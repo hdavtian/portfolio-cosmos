@@ -170,9 +170,32 @@ export default function ResumeSpace3D({
     // --- TEXTURES ---
     const textureLoader = new THREE.TextureLoader();
 
-    // Background - Simple Color for stability
-    // We remove the universe sphere texture for now to prevent "White Screen" and Shader errors
-    scene.background = new THREE.Color(0x020205); // Deep space dark blue/black
+    // Background - Two-layer starfield (matching original implementation)
+    // Outer layer: Main starfield
+    const starTexture = textureLoader.load("/textures/8k_stars.jpg");
+    const starGeo = new THREE.SphereGeometry(500, 64, 64);
+    const starMat = new THREE.MeshBasicMaterial({
+      map: starTexture,
+      side: THREE.BackSide,
+      toneMapped: false,
+      color: new THREE.Color(1.2, 1.2, 1.2), // Brightened to 120%
+    });
+    const starfield = new THREE.Mesh(starGeo, starMat);
+    scene.add(starfield);
+
+    // Inner layer: Secondary star layer for depth
+    const skyTexture = textureLoader.load("/textures/stars.jpg");
+    const skyGeo = new THREE.SphereGeometry(490, 64, 64);
+    const skyMat = new THREE.MeshBasicMaterial({
+      map: skyTexture,
+      side: THREE.BackSide,
+      toneMapped: false,
+      transparent: true,
+      opacity: 0.3,
+      color: new THREE.Color(0.8, 0.9, 1.0), // Blue tint
+    });
+    const skyfield = new THREE.Mesh(skyGeo, skyMat);
+    scene.add(skyfield);
 
     // --- LIGHTING ---
     // Increase ambient light so MeshLambertMaterial planets are visible
@@ -203,9 +226,7 @@ export default function ResumeSpace3D({
     const clickablePlanets: THREE.Mesh[] = [];
 
     // 1. SUN (Profile)
-    const sunTexture = textureLoader.load(
-      "https://raw.githubusercontent.com/SoumyaEXE/3d-Solar-System-ThreeJS/main/public/textures/sun.jpg"
-    );
+    const sunTexture = textureLoader.load("/textures/sun.jpg");
     const sunGeometry = new THREE.SphereGeometry(30, 32, 32);
     // Basic material for Sun so it's always bright and not affected by lights
     const initialBrightness =
@@ -213,11 +234,6 @@ export default function ResumeSpace3D({
     const sunMaterial = new THREE.MeshBasicMaterial({
       map: sunTexture,
       color: new THREE.Color(
-        initialBrightness,
-        initialBrightness * 0.95,
-        initialBrightness * 0.7
-      ),
-      emissive: new THREE.Color(
         initialBrightness,
         initialBrightness * 0.95,
         initialBrightness * 0.7
@@ -264,6 +280,16 @@ export default function ResumeSpace3D({
       div.style.textAlign = "center";
       div.style.pointerEvents = "auto";
       div.style.cursor = "pointer";
+
+      // Prevent wheel events on labels from triggering browser zoom
+      div.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        },
+        { passive: false }
+      );
 
       const title = document.createElement("div");
       title.textContent = text;
@@ -379,7 +405,7 @@ export default function ResumeSpace3D({
       scene,
       0.002,
       1,
-      "https://raw.githubusercontent.com/SoumyaEXE/3d-Solar-System-ThreeJS/main/public/textures/mars.jpg"
+      "/textures/mars.jpg"
     );
 
     const skillsPlanet = createPlanet(
@@ -390,7 +416,7 @@ export default function ResumeSpace3D({
       scene,
       0.0015,
       2,
-      "https://raw.githubusercontent.com/SoumyaEXE/3d-Solar-System-ThreeJS/main/public/textures/earth.jpg"
+      "/textures/earth.jpg"
     );
 
     const projectsPlanet = createPlanet(
@@ -401,9 +427,18 @@ export default function ResumeSpace3D({
       scene,
       0.001,
       3,
-      "https://raw.githubusercontent.com/SoumyaEXE/3d-Solar-System-ThreeJS/main/public/textures/jupiter.jpg"
+      "/textures/jupiter.jpg"
     );
-    createPlanet("Scrolling Resume", 40, 5, 0xcc99ff, projectsPlanet, 0.03);
+    createPlanet(
+      "Scrolling Resume",
+      40,
+      5,
+      0xcc99ff,
+      projectsPlanet,
+      0.03,
+      undefined,
+      "/textures/neptune.jpg"
+    );
 
     // 4. MOONS
     Object.values(resumeData.experience)
@@ -471,9 +506,9 @@ export default function ResumeSpace3D({
 
       // Reset previous hover
       if (hoveredObject && hoveredObject.userData.originalEmissive) {
-        (hoveredObject as THREE.Mesh).material.emissive.copy(
-          hoveredObject.userData.originalEmissive
-        );
+        (
+          (hoveredObject as THREE.Mesh).material as THREE.MeshLambertMaterial
+        ).emissive.copy(hoveredObject.userData.originalEmissive);
         document.body.style.cursor = "default";
         hoveredObject = null;
       }
@@ -486,9 +521,10 @@ export default function ResumeSpace3D({
         if (hit && hit.object.userData.sectionIndex !== undefined) {
           hoveredObject = hit.object;
           if (hoveredObject.userData.hoverEmissive) {
-            (hoveredObject as THREE.Mesh).material.emissive.copy(
-              hoveredObject.userData.hoverEmissive
-            );
+            (
+              (hoveredObject as THREE.Mesh)
+                .material as THREE.MeshLambertMaterial
+            ).emissive.copy(hoveredObject.userData.hoverEmissive);
             document.body.style.cursor = "pointer";
           }
         }
