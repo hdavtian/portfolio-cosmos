@@ -404,7 +404,6 @@ function App() {
     nodeSpacing: 100,
     glowIntensity: 5,
     parentSpacing: 180,
-    starBrightness: 50,
     twinkleSpeed: 3,
     circuitComplexity: 50,
     traceWidth: 3,
@@ -412,8 +411,6 @@ function App() {
     ringSpacing: 80,
     branchAngle: 45,
     leafDensity: 50,
-    spiralTightness: 0.3,
-    rotationSpeed: 5,
     pulseSpeed: 2,
     connectionDensity: 50,
   });

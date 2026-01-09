@@ -6,8 +6,8 @@ export type DiagramStyle =
   | "circuit"
   | "rings"
   | "tree"
-  | "galaxy"
-  | "neural";
+  | "neural"
+  | "space"; // 3D Solar System
 
 export interface DiagramStyleOptions {
   // Circle style options
@@ -15,9 +15,13 @@ export interface DiagramStyleOptions {
   glowIntensity?: number;
   parentSpacing?: number;
 
-  // Constellation options
-  starBrightness?: number;
+  // Constellation options (includes galaxy features)
   twinkleSpeed?: number;
+  constellationZoom?: number;
+  nebula?: number;
+  constellationColor?: string;
+  starSize?: number;
+  shootingStarFrequency?: number;
 
   // Circuit board options
   circuitComplexity?: number;
@@ -34,13 +38,14 @@ export interface DiagramStyleOptions {
   branchAngle?: number;
   leafDensity?: number;
 
-  // Galaxy options
-  spiralTightness?: number;
-  rotationSpeed?: number;
-
   // Neural options
   pulseSpeed?: number;
   connectionDensity?: number;
+
+  // Space options
+  spaceOrbitSpeed?: number;
+  spaceShowLabels?: boolean;
+  spaceSunIntensity?: number;
 }
 
 interface DiagramSettingsProps {
@@ -54,12 +59,12 @@ interface DiagramSettingsProps {
 
 const styleDescriptions: Record<DiagramStyle, string> = {
   circles: "Classic circles with lines - clean and elegant",
-  constellation: "Stars connected like a constellation map",
+  constellation: "Cosmic space theme with stars, nebulas, and spiral arms",
   circuit: "Tech-inspired circuit board design",
   rings: "Concentric rings orbiting the center",
   tree: "Organic tree structure with branches",
-  galaxy: "Spiral galaxy with orbiting elements",
   neural: "Neural network with pulsing connections",
+  space: "A fully 3D interactive solar system exploration",
 };
 
 export default function DiagramSettings({
@@ -125,14 +130,41 @@ export default function DiagramSettings({
         return (
           <>
             <div className="setting-item">
-              <label>Star Brightness: {options.starBrightness || 50}</label>
+              <label>Zoom Level: {options.constellationZoom || 100}%</label>
               <input
                 type="range"
-                min="20"
-                max="100"
-                value={options.starBrightness || 50}
+                min="50"
+                max="200"
+                value={options.constellationZoom || 100}
                 onChange={(e) =>
-                  handleSliderChange("starBrightness", Number(e.target.value))
+                  handleSliderChange(
+                    "constellationZoom",
+                    Number(e.target.value)
+                  )
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Star Size: {options.starSize || 100}%</label>
+              <input
+                type="range"
+                min="50"
+                max="200"
+                value={options.starSize || 100}
+                onChange={(e) =>
+                  handleSliderChange("starSize", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Nebula: {options.nebula || 50}</label>
+              <input
+                type="range"
+                min="10"
+                max="100"
+                value={options.nebula || 50}
+                onChange={(e) =>
+                  handleSliderChange("nebula", Number(e.target.value))
                 }
               />
             </div>
@@ -145,6 +177,23 @@ export default function DiagramSettings({
                 value={options.twinkleSpeed || 3}
                 onChange={(e) =>
                   handleSliderChange("twinkleSpeed", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>
+                Shooting Stars: {options.shootingStarFrequency || 3}
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="10"
+                value={options.shootingStarFrequency || 3}
+                onChange={(e) =>
+                  handleSliderChange(
+                    "shootingStarFrequency",
+                    Number(e.target.value)
+                  )
                 }
               />
             </div>
@@ -311,39 +360,6 @@ export default function DiagramSettings({
           </>
         );
 
-      case "galaxy":
-        return (
-          <>
-            <div className="setting-item">
-              <label>
-                Spiral Tightness: {(options.spiralTightness || 0.3).toFixed(1)}
-              </label>
-              <input
-                type="range"
-                min="0.1"
-                max="1"
-                step="0.1"
-                value={options.spiralTightness || 0.3}
-                onChange={(e) =>
-                  handleSliderChange("spiralTightness", Number(e.target.value))
-                }
-              />
-            </div>
-            <div className="setting-item">
-              <label>Rotation Speed: {options.rotationSpeed || 5}</label>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={options.rotationSpeed || 5}
-                onChange={(e) =>
-                  handleSliderChange("rotationSpeed", Number(e.target.value))
-                }
-              />
-            </div>
-          </>
-        );
-
       case "neural":
         return (
           <>
@@ -375,6 +391,75 @@ export default function DiagramSettings({
                   )
                 }
               />
+            </div>
+          </>
+        );
+
+      case "space":
+        return (
+          <>
+            <div className="setting-item">
+              <label>
+                Orbit Speed:{" "}
+                {options.spaceOrbitSpeed !== undefined
+                  ? options.spaceOrbitSpeed
+                  : 1}
+                x
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="3"
+                step="0.1"
+                value={
+                  options.spaceOrbitSpeed !== undefined
+                    ? options.spaceOrbitSpeed
+                    : 1
+                }
+                onChange={(e) =>
+                  handleSliderChange("spaceOrbitSpeed", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Sun Intensity: {options.spaceSunIntensity || 2.5}</label>
+              <input
+                type="range"
+                min="0.5"
+                max="5"
+                step="0.1"
+                value={options.spaceSunIntensity || 2.5}
+                onChange={(e) =>
+                  handleSliderChange(
+                    "spaceSunIntensity",
+                    Number(e.target.value)
+                  )
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={options.spaceShowLabels !== false}
+                  onChange={(e) =>
+                    // Use force update or boolean
+                    onOptionsChange({
+                      ...options,
+                      spaceShowLabels: e.target.checked,
+                    })
+                  }
+                  style={{ width: "auto" }}
+                />
+                Show Labels
+              </label>
             </div>
           </>
         );

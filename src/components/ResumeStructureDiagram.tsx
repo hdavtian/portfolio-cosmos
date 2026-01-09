@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import * as d3 from "d3";
 import resumeData from "../data/resume.json";
 import { type DiagramStyle, type DiagramStyleOptions } from "./DiagramSettings";
+import ResumeSpace3D from "./ResumeSpace3D";
 
 interface ResumeStructureDiagramProps {
   onNavigate: (section: number) => void;
@@ -22,6 +23,9 @@ function ResumeStructureDiagram({
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
+    // If style is "space", skip D3 rendering (handled by conditional return below)
+    if (style === "space") return;
+
     const svg = svgRef.current;
     if (!svg) return;
 
@@ -42,9 +46,6 @@ function ResumeStructureDiagram({
       case "tree":
         renderTreeStyle(svg, onNavigate, options);
         break;
-      case "galaxy":
-        renderGalaxyStyle(svg, onNavigate, options);
-        break;
       case "neural":
         renderNeuralStyle(svg, onNavigate, options);
         break;
@@ -52,6 +53,11 @@ function ResumeStructureDiagram({
         renderCirclesStyle(svg, onNavigate, options);
     }
   }, [onNavigate, style, options]);
+
+  // If style is "space", return 3D component
+  if (style === "space") {
+    return <ResumeSpace3D onNavigate={onNavigate} options={options} />;
+  }
 
   return (
     <div className="hero__diagram-container">
@@ -607,23 +613,246 @@ function renderCirclesStyle(
 }
 
 // ===== CONSTELLATION STYLE =====
+// Saved positions removed in favor of seeded random generation
+
 function renderConstellationStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
   options: DiagramStyleOptions
 ) {
-  const width = 1000;
-  const height = 500;
+  // Use parent container dimensions
+  const parent = svg.parentElement;
+  const width = parent ? parent.clientWidth : window.innerWidth;
+  const height = parent ? parent.clientHeight : window.innerHeight;
+
   d3.select(svg).selectAll("*").remove();
 
   const svgSelection = d3
     .select(svg)
     .attr("width", width)
     .attr("height", height)
-    .attr("viewBox", `0 0 ${width} ${height}`)
-    .attr("preserveAspectRatio", "xMidYMid meet");
+    // Remove viewBox to allow true panning/zooming without distortion
+    //.attr("viewBox", `0 0 ${width} ${height}`)
+    .style("cursor", "grab"); // Indicate draggability
 
+  // Apply zoom
+  const zoomLevel = (options.constellationZoom || 100) / 100;
+  const starSizeScale = (options.starSize || 100) / 100;
+  const nebulaIntensity = (options.nebula || 50) / 100;
+  const starDensity = 0.5;
+
+  // Create group for content
   const g = svgSelection.append("g");
+
+  // Setup Zoom Behavior
+  const zoomBehavior = d3
+    .zoom<SVGSVGElement, unknown>()
+    .scaleExtent([0.5, 4]) // Allow zooming out to 0.5x and in to 4x
+    .on("zoom", (event) => {
+      g.attr("transform", event.transform);
+    })
+    .on("start", () => {
+      svgSelection.style("cursor", "grabbing");
+    })
+    .on("end", () => {
+      svgSelection.style("cursor", "grab");
+    });
+
+  // Apply zoom behavior to SVG
+  svgSelection.call(zoomBehavior);
+
+  // Initialize zoom to center and scale based on options
+  // We want to center (width/2, height/2) and apply the zoom level
+  const initialTransform = d3.zoomIdentity
+    .translate(width / 2, height / 2)
+    .scale(zoomLevel)
+    .translate(-width / 2, -height / 2); // Center logic: translate to center, scale, translate back
+
+  // We actually just want to center view on the middle of our coordinate system (which is traditionally width/2, height/2)
+  // But D3 zoom transform is applied to the group.
+  // If we draw everything relative to 0,0 being top-left, we need to shift.
+  // Our drawing logic mostly assumes 0,0 is top left but calculates center as width/2, height/2.
+
+  // Let's set the initial transform manually and update the zoom internal state
+  svgSelection.call(zoomBehavior.transform, initialTransform);
+
+  // Fixed seed logic for stability independent of slider values
+  const createRandom = (seed: number) => {
+    let state = seed;
+    return () => {
+      state = (state * 9301 + 49297) % 233280;
+      return state / 233280;
+    };
+  };
+
+  // Separate random generators for each layer to prevent changes in one from affecting others
+  const nebulaRandom = createRandom(1);
+  const bgStarRandom = createRandom(2);
+  const galaxyRandom = createRandom(3);
+  const nodeRandom = createRandom(4);
+  const starPropRandom = createRandom(5);
+  // Keep a generic one for shooting stars etc if needed, though they usually use Math.random()
+
+  // Add nebula effects with gradients (larger and thicker)
+  const defs = svgSelection.append("defs");
+
+  // Add nebula clouds based on intensity (larger and thicker)
+  const nebulaLayer = g
+    .append("g")
+    .attr("opacity", 0.5 + nebulaIntensity * 0.4);
+  const numNebulas = Math.floor(nebulaIntensity * 8); // Max 8 nebulas at 100%
+
+  const nebulaColors = [
+    "#ff4d4d", // Red
+    "#ffaa00", // Orange
+    "#ffff00", // Yellow
+    "#00ff00", // Green
+    "#00ffff", // Cyan
+    "#0000ff", // Blue
+    "#ff00ff", // Magenta
+    "#9900ff", // Purple
+  ];
+
+  for (let i = 0; i < numNebulas; i++) {
+    const cx = nebulaRandom() * width;
+    const cy = nebulaRandom() * height;
+    const r = 150 + nebulaRandom() * 200; // Much larger
+    const color =
+      nebulaColors[Math.floor(nebulaRandom() * nebulaColors.length)];
+    const gradId = `nebulaGradient-${i}`;
+
+    const nebulaGradient = defs
+      .append("radialGradient")
+      .attr("id", gradId)
+      .attr("cx", "50%")
+      .attr("cy", "50%")
+      .attr("r", "50%");
+
+    nebulaGradient
+      .append("stop")
+      .attr("offset", "0%")
+      .attr("stop-color", color)
+      .attr("stop-opacity", 0.25);
+
+    nebulaGradient
+      .append("stop")
+      .attr("offset", "100%")
+      .attr("stop-color", color)
+      .attr("stop-opacity", 0);
+
+    nebulaLayer
+      .append("ellipse")
+      .attr("cx", cx)
+      .attr("cy", cy)
+      .attr("rx", r)
+      .attr("ry", r * (0.6 + nebulaRandom() * 0.4))
+      .attr("fill", `url(#${gradId})`)
+      .attr("transform", `rotate(${nebulaRandom() * 360} ${cx} ${cy})`)
+      .each(function () {
+        // Slow organic expanding/contracting breathing effect
+        const cloud = d3.select(this);
+        // Use seeded random for duration so it's consistent
+        const randomDuration = 10000 + nebulaRandom() * 20000;
+        const baseRx = r;
+        const baseRy = r * 0.6;
+
+        function breathe() {
+          cloud
+            .transition()
+            .duration(randomDuration)
+            .ease(d3.easeSinInOut)
+            .attr("rx", baseRx * (1.1 + Math.random() * 0.2)) // Use Math.random here for variation over time
+            .attr("ry", baseRy * (1.1 + Math.random() * 0.2))
+            .attr("opacity", 0.3 + Math.random() * 0.2)
+            .transition() // Contract back
+            .duration(randomDuration)
+            .ease(d3.easeSinInOut)
+            .attr("rx", baseRx * (0.9 + Math.random() * 0.1))
+            .attr("ry", baseRy * (0.9 + Math.random() * 0.1))
+            .attr("opacity", 0.6 + Math.random() * 0.2)
+            .on("end", breathe);
+        }
+        breathe();
+      });
+  }
+
+  // Add realistic twinkling background stars
+  const bgStarLayer = g.append("g");
+  // Significantly increased density for richer background (scales with zoom squared to maintain/increase density)
+  const numBgStars = Math.floor(
+    starDensity * 250 * (zoomLevel * zoomLevel * 1.5)
+  );
+  for (let i = 0; i < numBgStars; i++) {
+    const x = bgStarRandom() * width;
+    const y = bgStarRandom() * height;
+    // Scale down size slightly as we zoom in to keep them looking like stars, not balls
+    const size = (0.5 + bgStarRandom() * 1.5) / Math.sqrt(zoomLevel);
+    const baseOpacity = 0.3 + bgStarRandom() * 0.6;
+    const twinkleDelay = bgStarRandom() * 4000;
+    const twinkleDuration = 1000 + bgStarRandom() * 2000;
+
+    const bgStar = bgStarLayer
+      .append("circle")
+      .attr("cx", x)
+      .attr("cy", y)
+      .attr("r", size)
+      .attr("fill", "#ffffff")
+      .attr("opacity", baseOpacity);
+
+    // Realistic twinkling - random variations
+    function twinkleStar() {
+      bgStar
+        .transition()
+        .delay(twinkleDelay)
+        .duration(twinkleDuration)
+        .attr("opacity", 0.1 + Math.random() * 0.3)
+        .transition()
+        .duration(twinkleDuration)
+        .attr("opacity", baseOpacity + Math.random() * 0.4)
+        .on("end", twinkleStar);
+    }
+    twinkleStar();
+  }
+
+  // Add distinct distant galaxies (spirals)
+  const galaxyLayer = g.append("g").attr("opacity", 0.7);
+  const numGalaxies = 5 + Math.floor(galaxyRandom() * 4);
+
+  for (let i = 0; i < numGalaxies; i++) {
+    const gx = galaxyRandom() * width;
+    const gy = galaxyRandom() * height;
+    const scale = 0.2 + galaxyRandom() * 0.4;
+    const rotation = galaxyRandom() * 360;
+    const galaxyColor =
+      nebulaColors[Math.floor(galaxyRandom() * nebulaColors.length)];
+
+    const galaxyGroup = galaxyLayer
+      .append("g")
+      .attr(
+        "transform",
+        `translate(${gx},${gy}) scale(${scale}) rotate(${rotation})`
+      );
+
+    // Draw spiral arms
+    for (let arm = 0; arm < 2; arm++) {
+      galaxyGroup
+        .append("path")
+        .attr("d", "M0,0 Q20,0 40,20 T70,50")
+        .attr("stroke", galaxyColor)
+        .attr("stroke-width", 2)
+        .attr("fill", "none")
+        .attr("opacity", 0.6)
+        .attr("transform", `rotate(${arm * 180})`);
+
+      // Galaxy core glow
+      galaxyGroup
+        .append("circle")
+        .attr("r", 10)
+        .attr("fill", galaxyColor)
+        .attr("opacity", 0.3)
+        .attr("filter", "blur(2px)");
+    }
+  }
 
   // Build nodes (same structure as circles)
   interface Node extends d3.SimulationNodeDatum {
@@ -634,20 +863,22 @@ function renderConstellationStyle(
     sectionIndex?: number;
   }
 
-  const nodes: Node[] = [
-    {
-      id: "center",
-      type: "center",
-      label: "HD",
-      radius: 8,
-      x: width / 2,
-      y: height / 2,
-      fx: width / 2,
-      fy: height / 2,
-      sectionIndex: 0,
-    },
-  ];
+  const nodes: Node[] = [];
 
+  // Center node - fixed at center
+  nodes.push({
+    id: "center",
+    type: "center",
+    label: "HD",
+    radius: 8,
+    x: width / 2,
+    y: height / 2,
+    fx: width / 2,
+    fy: height / 2,
+    sectionIndex: 0,
+  });
+
+  // Position main sections - randomize layout
   const mainSections = [
     { id: "skills", label: "Skills", sectionIndex: 1 },
     { id: "experience", label: "Experience", sectionIndex: 2 },
@@ -658,120 +889,139 @@ function renderConstellationStyle(
     },
   ];
 
-  const mainAngles = [
-    { id: "skills", angle: -Math.PI / 2 },
-    { id: "experience", angle: (5 * Math.PI) / 6 },
-    { id: "education", angle: Math.PI / 6 },
-  ];
+  // Randomize initial rotation and spread for the main trio
+  const layoutRotation = nodeRandom() * Math.PI * 2;
 
-  mainSections.forEach((section, i) => {
-    const angle = mainAngles[i].angle;
-    const distance = 250;
+  mainSections.forEach((section, index) => {
+    // 3 sectors (0, 120, 240) + random wiggle (+/- 30deg) + global rotation
+    const baseAngle = (index * 2 * Math.PI) / 3;
+    const wiggle = (nodeRandom() - 0.5) * (Math.PI / 3);
+    const angle = baseAngle + wiggle + layoutRotation;
+
+    // Random distance 200-300px
+    const dist = 200 + nodeRandom() * 100;
+
+    const x = width / 2 + Math.cos(angle) * dist;
+    const y = height / 2 + Math.sin(angle) * dist;
+
     nodes.push({
       id: section.id,
       type: "main",
       label: section.label,
       radius: 6,
-      x: width / 2 + Math.cos(angle) * distance,
-      y: height / 2 + Math.sin(angle) * distance,
-      fx: width / 2 + Math.cos(angle) * distance,
-      fy: height / 2 + Math.sin(angle) * distance,
+      x: x,
+      y: y,
+      fx: x,
+      fy: y,
       sectionIndex: section.sectionIndex,
     });
   });
 
-  // Add jobs
+  // Position job nodes - scatter in a spiral arm pattern around Experience node
+  const experienceNode = nodes.find((n) => n.id === "experience")!;
+
+  // Create a visually cohesive "arm" for jobs
+  // This helps identify them as a group associated with Experience
+  const baseSpiralAngle = nodeRandom() * Math.PI * 2;
+
   resumeData.experience.forEach((job, index) => {
     const jobId = `job-${index}`;
+
+    // Spiral formula: increasing distance and angle
+    const angleOffset = (index * Math.PI) / 8; // Gentle curve
+    const combinedAngle = baseSpiralAngle + angleOffset;
+
+    // Increasing distance creates outward flow
+    const dist = 60 + index * 40 + nodeRandom() * 20;
+
+    const x = experienceNode.x! + Math.cos(combinedAngle) * dist;
+    const y = experienceNode.y! + Math.sin(combinedAngle) * dist;
+
     nodes.push({
       id: jobId,
       type: "job",
       label: job.navLabel || job.company,
       radius: 4,
+      x: x,
+      y: y,
       sectionIndex: 2 + index,
     });
   });
 
-  // Position jobs
-  const experienceNode = nodes.find((n) => n.id === "experience");
-  if (experienceNode) {
-    const jobNodes = nodes.filter((n) => n.type === "job");
-    jobNodes.forEach((job, i) => {
-      const angle =
-        Math.PI / 4 + (Math.PI / 2 / (jobNodes.length - 1 || 1)) * i;
-      const dist = 120;
-      job.x = experienceNode.x! + Math.cos(angle) * dist;
-      job.y = experienceNode.y! + Math.sin(angle) * dist;
-    });
-  }
-
-  // Draw constellation lines
-  const links = [
-    { source: nodes[0], target: nodes[1] },
-    { source: nodes[0], target: nodes[2] },
-    { source: nodes[0], target: nodes[3] },
+  // Realistic stellar classification colors (O, B, A, F, G, K, M types)
+  const stellarColors = [
+    { temp: "O", color: "#9bb0ff", glow: "#aabfff" }, // Very hot blue-white
+    { temp: "B", color: "#aabfff", glow: "#bbcfff" }, // Blue-white
+    { temp: "A", color: "#cad7ff", glow: "#dae3ff" }, // White
+    { temp: "F", color: "#f8f7ff", glow: "#fffef8" }, // Yellow-white
+    { temp: "G", color: "#fff4ea", glow: "#fff9f0" }, // Yellow (Sun-like)
+    { temp: "K", color: "#ffd2a1", glow: "#ffe0b8" }, // Orange
+    { temp: "M", color: "#ffcc6f", glow: "#ffd890" }, // Red-orange
   ];
 
-  // Add job links
-  const expNode = nodes.find((n) => n.id === "experience");
-  nodes
-    .filter((n) => n.type === "job")
-    .forEach((job) => {
-      links.push({ source: expNode!, target: job });
-    });
+  // Assign realistic stellar properties to each star
+  interface StarNode extends Node {
+    stellarType?: (typeof stellarColors)[number];
+    starMagnitude?: number;
+    glowRadius?: number;
+  }
 
-  g.append("g")
-    .selectAll("line")
-    .data(links)
-    .join("line")
-    .attr("x1", (d) => d.source.x!)
-    .attr("y1", (d) => d.source.y!)
-    .attr("x2", (d) => d.target.x!)
-    .attr("y2", (d) => d.target.y!)
-    .attr("stroke", "rgba(212, 175, 55, 0.3)")
-    .attr("stroke-width", 1);
+  const starNodes = nodes.map((node) => {
+    const stellar =
+      stellarColors[Math.floor(starPropRandom() * stellarColors.length)];
+    const magnitude = 0.7 + starPropRandom() * 0.6; // 0.7-1.3 brightness range
+    const glowRadius = 2 + starPropRandom() * 3; // 2-5px realistic glow
+    return {
+      ...node,
+      stellarType: stellar,
+      starMagnitude: magnitude,
+      glowRadius,
+    } as StarNode;
+  });
 
-  // Draw stars with twinkling
+  // Draw stars with realistic colors, sizes, and glows
   const stars = g
     .append("g")
     .selectAll("g")
-    .data(nodes)
+    .data(starNodes)
     .join("g")
     .attr("transform", (d) => `translate(${d.x},${d.y})`)
     .style("cursor", "pointer")
-    .on("click", (_, d) => {
-      if (d.sectionIndex !== undefined) {
+    .on("click", (event, d) => {
+      if (!event.defaultPrevented && d.sectionIndex !== undefined) {
         onNavigate(d.sectionIndex);
       }
     });
 
-  // Star glow
+  const brightness = 1; // Fixed brightness
+
+  // Star core - NO GLOW, just solid stars
   stars
     .append("circle")
-    .attr("r", (d) => d.radius * 3)
-    .attr("fill", "rgba(212, 175, 55, 0.1)")
-    .attr("class", "star-glow");
+    .attr("r", (d) => d.radius * starSizeScale * d.starMagnitude!)
+    .attr("fill", (d) => d.stellarType!.color);
 
-  // Star core
-  stars
-    .append("circle")
-    .attr("r", (d) => d.radius)
-    .attr("fill", "#ffffff")
-    .style("filter", "drop-shadow(0 0 4px rgba(255, 255, 255, 0.8))");
-
-  // Add star points
+  // Add star points with realistic stellar colors
   stars.each(function (d) {
     const star = d3.select(this);
-    for (let i = 0; i < 4; i++) {
-      const angle = (i * Math.PI) / 2;
+    const numPoints = d.type === "center" ? 8 : d.type === "main" ? 6 : 4;
+    for (let i = 0; i < numPoints; i++) {
+      const angle = (i * (2 * Math.PI)) / numPoints;
       star
         .append("line")
         .attr("x1", 0)
         .attr("y1", 0)
-        .attr("x2", Math.cos(angle) * d.radius * 2)
-        .attr("y2", Math.sin(angle) * d.radius * 2)
-        .attr("stroke", "rgba(255, 255, 255, 0.6)")
-        .attr("stroke-width", 0.5);
+        .attr(
+          "x2",
+          Math.cos(angle) * d.radius * 2 * starSizeScale * d.starMagnitude!
+        )
+        .attr(
+          "y2",
+          Math.sin(angle) * d.radius * 2 * starSizeScale * d.starMagnitude!
+        )
+        .attr("stroke", d.stellarType!.color)
+        .attr("stroke-width", 0.5 + nebulaIntensity * 0.5)
+        .attr("opacity", (0.4 + brightness * 0.3) * d.starMagnitude!);
     }
   });
 
@@ -779,34 +1029,101 @@ function renderConstellationStyle(
   stars
     .append("text")
     .text((d) => d.label)
-    .attr("y", (d) => d.radius + 15)
+    .attr("y", (d) => d.radius * starSizeScale + 15)
     .attr("text-anchor", "middle")
-    .attr("fill", "#d4af37")
+    .attr("fill", (d) => d.stellarType!.color)
     .attr("font-size", (d) =>
-      d.type === "center" ? "12px" : d.type === "main" ? "10px" : "8px"
+      d.type === "center"
+        ? `${12 * starSizeScale}px`
+        : d.type === "main"
+        ? `${10 * starSizeScale}px`
+        : `${8 * starSizeScale}px`
     )
     .style("pointer-events", "none");
 
-  // Twinkling animation
-  const twinkleSpeed = options.twinkleSpeed || 3;
-  stars
-    .selectAll("circle")
-    .transition()
-    .duration(1000 / twinkleSpeed)
-    .attr("opacity", 0.5)
-    .transition()
-    .duration(1000 / twinkleSpeed)
-    .attr("opacity", 1)
-    .on("end", function repeat() {
-      d3.select(this)
-        .transition()
-        .duration(1000 / twinkleSpeed)
-        .attr("opacity", 0.5)
-        .transition()
-        .duration(1000 / twinkleSpeed)
-        .attr("opacity", 1)
-        .on("end", repeat);
-    });
+  // Realistic meteor showers (shooting stars)
+  const shootingStarFreq = options.shootingStarFrequency || 3;
+  if (shootingStarFreq > 0) {
+    const shootingStarLayer = g.append("g");
+    // Define a gradient for meteor tails (White -> Transparent)
+    const meteorTailGradient = defs
+      .append("linearGradient")
+      .attr("id", "meteorTailGradient")
+      .attr("x1", "100%")
+      .attr("y1", "0%") // Head
+      .attr("x2", "0%")
+      .attr("y2", "0%"); // Tail
+
+    meteorTailGradient
+      .append("stop")
+      .attr("offset", "0%")
+      .attr("stop-color", "white")
+      .attr("stop-opacity", 0);
+    meteorTailGradient
+      .append("stop")
+      .attr("offset", "100%")
+      .attr("stop-color", "white")
+      .attr("stop-opacity", 1);
+
+    const numShootingStars = Math.floor(shootingStarFreq / 2);
+
+    for (let i = 0; i < numShootingStars; i++) {
+      // Use Path instead of Line for curves
+      const shootingStar = shootingStarLayer
+        .append("path")
+        .attr("stroke", "url(#meteorTailGradient)") // Use gradient for fading tail effect
+        .attr("stroke-width", 2)
+        .attr("stroke-linecap", "round")
+        .attr("fill", "none")
+        .attr("opacity", 0);
+
+      // Realistic meteor animation with arcs
+      function animateMeteor() {
+        // Random start point (bias towards top/right)
+        const startX = Math.random() < 0.5 ? Math.random() * width : width + 50;
+        const startY = Math.random() < 0.5 ? -50 : Math.random() * height * 0.5;
+
+        // Random end point (across the screen)
+        const endX = startX - (300 + Math.random() * 400);
+        const endY = startY + (200 + Math.random() * 300);
+
+        // Control point for quadratic bezier (creates the curve/arc)
+        // Offset perpendicular to movement direction
+        const midX = (startX + endX) / 2;
+        const midY = (startY + endY) / 2;
+        const curveOffset = (Math.random() - 0.5) * 200; // Curvature amount
+        const controlX = midX + curveOffset;
+        const controlY = midY - curveOffset; // Opposite direction
+
+        const pathFunc = d3.path();
+        pathFunc.moveTo(startX, startY);
+        pathFunc.quadraticCurveTo(controlX, controlY, endX, endY);
+        const pathData = pathFunc.toString();
+
+        shootingStar.attr("d", pathData);
+
+        // Animate stroke-dashoffset to make it travel
+        const totalLength = (
+          shootingStar.node() as SVGPathElement
+        ).getTotalLength();
+        const tailLength = 150 + Math.random() * 100;
+
+        shootingStar
+          .attr("stroke-dasharray", `${tailLength} ${totalLength}`)
+          .attr("stroke-dashoffset", tailLength) // Start hidden (offset = tail length, so dash is before start)
+          .attr("opacity", 1)
+          .transition()
+          .delay(1000 + Math.random() * 5000)
+          .duration(800 + Math.random() * 500)
+          .ease(d3.easeQuadIn)
+          .attr("stroke-dashoffset", -totalLength) // Animate until tail is gone
+          .on("end", animateMeteor);
+      }
+
+      // Initial kickoff with random delay to avoid sync
+      setTimeout(animateMeteor, Math.random() * 5000);
+    }
+  }
 }
 
 // ===== CIRCUIT BOARD STYLE =====
@@ -1953,137 +2270,6 @@ function renderTreeStyle(
 }
 
 // ===== GALAXY STYLE =====
-function renderGalaxyStyle(
-  svg: SVGSVGElement,
-  onNavigate: (section: number) => void,
-  options: DiagramStyleOptions
-) {
-  const width = 1000;
-  const height = 500;
-  d3.select(svg).selectAll("*").remove();
-
-  const svgSelection = d3
-    .select(svg)
-    .attr("width", width)
-    .attr("height", height)
-    .attr("viewBox", `0 0 ${width} ${height}`)
-    .attr("preserveAspectRatio", "xMidYMid meet");
-
-  const g = svgSelection.append("g");
-  const centerX = width / 2;
-  const centerY = height / 2;
-
-  const spiralTightness = options.spiralTightness || 0.3;
-
-  // Draw spiral arms
-  const spiralArms = g.append("g");
-  for (let arm = 0; arm < 3; arm++) {
-    const points: [number, number][] = [];
-    for (let t = 0; t < 3; t += 0.05) {
-      const angle = arm * ((2 * Math.PI) / 3) + t * Math.PI;
-      const radius = 50 + t * 80 * spiralTightness;
-      const x = centerX + Math.cos(angle) * radius;
-      const y = centerY + Math.sin(angle) * radius;
-      points.push([x, y]);
-    }
-
-    spiralArms
-      .append("path")
-      .attr("d", d3.line()(points) || "")
-      .attr("stroke", "rgba(212, 175, 55, 0.2)")
-      .attr("stroke-width", 2)
-      .attr("fill", "none");
-  }
-
-  // Position nodes along spiral
-  const nodes = [
-    { id: "center", label: "HD", arm: -1, t: 0, size: 40, sectionIndex: 0 },
-    {
-      id: "skills",
-      label: "Skills",
-      arm: 0,
-      t: 0.8,
-      size: 30,
-      sectionIndex: 1,
-    },
-    {
-      id: "experience",
-      label: "Experience",
-      arm: 1,
-      t: 1.2,
-      size: 30,
-      sectionIndex: 2,
-    },
-    {
-      id: "education",
-      label: "Education",
-      arm: 2,
-      t: 0.8,
-      size: 30,
-      sectionIndex: 2 + resumeData.experience.length,
-    },
-  ];
-
-  // Jobs on spiral
-  resumeData.experience.forEach((job, i) => {
-    const t = 1.5 + i * 0.3;
-    nodes.push({
-      id: `job-${i}`,
-      label: (job.navLabel || job.company).substring(0, 8),
-      arm: 1,
-      t: t,
-      size: 20,
-      sectionIndex: 2 + i,
-    });
-  });
-
-  const nodeGroups = g
-    .append("g")
-    .selectAll("g")
-    .data(nodes)
-    .join("g")
-    .attr("transform", (d) => {
-      if (d.arm === -1) return `translate(${centerX},${centerY})`;
-      const angle = d.arm * ((2 * Math.PI) / 3) + d.t * Math.PI;
-      const radius = 50 + d.t * 80 * spiralTightness;
-      const x = centerX + Math.cos(angle) * radius;
-      const y = centerY + Math.sin(angle) * radius;
-      return `translate(${x},${y})`;
-    })
-    .style("cursor", "pointer")
-    .on("click", (_, d) => {
-      if (d.sectionIndex !== undefined) {
-        onNavigate(d.sectionIndex);
-      }
-    });
-
-  // Glowing orbs
-  nodeGroups
-    .append("circle")
-    .attr("r", (d) => d.size * 1.5)
-    .attr("fill", "rgba(138, 43, 226, 0.1)");
-
-  nodeGroups
-    .append("circle")
-    .attr("r", (d) => d.size)
-    .attr(
-      "fill",
-      "radial-gradient(circle, rgba(138, 43, 226, 0.8) 0%, rgba(75, 0, 130, 0.9) 100%)"
-    )
-    .attr("stroke", "#d4af37")
-    .attr("stroke-width", 2)
-    .style("filter", "drop-shadow(0 0 10px rgba(138, 43, 226, 0.8))");
-
-  nodeGroups
-    .append("text")
-    .text((d) => d.label)
-    .attr("text-anchor", "middle")
-    .attr("dy", "0.35em")
-    .attr("fill", "#fff")
-    .attr("font-size", (d) => (d.arm === -1 ? "12px" : "9px"))
-    .style("pointer-events", "none");
-}
-
 // ===== NEURAL NETWORK STYLE =====
 function renderNeuralStyle(
   svg: SVGSVGElement,
