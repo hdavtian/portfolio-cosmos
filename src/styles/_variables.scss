@@ -1,0 +1,62 @@
+// Theme Colors - Dark cinematic theme
+$primary-bg: #000000;
+$secondary-bg: #0d0d0d;
+$accent-bg: #1a1a1a;
+$overlay-bg: rgba(0, 0, 0, 0.4);
+
+$primary-text: #ffffff;
+$secondary-text: #b8b8b8;
+$accent-text: #d4af37;
+$highlight-text: #f0d98d;
+$dim-text: #888888;
+
+$border-color: rgba(212, 175, 55, 0.4);
+$shadow-color: rgba(0, 0, 0, 0.8);
+
+// Typography - Cinematic fonts
+$font-primary: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+$font-heading: 'Cinzel', 'Playfair Display', Georgia, serif;
+$font-display: 'Playfair Display', Georgia, serif;
+$font-mono: 'Courier New', monospace;
+
+// Font Sizes - Responsive
+$fs-xs: clamp(0.7rem, 0.65rem + 0.25vw, 0.8rem);
+$fs-sm: clamp(0.8rem, 0.75rem + 0.25vw, 0.875rem);
+$fs-base: clamp(0.875rem, 0.8rem + 0.375vw, 1rem);
+$fs-md: clamp(1rem, 0.9rem + 0.5vw, 1.125rem);
+$fs-lg: clamp(1.125rem, 1rem + 0.625vw, 1.25rem);
+$fs-xl: clamp(1.25rem, 1.1rem + 0.75vw, 1.5rem);
+$fs-2xl: clamp(1.5rem, 1.3rem + 1vw, 2rem);
+$fs-3xl: clamp(1.75rem, 1.5rem + 1.25vw, 2.5rem);
+$fs-4xl: clamp(2rem, 1.75rem + 1.25vw, 3rem);
+
+// Spacing
+$spacing-xs: 0.5rem;
+$spacing-sm: 1rem;
+$spacing-md: 1.5rem;
+$spacing-lg: 2rem;
+$spacing-xl: 3rem;
+$spacing-2xl: 4rem;
+$spacing-3xl: 6rem;
+$spacing-4xl: 8rem;
+
+// Breakpoints
+$breakpoint-xs: 480px;
+$breakpoint-sm: 640px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 1024px;
+$breakpoint-xl: 1280px;
+$breakpoint-2xl: 1536px;
+
+// Transitions
+$transition-fast: 0.2s ease;
+$transition-base: 0.3s ease;
+$transition-slow: 0.5s ease;
+$transition-slower: 0.8s ease;
+
+// Z-index
+$z-below: -1;
+$z-base: 1;
+$z-elevated: 10;
+$z-overlay: 100;
+$z-modal: 1000;

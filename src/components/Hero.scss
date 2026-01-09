@@ -1,0 +1,159 @@
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.hero {
+    min-height: 100vh;
+    height: 100vh;
+    width: 100vw;
+    @include flex-center;
+    position: relative;
+    overflow: hidden;
+
+    &__background {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg,
+                rgba(212, 175, 55, 0.3) 0%,
+                rgba(0, 0, 0, 0.85) 50%,
+                rgba(212, 175, 55, 0.25) 100%);
+        z-index: 0;
+
+        &::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle,
+                    rgba(212, 175, 55, 0.2) 0%,
+                    transparent 70%);
+            animation: rotate 30s linear infinite;
+        }
+    }
+
+    &__overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(ellipse at center,
+                transparent 0%,
+                rgba(0, 0, 0, 0.4) 100%);
+        z-index: 1;
+    }
+
+    &__content {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+        padding: $spacing-2xl;
+    }
+
+    &__name {
+        font-family: 'Playfair Display', $font-display;
+        font-size: clamp(3rem, 9vw, 8rem);
+        font-weight: 700;
+        margin-bottom: $spacing-xl;
+        color: $primary-text;
+        letter-spacing: 0.03em;
+        text-shadow:
+            0 0 60px rgba(212, 175, 55, 0.6),
+            0 0 100px rgba(212, 175, 55, 0.4),
+            0 6px 30px rgba(0, 0, 0, 0.9),
+            2px 2px 4px rgba(0, 0, 0, 0.5);
+        line-height: 1;
+        background: linear-gradient(135deg, #ffffff 0%, #d4af37 50%, #ffffff 100%);
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-size: 200% auto;
+        animation: shimmer 3s linear infinite;
+
+        @include respond-to(md) {
+            margin-bottom: $spacing-2xl;
+        }
+    }
+
+    &__title {
+        font-family: $font-heading;
+        font-size: clamp(1.3rem, 3.5vw, 2.8rem);
+        color: $accent-text;
+        font-weight: 500;
+        margin-bottom: $spacing-3xl;
+        letter-spacing: 0.35em;
+        text-transform: uppercase;
+        text-shadow: 0 3px 25px rgba(0, 0, 0, 0.9);
+        position: relative;
+        display: inline-block;
+
+        &::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, $accent-text, transparent);
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.6);
+        }
+
+        @include respond-to(md) {
+            margin-bottom: $spacing-4xl;
+        }
+    }
+
+    &__contact {
+        @include flex-center;
+        flex-wrap: wrap;
+        gap: $spacing-md;
+        margin-top: $spacing-2xl;
+
+        @include respond-to(md) {
+            gap: $spacing-lg;
+        }
+    }
+
+    &__contact-item {
+        font-family: $font-primary;
+        font-size: clamp(0.75rem, 1.5vw, 1rem);
+        font-weight: 300;
+        color: $secondary-text;
+        padding: $spacing-sm $spacing-lg;
+        background: rgba(0, 0, 0, 0.6);
+        border: 1px solid $border-color;
+        border-radius: 2px;
+        backdrop-filter: blur(10px);
+        transition: all $transition-base;
+        letter-spacing: 0.05em;
+
+        &:hover {
+            background: rgba(212, 175, 55, 0.1);
+            border-color: $accent-text;
+            color: $highlight-text;
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(212, 175, 55, 0.3);
+        }
+    }
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes shimmer {
+    to {
+        background-position: 200% center;
+    }
+}

@@ -1,0 +1,220 @@
+{
+  "personal": {
+    "name": "Harma Davtian",
+    "title": "Lead Full Stack Engineer",
+    "email": "harma.davtian@gmail.com",
+    "phone": "818.632.1804",
+    "location": "Glendale, CA 91208"
+  },
+  "summary": "Lead Full Stack Engineer with experience designing and delivering end-to-end web platforms using Angular, React, and TypeScript, supported by backend services in C#, Java, and Node.js, in the cloud. Known for integrating across frontend, APIs, databases, messaging, CI/CD, and infrastructure to build cohesive systems. Product-minded leader and mentor with strong focus on architecture, scalability, and delivery.",
+  "skills": {
+    "Frontend": ["Angular", "React", "TypeScript", "JavaScript"],
+    "Backend": ["C#", "Java", "Node.js", "REST APIs"],
+    "Cloud & DevOps": ["Azure", "AWS", "Docker", "CI/CD"],
+    "Data & Messaging": ["PostgreSQL", "MongoDB", "RabbitMQ"],
+    "Testing": ["Playwright", "Selenium", "TestNG"]
+  },
+  "experience": [
+    {
+      "id": "investcloud",
+      "company": "InvestCloud Inc.",
+      "navLabel": "InvestCloud",
+      "location": "Los Angeles, CA",
+      "startDate": "04/2018",
+      "endDate": "06/2025",
+      "positions": [
+        {
+          "title": "Lead Full Stack Engineer",
+          "startDate": "02/2024",
+          "endDate": "06/2025",
+          "responsibilities": [
+            "Built modern customer-facing and internal web applications using Angular, React, and TypeScript, backed by APIs and services implemented in multiple backend languages.",
+            "Architected and built a full-stack test automation platform using Angular standalone components and a C# Playwright-based REST API, designed for thread-safe, asynchronous execution of long-running workflows.",
+            "Designed and implemented the cloud deployment on Azure using Static Web Apps, Container Apps, Blob Storage, Application Insights, RabbitMQ, MongoDB, and GitLab CI/CD, enabling scalable and reliable test execution.",
+            "Built a React/Redux dashboard and responsive UI to monitor, control, and visualize execution of the automation platform.",
+            "Built and maintained a Java Selenium/TestNG automation framework backed by a Spring Boot REST API, PostgreSQL, and Azure-based CI/CD deployment.",
+            "Mentored junior developers with a focus on system architecture, clean and decoupled design, ownership, and effective technical communication.",
+            "Established code review standards and ownership practices to improve code quality, consistency, and long-term maintainability across teams.",
+            "Served as Product Owner in a SCRUM/AGILE environment, owning backlog prioritization, roadmap planning, and delivery for test automation initiatives supporting global QA teams.",
+            "Partnered with engineering leadership and stakeholders to translate ambiguous product ideas into scalable, production-ready platforms and services."
+          ]
+        },
+        {
+          "title": "SDK Developer",
+          "startDate": "04/2018",
+          "endDate": "02/2024",
+          "responsibilities": [
+            "Designed and developed scalable Angular and React components using TypeScript, with a focus on performance, accessibility (a11y), and efficient data loading via RxJS-based API integration and caching.",
+            "Developed and maintained a TypeScript-based Chrome extension used companywide for analysis, training, and testing.",
+            "Integrated OAuth authentication flows on the frontend using access tokens.",
+            "Integrated third-party libraries (e.g., DevExtreme) into an internal C# portal generator used by low-code operators to produce full-featured Angular client portals.",
+            "Modernized legacy systems into ES6+/TypeScript architectures, introducing modern CSS/SCSS (Flexbox, Grid) and championing CLI-driven workflows using Angular CLI and Vite.",
+            "Led Test-Driven Development (TDD) within the front-end development group.",
+            "Debugged staging and production issues across the full stack."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rpa",
+      "company": "RPA (Rubin Postaer & Associates)",
+      "navLabel": "RPA",
+      "location": "Santa Monica, CA",
+      "startDate": "10/2014",
+      "endDate": "07/2017",
+      "positions": [
+        {
+          "title": "Senior Web Developer",
+          "responsibilities": [
+            "Built the \"Racing with Honda\" portal using React, Redux, and Next.js with Framer Motion and GSAP animations, backed by a Java Spring Boot REST API, MySQL database, and Dockerized AWS deployment via CI/CD.",
+            "Built marketing portals for Farmers initiatives using React, Redux, and Next.js, with semantic HTML and modular, responsive CSS/SCSS, deployed to Azure via CI/CD pipelines.",
+            "Collaborated with UX, design, and business to translate requirements into seamless user experiences.",
+            "Provided technical leadership and mentored junior developers in best practices and frameworks.",
+            "Introduced Gulp, Grunt and Webpack into development workflows.",
+            "Played a key role in refactoring the company's marketing site built with PHP and WordPress."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "boingo",
+      "company": "Boingo Wireless Inc.",
+      "navLabel": "Boingo",
+      "location": "Los Angeles, CA",
+      "startDate": "08/2010",
+      "endDate": "06/2014",
+      "positions": [
+        {
+          "title": "Web Engineer",
+          "responsibilities": [
+            "Maintained and enhanced the corporate website using PHP, with focus on standards compliant HTML and cross-browser compatible JavaScript and CSS.",
+            "Built marketing and signup microsites with outflows to iOS and Android Apps using semantic HTML, responsive CSS and JavaScript.",
+            "Built an internal dashboard for marketing to track initiatives using CakePHP/MySQL calling Adobe Test & Target APIs.",
+            "Introduced jQuery to the frontend team (cutting-edge technology at the time).",
+            "Led bi-monthly web production code releases.",
+            "Migrated the corporate website to AWS using load-balanced, auto-scaling EC2 instances, S3, and Amazon RDS.",
+            "Acted as Scrum Master and Product Owner in an Agile environment, prioritized tickets, created epics and stories and managed sprints.",
+            "Collaborated with other engineering groups as well as Product, Marketing and QA to lead Web initiatives."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "capital-group",
+      "company": "Capital Group Companies",
+      "navLabel": "Capital Group",
+      "location": "Los Angeles, CA",
+      "startDate": "04/2008",
+      "endDate": "04/2009",
+      "positions": [
+        {
+          "title": "Front-End Coder",
+          "responsibilities": [
+            "Maintained American funds website with annual tax information in a highly regulated environment.",
+            "Coded pages with clean HTML, CSS and JavaScript displaying tax content, calculators and graphs.",
+            "Collaborated with backend Java engineering teams in integrating web components."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "murad",
+      "company": "Murad Inc.",
+      "navLabel": "Murad",
+      "location": "El Segundo, CA",
+      "startDate": "05/2005",
+      "endDate": "04/2008",
+      "positions": [
+        {
+          "title": "Web Developer",
+          "responsibilities": [
+            "Created multiple weekly HTML Emails sent to thousands of customers.",
+            "Collaborated with Marketing and Designers for microsites for various Murad products.",
+            "Ensured cross browser compatibility for all HTML and CSS content on Murad microsites.",
+            "Managed product descriptions, web content and images within IBM iStore ecommerce platform.",
+            "Led search engine optimization efforts for Marketing campaigns in collaboration with vendors.",
+            "Integrated Google Analytics and other tracking to Murad owned websites."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "unitedlayer",
+      "company": "UnitedLayer Inc.",
+      "navLabel": "UnitedLayer",
+      "location": "Los Angeles, CA",
+      "startDate": "01/2001",
+      "endDate": "01/2002",
+      "positions": [
+        {
+          "title": "Web Developer/Designer",
+          "responsibilities": [
+            "Designed and developed the company website using HTML, CSS, and PHP.",
+            "Deployed and maintained the site on internally hosted Linux servers using a LAMP stack.",
+            "Supported Los Angeles data center operations, assisting with server cabinet setup, hardware installation, network cabling, and customer phone support."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "stormscape",
+      "company": "Stormscape (DBA for Harma Davtian)",
+      "navLabel": "Stormscape",
+      "location": "Glendale, CA",
+      "startDate": "01/2000",
+      "endDate": "01/2010",
+      "positions": [
+        {
+          "title": "Principal Web Developer",
+          "responsibilities": [
+            "Owned and delivered end-to-end custom web solutions for clients across political, healthcare, legal, education, nonprofit, and local business sectors, spanning architecture, development, deployment, and long-term support.",
+            "Delivered and supported websites for public figures and organizations, including local political campaigns and officials such as Ardy Kassakhian and Paul Krekorian, as well as actress Sean Young, and managed email marketing initiatives using Microsoft bCentral/List Builder.",
+            "Built and maintained attorney websites for firms such as Ourfalian & Ourfalian Attorneys at Law.",
+            "Developed and maintained websites for UCLA Medical Groups, including CMS integrations with platforms such as Drupal and WordPress.",
+            "Created websites for AGBU Young Professionals chapters in San Francisco, Los Angeles, and New York, as well as \"Camp Nubar\", an Armenian youth camp in New York.",
+            "Developed the official website for the Burbank Teachers Association, supporting communications for educators and union initiatives.",
+            "Built restaurant websites and internal dashboards for Smith Brothers Restaurant Corporation (Pasadena), enabling dynamic menu management and OpenTable reservation integrations for venues including Smitty's Grill, Arroyo Chop House, Crocodile Café, and Vibrato Grill Jazz (Beverly Hills).",
+            "Integrated e-commerce functionality for equipment reseller clients using ShopSite shopping cart software alongside custom PHP workflows to support online catalogs, shopping carts, and checkout flows.",
+            "Created Flash-based website intros and dual HTML/Flash site experiences common to the era, delivering rich interactive content while maintaining non-Flash fallbacks.",
+            "Built custom websites and administrative dashboards for local equipment resellers using PHP and Dreamweaver-era development tools.",
+            "Collaborated directly with clients, designers, and vendors to gather requirements, manage timelines, and ensure reliable production delivery."
+          ]
+        }
+      ]
+    }
+  ],
+  "education": {
+    "institution": "University of Southern California",
+    "degree": "Bachelor of Arts",
+    "major": "History",
+    "graduationDate": "06/1996"
+  },
+  "links": [
+    {
+      "title": "React/Redux/Spring Boot/AI-RAG Demo",
+      "url": "https://movie-app.disney.harma.dev"
+    },
+    {
+      "title": "LinkedIn",
+      "url": "https://www.linkedin.com/in/harma-davtian"
+    },
+    {
+      "title": "GitHub",
+      "url": "https://github.com/hdavtian"
+    },
+    {
+      "title": "CodePen",
+      "url": "https://codepen.io/hdavtian"
+    },
+    {
+      "title": "YouTube",
+      "url": "https://www.youtube.com/@harmadavtian2916"
+    }
+  ],
+  "certifications": [
+    {
+      "name": "Certified Scrum Product Owner (CSPO)",
+      "date": "06/2025"
+    }
+  ]
+}

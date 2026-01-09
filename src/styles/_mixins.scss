@@ -1,0 +1,161 @@
+@use './variables' as *;
+
+// Responsive Breakpoints
+@mixin respond-to($breakpoint) {
+    @if $breakpoint ==xs {
+        @media (min-width: $breakpoint-xs) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint ==sm {
+        @media (min-width: $breakpoint-sm) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint ==md {
+        @media (min-width: $breakpoint-md) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint ==lg {
+        @media (min-width: $breakpoint-lg) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint ==xl {
+        @media (min-width: $breakpoint-xl) {
+            @content;
+        }
+    }
+
+    @else if $breakpoint ==2xl {
+        @media (min-width: $breakpoint-2xl) {
+            @content;
+        }
+    }
+}
+
+// Flexbox utilities
+@mixin flex-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+@mixin flex-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@mixin flex-column {
+    display: flex;
+    flex-direction: column;
+}
+
+// Grid utilities
+@mixin grid-auto($min-width, $gap: $spacing-md) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax($min-width, 1fr));
+    gap: $gap;
+}
+
+// Edge-to-edge container
+@mixin edge-to-edge {
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    padding-left: $spacing-md;
+    padding-right: $spacing-md;
+
+    @include respond-to(md) {
+        padding-left: $spacing-xl;
+        padding-right: $spacing-xl;
+    }
+
+    @include respond-to(lg) {
+        padding-left: $spacing-3xl;
+        padding-right: $spacing-3xl;
+    }
+}
+
+// Text effects
+@mixin text-gradient($color1: $accent-text, $color2: $highlight-text) {
+    background: linear-gradient(135deg, $color1, $color2);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+@mixin text-shadow-glow($color: $accent-text) {
+    text-shadow: 0 0 20px rgba($color, 0.5),
+        0 0 40px rgba($color, 0.3);
+}
+
+// Box effects
+@mixin glass-effect {
+    background: rgba($secondary-bg, 0.6);
+    backdrop-filter: blur(10px);
+    border: 1px solid $border-color;
+}
+
+@mixin card-shadow {
+    box-shadow: 0 4px 6px -1px $shadow-color,
+        0 2px 4px -1px $shadow-color;
+}
+
+@mixin hover-lift {
+    transition: transform $transition-base, box-shadow $transition-base;
+
+    &:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px -6px $shadow-color;
+    }
+}
+
+// Movie credits styling
+@mixin credits-text {
+    font-family: $font-heading;
+    letter-spacing: 0.05em;
+    line-height: 1.6;
+}
+
+// Fade animations
+@mixin fade-in-up {
+    opacity: 0;
+    transform: translateY(30px);
+}
+
+@mixin fade-in-left {
+    opacity: 0;
+    transform: translateX(-30px);
+}
+
+@mixin fade-in-right {
+    opacity: 0;
+    transform: translateX(30px);
+}
+
+// Scrollbar styling
+@mixin custom-scrollbar {
+    &::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: $secondary-bg;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: $accent-text;
+        border-radius: 4px;
+
+        &:hover {
+            background: $highlight-text;
+        }
+    }
+}

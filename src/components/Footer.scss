@@ -1,0 +1,224 @@
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.footer {
+    background: $primary-bg;
+    position: relative;
+    overflow: hidden;
+    min-height: 100vh;
+    padding: $spacing-4xl 0;
+
+    &__background {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(ellipse at center,
+                rgba(212, 175, 55, 0.25) 0%,
+                rgba(0, 0, 0, 0.9) 50%,
+                rgba(0, 0, 0, 1) 100%);
+        z-index: 0;
+
+        &::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(0deg,
+                    transparent,
+                    transparent 100px,
+                    rgba(212, 175, 55, 0.06) 100px,
+                    rgba(212, 175, 55, 0.06) 101px);
+        }
+    }
+
+    &__overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(180deg,
+                transparent 0%,
+                rgba(0, 0, 0, 0.5) 50%,
+                rgba(0, 0, 0, 0.9) 100%);
+        z-index: 1;
+    }
+
+    &__container {
+        position: relative;
+        z-index: 2;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 $spacing-xl;
+        display: flex;
+        flex-direction: column;
+        gap: $spacing-4xl;
+
+        @include respond-to(md) {
+            padding: 0 $spacing-2xl;
+            gap: 6rem;
+        }
+    }
+
+    &__section {
+        text-align: center;
+        background: linear-gradient(135deg,
+                rgba(212, 175, 55, 0.1) 0%,
+                rgba(0, 0, 0, 0.7) 100%);
+        padding: $spacing-3xl;
+        border-radius: 20px;
+        border: 1px solid rgba(212, 175, 55, 0.4);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        transition: all 0.3s ease;
+
+        &:hover {
+            transform: translateY(-5px);
+            border-color: rgba(212, 175, 55, 0.6);
+            box-shadow: 0 15px 50px rgba(212, 175, 55, 0.2);
+        }
+
+        &--links {
+            margin-top: $spacing-2xl;
+        }
+    }
+
+    &__title {
+        font-family: $font-heading;
+        font-size: clamp(1.7rem, 3.2vw, 2.8rem);
+        color: $primary-text;
+        margin-bottom: $spacing-2xl;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        text-align: center;
+        font-weight: 600;
+        position: relative;
+        padding-bottom: $spacing-lg;
+
+        &::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, $accent-text, transparent);
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.7);
+        }
+
+        @include respond-to(md) {
+            margin-bottom: $spacing-3xl;
+        }
+    }
+
+    &__item {
+        margin-bottom: $spacing-xl;
+    }
+
+    &__institution,
+    &__cert-name {
+        font-family: $font-display;
+        font-size: clamp(1.3rem, 2.6vw, 2rem);
+        color: $accent-text;
+        margin-bottom: $spacing-md;
+        letter-spacing: 0.08em;
+        font-weight: 600;
+        text-shadow: 0 2px 15px rgba(212, 175, 55, 0.5);
+    }
+
+    &__degree {
+        font-family: $font-primary;
+        font-size: clamp(1.05rem, 2.1vw, 1.3rem);
+        color: $secondary-text;
+        margin-bottom: $spacing-xs;
+        font-weight: 300;
+        line-height: 1.8;
+        letter-spacing: 0.05em;
+    }
+
+    &__date {
+        font-family: $font-mono;
+        font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+        color: $accent-text;
+        letter-spacing: 0.1em;
+    }
+
+    &__links {
+        display: flex;
+        flex-direction: column;
+        gap: $spacing-md;
+        max-width: 600px;
+        margin: 0 auto;
+
+        @include respond-to(md) {
+            gap: $spacing-lg;
+        }
+    }
+
+    &__link {
+        font-family: $font-primary;
+        font-size: clamp(1rem, 1.8vw, 1.2rem);
+        color: $secondary-text;
+        padding: $spacing-lg $spacing-xl;
+        border: 1px solid rgba(212, 175, 55, 0.3);
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        letter-spacing: 0.08em;
+        font-weight: 400;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+
+        &:hover {
+            background: rgba(212, 175, 55, 0.2);
+            border-color: $accent-text;
+            color: $highlight-text;
+            transform: translateX(10px) scale(1.02);
+            box-shadow: 0 8px 30px rgba(212, 175, 55, 0.4);
+        }
+    }
+
+    &__credits {
+        text-align: center;
+        padding-top: $spacing-4xl;
+        margin-top: $spacing-4xl;
+        border-top: 1px solid rgba(212, 175, 55, 0.2);
+
+        @include respond-to(md) {
+            padding-top: 6rem;
+            margin-top: 6rem;
+        }
+    }
+
+    &__credits-name {
+        font-family: $font-display;
+        font-size: clamp(1.5rem, 3vw, 2.5rem);
+        color: $primary-text;
+        margin-bottom: $spacing-lg;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+    }
+
+    &__credits-text {
+        font-family: $font-primary;
+        font-size: clamp(0.85rem, 1.5vw, 1rem);
+        color: $dim-text;
+        margin-bottom: $spacing-sm;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        font-weight: 300;
+    }
+
+    &__credits-year {
+        font-family: $font-mono;
+        font-size: clamp(0.8rem, 1.3vw, 0.95rem);
+        color: $accent-text;
+        letter-spacing: 0.2em;
+        opacity: 0.7;
+    }
+}

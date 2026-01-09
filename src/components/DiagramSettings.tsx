@@ -1,0 +1,432 @@
+import "./DiagramSettings.scss";
+
+export type DiagramStyle =
+  | "circles"
+  | "constellation"
+  | "circuit"
+  | "rings"
+  | "tree"
+  | "galaxy"
+  | "neural";
+
+export interface DiagramStyleOptions {
+  // Circle style options
+  nodeSpacing?: number;
+  glowIntensity?: number;
+  parentSpacing?: number;
+
+  // Constellation options
+  starBrightness?: number;
+  twinkleSpeed?: number;
+
+  // Circuit board options
+  circuitComplexity?: number;
+  traceWidth?: number;
+  circuitColor?: string;
+  cpuSize?: number;
+  chipSize?: number;
+
+  // Ring options
+  ringCount?: number;
+  ringSpacing?: number;
+
+  // Tree options
+  branchAngle?: number;
+  leafDensity?: number;
+
+  // Galaxy options
+  spiralTightness?: number;
+  rotationSpeed?: number;
+
+  // Neural options
+  pulseSpeed?: number;
+  connectionDensity?: number;
+}
+
+interface DiagramSettingsProps {
+  currentStyle: DiagramStyle;
+  options: DiagramStyleOptions;
+  onStyleChange: (style: DiagramStyle) => void;
+  onOptionsChange: (options: DiagramStyleOptions) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+const styleDescriptions: Record<DiagramStyle, string> = {
+  circles: "Classic circles with lines - clean and elegant",
+  constellation: "Stars connected like a constellation map",
+  circuit: "Tech-inspired circuit board design",
+  rings: "Concentric rings orbiting the center",
+  tree: "Organic tree structure with branches",
+  galaxy: "Spiral galaxy with orbiting elements",
+  neural: "Neural network with pulsing connections",
+};
+
+export default function DiagramSettings({
+  currentStyle,
+  options,
+  onStyleChange,
+  onOptionsChange,
+  isOpen,
+  onToggle,
+}: DiagramSettingsProps) {
+  const handleSliderChange = (
+    key: keyof DiagramStyleOptions,
+    value: number | string
+  ) => {
+    onOptionsChange({ ...options, [key]: value });
+  };
+
+  const getStyleOptions = (style: DiagramStyle) => {
+    switch (style) {
+      case "circles":
+        return (
+          <>
+            <div className="setting-item">
+              <label>Parent Spacing: {options.parentSpacing || 180}</label>
+              <input
+                type="range"
+                min="100"
+                max="300"
+                value={options.parentSpacing || 180}
+                onChange={(e) =>
+                  handleSliderChange("parentSpacing", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Child Spacing: {options.nodeSpacing || 100}</label>
+              <input
+                type="range"
+                min="50"
+                max="200"
+                value={options.nodeSpacing || 100}
+                onChange={(e) =>
+                  handleSliderChange("nodeSpacing", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Glow Intensity: {options.glowIntensity || 5}</label>
+              <input
+                type="range"
+                min="0"
+                max="20"
+                value={options.glowIntensity || 5}
+                onChange={(e) =>
+                  handleSliderChange("glowIntensity", Number(e.target.value))
+                }
+              />
+            </div>
+          </>
+        );
+
+      case "constellation":
+        return (
+          <>
+            <div className="setting-item">
+              <label>Star Brightness: {options.starBrightness || 50}</label>
+              <input
+                type="range"
+                min="20"
+                max="100"
+                value={options.starBrightness || 50}
+                onChange={(e) =>
+                  handleSliderChange("starBrightness", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Twinkle Speed: {options.twinkleSpeed || 3}</label>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={options.twinkleSpeed || 3}
+                onChange={(e) =>
+                  handleSliderChange("twinkleSpeed", Number(e.target.value))
+                }
+              />
+            </div>
+          </>
+        );
+
+      case "circuit":
+        return (
+          <>
+            <div className="setting-item">
+              <label>
+                Circuit Complexity: {options.circuitComplexity || 50}
+              </label>
+              <input
+                type="range"
+                min="10"
+                max="100"
+                value={options.circuitComplexity || 50}
+                onChange={(e) =>
+                  handleSliderChange(
+                    "circuitComplexity",
+                    Number(e.target.value)
+                  )
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Trace Width: {options.traceWidth || 3}</label>
+              <input
+                type="range"
+                min="1"
+                max="8"
+                value={options.traceWidth || 3}
+                onChange={(e) =>
+                  handleSliderChange("traceWidth", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Pulse Rate: {options.pulseSpeed || 3}</label>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={options.pulseSpeed || 3}
+                onChange={(e) =>
+                  handleSliderChange("pulseSpeed", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>CPU Size: {options.cpuSize || 80}</label>
+              <input
+                type="range"
+                min="40"
+                max="180"
+                value={options.cpuSize || 80}
+                onChange={(e) =>
+                  handleSliderChange("cpuSize", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Chip Size: {options.chipSize || 100}</label>
+              <input
+                type="range"
+                min="40"
+                max="200"
+                value={options.chipSize || 100}
+                onChange={(e) =>
+                  handleSliderChange("chipSize", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Circuit Color</label>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {[
+                  "#d4af37",
+                  "#4a9eff",
+                  "#ff6b6b",
+                  "#50fa7b",
+                  "#bd93f9",
+                  "#ffb86c",
+                ].map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => handleSliderChange("circuitColor", color)}
+                    style={{
+                      width: "30px",
+                      height: "30px",
+                      backgroundColor: color,
+                      border:
+                        options.circuitColor === color
+                          ? "3px solid white"
+                          : "1px solid rgba(255,255,255,0.3)",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        );
+
+      case "rings":
+        return (
+          <>
+            <div className="setting-item">
+              <label>Ring Count: {options.ringCount || 3}</label>
+              <input
+                type="range"
+                min="2"
+                max="5"
+                value={options.ringCount || 3}
+                onChange={(e) =>
+                  handleSliderChange("ringCount", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Ring Spacing: {options.ringSpacing || 80}</label>
+              <input
+                type="range"
+                min="50"
+                max="150"
+                value={options.ringSpacing || 80}
+                onChange={(e) =>
+                  handleSliderChange("ringSpacing", Number(e.target.value))
+                }
+              />
+            </div>
+          </>
+        );
+
+      case "tree":
+        return (
+          <>
+            <div className="setting-item">
+              <label>Branch Angle: {options.branchAngle || 45}°</label>
+              <input
+                type="range"
+                min="20"
+                max="80"
+                value={options.branchAngle || 45}
+                onChange={(e) =>
+                  handleSliderChange("branchAngle", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Leaf Density: {options.leafDensity || 50}</label>
+              <input
+                type="range"
+                min="20"
+                max="100"
+                value={options.leafDensity || 50}
+                onChange={(e) =>
+                  handleSliderChange("leafDensity", Number(e.target.value))
+                }
+              />
+            </div>
+          </>
+        );
+
+      case "galaxy":
+        return (
+          <>
+            <div className="setting-item">
+              <label>
+                Spiral Tightness: {(options.spiralTightness || 0.3).toFixed(1)}
+              </label>
+              <input
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.1"
+                value={options.spiralTightness || 0.3}
+                onChange={(e) =>
+                  handleSliderChange("spiralTightness", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>Rotation Speed: {options.rotationSpeed || 5}</label>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={options.rotationSpeed || 5}
+                onChange={(e) =>
+                  handleSliderChange("rotationSpeed", Number(e.target.value))
+                }
+              />
+            </div>
+          </>
+        );
+
+      case "neural":
+        return (
+          <>
+            <div className="setting-item">
+              <label>Pulse Speed: {options.pulseSpeed || 2}</label>
+              <input
+                type="range"
+                min="1"
+                max="5"
+                value={options.pulseSpeed || 2}
+                onChange={(e) =>
+                  handleSliderChange("pulseSpeed", Number(e.target.value))
+                }
+              />
+            </div>
+            <div className="setting-item">
+              <label>
+                Connection Density: {options.connectionDensity || 50}
+              </label>
+              <input
+                type="range"
+                min="20"
+                max="100"
+                value={options.connectionDensity || 50}
+                onChange={(e) =>
+                  handleSliderChange(
+                    "connectionDensity",
+                    Number(e.target.value)
+                  )
+                }
+              />
+            </div>
+          </>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <>
+      <button
+        className="settings-toggle"
+        onClick={onToggle}
+        title="Diagram Settings"
+      >
+        ⚙️
+      </button>
+
+      {isOpen && (
+        <div className="diagram-settings">
+          <div className="settings-header">
+            <h3>Diagram Style</h3>
+            <button className="close-btn" onClick={onToggle}>
+              ×
+            </button>
+          </div>
+
+          <div className="style-selector">
+            {(Object.keys(styleDescriptions) as DiagramStyle[]).map((style) => (
+              <div key={style} className="style-option-wrapper">
+                <div
+                  className={`style-option ${
+                    currentStyle === style ? "active" : ""
+                  }`}
+                  onClick={() => onStyleChange(style)}
+                >
+                  <div className="style-name">{style.toUpperCase()}</div>
+                  <div className="style-description">
+                    {styleDescriptions[style]}
+                  </div>
+                </div>
+                {currentStyle === style && (
+                  <div className="style-options-inline">
+                    {getStyleOptions(style)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

@@ -1,0 +1,199 @@
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.experience {
+    background: $primary-bg;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+
+    &__job {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: $spacing-2xl $spacing-lg;
+        background: linear-gradient(135deg,
+                rgba(212, 175, 55, 0.15) 0%,
+                rgba(0, 0, 0, 0.95) 50%,
+                rgba(212, 175, 55, 0.08) 100%);
+        opacity: 0;
+        pointer-events: none;
+
+        &.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        @include respond-to(md) {
+            padding: $spacing-3xl $spacing-2xl;
+        }
+
+        @include respond-to(xs) {
+            height: auto;
+            min-height: 100vh;
+        }
+    }
+
+    &__container {
+        max-width: 1200px;
+        width: 100%;
+        height: 90vh;
+        overflow-y: auto;
+        text-align: center;
+        padding-right: $spacing-md;
+        border: 10px solid red !important;
+        background: rgba(255, 0, 0, 0.2) !important;
+        box-sizing: border-box;
+
+        /* Custom scrollbar styling */
+        &::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        &::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            border: 1px solid rgba(212, 175, 55, 0.2);
+        }
+
+        &::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg,
+                    rgba(212, 175, 55, 0.8),
+                    rgba(212, 175, 55, 0.4));
+            border-radius: 10px;
+            border: 2px solid rgba(0, 0, 0, 0.4);
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+
+            &:hover {
+                background: linear-gradient(180deg,
+                        rgba(212, 175, 55, 1),
+                        rgba(212, 175, 55, 0.6));
+                box-shadow: 0 0 15px rgba(212, 175, 55, 0.8);
+            }
+        }
+
+        /* Firefox scrollbar */
+        scrollbar-width: thin;
+        scrollbar-color: rgba(212, 175, 55, 0.8) rgba(0, 0, 0, 0.4);
+    }
+
+    &__company {
+        font-family: $font-heading;
+        font-size: clamp(2.5rem, 5vw, 5rem);
+        color: $primary-text;
+        margin-bottom: $spacing-xl;
+        letter-spacing: 0.08em;
+        text-align: center;
+        text-transform: uppercase;
+        font-weight: 700;
+        background: linear-gradient(135deg, #ffffff 0%, #d4af37 50%, #ffffff 100%);
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: none;
+        filter: drop-shadow(0 4px 20px rgba(212, 175, 55, 0.6));
+    }
+
+    &__meta {
+        @include flex-center;
+        gap: $spacing-2xl;
+        flex-wrap: wrap;
+        font-size: clamp(1.1rem, 2.2vw, 1.5rem);
+        color: $accent-text;
+        margin-bottom: $spacing-3xl;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        padding: $spacing-lg;
+        background: rgba(0, 0, 0, 0.4);
+        border-radius: 12px;
+        border: 1px solid rgba(212, 175, 55, 0.2);
+        font-weight: 500;
+        text-shadow: 0 2px 15px rgba(212, 175, 55, 0.5);
+    }
+
+    &__position-block {
+        margin-bottom: $spacing-xl;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+    &__position {
+        font-family: $font-heading;
+        font-size: clamp(1.5rem, 2.8vw, 2.3rem);
+        color: $highlight-text;
+        margin-bottom: $spacing-xl;
+        letter-spacing: 0.08em;
+        font-weight: 600;
+        text-shadow: 0 3px 20px rgba(212, 175, 55, 0.4);
+        position: relative;
+        padding-left: $spacing-lg;
+
+        &::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 80%;
+            background: linear-gradient(180deg, $accent-text, transparent);
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.6);
+        }
+    }
+
+    &__responsibilities {
+        list-style: none;
+        padding: 0;
+        margin: 0 auto;
+        max-width: 900px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: $spacing-sm;
+        text-align: left;
+
+        @include respond-to(md) {
+            grid-template-columns: repeat(2, 1fr);
+            gap: $spacing-md;
+        }
+    }
+
+    &__responsibility {
+        font-family: $font-primary;
+        font-size: clamp(1rem, 1.9vw, 1.25rem);
+        color: $secondary-text;
+        line-height: 1.9;
+        padding: $spacing-md $spacing-lg;
+        padding-left: $spacing-2xl;
+        position: relative;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        border-left: 3px solid rgba(212, 175, 55, 0.5);
+        transition: all 0.3s ease;
+        margin-bottom: $spacing-sm;
+
+        &:hover {
+            background: rgba(212, 175, 55, 0.1);
+            border-left-color: $accent-text;
+            transform: translateX(5px);
+            box-shadow: 0 4px 20px rgba(212, 175, 55, 0.2);
+        }
+
+        &::before {
+            content: '◆';
+            position: absolute;
+            left: $spacing-md;
+            color: $accent-text;
+            font-size: 1.1em;
+            text-shadow: 0 0 15px rgba(212, 175, 55, 0.8);
+        }
+    }
+}
