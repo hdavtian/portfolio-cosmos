@@ -422,12 +422,15 @@ export default function DiagramSettings({
               />
             </div>
             <div className="setting-item">
-              <label>Sun Intensity: {options.spaceSunIntensity || 2.5}</label>
+              <label>
+                Sun Intensity:{" "}
+                {options.spaceSunIntensity?.toFixed(3) || "2.500"}
+              </label>
               <input
                 type="range"
-                min="0.5"
+                min="0"
                 max="5"
-                step="0.1"
+                step="0.005"
                 value={options.spaceSunIntensity || 2.5}
                 onChange={(e) =>
                   handleSliderChange(

@@ -198,20 +198,33 @@ export default function ResumeSpace3D({
     scene.add(skyfield);
 
     // --- LIGHTING ---
-    // Increase ambient light so MeshLambertMaterial planets are visible
-    const ambientLight = new THREE.AmbientLight(0x404040);
+    // Match original site: very dim ambient + strong point light with decay + fill light
+    const ambientLight = new THREE.AmbientLight(
+      new THREE.Color(0.13, 0.13, 0.13),
+      0.5
+    );
     scene.add(ambientLight);
 
     const sunLight = new THREE.PointLight(
-      0xffffff,
-      optionsRef.current.spaceSunIntensity || 2.5,
-      8000 // Increased distance so light reaches all planets
+      new THREE.Color(1.0, 1.0, 1.0),
+      (optionsRef.current.spaceSunIntensity || 2.5) * 4, // Multiply by 4 to match original's 10.0 default
+      1000, // Distance
+      0.5 // Decay for physical light falloff
     );
     sunLight.position.set(0, 0, 0);
-    // Disable shadows to reduce shader complexity
     sunLight.castShadow = false;
     scene.add(sunLight);
     sceneRef.current.sunLight = sunLight;
+
+    // Fill light for ambient illumination (matches original)
+    const fillLight = new THREE.PointLight(
+      new THREE.Color(0.2, 0.4, 1.0),
+      2.0,
+      100,
+      1
+    );
+    fillLight.position.set(50, 50, -100);
+    scene.add(fillLight);
 
     // --- OBJECTS ---
     const items: {
@@ -349,12 +362,14 @@ export default function ResumeSpace3D({
       orbit.rotation.x = Math.PI / 2;
       parent.add(orbit);
 
-      // Planet Mesh - Use simpler material for GPU compatibility
+      // Planet Mesh - Use MeshStandardMaterial for physically-based rendering (matches original)
       const planetGeometry = new THREE.SphereGeometry(size, 32, 32);
-      const planetMaterial = new THREE.MeshLambertMaterial({
+      const planetMaterial = new THREE.MeshStandardMaterial({
         color: textureUrl ? 0xffffff : color,
         map: textureUrl ? textureLoader.load(textureUrl) : null,
-        emissive: 0x000000, // Will change on hover
+        emissive: new THREE.Color(0.0, 0.0, 0.0), // Will change on hover
+        metalness: 0.05,
+        roughness: 1.0,
       });
       const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
       // Store original color for hover effect
@@ -507,7 +522,7 @@ export default function ResumeSpace3D({
       // Reset previous hover
       if (hoveredObject && hoveredObject.userData.originalEmissive) {
         (
-          (hoveredObject as THREE.Mesh).material as THREE.MeshLambertMaterial
+          (hoveredObject as THREE.Mesh).material as THREE.MeshStandardMaterial
         ).emissive.copy(hoveredObject.userData.originalEmissive);
         document.body.style.cursor = "default";
         hoveredObject = null;
@@ -523,7 +538,7 @@ export default function ResumeSpace3D({
           if (hoveredObject.userData.hoverEmissive) {
             (
               (hoveredObject as THREE.Mesh)
-                .material as THREE.MeshLambertMaterial
+                .material as THREE.MeshStandardMaterial
             ).emissive.copy(hoveredObject.userData.hoverEmissive);
             document.body.style.cursor = "pointer";
           }
