@@ -5,6 +5,9 @@ import {
   CSS2DRenderer,
   CSS2DObject,
 } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import resumeData from "../data/resume.json";
 import { type DiagramStyleOptions } from "./DiagramSettings";
 
@@ -26,6 +29,8 @@ export default function ResumeSpace3D({
   const sceneRef = useRef<{
     sunLight?: THREE.PointLight;
     labelRendererDom?: HTMLElement;
+    bloomPass?: UnrealBloomPass;
+    sunMaterial?: THREE.MeshBasicMaterial;
   }>({});
 
   // Store options in a ref so the animation loop can access the latest values
@@ -34,9 +39,16 @@ export default function ResumeSpace3D({
   useEffect(() => {
     optionsRef.current = options;
 
-    // Update live properties
+    // Update live properties - directly control bloom like the original
+    if (sceneRef.current.bloomPass && options.spaceSunIntensity !== undefined) {
+      // Map slider value (0.5-5) to bloom strength (0-2)
+      const bloomStrength = (options.spaceSunIntensity / 5) * 2;
+      sceneRef.current.bloomPass.strength = bloomStrength;
+      console.log("Updated bloom strength to:", bloomStrength);
+    }
+
     if (sceneRef.current.sunLight && options.spaceSunIntensity !== undefined) {
-      sceneRef.current.sunLight.intensity = options.spaceSunIntensity;
+      sceneRef.current.sunLight.intensity = options.spaceSunIntensity * 2;
     }
     if (sceneRef.current.labelRendererDom) {
       sceneRef.current.labelRendererDom.style.display =
@@ -127,6 +139,34 @@ export default function ResumeSpace3D({
     controls.autoRotate = false;
     controls.autoRotateSpeed = 0.5;
 
+    // Post-processing for bloom effect
+    const composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(container.clientWidth, container.clientHeight),
+      Math.min((optionsRef.current.spaceSunIntensity || 2.5) * 0.4, 3), // Increased multiplier and cap
+      0.6, // Increased radius for more glow
+      0.5 // Lower threshold so more things glow
+    );
+    composer.addPass(bloomPass);
+    sceneRef.current.bloomPass = bloomPass;
+
+    // Prevent default browser zoom/pinch behavior so OrbitControls can handle it
+    const preventDefaultTouch = (e: Event) => {
+      if ((e as TouchEvent).touches && (e as TouchEvent).touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+    renderer.domElement.addEventListener("touchstart", preventDefaultTouch, {
+      passive: false,
+    });
+    renderer.domElement.addEventListener("touchmove", preventDefaultTouch, {
+      passive: false,
+    });
+    renderer.domElement.style.touchAction = "none";
+
     // --- TEXTURES ---
     const textureLoader = new THREE.TextureLoader();
 
@@ -142,7 +182,7 @@ export default function ResumeSpace3D({
     const sunLight = new THREE.PointLight(
       0xffffff,
       optionsRef.current.spaceSunIntensity || 2.5,
-      5000
+      8000 // Increased distance so light reaches all planets
     );
     sunLight.position.set(0, 0, 0);
     // Disable shadows to reduce shader complexity
@@ -159,18 +199,33 @@ export default function ResumeSpace3D({
       parent?: THREE.Object3D;
     }[] = [];
 
+    // Track clickable planets for raycasting
+    const clickablePlanets: THREE.Mesh[] = [];
+
     // 1. SUN (Profile)
     const sunTexture = textureLoader.load(
       "https://raw.githubusercontent.com/SoumyaEXE/3d-Solar-System-ThreeJS/main/public/textures/sun.jpg"
     );
     const sunGeometry = new THREE.SphereGeometry(30, 32, 32);
     // Basic material for Sun so it's always bright and not affected by lights
+    const initialBrightness =
+      0.8 + (optionsRef.current.spaceSunIntensity || 2.5) * 0.15;
     const sunMaterial = new THREE.MeshBasicMaterial({
       map: sunTexture,
-      color: 0xffdd44,
+      color: new THREE.Color(
+        initialBrightness,
+        initialBrightness * 0.95,
+        initialBrightness * 0.7
+      ),
+      emissive: new THREE.Color(
+        initialBrightness,
+        initialBrightness * 0.95,
+        initialBrightness * 0.7
+      ),
     });
     const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
     scene.add(sunMesh);
+    sceneRef.current.sunMaterial = sunMaterial;
 
     // Sun Glow (Procedural Texture)
     const canvas = document.createElement("canvas");
@@ -273,8 +328,12 @@ export default function ResumeSpace3D({
       const planetMaterial = new THREE.MeshLambertMaterial({
         color: textureUrl ? 0xffffff : color,
         map: textureUrl ? textureLoader.load(textureUrl) : null,
+        emissive: 0x000000, // Will change on hover
       });
       const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
+      // Store original color for hover effect
+      planetMesh.userData.originalEmissive = new THREE.Color(0x000000);
+      planetMesh.userData.hoverEmissive = new THREE.Color(0x4444ff);
       // Disable shadows for GPU compatibility
       planetMesh.castShadow = false;
       planetMesh.receiveShadow = false;
@@ -302,6 +361,11 @@ export default function ResumeSpace3D({
 
       // Interaction data
       planetMesh.userData = { isPlanet: true, sectionIndex };
+
+      // Add to clickable array if it has a section
+      if (sectionIndex !== undefined) {
+        clickablePlanets.push(planetMesh);
+      }
 
       return planetMesh;
     };
@@ -393,14 +457,47 @@ export default function ResumeSpace3D({
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
 
+    let hoveredObject: THREE.Object3D | null = null;
+
     const onPointerMove = (event: MouseEvent) => {
-      pointer.x = (event.clientX / mountRef.current!.clientWidth) * 2 - 1;
-      pointer.y = -(event.clientY / mountRef.current!.clientHeight) * 2 + 1;
+      if (!mountRef.current) return;
+      const rect = mountRef.current.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      // Check for hover
+      raycaster.setFromCamera(pointer, camera);
+      const intersects = raycaster.intersectObjects(clickablePlanets, false);
+
+      // Reset previous hover
+      if (hoveredObject && hoveredObject.userData.originalEmissive) {
+        (hoveredObject as THREE.Mesh).material.emissive.copy(
+          hoveredObject.userData.originalEmissive
+        );
+        document.body.style.cursor = "default";
+        hoveredObject = null;
+      }
+
+      // Apply new hover
+      if (intersects.length > 0) {
+        const hit = intersects.find(
+          (hit) => hit.object.userData.sectionIndex !== undefined
+        );
+        if (hit && hit.object.userData.sectionIndex !== undefined) {
+          hoveredObject = hit.object;
+          if (hoveredObject.userData.hoverEmissive) {
+            (hoveredObject as THREE.Mesh).material.emissive.copy(
+              hoveredObject.userData.hoverEmissive
+            );
+            document.body.style.cursor = "pointer";
+          }
+        }
+      }
     };
 
     const onClick = () => {
       raycaster.setFromCamera(pointer, camera);
-      const intersects = raycaster.intersectObjects(scene.children, true);
+      const intersects = raycaster.intersectObjects(clickablePlanets, false);
 
       if (intersects.length > 0) {
         // Find first object with userData.sectionIndex
@@ -443,7 +540,7 @@ export default function ResumeSpace3D({
       }
 
       controls.update();
-      renderer.render(scene, camera);
+      composer.render(); // Use composer instead of renderer for bloom effect
       labelRenderer.render(scene, camera);
     };
 
@@ -456,6 +553,10 @@ export default function ResumeSpace3D({
         mountRef.current.clientWidth / mountRef.current.clientHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(
+        mountRef.current.clientWidth,
+        mountRef.current.clientHeight
+      );
+      composer.setSize(
         mountRef.current.clientWidth,
         mountRef.current.clientHeight
       );
@@ -472,6 +573,13 @@ export default function ResumeSpace3D({
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("click", onClick);
+
+      // Remove touch event listeners
+      renderer.domElement.removeEventListener(
+        "touchstart",
+        preventDefaultTouch
+      );
+      renderer.domElement.removeEventListener("touchmove", preventDefaultTouch);
 
       if (container && container.parentElement) {
         while (container.firstChild) {
