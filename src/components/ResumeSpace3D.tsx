@@ -717,7 +717,7 @@ export default function ResumeSpace3D({
         if (job.id === "investcloud") {
           textureUrl = "/textures/custom-planet-textures/texture1.jpg";
         } else if (job.id === "boingo") {
-          textureUrl = "/textures/custom-planet-textures/texture2.jpg";
+          textureUrl = "/textures/custom-planet-textures/texture3.jpg";
         }
 
         // Job moons should be clickable with section index 2+i
