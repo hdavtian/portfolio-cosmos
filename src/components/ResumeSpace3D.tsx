@@ -1256,10 +1256,12 @@ export default function ResumeSpace3D({
           setOverlayVisible(true);
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
+          vlog('🌌 Navigated to Sun (About)');
           // Restore original camera constraints
           setMinDistance(originalMinDistanceRef.current, "restore after about");
           break;
         case "experience":
+          vlog('🌍 Traveling to Experience Planet...');
           await cameraDirectorRef.current.focusPlanet(expPlanet, 300);
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
@@ -1270,6 +1272,7 @@ export default function ResumeSpace3D({
           );
           break;
         case "skills":
+          vlog('⚡ Traveling to Skills Planet...');
           await cameraDirectorRef.current.focusPlanet(skillsPlanet, 350);
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
@@ -1280,6 +1283,7 @@ export default function ResumeSpace3D({
           );
           break;
         case "projects":
+          vlog('💡 Traveling to Projects Planet...');
           await cameraDirectorRef.current.focusPlanet(projectsPlanet, 400);
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
@@ -1301,6 +1305,8 @@ export default function ResumeSpace3D({
 
     const handleExperienceCompanyNavigation = async (companyId: string) => {
       if (!cameraDirectorRef.current) return;
+
+      vlog(`🌙 Initiating moon navigation: ${companyId}`);
 
       // Find the specific company data
       const company = resumeData.experience.find(
@@ -1326,7 +1332,12 @@ export default function ResumeSpace3D({
         }
       });
 
-      if (!moonMesh) return;
+      if (!moonMesh) {
+        vlog(`⚠️ Moon not found for company: ${companyId}`);
+        return;
+      }
+
+      vlog(`✅ Moon found: ${company.company}`);
 
       // FIRST: Stop all orbital movement by setting split-screen mode
       setSplitScreenMode(true);
@@ -1383,6 +1394,8 @@ export default function ResumeSpace3D({
         duration: 2.5,
         ease: "power2.inOut",
       });
+
+      vlog(`✈️ Flight to ${company.company} complete`);
 
       // CRITICAL: Update OrbitControls target AFTER flyTo completes
       // This allows manual zoom to work toward the moon, not the sun!
@@ -2339,42 +2352,115 @@ export default function ResumeSpace3D({
         animation="cosmic"
       />
 
-      {/* Visual Console Overlay */}
+      {/* Visual Console Overlay - Cosmic Style */}
       <div
         style={{
           position: "fixed",
           bottom: "20px",
           left: "20px",
-          width: "400px",
-          maxHeight: consoleVisible ? "200px" : "0px",
-          backgroundColor: "rgba(0, 10, 20, 0.85)",
-          backdropFilter: "blur(10px)",
-          border: consoleVisible ? "1px solid rgba(0, 255, 200, 0.3)" : "none",
-          borderRadius: "8px",
+          width: consoleVisible ? "800px" : "0px",
+          height: consoleVisible ? "200px" : "0px",
+          background: consoleVisible ? "linear-gradient(135deg, rgba(20, 25, 35, 0.95) 0%, rgba(30, 40, 55, 0.95) 50%, rgba(25, 35, 50, 0.95) 100%)" : "transparent",
+          backdropFilter: consoleVisible ? "blur(8px)" : "none",
+          border: consoleVisible ? "2px solid rgba(212, 175, 55, 0.6)" : "none",
+          borderRadius: "15px",
           fontFamily: '"Courier New", monospace',
           fontSize: "11px",
-          color: "#00ffaa",
-          overflow: "auto",
-          transition: "all 0.3s ease",
+          color: "rgba(212, 175, 55, 0.9)",
+          overflow: "hidden",
+          transition: "all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
           zIndex: 9999,
-          padding: consoleVisible ? "8px 12px" : "0",
           boxShadow: consoleVisible
-            ? "0 4px 20px rgba(0, 255, 200, 0.15)"
+            ? "0 25px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 100px rgba(212, 175, 55, 0.3)"
             : "none",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        {consoleVisible &&
-          consoleLogs.map((log, i) => (
-            <div
-              key={i}
-              style={{
-                marginBottom: "2px",
-                opacity: 0.7 + (i / consoleLogs.length) * 0.3,
-              }}
-            >
-              {log}
+        {consoleVisible && (
+          <>
+            {/* Console Header */}
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "8px 12px",
+              borderBottom: "1px solid rgba(212, 175, 55, 0.3)",
+              background: "rgba(0, 0, 0, 0.2)",
+            }}>
+              <div style={{ 
+                fontFamily: "'Cinzel', serif", 
+                fontSize: "12px",
+                color: "rgba(212, 175, 55, 0.9)",
+                letterSpacing: "1px",
+              }}>
+                ⚡ SYSTEM CONSOLE
+              </div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(consoleLogs.join('\n'));
+                  }}
+                  style={{
+                    background: "rgba(212, 175, 55, 0.2)",
+                    border: "1px solid rgba(212, 175, 55, 0.4)",
+                    borderRadius: "4px",
+                    color: "rgba(212, 175, 55, 0.9)",
+                    fontSize: "10px",
+                    padding: "3px 8px",
+                    cursor: "pointer",
+                    fontFamily: "'Montserrat', sans-serif",
+                  }}
+                  title="Copy Console"
+                >
+                  📋
+                </button>
+                <button
+                  onClick={() => {
+                    setConsoleLogs([]);
+                    consoleLogsRef.current = [];
+                  }}
+                  style={{
+                    background: "rgba(255, 100, 100, 0.2)",
+                    border: "1px solid rgba(255, 100, 100, 0.4)",
+                    borderRadius: "4px",
+                    color: "rgba(255, 100, 100, 0.8)",
+                    fontSize: "10px",
+                    padding: "3px 8px",
+                    cursor: "pointer",
+                    fontFamily: "'Montserrat', sans-serif",
+                  }}
+                  title="Clear Console"
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
-          ))}
+            
+            {/* Console Content */}
+            <div style={{ 
+              flex: 1, 
+              overflowY: "auto", 
+              padding: "8px 12px",
+              background: "rgba(0, 0, 0, 0.1)",
+            }}>
+              {consoleLogs.map((log, i) => (
+                <div
+                  key={i}
+                  style={{
+                    marginBottom: "3px",
+                    opacity: 0.6 + (i / consoleLogs.length) * 0.4,
+                    fontFamily: '"Courier New", monospace',
+                    fontSize: "11px",
+                    lineHeight: "1.4",
+                  }}
+                >
+                  {log}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Console Toggle Button */}
@@ -2386,11 +2472,11 @@ export default function ResumeSpace3D({
           left: "20px",
           width: "40px",
           height: "40px",
-          backgroundColor: "rgba(0, 10, 20, 0.7)",
-          backdropFilter: "blur(10px)",
-          border: "1px solid rgba(0, 255, 200, 0.3)",
+          background: "linear-gradient(135deg, rgba(20, 25, 35, 0.9) 0%, rgba(30, 40, 55, 0.9) 100%)",
+          backdropFilter: "blur(8px)",
+          border: "2px solid rgba(212, 175, 55, 0.6)",
           borderRadius: "50%",
-          color: "#00ffaa",
+          color: "rgba(212, 175, 55, 0.9)",
           fontSize: "18px",
           cursor: "pointer",
           zIndex: 10000,
@@ -2398,11 +2484,11 @@ export default function ResumeSpace3D({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          boxShadow: "0 2px 10px rgba(0, 255, 200, 0.2)",
+          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(212, 175, 55, 0.3)",
         }}
         title={consoleVisible ? "Hide Console" : "Show Console"}
       >
-        {consoleVisible ? "✕" : "⌘"}
+        {consoleVisible ? "✕" : "⚡"}
       </button>
     </div>
   );
