@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import gsap from "gsap";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import {
@@ -27,11 +28,18 @@ export default function ResumeSpace3D({
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<{
+    scene?: THREE.Scene;
+    camera?: THREE.PerspectiveCamera;
+    controls?: OrbitControls;
     sunLight?: THREE.PointLight;
     labelRendererDom?: HTMLElement;
     bloomPass?: UnrealBloomPass;
     sunMaterial?: THREE.MeshBasicMaterial;
   }>({});
+
+  // State for floating detail panel
+  const [detailPanelVisible, setDetailPanelVisible] = useState(false);
+  const [detailPanelJobId, setDetailPanelJobId] = useState<string | null>(null);
 
   // Store options in a ref so the animation loop can access the latest values
   // without needing to be recreated on every render
@@ -138,6 +146,9 @@ export default function ResumeSpace3D({
     container.appendChild(labelRenderer.domElement);
 
     sceneRef.current.labelRendererDom = labelRenderer.domElement;
+    sceneRef.current.scene = scene;
+    sceneRef.current.camera = camera;
+
     // Apply initial visibility
     if (optionsRef.current.spaceShowLabels === false) {
       labelRenderer.domElement.style.display = "none";
@@ -145,6 +156,7 @@ export default function ResumeSpace3D({
 
     // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
+    sceneRef.current.controls = controls;
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.minDistance = 50;
@@ -691,6 +703,8 @@ export default function ResumeSpace3D({
           textureUrl = "/textures/custom-planet-textures/texture2.jpg";
         }
 
+        // Job moons should be clickable with section index 2+i
+        // (section 0 = hero+summary, section 1 = skills, sections 2+ = jobs)
         const moon = createPlanet(
           job.company,
           40 + i * 10,
@@ -698,7 +712,7 @@ export default function ResumeSpace3D({
           0xffaadd,
           expPlanet,
           0.02 + Math.random() * 0.01,
-          undefined,
+          2 + i, // Make job moons clickable with correct section index
           textureUrl,
         );
         moon.rotation.x = Math.PI / 2;
@@ -860,7 +874,19 @@ export default function ResumeSpace3D({
           console.log(
             `📍 Navigating to section ${hit.object.userData.sectionIndex} ("${hit.object.userData.planetName}")`,
           );
-          onNavigate(hit.object.userData.sectionIndex);
+
+          // Special handling for InvestCloud - show floating panel instead
+          const jobData = resumeData.experience.find(
+            (job) => job.company === hit.object.userData.planetName,
+          );
+          if (jobData && jobData.id === "investcloud") {
+            console.log("🚀 Opening InvestCloud detail panel in cosmos");
+            setDetailPanelVisible(true);
+            setDetailPanelJobId(jobData.id);
+          } else {
+            // Regular navigation for other planets
+            onNavigate(hit.object.userData.sectionIndex);
+          }
         }
       }
     };
@@ -882,7 +908,158 @@ export default function ResumeSpace3D({
           ? optionsRef.current.spaceOrbitSpeed
           : 1;
 
-      // Only animate if speed is not zero
+      // Animate halo layers and flash effects ALWAYS (independent of orbit speed)
+      const time = Date.now() * 0.001; // Time in seconds
+
+      items.forEach((item) => {
+        const planetOffset = item.angle * 10; // Unique offset per planet
+
+        // Handle color flash effect on hover
+        if (item.mesh.userData.hoverStartTime > 0) {
+          const flashDuration = 1200; // 1.2 seconds for complete flash cycle
+          const elapsed = Date.now() - item.mesh.userData.hoverStartTime;
+          const material = item.mesh.material as THREE.MeshStandardMaterial;
+
+          if (elapsed < flashDuration) {
+            // Quick flash up then fade out
+            const progress = elapsed / flashDuration;
+
+            // Create a quick bright flash that fades
+            // First 20% of time: rapid bright flash
+            // Remaining 80%: gentle fade to original
+            let intensity;
+            if (progress < 0.2) {
+              // Quick flash up - reduced from 0.8 to 0.4 for subtlety
+              intensity = (progress / 0.2) * 0.4;
+            } else {
+              // Slow fade out
+              intensity = 0.4 * (1 - (progress - 0.2) / 0.8);
+            }
+
+            // Subtle white/cyan flash - reduced intensity values
+            material.emissive.setRGB(
+              0.3 * intensity,
+              0.4 * intensity,
+              0.6 * intensity,
+            );
+          } else {
+            // Flash complete, ensure back to original
+            material.emissive.copy(item.mesh.userData.originalEmissive);
+          }
+        } else {
+          // Not hovering, ensure emissive is at original
+          const material = item.mesh.material as THREE.MeshStandardMaterial;
+          material.emissive.copy(item.mesh.userData.originalEmissive);
+        }
+
+        // Animate aurora sprite
+        if (item.mesh.userData.auroraSprite) {
+          const auroraSprite = item.mesh.userData.auroraSprite;
+          const material = auroraSprite.material as THREE.SpriteMaterial;
+          const targetOpacity = item.mesh.userData.auroraTargetOpacity || 0;
+          const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
+          const haloSize = item.mesh.userData.haloSizeVariance || 1;
+
+          // Slow wavy rotation with slight variation - always animate
+          material.rotation +=
+            0.003 * haloSpeed + Math.sin(time * 0.5 + planetOffset) * 0.002;
+
+          // Living breathing scale effect
+          const breathe = 1.0 + Math.sin(time * 0.8 + planetOffset) * 0.12;
+          const baseScale =
+            (item.mesh.geometry as THREE.SphereGeometry).parameters.radius *
+            5 *
+            haloSize;
+          auroraSprite.scale.set(baseScale * breathe, baseScale * breathe, 1);
+
+          // Smooth fade to target with flowing opacity variation
+          const currentBase = material.opacity;
+          const newBase = currentBase + (targetOpacity - currentBase) * 0.1;
+          if (newBase > 0.01) {
+            const opacityFlow = Math.sin(time * 1.2 + planetOffset) * 0.15;
+            material.opacity = Math.max(0, newBase + opacityFlow);
+          } else {
+            material.opacity = 0;
+          }
+        }
+
+        // Animate ring sprite
+        if (item.mesh.userData.ringSprite) {
+          const ringSprite = item.mesh.userData.ringSprite;
+          const material = ringSprite.material as THREE.SpriteMaterial;
+          const targetOpacity = item.mesh.userData.ringTargetOpacity || 0;
+          const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
+          const haloSize = item.mesh.userData.haloSizeVariance || 1;
+
+          // Counter-rotation with variation - always animate
+          material.rotation -=
+            0.006 * haloSpeed + Math.cos(time * 0.7 + planetOffset) * 0.003;
+
+          // Pulsing scale with random size
+          const pulse = 1.0 + Math.cos(time * 1.5 + planetOffset) * 0.08;
+          const baseScale =
+            (item.mesh.geometry as THREE.SphereGeometry).parameters.radius *
+            3.5 *
+            haloSize;
+          ringSprite.scale.set(baseScale * pulse, baseScale * pulse, 1);
+
+          // Smooth fade to target with shimmer effect
+          const currentBase = material.opacity;
+          const newBase = currentBase + (targetOpacity - currentBase) * 0.12;
+          if (newBase > 0.01) {
+            const shimmer = Math.cos(time * 2 + planetOffset) * 0.15;
+            material.opacity = Math.max(0, newBase + shimmer);
+          } else {
+            material.opacity = 0;
+          }
+        }
+
+        // Animate core sprite
+        if (item.mesh.userData.coreSprite) {
+          const coreSprite = item.mesh.userData.coreSprite;
+          const material = coreSprite.material as THREE.SpriteMaterial;
+          const targetOpacity = item.mesh.userData.coreTargetOpacity || 0;
+          const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
+          const haloSize = item.mesh.userData.haloSizeVariance || 1;
+
+          // Faster pulsing with double frequency
+          const pulse1 = Math.sin(time * 3 * haloSpeed + planetOffset) * 0.1;
+          const pulse2 =
+            Math.sin(time * 5 * haloSpeed + planetOffset * 0.5) * 0.05;
+          const combinedPulse = 1.0 + pulse1 + pulse2;
+          const baseScale =
+            (item.mesh.geometry as THREE.SphereGeometry).parameters.radius *
+            2.5 *
+            haloSize;
+          coreSprite.scale.set(
+            baseScale * combinedPulse,
+            baseScale * combinedPulse,
+            1,
+          );
+
+          // Smooth fade to target with rapid pulsing
+          const currentBase = material.opacity;
+          const newBase = currentBase + (targetOpacity - currentBase) * 0.15;
+          if (newBase > 0.01) {
+            const heartbeat =
+              Math.sin(time * 4 * haloSpeed + planetOffset) * 0.15;
+            material.opacity = Math.max(0, newBase + heartbeat);
+
+            // Subtle brightness shift for living effect
+            const brightnessShift =
+              0.95 + Math.sin(time * 2.5 + planetOffset) * 0.1;
+            const baseColor =
+              item.mesh.userData.haloColor || new THREE.Color(0xaaddff);
+            material.color.copy(
+              baseColor.clone().multiplyScalar(brightnessShift * 1.2),
+            );
+          } else {
+            material.opacity = 0;
+          }
+        }
+      });
+
+      // Only animate orbit positions and planet rotation if speed is not zero
       if (speedMultiplier !== 0) {
         items.forEach((item) => {
           item.angle += item.orbitSpeed * speedMultiplier;
@@ -891,148 +1068,6 @@ export default function ResumeSpace3D({
 
           // Self rotation
           item.mesh.rotation.y += 0.01 * speedMultiplier;
-
-          // Handle color flash effect on hover
-          if (item.mesh.userData.hoverStartTime > 0) {
-            const flashDuration = 1200; // 1.2 seconds for complete flash cycle
-            const elapsed = Date.now() - item.mesh.userData.hoverStartTime;
-            const material = item.mesh.material as THREE.MeshStandardMaterial;
-
-            if (elapsed < flashDuration) {
-              // Quick flash up then fade out
-              const progress = elapsed / flashDuration;
-
-              // Create a quick bright flash that fades
-              // First 20% of time: rapid bright flash
-              // Remaining 80%: gentle fade to original
-              let intensity;
-              if (progress < 0.2) {
-                // Quick flash up - reduced from 0.8 to 0.4 for subtlety
-                intensity = (progress / 0.2) * 0.4;
-              } else {
-                // Slow fade out
-                intensity = 0.4 * (1 - (progress - 0.2) / 0.8);
-              }
-
-              // Subtle white/cyan flash - reduced intensity values
-              material.emissive.setRGB(
-                0.3 * intensity,
-                0.4 * intensity,
-                0.6 * intensity,
-              );
-            } else {
-              // Flash complete, ensure back to original
-              material.emissive.copy(item.mesh.userData.originalEmissive);
-            }
-          } else {
-            // Not hovering, ensure emissive is at original
-            const material = item.mesh.material as THREE.MeshStandardMaterial;
-            material.emissive.copy(item.mesh.userData.originalEmissive);
-          }
-
-          // Animate halo layers ALWAYS (even when hidden) for seamless living effect
-          const time = Date.now() * 0.001; // Time in seconds
-          const planetOffset = item.angle * 10; // Unique offset per planet
-
-          if (item.mesh.userData.auroraSprite) {
-            const auroraSprite = item.mesh.userData.auroraSprite;
-            const material = auroraSprite.material as THREE.SpriteMaterial;
-            const targetOpacity = item.mesh.userData.auroraTargetOpacity || 0;
-            const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
-            const haloSize = item.mesh.userData.haloSizeVariance || 1;
-
-            // Slow wavy rotation with slight variation - using random speed
-            material.rotation +=
-              (0.003 * haloSpeed +
-                Math.sin(time * 0.5 + planetOffset) * 0.002) *
-              speedMultiplier;
-
-            // Living breathing scale effect
-            const breathe = 1.0 + Math.sin(time * 0.8 + planetOffset) * 0.12;
-            const baseScale = item.mesh.geometry.parameters.radius * 5;
-            auroraSprite.scale.set(baseScale * breathe, baseScale * breathe, 1);
-
-            // Smooth fade to target with flowing opacity variation
-            const currentBase = material.opacity;
-            const newBase = currentBase + (targetOpacity - currentBase) * 0.1; // Smooth lerp
-            if (newBase > 0.01) {
-              const opacityFlow = Math.sin(time * 1.2 + planetOffset) * 0.15;
-              material.opacity = Math.max(0, newBase + opacityFlow);
-            } else {
-              material.opacity = 0;
-            }
-          }
-
-          if (item.mesh.userData.ringSprite) {
-            const ringSprite = item.mesh.userData.ringSprite;
-            const material = ringSprite.material as THREE.SpriteMaterial;
-            const targetOpacity = item.mesh.userData.ringTargetOpacity || 0;
-            const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
-            const haloSize = item.mesh.userData.haloSizeVariance || 1;
-
-            // Counter-rotation with variation - using random speed
-            material.rotation -=
-              (0.006 * haloSpeed +
-                Math.cos(time * 0.7 + planetOffset) * 0.003) *
-              speedMultiplier;
-
-            // Pulsing scale with random size
-            const pulse = 1.0 + Math.cos(time * 1.5 + planetOffset) * 0.08;
-            const baseScale =
-              item.mesh.geometry.parameters.radius * 3.5 * haloSize;
-            ringSprite.scale.set(baseScale * pulse, baseScale * pulse, 1);
-
-            // Smooth fade to target with shimmer effect
-            const currentBase = material.opacity;
-            const newBase = currentBase + (targetOpacity - currentBase) * 0.12; // Smooth lerp
-            if (newBase > 0.01) {
-              const shimmer = Math.cos(time * 2 + planetOffset) * 0.15;
-              material.opacity = Math.max(0, newBase + shimmer);
-            } else {
-              material.opacity = 0;
-            }
-          }
-
-          if (item.mesh.userData.coreSprite) {
-            const coreSprite = item.mesh.userData.coreSprite;
-            const material = coreSprite.material as THREE.SpriteMaterial;
-            const targetOpacity = item.mesh.userData.coreTargetOpacity || 0;
-            const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
-            const haloSize = item.mesh.userData.haloSizeVariance || 1;
-
-            // Faster pulsing with double frequency - using random speed
-            const pulse1 = Math.sin(time * 3 * haloSpeed + planetOffset) * 0.1;
-            const pulse2 =
-              Math.sin(time * 5 * haloSpeed + planetOffset * 0.5) * 0.05;
-            const combinedPulse = 1.0 + pulse1 + pulse2;
-            const baseScale =
-              item.mesh.geometry.parameters.radius * 2.5 * haloSize;
-            coreSprite.scale.set(
-              baseScale * combinedPulse,
-              baseScale * combinedPulse,
-              1,
-            );
-
-            // Smooth fade to target with rapid pulsing
-            const currentBase = material.opacity;
-            const newBase = currentBase + (targetOpacity - currentBase) * 0.15; // Fastest lerp
-            if (newBase > 0.01) {
-              const heartbeat =
-                Math.sin(time * 4 * haloSpeed + planetOffset) * 0.15;
-              material.opacity = Math.max(0, newBase + heartbeat);
-
-              // Subtle brightness shift for living effect
-              const brightnessShift =
-                0.95 + Math.sin(time * 2.5 + planetOffset) * 0.1;
-              const baseColor =
-                item.mesh.userData.haloColor || new THREE.Color(0xaaddff);
-              material.color.copy(
-                baseColor.clone().multiplyScalar(brightnessShift * 1.2),
-              );
-            } else {
-              material.opacity = 0;
-            }
-          }
         });
       }
 
@@ -1107,37 +1142,200 @@ export default function ResumeSpace3D({
   }, []);
 
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative" }}>
-      <div
-        ref={mountRef}
-        className="width-full height-full"
-        style={{
-          width: "100%",
-          height: "100%",
-          position: "absolute",
-          top: 0,
-          left: 0,
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          bottom: "30px",
-          right: "30px",
-          color: "rgba(212, 175, 55, 0.9)",
-          fontFamily: "'Cinzel', serif",
-          fontSize: "14px",
-          textAlign: "right",
-          pointerEvents: "none",
-          userSelect: "none",
-          zIndex: 10,
-          textShadow: "0 2px 4px rgba(0,0,0,0.8)",
-        }}
-      >
-        <p style={{ margin: "5px 0" }}>↔ DRAG TO ROTATE</p>
-        <p style={{ margin: "5px 0" }}>↕ SCROLL TO ZOOM</p>
-        <p style={{ margin: "5px 0" }}>• CLICK PLANETS TO VISIT</p>
+    <>
+      <div style={{ width: "100%", height: "100%", position: "relative" }}>
+        <div
+          ref={mountRef}
+          className="width-full height-full"
+          style={{
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            top: 0,
+            left: 0,
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            bottom: "30px",
+            right: "30px",
+            color: "rgba(212, 175, 55, 0.9)",
+            fontFamily: "'Cinzel', serif",
+            fontSize: "14px",
+            textAlign: "right",
+            pointerEvents: "none",
+            userSelect: "none",
+            zIndex: 10,
+            textShadow: "0 2px 4px rgba(0,0,0,0.8)",
+          }}
+        >
+          <p style={{ margin: "5px 0" }}>↔ DRAG TO ROTATE</p>
+          <p style={{ margin: "5px 0" }}>↕ SCROLL TO ZOOM</p>
+          <p style={{ margin: "5px 0" }}>• CLICK PLANETS TO VISIT</p>
+        </div>
       </div>
-    </div>
+
+      {/* Floating Detail Panel for InvestCloud */}
+      {detailPanelVisible && detailPanelJobId === "investcloud" && (
+        <div
+          className="detail-panel"
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "800px",
+            maxWidth: "90vw",
+            maxHeight: "80vh",
+            backgroundColor: "rgba(10, 10, 20, 0.8)",
+            border: "2px solid rgba(212, 175, 55, 0.8)",
+            borderRadius: "12px",
+            padding: "30px",
+            overflowY: "auto",
+            zIndex: 1000,
+            boxShadow:
+              "0 0 40px rgba(212, 175, 55, 0.4), inset 0 0 20px rgba(0, 0, 0, 0.5)",
+            backdropFilter: "blur(10px)",
+            pointerEvents: "auto",
+          }}
+        >
+          {/* Close Button */}
+          <button
+            onClick={() => {
+              // Simple fade out without scale animation (conflicts with CSS2DRenderer)
+              const tl = gsap.timeline({
+                onComplete: () => {
+                  setDetailPanelVisible(false);
+                  setDetailPanelJobId(null);
+                },
+              });
+              tl.to(".detail-panel", {
+                opacity: 0,
+                duration: 0.3,
+              });
+            }}
+            style={{
+              position: "absolute",
+              top: "15px",
+              right: "15px",
+              background: "rgba(212, 175, 55, 0.2)",
+              border: "1px solid rgba(212, 175, 55, 0.6)",
+              color: "rgba(212, 175, 55, 1)",
+              width: "32px",
+              height: "32px",
+              borderRadius: "50%",
+              cursor: "pointer",
+              fontSize: "18px",
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.3s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(212, 175, 55, 0.4)";
+              e.currentTarget.style.transform = "scale(1.1)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(212, 175, 55, 0.2)";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+          >
+            ×
+          </button>
+
+          {/* Content */}
+          {detailPanelVisible &&
+            detailPanelJobId &&
+            (() => {
+              const job = resumeData.experience.find(
+                (j) => j.id === detailPanelJobId,
+              );
+              if (!job) return null;
+
+              return (
+                <div style={{ color: "rgba(255, 255, 255, 0.9)" }}>
+                  <h2
+                    className="detail-panel__company"
+                    style={{
+                      fontFamily: "'Cinzel', serif",
+                      color: "rgba(212, 175, 55, 1)",
+                      fontSize: "28px",
+                      marginBottom: "10px",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    {job.company}
+                  </h2>
+
+                  <div
+                    className="detail-panel__dates"
+                    style={{
+                      fontFamily: "'Montserrat', sans-serif",
+                      fontSize: "14px",
+                      color: "rgba(212, 175, 55, 0.8)",
+                      marginBottom: "20px",
+                    }}
+                  >
+                    {job.location} • {job.startDate} - {job.endDate}
+                  </div>
+
+                  {job.positions.map((position, idx) => (
+                    <div
+                      key={idx}
+                      className="detail-panel__position"
+                      style={{ marginBottom: "25px" }}
+                    >
+                      <h3
+                        style={{
+                          fontFamily: "'Cinzel', serif",
+                          color: "rgba(212, 175, 55, 0.9)",
+                          fontSize: "20px",
+                          marginBottom: "8px",
+                        }}
+                      >
+                        {position.title}
+                      </h3>
+
+                      <div
+                        style={{
+                          fontFamily: "'Montserrat', sans-serif",
+                          fontSize: "13px",
+                          color: "rgba(212, 175, 55, 0.7)",
+                          marginBottom: "12px",
+                        }}
+                      >
+                        {"startDate" in position && position.startDate}{" "}
+                        {"startDate" in position &&
+                          "endDate" in position &&
+                          "-"}{" "}
+                        {"endDate" in position && position.endDate}
+                      </div>
+
+                      <ul
+                        style={{
+                          fontFamily: "'Montserrat', sans-serif",
+                          fontSize: "14px",
+                          lineHeight: "1.8",
+                          paddingLeft: "20px",
+                          color: "rgba(255, 255, 255, 0.85)",
+                        }}
+                      >
+                        {position.responsibilities.map((resp, rIdx) => (
+                          <li key={rIdx} style={{ marginBottom: "10px" }}>
+                            {resp}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+        </div>
+      )}
+    </>
   );
 }

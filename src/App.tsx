@@ -120,7 +120,7 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
             if (source.type === "category") return 100;
             return 50;
           })
-          .strength(0.8)
+          .strength(0.8),
       )
       .force(
         "charge",
@@ -129,12 +129,12 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
           if (node.type === "center") return -1000;
           if (node.type === "category") return -400;
           return -150;
-        })
+        }),
       )
       .force("center", d3.forceCenter(width / 2, height / 2))
       .force(
         "collision",
-        d3.forceCollide<Node>().radius((d) => d.radius + 10)
+        d3.forceCollide<Node>().radius((d) => d.radius + 10),
       );
 
     // Draw links
@@ -171,10 +171,42 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
             d.fy = event.y;
           })
           .on("end", (event, d) => {
+            // Don't release position immediately - keep node where dropped
             if (!event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-          }) as any
+
+            // Store the drop position
+            const dropX = event.x;
+            const dropY = event.y;
+
+            // Create a small "settling zone" within 10% of node radius
+            const settleRadius = d.radius * 0.1;
+
+            // Add a gentle spring back force to settle within the zone
+            const settleSimulation = d3
+              .forceSimulation([d])
+              .force(
+                "settle",
+                d3.forceRadial(settleRadius, dropX, dropY).strength(0.3),
+              )
+              .alphaDecay(0.1)
+              .on("tick", () => {
+                // Update the fixed position slightly for bounce effect
+                d.fx = d.x;
+                d.fy = d.y;
+              })
+              .on("end", () => {
+                // After settling, fix the position permanently
+                d.fx = d.x;
+                d.fy = d.y;
+              });
+
+            // Run settling simulation for a short time
+            setTimeout(() => {
+              settleSimulation.stop();
+              d.fx = d.x;
+              d.fy = d.y;
+            }, 500);
+          }) as any,
       );
 
     // Add circles
@@ -206,15 +238,15 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
       })
       .attr("fill", (d) => (d.type === "skill" ? "#ffffff" : "#d4af37"))
       .attr("font-weight", (d) =>
-        d.type === "center" ? "700" : d.type === "category" ? "600" : "400"
+        d.type === "center" ? "700" : d.type === "category" ? "600" : "400",
       )
       .attr("font-family", (d) =>
         d.type === "center" || d.type === "category"
           ? "Cinzel, serif"
-          : "Montserrat, sans-serif"
+          : "Montserrat, sans-serif",
       )
       .attr("letter-spacing", (d) =>
-        d.type === "center" || d.type === "category" ? "0.1em" : "0"
+        d.type === "center" || d.type === "category" ? "0.1em" : "0",
       )
       .style("pointer-events", "none")
       .style("user-select", "none")
@@ -422,31 +454,31 @@ function App() {
     tl.fromTo(
       ".hero__content",
       { opacity: 0 },
-      { opacity: 1, duration: 0.8, delay: 0.2 }
+      { opacity: 1, duration: 0.8, delay: 0.2 },
     )
       .fromTo(
         ".hero__name",
         { opacity: 0 },
         { opacity: 1, duration: 0.6 },
-        "-=0.4"
+        "-=0.4",
       )
       .fromTo(
         ".hero__title",
         { opacity: 0 },
         { opacity: 1, duration: 0.6 },
-        "-=0.3"
+        "-=0.3",
       )
       .fromTo(
         ".hero__contact-item",
         { opacity: 0 },
         { opacity: 1, duration: 0.4, stagger: 0.1 },
-        "-=0.3"
+        "-=0.3",
       )
       .fromTo(
         ".hero__summary",
         { opacity: 0, y: 20 },
         { opacity: 1, y: 0, duration: 0.6 },
-        "-=0.2"
+        "-=0.2",
       );
   }, []);
 
@@ -501,12 +533,12 @@ function App() {
     tl.fromTo(
       ".skills__title",
       { opacity: 0, y: 20 },
-      { opacity: 1, y: 0, duration: 0.6 }
+      { opacity: 1, y: 0, duration: 0.6 },
     ).fromTo(
       ".skills__category",
       { opacity: 0, y: 15 },
       { opacity: 1, y: 0, duration: 0.5, stagger: 0.1 },
-      "-=0.3"
+      "-=0.3",
     );
   };
 
@@ -517,31 +549,31 @@ function App() {
     tl.fromTo(
       `${jobEl} .experience__company`,
       { opacity: 0, scale: 1.3 },
-      { opacity: 1, scale: 1, duration: 0.6 }
+      { opacity: 1, scale: 1, duration: 0.6 },
     )
       .fromTo(
         `${jobEl} .experience__meta`,
         { opacity: 0, y: 20 },
         { opacity: 1, y: 0, duration: 0.5 },
-        "-=0.4"
+        "-=0.4",
       )
       .fromTo(
         `${jobEl} .experience__position`,
         { opacity: 0, y: 15 },
         { opacity: 1, y: 0, duration: 0.5 },
-        "-=0.3"
+        "-=0.3",
       )
       .fromTo(
         `${jobEl} .experience__position-dates`,
         { opacity: 0, y: 10 },
         { opacity: 1, y: 0, duration: 0.4 },
-        "-=0.3"
+        "-=0.3",
       )
       .fromTo(
         `${jobEl} .experience__responsibility`,
         { opacity: 0, x: -20 },
         { opacity: 1, x: 0, duration: 0.4, stagger: 0.05 },
-        "-=0.3"
+        "-=0.3",
       );
   };
 
@@ -550,7 +582,7 @@ function App() {
     tl.fromTo(
       ".footer__section",
       { opacity: 0, y: 20 },
-      { opacity: 1, y: 0, duration: 0.6, stagger: 0.15 }
+      { opacity: 1, y: 0, duration: 0.6, stagger: 0.15 },
     );
   };
 
