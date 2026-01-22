@@ -112,6 +112,16 @@ export default function ResumeSpace3D({
   const tourBuilderRef = useRef<TourDefinitionBuilder | null>(null);
   const planetsDataRef = useRef<Map<string, PlanetData>>(new Map());
 
+  // Private setter for minDistance to make it easier to track where it's being set
+  const setMinDistance = (value: number, reason?: string) => {
+    if (sceneRef.current.controls) {
+      sceneRef.current.controls.minDistance = value;
+      if (reason) {
+        vlog(`🔧 minDistance set to ${value} (${reason})`);
+      }
+    }
+  };
+
   // Store options in a ref so the animation loop can access the latest values
   // without needing to be recreated on every render
   const optionsRef = useRef(options);
@@ -1247,40 +1257,37 @@ export default function ResumeSpace3D({
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
           // Restore original camera constraints
-          if (sceneRef.current.controls) {
-            sceneRef.current.controls.minDistance =
-              originalMinDistanceRef.current;
-          }
+          setMinDistance(originalMinDistanceRef.current, "restore after about");
           break;
         case "experience":
           await cameraDirectorRef.current.focusPlanet(expPlanet, 300);
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
           // Restore original camera constraints
-          if (sceneRef.current.controls) {
-            sceneRef.current.controls.minDistance =
-              originalMinDistanceRef.current;
-          }
+          setMinDistance(
+            originalMinDistanceRef.current,
+            "restore after experience",
+          );
           break;
         case "skills":
           await cameraDirectorRef.current.focusPlanet(skillsPlanet, 350);
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
           // Restore original camera constraints
-          if (sceneRef.current.controls) {
-            sceneRef.current.controls.minDistance =
-              originalMinDistanceRef.current;
-          }
+          setMinDistance(
+            originalMinDistanceRef.current,
+            "restore after skills",
+          );
           break;
         case "projects":
           await cameraDirectorRef.current.focusPlanet(projectsPlanet, 400);
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
           // Restore original camera constraints
-          if (sceneRef.current.controls) {
-            sceneRef.current.controls.minDistance =
-              originalMinDistanceRef.current;
-          }
+          setMinDistance(
+            originalMinDistanceRef.current,
+            "restore after projects",
+          );
           break;
         default:
           // Handle experience company specific navigation
@@ -1382,7 +1389,7 @@ export default function ResumeSpace3D({
       if (sceneRef.current.controls) {
         vlog(`🎯 After flyTo, updating target to moon...`);
         sceneRef.current.controls.target.copy(moonWorldPos);
-        sceneRef.current.controls.minDistance = 0; // Allow zoom all the way to moon surface
+        setMinDistance(0, "allow zoom to moon surface");
         sceneRef.current.controls.update(); // Force update to apply changes
 
         const camToTarget = sceneRef.current.camera.position.distanceTo(
@@ -2096,10 +2103,10 @@ export default function ResumeSpace3D({
                   setSplitScreenContent(null);
                   splitScreenModeRef.current = false;
                   // Restore original camera constraints
-                  if (sceneRef.current.controls) {
-                    sceneRef.current.controls.minDistance =
-                      originalMinDistanceRef.current;
-                  }
+                  setMinDistance(
+                    originalMinDistanceRef.current,
+                    "restore on split-screen close",
+                  );
                 }}
                 style={{
                   position: "absolute",
@@ -2198,10 +2205,10 @@ export default function ResumeSpace3D({
                           setSplitScreenMode(false);
                           splitScreenModeRef.current = false;
                           // Restore original camera constraints
-                          if (sceneRef.current.controls) {
-                            sceneRef.current.controls.minDistance =
-                              originalMinDistanceRef.current;
-                          }
+                          setMinDistance(
+                            originalMinDistanceRef.current,
+                            "restore on overlay close",
+                          );
                           cameraDirectorRef.current?.systemOverview();
                         }
                         // Add other action handlers as needed
