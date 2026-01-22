@@ -215,6 +215,10 @@ section {
         z-index: 10;
         position: relative;
         padding-bottom: 1vh;
+
+        &--hidden {
+            display: none !important;
+        }
     }
 
     &__content {

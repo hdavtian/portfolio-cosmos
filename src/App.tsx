@@ -681,7 +681,9 @@ function App() {
             options={diagramOptions}
           />
         </div>
-        <div className="hero__footer">
+        <div
+          className={`hero__footer ${diagramStyle === "space" ? "hero__footer--hidden" : ""}`}
+        >
           <div className="hero__summary">
             <p className="hero__summary-text">{resumeData.summary}</p>
           </div>

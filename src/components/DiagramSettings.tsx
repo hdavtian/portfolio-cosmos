@@ -77,7 +77,7 @@ export default function DiagramSettings({
 }: DiagramSettingsProps) {
   const handleSliderChange = (
     key: keyof DiagramStyleOptions,
-    value: number | string
+    value: number | string,
   ) => {
     onOptionsChange({ ...options, [key]: value });
   };
@@ -139,7 +139,7 @@ export default function DiagramSettings({
                 onChange={(e) =>
                   handleSliderChange(
                     "constellationZoom",
-                    Number(e.target.value)
+                    Number(e.target.value),
                   )
                 }
               />
@@ -192,7 +192,7 @@ export default function DiagramSettings({
                 onChange={(e) =>
                   handleSliderChange(
                     "shootingStarFrequency",
-                    Number(e.target.value)
+                    Number(e.target.value),
                   )
                 }
               />
@@ -215,7 +215,7 @@ export default function DiagramSettings({
                 onChange={(e) =>
                   handleSliderChange(
                     "circuitComplexity",
-                    Number(e.target.value)
+                    Number(e.target.value),
                   )
                 }
               />
@@ -387,7 +387,7 @@ export default function DiagramSettings({
                 onChange={(e) =>
                   handleSliderChange(
                     "connectionDensity",
-                    Number(e.target.value)
+                    Number(e.target.value),
                   )
                 }
               />
@@ -403,7 +403,7 @@ export default function DiagramSettings({
                 Orbit Speed:{" "}
                 {options.spaceOrbitSpeed !== undefined
                   ? options.spaceOrbitSpeed
-                  : 1}
+                  : 0.1}
                 x
               </label>
               <input
@@ -414,7 +414,7 @@ export default function DiagramSettings({
                 value={
                   options.spaceOrbitSpeed !== undefined
                     ? options.spaceOrbitSpeed
-                    : 1
+                    : 0.1
                 }
                 onChange={(e) =>
                   handleSliderChange("spaceOrbitSpeed", Number(e.target.value))
@@ -435,7 +435,7 @@ export default function DiagramSettings({
                 onChange={(e) =>
                   handleSliderChange(
                     "spaceSunIntensity",
-                    Number(e.target.value)
+                    Number(e.target.value),
                   )
                 }
               />

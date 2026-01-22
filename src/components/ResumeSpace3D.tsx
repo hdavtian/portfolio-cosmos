@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import gsap from "gsap";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import {
@@ -150,6 +149,7 @@ export default function ResumeSpace3D({
     labelRenderer.domElement.style.position = "absolute";
     labelRenderer.domElement.style.top = "0px";
     labelRenderer.domElement.style.pointerEvents = "none";
+    labelRenderer.domElement.style.zIndex = "100";
     container.appendChild(labelRenderer.domElement);
 
     sceneRef.current.labelRendererDom = labelRenderer.domElement;
@@ -162,6 +162,7 @@ export default function ResumeSpace3D({
     css3DRenderer.domElement.style.position = "absolute";
     css3DRenderer.domElement.style.top = "0px";
     css3DRenderer.domElement.style.pointerEvents = "none";
+    css3DRenderer.domElement.style.zIndex = "1000";
     container.appendChild(css3DRenderer.domElement);
     sceneRef.current.css3DRenderer = css3DRenderer;
 
@@ -176,7 +177,7 @@ export default function ResumeSpace3D({
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.minDistance = 50;
-    controls.maxDistance = 2500;
+    controls.maxDistance = 6000; // Increased to allow more zoom out while staying within starfield
     controls.autoRotate = false;
     controls.autoRotateSpeed = 0.5;
 
@@ -211,10 +212,10 @@ export default function ResumeSpace3D({
     // --- TEXTURES ---
     const textureLoader = new THREE.TextureLoader();
 
-    // Background - Two-layer starfield (matching original implementation)
-    // Outer layer: Main starfield
+    // Background - Large distant starfield (skybox approach)
+    // Create a much larger sphere to avoid visible sphere edge on zoom out
     const starTexture = textureLoader.load("/textures/8k_stars.jpg");
-    const starGeo = new THREE.SphereGeometry(500, 64, 64);
+    const starGeo = new THREE.SphereGeometry(8000, 64, 64); // Much larger sphere
     const starMat = new THREE.MeshBasicMaterial({
       map: starTexture,
       side: THREE.BackSide,
@@ -226,7 +227,7 @@ export default function ResumeSpace3D({
 
     // Inner layer: Secondary star layer for depth
     const skyTexture = textureLoader.load("/textures/stars.jpg");
-    const skyGeo = new THREE.SphereGeometry(490, 64, 64);
+    const skyGeo = new THREE.SphereGeometry(7800, 64, 64); // Much larger sphere
     const skyMat = new THREE.MeshBasicMaterial({
       map: skyTexture,
       side: THREE.BackSide,
@@ -666,7 +667,7 @@ export default function ResumeSpace3D({
     // 3. PLANETS (Sections)
     const expPlanet = createPlanet(
       "Experience",
-      180,
+      200,
       15,
       0xff5533,
       scene,
@@ -677,7 +678,7 @@ export default function ResumeSpace3D({
 
     const skillsPlanet = createPlanet(
       "Skills",
-      280,
+      350,
       20,
       0x3388ff,
       scene,
@@ -688,7 +689,7 @@ export default function ResumeSpace3D({
 
     const projectsPlanet = createPlanet(
       "Projects",
-      380,
+      500,
       18,
       0x9933ff,
       scene,
@@ -723,7 +724,7 @@ export default function ResumeSpace3D({
         // (section 0 = hero+summary, section 1 = skills, sections 2+ = jobs)
         const moon = createPlanet(
           job.company,
-          40 + i * 10,
+          60 + i * 20,
           5,
           0xffaadd,
           expPlanet,
@@ -737,7 +738,7 @@ export default function ResumeSpace3D({
     Object.keys(resumeData.skills).forEach((cat, i) => {
       createPlanet(
         cat,
-        50 + i * 8,
+        70 + i * 15,
         6,
         0xaaddff,
         skillsPlanet,
@@ -756,13 +757,20 @@ export default function ResumeSpace3D({
       })),
     );
 
-    // Starfield
+    // Enhanced point-based starfield for deep space effect
     const starsGeometry = new THREE.BufferGeometry();
-    const starsCount = 5000;
+    const starsCount = 15000; // Increased star count for better density
     const posArray = new Float32Array(starsCount * 3);
 
-    for (let i = 0; i < starsCount * 3; i++) {
-      posArray[i] = (Math.random() - 0.5) * 3000;
+    for (let i = 0; i < starsCount * 3; i += 3) {
+      // Create more evenly distributed stars in spherical coordinates
+      const radius = 2000 + Math.random() * 4000; // Stars at varying depths
+      const theta = Math.random() * Math.PI * 2; // Azimuth angle
+      const phi = Math.acos(2 * Math.random() - 1); // Polar angle (ensures even distribution)
+
+      posArray[i] = radius * Math.sin(phi) * Math.cos(theta); // x
+      posArray[i + 1] = radius * Math.sin(phi) * Math.sin(theta); // y
+      posArray[i + 2] = radius * Math.cos(phi); // z
     }
 
     starsGeometry.setAttribute(
@@ -770,10 +778,11 @@ export default function ResumeSpace3D({
       new THREE.BufferAttribute(posArray, 3),
     );
     const starsMaterial = new THREE.PointsMaterial({
-      size: 2,
+      size: 1.5,
       color: 0xffffff,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.9,
+      sizeAttenuation: false, // Keep consistent size regardless of camera distance
     });
     const starField = new THREE.Points(starsGeometry, starsMaterial);
     scene.add(starField);
@@ -1078,9 +1087,9 @@ export default function ResumeSpace3D({
       // Only animate orbit positions and planet rotation if speed is not zero
       if (speedMultiplier !== 0) {
         items.forEach((item) => {
-          item.angle += item.orbitSpeed * speedMultiplier;
+          item.angle -= item.orbitSpeed * speedMultiplier;
           item.mesh.position.x = Math.cos(item.angle) * item.distance;
-          item.mesh.position.z = Math.sin(item.angle) * item.distance;
+          item.mesh.position.z = -Math.sin(item.angle) * item.distance;
 
           // Self rotation
           item.mesh.rotation.y += 0.01 * speedMultiplier;
@@ -1196,6 +1205,9 @@ export default function ResumeSpace3D({
     // Create CSS3DObject
     const panel3D = new CSS3DObject(panelElement);
 
+    // Ensure the wrapper element allows pointer events for scrolling
+    panel3D.element.style.pointerEvents = "auto";
+
     // Position at center of cosmos
     panel3D.position.set(0, 0, 0);
 
@@ -1205,11 +1217,33 @@ export default function ResumeSpace3D({
     // Copy camera rotation to face viewer, then rotate 180° to show front
     panel3D.quaternion.copy(camera.quaternion);
 
+    // Add direct wheel event handler to prevent OrbitControls from capturing scroll
+    const scrollableContent = panelElement.querySelector(
+      ".detail-panel-content",
+    );
+    const handleWheel = (e: Event) => {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      // Let the browser handle the scroll naturally
+    };
+
+    if (scrollableContent) {
+      scrollableContent.addEventListener("wheel", handleWheel, {
+        passive: false,
+        capture: true,
+      });
+    }
+
     // Add to scene
     scene.add(panel3D);
     detailPanel3DRef.current = panel3D;
 
     return () => {
+      if (scrollableContent) {
+        scrollableContent.removeEventListener("wheel", handleWheel, {
+          capture: true,
+        } as AddEventListenerOptions);
+      }
       if (detailPanel3DRef.current && scene) {
         scene.remove(detailPanel3DRef.current);
         detailPanel3DRef.current = null;
@@ -1264,153 +1298,184 @@ export default function ResumeSpace3D({
             backgroundColor: "rgba(10, 10, 20, 0.95)",
             border: "2px solid rgba(212, 175, 55, 0.8)",
             borderRadius: "12px",
-            padding: "30px",
-            overflowY: "auto",
             boxShadow:
               "0 0 40px rgba(212, 175, 55, 0.4), inset 0 0 20px rgba(0, 0, 0, 0.5)",
             backdropFilter: "blur(10px)",
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            zIndex: 2147483647,
             pointerEvents: "auto",
+            userSelect: "text",
           }}
         >
-          {/* Close Button */}
-          <button
-            onClick={() => {
-              // Remove the 3D object from scene first to avoid DOM conflicts
-              if (detailPanel3DRef.current && sceneRef.current.scene) {
-                sceneRef.current.scene.remove(detailPanel3DRef.current);
-                detailPanel3DRef.current = null;
-              }
-
-              // Then close the panel
-              const tl = gsap.timeline({
-                onComplete: () => {
-                  setDetailPanelVisible(false);
-                  setDetailPanelJobId(null);
-                },
-              });
-              tl.to(".detail-panel", {
-                opacity: 0,
-                duration: 0.3,
-              });
-            }}
+          {/* Fixed Header */}
+          <div
             style={{
-              position: "absolute",
-              top: "15px",
-              right: "15px",
-              background: "rgba(212, 175, 55, 0.2)",
-              border: "1px solid rgba(212, 175, 55, 0.6)",
-              color: "rgba(212, 175, 55, 1)",
-              width: "32px",
-              height: "32px",
-              borderRadius: "50%",
-              cursor: "pointer",
-              fontSize: "18px",
-              fontWeight: "bold",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              transition: "all 0.3s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(212, 175, 55, 0.4)";
-              e.currentTarget.style.transform = "scale(1.1)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(212, 175, 55, 0.2)";
-              e.currentTarget.style.transform = "scale(1)";
+              justifyContent: "space-between",
+              padding: "15px 20px",
+              borderBottom: "1px solid rgba(212, 175, 55, 0.3)",
+              backgroundColor: "rgba(0, 0, 0, 0.3)",
             }}
           >
-            ×
-          </button>
+            <div style={{ display: "flex", gap: "10px" }}>
+              {/* Placeholder for icons */}
+            </div>
+            <button
+              onClick={() => {
+                setDetailPanelVisible(false);
+                setDetailPanelJobId(null);
+              }}
+              style={{
+                background: "rgba(212, 175, 55, 0.2)",
+                border: "1px solid rgba(212, 175, 55, 0.5)",
+                color: "rgba(212, 175, 55, 0.9)",
+                width: "32px",
+                height: "32px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "20px",
+                fontWeight: "bold",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(212, 175, 55, 0.4)";
+                e.currentTarget.style.transform = "scale(1.1)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(212, 175, 55, 0.2)";
+                e.currentTarget.style.transform = "scale(1)";
+              }}
+            >
+              ×
+            </button>
+          </div>
 
-          {/* Content */}
-          {detailPanelVisible &&
-            detailPanelJobId &&
-            (() => {
-              const job = resumeData.experience.find(
-                (j) => j.id === detailPanelJobId,
-              );
-              if (!job) return null;
+          {/* Scrollable Content */}
+          <div
+            className="detail-panel-content"
+            onWheel={(e) => {
+              // Stop wheel events from propagating to OrbitControls
+              e.stopPropagation();
+            }}
+            onMouseEnter={() => {
+              // Disable OrbitControls when mouse enters the content area
+              if (sceneRef.current.controls) {
+                sceneRef.current.controls.enabled = false;
+              }
+            }}
+            onMouseLeave={() => {
+              // Re-enable OrbitControls when mouse leaves the content area
+              if (sceneRef.current.controls) {
+                sceneRef.current.controls.enabled = true;
+              }
+            }}
+            style={{
+              height: "calc(600px - 60px)",
+              overflowY: "auto",
+              overflowX: "hidden",
+              padding: "30px",
+              position: "relative",
+              pointerEvents: "auto",
+              userSelect: "text",
+              cursor: "auto",
+            }}
+          >
+            {/* Content */}
+            {detailPanelVisible &&
+              detailPanelJobId &&
+              (() => {
+                const job = resumeData.experience.find(
+                  (j) => j.id === detailPanelJobId,
+                );
+                if (!job) return <div>Job not found</div>;
 
-              return (
-                <div style={{ color: "rgba(255, 255, 255, 0.9)" }}>
-                  <h2
-                    className="detail-panel__company"
-                    style={{
-                      fontFamily: "'Cinzel', serif",
-                      color: "rgba(212, 175, 55, 1)",
-                      fontSize: "28px",
-                      marginBottom: "10px",
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    {job.company}
-                  </h2>
-
-                  <div
-                    className="detail-panel__dates"
-                    style={{
-                      fontFamily: "'Montserrat', sans-serif",
-                      fontSize: "14px",
-                      color: "rgba(212, 175, 55, 0.8)",
-                      marginBottom: "20px",
-                    }}
-                  >
-                    {job.location} • {job.startDate} - {job.endDate}
-                  </div>
-
-                  {job.positions.map((position, idx) => (
-                    <div
-                      key={idx}
-                      className="detail-panel__position"
-                      style={{ marginBottom: "25px" }}
+                return (
+                  <div style={{ color: "rgba(255, 255, 255, 0.9)" }}>
+                    <h2
+                      className="detail-panel__company"
+                      style={{
+                        fontFamily: "'Cinzel', serif",
+                        color: "rgba(212, 175, 55, 1)",
+                        fontSize: "28px",
+                        marginBottom: "10px",
+                        letterSpacing: "0.05em",
+                      }}
                     >
-                      <h3
-                        style={{
-                          fontFamily: "'Cinzel', serif",
-                          color: "rgba(212, 175, 55, 0.9)",
-                          fontSize: "20px",
-                          marginBottom: "8px",
-                        }}
-                      >
-                        {position.title}
-                      </h3>
+                      {job.company}
+                    </h2>
 
-                      <div
-                        style={{
-                          fontFamily: "'Montserrat', sans-serif",
-                          fontSize: "13px",
-                          color: "rgba(212, 175, 55, 0.7)",
-                          marginBottom: "12px",
-                        }}
-                      >
-                        {"startDate" in position && position.startDate}{" "}
-                        {"startDate" in position &&
-                          "endDate" in position &&
-                          "-"}{" "}
-                        {"endDate" in position && position.endDate}
-                      </div>
-
-                      <ul
-                        style={{
-                          fontFamily: "'Montserrat', sans-serif",
-                          fontSize: "14px",
-                          lineHeight: "1.8",
-                          paddingLeft: "20px",
-                          color: "rgba(255, 255, 255, 0.85)",
-                        }}
-                      >
-                        {position.responsibilities.map((resp, rIdx) => (
-                          <li key={rIdx} style={{ marginBottom: "10px" }}>
-                            {resp}
-                          </li>
-                        ))}
-                      </ul>
+                    <div
+                      className="detail-panel__dates"
+                      style={{
+                        fontFamily: "'Montserrat', sans-serif",
+                        fontSize: "14px",
+                        color: "rgba(212, 175, 55, 0.8)",
+                        marginBottom: "20px",
+                      }}
+                    >
+                      {job.location} • {job.startDate} - {job.endDate}
                     </div>
-                  ))}
-                </div>
-              );
-            })()}
+
+                    {job.positions.map((position, idx) => (
+                      <div
+                        key={idx}
+                        className="detail-panel__position"
+                        style={{ marginBottom: "25px" }}
+                      >
+                        <h3
+                          style={{
+                            fontFamily: "'Cinzel', serif",
+                            color: "rgba(212, 175, 55, 0.9)",
+                            fontSize: "20px",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          {position.title}
+                        </h3>
+
+                        <div
+                          style={{
+                            fontFamily: "'Montserrat', sans-serif",
+                            fontSize: "13px",
+                            color: "rgba(212, 175, 55, 0.7)",
+                            marginBottom: "12px",
+                          }}
+                        >
+                          {"startDate" in position && position.startDate}{" "}
+                          {"startDate" in position &&
+                            "endDate" in position &&
+                            "-"}{" "}
+                          {"endDate" in position && position.endDate}
+                        </div>
+
+                        <ul
+                          style={{
+                            fontFamily: "'Montserrat', sans-serif",
+                            fontSize: "14px",
+                            lineHeight: "1.8",
+                            paddingLeft: "20px",
+                            color: "rgba(255, 255, 255, 0.85)",
+                          }}
+                        >
+                          {position.responsibilities.map((resp, rIdx) => (
+                            <li key={rIdx} style={{ marginBottom: "10px" }}>
+                              {resp}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+          </div>
         </div>
       )}
     </>
