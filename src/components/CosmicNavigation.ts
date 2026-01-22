@@ -424,18 +424,19 @@ export class NavigationInterface {
   private createInterface(): void {
     const navHTML = `
       <div class="cosmic-navigation" style="
-        position: absolute;
-        top: 20px;
-        left: 20px;
+        position: fixed;
+        top: 45px;
+        left: 0;
+        bottom: 80px;
+        width: 280px;
         z-index: 1000;
-        background: rgba(0, 0, 0, 0.8);
-        border: 2px solid rgba(212, 175, 55, 0.6);
-        border-radius: 12px;
+        background: #1a1f28;
+        border-right: 3px solid #2a3340;
         padding: 20px;
-        backdrop-filter: blur(10px);
         font-family: 'Cinzel', serif;
-        color: rgba(212, 175, 55, 0.9);
-        min-width: 250px;
+        color: #c8d0d8;
+        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        overflow-y: auto;
       ">
         <h3 style="margin: 0 0 15px 0; text-align: center;">Cosmic Navigator</h3>
         

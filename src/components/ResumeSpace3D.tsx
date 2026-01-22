@@ -5,10 +5,6 @@ import {
   CSS2DRenderer,
   CSS2DObject,
 } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import {
-  CSS3DRenderer,
-  CSS3DObject,
-} from "three/examples/jsm/renderers/CSS3DRenderer.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -22,13 +18,12 @@ import {
   NavigationInterface,
   type NavigationWaypoint,
 } from "./CosmicNavigation";
-import CosmicContentOverlay, {
-  type OverlayContent,
-} from "./CosmicContentOverlay";
+import type { OverlayContent } from "./CosmicContentOverlay";
 import {
   TourDefinitionBuilder,
   type PlanetData,
 } from "./TourDefinitionBuilder";
+import { SpaceshipHUD } from "./SpaceshipHUD";
 
 // Global singleton to prevent multiple WebGL context creation
 let globalRenderer: THREE.WebGLRenderer | null = null;
@@ -49,28 +44,17 @@ export default function ResumeSpace3D({
     scene?: THREE.Scene;
     camera?: THREE.PerspectiveCamera;
     controls?: OrbitControls;
-    css3DRenderer?: CSS3DRenderer;
     sunLight?: THREE.PointLight;
     labelRendererDom?: HTMLElement;
     bloomPass?: UnrealBloomPass;
     sunMaterial?: THREE.MeshBasicMaterial;
   }>({});
 
-  // State for floating detail panel (existing)
-  const [detailPanelVisible, setDetailPanelVisible] = useState(false);
-  const [detailPanelJobId, setDetailPanelJobId] = useState<string | null>(null);
-  const detailPanelRef = useRef<HTMLDivElement>(null);
-  const detailPanel3DRef = useRef<CSS3DObject | null>(null);
-
   // State for new cosmic systems
   const [overlayContent, setOverlayContent] = useState<OverlayContent | null>(
     null,
   );
-  const [overlayVisible, setOverlayVisible] = useState(false);
-  const [splitScreenMode, setSplitScreenMode] = useState(false);
-  const [splitScreenContent, setSplitScreenContent] =
-    useState<OverlayContent | null>(null);
-  const splitScreenModeRef = useRef(false);
+  const [contentLoading, setContentLoading] = useState(false);
   const originalMinDistanceRef = useRef<number>(0);
 
   // Visual console state
@@ -235,16 +219,6 @@ export default function ResumeSpace3D({
     sceneRef.current.labelRendererDom = labelRenderer.domElement;
     sceneRef.current.scene = scene;
     sceneRef.current.camera = camera;
-
-    // CSS3DRenderer for 3D detail panel
-    const css3DRenderer = new CSS3DRenderer();
-    css3DRenderer.setSize(container.clientWidth, container.clientHeight);
-    css3DRenderer.domElement.style.position = "absolute";
-    css3DRenderer.domElement.style.top = "0px";
-    css3DRenderer.domElement.style.pointerEvents = "none";
-    css3DRenderer.domElement.style.zIndex = "1000";
-    container.appendChild(css3DRenderer.domElement);
-    sceneRef.current.css3DRenderer = css3DRenderer;
 
     // Apply initial visibility
     if (optionsRef.current.spaceShowLabels === false) {
@@ -1053,68 +1027,58 @@ export default function ResumeSpace3D({
 
               if (content) {
                 setOverlayContent(content);
-                setOverlayVisible(true);
+                setContentLoading(false);
                 return; // Don't do regular navigation
               }
             }
           }
 
-          // Special handling for InvestCloud - show floating panel instead
+          // Special handling for job moons - show cosmic overlay
           const jobData = resumeData.experience.find(
             (job) => job.company === planetName,
           );
-          if (jobData && jobData.id === "investcloud") {
-            console.log("🚀 Opening InvestCloud detail panel in cosmos");
-            setDetailPanelVisible(true);
-            setDetailPanelJobId(jobData.id);
-          } else if (jobData) {
-            // Show cosmic overlay for job moons
-            const position = jobData.positions?.[0]; // Get first/latest position
+          if (jobData) {
+            setContentLoading(true);
+
+            // Build comprehensive job content sections
+            const sections: any[] = [];
+
+            // Add each position as a section
+            jobData.positions?.forEach((position, idx) => {
+              const posWithDates = position as any;
+              sections.push({
+                id: `position-${idx}`,
+                title: position.title,
+                content: position.responsibilities.join("\n\n• "),
+                type: "text",
+                data: {
+                  startDate: posWithDates.startDate,
+                  endDate: posWithDates.endDate,
+                },
+              });
+            });
+
             const jobContent: OverlayContent = {
               title: jobData.company,
-              subtitle: position?.title || "Professional Experience",
-              description: `Professional experience at ${jobData.company} from ${jobData.startDate} to ${jobData.endDate || "Present"}.`,
-              sections: [
-                {
-                  id: "details",
-                  title: "Role Details",
-                  content: position?.responsibilities || [
-                    "Key responsibilities and achievements.",
-                  ],
-                  type: "text",
-                },
-                {
-                  id: "timeline",
-                  title: "Timeline",
-                  content: "",
-                  type: "timeline",
-                  data:
-                    jobData.positions?.map((pos) => {
-                      const posWithDates = pos as any; // Type assertion for optional date fields
-                      return {
-                        date:
-                          posWithDates.startDate && posWithDates.endDate
-                            ? `${posWithDates.startDate} - ${posWithDates.endDate}`
-                            : pos.title,
-                        title: pos.title,
-                        description: pos.responsibilities?.[0] || "",
-                        technologies: [], // We don't have technologies in current data structure
-                      };
-                    }) || [],
-                },
-              ],
+              subtitle: `${jobData.startDate} - ${jobData.endDate || "Present"} • ${jobData.location}`,
+              description:
+                jobData.positions?.[0]?.responsibilities[0] ||
+                `Professional experience at ${jobData.company}.`,
+              sections,
               actions: [
                 {
-                  label: "View All Experience",
+                  label: "View Career Journey",
                   action: "tour:career-journey",
                   icon: "📈",
                 },
-                { label: "Contact Info", action: "contact:show", icon: "📧" },
               ],
             };
 
-            setOverlayContent(jobContent);
-            setOverlayVisible(true);
+            // Simulate loading delay for smooth animation
+            setTimeout(() => {
+              setOverlayContent(jobContent);
+              setContentLoading(false);
+            }, 300);
           } else {
             // Regular navigation for other planets
             onNavigate(hit.object.userData.sectionIndex);
@@ -1201,7 +1165,7 @@ export default function ResumeSpace3D({
       // Show content without overlay blocking the view
       if (waypoint.content) {
         setOverlayContent(waypoint.content);
-        setOverlayVisible(true);
+        setContentLoading(false);
       }
     };
 
@@ -1222,8 +1186,6 @@ export default function ResumeSpace3D({
       switch (target) {
         case "home":
           await cameraDirectorRef.current.systemOverview();
-          setSplitScreenMode(false);
-          splitScreenModeRef.current = false;
           break;
         case "about":
           await cameraDirectorRef.current.systemOverview();
@@ -1270,9 +1232,7 @@ export default function ResumeSpace3D({
             ],
           };
           setOverlayContent(aboutContent);
-          setOverlayVisible(true);
-          setSplitScreenMode(false);
-          splitScreenModeRef.current = false;
+          setContentLoading(false);
           vlog("🌌 Navigated to Sun (About)");
           // Restore original camera constraints
           setMinDistance(originalMinDistanceRef.current, "restore after about");
@@ -1280,8 +1240,6 @@ export default function ResumeSpace3D({
         case "experience":
           vlog("🌍 Traveling to Experience Planet...");
           await cameraDirectorRef.current.focusPlanet(expPlanet, 300);
-          setSplitScreenMode(false);
-          splitScreenModeRef.current = false;
           // Restore original camera constraints
           setMinDistance(
             originalMinDistanceRef.current,
@@ -1291,8 +1249,6 @@ export default function ResumeSpace3D({
         case "skills":
           vlog("⚡ Traveling to Skills Planet...");
           await cameraDirectorRef.current.focusPlanet(skillsPlanet, 350);
-          setSplitScreenMode(false);
-          splitScreenModeRef.current = false;
           // Restore original camera constraints
           setMinDistance(
             originalMinDistanceRef.current,
@@ -1302,8 +1258,6 @@ export default function ResumeSpace3D({
         case "projects":
           vlog("💡 Traveling to Projects Planet...");
           await cameraDirectorRef.current.focusPlanet(projectsPlanet, 400);
-          setSplitScreenMode(false);
-          splitScreenModeRef.current = false;
           // Restore original camera constraints
           setMinDistance(
             originalMinDistanceRef.current,
@@ -1335,9 +1289,8 @@ export default function ResumeSpace3D({
                   `✅ Starting tour: ${tour.title} with ${tour.waypoints.length} waypoints`,
                 );
                 setTourActive(true);
-                setOverlayVisible(false);
                 setOverlayContent(null);
-                setSplitScreenMode(false);
+                setContentLoading(false);
                 tourGuideRef.current.startTour(tour.waypoints);
               } else {
                 vlog(`❌ Failed to create tour`);
@@ -1390,10 +1343,6 @@ export default function ResumeSpace3D({
       }
 
       vlog(`✅ Moon found: ${company.company}`);
-
-      // FIRST: Stop all orbital movement by setting split-screen mode
-      setSplitScreenMode(true);
-      splitScreenModeRef.current = true;
 
       // Get the moon's WORLD position (not local position relative to parent)
       const moonWorldPos = new THREE.Vector3();
@@ -1470,48 +1419,6 @@ export default function ResumeSpace3D({
           `📐 Camera-to-target distance: ${camToTarget.toFixed(2)} (min: ${sceneRef.current.controls.minDistance}, max: ${sceneRef.current.controls.maxDistance})`,
         );
       }
-
-      // Create comprehensive split-screen content with full job details
-      const position = company.positions?.[0];
-      const splitContent: OverlayContent = {
-        title: company.company,
-        subtitle: position?.title || "Professional Experience",
-        description: `${company.startDate} - ${company.endDate || "Present"} | ${company.location}`,
-        sections: [
-          {
-            id: "overview",
-            title: "Company Overview",
-            content: `Professional experience at ${company.company}, contributing to innovative solutions and technical excellence in ${company.location}.`,
-            type: "text",
-          },
-          {
-            id: "roles",
-            title: "Positions & Responsibilities",
-            content:
-              position?.responsibilities?.join("\n\n• ") ||
-              "Key responsibilities and achievements during tenure.",
-            type: "text",
-          },
-          {
-            id: "period",
-            title: "Employment Period",
-            content: `${company.startDate} - ${company.endDate || "Present"}`,
-            type: "text",
-          },
-        ],
-        actions: [
-          {
-            label: "View All Experience",
-            action: "tour:career-journey",
-            icon: "📈",
-          },
-          { label: "Back to Galaxy", action: "navigate:home", icon: "🌌" },
-        ],
-      };
-
-      setSplitScreenContent(splitContent);
-      setSplitScreenMode(true);
-      splitScreenModeRef.current = true;
     };
 
     // Initialize navigation interface
@@ -1531,10 +1438,9 @@ export default function ResumeSpace3D({
       // Rotate Sun
       sunMesh.rotation.y += 0.002;
 
-      // Orbit logic - stop orbital movement during split-screen mode
-      const speedMultiplier = splitScreenModeRef.current
-        ? 0 // Stop orbital movement during split-screen mode
-        : optionsRef.current.spaceOrbitSpeed !== undefined
+      // Orbit logic
+      const speedMultiplier =
+        optionsRef.current.spaceOrbitSpeed !== undefined
           ? optionsRef.current.spaceOrbitSpeed
           : 0.1;
 
@@ -1722,11 +1628,6 @@ export default function ResumeSpace3D({
       controls.update();
       composer.render(); // Use composer instead of renderer for bloom effect
       labelRenderer.render(scene, camera);
-
-      // Render CSS3D panel
-      if (sceneRef.current.css3DRenderer) {
-        sceneRef.current.css3DRenderer.render(scene, camera);
-      }
     };
 
     animate();
@@ -1749,13 +1650,6 @@ export default function ResumeSpace3D({
         mountRef.current.clientWidth,
         mountRef.current.clientHeight,
       );
-
-      if (sceneRef.current.css3DRenderer) {
-        sceneRef.current.css3DRenderer.setSize(
-          mountRef.current.clientWidth,
-          mountRef.current.clientHeight,
-        );
-      }
     };
 
     window.addEventListener("resize", handleResize);
@@ -1785,10 +1679,6 @@ export default function ResumeSpace3D({
       rendererRef.current = null;
       labelRenderer.domElement.remove();
 
-      if (sceneRef.current.css3DRenderer) {
-        sceneRef.current.css3DRenderer.domElement.remove();
-      }
-
       // Traverse and dispose scene objects to free memory
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
@@ -1805,103 +1695,6 @@ export default function ResumeSpace3D({
     return globalCleanup;
   }, []);
 
-  // Handle split-screen mode viewport changes
-  useEffect(() => {
-    if (!mountRef.current) return;
-
-    // Trigger resize to update camera aspect ratio and renderer size
-    const handleSplitScreenResize = () => {
-      if (!sceneRef.current.camera || !rendererRef.current) return;
-
-      const width = mountRef.current!.clientWidth;
-      const height = mountRef.current!.clientHeight;
-
-      sceneRef.current.camera.aspect = width / height;
-      sceneRef.current.camera.updateProjectionMatrix();
-
-      rendererRef.current.setSize(width, height);
-
-      // CSS3DRenderer handles its own sizing
-      if (sceneRef.current.css3DRenderer) {
-        sceneRef.current.css3DRenderer.setSize(width, height);
-      }
-    };
-
-    // Small delay to ensure DOM updates are complete
-    const timeoutId = setTimeout(handleSplitScreenResize, 100);
-
-    return () => clearTimeout(timeoutId);
-  }, [splitScreenMode]);
-
-  // Create CSS3DObject for detail panel when it becomes visible
-  useEffect(() => {
-    if (
-      !detailPanelVisible ||
-      !detailPanelRef.current ||
-      !sceneRef.current.scene ||
-      !sceneRef.current.camera
-    ) {
-      // Clean up existing panel
-      if (detailPanel3DRef.current && sceneRef.current.scene) {
-        sceneRef.current.scene.remove(detailPanel3DRef.current);
-        detailPanel3DRef.current = null;
-      }
-      return;
-    }
-
-    const scene = sceneRef.current.scene;
-    const camera = sceneRef.current.camera;
-    const panelElement = detailPanelRef.current;
-
-    // Create CSS3DObject
-    const panel3D = new CSS3DObject(panelElement);
-
-    // Ensure the wrapper element allows pointer events for scrolling
-    panel3D.element.style.pointerEvents = "auto";
-
-    // Position at center of cosmos
-    panel3D.position.set(0, 0, 0);
-
-    // Scale down significantly (CSS3D uses pixel units, much larger than Three.js units)
-    panel3D.scale.set(0.25, 0.25, 0.25);
-
-    // Copy camera rotation to face viewer, then rotate 180° to show front
-    panel3D.quaternion.copy(camera.quaternion);
-
-    // Add direct wheel event handler to prevent OrbitControls from capturing scroll
-    const scrollableContent = panelElement.querySelector(
-      ".detail-panel-content",
-    );
-    const handleWheel = (e: Event) => {
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      // Let the browser handle the scroll naturally
-    };
-
-    if (scrollableContent) {
-      scrollableContent.addEventListener("wheel", handleWheel, {
-        passive: false,
-        capture: true,
-      });
-    }
-
-    // Add to scene
-    scene.add(panel3D);
-    detailPanel3DRef.current = panel3D;
-
-    return () => {
-      if (scrollableContent) {
-        scrollableContent.removeEventListener("wheel", handleWheel, {
-          capture: true,
-        } as AddEventListenerOptions);
-      }
-      if (detailPanel3DRef.current && scene) {
-        scene.remove(detailPanel3DRef.current);
-        detailPanel3DRef.current = null;
-      }
-    };
-  }, [detailPanelVisible]);
-
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       <div style={{ width: "100%", height: "100%", position: "relative" }}>
@@ -1909,12 +1702,11 @@ export default function ResumeSpace3D({
           ref={mountRef}
           className="width-full height-full"
           style={{
-            width: splitScreenMode ? "60%" : "100%",
+            width: "100%",
             height: "100%",
             position: "absolute",
             top: 0,
             left: 0,
-            transition: "width 0.3s ease-in-out",
           }}
         />
 
@@ -1939,381 +1731,39 @@ export default function ResumeSpace3D({
         </div>
       </div>
 
-      {/* Floating Detail Panel for InvestCloud */}
-      {detailPanelVisible && detailPanelJobId === "investcloud" && (
-        <div
-          ref={detailPanelRef}
-          className="detail-panel"
-          style={{
-            width: "800px",
-            height: "600px",
-            backgroundColor: "rgba(10, 10, 20, 0.95)",
-            border: "2px solid rgba(212, 175, 55, 0.8)",
-            borderRadius: "12px",
-            boxShadow:
-              "0 0 40px rgba(212, 175, 55, 0.4), inset 0 0 20px rgba(0, 0, 0, 0.5)",
-            backdropFilter: "blur(10px)",
-            position: "relative",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            zIndex: 2147483647,
-            pointerEvents: "auto",
-            userSelect: "text",
-          }}
-        >
-          {/* Fixed Header */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "15px 20px",
-              borderBottom: "1px solid rgba(212, 175, 55, 0.3)",
-              backgroundColor: "rgba(0, 0, 0, 0.3)",
-            }}
-          >
-            <div style={{ display: "flex", gap: "10px" }}>
-              {/* Placeholder for icons */}
-            </div>
-            <button
-              onClick={() => {
-                setDetailPanelVisible(false);
-                setDetailPanelJobId(null);
-              }}
-              style={{
-                background: "rgba(212, 175, 55, 0.2)",
-                border: "1px solid rgba(212, 175, 55, 0.5)",
-                color: "rgba(212, 175, 55, 0.9)",
-                width: "32px",
-                height: "32px",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "20px",
-                fontWeight: "bold",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                transition: "all 0.2s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(212, 175, 55, 0.4)";
-                e.currentTarget.style.transform = "scale(1.1)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "rgba(212, 175, 55, 0.2)";
-                e.currentTarget.style.transform = "scale(1)";
-              }}
-            >
-              ×
-            </button>
-          </div>
-
-          {/* Scrollable Content */}
-          <div
-            className="detail-panel-content"
-            onWheel={(e) => {
-              // Stop wheel events from propagating to OrbitControls
-              e.stopPropagation();
-            }}
-            onMouseEnter={() => {
-              // Disable OrbitControls when mouse enters the content area
-              if (sceneRef.current.controls) {
-                sceneRef.current.controls.enabled = false;
-              }
-            }}
-            onMouseLeave={() => {
-              // Re-enable OrbitControls when mouse leaves the content area
-              if (sceneRef.current.controls) {
-                sceneRef.current.controls.enabled = true;
-              }
-            }}
-            style={{
-              height: "calc(600px - 60px)",
-              overflowY: "auto",
-              overflowX: "hidden",
-              padding: "30px",
-              position: "relative",
-              pointerEvents: "auto",
-              userSelect: "text",
-              cursor: "auto",
-            }}
-          >
-            {/* Content */}
-            {detailPanelVisible &&
-              detailPanelJobId &&
-              (() => {
-                const job = resumeData.experience.find(
-                  (j) => j.id === detailPanelJobId,
-                );
-                if (!job) return <div>Job not found</div>;
-
-                return (
-                  <div style={{ color: "rgba(255, 255, 255, 0.9)" }}>
-                    <h2
-                      className="detail-panel__company"
-                      style={{
-                        fontFamily: "'Cinzel', serif",
-                        color: "rgba(212, 175, 55, 1)",
-                        fontSize: "28px",
-                        marginBottom: "10px",
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      {job.company}
-                    </h2>
-
-                    <div
-                      className="detail-panel__dates"
-                      style={{
-                        fontFamily: "'Montserrat', sans-serif",
-                        fontSize: "14px",
-                        color: "rgba(212, 175, 55, 0.8)",
-                        marginBottom: "20px",
-                      }}
-                    >
-                      {job.location} • {job.startDate} - {job.endDate}
-                    </div>
-
-                    {job.positions.map((position, idx) => (
-                      <div
-                        key={idx}
-                        className="detail-panel__position"
-                        style={{ marginBottom: "25px" }}
-                      >
-                        <h3
-                          style={{
-                            fontFamily: "'Cinzel', serif",
-                            color: "rgba(212, 175, 55, 0.9)",
-                            fontSize: "20px",
-                            marginBottom: "8px",
-                          }}
-                        >
-                          {position.title}
-                        </h3>
-
-                        <div
-                          style={{
-                            fontFamily: "'Montserrat', sans-serif",
-                            fontSize: "13px",
-                            color: "rgba(212, 175, 55, 0.7)",
-                            marginBottom: "12px",
-                          }}
-                        >
-                          {"startDate" in position && position.startDate}{" "}
-                          {"startDate" in position &&
-                            "endDate" in position &&
-                            "-"}{" "}
-                          {"endDate" in position && position.endDate}
-                        </div>
-
-                        <ul
-                          style={{
-                            fontFamily: "'Montserrat', sans-serif",
-                            fontSize: "14px",
-                            lineHeight: "1.8",
-                            paddingLeft: "20px",
-                            color: "rgba(255, 255, 255, 0.85)",
-                          }}
-                        >
-                          {position.responsibilities.map((resp, rIdx) => (
-                            <li key={rIdx} style={{ marginBottom: "10px" }}>
-                              {resp}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-          </div>
-        </div>
-      )}
-
-      {/* Split-Screen Experience View */}
-      {splitScreenMode && splitScreenContent && (
-        <div>
-          {/* Right section - Content Panel */}
-          <div
-            style={{
-              position: "fixed",
-              right: 0,
-              top: 0,
-              width: "40%",
-              height: "100vh",
-              background:
-                "linear-gradient(135deg, rgba(20, 25, 35, 0.98) 0%, rgba(30, 40, 55, 0.98) 100%)",
-              border: "2px solid rgba(212, 175, 55, 0.6)",
-              borderRight: "none",
-              borderRadius: "20px 0 0 20px",
-              backdropFilter: "blur(15px)",
-              zIndex: 1500,
-              overflow: "hidden",
-              boxShadow: "-10px 0 50px rgba(0, 0, 0, 0.5)",
-            }}
-          >
-            <div
-              style={{
-                padding: "30px",
-                height: "100%",
-                overflowY: "auto",
-                fontFamily: "'Cinzel', serif",
-                color: "rgba(212, 175, 55, 0.9)",
-              }}
-            >
-              <button
-                onClick={() => {
-                  setSplitScreenMode(false);
-                  setSplitScreenContent(null);
-                  splitScreenModeRef.current = false;
-                  // Restore original camera constraints
-                  setMinDistance(
-                    originalMinDistanceRef.current,
-                    "restore on split-screen close",
-                  );
-                }}
-                style={{
-                  position: "absolute",
-                  top: "20px",
-                  right: "20px",
-                  background: "rgba(255, 100, 100, 0.2)",
-                  border: "1px solid rgba(255, 100, 100, 0.4)",
-                  color: "rgba(255, 100, 100, 0.8)",
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "20px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "16px",
-                }}
-              >
-                ✕
-              </button>
-
-              <h2 style={{ marginBottom: "10px", fontSize: "28px" }}>
-                {splitScreenContent.title}
-              </h2>
-              {splitScreenContent.subtitle && (
-                <p
-                  style={{
-                    marginBottom: "20px",
-                    fontSize: "16px",
-                    color: "rgba(255, 255, 255, 0.7)",
-                    fontStyle: "italic",
-                  }}
-                >
-                  {splitScreenContent.subtitle}
-                </p>
-              )}
-              <p
-                style={{
-                  marginBottom: "30px",
-                  lineHeight: "1.6",
-                  color: "rgba(255, 255, 255, 0.85)",
-                }}
-              >
-                {splitScreenContent.description}
-              </p>
-
-              {splitScreenContent.sections.map((section) => (
-                <div key={section.id} style={{ marginBottom: "30px" }}>
-                  <h3
-                    style={{
-                      marginBottom: "15px",
-                      fontSize: "20px",
-                      color: "rgba(212, 175, 55, 1)",
-                      textShadow: "0 0 8px rgba(212, 175, 55, 0.3)",
-                    }}
-                  >
-                    {section.title}
-                  </h3>
-                  <div
-                    style={{
-                      fontSize: "14px",
-                      lineHeight: "1.7",
-                      color: "rgba(255, 255, 255, 0.9)",
-                      whiteSpace: "pre-line",
-                      marginBottom: "15px",
-                    }}
-                  >
-                    {typeof section.content === "string" &&
-                    section.content.startsWith("• ") ? (
-                      <ul style={{ listStyle: "none", paddingLeft: 0 }}>
-                        {section.content
-                          .split("\n\n")
-                          .map((item: string, idx: number) => (
-                            <li key={idx} style={{ marginBottom: "8px" }}>
-                              {item}
-                            </li>
-                          ))}
-                      </ul>
-                    ) : Array.isArray(section.content) ? (
-                      section.content.join("\n\n")
-                    ) : (
-                      section.content
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {splitScreenContent.actions && (
-                <div style={{ marginTop: "30px", textAlign: "center" }}>
-                  {splitScreenContent.actions.map((action, index) => (
-                    <button
-                      key={index}
-                      onClick={() => {
-                        // Handle action - could trigger tours or navigation
-                        if (action.action === "navigate:home") {
-                          setSplitScreenMode(false);
-                          splitScreenModeRef.current = false;
-                          // Restore original camera constraints
-                          setMinDistance(
-                            originalMinDistanceRef.current,
-                            "restore on overlay close",
-                          );
-                          cameraDirectorRef.current?.systemOverview();
-                        }
-                        // Add other action handlers as needed
-                      }}
-                      style={{
-                        background: "rgba(212, 175, 55, 0.2)",
-                        border: "1px solid rgba(212, 175, 55, 0.5)",
-                        color: "rgba(212, 175, 55, 0.9)",
-                        padding: "12px 20px",
-                        borderRadius: "25px",
-                        cursor: "pointer",
-                        margin: "5px",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        fontFamily: "inherit",
-                        fontSize: "14px",
-                      }}
-                    >
-                      {action.icon && <span>{action.icon}</span>}
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Cosmic Content Overlay */}
-      <CosmicContentOverlay
-        content={overlayContent}
-        isVisible={overlayVisible}
-        onClose={() => {
-          setOverlayVisible(false);
-          setOverlayContent(null);
+      {/* Spaceship HUD Interface */}
+      <SpaceshipHUD
+        userName="HARMA DAVTIAN"
+        userTitle="Lead Full Stack Engineer"
+        consoleLogs={consoleLogs}
+        consoleVisible={consoleVisible}
+        onConsoleToggle={() => setConsoleVisible(!consoleVisible)}
+        onConsoleCopy={() => {
+          navigator.clipboard.writeText(consoleLogs.join("\n"));
         }}
-        onAction={(action) => {
-          vlog(`🎬 Overlay action received: ${action}`);
+        onConsoleClear={() => {
+          setConsoleLogs([]);
+          consoleLogsRef.current = [];
+        }}
+        tourActive={tourActive}
+        tourWaypoint={tourWaypoint}
+        tourProgress={tourProgress}
+        onTourPrevious={() => tourGuideRef.current?.previousWaypoint()}
+        onTourNext={() => tourGuideRef.current?.nextWaypoint()}
+        onTourRestart={() => tourGuideRef.current?.restartTour()}
+        onTourEnd={() => {
+          tourGuideRef.current?.stopTour();
+          setTourActive(false);
+          setOverlayContent(null);
+          setContentLoading(false);
+          vlog("🛑 Tour ended");
+        }}
+        isTransitioning={false}
+        speed={0}
+        content={overlayContent}
+        contentLoading={contentLoading}
+        onContentAction={(action: string) => {
+          vlog(`🎬 Content action received: ${action}`);
 
           // Handle different actions
           if (action.startsWith("tour:")) {
@@ -2343,9 +1793,8 @@ export default function ResumeSpace3D({
               if (tour) {
                 vlog(`✅ Tour object valid, starting...`);
                 setTourActive(true);
-                setOverlayVisible(false); // Close any open overlays
                 setOverlayContent(null);
-                setSplitScreenMode(false);
+                setContentLoading(false);
                 tourGuideRef.current.startTour(tour.waypoints);
                 vlog(
                   `✨ Tour started: ${tour.title} (${tour.waypoints.length} waypoints)`,
@@ -2358,14 +1807,21 @@ export default function ResumeSpace3D({
             }
           } else if (action.startsWith("navigate:")) {
             const target = action.replace("navigate:", "");
-            // Call navigation directly since we have access to the planets and camera director
             if (cameraDirectorRef.current) {
               switch (target) {
                 case "sun":
+                case "home":
+                  setOverlayContent(null);
+                  setContentLoading(false);
+                  if (originalMinDistanceRef.current > 0) {
+                    setMinDistance(
+                      originalMinDistanceRef.current,
+                      "restore on navigate home",
+                    );
+                  }
                   cameraDirectorRef.current.systemOverview();
                   break;
                 case "experience":
-                  // We need to access the planet meshes - let's use the stored planet data
                   const expData = planetsDataRef.current.get("experience");
                   if (expData) {
                     cameraDirectorRef.current.flyTo({
@@ -2410,349 +1866,10 @@ export default function ResumeSpace3D({
               }
             }
           } else if (action === "mode:free") {
-            // setNavigationMode('free'); // Removed since we're not tracking this state currently
             tourGuideRef.current?.stopTour();
           }
-
-          // Close overlay after action
-          setOverlayVisible(false);
-          setOverlayContent(null);
         }}
-        position="center"
-        animation="cosmic"
       />
-
-      {/* Tour Control Panel */}
-      {tourActive && (
-        <div
-          style={{
-            position: "fixed",
-            top: "50%",
-            right: "30px",
-            transform: "translateY(-50%)",
-            background:
-              "linear-gradient(135deg, rgba(20, 25, 35, 0.95) 0%, rgba(30, 40, 55, 0.95) 100%)",
-            backdropFilter: "blur(8px)",
-            border: "2px solid rgba(212, 175, 55, 0.6)",
-            borderRadius: "15px",
-            padding: "20px",
-            boxShadow:
-              "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 100px rgba(212, 175, 55, 0.3)",
-            zIndex: 9998,
-            minWidth: "200px",
-          }}
-        >
-          {/* Tour Header */}
-          <div
-            style={{
-              fontFamily: "'Cinzel', serif",
-              fontSize: "14px",
-              color: "rgba(212, 175, 55, 0.9)",
-              letterSpacing: "1px",
-              marginBottom: "15px",
-              textAlign: "center",
-              borderBottom: "1px solid rgba(212, 175, 55, 0.3)",
-              paddingBottom: "10px",
-            }}
-          >
-            🎬 GUIDED TOUR
-          </div>
-
-          {/* Tour Info */}
-          <div
-            style={{
-              fontFamily: "'Montserrat', sans-serif",
-              fontSize: "11px",
-              color: "rgba(212, 175, 55, 0.7)",
-              marginBottom: "10px",
-              textAlign: "center",
-            }}
-          >
-            {tourWaypoint}
-          </div>
-
-          {/* Progress Bar */}
-          <div
-            style={{
-              width: "100%",
-              height: "4px",
-              background: "rgba(212, 175, 55, 0.2)",
-              borderRadius: "2px",
-              marginBottom: "15px",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                width: `${(tourProgress.current / tourProgress.total) * 100}%`,
-                height: "100%",
-                background:
-                  "linear-gradient(90deg, rgba(212, 175, 55, 0.8), rgba(212, 175, 55, 1))",
-                transition: "width 0.5s ease",
-              }}
-            ></div>
-          </div>
-
-          {/* Progress Text */}
-          <div
-            style={{
-              fontFamily: "'Courier New', monospace",
-              fontSize: "10px",
-              color: "rgba(212, 175, 55, 0.6)",
-              textAlign: "center",
-              marginBottom: "15px",
-            }}
-          >
-            {tourProgress.current} / {tourProgress.total}
-          </div>
-
-          {/* Navigation Controls */}
-          <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
-            <button
-              onClick={() => tourGuideRef.current?.previousWaypoint()}
-              disabled={tourProgress.current <= 1}
-              style={{
-                flex: 1,
-                background:
-                  tourProgress.current <= 1
-                    ? "rgba(100, 100, 100, 0.2)"
-                    : "rgba(212, 175, 55, 0.2)",
-                border: `1px solid ${tourProgress.current <= 1 ? "rgba(100, 100, 100, 0.4)" : "rgba(212, 175, 55, 0.4)"}`,
-                borderRadius: "6px",
-                color:
-                  tourProgress.current <= 1
-                    ? "rgba(150, 150, 150, 0.5)"
-                    : "rgba(212, 175, 55, 0.9)",
-                fontSize: "14px",
-                padding: "8px",
-                cursor: tourProgress.current <= 1 ? "not-allowed" : "pointer",
-                fontFamily: "'Montserrat', sans-serif",
-              }}
-              title="Previous"
-            >
-              ◀
-            </button>
-            <button
-              onClick={() => tourGuideRef.current?.nextWaypoint()}
-              disabled={tourProgress.current >= tourProgress.total}
-              style={{
-                flex: 1,
-                background:
-                  tourProgress.current >= tourProgress.total
-                    ? "rgba(100, 100, 100, 0.2)"
-                    : "rgba(212, 175, 55, 0.2)",
-                border: `1px solid ${tourProgress.current >= tourProgress.total ? "rgba(100, 100, 100, 0.4)" : "rgba(212, 175, 55, 0.4)"}`,
-                borderRadius: "6px",
-                color:
-                  tourProgress.current >= tourProgress.total
-                    ? "rgba(150, 150, 150, 0.5)"
-                    : "rgba(212, 175, 55, 0.9)",
-                fontSize: "14px",
-                padding: "8px",
-                cursor:
-                  tourProgress.current >= tourProgress.total
-                    ? "not-allowed"
-                    : "pointer",
-                fontFamily: "'Montserrat', sans-serif",
-              }}
-              title="Next"
-            >
-              ▶
-            </button>
-          </div>
-
-          {/* Action Buttons */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <button
-              onClick={() => tourGuideRef.current?.restartTour()}
-              style={{
-                background: "rgba(100, 150, 255, 0.2)",
-                border: "1px solid rgba(100, 150, 255, 0.4)",
-                borderRadius: "6px",
-                color: "rgba(100, 150, 255, 0.9)",
-                fontSize: "11px",
-                padding: "6px",
-                cursor: "pointer",
-                fontFamily: "'Montserrat', sans-serif",
-              }}
-              title="Restart Tour"
-            >
-              🔄 Restart
-            </button>
-            <button
-              onClick={() => {
-                tourGuideRef.current?.stopTour();
-                setTourActive(false);
-                setOverlayVisible(false);
-                setOverlayContent(null);
-                vlog("🛑 Tour ended");
-              }}
-              style={{
-                background: "rgba(255, 100, 100, 0.2)",
-                border: "1px solid rgba(255, 100, 100, 0.4)",
-                borderRadius: "6px",
-                color: "rgba(255, 100, 100, 0.8)",
-                fontSize: "11px",
-                padding: "6px",
-                cursor: "pointer",
-                fontFamily: "'Montserrat', sans-serif",
-              }}
-              title="End Tour"
-            >
-              ✕ End Tour
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Visual Console Overlay - Cosmic Style */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: "20px",
-          left: "20px",
-          width: consoleVisible ? "800px" : "0px",
-          height: consoleVisible ? "200px" : "0px",
-          background: consoleVisible
-            ? "linear-gradient(135deg, rgba(20, 25, 35, 0.95) 0%, rgba(30, 40, 55, 0.95) 50%, rgba(25, 35, 50, 0.95) 100%)"
-            : "transparent",
-          backdropFilter: consoleVisible ? "blur(8px)" : "none",
-          border: consoleVisible ? "2px solid rgba(212, 175, 55, 0.6)" : "none",
-          borderRadius: "15px",
-          fontFamily: '"Courier New", monospace',
-          fontSize: "11px",
-          color: "rgba(212, 175, 55, 0.9)",
-          overflow: "hidden",
-          transition: "all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-          zIndex: 9999,
-          boxShadow: consoleVisible
-            ? "0 25px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 100px rgba(212, 175, 55, 0.3)"
-            : "none",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {consoleVisible && (
-          <>
-            {/* Console Header */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "8px 12px",
-                borderBottom: "1px solid rgba(212, 175, 55, 0.3)",
-                background: "rgba(0, 0, 0, 0.2)",
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "'Cinzel', serif",
-                  fontSize: "12px",
-                  color: "rgba(212, 175, 55, 0.9)",
-                  letterSpacing: "1px",
-                }}
-              >
-                ⚡ SYSTEM CONSOLE
-              </div>
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(consoleLogs.join("\n"));
-                  }}
-                  style={{
-                    background: "rgba(212, 175, 55, 0.2)",
-                    border: "1px solid rgba(212, 175, 55, 0.4)",
-                    borderRadius: "4px",
-                    color: "rgba(212, 175, 55, 0.9)",
-                    fontSize: "10px",
-                    padding: "3px 8px",
-                    cursor: "pointer",
-                    fontFamily: "'Montserrat', sans-serif",
-                  }}
-                  title="Copy Console"
-                >
-                  📋
-                </button>
-                <button
-                  onClick={() => {
-                    setConsoleLogs([]);
-                    consoleLogsRef.current = [];
-                  }}
-                  style={{
-                    background: "rgba(255, 100, 100, 0.2)",
-                    border: "1px solid rgba(255, 100, 100, 0.4)",
-                    borderRadius: "4px",
-                    color: "rgba(255, 100, 100, 0.8)",
-                    fontSize: "10px",
-                    padding: "3px 8px",
-                    cursor: "pointer",
-                    fontFamily: "'Montserrat', sans-serif",
-                  }}
-                  title="Clear Console"
-                >
-                  🗑️
-                </button>
-              </div>
-            </div>
-
-            {/* Console Content */}
-            <div
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                padding: "8px 12px",
-                background: "rgba(0, 0, 0, 0.1)",
-              }}
-            >
-              {consoleLogs.map((log, i) => (
-                <div
-                  key={i}
-                  style={{
-                    marginBottom: "3px",
-                    opacity: 0.6 + (i / consoleLogs.length) * 0.4,
-                    fontFamily: '"Courier New", monospace',
-                    fontSize: "11px",
-                    lineHeight: "1.4",
-                  }}
-                >
-                  {log}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Console Toggle Button */}
-      <button
-        onClick={() => setConsoleVisible(!consoleVisible)}
-        style={{
-          position: "fixed",
-          bottom: consoleVisible ? "230px" : "20px",
-          left: "20px",
-          width: "40px",
-          height: "40px",
-          background:
-            "linear-gradient(135deg, rgba(20, 25, 35, 0.9) 0%, rgba(30, 40, 55, 0.9) 100%)",
-          backdropFilter: "blur(8px)",
-          border: "2px solid rgba(212, 175, 55, 0.6)",
-          borderRadius: "50%",
-          color: "rgba(212, 175, 55, 0.9)",
-          fontSize: "18px",
-          cursor: "pointer",
-          zIndex: 10000,
-          transition: "all 0.3s ease",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow:
-            "0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(212, 175, 55, 0.3)",
-        }}
-        title={consoleVisible ? "Hide Console" : "Show Console"}
-      >
-        {consoleVisible ? "✕" : "⚡"}
-      </button>
     </div>
   );
 }
