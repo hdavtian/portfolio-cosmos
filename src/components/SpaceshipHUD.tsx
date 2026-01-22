@@ -80,8 +80,6 @@ export const SpaceshipHUD: React.FC<SpaceshipHUDProps> = ({
           height: "45px",
           background: "linear-gradient(180deg, #1a1f28 0%, #0f1419 100%)",
           borderBottom: "3px solid #2a3340",
-          boxShadow:
-            "0 4px 20px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
           zIndex: 10000,
         }}
       >
@@ -551,8 +549,6 @@ export const SpaceshipHUD: React.FC<SpaceshipHUDProps> = ({
           height: consoleVisible ? "200px" : "40px",
           background: "#1a1f28",
           borderTop: "3px solid #2a3340",
-          boxShadow:
-            "0 -4px 20px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
           zIndex: 10000,
           transition: "height 0.3s ease",
           display: "flex",
@@ -578,7 +574,7 @@ export const SpaceshipHUD: React.FC<SpaceshipHUDProps> = ({
               padding: "0 15px",
               borderBottom: consoleVisible ? "2px solid #2a3340" : "none",
             }}
-        >
+          >
             {/* Left: Console Toggle */}
             <button
               onClick={onConsoleToggle}
@@ -615,7 +611,9 @@ export const SpaceshipHUD: React.FC<SpaceshipHUDProps> = ({
             >
               <div style={{ color: "#4a9eff" }}>● PWR: 100%</div>
               <div style={{ color: "#4a9eff" }}>● CONN</div>
-              <div style={{ color: "#4a9eff" }}>● LOGS: {consoleLogs.length}</div>
+              <div style={{ color: "#4a9eff" }}>
+                ● LOGS: {consoleLogs.length}
+              </div>
             </div>
 
             {/* Right: Console Actions */}
