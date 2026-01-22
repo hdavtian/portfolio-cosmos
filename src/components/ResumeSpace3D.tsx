@@ -79,6 +79,11 @@ export default function ResumeSpace3D({
   const consoleLogsRef = useRef<string[]>([]);
   const maxConsoleLogs = 8; // Keep last 8 logs
 
+  // Tour state
+  const [tourActive, setTourActive] = useState(false);
+  const [tourWaypoint, setTourWaypoint] = useState<string>("");
+  const [tourProgress, setTourProgress] = useState({ current: 0, total: 0 });
+
   // Custom logging function
   const vlog = (message: string, data?: any) => {
     const timestamp = new Date().toLocaleTimeString("en-US", {
@@ -1187,15 +1192,27 @@ export default function ResumeSpace3D({
 
     // Initialize tour guide with content display handler
     const handleContentDisplay = (waypoint: NavigationWaypoint) => {
+      vlog(`🎬 Tour waypoint: ${waypoint.name}`);
+      setTourWaypoint(waypoint.name);
+      if (waypoint.narration) {
+        vlog(`📖 ${waypoint.narration}`);
+      }
+
+      // Show content without overlay blocking the view
       if (waypoint.content) {
         setOverlayContent(waypoint.content);
         setOverlayVisible(true);
       }
     };
 
+    const handleProgressUpdate = (current: number, total: number) => {
+      setTourProgress({ current, total });
+    };
+
     tourGuideRef.current = new CosmicTourGuide(
       cameraDirectorRef.current,
       handleContentDisplay,
+      handleProgressUpdate,
     );
 
     // Initialize navigation interface
@@ -1256,12 +1273,12 @@ export default function ResumeSpace3D({
           setOverlayVisible(true);
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
-          vlog('🌌 Navigated to Sun (About)');
+          vlog("🌌 Navigated to Sun (About)");
           // Restore original camera constraints
           setMinDistance(originalMinDistanceRef.current, "restore after about");
           break;
         case "experience":
-          vlog('🌍 Traveling to Experience Planet...');
+          vlog("🌍 Traveling to Experience Planet...");
           await cameraDirectorRef.current.focusPlanet(expPlanet, 300);
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
@@ -1272,7 +1289,7 @@ export default function ResumeSpace3D({
           );
           break;
         case "skills":
-          vlog('⚡ Traveling to Skills Planet...');
+          vlog("⚡ Traveling to Skills Planet...");
           await cameraDirectorRef.current.focusPlanet(skillsPlanet, 350);
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
@@ -1283,7 +1300,7 @@ export default function ResumeSpace3D({
           );
           break;
         case "projects":
-          vlog('💡 Traveling to Projects Planet...');
+          vlog("💡 Traveling to Projects Planet...");
           await cameraDirectorRef.current.focusPlanet(projectsPlanet, 400);
           setSplitScreenMode(false);
           splitScreenModeRef.current = false;
@@ -1294,8 +1311,43 @@ export default function ResumeSpace3D({
           );
           break;
         default:
+          // Handle tour actions
+          if (target.startsWith("tour:")) {
+            const tourType = target.replace("tour:", "");
+            vlog(`🚀 Tour request from navigation: ${tourType}`);
+
+            if (tourBuilderRef.current && tourGuideRef.current) {
+              let tour;
+              switch (tourType) {
+                case "career-journey":
+                  tour = tourBuilderRef.current.createCareerJourneyTour();
+                  break;
+                case "technical-deep-dive":
+                  tour = tourBuilderRef.current.createTechnicalDeepDiveTour();
+                  break;
+                case "leadership-story":
+                  tour = tourBuilderRef.current.createLeadershipStoryTour();
+                  break;
+              }
+
+              if (tour) {
+                vlog(
+                  `✅ Starting tour: ${tour.title} with ${tour.waypoints.length} waypoints`,
+                );
+                setTourActive(true);
+                setOverlayVisible(false);
+                setOverlayContent(null);
+                setSplitScreenMode(false);
+                tourGuideRef.current.startTour(tour.waypoints);
+              } else {
+                vlog(`❌ Failed to create tour`);
+              }
+            } else {
+              vlog(`❌ Tour system not initialized`);
+            }
+          }
           // Handle experience company specific navigation
-          if (target.startsWith("experience-")) {
+          else if (target.startsWith("experience-")) {
             const companyId = target.replace("experience-", "");
             await handleExperienceCompanyNavigation(companyId);
           }
@@ -1399,7 +1451,7 @@ export default function ResumeSpace3D({
 
       // CRITICAL: Update OrbitControls target AFTER flyTo completes
       // This allows manual zoom to work toward the moon, not the sun!
-      if (sceneRef.current.controls) {
+      if (sceneRef.current.controls && sceneRef.current.camera) {
         vlog(`🎯 After flyTo, updating target to moon...`);
         sceneRef.current.controls.target.copy(moonWorldPos);
         setMinDistance(0, "allow zoom to moon surface");
@@ -2261,17 +2313,24 @@ export default function ResumeSpace3D({
           setOverlayContent(null);
         }}
         onAction={(action) => {
-          console.log("Overlay action:", action);
+          vlog(`🎬 Overlay action received: ${action}`);
 
           // Handle different actions
           if (action.startsWith("tour:")) {
             const tourType = action.replace("tour:", "");
+            vlog(`🔍 Tour type: ${tourType}`);
+            vlog(`📦 tourBuilderRef exists: ${!!tourBuilderRef.current}`);
+            vlog(`📦 tourGuideRef exists: ${!!tourGuideRef.current}`);
 
             if (tourBuilderRef.current && tourGuideRef.current) {
+              vlog(`🚀 Starting ${tourType} tour...`);
               let tour;
               switch (tourType) {
                 case "career-journey":
                   tour = tourBuilderRef.current.createCareerJourneyTour();
+                  vlog(
+                    `📋 Tour created with ${tour?.waypoints.length || 0} waypoints`,
+                  );
                   break;
                 case "technical-deep-dive":
                   tour = tourBuilderRef.current.createTechnicalDeepDiveTour();
@@ -2282,9 +2341,20 @@ export default function ResumeSpace3D({
               }
 
               if (tour) {
+                vlog(`✅ Tour object valid, starting...`);
+                setTourActive(true);
+                setOverlayVisible(false); // Close any open overlays
+                setOverlayContent(null);
+                setSplitScreenMode(false);
                 tourGuideRef.current.startTour(tour.waypoints);
-                // setNavigationMode('guided'); // Removed since we're not tracking this state currently
+                vlog(
+                  `✨ Tour started: ${tour.title} (${tour.waypoints.length} waypoints)`,
+                );
+              } else {
+                vlog(`❌ Tour object is null or undefined`);
               }
+            } else {
+              vlog(`❌ Tour refs not initialized`);
             }
           } else if (action.startsWith("navigate:")) {
             const target = action.replace("navigate:", "");
@@ -2352,6 +2422,189 @@ export default function ResumeSpace3D({
         animation="cosmic"
       />
 
+      {/* Tour Control Panel */}
+      {tourActive && (
+        <div
+          style={{
+            position: "fixed",
+            top: "50%",
+            right: "30px",
+            transform: "translateY(-50%)",
+            background:
+              "linear-gradient(135deg, rgba(20, 25, 35, 0.95) 0%, rgba(30, 40, 55, 0.95) 100%)",
+            backdropFilter: "blur(8px)",
+            border: "2px solid rgba(212, 175, 55, 0.6)",
+            borderRadius: "15px",
+            padding: "20px",
+            boxShadow:
+              "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 100px rgba(212, 175, 55, 0.3)",
+            zIndex: 9998,
+            minWidth: "200px",
+          }}
+        >
+          {/* Tour Header */}
+          <div
+            style={{
+              fontFamily: "'Cinzel', serif",
+              fontSize: "14px",
+              color: "rgba(212, 175, 55, 0.9)",
+              letterSpacing: "1px",
+              marginBottom: "15px",
+              textAlign: "center",
+              borderBottom: "1px solid rgba(212, 175, 55, 0.3)",
+              paddingBottom: "10px",
+            }}
+          >
+            🎬 GUIDED TOUR
+          </div>
+
+          {/* Tour Info */}
+          <div
+            style={{
+              fontFamily: "'Montserrat', sans-serif",
+              fontSize: "11px",
+              color: "rgba(212, 175, 55, 0.7)",
+              marginBottom: "10px",
+              textAlign: "center",
+            }}
+          >
+            {tourWaypoint}
+          </div>
+
+          {/* Progress Bar */}
+          <div
+            style={{
+              width: "100%",
+              height: "4px",
+              background: "rgba(212, 175, 55, 0.2)",
+              borderRadius: "2px",
+              marginBottom: "15px",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${(tourProgress.current / tourProgress.total) * 100}%`,
+                height: "100%",
+                background:
+                  "linear-gradient(90deg, rgba(212, 175, 55, 0.8), rgba(212, 175, 55, 1))",
+                transition: "width 0.5s ease",
+              }}
+            ></div>
+          </div>
+
+          {/* Progress Text */}
+          <div
+            style={{
+              fontFamily: "'Courier New', monospace",
+              fontSize: "10px",
+              color: "rgba(212, 175, 55, 0.6)",
+              textAlign: "center",
+              marginBottom: "15px",
+            }}
+          >
+            {tourProgress.current} / {tourProgress.total}
+          </div>
+
+          {/* Navigation Controls */}
+          <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+            <button
+              onClick={() => tourGuideRef.current?.previousWaypoint()}
+              disabled={tourProgress.current <= 1}
+              style={{
+                flex: 1,
+                background:
+                  tourProgress.current <= 1
+                    ? "rgba(100, 100, 100, 0.2)"
+                    : "rgba(212, 175, 55, 0.2)",
+                border: `1px solid ${tourProgress.current <= 1 ? "rgba(100, 100, 100, 0.4)" : "rgba(212, 175, 55, 0.4)"}`,
+                borderRadius: "6px",
+                color:
+                  tourProgress.current <= 1
+                    ? "rgba(150, 150, 150, 0.5)"
+                    : "rgba(212, 175, 55, 0.9)",
+                fontSize: "14px",
+                padding: "8px",
+                cursor: tourProgress.current <= 1 ? "not-allowed" : "pointer",
+                fontFamily: "'Montserrat', sans-serif",
+              }}
+              title="Previous"
+            >
+              ◀
+            </button>
+            <button
+              onClick={() => tourGuideRef.current?.nextWaypoint()}
+              disabled={tourProgress.current >= tourProgress.total}
+              style={{
+                flex: 1,
+                background:
+                  tourProgress.current >= tourProgress.total
+                    ? "rgba(100, 100, 100, 0.2)"
+                    : "rgba(212, 175, 55, 0.2)",
+                border: `1px solid ${tourProgress.current >= tourProgress.total ? "rgba(100, 100, 100, 0.4)" : "rgba(212, 175, 55, 0.4)"}`,
+                borderRadius: "6px",
+                color:
+                  tourProgress.current >= tourProgress.total
+                    ? "rgba(150, 150, 150, 0.5)"
+                    : "rgba(212, 175, 55, 0.9)",
+                fontSize: "14px",
+                padding: "8px",
+                cursor:
+                  tourProgress.current >= tourProgress.total
+                    ? "not-allowed"
+                    : "pointer",
+                fontFamily: "'Montserrat', sans-serif",
+              }}
+              title="Next"
+            >
+              ▶
+            </button>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <button
+              onClick={() => tourGuideRef.current?.restartTour()}
+              style={{
+                background: "rgba(100, 150, 255, 0.2)",
+                border: "1px solid rgba(100, 150, 255, 0.4)",
+                borderRadius: "6px",
+                color: "rgba(100, 150, 255, 0.9)",
+                fontSize: "11px",
+                padding: "6px",
+                cursor: "pointer",
+                fontFamily: "'Montserrat', sans-serif",
+              }}
+              title="Restart Tour"
+            >
+              🔄 Restart
+            </button>
+            <button
+              onClick={() => {
+                tourGuideRef.current?.stopTour();
+                setTourActive(false);
+                setOverlayVisible(false);
+                setOverlayContent(null);
+                vlog("🛑 Tour ended");
+              }}
+              style={{
+                background: "rgba(255, 100, 100, 0.2)",
+                border: "1px solid rgba(255, 100, 100, 0.4)",
+                borderRadius: "6px",
+                color: "rgba(255, 100, 100, 0.8)",
+                fontSize: "11px",
+                padding: "6px",
+                cursor: "pointer",
+                fontFamily: "'Montserrat', sans-serif",
+              }}
+              title="End Tour"
+            >
+              ✕ End Tour
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Visual Console Overlay - Cosmic Style */}
       <div
         style={{
@@ -2360,7 +2613,9 @@ export default function ResumeSpace3D({
           left: "20px",
           width: consoleVisible ? "800px" : "0px",
           height: consoleVisible ? "200px" : "0px",
-          background: consoleVisible ? "linear-gradient(135deg, rgba(20, 25, 35, 0.95) 0%, rgba(30, 40, 55, 0.95) 50%, rgba(25, 35, 50, 0.95) 100%)" : "transparent",
+          background: consoleVisible
+            ? "linear-gradient(135deg, rgba(20, 25, 35, 0.95) 0%, rgba(30, 40, 55, 0.95) 50%, rgba(25, 35, 50, 0.95) 100%)"
+            : "transparent",
           backdropFilter: consoleVisible ? "blur(8px)" : "none",
           border: consoleVisible ? "2px solid rgba(212, 175, 55, 0.6)" : "none",
           borderRadius: "15px",
@@ -2380,26 +2635,30 @@ export default function ResumeSpace3D({
         {consoleVisible && (
           <>
             {/* Console Header */}
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "8px 12px",
-              borderBottom: "1px solid rgba(212, 175, 55, 0.3)",
-              background: "rgba(0, 0, 0, 0.2)",
-            }}>
-              <div style={{ 
-                fontFamily: "'Cinzel', serif", 
-                fontSize: "12px",
-                color: "rgba(212, 175, 55, 0.9)",
-                letterSpacing: "1px",
-              }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "8px 12px",
+                borderBottom: "1px solid rgba(212, 175, 55, 0.3)",
+                background: "rgba(0, 0, 0, 0.2)",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "'Cinzel', serif",
+                  fontSize: "12px",
+                  color: "rgba(212, 175, 55, 0.9)",
+                  letterSpacing: "1px",
+                }}
+              >
                 ⚡ SYSTEM CONSOLE
               </div>
               <div style={{ display: "flex", gap: "6px" }}>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(consoleLogs.join('\n'));
+                    navigator.clipboard.writeText(consoleLogs.join("\n"));
                   }}
                   style={{
                     background: "rgba(212, 175, 55, 0.2)",
@@ -2436,14 +2695,16 @@ export default function ResumeSpace3D({
                 </button>
               </div>
             </div>
-            
+
             {/* Console Content */}
-            <div style={{ 
-              flex: 1, 
-              overflowY: "auto", 
-              padding: "8px 12px",
-              background: "rgba(0, 0, 0, 0.1)",
-            }}>
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "8px 12px",
+                background: "rgba(0, 0, 0, 0.1)",
+              }}
+            >
               {consoleLogs.map((log, i) => (
                 <div
                   key={i}
@@ -2472,7 +2733,8 @@ export default function ResumeSpace3D({
           left: "20px",
           width: "40px",
           height: "40px",
-          background: "linear-gradient(135deg, rgba(20, 25, 35, 0.9) 0%, rgba(30, 40, 55, 0.9) 100%)",
+          background:
+            "linear-gradient(135deg, rgba(20, 25, 35, 0.9) 0%, rgba(30, 40, 55, 0.9) 100%)",
           backdropFilter: "blur(8px)",
           border: "2px solid rgba(212, 175, 55, 0.6)",
           borderRadius: "50%",
@@ -2484,7 +2746,8 @@ export default function ResumeSpace3D({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(212, 175, 55, 0.3)",
+          boxShadow:
+            "0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(212, 175, 55, 0.3)",
         }}
         title={consoleVisible ? "Hide Console" : "Show Console"}
       >

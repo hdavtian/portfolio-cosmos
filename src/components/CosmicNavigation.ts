@@ -231,25 +231,33 @@ export class CosmicTourGuide {
   private waypoints: NavigationWaypoint[] = [];
   private currentWaypointIndex = 0;
   private isActive = false;
+  private autoPlayTimeout: number | null = null;
   private onContentDisplay?: (waypoint: NavigationWaypoint) => void;
+  private onProgressUpdate?: (current: number, total: number) => void;
 
   constructor(
     cameraDirector: CosmosCameraDirector,
     onContentDisplay?: (waypoint: NavigationWaypoint) => void,
+    onProgressUpdate?: (current: number, total: number) => void,
   ) {
     this.cameraDirector = cameraDirector;
     this.onContentDisplay = onContentDisplay;
+    this.onProgressUpdate = onProgressUpdate;
   }
 
   public startTour(waypoints: NavigationWaypoint[]): void {
     this.waypoints = waypoints;
     this.currentWaypointIndex = 0;
     this.isActive = true;
-    this.visitNextWaypoint();
+    this.visitWaypoint(false); // Don't auto-continue on first waypoint
   }
 
   public stopTour(): void {
     this.isActive = false;
+    if (this.autoPlayTimeout) {
+      clearTimeout(this.autoPlayTimeout);
+      this.autoPlayTimeout = null;
+    }
     this.cameraDirector.stop();
   }
 
@@ -259,21 +267,45 @@ export class CosmicTourGuide {
       this.currentWaypointIndex >= this.waypoints.length - 1
     )
       return;
+    if (this.autoPlayTimeout) {
+      clearTimeout(this.autoPlayTimeout);
+      this.autoPlayTimeout = null;
+    }
     this.currentWaypointIndex++;
-    this.visitNextWaypoint();
+    this.visitWaypoint(false);
   }
 
   public previousWaypoint(): void {
     if (!this.isActive || this.currentWaypointIndex <= 0) return;
+    if (this.autoPlayTimeout) {
+      clearTimeout(this.autoPlayTimeout);
+      this.autoPlayTimeout = null;
+    }
     this.currentWaypointIndex--;
-    this.visitNextWaypoint();
+    this.visitWaypoint(false);
   }
 
-  private async visitNextWaypoint(): Promise<void> {
+  public restartTour(): void {
+    if (!this.isActive) return;
+    if (this.autoPlayTimeout) {
+      clearTimeout(this.autoPlayTimeout);
+      this.autoPlayTimeout = null;
+    }
+    this.currentWaypointIndex = 0;
+    this.visitWaypoint(false);
+  }
+
+  private async visitWaypoint(autoContinue: boolean = true): Promise<void> {
     if (!this.isActive) return;
 
     const waypoint = this.waypoints[this.currentWaypointIndex];
     if (!waypoint) return;
+
+    // Update progress
+    this.onProgressUpdate?.(
+      this.currentWaypointIndex + 1,
+      this.waypoints.length,
+    );
 
     // Animate to waypoint
     await this.cameraDirector.flyTo(waypoint.target);
@@ -281,16 +313,18 @@ export class CosmicTourGuide {
     // Display content
     this.onContentDisplay?.(waypoint);
 
-    // Auto-continue after delay (can be overridden)
+    // Auto-continue after delay if enabled
     if (
+      autoContinue &&
       this.isActive &&
       this.currentWaypointIndex < this.waypoints.length - 1
     ) {
-      setTimeout(() => {
+      this.autoPlayTimeout = window.setTimeout(() => {
         if (this.isActive) {
-          this.nextWaypoint();
+          this.currentWaypointIndex++;
+          this.visitWaypoint(true);
         }
-      }, 5000); // 5 second delay between waypoints
+      }, 8000); // 8 second delay between waypoints
     }
   }
 
@@ -302,6 +336,18 @@ export class CosmicTourGuide {
     return this.waypoints.length > 0
       ? this.currentWaypointIndex / (this.waypoints.length - 1)
       : 0;
+  }
+
+  public get waypointCount(): number {
+    return this.waypoints.length;
+  }
+
+  public get currentIndex(): number {
+    return this.currentWaypointIndex;
+  }
+
+  public get active(): boolean {
+    return this.isActive;
   }
 }
 
@@ -443,6 +489,13 @@ export class NavigationInterface {
       btn.addEventListener("click", (e) => {
         const mode = (e.target as HTMLElement).dataset.mode;
         this.switchMode(mode);
+
+        // If guided mode is selected, trigger the tour
+        if (mode === "guided") {
+          this.onNavigate?.("tour:career-journey");
+        } else if (mode === "overview") {
+          this.onNavigate?.("home");
+        }
       });
     });
 
