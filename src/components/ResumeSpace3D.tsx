@@ -6,6 +6,10 @@ import {
   CSS2DRenderer,
   CSS2DObject,
 } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import {
+  CSS3DRenderer,
+  CSS3DObject,
+} from "three/examples/jsm/renderers/CSS3DRenderer.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -31,6 +35,7 @@ export default function ResumeSpace3D({
     scene?: THREE.Scene;
     camera?: THREE.PerspectiveCamera;
     controls?: OrbitControls;
+    css3DRenderer?: CSS3DRenderer;
     sunLight?: THREE.PointLight;
     labelRendererDom?: HTMLElement;
     bloomPass?: UnrealBloomPass;
@@ -40,6 +45,8 @@ export default function ResumeSpace3D({
   // State for floating detail panel
   const [detailPanelVisible, setDetailPanelVisible] = useState(false);
   const [detailPanelJobId, setDetailPanelJobId] = useState<string | null>(null);
+  const detailPanelRef = useRef<HTMLDivElement>(null);
+  const detailPanel3DRef = useRef<CSS3DObject | null>(null);
 
   // Store options in a ref so the animation loop can access the latest values
   // without needing to be recreated on every render
@@ -148,6 +155,15 @@ export default function ResumeSpace3D({
     sceneRef.current.labelRendererDom = labelRenderer.domElement;
     sceneRef.current.scene = scene;
     sceneRef.current.camera = camera;
+
+    // CSS3DRenderer for 3D detail panel
+    const css3DRenderer = new CSS3DRenderer();
+    css3DRenderer.setSize(container.clientWidth, container.clientHeight);
+    css3DRenderer.domElement.style.position = "absolute";
+    css3DRenderer.domElement.style.top = "0px";
+    css3DRenderer.domElement.style.pointerEvents = "none";
+    container.appendChild(css3DRenderer.domElement);
+    sceneRef.current.css3DRenderer = css3DRenderer;
 
     // Apply initial visibility
     if (optionsRef.current.spaceShowLabels === false) {
@@ -441,7 +457,7 @@ export default function ResumeSpace3D({
       size: number,
       color: number,
       parent: THREE.Object3D,
-      orbitSpeed: number = 0.005,
+      orbitSpeed: number = 0.1,
       sectionIndex?: number,
       textureUrl?: string,
     ) => {
@@ -654,7 +670,7 @@ export default function ResumeSpace3D({
       15,
       0xff5533,
       scene,
-      0.002,
+      0.0002,
       1,
       "/textures/mars.jpg",
     );
@@ -665,7 +681,7 @@ export default function ResumeSpace3D({
       20,
       0x3388ff,
       scene,
-      0.0015,
+      0.00015,
       2,
       "/textures/earth.jpg",
     );
@@ -676,7 +692,7 @@ export default function ResumeSpace3D({
       18,
       0x9933ff,
       scene,
-      0.001,
+      0.0001,
       3,
       "/textures/jupiter.jpg",
     );
@@ -686,7 +702,7 @@ export default function ResumeSpace3D({
       5,
       0xcc99ff,
       projectsPlanet,
-      0.03,
+      0.003,
       undefined,
       "/textures/neptune.jpg",
     );
@@ -711,7 +727,7 @@ export default function ResumeSpace3D({
           5,
           0xffaadd,
           expPlanet,
-          0.02 + Math.random() * 0.01,
+          0.002 + Math.random() * 0.001,
           2 + i, // Make job moons clickable with correct section index
           textureUrl,
         );
@@ -725,7 +741,7 @@ export default function ResumeSpace3D({
         6,
         0xaaddff,
         skillsPlanet,
-        0.015 + Math.random() * 0.01,
+        0.0015 + Math.random() * 0.001,
       );
     });
 
@@ -906,7 +922,7 @@ export default function ResumeSpace3D({
       const speedMultiplier =
         optionsRef.current.spaceOrbitSpeed !== undefined
           ? optionsRef.current.spaceOrbitSpeed
-          : 1;
+          : 0.1;
 
       // Animate halo layers and flash effects ALWAYS (independent of orbit speed)
       const time = Date.now() * 0.001; // Time in seconds
@@ -1074,6 +1090,11 @@ export default function ResumeSpace3D({
       controls.update();
       composer.render(); // Use composer instead of renderer for bloom effect
       labelRenderer.render(scene, camera);
+
+      // Render CSS3D panel
+      if (sceneRef.current.css3DRenderer) {
+        sceneRef.current.css3DRenderer.render(scene, camera);
+      }
     };
 
     animate();
@@ -1096,6 +1117,13 @@ export default function ResumeSpace3D({
         mountRef.current.clientWidth,
         mountRef.current.clientHeight,
       );
+
+      if (sceneRef.current.css3DRenderer) {
+        sceneRef.current.css3DRenderer.setSize(
+          mountRef.current.clientWidth,
+          mountRef.current.clientHeight,
+        );
+      }
     };
 
     window.addEventListener("resize", handleResize);
@@ -1125,6 +1153,10 @@ export default function ResumeSpace3D({
       rendererRef.current = null;
       labelRenderer.domElement.remove();
 
+      if (sceneRef.current.css3DRenderer) {
+        sceneRef.current.css3DRenderer.domElement.remove();
+      }
+
       // Traverse and dispose scene objects to free memory
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
@@ -1140,6 +1172,50 @@ export default function ResumeSpace3D({
 
     return globalCleanup;
   }, []);
+
+  // Create CSS3DObject for detail panel when it becomes visible
+  useEffect(() => {
+    if (
+      !detailPanelVisible ||
+      !detailPanelRef.current ||
+      !sceneRef.current.scene ||
+      !sceneRef.current.camera
+    ) {
+      // Clean up existing panel
+      if (detailPanel3DRef.current && sceneRef.current.scene) {
+        sceneRef.current.scene.remove(detailPanel3DRef.current);
+        detailPanel3DRef.current = null;
+      }
+      return;
+    }
+
+    const scene = sceneRef.current.scene;
+    const camera = sceneRef.current.camera;
+    const panelElement = detailPanelRef.current;
+
+    // Create CSS3DObject
+    const panel3D = new CSS3DObject(panelElement);
+
+    // Position at center of cosmos
+    panel3D.position.set(0, 0, 0);
+
+    // Scale down significantly (CSS3D uses pixel units, much larger than Three.js units)
+    panel3D.scale.set(0.25, 0.25, 0.25);
+
+    // Copy camera rotation to face viewer, then rotate 180° to show front
+    panel3D.quaternion.copy(camera.quaternion);
+
+    // Add to scene
+    scene.add(panel3D);
+    detailPanel3DRef.current = panel3D;
+
+    return () => {
+      if (detailPanel3DRef.current && scene) {
+        scene.remove(detailPanel3DRef.current);
+        detailPanel3DRef.current = null;
+      }
+    };
+  }, [detailPanelVisible]);
 
   return (
     <>
@@ -1180,21 +1256,16 @@ export default function ResumeSpace3D({
       {/* Floating Detail Panel for InvestCloud */}
       {detailPanelVisible && detailPanelJobId === "investcloud" && (
         <div
+          ref={detailPanelRef}
           className="detail-panel"
           style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
             width: "800px",
-            maxWidth: "90vw",
-            maxHeight: "80vh",
-            backgroundColor: "rgba(10, 10, 20, 0.8)",
+            height: "600px",
+            backgroundColor: "rgba(10, 10, 20, 0.95)",
             border: "2px solid rgba(212, 175, 55, 0.8)",
             borderRadius: "12px",
             padding: "30px",
             overflowY: "auto",
-            zIndex: 1000,
             boxShadow:
               "0 0 40px rgba(212, 175, 55, 0.4), inset 0 0 20px rgba(0, 0, 0, 0.5)",
             backdropFilter: "blur(10px)",
@@ -1204,7 +1275,13 @@ export default function ResumeSpace3D({
           {/* Close Button */}
           <button
             onClick={() => {
-              // Simple fade out without scale animation (conflicts with CSS2DRenderer)
+              // Remove the 3D object from scene first to avoid DOM conflicts
+              if (detailPanel3DRef.current && sceneRef.current.scene) {
+                sceneRef.current.scene.remove(detailPanel3DRef.current);
+                detailPanel3DRef.current = null;
+              }
+
+              // Then close the panel
               const tl = gsap.timeline({
                 onComplete: () => {
                   setDetailPanelVisible(false);
