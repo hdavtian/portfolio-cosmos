@@ -547,149 +547,277 @@ export const SpaceshipHUD: React.FC<SpaceshipHUDProps> = ({
           position: "fixed",
           bottom: 0,
           left: 0,
-          width: "35%",
-          height: consoleVisible ? "200px" : "80px",
+          width: "100%",
+          height: consoleVisible ? "200px" : "40px",
           background: "#1a1f28",
           borderTop: "3px solid #2a3340",
-          borderRight: "3px solid #2a3340",
           boxShadow:
             "0 -4px 20px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
           zIndex: 10000,
           transition: "height 0.3s ease",
           display: "flex",
-          flexDirection: "column",
+          flexDirection: "row",
         }}
       >
-        {/* Control Bar */}
+        {/* Panel 1: Console */}
         <div
           style={{
-            height: "80px",
+            flex: 1,
             display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 20px",
-            borderBottom: consoleVisible ? "2px solid #2a3340" : "none",
+            flexDirection: "column",
+            borderRight: "3px solid #2a3340",
           }}
         >
-          {/* Left: Console Toggle */}
-          <button
-            onClick={onConsoleToggle}
-            style={{
-              background: consoleVisible ? "#e8c547" : "#2a3340",
-              border: "none",
-              color: consoleVisible ? "#0f1419" : "#8a9199",
-              padding: "10px 18px",
-              borderRadius: "3px",
-              cursor: "pointer",
-              fontSize: "10px",
-              fontFamily: "'Courier New', monospace",
-              textTransform: "uppercase",
-              letterSpacing: "1px",
-              fontWeight: "bold",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            <span>{consoleVisible ? "▼" : "▲"}</span>
-            <span>TELEMETRY</span>
-          </button>
-
-          {/* Center: System Indicators */}
+          {/* Console Control Bar */}
           <div
             style={{
+              height: "40px",
               display: "flex",
               alignItems: "center",
-              gap: "15px",
-              fontSize: "9px",
-              fontFamily: "'Courier New', monospace",
+              justifyContent: "space-between",
+              padding: "0 15px",
+              borderBottom: consoleVisible ? "2px solid #2a3340" : "none",
             }}
-          >
-            <div style={{ color: "#4a9eff" }}>● PWR: 100%</div>
-            <div style={{ color: "#4a9eff" }}>● CONN</div>
-            <div style={{ color: "#4a9eff" }}>● LOGS: {consoleLogs.length}</div>
-          </div>
-
-          {/* Right: Console Actions */}
-          <div style={{ display: "flex", gap: "8px" }}>
+        >
+            {/* Left: Console Toggle */}
             <button
-              onClick={onConsoleCopy}
+              onClick={onConsoleToggle}
               style={{
-                background: "#2a3340",
+                background: consoleVisible ? "#e8c547" : "#2a3340",
                 border: "none",
+                color: consoleVisible ? "#0f1419" : "#8a9199",
+                padding: "6px 12px",
                 borderRadius: "3px",
-                color: "#8a9199",
-                fontSize: "9px",
-                padding: "8px 12px",
                 cursor: "pointer",
+                fontSize: "9px",
                 fontFamily: "'Courier New', monospace",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
                 fontWeight: "bold",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
               }}
             >
-              COPY
+              <span>{consoleVisible ? "▼" : "▲"}</span>
+              <span>TELEMETRY</span>
             </button>
-            <button
-              onClick={onConsoleClear}
+
+            {/* Center: System Indicators */}
+            <div
               style={{
-                background: "#2a3340",
-                border: "none",
-                borderRadius: "3px",
-                color: "#dc3545",
-                fontSize: "9px",
-                padding: "8px 12px",
-                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                fontSize: "8px",
                 fontFamily: "'Courier New', monospace",
-                fontWeight: "bold",
               }}
             >
-              CLEAR
-            </button>
-          </div>
-        </div>
+              <div style={{ color: "#4a9eff" }}>● PWR: 100%</div>
+              <div style={{ color: "#4a9eff" }}>● CONN</div>
+              <div style={{ color: "#4a9eff" }}>● LOGS: {consoleLogs.length}</div>
+            </div>
 
-        {/* Console Output */}
-        {consoleVisible && (
-          <div
-            style={{
-              flex: 1,
-              overflowY: "auto",
-              padding: "15px 25px",
-              background: "#0f1419",
-              fontFamily: "'Courier New', monospace",
-              fontSize: "10px",
-              lineHeight: "1.6",
-            }}
-          >
-            {consoleLogs.length === 0 ? (
-              <div
+            {/* Right: Console Actions */}
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button
+                onClick={onConsoleCopy}
                 style={{
-                  color: "#3a4350",
-                  fontStyle: "italic",
-                  textAlign: "center",
-                  paddingTop: "20px",
+                  background: "#2a3340",
+                  border: "none",
+                  borderRadius: "3px",
+                  color: "#8a9199",
+                  fontSize: "8px",
+                  padding: "5px 10px",
+                  cursor: "pointer",
+                  fontFamily: "'Courier New', monospace",
+                  fontWeight: "bold",
                 }}
               >
-                [ TELEMETRY CONSOLE - READY ]
-              </div>
-            ) : (
-              consoleLogs.map((log, i) => (
+                COPY
+              </button>
+              <button
+                onClick={onConsoleClear}
+                style={{
+                  background: "#2a3340",
+                  border: "none",
+                  borderRadius: "3px",
+                  color: "#dc3545",
+                  fontSize: "8px",
+                  padding: "5px 10px",
+                  cursor: "pointer",
+                  fontFamily: "'Courier New', monospace",
+                  fontWeight: "bold",
+                }}
+              >
+                CLEAR
+              </button>
+            </div>
+          </div>
+
+          {/* Console Output */}
+          {consoleVisible && (
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "10px 15px",
+                background: "#0f1419",
+                fontFamily: "'Courier New', monospace",
+                fontSize: "10px",
+                lineHeight: "1.4",
+              }}
+            >
+              {consoleLogs.length === 0 ? (
                 <div
-                  key={i}
                   style={{
-                    marginBottom: "3px",
-                    color: "#4a9eff",
-                    opacity: 0.4 + (i / consoleLogs.length) * 0.6,
+                    color: "#3a4350",
+                    fontStyle: "italic",
+                    textAlign: "center",
+                    paddingTop: "20px",
                   }}
                 >
-                  <span style={{ color: "#6a7380" }}>
-                    [{new Date().toLocaleTimeString()}]
-                  </span>{" "}
-                  {log}
+                  [ TELEMETRY CONSOLE - READY ]
                 </div>
-              ))
-            )}
+              ) : (
+                consoleLogs.map((log, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      marginBottom: "2px",
+                      color: "#4a9eff",
+                      opacity: 0.4 + (i / consoleLogs.length) * 0.6,
+                    }}
+                  >
+                    <span style={{ color: "#6a7380" }}>
+                      [{new Date().toLocaleTimeString()}]
+                    </span>{" "}
+                    {log}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Panel 2: Status */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            borderRight: "3px solid #2a3340",
+          }}
+        >
+          {/* Status Header */}
+          <div
+            style={{
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 15px",
+              borderBottom: consoleVisible ? "2px solid #2a3340" : "none",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "9px",
+                fontFamily: "'Courier New', monospace",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                fontWeight: "bold",
+                color: "#8a9199",
+              }}
+            >
+              SYSTEM STATUS
+            </div>
           </div>
-        )}
+
+          {/* Status Content */}
+          {consoleVisible && (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "10px 15px",
+                background: "#0f1419",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "8px",
+                  fontFamily: "'Courier New', monospace",
+                  color: "#4a9eff",
+                  textAlign: "center",
+                }}
+              >
+                [ ALL SYSTEMS NOMINAL ]
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Panel 3: Navigation */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* Navigation Header */}
+          <div
+            style={{
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 15px",
+              borderBottom: consoleVisible ? "2px solid #2a3340" : "none",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "9px",
+                fontFamily: "'Courier New', monospace",
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                fontWeight: "bold",
+                color: "#8a9199",
+              }}
+            >
+              NAV CONTROLS
+            </div>
+          </div>
+
+          {/* Navigation Content */}
+          {consoleVisible && (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "10px 15px",
+                background: "#0f1419",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "8px",
+                  fontFamily: "'Courier New', monospace",
+                  color: "#4a9eff",
+                  textAlign: "center",
+                }}
+              >
+                [ AWAITING INPUT ]
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Animations */}

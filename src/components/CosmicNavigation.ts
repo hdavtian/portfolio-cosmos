@@ -427,7 +427,7 @@ export class NavigationInterface {
         position: fixed;
         top: 45px;
         left: 0;
-        bottom: 80px;
+        bottom: 40px;
         width: 280px;
         z-index: 1000;
         background: #1a1f28;
