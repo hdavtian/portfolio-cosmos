@@ -193,20 +193,45 @@ export default function ResumeSpace3D({
     camera.position.set(0, 400, 600);
     camera.lookAt(0, 0, 0);
 
-    // Renderer (WebGL) - Create ONLY if global doesn't exist
-    console.log("Creating NEW WebGL context");
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: false,
-    });
-    globalRenderer = renderer; // Store globally
-    rendererRef.current = renderer;
+    // Renderer (WebGL)
+    const renderer =
+      globalRenderer ||
+      new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    // Disable shadows to reduce shader complexity for GPU compatibility
-    renderer.shadowMap.enabled = false;
+    renderer.domElement.style.position = "absolute";
     container.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+    globalRenderer = renderer;
 
+    // (moved) helper functions are defined earlier to avoid TDZ
+
+    // Create sprite materials/textures for halo layers
+    const auroraTexture = createAuroraHaloTexture();
+    auroraTexture.minFilter = THREE.LinearFilter;
+    auroraTexture.magFilter = THREE.LinearFilter;
+
+    const ringTexture = createRingHaloTexture();
+    ringTexture.minFilter = THREE.LinearFilter;
+    ringTexture.magFilter = THREE.LinearFilter;
+
+    const coreCanvas = document.createElement("canvas");
+    coreCanvas.width = 64;
+    coreCanvas.height = 64;
+    const coreCtx = coreCanvas.getContext("2d");
+    if (coreCtx) {
+      const cx = 32;
+      const cy = 32;
+      const grad = coreCtx.createRadialGradient(cx, cy, 0, cx, cy, 32);
+      grad.addColorStop(0, "rgba(255,255,230,1)");
+      grad.addColorStop(0.5, "rgba(255,200,150,0.7)");
+      grad.addColorStop(1, "rgba(255,0,0,0)");
+      coreCtx.fillStyle = grad;
+      coreCtx.fillRect(0, 0, 64, 64);
+    }
+    const coreTexture = new THREE.CanvasTexture(coreCanvas);
+    coreTexture.minFilter = THREE.LinearFilter;
+    coreTexture.magFilter = THREE.LinearFilter;
     // Renderer (CSS 2D for labels)
     const labelRenderer = new CSS2DRenderer();
     labelRenderer.setSize(container.clientWidth, container.clientHeight);
@@ -355,14 +380,13 @@ export default function ResumeSpace3D({
     scene.add(sunMesh);
     sceneRef.current.sunMaterial = sunMaterial;
 
-    // Helper function to create a cloudy aurora-like halo texture
-    const createAuroraHaloTexture = () => {
+    // Helper function to create a cloudy aurora-like halo texture (canvas-based)
+    function createAuroraHaloTexture() {
       const canvas = document.createElement("canvas");
       canvas.width = 256;
       canvas.height = 256;
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        // Create multiple layered gradients for aurora effect
         const centerX = 128;
         const centerY = 128;
 
@@ -383,7 +407,7 @@ export default function ResumeSpace3D({
         ctx.fillStyle = gradient1;
         ctx.fillRect(0, 0, 256, 256);
 
-        // Add wispy cloud-like patterns
+        // Wispy cloud patterns
         for (let i = 0; i < 12; i++) {
           const angle = (Math.PI * 2 * i) / 12;
           const x = centerX + Math.cos(angle) * 80;
@@ -397,10 +421,10 @@ export default function ResumeSpace3D({
         }
       }
       return new THREE.CanvasTexture(canvas);
-    };
+    }
 
     // Helper function to create ring halo texture
-    const createRingHaloTexture = () => {
+    function createRingHaloTexture() {
       const canvas = document.createElement("canvas");
       canvas.width = 128;
       canvas.height = 128;
@@ -409,7 +433,6 @@ export default function ResumeSpace3D({
         const centerX = 64;
         const centerY = 64;
 
-        // Create ring effect with multiple bands
         for (let i = 0; i < 3; i++) {
           const innerRadius = 35 + i * 8;
           const outerRadius = 45 + i * 8;
@@ -430,7 +453,7 @@ export default function ResumeSpace3D({
         }
       }
       return new THREE.CanvasTexture(canvas);
-    };
+    }
 
     // Sun Glow (Procedural Texture)
     const canvas = document.createElement("canvas");
@@ -582,83 +605,61 @@ export default function ResumeSpace3D({
         planetMesh.userData.haloSpeedVariance = speedVariance;
         planetMesh.userData.haloColor = haloColor;
 
-        // Layer 1: Aurora cloud effect (largest, slowest rotation)
-        const auroraTexture = createAuroraHaloTexture();
-        const auroraSprite = new THREE.Sprite(
-          new THREE.SpriteMaterial({
-            map: auroraTexture,
-            color: haloColor,
-            transparent: true,
-            opacity: 0,
-            blending: THREE.AdditiveBlending,
-          }),
-        );
+        // Create sprite-based halo layers (aurora, ring, core)
+        const auroraMaterial = new THREE.SpriteMaterial({
+          map: auroraTexture,
+          color: haloColor,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const auroraSprite = new THREE.Sprite(auroraMaterial);
         auroraSprite.scale.set(
-          size * 5 * sizeVariance,
-          size * 5 * sizeVariance,
+          size * 4 * sizeVariance,
+          size * 4 * sizeVariance,
           1,
         );
-        auroraSprite.visible = false; // Hide by default to prevent dark artifact occlusion
+        auroraSprite.position.set(0, 0, 0);
         planetMesh.add(auroraSprite);
-        planetMesh.userData.auroraSprite = auroraSprite;
-        planetMesh.userData.auroraTargetOpacity = 0;
 
-        // Layer 2: Inner glow/ring (medium size, counter-rotation)
-        const ringTexture = createRingHaloTexture();
-        const darkerHaloColor = haloColor.clone().multiplyScalar(0.8);
-        const ringSprite = new THREE.Sprite(
-          new THREE.SpriteMaterial({
-            map: ringTexture,
-            color: darkerHaloColor,
-            transparent: true,
-            opacity: 0,
-            blending: THREE.AdditiveBlending,
-          }),
-        );
+        const ringMaterial = new THREE.SpriteMaterial({
+          map: ringTexture,
+          color: haloColor,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const ringSprite = new THREE.Sprite(ringMaterial);
         ringSprite.scale.set(
-          size * 3.5 * sizeVariance,
-          size * 3.5 * sizeVariance,
+          size * 2.6 * sizeVariance,
+          size * 2.6 * sizeVariance,
           1,
         );
-        ringSprite.visible = false; // Hide by default to prevent dark artifact occlusion
+        ringSprite.position.set(0, 0, 0);
         planetMesh.add(ringSprite);
-        planetMesh.userData.ringSprite = ringSprite;
-        planetMesh.userData.ringTargetOpacity = 0;
 
-        // Layer 3: Pulsing core glow (smallest, brightest)
-        const coreCanvas = document.createElement("canvas");
-        coreCanvas.width = 64;
-        coreCanvas.height = 64;
-        const coreCtx = coreCanvas.getContext("2d");
-        if (coreCtx) {
-          const gradient = coreCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
-          gradient.addColorStop(0, "rgba(200, 230, 255, 0.8)");
-          gradient.addColorStop(0.4, "rgba(100, 180, 255, 0.6)");
-          gradient.addColorStop(0.8, "rgba(50, 120, 255, 0.2)");
-          gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-          coreCtx.fillStyle = gradient;
-          coreCtx.fillRect(0, 0, 64, 64);
-        }
-        const coreTexture = new THREE.CanvasTexture(coreCanvas);
-        const brighterHaloColor = haloColor.clone().multiplyScalar(1.2);
-        const coreSprite = new THREE.Sprite(
-          new THREE.SpriteMaterial({
-            map: coreTexture,
-            color: brighterHaloColor,
-            transparent: true,
-            opacity: 0,
-            blending: THREE.AdditiveBlending,
-          }),
-        );
-        coreSprite.scale.set(
-          size * 2.5 * sizeVariance,
-          size * 2.5 * sizeVariance,
-          1,
-        );
-        coreSprite.visible = false; // Hide by default to prevent dark artifact occlusion
+        const coreMaterial = new THREE.SpriteMaterial({
+          map: coreTexture,
+          color: new THREE.Color(1, 0.95, 0.85),
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const coreSprite = new THREE.Sprite(coreMaterial);
+        coreSprite.scale.set(size * 1.2, size * 1.2, 1);
+        coreSprite.position.set(0, 0, 0);
         planetMesh.add(coreSprite);
+
+        planetMesh.userData.auroraSprite = auroraSprite;
+        planetMesh.userData.ringSprite = ringSprite;
         planetMesh.userData.coreSprite = coreSprite;
+        planetMesh.userData.auroraTargetOpacity = 0;
+        planetMesh.userData.ringTargetOpacity = 0;
         planetMesh.userData.coreTargetOpacity = 0;
+        planetMesh.userData.hasHaloLayers = true;
       }
 
       // Start position
@@ -696,7 +697,7 @@ export default function ResumeSpace3D({
         console.log(
           `✅ Added clickable planet: "${name}" (sectionIndex: ${sectionIndex})`,
           {
-            hasHaloLayers: !!planetMesh.userData.auroraSprite,
+            hasHaloLayers: !!planetMesh.userData.hasHaloLayers,
             haloColor: planetMesh.userData.haloColor,
             haloSize: planetMesh.userData.haloSizeVariance,
             haloSpeed: planetMesh.userData.haloSpeedVariance,
@@ -800,7 +801,7 @@ export default function ResumeSpace3D({
       clickablePlanets.map((p) => ({
         name: p.userData.planetName,
         sectionIndex: p.userData.sectionIndex,
-        hasHaloLayers: !!p.userData.auroraSprite,
+        hasHaloLayers: !!p.userData.hasHaloLayers,
         hasEmissive: !!p.userData.hoverEmissive,
       })),
     );
@@ -862,14 +863,10 @@ export default function ResumeSpace3D({
       if (hoveredObject) {
         // Reset hover time so flash effect stops
         hoveredObject.userData.hoverStartTime = 0;
-        // Set target opacities to 0 for smooth fade out
-        if (hoveredObject.userData.auroraSprite) {
+        // Set sprite target opacities to 0 for smooth fade out
+        if (hoveredObject.userData.hasHaloLayers) {
           hoveredObject.userData.auroraTargetOpacity = 0;
-        }
-        if (hoveredObject.userData.ringSprite) {
           hoveredObject.userData.ringTargetOpacity = 0;
-        }
-        if (hoveredObject.userData.coreSprite) {
           hoveredObject.userData.coreTargetOpacity = 0;
         }
         document.body.style.cursor = "default";
@@ -890,14 +887,10 @@ export default function ResumeSpace3D({
             hoveredObject.userData.hoverStartTime = Date.now();
           }
 
-          // Show all halo layers with different target opacities for smooth fade in
-          if (hoveredObject.userData.auroraSprite) {
-            hoveredObject.userData.auroraTargetOpacity = 0.7;
-          }
-          if (hoveredObject.userData.ringSprite) {
-            hoveredObject.userData.ringTargetOpacity = 0.85;
-          }
-          if (hoveredObject.userData.coreSprite) {
+          // Show sprite halo layers with target opacities for smooth fade in
+          if (hoveredObject.userData.hasHaloLayers) {
+            hoveredObject.userData.auroraTargetOpacity = 0.45;
+            hoveredObject.userData.ringTargetOpacity = 0.32;
             hoveredObject.userData.coreTargetOpacity = 0.9;
           }
 
@@ -1448,8 +1441,6 @@ export default function ResumeSpace3D({
       const time = Date.now() * 0.001; // Time in seconds
 
       items.forEach((item) => {
-        const planetOffset = item.angle * 10; // Unique offset per planet
-
         // Handle color flash effect on hover
         if (item.mesh.userData.hoverStartTime > 0) {
           const flashDuration = 1200; // 1.2 seconds for complete flash cycle
@@ -1488,128 +1479,37 @@ export default function ResumeSpace3D({
           material.emissive.copy(item.mesh.userData.originalEmissive);
         }
 
-        // Animate aurora sprite
-        if (item.mesh.userData.auroraSprite) {
-          const auroraSprite = item.mesh.userData.auroraSprite;
-          const material = auroraSprite.material as THREE.SpriteMaterial;
-          const targetOpacity = item.mesh.userData.auroraTargetOpacity || 0;
+        // Animate sprite-based halo layers (aurora, ring, core)
+        if (item.mesh.userData.hasHaloLayers) {
+          const aurora = item.mesh.userData.auroraSprite as THREE.Sprite;
+          const ring = item.mesh.userData.ringSprite as THREE.Sprite;
+          const core = item.mesh.userData.coreSprite as THREE.Sprite;
+          const aMat = aurora.material as THREE.SpriteMaterial;
+          const rMat = ring.material as THREE.SpriteMaterial;
+          const cMat = core.material as THREE.SpriteMaterial;
+          const targetAurora = item.mesh.userData.auroraTargetOpacity || 0;
+          const targetRing = item.mesh.userData.ringTargetOpacity || 0;
+          const targetCore = item.mesh.userData.coreTargetOpacity || 0;
           const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
-          const haloSize = item.mesh.userData.haloSizeVariance || 1;
 
-          // Show/hide sprite based on whether it should be visible
-          if (targetOpacity > 0) {
-            auroraSprite.visible = true;
-          }
+          // Smoothly lerp opacities toward targets
+          aMat.opacity += (targetAurora - aMat.opacity) * 0.08;
+          rMat.opacity += (targetRing - rMat.opacity) * 0.08;
+          cMat.opacity += (targetCore - cMat.opacity) * 0.12;
 
-          // Slow wavy rotation with slight variation - always animate
-          material.rotation +=
-            0.003 * haloSpeed + Math.sin(time * 0.5 + planetOffset) * 0.002;
+          // Visibility toggles
+          aurora.visible = aMat.opacity > 0.005;
+          ring.visible = rMat.opacity > 0.005;
+          core.visible = cMat.opacity > 0.005;
 
-          // Living breathing scale effect
-          const breathe = 1.0 + Math.sin(time * 0.8 + planetOffset) * 0.12;
-          const baseScale =
-            (item.mesh.geometry as THREE.SphereGeometry).parameters.radius *
-            5 *
-            haloSize;
-          auroraSprite.scale.set(baseScale * breathe, baseScale * breathe, 1);
+          // Rotate aurora and ring for subtle motion
+          aMat.rotation = (time * 0.06 * haloSpeed) % (Math.PI * 2);
+          rMat.rotation = (-time * 0.12 * haloSpeed) % (Math.PI * 2);
 
-          // Smooth fade to target with flowing opacity variation
-          const currentBase = material.opacity;
-          const newBase = currentBase + (targetOpacity - currentBase) * 0.1;
-          if (newBase > 0.01) {
-            const opacityFlow = Math.sin(time * 1.2 + planetOffset) * 0.15;
-            material.opacity = Math.max(0, newBase + opacityFlow);
-          } else {
-            material.opacity = 0;
-            auroraSprite.visible = false; // Hide when fully faded out
-          }
-        }
-
-        // Animate ring sprite
-        if (item.mesh.userData.ringSprite) {
-          const ringSprite = item.mesh.userData.ringSprite;
-          const material = ringSprite.material as THREE.SpriteMaterial;
-          const targetOpacity = item.mesh.userData.ringTargetOpacity || 0;
-          const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
-          const haloSize = item.mesh.userData.haloSizeVariance || 1;
-
-          // Show/hide sprite based on whether it should be visible
-          if (targetOpacity > 0) {
-            ringSprite.visible = true;
-          }
-
-          // Counter-rotation with variation - always animate
-          material.rotation -=
-            0.006 * haloSpeed + Math.cos(time * 0.7 + planetOffset) * 0.003;
-
-          // Pulsing scale with random size
-          const pulse = 1.0 + Math.cos(time * 1.5 + planetOffset) * 0.08;
-          const baseScale =
-            (item.mesh.geometry as THREE.SphereGeometry).parameters.radius *
-            3.5 *
-            haloSize;
-          ringSprite.scale.set(baseScale * pulse, baseScale * pulse, 1);
-
-          // Smooth fade to target with shimmer effect
-          const currentBase = material.opacity;
-          const newBase = currentBase + (targetOpacity - currentBase) * 0.12;
-          if (newBase > 0.01) {
-            const shimmer = Math.cos(time * 2 + planetOffset) * 0.15;
-            material.opacity = Math.max(0, newBase + shimmer);
-          } else {
-            material.opacity = 0;
-            ringSprite.visible = false; // Hide when fully faded out
-          }
-        }
-
-        // Animate core sprite
-        if (item.mesh.userData.coreSprite) {
-          const coreSprite = item.mesh.userData.coreSprite;
-          const material = coreSprite.material as THREE.SpriteMaterial;
-          const targetOpacity = item.mesh.userData.coreTargetOpacity || 0;
-          const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
-          const haloSize = item.mesh.userData.haloSizeVariance || 1;
-
-          // Show/hide sprite based on whether it should be visible
-          if (targetOpacity > 0) {
-            coreSprite.visible = true;
-          }
-
-          // Faster pulsing with double frequency
-          const pulse1 = Math.sin(time * 3 * haloSpeed + planetOffset) * 0.1;
-          const pulse2 =
-            Math.sin(time * 5 * haloSpeed + planetOffset * 0.5) * 0.05;
-          const combinedPulse = 1.0 + pulse1 + pulse2;
-          const baseScale =
-            (item.mesh.geometry as THREE.SphereGeometry).parameters.radius *
-            2.5 *
-            haloSize;
-          coreSprite.scale.set(
-            baseScale * combinedPulse,
-            baseScale * combinedPulse,
-            1,
-          );
-
-          // Smooth fade to target with rapid pulsing
-          const currentBase = material.opacity;
-          const newBase = currentBase + (targetOpacity - currentBase) * 0.15;
-          if (newBase > 0.01) {
-            const heartbeat =
-              Math.sin(time * 4 * haloSpeed + planetOffset) * 0.15;
-            material.opacity = Math.max(0, newBase + heartbeat);
-
-            // Subtle brightness shift for living effect
-            const brightnessShift =
-              0.95 + Math.sin(time * 2.5 + planetOffset) * 0.1;
-            const baseColor =
-              item.mesh.userData.haloColor || new THREE.Color(0xaaddff);
-            material.color.copy(
-              baseColor.clone().multiplyScalar(brightnessShift * 1.2),
-            );
-          } else {
-            material.opacity = 0;
-            coreSprite.visible = false; // Hide when fully faded out
-          }
+          // Pulsing core scale
+          const baseCoreScale = (core.scale.x + core.scale.y) / 2 || 1;
+          const pulse = 1 + Math.sin(time * 2.0 * haloSpeed) * 0.06;
+          core.scale.set(baseCoreScale * pulse, baseCoreScale * pulse, 1);
         }
       });
 
