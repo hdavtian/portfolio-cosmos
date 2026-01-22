@@ -15,6 +15,21 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import resumeData from "../data/resume.json";
 import { type DiagramStyleOptions } from "./DiagramSettings";
 
+// Import our new cosmic systems
+import {
+  CosmosCameraDirector,
+  CosmicTourGuide,
+  NavigationInterface,
+  type NavigationWaypoint,
+} from "./CosmicNavigation";
+import CosmicContentOverlay, {
+  type OverlayContent,
+} from "./CosmicContentOverlay";
+import {
+  TourDefinitionBuilder,
+  type PlanetData,
+} from "./TourDefinitionBuilder";
+
 // Global singleton to prevent multiple WebGL context creation
 let globalRenderer: THREE.WebGLRenderer | null = null;
 let globalCleanup: (() => void) | null = null;
@@ -41,11 +56,61 @@ export default function ResumeSpace3D({
     sunMaterial?: THREE.MeshBasicMaterial;
   }>({});
 
-  // State for floating detail panel
+  // State for floating detail panel (existing)
   const [detailPanelVisible, setDetailPanelVisible] = useState(false);
   const [detailPanelJobId, setDetailPanelJobId] = useState<string | null>(null);
   const detailPanelRef = useRef<HTMLDivElement>(null);
   const detailPanel3DRef = useRef<CSS3DObject | null>(null);
+
+  // State for new cosmic systems
+  const [overlayContent, setOverlayContent] = useState<OverlayContent | null>(
+    null,
+  );
+  const [overlayVisible, setOverlayVisible] = useState(false);
+  const [splitScreenMode, setSplitScreenMode] = useState(false);
+  const [splitScreenContent, setSplitScreenContent] =
+    useState<OverlayContent | null>(null);
+  const splitScreenModeRef = useRef(false);
+  const originalMinDistanceRef = useRef<number>(0);
+
+  // Visual console state
+  const [consoleVisible, setConsoleVisible] = useState(true);
+  const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
+  const consoleLogsRef = useRef<string[]>([]);
+  const maxConsoleLogs = 8; // Keep last 8 logs
+
+  // Custom logging function
+  const vlog = (message: string, data?: any) => {
+    const timestamp = new Date().toLocaleTimeString("en-US", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      fractionalSecondDigits: 1,
+    });
+    const logMessage = `[${timestamp}] ${message}`;
+
+    // Log to regular console
+    if (data !== undefined) {
+      console.log(logMessage, data);
+    } else {
+      console.log(logMessage);
+    }
+
+    // Add to visual console
+    const newLogs = [...consoleLogsRef.current, logMessage].slice(
+      -maxConsoleLogs,
+    );
+    consoleLogsRef.current = newLogs;
+    setConsoleLogs(newLogs);
+  };
+
+  // Refs for cosmic systems
+  const cameraDirectorRef = useRef<CosmosCameraDirector | null>(null);
+  const tourGuideRef = useRef<CosmicTourGuide | null>(null);
+  const navigationInterfaceRef = useRef<NavigationInterface | null>(null);
+  const tourBuilderRef = useRef<TourDefinitionBuilder | null>(null);
+  const planetsDataRef = useRef<Map<string, PlanetData>>(new Map());
 
   // Store options in a ref so the animation loop can access the latest values
   // without needing to be recreated on every render
@@ -176,7 +241,7 @@ export default function ResumeSpace3D({
     sceneRef.current.controls = controls;
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 50;
+    controls.minDistance = 0; // Allow zooming through objects
     controls.maxDistance = 6000; // Increased to allow more zoom out while staying within starfield
     controls.autoRotate = false;
     controls.autoRotateSpeed = 0.5;
@@ -462,26 +527,16 @@ export default function ResumeSpace3D({
       sectionIndex?: number,
       textureUrl?: string,
     ) => {
-      // Orbit Path
-      const orbitCurve = new THREE.EllipseCurve(
-        0,
-        0,
-        distance,
-        distance,
-        0,
-        2 * Math.PI,
-        false,
-        0,
-      );
-      const points = orbitCurve.getPoints(128);
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const material = new THREE.LineBasicMaterial({
-        color: 0x555555,
+      // Orbit Path - Create professional orbital rings using TorusGeometry approach
+      const ringGeometry = new THREE.TorusGeometry(distance, 0.3, 8, 64);
+      const ringMaterial = new THREE.MeshBasicMaterial({
+        color: 0x444466,
         transparent: true,
-        opacity: 0.2,
+        opacity: 0.15,
+        side: THREE.DoubleSide,
       });
-      const orbit = new THREE.Line(geometry, material);
-      orbit.rotation.x = Math.PI / 2;
+      const orbit = new THREE.Mesh(ringGeometry, ringMaterial);
+      orbit.rotation.x = Math.PI / 2; // Rotate to horizontal plane
       parent.add(orbit);
 
       // Planet Mesh - Use MeshStandardMaterial for physically-based rendering (matches original)
@@ -554,6 +609,7 @@ export default function ResumeSpace3D({
           size * 5 * sizeVariance,
           1,
         );
+        auroraSprite.visible = false; // Hide by default to prevent dark artifact occlusion
         planetMesh.add(auroraSprite);
         planetMesh.userData.auroraSprite = auroraSprite;
         planetMesh.userData.auroraTargetOpacity = 0;
@@ -575,6 +631,7 @@ export default function ResumeSpace3D({
           size * 3.5 * sizeVariance,
           1,
         );
+        ringSprite.visible = false; // Hide by default to prevent dark artifact occlusion
         planetMesh.add(ringSprite);
         planetMesh.userData.ringSprite = ringSprite;
         planetMesh.userData.ringTargetOpacity = 0;
@@ -609,6 +666,7 @@ export default function ResumeSpace3D({
           size * 2.5 * sizeVariance,
           1,
         );
+        coreSprite.visible = false; // Hide by default to prevent dark artifact occlusion
         planetMesh.add(coreSprite);
         planetMesh.userData.coreSprite = coreSprite;
         planetMesh.userData.coreTargetOpacity = 0;
@@ -722,7 +780,7 @@ export default function ResumeSpace3D({
 
         // Job moons should be clickable with section index 2+i
         // (section 0 = hero+summary, section 1 = skills, sections 2+ = jobs)
-        const moon = createPlanet(
+        createPlanet(
           job.company,
           60 + i * 20,
           5,
@@ -732,7 +790,8 @@ export default function ResumeSpace3D({
           2 + i, // Make job moons clickable with correct section index
           textureUrl,
         );
-        moon.rotation.x = Math.PI / 2;
+        // Remove the rotation that might be causing visual issues
+        // moon.rotation.x = Math.PI / 2;
       });
 
     Object.keys(resumeData.skills).forEach((cat, i) => {
@@ -824,59 +883,33 @@ export default function ResumeSpace3D({
         if (hoveredObject.userData.coreSprite) {
           hoveredObject.userData.coreTargetOpacity = 0;
         }
-        console.log(
-          `👋 Unhovered: "${hoveredObject.userData.planetName}" - fading out halo layers`,
-        );
         document.body.style.cursor = "default";
         hoveredObject = null;
       }
 
       // Apply new hover
       if (intersects.length > 0) {
-        console.log(
-          `🎯 Raycast hit ${intersects.length} objects:`,
-          intersects.map((i) => ({
-            name: i.object.userData.planetName,
-            sectionIndex: i.object.userData.sectionIndex,
-            distance: i.distance,
-            hasHaloLayers: !!i.object.userData.auroraSprite,
-          })),
-        );
-
         const hit = intersects.find(
           (hit) => hit.object.userData.sectionIndex !== undefined,
         );
 
         if (hit && hit.object.userData.sectionIndex !== undefined) {
           hoveredObject = hit.object;
-          console.log(
-            `✨ Hovering: "${hoveredObject.userData.planetName}" (section ${hoveredObject.userData.sectionIndex})`,
-          );
 
           // Start the flash effect on first hover
           if (hoveredObject.userData.hoverStartTime === 0) {
             hoveredObject.userData.hoverStartTime = Date.now();
-            console.log(`  → Started flash effect`);
           }
 
           // Show all halo layers with different target opacities for smooth fade in
           if (hoveredObject.userData.auroraSprite) {
             hoveredObject.userData.auroraTargetOpacity = 0.7;
-            console.log(`  → 🌟 Fading in aurora layer`);
           }
           if (hoveredObject.userData.ringSprite) {
             hoveredObject.userData.ringTargetOpacity = 0.85;
-            console.log(`  → 🌟 Fading in ring layer`);
           }
           if (hoveredObject.userData.coreSprite) {
             hoveredObject.userData.coreTargetOpacity = 0.9;
-            console.log(`  → 🌟 Fading in core glow layer`);
-          }
-
-          if (!hoveredObject.userData.auroraSprite) {
-            console.warn(
-              `  ⚠️ No halo layers found for "${hoveredObject.userData.planetName}"!`,
-            );
           }
 
           document.body.style.cursor = "pointer";
@@ -900,14 +933,173 @@ export default function ResumeSpace3D({
             `📍 Navigating to section ${hit.object.userData.sectionIndex} ("${hit.object.userData.planetName}")`,
           );
 
+          const planetName = hit.object.userData.planetName;
+
+          // Enhanced cosmic interaction based on planet type
+          if (
+            planetName === "Experience" ||
+            planetName === "Skills" ||
+            planetName === "Projects"
+          ) {
+            // Show cosmic overlay for main planets
+            if (tourBuilderRef.current) {
+              let content: OverlayContent | null = null;
+
+              switch (planetName) {
+                case "Experience":
+                  content = tourBuilderRef.current[
+                    "createExperienceContent"
+                  ]?.() || {
+                    title: "Experience Planet",
+                    description:
+                      "Explore my professional journey through the cosmos of career growth.",
+                    sections: [
+                      {
+                        id: "overview",
+                        title: "Career Overview",
+                        content:
+                          "Professional experiences spanning multiple industries and technologies.",
+                        type: "text",
+                      },
+                    ],
+                    actions: [
+                      {
+                        label: "Career Tour",
+                        action: "tour:career-journey",
+                        icon: "🚀",
+                      },
+                      {
+                        label: "Explore Moons",
+                        action: "navigate:experience-moons",
+                        icon: "🌙",
+                      },
+                    ],
+                  };
+                  break;
+                case "Skills":
+                  content = tourBuilderRef.current[
+                    "createSkillsContent"
+                  ]?.() || {
+                    title: "Skills Constellation",
+                    description:
+                      "Technical abilities and creative tools mastered over the years.",
+                    sections: [
+                      {
+                        id: "overview",
+                        title: "Technical Skills",
+                        content:
+                          "Programming languages, frameworks, and development methodologies.",
+                        type: "text",
+                      },
+                    ],
+                    actions: [
+                      {
+                        label: "Technical Deep Dive",
+                        action: "tour:technical-deep-dive",
+                        icon: "⚡",
+                      },
+                      {
+                        label: "View Portfolio",
+                        action: "navigate:projects",
+                        icon: "🎨",
+                      },
+                    ],
+                  };
+                  break;
+                case "Projects":
+                  content = {
+                    title: "Innovation Station",
+                    description:
+                      "Creative projects and technological innovations.",
+                    sections: [
+                      {
+                        id: "overview",
+                        title: "Project Gallery",
+                        content:
+                          "Innovative solutions and creative implementations.",
+                        type: "text",
+                      },
+                    ],
+                    actions: [
+                      {
+                        label: "View Gallery",
+                        action: "projects:gallery",
+                        icon: "🖼️",
+                      },
+                      {
+                        label: "Technical Details",
+                        action: "tour:technical-deep-dive",
+                        icon: "🔧",
+                      },
+                    ],
+                  };
+                  break;
+              }
+
+              if (content) {
+                setOverlayContent(content);
+                setOverlayVisible(true);
+                return; // Don't do regular navigation
+              }
+            }
+          }
+
           // Special handling for InvestCloud - show floating panel instead
           const jobData = resumeData.experience.find(
-            (job) => job.company === hit.object.userData.planetName,
+            (job) => job.company === planetName,
           );
           if (jobData && jobData.id === "investcloud") {
             console.log("🚀 Opening InvestCloud detail panel in cosmos");
             setDetailPanelVisible(true);
             setDetailPanelJobId(jobData.id);
+          } else if (jobData) {
+            // Show cosmic overlay for job moons
+            const position = jobData.positions?.[0]; // Get first/latest position
+            const jobContent: OverlayContent = {
+              title: jobData.company,
+              subtitle: position?.title || "Professional Experience",
+              description: `Professional experience at ${jobData.company} from ${jobData.startDate} to ${jobData.endDate || "Present"}.`,
+              sections: [
+                {
+                  id: "details",
+                  title: "Role Details",
+                  content: position?.responsibilities || [
+                    "Key responsibilities and achievements.",
+                  ],
+                  type: "text",
+                },
+                {
+                  id: "timeline",
+                  title: "Timeline",
+                  content: "",
+                  type: "timeline",
+                  data:
+                    jobData.positions?.map((pos) => {
+                      const posWithDates = pos as any; // Type assertion for optional date fields
+                      return {
+                        date:
+                          posWithDates.startDate && posWithDates.endDate
+                            ? `${posWithDates.startDate} - ${posWithDates.endDate}`
+                            : pos.title,
+                        title: pos.title,
+                        description: pos.responsibilities?.[0] || "",
+                        technologies: [], // We don't have technologies in current data structure
+                      };
+                    }) || [],
+                },
+              ],
+              actions: [
+                {
+                  label: "View All Experience",
+                  action: "tour:career-journey",
+                  icon: "📈",
+                },
+                { label: "Contact Info", action: "contact:show", icon: "📧" },
+              ],
+            };
+
+            setOverlayContent(jobContent);
+            setOverlayVisible(true);
           } else {
             // Regular navigation for other planets
             onNavigate(hit.object.userData.sectionIndex);
@@ -919,6 +1111,346 @@ export default function ResumeSpace3D({
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("click", onClick);
 
+    // --- COSMIC SYSTEMS INITIALIZATION ---
+    // Initialize camera director for cinematic movements
+    cameraDirectorRef.current = new CosmosCameraDirector(camera, controls);
+
+    // Initialize tour builder
+    tourBuilderRef.current = new TourDefinitionBuilder();
+
+    // Register planet data for tours
+    const registerPlanetData = () => {
+      // Register Experience Planet
+      const expPlanetData: PlanetData = {
+        name: "Experience",
+        position: expPlanet.position.clone(),
+        data: resumeData.experience,
+        moons: Object.values(resumeData.experience)
+          .flat()
+          .map((job, index) => ({
+            name: job.company,
+            position: new THREE.Vector3(
+              expPlanet.position.x + (60 + index * 20) * Math.cos(index * 0.8),
+              expPlanet.position.y + (index % 2 === 0 ? 10 : -10),
+              expPlanet.position.z + (60 + index * 20) * Math.sin(index * 0.8),
+            ),
+            data: job,
+          })),
+      };
+
+      // Register Skills Planet
+      const skillsPlanetData: PlanetData = {
+        name: "Skills",
+        position: skillsPlanet.position.clone(),
+        data: resumeData.skills,
+        moons: Object.keys(resumeData.skills).map((category, index) => ({
+          name: category,
+          position: new THREE.Vector3(
+            skillsPlanet.position.x + (70 + index * 15) * Math.cos(index * 1.2),
+            skillsPlanet.position.y + (index % 2 === 0 ? 15 : -15),
+            skillsPlanet.position.z + (70 + index * 15) * Math.sin(index * 1.2),
+          ),
+          data: (resumeData.skills as any)[category],
+        })),
+      };
+
+      // Register Projects Planet
+      const projectsPlanetData: PlanetData = {
+        name: "Projects",
+        position: projectsPlanet.position.clone(),
+        data: {
+          name: "Projects",
+          description: "Creative projects and innovations",
+        },
+      };
+
+      tourBuilderRef.current?.registerPlanet("experience", expPlanetData);
+      tourBuilderRef.current?.registerPlanet("skills", skillsPlanetData);
+      tourBuilderRef.current?.registerPlanet("projects", projectsPlanetData);
+
+      planetsDataRef.current.set("experience", expPlanetData);
+      planetsDataRef.current.set("skills", skillsPlanetData);
+      planetsDataRef.current.set("projects", projectsPlanetData);
+    };
+
+    registerPlanetData();
+
+    // Initialize tour guide with content display handler
+    const handleContentDisplay = (waypoint: NavigationWaypoint) => {
+      if (waypoint.content) {
+        setOverlayContent(waypoint.content);
+        setOverlayVisible(true);
+      }
+    };
+
+    tourGuideRef.current = new CosmicTourGuide(
+      cameraDirectorRef.current,
+      handleContentDisplay,
+    );
+
+    // Initialize navigation interface
+    const handleNavigation = async (target: string) => {
+      if (!cameraDirectorRef.current) return;
+
+      switch (target) {
+        case "home":
+          await cameraDirectorRef.current.systemOverview();
+          setSplitScreenMode(false);
+          splitScreenModeRef.current = false;
+          break;
+        case "about":
+          await cameraDirectorRef.current.systemOverview();
+          // Show About Harma content
+          const aboutContent: OverlayContent = {
+            title: "About Harma Davtian",
+            subtitle: "Lead Full Stack Engineer",
+            description: resumeData.summary,
+            sections: [
+              {
+                id: "contact",
+                title: "Contact Information",
+                content: [
+                  `📧 ${resumeData.personal.email}`,
+                  `📞 ${resumeData.personal.phone}`,
+                  `📍 ${resumeData.personal.location}`,
+                ],
+                type: "text",
+              },
+              {
+                id: "expertise",
+                title: "Professional Focus",
+                content:
+                  "Specializing in full-stack development with a focus on scalable architecture, team leadership, and innovative problem-solving across diverse technology stacks.",
+                type: "text",
+              },
+            ],
+            actions: [
+              {
+                label: "View Experience",
+                action: "navigate:experience",
+                icon: "🌍",
+              },
+              {
+                label: "Technical Skills",
+                action: "navigate:skills",
+                icon: "⚡",
+              },
+              {
+                label: "Start Career Tour",
+                action: "tour:career-journey",
+                icon: "🚀",
+              },
+            ],
+          };
+          setOverlayContent(aboutContent);
+          setOverlayVisible(true);
+          setSplitScreenMode(false);
+          splitScreenModeRef.current = false;
+          // Restore original camera constraints
+          if (sceneRef.current.controls) {
+            sceneRef.current.controls.minDistance =
+              originalMinDistanceRef.current;
+          }
+          break;
+        case "experience":
+          await cameraDirectorRef.current.focusPlanet(expPlanet, 300);
+          setSplitScreenMode(false);
+          splitScreenModeRef.current = false;
+          // Restore original camera constraints
+          if (sceneRef.current.controls) {
+            sceneRef.current.controls.minDistance =
+              originalMinDistanceRef.current;
+          }
+          break;
+        case "skills":
+          await cameraDirectorRef.current.focusPlanet(skillsPlanet, 350);
+          setSplitScreenMode(false);
+          splitScreenModeRef.current = false;
+          // Restore original camera constraints
+          if (sceneRef.current.controls) {
+            sceneRef.current.controls.minDistance =
+              originalMinDistanceRef.current;
+          }
+          break;
+        case "projects":
+          await cameraDirectorRef.current.focusPlanet(projectsPlanet, 400);
+          setSplitScreenMode(false);
+          splitScreenModeRef.current = false;
+          // Restore original camera constraints
+          if (sceneRef.current.controls) {
+            sceneRef.current.controls.minDistance =
+              originalMinDistanceRef.current;
+          }
+          break;
+        default:
+          // Handle experience company specific navigation
+          if (target.startsWith("experience-")) {
+            const companyId = target.replace("experience-", "");
+            await handleExperienceCompanyNavigation(companyId);
+          }
+          break;
+      }
+    };
+
+    const handleExperienceCompanyNavigation = async (companyId: string) => {
+      if (!cameraDirectorRef.current) return;
+
+      // Find the specific company data
+      const company = resumeData.experience.find(
+        (exp) =>
+          exp.company.toLowerCase().includes(companyId) || exp.id === companyId,
+      );
+
+      if (!company) return;
+
+      // Find the corresponding moon mesh in the 3D scene
+      let moonMesh: THREE.Mesh | undefined;
+
+      // Search through all meshes in the scene to find the company moon
+      sceneRef.current.scene?.traverse((object) => {
+        if (object instanceof THREE.Mesh && object.userData.planetName) {
+          const planetName = object.userData.planetName.toLowerCase();
+          if (
+            planetName.includes(companyId.toLowerCase()) ||
+            planetName.includes(company.company.toLowerCase())
+          ) {
+            moonMesh = object;
+          }
+        }
+      });
+
+      if (!moonMesh) return;
+
+      // FIRST: Stop all orbital movement by setting split-screen mode
+      setSplitScreenMode(true);
+      splitScreenModeRef.current = true;
+
+      // Get the moon's WORLD position (not local position relative to parent)
+      const moonWorldPos = new THREE.Vector3();
+      moonMesh.getWorldPosition(moonWorldPos);
+
+      vlog(
+        `🌙 Moon world: [${moonWorldPos
+          .toArray()
+          .map((n) => n.toFixed(1))
+          .join(", ")}]`,
+      );
+      vlog(
+        `🌙 Moon local: [${moonMesh.position
+          .toArray()
+          .map((n) => n.toFixed(1))
+          .join(", ")}]`,
+      );
+
+      // Calculate camera position - simplified to just be directly in front
+      const distance = 15; // Distance from moon center - testing value
+
+      // Simple: position camera directly along one axis from moon
+      const cameraPos = new THREE.Vector3(
+        moonWorldPos.x,
+        moonWorldPos.y,
+        moonWorldPos.z + distance, // Just move back along Z axis
+      );
+
+      vlog(
+        `📷 Camera: [${cameraPos
+          .toArray()
+          .map((n) => n.toFixed(1))
+          .join(", ")}]`,
+      );
+      vlog(`📏 Distance: ${cameraPos.distanceTo(moonWorldPos).toFixed(2)}`);
+
+      // Log controls target BEFORE flyTo
+      if (sceneRef.current.controls) {
+        vlog(
+          `🎯 Before flyTo - target: [${sceneRef.current.controls.target
+            .toArray()
+            .map((n) => n.toFixed(1))
+            .join(", ")}]`,
+        );
+      }
+
+      await cameraDirectorRef.current.flyTo({
+        position: cameraPos,
+        lookAt: moonWorldPos,
+        duration: 2.5,
+        ease: "power2.inOut",
+      });
+
+      // CRITICAL: Update OrbitControls target AFTER flyTo completes
+      // This allows manual zoom to work toward the moon, not the sun!
+      if (sceneRef.current.controls) {
+        vlog(`🎯 After flyTo, updating target to moon...`);
+        sceneRef.current.controls.target.copy(moonWorldPos);
+        sceneRef.current.controls.minDistance = 0; // Allow zoom all the way to moon surface
+        sceneRef.current.controls.update(); // Force update to apply changes
+
+        const camToTarget = sceneRef.current.camera.position.distanceTo(
+          sceneRef.current.controls.target,
+        );
+        vlog(
+          `✓ Target updated: [${sceneRef.current.controls.target
+            .toArray()
+            .map((n) => n.toFixed(1))
+            .join(", ")}]`,
+        );
+        vlog(
+          `📐 Camera-to-target distance: ${camToTarget.toFixed(2)} (min: ${sceneRef.current.controls.minDistance}, max: ${sceneRef.current.controls.maxDistance})`,
+        );
+      }
+
+      // Create comprehensive split-screen content with full job details
+      const position = company.positions?.[0];
+      const splitContent: OverlayContent = {
+        title: company.company,
+        subtitle: position?.title || "Professional Experience",
+        description: `${company.startDate} - ${company.endDate || "Present"} | ${company.location}`,
+        sections: [
+          {
+            id: "overview",
+            title: "Company Overview",
+            content: `Professional experience at ${company.company}, contributing to innovative solutions and technical excellence in ${company.location}.`,
+            type: "text",
+          },
+          {
+            id: "roles",
+            title: "Positions & Responsibilities",
+            content:
+              position?.responsibilities?.join("\n\n• ") ||
+              "Key responsibilities and achievements during tenure.",
+            type: "text",
+          },
+          {
+            id: "period",
+            title: "Employment Period",
+            content: `${company.startDate} - ${company.endDate || "Present"}`,
+            type: "text",
+          },
+        ],
+        actions: [
+          {
+            label: "View All Experience",
+            action: "tour:career-journey",
+            icon: "📈",
+          },
+          { label: "Back to Galaxy", action: "navigate:home", icon: "🌌" },
+        ],
+      };
+
+      setSplitScreenContent(splitContent);
+      setSplitScreenMode(true);
+      splitScreenModeRef.current = true;
+    };
+
+    // Initialize navigation interface
+    if (container) {
+      navigationInterfaceRef.current = new NavigationInterface(
+        container,
+        handleNavigation,
+      );
+      // Tour guide functionality removed for simplification
+    }
+
     // --- ANIMATION LOOP ---
     let animationFrameId: number;
     const animate = () => {
@@ -927,9 +1459,10 @@ export default function ResumeSpace3D({
       // Rotate Sun
       sunMesh.rotation.y += 0.002;
 
-      // Orbit logic
-      const speedMultiplier =
-        optionsRef.current.spaceOrbitSpeed !== undefined
+      // Orbit logic - stop orbital movement during split-screen mode
+      const speedMultiplier = splitScreenModeRef.current
+        ? 0 // Stop orbital movement during split-screen mode
+        : optionsRef.current.spaceOrbitSpeed !== undefined
           ? optionsRef.current.spaceOrbitSpeed
           : 0.1;
 
@@ -985,6 +1518,11 @@ export default function ResumeSpace3D({
           const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
           const haloSize = item.mesh.userData.haloSizeVariance || 1;
 
+          // Show/hide sprite based on whether it should be visible
+          if (targetOpacity > 0) {
+            auroraSprite.visible = true;
+          }
+
           // Slow wavy rotation with slight variation - always animate
           material.rotation +=
             0.003 * haloSpeed + Math.sin(time * 0.5 + planetOffset) * 0.002;
@@ -1005,6 +1543,7 @@ export default function ResumeSpace3D({
             material.opacity = Math.max(0, newBase + opacityFlow);
           } else {
             material.opacity = 0;
+            auroraSprite.visible = false; // Hide when fully faded out
           }
         }
 
@@ -1015,6 +1554,11 @@ export default function ResumeSpace3D({
           const targetOpacity = item.mesh.userData.ringTargetOpacity || 0;
           const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
           const haloSize = item.mesh.userData.haloSizeVariance || 1;
+
+          // Show/hide sprite based on whether it should be visible
+          if (targetOpacity > 0) {
+            ringSprite.visible = true;
+          }
 
           // Counter-rotation with variation - always animate
           material.rotation -=
@@ -1036,6 +1580,7 @@ export default function ResumeSpace3D({
             material.opacity = Math.max(0, newBase + shimmer);
           } else {
             material.opacity = 0;
+            ringSprite.visible = false; // Hide when fully faded out
           }
         }
 
@@ -1046,6 +1591,11 @@ export default function ResumeSpace3D({
           const targetOpacity = item.mesh.userData.coreTargetOpacity || 0;
           const haloSpeed = item.mesh.userData.haloSpeedVariance || 1;
           const haloSize = item.mesh.userData.haloSizeVariance || 1;
+
+          // Show/hide sprite based on whether it should be visible
+          if (targetOpacity > 0) {
+            coreSprite.visible = true;
+          }
 
           // Faster pulsing with double frequency
           const pulse1 = Math.sin(time * 3 * haloSpeed + planetOffset) * 0.1;
@@ -1080,6 +1630,7 @@ export default function ResumeSpace3D({
             );
           } else {
             material.opacity = 0;
+            coreSprite.visible = false; // Hide when fully faded out
           }
         }
       });
@@ -1182,6 +1733,34 @@ export default function ResumeSpace3D({
     return globalCleanup;
   }, []);
 
+  // Handle split-screen mode viewport changes
+  useEffect(() => {
+    if (!mountRef.current) return;
+
+    // Trigger resize to update camera aspect ratio and renderer size
+    const handleSplitScreenResize = () => {
+      if (!sceneRef.current.camera || !rendererRef.current) return;
+
+      const width = mountRef.current!.clientWidth;
+      const height = mountRef.current!.clientHeight;
+
+      sceneRef.current.camera.aspect = width / height;
+      sceneRef.current.camera.updateProjectionMatrix();
+
+      rendererRef.current.setSize(width, height);
+
+      // CSS3DRenderer handles its own sizing
+      if (sceneRef.current.css3DRenderer) {
+        sceneRef.current.css3DRenderer.setSize(width, height);
+      }
+    };
+
+    // Small delay to ensure DOM updates are complete
+    const timeoutId = setTimeout(handleSplitScreenResize, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [splitScreenMode]);
+
   // Create CSS3DObject for detail panel when it becomes visible
   useEffect(() => {
     if (
@@ -1252,17 +1831,18 @@ export default function ResumeSpace3D({
   }, [detailPanelVisible]);
 
   return (
-    <>
+    <div style={{ width: "100%", height: "100%", position: "relative" }}>
       <div style={{ width: "100%", height: "100%", position: "relative" }}>
         <div
           ref={mountRef}
           className="width-full height-full"
           style={{
-            width: "100%",
+            width: splitScreenMode ? "60%" : "100%",
             height: "100%",
             position: "absolute",
             top: 0,
             left: 0,
+            transition: "width 0.3s ease-in-out",
           }}
         />
 
@@ -1478,6 +2058,345 @@ export default function ResumeSpace3D({
           </div>
         </div>
       )}
-    </>
+
+      {/* Split-Screen Experience View */}
+      {splitScreenMode && splitScreenContent && (
+        <div>
+          {/* Right section - Content Panel */}
+          <div
+            style={{
+              position: "fixed",
+              right: 0,
+              top: 0,
+              width: "40%",
+              height: "100vh",
+              background:
+                "linear-gradient(135deg, rgba(20, 25, 35, 0.98) 0%, rgba(30, 40, 55, 0.98) 100%)",
+              border: "2px solid rgba(212, 175, 55, 0.6)",
+              borderRight: "none",
+              borderRadius: "20px 0 0 20px",
+              backdropFilter: "blur(15px)",
+              zIndex: 1500,
+              overflow: "hidden",
+              boxShadow: "-10px 0 50px rgba(0, 0, 0, 0.5)",
+            }}
+          >
+            <div
+              style={{
+                padding: "30px",
+                height: "100%",
+                overflowY: "auto",
+                fontFamily: "'Cinzel', serif",
+                color: "rgba(212, 175, 55, 0.9)",
+              }}
+            >
+              <button
+                onClick={() => {
+                  setSplitScreenMode(false);
+                  setSplitScreenContent(null);
+                  splitScreenModeRef.current = false;
+                  // Restore original camera constraints
+                  if (sceneRef.current.controls) {
+                    sceneRef.current.controls.minDistance =
+                      originalMinDistanceRef.current;
+                  }
+                }}
+                style={{
+                  position: "absolute",
+                  top: "20px",
+                  right: "20px",
+                  background: "rgba(255, 100, 100, 0.2)",
+                  border: "1px solid rgba(255, 100, 100, 0.4)",
+                  color: "rgba(255, 100, 100, 0.8)",
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "20px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "16px",
+                }}
+              >
+                ✕
+              </button>
+
+              <h2 style={{ marginBottom: "10px", fontSize: "28px" }}>
+                {splitScreenContent.title}
+              </h2>
+              {splitScreenContent.subtitle && (
+                <p
+                  style={{
+                    marginBottom: "20px",
+                    fontSize: "16px",
+                    color: "rgba(255, 255, 255, 0.7)",
+                    fontStyle: "italic",
+                  }}
+                >
+                  {splitScreenContent.subtitle}
+                </p>
+              )}
+              <p
+                style={{
+                  marginBottom: "30px",
+                  lineHeight: "1.6",
+                  color: "rgba(255, 255, 255, 0.85)",
+                }}
+              >
+                {splitScreenContent.description}
+              </p>
+
+              {splitScreenContent.sections.map((section) => (
+                <div key={section.id} style={{ marginBottom: "30px" }}>
+                  <h3
+                    style={{
+                      marginBottom: "15px",
+                      fontSize: "20px",
+                      color: "rgba(212, 175, 55, 1)",
+                      textShadow: "0 0 8px rgba(212, 175, 55, 0.3)",
+                    }}
+                  >
+                    {section.title}
+                  </h3>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      lineHeight: "1.7",
+                      color: "rgba(255, 255, 255, 0.9)",
+                      whiteSpace: "pre-line",
+                      marginBottom: "15px",
+                    }}
+                  >
+                    {typeof section.content === "string" &&
+                    section.content.startsWith("• ") ? (
+                      <ul style={{ listStyle: "none", paddingLeft: 0 }}>
+                        {section.content
+                          .split("\n\n")
+                          .map((item: string, idx: number) => (
+                            <li key={idx} style={{ marginBottom: "8px" }}>
+                              {item}
+                            </li>
+                          ))}
+                      </ul>
+                    ) : Array.isArray(section.content) ? (
+                      section.content.join("\n\n")
+                    ) : (
+                      section.content
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {splitScreenContent.actions && (
+                <div style={{ marginTop: "30px", textAlign: "center" }}>
+                  {splitScreenContent.actions.map((action, index) => (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        // Handle action - could trigger tours or navigation
+                        if (action.action === "navigate:home") {
+                          setSplitScreenMode(false);
+                          splitScreenModeRef.current = false;
+                          // Restore original camera constraints
+                          if (sceneRef.current.controls) {
+                            sceneRef.current.controls.minDistance =
+                              originalMinDistanceRef.current;
+                          }
+                          cameraDirectorRef.current?.systemOverview();
+                        }
+                        // Add other action handlers as needed
+                      }}
+                      style={{
+                        background: "rgba(212, 175, 55, 0.2)",
+                        border: "1px solid rgba(212, 175, 55, 0.5)",
+                        color: "rgba(212, 175, 55, 0.9)",
+                        padding: "12px 20px",
+                        borderRadius: "25px",
+                        cursor: "pointer",
+                        margin: "5px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        fontFamily: "inherit",
+                        fontSize: "14px",
+                      }}
+                    >
+                      {action.icon && <span>{action.icon}</span>}
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cosmic Content Overlay */}
+      <CosmicContentOverlay
+        content={overlayContent}
+        isVisible={overlayVisible}
+        onClose={() => {
+          setOverlayVisible(false);
+          setOverlayContent(null);
+        }}
+        onAction={(action) => {
+          console.log("Overlay action:", action);
+
+          // Handle different actions
+          if (action.startsWith("tour:")) {
+            const tourType = action.replace("tour:", "");
+
+            if (tourBuilderRef.current && tourGuideRef.current) {
+              let tour;
+              switch (tourType) {
+                case "career-journey":
+                  tour = tourBuilderRef.current.createCareerJourneyTour();
+                  break;
+                case "technical-deep-dive":
+                  tour = tourBuilderRef.current.createTechnicalDeepDiveTour();
+                  break;
+                case "leadership-story":
+                  tour = tourBuilderRef.current.createLeadershipStoryTour();
+                  break;
+              }
+
+              if (tour) {
+                tourGuideRef.current.startTour(tour.waypoints);
+                // setNavigationMode('guided'); // Removed since we're not tracking this state currently
+              }
+            }
+          } else if (action.startsWith("navigate:")) {
+            const target = action.replace("navigate:", "");
+            // Call navigation directly since we have access to the planets and camera director
+            if (cameraDirectorRef.current) {
+              switch (target) {
+                case "sun":
+                  cameraDirectorRef.current.systemOverview();
+                  break;
+                case "experience":
+                  // We need to access the planet meshes - let's use the stored planet data
+                  const expData = planetsDataRef.current.get("experience");
+                  if (expData) {
+                    cameraDirectorRef.current.flyTo({
+                      position: new THREE.Vector3(
+                        expData.position.x + 300,
+                        expData.position.y + 150,
+                        expData.position.z + 200,
+                      ),
+                      lookAt: expData.position,
+                      duration: 2,
+                    });
+                  }
+                  break;
+                case "skills":
+                  const skillsData = planetsDataRef.current.get("skills");
+                  if (skillsData) {
+                    cameraDirectorRef.current.flyTo({
+                      position: new THREE.Vector3(
+                        skillsData.position.x + 350,
+                        skillsData.position.y + 150,
+                        skillsData.position.z + 250,
+                      ),
+                      lookAt: skillsData.position,
+                      duration: 2,
+                    });
+                  }
+                  break;
+                case "projects":
+                  const projectsData = planetsDataRef.current.get("projects");
+                  if (projectsData) {
+                    cameraDirectorRef.current.flyTo({
+                      position: new THREE.Vector3(
+                        projectsData.position.x + 400,
+                        projectsData.position.y + 200,
+                        projectsData.position.z + 300,
+                      ),
+                      lookAt: projectsData.position,
+                      duration: 2,
+                    });
+                  }
+                  break;
+              }
+            }
+          } else if (action === "mode:free") {
+            // setNavigationMode('free'); // Removed since we're not tracking this state currently
+            tourGuideRef.current?.stopTour();
+          }
+
+          // Close overlay after action
+          setOverlayVisible(false);
+          setOverlayContent(null);
+        }}
+        position="center"
+        animation="cosmic"
+      />
+
+      {/* Visual Console Overlay */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: "20px",
+          left: "20px",
+          width: "400px",
+          maxHeight: consoleVisible ? "200px" : "0px",
+          backgroundColor: "rgba(0, 10, 20, 0.85)",
+          backdropFilter: "blur(10px)",
+          border: consoleVisible ? "1px solid rgba(0, 255, 200, 0.3)" : "none",
+          borderRadius: "8px",
+          fontFamily: '"Courier New", monospace',
+          fontSize: "11px",
+          color: "#00ffaa",
+          overflow: "auto",
+          transition: "all 0.3s ease",
+          zIndex: 9999,
+          padding: consoleVisible ? "8px 12px" : "0",
+          boxShadow: consoleVisible
+            ? "0 4px 20px rgba(0, 255, 200, 0.15)"
+            : "none",
+        }}
+      >
+        {consoleVisible &&
+          consoleLogs.map((log, i) => (
+            <div
+              key={i}
+              style={{
+                marginBottom: "2px",
+                opacity: 0.7 + (i / consoleLogs.length) * 0.3,
+              }}
+            >
+              {log}
+            </div>
+          ))}
+      </div>
+
+      {/* Console Toggle Button */}
+      <button
+        onClick={() => setConsoleVisible(!consoleVisible)}
+        style={{
+          position: "fixed",
+          bottom: consoleVisible ? "230px" : "20px",
+          left: "20px",
+          width: "40px",
+          height: "40px",
+          backgroundColor: "rgba(0, 10, 20, 0.7)",
+          backdropFilter: "blur(10px)",
+          border: "1px solid rgba(0, 255, 200, 0.3)",
+          borderRadius: "50%",
+          color: "#00ffaa",
+          fontSize: "18px",
+          cursor: "pointer",
+          zIndex: 10000,
+          transition: "all 0.3s ease",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 2px 10px rgba(0, 255, 200, 0.2)",
+        }}
+        title={consoleVisible ? "Hide Console" : "Show Console"}
+      >
+        {consoleVisible ? "✕" : "⌘"}
+      </button>
+    </div>
   );
 }

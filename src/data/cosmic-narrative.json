@@ -1,0 +1,187 @@
+{
+  "cosmicNarrative": {
+    "introduction": {
+      "title": "The Harma System",
+      "subtitle": "A Digital Galaxy of Professional Excellence",
+      "description": "Welcome to the Harma System, where each planet represents a domain of expertise, and every moon tells the story of a professional journey through the digital cosmos."
+    },
+    "guidedTours": [
+      {
+        "id": "career-journey",
+        "name": "The Career Odyssey",
+        "description": "Follow the chronological path through professional evolution",
+        "duration": "3 minutes",
+        "waypoints": ["sun", "experience", "investcloud", "skills", "projects"]
+      },
+      {
+        "id": "technical-deep-dive",
+        "name": "Technical Constellation",
+        "description": "Explore the technical skills and architectural thinking",
+        "duration": "2 minutes",
+        "waypoints": ["skills", "backend", "frontend", "cloud", "experience"]
+      },
+      {
+        "id": "leadership-story",
+        "name": "Leadership Nebula",
+        "description": "Discover mentorship, ownership, and team building experiences",
+        "duration": "2.5 minutes",
+        "waypoints": ["experience", "investcloud", "projects", "summary"]
+      }
+    ],
+    "planets": {
+      "experience": {
+        "cosmicName": "Experientia Prime",
+        "description": "The central world of professional achievement, orbited by career milestones",
+        "atmosphere": "A dynamic atmosphere swirling with the energy of innovation and leadership",
+        "cameraPositions": {
+          "overview": { "x": 300, "y": 150, "z": 300 },
+          "closeup": { "x": 220, "y": 50, "z": 220 },
+          "orbit": { "radius": 250, "height": 100 }
+        },
+        "visualEffects": {
+          "atmosphereColor": "#ff5533",
+          "ringSystem": true,
+          "particleTrails": true,
+          "auroras": ["#ff6b35", "#f7931e", "#ffcb05"]
+        },
+        "moons": {
+          "investcloud": {
+            "cosmicName": "InvestLuna",
+            "classification": "Tech Giant Satellite",
+            "description": "The primary moon representing 7 years of full-stack mastery and leadership growth",
+            "significance": "Where architectural thinking evolved and mentorship skills crystallized",
+            "visualTheme": "corporate-innovation",
+            "specialEffects": [
+              "data-streams",
+              "code-aurora",
+              "leadership-beacon"
+            ],
+            "contentSections": [
+              {
+                "type": "timeline",
+                "title": "Evolution Timeline",
+                "subtitle": "From SDK Developer to Lead Engineer"
+              },
+              {
+                "type": "achievements",
+                "title": "Major Accomplishments",
+                "subtitle": "Building platforms used by global teams"
+              },
+              {
+                "type": "technical-stack",
+                "title": "Technology Mastery",
+                "subtitle": "Full-stack expertise across multiple domains"
+              },
+              {
+                "type": "leadership",
+                "title": "Leadership & Mentorship",
+                "subtitle": "Growing teams and establishing best practices"
+              }
+            ]
+          },
+          "boingo": {
+            "cosmicName": "Boingo Minor",
+            "classification": "Legacy World",
+            "description": "An earlier civilization representing foundational learning",
+            "significance": "Where the journey began in the digital realm",
+            "visualTheme": "retro-tech",
+            "specialEffects": ["vintage-glow", "foundation-rings"]
+          }
+        }
+      },
+      "skills": {
+        "cosmicName": "Technos Majoris",
+        "description": "The knowledge planet where technical expertise orbits in perfect harmony",
+        "atmosphere": "Crackling with electrical storms of innovation and learning",
+        "cameraPositions": {
+          "overview": { "x": 450, "y": 200, "z": 350 },
+          "closeup": { "x": 370, "y": 80, "z": 300 },
+          "orbit": { "radius": 400, "height": 120 }
+        },
+        "visualEffects": {
+          "atmosphereColor": "#3388ff",
+          "electricStorms": true,
+          "dataFlows": true,
+          "techGrid": true
+        },
+        "moons": {
+          "Frontend": {
+            "cosmicName": "Reactia",
+            "classification": "User Interface World",
+            "description": "Where user experiences come to life through code",
+            "technologies": ["Angular", "React", "TypeScript", "JavaScript"],
+            "visualTheme": "ui-crystal",
+            "specialEffects": ["component-fractals", "state-flows"]
+          },
+          "Backend": {
+            "cosmicName": "Servicus",
+            "classification": "Logic Engine Planet",
+            "description": "The powerhouse of business logic and data processing",
+            "technologies": ["C#", "Java", "Node.js", "REST APIs"],
+            "visualTheme": "industrial-core",
+            "specialEffects": ["api-networks", "data-processing-beams"]
+          },
+          "Cloud & DevOps": {
+            "cosmicName": "Nebula Ops",
+            "classification": "Infrastructure Realm",
+            "description": "Where applications ascend to the cloud dimensions",
+            "technologies": ["Azure", "AWS", "Docker", "CI/CD"],
+            "visualTheme": "cloud-networks",
+            "specialEffects": ["deployment-streams", "container-orbits"]
+          }
+        }
+      },
+      "projects": {
+        "cosmicName": "Innovation Station",
+        "description": "The creative lab where ideas transform into reality",
+        "atmosphere": "Shimmering with creative energy and prototype particles",
+        "cameraPositions": {
+          "overview": { "x": 600, "y": 250, "z": 400 },
+          "closeup": { "x": 520, "y": 100, "z": 350 },
+          "orbit": { "radius": 550, "height": 150 }
+        },
+        "visualEffects": {
+          "atmosphereColor": "#9933ff",
+          "creativeAura": true,
+          "prototypeStreams": true,
+          "innovationPulse": true
+        }
+      }
+    },
+    "navigationModes": {
+      "free-exploration": {
+        "name": "Free Flight",
+        "description": "Explore the cosmos at your own pace",
+        "controls": "standard"
+      },
+      "guided-tour": {
+        "name": "Cosmic Journey",
+        "description": "Let the system guide you through the professional story",
+        "controls": "cinematic"
+      },
+      "system-overview": {
+        "name": "Galaxy Map",
+        "description": "High-level view with quick navigation",
+        "controls": "strategic"
+      }
+    },
+    "ambientElements": {
+      "soundtrack": {
+        "exploration": "cosmic-ambient.ogg",
+        "discovery": "discovery-theme.ogg",
+        "achievement": "triumph-fanfare.ogg"
+      },
+      "particleSystems": {
+        "nebulaDust": true,
+        "starFormation": true,
+        "solarWind": true,
+        "quantumFluctuations": true
+      },
+      "dynamicLighting": {
+        "sunFlares": true,
+        "planetReflection": true,
+        "atmosphericScattering": true
+      }
+    }
+  }
+}
