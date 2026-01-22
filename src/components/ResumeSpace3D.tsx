@@ -96,6 +96,7 @@ export default function ResumeSpace3D({
 
   // Refs for cosmic systems
   const cameraDirectorRef = useRef<CosmosCameraDirector | null>(null);
+  const focusedMoonRef = useRef<THREE.Mesh | null>(null);
   const tourGuideRef = useRef<CosmicTourGuide | null>(null);
   const navigationInterfaceRef = useRef<NavigationInterface | null>(null);
   const tourBuilderRef = useRef<TourDefinitionBuilder | null>(null);
@@ -110,6 +111,12 @@ export default function ResumeSpace3D({
       }
     }
   };
+
+  // Drag-to-rotate state for focused moon
+  const isDraggingRef = useRef(false);
+  const lastPointerRef = useRef<{ x: number; y: number; t: number } | null>(
+    null,
+  );
 
   // Store options in a ref so the animation loop can access the latest values
   // without needing to be recreated on every render
@@ -232,6 +239,117 @@ export default function ResumeSpace3D({
     const coreTexture = new THREE.CanvasTexture(coreCanvas);
     coreTexture.minFilter = THREE.LinearFilter;
     coreTexture.magFilter = THREE.LinearFilter;
+
+    // Helper to create a canvas texture with lines and text for close-up overlays
+    const createDetailTexture = (
+      lines: string[],
+      options?: {
+        width?: number;
+        height?: number;
+        bgColor?: string;
+        lineColor?: string;
+        textColor?: string;
+      },
+    ) => {
+      const width = options?.width || 1024;
+      const height = options?.height || 512;
+      const bgColor = options?.bgColor || "rgba(0,0,0,0)";
+      const lineColor = options?.lineColor || "rgba(180,220,255,0.9)";
+      const textColor = options?.textColor || "rgba(220,240,255,0.95)";
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return new THREE.CanvasTexture(canvas);
+
+      // Transparent background (so texture can be blended onto sphere)
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, width, height);
+
+      // Draw some guide lines across the canvas to emulate the codepen style
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(40, height * 0.25);
+      ctx.lineTo(width - 40, height * 0.25);
+      ctx.moveTo(40, height * 0.5);
+      ctx.lineTo(width - 40, height * 0.5);
+      ctx.moveTo(40, height * 0.75);
+      ctx.lineTo(width - 40, height * 0.75);
+      ctx.stroke();
+
+      // Render text lines with a monospace/techy font
+      ctx.fillStyle = textColor;
+      ctx.font = "28px monospace";
+      ctx.textBaseline = "middle";
+      const padding = 64;
+      const lineSpacing = 40;
+      lines.forEach((line, i) => {
+        ctx.fillText(line, padding, padding + i * lineSpacing);
+      });
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.needsUpdate = true;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      return tex;
+    };
+
+    // Attach a detail overlay panel (vertical plane) above the planet surface
+    const attachDetailOverlay = (
+      planetMesh: THREE.Mesh,
+      texture: THREE.Texture,
+      options?: { offset?: number; opacity?: number },
+    ) => {
+      // Remove existing overlay if present
+      if (planetMesh.userData.detailOverlay) {
+        const existing = planetMesh.userData.detailOverlay as THREE.Mesh;
+        planetMesh.remove(existing);
+        try {
+          if (existing.geometry) existing.geometry.dispose();
+          if (existing.material)
+            (existing.material as THREE.Material).dispose();
+        } catch (e) {
+          // ignore dispose errors
+        }
+      }
+
+      const size =
+        ((planetMesh.geometry as THREE.SphereGeometry).parameters
+          .radius as number) || 5;
+
+      // Create a plane that sits just above the planet surface and faces the camera horizontally
+      const img: any = texture.image as any;
+      const aspect =
+        img && img.width && img.height ? img.width / img.height : 2;
+      const planeHeight = size * 1.2;
+      const planeWidth = planeHeight * aspect;
+
+      const overlayGeo = new THREE.PlaneGeometry(planeWidth, planeHeight);
+      const overlayMat = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        opacity: options?.opacity ?? 0.95,
+        depthWrite: false,
+        depthTest: false,
+        side: THREE.DoubleSide,
+      });
+      const overlayMesh = new THREE.Mesh(overlayGeo, overlayMat);
+
+      // Position the plane above the surface along the planet's local Y axis
+      const offset = options?.offset ?? 0.03;
+      overlayMesh.position.set(0, size + size * offset, 0);
+
+      // Keep panel upright; rotation will be updated in the animation loop to face camera horizontally
+      overlayMesh.rotation.set(0, 0, 0);
+      overlayMesh.userData.isDetailOverlay = true;
+      planetMesh.add(overlayMesh);
+      planetMesh.userData.detailOverlay = overlayMesh;
+      // Ensure overlay renders on top so text is visible even when close to surface
+      overlayMesh.renderOrder = 999;
+      return overlayMesh;
+    };
     // Renderer (CSS 2D for labels)
     const labelRenderer = new CSS2DRenderer();
     labelRenderer.setSize(container.clientWidth, container.clientHeight);
@@ -1080,8 +1198,77 @@ export default function ResumeSpace3D({
       }
     };
 
+    // Pointer handlers for rotating a focused moon directly
+    const onPointerDownRotate = (event: PointerEvent) => {
+      if (!mountRef.current || !focusedMoonRef.current) return;
+      const rect = mountRef.current.getBoundingClientRect();
+      const px = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const py = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      pointer.x = px;
+      pointer.y = py;
+      raycaster.setFromCamera(pointer, camera);
+      const intersects = raycaster.intersectObject(
+        focusedMoonRef.current,
+        true,
+      );
+      if (intersects.length > 0) {
+        isDraggingRef.current = true;
+        lastPointerRef.current = {
+          x: event.clientX,
+          y: event.clientY,
+          t: Date.now(),
+        };
+        if (sceneRef.current && sceneRef.current.controls) {
+          sceneRef.current.controls.enabled = false;
+        }
+      }
+    };
+
+    const onPointerMoveRotate = (event: PointerEvent) => {
+      if (
+        !isDraggingRef.current ||
+        !focusedMoonRef.current ||
+        !lastPointerRef.current
+      )
+        return;
+      const now = Date.now();
+      const dt = Math.max((now - lastPointerRef.current.t) / 1000, 1 / 120);
+      const dx = event.clientX - lastPointerRef.current.x;
+      const dy = event.clientY - lastPointerRef.current.y;
+
+      // Map drag delta to rotation deltas
+      const rotY = dx * 0.008; // horizontal drag -> rotate around Y
+      const rotX = dy * 0.008; // vertical drag -> rotate around X
+      focusedMoonRef.current.rotation.y += rotY;
+      focusedMoonRef.current.rotation.x += rotX;
+
+      // Compute spin velocity to continue after release (inverse mapping)
+      const vx = rotX / dt;
+      const vy = rotY / dt;
+      focusedMoonRef.current.userData.spinVelocity = new THREE.Vector3(
+        vx * 0.15,
+        vy * 0.15,
+        0,
+      );
+
+      lastPointerRef.current = { x: event.clientX, y: event.clientY, t: now };
+    };
+
+    const onPointerUpRotate = (_event: PointerEvent) => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        if (sceneRef.current && sceneRef.current.controls) {
+          sceneRef.current.controls.enabled = true;
+        }
+      }
+    };
+
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("click", onClick);
+    // Add rotate handlers
+    window.addEventListener("pointerdown", onPointerDownRotate);
+    window.addEventListener("pointermove", onPointerMoveRotate);
+    window.addEventListener("pointerup", onPointerUpRotate);
 
     // --- COSMIC SYSTEMS INITIALIZATION ---
     // Initialize camera director for cinematic movements
@@ -1355,7 +1542,7 @@ export default function ResumeSpace3D({
       );
 
       // Calculate camera position - simplified to just be directly in front
-      const distance = 15; // Distance from moon center - testing value
+      const distance = 25; // Distance from moon center - testing value
 
       // Simple: position camera directly along one axis from moon
       const cameraPos = new THREE.Vector3(
@@ -1411,6 +1598,57 @@ export default function ResumeSpace3D({
         vlog(
           `📐 Camera-to-target distance: ${camToTarget.toFixed(2)} (min: ${sceneRef.current.controls.minDistance}, max: ${sceneRef.current.controls.maxDistance})`,
         );
+      }
+
+      // After arriving, attach a detail overlay for the moon showing job info
+      try {
+        const detailLines: string[] = [];
+        detailLines.push(company.company.toUpperCase());
+        const firstPos = company.positions?.[0];
+        if (firstPos) {
+          const fp: any = firstPos as any;
+          detailLines.push(
+            `${fp.title} (${fp.startDate || ""} - ${fp.endDate || "Present"})`,
+          );
+        }
+        detailLines.push(company.location || "");
+        detailLines.push("\u2022 Click to zoom out");
+
+        const detailTex = createDetailTexture(detailLines, {
+          width: 1024,
+          height: 512,
+        });
+        attachDetailOverlay(moonMesh!, detailTex, {
+          offset: 0.03,
+          opacity: 0.95,
+        });
+
+        // Mark moon as focused: pause orbital revolution but allow spinning/interaction
+        moonMesh!.userData.pauseOrbit = true;
+        if (!moonMesh!.userData.spinVelocity) {
+          moonMesh!.userData.spinVelocity = new THREE.Vector3(0, 0, 0);
+        }
+
+        // Detach moon from its orbital parent so it stops inheriting parent's revolution
+        const itemEntry = items.find((it) => it.mesh === moonMesh!);
+        if (itemEntry) {
+          // store original parent so we can reattach later
+          itemEntry.originalParent = itemEntry.parent;
+
+          // compute world position and reparent to scene
+          const worldPos = new THREE.Vector3();
+          moonMesh!.getWorldPosition(worldPos);
+          scene.add(moonMesh!);
+          moonMesh!.position.copy(worldPos);
+          // mark as detached
+          itemEntry.detached = true;
+          // set parent to scene for consistency
+          itemEntry.parent = scene;
+        }
+
+        focusedMoonRef.current = moonMesh!;
+      } catch (e) {
+        console.warn("Failed to attach detail overlay:", e);
       }
     };
 
@@ -1511,19 +1749,61 @@ export default function ResumeSpace3D({
           const pulse = 1 + Math.sin(time * 2.0 * haloSpeed) * 0.06;
           core.scale.set(baseCoreScale * pulse, baseCoreScale * pulse, 1);
         }
+
+        // Orient any detail overlay panels to face the camera horizontally (keep upright)
+        if (item.mesh.userData.detailOverlay) {
+          const panel = item.mesh.userData.detailOverlay as THREE.Mesh;
+          if (panel && sceneRef.current && sceneRef.current.camera) {
+            // Get world positions
+            const panelWorldPos = new THREE.Vector3();
+            panel.getWorldPosition(panelWorldPos);
+            const camPos = sceneRef.current.camera.position.clone();
+
+            // Compute vector from panel to camera, project to XZ plane to keep upright
+            const dir = camPos.sub(panelWorldPos);
+            dir.y = 0; // zero out vertical component
+            const angle = Math.atan2(dir.x, dir.z);
+
+            // Apply rotation around Y so panel faces camera horizontally
+            panel.rotation.y = angle;
+            panel.rotation.x = 0;
+            panel.rotation.z = 0;
+          }
+        }
       });
 
-      // Only animate orbit positions and planet rotation if speed is not zero
-      if (speedMultiplier !== 0) {
-        items.forEach((item) => {
-          item.angle -= item.orbitSpeed * speedMultiplier;
-          item.mesh.position.x = Math.cos(item.angle) * item.distance;
-          item.mesh.position.z = -Math.sin(item.angle) * item.distance;
+      // Animate orbital positions when global speed is non-zero
+      items.forEach((item) => {
+        if (speedMultiplier !== 0) {
+          // If this item is paused (focused moon), skip updating its orbital revolution
+          if (!item.mesh.userData.pauseOrbit) {
+            item.angle -= item.orbitSpeed * speedMultiplier;
+            item.mesh.position.x = Math.cos(item.angle) * item.distance;
+            item.mesh.position.z = -Math.sin(item.angle) * item.distance;
+          }
+        }
 
-          // Self rotation
-          item.mesh.rotation.y += 0.01 * speedMultiplier;
-        });
-      }
+        // Self rotation: always apply so focused moon can be spun by the user
+        const baseSpin = 0.01;
+        const spinMultiplier = item.mesh.userData.pauseOrbit
+          ? 1
+          : speedMultiplier;
+        item.mesh.rotation.y += baseSpin * spinMultiplier;
+
+        // Apply any residual spin velocity from user interaction (always applied)
+        const spin = item.mesh.userData.spinVelocity as
+          | THREE.Vector3
+          | undefined;
+        if (spin) {
+          // approximate delta-time
+          const dt = 1 / 60; // seconds
+          item.mesh.rotation.x += spin.x * dt;
+          item.mesh.rotation.y += spin.y * dt;
+
+          // decay spin slowly
+          spin.multiplyScalar(0.995);
+        }
+      });
 
       controls.update();
       composer.render(); // Use composer instead of renderer for bloom effect
