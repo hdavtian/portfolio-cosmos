@@ -597,6 +597,7 @@ export class NavigationInterface {
         .nav-button.active {
           background: rgba(212, 175, 55, 0.6);
           box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+          animation: pulse-border 1.8s infinite;
         }
         
         .navigation-modes {
@@ -635,6 +636,11 @@ export class NavigationInterface {
         .control-btn {
           flex: 1;
           margin: 0 2px;
+        }
+        @keyframes pulse-border {
+          0% { box-shadow: 0 0 0 0 rgba(74,158,255,0.12); }
+          70% { box-shadow: 0 0 0 8px rgba(74,158,255,0.02); }
+          100% { box-shadow: 0 0 0 0 rgba(74,158,255,0); }
         }
       </style>
     `;

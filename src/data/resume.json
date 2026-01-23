@@ -18,6 +18,11 @@
     {
       "id": "investcloud",
       "company": "InvestCloud Inc.",
+      "notes": [
+        { "text": "Launched global dashboard feature", "speed": 0.18 },
+        { "text": "Led automation platform initiative", "speed": 0.05 },
+        { "text": "Mentored cross-functional teams", "speed": 0.32 }
+      ],
       "navLabel": "InvestCloud",
       "location": "Los Angeles, CA",
       "startDate": "04/2018",
@@ -79,6 +84,11 @@
     {
       "id": "boingo",
       "company": "Boingo Wireless Inc.",
+      "notes": [
+        { "text": "Managed marketing microsites", "speed": 0.12 },
+        { "text": "Migrated infra to AWS", "speed": 0.45 },
+        { "text": "Introduced jQuery to the team", "speed": 0.22 }
+      ],
       "navLabel": "Boingo",
       "location": "Los Angeles, CA",
       "startDate": "08/2010",

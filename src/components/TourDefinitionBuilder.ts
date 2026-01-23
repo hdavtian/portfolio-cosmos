@@ -76,9 +76,26 @@ export class TourDefinitionBuilder {
           "Approaching the Experience Planet - a world shaped by years of professional growth, leadership challenges, and technological innovation.",
       });
 
-      // Visit each experience moon
+      // Visit each experience moon (sorted: latest -> oldest by startDate)
       if (expPlanet.moons) {
-        expPlanet.moons.forEach((moon, index) => {
+        const moonsSorted = expPlanet.moons.slice().sort((a, b) => {
+          const parse = (s: any) => {
+            if (!s || !s.data) return 0;
+            const sd = s.data.startDate || "";
+            // attempt to parse MM/YYYY or YYYY
+            const parts = sd.split("/");
+            if (parts.length === 2) {
+              const month = parseInt(parts[0], 10) || 1;
+              const year = parseInt(parts[1], 10) || 1970;
+              return new Date(year, month - 1).getTime();
+            }
+            const y = parseInt(sd, 10);
+            return isNaN(y) ? 0 : new Date(y, 0).getTime();
+          };
+          return parse(b) - parse(a);
+        });
+
+        moonsSorted.forEach((moon, index) => {
           waypoints.push({
             id: `experience-moon-${index}`,
             name: moon.name,

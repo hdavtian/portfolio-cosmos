@@ -23,7 +23,7 @@ import {
   TourDefinitionBuilder,
   type PlanetData,
 } from "./TourDefinitionBuilder";
-import { SpaceshipHUD } from "./SpaceshipHUD";
+import SpaceshipHUD from "./SpaceshipHUDClean.tsx";
 
 // Global singleton to prevent multiple WebGL context creation
 let globalRenderer: THREE.WebGLRenderer | null = null;
@@ -56,6 +56,12 @@ export default function ResumeSpace3D({
   );
   const [contentLoading, setContentLoading] = useState(false);
   const originalMinDistanceRef = useRef<number>(0);
+  // Request flag to tell the scene effect to exit focused moon (cross-scope safe)
+  const exitFocusRequestRef = useRef<boolean>(false);
+
+  // How many world units change in camera-to-moon distance should trigger exiting focus
+  // Tune this to allow small zoom adjustments without losing focus.
+  const zoomExitThresholdRef = useRef<number>(12); // units (default suggestion)
 
   // Visual console state
   const [consoleVisible, setConsoleVisible] = useState(true);
@@ -117,6 +123,10 @@ export default function ResumeSpace3D({
   const lastPointerRef = useRef<{ x: number; y: number; t: number } | null>(
     null,
   );
+  // Track whether OrbitControls is actively being dragged by the user
+  const controlsDraggingRef = useRef(false);
+  // Store camera distance to focused moon when entering focus; used to detect zoom
+  const focusedMoonCameraDistanceRef = useRef<number | null>(null);
 
   // Store options in a ref so the animation loop can access the latest values
   // without needing to be recreated on every render
@@ -213,6 +223,67 @@ export default function ResumeSpace3D({
 
     // (moved) helper functions are defined earlier to avoid TDZ
 
+    // Helper: create a soft aurora-like halo texture (canvas -> CanvasTexture)
+    function createAuroraHaloTexture() {
+      // Create a horizontally-elongated soft halo using an elliptical radial gradient
+      const canvas = document.createElement("canvas");
+      canvas.width = 512;
+      canvas.height = 256;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw several layered elliptical gradients for a soft aurora band
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+
+        // We'll draw into a scaled context to create an elliptical radial gradient
+        for (let layer = 0; layer < 4; layer++) {
+          const maxRadius = 160 - layer * 24;
+          ctx.save();
+          // scale X to stretch horizontally
+          const scaleX = 1.6 - layer * 0.12;
+          ctx.translate(cx, cy);
+          ctx.scale(scaleX, 1);
+          const grad = ctx.createRadialGradient(
+            0,
+            0,
+            maxRadius * 0.12,
+            0,
+            0,
+            maxRadius,
+          );
+          const alphaBase = 0.06 + layer * 0.02;
+          grad.addColorStop(0, `rgba(180,230,255,${alphaBase * 0.15})`);
+          grad.addColorStop(0.4, `rgba(140,200,255,${alphaBase * 0.9})`);
+          grad.addColorStop(0.7, `rgba(80,160,255,${alphaBase * 0.4})`);
+          grad.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(0, 0, maxRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Add a few soft wisps for texture
+        for (let i = 0; i < 6; i++) {
+          const y = cy + (i - 3) * 8 + Math.random() * 6;
+          ctx.save();
+          ctx.globalAlpha = 0.12 + Math.random() * 0.06;
+          ctx.fillStyle = `rgba(180,230,255,0.5)`;
+          ctx.fillRect(40, y - 6, canvas.width - 80, 12);
+          ctx.restore();
+        }
+      }
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.premultiplyAlpha = true;
+      (tex as any).encoding = (THREE as any).sRGBEncoding;
+      tex.needsUpdate = true;
+      return tex;
+    }
+
     // Create sprite materials/textures for halo layers
     const auroraTexture = createAuroraHaloTexture();
     auroraTexture.minFilter = THREE.LinearFilter;
@@ -249,6 +320,11 @@ export default function ResumeSpace3D({
         bgColor?: string;
         lineColor?: string;
         textColor?: string;
+        showLine?: boolean;
+        fontSize?: number;
+        lineSpacing?: number;
+        textAlign?: CanvasTextAlign;
+        padding?: number;
       },
     ) => {
       const width = options?.width || 1024;
@@ -256,6 +332,11 @@ export default function ResumeSpace3D({
       const bgColor = options?.bgColor || "rgba(0,0,0,0)";
       const lineColor = options?.lineColor || "rgba(180,220,255,0.9)";
       const textColor = options?.textColor || "rgba(220,240,255,0.95)";
+      const showLine = options?.showLine ?? true;
+      const fontSize = options?.fontSize ?? 28;
+      const lineSpacing = options?.lineSpacing ?? Math.round(fontSize * 1.4);
+      const textAlign = options?.textAlign ?? ("left" as CanvasTextAlign);
+      const padding = options?.padding ?? 64;
 
       const canvas = document.createElement("canvas");
       canvas.width = width;
@@ -267,26 +348,25 @@ export default function ResumeSpace3D({
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, width, height);
 
-      // Draw some guide lines across the canvas to emulate the codepen style
-      ctx.strokeStyle = lineColor;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(40, height * 0.25);
-      ctx.lineTo(width - 40, height * 0.25);
-      ctx.moveTo(40, height * 0.5);
-      ctx.lineTo(width - 40, height * 0.5);
-      ctx.moveTo(40, height * 0.75);
-      ctx.lineTo(width - 40, height * 0.75);
-      ctx.stroke();
+      // Optionally draw a subtle horizontal guide line (centered)
+      if (showLine) {
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const y = height * 0.5;
+        ctx.moveTo(40, y);
+        ctx.lineTo(width - 40, y);
+        ctx.stroke();
+      }
 
       // Render text lines with a monospace/techy font
       ctx.fillStyle = textColor;
-      ctx.font = "28px monospace";
+      ctx.font = `${fontSize}px monospace`;
       ctx.textBaseline = "middle";
-      const padding = 64;
-      const lineSpacing = 40;
+      ctx.textAlign = textAlign;
       lines.forEach((line, i) => {
-        ctx.fillText(line, padding, padding + i * lineSpacing);
+        const x = textAlign === "left" ? padding : width / 2;
+        ctx.fillText(line, x, padding + i * lineSpacing);
       });
 
       const tex = new THREE.CanvasTexture(canvas);
@@ -296,59 +376,173 @@ export default function ResumeSpace3D({
       return tex;
     };
 
-    // Attach a detail overlay panel (vertical plane) above the planet surface
-    const attachDetailOverlay = (
+    // (attachDetailOverlay removed — replaced by attachMultiNoteOverlays)
+
+    // Attach multiple small note overlays around a planet (world-space) using an array of short strings
+    const attachMultiNoteOverlays = (
       planetMesh: THREE.Mesh,
-      texture: THREE.Texture,
-      options?: { offset?: number; opacity?: number },
+      overlayDefs: Array<
+        string | { type?: string; text?: string; lines?: string[] }
+      >,
+      options?: { radiusOffset?: number; opacity?: number },
     ) => {
-      // Remove existing overlay if present
-      if (planetMesh.userData.detailOverlay) {
-        const existing = planetMesh.userData.detailOverlay as THREE.Mesh;
-        planetMesh.remove(existing);
-        try {
-          if (existing.geometry) existing.geometry.dispose();
-          if (existing.material)
-            (existing.material as THREE.Material).dispose();
-        } catch (e) {
-          // ignore dispose errors
-        }
+      // Remove existing overlays if present
+      const existing = planetMesh.userData.detailOverlays as
+        | THREE.Mesh[]
+        | undefined;
+      if (existing && existing.length) {
+        existing.forEach((o) => {
+          if (o.parent) o.parent.remove(o);
+          const idx = overlayClickables.indexOf(o);
+          if (idx >= 0) overlayClickables.splice(idx, 1);
+          try {
+            if (o.geometry) o.geometry.dispose();
+            if (o.material) (o.material as THREE.Material).dispose();
+          } catch (e) {
+            // ignore
+          }
+        });
       }
 
       const size =
         ((planetMesh.geometry as THREE.SphereGeometry).parameters
           .radius as number) || 5;
+      const centerWorld = new THREE.Vector3();
+      planetMesh.getWorldPosition(centerWorld);
 
-      // Create a plane that sits just above the planet surface and faces the camera horizontally
-      const img: any = texture.image as any;
-      const aspect =
-        img && img.width && img.height ? img.width / img.height : 2;
-      const planeHeight = size * 1.2;
-      const planeWidth = planeHeight * aspect;
+      const overlays: THREE.Mesh[] = [];
+      overlayDefs.forEach((note, idx) => {
+        // normalize def to object form
+        const def =
+          typeof note === "string" ? { type: "general", text: note } : note;
+        // Title overlay: placed above planet and does not rotate with planet
+        if (def.type === "title" || def.lines) {
+          const lines = def.lines || [planetMesh.userData.planetName || ""];
+          const titleTex = createDetailTexture(lines, {
+            width: 1024,
+            height: 256,
+          });
+          const aspectT = (titleTex.image as any)?.width
+            ? (titleTex.image as any).width / (titleTex.image as any).height
+            : 4;
+          const planeHT = size * 1.2;
+          const planeWT = planeHT * aspectT;
+          const geoT = new THREE.PlaneGeometry(planeWT, planeHT);
+          const matT = new THREE.MeshBasicMaterial({
+            map: titleTex,
+            transparent: true,
+            opacity: options?.opacity ?? 0.98,
+            depthWrite: false,
+            depthTest: false,
+            side: THREE.DoubleSide,
+          });
+          const meshT = new THREE.Mesh(geoT, matT);
+          const worldPosT = new THREE.Vector3();
+          planetMesh.getWorldPosition(worldPosT);
+          meshT.position.set(
+            worldPosT.x,
+            worldPosT.y + size + size * 0.03,
+            worldPosT.z,
+          );
+          meshT.userData.isTitleOverlay = true;
+          meshT.userData.planeWidth = planeWT;
+          meshT.userData.planeHeight = planeHT;
+          meshT.userData.isDetailOverlay = true;
+          meshT.renderOrder = 999;
+          scene.add(meshT);
+          overlays.push(meshT);
+          overlayClickables.push(meshT);
+          // store as planet title overlay reference
+          planetMesh.userData.titleOverlay = meshT;
+          return; // continue to next def
+        }
 
-      const overlayGeo = new THREE.PlaneGeometry(planeWidth, planeHeight);
-      const overlayMat = new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-        opacity: options?.opacity ?? 0.95,
-        depthWrite: false,
-        depthTest: false,
-        side: THREE.DoubleSide,
+        // Small texture for general note (bullet-style)
+        const bulletText = `- ${def.text || ""}`;
+        const textTex = createDetailTexture([bulletText], {
+          width: 512,
+          height: 128,
+          bgColor: "rgba(0,0,0,0)",
+          showLine: false,
+          textColor: "rgba(150,230,255,0.95)",
+          fontSize: 20,
+          lineSpacing: 26,
+          textAlign: "left",
+          padding: 48,
+        });
+
+        const aspect = (textTex.image as any)?.width
+          ? (textTex.image as any).width / (textTex.image as any).height
+          : 4;
+        const planeH = size * 0.4; // small panel height
+        const planeW = planeH * aspect;
+        const geo = new THREE.PlaneGeometry(planeW, planeH);
+        const mat = new THREE.MeshBasicMaterial({
+          map: textTex,
+          transparent: true,
+          opacity: options?.opacity ?? 0.95,
+          depthWrite: false,
+          depthTest: false,
+          side: THREE.DoubleSide,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+
+        // For general overlays: create bullet panels that will slide out under the title
+        const elev = 0.02 * size; // small lift above surface while hidden
+        const radialOffset = options?.radiusOffset ?? 0.02 * size;
+
+        // mark as bullet overlay and track stacking index
+        mesh.userData.isBulletOverlay = true;
+        mesh.userData.bulletIndex = overlays.filter(
+          (o) => !(o.userData && o.userData.isTitleOverlay),
+        ).length;
+        mesh.userData.radiusOffset = radialOffset;
+        mesh.userData.elev = elev;
+        mesh.userData.planeHeight = planeH;
+        mesh.userData.planeWidth = planeW;
+        mesh.userData.slideDir = Math.random() < 0.5 ? -1 : 1;
+        mesh.userData.slideProgress = 0; // 0 = hidden at moon, 1 = slid out under title
+
+        // start at planet center (hidden) and slide out toward title position when active
+        mesh.position.set(centerWorld.x, centerWorld.y + elev, centerWorld.z);
+
+        // keep overlays horizontal and readable (no tilt)
+        mesh.rotation.x = 0;
+        mesh.rotation.z = 0;
+
+        mesh.userData.isDetailOverlay = true;
+        mesh.renderOrder = 999;
+
+        scene.add(mesh);
+        overlays.push(mesh);
+        overlayClickables.push(mesh);
+        // Debug: log initial overlay parameters for InvestCloud
+        try {
+          const pname = planetMesh.userData?.planetName as string | undefined;
+          if (pname && pname.toLowerCase().includes("investcloud")) {
+            try {
+              const pos = mesh.position.clone().toArray();
+              vlog(
+                `INVESTCLOUD_OVERLAY_INIT ${idx} ${JSON.stringify({
+                  theta: mesh.userData.theta,
+                  angularSpeed: mesh.userData.angularSpeed,
+                  inclination: mesh.userData.inclination,
+                  radiusOffset: mesh.userData.radiusOffset,
+                  elev: mesh.userData.elev,
+                  position: pos,
+                })}`,
+              );
+            } catch (e) {
+              vlog(`INVESTCLOUD_OVERLAY_INIT ${idx} (log error)`);
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
       });
-      const overlayMesh = new THREE.Mesh(overlayGeo, overlayMat);
 
-      // Position the plane above the surface along the planet's local Y axis
-      const offset = options?.offset ?? 0.03;
-      overlayMesh.position.set(0, size + size * offset, 0);
-
-      // Keep panel upright; rotation will be updated in the animation loop to face camera horizontally
-      overlayMesh.rotation.set(0, 0, 0);
-      overlayMesh.userData.isDetailOverlay = true;
-      planetMesh.add(overlayMesh);
-      planetMesh.userData.detailOverlay = overlayMesh;
-      // Ensure overlay renders on top so text is visible even when close to surface
-      overlayMesh.renderOrder = 999;
-      return overlayMesh;
+      planetMesh.userData.detailOverlays = overlays;
+      return overlays;
     };
     // Renderer (CSS 2D for labels)
     const labelRenderer = new CSS2DRenderer();
@@ -377,6 +571,52 @@ export default function ResumeSpace3D({
     controls.maxDistance = 6000; // Increased to allow more zoom out while staying within starfield
     controls.autoRotate = false;
     controls.autoRotateSpeed = 0.5;
+
+    // Track when OrbitControls starts/ends user interaction so we don't exit focus
+    controls.addEventListener("start", () => {
+      controlsDraggingRef.current = true;
+    });
+    controls.addEventListener("change", () => {
+      try {
+        // If there's a focused moon, only exit when the camera distance to the moon changes (zoom),
+        // not when the user rotates/pans around it. Also ignore while user is directly dragging the moon.
+        if (focusedMoonRef.current && !isDraggingRef.current) {
+          const moonWorld = new THREE.Vector3();
+          focusedMoonRef.current.getWorldPosition(moonWorld);
+          const camPos = camera.position.clone();
+          const currentDist = camPos.distanceTo(moonWorld);
+
+          const base = focusedMoonCameraDistanceRef.current ?? currentDist;
+          const diff = Math.abs(currentDist - base);
+          // If distance changed significantly (zoom), request exit. Use configurable threshold.
+          const threshold = zoomExitThresholdRef.current || 12;
+          if (diff > threshold) {
+            exitFocusRequestRef.current = true;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    });
+
+    // Wheel events indicate zooming; rely on controls.change distance checks instead
+    // (don't exit immediately on wheel so small zooms/pinch are allowed)
+    renderer.domElement.addEventListener(
+      "wheel",
+      () => {
+        // no immediate action; controls.change will detect significant zoom and exit when needed
+      },
+      { passive: true },
+    );
+
+    // Multi-touch gestures (pinch) will be handled by controls.change distance checks
+    renderer.domElement.addEventListener(
+      "touchstart",
+      () => {
+        // do nothing immediate; let the distance threshold logic decide whether to exit
+      },
+      { passive: true },
+    );
 
     // Post-processing for bloom effect
     const composer = new EffectComposer(renderer);
@@ -465,6 +705,17 @@ export default function ResumeSpace3D({
     fillLight.position.set(50, 50, -100);
     scene.add(fillLight);
 
+    // Sun mesh (visual center object)
+    const sunGeometry = new THREE.SphereGeometry(60, 32, 32);
+    const sunMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffdd99,
+      toneMapped: false,
+    });
+    const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
+    sunMesh.position.set(0, 0, 0);
+    scene.add(sunMesh);
+    sceneRef.current.sunMaterial = sunMaterial;
+
     // --- OBJECTS ---
     const items: {
       mesh: THREE.Mesh;
@@ -472,105 +723,50 @@ export default function ResumeSpace3D({
       angle: number;
       distance: number;
       parent?: THREE.Object3D;
+      detached?: boolean;
+      originalParent?: THREE.Object3D;
+      overlayMeshes?: THREE.Mesh[];
+      overlayOffsets?: number[];
+      overlayHeights?: number[];
     }[] = [];
+    // clickable overlay registry (planes that should be raycast-targeted)
+    const overlayClickables: THREE.Object3D[] = [];
+    // clickable planet registry (used for raycasting planet clicks)
+    const clickablePlanets: THREE.Object3D[] = [];
 
-    // Track clickable planets for raycasting
-    const clickablePlanets: THREE.Mesh[] = [];
-
-    // 1. SUN (Profile)
-    const sunTexture = textureLoader.load("/textures/sun.jpg");
-    const sunGeometry = new THREE.SphereGeometry(30, 32, 32);
-    // Basic material for Sun so it's always bright and not affected by lights
-    // Cap brightness at lower value to prevent sun from being too bright to look at
-    const initialBrightness = Math.min(
-      0.6 + (optionsRef.current.spaceSunIntensity || 2.5) * 0.08,
-      1.0,
-    );
-    const sunMaterial = new THREE.MeshBasicMaterial({
-      map: sunTexture,
-      color: new THREE.Color(
-        initialBrightness,
-        initialBrightness * 0.95,
-        initialBrightness * 0.7,
-      ),
-    });
-    const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
-    scene.add(sunMesh);
-    sceneRef.current.sunMaterial = sunMaterial;
-
-    // Helper function to create a cloudy aurora-like halo texture (canvas-based)
-    function createAuroraHaloTexture() {
+    // Helper function to create ring halo texture
+    function createRingHaloTexture() {
       const canvas = document.createElement("canvas");
       canvas.width = 256;
       canvas.height = 256;
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        const centerX = 128;
-        const centerY = 128;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
 
-        // Base glow
-        const gradient1 = ctx.createRadialGradient(
-          centerX,
-          centerY,
-          0,
-          centerX,
-          centerY,
-          128,
-        );
-        gradient1.addColorStop(0, "rgba(100, 200, 255, 0)");
-        gradient1.addColorStop(0.3, "rgba(100, 180, 255, 0.15)");
-        gradient1.addColorStop(0.5, "rgba(80, 150, 255, 0.3)");
-        gradient1.addColorStop(0.7, "rgba(60, 120, 255, 0.2)");
-        gradient1.addColorStop(1, "rgba(0, 0, 0, 0)");
-        ctx.fillStyle = gradient1;
-        ctx.fillRect(0, 0, 256, 256);
-
-        // Wispy cloud patterns
-        for (let i = 0; i < 12; i++) {
-          const angle = (Math.PI * 2 * i) / 12;
-          const x = centerX + Math.cos(angle) * 80;
-          const y = centerY + Math.sin(angle) * 80;
-          const gradient = ctx.createRadialGradient(x, y, 0, x, y, 40);
-          gradient.addColorStop(0, "rgba(150, 200, 255, 0.4)");
-          gradient.addColorStop(0.5, "rgba(100, 150, 255, 0.15)");
-          gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, 256, 256);
-        }
-      }
-      return new THREE.CanvasTexture(canvas);
-    }
-
-    // Helper function to create ring halo texture
-    function createRingHaloTexture() {
-      const canvas = document.createElement("canvas");
-      canvas.width = 128;
-      canvas.height = 128;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        const centerX = 64;
-        const centerY = 64;
-
+        // Draw multiple soft rings with radial gradients
         for (let i = 0; i < 3; i++) {
-          const innerRadius = 35 + i * 8;
-          const outerRadius = 45 + i * 8;
-          const gradient = ctx.createRadialGradient(
-            centerX,
-            centerY,
-            innerRadius,
-            centerX,
-            centerY,
-            outerRadius,
-          );
-          const opacity = 0.5 - i * 0.15;
-          gradient.addColorStop(0, `rgba(120, 180, 255, ${opacity})`);
-          gradient.addColorStop(0.5, `rgba(80, 150, 255, ${opacity * 1.2})`);
-          gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, 128, 128);
+          const inner = 48 + i * 12;
+          const outer = 68 + i * 18;
+          const grad = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
+          const opacity = 0.45 - i * 0.12;
+          grad.addColorStop(0, `rgba(120,180,255,${opacity})`);
+          grad.addColorStop(0.5, `rgba(100,160,230,${opacity * 1.1})`);
+          grad.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, outer, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
-      return new THREE.CanvasTexture(canvas);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.premultiplyAlpha = true;
+      (tex as any).encoding = (THREE as any).sRGBEncoding;
+      tex.needsUpdate = true;
+      return tex;
     }
 
     // Sun Glow (Procedural Texture)
@@ -682,6 +878,14 @@ export default function ResumeSpace3D({
       // Store original color for hover effect
       planetMesh.userData.originalEmissive = new THREE.Color(0x000000);
       planetMesh.userData.hoverStartTime = 0; // Track when hover started for flash effect
+      planetMesh.userData.lastFlashAt = 0; // last time a flash occurred (ms)
+      planetMesh.userData.flashActive = false; // whether flash is currently animating
+      planetMesh.userData.flashStrength = 0.6; // multiplier for flash intensity
+      // Track hover counts to limit super-flashes: do a super flash every 4 or 5 distinct hovers
+      planetMesh.userData.hoverCount = 0;
+      planetMesh.userData.superEvery = Math.random() < 0.5 ? 4 : 5;
+      planetMesh.userData.lastSuperFlashAt = 0;
+      planetMesh.userData.isPointerOver = false; // track enter/leave transitions
       // Disable shadows for GPU compatibility
       planetMesh.castShadow = false;
       planetMesh.receiveShadow = false;
@@ -884,6 +1088,8 @@ export default function ResumeSpace3D({
           textureUrl = "/textures/custom-planet-textures/texture1.jpg";
         } else if (job.id === "boingo") {
           textureUrl = "/textures/custom-planet-textures/texture3.jpg";
+        } else if (job.id === "rpa") {
+          textureUrl = "/textures/custom-planet-textures/texture4-rpa.jpg";
         }
 
         // Job moons should be clickable with section index 2+i
@@ -977,48 +1183,122 @@ export default function ResumeSpace3D({
         );
       }
 
-      // Reset previous hover
-      if (hoveredObject) {
-        // Reset hover time so flash effect stops
-        hoveredObject.userData.hoverStartTime = 0;
-        // Set sprite target opacities to 0 for smooth fade out
-        if (hoveredObject.userData.hasHaloLayers) {
-          hoveredObject.userData.auroraTargetOpacity = 0;
-          hoveredObject.userData.ringTargetOpacity = 0;
-          hoveredObject.userData.coreTargetOpacity = 0;
+      // Determine the object under pointer (if any)
+      const hit = intersects.find(
+        (h) => h.object.userData.sectionIndex !== undefined,
+      );
+
+      const now = Date.now();
+
+      // If we hit a valid planet
+      if (hit && hit.object.userData.sectionIndex !== undefined) {
+        const obj = hit.object;
+
+        // If focused/paused, don't activate hover halo
+        if (obj.userData.pauseOrbit) {
+          // Ensure we clear any previous hover state if pointer moved from another object
+          if (hoveredObject && hoveredObject !== obj) {
+            const prev = hoveredObject;
+            prev.userData.isPointerOver = false;
+            if (!prev.userData.flashActive) prev.userData.hoverStartTime = 0;
+            if (prev.userData.hasHaloLayers) {
+              prev.userData.auroraTargetOpacity = 0;
+              prev.userData.ringTargetOpacity = 0;
+              prev.userData.coreTargetOpacity = 0;
+            }
+            document.body.style.cursor = "default";
+            hoveredObject = null;
+          }
+        } else {
+          // If pointer moved from another object, clear previous
+          if (hoveredObject && hoveredObject !== obj) {
+            const prev = hoveredObject;
+            prev.userData.isPointerOver = false;
+            if (!prev.userData.flashActive) prev.userData.hoverStartTime = 0;
+            if (prev.userData.hasHaloLayers) {
+              prev.userData.auroraTargetOpacity = 0;
+              prev.userData.ringTargetOpacity = 0;
+              prev.userData.coreTargetOpacity = 0;
+            }
+          }
+
+          hoveredObject = obj;
+
+          // Detect enter transition (distinct hover)
+          const becameOver = !obj.userData.isPointerOver;
+          obj.userData.isPointerOver = true;
+
+          if (becameOver) {
+            // Increment the hover count (counts distinct enter events)
+            obj.userData.hoverCount = (obj.userData.hoverCount || 0) + 1;
+            const superEvery = obj.userData.superEvery || 4;
+            const lastSuper = obj.userData.lastSuperFlashAt || 0;
+            const superCooldown = 2000; // ms minimum between super flashes
+
+            // Decide whether this enter should be a 'super' flash (every N hovers)
+            const shouldSuper =
+              obj.userData.hoverCount % superEvery === 0 &&
+              now - lastSuper > superCooldown;
+
+            if (shouldSuper) {
+              // Super flash
+              obj.userData.hoverStartTime = now;
+              obj.userData.flashActive = true;
+              obj.userData.flashStrength = 0.6 + Math.random() * 1.0; // strong
+              obj.userData.lastFlashAt = now;
+              obj.userData.lastSuperFlashAt = now;
+
+              if (obj.userData.hasHaloLayers) {
+                obj.userData.auroraTargetOpacity = 0.6;
+                obj.userData.ringTargetOpacity = 0.4;
+                obj.userData.coreTargetOpacity = 1.0;
+              }
+            } else {
+              // Small/subtle emission that still sends light out
+              obj.userData.hoverStartTime = now;
+              obj.userData.flashActive = true;
+              obj.userData.flashStrength = 0.12 + Math.random() * 0.12; // small
+              obj.userData.lastFlashAt = now;
+
+              if (obj.userData.hasHaloLayers) {
+                obj.userData.auroraTargetOpacity = 0.18;
+                obj.userData.ringTargetOpacity = 0.12;
+                obj.userData.coreTargetOpacity = 0.22;
+              }
+            }
+
+            document.body.style.cursor = "pointer";
+          }
         }
-        document.body.style.cursor = "default";
-        hoveredObject = null;
-      }
-
-      // Apply new hover
-      if (intersects.length > 0) {
-        const hit = intersects.find(
-          (hit) => hit.object.userData.sectionIndex !== undefined,
-        );
-
-        if (hit && hit.object.userData.sectionIndex !== undefined) {
-          hoveredObject = hit.object;
-
-          // Start the flash effect on first hover
-          if (hoveredObject.userData.hoverStartTime === 0) {
-            hoveredObject.userData.hoverStartTime = Date.now();
+      } else {
+        // No hit: clear previous hovered object if any
+        if (hoveredObject) {
+          const prev = hoveredObject;
+          prev.userData.isPointerOver = false;
+          if (!prev.userData.flashActive) prev.userData.hoverStartTime = 0;
+          if (prev.userData.hasHaloLayers) {
+            prev.userData.auroraTargetOpacity = 0;
+            prev.userData.ringTargetOpacity = 0;
+            prev.userData.coreTargetOpacity = 0;
           }
-
-          // Show sprite halo layers with target opacities for smooth fade in
-          if (hoveredObject.userData.hasHaloLayers) {
-            hoveredObject.userData.auroraTargetOpacity = 0.45;
-            hoveredObject.userData.ringTargetOpacity = 0.32;
-            hoveredObject.userData.coreTargetOpacity = 0.9;
-          }
-
-          document.body.style.cursor = "pointer";
+          document.body.style.cursor = "default";
+          hoveredObject = null;
         }
       }
     };
 
     const onClick = () => {
       raycaster.setFromCamera(pointer, camera);
+
+      // First, check for overlay clicks (exit focused moon)
+      const overlayHits = raycaster.intersectObjects(overlayClickables, false);
+      if (overlayHits.length > 0) {
+        // Exit focused moon view when overlay is clicked
+        exitFocusedMoon();
+        return;
+      }
+
+      // Clicking empty space should not exit moon focus — only overlay clicks or navigation/zoom do.
       const intersects = raycaster.intersectObjects(clickablePlanets, false);
 
       console.log(`🖱️ Click detected: ${intersects.length} intersections`);
@@ -1151,6 +1431,18 @@ export default function ResumeSpace3D({
           if (jobData) {
             setContentLoading(true);
 
+            // Trigger the same travel + focus behavior as navigator clicks
+            try {
+              const cid = (jobData as any).id ||
+                (jobData.company || "").toLowerCase().replace(/\s+/g, "-");
+              // fire-and-forget: start the camera travel and moon focus
+              // handleExperienceCompanyNavigation is defined later in this scope
+              // but it's safe to call here because this handler runs on user interaction later.
+              (handleExperienceCompanyNavigation as any)?.(cid);
+            } catch (e) {
+              // ignore if function not yet defined
+            }
+
             // Build comprehensive job content sections
             const sections: any[] = [];
 
@@ -1270,6 +1562,86 @@ export default function ResumeSpace3D({
     window.addEventListener("pointermove", onPointerMoveRotate);
     window.addEventListener("pointerup", onPointerUpRotate);
 
+    // Function to exit focused moon view: reattach, resume orbit, remove overlay, disable user spin
+    const exitFocusedMoon = () => {
+      const focused = focusedMoonRef.current;
+      if (!focused) return;
+
+      // Remove single overlay if present
+      const overlay = focused.userData.detailOverlay as THREE.Mesh | undefined;
+      if (overlay) {
+        if (overlay.parent) overlay.parent.remove(overlay);
+        const oi = overlayClickables.indexOf(overlay);
+        if (oi >= 0) overlayClickables.splice(oi, 1);
+        try {
+          if (overlay.geometry) overlay.geometry.dispose();
+          if (overlay.material) (overlay.material as THREE.Material).dispose();
+        } catch (e) {
+          // ignore
+        }
+        focused.userData.detailOverlay = null;
+      }
+
+      // Remove multiple note overlays if present
+      const overlays = focused.userData.detailOverlays as
+        | THREE.Mesh[]
+        | undefined;
+      if (overlays && overlays.length) {
+        overlays.forEach((o) => {
+          if (o.parent) o.parent.remove(o);
+          const oi = overlayClickables.indexOf(o);
+          if (oi >= 0) overlayClickables.splice(oi, 1);
+          try {
+            if (o.geometry) o.geometry.dispose();
+            if (o.material) (o.material as THREE.Material).dispose();
+          } catch (e) {
+            // ignore
+          }
+        });
+        focused.userData.detailOverlays = null;
+      }
+
+      // Find items entry
+      const itemEntry = items.find((it) => it.mesh === focused);
+      if (itemEntry) {
+        const originalParent = (itemEntry as any).originalParent as
+          | THREE.Object3D
+          | undefined;
+        const newParent = originalParent || itemEntry.parent || scene;
+
+        // Convert world position back into the parent's local space, then reparent
+        const worldPos = new THREE.Vector3();
+        focused.getWorldPosition(worldPos);
+        // add to parent then set local position
+        newParent.add(focused);
+        newParent.worldToLocal(worldPos);
+        focused.position.copy(worldPos);
+
+        // mark as attached again
+        itemEntry.detached = false;
+        itemEntry.parent = newParent;
+
+        // Recompute polar coordinates for consistent orbit continuation
+        const x = focused.position.x;
+        const z = focused.position.z;
+        itemEntry.distance = Math.sqrt(x * x + z * z) || itemEntry.distance;
+        itemEntry.angle = Math.atan2(-z, x);
+      }
+
+      // Resume orbit and clear user-driven spin
+      focused.userData.pauseOrbit = false;
+      focused.userData.spinVelocity = undefined;
+
+      // Disable any ongoing drag
+      isDraggingRef.current = false;
+      if (sceneRef.current && sceneRef.current.controls) {
+        sceneRef.current.controls.enabled = true;
+      }
+
+      // Clear focused reference
+      focusedMoonRef.current = null;
+    };
+
     // --- COSMIC SYSTEMS INITIALIZATION ---
     // Initialize camera director for cinematic movements
     cameraDirectorRef.current = new CosmosCameraDirector(camera, controls);
@@ -1342,7 +1714,46 @@ export default function ResumeSpace3D({
         vlog(`📖 ${waypoint.narration}`);
       }
 
-      // Show content without overlay blocking the view
+      // If this is an experience moon waypoint, delegate to the same
+      // experience-company navigation handler so camera travel and
+      // right-pane content match an explicit moon click.
+      // If this is an experience moon waypoint, finalize focus using the
+      // same overlay/attach logic as clicking the moon (Tour already flew).
+      if (waypoint.id && waypoint.id.startsWith("experience-moon-")) {
+        try {
+          const candidate = (waypoint.content && (waypoint.content as any).title) || waypoint.name;
+          const company = (resumeData.experience as any[]).find((c) => {
+            if (!c) return false;
+            const lname = (c.company || c.id || "").toLowerCase();
+            return candidate.toLowerCase().includes((lname.split(" ")[0] || lname));
+          });
+          if (company) {
+            // locate moon mesh
+            let moonMesh: THREE.Mesh | undefined;
+            sceneRef.current.scene?.traverse((object) => {
+              if (object instanceof THREE.Mesh && object.userData.planetName) {
+                const pname = object.userData.planetName.toLowerCase();
+                if (
+                  pname.includes((company.id || "").toLowerCase()) ||
+                  pname.includes((company.company || "").toLowerCase())
+                ) {
+                  moonMesh = object;
+                }
+              }
+            });
+
+            if (moonMesh) {
+              setContentLoading(true);
+              finalizeFocusOnMoon(moonMesh, company);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn("Error finalizing tour waypoint:", e);
+        }
+      }
+
+      // Default: Show content without overlay blocking the view
       if (waypoint.content) {
         setOverlayContent(waypoint.content);
         setContentLoading(false);
@@ -1468,10 +1879,48 @@ export default function ResumeSpace3D({
                 vlog(
                   `✅ Starting tour: ${tour.title} with ${tour.waypoints.length} waypoints`,
                 );
+                // Resolve any experience-moon waypoint positions to live moon world positions
+                const resolvedWaypoints = tour.waypoints.map((wp) => {
+                  try {
+                    if (wp.id && wp.id.startsWith("experience-moon-")) {
+                      const candidate = (wp.content && (wp.content as any).title) || wp.name;
+                      let moonMesh: THREE.Mesh | undefined;
+                      sceneRef.current.scene?.traverse((object) => {
+                        if (object instanceof THREE.Mesh && object.userData.planetName) {
+                          const pname = (object.userData.planetName || "").toLowerCase();
+                          if (
+                            candidate &&
+                            pname.includes((candidate || "").toLowerCase().split(" ")[0])
+                          ) {
+                            moonMesh = object as THREE.Mesh;
+                          }
+                        }
+                      });
+
+                      if (moonMesh) {
+                        const worldPos = new THREE.Vector3();
+                        moonMesh.getWorldPosition(worldPos);
+                        const offset = new THREE.Vector3(80, 40, 60);
+                        return {
+                          ...wp,
+                          target: {
+                            ...wp.target,
+                            lookAt: worldPos.clone(),
+                            position: worldPos.clone().add(offset),
+                          },
+                        } as typeof wp;
+                      }
+                    }
+                  } catch (e) {
+                    console.warn("Error resolving waypoint to mesh:", e);
+                  }
+                  return wp;
+                });
+
                 setTourActive(true);
                 setOverlayContent(null);
                 setContentLoading(false);
-                tourGuideRef.current.startTour(tour.waypoints);
+                tourGuideRef.current.startTour(resolvedWaypoints);
               } else {
                 vlog(`❌ Failed to create tour`);
               }
@@ -1600,8 +2049,16 @@ export default function ResumeSpace3D({
         );
       }
 
-      // After arriving, attach a detail overlay for the moon showing job info
+      // After arriving, finalize focus/overlays for the moon (extracted)
+      finalizeFocusOnMoon(moonMesh!, company);
+    };
+
+    // Helper: finalize focus on a moon (attach overlays, pause orbit, detach, set focused state)
+    const finalizeFocusOnMoon = (moonMesh: THREE.Mesh, company: any) => {
       try {
+        const moonWorldPos = new THREE.Vector3();
+        moonMesh.getWorldPosition(moonWorldPos);
+
         const detailLines: string[] = [];
         detailLines.push(company.company.toUpperCase());
         const firstPos = company.positions?.[0];
@@ -1612,43 +2069,103 @@ export default function ResumeSpace3D({
           );
         }
         detailLines.push(company.location || "");
-        detailLines.push("\u2022 Click to zoom out");
 
-        const detailTex = createDetailTexture(detailLines, {
-          width: 1024,
-          height: 512,
+        const jobNotes = (company as any).notes || [];
+        const overlayDefs: Array<string | { type?: string; text?: string; lines?: string[] }> = [];
+        overlayDefs.push({ type: "title", lines: detailLines });
+        if (Array.isArray(jobNotes) && jobNotes.length) {
+          jobNotes.forEach((n: string) => overlayDefs.push(n));
+        }
+
+        // Prepare right-pane content
+        const sections: any[] = [];
+        company.positions?.forEach((position: any, idx: number) => {
+          sections.push({
+            id: `position-${idx}`,
+            title: position.title,
+            content: (position.responsibilities || []).join("\n\n• "),
+            type: "text",
+            data: {
+              startDate: position.startDate,
+              endDate: position.endDate,
+            },
+          });
         });
-        attachDetailOverlay(moonMesh!, detailTex, {
-          offset: 0.03,
+
+        const jobContent: OverlayContent = {
+          title: company.company,
+          subtitle: `${company.startDate || ""} - ${company.endDate || "Present"} • ${company.location || ""}`,
+          description:
+            company.positions?.[0]?.responsibilities?.[0] ||
+            `Professional experience at ${company.company}.`,
+          sections,
+          actions: [
+            {
+              label: "View Career Journey",
+              action: "tour:career-journey",
+              icon: "📈",
+            },
+          ],
+        };
+
+        // Show right-pane content (simulate load)
+        setContentLoading(true);
+        setTimeout(() => {
+          setOverlayContent(jobContent);
+          setContentLoading(false);
+        }, 300);
+
+        // Attach overlays
+        attachMultiNoteOverlays(moonMesh, overlayDefs, {
+          radiusOffset: 0.04,
           opacity: 0.95,
         });
 
         // Mark moon as focused: pause orbital revolution but allow spinning/interaction
-        moonMesh!.userData.pauseOrbit = true;
-        if (!moonMesh!.userData.spinVelocity) {
-          moonMesh!.userData.spinVelocity = new THREE.Vector3(0, 0, 0);
+        moonMesh.userData.pauseOrbit = true;
+        if (!moonMesh.userData.spinVelocity) {
+          moonMesh.userData.spinVelocity = new THREE.Vector3(0, 0, 0);
+        }
+
+        // Disable halo on focused moon
+        if (moonMesh.userData.hasHaloLayers) {
+          moonMesh.userData.auroraTargetOpacity = 0;
+          moonMesh.userData.ringTargetOpacity = 0;
+          moonMesh.userData.coreTargetOpacity = 0;
+          const a = moonMesh.userData.auroraSprite as THREE.Sprite | undefined;
+          const r = moonMesh.userData.ringSprite as THREE.Sprite | undefined;
+          const c = moonMesh.userData.coreSprite as THREE.Sprite | undefined;
+          if (a && a.material) {
+            (a.material as THREE.SpriteMaterial).opacity = 0;
+            a.visible = false;
+          }
+          if (r && r.material) {
+            (r.material as THREE.SpriteMaterial).opacity = 0;
+            r.visible = false;
+          }
+          if (c && c.material) {
+            (c.material as THREE.SpriteMaterial).opacity = 0;
+            c.visible = false;
+          }
         }
 
         // Detach moon from its orbital parent so it stops inheriting parent's revolution
-        const itemEntry = items.find((it) => it.mesh === moonMesh!);
+        const itemEntry = items.find((it) => it.mesh === moonMesh);
         if (itemEntry) {
-          // store original parent so we can reattach later
           itemEntry.originalParent = itemEntry.parent;
-
-          // compute world position and reparent to scene
           const worldPos = new THREE.Vector3();
-          moonMesh!.getWorldPosition(worldPos);
-          scene.add(moonMesh!);
-          moonMesh!.position.copy(worldPos);
-          // mark as detached
+          moonMesh.getWorldPosition(worldPos);
+          scene.add(moonMesh);
+          moonMesh.position.copy(worldPos);
           itemEntry.detached = true;
-          // set parent to scene for consistency
           itemEntry.parent = scene;
         }
 
-        focusedMoonRef.current = moonMesh!;
+        focusedMoonRef.current = moonMesh;
+        focusedMoonCameraDistanceRef.current =
+          sceneRef.current?.camera?.position.distanceTo(moonWorldPos) || null;
       } catch (e) {
-        console.warn("Failed to attach detail overlay:", e);
+        console.warn("Failed to finalize focus on moon:", e);
       }
     };
 
@@ -1659,12 +2176,49 @@ export default function ResumeSpace3D({
         handleNavigation,
       );
       // Tour guide functionality removed for simplification
+      // Populate experience submenu dynamically with all jobs
+      try {
+        const submenu = container.querySelector(
+          ".experience-submenu",
+        ) as HTMLElement | null;
+        if (submenu) {
+          // clear existing static items
+          submenu.innerHTML = "";
+          resumeData.experience.forEach((company) => {
+            const id =
+              (company.id as string) ||
+              company.company.toLowerCase().replace(/\s+/g, "-");
+            const btn = document.createElement("button");
+            btn.className = "target-button submenu-item";
+            btn.dataset.target = `experience-${id}`;
+            btn.dataset.company = company.company;
+            btn.textContent = `${company.company}`;
+            btn.addEventListener("click", () => {
+              // Delegate to handleNavigation so behavior is consistent
+              handleNavigation(`experience-${id}`);
+            });
+            submenu.appendChild(btn);
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to populate experience submenu:", e);
+      }
     }
 
     // --- ANIMATION LOOP ---
     let animationFrameId: number;
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
+
+      // If an external request to exit focused moon was made (from UI), run it here
+      if (exitFocusRequestRef.current) {
+        try {
+          exitFocusedMoon();
+        } catch (e) {
+          console.warn("exitFocusedMoon failed:", e);
+        }
+        exitFocusRequestRef.current = false;
+      }
 
       // Rotate Sun
       sunMesh.rotation.y += 0.002;
@@ -1680,39 +2234,36 @@ export default function ResumeSpace3D({
 
       items.forEach((item) => {
         // Handle color flash effect on hover
-        if (item.mesh.userData.hoverStartTime > 0) {
-          const flashDuration = 1200; // 1.2 seconds for complete flash cycle
-          const elapsed = Date.now() - item.mesh.userData.hoverStartTime;
+        // Hover/flash handling with cooldown and variable strength
+        if (item.mesh.userData.flashActive) {
+          const flashDuration = 900; // ms for flash animation
+          const elapsed = Date.now() - (item.mesh.userData.hoverStartTime || 0);
           const material = item.mesh.material as THREE.MeshStandardMaterial;
 
           if (elapsed < flashDuration) {
-            // Quick flash up then fade out
             const progress = elapsed / flashDuration;
-
-            // Create a quick bright flash that fades
-            // First 20% of time: rapid bright flash
-            // Remaining 80%: gentle fade to original
+            // stronger quick peak then faster decay
             let intensity;
-            if (progress < 0.2) {
-              // Quick flash up - reduced from 0.8 to 0.4 for subtlety
-              intensity = (progress / 0.2) * 0.4;
+            if (progress < 0.18) {
+              intensity = (progress / 0.18) * (item.mesh.userData.flashStrength || 0.8);
             } else {
-              // Slow fade out
-              intensity = 0.4 * (1 - (progress - 0.2) / 0.8);
+              intensity = (item.mesh.userData.flashStrength || 0.8) * Math.max(0, 1 - (progress - 0.18) / 0.82);
             }
 
-            // Subtle white/cyan flash - reduced intensity values
-            material.emissive.setRGB(
-              0.3 * intensity,
-              0.4 * intensity,
-              0.6 * intensity,
-            );
+            // Color skew toward cyan/blue but modulated by intensity
+            const r = 0.2 * intensity;
+            const g = 0.35 * intensity;
+            const b = 0.6 * intensity;
+            material.emissive.setRGB(r, g, b);
           } else {
-            // Flash complete, ensure back to original
+            // Flash complete: ensure emissive resets and mark inactive
             material.emissive.copy(item.mesh.userData.originalEmissive);
+            item.mesh.userData.flashActive = false;
+            item.mesh.userData.hoverStartTime = 0;
+            item.mesh.userData.lastFlashAt = Date.now();
           }
         } else {
-          // Not hovering, ensure emissive is at original
+          // Not in an active flash: ensure emissive is at original
           const material = item.mesh.material as THREE.MeshStandardMaterial;
           material.emissive.copy(item.mesh.userData.originalEmissive);
         }
@@ -1770,6 +2321,138 @@ export default function ResumeSpace3D({
             panel.rotation.z = 0;
           }
         }
+
+        // Also update any small "detailOverlays" (multi-note panels) so they follow the planet
+        const multi = item.mesh.userData.detailOverlays as
+          | THREE.Mesh[]
+          | undefined;
+        if (
+          multi &&
+          multi.length &&
+          sceneRef.current &&
+          sceneRef.current.camera
+        ) {
+          const camPos = sceneRef.current.camera.position;
+          const baseWorld = new THREE.Vector3();
+          const size =
+            ((item.mesh.geometry as any)?.parameters?.radius as number) || 5;
+          const dt = 1 / 60; // approximate frame delta for angular updates
+          multi.forEach((ov, ovIdx) => {
+            // Title overlays are world-space and sit above the planet
+            if (ov.userData?.isTitleOverlay) {
+              item.mesh.getWorldPosition(baseWorld);
+              const titleOffset =
+                (ov.userData.titleOffset as number) || size * 0.03;
+              ov.position.set(
+                baseWorld.x,
+                baseWorld.y + size + titleOffset,
+                baseWorld.z,
+              );
+              // face camera horizontally
+              const dirT = new THREE.Vector3().subVectors(camPos, ov.position);
+              dirT.y = 0;
+              ov.rotation.set(0, Math.atan2(dirT.x, dirT.z), 0);
+              return;
+            }
+
+            // Bullet-style overlays: slide out under the title and remain static/readable
+            const isBullet = ov.userData?.isBulletOverlay;
+            if (isBullet) {
+              // base world position follows the planet
+              item.mesh.getWorldPosition(baseWorld);
+
+              // Find title position (if available) otherwise compute a reasonable top position
+              const titleMesh = item.mesh.userData?.titleOverlay as
+                | THREE.Mesh
+                | undefined;
+              const titlePos = new THREE.Vector3();
+              if (titleMesh) {
+                titleMesh.getWorldPosition(titlePos);
+              } else {
+                // fallback: above planet surface
+                titlePos.set(
+                  baseWorld.x,
+                  baseWorld.y + size + size * 0.03,
+                  baseWorld.z,
+                );
+              }
+
+              const planeH = ov.userData?.planeHeight ?? size * 0.35;
+              const planeW = ov.userData?.planeWidth ?? planeH * 2;
+              const index = ov.userData?.bulletIndex ?? 0;
+              const spacing = planeH * 0.6; // tighter stacking
+
+              // Compute left-edge alignment using title width and bullet width
+              const titleWidth =
+                (titleMesh && titleMesh.userData?.planeWidth) || size * 1.2;
+              const titleLeft = titlePos.x - titleWidth * 0.5;
+              const inset = Math.min(planeW * 0.15, titleWidth * 0.05);
+              const bulletTargetX = titleLeft + planeW * 0.5 + inset;
+
+              const targetPos = new THREE.Vector3(
+                bulletTargetX,
+                titlePos.y - planeH * 0.6 - index * spacing,
+                titlePos.z,
+              );
+
+              // slide progress animates from left/right toward the target on same horizontal plane
+              const sp = ov.userData?.slideProgress ?? 0;
+              const active =
+                !!item.mesh.userData.pauseOrbit ||
+                focusedMoonRef.current === item.mesh;
+              const slideRate = 3.0; // per second
+              const nextSp = active
+                ? Math.min(1, sp + slideRate * dt)
+                : Math.max(0, sp - slideRate * dt);
+              ov.userData.slideProgress = nextSp;
+              const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+              const t = easeOutCubic(nextSp);
+
+              const startOffset = (titleWidth || planeW) * 0.9;
+              const sd = ov.userData?.slideDir ?? 1;
+              const startPos = new THREE.Vector3(
+                targetPos.x + sd * startOffset,
+                targetPos.y,
+                targetPos.z,
+              );
+              ov.position.lerpVectors(startPos, targetPos, t);
+
+              // face camera horizontally like the title
+              const dirT = new THREE.Vector3().subVectors(camPos, ov.position);
+              dirT.y = 0;
+              ov.rotation.set(0, Math.atan2(dirT.x, dirT.z), 0);
+
+              // visibility based on slide progress
+              ov.visible = nextSp > 0.01;
+
+              // Debug: log InvestCloud bullets
+              try {
+                const pname = item.mesh.userData?.planetName as
+                  | string
+                  | undefined;
+                if (pname && pname.toLowerCase().includes("investcloud")) {
+                  vlog(
+                    `INVESTCLOUD_OVERLAY_BULLET ${ovIdx} ${JSON.stringify({
+                      index,
+                      slide: nextSp,
+                      pos: ov.position.clone().toArray(),
+                      target: targetPos.toArray(),
+                    })}`,
+                  );
+                }
+              } catch (e) {
+                // ignore
+              }
+            } else {
+              // fallback: keep as-is at current position and face camera
+              ov.rotation.x = 0;
+              ov.rotation.z = 0;
+              const dirT = new THREE.Vector3().subVectors(camPos, ov.position);
+              dirT.y = 0;
+              ov.rotation.y = Math.atan2(dirT.x, dirT.z);
+            }
+          });
+        }
       });
 
       // Animate orbital positions when global speed is non-zero
@@ -1785,10 +2468,18 @@ export default function ResumeSpace3D({
 
         // Self rotation: always apply so focused moon can be spun by the user
         const baseSpin = 0.01;
+        // Reduce axis rotation for smaller bodies (moons) to 1/5th
+        let radius = 0;
+        try {
+          radius = (item.mesh.geometry as any)?.parameters?.radius || 0;
+        } catch (e) {
+          radius = 0;
+        }
+        const moonFactor = radius > 0 && radius < 8 ? 0.2 : 1.0;
         const spinMultiplier = item.mesh.userData.pauseOrbit
           ? 1
           : speedMultiplier;
-        item.mesh.rotation.y += baseSpin * spinMultiplier;
+        item.mesh.rotation.y += baseSpin * spinMultiplier * moonFactor;
 
         // Apply any residual spin velocity from user interaction (always applied)
         const spin = item.mesh.userData.spinVelocity as
@@ -1972,10 +2663,44 @@ export default function ResumeSpace3D({
 
               if (tour) {
                 vlog(`✅ Tour object valid, starting...`);
+                // Resolve experience-moon targets to live world positions
+                const resolvedWaypoints = tour.waypoints.map((wp) => {
+                  try {
+                    if (wp.id && wp.id.startsWith("experience-moon-")) {
+                      const candidate = (wp.content && (wp.content as any).title) || wp.name;
+                      let moonMesh: THREE.Mesh | undefined;
+                      sceneRef.current.scene?.traverse((object) => {
+                        if (object instanceof THREE.Mesh && object.userData.planetName) {
+                          const pname = (object.userData.planetName || "").toLowerCase();
+                          if (candidate && pname.includes((candidate || "").toLowerCase().split(" ")[0])) {
+                            moonMesh = object as THREE.Mesh;
+                          }
+                        }
+                      });
+                      if (moonMesh) {
+                        const worldPos = new THREE.Vector3();
+                        moonMesh.getWorldPosition(worldPos);
+                        const offset = new THREE.Vector3(80, 40, 60);
+                        return {
+                          ...wp,
+                          target: {
+                            ...wp.target,
+                            lookAt: worldPos.clone(),
+                            position: worldPos.clone().add(offset),
+                          },
+                        } as typeof wp;
+                      }
+                    }
+                  } catch (e) {
+                    console.warn("Error resolving waypoint to mesh:", e);
+                  }
+                  return wp;
+                });
+
                 setTourActive(true);
                 setOverlayContent(null);
                 setContentLoading(false);
-                tourGuideRef.current.startTour(tour.waypoints);
+                tourGuideRef.current.startTour(resolvedWaypoints);
                 vlog(
                   `✨ Tour started: ${tour.title} (${tour.waypoints.length} waypoints)`,
                 );
@@ -1988,6 +2713,10 @@ export default function ResumeSpace3D({
           } else if (action.startsWith("navigate:")) {
             const target = action.replace("navigate:", "");
             if (cameraDirectorRef.current) {
+              // If navigating away from a focused moon, restore it first
+              if (focusedMoonRef.current) {
+                exitFocusRequestRef.current = true;
+              }
               switch (target) {
                 case "sun":
                 case "home":

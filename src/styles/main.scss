@@ -1,5 +1,6 @@
 @use './variables' as *;
 @use './mixins' as *;
+@use '../components/CosmicContentOverlay' as *;
 
 // Reset & Base Styles
 *,
@@ -1206,5 +1207,4 @@ ol {
     }
 }
 
-// Import cosmic overlay styles
-@import '../components/CosmicContentOverlay.scss';
+// Import cosmic overlay styles (loaded at top via @use)
