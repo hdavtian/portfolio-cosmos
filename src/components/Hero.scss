@@ -54,6 +54,20 @@
         padding: $spacing-2xl;
     }
 
+    &__header {
+        position: absolute;
+        top: 20%;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2;
+        text-align: center;
+
+        &--hidden {
+            display: none !important;
+            border: 10px solid red;
+        }
+    }
+
     &__name {
         font-family: 'Playfair Display', $font-display;
         font-size: clamp(3rem, 9vw, 8rem);

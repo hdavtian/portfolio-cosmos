@@ -668,7 +668,9 @@ function App() {
       <section className={`hero section ${getSectionClass(0)}`}>
         <div className="hero__background"></div>
         <div className="hero__overlay"></div>
-        <div className="hero__header">
+        <div
+          className={`hero__header ${diagramStyle === "space" ? "hero__header--hidden" : ""}`}
+        >
           <h1 className="hero__name">
             {resumeData.personal.name}
             <span className="hero__title">{resumeData.personal.title}</span>
@@ -679,6 +681,7 @@ function App() {
             onNavigate={navigateToSection}
             style={diagramStyle}
             options={diagramOptions}
+            onOptionsChange={setDiagramOptions}
           />
         </div>
         <div

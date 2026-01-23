@@ -182,22 +182,29 @@
     .section-tab {
         background: rgba(255, 255, 255, 0.1);
         border: 1px solid rgba(212, 175, 55, 0.3);
-        color: rgba(255, 255, 255, 0.7);
-        padding: 10px 16px;
-        border-radius: 20px;
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 4px;
         cursor: pointer;
         transition: all 0.3s ease;
-        font-size: 14px;
-        font-family: inherit;
+        font-size: 12px;
+        font-family: 'Rajdhani', sans-serif;
+        font-weight: 600;
+        letter-spacing: 0.5px;
 
-        &:hover {
+        &:hover:not(:disabled) {
             background: rgba(212, 175, 55, 0.2);
-            color: rgba(212, 175, 55, 0.9);
+            border-color: rgba(212, 175, 55, 0.5);
+        }
+
+        &:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }
 
         &.active {
             background: rgba(212, 175, 55, 0.3);
-            color: rgba(212, 175, 55, 1);
+            color: #fff;
             border-color: rgba(212, 175, 55, 0.6);
             box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
         }
@@ -627,5 +634,85 @@
 
     .skills-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+// Spaceship HUD compact styles
+.spaceship-hud__top {
+    height: 45px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    background: linear-gradient(90deg, rgba(15, 20, 25, 1), rgba(18, 22, 28, 1));
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+
+    div {
+        line-height: 1;
+    }
+
+    .title {
+        font-size: 14px;
+    }
+}
+
+.spaceship-hud__right {
+    width: 420px;
+    padding: 12px;
+    background: #0f1316;
+    border-left: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.spaceship-hud__footer {
+    font-family: 'Orbitron', 'Cinzel', sans-serif;
+}
+
+.spaceship-hud__footer>div {
+    display: flex;
+    gap: 12px;
+    padding: 8px 12px;
+}
+
+.spaceship-hud__footer .hud-button {
+    background: linear-gradient(180deg, #2b3440, #1e2328);
+    color: #fff !important;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.6px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+
+.hud-console-panel {
+    margin-top: 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.spaceship-hud__footer .hud-console-panel div {
+    padding: 2px 0;
+}
+
+.spaceship-hud__footer .hud-col {
+    padding: 8px 12px;
+}
+
+.hud-placeholder {
+    color: #8a9199;
+    font-size: 12px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: transparent;
+}
+
+@media (max-width: 900px) {
+    .spaceship-hud__right {
+        display: none;
+    }
+
+    .spaceship-hud__footer>div {
+        flex-direction: column;
+        gap: 6px;
     }
 }

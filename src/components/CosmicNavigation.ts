@@ -423,22 +423,35 @@ export class NavigationInterface {
 
   private createInterface(): void {
     const navHTML = `
-      <div class="cosmic-navigation" style="
+      <div class="spaceship-hud__left" style="
         position: fixed;
         top: 45px;
         left: 0;
-        bottom: 40px;
-        width: 280px;
+        bottom: 182px;
+        width: 320px;
         z-index: 1000;
-        background: #1a1f28;
-        border-right: 3px solid #2a3340;
-        padding: 20px;
-        font-family: 'Cinzel', serif;
-        color: #c8d0d8;
-        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-        overflow-y: auto;
+        background: #0f1419;
+        border-right: 2px solid rgba(212, 175, 55, 0.3);
+        display: flex;
+        flex-direction: column;
       ">
-        <h3 style="margin: 0 0 15px 0; text-align: center;">Cosmic Navigator</h3>
+        <div class="cosmic-navigation" style="
+          flex: 0 1 auto;
+          overflow-y: auto;
+          padding: 16px;
+          font-family: 'Rajdhani', sans-serif;
+          color: #c8d0d8;
+          max-height: 60%;
+        ">
+        <h3 style="
+          margin: 0 0 12px 0;
+          text-align: center;
+          color: #e8c547;
+          font-weight: 600;
+          font-size: 13px;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+        ">Cosmic Navigator</h3>
         
         <div class="navigation-modes" style="margin-bottom: 20px;">
           <button class="nav-button active" data-mode="free">Free Flight</button>
@@ -446,12 +459,19 @@ export class NavigationInterface {
           <button class="nav-button" data-mode="overview">Galaxy Map</button>
         </div>
 
-        <div class="quick-nav" style="margin-bottom: 20px;">
-          <h4 style="margin: 0 0 10px 0; font-size: 14px;">Quick Navigation</h4>
+        <div class="quick-nav" style="margin-bottom: 16px;">
+          <h4 style="
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            color: #e8c547;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+          ">Quick Navigation</h4>
           <button class="target-button" data-target="home">🏠 Home</button>
           <button class="target-button" data-target="about">👨‍💻 About Harma</button>
           <button class="target-button experience-main" data-target="experience">🌍 Experience</button>
-          <div class="experience-submenu" style="display: none; margin-left: 20px; margin-top: 5px;">
+          <div class="experience-submenu" style="display: none;">
             <button class="target-button submenu-item" data-target="experience-investcloud" data-company="InvestCloud Inc.">🏢 InvestCloud</button>
             <button class="target-button submenu-item" data-target="experience-boingo" data-company="Boingo">📡 Boingo</button>
           </div>
@@ -459,23 +479,17 @@ export class NavigationInterface {
           <button class="target-button" data-target="projects">🚀 Projects</button>
         </div>
         
-        <div class="audio-controls" style="margin-bottom: 20px;">
-          <h4 style="margin: 0 0 10px 0; font-size: 14px;">Cosmic Audio</h4>
-          <select class="audio-selector" style="width: 100%; margin-bottom: 10px; padding: 5px; background: rgba(0,0,0,0.8); color: rgba(212, 175, 55, 0.9); border: 1px solid rgba(212, 175, 55, 0.5); border-radius: 4px;">
-            <option value="">🔇 Silence</option>
-            <option value="cosmic-journey">🌌 Cosmic Journey</option>
-            <option value="stellar-winds">⭐ Stellar Winds</option>
-            <option value="deep-space">🌠 Deep Space</option>
-            <option value="galactic-ambience">🌍 Galactic Ambience</option>
-          </select>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 12px;">🔊</span>
-            <input type="range" class="volume-slider" min="0" max="100" value="30" style="flex: 1;">
-            <span class="volume-display" style="font-size: 12px;">30%</span>
-          </div>
+        <!-- audio-controls removed: handled via HUD cosmos options -->
+
         </div>
-
-
+        
+        <div id="cosmos-options-container" style="
+          border-top: 2px solid rgba(212, 175, 55, 0.3);
+          padding: 12px;
+          background: #0f1419;
+        ">
+          <!-- Cosmos options will be injected here by SpaceshipHUD -->
+        </div>
       </div>
     `;
 
@@ -500,29 +514,48 @@ export class NavigationInterface {
       });
     });
 
-    // Quick navigation
-    this.container.querySelectorAll(".target-button").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const target = (e.target as HTMLElement).dataset.target;
+    // Quick navigation (event delegation for dynamic buttons)
+    this.container.addEventListener("click", (e) => {
+      const button = (e.target as HTMLElement).closest(
+        ".target-button",
+      ) as HTMLElement | null;
+      if (!button) return;
 
-        // Handle experience submenu toggle
-        if (target === "experience") {
-          const submenu = this.container.querySelector(
-            ".experience-submenu",
-          ) as HTMLElement;
-          if (submenu) {
-            const isVisible = submenu.style.display !== "none";
-            submenu.style.display = isVisible ? "none" : "block";
-            if (!isVisible) {
-              // Also navigate to experience overview
-              this.onNavigate?.(target || "");
-            }
-          }
-          return;
+      const target = button.dataset.target;
+      const isSubmenuItem = button.classList.contains("submenu-item");
+
+      // Persistent 'clicked/selected' visual state
+      if (isSubmenuItem) {
+        // Only clear selection within submenu items
+        this.container
+          .querySelectorAll(".submenu-item")
+          .forEach((b) => b.classList.remove("selected"));
+        // Keep parent experience-main highlighted
+        const parentMain = this.container.querySelector(
+          ".experience-main",
+        ) as HTMLElement | null;
+        parentMain?.classList.add("selected");
+      } else {
+        // Clear selection from all top-level target buttons
+        this.container
+          .querySelectorAll(".target-button")
+          .forEach((b) => b.classList.remove("selected"));
+      }
+
+      // Mark the clicked button as selected
+      button.classList.add("selected");
+
+      // Handle experience submenu toggle
+      if (target === "experience") {
+        const submenu = this.container.querySelector(
+          ".experience-submenu",
+        ) as HTMLElement;
+        if (submenu) {
+          const isVisible = submenu.style.display !== "none";
+          submenu.style.display = isVisible ? "none" : "block";
         }
-
-        this.onNavigate?.(target || "");
-      });
+      }
+      // Note: Navigation for dynamic submenu items is handled where they are created
     });
 
     // Audio controls
@@ -577,70 +610,126 @@ export class NavigationInterface {
     const styles = `
       <style>
         .nav-button, .target-button, .control-btn {
-          background: rgba(212, 175, 55, 0.2);
-          border: 1px solid rgba(212, 175, 55, 0.5);
-          color: rgba(212, 175, 55, 0.9);
+          background: #2a3340;
+          border: 1px solid rgba(232, 197, 71, 0.3);
+          color: #ffffff;
           padding: 8px 12px;
-          margin: 2px;
-          border-radius: 6px;
+          margin: 2px 2px 6px 2px;
+          border-radius: 8px;
           cursor: pointer;
           font-size: 12px;
-          transition: all 0.2s ease;
-          font-family: inherit;
+          letter-spacing: 0.3px;
+          transition: background 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+          font-family: 'Rajdhani', sans-serif;
         }
-        
+
         .nav-button:hover, .target-button:hover, .control-btn:hover {
-          background: rgba(212, 175, 55, 0.4);
-          transform: scale(1.05);
+          background: #364152;
+          border-color: rgba(232, 197, 71, 0.6);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.25), 0 0 0 2px rgba(232,197,71,0.08) inset;
         }
-        
+
+        .nav-button:active, .target-button:active, .control-btn:active {
+          transform: translateY(0);
+          box-shadow: 0 2px 6px rgba(0,0,0,0.35) inset;
+          filter: brightness(0.98);
+        }
+
         .nav-button.active {
-          background: rgba(212, 175, 55, 0.6);
-          box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
-          animation: pulse-border 1.8s infinite;
+          background: #e8c547;
+          color: #0f1419;
+          border-color: #e8c547;
+          box-shadow: 0 0 0 2px rgba(232,197,71,0.2), 0 0 18px rgba(232,197,71,0.25);
         }
-        
+
         .navigation-modes {
           display: flex;
           flex-wrap: wrap;
-          gap: 5px;
+          gap: 6px;
+          margin-bottom: 8px;
         }
-        
+
         .target-button {
           display: block;
           width: 100%;
-          margin-bottom: 5px;
+          margin-bottom: 6px;
           text-align: left;
         }
-        
+
         .submenu-item {
           font-size: 11px;
           padding: 6px 10px;
-          opacity: 0.8;
+          opacity: 0.95;
+          display: block;
+          width: 100%;
+          margin-bottom: 6px;
+          text-align: left;
         }
-        
+
         .submenu-item:hover {
           opacity: 1;
-          transform: scale(1.02);
+          transform: translateX(2px);
         }
-        
+
         .experience-main.active + .experience-submenu {
           display: block !important;
         }
-        
+
         .tour-buttons {
           display: flex;
           justify-content: space-between;
         }
-        
+
         .control-btn {
           flex: 1;
           margin: 0 2px;
         }
-        @keyframes pulse-border {
-          0% { box-shadow: 0 0 0 0 rgba(74,158,255,0.12); }
-          70% { box-shadow: 0 0 0 8px rgba(74,158,255,0.02); }
-          100% { box-shadow: 0 0 0 0 rgba(74,158,255,0); }
+        /* Panel style for experience submenu (no indent) */
+        .experience-submenu {
+          background: rgba(232, 197, 71, 0.06);
+          border: 1px solid rgba(232, 197, 71, 0.18);
+          border-radius: 8px;
+          padding: 8px;
+          margin: 8px 0;
+        }
+
+        /* Persistent selected (clicked) state for quick navigation */
+        .target-button.selected {
+          background: #e8c547;
+          color: #0f1419;
+          border-color: #e8c547;
+          box-shadow: 0 0 0 2px rgba(232,197,71,0.25), 0 0 12px rgba(232,197,71,0.25);
+        }
+
+        /* Ensure selected wins inside quick nav panel */
+        .quick-nav .target-button.selected {
+          background: #e8c547;
+          color: #0f1419;
+          border-color: #e8c547;
+          box-shadow: 0 0 0 2px rgba(232,197,71,0.25), 0 0 12px rgba(232,197,71,0.25);
+        }
+
+        .submenu-item.selected {
+          background: rgba(232,197,71,0.85);
+          color: #0f1419;
+          border-color: rgba(232,197,71,1);
+          /* Removed left accent bar; background change is sufficient */
+        }
+
+        /* Stronger specificity inside the submenu panel */
+        .experience-submenu .submenu-item.selected {
+          background: rgba(232,197,71,0.9);
+          color: #0f1419;
+          border-color: rgba(232,197,71,1);
+        }
+
+        /* Left accent bar removed per request */
+
+        /* Down (pressed) state feedback for submenu items */
+        .experience-submenu .submenu-item:active {
+          filter: brightness(0.98);
+          box-shadow: 0 2px 6px rgba(0,0,0,0.35) inset;
         }
       </style>
     `;

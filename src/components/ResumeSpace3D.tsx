@@ -10,6 +10,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import resumeData from "../data/resume.json";
 import { type DiagramStyleOptions } from "./DiagramSettings";
+import CosmosLoader from "./CosmosLoader";
 
 // Import our new cosmic systems
 import {
@@ -32,11 +33,13 @@ let globalCleanup: (() => void) | null = null;
 interface ResumeSpace3DProps {
   onNavigate: (section: number) => void;
   options: DiagramStyleOptions;
+  onOptionsChange?: (options: DiagramStyleOptions) => void;
 }
 
 export default function ResumeSpace3D({
   onNavigate,
   options,
+  onOptionsChange,
 }: ResumeSpace3DProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -68,6 +71,10 @@ export default function ResumeSpace3D({
   const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
   const consoleLogsRef = useRef<string[]>([]);
   const maxConsoleLogs = 8; // Keep last 8 logs
+
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
+  const [sceneReady, setSceneReady] = useState(false);
 
   // Tour state
   const [tourActive, setTourActive] = useState(false);
@@ -161,6 +168,16 @@ export default function ResumeSpace3D({
     if (sceneRef.current.labelRendererDom) {
       sceneRef.current.labelRendererDom.style.display =
         options.spaceShowLabels === false ? "none" : "block";
+    }
+    
+    // Control orbit lines visibility
+    if (sceneRef.current.scene) {
+      const showOrbits = options.spaceShowOrbits !== false;
+      sceneRef.current.scene.traverse((object) => {
+        if (object.userData.isOrbitLine) {
+          object.visible = showOrbits;
+        }
+      });
     }
   }, [options]);
 
@@ -863,6 +880,7 @@ export default function ResumeSpace3D({
       });
       const orbit = new THREE.Mesh(ringGeometry, ringMaterial);
       orbit.rotation.x = Math.PI / 2; // Rotate to horizontal plane
+      orbit.userData.isOrbitLine = true; // Mark for visibility control
       parent.add(orbit);
 
       // Planet Mesh - Use MeshStandardMaterial for physically-based rendering (matches original)
@@ -2503,6 +2521,39 @@ export default function ResumeSpace3D({
 
     animate();
 
+    // Trigger loading complete with camera animation
+    setTimeout(() => {
+      setSceneReady(true);
+      
+      // Add smooth zoom and pan animation
+      const startPos = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
+      const endPos = { x: 0, y: 400, z: 600 };
+      const startTime = Date.now();
+      const duration = 2500; // 2.5 seconds
+      
+      // Start from a zoomed out position for dramatic effect
+      camera.position.set(50, 500, 800);
+      
+      const animateCamera = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Ease out cubic for smooth deceleration
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        
+        camera.position.x = startPos.x + (endPos.x - startPos.x) * easeProgress;
+        camera.position.y = startPos.y + (endPos.y - startPos.y) * easeProgress;
+        camera.position.z = startPos.z + (endPos.z - startPos.z) * easeProgress;
+        camera.lookAt(0, 0, 0);
+        
+        if (progress < 1) {
+          requestAnimationFrame(animateCamera);
+        }
+      };
+      
+      animateCamera();
+    }, 100);
+
     // --- CLEANUP ---
     const handleResize = () => {
       if (!mountRef.current) return;
@@ -2567,7 +2618,25 @@ export default function ResumeSpace3D({
   }, []);
 
   return (
-    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+    <>
+      {/* Show loader while scene is setting up */}
+      {isLoading && (
+        <CosmosLoader 
+          onLoadingComplete={() => {
+            setIsLoading(false);
+          }} 
+        />
+      )}
+      
+      <div 
+        style={{ 
+          width: "100%", 
+          height: "100%", 
+          position: "relative",
+          opacity: !isLoading && sceneReady ? 1 : 0,
+          transition: "opacity 1.5s ease-in-out"
+        }}
+      >
       <div style={{ width: "100%", height: "100%", position: "relative" }}>
         <div
           ref={mountRef}
@@ -2585,10 +2654,10 @@ export default function ResumeSpace3D({
           style={{
             position: "absolute",
             bottom: "30px",
-            right: "30px",
+            right: "450px",
             color: "rgba(212, 175, 55, 0.9)",
-            fontFamily: "'Cinzel', serif",
-            fontSize: "14px",
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: "12px",
             textAlign: "right",
             pointerEvents: "none",
             userSelect: "none",
@@ -2596,9 +2665,9 @@ export default function ResumeSpace3D({
             textShadow: "0 2px 4px rgba(0,0,0,0.8)",
           }}
         >
-          <p style={{ margin: "5px 0" }}>↔ DRAG TO ROTATE</p>
-          <p style={{ margin: "5px 0" }}>↕ SCROLL TO ZOOM</p>
-          <p style={{ margin: "5px 0" }}>• CLICK PLANETS TO VISIT</p>
+          <p style={{ margin: "4px 0" }}>↔ DRAG TO ROTATE</p>
+          <p style={{ margin: "4px 0" }}>↕ SCROLL TO ZOOM</p>
+          <p style={{ margin: "4px 0" }}>• CLICK PLANETS TO VISIT</p>
         </div>
       </div>
 
@@ -2633,6 +2702,16 @@ export default function ResumeSpace3D({
         speed={0}
         content={overlayContent}
         contentLoading={contentLoading}
+        cosmosOptions={options}
+        onCosmosOptionsChange={(newOptions) => {
+          // Pass the options change up to the parent component
+          if (onOptionsChange) {
+            onOptionsChange(newOptions);
+          }
+        }}
+        onConsoleLog={(message) => {
+          vlog(message);
+        }}
         onContentAction={(action: string) => {
           vlog(`🎬 Content action received: ${action}`);
 
@@ -2779,6 +2858,7 @@ export default function ResumeSpace3D({
           }
         }}
       />
-    </div>
+      </div>
+    </>
   );
 }

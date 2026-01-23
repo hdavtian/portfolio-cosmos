@@ -8,6 +8,7 @@ interface ResumeStructureDiagramProps {
   onNavigate: (section: number) => void;
   style: DiagramStyle;
   options: DiagramStyleOptions;
+  onOptionsChange?: (options: DiagramStyleOptions) => void;
 }
 
 // Store node positions at module level to persist across component remounts
@@ -19,6 +20,7 @@ function ResumeStructureDiagram({
   onNavigate,
   style,
   options,
+  onOptionsChange,
 }: ResumeStructureDiagramProps) {
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -56,7 +58,13 @@ function ResumeStructureDiagram({
 
   // If style is "space", return 3D component
   if (style === "space") {
-    return <ResumeSpace3D onNavigate={onNavigate} options={options} />;
+    return (
+      <ResumeSpace3D
+        onNavigate={onNavigate}
+        options={options}
+        onOptionsChange={onOptionsChange}
+      />
+    );
   }
 
   return (
@@ -70,7 +78,7 @@ function ResumeStructureDiagram({
 function renderCirclesStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
-  options: DiagramStyleOptions
+  options: DiagramStyleOptions,
 ) {
   const width = 1000;
   const height = 500;
@@ -111,7 +119,7 @@ function renderCirclesStyle(
   const calculateRadius = (
     label: string,
     type: "center" | "main" | "job",
-    svg: d3.Selection<SVGSVGElement, unknown, null, undefined>
+    svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
   ): number => {
     const baseFontSize = type === "center" ? 14 : type === "main" ? 11 : 9;
     const fontFamily =
@@ -174,7 +182,7 @@ function renderCirclesStyle(
     const requiredRadiusForHeight = totalHeight / 2 + padding;
     const calculatedRadius = Math.max(
       requiredRadiusForWidth,
-      requiredRadiusForHeight
+      requiredRadiusForHeight,
     );
 
     // Set minimum radius based on node type
@@ -212,7 +220,7 @@ function renderCirclesStyle(
 
   // Calculate max radius for main sections to ensure uniformity
   const mainRadii = mainSections.map((section) =>
-    calculateRadius(section.label, "main", svgSelection)
+    calculateRadius(section.label, "main", svgSelection),
   );
   const maxMainRadius = Math.max(...mainRadii);
 
@@ -335,7 +343,7 @@ function renderCirclesStyle(
           const source = d.source as Node;
           if (source.type === "center") return 0.3; // Weaker for main sections
           return 0.8; // Strong for jobs to Experience
-        })
+        }),
     )
     .force(
       "charge",
@@ -344,14 +352,14 @@ function renderCirclesStyle(
         if (node.type === "center") return 0; // Center doesn't repel
         if (node.type === "main") return 0; // Main sections don't repel (they're fixed)
         return -150; // Jobs repel each other to avoid overlap
-      })
+      }),
     )
     .force(
       "collision",
       d3
         .forceCollide<Node>()
         .radius((d) => d.radius + 10)
-        .strength(0.9)
+        .strength(0.9),
     )
     .force(
       "x",
@@ -362,7 +370,7 @@ function renderCirclesStyle(
           }
           return width / 2;
         })
-        .strength(0.05)
+        .strength(0.05),
     )
     .force(
       "y",
@@ -373,7 +381,7 @@ function renderCirclesStyle(
           }
           return height / 2;
         })
-        .strength(0.05)
+        .strength(0.05),
     );
 
   // Draw links
@@ -406,7 +414,7 @@ function renderCirclesStyle(
     .style("cursor", (d) =>
       d.type === "center" || d.type === "main" || d.type === "job"
         ? "pointer"
-        : "default"
+        : "default",
     )
     .call(
       d3
@@ -458,7 +466,7 @@ function renderCirclesStyle(
 
           isDragging = false;
           clickedNode = null;
-        }) as any
+        }) as any,
     );
 
   // Add circles with glow effect
@@ -481,7 +489,7 @@ function renderCirclesStyle(
       "filter",
       glowIntensity > 0
         ? `drop-shadow(0 0 ${glowIntensity}px rgba(212, 175, 55, 0.6))`
-        : "none"
+        : "none",
     )
     .on("mouseenter", function () {
       d3.select(this)
@@ -490,7 +498,7 @@ function renderCirclesStyle(
         .attr("stroke-width", 4)
         .style(
           "filter",
-          `drop-shadow(0 0 ${glowIntensity + 10}px rgba(212, 175, 55, 0.9))`
+          `drop-shadow(0 0 ${glowIntensity + 10}px rgba(212, 175, 55, 0.9))`,
         );
     })
     .on("mouseleave", function (_, d) {
@@ -502,7 +510,7 @@ function renderCirclesStyle(
           "filter",
           glowIntensity > 0
             ? `drop-shadow(0 0 ${glowIntensity}px rgba(212, 175, 55, 0.6))`
-            : "none"
+            : "none",
         );
     });
 
@@ -618,7 +626,7 @@ function renderCirclesStyle(
 function renderConstellationStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
-  options: DiagramStyleOptions
+  options: DiagramStyleOptions,
 ) {
   // Use parent container dimensions
   const parent = svg.parentElement;
@@ -780,7 +788,7 @@ function renderConstellationStyle(
   const bgStarLayer = g.append("g");
   // Significantly increased density for richer background (scales with zoom squared to maintain/increase density)
   const numBgStars = Math.floor(
-    starDensity * 250 * (zoomLevel * zoomLevel * 1.5)
+    starDensity * 250 * (zoomLevel * zoomLevel * 1.5),
   );
   for (let i = 0; i < numBgStars; i++) {
     const x = bgStarRandom() * width;
@@ -830,7 +838,7 @@ function renderConstellationStyle(
       .append("g")
       .attr(
         "transform",
-        `translate(${gx},${gy}) scale(${scale}) rotate(${rotation})`
+        `translate(${gx},${gy}) scale(${scale}) rotate(${rotation})`,
       );
 
     // Draw spiral arms
@@ -1013,11 +1021,11 @@ function renderConstellationStyle(
         .attr("y1", 0)
         .attr(
           "x2",
-          Math.cos(angle) * d.radius * 2 * starSizeScale * d.starMagnitude!
+          Math.cos(angle) * d.radius * 2 * starSizeScale * d.starMagnitude!,
         )
         .attr(
           "y2",
-          Math.sin(angle) * d.radius * 2 * starSizeScale * d.starMagnitude!
+          Math.sin(angle) * d.radius * 2 * starSizeScale * d.starMagnitude!,
         )
         .attr("stroke", d.stellarType!.color)
         .attr("stroke-width", 0.5 + nebulaIntensity * 0.5)
@@ -1036,8 +1044,8 @@ function renderConstellationStyle(
       d.type === "center"
         ? `${12 * starSizeScale}px`
         : d.type === "main"
-        ? `${10 * starSizeScale}px`
-        : `${8 * starSizeScale}px`
+          ? `${10 * starSizeScale}px`
+          : `${8 * starSizeScale}px`,
     )
     .style("pointer-events", "none");
 
@@ -1130,7 +1138,7 @@ function renderConstellationStyle(
 function renderCircuitStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
-  options: DiagramStyleOptions
+  options: DiagramStyleOptions,
 ) {
   const width = 1000;
   const height = 500;
@@ -1481,7 +1489,7 @@ function renderCircuitStyle(
         .attr("attributeName", "r")
         .attr(
           "values",
-          `${traceWidth * 1.2};${traceWidth * 2};${traceWidth * 1.2}`
+          `${traceWidth * 1.2};${traceWidth * 2};${traceWidth * 1.2}`,
         )
         .attr("dur", `${4 / pulseSpeed}s`)
         .attr("repeatCount", "indefinite");
@@ -1746,7 +1754,7 @@ function renderCircuitStyle(
         .attr("attributeName", "r")
         .attr(
           "values",
-          `${traceWidth * 1.2};${traceWidth * 2};${traceWidth * 1.2}`
+          `${traceWidth * 1.2};${traceWidth * 2};${traceWidth * 1.2}`,
         )
         .attr("dur", `${4 / pulseSpeed}s`)
         .attr("repeatCount", "indefinite");
@@ -2009,7 +2017,7 @@ function renderCircuitStyle(
 function renderRingsStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
-  options: DiagramStyleOptions
+  options: DiagramStyleOptions,
 ) {
   const width = 1000;
   const height = 500;
@@ -2124,7 +2132,7 @@ function renderRingsStyle(
 function renderTreeStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
-  options: DiagramStyleOptions
+  options: DiagramStyleOptions,
 ) {
   const width = 1000;
   const height = 500;
@@ -2215,7 +2223,7 @@ function renderTreeStyle(
         "d",
         `M ${rootX} ${rootY} Q ${rootX} ${(rootY + node.y) / 2} ${node.x} ${
           node.y
-        }`
+        }`,
       )
       .attr("stroke", "rgba(139, 69, 19, 0.6)")
       .attr("stroke-width", 8)
@@ -2252,7 +2260,7 @@ function renderTreeStyle(
     .append("circle")
     .attr("r", (d) => d.r)
     .attr("fill", (d) =>
-      d.type === "leaf" ? "rgba(34, 139, 34, 0.8)" : "rgba(139, 69, 19, 0.9)"
+      d.type === "leaf" ? "rgba(34, 139, 34, 0.8)" : "rgba(139, 69, 19, 0.9)",
     )
     .attr("stroke", "#d4af37")
     .attr("stroke-width", 2);
@@ -2264,7 +2272,7 @@ function renderTreeStyle(
     .attr("dy", "0.35em")
     .attr("fill", "#fff")
     .attr("font-size", (d) =>
-      d.type === "trunk" ? "12px" : d.type === "leaf" ? "8px" : "10px"
+      d.type === "trunk" ? "12px" : d.type === "leaf" ? "8px" : "10px",
     )
     .style("pointer-events", "none");
 }
@@ -2274,7 +2282,7 @@ function renderTreeStyle(
 function renderNeuralStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
-  options: DiagramStyleOptions
+  options: DiagramStyleOptions,
 ) {
   const width = 1000;
   const height = 500;

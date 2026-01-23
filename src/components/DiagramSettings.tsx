@@ -46,6 +46,7 @@ export interface DiagramStyleOptions {
   spaceOrbitSpeed?: number;
   spaceShowLabels?: boolean;
   spaceSunIntensity?: number;
+  spaceShowOrbits?: boolean;
 }
 
 interface DiagramSettingsProps {
@@ -397,74 +398,16 @@ export default function DiagramSettings({
 
       case "space":
         return (
-          <>
-            <div className="setting-item">
-              <label>
-                Orbit Speed:{" "}
-                {options.spaceOrbitSpeed !== undefined
-                  ? options.spaceOrbitSpeed
-                  : 0.1}
-                x
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="3"
-                step="0.1"
-                value={
-                  options.spaceOrbitSpeed !== undefined
-                    ? options.spaceOrbitSpeed
-                    : 0.1
-                }
-                onChange={(e) =>
-                  handleSliderChange("spaceOrbitSpeed", Number(e.target.value))
-                }
-              />
-            </div>
-            <div className="setting-item">
-              <label>
-                Sun Intensity:{" "}
-                {options.spaceSunIntensity?.toFixed(3) || "2.500"}
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="5"
-                step="0.005"
-                value={options.spaceSunIntensity || 2.5}
-                onChange={(e) =>
-                  handleSliderChange(
-                    "spaceSunIntensity",
-                    Number(e.target.value),
-                  )
-                }
-              />
-            </div>
-            <div className="setting-item">
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={options.spaceShowLabels !== false}
-                  onChange={(e) =>
-                    // Use force update or boolean
-                    onOptionsChange({
-                      ...options,
-                      spaceShowLabels: e.target.checked,
-                    })
-                  }
-                  style={{ width: "auto" }}
-                />
-                Show Labels
-              </label>
-            </div>
-          </>
+          <div
+            style={{
+              padding: "12px",
+              color: "#8a9199",
+              fontSize: "13px",
+              fontStyle: "italic",
+            }}
+          >
+            Cosmos controls are available in the HUD panel →
+          </div>
         );
 
       default:
@@ -478,11 +421,14 @@ export default function DiagramSettings({
         className="settings-toggle"
         onClick={onToggle}
         title="Diagram Settings"
+        style={{
+          display: currentStyle === "space" ? "none" : "flex",
+        }}
       >
         ⚙️
       </button>
 
-      {isOpen && (
+      {isOpen && currentStyle !== "space" && (
         <div className="diagram-settings">
           <div className="settings-header">
             <h3>Diagram Style</h3>
