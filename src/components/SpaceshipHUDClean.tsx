@@ -132,6 +132,11 @@ const SpaceshipHUD: React.FC<Props> = ({
             `🌙 Moon orbit speed adjusted to ${Number(value).toFixed(1)}x`,
           );
           break;
+        case "spaceMoonSpinSpeed":
+          onConsoleLog(
+            `🌀 Moon spin speed adjusted to ${Number(value).toFixed(1)}x`,
+          );
+          break;
         case "spaceSunIntensity":
           onConsoleLog(`☀️ Sun intensity set to ${Number(value).toFixed(2)}`);
           break;
@@ -776,6 +781,42 @@ const SpaceshipHUD: React.FC<Props> = ({
                     onChange={(e) =>
                       handleCosmosOptionChange(
                         "spaceMoonOrbitSpeed",
+                        Number(e.target.value),
+                      )
+                    }
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      color: "#8a9199",
+                      fontSize: 11,
+                      display: "block",
+                      marginBottom: 4,
+                      fontFamily: "'Rajdhani', sans-serif",
+                    }}
+                  >
+                    Moon Spin Speed:{" "}
+                    {cosmosOptions.spaceMoonSpinSpeed !== undefined
+                      ? cosmosOptions.spaceMoonSpinSpeed.toFixed(1)
+                      : "1.0"}
+                    x
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="3"
+                    step="0.1"
+                    value={
+                      cosmosOptions.spaceMoonSpinSpeed !== undefined
+                        ? (cosmosOptions.spaceMoonSpinSpeed as number)
+                        : 1.0
+                    }
+                    onChange={(e) =>
+                      handleCosmosOptionChange(
+                        "spaceMoonSpinSpeed",
                         Number(e.target.value),
                       )
                     }

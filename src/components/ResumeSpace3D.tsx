@@ -2833,16 +2833,25 @@ export default function ResumeSpace3D({
           }
         }
 
-        // Self rotation: decouple from global orbit speed so moons always spin
+        // Self rotation: use moon spin speed control for moons, base spin for planets
         const isMoonBody = item.mesh.userData?.isMoon === true;
-        const baseSpin = isMoonBody ? 0.02 : 0.008; // moons spin a bit faster
+        
+        // Get moon spin speed multiplier from options (default to 1.0 if not set)
+        const moonSpinMultiplier = optionsRef.current.spaceMoonSpinSpeed !== undefined
+          ? optionsRef.current.spaceMoonSpinSpeed
+          : 1.0;
+        
+        const baseSpin = isMoonBody ? 0.02 * moonSpinMultiplier : 0.008; // moons use multiplier
         
         // For planets that have moons as children, only apply rotation if moon orbit speed > 0
         // Otherwise the planet rotation causes moons to orbit even when speed is 0
         const isPlanetWithPotentialMoons = item.mesh.userData?.isMainPlanet === true;
         const shouldRotate = !isPlanetWithPotentialMoons || moonSpeedMultiplier > 0;
         
-        if (shouldRotate) {
+        // Only rotate if should rotate AND if it's not a moon with 0 spin speed
+        const shouldApplySpin = shouldRotate && (!isMoonBody || moonSpinMultiplier > 0);
+        
+        if (shouldApplySpin) {
           item.mesh.rotation.y += baseSpin;
         }
 

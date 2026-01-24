@@ -45,6 +45,7 @@ export interface DiagramStyleOptions {
   // Space options
   spaceOrbitSpeed?: number;
   spaceMoonOrbitSpeed?: number;
+  spaceMoonSpinSpeed?: number;
   spaceShowLabels?: boolean;
   spaceSunIntensity?: number;
   spaceShowOrbits?: boolean;
