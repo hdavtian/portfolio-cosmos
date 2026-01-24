@@ -28,8 +28,26 @@ type Props = {
   onTourRestart: () => void;
   onTourEnd: () => void;
   followingSpaceship?: boolean;
+  insideShip?: boolean;
+  shipViewMode?: "exterior" | "interior" | "cockpit";
+  onEnterShip?: () => void;
+  onExitShip?: () => void;
+  onGoToCockpit?: () => void;
+  onGoToInterior?: () => void;
   shipExteriorLights?: boolean;
   onShipExteriorLightsChange?: (value: boolean) => void;
+  shipInteriorLights?: boolean;
+  onShipInteriorLightsChange?: (value: boolean) => void;
+  manualFlightMode?: boolean;
+  onManualFlightModeChange?: (value: boolean) => void;
+  manualFlightSpeed?: number;
+  manualFlightMaxSpeed?: number;
+  keyboardState?: Record<string, boolean>;
+  keyboardUpdateTrigger?: number;
+  invertControls?: boolean;
+  onInvertControlsChange?: (value: boolean) => void;
+  controlSensitivity?: number;
+  onControlSensitivityChange?: (value: number) => void;
   onStopFollowing?: () => void;
   isTransitioning?: boolean;
   speed?: number;
@@ -57,8 +75,26 @@ const SpaceshipHUD: React.FC<Props> = ({
   onTourRestart,
   onTourEnd,
   followingSpaceship = false,
+  insideShip = false,
+  shipViewMode = "exterior",
+  onEnterShip,
+  onExitShip,
+  onGoToCockpit,
+  onGoToInterior,
   shipExteriorLights = false,
   onShipExteriorLightsChange,
+  shipInteriorLights = true,
+  onShipInteriorLightsChange,
+  manualFlightMode = false,
+  onManualFlightModeChange,
+  manualFlightSpeed = 0,
+  manualFlightMaxSpeed = 1,
+  keyboardState = {},
+  keyboardUpdateTrigger = 0,
+  invertControls = false,
+  onInvertControlsChange,
+  controlSensitivity = 0.5,
+  onControlSensitivityChange,
   onStopFollowing,
   isTransitioning = false,
   speed = 0,
@@ -111,7 +147,7 @@ const SpaceshipHUD: React.FC<Props> = ({
     return () => {
       window.removeEventListener("resize", calculatePosition);
     };
-  }, [followingSpaceship]); // Recalculate when following state changes
+  }, [followingSpaceship, keyboardUpdateTrigger]); // Recalculate when following state changes or keyboard updates
 
   const handleCosmosOptionChange = (
     key: keyof DiagramStyleOptions,
@@ -1051,59 +1087,385 @@ const SpaceshipHUD: React.FC<Props> = ({
               </label>
             </div>
 
-            <div className="contextual-control-group">
-              <label>
-                <span>Follow Distance</span>
-                <input
-                  type="range"
-                  min="20"
-                  max="150"
-                  step="5"
-                  value={cosmosOptions.spaceFollowDistance ?? 80}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    onCosmosOptionsChange({
-                      ...cosmosOptions,
-                      spaceFollowDistance: value,
-                    });
-                    if (onConsoleLog) {
-                      onConsoleLog(`📏 Ship follow distance: ${value}`);
-                    }
-                  }}
-                  style={{ width: "100%" }}
-                />
-                <span className="value">
-                  {cosmosOptions.spaceFollowDistance ?? 80}
-                </span>
-              </label>
-            </div>
+            {/* Flight Mode Toggle - Only show when NOT inside ship */}
+            {!insideShip && (
+              <div className="contextual-control-group flight-mode-toggle">
+                <div className="mode-buttons">
+                  <button
+                    className={`mode-button ${!manualFlightMode ? "active" : ""}`}
+                    onClick={() => {
+                      if (onManualFlightModeChange) {
+                        onManualFlightModeChange(false);
+                      }
+                      if (onConsoleLog) {
+                        onConsoleLog("🤖 Autopilot engaged");
+                      }
+                    }}
+                  >
+                    🤖 AUTOPILOT
+                  </button>
+                  <button
+                    className={`mode-button ${manualFlightMode ? "active" : ""}`}
+                    onClick={() => {
+                      if (onManualFlightModeChange) {
+                        onManualFlightModeChange(true);
+                      }
+                      if (onConsoleLog) {
+                        onConsoleLog("✋ Manual control activated");
+                      }
+                    }}
+                  >
+                    ✋ MANUAL
+                  </button>
+                </div>
+              </div>
+            )}
 
-            <div className="contextual-control-group">
-              <label>
-                <span>Travel Speed</span>
-                <input
-                  type="range"
-                  min="10"
-                  max="200"
-                  step="10"
-                  value={cosmosOptions.spaceTravelSpeed ?? 50}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    onCosmosOptionsChange({
-                      ...cosmosOptions,
-                      spaceTravelSpeed: value,
-                    });
-                    if (onConsoleLog) {
-                      onConsoleLog(`🚀 Ship travel speed: ${value}%`);
+            {/* Manual Flight Controls - Only show in manual mode and NOT inside ship */}
+            {!insideShip && manualFlightMode && (
+              <div className="manual-flight-controls">
+                {/* Flight Settings */}
+                <div className="flight-settings">
+                  <div className="setting-row">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={invertControls}
+                        onChange={(e) => {
+                          if (onInvertControlsChange) {
+                            onInvertControlsChange(e.target.checked);
+                          }
+                        }}
+                      />
+                      <span>Invert Controls</span>
+                    </label>
+                  </div>
+                  <div className="setting-row">
+                    <label>
+                      <span>Sensitivity</span>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="2.0"
+                        step="0.1"
+                        value={controlSensitivity}
+                        onChange={(e) => {
+                          if (onControlSensitivityChange) {
+                            onControlSensitivityChange(
+                              parseFloat(e.target.value),
+                            );
+                          }
+                        }}
+                        style={{ width: "100%" }}
+                      />
+                      <span className="value">
+                        {Math.round(controlSensitivity * 10)}/20
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Speedometer */}
+                <div className="speedometer">
+                  <div className="speed-label">VELOCITY</div>
+                  <div className="speed-value">
+                    {Math.round(
+                      ((manualFlightSpeed || 0) / (manualFlightMaxSpeed || 1)) *
+                        100,
+                    )}
+                    <span className="speed-unit">%</span>
+                  </div>
+                  <div className="speed-bar">
+                    <div
+                      className="speed-bar-fill"
+                      style={{
+                        width: `${((manualFlightSpeed || 0) / (manualFlightMaxSpeed || 1)) * 100}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Navigation Keypad */}
+                <div className="nav-keypad">
+                  <div className="nav-instructions">
+                    Use Arrow Keys + SHIFT to boost
+                  </div>
+                  <div className="nav-grid">
+                    {/* Top row */}
+                    <div className="nav-key-spacer"></div>
+                    <button
+                      className={`nav-key ${keyboardState?.ArrowUp ? "active" : ""}`}
+                      onMouseDown={() => {
+                        const event = new KeyboardEvent("keydown", {
+                          code: "ArrowUp",
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                      onMouseUp={() => {
+                        const event = new KeyboardEvent("keyup", {
+                          code: "ArrowUp",
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      ▲
+                    </button>
+                    <div className="nav-key-spacer"></div>
+
+                    {/* Middle row */}
+                    <button
+                      className={`nav-key ${keyboardState?.ArrowLeft ? "active" : ""}`}
+                      onMouseDown={() => {
+                        const event = new KeyboardEvent("keydown", {
+                          code: "ArrowLeft",
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                      onMouseUp={() => {
+                        const event = new KeyboardEvent("keyup", {
+                          code: "ArrowLeft",
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      ◀
+                    </button>
+                    <button
+                      className={`nav-key center-key ${keyboardState?.ShiftLeft ? "boost-active" : ""}`}
+                      onMouseDown={() => {
+                        const event = new KeyboardEvent("keydown", {
+                          code: "ShiftLeft",
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                      onMouseUp={() => {
+                        const event = new KeyboardEvent("keyup", {
+                          code: "ShiftLeft",
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      {keyboardState?.ShiftLeft ? "🔥" : "⚡"}
+                    </button>
+                    <button
+                      className={`nav-key ${keyboardState?.ArrowRight ? "active" : ""}`}
+                      onMouseDown={() => {
+                        const event = new KeyboardEvent("keydown", {
+                          code: "ArrowRight",
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                      onMouseUp={() => {
+                        const event = new KeyboardEvent("keyup", {
+                          code: "ArrowRight",
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      ▶
+                    </button>
+
+                    {/* Bottom row */}
+                    <div className="nav-key-spacer"></div>
+                    <button
+                      className={`nav-key ${keyboardState?.ArrowDown ? "active" : ""}`}
+                      onMouseDown={() => {
+                        const event = new KeyboardEvent("keydown", {
+                          code: "ArrowDown",
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                      onMouseUp={() => {
+                        const event = new KeyboardEvent("keyup", {
+                          code: "ArrowDown",
+                        });
+                        window.dispatchEvent(event);
+                      }}
+                    >
+                      ▼
+                    </button>
+                    <div className="nav-key-spacer"></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Interior Lights - Only show when inside ship */}
+            {insideShip && (
+              <div className="contextual-control-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={shipInteriorLights}
+                    onChange={(e) => {
+                      if (onShipInteriorLightsChange) {
+                        onShipInteriorLightsChange(e.target.checked);
+                      }
+                      if (onConsoleLog) {
+                        onConsoleLog(
+                          e.target.checked
+                            ? "💡 Ship interior lights ON"
+                            : "💡 Ship interior lights OFF",
+                        );
+                      }
+                    }}
+                  />
+                  <span>Interior Lights</span>
+                </label>
+              </div>
+            )}
+
+            {/* Interior View Controls - Only show when NOT inside ship */}
+            {!insideShip && (
+              <>
+                <div className="contextual-control-group">
+                  <label>
+                    <span>Follow Distance</span>
+                    <input
+                      type="range"
+                      min="20"
+                      max="150"
+                      step="5"
+                      value={cosmosOptions.spaceFollowDistance ?? 80}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        onCosmosOptionsChange({
+                          ...cosmosOptions,
+                          spaceFollowDistance: value,
+                        });
+                        if (onConsoleLog) {
+                          onConsoleLog(`📏 Ship follow distance: ${value}`);
+                        }
+                      }}
+                      style={{ width: "100%" }}
+                    />
+                    <span className="value">
+                      {cosmosOptions.spaceFollowDistance ?? 80}
+                    </span>
+                  </label>
+                </div>
+
+                <div className="contextual-control-group">
+                  <label>
+                    <span>Travel Speed</span>
+                    <input
+                      type="range"
+                      min="10"
+                      max="200"
+                      step="10"
+                      value={cosmosOptions.spaceTravelSpeed ?? 50}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        onCosmosOptionsChange({
+                          ...cosmosOptions,
+                          spaceTravelSpeed: value,
+                        });
+                        if (onConsoleLog) {
+                          onConsoleLog(`🚀 Ship travel speed: ${value}%`);
+                        }
+                      }}
+                      style={{ width: "100%" }}
+                    />
+                    <span className="value">
+                      {cosmosOptions.spaceTravelSpeed ?? 50}%
+                    </span>
+                  </label>
+                </div>
+
+                <button
+                  className="contextual-action-button"
+                  onClick={() => {
+                    if (onEnterShip) {
+                      onEnterShip();
+                      if (onConsoleLog) {
+                        onConsoleLog("🛸 Entering ship interior...");
+                      }
                     }
                   }}
-                  style={{ width: "100%" }}
-                />
-                <span className="value">
-                  {cosmosOptions.spaceTravelSpeed ?? 50}%
-                </span>
-              </label>
-            </div>
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #1e3a5f 0%, #2a5a8f 100%)",
+                    border: "1px solid rgba(100, 149, 237, 0.6)",
+                    color: "#6495ed",
+                    marginBottom: "8px",
+                  }}
+                >
+                  🛸 ENTER SHIP
+                </button>
+              </>
+            )}
+
+            {/* Inside Ship Controls - Only show when inside */}
+            {insideShip && (
+              <>
+                {shipViewMode === "interior" && (
+                  <button
+                    className="contextual-action-button"
+                    onClick={() => {
+                      if (onGoToCockpit) {
+                        onGoToCockpit();
+                        if (onConsoleLog) {
+                          onConsoleLog("✈️ Moving to cockpit...");
+                        }
+                      }
+                    }}
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #2a5a8f 0%, #3a7abf 100%)",
+                      border: "1px solid rgba(100, 149, 237, 0.8)",
+                      color: "#87ceeb",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    ✈️ GO TO COCKPIT
+                  </button>
+                )}
+
+                {shipViewMode === "cockpit" && (
+                  <button
+                    className="contextual-action-button"
+                    onClick={() => {
+                      if (onGoToInterior) {
+                        onGoToInterior();
+                        if (onConsoleLog) {
+                          onConsoleLog("🚪 Returning to main interior...");
+                        }
+                      }
+                    }}
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #2a5a8f 0%, #3a7abf 100%)",
+                      border: "1px solid rgba(100, 149, 237, 0.8)",
+                      color: "#87ceeb",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    🚪 RETURN TO CABIN
+                  </button>
+                )}
+
+                <button
+                  className="contextual-action-button"
+                  onClick={() => {
+                    if (onExitShip) {
+                      onExitShip();
+                      if (onConsoleLog) {
+                        onConsoleLog("🚪 Exiting ship...");
+                      }
+                    }
+                  }}
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #1e5f3a 0%, #2a8f5a 100%)",
+                    border: "1px solid rgba(50, 205, 50, 0.6)",
+                    color: "#32cd32",
+                    marginBottom: "8px",
+                  }}
+                >
+                  🚪 EXIT SHIP
+                </button>
+              </>
+            )}
 
             <button
               className="contextual-stop-button"

@@ -139,10 +139,9 @@
     }
 }
 
-.contextual-stop-button {
-    background: rgba(220, 38, 38, 0.2);
+.contextual-stop-button,
+.contextual-action-button {
     border: 2px solid rgba(220, 38, 38, 0.6);
-    color: #ff5555;
     padding: 10px 20px;
     border-radius: 8px;
     font-family: 'Rajdhani', sans-serif;
@@ -151,15 +150,302 @@
     letter-spacing: 1px;
     cursor: pointer;
     transition: all 0.3s ease;
+    width: 100%;
 
     &:hover {
-        background: rgba(220, 38, 38, 0.4);
-        border-color: rgba(220, 38, 38, 0.8);
-        box-shadow: 0 0 15px rgba(220, 38, 38, 0.5);
+        box-shadow: 0 0 15px rgba(100, 149, 237, 0.5);
         transform: scale(1.02);
     }
 
     &:active {
         transform: scale(0.98);
+    }
+}
+
+.contextual-stop-button {
+    background: rgba(220, 38, 38, 0.2);
+    border-color: rgba(220, 38, 38, 0.6);
+    color: #ff5555;
+
+    &:hover {
+        background: rgba(220, 38, 38, 0.4);
+        border-color: rgba(220, 38, 38, 0.8);
+        box-shadow: 0 0 15px rgba(220, 38, 38, 0.5);
+    }
+}
+/* Flight Mode Toggle */
+.flight-mode-toggle {
+    margin: 12px 0;
+    
+    .mode-buttons {
+        display: flex;
+        gap: 8px;
+        
+        .mode-button {
+            flex: 1;
+            padding: 10px 12px;
+            background: rgba(15, 20, 25, 0.6);
+            border: 1px solid rgba(138, 145, 153, 0.3);
+            border-radius: 6px;
+            color: #8a9199;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            
+            &:hover {
+                background: rgba(30, 40, 50, 0.8);
+                border-color: rgba(100, 149, 237, 0.5);
+            }
+            
+            &.active {
+                background: linear-gradient(135deg, rgba(100, 149, 237, 0.3) 0%, rgba(65, 105, 225, 0.3) 100%);
+                border-color: rgba(100, 149, 237, 0.8);
+                color: #6495ed;
+                box-shadow: 0 0 15px rgba(100, 149, 237, 0.4);
+            }
+        }
+    }
+}
+
+/* Manual Flight Controls */
+.manual-flight-controls {
+    animation: slideIn 0.4s ease-out;
+    margin: 16px 0;
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(15, 20, 25, 0.9) 0%, rgba(25, 35, 45, 0.9) 100%);
+    border: 1px solid rgba(100, 149, 237, 0.4);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Speedometer */
+.speedometer {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border: 1px solid rgba(100, 149, 237, 0.3);
+    
+    .speed-label {
+        font-size: 10px;
+        color: #6495ed;
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+        font-weight: 600;
+    }
+    
+    .speed-value {
+        font-size: 32px;
+        font-weight: bold;
+        color: #87ceeb;
+        line-height: 1;
+        font-family: 'Orbitron', monospace;
+        text-shadow: 0 0 10px rgba(135, 206, 235, 0.5);
+        
+        .speed-unit {
+            font-size: 16px;
+            color: #6495ed;
+            margin-left: 4px;
+        }
+    }
+    
+    .speed-bar {
+        margin-top: 8px;
+        height: 6px;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 3px;
+        overflow: hidden;
+        border: 1px solid rgba(100, 149, 237, 0.3);
+        
+        .speed-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4169e1 0%, #87ceeb 50%, #00ffff 100%);
+            transition: width 0.2s ease;
+            box-shadow: 0 0 10px rgba(135, 206, 235, 0.8);
+        }
+    }
+}
+
+/* Navigation Keypad */
+.nav-keypad {
+    .nav-instructions {
+        font-size: 10px;
+        color: #8a9199;
+        text-align: center;
+        margin-bottom: 12px;
+        font-family: 'Rajdhani', sans-serif;
+        letter-spacing: 0.5px;
+    }
+    
+    .nav-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        max-width: 200px;
+        margin: 0 auto;
+    }
+    
+    .nav-key {
+        aspect-ratio: 1;
+        background: linear-gradient(135deg, rgba(30, 40, 50, 0.6) 0%, rgba(15, 25, 35, 0.8) 100%);
+        border: 2px solid rgba(100, 149, 237, 0.3);
+        border-radius: 8px;
+        color: #6495ed;
+        font-size: 20px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        
+        &:hover {
+            background: linear-gradient(135deg, rgba(40, 60, 80, 0.8) 0%, rgba(25, 40, 55, 0.9) 100%);
+            border-color: rgba(100, 149, 237, 0.6);
+            box-shadow: 0 0 15px rgba(100, 149, 237, 0.4);
+            transform: scale(1.05);
+        }
+        
+        &:active, &.active {
+            background: linear-gradient(135deg, rgba(100, 149, 237, 0.4) 0%, rgba(65, 105, 225, 0.5) 100%);
+            border-color: rgba(135, 206, 235, 0.8);
+            box-shadow: 0 0 20px rgba(135, 206, 235, 0.6);
+            transform: scale(0.95);
+            color: #87ceeb;
+        }
+        
+        &.center-key {
+            font-size: 24px;
+            
+            &.boost-active {
+                background: linear-gradient(135deg, rgba(255, 140, 0, 0.4) 0%, rgba(255, 69, 0, 0.5) 100%);
+                border-color: rgba(255, 140, 0, 0.8);
+                box-shadow: 0 0 25px rgba(255, 140, 0, 0.8);
+                animation: pulse 0.5s ease-in-out infinite;
+            }
+        }
+    }
+    
+    .nav-key-spacer {
+        aspect-ratio: 1;
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 25px rgba(255, 140, 0, 0.8);
+    }
+    50% {
+        box-shadow: 0 0 35px rgba(255, 140, 0, 1);
+    }
+}
+
+/* Flight Settings */
+.flight-settings {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border: 1px solid rgba(100, 149, 237, 0.3);
+    
+    .setting-row {
+        margin-bottom: 8px;
+        
+        &:last-child {
+            margin-bottom: 0;
+        }
+        
+        label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #8a9199;
+            font-size: 11px;
+            cursor: pointer;
+            font-family: 'Rajdhani', sans-serif;
+            
+            input[type="checkbox"] {
+                cursor: pointer;
+            }
+            
+            input[type="range"] {
+                flex: 1;
+                cursor: pointer;
+            }
+            
+            span {
+                white-space: nowrap;
+            }
+            
+            .value {
+                color: #6495ed;
+                font-weight: 600;
+                min-width: 35px;
+                text-align: right;
+            }
+        }
+    }
+}
+
+/* Flight Settings */
+.flight-settings {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border: 1px solid rgba(100, 149, 237, 0.3);
+    
+    .setting-row {
+        margin-bottom: 8px;
+        
+        &:last-child {
+            margin-bottom: 0;
+        }
+        
+        label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #8a9199;
+            font-size: 11px;
+            cursor: pointer;
+            font-family: 'Rajdhani', sans-serif;
+            
+            input[type=checkbox] {
+                cursor: pointer;
+            }
+            
+            input[type=range] {
+                flex: 1;
+                cursor: pointer;
+            }
+            
+            span {
+                white-space: nowrap;
+            }
+            
+            .value {
+                color: #6495ed;
+                font-weight: 600;
+                min-width: 35px;
+                text-align: right;
+            }
+        }
     }
 }

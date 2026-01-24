@@ -86,8 +86,19 @@ export default function ResumeSpace3D({
   const [followingSpaceship, setFollowingSpaceship] = useState(false);
   const followingSpaceshipRef = useRef(false);
   const [shipExteriorLights, setShipExteriorLights] = useState(false);
+  const [shipInteriorLights, setShipInteriorLights] = useState(true);
+  const [insideShip, setInsideShip] = useState(false);
+  const insideShipRef = useRef(false);
+  const spaceshipInteriorLightsRef = useRef<THREE.PointLight[]>([]);
+  const [shipViewMode, setShipViewMode] = useState<
+    "exterior" | "interior" | "cockpit"
+  >("exterior");
+  const shipViewModeRef = useRef<"exterior" | "interior" | "cockpit">(
+    "exterior",
+  );
   const spaceshipRef = useRef<THREE.Group | null>(null);
   const spaceshipLightsRef = useRef<THREE.PointLight[]>([]);
+  const spaceshipEngineLightRef = useRef<THREE.PointLight | null>(null);
   const spaceshipCameraOffsetRef = useRef<THREE.Vector3>(
     new THREE.Vector3(0, 20, -60),
   );
@@ -101,6 +112,10 @@ export default function ResumeSpace3D({
     isPaused: boolean;
     rollSpeed: number;
     rollAmount: number;
+    visitingMoon: boolean;
+    moonVisitStartTime: number;
+    moonVisitDuration: number;
+    currentMoonTarget: THREE.Vector3 | null;
   }>({
     waypoints: [],
     currentIndex: 0,
@@ -111,6 +126,63 @@ export default function ResumeSpace3D({
     isPaused: false,
     rollSpeed: 0,
     rollAmount: 0,
+    visitingMoon: false,
+    moonVisitStartTime: 0,
+    moonVisitDuration: 10000, // 10 seconds
+    currentMoonTarget: null,
+  });
+
+  // Manual flight control state
+  const [manualFlightMode, setManualFlightMode] = useState(false);
+  const manualFlightModeRef = useRef(false);
+  const [keyboardUpdateTrigger, setKeyboardUpdateTrigger] = useState(0);
+  const [invertControls, setInvertControls] = useState(false);
+  const invertControlsRef = useRef(false);
+  const [controlSensitivity, setControlSensitivity] = useState(0.5); // 0.1 to 2.0
+  const controlSensitivityRef = useRef(0.5);
+  const manualFlightRef = useRef<{
+    velocity: THREE.Vector3;
+    acceleration: number;
+    maxSpeed: number;
+    currentSpeed: number;
+    pitch: number; // Rotation around X axis
+    yaw: number; // Rotation around Y axis
+    roll: number; // Rotation around Z axis
+    targetPitch: number;
+    targetYaw: number;
+    targetRoll: number;
+    isAccelerating: boolean;
+    direction: { forward: number; right: number; up: number };
+    turboStartTime: number;
+    isTurboActive: boolean;
+  }>({
+    velocity: new THREE.Vector3(),
+    acceleration: 0,
+    maxSpeed: 2.0,
+    currentSpeed: 0,
+    pitch: 0,
+    yaw: 0,
+    roll: 0,
+    targetPitch: 0,
+    targetYaw: 0,
+    targetRoll: 0,
+    isAccelerating: false,
+    direction: { forward: 0, right: 0, up: 0 },
+    turboStartTime: 0,
+    isTurboActive: false,
+  });
+
+  // Keyboard state for manual controls
+  const keyboardStateRef = useRef({
+    ArrowUp: false,
+    ArrowDown: false,
+    ArrowLeft: false,
+    ArrowRight: false,
+    ShiftLeft: false,
+    KeyQ: false, // Strafe left
+    KeyE: false, // Strafe right
+    KeyZ: false, // Roll left
+    KeyC: false, // Roll right
   });
 
   // Custom logging function
@@ -232,6 +304,57 @@ export default function ResumeSpace3D({
       });
     }
   }, [shipExteriorLights]);
+
+  // Update spaceship interior lights
+  useEffect(() => {
+    if (spaceshipInteriorLightsRef.current.length > 0) {
+      spaceshipInteriorLightsRef.current.forEach((light) => {
+        light.intensity = shipInteriorLights ? 2 : 0;
+      });
+    }
+  }, [shipInteriorLights]);
+
+  // Manual flight keyboard controls
+  useEffect(() => {
+    if (!manualFlightMode) {
+      // Clear all keyboard states when exiting manual mode
+      Object.keys(keyboardStateRef.current).forEach(key => {
+        keyboardStateRef.current[key as keyof typeof keyboardStateRef.current] = false;
+      });
+      return;
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code in keyboardStateRef.current) {
+        e.preventDefault(); // Prevent default browser behavior
+        e.stopPropagation(); // Stop event from reaching other handlers
+        keyboardStateRef.current[e.code as keyof typeof keyboardStateRef.current] = true;
+        setKeyboardUpdateTrigger(prev => prev + 1); // Trigger UI update
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code in keyboardStateRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        keyboardStateRef.current[e.code as keyof typeof keyboardStateRef.current] = false;
+        setKeyboardUpdateTrigger(prev => prev + 1); // Trigger UI update
+      }
+    };
+
+    // Use capture phase to intercept events before other handlers
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    window.addEventListener('keyup', handleKeyUp, { capture: true });
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
+      window.removeEventListener('keyup', handleKeyUp, { capture: true });
+      // Clear keyboard states on cleanup
+      Object.keys(keyboardStateRef.current).forEach(key => {
+        keyboardStateRef.current[key as keyof typeof keyboardStateRef.current] = false;
+      });
+    };
+  }, [manualFlightMode]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -509,8 +632,8 @@ export default function ResumeSpace3D({
             transparent: true,
             // Tone down brightness slightly to reduce bloom/glow
             opacity: options?.opacity ?? 0.88,
-            depthWrite: false,
-            depthTest: false,
+            depthWrite: true,
+            depthTest: true,
             side: THREE.DoubleSide,
           });
           const meshT = new THREE.Mesh(geoT, matT);
@@ -525,7 +648,7 @@ export default function ResumeSpace3D({
           meshT.userData.planeWidth = planeWT;
           meshT.userData.planeHeight = planeHT;
           meshT.userData.isDetailOverlay = true;
-          meshT.renderOrder = 999;
+          meshT.renderOrder = 0; // Use default render order to respect depth
           scene.add(meshT);
           overlays.push(meshT);
           overlayClickables.push(meshT);
@@ -559,8 +682,8 @@ export default function ResumeSpace3D({
           map: textTex,
           transparent: true,
           opacity: options?.opacity ?? 0.9,
-          depthWrite: false,
-          depthTest: false,
+          depthWrite: true,
+          depthTest: true,
           side: THREE.DoubleSide,
         });
         const mesh = new THREE.Mesh(geo, mat);
@@ -589,7 +712,7 @@ export default function ResumeSpace3D({
         mesh.rotation.z = 0;
 
         mesh.userData.isDetailOverlay = true;
-        mesh.renderOrder = 999;
+        mesh.renderOrder = 0; // Use default render order to respect depth
 
         scene.add(mesh);
         overlays.push(mesh);
@@ -1296,6 +1419,14 @@ export default function ResumeSpace3D({
         console.log("✅ Spaceship GLTF loaded successfully");
         const spaceship = gltf.scene;
 
+        // Log ship structure to find cockpit
+        console.log("🔍 Ship structure:");
+        spaceship.traverse((child) => {
+          if (child.name) {
+            console.log(`  - ${child.name}:`, child.type, child.position);
+          }
+        });
+
         // Scale down the spaceship to be tiny compared to planets
         spaceship.scale.set(0.5, 0.5, 0.5);
 
@@ -1335,6 +1466,31 @@ export default function ResumeSpace3D({
 
         spaceshipLightsRef.current = exteriorLights;
 
+        // Create dedicated engine light for boost effects
+        const engineLight = new THREE.PointLight(0x6699ff, 0.5, 30);
+        engineLight.position.set(0, 0, -4); // Back of ship
+        spaceship.add(engineLight);
+        spaceshipEngineLightRef.current = engineLight;
+
+        // Create interior lights (for cabin and cockpit)
+        const interiorLights: THREE.PointLight[] = [];
+        const interiorLightPositions = [
+          new THREE.Vector3(0, 0.8, 0), // Center ceiling light
+          new THREE.Vector3(1.5, 0.5, 1), // Cabin area (right front)
+          new THREE.Vector3(0, 0.6, 3.5), // Cockpit area
+          new THREE.Vector3(-1, 0.5, 0), // Left side
+          new THREE.Vector3(1, 0.5, 0), // Right side
+        ];
+
+        interiorLightPositions.forEach((pos) => {
+          const light = new THREE.PointLight(0xffd9b3, 2, 8); // Warm interior lighting
+          light.position.copy(pos);
+          spaceship.add(light);
+          interiorLights.push(light);
+        });
+
+        spaceshipInteriorLightsRef.current = interiorLights;
+
         scene.add(spaceship);
         spaceshipRef.current = spaceship;
 
@@ -1346,7 +1502,38 @@ export default function ResumeSpace3D({
           const numWaypoints = 8;
 
           for (let i = 0; i < numWaypoints; i++) {
-            // Create waypoints that explore the space between planets
+            // 30% chance to target a random moon instead of random space
+            if (Math.random() < 0.3 && items.length > 0) {
+              // Find all moons
+              const moons = items.filter(
+                (item) => item.mesh.userData?.isMoon === true,
+              );
+
+              if (moons.length > 0) {
+                // Pick random moon
+                const randomMoon =
+                  moons[Math.floor(Math.random() * moons.length)];
+                const moonWorldPos = new THREE.Vector3();
+                randomMoon.mesh.getWorldPosition(moonWorldPos);
+
+                // Position near the moon (30 units away)
+                const offset = new THREE.Vector3(
+                  (Math.random() - 0.5) * 60,
+                  (Math.random() - 0.5) * 40,
+                  (Math.random() - 0.5) * 60,
+                )
+                  .normalize()
+                  .multiplyScalar(30);
+
+                waypoints.push(moonWorldPos.clone().add(offset));
+                console.log(
+                  `🌙 Spaceship will visit moon: ${randomMoon.mesh.userData.planetName}`,
+                );
+                continue;
+              }
+            }
+
+            // Regular random waypoint
             const angle = (i / numWaypoints) * Math.PI * 2;
             const radius = 200 + Math.random() * 800;
             const height = (Math.random() - 0.5) * 400;
@@ -2473,19 +2660,203 @@ export default function ResumeSpace3D({
       }
 
       // --- SPACESHIP ANIMATION ---
-      if (
-        spaceshipRef.current &&
-        spaceshipPathRef.current.waypoints.length > 0
-      ) {
-        const pathData = spaceshipPathRef.current;
+      if (spaceshipRef.current) {
         const ship = spaceshipRef.current;
+
+        if (manualFlightModeRef.current) {
+          // MANUAL FLIGHT MODE
+          const manual = manualFlightRef.current;
+          const keyboard = keyboardStateRef.current;
+
+          // Calculate direction based on keyboard input
+          const baseTurnRate = 0.003; // Base turn rate (very subtle)
+          const turnRate = baseTurnRate * controlSensitivityRef.current; // Use ref, not state
+          const springBackRate = 0.08; // How fast ship returns to neutral
+          const invertMultiplier = invertControlsRef.current ? -1 : 1; // Use ref, not state
+
+          // Apply incremental rotation when keys are pressed
+          if (keyboard.ArrowUp) {
+            ship.rotation.x += turnRate * invertMultiplier; // Pitch up (nose up)
+            manual.targetPitch = 0.03 * invertMultiplier; // Visual tilt (reduced)
+          } else if (keyboard.ArrowDown) {
+            ship.rotation.x -= turnRate * invertMultiplier; // Pitch down (nose down)
+            manual.targetPitch = -0.03 * invertMultiplier;
+          } else {
+            manual.targetPitch = 0; // Spring back when not pressed
+          }
+
+          if (keyboard.ArrowLeft) {
+            ship.rotation.y += turnRate * invertMultiplier; // Yaw left (inverted if enabled)
+            manual.targetYaw = 0.03 * invertMultiplier;
+          } else if (keyboard.ArrowRight) {
+            ship.rotation.y -= turnRate * invertMultiplier; // Yaw right (inverted if enabled)
+            manual.targetYaw = -0.03 * invertMultiplier;
+          } else {
+            manual.targetYaw = 0; // Spring back when not pressed
+          }
+
+          if (keyboard.KeyZ) {
+            ship.rotation.z += turnRate * 0.5; // Roll left
+            manual.targetRoll = 0.03;
+          } else if (keyboard.KeyC) {
+            ship.rotation.z -= turnRate * 0.5; // Roll right
+            manual.targetRoll = -0.03;
+          } else {
+            manual.targetRoll = 0; // Spring back when not pressed
+          }
+
+          // Smooth visual tilt for physics feel (ship rocks gently)
+          manual.pitch += (manual.targetPitch - manual.pitch) * springBackRate;
+          manual.yaw += (manual.targetYaw - manual.yaw) * springBackRate;
+          manual.roll += (manual.targetRoll - manual.roll) * springBackRate;
+
+          // Handle acceleration with physics
+          manual.isAccelerating = keyboard.ShiftLeft;
+
+          if (manual.isAccelerating) {
+            // Gradual acceleration buildup
+            manual.acceleration = Math.min(manual.acceleration + 0.008, 1.0);
+            
+            // Check for turbo mode (at 100% for 3 seconds)
+            if (manual.acceleration >= 1.0) {
+              if (manual.turboStartTime === 0) {
+                manual.turboStartTime = Date.now();
+              } else if (Date.now() - manual.turboStartTime >= 3000 && !manual.isTurboActive) {
+                manual.isTurboActive = true;
+                vlog("🔥 TURBO MODE ACTIVATED!");
+              }
+            } else {
+              manual.turboStartTime = 0;
+              manual.isTurboActive = false;
+            }
+          } else {
+            // Gentle, gradual deceleration (coasting physics)
+            manual.acceleration = Math.max(manual.acceleration - 0.005, 0);
+            manual.turboStartTime = 0;
+            manual.isTurboActive = false;
+          }
+          
+          // Update speed based on acceleration (turbo adds 50% speed boost)
+          const turboMultiplier = manual.isTurboActive ? 1.5 : 1.0;
+          manual.currentSpeed = manual.acceleration * manual.maxSpeed * turboMultiplier;
+
+          // Calculate forward direction from ship's rotation
+          const direction = new THREE.Vector3(0, 0, 1);
+          const rotationMatrix = new THREE.Matrix4();
+          rotationMatrix.makeRotationFromEuler(new THREE.Euler(ship.rotation.x - manual.pitch, ship.rotation.y - manual.yaw, ship.rotation.z - manual.roll));
+          direction.applyMatrix4(rotationMatrix);
+
+          // Apply velocity
+          ship.position.add(direction.multiplyScalar(manual.currentSpeed));
+
+          // Camera follows ship in 3rd person view (like a game)
+          if (followingSpaceshipRef.current && sceneRef.current.controls) {
+            const cameraDistance = 60; // Distance behind ship
+            const cameraHeight = 20; // Height above ship
+            
+            // Calculate camera position behind and above ship
+            const backwardDirection = new THREE.Vector3(0, 0, -1);
+            backwardDirection.applyQuaternion(ship.quaternion);
+            
+            const cameraTargetPos = ship.position.clone()
+              .add(backwardDirection.multiplyScalar(cameraDistance))
+              .add(new THREE.Vector3(0, cameraHeight, 0));
+            
+            // Smooth camera follow
+            camera.position.lerp(cameraTargetPos, 0.1);
+            
+            // Camera looks at ship
+            sceneRef.current.controls.target.lerp(ship.position, 0.1);
+            sceneRef.current.controls.update();
+          }
+
+          // Boost engine light intensity when accelerating
+          if (spaceshipEngineLightRef.current) {
+            const engineLight = spaceshipEngineLightRef.current;
+            const baseIntensity = 0.5;
+            const turboBoost = manual.isTurboActive ? 3 : 0;
+            const boostIntensity = (manual.acceleration * 8) + turboBoost; // Much stronger boost
+            engineLight.intensity = baseIntensity + boostIntensity;
+            
+            // Shift color from white to cyan-blue during acceleration
+            if (manual.acceleration > 0) {
+              const blueAmount = 0.3 + manual.acceleration * 0.7;
+              const turboGlow = manual.isTurboActive ? 1.5 : 1.0;
+              engineLight.color.setRGB(
+                blueAmount * 0.3 * turboGlow,  // Less red
+                blueAmount * 0.6 * turboGlow,  // Medium green
+                blueAmount * 1.0 * turboGlow   // Full blue
+              );
+            } else {
+              // Reset to default blue when not accelerating
+              engineLight.color.set(0x6699ff);
+            }
+          }
+
+          // Also enhance the ship's built-in blue emissive materials
+          ship.traverse((child) => {
+            if (child instanceof THREE.Mesh && child.material) {
+              const materials = Array.isArray(child.material) ? child.material : [child.material];
+              materials.forEach((mat) => {
+                // If material has emissive property and it's blue-ish
+                if (mat.emissive && mat.emissive.getHex() > 0) {
+                  const baseEmissive = mat.userData.baseEmissive || mat.emissive.clone();
+                  if (!mat.userData.baseEmissive) {
+                    mat.userData.baseEmissive = baseEmissive;
+                  }
+                  // Boost emissive intensity during acceleration (much stronger in turbo)
+                  const turboBoost = manual.isTurboActive ? 3 : 0;
+                  const boostFactor = 1 + (manual.acceleration * 6) + turboBoost;
+                  mat.emissive.copy(baseEmissive).multiplyScalar(boostFactor);
+                  mat.emissiveIntensity = 1 + (manual.acceleration * 4) + turboBoost;
+                }
+              });
+            }
+          });
+        } else if (spaceshipPathRef.current.waypoints.length > 0) {
+          // AUTOPILOT MODE (existing behavior)
+          const pathData = spaceshipPathRef.current;
+
+          // Check if we're visiting a moon
+          if (pathData.visitingMoon) {
+          const elapsed = Date.now() - pathData.moonVisitStartTime;
+
+          if (elapsed >= pathData.moonVisitDuration) {
+            // Finished visiting moon
+            pathData.visitingMoon = false;
+            pathData.currentMoonTarget = null;
+            console.log("🚀 Finished moon visit, resuming flight");
+          } else {
+            // Orbit around the moon slowly
+            if (pathData.currentMoonTarget) {
+              const orbitSpeed = 0.0005;
+              const orbitRadius = 30;
+              const orbitAngle = (elapsed * orbitSpeed) % (Math.PI * 2);
+
+              const orbitX =
+                pathData.currentMoonTarget.x +
+                Math.cos(orbitAngle) * orbitRadius;
+              const orbitY =
+                pathData.currentMoonTarget.y + Math.sin(orbitAngle * 0.5) * 10;
+              const orbitZ =
+                pathData.currentMoonTarget.z +
+                Math.sin(orbitAngle) * orbitRadius;
+
+              ship.position.set(orbitX, orbitY, orbitZ);
+              ship.lookAt(pathData.currentMoonTarget);
+            }
+            // Skip normal movement
+            return;
+          }
+        }
 
         // Smoothly accelerate/decelerate to target speed (never stop)
         pathData.speed += (pathData.targetSpeed - pathData.speed) * 0.02;
 
         // Apply travel speed multiplier from options
-        const speedMultiplier = (optionsRef.current.spaceTravelSpeed ?? 50) / 50;
-        
+        const speedMultiplier =
+          (optionsRef.current.spaceTravelSpeed ?? 50) / 50;
+
         // Move along path
         pathData.progress += pathData.speed * speedMultiplier;
 
@@ -2494,13 +2865,34 @@ export default function ResumeSpace3D({
           pathData.currentIndex =
             (pathData.currentIndex + 1) % pathData.waypoints.length;
 
+          // Check if next waypoint is near a moon
+          const nextWaypoint = pathData.waypoints[pathData.currentIndex];
+          const moons = items.filter(
+            (item) => item.mesh.userData?.isMoon === true,
+          );
+
+          for (const moonItem of moons) {
+            const moonWorldPos = new THREE.Vector3();
+            moonItem.mesh.getWorldPosition(moonWorldPos);
+
+            // If waypoint is within 50 units of moon, start visit
+            if (nextWaypoint.distanceTo(moonWorldPos) < 50) {
+              pathData.visitingMoon = true;
+              pathData.moonVisitStartTime = Date.now();
+              pathData.currentMoonTarget = moonWorldPos.clone();
+              console.log(
+                `🌙 Starting moon visit: ${moonItem.mesh.userData.planetName}`,
+              );
+              break;
+            }
+          }
+
           // Randomly vary speed for natural movement
           pathData.targetSpeed = 0.002 + Math.random() * 0.002;
 
           // Very rarely trigger a barrel roll - 3% chance
           if (Math.random() < 0.03) {
-            pathData.rollSpeed =
-              (Math.random() > 0.5 ? 1 : -1) * 0.02;
+            pathData.rollSpeed = (Math.random() > 0.5 ? 1 : -1) * 0.02;
             pathData.rollAmount = Math.PI * 2;
           }
         }
@@ -2546,34 +2938,130 @@ export default function ResumeSpace3D({
 
         // If following spaceship, move camera and target with ship while maintaining user's viewing angle
         if (followingSpaceshipRef.current) {
-          // Get the user's desired follow distance
-          const followDistance = optionsRef.current.spaceFollowDistance || 60;
+          if (insideShipRef.current) {
+            // Inside ship view - camera moves with ship, user can zoom/look around
 
-          // Update the camera offset if user has moved the camera (via orbit controls)
-          const currentOffset = camera.position.clone().sub(ship.position);
+            // Get ship's world position and rotation
+            const shipWorldPos = new THREE.Vector3();
+            const shipWorldQuat = new THREE.Quaternion();
+            ship.getWorldPosition(shipWorldPos);
+            ship.getWorldQuaternion(shipWorldQuat);
 
-          // Only update stored offset if it's significantly different (user dragged)
-          if (currentOffset.distanceTo(spaceshipCameraOffsetRef.current) > 1) {
-            spaceshipCameraOffsetRef.current.copy(currentOffset);
-          }
+            if (sceneRef.current.controls) {
+              // Calculate the target point (where we're looking) in ship's local space
+              const targetOffset =
+                shipViewModeRef.current === "cockpit"
+                  ? new THREE.Vector3(0, 0.5, 10) // Cockpit: look forward through window
+                  : new THREE.Vector3(0.5, 0, 0); // Cabin: look at cabin center (right front area)
 
-          // Scale the offset to match the desired follow distance
-          const scaledOffset = spaceshipCameraOffsetRef.current
-            .clone()
-            .normalize()
-            .multiplyScalar(followDistance);
+              // Transform target to world space
+              const localTargetOffset = targetOffset
+                .clone()
+                .applyQuaternion(shipWorldQuat);
+              const worldTarget = shipWorldPos.clone().add(localTargetOffset);
 
-          // Apply the scaled offset to maintain viewing angle at correct distance
-          const desiredCameraPos = ship.position.clone().add(scaledOffset);
-          camera.position.copy(desiredCameraPos);
+              // Get camera's current offset from the target (in world space)
+              const currentCameraOffset = camera.position
+                .clone()
+                .sub(sceneRef.current.controls.target);
 
-          // Update orbit controls target to ship position
-          if (sceneRef.current.controls) {
-            sceneRef.current.controls.target.copy(ship.position);
-            sceneRef.current.controls.update();
+              // Update target to follow ship
+              sceneRef.current.controls.target.copy(worldTarget);
+
+              // Calculate desired camera position
+              const desiredCameraPos = worldTarget
+                .clone()
+                .add(currentCameraOffset);
+
+              // Constrain camera to stay inside ship bounds (in ship's local space)
+              const shipLocalCameraPos = desiredCameraPos
+                .clone()
+                .sub(shipWorldPos);
+              // Convert to ship's local coordinate system
+              const inverseQuat = shipWorldQuat.clone().invert();
+              shipLocalCameraPos.applyQuaternion(inverseQuat);
+
+              // Define ship interior bounds (adjust based on model size)
+              const bounds =
+                shipViewModeRef.current === "cockpit"
+                  ? { x: 1.2, y: 1, z: 6 } // Cockpit bounds (forward area)
+                  : { x: 2.5, y: 1.2, z: 3 }; // Cabin bounds (right front area)
+
+              // Clamp camera position within bounds
+              shipLocalCameraPos.x = Math.max(
+                -bounds.x,
+                Math.min(bounds.x, shipLocalCameraPos.x),
+              );
+              shipLocalCameraPos.y = Math.max(
+                -bounds.y,
+                Math.min(bounds.y, shipLocalCameraPos.y),
+              );
+              shipLocalCameraPos.z = Math.max(
+                -bounds.z,
+                Math.min(bounds.z, shipLocalCameraPos.z),
+              );
+
+              // Convert back to world space
+              shipLocalCameraPos.applyQuaternion(shipWorldQuat);
+              const constrainedCameraPos = shipWorldPos
+                .clone()
+                .add(shipLocalCameraPos);
+
+              // Apply constrained camera position
+              camera.position.copy(constrainedCameraPos);
+
+              // Configure controls for interior view
+              sceneRef.current.controls.enablePan = false;
+              sceneRef.current.controls.enableRotate = true;
+              sceneRef.current.controls.enableZoom = true;
+
+              if (shipViewModeRef.current === "cockpit") {
+                // Cockpit: Allow zoom to window (close) or back to see cockpit (far)
+                sceneRef.current.controls.minDistance = 0.3; // Zoom close to window
+                sceneRef.current.controls.maxDistance = 4; // Zoom out to see cockpit
+              } else {
+                // Interior: Allow zoom around cabin
+                sceneRef.current.controls.minDistance = 0.5; // Zoom close to details
+                sceneRef.current.controls.maxDistance = 3.5; // Zoom out to see cabin
+              }
+
+              sceneRef.current.controls.update();
+            }
+          } else {
+            // Exterior follow view (existing logic)
+            const followDistance = optionsRef.current.spaceFollowDistance || 60;
+
+            // Update the camera offset if user has moved the camera (via orbit controls)
+            const currentOffset = camera.position.clone().sub(ship.position);
+
+            // Only update stored offset if it's significantly different (user dragged)
+            if (
+              currentOffset.distanceTo(spaceshipCameraOffsetRef.current) > 1
+            ) {
+              spaceshipCameraOffsetRef.current.copy(currentOffset);
+            }
+
+            // Scale the offset to match the desired follow distance
+            const scaledOffset = spaceshipCameraOffsetRef.current
+              .clone()
+              .normalize()
+              .multiplyScalar(followDistance);
+
+            // Apply the scaled offset to maintain viewing angle at correct distance
+            const desiredCameraPos = ship.position.clone().add(scaledOffset);
+            camera.position.copy(desiredCameraPos);
+
+            // Update orbit controls target to ship position
+            if (sceneRef.current.controls) {
+              sceneRef.current.controls.target.copy(ship.position);
+              sceneRef.current.controls.enablePan = true;
+              sceneRef.current.controls.maxDistance = 1000; // Reset to normal
+              sceneRef.current.controls.update();
+            }
           }
         }
-      }
+        } // End of autopilot mode block
+      } // End of spaceship animation
 
       // Rotate Sun
       sunMesh.rotation.y += 0.002;
@@ -2821,7 +3309,7 @@ export default function ResumeSpace3D({
       items.forEach((item) => {
         const isMoon = item.mesh.userData?.isMoon === true;
         const sm = isMoon ? moonSpeedMultiplier : planetSpeedMultiplier;
-        
+
         // Only update orbital position if speed is greater than 0
         // Also skip if this is a focused moon
         if (sm > 0) {
@@ -2835,22 +3323,26 @@ export default function ResumeSpace3D({
 
         // Self rotation: use moon spin speed control for moons, base spin for planets
         const isMoonBody = item.mesh.userData?.isMoon === true;
-        
+
         // Get moon spin speed multiplier from options (default to 1.0 if not set)
-        const moonSpinMultiplier = optionsRef.current.spaceMoonSpinSpeed !== undefined
-          ? optionsRef.current.spaceMoonSpinSpeed
-          : 1.0;
-        
+        const moonSpinMultiplier =
+          optionsRef.current.spaceMoonSpinSpeed !== undefined
+            ? optionsRef.current.spaceMoonSpinSpeed
+            : 1.0;
+
         const baseSpin = isMoonBody ? 0.02 * moonSpinMultiplier : 0.008; // moons use multiplier
-        
+
         // For planets that have moons as children, only apply rotation if moon orbit speed > 0
         // Otherwise the planet rotation causes moons to orbit even when speed is 0
-        const isPlanetWithPotentialMoons = item.mesh.userData?.isMainPlanet === true;
-        const shouldRotate = !isPlanetWithPotentialMoons || moonSpeedMultiplier > 0;
-        
+        const isPlanetWithPotentialMoons =
+          item.mesh.userData?.isMainPlanet === true;
+        const shouldRotate =
+          !isPlanetWithPotentialMoons || moonSpeedMultiplier > 0;
+
         // Only rotate if should rotate AND if it's not a moon with 0 spin speed
-        const shouldApplySpin = shouldRotate && (!isMoonBody || moonSpinMultiplier > 0);
-        
+        const shouldApplySpin =
+          shouldRotate && (!isMoonBody || moonSpinMultiplier > 0);
+
         if (shouldApplySpin) {
           item.mesh.rotation.y += baseSpin;
         }
@@ -2867,6 +3359,89 @@ export default function ResumeSpace3D({
 
           // decay spin slowly
           spin.multiplyScalar(0.995);
+        }
+      });
+
+      // Check occlusion for CSS2D labels
+      const raycaster = new THREE.Raycaster();
+      raycaster.camera = camera; // Set camera for sprite raycasting
+      const cameraDirection = new THREE.Vector3();
+
+      items.forEach((item) => {
+        // Skip if mesh is not fully initialized
+        if (!item.mesh || !item.mesh.matrixWorld) return;
+
+        // Find the CSS2DObject label in the mesh's children
+        const label = item.mesh.children.find(
+          (child) => child instanceof CSS2DObject,
+        ) as CSS2DObject | undefined;
+
+        if (label) {
+          try {
+            // Get label position in world space
+            const labelPos = new THREE.Vector3();
+            label.getWorldPosition(labelPos);
+
+            // Calculate direction from camera to label
+            cameraDirection.copy(labelPos).sub(camera.position).normalize();
+
+            // Set up raycaster
+            raycaster.set(camera.position, cameraDirection);
+
+            // Calculate distance to label
+            const distanceToLabel = camera.position.distanceTo(labelPos);
+
+            // Check intersections with all celestial bodies and spaceship
+            let isOccluded = false;
+
+            // Check other planets/moons
+            for (const otherItem of items) {
+              if (
+                otherItem !== item &&
+                otherItem.mesh &&
+                otherItem.mesh.matrixWorld
+              ) {
+                const intersects = raycaster.intersectObject(
+                  otherItem.mesh,
+                  false, // Don't recurse to avoid sprites
+                );
+                // If something intersects before reaching the label, it's occluded
+                if (
+                  intersects.length > 0 &&
+                  intersects[0].distance < distanceToLabel - 5
+                ) {
+                  isOccluded = true;
+                  break;
+                }
+              }
+            }
+
+            // Check spaceship
+            if (
+              !isOccluded &&
+              spaceshipRef.current &&
+              spaceshipRef.current.matrixWorld
+            ) {
+              const intersects = raycaster.intersectObject(
+                spaceshipRef.current,
+                false, // Don't recurse to avoid sprites
+              );
+              if (
+                intersects.length > 0 &&
+                intersects[0].distance < distanceToLabel - 5
+              ) {
+                isOccluded = true;
+              }
+            }
+
+            // Update label visibility with smooth transition
+            if (label.element) {
+              label.element.style.transition = "opacity 0.2s ease-in-out";
+              label.element.style.opacity = isOccluded ? "0" : "1";
+            }
+          } catch (error) {
+            // Silently skip if there's an error with this label
+          }
         }
       });
 
@@ -3059,11 +3634,171 @@ export default function ResumeSpace3D({
             vlog("🛑 Tour ended");
           }}
           followingSpaceship={followingSpaceship}
+          insideShip={insideShip}
+          shipViewMode={shipViewMode}
+          onEnterShip={() => {
+            setInsideShip(true);
+            insideShipRef.current = true;
+            setShipViewMode("interior");
+            shipViewModeRef.current = "interior";
+
+            // Initialize camera inside ship at cabin location (right front)
+            if (
+              spaceshipRef.current &&
+              sceneRef.current.camera &&
+              sceneRef.current.controls
+            ) {
+              const ship = spaceshipRef.current;
+              const shipWorldPos = new THREE.Vector3();
+              const shipWorldQuat = new THREE.Quaternion();
+              ship.getWorldPosition(shipWorldPos);
+              ship.getWorldQuaternion(shipWorldQuat);
+
+              // Cabin is at right front (1.5 right, 0.2 up, 1 forward in ship local space)
+              const cabinLocalPos = new THREE.Vector3(1.5, 0.2, 1);
+              const cabinWorldPos = cabinLocalPos
+                .clone()
+                .applyQuaternion(shipWorldQuat)
+                .add(shipWorldPos);
+
+              // Camera looks into cabin center
+              const cabinLookTarget = new THREE.Vector3(0.5, 0, 0)
+                .applyQuaternion(shipWorldQuat)
+                .add(shipWorldPos);
+
+              sceneRef.current.camera.position.copy(cabinWorldPos);
+              sceneRef.current.controls.target.copy(cabinLookTarget);
+              sceneRef.current.controls.update();
+            }
+
+            vlog("🛸 Entering ship - interior view (cabin)");
+          }}
+          onExitShip={() => {
+            setInsideShip(false);
+            insideShipRef.current = false;
+            setShipViewMode("exterior");
+            shipViewModeRef.current = "exterior";
+            vlog("🚪 Exiting ship - exterior view");
+          }}
+          onGoToCockpit={() => {
+            setShipViewMode("cockpit");
+            shipViewModeRef.current = "cockpit";
+
+            // Position camera in cockpit looking forward
+            if (
+              spaceshipRef.current &&
+              sceneRef.current.camera &&
+              sceneRef.current.controls
+            ) {
+              const ship = spaceshipRef.current;
+              const shipWorldPos = new THREE.Vector3();
+              const shipWorldQuat = new THREE.Quaternion();
+              ship.getWorldPosition(shipWorldPos);
+              ship.getWorldQuaternion(shipWorldQuat);
+
+              // Cockpit position (center, slightly up, forward)
+              const cockpitLocalPos = new THREE.Vector3(0, 0.5, 3);
+              const cockpitWorldPos = cockpitLocalPos
+                .clone()
+                .applyQuaternion(shipWorldQuat)
+                .add(shipWorldPos);
+
+              // Look forward through window
+              const windowTarget = new THREE.Vector3(0, 0.5, 10)
+                .applyQuaternion(shipWorldQuat)
+                .add(shipWorldPos);
+
+              sceneRef.current.camera.position.copy(cockpitWorldPos);
+              sceneRef.current.controls.target.copy(windowTarget);
+              sceneRef.current.controls.update();
+            }
+
+            vlog("✈️ Moving to cockpit");
+          }}
+          onGoToInterior={() => {
+            setShipViewMode("interior");
+            shipViewModeRef.current = "interior";
+
+            // Return to cabin location
+            if (
+              spaceshipRef.current &&
+              sceneRef.current.camera &&
+              sceneRef.current.controls
+            ) {
+              const ship = spaceshipRef.current;
+              const shipWorldPos = new THREE.Vector3();
+              const shipWorldQuat = new THREE.Quaternion();
+              ship.getWorldPosition(shipWorldPos);
+              ship.getWorldQuaternion(shipWorldQuat);
+
+              // Cabin position (right front)
+              const cabinLocalPos = new THREE.Vector3(1.5, 0.2, 1);
+              const cabinWorldPos = cabinLocalPos
+                .clone()
+                .applyQuaternion(shipWorldQuat)
+                .add(shipWorldPos);
+
+              // Look into cabin center
+              const cabinLookTarget = new THREE.Vector3(0.5, 0, 0)
+                .applyQuaternion(shipWorldQuat)
+                .add(shipWorldPos);
+
+              sceneRef.current.camera.position.copy(cabinWorldPos);
+              sceneRef.current.controls.target.copy(cabinLookTarget);
+              sceneRef.current.controls.update();
+            }
+
+            vlog("🚪 Moving to main interior (cabin)");
+          }}
           shipExteriorLights={shipExteriorLights}
           onShipExteriorLightsChange={setShipExteriorLights}
+          shipInteriorLights={shipInteriorLights}
+          onShipInteriorLightsChange={setShipInteriorLights}
+          manualFlightMode={manualFlightMode}
+          onManualFlightModeChange={(value) => {
+            setManualFlightMode(value);
+            manualFlightModeRef.current = value;
+            
+            // Reset manual flight state when switching modes
+            if (value) {
+              // Entering manual mode - reset physics
+              manualFlightRef.current.velocity.set(0, 0, 0);
+              manualFlightRef.current.acceleration = 0;
+              manualFlightRef.current.currentSpeed = 0;
+              manualFlightRef.current.pitch = 0;
+              manualFlightRef.current.yaw = 0;
+              manualFlightRef.current.roll = 0;
+              manualFlightRef.current.targetPitch = 0;
+              manualFlightRef.current.targetYaw = 0;
+              manualFlightRef.current.targetRoll = 0;
+              manualFlightRef.current.isAccelerating = false;
+              vlog("✋ Manual flight mode activated - Take control!");
+            } else {
+              // Returning to autopilot
+              vlog("🤖 Autopilot engaged - Ship will resume autonomous flight");
+            }
+          }}
+          manualFlightSpeed={manualFlightRef.current.currentSpeed}
+          manualFlightMaxSpeed={manualFlightRef.current.maxSpeed}
+          keyboardState={keyboardStateRef.current}
+          keyboardUpdateTrigger={keyboardUpdateTrigger}
+          invertControls={invertControls}
+          onInvertControlsChange={(value) => {
+            setInvertControls(value);
+            invertControlsRef.current = value;
+          }}
+          controlSensitivity={controlSensitivity}
+          onControlSensitivityChange={(value) => {
+            setControlSensitivity(value);
+            controlSensitivityRef.current = value;
+          }}
           onStopFollowing={() => {
             setFollowingSpaceship(false);
             followingSpaceshipRef.current = false;
+            setInsideShip(false);
+            insideShipRef.current = false;
+            setShipViewMode("exterior");
+            shipViewModeRef.current = "exterior";
             if (sceneRef.current.controls) {
               sceneRef.current.controls.enabled = true;
             }
