@@ -552,9 +552,13 @@ export class NavigationInterface {
         if (submenu) {
           const isVisible = submenu.style.display !== "none";
           submenu.style.display = isVisible ? "none" : "block";
+
+          // Only navigate to Experience planet if submenu is being hidden
+          // Otherwise just show the submenu
+          if (isVisible) {
+            this.onNavigate?.("experience");
+          }
         }
-        // Also navigate to the Experience planet
-        this.onNavigate?.("experience");
         return; // Avoid falling through
       }
       // Note: Navigation for dynamic submenu items is handled where they are created
