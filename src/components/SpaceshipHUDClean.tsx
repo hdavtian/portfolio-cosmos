@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { DiagramStyleOptions } from "./DiagramSettings";
 import "./SpaceshipHUDClean.scss";
@@ -70,11 +70,48 @@ const SpaceshipHUD: React.FC<Props> = ({
   onConsoleLog,
 }) => {
   const [cosmosExpanded, setCosmosExpanded] = useState(true);
+  const [contextualPosition, setContextualPosition] = useState({
+    right: 20,
+    bottom: 20,
+  });
 
   const cosmosContainer =
     typeof document !== "undefined"
       ? document.getElementById("cosmos-options-container")
       : null;
+
+  // Calculate contextual controls position based on HUD dimensions
+  useEffect(() => {
+    const calculatePosition = () => {
+      if (typeof document === "undefined") return;
+
+      const rightPanel = document.querySelector(
+        ".spaceship-hud__right",
+      ) as HTMLElement;
+      const footer = document.querySelector(
+        ".spaceship-hud__footer",
+      ) as HTMLElement;
+
+      const rightWidth = rightPanel?.offsetWidth || 0;
+      const footerHeight = footer?.offsetHeight || 0;
+
+      setContextualPosition({
+        right: rightWidth + 50,
+        bottom: footerHeight + 50,
+      });
+    };
+
+    // Calculate on mount
+    calculatePosition();
+
+    // Recalculate on window resize
+    window.addEventListener("resize", calculatePosition);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener("resize", calculatePosition);
+    };
+  }, [followingSpaceship]); // Recalculate when following state changes
 
   const handleCosmosOptionChange = (
     key: keyof DiagramStyleOptions,
@@ -940,7 +977,13 @@ const SpaceshipHUD: React.FC<Props> = ({
       {followingSpaceship &&
         typeof document !== "undefined" &&
         createPortal(
-          <div className="contextual-controls">
+          <div
+            className="contextual-controls"
+            style={{
+              right: `${contextualPosition.right}px`,
+              bottom: `${contextualPosition.bottom}px`,
+            }}
+          >
             <div className="contextual-controls-header">
               <span>🚀 SHIP CONTROLS</span>
             </div>
