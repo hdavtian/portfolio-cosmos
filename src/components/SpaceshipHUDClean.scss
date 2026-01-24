@@ -42,3 +42,124 @@
     cursor: pointer;
     font-family: 'Rajdhani', sans-serif;
 }
+
+/* Contextual Controls - Floating ship controls */
+
+.contextual-controls {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+
+    background: rgba(15, 20, 25, 0.95);
+    border: 2px solid rgba(212, 175, 55, 0.6);
+    border-radius: 12px;
+    padding: 16px 24px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+        0 0 20px rgba(212, 175, 55, 0.3);
+
+    font-family: 'Rajdhani', sans-serif;
+    z-index: 1000;
+
+    min-width: 280px;
+    max-width: 320px;
+
+    animation: slideInRight 0.4s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.contextual-controls-header {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #d4af37;
+    letter-spacing: 2px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.contextual-control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        color: #8a9199;
+        font-size: 12px;
+        cursor: pointer;
+
+        input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #d4af37;
+            margin-right: 8px;
+        }
+
+        input[type="range"] {
+            cursor: pointer;
+
+            &::-webkit-slider-thumb {
+                background: #d4af37;
+            }
+
+            &::-moz-range-thumb {
+                background: #d4af37;
+            }
+        }
+
+        .value {
+            text-align: right;
+            font-weight: 700;
+            color: #d4af37;
+        }
+
+        >span:first-child {
+            font-weight: 600;
+            color: #a8b2bd;
+        }
+    }
+}
+
+.contextual-stop-button {
+    background: rgba(220, 38, 38, 0.2);
+    border: 2px solid rgba(220, 38, 38, 0.6);
+    color: #ff5555;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+
+    &:hover {
+        background: rgba(220, 38, 38, 0.4);
+        border-color: rgba(220, 38, 38, 0.8);
+        box-shadow: 0 0 15px rgba(220, 38, 38, 0.5);
+        transform: scale(1.02);
+    }
+
+    &:active {
+        transform: scale(0.98);
+    }
+}

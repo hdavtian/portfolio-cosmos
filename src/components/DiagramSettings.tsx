@@ -50,6 +50,8 @@ export interface DiagramStyleOptions {
   spaceShowOrbits?: boolean;
   spaceSunColor?: string;
   spaceTintSunMesh?: boolean;
+  spaceFollowDistance?: number;
+  spaceTravelSpeed?: number;
 }
 
 interface DiagramSettingsProps {

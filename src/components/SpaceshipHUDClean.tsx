@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import type { DiagramStyleOptions } from "./DiagramSettings";
+import "./SpaceshipHUDClean.scss";
 
 type HUDSection = { id: string; title: string; content: string | string[] };
 type HUDContent = {
@@ -26,6 +27,10 @@ type Props = {
   onTourNext: () => void;
   onTourRestart: () => void;
   onTourEnd: () => void;
+  followingSpaceship?: boolean;
+  shipExteriorLights?: boolean;
+  onShipExteriorLightsChange?: (value: boolean) => void;
+  onStopFollowing?: () => void;
   isTransitioning?: boolean;
   speed?: number;
   content: HUDContent | null;
@@ -51,6 +56,10 @@ const SpaceshipHUD: React.FC<Props> = ({
   onTourNext,
   onTourRestart,
   onTourEnd,
+  followingSpaceship = false,
+  shipExteriorLights = false,
+  onShipExteriorLightsChange,
+  onStopFollowing,
   isTransitioning = false,
   speed = 0,
   content,
@@ -100,6 +109,11 @@ const SpaceshipHUD: React.FC<Props> = ({
           break;
         case "spaceShowOrbits":
           onConsoleLog(`⭕ Orbit lines ${value ? "visible" : "hidden"}`);
+          break;
+        case "spaceFollowDistance":
+          onConsoleLog(
+            `📏 Ship follow distance set to ${Number(value).toFixed(0)}`,
+          );
           break;
         default:
           onConsoleLog(`⚙️ Setting '${String(key)}' updated`);
@@ -167,6 +181,50 @@ const SpaceshipHUD: React.FC<Props> = ({
         className="spaceship-hud__right"
       >
         <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+          {followingSpaceship && (
+            <div style={{ marginBottom: 12 }}>
+              <div
+                className="overlay-subtitle"
+                style={{
+                  textAlign: "center",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  color: "#e8c547",
+                }}
+              >
+                🚀 FOLLOWING SPACESHIP
+              </div>
+              <div style={{ marginTop: 8, textAlign: "center" }}>
+                <button
+                  className="section-tab"
+                  onClick={onStopFollowing}
+                  style={{
+                    color: "#fff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    background: "rgba(212, 55, 55, 0.2)",
+                    border: "1px solid rgba(212, 55, 55, 0.5)",
+                    padding: "8px 24px",
+                    cursor: "pointer",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(212, 55, 55, 0.4)";
+                    e.currentTarget.style.borderColor =
+                      "rgba(212, 55, 55, 0.8)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(212, 55, 55, 0.2)";
+                    e.currentTarget.style.borderColor =
+                      "rgba(212, 55, 55, 0.5)";
+                  }}
+                >
+                  🛑 STOP FOLLOWING
+                </button>
+              </div>
+            </div>
+          )}
           {tourActive && (
             <div style={{ marginBottom: 12 }}>
               <div
@@ -698,6 +756,41 @@ const SpaceshipHUD: React.FC<Props> = ({
                       fontFamily: "'Rajdhani', sans-serif",
                     }}
                   >
+                    Ship Follow Distance:{" "}
+                    {cosmosOptions.spaceFollowDistance !== undefined
+                      ? cosmosOptions.spaceFollowDistance.toFixed(0)
+                      : "60"}
+                  </label>
+                  <input
+                    type="range"
+                    min="20"
+                    max="150"
+                    step="5"
+                    value={
+                      cosmosOptions.spaceFollowDistance !== undefined
+                        ? (cosmosOptions.spaceFollowDistance as number)
+                        : 60
+                    }
+                    onChange={(e) =>
+                      handleCosmosOptionChange(
+                        "spaceFollowDistance",
+                        Number(e.target.value),
+                      )
+                    }
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      color: "#8a9199",
+                      fontSize: 11,
+                      display: "block",
+                      marginBottom: 4,
+                      fontFamily: "'Rajdhani', sans-serif",
+                    }}
+                  >
                     Sun Intensity:{" "}
                     {cosmosOptions.spaceSunIntensity?.toFixed(2) || "2.50"}
                   </label>
@@ -876,6 +969,105 @@ const SpaceshipHUD: React.FC<Props> = ({
             )}
           </div>,
           cosmosContainer,
+        )}
+
+      {/* Contextual Controls - Ship Controls */}
+      {followingSpaceship &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="contextual-controls">
+            <div className="contextual-controls-header">
+              <span>🚀 SHIP CONTROLS</span>
+            </div>
+
+            <div className="contextual-control-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={shipExteriorLights}
+                  onChange={(e) => {
+                    if (onShipExteriorLightsChange) {
+                      onShipExteriorLightsChange(e.target.checked);
+                    }
+                    if (onConsoleLog) {
+                      onConsoleLog(
+                        e.target.checked
+                          ? "💡 Ship exterior lights ON"
+                          : "💡 Ship exterior lights OFF",
+                      );
+                    }
+                  }}
+                />
+                <span>Exterior Lights</span>
+              </label>
+            </div>
+
+            <div className="contextual-control-group">
+              <label>
+                <span>Follow Distance</span>
+                <input
+                  type="range"
+                  min="20"
+                  max="150"
+                  step="5"
+                  value={cosmosOptions.spaceFollowDistance ?? 80}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value);
+                    onCosmosOptionsChange({
+                      ...cosmosOptions,
+                      spaceFollowDistance: value,
+                    });
+                    if (onConsoleLog) {
+                      onConsoleLog(`📏 Ship follow distance: ${value}`);
+                    }
+                  }}
+                  style={{ width: "100%" }}
+                />
+                <span className="value">
+                  {cosmosOptions.spaceFollowDistance ?? 80}
+                </span>
+              </label>
+            </div>
+
+            <div className="contextual-control-group">
+              <label>
+                <span>Travel Speed</span>
+                <input
+                  type="range"
+                  min="10"
+                  max="200"
+                  step="10"
+                  value={cosmosOptions.spaceTravelSpeed ?? 50}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value);
+                    onCosmosOptionsChange({
+                      ...cosmosOptions,
+                      spaceTravelSpeed: value,
+                    });
+                    if (onConsoleLog) {
+                      onConsoleLog(`🚀 Ship travel speed: ${value}%`);
+                    }
+                  }}
+                  style={{ width: "100%" }}
+                />
+                <span className="value">
+                  {cosmosOptions.spaceTravelSpeed ?? 50}%
+                </span>
+              </label>
+            </div>
+
+            <button
+              className="contextual-stop-button"
+              onClick={() => {
+                if (onStopFollowing) {
+                  onStopFollowing();
+                }
+              }}
+            >
+              STOP FOLLOWING
+            </button>
+          </div>,
+          document.body,
         )}
     </>
   );

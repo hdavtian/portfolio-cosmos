@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   CSS2DRenderer,
   CSS2DObject,
@@ -81,6 +82,37 @@ export default function ResumeSpace3D({
   const [tourWaypoint, setTourWaypoint] = useState<string>("");
   const [tourProgress, setTourProgress] = useState({ current: 0, total: 0 });
 
+  // Spaceship state
+  const [followingSpaceship, setFollowingSpaceship] = useState(false);
+  const followingSpaceshipRef = useRef(false);
+  const [shipExteriorLights, setShipExteriorLights] = useState(false);
+  const spaceshipRef = useRef<THREE.Group | null>(null);
+  const spaceshipLightsRef = useRef<THREE.PointLight[]>([]);
+  const spaceshipCameraOffsetRef = useRef<THREE.Vector3>(
+    new THREE.Vector3(0, 20, -60),
+  );
+  const spaceshipPathRef = useRef<{
+    waypoints: THREE.Vector3[];
+    currentIndex: number;
+    progress: number;
+    speed: number;
+    targetSpeed: number;
+    pauseTime: number;
+    isPaused: boolean;
+    rollSpeed: number;
+    rollAmount: number;
+  }>({
+    waypoints: [],
+    currentIndex: 0,
+    progress: 0,
+    speed: 0.002,
+    targetSpeed: 0.002,
+    pauseTime: 0,
+    isPaused: false,
+    rollSpeed: 0,
+    rollAmount: 0,
+  });
+
   // Custom logging function
   const vlog = (message: string, data?: any) => {
     const timestamp = new Date().toLocaleTimeString("en-US", {
@@ -153,7 +185,9 @@ export default function ResumeSpace3D({
       sceneRef.current.sunLight.intensity = options.spaceSunIntensity * 2;
       // Tint only the light with chosen color; do not repaint sun mesh
       if (options.spaceSunColor) {
-        sceneRef.current.sunLight.color = new THREE.Color(options.spaceSunColor);
+        sceneRef.current.sunLight.color = new THREE.Color(
+          options.spaceSunColor,
+        );
       }
       // Update glow sprite color to match sun color; adjust opacity slightly by intensity
       if (sceneRef.current.sunGlowMaterial) {
@@ -178,7 +212,7 @@ export default function ResumeSpace3D({
       sceneRef.current.labelRendererDom.style.display =
         options.spaceShowLabels === false ? "none" : "block";
     }
-    
+
     // Control orbit lines visibility
     if (sceneRef.current.scene) {
       const showOrbits = options.spaceShowOrbits !== false;
@@ -189,6 +223,15 @@ export default function ResumeSpace3D({
       });
     }
   }, [options]);
+
+  // Update spaceship exterior lights
+  useEffect(() => {
+    if (spaceshipLightsRef.current.length > 0) {
+      spaceshipLightsRef.current.forEach((light) => {
+        light.intensity = shipExteriorLights ? 1.5 : 0;
+      });
+    }
+  }, [shipExteriorLights]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -752,15 +795,12 @@ export default function ResumeSpace3D({
     sceneRef.current.sunMaterial = sunMaterial;
     // Try to apply a sun texture to preserve detail
     try {
-      textureLoader.load(
-        "/textures/sun.jpg",
-        (tex) => {
-          tex.minFilter = THREE.LinearFilter;
-          tex.magFilter = THREE.LinearFilter;
-          sunMaterial.map = tex;
-          sunMaterial.needsUpdate = true;
-        },
-      );
+      textureLoader.load("/textures/sun.jpg", (tex) => {
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        sunMaterial.map = tex;
+        sunMaterial.needsUpdate = true;
+      });
     } catch {}
 
     // --- OBJECTS ---
@@ -924,7 +964,9 @@ export default function ResumeSpace3D({
             ringColorHex = 0x666a80; // neutral
         }
       } else {
-        const parentName = ((parent as any)?.userData?.planetName || "").toLowerCase();
+        const parentName = (
+          (parent as any)?.userData?.planetName || ""
+        ).toLowerCase();
         if (parentName.includes("experience")) {
           ringColorHex = 0xff9966; // warm for moons of Experience
         } else if (parentName.includes("skills")) {
@@ -1245,6 +1287,109 @@ export default function ResumeSpace3D({
     const starField = new THREE.Points(starsGeometry, starsMaterial);
     scene.add(starField);
 
+    // --- SPACESHIP LOADING ---
+    console.log("🚀 Initializing spaceship loader...");
+    const loader = new GLTFLoader();
+    loader.load(
+      "/models/spaceship/scene.gltf",
+      (gltf) => {
+        console.log("✅ Spaceship GLTF loaded successfully");
+        const spaceship = gltf.scene;
+
+        // Scale down the spaceship to be tiny compared to planets
+        spaceship.scale.set(0.5, 0.5, 0.5);
+
+        // Position it initially near the sun
+        spaceship.position.set(50, 20, 50);
+
+        // Add a subtle point light to the spaceship for visibility
+        const shipLight = new THREE.PointLight(0x6699ff, 0.5, 50);
+        spaceship.add(shipLight);
+
+        // Create exterior lights (initially off)
+        const exteriorLights: THREE.PointLight[] = [];
+        const lightPositions = [
+          // Top lights
+          new THREE.Vector3(0, 2, 0), // Top center
+          new THREE.Vector3(2, 1.5, 2), // Top front right
+          new THREE.Vector3(-2, 1.5, 2), // Top front left
+          new THREE.Vector3(2, 1.5, -2), // Top back right
+          new THREE.Vector3(-2, 1.5, -2), // Top back left
+          // Bottom lights
+          new THREE.Vector3(0, -2, 0), // Bottom center
+          new THREE.Vector3(2, -1.5, 2), // Bottom front right
+          new THREE.Vector3(-2, -1.5, 2), // Bottom front left
+          new THREE.Vector3(2, -1.5, -2), // Bottom back right
+          new THREE.Vector3(-2, -1.5, -2), // Bottom back left
+          // Side lights
+          new THREE.Vector3(3, 0, 0), // Right side
+          new THREE.Vector3(-3, 0, 0), // Left side
+        ];
+
+        lightPositions.forEach((pos) => {
+          const light = new THREE.PointLight(0xffffff, 0, 15);
+          light.position.copy(pos);
+          spaceship.add(light);
+          exteriorLights.push(light);
+        });
+
+        spaceshipLightsRef.current = exteriorLights;
+
+        scene.add(spaceship);
+        spaceshipRef.current = spaceship;
+
+        console.log("🚀 Spaceship added to scene at", spaceship.position);
+
+        // Generate random flight path waypoints throughout the cosmos
+        const generateFlightPath = () => {
+          const waypoints: THREE.Vector3[] = [];
+          const numWaypoints = 8;
+
+          for (let i = 0; i < numWaypoints; i++) {
+            // Create waypoints that explore the space between planets
+            const angle = (i / numWaypoints) * Math.PI * 2;
+            const radius = 200 + Math.random() * 800;
+            const height = (Math.random() - 0.5) * 400;
+
+            waypoints.push(
+              new THREE.Vector3(
+                Math.cos(angle) * radius,
+                height,
+                Math.sin(angle) * radius,
+              ),
+            );
+          }
+
+          // Close the loop
+          waypoints.push(waypoints[0].clone());
+
+          return waypoints;
+        };
+
+        spaceshipPathRef.current.waypoints = generateFlightPath();
+        spaceshipPathRef.current.currentIndex = 0;
+        spaceshipPathRef.current.progress = 0;
+
+        console.log(
+          "🛤️ Flight path generated with",
+          spaceshipPathRef.current.waypoints.length,
+          "waypoints",
+        );
+        vlog("🚀 Spaceship loaded and flight path initialized");
+      },
+      (progress) => {
+        // Loading progress
+        if (progress.total > 0) {
+          const percent = (progress.loaded / progress.total) * 100;
+          console.log(`📦 Loading spaceship: ${Math.round(percent)}%`);
+        }
+      },
+      (error) => {
+        console.error("❌ Error loading spaceship:", error);
+        vlog("❌ Failed to load spaceship model");
+      },
+    );
+
     // --- INTERACTION ---
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
@@ -1418,9 +1563,9 @@ export default function ResumeSpace3D({
               pname === "experience"
                 ? "experience"
                 : pname === "skills"
-                ? "skills"
-                : "projects";
-            
+                  ? "skills"
+                  : "projects";
+
             vlog(`🌍 Planet clicked: ${planetName}, flying to ${target}`);
             handleNavigation(target);
             return;
@@ -1435,7 +1580,8 @@ export default function ResumeSpace3D({
 
             // Trigger the same travel + focus behavior as navigator clicks
             try {
-              const cid = (jobData as any).id ||
+              const cid =
+                (jobData as any).id ||
                 (jobData.company || "").toLowerCase().replace(/\s+/g, "-");
               // fire-and-forget: start the camera travel and moon focus
               // handleExperienceCompanyNavigation is defined later in this scope
@@ -1720,11 +1866,15 @@ export default function ResumeSpace3D({
       // same overlay/attach logic as clicking the moon (Tour already flew).
       if (waypoint.id && waypoint.id.startsWith("experience-moon-")) {
         try {
-          const candidate = (waypoint.content && (waypoint.content as any).title) || waypoint.name;
+          const candidate =
+            (waypoint.content && (waypoint.content as any).title) ||
+            waypoint.name;
           const company = (resumeData.experience as any[]).find((c) => {
             if (!c) return false;
             const lname = (c.company || c.id || "").toLowerCase();
-            return candidate.toLowerCase().includes((lname.split(" ")[0] || lname));
+            return candidate
+              .toLowerCase()
+              .includes(lname.split(" ")[0] || lname);
           });
           if (company) {
             // locate moon mesh
@@ -1775,11 +1925,79 @@ export default function ResumeSpace3D({
 
       switch (target) {
         case "home":
+          // Stop following spaceship if we were
+          if (followingSpaceship) {
+            setFollowingSpaceship(false);
+            followingSpaceshipRef.current = false;
+            if (sceneRef.current.controls)
+              sceneRef.current.controls.enabled = true;
+          }
           await cameraDirectorRef.current.systemOverview();
           break;
         case "about":
-          await cameraDirectorRef.current.systemOverview();
-          // Show About Harma content
+          // Follow the spaceship!
+          console.log("🚀 About Harma clicked - checking spaceship...");
+          vlog("🚀 About Harma navigation triggered");
+
+          if (spaceshipRef.current) {
+            console.log("✅ Spaceship found, initiating follow mode");
+            vlog("🚀 Spaceship located, beginning pursuit...");
+
+            // Enable follow mode immediately
+            setFollowingSpaceship(true);
+            followingSpaceshipRef.current = true;
+
+            // Fly camera to behind the spaceship
+            const shipPos = spaceshipRef.current.position.clone();
+
+            // Get the ship's backward direction (behind it)
+            const shipDirection = new THREE.Vector3();
+            spaceshipRef.current.getWorldDirection(shipDirection);
+            const behindOffset = shipDirection.multiplyScalar(-60); // 60 units behind
+            const heightOffset = new THREE.Vector3(0, 20, 0); // 20 units above
+
+            const targetCameraPos = shipPos
+              .clone()
+              .add(behindOffset)
+              .add(heightOffset);
+
+            // Animate camera to behind spaceship
+            const startPos = camera.position.clone();
+            const duration = 2000; // 2 seconds
+            const startTime = Date.now();
+
+            const animateToShip = () => {
+              const elapsed = Date.now() - startTime;
+              const progress = Math.min(elapsed / duration, 1);
+              const eased = progress * progress * (3 - 2 * progress); // smooth ease
+
+              const currentShipPos = spaceshipRef.current!.position.clone();
+              camera.position.lerpVectors(startPos, targetCameraPos, eased);
+              camera.lookAt(currentShipPos);
+
+              if (progress < 1) {
+                requestAnimationFrame(animateToShip);
+              } else {
+                // Set orbit controls to follow the ship
+                if (sceneRef.current.controls) {
+                  sceneRef.current.controls.target.copy(currentShipPos);
+                  sceneRef.current.controls.enabled = true;
+                  sceneRef.current.controls.enableDamping = true;
+                }
+                vlog(
+                  "🎯 Following spaceship engaged - orbit around ship enabled",
+                );
+              }
+            };
+
+            animateToShip();
+          } else {
+            console.warn("⚠️ Spaceship not loaded yet");
+            // Fallback to sun if spaceship not loaded yet
+            await cameraDirectorRef.current.systemOverview();
+            vlog("🌌 Navigated to Sun (About) - spaceship not yet loaded");
+          }
+          // Show About overlay regardless
           const aboutContent: OverlayContent = {
             title: "About Harma Davtian",
             subtitle: "Lead Full Stack Engineer",
@@ -1823,12 +2041,23 @@ export default function ResumeSpace3D({
           };
           setOverlayContent(aboutContent);
           setContentLoading(false);
-          vlog("🌌 Navigated to Sun (About)");
-          // Restore original camera constraints
-          setMinDistance(originalMinDistanceRef.current, "restore after about");
+          if (!spaceshipRef.current) {
+            // Only restore constraints if we're not following spaceship
+            setMinDistance(
+              originalMinDistanceRef.current,
+              "restore after about",
+            );
+          }
           break;
         case "experience":
           vlog("🌍 Traveling to Experience Planet...");
+          // Stop following spaceship if we were
+          if (followingSpaceship) {
+            setFollowingSpaceship(false);
+            followingSpaceshipRef.current = false;
+            if (sceneRef.current.controls)
+              sceneRef.current.controls.enabled = true;
+          }
           await cameraDirectorRef.current.focusPlanet(expPlanet, 300);
           // Restore original camera constraints
           setMinDistance(
@@ -1838,6 +2067,13 @@ export default function ResumeSpace3D({
           break;
         case "skills":
           vlog("⚡ Traveling to Skills Planet...");
+          // Stop following spaceship if we were
+          if (followingSpaceship) {
+            setFollowingSpaceship(false);
+            followingSpaceshipRef.current = false;
+            if (sceneRef.current.controls)
+              sceneRef.current.controls.enabled = true;
+          }
           await cameraDirectorRef.current.focusPlanet(skillsPlanet, 350);
           // Restore original camera constraints
           setMinDistance(
@@ -1847,6 +2083,13 @@ export default function ResumeSpace3D({
           break;
         case "projects":
           vlog("💡 Traveling to Projects Planet...");
+          // Stop following spaceship if we were
+          if (followingSpaceship) {
+            setFollowingSpaceship(false);
+            followingSpaceshipRef.current = false;
+            if (sceneRef.current.controls)
+              sceneRef.current.controls.enabled = true;
+          }
           await cameraDirectorRef.current.focusPlanet(projectsPlanet, 400);
           // Restore original camera constraints
           setMinDistance(
@@ -1882,14 +2125,22 @@ export default function ResumeSpace3D({
                 const resolvedWaypoints = tour.waypoints.map((wp) => {
                   try {
                     if (wp.id && wp.id.startsWith("experience-moon-")) {
-                      const candidate = (wp.content && (wp.content as any).title) || wp.name;
+                      const candidate =
+                        (wp.content && (wp.content as any).title) || wp.name;
                       let moonMesh: THREE.Mesh | undefined;
                       sceneRef.current.scene?.traverse((object) => {
-                        if (object instanceof THREE.Mesh && object.userData.planetName) {
-                          const pname = (object.userData.planetName || "").toLowerCase();
+                        if (
+                          object instanceof THREE.Mesh &&
+                          object.userData.planetName
+                        ) {
+                          const pname = (
+                            object.userData.planetName || ""
+                          ).toLowerCase();
                           if (
                             candidate &&
-                            pname.includes((candidate || "").toLowerCase().split(" ")[0])
+                            pname.includes(
+                              (candidate || "").toLowerCase().split(" ")[0],
+                            )
                           ) {
                             moonMesh = object as THREE.Mesh;
                           }
@@ -2070,7 +2321,9 @@ export default function ResumeSpace3D({
         detailLines.push(company.location || "");
 
         const jobNotes = (company as any).notes || [];
-        const overlayDefs: Array<string | { type?: string; text?: string; lines?: string[] }> = [];
+        const overlayDefs: Array<
+          string | { type?: string; text?: string; lines?: string[] }
+        > = [];
         overlayDefs.push({ type: "title", lines: detailLines });
         if (Array.isArray(jobNotes) && jobNotes.length) {
           jobNotes.forEach((n: string) => overlayDefs.push(n));
@@ -2219,6 +2472,136 @@ export default function ResumeSpace3D({
         exitFocusRequestRef.current = false;
       }
 
+      // --- SPACESHIP ANIMATION ---
+      if (
+        spaceshipRef.current &&
+        spaceshipPathRef.current.waypoints.length > 0
+      ) {
+        const pathData = spaceshipPathRef.current;
+        const ship = spaceshipRef.current;
+
+        // Handle pauses and speed changes
+        if (pathData.isPaused) {
+          pathData.pauseTime--;
+          if (pathData.pauseTime <= 0) {
+            pathData.isPaused = false;
+            // Randomly choose new target speed (slow to fast)
+            pathData.targetSpeed = 0.001 + Math.random() * 0.004;
+          }
+        } else {
+          // Smoothly accelerate/decelerate to target speed
+          pathData.speed += (pathData.targetSpeed - pathData.speed) * 0.02;
+
+          // Apply travel speed multiplier from options
+          const speedMultiplier = (options.spaceTravelSpeed ?? 50) / 50;
+          
+          // Interpolate position
+          pathData.progress += pathData.speed * speedMultiplier;
+
+          if (pathData.progress >= 1) {
+            pathData.progress = 0;
+            pathData.currentIndex =
+              (pathData.currentIndex + 1) % pathData.waypoints.length;
+
+            // Randomly decide to pause at waypoint (20% chance)
+            if (Math.random() < 0.2) {
+              pathData.isPaused = true;
+              pathData.pauseTime = 30 + Math.random() * 60; // 0.5-1.5 seconds at 60fps
+              pathData.speed = 0;
+            }
+
+            // Randomly trigger a barrel roll (15% chance)
+            if (Math.random() < 0.15) {
+              pathData.rollSpeed =
+                (Math.random() > 0.5 ? 1 : -1) * (0.03 + Math.random() * 0.05);
+              pathData.rollAmount = Math.PI * 2; // Full 360° roll
+            }
+          }
+        }
+
+        // Get current and next waypoint
+        const current = pathData.waypoints[pathData.currentIndex];
+        const next =
+          pathData.waypoints[
+            (pathData.currentIndex + 1) % pathData.waypoints.length
+          ];
+
+        // Smooth interpolation using ease-in-out
+        const t = pathData.progress;
+        const smoothT = t * t * (3 - 2 * t);
+
+        ship.position.lerpVectors(current, next, smoothT);
+
+        // Orient spaceship to face direction of travel
+        const direction = new THREE.Vector3()
+          .subVectors(next, current)
+          .normalize();
+        const targetQuaternion = new THREE.Quaternion();
+        const up = new THREE.Vector3(0, 1, 0);
+        const matrix = new THREE.Matrix4();
+        matrix.lookAt(direction, new THREE.Vector3(0, 0, 0), up);
+        targetQuaternion.setFromRotationMatrix(matrix);
+        ship.quaternion.slerp(targetQuaternion, 0.1);
+
+        // Apply barrel roll if active
+        if (Math.abs(pathData.rollAmount) > 0.01) {
+          const rollAxis = new THREE.Vector3(0, 0, 1); // Roll around forward axis
+          rollAxis.applyQuaternion(ship.quaternion);
+          const rollQuat = new THREE.Quaternion();
+          rollQuat.setFromAxisAngle(rollAxis, pathData.rollSpeed);
+          ship.quaternion.multiply(rollQuat);
+
+          pathData.rollAmount -= Math.abs(pathData.rollSpeed);
+          if (pathData.rollAmount <= 0) {
+            pathData.rollSpeed = 0;
+            pathData.rollAmount = 0;
+          }
+        }
+
+        // Add subtle continuous rotation for life
+        if (!pathData.isPaused && pathData.rollAmount === 0) {
+          const wobbleAxis = new THREE.Vector3(
+            Math.sin(Date.now() * 0.0005) * 0.3,
+            Math.cos(Date.now() * 0.0007) * 0.2,
+            1,
+          ).normalize();
+          wobbleAxis.applyQuaternion(ship.quaternion);
+          const wobbleQuat = new THREE.Quaternion();
+          wobbleQuat.setFromAxisAngle(wobbleAxis, 0.005);
+          ship.quaternion.multiply(wobbleQuat);
+        }
+
+        // If following spaceship, move camera and target with ship while maintaining user's viewing angle
+        if (followingSpaceshipRef.current) {
+          // Get the user's desired follow distance
+          const followDistance = optionsRef.current.spaceFollowDistance || 60;
+
+          // Update the camera offset if user has moved the camera (via orbit controls)
+          const currentOffset = camera.position.clone().sub(ship.position);
+
+          // Only update stored offset if it's significantly different (user dragged)
+          if (currentOffset.distanceTo(spaceshipCameraOffsetRef.current) > 1) {
+            spaceshipCameraOffsetRef.current.copy(currentOffset);
+          }
+
+          // Scale the offset to match the desired follow distance
+          const scaledOffset = spaceshipCameraOffsetRef.current
+            .clone()
+            .normalize()
+            .multiplyScalar(followDistance);
+
+          // Apply the scaled offset to maintain viewing angle at correct distance
+          const desiredCameraPos = ship.position.clone().add(scaledOffset);
+          camera.position.copy(desiredCameraPos);
+
+          // Update orbit controls target to ship position
+          if (sceneRef.current.controls) {
+            sceneRef.current.controls.target.copy(ship.position);
+            sceneRef.current.controls.update();
+          }
+        }
+      }
+
       // Rotate Sun
       sunMesh.rotation.y += 0.002;
 
@@ -2248,9 +2631,12 @@ export default function ResumeSpace3D({
             // stronger quick peak then faster decay
             let intensity;
             if (progress < 0.18) {
-              intensity = (progress / 0.18) * (item.mesh.userData.flashStrength || 0.8);
+              intensity =
+                (progress / 0.18) * (item.mesh.userData.flashStrength || 0.8);
             } else {
-              intensity = (item.mesh.userData.flashStrength || 0.8) * Math.max(0, 1 - (progress - 0.18) / 0.82);
+              intensity =
+                (item.mesh.userData.flashStrength || 0.8) *
+                Math.max(0, 1 - (progress - 0.18) / 0.82);
             }
 
             // Color skew toward cyan/blue but modulated by intensity
@@ -2501,33 +2887,37 @@ export default function ResumeSpace3D({
     // Trigger loading complete with camera animation
     setTimeout(() => {
       setSceneReady(true);
-      
+
       // Add smooth zoom and pan animation
-      const startPos = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
+      const startPos = {
+        x: camera.position.x,
+        y: camera.position.y,
+        z: camera.position.z,
+      };
       const endPos = { x: 0, y: 400, z: 600 };
       const startTime = Date.now();
       const duration = 2500; // 2.5 seconds
-      
+
       // Start from a zoomed out position for dramatic effect
       camera.position.set(50, 500, 800);
-      
+
       const animateCamera = () => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        
+
         // Ease out cubic for smooth deceleration
         const easeProgress = 1 - Math.pow(1 - progress, 3);
-        
+
         camera.position.x = startPos.x + (endPos.x - startPos.x) * easeProgress;
         camera.position.y = startPos.y + (endPos.y - startPos.y) * easeProgress;
         camera.position.z = startPos.z + (endPos.z - startPos.z) * easeProgress;
         camera.lookAt(0, 0, 0);
-        
+
         if (progress < 1) {
           requestAnimationFrame(animateCamera);
         }
       };
-      
+
       animateCamera();
     }, 100);
 
@@ -2598,243 +2988,265 @@ export default function ResumeSpace3D({
     <>
       {/* Show loader while scene is setting up */}
       {isLoading && (
-        <CosmosLoader 
+        <CosmosLoader
           onLoadingComplete={() => {
             setIsLoading(false);
-          }} 
+          }}
         />
       )}
-      
-      <div 
-        style={{ 
-          width: "100%", 
-          height: "100%", 
+
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
           position: "relative",
           opacity: !isLoading && sceneReady ? 1 : 0,
-          transition: "opacity 1.5s ease-in-out"
+          transition: "opacity 1.5s ease-in-out",
         }}
       >
-      <div style={{ width: "100%", height: "100%", position: "relative" }}>
-        <div
-          ref={mountRef}
-          className="width-full height-full"
-          style={{
-            width: "100%",
-            height: "100%",
-            position: "absolute",
-            top: 0,
-            left: 0,
-          }}
-        />
+        <div style={{ width: "100%", height: "100%", position: "relative" }}>
+          <div
+            ref={mountRef}
+            className="width-full height-full"
+            style={{
+              width: "100%",
+              height: "100%",
+              position: "absolute",
+              top: 0,
+              left: 0,
+            }}
+          />
 
-        <div
-          style={{
-            position: "absolute",
-            bottom: "30px",
-            right: "450px",
-            color: "rgba(212, 175, 55, 0.9)",
-            fontFamily: "'Rajdhani', sans-serif",
-            fontSize: "12px",
-            textAlign: "right",
-            pointerEvents: "none",
-            userSelect: "none",
-            zIndex: 10,
-            textShadow: "0 2px 4px rgba(0,0,0,0.8)",
-          }}
-        >
-          <p style={{ margin: "4px 0" }}>↔ DRAG TO ROTATE</p>
-          <p style={{ margin: "4px 0" }}>↕ SCROLL TO ZOOM</p>
-          <p style={{ margin: "4px 0" }}>• CLICK PLANETS TO VISIT</p>
+          <div
+            style={{
+              position: "absolute",
+              bottom: "30px",
+              right: "450px",
+              color: "rgba(212, 175, 55, 0.9)",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: "12px",
+              textAlign: "right",
+              pointerEvents: "none",
+              userSelect: "none",
+              zIndex: 10,
+              textShadow: "0 2px 4px rgba(0,0,0,0.8)",
+            }}
+          >
+            <p style={{ margin: "4px 0" }}>↔ DRAG TO ROTATE</p>
+            <p style={{ margin: "4px 0" }}>↕ SCROLL TO ZOOM</p>
+            <p style={{ margin: "4px 0" }}>• CLICK PLANETS TO VISIT</p>
+          </div>
         </div>
-      </div>
 
-      {/* Spaceship HUD Interface */}
-      <SpaceshipHUD
-        userName="HARMA DAVTIAN"
-        userTitle="Lead Full Stack Engineer"
-        consoleLogs={consoleLogs}
-        consoleVisible={consoleVisible}
-        onConsoleToggle={() => setConsoleVisible(!consoleVisible)}
-        onConsoleCopy={() => {
-          navigator.clipboard.writeText(consoleLogs.join("\n"));
-        }}
-        onConsoleClear={() => {
-          setConsoleLogs([]);
-          consoleLogsRef.current = [];
-        }}
-        tourActive={tourActive}
-        tourWaypoint={tourWaypoint}
-        tourProgress={tourProgress}
-        onTourPrevious={() => tourGuideRef.current?.previousWaypoint()}
-        onTourNext={() => tourGuideRef.current?.nextWaypoint()}
-        onTourRestart={() => tourGuideRef.current?.restartTour()}
-        onTourEnd={() => {
-          tourGuideRef.current?.stopTour();
-          setTourActive(false);
-          setOverlayContent(null);
-          setContentLoading(false);
-          vlog("🛑 Tour ended");
-        }}
-        isTransitioning={false}
-        speed={0}
-        content={overlayContent}
-        contentLoading={contentLoading}
-        cosmosOptions={options}
-        onCosmosOptionsChange={(newOptions) => {
-          // Pass the options change up to the parent component
-          if (onOptionsChange) {
-            onOptionsChange(newOptions);
-          }
-        }}
-        onConsoleLog={(message) => {
-          vlog(message);
-        }}
-        onContentAction={(action: string) => {
-          vlog(`🎬 Content action received: ${action}`);
-
-          // Handle different actions
-          if (action.startsWith("tour:")) {
-            const tourType = action.replace("tour:", "");
-            vlog(`🔍 Tour type: ${tourType}`);
-            vlog(`📦 tourBuilderRef exists: ${!!tourBuilderRef.current}`);
-            vlog(`📦 tourGuideRef exists: ${!!tourGuideRef.current}`);
-
-            if (tourBuilderRef.current && tourGuideRef.current) {
-              vlog(`🚀 Starting ${tourType} tour...`);
-              let tour;
-              switch (tourType) {
-                case "career-journey":
-                  tour = tourBuilderRef.current.createCareerJourneyTour();
-                  vlog(
-                    `📋 Tour created with ${tour?.waypoints.length || 0} waypoints`,
-                  );
-                  break;
-                case "technical-deep-dive":
-                  tour = tourBuilderRef.current.createTechnicalDeepDiveTour();
-                  break;
-                case "leadership-story":
-                  tour = tourBuilderRef.current.createLeadershipStoryTour();
-                  break;
-              }
-
-              if (tour) {
-                vlog(`✅ Tour object valid, starting...`);
-                // Resolve experience-moon targets to live world positions
-                const resolvedWaypoints = tour.waypoints.map((wp) => {
-                  try {
-                    if (wp.id && wp.id.startsWith("experience-moon-")) {
-                      const candidate = (wp.content && (wp.content as any).title) || wp.name;
-                      let moonMesh: THREE.Mesh | undefined;
-                      sceneRef.current.scene?.traverse((object) => {
-                        if (object instanceof THREE.Mesh && object.userData.planetName) {
-                          const pname = (object.userData.planetName || "").toLowerCase();
-                          if (candidate && pname.includes((candidate || "").toLowerCase().split(" ")[0])) {
-                            moonMesh = object as THREE.Mesh;
-                          }
-                        }
-                      });
-                      if (moonMesh) {
-                        const worldPos = new THREE.Vector3();
-                        moonMesh.getWorldPosition(worldPos);
-                        const offset = new THREE.Vector3(80, 40, 60);
-                        return {
-                          ...wp,
-                          target: {
-                            ...wp.target,
-                            lookAt: worldPos.clone(),
-                            position: worldPos.clone().add(offset),
-                          },
-                        } as typeof wp;
-                      }
-                    }
-                  } catch (e) {
-                    console.warn("Error resolving waypoint to mesh:", e);
-                  }
-                  return wp;
-                });
-
-                setTourActive(true);
-                setOverlayContent(null);
-                setContentLoading(false);
-                tourGuideRef.current.startTour(resolvedWaypoints);
-                vlog(
-                  `✨ Tour started: ${tour.title} (${tour.waypoints.length} waypoints)`,
-                );
-              } else {
-                vlog(`❌ Tour object is null or undefined`);
-              }
-            } else {
-              vlog(`❌ Tour refs not initialized`);
+        {/* Spaceship HUD Interface */}
+        <SpaceshipHUD
+          userName="HARMA DAVTIAN"
+          userTitle="Lead Full Stack Engineer"
+          consoleLogs={consoleLogs}
+          consoleVisible={consoleVisible}
+          onConsoleToggle={() => setConsoleVisible(!consoleVisible)}
+          onConsoleCopy={() => {
+            navigator.clipboard.writeText(consoleLogs.join("\n"));
+          }}
+          onConsoleClear={() => {
+            setConsoleLogs([]);
+            consoleLogsRef.current = [];
+          }}
+          tourActive={tourActive}
+          tourWaypoint={tourWaypoint}
+          tourProgress={tourProgress}
+          onTourPrevious={() => tourGuideRef.current?.previousWaypoint()}
+          onTourNext={() => tourGuideRef.current?.nextWaypoint()}
+          onTourRestart={() => tourGuideRef.current?.restartTour()}
+          onTourEnd={() => {
+            tourGuideRef.current?.stopTour();
+            setTourActive(false);
+            setOverlayContent(null);
+            setContentLoading(false);
+            vlog("🛑 Tour ended");
+          }}
+          followingSpaceship={followingSpaceship}
+          shipExteriorLights={shipExteriorLights}
+          onShipExteriorLightsChange={setShipExteriorLights}
+          onStopFollowing={() => {
+            setFollowingSpaceship(false);
+            followingSpaceshipRef.current = false;
+            if (sceneRef.current.controls) {
+              sceneRef.current.controls.enabled = true;
             }
-          } else if (action.startsWith("navigate:")) {
-            const target = action.replace("navigate:", "");
-            if (cameraDirectorRef.current) {
-              // If navigating away from a focused moon, restore it first
-              if (focusedMoonRef.current) {
-                exitFocusRequestRef.current = true;
-              }
-              switch (target) {
-                case "sun":
-                case "home":
+            vlog("🛑 Stopped following spaceship");
+          }}
+          isTransitioning={false}
+          speed={0}
+          content={overlayContent}
+          contentLoading={contentLoading}
+          cosmosOptions={options}
+          onCosmosOptionsChange={(newOptions) => {
+            // Pass the options change up to the parent component
+            if (onOptionsChange) {
+              onOptionsChange(newOptions);
+            }
+          }}
+          onConsoleLog={(message) => {
+            vlog(message);
+          }}
+          onContentAction={(action: string) => {
+            vlog(`🎬 Content action received: ${action}`);
+
+            // Handle different actions
+            if (action.startsWith("tour:")) {
+              const tourType = action.replace("tour:", "");
+              vlog(`🔍 Tour type: ${tourType}`);
+              vlog(`📦 tourBuilderRef exists: ${!!tourBuilderRef.current}`);
+              vlog(`📦 tourGuideRef exists: ${!!tourGuideRef.current}`);
+
+              if (tourBuilderRef.current && tourGuideRef.current) {
+                vlog(`🚀 Starting ${tourType} tour...`);
+                let tour;
+                switch (tourType) {
+                  case "career-journey":
+                    tour = tourBuilderRef.current.createCareerJourneyTour();
+                    vlog(
+                      `📋 Tour created with ${tour?.waypoints.length || 0} waypoints`,
+                    );
+                    break;
+                  case "technical-deep-dive":
+                    tour = tourBuilderRef.current.createTechnicalDeepDiveTour();
+                    break;
+                  case "leadership-story":
+                    tour = tourBuilderRef.current.createLeadershipStoryTour();
+                    break;
+                }
+
+                if (tour) {
+                  vlog(`✅ Tour object valid, starting...`);
+                  // Resolve experience-moon targets to live world positions
+                  const resolvedWaypoints = tour.waypoints.map((wp) => {
+                    try {
+                      if (wp.id && wp.id.startsWith("experience-moon-")) {
+                        const candidate =
+                          (wp.content && (wp.content as any).title) || wp.name;
+                        let moonMesh: THREE.Mesh | undefined;
+                        sceneRef.current.scene?.traverse((object) => {
+                          if (
+                            object instanceof THREE.Mesh &&
+                            object.userData.planetName
+                          ) {
+                            const pname = (
+                              object.userData.planetName || ""
+                            ).toLowerCase();
+                            if (
+                              candidate &&
+                              pname.includes(
+                                (candidate || "").toLowerCase().split(" ")[0],
+                              )
+                            ) {
+                              moonMesh = object as THREE.Mesh;
+                            }
+                          }
+                        });
+                        if (moonMesh) {
+                          const worldPos = new THREE.Vector3();
+                          moonMesh.getWorldPosition(worldPos);
+                          const offset = new THREE.Vector3(80, 40, 60);
+                          return {
+                            ...wp,
+                            target: {
+                              ...wp.target,
+                              lookAt: worldPos.clone(),
+                              position: worldPos.clone().add(offset),
+                            },
+                          } as typeof wp;
+                        }
+                      }
+                    } catch (e) {
+                      console.warn("Error resolving waypoint to mesh:", e);
+                    }
+                    return wp;
+                  });
+
+                  setTourActive(true);
                   setOverlayContent(null);
                   setContentLoading(false);
-                  if (originalMinDistanceRef.current > 0) {
-                    setMinDistance(
-                      originalMinDistanceRef.current,
-                      "restore on navigate home",
-                    );
-                  }
-                  cameraDirectorRef.current.systemOverview();
-                  break;
-                case "experience":
-                  const expData = planetsDataRef.current.get("experience");
-                  if (expData) {
-                    cameraDirectorRef.current.flyTo({
-                      position: new THREE.Vector3(
-                        expData.position.x + 300,
-                        expData.position.y + 150,
-                        expData.position.z + 200,
-                      ),
-                      lookAt: expData.position,
-                      duration: 2,
-                    });
-                  }
-                  break;
-                case "skills":
-                  const skillsData = planetsDataRef.current.get("skills");
-                  if (skillsData) {
-                    cameraDirectorRef.current.flyTo({
-                      position: new THREE.Vector3(
-                        skillsData.position.x + 350,
-                        skillsData.position.y + 150,
-                        skillsData.position.z + 250,
-                      ),
-                      lookAt: skillsData.position,
-                      duration: 2,
-                    });
-                  }
-                  break;
-                case "projects":
-                  const projectsData = planetsDataRef.current.get("projects");
-                  if (projectsData) {
-                    cameraDirectorRef.current.flyTo({
-                      position: new THREE.Vector3(
-                        projectsData.position.x + 400,
-                        projectsData.position.y + 200,
-                        projectsData.position.z + 300,
-                      ),
-                      lookAt: projectsData.position,
-                      duration: 2,
-                    });
-                  }
-                  break;
+                  tourGuideRef.current.startTour(resolvedWaypoints);
+                  vlog(
+                    `✨ Tour started: ${tour.title} (${tour.waypoints.length} waypoints)`,
+                  );
+                } else {
+                  vlog(`❌ Tour object is null or undefined`);
+                }
+              } else {
+                vlog(`❌ Tour refs not initialized`);
               }
+            } else if (action.startsWith("navigate:")) {
+              const target = action.replace("navigate:", "");
+              if (cameraDirectorRef.current) {
+                // If navigating away from a focused moon, restore it first
+                if (focusedMoonRef.current) {
+                  exitFocusRequestRef.current = true;
+                }
+                switch (target) {
+                  case "sun":
+                  case "home":
+                    setOverlayContent(null);
+                    setContentLoading(false);
+                    if (originalMinDistanceRef.current > 0) {
+                      setMinDistance(
+                        originalMinDistanceRef.current,
+                        "restore on navigate home",
+                      );
+                    }
+                    cameraDirectorRef.current.systemOverview();
+                    break;
+                  case "experience":
+                    const expData = planetsDataRef.current.get("experience");
+                    if (expData) {
+                      cameraDirectorRef.current.flyTo({
+                        position: new THREE.Vector3(
+                          expData.position.x + 300,
+                          expData.position.y + 150,
+                          expData.position.z + 200,
+                        ),
+                        lookAt: expData.position,
+                        duration: 2,
+                      });
+                    }
+                    break;
+                  case "skills":
+                    const skillsData = planetsDataRef.current.get("skills");
+                    if (skillsData) {
+                      cameraDirectorRef.current.flyTo({
+                        position: new THREE.Vector3(
+                          skillsData.position.x + 350,
+                          skillsData.position.y + 150,
+                          skillsData.position.z + 250,
+                        ),
+                        lookAt: skillsData.position,
+                        duration: 2,
+                      });
+                    }
+                    break;
+                  case "projects":
+                    const projectsData = planetsDataRef.current.get("projects");
+                    if (projectsData) {
+                      cameraDirectorRef.current.flyTo({
+                        position: new THREE.Vector3(
+                          projectsData.position.x + 400,
+                          projectsData.position.y + 200,
+                          projectsData.position.z + 300,
+                        ),
+                        lookAt: projectsData.position,
+                        duration: 2,
+                      });
+                    }
+                    break;
+                }
+              }
+            } else if (action === "mode:free") {
+              tourGuideRef.current?.stopTour();
             }
-          } else if (action === "mode:free") {
-            tourGuideRef.current?.stopTour();
-          }
-        }}
-      />
+          }}
+        />
       </div>
     </>
   );
