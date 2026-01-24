@@ -37,7 +37,6 @@ interface ResumeSpace3DProps {
 }
 
 export default function ResumeSpace3D({
-  onNavigate,
   options,
   onOptionsChange,
 }: ResumeSpace3DProps) {
@@ -448,6 +447,13 @@ export default function ResumeSpace3D({
           const titleTex = createDetailTexture(lines, {
             width: 1024,
             height: 256,
+            // Transparent backdrop; restore guide line under title for clarity
+            textColor: "rgba(230,235,245,0.86)",
+            showLine: true,
+            fontSize: 26,
+            lineSpacing: 28,
+            textAlign: "left",
+            padding: 48,
           });
           const aspectT = (titleTex.image as any)?.width
             ? (titleTex.image as any).width / (titleTex.image as any).height
@@ -458,7 +464,8 @@ export default function ResumeSpace3D({
           const matT = new THREE.MeshBasicMaterial({
             map: titleTex,
             transparent: true,
-            opacity: options?.opacity ?? 0.98,
+            // Tone down brightness slightly to reduce bloom/glow
+            opacity: options?.opacity ?? 0.88,
             depthWrite: false,
             depthTest: false,
             side: THREE.DoubleSide,
@@ -491,7 +498,8 @@ export default function ResumeSpace3D({
           height: 128,
           bgColor: "rgba(0,0,0,0)",
           showLine: false,
-          textColor: "rgba(150,230,255,0.95)",
+          // Softer cyan to avoid overbright glow
+          textColor: "rgba(180,220,240,0.82)",
           fontSize: 20,
           lineSpacing: 26,
           textAlign: "left",
@@ -507,7 +515,7 @@ export default function ResumeSpace3D({
         const mat = new THREE.MeshBasicMaterial({
           map: textTex,
           transparent: true,
-          opacity: options?.opacity ?? 0.95,
+          opacity: options?.opacity ?? 0.9,
           depthWrite: false,
           depthTest: false,
           side: THREE.DoubleSide,
@@ -894,11 +902,45 @@ export default function ResumeSpace3D({
       textureUrl?: string,
     ) => {
       // Orbit Path - Create professional orbital rings using TorusGeometry approach
-      const ringGeometry = new THREE.TorusGeometry(distance, 0.3, 8, 64);
+      // Make rings thinner: main orbits slightly thicker than moon orbits
+      const isMainOrbit = parent === scene; // scene-centered orbits (around Sun)
+      const tubeRadius = isMainOrbit ? 0.12 : 0.08;
+      const ringGeometry = new THREE.TorusGeometry(distance, tubeRadius, 8, 64);
+
+      // Distinct orbit colors: main planets around the sun vs. moons around planets
+      let ringColorHex: number = 0x444466;
+      if (isMainOrbit) {
+        switch ((name || "").toLowerCase()) {
+          case "experience":
+            ringColorHex = 0xe8c547; // gold
+            break;
+          case "skills":
+            ringColorHex = 0x33a8ff; // cyan
+            break;
+          case "projects":
+            ringColorHex = 0x9933ff; // purple
+            break;
+          default:
+            ringColorHex = 0x666a80; // neutral
+        }
+      } else {
+        const parentName = ((parent as any)?.userData?.planetName || "").toLowerCase();
+        if (parentName.includes("experience")) {
+          ringColorHex = 0xff9966; // warm for moons of Experience
+        } else if (parentName.includes("skills")) {
+          ringColorHex = 0x66ccff; // cool for moons of Skills
+        } else if (parentName.includes("projects")) {
+          ringColorHex = 0xcc99ff; // pastel for moons of Projects
+        } else {
+          ringColorHex = 0x556070;
+        }
+      }
+
       const ringMaterial = new THREE.MeshBasicMaterial({
-        color: 0x444466,
+        color: ringColorHex,
         transparent: true,
-        opacity: 0.15,
+        // Further mute brightness so orbits don't dominate the scene
+        opacity: isMainOrbit ? 0.08 : 0.05,
         side: THREE.DoubleSide,
       });
       const orbit = new THREE.Mesh(ringGeometry, ringMaterial);
@@ -1052,6 +1094,8 @@ export default function ResumeSpace3D({
         isPlanet: true,
         sectionIndex,
         planetName: name,
+        isMoon: parent !== scene,
+        isMainPlanet: parent === scene,
       };
 
       // Add to clickable array if it has a section
@@ -1078,7 +1122,7 @@ export default function ResumeSpace3D({
     // 3. PLANETS (Sections)
     const expPlanet = createPlanet(
       "Experience",
-      200,
+      600,
       15,
       0xff5533,
       scene,
@@ -1089,7 +1133,7 @@ export default function ResumeSpace3D({
 
     const skillsPlanet = createPlanet(
       "Skills",
-      350,
+      1000,
       20,
       0x3388ff,
       scene,
@@ -1100,7 +1144,7 @@ export default function ResumeSpace3D({
 
     const projectsPlanet = createPlanet(
       "Projects",
-      500,
+      1400,
       18,
       0x9933ff,
       scene,
@@ -1328,7 +1372,14 @@ export default function ResumeSpace3D({
       }
     };
 
-    const onClick = () => {
+    const onClick = (event: MouseEvent) => {
+      // Update pointer from the actual click position to avoid stale coords
+      if (mountRef.current) {
+        const rect = mountRef.current.getBoundingClientRect();
+        pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      }
+
       raycaster.setFromCamera(pointer, camera);
 
       // First, check for overlay clicks (exit focused moon)
@@ -1356,113 +1407,23 @@ export default function ResumeSpace3D({
 
           const planetName = hit.object.userData.planetName;
 
-          // Enhanced cosmic interaction based on planet type
+          // Main planets: Fly to them using handleNavigation (same as quick nav)
           if (
             planetName === "Experience" ||
             planetName === "Skills" ||
             planetName === "Projects"
           ) {
-            // Show cosmic overlay for main planets
-            if (tourBuilderRef.current) {
-              let content: OverlayContent | null = null;
-
-              switch (planetName) {
-                case "Experience":
-                  content = tourBuilderRef.current[
-                    "createExperienceContent"
-                  ]?.() || {
-                    title: "Experience Planet",
-                    description:
-                      "Explore my professional journey through the cosmos of career growth.",
-                    sections: [
-                      {
-                        id: "overview",
-                        title: "Career Overview",
-                        content:
-                          "Professional experiences spanning multiple industries and technologies.",
-                        type: "text",
-                      },
-                    ],
-                    actions: [
-                      {
-                        label: "Career Tour",
-                        action: "tour:career-journey",
-                        icon: "🚀",
-                      },
-                      {
-                        label: "Explore Moons",
-                        action: "navigate:experience-moons",
-                        icon: "🌙",
-                      },
-                    ],
-                  };
-                  break;
-                case "Skills":
-                  content = tourBuilderRef.current[
-                    "createSkillsContent"
-                  ]?.() || {
-                    title: "Skills Constellation",
-                    description:
-                      "Technical abilities and creative tools mastered over the years.",
-                    sections: [
-                      {
-                        id: "overview",
-                        title: "Technical Skills",
-                        content:
-                          "Programming languages, frameworks, and development methodologies.",
-                        type: "text",
-                      },
-                    ],
-                    actions: [
-                      {
-                        label: "Technical Deep Dive",
-                        action: "tour:technical-deep-dive",
-                        icon: "⚡",
-                      },
-                      {
-                        label: "View Portfolio",
-                        action: "navigate:projects",
-                        icon: "🎨",
-                      },
-                    ],
-                  };
-                  break;
-                case "Projects":
-                  content = {
-                    title: "Innovation Station",
-                    description:
-                      "Creative projects and technological innovations.",
-                    sections: [
-                      {
-                        id: "overview",
-                        title: "Project Gallery",
-                        content:
-                          "Innovative solutions and creative implementations.",
-                        type: "text",
-                      },
-                    ],
-                    actions: [
-                      {
-                        label: "View Gallery",
-                        action: "projects:gallery",
-                        icon: "🖼️",
-                      },
-                      {
-                        label: "Technical Details",
-                        action: "tour:technical-deep-dive",
-                        icon: "🔧",
-                      },
-                    ],
-                  };
-                  break;
-              }
-
-              if (content) {
-                setOverlayContent(content);
-                setContentLoading(false);
-                return; // Don't do regular navigation
-              }
-            }
+            const pname = planetName.toLowerCase();
+            const target =
+              pname === "experience"
+                ? "experience"
+                : pname === "skills"
+                ? "skills"
+                : "projects";
+            
+            vlog(`🌍 Planet clicked: ${planetName}, flying to ${target}`);
+            handleNavigation(target);
+            return;
           }
 
           // Special handling for job moons - show cosmic overlay
@@ -1523,9 +1484,6 @@ export default function ResumeSpace3D({
               setOverlayContent(jobContent);
               setContentLoading(false);
             }, 300);
-          } else {
-            // Regular navigation for other planets
-            onNavigate(hit.object.userData.sectionIndex);
           }
         }
       }
@@ -2264,11 +2222,15 @@ export default function ResumeSpace3D({
       // Rotate Sun
       sunMesh.rotation.y += 0.002;
 
-      // Orbit logic
-      const speedMultiplier =
+      // Orbit logic (separate speeds for main planets vs. moons)
+      const planetSpeedMultiplier =
         optionsRef.current.spaceOrbitSpeed !== undefined
           ? optionsRef.current.spaceOrbitSpeed
           : 0.1;
+      const moonSpeedMultiplier =
+        optionsRef.current.spaceMoonOrbitSpeed !== undefined
+          ? (optionsRef.current.spaceMoonOrbitSpeed as number)
+          : planetSpeedMultiplier;
 
       // Animate halo layers and flash effects ALWAYS (independent of orbit speed)
       const time = Date.now() * 0.001; // Time in seconds
@@ -2421,7 +2383,7 @@ export default function ResumeSpace3D({
               const planeH = ov.userData?.planeHeight ?? size * 0.35;
               const planeW = ov.userData?.planeWidth ?? planeH * 2;
               const index = ov.userData?.bulletIndex ?? 0;
-              const spacing = planeH * 0.6; // tighter stacking
+              const spacing = planeH * 0.45; // closer stacking for bullet points
 
               // Compute left-edge alignment using title width and bullet width
               const titleWidth =
@@ -2498,29 +2460,21 @@ export default function ResumeSpace3D({
 
       // Animate orbital positions when global speed is non-zero
       items.forEach((item) => {
-        if (speedMultiplier !== 0) {
+        const isMoon = item.mesh.userData?.isMoon === true;
+        const sm = isMoon ? moonSpeedMultiplier : planetSpeedMultiplier;
+        if (sm !== 0) {
           // If this item is paused (focused moon), skip updating its orbital revolution
           if (!item.mesh.userData.pauseOrbit) {
-            item.angle -= item.orbitSpeed * speedMultiplier;
+            item.angle -= item.orbitSpeed * sm;
             item.mesh.position.x = Math.cos(item.angle) * item.distance;
             item.mesh.position.z = -Math.sin(item.angle) * item.distance;
           }
         }
 
-        // Self rotation: always apply so focused moon can be spun by the user
-        const baseSpin = 0.01;
-        // Reduce axis rotation for smaller bodies (moons) to 1/5th
-        let radius = 0;
-        try {
-          radius = (item.mesh.geometry as any)?.parameters?.radius || 0;
-        } catch (e) {
-          radius = 0;
-        }
-        const moonFactor = radius > 0 && radius < 8 ? 0.2 : 1.0;
-        const spinMultiplier = item.mesh.userData.pauseOrbit
-          ? 1
-          : speedMultiplier;
-        item.mesh.rotation.y += baseSpin * spinMultiplier * moonFactor;
+        // Self rotation: decouple from global orbit speed so moons always spin
+        const isMoonBody = item.mesh.userData?.isMoon === true;
+        const baseSpin = isMoonBody ? 0.02 : 0.008; // moons spin a bit faster
+        item.mesh.rotation.y += baseSpin;
 
         // Apply any residual spin velocity from user interaction (always applied)
         const spin = item.mesh.userData.spinVelocity as

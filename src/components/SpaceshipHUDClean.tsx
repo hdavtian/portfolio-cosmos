@@ -81,6 +81,11 @@ const SpaceshipHUD: React.FC<Props> = ({
             `🌍 Orbit speed adjusted to ${Number(value).toFixed(1)}x`,
           );
           break;
+        case "spaceMoonOrbitSpeed":
+          onConsoleLog(
+            `🌙 Moon orbit speed adjusted to ${Number(value).toFixed(1)}x`,
+          );
+          break;
         case "spaceSunIntensity":
           onConsoleLog(`☀️ Sun intensity set to ${Number(value).toFixed(2)}`);
           break;
@@ -344,28 +349,6 @@ const SpaceshipHUD: React.FC<Props> = ({
         </div>
 
         {/* Footer Panel attached to bottom */}
-        <div
-          style={{
-            height: 182,
-            borderTop: "2px solid rgba(212, 175, 55, 0.3)",
-            background: "#0f1419",
-            padding: 8,
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-            position: "relative",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              color: "#8a9199",
-              fontFamily: "'Rajdhani', sans-serif",
-            }}
-          >
-            Ready for exploration
-          </div>
-        </div>
       </aside>
 
       <footer
@@ -662,6 +645,42 @@ const SpaceshipHUD: React.FC<Props> = ({
                     onChange={(e) =>
                       handleCosmosOptionChange(
                         "spaceOrbitSpeed",
+                        Number(e.target.value),
+                      )
+                    }
+                    style={{ width: "100%" }}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      color: "#8a9199",
+                      fontSize: 11,
+                      display: "block",
+                      marginBottom: 4,
+                      fontFamily: "'Rajdhani', sans-serif",
+                    }}
+                  >
+                    Moon Orbit Speed:{" "}
+                    {cosmosOptions.spaceMoonOrbitSpeed !== undefined
+                      ? cosmosOptions.spaceMoonOrbitSpeed.toFixed(1)
+                      : (cosmosOptions.spaceOrbitSpeed ?? 0.1).toFixed(1)}
+                    x
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="3"
+                    step="0.1"
+                    value={
+                      cosmosOptions.spaceMoonOrbitSpeed !== undefined
+                        ? (cosmosOptions.spaceMoonOrbitSpeed as number)
+                        : (cosmosOptions.spaceOrbitSpeed ?? 0.1)
+                    }
+                    onChange={(e) =>
+                      handleCosmosOptionChange(
+                        "spaceMoonOrbitSpeed",
                         Number(e.target.value),
                       )
                     }
