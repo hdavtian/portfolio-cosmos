@@ -49,6 +49,16 @@ type Props = {
   controlSensitivity?: number;
   onControlSensitivityChange?: (value: number) => void;
   onStopFollowing?: () => void;
+  navigationTargets?: Array<{
+    id: string;
+    label: string;
+    type: "section" | "moon";
+    icon?: string;
+  }>;
+  onNavigate?: (targetId: string, targetType: "section" | "moon") => void;
+  currentTarget?: string | null;
+  navigationDistance?: number | null;
+  navigationETA?: number | null;
   isTransitioning?: boolean;
   speed?: number;
   content: HUDContent | null;
@@ -96,6 +106,11 @@ const SpaceshipHUD: React.FC<Props> = ({
   controlSensitivity = 0.5,
   onControlSensitivityChange,
   onStopFollowing,
+  navigationTargets = [],
+  onNavigate,
+  currentTarget = null,
+  navigationDistance = null,
+  navigationETA = null,
   isTransitioning = false,
   speed = 0,
   content,
@@ -201,6 +216,73 @@ const SpaceshipHUD: React.FC<Props> = ({
 
   return (
     <>
+      {/* Navigation Drawer - Only in Autopilot Mode */}
+      {followingSpaceship &&
+        !manualFlightMode &&
+        navigationTargets.length > 0 &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="spaceship-nav-drawer"
+            style={{
+              right: `${contextualPosition.right + 320 + 20}px`, // controls position + controls width + gap
+              bottom: `${contextualPosition.bottom}px`,
+            }}
+          >
+            <div className="nav-drawer__header">
+              <span className="nav-drawer__icon">🧭</span>
+              <h3 className="nav-drawer__title">Quick Nav</h3>
+            </div>
+
+            <div className="nav-drawer__list">
+              {navigationTargets.map((target) => (
+                <button
+                  key={target.id}
+                  className={`nav-drawer__item ${currentTarget === target.id ? "active" : ""} ${target.type === "moon" ? "nav-drawer__item--moon" : ""}`}
+                  onClick={() => onNavigate?.(target.id, target.type)}
+                  title={`Navigate to ${target.label}`}
+                >
+                  {target.icon && (
+                    <span className="nav-drawer__item-icon">{target.icon}</span>
+                  )}
+                  <span className="nav-drawer__item-label">{target.label}</span>
+                  {target.type === "moon" && (
+                    <span className="nav-drawer__item-badge">🌙</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Navigation Status */}
+            {currentTarget &&
+              (navigationDistance !== null || navigationETA !== null) && (
+                <div className="nav-drawer__status">
+                  {navigationDistance !== null && (
+                    <div className="nav-drawer__status-item">
+                      <span className="nav-drawer__status-label">
+                        Distance:
+                      </span>
+                      <span className="nav-drawer__status-value">
+                        {navigationDistance < 1000
+                          ? `${navigationDistance.toFixed(0)} u`
+                          : `${(navigationDistance / 1000).toFixed(1)} km`}
+                      </span>
+                    </div>
+                  )}
+                  {navigationETA !== null && (
+                    <div className="nav-drawer__status-item">
+                      <span className="nav-drawer__status-label">ETA:</span>
+                      <span className="nav-drawer__status-value">
+                        {navigationETA.toFixed(1)}s
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+          </div>,
+          document.body,
+        )}
+
       <div
         style={{
           position: "fixed",
@@ -1048,6 +1130,64 @@ const SpaceshipHUD: React.FC<Props> = ({
             )}
           </div>,
           cosmosContainer,
+        )}
+
+      {/* Navigation Drawer - Only in Autopilot Mode */}
+      {followingSpaceship &&
+        !manualFlightMode &&
+        navigationTargets.length > 0 && (
+          <div className="spaceship-nav-drawer">
+            <div className="nav-drawer__header">
+              <span className="nav-drawer__icon">🧭</span>
+              <h3 className="nav-drawer__title">Quick Nav</h3>
+            </div>
+
+            <div className="nav-drawer__list">
+              {navigationTargets.map((target) => (
+                <button
+                  key={target.id}
+                  className={`nav-drawer__item ${currentTarget === target.id ? "active" : ""} ${target.type === "moon" ? "nav-drawer__item--moon" : ""}`}
+                  onClick={() => onNavigate?.(target.id, target.type)}
+                  title={`Navigate to ${target.label}`}
+                >
+                  {target.icon && (
+                    <span className="nav-drawer__item-icon">{target.icon}</span>
+                  )}
+                  <span className="nav-drawer__item-label">{target.label}</span>
+                  {target.type === "moon" && (
+                    <span className="nav-drawer__item-badge">🌙</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Navigation Status */}
+            {currentTarget &&
+              (navigationDistance !== null || navigationETA !== null) && (
+                <div className="nav-drawer__status">
+                  {navigationDistance !== null && (
+                    <div className="nav-drawer__status-item">
+                      <span className="nav-drawer__status-label">
+                        Distance:
+                      </span>
+                      <span className="nav-drawer__status-value">
+                        {navigationDistance < 1000
+                          ? `${navigationDistance.toFixed(0)} u`
+                          : `${(navigationDistance / 1000).toFixed(1)} km`}
+                      </span>
+                    </div>
+                  )}
+                  {navigationETA !== null && (
+                    <div className="nav-drawer__status-item">
+                      <span className="nav-drawer__status-label">ETA:</span>
+                      <span className="nav-drawer__status-value">
+                        {navigationETA.toFixed(1)}s
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+          </div>
         )}
 
       {/* Contextual Controls - Ship Controls */}
