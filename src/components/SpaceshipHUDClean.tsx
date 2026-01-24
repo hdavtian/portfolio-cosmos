@@ -84,6 +84,12 @@ const SpaceshipHUD: React.FC<Props> = ({
         case "spaceSunIntensity":
           onConsoleLog(`☀️ Sun intensity set to ${Number(value).toFixed(2)}`);
           break;
+        case "spaceSunColor":
+          onConsoleLog(`🎨 Sun color set to ${String(value)}`);
+          break;
+        case "spaceTintSunMesh":
+          onConsoleLog(`🖌️ Sun surface tint ${value ? "enabled" : "disabled"}`);
+          break;
         case "spaceShowLabels":
           onConsoleLog(`🏷️ Planet labels ${value ? "enabled" : "disabled"}`);
           break;
@@ -624,7 +630,6 @@ const SpaceshipHUD: React.FC<Props> = ({
                   display: "flex",
                   flexDirection: "column",
                   gap: 10,
-                  maxHeight: 300,
                   overflowY: "auto",
                 }}
               >
@@ -693,6 +698,35 @@ const SpaceshipHUD: React.FC<Props> = ({
                   />
                 </div>
 
+                <div>
+                  <label
+                    style={{
+                      color: "#8a9199",
+                      fontSize: 11,
+                      display: "block",
+                      margin: "8px 0 4px 0",
+                      fontFamily: "'Rajdhani', sans-serif",
+                    }}
+                  >
+                    Sun Color
+                  </label>
+                  <input
+                    type="color"
+                    value={cosmosOptions.spaceSunColor || "#ffdd99"}
+                    onChange={(e) =>
+                      handleCosmosOptionChange("spaceSunColor", e.target.value)
+                    }
+                    style={{
+                      width: 56,
+                      height: 28,
+                      padding: 0,
+                      border: "1px solid rgba(212, 175, 55, 0.5)",
+                      borderRadius: 6,
+                      background: "#0f1419",
+                    }}
+                  />
+                </div>
+
                 <label
                   style={{
                     display: "flex",
@@ -739,6 +773,30 @@ const SpaceshipHUD: React.FC<Props> = ({
                     }
                   />
                   Show Orbit Lines
+                </label>
+
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    color: "#8a9199",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    fontFamily: "'Rajdhani', sans-serif",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={cosmosOptions.spaceTintSunMesh === true}
+                    onChange={(e) =>
+                      handleCosmosOptionChange(
+                        "spaceTintSunMesh",
+                        e.target.checked,
+                      )
+                    }
+                  />
+                  Tint Sun Surface (subtle hue)
                 </label>
 
                 <div

@@ -51,6 +51,7 @@ export default function ResumeSpace3D({
     labelRendererDom?: HTMLElement;
     bloomPass?: UnrealBloomPass;
     sunMaterial?: THREE.MeshBasicMaterial;
+    sunGlowMaterial?: THREE.SpriteMaterial;
   }>({});
 
   // State for new cosmic systems
@@ -151,19 +152,28 @@ export default function ResumeSpace3D({
 
     if (sceneRef.current.sunLight && options.spaceSunIntensity !== undefined) {
       sceneRef.current.sunLight.intensity = options.spaceSunIntensity * 2;
-
-      // Update sun material brightness separately with a cap
-      if (sceneRef.current.sunMaterial) {
-        const sunBrightness = Math.min(
-          0.6 + options.spaceSunIntensity * 0.08,
-          1.0,
-        );
-        sceneRef.current.sunMaterial.color.setRGB(
-          sunBrightness,
-          sunBrightness * 0.95,
-          sunBrightness * 0.7,
+      // Tint only the light with chosen color; do not repaint sun mesh
+      if (options.spaceSunColor) {
+        sceneRef.current.sunLight.color = new THREE.Color(options.spaceSunColor);
+      }
+      // Update glow sprite color to match sun color; adjust opacity slightly by intensity
+      if (sceneRef.current.sunGlowMaterial) {
+        const glowColor = new THREE.Color(options.spaceSunColor || 0xffaa00);
+        sceneRef.current.sunGlowMaterial.color.copy(glowColor);
+        sceneRef.current.sunGlowMaterial.opacity = Math.min(
+          0.4 + (options.spaceSunIntensity || 2.5) * 0.1,
+          0.9,
         );
       }
+    }
+    // Optionally tint the sun mesh surface. When disabled, keep texture unmodified.
+    if (sceneRef.current.sunMaterial) {
+      if (options.spaceTintSunMesh && options.spaceSunColor) {
+        sceneRef.current.sunMaterial.color.set(options.spaceSunColor);
+      } else {
+        sceneRef.current.sunMaterial.color.set(0xffffff);
+      }
+      sceneRef.current.sunMaterial.needsUpdate = true;
     }
     if (sceneRef.current.labelRendererDom) {
       sceneRef.current.labelRendererDom.style.display =
@@ -725,13 +735,25 @@ export default function ResumeSpace3D({
     // Sun mesh (visual center object)
     const sunGeometry = new THREE.SphereGeometry(60, 32, 32);
     const sunMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffdd99,
+      color: 0xffffff,
       toneMapped: false,
     });
     const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
     sunMesh.position.set(0, 0, 0);
     scene.add(sunMesh);
     sceneRef.current.sunMaterial = sunMaterial;
+    // Try to apply a sun texture to preserve detail
+    try {
+      textureLoader.load(
+        "/textures/sun.jpg",
+        (tex) => {
+          tex.minFilter = THREE.LinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          sunMaterial.map = tex;
+          sunMaterial.needsUpdate = true;
+        },
+      );
+    } catch {}
 
     // --- OBJECTS ---
     const items: {
@@ -812,6 +834,7 @@ export default function ResumeSpace3D({
     const sprite = new THREE.Sprite(spriteMaterial);
     sprite.scale.set(180, 180, 1);
     sunMesh.add(sprite);
+    sceneRef.current.sunGlowMaterial = spriteMaterial;
 
     // Label Helper
     const createLabel = (text: string, subtext?: string) => {

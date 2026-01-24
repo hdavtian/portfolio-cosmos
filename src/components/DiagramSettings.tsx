@@ -47,6 +47,8 @@ export interface DiagramStyleOptions {
   spaceShowLabels?: boolean;
   spaceSunIntensity?: number;
   spaceShowOrbits?: boolean;
+  spaceSunColor?: string;
+  spaceTintSunMesh?: boolean;
 }
 
 interface DiagramSettingsProps {

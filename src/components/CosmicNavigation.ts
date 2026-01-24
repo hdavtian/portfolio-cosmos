@@ -441,7 +441,6 @@ export class NavigationInterface {
           padding: 16px;
           font-family: 'Rajdhani', sans-serif;
           color: #c8d0d8;
-          max-height: 60%;
         ">
         <h3 style="
           margin: 0 0 12px 0;
@@ -554,8 +553,17 @@ export class NavigationInterface {
           const isVisible = submenu.style.display !== "none";
           submenu.style.display = isVisible ? "none" : "block";
         }
+        // Also navigate to the Experience planet
+        this.onNavigate?.("experience");
+        return; // Avoid falling through
       }
       // Note: Navigation for dynamic submenu items is handled where they are created
+
+      // For top-level quick navigation buttons, trigger navigation
+      if (!isSubmenuItem && target) {
+        // home, about, skills, projects
+        this.onNavigate?.(target);
+      }
     });
 
     // Audio controls
