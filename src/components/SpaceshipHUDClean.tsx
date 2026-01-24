@@ -756,41 +756,6 @@ const SpaceshipHUD: React.FC<Props> = ({
                       fontFamily: "'Rajdhani', sans-serif",
                     }}
                   >
-                    Ship Follow Distance:{" "}
-                    {cosmosOptions.spaceFollowDistance !== undefined
-                      ? cosmosOptions.spaceFollowDistance.toFixed(0)
-                      : "60"}
-                  </label>
-                  <input
-                    type="range"
-                    min="20"
-                    max="150"
-                    step="5"
-                    value={
-                      cosmosOptions.spaceFollowDistance !== undefined
-                        ? (cosmosOptions.spaceFollowDistance as number)
-                        : 60
-                    }
-                    onChange={(e) =>
-                      handleCosmosOptionChange(
-                        "spaceFollowDistance",
-                        Number(e.target.value),
-                      )
-                    }
-                    style={{ width: "100%" }}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      color: "#8a9199",
-                      fontSize: 11,
-                      display: "block",
-                      marginBottom: 4,
-                      fontFamily: "'Rajdhani', sans-serif",
-                    }}
-                  >
                     Sun Intensity:{" "}
                     {cosmosOptions.spaceSunIntensity?.toFixed(2) || "2.50"}
                   </label>

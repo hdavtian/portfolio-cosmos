@@ -2480,42 +2480,28 @@ export default function ResumeSpace3D({
         const pathData = spaceshipPathRef.current;
         const ship = spaceshipRef.current;
 
-        // Handle pauses and speed changes
-        if (pathData.isPaused) {
-          pathData.pauseTime--;
-          if (pathData.pauseTime <= 0) {
-            pathData.isPaused = false;
-            // Randomly choose new target speed (slow to fast)
-            pathData.targetSpeed = 0.001 + Math.random() * 0.004;
-          }
-        } else {
-          // Smoothly accelerate/decelerate to target speed
-          pathData.speed += (pathData.targetSpeed - pathData.speed) * 0.02;
+        // Smoothly accelerate/decelerate to target speed (never stop)
+        pathData.speed += (pathData.targetSpeed - pathData.speed) * 0.02;
 
-          // Apply travel speed multiplier from options
-          const speedMultiplier = (options.spaceTravelSpeed ?? 50) / 50;
-          
-          // Interpolate position
-          pathData.progress += pathData.speed * speedMultiplier;
+        // Apply travel speed multiplier from options
+        const speedMultiplier = (optionsRef.current.spaceTravelSpeed ?? 50) / 50;
+        
+        // Move along path
+        pathData.progress += pathData.speed * speedMultiplier;
 
-          if (pathData.progress >= 1) {
-            pathData.progress = 0;
-            pathData.currentIndex =
-              (pathData.currentIndex + 1) % pathData.waypoints.length;
+        if (pathData.progress >= 1) {
+          pathData.progress = 0;
+          pathData.currentIndex =
+            (pathData.currentIndex + 1) % pathData.waypoints.length;
 
-            // Randomly decide to pause at waypoint (20% chance)
-            if (Math.random() < 0.2) {
-              pathData.isPaused = true;
-              pathData.pauseTime = 30 + Math.random() * 60; // 0.5-1.5 seconds at 60fps
-              pathData.speed = 0;
-            }
+          // Randomly vary speed for natural movement
+          pathData.targetSpeed = 0.002 + Math.random() * 0.002;
 
-            // Randomly trigger a barrel roll (15% chance)
-            if (Math.random() < 0.15) {
-              pathData.rollSpeed =
-                (Math.random() > 0.5 ? 1 : -1) * (0.03 + Math.random() * 0.05);
-              pathData.rollAmount = Math.PI * 2; // Full 360° roll
-            }
+          // Very rarely trigger a barrel roll - 3% chance
+          if (Math.random() < 0.03) {
+            pathData.rollSpeed =
+              (Math.random() > 0.5 ? 1 : -1) * 0.02;
+            pathData.rollAmount = Math.PI * 2;
           }
         }
 
@@ -2526,9 +2512,9 @@ export default function ResumeSpace3D({
             (pathData.currentIndex + 1) % pathData.waypoints.length
           ];
 
-        // Smooth interpolation using ease-in-out
+        // Smooth interpolation between waypoints
         const t = pathData.progress;
-        const smoothT = t * t * (3 - 2 * t);
+        const smoothT = t * t * (3 - 2 * t); // Smoothstep
 
         ship.position.lerpVectors(current, next, smoothT);
 
@@ -2541,11 +2527,11 @@ export default function ResumeSpace3D({
         const matrix = new THREE.Matrix4();
         matrix.lookAt(direction, new THREE.Vector3(0, 0, 0), up);
         targetQuaternion.setFromRotationMatrix(matrix);
-        ship.quaternion.slerp(targetQuaternion, 0.1);
+        ship.quaternion.slerp(targetQuaternion, 0.05);
 
         // Apply barrel roll if active
         if (Math.abs(pathData.rollAmount) > 0.01) {
-          const rollAxis = new THREE.Vector3(0, 0, 1); // Roll around forward axis
+          const rollAxis = new THREE.Vector3(0, 0, 1);
           rollAxis.applyQuaternion(ship.quaternion);
           const rollQuat = new THREE.Quaternion();
           rollQuat.setFromAxisAngle(rollAxis, pathData.rollSpeed);
@@ -2556,19 +2542,6 @@ export default function ResumeSpace3D({
             pathData.rollSpeed = 0;
             pathData.rollAmount = 0;
           }
-        }
-
-        // Add subtle continuous rotation for life
-        if (!pathData.isPaused && pathData.rollAmount === 0) {
-          const wobbleAxis = new THREE.Vector3(
-            Math.sin(Date.now() * 0.0005) * 0.3,
-            Math.cos(Date.now() * 0.0007) * 0.2,
-            1,
-          ).normalize();
-          wobbleAxis.applyQuaternion(ship.quaternion);
-          const wobbleQuat = new THREE.Quaternion();
-          wobbleQuat.setFromAxisAngle(wobbleAxis, 0.005);
-          ship.quaternion.multiply(wobbleQuat);
         }
 
         // If following spaceship, move camera and target with ship while maintaining user's viewing angle
@@ -2613,7 +2586,7 @@ export default function ResumeSpace3D({
       const moonSpeedMultiplier =
         optionsRef.current.spaceMoonOrbitSpeed !== undefined
           ? (optionsRef.current.spaceMoonOrbitSpeed as number)
-          : planetSpeedMultiplier;
+          : (optionsRef.current.spaceOrbitSpeed ?? 0.1);
 
       // Animate halo layers and flash effects ALWAYS (independent of orbit speed)
       const time = Date.now() * 0.001; // Time in seconds
@@ -2844,14 +2817,17 @@ export default function ResumeSpace3D({
         }
       });
 
-      // Animate orbital positions when global speed is non-zero
+      // Animate orbital positions only when speed is greater than zero
       items.forEach((item) => {
         const isMoon = item.mesh.userData?.isMoon === true;
         const sm = isMoon ? moonSpeedMultiplier : planetSpeedMultiplier;
-        if (sm !== 0) {
-          // If this item is paused (focused moon), skip updating its orbital revolution
-          if (!item.mesh.userData.pauseOrbit) {
-            item.angle -= item.orbitSpeed * sm;
+        
+        // Only update orbital position if speed is greater than 0
+        // Also skip if this is a focused moon
+        if (sm > 0) {
+          const isFocused = focusedMoonRef.current === item.mesh;
+          if (!item.mesh.userData.pauseOrbit && !isFocused) {
+            item.angle += item.orbitSpeed * sm;
             item.mesh.position.x = Math.cos(item.angle) * item.distance;
             item.mesh.position.z = -Math.sin(item.angle) * item.distance;
           }
@@ -2860,7 +2836,15 @@ export default function ResumeSpace3D({
         // Self rotation: decouple from global orbit speed so moons always spin
         const isMoonBody = item.mesh.userData?.isMoon === true;
         const baseSpin = isMoonBody ? 0.02 : 0.008; // moons spin a bit faster
-        item.mesh.rotation.y += baseSpin;
+        
+        // For planets that have moons as children, only apply rotation if moon orbit speed > 0
+        // Otherwise the planet rotation causes moons to orbit even when speed is 0
+        const isPlanetWithPotentialMoons = item.mesh.userData?.isMainPlanet === true;
+        const shouldRotate = !isPlanetWithPotentialMoons || moonSpeedMultiplier > 0;
+        
+        if (shouldRotate) {
+          item.mesh.rotation.y += baseSpin;
+        }
 
         // Apply any residual spin velocity from user interaction (always applied)
         const spin = item.mesh.userData.spinVelocity as
