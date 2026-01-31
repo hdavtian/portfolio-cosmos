@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { gsap } from "gsap";
 import { createPortal } from "react-dom";
 import type { DiagramStyleOptions } from "./DiagramSettings";
 import "./SpaceshipHUDClean.scss";
@@ -17,6 +18,7 @@ type Props = {
   userTitle: string;
   consoleLogs: string[];
   consoleVisible: boolean;
+  hudVisible?: boolean;
   onConsoleToggle: () => void;
   onConsoleCopy: () => void;
   onConsoleClear: () => void;
@@ -67,6 +69,10 @@ type Props = {
   cosmosOptions?: DiagramStyleOptions;
   onCosmosOptionsChange?: (options: DiagramStyleOptions) => void;
   onConsoleLog?: (message: string) => void;
+  missionControlLogs?: string[];
+  onMissionControlLog?: (message: string) => void;
+  onMissionControlClear?: () => void;
+  onMissionControlCopy?: () => void;
 };
 
 const SpaceshipHUD: React.FC<Props> = ({
@@ -119,17 +125,185 @@ const SpaceshipHUD: React.FC<Props> = ({
   cosmosOptions = {},
   onCosmosOptionsChange = () => {},
   onConsoleLog,
+  hudVisible = true,
+  missionControlLogs = [],
+  onMissionControlLog = () => {},
+  onMissionControlClear = () => {},
+  onMissionControlCopy = () => {},
 }) => {
   const [cosmosExpanded, setCosmosExpanded] = useState(true);
   const [contextualPosition, setContextualPosition] = useState({
     right: 20,
     bottom: 20,
   });
+  const [viewportSize, setViewportSize] = useState(() => ({
+    width: typeof window !== "undefined" ? window.innerWidth : 1920,
+    height: typeof window !== "undefined" ? window.innerHeight : 1080,
+  }));
+  const [panelPercents, setPanelPercents] = useState({
+    left: 18,
+    right: 24,
+    footer: 24,
+  });
+  const [leftPanelEl, setLeftPanelEl] = useState<HTMLElement | null>(null);
+
+  const isUniverseLog = (log: string) => {
+    const keywords = [
+      "orbit",
+      "moon",
+      "planet",
+      "cosmos",
+      "space",
+      "sun",
+      "galaxy",
+      "universe",
+      "label",
+      "tint",
+    ];
+    const lower = log.toLowerCase();
+    return keywords.some((k) => lower.includes(k));
+  };
+
+  const clampValue = (value: number, min: number, max: number) => {
+    return Math.min(Math.max(value, min), max);
+  };
+
+  // Derived pixel sizes from percents and viewport
+  const leftWidthPx = clampValue(
+    (panelPercents.left / 100) * viewportSize.width,
+    220,
+    viewportSize.width * 0.4,
+  );
+  const rightWidthPx = clampValue(
+    (panelPercents.right / 100) * viewportSize.width,
+    260,
+    viewportSize.width * 0.4,
+  );
+  const footerHeightPx = clampValue(
+    (panelPercents.footer / 100) * viewportSize.height,
+    150,
+    viewportSize.height * 0.4,
+  );
 
   const cosmosContainer =
     typeof document !== "undefined"
       ? document.getElementById("cosmos-options-container")
       : null;
+
+  // Animate HUD show/hide
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const tl = gsap.timeline({
+      defaults: { duration: 0.4, ease: "power2.inOut" },
+    });
+
+    const topEl = document.querySelector(".spaceship-hud__top");
+    const rightEl = document.querySelector(".spaceship-hud__right");
+    const leftEl = document.querySelector(".spaceship-hud__left");
+    const footerEl = document.querySelector(".spaceship-hud__footer");
+
+    if (hudVisible) {
+      tl.fromTo(topEl, { y: "-120%", autoAlpha: 0 }, { y: "0%", autoAlpha: 1 })
+        .fromTo(
+          leftEl,
+          { x: "-110%", autoAlpha: 0 },
+          { x: "0%", autoAlpha: 1 },
+          "-=0.45",
+        )
+        .fromTo(
+          rightEl,
+          { x: "110%", autoAlpha: 0 },
+          { x: "0%", autoAlpha: 1 },
+          "-=0.42",
+        )
+        .fromTo(
+          footerEl,
+          { y: "120%", autoAlpha: 0 },
+          { y: "0%", autoAlpha: 1 },
+          "-=0.40",
+        );
+    } else {
+      tl.to(topEl, { y: "-120%", autoAlpha: 0 })
+        .to(leftEl, { x: "-110%", autoAlpha: 0 }, "-=0.45")
+        .to(rightEl, { x: "110%", autoAlpha: 0 }, "-=0.42")
+        .to(footerEl, { y: "120%", autoAlpha: 0 }, "-=0.40");
+    }
+
+    return () => {
+      tl.kill();
+    };
+  }, [hudVisible]);
+
+  // Locate the left HUD container injected by CosmicNavigation for resizing/portals
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const el = document.querySelector(
+      ".spaceship-hud__left",
+    ) as HTMLElement | null;
+    if (el) {
+      setLeftPanelEl(el);
+    }
+  }, []);
+
+  // Track viewport for percentage-based sizing
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window === "undefined") return;
+      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Apply dynamic sizing to the left HUD panel that lives outside React
+  useEffect(() => {
+    if (!leftPanelEl) return;
+    leftPanelEl.style.width = `${leftWidthPx}px`;
+    leftPanelEl.style.bottom = `${footerHeightPx}px`;
+  }, [leftPanelEl, leftWidthPx, footerHeightPx]);
+
+  // Resizing logic for left, right, and footer edges
+  const startResize =
+    (target: "left" | "right" | "footer") =>
+    (event: React.MouseEvent | MouseEvent) => {
+      event.preventDefault();
+
+      const handleMouseMove = (e: MouseEvent) => {
+        const maxWidthPx = viewportSize.width * 0.4;
+        if (target === "left") {
+          const newWidthPx = clampValue(e.clientX, 220, maxWidthPx);
+          const newPercent = (newWidthPx / viewportSize.width) * 100;
+          setPanelPercents((prev) => ({ ...prev, left: newPercent }));
+        } else if (target === "right") {
+          const newWidthPx = clampValue(
+            viewportSize.width - e.clientX,
+            260,
+            maxWidthPx,
+          );
+          const newPercent = (newWidthPx / viewportSize.width) * 100;
+          setPanelPercents((prev) => ({ ...prev, right: newPercent }));
+        } else if (target === "footer") {
+          const maxHeightPx = viewportSize.height * 0.4;
+          const newHeightPx = clampValue(
+            viewportSize.height - e.clientY,
+            150,
+            maxHeightPx,
+          );
+          const newPercent = (newHeightPx / viewportSize.height) * 100;
+          setPanelPercents((prev) => ({ ...prev, footer: newPercent }));
+        }
+      };
+
+      const handleMouseUp = () => {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    };
 
   // Calculate contextual controls position based on HUD dimensions
   useEffect(() => {
@@ -138,13 +312,14 @@ const SpaceshipHUD: React.FC<Props> = ({
 
       const rightPanel = document.querySelector(
         ".spaceship-hud__right",
-      ) as HTMLElement;
+      ) as HTMLElement | null;
       const footer = document.querySelector(
         ".spaceship-hud__footer",
-      ) as HTMLElement;
+      ) as HTMLElement | null;
 
-      const rightWidth = rightPanel?.offsetWidth || 0;
-      const footerHeight = footer?.offsetHeight || 0;
+      // When HUD is hidden, treat panel sizes as zero so controls hug the viewport
+      const rightWidth = hudVisible ? rightPanel?.offsetWidth || 0 : 0;
+      const footerHeight = hudVisible ? footer?.offsetHeight || 0 : 0;
 
       setContextualPosition({
         right: rightWidth + 50,
@@ -162,7 +337,13 @@ const SpaceshipHUD: React.FC<Props> = ({
     return () => {
       window.removeEventListener("resize", calculatePosition);
     };
-  }, [followingSpaceship, keyboardUpdateTrigger]); // Recalculate when following state changes or keyboard updates
+  }, [
+    followingSpaceship,
+    keyboardUpdateTrigger,
+    rightWidthPx,
+    footerHeightPx,
+    hudVisible,
+  ]); // Recalculate when following state changes or keyboard updates
 
   const handleCosmosOptionChange = (
     key: keyof DiagramStyleOptions,
@@ -175,7 +356,7 @@ const SpaceshipHUD: React.FC<Props> = ({
       switch (key) {
         case "spaceOrbitSpeed":
           onConsoleLog(
-            `🌍 Orbit speed adjusted to ${Number(value).toFixed(1)}x`,
+            `🌍 Planets orbit speed adjusted to ${Number(value).toFixed(1)}x`,
           );
           break;
         case "spaceMoonOrbitSpeed":
@@ -330,8 +511,8 @@ const SpaceshipHUD: React.FC<Props> = ({
           position: "fixed",
           top: 45,
           right: 0,
-          bottom: 182,
-          width: 420,
+          bottom: footerHeightPx,
+          width: rightWidthPx,
           background: "#111418",
           zIndex: 9999,
           display: "flex",
@@ -340,6 +521,10 @@ const SpaceshipHUD: React.FC<Props> = ({
         }}
         className="spaceship-hud__right"
       >
+        <div
+          className="hud-resize-handle hud-resize-handle--right"
+          onMouseDown={startResize("right")}
+        />
         <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
           {followingSpaceship && (
             <div style={{ marginBottom: 12 }}>
@@ -575,7 +760,7 @@ const SpaceshipHUD: React.FC<Props> = ({
           bottom: 0,
           left: 0,
           right: 0,
-          height: 182,
+          height: footerHeightPx,
           background: "#0f1419",
           borderTop: "2px solid rgba(212, 175, 55, 0.3)",
           zIndex: 10000,
@@ -584,6 +769,10 @@ const SpaceshipHUD: React.FC<Props> = ({
         }}
         className="spaceship-hud__footer"
       >
+        <div
+          className="hud-resize-handle hud-resize-handle--footer"
+          onMouseDown={startResize("footer")}
+        />
         {/* Left Panel: TELEMETRY Console */}
         <div
           style={{
@@ -593,6 +782,7 @@ const SpaceshipHUD: React.FC<Props> = ({
             flexDirection: "column",
             background: "#0f1419",
             position: "relative",
+            minHeight: 0,
           }}
         >
           <div
@@ -600,60 +790,74 @@ const SpaceshipHUD: React.FC<Props> = ({
               padding: "8px 12px",
               borderBottom: "1px solid rgba(212, 175, 55, 0.2)",
               display: "flex",
-              gap: 8,
+              justifyContent: "space-between",
               alignItems: "center",
+              gap: 12,
             }}
           >
-            <button
-              onClick={onConsoleToggle}
-              className="hud-button"
+            <div
               style={{
-                background: consoleVisible ? "#e8c547" : "#2a3340",
-                border: "none",
-                color: consoleVisible ? "#0f1419" : "#fff",
-                padding: "5px 10px",
-                borderRadius: 4,
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: 11,
+                color: "#e8c547",
+                fontWeight: 600,
+                fontSize: 12,
                 fontFamily: "'Rajdhani', sans-serif",
-                letterSpacing: 0.5,
+                letterSpacing: 1,
               }}
             >
-              {consoleVisible ? "▼" : "▲"} TELEMETRY
-            </button>
-            <button
-              onClick={onConsoleCopy}
-              className="hud-button"
-              style={{
-                background: "#2a3340",
-                color: "#fff",
-                border: "none",
-                padding: "5px 10px",
-                borderRadius: 4,
-                cursor: "pointer",
-                fontSize: 10,
-                fontFamily: "'Rajdhani', sans-serif",
-              }}
-            >
-              COPY
-            </button>
-            <button
-              onClick={onConsoleClear}
-              className="hud-button"
-              style={{
-                background: "#2a3340",
-                color: "#fff",
-                border: "none",
-                padding: "5px 10px",
-                borderRadius: 4,
-                cursor: "pointer",
-                fontSize: 10,
-                fontFamily: "'Rajdhani', sans-serif",
-              }}
-            >
-              CLEAR
-            </button>
+              Universe Logs
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={onConsoleToggle}
+                className="hud-button"
+                style={{
+                  background: consoleVisible ? "#e8c547" : "#2a3340",
+                  border: "none",
+                  color: consoleVisible ? "#0f1419" : "#fff",
+                  padding: "5px 10px",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontSize: 11,
+                  fontFamily: "'Rajdhani', sans-serif",
+                  letterSpacing: 0.5,
+                }}
+              >
+                {consoleVisible ? "▼" : "▲"} TELEMETRY
+              </button>
+              <button
+                onClick={onConsoleCopy}
+                className="hud-button"
+                style={{
+                  background: "#2a3340",
+                  color: "#fff",
+                  border: "none",
+                  padding: "5px 10px",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  fontSize: 10,
+                  fontFamily: "'Rajdhani', sans-serif",
+                }}
+              >
+                COPY
+              </button>
+              <button
+                onClick={onConsoleClear}
+                className="hud-button"
+                style={{
+                  background: "#2a3340",
+                  color: "#fff",
+                  border: "none",
+                  padding: "5px 10px",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  fontSize: 10,
+                  fontFamily: "'Rajdhani', sans-serif",
+                }}
+              >
+                CLEAR
+              </button>
+            </div>
           </div>
 
           {consoleVisible && (
@@ -664,9 +868,10 @@ const SpaceshipHUD: React.FC<Props> = ({
                 background: "#0b0f12",
                 overflowY: "auto",
                 padding: 8,
+                minHeight: 0,
               }}
             >
-              {consoleLogs.length === 0 ? (
+              {consoleLogs.filter(isUniverseLog).length === 0 ? (
                 <div
                   style={{
                     color: "#3a4350",
@@ -680,6 +885,7 @@ const SpaceshipHUD: React.FC<Props> = ({
                 </div>
               ) : (
                 consoleLogs
+                  .filter(isUniverseLog)
                   .slice()
                   .reverse()
                   .map((l, i) => (
@@ -688,7 +894,7 @@ const SpaceshipHUD: React.FC<Props> = ({
                       style={{
                         color: "#9aa6b2",
                         fontFamily: "Courier New, monospace",
-                        fontSize: 10,
+                        fontSize: 12,
                         padding: "2px 0",
                       }}
                     >
@@ -709,6 +915,7 @@ const SpaceshipHUD: React.FC<Props> = ({
             flexDirection: "column",
             background: "#0f1419",
             position: "relative",
+            minHeight: 0,
           }}
         >
           <div
@@ -720,22 +927,90 @@ const SpaceshipHUD: React.FC<Props> = ({
               fontWeight: 600,
               fontFamily: "'Rajdhani', sans-serif",
               letterSpacing: 1,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
             }}
           >
-            MISSION CONTROL
+            <span>Ship's Logs</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                onClick={onMissionControlCopy}
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(212, 175, 55, 0.3)",
+                  color: "#e8c547",
+                  padding: "2px 6px",
+                  fontSize: 9,
+                  cursor: "pointer",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  letterSpacing: 0.5,
+                  borderRadius: 2,
+                }}
+                title="Copy mission logs"
+              >
+                COPY
+              </button>
+              <button
+                onClick={onMissionControlClear}
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(212, 175, 55, 0.3)",
+                  color: "#e8c547",
+                  padding: "2px 6px",
+                  fontSize: 9,
+                  cursor: "pointer",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  letterSpacing: 0.5,
+                  borderRadius: 2,
+                }}
+                title="Clear mission logs"
+              >
+                CLEAR
+              </button>
+            </div>
           </div>
           <div
             style={{
               flex: 1,
+              overflowY: "auto",
+              padding: "8px 12px",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#6a7380",
-              fontSize: 11,
-              fontFamily: "'Rajdhani', sans-serif",
+              flexDirection: "column",
+              gap: 4,
+              minHeight: 0,
             }}
           >
-            Awaiting commands...
+            {missionControlLogs.length === 0 ? (
+              <div
+                style={{
+                  color: "#6a7380",
+                  fontSize: 13,
+                  fontFamily: "'Orbitron', monospace",
+                  fontStyle: "italic",
+                  textAlign: "center",
+                  marginTop: 20,
+                }}
+              >
+                Awaiting navigation commands...
+              </div>
+            ) : (
+              missionControlLogs.map((log, i) => (
+                <div
+                  key={i}
+                  style={{
+                    color: "#8bc34a",
+                    fontSize: 12,
+                    fontFamily: "'Orbitron', monospace",
+                    lineHeight: 1.4,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {log}
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -795,6 +1070,15 @@ const SpaceshipHUD: React.FC<Props> = ({
         </div>
       </footer>
 
+      {leftPanelEl &&
+        createPortal(
+          <div
+            className="hud-resize-handle hud-resize-handle--left"
+            onMouseDown={startResize("left")}
+          />,
+          leftPanelEl,
+        )}
+
       {cosmosContainer &&
         createPortal(
           <div>
@@ -844,7 +1128,7 @@ const SpaceshipHUD: React.FC<Props> = ({
                       fontFamily: "'Rajdhani', sans-serif",
                     }}
                   >
-                    Orbit Speed:{" "}
+                    Planets Orbit Speed:{" "}
                     {cosmosOptions.spaceOrbitSpeed !== undefined
                       ? cosmosOptions.spaceOrbitSpeed.toFixed(1)
                       : "0.1"}
@@ -882,19 +1166,19 @@ const SpaceshipHUD: React.FC<Props> = ({
                   >
                     Moon Orbit Speed:{" "}
                     {cosmosOptions.spaceMoonOrbitSpeed !== undefined
-                      ? cosmosOptions.spaceMoonOrbitSpeed.toFixed(1)
-                      : (cosmosOptions.spaceOrbitSpeed ?? 0.1).toFixed(1)}
+                      ? cosmosOptions.spaceMoonOrbitSpeed.toFixed(3)
+                      : (cosmosOptions.spaceOrbitSpeed ?? 0.01).toFixed(3)}
                     x
                   </label>
                   <input
                     type="range"
                     min="0"
-                    max="3"
-                    step="0.1"
+                    max="1"
+                    step="0.001"
                     value={
                       cosmosOptions.spaceMoonOrbitSpeed !== undefined
                         ? (cosmosOptions.spaceMoonOrbitSpeed as number)
-                        : (cosmosOptions.spaceOrbitSpeed ?? 0.1)
+                        : (cosmosOptions.spaceOrbitSpeed ?? 0.01)
                     }
                     onChange={(e) =>
                       handleCosmosOptionChange(

@@ -199,6 +199,10 @@ section {
         z-index: 10;
         position: relative;
         padding-top: 2vh;
+
+        &--hidden {
+            display: none !important;
+        }
     }
 
     &__canvas {

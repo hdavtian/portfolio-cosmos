@@ -368,6 +368,42 @@
     }
 }
 
+/* HUD resize handles */
+.hud-resize-handle {
+    position: absolute;
+    background: rgba(232, 197, 71, 0.4);
+    transition: background 0.2s ease;
+    z-index: 3;
+
+    &:hover {
+        background: rgba(232, 197, 71, 0.7);
+    }
+}
+
+.hud-resize-handle--left {
+    top: 0;
+    bottom: 0;
+    right: -2px;
+    width: 4px;
+    cursor: col-resize;
+}
+
+.hud-resize-handle--right {
+    top: 0;
+    bottom: 0;
+    left: -2px;
+    width: 4px;
+    cursor: col-resize;
+}
+
+.hud-resize-handle--footer {
+    top: -2px;
+    left: 0;
+    right: 0;
+    height: 4px;
+    cursor: row-resize;
+}
+
 /* Flight Mode Toggle */
 .flight-mode-toggle {
     margin: 12px 0;

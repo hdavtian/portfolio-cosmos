@@ -26,6 +26,11 @@ import {
   type PlanetData,
 } from "./TourDefinitionBuilder";
 import SpaceshipHUD from "./SpaceshipHUDClean.tsx";
+import { getOrbitalPositionEmitter } from "./OrbitalPositionEmitter";
+import {
+  SpaceshipNavigationSystem,
+  type NavigationStatus,
+} from "./SpaceshipNavigationSystem";
 
 // Global singleton to prevent multiple WebGL context creation
 let globalRenderer: THREE.WebGLRenderer | null = null;
@@ -35,7 +40,6 @@ let globalCleanup: (() => void) | null = null;
 declare global {
   interface Window {
     lastAutopilotLog?: number;
-    lastWaypointLog?: number;
   }
 }
 
@@ -79,7 +83,13 @@ export default function ResumeSpace3D({
   const [consoleVisible, setConsoleVisible] = useState(true);
   const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
   const consoleLogsRef = useRef<string[]>([]);
-  const maxConsoleLogs = 8; // Keep last 8 logs
+
+  // HUD visibility state
+  const [hudVisible, setHudVisible] = useState(true);
+
+  // Mission Control logs state (for game/navigation logs)
+  const [missionControlLogs, setMissionControlLogs] = useState<string[]>([]);
+  const missionControlLogsRef = useRef<string[]>([]);
 
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
@@ -107,11 +117,11 @@ export default function ResumeSpace3D({
   const spaceshipRef = useRef<THREE.Group | null>(null);
   const spaceshipLightsRef = useRef<THREE.PointLight[]>([]);
   const spaceshipEngineLightRef = useRef<THREE.PointLight | null>(null);
+
   const spaceshipCameraOffsetRef = useRef<THREE.Vector3>(
     new THREE.Vector3(0, 20, -60),
   );
   const spaceshipPathRef = useRef<{
-    waypoints: THREE.Vector3[];
     currentIndex: number;
     progress: number;
     speed: number;
@@ -125,7 +135,6 @@ export default function ResumeSpace3D({
     moonVisitDuration: number;
     currentMoonTarget: THREE.Vector3 | null;
   }>({
-    waypoints: [],
     currentIndex: 0,
     progress: 0,
     speed: 0.002,
@@ -139,6 +148,22 @@ export default function ResumeSpace3D({
     moonVisitDuration: 10000, // 10 seconds
     currentMoonTarget: null,
   });
+
+  // Items ref to track orbital objects (moons, planets)
+  const itemsRef = useRef<
+    {
+      mesh: THREE.Mesh;
+      orbitSpeed: number;
+      angle: number;
+      distance: number;
+      parent?: THREE.Object3D;
+      detached?: boolean;
+      originalParent?: THREE.Object3D;
+      overlayMeshes?: THREE.Mesh[];
+      overlayOffsets?: number[];
+      overlayHeights?: number[];
+    }[]
+  >([]);
 
   // Manual flight control state
   const [manualFlightMode, setManualFlightMode] = useState(false);
@@ -237,12 +262,62 @@ export default function ResumeSpace3D({
     })),
   ];
 
+  // Centralized function to freeze orbital motion (call before ANY moon visit)
+  // Defined early to be available for handleAutopilotNavigation
+  const freezeOrbitalMotion = (moonMesh: THREE.Mesh) => {
+    // Don't freeze if already frozen
+    if (frozenOrbitalSpeedsRef.current) {
+      vlog("🧊 Orbital motion already frozen - reusing frozen state");
+      return;
+    }
+
+    const moonItemEntry = itemsRef.current.find((it) => it.mesh === moonMesh);
+    if (!moonItemEntry) {
+      vlog("⚠️ Could not find moon item entry");
+      return;
+    }
+
+    vlog(`🧊 Freezing orbital motion for moon visit`);
+
+    // Store the original speeds
+    frozenOrbitalSpeedsRef.current = {
+      parentPlanetOrbitSpeed: optionsRef.current.spaceOrbitSpeed,
+      parentPlanetMoonOrbitSpeed: optionsRef.current.spaceMoonOrbitSpeed,
+      moonOrbitSpeed: moonItemEntry.orbitSpeed,
+      moonItemEntry: moonItemEntry,
+    };
+
+    vlog(
+      `   Stored speeds: planet=${frozenOrbitalSpeedsRef.current.parentPlanetOrbitSpeed}, moonOrbit=${frozenOrbitalSpeedsRef.current.parentPlanetMoonOrbitSpeed}, thisMoon=${frozenOrbitalSpeedsRef.current.moonOrbitSpeed}`,
+    );
+
+    // Freeze the speeds immediately
+    if (onOptionsChange) {
+      onOptionsChange({
+        ...optionsRef.current,
+        spaceOrbitSpeed: 0,
+        spaceMoonOrbitSpeed: 0,
+      });
+    }
+
+    // Freeze this specific moon's orbit speed
+    moonItemEntry.orbitSpeed = 0;
+
+    vlog(`   ✅ All orbital motion frozen`);
+  };
+
   // Handle autopilot navigation from drawer
   const handleAutopilotNavigation = (
     targetId: string,
     targetType: "section" | "moon",
   ) => {
     vlog(`🖱️ CLICK: Navigation button clicked - ${targetType}: ${targetId}`);
+
+    // If a moon is currently focused, schedule exit so its orbit resumes before new travel
+    if (focusedMoonRef.current) {
+      exitFocusRequestRef.current = true;
+      vlog("↩️ Exiting previous focused moon before new navigation");
+    }
 
     if (!followingSpaceshipRef.current || manualFlightModeRef.current) {
       vlog("⚠️ Navigation only available in autopilot mode");
@@ -252,36 +327,54 @@ export default function ResumeSpace3D({
       return;
     }
 
-    vlog(`🎯 Autopilot navigation to ${targetType}: ${targetId}`);
-    setCurrentNavigationTarget(targetId);
+    if (!navigationSystemRef.current) {
+      vlog("⚠️ Navigation system not initialized");
+      return;
+    }
 
-    // Find target position
-    let targetPosition: THREE.Vector3 | null = null;
+    vlog(`🎯 Autopilot navigation to ${targetType}: ${targetId}`);
 
     if (targetType === "moon") {
-      // Find the moon mesh
-      const company = resumeData.experience.find((exp) => exp.id === targetId);
+      // Use new navigation system for moons
+      const moonId = `moon-${targetId}`;
 
-      sceneRef.current.scene?.traverse((object) => {
-        if (object instanceof THREE.Mesh && object.userData.planetName) {
-          const objName = (object.userData.planetName || "").toLowerCase();
+      if (!emitterRef.current.isTracking(moonId)) {
+        vlog(`⚠️ Moon ${targetId} is not being tracked by emitter`);
+        return;
+      }
 
-          if (company) {
-            const companyName = (
-              company.navLabel || company.company
-            ).toLowerCase();
-            if (
-              objName.includes(companyName.split(" ")[0]) ||
-              companyName.includes(objName)
-            ) {
-              targetPosition = new THREE.Vector3();
-              object.getWorldPosition(targetPosition);
-            }
-          }
-        }
-      });
+      // Determine if we should use turbo based on distance
+      const currentPos = emitterRef.current.getCurrentPosition(moonId);
+      const useTurbo =
+        currentPos && spaceshipRef.current
+          ? spaceshipRef.current.position.distanceTo(currentPos.worldPosition) >
+            500
+          : true;
+
+      vlog(`🎯 Starting navigation to moon: ${moonId}`);
+      vlog(`   Emitter tracking: ${emitterRef.current.isTracking(moonId)}`);
+      vlog(`   Nav system exists: ${!!navigationSystemRef.current}`);
+      vlog(`   Ship exists: ${!!spaceshipRef.current}`);
+
+      const success = navigationSystemRef.current.navigateToObject(
+        moonId,
+        useTurbo,
+      );
+
+      if (success) {
+        setCurrentNavigationTarget(targetId);
+        vlog(`✅ Navigation started to moon: ${targetId} (turbo: ${useTurbo})`);
+        missionLog(
+          `🎯 NAVIGATION INITIATED: Target - ${targetId} | Distance: ${currentPos ? spaceshipRef.current!.position.distanceTo(currentPos.worldPosition).toFixed(0) : "unknown"}u`,
+        );
+      } else {
+        vlog(`❌ Failed to start navigation to moon: ${targetId}`);
+        missionLog(`⚠️ NAVIGATION FAILED: Unable to lock onto ${targetId}`);
+      }
     } else if (targetType === "section") {
-      // Find section planet (Experience or Skills)
+      // Handle section navigation (planets) - use old approach for now
+      // TODO: Could also use new system for planets
+      let targetPosition: THREE.Vector3 | null = null;
       let targetName = targetId;
 
       sceneRef.current.scene?.traverse((object) => {
@@ -293,40 +386,37 @@ export default function ResumeSpace3D({
           }
         }
       });
-    }
 
-    if (targetPosition && spaceshipRef.current) {
-      const shipPos = spaceshipRef.current.position.clone();
-      const targetPos = targetPosition as THREE.Vector3; // Type assertion since we checked null above
-      const distance = shipPos.distanceTo(targetPos);
+      if (targetPosition && spaceshipRef.current) {
+        const shipPos = spaceshipRef.current.position.clone();
+        const targetPos = targetPosition as THREE.Vector3;
+        const distance = shipPos.distanceTo(targetPos);
 
-      vlog(
-        `✅ Target found at [${targetPos.x.toFixed(1)}, ${targetPos.y.toFixed(1)}, ${targetPos.z.toFixed(1)}]`,
-      );
-      vlog(
-        `📍 Ship at [${shipPos.x.toFixed(1)}, ${shipPos.y.toFixed(1)}, ${shipPos.z.toFixed(1)}]`,
-      );
-      vlog(`📏 Distance: ${distance.toFixed(1)} units`);
+        vlog(
+          `✅ Target found at [${targetPos.x.toFixed(1)}, ${targetPos.y.toFixed(1)}, ${targetPos.z.toFixed(1)}]`,
+        );
+        vlog(
+          `📍 Ship at [${shipPos.x.toFixed(1)}, ${shipPos.y.toFixed(1)}, ${shipPos.z.toFixed(1)}]`,
+        );
+        vlog(`📏 Distance: ${distance.toFixed(1)} units`);
 
-      // Store navigation data
-      navigationTargetRef.current = {
-        id: targetId,
-        type: targetType,
-        position: targetPos,
-        startPosition: shipPos.clone(),
-        startTime: Date.now(),
-        useTurbo: distance > 500, // Use turbo for distances > 500 units
-      };
+        // Store navigation data for old system
+        navigationTargetRef.current = {
+          id: targetId,
+          type: targetType,
+          position: targetPos,
+          startPosition: shipPos.clone(),
+          startTime: Date.now(),
+          useTurbo: distance > 500,
+        };
 
-      vlog(
-        `📏 Distance to target: ${distance.toFixed(1)} units ${navigationTargetRef.current.useTurbo ? "(TURBO enabled)" : ""}`,
-      );
-    } else {
-      vlog(`❌ Could not find target: ${targetId}`);
-      vlog(
-        `   Target pos: ${!!targetPosition}, Ship ref: ${!!spaceshipRef.current}`,
-      );
-      setCurrentNavigationTarget(null);
+        vlog(
+          `📏 Distance to target: ${distance.toFixed(1)} units ${navigationTargetRef.current.useTurbo ? "(TURBO enabled)" : ""}`,
+        );
+      } else {
+        vlog(`❌ Could not find target: ${targetId}`);
+        setCurrentNavigationTarget(null);
+      }
     }
   };
 
@@ -349,11 +439,25 @@ export default function ResumeSpace3D({
     }
 
     // Add to visual console
-    const newLogs = [...consoleLogsRef.current, logMessage].slice(
-      -maxConsoleLogs,
-    );
+    const newLogs = [...consoleLogsRef.current, logMessage];
     consoleLogsRef.current = newLogs;
     setConsoleLogs(newLogs);
+  };
+
+  // Mission Control logging (game-related logs for navigation, combat, etc.)
+  const missionLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString("en-US", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    const logMessage = `[${timestamp}] ${message}`;
+
+    // Add to mission control console
+    const newLogs = [...missionControlLogsRef.current, logMessage];
+    missionControlLogsRef.current = newLogs;
+    setMissionControlLogs(newLogs);
   };
 
   // Refs for cosmic systems
@@ -363,6 +467,10 @@ export default function ResumeSpace3D({
   const navigationInterfaceRef = useRef<NavigationInterface | null>(null);
   const tourBuilderRef = useRef<TourDefinitionBuilder | null>(null);
   const planetsDataRef = useRef<Map<string, PlanetData>>(new Map());
+
+  // New navigation system refs
+  const emitterRef = useRef(getOrbitalPositionEmitter());
+  const navigationSystemRef = useRef<SpaceshipNavigationSystem | null>(null);
 
   // Private setter for minDistance to make it easier to track where it's being set
   const setMinDistance = (value: number, reason?: string) => {
@@ -392,11 +500,19 @@ export default function ResumeSpace3D({
     moonItemEntry?: any; // Store the moon's item entry for speed restoration
   } | null>(null);
 
+  // HUD show/hide control
+  const hudRefs = useRef<{
+    top: HTMLElement | null;
+    right: HTMLElement | null;
+    left: HTMLElement | null;
+    footer: HTMLElement | null;
+  }>({ top: null, right: null, left: null, footer: null });
+
   // Store options in a ref so the animation loop can access the latest values
   // without needing to be recreated on every render
-  const optionsRef = useRef(options);
+  const optionsRef = useRef({ spaceMoonOrbitSpeed: 0.01, ...options });
   useEffect(() => {
-    optionsRef.current = options;
+    optionsRef.current = { spaceMoonOrbitSpeed: 0.01, ...options };
 
     // Update live properties - directly control bloom like the original
     if (sceneRef.current.bloomPass && options.spaceSunIntensity !== undefined) {
@@ -1104,6 +1220,12 @@ export default function ResumeSpace3D({
       overlayOffsets?: number[];
       overlayHeights?: number[];
     }[] = [];
+
+    const orbitAnchors: { anchor: THREE.Object3D; parent: THREE.Object3D }[] =
+      [];
+
+    // Update items ref so it's accessible outside useFrame
+    itemsRef.current = items;
     // clickable overlay registry (planes that should be raycast-targeted)
     const overlayClickables: THREE.Object3D[] = [];
     // clickable planet registry (used for raycasting planet clicks)
@@ -1229,11 +1351,46 @@ export default function ResumeSpace3D({
       sectionIndex?: number,
       textureUrl?: string,
     ) => {
-      // Orbit Path - Create professional orbital rings using TorusGeometry approach
+      // Orbit Path - Render as smooth ellipses instead of segmented torus rings
       // Make rings thinner: main orbits slightly thicker than moon orbits
       const isMainOrbit = parent === scene; // scene-centered orbits (around Sun)
+      let orbitContainer: THREE.Object3D = parent;
+      if (!isMainOrbit && (parent as any)?.userData) {
+        const parentData = (parent as any).userData as Record<string, any>;
+        if (!parentData.orbitAnchor) {
+          const anchor = new THREE.Group();
+          anchor.name = `${parentData.planetName || "planet"}-orbit-anchor`;
+          parent.add(anchor);
+          parentData.orbitAnchor = anchor;
+          orbitAnchors.push({ anchor, parent });
+        }
+        orbitContainer = parentData.orbitAnchor as THREE.Object3D;
+      }
       const tubeRadius = isMainOrbit ? 0.12 : 0.08;
-      const ringGeometry = new THREE.TorusGeometry(distance, tubeRadius, 8, 64);
+      const orbitEllipseRatio = isMainOrbit ? 0.85 : 0.9; // Z radius ratio for oval shape
+      const ellipseCurve = new THREE.EllipseCurve(
+        0,
+        0,
+        distance,
+        distance * orbitEllipseRatio,
+        0,
+        Math.PI * 2,
+        false,
+        0,
+      );
+      const ellipsePoints = ellipseCurve.getPoints(256);
+      const ellipsePath = new THREE.CatmullRomCurve3(
+        ellipsePoints.map((p) => new THREE.Vector3(p.x, 0, p.y)),
+        true,
+        "centripetal",
+      );
+      const ringGeometry = new THREE.TubeGeometry(
+        ellipsePath,
+        256,
+        tubeRadius,
+        12,
+        true,
+      );
 
       // Distinct orbit colors: main planets around the sun vs. moons around planets
       let ringColorHex: number = 0x444466;
@@ -1274,9 +1431,8 @@ export default function ResumeSpace3D({
         side: THREE.DoubleSide,
       });
       const orbit = new THREE.Mesh(ringGeometry, ringMaterial);
-      orbit.rotation.x = Math.PI / 2; // Rotate to horizontal plane
       orbit.userData.isOrbitLine = true; // Mark for visibility control
-      parent.add(orbit);
+      orbitContainer.add(orbit);
 
       // Planet Mesh - Use MeshStandardMaterial for physically-based rendering (matches original)
       const planetGeometry = new THREE.SphereGeometry(size, 32, 32);
@@ -1402,7 +1558,7 @@ export default function ResumeSpace3D({
       planetMesh.position.x = Math.cos(startAngle) * distance;
       planetMesh.position.z = Math.sin(startAngle) * distance;
 
-      parent.add(planetMesh);
+      orbitContainer.add(planetMesh);
 
       // Add to animation lists
       items.push({
@@ -1410,7 +1566,7 @@ export default function ResumeSpace3D({
         orbitSpeed,
         angle: startAngle,
         distance,
-        parent: parent,
+        parent: orbitContainer,
       });
 
       // Label
@@ -1426,6 +1582,8 @@ export default function ResumeSpace3D({
         planetName: name,
         isMoon: parent !== scene,
         isMainPlanet: parent === scene,
+        orbitEllipseRatio,
+        orbitUsesAnchor: orbitContainer !== parent,
       };
 
       // Add to clickable array if it has a section
@@ -1509,7 +1667,7 @@ export default function ResumeSpace3D({
 
         // Job moons should be clickable with section index 2+i
         // (section 0 = hero+summary, section 1 = skills, sections 2+ = jobs)
-        createPlanet(
+        const moonMesh = createPlanet(
           job.company,
           60 + i * 20,
           5,
@@ -1519,6 +1677,15 @@ export default function ResumeSpace3D({
           2 + i, // Make job moons clickable with correct section index
           textureUrl,
         );
+
+        // Register moon with position emitter for tracking
+        const moonId = `moon-${job.id}`;
+        moonMesh.userData.moonId = moonId;
+        emitterRef.current.registerObject(moonId, moonMesh, 16); // 60fps updates
+        console.log(
+          `📡 Registered moon for tracking: ${moonId} (${job.company})`,
+        );
+
         // Remove the rotation that might be causing visual issues
         // moon.rotation.x = Math.PI / 2;
       });
@@ -1595,6 +1762,11 @@ export default function ResumeSpace3D({
         // Scale down the spaceship to be tiny compared to planets
         spaceship.scale.set(0.5, 0.5, 0.5);
 
+        // Align model forward axis (model front is +Z; navigation lookAt uses -Z)
+        spaceship.userData.forwardOffset = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(0, Math.PI, 0),
+        );
+
         // Position it initially near the sun
         spaceship.position.set(50, 20, 50);
 
@@ -1660,74 +1832,104 @@ export default function ResumeSpace3D({
         spaceshipRef.current = spaceship;
 
         console.log("🚀 Spaceship added to scene at", spaceship.position);
+        vlog("🚀 Spaceship loaded - ready for navigation");
 
-        // Generate random flight path waypoints throughout the cosmos
-        const generateFlightPath = () => {
-          const waypoints: THREE.Vector3[] = [];
-          const numWaypoints = 8;
+        // Initialize navigation system
+        navigationSystemRef.current = new SpaceshipNavigationSystem(spaceship, {
+          maxSpeed: 3.0,
+          turboSpeed: 6.0,
+          accelerationRate: 0.12,
+          decelerationDistance: 150,
+          arrivalDistance: 30,
+          usePredictiveIntercept: true,
+          freezeOrbitOnApproach: true,
+          freezeDistance: 60,
+        });
 
-          for (let i = 0; i < numWaypoints; i++) {
-            // 30% chance to target a random moon instead of random space
-            if (Math.random() < 0.3 && items.length > 0) {
-              // Find all moons
-              const moons = items.filter(
-                (item) => item.mesh.userData?.isMoon === true,
-              );
+        // Set up callbacks for navigation status updates
+        navigationSystemRef.current.setOnStatusChange(
+          (status: NavigationStatus) => {
+            setNavigationDistance(status.distance);
+            setNavigationETA(status.eta);
+            // Update any other UI state as needed
+          },
+        );
 
-              if (moons.length > 0) {
-                // Pick random moon
-                const randomMoon =
-                  moons[Math.floor(Math.random() * moons.length)];
-                const moonWorldPos = new THREE.Vector3();
-                randomMoon.mesh.getWorldPosition(moonWorldPos);
+        // Set up mission log callback
+        navigationSystemRef.current.setMissionLog(missionLog);
 
-                // Position near the moon (30 units away)
-                const offset = new THREE.Vector3(
-                  (Math.random() - 0.5) * 60,
-                  (Math.random() - 0.5) * 40,
-                  (Math.random() - 0.5) * 60,
-                )
-                  .normalize()
-                  .multiplyScalar(30);
+        // Provide obstacles (moons/planets) for avoidance
+        navigationSystemRef.current.setObstaclesProvider(() => {
+          const obstacles: {
+            id?: string;
+            position: THREE.Vector3;
+            radius: number;
+          }[] = [];
 
-                waypoints.push(moonWorldPos.clone().add(offset));
-                console.log(
-                  `🌙 Spaceship will visit moon: ${randomMoon.mesh.userData.planetName}`,
-                );
-                continue;
+          if (emitterRef.current) {
+            const ids = emitterRef.current.getRegisteredObjectIds();
+            ids.forEach((id) => {
+              // Don't treat current target as obstacle
+              if (id === navigationSystemRef.current?.getStatus().targetId)
+                return;
+
+              const pos = emitterRef.current?.getCurrentPosition(id);
+              if (pos) {
+                obstacles.push({
+                  id,
+                  position: pos.worldPosition.clone(),
+                  radius: id.startsWith("moon-") ? 50 : 100,
+                });
               }
-            }
-
-            // Regular random waypoint
-            const angle = (i / numWaypoints) * Math.PI * 2;
-            const radius = 200 + Math.random() * 800;
-            const height = (Math.random() - 0.5) * 400;
-
-            waypoints.push(
-              new THREE.Vector3(
-                Math.cos(angle) * radius,
-                height,
-                Math.sin(angle) * radius,
-              ),
-            );
+            });
           }
 
-          // Close the loop
-          waypoints.push(waypoints[0].clone());
+          return obstacles;
+        });
 
-          return waypoints;
-        };
+        // Set up arrival callback
+        navigationSystemRef.current.setOnArrival((targetId: string) => {
+          vlog(`✅ ARRIVED at ${targetId}`);
 
-        spaceshipPathRef.current.waypoints = generateFlightPath();
-        spaceshipPathRef.current.currentIndex = 0;
-        spaceshipPathRef.current.progress = 0;
+          // Handle arrival at moon - inline to access finalizeFocusOnMoon
+          // Extract company ID from moon ID (remove "moon-" prefix)
+          const companyId = targetId.replace("moon-", "");
+          const company = resumeData.experience.find(
+            (exp) => exp.id === companyId,
+          );
 
-        console.log(
-          "🛤️ Flight path generated with",
-          spaceshipPathRef.current.waypoints.length,
-          "waypoints",
-        );
-        vlog("🚀 Spaceship loaded and flight path initialized");
+          if (!company) {
+            vlog(`⚠️ Could not find company for moon: ${targetId}`);
+            return;
+          }
+
+          // Find the moon mesh
+          let moonMesh: THREE.Mesh | null = null;
+          scene.traverse((object) => {
+            if (
+              object instanceof THREE.Mesh &&
+              object.userData.moonId === targetId
+            ) {
+              moonMesh = object;
+            }
+          });
+
+          if (!moonMesh) {
+            vlog(`⚠️ Could not find moon mesh: ${targetId}`);
+            return;
+          }
+
+          vlog(`🌙 Processing arrival at moon: ${company.company}`);
+          missionLog(
+            `🌙 STATION CONTACT: Arrived at ${company.company} - Establishing connection`,
+          );
+
+          // The orbit is already frozen by navigation system
+          // Now show the overlay and set up the close-up view
+          finalizeFocusOnMoon(moonMesh, company);
+        });
+
+        console.log("🎯 Navigation system initialized");
       },
       (progress) => {
         // Loading progress
@@ -1743,6 +1945,20 @@ export default function ResumeSpace3D({
     );
 
     // --- INTERACTION ---
+    // Cache HUD panel elements for show/hide animations
+    hudRefs.current.top = document.querySelector(
+      ".spaceship-hud__top",
+    ) as HTMLElement | null;
+    hudRefs.current.right = document.querySelector(
+      ".spaceship-hud__right",
+    ) as HTMLElement | null;
+    hudRefs.current.left = document.querySelector(
+      ".spaceship-hud__left",
+    ) as HTMLElement | null;
+    hudRefs.current.footer = document.querySelector(
+      ".spaceship-hud__footer",
+    ) as HTMLElement | null;
+
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
 
@@ -2125,8 +2341,11 @@ export default function ResumeSpace3D({
         // Recompute polar coordinates for consistent orbit continuation
         const x = focused.position.x;
         const z = focused.position.z;
-        itemEntry.distance = Math.sqrt(x * x + z * z) || itemEntry.distance;
-        itemEntry.angle = Math.atan2(-z, x);
+        const orbitRatio = focused.userData?.orbitEllipseRatio ?? 1;
+        itemEntry.distance =
+          Math.sqrt(x * x + (z * z) / (orbitRatio * orbitRatio)) ||
+          itemEntry.distance;
+        itemEntry.angle = Math.atan2(-z / orbitRatio, x);
       }
 
       // Resume orbit and clear user-driven spin
@@ -2147,7 +2366,7 @@ export default function ResumeSpace3D({
           onOptionsChange({
             ...optionsRef.current,
             spaceOrbitSpeed: frozen.parentPlanetOrbitSpeed ?? 0.1,
-            spaceMoonOrbitSpeed: frozen.parentPlanetMoonOrbitSpeed ?? 0.1,
+            spaceMoonOrbitSpeed: frozen.parentPlanetMoonOrbitSpeed ?? 0.01,
           });
         }
 
@@ -2171,6 +2390,8 @@ export default function ResumeSpace3D({
       // Clear focused reference
       focusedMoonRef.current = null;
     };
+
+    // freezeOrbitalMotion moved earlier in the file to avoid hoisting issues
 
     // --- COSMIC SYSTEMS INITIALIZATION ---
     // Initialize camera director for cinematic movements
@@ -2610,36 +2831,7 @@ export default function ResumeSpace3D({
 
       // CRITICAL: Freeze orbital motion BEFORE getting position
       // This ensures the moon stays still during camera flight
-      const moonItemEntry = items.find((it) => it.mesh === moonMesh);
-      if (moonItemEntry) {
-        vlog(`🧊 PRE-FLIGHT: Freezing orbital motion`);
-
-        // Store the original speeds BEFORE freezing
-        frozenOrbitalSpeedsRef.current = {
-          parentPlanetOrbitSpeed: optionsRef.current.spaceOrbitSpeed,
-          parentPlanetMoonOrbitSpeed: optionsRef.current.spaceMoonOrbitSpeed,
-          moonOrbitSpeed: moonItemEntry.orbitSpeed,
-          moonItemEntry: moonItemEntry,
-        };
-
-        vlog(
-          `   Stored speeds: planet=${frozenOrbitalSpeedsRef.current.parentPlanetOrbitSpeed}, moonOrbit=${frozenOrbitalSpeedsRef.current.parentPlanetMoonOrbitSpeed}, thisMoon=${frozenOrbitalSpeedsRef.current.moonOrbitSpeed}`,
-        );
-
-        // Freeze the speeds immediately
-        if (onOptionsChange) {
-          onOptionsChange({
-            ...optionsRef.current,
-            spaceOrbitSpeed: 0,
-            spaceMoonOrbitSpeed: 0,
-          });
-        }
-
-        // Freeze this specific moon's orbit speed
-        moonItemEntry.orbitSpeed = 0;
-
-        vlog(`   ✅ All orbital motion frozen before flight`);
-      }
+      freezeOrbitalMotion(moonMesh);
 
       // Get the moon's WORLD position (now that it's frozen)
       const moonWorldPos = new THREE.Vector3();
@@ -3089,15 +3281,32 @@ export default function ResumeSpace3D({
             Date.now() - window.lastAutopilotLog > 2000
           ) {
             vlog(
-              `🤖 AUTOPILOT: nav=${!!navigationTargetRef.current.id}, waypoints=${pathData.waypoints.length}, visiting=${pathData.visitingMoon}`,
+              `🤖 AUTOPILOT: nav=${!!navigationTargetRef.current.id}, system=${!!navigationSystemRef.current?.getStatus().isNavigating}`,
             );
             window.lastAutopilotLog = Date.now();
           }
 
-          // Check for active navigation target from drawer
+          // Update new navigation system if active (for moon navigation)
+          if (navigationSystemRef.current) {
+            const deltaTime = 0.016; // Approximate 60fps
+            const status = navigationSystemRef.current.getStatus();
+            if (
+              (status.isNavigating && !(window as any).lastNavSystemLog) ||
+              Date.now() - ((window as any).lastNavSystemLog || 0) > 2000
+            ) {
+              vlog(
+                `🎯 Nav System Active: ${status.targetId}, dist: ${status.distance?.toFixed(1)}`,
+              );
+              (window as any).lastNavSystemLog = Date.now();
+            }
+            navigationSystemRef.current.update(deltaTime);
+          }
+
+          // Old navigation system for sections/planets (non-moon targets)
           if (
             navigationTargetRef.current.id &&
-            navigationTargetRef.current.position
+            navigationTargetRef.current.position &&
+            navigationTargetRef.current.type === "section" // Only use old system for sections
           ) {
             const target = navigationTargetRef.current;
             const shipPos = ship.position.clone();
@@ -3223,11 +3432,9 @@ export default function ResumeSpace3D({
               manualFlightRef.current.acceleration = 0;
               manualFlightRef.current.isTurboActive = false;
 
-              // CRITICAL: Clear waypoints to prevent waypoint mode from taking over
-              pathData.waypoints = [];
               pathData.visitingMoon = false;
               pathData.currentMoonTarget = null;
-              vlog(`🧹 Cleared waypoints and moon visit state`);
+              vlog(`🧹 Cleared moon visit state`);
 
               vlog(`🔧 Clearing navigation state and re-enabling controls`);
 
@@ -3274,6 +3481,7 @@ export default function ResumeSpace3D({
                 });
 
                 if (moonMesh && company) {
+                  // Orbital motion was already frozen at navigation start
                   // Show the overlays and detach the moon
                   finalizeFocusOnMoon(moonMesh, company);
                 }
@@ -3284,274 +3492,136 @@ export default function ResumeSpace3D({
               return;
             }
 
-            // Skip normal waypoint behavior while navigating
-          } else if (spaceshipPathRef.current.waypoints.length > 0) {
-            // Normal waypoint behavior
-            if (
-              !window.lastWaypointLog ||
-              Date.now() - window.lastWaypointLog > 2000
-            ) {
-              vlog(
-                `🛤️ WAYPOINT MODE: ${spaceshipPathRef.current.waypoints.length} waypoints, visiting=${pathData.visitingMoon}`,
-              );
-              window.lastWaypointLog = Date.now();
-            }
+            // No more waypoint behavior - ship only moves when navigating
+          } else {
+            // Ship idles when not navigating
+          }
 
-            // Check if we're visiting a moon
-            if (pathData.visitingMoon) {
-              const elapsed = Date.now() - pathData.moonVisitStartTime;
+          // If following spaceship, move camera and target with ship while maintaining user's viewing angle
+          if (followingSpaceshipRef.current) {
+            if (insideShipRef.current) {
+              // Inside ship view - camera moves with ship, user can zoom/look around
 
-              if (elapsed >= pathData.moonVisitDuration) {
-                // Finished visiting moon
-                pathData.visitingMoon = false;
-                pathData.currentMoonTarget = null;
-                vlog("🚀 MOON VISIT ENDED: Resuming waypoint flight");
-              } else {
-                // Orbit around the moon slowly
-                if (pathData.currentMoonTarget) {
-                  const orbitSpeed = 0.0005;
-                  const orbitRadius = 30;
-                  const orbitAngle = (elapsed * orbitSpeed) % (Math.PI * 2);
+              // Get ship's world position and rotation
+              const shipWorldPos = new THREE.Vector3();
+              const shipWorldQuat = new THREE.Quaternion();
+              ship.getWorldPosition(shipWorldPos);
+              ship.getWorldQuaternion(shipWorldQuat);
 
-                  const orbitX =
-                    pathData.currentMoonTarget.x +
-                    Math.cos(orbitAngle) * orbitRadius;
-                  const orbitY =
-                    pathData.currentMoonTarget.y +
-                    Math.sin(orbitAngle * 0.5) * 10;
-                  const orbitZ =
-                    pathData.currentMoonTarget.z +
-                    Math.sin(orbitAngle) * orbitRadius;
+              if (sceneRef.current.controls) {
+                // Calculate the target point (where we're looking) in ship's local space
+                const targetOffset =
+                  shipViewModeRef.current === "cockpit"
+                    ? new THREE.Vector3(0, 0.5, 10) // Cockpit: look forward through window
+                    : new THREE.Vector3(0.5, 0, 0); // Cabin: look at cabin center (right front area)
 
-                  ship.position.set(orbitX, orbitY, orbitZ);
-                  ship.lookAt(pathData.currentMoonTarget);
-                }
-                // Skip normal movement
-                return;
-              }
-            }
-
-            // Smoothly accelerate/decelerate to target speed (never stop)
-            pathData.speed += (pathData.targetSpeed - pathData.speed) * 0.02;
-
-            // Apply travel speed multiplier from options
-            const speedMultiplier =
-              (optionsRef.current.spaceTravelSpeed ?? 50) / 50;
-
-            // Move along path
-            pathData.progress += pathData.speed * speedMultiplier;
-
-            if (pathData.progress >= 1) {
-              pathData.progress = 0;
-              pathData.currentIndex =
-                (pathData.currentIndex + 1) % pathData.waypoints.length;
-
-              // Check if next waypoint is near a moon
-              const nextWaypoint = pathData.waypoints[pathData.currentIndex];
-              const moons = items.filter(
-                (item) => item.mesh.userData?.isMoon === true,
-              );
-
-              for (const moonItem of moons) {
-                const moonWorldPos = new THREE.Vector3();
-                moonItem.mesh.getWorldPosition(moonWorldPos);
-
-                // If waypoint is within 50 units of moon, start visit
-                if (nextWaypoint.distanceTo(moonWorldPos) < 50) {
-                  pathData.visitingMoon = true;
-                  pathData.moonVisitStartTime = Date.now();
-                  pathData.currentMoonTarget = moonWorldPos.clone();
-                  vlog(
-                    `🌙 MOON VISIT STARTED: ${moonItem.mesh.userData.planetName} (10 second orbit)`,
-                  );
-                  vlog(
-                    `   Moon at: [${moonWorldPos.x.toFixed(1)}, ${moonWorldPos.y.toFixed(1)}, ${moonWorldPos.z.toFixed(1)}]`,
-                  );
-                  break;
-                }
-              }
-
-              // Randomly vary speed for natural movement
-              pathData.targetSpeed = 0.002 + Math.random() * 0.002;
-
-              // Very rarely trigger a barrel roll - 3% chance
-              if (Math.random() < 0.03) {
-                pathData.rollSpeed = (Math.random() > 0.5 ? 1 : -1) * 0.02;
-                pathData.rollAmount = Math.PI * 2;
-              }
-            }
-
-            // Get current and next waypoint
-            const current = pathData.waypoints[pathData.currentIndex];
-            const next =
-              pathData.waypoints[
-                (pathData.currentIndex + 1) % pathData.waypoints.length
-              ];
-
-            // Smooth interpolation between waypoints
-            const t = pathData.progress;
-            const smoothT = t * t * (3 - 2 * t); // Smoothstep
-
-            ship.position.lerpVectors(current, next, smoothT);
-
-            // Orient spaceship to face direction of travel
-            const direction = new THREE.Vector3()
-              .subVectors(next, current)
-              .normalize();
-            const targetQuaternion = new THREE.Quaternion();
-            const up = new THREE.Vector3(0, 1, 0);
-            const matrix = new THREE.Matrix4();
-            matrix.lookAt(direction, new THREE.Vector3(0, 0, 0), up);
-            targetQuaternion.setFromRotationMatrix(matrix);
-            ship.quaternion.slerp(targetQuaternion, 0.05);
-
-            // Apply barrel roll if active
-            if (Math.abs(pathData.rollAmount) > 0.01) {
-              const rollAxis = new THREE.Vector3(0, 0, 1);
-              rollAxis.applyQuaternion(ship.quaternion);
-              const rollQuat = new THREE.Quaternion();
-              rollQuat.setFromAxisAngle(rollAxis, pathData.rollSpeed);
-              ship.quaternion.multiply(rollQuat);
-
-              pathData.rollAmount -= Math.abs(pathData.rollSpeed);
-              if (pathData.rollAmount <= 0) {
-                pathData.rollSpeed = 0;
-                pathData.rollAmount = 0;
-              }
-            }
-
-            // If following spaceship, move camera and target with ship while maintaining user's viewing angle
-            if (followingSpaceshipRef.current) {
-              if (insideShipRef.current) {
-                // Inside ship view - camera moves with ship, user can zoom/look around
-
-                // Get ship's world position and rotation
-                const shipWorldPos = new THREE.Vector3();
-                const shipWorldQuat = new THREE.Quaternion();
-                ship.getWorldPosition(shipWorldPos);
-                ship.getWorldQuaternion(shipWorldQuat);
-
-                if (sceneRef.current.controls) {
-                  // Calculate the target point (where we're looking) in ship's local space
-                  const targetOffset =
-                    shipViewModeRef.current === "cockpit"
-                      ? new THREE.Vector3(0, 0.5, 10) // Cockpit: look forward through window
-                      : new THREE.Vector3(0.5, 0, 0); // Cabin: look at cabin center (right front area)
-
-                  // Transform target to world space
-                  const localTargetOffset = targetOffset
-                    .clone()
-                    .applyQuaternion(shipWorldQuat);
-                  const worldTarget = shipWorldPos
-                    .clone()
-                    .add(localTargetOffset);
-
-                  // Get camera's current offset from the target (in world space)
-                  const currentCameraOffset = camera.position
-                    .clone()
-                    .sub(sceneRef.current.controls.target);
-
-                  // Update target to follow ship
-                  sceneRef.current.controls.target.copy(worldTarget);
-
-                  // Calculate desired camera position
-                  const desiredCameraPos = worldTarget
-                    .clone()
-                    .add(currentCameraOffset);
-
-                  // Constrain camera to stay inside ship bounds (in ship's local space)
-                  const shipLocalCameraPos = desiredCameraPos
-                    .clone()
-                    .sub(shipWorldPos);
-                  // Convert to ship's local coordinate system
-                  const inverseQuat = shipWorldQuat.clone().invert();
-                  shipLocalCameraPos.applyQuaternion(inverseQuat);
-
-                  // Define ship interior bounds (adjust based on model size)
-                  const bounds =
-                    shipViewModeRef.current === "cockpit"
-                      ? { x: 1.2, y: 1, z: 6 } // Cockpit bounds (forward area)
-                      : { x: 2.5, y: 1.2, z: 3 }; // Cabin bounds (right front area)
-
-                  // Clamp camera position within bounds
-                  shipLocalCameraPos.x = Math.max(
-                    -bounds.x,
-                    Math.min(bounds.x, shipLocalCameraPos.x),
-                  );
-                  shipLocalCameraPos.y = Math.max(
-                    -bounds.y,
-                    Math.min(bounds.y, shipLocalCameraPos.y),
-                  );
-                  shipLocalCameraPos.z = Math.max(
-                    -bounds.z,
-                    Math.min(bounds.z, shipLocalCameraPos.z),
-                  );
-
-                  // Convert back to world space
-                  shipLocalCameraPos.applyQuaternion(shipWorldQuat);
-                  const constrainedCameraPos = shipWorldPos
-                    .clone()
-                    .add(shipLocalCameraPos);
-
-                  // Apply constrained camera position
-                  camera.position.copy(constrainedCameraPos);
-
-                  // Configure controls for interior view
-                  sceneRef.current.controls.enablePan = false;
-                  sceneRef.current.controls.enableRotate = true;
-                  sceneRef.current.controls.enableZoom = true;
-
-                  if (shipViewModeRef.current === "cockpit") {
-                    // Cockpit: Allow zoom to window (close) or back to see cockpit (far)
-                    sceneRef.current.controls.minDistance = 0.3; // Zoom close to window
-                    sceneRef.current.controls.maxDistance = 4; // Zoom out to see cockpit
-                  } else {
-                    // Interior: Allow zoom around cabin
-                    sceneRef.current.controls.minDistance = 0.5; // Zoom close to details
-                    sceneRef.current.controls.maxDistance = 3.5; // Zoom out to see cabin
-                  }
-
-                  sceneRef.current.controls.update();
-                }
-              } else {
-                // Exterior follow view (existing logic)
-                const followDistance =
-                  optionsRef.current.spaceFollowDistance || 60;
-
-                // Update the camera offset if user has moved the camera (via orbit controls)
-                const currentOffset = camera.position
+                // Transform target to world space
+                const localTargetOffset = targetOffset
                   .clone()
-                  .sub(ship.position);
+                  .applyQuaternion(shipWorldQuat);
+                const worldTarget = shipWorldPos.clone().add(localTargetOffset);
 
-                // Only update stored offset if it's significantly different (user dragged)
-                if (
-                  currentOffset.distanceTo(spaceshipCameraOffsetRef.current) > 1
-                ) {
-                  spaceshipCameraOffsetRef.current.copy(currentOffset);
+                // Get camera's current offset from the target (in world space)
+                const currentCameraOffset = camera.position
+                  .clone()
+                  .sub(sceneRef.current.controls.target);
+
+                // Update target to follow ship
+                sceneRef.current.controls.target.copy(worldTarget);
+
+                // Calculate desired camera position
+                const desiredCameraPos = worldTarget
+                  .clone()
+                  .add(currentCameraOffset);
+
+                // Constrain camera to stay inside ship bounds (in ship's local space)
+                const shipLocalCameraPos = desiredCameraPos
+                  .clone()
+                  .sub(shipWorldPos);
+                // Convert to ship's local coordinate system
+                const inverseQuat = shipWorldQuat.clone().invert();
+                shipLocalCameraPos.applyQuaternion(inverseQuat);
+
+                // Define ship interior bounds (adjust based on model size)
+                const bounds =
+                  shipViewModeRef.current === "cockpit"
+                    ? { x: 1.2, y: 1, z: 6 } // Cockpit bounds (forward area)
+                    : { x: 2.5, y: 1.2, z: 3 }; // Cabin bounds (right front area)
+
+                // Clamp camera position within bounds
+                shipLocalCameraPos.x = Math.max(
+                  -bounds.x,
+                  Math.min(bounds.x, shipLocalCameraPos.x),
+                );
+                shipLocalCameraPos.y = Math.max(
+                  -bounds.y,
+                  Math.min(bounds.y, shipLocalCameraPos.y),
+                );
+                shipLocalCameraPos.z = Math.max(
+                  -bounds.z,
+                  Math.min(bounds.z, shipLocalCameraPos.z),
+                );
+
+                // Convert back to world space
+                shipLocalCameraPos.applyQuaternion(shipWorldQuat);
+                const constrainedCameraPos = shipWorldPos
+                  .clone()
+                  .add(shipLocalCameraPos);
+
+                // Apply constrained camera position
+                camera.position.copy(constrainedCameraPos);
+
+                // Configure controls for interior view
+                sceneRef.current.controls.enablePan = false;
+                sceneRef.current.controls.enableRotate = true;
+                sceneRef.current.controls.enableZoom = true;
+
+                if (shipViewModeRef.current === "cockpit") {
+                  // Cockpit: Allow zoom to window (close) or back to see cockpit (far)
+                  sceneRef.current.controls.minDistance = 0.3; // Zoom close to window
+                  sceneRef.current.controls.maxDistance = 4; // Zoom out to see cockpit
+                } else {
+                  // Interior: Allow zoom around cabin
+                  sceneRef.current.controls.minDistance = 0.5; // Zoom close to details
+                  sceneRef.current.controls.maxDistance = 3.5; // Zoom out to see cabin
                 }
 
-                // Scale the offset to match the desired follow distance
-                const scaledOffset = spaceshipCameraOffsetRef.current
-                  .clone()
-                  .normalize()
-                  .multiplyScalar(followDistance);
+                sceneRef.current.controls.update();
+              }
+            } else {
+              // Exterior follow view (existing logic)
+              const followDistance =
+                optionsRef.current.spaceFollowDistance || 60;
 
-                // Apply the scaled offset to maintain viewing angle at correct distance
-                const desiredCameraPos = ship.position
-                  .clone()
-                  .add(scaledOffset);
-                camera.position.copy(desiredCameraPos);
+              // Update the camera offset if user has moved the camera (via orbit controls)
+              const currentOffset = camera.position.clone().sub(ship.position);
 
-                // Update orbit controls target to ship position
-                if (sceneRef.current.controls) {
-                  sceneRef.current.controls.target.copy(ship.position);
-                  sceneRef.current.controls.enablePan = true;
-                  sceneRef.current.controls.maxDistance = 1000; // Reset to normal
-                  sceneRef.current.controls.update();
-                }
+              // Only update stored offset if it's significantly different (user dragged)
+              if (
+                currentOffset.distanceTo(spaceshipCameraOffsetRef.current) > 1
+              ) {
+                spaceshipCameraOffsetRef.current.copy(currentOffset);
+              }
+
+              // Scale the offset to match the desired follow distance
+              const scaledOffset = spaceshipCameraOffsetRef.current
+                .clone()
+                .normalize()
+                .multiplyScalar(followDistance);
+
+              // Apply the scaled offset to maintain viewing angle at correct distance
+              const desiredCameraPos = ship.position.clone().add(scaledOffset);
+              camera.position.copy(desiredCameraPos);
+
+              // Update orbit controls target to ship position
+              if (sceneRef.current.controls) {
+                sceneRef.current.controls.target.copy(ship.position);
+                sceneRef.current.controls.enablePan = true;
+                sceneRef.current.controls.maxDistance = 1000; // Reset to normal
+                sceneRef.current.controls.update();
               }
             }
-          } // End of normal waypoint behavior
+          }
         } // End of autopilot mode block
       } // End of spaceship animation
 
@@ -3559,14 +3629,22 @@ export default function ResumeSpace3D({
       sunMesh.rotation.y += 0.002;
 
       // Orbit logic (separate speeds for main planets vs. moons)
-      const planetSpeedMultiplier =
-        optionsRef.current.spaceOrbitSpeed !== undefined
-          ? optionsRef.current.spaceOrbitSpeed
-          : 0.1;
-      const moonSpeedMultiplier =
-        optionsRef.current.spaceMoonOrbitSpeed !== undefined
-          ? (optionsRef.current.spaceMoonOrbitSpeed as number)
-          : (optionsRef.current.spaceOrbitSpeed ?? 0.1);
+      const planetSpeedMultiplier = Math.max(
+        0,
+        Number(
+          optionsRef.current.spaceOrbitSpeed !== undefined
+            ? optionsRef.current.spaceOrbitSpeed
+            : 0.1,
+        ) || 0.1,
+      );
+      const moonSpeedMultiplier = Math.max(
+        0,
+        Number(
+          optionsRef.current.spaceMoonOrbitSpeed !== undefined
+            ? optionsRef.current.spaceMoonOrbitSpeed
+            : (optionsRef.current.spaceOrbitSpeed ?? 0.01),
+        ) || 0.01,
+      );
 
       // Animate halo layers and flash effects ALWAYS (independent of orbit speed)
       const time = Date.now() * 0.001; // Time in seconds
@@ -3802,15 +3880,23 @@ export default function ResumeSpace3D({
         const isMoon = item.mesh.userData?.isMoon === true;
         const sm = isMoon ? moonSpeedMultiplier : planetSpeedMultiplier;
 
-        // Only update orbital position if speed is greater than 0
-        // Also skip if this is a focused moon
-        if (sm > 0) {
-          const isFocused = focusedMoonRef.current === item.mesh;
-          if (!item.mesh.userData.pauseOrbit && !isFocused) {
+        // Update orbital angle only when speed is greater than 0
+        // Always re-project position to the orbit line so it can't drift off
+        const isFocused = focusedMoonRef.current === item.mesh;
+        if (!item.mesh.userData.pauseOrbit && !isFocused) {
+          if (sm > 0) {
             item.angle += item.orbitSpeed * sm;
-            item.mesh.position.x = Math.cos(item.angle) * item.distance;
-            item.mesh.position.z = -Math.sin(item.angle) * item.distance;
           }
+          const usesAnchor = item.mesh.userData?.orbitUsesAnchor === true;
+          const parentRotationY =
+            !usesAnchor && isMoon && item.mesh.parent
+              ? item.mesh.parent.rotation.y
+              : 0;
+          const orbitAngle = isMoon ? item.angle - parentRotationY : item.angle;
+          const orbitRatio = item.mesh.userData?.orbitEllipseRatio ?? 1;
+          item.mesh.position.x = Math.cos(orbitAngle) * item.distance;
+          item.mesh.position.z =
+            -Math.sin(orbitAngle) * item.distance * orbitRatio;
         }
 
         // Self rotation: use moon spin speed control for moons, base spin for planets
@@ -3852,6 +3938,11 @@ export default function ResumeSpace3D({
           // decay spin slowly
           spin.multiplyScalar(0.995);
         }
+      });
+
+      // Keep moon orbits stationary by canceling parent planet spin
+      orbitAnchors.forEach(({ anchor, parent }) => {
+        anchor.rotation.set(0, -parent.rotation.y, 0);
       });
 
       // Check occlusion for CSS2D labels
@@ -3948,6 +4039,10 @@ export default function ResumeSpace3D({
     setTimeout(() => {
       setSceneReady(true);
 
+      // Start the orbital position emitter for tracking moving objects
+      emitterRef.current.start();
+      console.log("📡 Orbital position emitter started");
+
       // Add smooth zoom and pan animation
       const startPos = {
         x: camera.position.x,
@@ -4008,6 +4103,17 @@ export default function ResumeSpace3D({
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("click", onClick);
+
+      // Stop orbital position emitter
+      emitterRef.current.stop();
+      console.log("📡 Orbital position emitter stopped");
+
+      // Cleanup navigation system
+      if (navigationSystemRef.current) {
+        navigationSystemRef.current.dispose();
+        navigationSystemRef.current = null;
+        console.log("🎯 Navigation system disposed");
+      }
 
       // Remove touch event listeners
       renderer.domElement.removeEventListener(
@@ -4077,6 +4183,32 @@ export default function ResumeSpace3D({
             }}
           />
 
+          {/* HUD Toggle Button */}
+          <button
+            onClick={() => setHudVisible((v) => !v)}
+            style={{
+              position: "absolute",
+              top: 10,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 20000,
+              padding: "8px 14px",
+              borderRadius: 18,
+              border: "1px solid rgba(232, 197, 71, 0.6)",
+              background: hudVisible
+                ? "rgba(15,20,25,0.9)"
+                : "rgba(15,20,25,0.6)",
+              color: "#e8c547",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontWeight: 700,
+              letterSpacing: 0.5,
+              cursor: "pointer",
+              boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+            }}
+          >
+            {hudVisible ? "Hide HUD" : "Show HUD"}
+          </button>
+
           <div
             style={{
               position: "absolute",
@@ -4100,6 +4232,7 @@ export default function ResumeSpace3D({
 
         {/* Spaceship HUD Interface */}
         <SpaceshipHUD
+          hudVisible={hudVisible}
           userName="HARMA DAVTIAN"
           userTitle="Lead Full Stack Engineer"
           consoleLogs={consoleLogs}
@@ -4111,6 +4244,15 @@ export default function ResumeSpace3D({
           onConsoleClear={() => {
             setConsoleLogs([]);
             consoleLogsRef.current = [];
+          }}
+          missionControlLogs={missionControlLogs}
+          onMissionControlLog={missionLog}
+          onMissionControlClear={() => {
+            setMissionControlLogs([]);
+            missionControlLogsRef.current = [];
+          }}
+          onMissionControlCopy={() => {
+            navigator.clipboard.writeText(missionControlLogs.join("\n"));
           }}
           tourActive={tourActive}
           tourWaypoint={tourWaypoint}
