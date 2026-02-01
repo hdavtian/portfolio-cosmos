@@ -127,6 +127,7 @@ const SpaceshipHUD: React.FC<Props> = ({
   onConsoleLog,
   hudVisible = true,
   missionControlLogs = [],
+  // @ts-expect-error - Kept for future use
   onMissionControlLog = () => {},
   onMissionControlClear = () => {},
   onMissionControlCopy = () => {},
