@@ -441,6 +441,11 @@ export default function ResumeSpace3D({
     })),
   ];
 
+  // RULES
+  // -----
+  // - On moon visit, freeze only the current system so the camera can lock.
+  // - Always capture the pre-visit moon orbit speed so exit can restore the
+  //   exact prior state (moving vs. stopped, and original speed).
   // Centralized function to freeze orbital motion (call before ANY moon visit)
   // Defined early to be available for handleAutopilotNavigation
   const freezeOrbitalMotion = (moonMesh: THREE.Mesh) => {
@@ -749,16 +754,23 @@ export default function ResumeSpace3D({
         options.spaceShowLabels === false ? "none" : "block";
     }
 
+    // RULES
+    // -----
+    // - spaceShowOrbits toggles ALL ellipse visibility globally.
+    // - When a system is frozen for moon focus, its orbit lines must stay
+    //   hidden regardless of global visibility, and only be restored on exit.
     // Control orbit lines visibility
     if (sceneRef.current.scene) {
       const showOrbits = options.spaceShowOrbits !== false;
       sceneRef.current.scene.traverse((object) => {
         if (object.userData.isOrbitLine) {
+          // Apply global orbit ellipse visibility toggle
           object.visible = showOrbits;
         }
       });
       if (frozenSystemStateRef.current) {
         frozenSystemStateRef.current.orbitLines.forEach((line) => {
+          // Keep frozen system ellipses hidden while focused
           line.visible = false;
         });
       }
@@ -1442,6 +1454,14 @@ export default function ResumeSpace3D({
       vlog,
     });
 
+    // RULES
+    // -----
+    // - When leaving a moon, restore the system orbit state as it was before
+    //   entering. If the moon/system was stopped, keep it stopped. If it was
+    //   moving, resume at the exact prior speed and path.
+    // - Exiting should never re-derive orbit path from scratch; it must
+    //   reattach the moon and continue from the stored state.
+    // Exit moon view (single authoritative path)
     const exitMoonView = () => {
       const shouldExitRestoreOptions = !!frozenOrbitalSpeedsRef.current;
 

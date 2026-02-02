@@ -24,6 +24,10 @@ const resolveSystemId = (moonMesh: THREE.Mesh): string | undefined => {
   return undefined;
 };
 
+// RULES
+// -----
+// - On restore, orbit ellipses for the frozen system must return to the
+//   global visibility state (showOrbits). Do not force visible when off.
 export const restoreFrozenSystem = (params: {
   frozenSystemStateRef: MutableRefObject<FrozenSystemState | null>;
   showOrbits?: boolean;
@@ -41,6 +45,7 @@ export const restoreFrozenSystem = (params: {
   });
 
   state.orbitLines.forEach((line) => {
+    // Show orbit ellipses for the restored system (respect global visibility)
     line.visible = showOrbits;
   });
 
@@ -48,6 +53,10 @@ export const restoreFrozenSystem = (params: {
   frozenSystemStateRef.current = null;
 };
 
+// RULES
+// -----
+// - On moon focus, hide orbit ellipses for the affected system only.
+//   Global visibility is preserved and restored on exit.
 export const freezeSystemForMoon = (params: {
   moonMesh: THREE.Mesh;
   items: OrbitItem[];
@@ -87,6 +96,7 @@ export const freezeSystemForMoon = (params: {
   scene.traverse((obj) => {
     if (obj.userData?.isOrbitLine && obj.userData?.orbitSystemId === systemId) {
       orbitLines.push(obj);
+      // Hide orbit ellipses for the focused system during moon view
       obj.visible = false;
     }
   });

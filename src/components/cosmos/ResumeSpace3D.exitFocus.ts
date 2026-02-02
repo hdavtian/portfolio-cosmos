@@ -14,6 +14,12 @@ export type OrbitItem = {
   overlayHeights?: number[];
 };
 
+// RULES
+// -----
+// - Moon exit must resume the SAME orbit path (ellipse) and speed the moon
+//   had before focus. No new path derivation.
+// - If the moon was stopped before focus, it must remain stopped after exit.
+//   If it was moving, resume at the last speed.
 export const createExitFocusedMoon = (deps: {
   scene: THREE.Scene;
   items: OrbitItem[];
