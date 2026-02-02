@@ -369,9 +369,17 @@ export const createOrbitRing = (params: {
   orbitContainer: THREE.Object3D;
   ellipsePath: THREE.Curve<THREE.Vector3>;
   tubeRadius: number;
+  systemId?: string;
 }): THREE.Mesh => {
-  const { name, parent, isMainOrbit, orbitContainer, ellipsePath, tubeRadius } =
-    params;
+  const {
+    name,
+    parent,
+    isMainOrbit,
+    orbitContainer,
+    ellipsePath,
+    tubeRadius,
+    systemId,
+  } = params;
 
   const ringGeometry = new THREE.TubeGeometry(
     ellipsePath,
@@ -421,6 +429,9 @@ export const createOrbitRing = (params: {
   });
   const orbit = new THREE.Mesh(ringGeometry, ringMaterial);
   orbit.userData.isOrbitLine = true; // Mark for visibility control
+  if (systemId) {
+    orbit.userData.orbitSystemId = systemId;
+  }
   orbitContainer.add(orbit);
 
   return orbit;
@@ -473,6 +484,15 @@ export const createPlanetFactory = (deps: {
       orbitContainer = parentData.orbitAnchor as THREE.Object3D;
     }
     const tubeRadius = isMainOrbit ? 0.12 : 0.08;
+    const systemId = isMainOrbit
+      ? name.toLowerCase()
+      : (
+          (parent as any)?.userData?.systemId ||
+          (parent as any)?.userData?.planetName ||
+          ""
+        )
+          .toString()
+          .toLowerCase();
     const orbitEllipseRatio = isMainOrbit ? 0.85 : 0.9; // Z radius ratio for oval shape
     const ellipseCurve = new THREE.EllipseCurve(
       0,
@@ -497,6 +517,7 @@ export const createPlanetFactory = (deps: {
       orbitContainer,
       ellipsePath,
       tubeRadius,
+      systemId,
     });
 
     // Planet Mesh - Use MeshStandardMaterial for physically-based rendering (matches original)
@@ -647,6 +668,7 @@ export const createPlanetFactory = (deps: {
       planetName: name,
       isMoon: parent !== scene,
       isMainPlanet: parent === scene,
+      systemId,
       orbitEllipseRatio,
       orbitUsesAnchor: orbitContainer !== parent,
     };

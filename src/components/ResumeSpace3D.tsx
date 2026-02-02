@@ -180,7 +180,6 @@ import {
   createDetailTexture,
   createLabel,
   createLighting,
-  createOrbitRing,
   createPlanetFactory,
   createRingHaloTexture,
   createStarField,
@@ -188,7 +187,19 @@ import {
   createSunMesh,
   createSunGlowTexture,
 } from "./cosmos/ResumeSpace3D.factories";
+import { createFinalizeFocusOnMoon } from "./cosmos/ResumeSpace3D.content";
+import { createExitFocusedMoon } from "./cosmos/ResumeSpace3D.exitFocus";
+import {
+  createFocusedMoonRotationHandlers,
+  createPointerInteractionHandlers,
+} from "./cosmos/ResumeSpace3D.interaction";
+import { updateOrbit } from "./cosmos/ResumeSpace3D.orbital";
 import { easeOutCubic } from "./cosmos/ResumeSpace3D.helpers";
+import {
+  freezeSystemForMoon,
+  restoreFrozenSystem,
+  type FrozenSystemState,
+} from "./cosmos/ResumeSpace3D.systemFreeze";
 import type {
   ResumeSpace3DProps,
   SceneRef,
@@ -459,11 +470,24 @@ export default function ResumeSpace3D({
       `   Stored speeds: planet=${frozenOrbitalSpeedsRef.current.parentPlanetOrbitSpeed}, moonOrbit=${frozenOrbitalSpeedsRef.current.parentPlanetMoonOrbitSpeed}, thisMoon=${frozenOrbitalSpeedsRef.current.moonOrbitSpeed}`,
     );
 
+    lastMoonOrbitSpeedRef.current =
+      optionsRef.current.spaceMoonOrbitSpeed ?? 0.01;
+
+    if (sceneRef.current.scene) {
+      freezeSystemForMoon({
+        moonMesh,
+        items: itemsRef.current,
+        scene: sceneRef.current.scene,
+        frozenSystemStateRef,
+        showOrbits: optionsRef.current.spaceShowOrbits !== false,
+        vlog,
+      });
+    }
+
     // Freeze the speeds immediately
     if (onOptionsChange) {
       onOptionsChange({
         ...optionsRef.current,
-        spaceOrbitSpeed: 0,
         spaceMoonOrbitSpeed: 0,
       });
     }
@@ -667,6 +691,9 @@ export default function ResumeSpace3D({
     moonOrbitSpeed?: number;
     moonItemEntry?: any; // Store the moon's item entry for speed restoration
   } | null>(null);
+  const frozenSystemStateRef = useRef<FrozenSystemState | null>(null);
+  const lastMoonOrbitSpeedRef = useRef<number | null>(null);
+  const lastMoonSpinSpeedRef = useRef<number | null>(null);
 
   // HUD show/hide control
   const hudRefs = useRef<{
@@ -730,6 +757,11 @@ export default function ResumeSpace3D({
           object.visible = showOrbits;
         }
       });
+      if (frozenSystemStateRef.current) {
+        frozenSystemStateRef.current.orbitLines.forEach((line) => {
+          line.visible = false;
+        });
+      }
     }
   }, [options]);
 
@@ -1349,9 +1381,7 @@ export default function ResumeSpace3D({
             `🌙 STATION CONTACT: Arrived at ${company.company} - Establishing connection`,
           );
 
-          // The orbit is already frozen by navigation system
-          // Now show the overlay and set up the close-up view
-          finalizeFocusOnMoon(moonMesh, company);
+          enterMoonView({ moonMesh, company, useFlight: false });
         });
 
         console.log("🎯 Navigation system initialized");
@@ -1387,433 +1417,64 @@ export default function ResumeSpace3D({
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
 
-    let hoveredObject: THREE.Object3D | null = null;
+    const { onPointerDownRotate, onPointerMoveRotate, onPointerUpRotate } =
+      createFocusedMoonRotationHandlers({
+        mountRef,
+        focusedMoonRef,
+        isDraggingRef,
+        lastPointerRef,
+        sceneRef,
+        raycaster,
+        pointer,
+        camera,
+      });
 
-    const onPointerMove = (event: MouseEvent) => {
-      if (!mountRef.current) return;
-      const rect = mountRef.current.getBoundingClientRect();
-      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    const exitFocusedMoon = createExitFocusedMoon({
+      scene,
+      items,
+      overlayClickables,
+      focusedMoonRef,
+      frozenOrbitalSpeedsRef,
+      optionsRef,
+      onOptionsChange,
+      isDraggingRef,
+      sceneRef,
+      vlog,
+    });
 
-      // Check for hover
-      raycaster.setFromCamera(pointer, camera);
-      const intersects = raycaster.intersectObjects(clickablePlanets, false);
+    const exitMoonView = () => {
+      const shouldExitRestoreOptions = !!frozenOrbitalSpeedsRef.current;
 
-      // Debug: log on every 100th move to avoid spam
-      if (Math.random() < 0.01) {
-        console.log(
-          `🔍 Raycasting: ${clickablePlanets.length} clickable planets, ${intersects.length} intersections`,
-        );
+      restoreFrozenSystem({
+        frozenSystemStateRef,
+        showOrbits: optionsRef.current.spaceShowOrbits !== false,
+        vlog,
+      });
+
+      const nextOptions = { ...optionsRef.current };
+      let applyOptions = false;
+
+      if (lastMoonOrbitSpeedRef.current !== null) {
+        nextOptions.spaceMoonOrbitSpeed = lastMoonOrbitSpeedRef.current;
+        applyOptions = true;
+        lastMoonOrbitSpeedRef.current = null;
       }
 
-      // Determine the object under pointer (if any)
-      const hit = intersects.find(
-        (h) => h.object.userData.sectionIndex !== undefined,
-      );
-
-      const now = Date.now();
-
-      // If we hit a valid planet
-      if (hit && hit.object.userData.sectionIndex !== undefined) {
-        const obj = hit.object;
-
-        // If focused/paused, don't activate hover halo
-        if (obj.userData.pauseOrbit) {
-          // Ensure we clear any previous hover state if pointer moved from another object
-          if (hoveredObject && hoveredObject !== obj) {
-            const prev = hoveredObject;
-            prev.userData.isPointerOver = false;
-            if (!prev.userData.flashActive) prev.userData.hoverStartTime = 0;
-            if (prev.userData.hasHaloLayers) {
-              prev.userData.auroraTargetOpacity = 0;
-              prev.userData.ringTargetOpacity = 0;
-              prev.userData.coreTargetOpacity = 0;
-            }
-            document.body.style.cursor = "default";
-            hoveredObject = null;
-          }
-        } else {
-          // If pointer moved from another object, clear previous
-          if (hoveredObject && hoveredObject !== obj) {
-            const prev = hoveredObject;
-            prev.userData.isPointerOver = false;
-            if (!prev.userData.flashActive) prev.userData.hoverStartTime = 0;
-            if (prev.userData.hasHaloLayers) {
-              prev.userData.auroraTargetOpacity = 0;
-              prev.userData.ringTargetOpacity = 0;
-              prev.userData.coreTargetOpacity = 0;
-            }
-          }
-
-          hoveredObject = obj;
-
-          // Detect enter transition (distinct hover)
-          const becameOver = !obj.userData.isPointerOver;
-          obj.userData.isPointerOver = true;
-
-          if (becameOver) {
-            // Increment the hover count (counts distinct enter events)
-            obj.userData.hoverCount = (obj.userData.hoverCount || 0) + 1;
-            const superEvery = obj.userData.superEvery || 4;
-            const lastSuper = obj.userData.lastSuperFlashAt || 0;
-            const superCooldown = 2000; // ms minimum between super flashes
-
-            // Decide whether this enter should be a 'super' flash (every N hovers)
-            const shouldSuper =
-              obj.userData.hoverCount % superEvery === 0 &&
-              now - lastSuper > superCooldown;
-
-            if (shouldSuper) {
-              // Super flash
-              obj.userData.hoverStartTime = now;
-              obj.userData.flashActive = true;
-              obj.userData.flashStrength = 0.6 + Math.random() * 1.0; // strong
-              obj.userData.lastFlashAt = now;
-              obj.userData.lastSuperFlashAt = now;
-
-              if (obj.userData.hasHaloLayers) {
-                obj.userData.auroraTargetOpacity = 0.6;
-                obj.userData.ringTargetOpacity = 0.4;
-                obj.userData.coreTargetOpacity = 1.0;
-              }
-            } else {
-              // Small/subtle emission that still sends light out
-              obj.userData.hoverStartTime = now;
-              obj.userData.flashActive = true;
-              obj.userData.flashStrength = 0.12 + Math.random() * 0.12; // small
-              obj.userData.lastFlashAt = now;
-
-              if (obj.userData.hasHaloLayers) {
-                obj.userData.auroraTargetOpacity = 0.18;
-                obj.userData.ringTargetOpacity = 0.12;
-                obj.userData.coreTargetOpacity = 0.22;
-              }
-            }
-
-            document.body.style.cursor = "pointer";
-          }
-        }
-      } else {
-        // No hit: clear previous hovered object if any
-        if (hoveredObject) {
-          const prev = hoveredObject;
-          prev.userData.isPointerOver = false;
-          if (!prev.userData.flashActive) prev.userData.hoverStartTime = 0;
-          if (prev.userData.hasHaloLayers) {
-            prev.userData.auroraTargetOpacity = 0;
-            prev.userData.ringTargetOpacity = 0;
-            prev.userData.coreTargetOpacity = 0;
-          }
-          document.body.style.cursor = "default";
-          hoveredObject = null;
-        }
-      }
-    };
-
-    const onClick = (event: MouseEvent) => {
-      // Update pointer from the actual click position to avoid stale coords
-      if (mountRef.current) {
-        const rect = mountRef.current.getBoundingClientRect();
-        pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      if (lastMoonSpinSpeedRef.current !== null) {
+        nextOptions.spaceMoonSpinSpeed = lastMoonSpinSpeedRef.current;
+        applyOptions = true;
+        lastMoonSpinSpeedRef.current = null;
       }
 
-      raycaster.setFromCamera(pointer, camera);
-
-      // First, check for overlay clicks (exit focused moon)
-      // Filter out objects marked as overlays since they should not block interaction
-      const overlayHits = raycaster.intersectObjects(
-        overlayClickables.filter((o) => !o.userData.isOverlay),
-        false,
-      );
-      if (overlayHits.length > 0) {
-        // Exit focused moon view when overlay is clicked
-        exitFocusedMoon();
-        return;
+      if (applyOptions) {
+        optionsRef.current = nextOptions;
       }
 
-      // Clicking empty space should not exit moon focus — only overlay clicks or navigation/zoom do.
-      const intersects = raycaster.intersectObjects(clickablePlanets, false);
+      exitFocusedMoon();
 
-      console.log(`🖱️ Click detected: ${intersects.length} intersections`);
-
-      if (intersects.length > 0) {
-        // Find first object with userData.sectionIndex
-        const hit = intersects.find(
-          (hit) => hit.object.userData.sectionIndex !== undefined,
-        );
-        if (hit && hit.object.userData.sectionIndex !== undefined) {
-          console.log(
-            `📍 Navigating to section ${hit.object.userData.sectionIndex} ("${hit.object.userData.planetName}")`,
-          );
-
-          const planetName = hit.object.userData.planetName;
-
-          // Main planets: Fly to them using handleNavigation (same as quick nav)
-          if (
-            planetName === "Experience" ||
-            planetName === "Skills" ||
-            planetName === "Projects"
-          ) {
-            const pname = planetName.toLowerCase();
-            const target =
-              pname === "experience"
-                ? "experience"
-                : pname === "skills"
-                  ? "skills"
-                  : "projects";
-
-            vlog(`🌍 Planet clicked: ${planetName}, flying to ${target}`);
-            handleNavigation(target);
-            return;
-          }
-
-          // Special handling for job moons - show cosmic overlay
-          const jobData = resumeData.experience.find(
-            (job) => job.company === planetName,
-          );
-          if (jobData) {
-            setContentLoading(true);
-
-            // Trigger the same travel + focus behavior as navigator clicks
-            try {
-              const cid =
-                (jobData as any).id ||
-                (jobData.company || "").toLowerCase().replace(/\s+/g, "-");
-              // fire-and-forget: start the camera travel and moon focus
-              // handleExperienceCompanyNavigation is defined later in this scope
-              // but it's safe to call here because this handler runs on user interaction later.
-              (handleExperienceCompanyNavigation as any)?.(cid);
-            } catch (e) {
-              // ignore if function not yet defined
-            }
-
-            // Build comprehensive job content sections
-            const sections: any[] = [];
-
-            // Add each position as a section
-            jobData.positions?.forEach((position, idx) => {
-              const posWithDates = position as any;
-              sections.push({
-                id: `position-${idx}`,
-                title: position.title,
-                content: position.responsibilities.join("\n\n• "),
-                type: "text",
-                data: {
-                  startDate: posWithDates.startDate,
-                  endDate: posWithDates.endDate,
-                },
-              });
-            });
-
-            const jobContent: OverlayContent = {
-              title: jobData.company,
-              subtitle: `${jobData.startDate} - ${jobData.endDate || "Present"} • ${jobData.location}`,
-              description:
-                jobData.positions?.[0]?.responsibilities[0] ||
-                `Professional experience at ${jobData.company}.`,
-              sections,
-              actions: [
-                {
-                  label: "View Career Journey",
-                  action: "tour:career-journey",
-                  icon: "📈",
-                },
-              ],
-            };
-
-            // Simulate loading delay for smooth animation
-            setTimeout(() => {
-              setOverlayContent(jobContent);
-              setContentLoading(false);
-            }, 300);
-          }
-        }
+      if (applyOptions && onOptionsChange && !shouldExitRestoreOptions) {
+        onOptionsChange(nextOptions);
       }
-    };
-
-    // Pointer handlers for rotating a focused moon directly
-    const onPointerDownRotate = (event: PointerEvent) => {
-      if (!mountRef.current || !focusedMoonRef.current) return;
-      const rect = mountRef.current.getBoundingClientRect();
-      const px = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      const py = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      pointer.x = px;
-      pointer.y = py;
-      raycaster.setFromCamera(pointer, camera);
-      const intersects = raycaster.intersectObject(
-        focusedMoonRef.current,
-        true,
-      );
-      if (intersects.length > 0) {
-        isDraggingRef.current = true;
-        lastPointerRef.current = {
-          x: event.clientX,
-          y: event.clientY,
-          t: Date.now(),
-        };
-        if (sceneRef.current && sceneRef.current.controls) {
-          sceneRef.current.controls.enabled = false;
-        }
-      }
-    };
-
-    const onPointerMoveRotate = (event: PointerEvent) => {
-      if (
-        !isDraggingRef.current ||
-        !focusedMoonRef.current ||
-        !lastPointerRef.current
-      )
-        return;
-      const now = Date.now();
-      const dt = Math.max((now - lastPointerRef.current.t) / 1000, 1 / 120);
-      const dx = event.clientX - lastPointerRef.current.x;
-      const dy = event.clientY - lastPointerRef.current.y;
-
-      // Map drag delta to rotation deltas
-      const rotY = dx * 0.008; // horizontal drag -> rotate around Y
-      const rotX = dy * 0.008; // vertical drag -> rotate around X
-      focusedMoonRef.current.rotation.y += rotY;
-      focusedMoonRef.current.rotation.x += rotX;
-
-      // Compute spin velocity to continue after release (inverse mapping)
-      const vx = rotX / dt;
-      const vy = rotY / dt;
-      focusedMoonRef.current.userData.spinVelocity = new THREE.Vector3(
-        vx * 0.15,
-        vy * 0.15,
-        0,
-      );
-
-      lastPointerRef.current = { x: event.clientX, y: event.clientY, t: now };
-    };
-
-    const onPointerUpRotate = (_event: PointerEvent) => {
-      if (isDraggingRef.current) {
-        isDraggingRef.current = false;
-        if (sceneRef.current && sceneRef.current.controls) {
-          sceneRef.current.controls.enabled = true;
-        }
-      }
-    };
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("click", onClick);
-    // Add rotate handlers
-    window.addEventListener("pointerdown", onPointerDownRotate);
-    window.addEventListener("pointermove", onPointerMoveRotate);
-    window.addEventListener("pointerup", onPointerUpRotate);
-
-    // Function to exit focused moon view: reattach, resume orbit, remove overlay, disable user spin
-    const exitFocusedMoon = () => {
-      const focused = focusedMoonRef.current;
-      if (!focused) return;
-
-      // Remove single overlay if present
-      const overlay = focused.userData.detailOverlay as THREE.Mesh | undefined;
-      if (overlay) {
-        if (overlay.parent) overlay.parent.remove(overlay);
-        const oi = overlayClickables.indexOf(overlay);
-        if (oi >= 0) overlayClickables.splice(oi, 1);
-        try {
-          if (overlay.geometry) overlay.geometry.dispose();
-          if (overlay.material) (overlay.material as THREE.Material).dispose();
-        } catch (e) {
-          // ignore
-        }
-        focused.userData.detailOverlay = null;
-      }
-
-      // Remove multiple note overlays if present
-      const overlays = focused.userData.detailOverlays as
-        | THREE.Mesh[]
-        | undefined;
-      if (overlays && overlays.length) {
-        overlays.forEach((o) => {
-          if (o.parent) o.parent.remove(o);
-          const oi = overlayClickables.indexOf(o);
-          if (oi >= 0) overlayClickables.splice(oi, 1);
-          try {
-            if (o.geometry) o.geometry.dispose();
-            if (o.material) (o.material as THREE.Material).dispose();
-          } catch (e) {
-            // ignore
-          }
-        });
-        focused.userData.detailOverlays = null;
-      }
-
-      // Find items entry
-      const itemEntry = items.find((it) => it.mesh === focused);
-      if (itemEntry) {
-        const originalParent = (itemEntry as any).originalParent as
-          | THREE.Object3D
-          | undefined;
-        const newParent = originalParent || itemEntry.parent || scene;
-
-        // Convert world position back into the parent's local space, then reparent
-        const worldPos = new THREE.Vector3();
-        focused.getWorldPosition(worldPos);
-        // add to parent then set local position
-        newParent.add(focused);
-        newParent.worldToLocal(worldPos);
-        focused.position.copy(worldPos);
-
-        // mark as attached again
-        itemEntry.detached = false;
-        itemEntry.parent = newParent;
-
-        // Recompute polar coordinates for consistent orbit continuation
-        const x = focused.position.x;
-        const z = focused.position.z;
-        const orbitRatio = focused.userData?.orbitEllipseRatio ?? 1;
-        itemEntry.distance =
-          Math.sqrt(x * x + (z * z) / (orbitRatio * orbitRatio)) ||
-          itemEntry.distance;
-        itemEntry.angle = Math.atan2(-z / orbitRatio, x);
-      }
-
-      // Resume orbit and clear user-driven spin
-      focused.userData.pauseOrbit = false;
-      focused.userData.spinVelocity = undefined;
-
-      // RESTORE ORBITAL SPEEDS: Restore the speeds we froze when focusing
-      if (frozenOrbitalSpeedsRef.current) {
-        vlog(`❄️ Restoring orbital motion after moon visit`);
-
-        const frozen = frozenOrbitalSpeedsRef.current;
-        vlog(
-          `   Restoring speeds: planet=${frozen.parentPlanetOrbitSpeed}, moonOrbit=${frozen.parentPlanetMoonOrbitSpeed}, thisMoon=${frozen.moonOrbitSpeed}`,
-        );
-
-        // Restore the global speed settings
-        if (onOptionsChange) {
-          onOptionsChange({
-            ...optionsRef.current,
-            spaceOrbitSpeed: frozen.parentPlanetOrbitSpeed ?? 0.1,
-            spaceMoonOrbitSpeed: frozen.parentPlanetMoonOrbitSpeed ?? 0.01,
-          });
-        }
-
-        // Restore this specific moon's orbit speed
-        if (frozen.moonItemEntry && frozen.moonOrbitSpeed !== undefined) {
-          frozen.moonItemEntry.orbitSpeed = frozen.moonOrbitSpeed;
-        }
-
-        // Clear the frozen speeds
-        frozenOrbitalSpeedsRef.current = null;
-
-        vlog(`   ✅ Orbital motion restored`);
-      }
-
-      // Disable any ongoing drag
-      isDraggingRef.current = false;
-      if (sceneRef.current && sceneRef.current.controls) {
-        sceneRef.current.controls.enabled = true;
-      }
-
-      // Clear focused reference
-      focusedMoonRef.current = null;
     };
 
     // freezeOrbitalMotion moved earlier in the file to avoid hoisting issues
@@ -1924,7 +1585,7 @@ export default function ResumeSpace3D({
 
             if (moonMesh) {
               setContentLoading(true);
-              finalizeFocusOnMoon(moonMesh, company);
+              enterMoonView({ moonMesh, company, useFlight: false });
               return;
             }
           }
@@ -1953,6 +1614,11 @@ export default function ResumeSpace3D({
     // Initialize navigation interface
     const handleNavigation = async (target: string) => {
       if (!cameraDirectorRef.current) return;
+
+      // If a moon is currently focused, schedule exit so its orbit resumes before navigating
+      if (focusedMoonRef.current) {
+        exitFocusRequestRef.current = true;
+      }
 
       switch (target) {
         case "home":
@@ -2254,227 +1920,158 @@ export default function ResumeSpace3D({
 
       vlog(`✅ Moon found: ${company.company}`);
 
+      await enterMoonView({ moonMesh, company, useFlight: true });
+    };
+
+    const finalizeFocusOnMoon = createFinalizeFocusOnMoon({
+      scene,
+      items,
+      attachMultiNoteOverlays,
+      setContentLoading,
+      setOverlayContent,
+      vlog,
+      sceneRef,
+      focusedMoonRef,
+      focusedMoonCameraDistanceRef,
+      onFocus: () => {
+        if (lastMoonOrbitSpeedRef.current === null) {
+          lastMoonOrbitSpeedRef.current =
+            optionsRef.current.spaceMoonOrbitSpeed ?? 0.01;
+        }
+        lastMoonSpinSpeedRef.current =
+          optionsRef.current.spaceMoonSpinSpeed ?? 1.0;
+        optionsRef.current = {
+          ...optionsRef.current,
+          spaceMoonSpinSpeed: 0.1,
+        };
+        if (onOptionsChange) {
+          onOptionsChange({
+            ...optionsRef.current,
+            spaceMoonSpinSpeed: 0.1,
+          });
+        }
+      },
+    });
+
+    const enterMoonView = async (params: {
+      moonMesh: THREE.Mesh;
+      company: any;
+      useFlight?: boolean;
+    }) => {
+      const { moonMesh, company, useFlight = false } = params;
+
+      if (focusedMoonRef.current && focusedMoonRef.current !== moonMesh) {
+        exitMoonView();
+      }
+
       // CRITICAL: Freeze orbital motion BEFORE getting position
       // This ensures the moon stays still during camera flight
       freezeOrbitalMotion(moonMesh);
 
-      // Get the moon's WORLD position (now that it's frozen)
-      const moonWorldPos = new THREE.Vector3();
-      moonMesh.getWorldPosition(moonWorldPos);
-
-      vlog(
-        `🌙 Moon world: [${moonWorldPos
-          .toArray()
-          .map((n) => n.toFixed(1))
-          .join(", ")}]`,
-      );
-      vlog(
-        `🌙 Moon local: [${moonMesh.position
-          .toArray()
-          .map((n) => n.toFixed(1))
-          .join(", ")}]`,
-      );
-
-      // Calculate camera position - simplified to just be directly in front
-      const distance = 25; // Distance from moon center - testing value
-
-      // Simple: position camera directly along one axis from moon
-      const cameraPos = new THREE.Vector3(
-        moonWorldPos.x,
-        moonWorldPos.y,
-        moonWorldPos.z + distance, // Just move back along Z axis
-      );
-
-      vlog(
-        `📷 Camera: [${cameraPos
-          .toArray()
-          .map((n) => n.toFixed(1))
-          .join(", ")}]`,
-      );
-      vlog(`📏 Distance: ${cameraPos.distanceTo(moonWorldPos).toFixed(2)}`);
-
-      // Log controls target BEFORE flyTo
-      if (sceneRef.current.controls) {
-        vlog(
-          `🎯 Before flyTo - target: [${sceneRef.current.controls.target
-            .toArray()
-            .map((n) => n.toFixed(1))
-            .join(", ")}]`,
-        );
-      }
-
-      await cameraDirectorRef.current.flyTo({
-        position: cameraPos,
-        lookAt: moonWorldPos,
-        duration: 2.5,
-        ease: "power2.inOut",
-      });
-
-      vlog(`✈️ Flight to ${company.company} complete`);
-
-      // CRITICAL: Update OrbitControls target AFTER flyTo completes
-      // This allows manual zoom to work toward the moon, not the sun!
-      if (sceneRef.current.controls && sceneRef.current.camera) {
-        vlog(`🎯 After flyTo, updating target to moon...`);
-        sceneRef.current.controls.target.copy(moonWorldPos);
-        setMinDistance(0, "allow zoom to moon surface");
-        sceneRef.current.controls.update(); // Force update to apply changes
-
-        const camToTarget = sceneRef.current.camera.position.distanceTo(
-          sceneRef.current.controls.target,
-        );
-        vlog(
-          `✓ Target updated: [${sceneRef.current.controls.target
-            .toArray()
-            .map((n) => n.toFixed(1))
-            .join(", ")}]`,
-        );
-        vlog(
-          `📐 Camera-to-target distance: ${camToTarget.toFixed(2)} (min: ${sceneRef.current.controls.minDistance}, max: ${sceneRef.current.controls.maxDistance})`,
-        );
-      }
-
-      // After arriving, finalize focus/overlays for the moon (extracted)
-      finalizeFocusOnMoon(moonMesh!, company);
-    };
-
-    // Helper: finalize focus on a moon (attach overlays, pause orbit, detach, set focused state)
-    const finalizeFocusOnMoon = (moonMesh: THREE.Mesh, company: any) => {
-      try {
+      if (useFlight && cameraDirectorRef.current) {
+        // Get the moon's WORLD position (now that it's frozen)
         const moonWorldPos = new THREE.Vector3();
         moonMesh.getWorldPosition(moonWorldPos);
 
-        const detailLines: string[] = [];
-        detailLines.push(company.company.toUpperCase());
-        const firstPos = company.positions?.[0];
-        if (firstPos) {
-          const fp: any = firstPos as any;
-          detailLines.push(
-            `${fp.title} (${fp.startDate || ""} - ${fp.endDate || "Present"})`,
+        vlog(
+          `🌙 Moon world: [${moonWorldPos
+            .toArray()
+            .map((n) => n.toFixed(1))
+            .join(", ")}]`,
+        );
+        vlog(
+          `🌙 Moon local: [${moonMesh.position
+            .toArray()
+            .map((n) => n.toFixed(1))
+            .join(", ")}]`,
+        );
+
+        // Calculate camera position - simplified to just be directly in front
+        const distance = 25; // Distance from moon center - testing value
+
+        // Simple: position camera directly along one axis from moon
+        const cameraPos = new THREE.Vector3(
+          moonWorldPos.x,
+          moonWorldPos.y,
+          moonWorldPos.z + distance, // Just move back along Z axis
+        );
+
+        vlog(
+          `📷 Camera: [${cameraPos
+            .toArray()
+            .map((n) => n.toFixed(1))
+            .join(", ")}]`,
+        );
+        vlog(`📏 Distance: ${cameraPos.distanceTo(moonWorldPos).toFixed(2)}`);
+
+        // Log controls target BEFORE flyTo
+        if (sceneRef.current.controls) {
+          vlog(
+            `🎯 Before flyTo - target: [${sceneRef.current.controls.target
+              .toArray()
+              .map((n) => n.toFixed(1))
+              .join(", ")}]`,
           );
         }
-        detailLines.push(company.location || "");
 
-        const jobNotes = (company as any).notes || [];
-        const overlayDefs: Array<
-          string | { type?: string; text?: string; lines?: string[] }
-        > = [];
-        overlayDefs.push({ type: "title", lines: detailLines });
-        if (Array.isArray(jobNotes) && jobNotes.length) {
-          jobNotes.forEach((n: string) => overlayDefs.push(n));
-        }
-
-        // Prepare right-pane content
-        const sections: any[] = [];
-        company.positions?.forEach((position: any, idx: number) => {
-          sections.push({
-            id: `position-${idx}`,
-            title: position.title,
-            content: (position.responsibilities || []).join("\n\n• "),
-            type: "text",
-            data: {
-              startDate: position.startDate,
-              endDate: position.endDate,
-            },
-          });
+        await cameraDirectorRef.current.flyTo({
+          position: cameraPos,
+          lookAt: moonWorldPos,
+          duration: 2.5,
+          ease: "power2.inOut",
         });
 
-        const jobContent: OverlayContent = {
-          title: company.company,
-          subtitle: `${company.startDate || ""} - ${company.endDate || "Present"} • ${company.location || ""}`,
-          description:
-            company.positions?.[0]?.responsibilities?.[0] ||
-            `Professional experience at ${company.company}.`,
-          sections,
-          actions: [
-            {
-              label: "View Career Journey",
-              action: "tour:career-journey",
-              icon: "📈",
-            },
-          ],
-        };
+        vlog(`✈️ Flight to ${company.company} complete`);
 
-        // Show right-pane content (simulate load)
-        setContentLoading(true);
-        setTimeout(() => {
-          setOverlayContent(jobContent);
-          setContentLoading(false);
-        }, 300);
+        // CRITICAL: Update OrbitControls target AFTER flyTo completes
+        // This allows manual zoom to work toward the moon, not the sun!
+        if (sceneRef.current.controls && sceneRef.current.camera) {
+          vlog(`🎯 After flyTo, updating target to moon...`);
+          sceneRef.current.controls.target.copy(moonWorldPos);
+          setMinDistance(0, "allow zoom to moon surface");
+          sceneRef.current.controls.update(); // Force update to apply changes
 
-        // Attach overlays
-        attachMultiNoteOverlays(moonMesh, overlayDefs, {
-          radiusOffset: 0.04,
-          opacity: 0.95,
-        });
-
-        // Mark moon as focused: pause orbital revolution but allow spinning/interaction
-        moonMesh.userData.pauseOrbit = true;
-        if (!moonMesh.userData.spinVelocity) {
-          moonMesh.userData.spinVelocity = new THREE.Vector3(0, 0, 0);
+          const camToTarget = sceneRef.current.camera.position.distanceTo(
+            sceneRef.current.controls.target,
+          );
+          vlog(
+            `✓ Target updated: [${sceneRef.current.controls.target
+              .toArray()
+              .map((n) => n.toFixed(1))
+              .join(", ")}]`,
+          );
+          vlog(
+            `📐 Camera-to-target distance: ${camToTarget.toFixed(2)} (min: ${sceneRef.current.controls.minDistance}, max: ${sceneRef.current.controls.maxDistance})`,
+          );
         }
-
-        // Disable halo on focused moon
-        if (moonMesh.userData.hasHaloLayers) {
-          moonMesh.userData.auroraTargetOpacity = 0;
-          moonMesh.userData.ringTargetOpacity = 0;
-          moonMesh.userData.coreTargetOpacity = 0;
-          const a = moonMesh.userData.auroraSprite as THREE.Sprite | undefined;
-          const r = moonMesh.userData.ringSprite as THREE.Sprite | undefined;
-          const c = moonMesh.userData.coreSprite as THREE.Sprite | undefined;
-          if (a && a.material) {
-            (a.material as THREE.SpriteMaterial).opacity = 0;
-            a.visible = false;
-          }
-          if (r && r.material) {
-            (r.material as THREE.SpriteMaterial).opacity = 0;
-            r.visible = false;
-          }
-          if (c && c.material) {
-            (c.material as THREE.SpriteMaterial).opacity = 0;
-            c.visible = false;
-          }
-        }
-
-        // Detach moon from its orbital parent so it stops inheriting parent's revolution
-        const itemEntry = items.find((it) => it.mesh === moonMesh);
-        if (itemEntry) {
-          itemEntry.originalParent = itemEntry.parent;
-          const worldPos = new THREE.Vector3();
-          moonMesh.getWorldPosition(worldPos);
-
-          vlog(`🔄 Detaching moon from parent`);
-          vlog(
-            `   World pos before detach: [${worldPos.x.toFixed(1)}, ${worldPos.y.toFixed(1)}, ${worldPos.z.toFixed(1)}]`,
-          );
-          vlog(
-            `   Local pos before detach: [${moonMesh.position.x.toFixed(1)}, ${moonMesh.position.y.toFixed(1)}, ${moonMesh.position.z.toFixed(1)}]`,
-          );
-          vlog(`   Parent: ${itemEntry.parent?.type || "unknown"}`);
-
-          scene.add(moonMesh);
-          moonMesh.position.copy(worldPos);
-          itemEntry.detached = true;
-          itemEntry.parent = scene;
-
-          vlog(
-            `   Position after detach: [${moonMesh.position.x.toFixed(1)}, ${moonMesh.position.y.toFixed(1)}, ${moonMesh.position.z.toFixed(1)}]`,
-          );
-          vlog(
-            `   Moon visible: ${moonMesh.visible}, in scene: ${moonMesh.parent === scene}`,
-          );
-
-          // Note: Orbital speeds were already frozen before camera flight
-          vlog(`   (Orbital speeds already frozen during pre-flight)`);
-        }
-
-        focusedMoonRef.current = moonMesh;
-        focusedMoonCameraDistanceRef.current =
-          sceneRef.current?.camera?.position.distanceTo(moonWorldPos) || null;
-      } catch (e) {
-        console.warn("Failed to finalize focus on moon:", e);
       }
+
+      // After arriving, finalize focus/overlays for the moon (extracted)
+      finalizeFocusOnMoon(moonMesh, company);
     };
+
+    const { onPointerMove, onClick } = createPointerInteractionHandlers({
+      mountRef,
+      camera,
+      raycaster,
+      pointer,
+      clickablePlanets,
+      overlayClickables,
+      handleNavigation,
+      handleExperienceCompanyNavigation,
+      resumeData,
+      setContentLoading,
+      setOverlayContent,
+      exitFocusedMoon: exitMoonView,
+      vlog,
+    });
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("click", onClick);
+    // Add rotate handlers
+    window.addEventListener("pointerdown", onPointerDownRotate);
+    window.addEventListener("pointermove", onPointerMoveRotate);
+    window.addEventListener("pointerup", onPointerUpRotate);
 
     // Initialize navigation interface
     if (container) {
@@ -2520,7 +2117,7 @@ export default function ResumeSpace3D({
       // If an external request to exit focused moon was made (from UI), run it here
       if (exitFocusRequestRef.current) {
         try {
-          exitFocusedMoon();
+          exitMoonView();
         } catch (e) {
           console.warn("exitFocusedMoon failed:", e);
         }
@@ -2908,7 +2505,7 @@ export default function ResumeSpace3D({
                 if (moonMesh && company) {
                   // Orbital motion was already frozen at navigation start
                   // Show the overlays and detach the moon
-                  finalizeFocusOnMoon(moonMesh, company);
+                  enterMoonView({ moonMesh, company, useFlight: false });
                 }
               }
 
@@ -3052,24 +2649,6 @@ export default function ResumeSpace3D({
 
       // Rotate Sun
       sunMesh.rotation.y += 0.002;
-
-      // Orbit logic (separate speeds for main planets vs. moons)
-      const planetSpeedMultiplier = Math.max(
-        0,
-        Number(
-          optionsRef.current.spaceOrbitSpeed !== undefined
-            ? optionsRef.current.spaceOrbitSpeed
-            : 0.1,
-        ) || 0.1,
-      );
-      const moonSpeedMultiplier = Math.max(
-        0,
-        Number(
-          optionsRef.current.spaceMoonOrbitSpeed !== undefined
-            ? optionsRef.current.spaceMoonOrbitSpeed
-            : (optionsRef.current.spaceOrbitSpeed ?? 0.01),
-        ) || 0.01,
-      );
 
       // Animate halo layers and flash effects ALWAYS (independent of orbit speed)
       const time = Date.now() * 0.001; // Time in seconds
@@ -3299,74 +2878,11 @@ export default function ResumeSpace3D({
         }
       });
 
-      // Animate orbital positions only when speed is greater than zero
-      items.forEach((item) => {
-        const isMoon = item.mesh.userData?.isMoon === true;
-        const sm = isMoon ? moonSpeedMultiplier : planetSpeedMultiplier;
-
-        // Update orbital angle only when speed is greater than 0
-        // Always re-project position to the orbit line so it can't drift off
-        const isFocused = focusedMoonRef.current === item.mesh;
-        if (!item.mesh.userData.pauseOrbit && !isFocused) {
-          if (sm > 0) {
-            item.angle += item.orbitSpeed * sm;
-          }
-          const usesAnchor = item.mesh.userData?.orbitUsesAnchor === true;
-          const parentRotationY =
-            !usesAnchor && isMoon && item.mesh.parent
-              ? item.mesh.parent.rotation.y
-              : 0;
-          const orbitAngle = isMoon ? item.angle - parentRotationY : item.angle;
-          const orbitRatio = item.mesh.userData?.orbitEllipseRatio ?? 1;
-          item.mesh.position.x = Math.cos(orbitAngle) * item.distance;
-          item.mesh.position.z =
-            -Math.sin(orbitAngle) * item.distance * orbitRatio;
-        }
-
-        // Self rotation: use moon spin speed control for moons, base spin for planets
-        const isMoonBody = item.mesh.userData?.isMoon === true;
-
-        // Get moon spin speed multiplier from options (default to 1.0 if not set)
-        const moonSpinMultiplier =
-          optionsRef.current.spaceMoonSpinSpeed !== undefined
-            ? optionsRef.current.spaceMoonSpinSpeed
-            : 1.0;
-
-        const baseSpin = isMoonBody ? 0.02 * moonSpinMultiplier : 0.008; // moons use multiplier
-
-        // For planets that have moons as children, only apply rotation if moon orbit speed > 0
-        // Otherwise the planet rotation causes moons to orbit even when speed is 0
-        const isPlanetWithPotentialMoons =
-          item.mesh.userData?.isMainPlanet === true;
-        const shouldRotate =
-          !isPlanetWithPotentialMoons || moonSpeedMultiplier > 0;
-
-        // Only rotate if should rotate AND if it's not a moon with 0 spin speed
-        const shouldApplySpin =
-          shouldRotate && (!isMoonBody || moonSpinMultiplier > 0);
-
-        if (shouldApplySpin) {
-          item.mesh.rotation.y += baseSpin;
-        }
-
-        // Apply any residual spin velocity from user interaction (always applied)
-        const spin = item.mesh.userData.spinVelocity as
-          | THREE.Vector3
-          | undefined;
-        if (spin) {
-          // approximate delta-time
-          const dt = 1 / 60; // seconds
-          item.mesh.rotation.x += spin.x * dt;
-          item.mesh.rotation.y += spin.y * dt;
-
-          // decay spin slowly
-          spin.multiplyScalar(0.995);
-        }
-      });
-
-      // Keep moon orbits stationary by canceling parent planet spin
-      orbitAnchors.forEach(({ anchor, parent }) => {
-        anchor.rotation.set(0, -parent.rotation.y, 0);
+      updateOrbit({
+        items,
+        orbitAnchors,
+        options: optionsRef.current,
+        focusedMoon: focusedMoonRef.current,
       });
 
       // Check occlusion for CSS2D labels
