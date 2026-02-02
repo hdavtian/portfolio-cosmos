@@ -4,6 +4,16 @@
 
 ResumeSpace3D.tsx remains a large, monolithic component with mixed responsibilities: Three.js scene setup, render loop, input handling, navigation, content overlays, tour logic, and options syncing. The existing cosmos helpers are a good start, but the file still tightly couples state, effects, and imperative scene updates.
 
+## Completion Status
+
+- [x] Phase 1 completed (component moved, imports updated, stable export).
+- [x] Phase 2 implemented (pending validation).
+- [x] Phase 3 implemented (pending validation).
+- [x] Phase 4 implemented (pending validation).
+- [x] Phase 5 implemented (pending validation).
+- [x] Phase 6 implemented (pending validation).
+- [x] Phase 7 implemented (pending validation).
+
 ## Refactor Goals
 
 - Keep the refactor live and incremental with test points after each phase.
@@ -31,9 +41,9 @@ Best-practice emphasis:
 
 ### Phase 0 — Baseline & Safety
 
-- Add a minimal “integration checklist” doc for runtime tests.
-- Identify a single “export surface” for the component (props and emitted events) and keep it stable.
-- Add a short “ownership map” comment in the component to show which hook controls which system.
+- [x] Add a minimal “integration checklist” doc for runtime tests.
+- [x] Identify a single “export surface” for the component (props and emitted events) and keep it stable.
+- [x] Add a short “ownership map” comment in the component to show which hook controls which system.
 
 Test Focus:
 
@@ -41,10 +51,10 @@ Test Focus:
 
 ### Phase 1 — Relocate Component (Low Risk)
 
-- Move ResumeSpace3D.tsx into src/components/cosmos.
-- Update imports in App.tsx and any other references.
-- Keep file content unchanged aside from import path updates.
-- Keep exported component name stable to avoid downstream changes.
+- [x] Move ResumeSpace3D.tsx into src/components/cosmos.
+- [x] Update imports in App.tsx and any other references.
+- [x] Keep file content unchanged aside from import path updates.
+- [x] Keep exported component name stable to avoid downstream changes.
 
 Test Focus:
 
@@ -52,9 +62,9 @@ Test Focus:
 
 ### Phase 2 — Extract Options & Logging (Low Risk)
 
-- Extract options syncing and display (console logs, mission logs) into a hook (e.g., useCosmosLogs, useCosmosOptions).
-- Keep external behavior unchanged.
-- Ensure these hooks are pure React state + refs (no scene mutation inside).
+- [x] Extract options syncing and display (console logs, mission logs) into a hook (e.g., useCosmosLogs, useCosmosOptions).
+- [x] Keep external behavior unchanged.
+- [x] Ensure these hooks are pure React state + refs (no scene mutation inside).
 
 Test Focus:
 
@@ -63,11 +73,11 @@ Test Focus:
 
 ### Phase 3 — Extract Input Handling (Medium Risk)
 
-- Extract keyboard and pointer handlers into hooks:
-  - useKeyboardControls
-  - usePointerInteractions
-- Keep event registration in hooks; return handlers as needed.
-- Ensure event listeners are registered once and cleaned up on unmount.
+- [x] Extract keyboard and pointer handlers into hooks:
+  - [x] useKeyboardControls
+  - [x] usePointerInteractions
+- [x] Keep event registration in hooks; return handlers as needed.
+- [x] Ensure event listeners are registered once and cleaned up on unmount.
 
 Test Focus:
 
@@ -77,9 +87,9 @@ Test Focus:
 
 ### Phase 4 — Extract Scene Setup & Cleanup (Medium Risk)
 
-- Move Three.js scene creation (scene, camera, renderer, post-processing, label renderer, lights) into useThreeScene.
-- Ensure cleanup remains robust.
-- Centralize all Three.js disposal in a single teardown path.
+- [x] Move Three.js scene creation (scene, camera, renderer, post-processing, label renderer, lights) into useThreeScene.
+- [x] Ensure cleanup remains robust.
+- [x] Centralize all Three.js disposal in a single teardown path.
 
 Test Focus:
 
@@ -89,9 +99,9 @@ Test Focus:
 
 ### Phase 5 — Extract Orbit + Moon Focus System (Medium Risk)
 
-- Encapsulate orbit data structure + update loop into useOrbitSystem.
-- Encapsulate moon focus/exit into a small “focus controller” module.
-- Keep orbit rules in a single place (no scattered orbit writes).
+- [x] Encapsulate orbit data structure + update loop into useOrbitSystem.
+- [x] Encapsulate moon focus/exit into a small “focus controller” module.
+- [x] Keep orbit rules in a single place (no scattered orbit writes).
 
 Test Focus:
 
@@ -99,8 +109,8 @@ Test Focus:
 
 ### Phase 6 — Extract Navigation System (Higher Risk)
 
-- Move autopilot navigation, target tracking, and arrival handling into a useNavigationSystem hook that wraps SpaceshipNavigationSystem.
-- Keep navigation side effects (freeze/resume orbit) inside the navigation hook.
+- [x] Move autopilot navigation, target tracking, and arrival handling into a useNavigationSystem hook that wraps SpaceshipNavigationSystem.
+- [x] Keep navigation side effects (freeze/resume orbit) inside the navigation hook.
 
 Test Focus:
 
@@ -109,9 +119,9 @@ Test Focus:
 
 ### Phase 7 — Extract Render Loop (Higher Risk)
 
-- Centralize the animation loop in a single hook and inject dependencies (scene, camera, systems).
-- Keep the loop minimal and deterministic.
-- Gate loop start until all required systems are ready.
+- [x] Centralize the animation loop in a single hook and inject dependencies (scene, camera, systems).
+- [x] Keep the loop minimal and deterministic.
+- [x] Gate loop start until all required systems are ready.
 
 Test Focus:
 
@@ -128,8 +138,8 @@ Test Focus:
   - useNavigationSystem.ts
   - useCosmosOptions.ts
   - useCosmosLogs.ts
-- src/components/cosmos/controllers/
-  - MoonFocusController.ts
+- src/components/cosmos/
+  - ResumeSpace3D.focusController.ts
 - src/components/cosmos/systems/
   - OrbitSystem.ts
   - NavigationSystem.ts
@@ -137,12 +147,12 @@ Test Focus:
 
 ## Test Checkpoints (Per Phase)
 
-- App loads, no errors in console.
-- Orbits visible and toggleable.
-- Moon focus enters and exits correctly; orbit resumes correctly.
-- Navigation to moon works.
-- HUD toggles and overlay content works.
-- No duplicate canvases or leaked event handlers after remount.
+- [ ] App loads, no errors in console.
+- [ ] Orbits visible and toggleable.
+- [ ] Moon focus enters and exits correctly; orbit resumes correctly.
+- [ ] Navigation to moon works.
+- [ ] HUD toggles and overlay content works.
+- [ ] No duplicate canvases or leaked event handlers after remount.
 
 ## Open Questions (for later confirmation)
 

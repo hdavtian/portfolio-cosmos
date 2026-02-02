@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import * as d3 from "d3";
 import resumeData from "../data/resume.json";
 import { type DiagramStyle, type DiagramStyleOptions } from "./DiagramSettings";
-import ResumeSpace3D from "./ResumeSpace3D";
+import ResumeSpace3D from "./cosmos/ResumeSpace3D";
 
 interface ResumeStructureDiagramProps {
   onNavigate: (section: number) => void;
