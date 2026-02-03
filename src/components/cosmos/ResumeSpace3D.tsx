@@ -1,5 +1,5 @@
 import type { MutableRefObject } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
@@ -366,6 +366,9 @@ export default function ResumeSpace3D({
       }) => void)
     | null
   >(null);
+  const handleNavigationRef = useRef<
+    ((target: string) => void | Promise<void>) | null
+  >(null);
 
   // New navigation system refs
   const emitterRef = useRef(getOrbitalPositionEmitter());
@@ -428,7 +431,6 @@ export default function ResumeSpace3D({
     currentNavigationTarget,
     navigationDistance,
     navigationETA,
-    handleAutopilotNavigation,
     initializeNavigationSystem,
     updateAutopilotNavigation,
     disposeNavigationSystem,
@@ -447,6 +449,60 @@ export default function ResumeSpace3D({
     spaceshipPathRef,
     enterMoonViewRef,
   });
+
+  const handleExperienceCompanyNavigation = useCallback(
+    async (companyId: string) => {
+      if (!companyId) return;
+
+      vlog(`🌙 Initiating moon navigation: ${companyId}`);
+
+      // Find the specific company data
+      const company = resumeData.experience.find(
+        (exp) =>
+          exp.company.toLowerCase().includes(companyId) || exp.id === companyId,
+      );
+
+      if (!company) return;
+
+      // Find the corresponding moon mesh in the 3D scene
+      let moonMesh: THREE.Mesh | undefined;
+
+      // Search through all meshes in the scene to find the company moon
+      sceneRef.current.scene?.traverse((object) => {
+        if (object instanceof THREE.Mesh && object.userData.planetName) {
+          const planetName = object.userData.planetName.toLowerCase();
+          if (
+            planetName.includes(companyId.toLowerCase()) ||
+            planetName.includes(company.company.toLowerCase())
+          ) {
+            moonMesh = object;
+          }
+        }
+      });
+
+      if (!moonMesh) {
+        vlog(`⚠️ Moon not found for company: ${companyId}`);
+        return;
+      }
+
+      vlog(`✅ Moon found: ${company.company}`);
+
+      await enterMoonViewRef.current?.({ moonMesh, company, useFlight: true });
+    },
+    [vlog],
+  );
+
+  const handleQuickNav = useCallback(
+    (targetId: string, targetType: "section" | "moon") => {
+      const target =
+        targetType === "moon" ? `experience-${targetId}` : targetId;
+
+      if (handleNavigationRef.current) {
+        handleNavigationRef.current(target);
+      }
+    },
+    [],
+  );
 
   const { initializeScene, setGlobalCleanup } = useThreeScene({
     mountRef,
@@ -1241,44 +1297,7 @@ export default function ResumeSpace3D({
       }
     };
 
-    const handleExperienceCompanyNavigation = async (companyId: string) => {
-      if (!cameraDirectorRef.current) return;
-
-      vlog(`🌙 Initiating moon navigation: ${companyId}`);
-
-      // Find the specific company data
-      const company = resumeData.experience.find(
-        (exp) =>
-          exp.company.toLowerCase().includes(companyId) || exp.id === companyId,
-      );
-
-      if (!company) return;
-
-      // Find the corresponding moon mesh in the 3D scene
-      let moonMesh: THREE.Mesh | undefined;
-
-      // Search through all meshes in the scene to find the company moon
-      sceneRef.current.scene?.traverse((object) => {
-        if (object instanceof THREE.Mesh && object.userData.planetName) {
-          const planetName = object.userData.planetName.toLowerCase();
-          if (
-            planetName.includes(companyId.toLowerCase()) ||
-            planetName.includes(company.company.toLowerCase())
-          ) {
-            moonMesh = object;
-          }
-        }
-      });
-
-      if (!moonMesh) {
-        vlog(`⚠️ Moon not found for company: ${companyId}`);
-        return;
-      }
-
-      vlog(`✅ Moon found: ${company.company}`);
-
-      await enterMoonView({ moonMesh, company, useFlight: true });
-    };
+    handleNavigationRef.current = handleNavigation;
 
     const { onPointerMove, onClick } = buildPointerHandlers({
       camera,
@@ -1287,10 +1306,7 @@ export default function ResumeSpace3D({
       clickablePlanets,
       overlayClickables,
       handleNavigation,
-      handleExperienceCompanyNavigation,
       resumeData,
-      setContentLoading,
-      setOverlayContent,
       exitFocusedMoon: exitMoonView,
       vlog,
     });
@@ -2017,7 +2033,7 @@ export default function ResumeSpace3D({
             vlog("🛑 Stopped following spaceship");
           }}
           navigationTargets={navigationTargets}
-          onNavigate={handleAutopilotNavigation}
+          onNavigate={handleQuickNav}
           currentTarget={currentNavigationTarget}
           navigationDistance={navigationDistance}
           navigationETA={navigationETA}

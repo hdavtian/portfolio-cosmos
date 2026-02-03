@@ -1,7 +1,6 @@
 import type { MutableRefObject, RefObject } from "react";
 import { useCallback } from "react";
 import * as THREE from "three";
-import type { OverlayContent } from "../../CosmicContentOverlay";
 import {
   createFocusedMoonRotationHandlers,
   createPointerInteractionHandlers,
@@ -44,14 +43,7 @@ export const usePointerInteractions = (params: {
       clickablePlanets: THREE.Object3D[];
       overlayClickables: THREE.Object3D[];
       handleNavigation: (target: string) => void | Promise<void>;
-      handleExperienceCompanyNavigation: (
-        companyId: string,
-      ) => void | Promise<void>;
       resumeData: any;
-      setContentLoading: React.Dispatch<React.SetStateAction<boolean>>;
-      setOverlayContent: React.Dispatch<
-        React.SetStateAction<OverlayContent | null>
-      >;
       exitFocusedMoon: () => void;
       vlog: (message: string) => void;
     }) =>
@@ -63,11 +55,7 @@ export const usePointerInteractions = (params: {
         clickablePlanets: args.clickablePlanets,
         overlayClickables: args.overlayClickables,
         handleNavigation: args.handleNavigation,
-        handleExperienceCompanyNavigation:
-          args.handleExperienceCompanyNavigation,
         resumeData: args.resumeData,
-        setContentLoading: args.setContentLoading,
-        setOverlayContent: args.setOverlayContent,
         exitFocusedMoon: args.exitFocusedMoon,
         vlog: args.vlog,
       }),

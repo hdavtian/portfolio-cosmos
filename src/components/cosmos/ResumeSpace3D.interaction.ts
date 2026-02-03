@@ -1,6 +1,5 @@
 import type React from "react";
 import * as THREE from "three";
-import type { OverlayContent } from "../CosmicContentOverlay";
 
 export const createFocusedMoonRotationHandlers = (deps: {
   mountRef: React.RefObject<HTMLDivElement | null>;
@@ -101,14 +100,7 @@ export const createPointerInteractionHandlers = (deps: {
   clickablePlanets: THREE.Object3D[];
   overlayClickables: THREE.Object3D[];
   handleNavigation: (target: string) => void | Promise<void>;
-  handleExperienceCompanyNavigation: (
-    companyId: string,
-  ) => void | Promise<void>;
   resumeData: any;
-  setContentLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  setOverlayContent: React.Dispatch<
-    React.SetStateAction<OverlayContent | null>
-  >;
   exitFocusedMoon: () => void;
   vlog: (message: string) => void;
 }) => {
@@ -120,10 +112,7 @@ export const createPointerInteractionHandlers = (deps: {
     clickablePlanets,
     overlayClickables,
     handleNavigation,
-    handleExperienceCompanyNavigation,
     resumeData,
-    setContentLoading,
-    setOverlayContent,
     exitFocusedMoon,
     vlog,
   } = deps;
@@ -301,60 +290,16 @@ export const createPointerInteractionHandlers = (deps: {
           (job: any) => job.company === planetName,
         );
         if (jobData) {
-          setContentLoading(true);
-
           // Trigger the same travel + focus behavior as navigator clicks
           try {
             const cid =
               (jobData as any).id ||
               (jobData.company || "").toLowerCase().replace(/\s+/g, "-");
             // fire-and-forget: start the camera travel and moon focus
-            // handleExperienceCompanyNavigation is defined later in this scope
-            // but it's safe to call here because this handler runs on user interaction later.
-            (handleExperienceCompanyNavigation as any)?.(cid);
+            handleNavigation(`experience-${cid}`);
           } catch (e) {
             // ignore if function not yet defined
           }
-
-          // Build comprehensive job content sections
-          const sections: any[] = [];
-
-          // Add each position as a section
-          jobData.positions?.forEach((position: any, idx: number) => {
-            const posWithDates = position as any;
-            sections.push({
-              id: `position-${idx}`,
-              title: position.title,
-              content: position.responsibilities.join("\n\n• "),
-              type: "text",
-              data: {
-                startDate: posWithDates.startDate,
-                endDate: posWithDates.endDate,
-              },
-            });
-          });
-
-          const jobContent: OverlayContent = {
-            title: jobData.company,
-            subtitle: `${jobData.startDate} - ${jobData.endDate || "Present"} • ${jobData.location}`,
-            description:
-              jobData.positions?.[0]?.responsibilities[0] ||
-              `Professional experience at ${jobData.company}.`,
-            sections,
-            actions: [
-              {
-                label: "View Career Journey",
-                action: "tour:career-journey",
-                icon: "📈",
-              },
-            ],
-          };
-
-          // Simulate loading delay for smooth animation
-          setTimeout(() => {
-            setOverlayContent(jobContent);
-            setContentLoading(false);
-          }, 300);
         }
       }
     }
