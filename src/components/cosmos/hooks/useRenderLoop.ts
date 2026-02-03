@@ -188,6 +188,8 @@ export const useRenderLoop = () => {
               if (orbitProgress >= 1) {
                 cinematic.phase = "approach";
                 cinematic.startTime = now;
+                cinematic.startPos = ship.position.clone();
+                cinematic.startQuat = ship.quaternion.clone();
               }
             } else if (cinematic.phase === "approach") {
               const progress = Math.min(
