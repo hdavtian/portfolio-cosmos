@@ -491,6 +491,28 @@ export const createPlanetFactory = (deps: {
     coreTexture,
   } = deps;
 
+  const mainOrbitInclinations: Record<string, { x: number; z: number }> = {
+    experience: { x: 8, z: -4 },
+    skills: { x: -12, z: 14 },
+    projects: { x: 26, z: -10 },
+  };
+
+  const resolveMainOrbitInclination = (planetName: string) => {
+    const key = planetName.trim().toLowerCase();
+    return mainOrbitInclinations[key] ?? { x: 0, z: 0 };
+  };
+
+  const mainOrbitStartAngles: Record<string, number> = {
+    experience: 0,
+    skills: Math.PI,
+    projects: Math.PI * 0.5,
+  };
+
+  const resolveMainOrbitStartAngle = (planetName: string) => {
+    const key = planetName.trim().toLowerCase();
+    return mainOrbitStartAngles[key];
+  };
+
   return (
     name: string,
     distance: number,
@@ -505,6 +527,20 @@ export const createPlanetFactory = (deps: {
     // Make rings thinner: main orbits slightly thicker than moon orbits
     const isMainOrbit = parent === scene; // scene-centered orbits (around Sun)
     let orbitContainer: THREE.Object3D = parent;
+    let orbitInclination = { x: 0, z: 0 };
+    if (isMainOrbit) {
+      orbitInclination = resolveMainOrbitInclination(name);
+      const orbitPlane = new THREE.Group();
+      orbitPlane.name = `${name}-orbit-plane`;
+      orbitPlane.rotation.set(
+        THREE.MathUtils.degToRad(orbitInclination.x),
+        0,
+        THREE.MathUtils.degToRad(orbitInclination.z),
+      );
+      orbitPlane.userData.orbitPlaneInclination = { ...orbitInclination };
+      scene.add(orbitPlane);
+      orbitContainer = orbitPlane;
+    }
     if (!isMainOrbit && (parent as any)?.userData) {
       const parentData = (parent as any).userData as Record<string, any>;
       if (!parentData.orbitAnchor) {
@@ -673,7 +709,13 @@ export const createPlanetFactory = (deps: {
     }
 
     // Start position
-    const startAngle = Math.random() * Math.PI * 2;
+    const forcedStartAngle = isMainOrbit
+      ? resolveMainOrbitStartAngle(name)
+      : undefined;
+    const startAngle =
+      forcedStartAngle !== undefined
+        ? forcedStartAngle
+        : Math.random() * Math.PI * 2;
     planetMesh.position.x = Math.cos(startAngle) * distance;
     planetMesh.position.z = Math.sin(startAngle) * distance;
 
@@ -704,6 +746,7 @@ export const createPlanetFactory = (deps: {
       systemId,
       orbitEllipseRatio,
       orbitUsesAnchor: orbitContainer !== parent,
+      orbitInclination,
     };
 
     // Add to clickable array if it has a section

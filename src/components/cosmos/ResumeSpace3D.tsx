@@ -595,7 +595,7 @@ export default function ResumeSpace3D({
 
     const projectsPlanet = createPlanet(
       "Projects",
-      1400,
+      900,
       18,
       0x9933ff,
       scene,
