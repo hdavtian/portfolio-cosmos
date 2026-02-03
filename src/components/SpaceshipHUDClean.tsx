@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { HexColorPicker } from "react-colorful";
 import { gsap } from "gsap";
 import { createPortal } from "react-dom";
 import type { DiagramStyleOptions } from "./DiagramSettings";
@@ -75,6 +76,33 @@ type Props = {
   onMissionControlCopy?: () => void;
 };
 
+type RGB = { r: number; g: number; b: number };
+
+const clampRgb = (value: number) => Math.max(0, Math.min(255, value));
+
+const hexToRgb = (hex: string): RGB => {
+  const cleanHex = hex.replace("#", "");
+  const expanded =
+    cleanHex.length === 3
+      ? cleanHex
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : cleanHex;
+  const intVal = Number.parseInt(expanded, 16);
+  if (Number.isNaN(intVal)) return { r: 255, g: 221, b: 153 };
+  return {
+    r: (intVal >> 16) & 255,
+    g: (intVal >> 8) & 255,
+    b: intVal & 255,
+  };
+};
+
+const rgbToHex = ({ r, g, b }: RGB) => {
+  const toHex = (val: number) => clampRgb(val).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
 const SpaceshipHUD: React.FC<Props> = ({
   userName,
   userTitle,
@@ -147,6 +175,54 @@ const SpaceshipHUD: React.FC<Props> = ({
     footer: 24,
   });
   const [leftPanelEl, setLeftPanelEl] = useState<HTMLElement | null>(null);
+  const [sunColorPickerOpen, setSunColorPickerOpen] = useState(false);
+  const [sunColorDraft, setSunColorDraft] = useState(
+    cosmosOptions.spaceSunColor || "#ffdd99",
+  );
+  const sunColorPickerRef = useRef<HTMLDivElement | null>(null);
+  const sunColorButtonRef = useRef<HTMLButtonElement | null>(null);
+  const sunColorRafRef = useRef<number | null>(null);
+  const sunColorPendingRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!sunColorPickerOpen) return;
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (sunColorPickerRef.current?.contains(target)) return;
+      if (sunColorButtonRef.current?.contains(target)) return;
+      setSunColorPickerOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [sunColorPickerOpen]);
+
+  useEffect(() => {
+    if (!sunColorPickerOpen) {
+      setSunColorDraft(cosmosOptions.spaceSunColor || "#ffdd99");
+    }
+  }, [sunColorPickerOpen, cosmosOptions.spaceSunColor]);
+
+  useEffect(() => {
+    return () => {
+      if (sunColorRafRef.current !== null) {
+        cancelAnimationFrame(sunColorRafRef.current);
+      }
+    };
+  }, []);
+
+  const queueSunColorUpdate = (value: string) => {
+    sunColorPendingRef.current = value;
+    if (sunColorRafRef.current !== null) return;
+    sunColorRafRef.current = requestAnimationFrame(() => {
+      if (sunColorPendingRef.current) {
+        handleCosmosOptionChange("spaceSunColor", sunColorPendingRef.current);
+      }
+      sunColorRafRef.current = null;
+    });
+  };
 
   const isUniverseLog = (log: string) => {
     const keywords = [
@@ -1116,7 +1192,7 @@ const SpaceshipHUD: React.FC<Props> = ({
                   display: "flex",
                   flexDirection: "column",
                   gap: 10,
-                  overflowY: "auto",
+                  overflow: "visible",
                 }}
               >
                 <div>
@@ -1268,21 +1344,134 @@ const SpaceshipHUD: React.FC<Props> = ({
                   >
                     Sun Color
                   </label>
-                  <input
-                    type="color"
-                    value={cosmosOptions.spaceSunColor || "#ffdd99"}
-                    onChange={(e) =>
-                      handleCosmosOptionChange("spaceSunColor", e.target.value)
-                    }
-                    style={{
-                      width: 56,
-                      height: 28,
-                      padding: 0,
-                      border: "1px solid rgba(212, 175, 55, 0.5)",
-                      borderRadius: 6,
-                      background: "#0f1419",
-                    }}
-                  />
+                  <div
+                    style={{ position: "relative", display: "inline-block" }}
+                  >
+                    <button
+                      type="button"
+                      ref={sunColorButtonRef}
+                      onClick={() => setSunColorPickerOpen((open) => !open)}
+                      style={{
+                        width: 56,
+                        height: 28,
+                        padding: 0,
+                        border: "1px solid rgba(212, 175, 55, 0.5)",
+                        borderRadius: 6,
+                        background: cosmosOptions.spaceSunColor || "#ffdd99",
+                        cursor: "pointer",
+                      }}
+                      aria-label="Open sun color picker"
+                    />
+
+                    {sunColorPickerOpen && (
+                      <div
+                        ref={sunColorPickerRef}
+                        style={{
+                          position: "absolute",
+                          top: 34,
+                          left: 0,
+                          padding: 8,
+                          borderRadius: 8,
+                          border: "1px solid rgba(212, 175, 55, 0.5)",
+                          background: "rgba(7, 10, 14, 0.95)",
+                          boxShadow: "0 6px 18px rgba(0, 0, 0, 0.45)",
+                          zIndex: 10,
+                          width: 200,
+                        }}
+                      >
+                        <div style={{ marginBottom: 8 }}>
+                          <HexColorPicker
+                            color={sunColorDraft}
+                            onChange={(value) => {
+                              setSunColorDraft(value);
+                              queueSunColorUpdate(value);
+                            }}
+                            style={{ width: "100%", height: 140 }}
+                          />
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(3, 1fr)",
+                            gap: 6,
+                            marginBottom: 8,
+                          }}
+                        >
+                          {(["r", "g", "b"] as const).map((channel) => {
+                            const rgb = hexToRgb(sunColorDraft);
+                            return (
+                              <label
+                                key={channel}
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 4,
+                                  color: "#8a9199",
+                                  fontSize: 10,
+                                  fontFamily: "'Rajdhani', sans-serif",
+                                }}
+                              >
+                                {channel.toUpperCase()}
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={255}
+                                  value={rgb[channel]}
+                                  onChange={(event) => {
+                                    const nextValue = clampRgb(
+                                      Number(event.target.value),
+                                    );
+                                    const nextRgb = {
+                                      ...rgb,
+                                      [channel]: nextValue,
+                                    };
+                                    const nextHex = rgbToHex(nextRgb);
+                                    setSunColorDraft(nextHex);
+                                    queueSunColorUpdate(nextHex);
+                                  }}
+                                  style={{
+                                    width: "100%",
+                                    padding: "4px 6px",
+                                    borderRadius: 6,
+                                    border:
+                                      "1px solid rgba(212, 175, 55, 0.35)",
+                                    background: "rgba(0, 0, 0, 0.6)",
+                                    color: "rgba(212, 175, 55, 0.9)",
+                                    fontFamily: "'Rajdhani', sans-serif",
+                                    fontSize: 11,
+                                  }}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleCosmosOptionChange(
+                              "spaceSunColor",
+                              sunColorDraft,
+                            );
+                            setSunColorPickerOpen(false);
+                          }}
+                          style={{
+                            marginTop: 6,
+                            padding: "4px 10px",
+                            fontSize: 10,
+                            borderRadius: 6,
+                            border: "1px solid rgba(212, 175, 55, 0.5)",
+                            background: "rgba(0, 0, 0, 0.6)",
+                            color: "rgba(212, 175, 55, 0.9)",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            cursor: "pointer",
+                            width: "100%",
+                          }}
+                        >
+                          OK
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <label

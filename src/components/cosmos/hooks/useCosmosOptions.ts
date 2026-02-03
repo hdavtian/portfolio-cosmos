@@ -24,7 +24,7 @@ export const useCosmosOptions = (params: {
     }
 
     if (sceneRef.current.sunLight && options.spaceSunIntensity !== undefined) {
-      sceneRef.current.sunLight.intensity = options.spaceSunIntensity * 2;
+      sceneRef.current.sunLight.intensity = options.spaceSunIntensity * 4;
       if (options.spaceSunColor) {
         sceneRef.current.sunLight.color = new THREE.Color(
           options.spaceSunColor,
@@ -41,12 +41,22 @@ export const useCosmosOptions = (params: {
     }
 
     if (sceneRef.current.sunMaterial) {
-      if (options.spaceTintSunMesh && options.spaceSunColor) {
-        sceneRef.current.sunMaterial.color.set(options.spaceSunColor);
-      } else {
-        sceneRef.current.sunMaterial.color.set(0xffffff);
+      const sunMaterial = sceneRef.current.sunMaterial;
+      const targetColor = new THREE.Color(options.spaceSunColor || "#ffdd99");
+
+      if ("uniforms" in sunMaterial && sunMaterial.uniforms?.tintColor) {
+        sunMaterial.uniforms.tintColor.value = targetColor;
+        sunMaterial.uniforms.tintStrength.value =
+          options.spaceTintSunMesh === false ? 0.0 : 1.0;
+        sunMaterial.needsUpdate = true;
+      } else if ("color" in sunMaterial) {
+        if (options.spaceTintSunMesh && options.spaceSunColor) {
+          sunMaterial.color.set(options.spaceSunColor);
+        } else {
+          sunMaterial.color.set(0xffffff);
+        }
+        sunMaterial.needsUpdate = true;
       }
-      sceneRef.current.sunMaterial.needsUpdate = true;
     }
 
     if (sceneRef.current.labelRendererDom) {

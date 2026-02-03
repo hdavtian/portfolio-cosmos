@@ -16,6 +16,6 @@ export interface SceneRef {
   sunLight?: THREE.PointLight;
   labelRendererDom?: HTMLElement;
   bloomPass?: UnrealBloomPass;
-  sunMaterial?: THREE.MeshBasicMaterial;
+  sunMaterial?: THREE.MeshBasicMaterial | THREE.ShaderMaterial;
   sunGlowMaterial?: THREE.SpriteMaterial;
 }

@@ -290,13 +290,46 @@ export const createStarfieldMeshes = (
 
 export const createSunMesh = (
   textureLoader: THREE.TextureLoader,
-): { sunMesh: THREE.Mesh; sunMaterial: THREE.MeshBasicMaterial } => {
+): { sunMesh: THREE.Mesh; sunMaterial: THREE.ShaderMaterial } => {
   // Sun mesh (visual center object)
   const sunGeometry = new THREE.SphereGeometry(60, 32, 32);
-  const sunMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
+  const fallbackTexture = new THREE.DataTexture(
+    new Uint8Array([255, 255, 255, 255]),
+    1,
+    1,
+    THREE.RGBAFormat,
+  );
+  fallbackTexture.needsUpdate = true;
+
+  const sunMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: fallbackTexture },
+      tintColor: { value: new THREE.Color("#ffdd99") },
+      tintStrength: { value: 1.0 },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D map;
+      uniform vec3 tintColor;
+      uniform float tintStrength;
+      varying vec2 vUv;
+      void main() {
+        vec4 tex = texture2D(map, vUv);
+        float luma = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+        vec3 tinted = luma * tintColor;
+        vec3 finalColor = mix(tex.rgb, tinted, tintStrength);
+        gl_FragColor = vec4(finalColor, tex.a);
+      }
+    `,
     toneMapped: false,
   });
+
   const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
   sunMesh.position.set(0, 0, 0);
 
@@ -305,7 +338,7 @@ export const createSunMesh = (
     textureLoader.load("/textures/sun.jpg", (tex) => {
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
-      sunMaterial.map = tex;
+      sunMaterial.uniforms.map.value = tex;
       sunMaterial.needsUpdate = true;
     });
   } catch {}
@@ -323,8 +356,8 @@ export const createLighting = (options: { spaceSunIntensity?: number }) => {
   const sunLight = new THREE.PointLight(
     new THREE.Color(1.0, 1.0, 1.0),
     (options.spaceSunIntensity || 2.5) * 4, // Multiply by 4 to match original's 10.0 default
-    1000, // Distance
-    0.5, // Decay for physical light falloff
+    2200, // Distance (extended to reach far planets)
+    0.35, // Decay for softer falloff across the system
   );
   sunLight.position.set(0, 0, 0);
   sunLight.castShadow = false;
