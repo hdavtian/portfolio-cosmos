@@ -1332,43 +1332,64 @@ export default function ResumeSpace3D({
     });
 
     // Trigger loading complete with camera animation
+    let introRafId: number | null = null;
     setTimeout(() => {
       setSceneReady(true);
 
       // Start the orbital position emitter for tracking moving objects
       emitterRef.current.start();
 
-      // Add smooth zoom and pan animation
-      const startPos = {
-        x: camera.position.x,
-        y: camera.position.y,
-        z: camera.position.z,
-      };
-      const endPos = { x: 0, y: 400, z: 600 };
-      const startTime = Date.now();
-      const duration = 2500; // 2.5 seconds
+      // Intro: zoom to provided camera snapshot
+      const startPos = camera.position.clone();
+      const startTarget = controls.target.clone();
+      const endPos = new THREE.Vector3(
+        919.9426740762151,
+        35.549232587905905,
+        180.65560343913018,
+      );
+      const endTarget = new THREE.Vector3(
+        599.99999808,
+        0,
+        -0.04079999995648001,
+      );
 
-      // Start from a zoomed out position for dramatic effect
-      camera.position.set(50, 500, 800);
+      const duration = 5000; // ms
+      const startTime = performance.now();
+      const previousControlsEnabled = controls.enabled;
+      controls.enabled = false;
+
+      const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
       const animateCamera = () => {
-        const elapsed = Date.now() - startTime;
+        const elapsed = performance.now() - startTime;
         const progress = Math.min(elapsed / duration, 1);
+        const eased = easeOutCubic(progress);
 
-        // Ease out cubic for smooth deceleration
-        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        const currentPos = new THREE.Vector3().lerpVectors(
+          startPos,
+          endPos,
+          eased,
+        );
+        const currentTarget = new THREE.Vector3().lerpVectors(
+          startTarget,
+          endTarget,
+          eased,
+        );
 
-        camera.position.x = startPos.x + (endPos.x - startPos.x) * easeProgress;
-        camera.position.y = startPos.y + (endPos.y - startPos.y) * easeProgress;
-        camera.position.z = startPos.z + (endPos.z - startPos.z) * easeProgress;
-        camera.lookAt(0, 0, 0);
+        camera.position.copy(currentPos);
+        controls.target.copy(currentTarget);
+        controls.update();
 
         if (progress < 1) {
-          requestAnimationFrame(animateCamera);
+          introRafId = requestAnimationFrame(animateCamera);
+        } else {
+          introRafId = null;
+          controls.enabled = previousControlsEnabled;
+          setHudVisible(false);
         }
       };
 
-      animateCamera();
+      introRafId = requestAnimationFrame(animateCamera);
     }, 100);
 
     // --- CLEANUP ---
@@ -1393,14 +1414,63 @@ export default function ResumeSpace3D({
 
     window.addEventListener("resize", handleResize);
 
+    const handleCameraSnapshot = () => {
+      const currentCamera = sceneRef.current.camera as
+        | THREE.PerspectiveCamera
+        | undefined;
+      const currentControls = sceneRef.current.controls as
+        | { target?: THREE.Vector3 }
+        | undefined;
+
+      if (!currentCamera || !currentControls?.target) return;
+
+      const snapshot = {
+        position: {
+          x: currentCamera.position.x,
+          y: currentCamera.position.y,
+          z: currentCamera.position.z,
+        },
+        target: {
+          x: currentControls.target.x,
+          y: currentControls.target.y,
+          z: currentControls.target.z,
+        },
+        rotation: {
+          x: currentCamera.rotation.x,
+          y: currentCamera.rotation.y,
+          z: currentCamera.rotation.z,
+        },
+        fov: currentCamera.fov,
+        zoom: currentCamera.zoom,
+        near: currentCamera.near,
+        far: currentCamera.far,
+      };
+
+      console.log("CAMERA_SNAPSHOT", snapshot);
+    };
+
+    const handleSnapshotKey = (event: KeyboardEvent) => {
+      if (event.code === "KeyL" && event.shiftKey) {
+        handleCameraSnapshot();
+      }
+    };
+
+    window.addEventListener("keydown", handleSnapshotKey);
+
     const cleanup = () => {
       stopRenderLoop();
       window.removeEventListener("resize", handleResize);
+      window.removeEventListener("keydown", handleSnapshotKey);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("click", onClick);
       window.removeEventListener("pointerdown", onPointerDownRotate);
       window.removeEventListener("pointermove", onPointerMoveRotate);
       window.removeEventListener("pointerup", onPointerUpRotate);
+
+      if (introRafId !== null) {
+        cancelAnimationFrame(introRafId);
+        introRafId = null;
+      }
 
       // Stop orbital position emitter
       emitterRef.current.stop();
