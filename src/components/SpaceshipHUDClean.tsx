@@ -3,6 +3,7 @@ import { HexColorPicker } from "react-colorful";
 import { gsap } from "gsap";
 import { createPortal } from "react-dom";
 import type { DiagramStyleOptions } from "./DiagramSettings";
+import UniverseLogsTerminal from "./UniverseLogsTerminal";
 import "./SpaceshipHUDClean.scss";
 
 type HUDSection = { id: string; title: string; content: string | string[] };
@@ -175,6 +176,8 @@ const SpaceshipHUD: React.FC<Props> = ({
   });
   const [leftPanelEl, setLeftPanelEl] = useState<HTMLElement | null>(null);
   const [sunColorPickerOpen, setSunColorPickerOpen] = useState(false);
+  const [consoleFeedback, setConsoleFeedback] = useState<string | null>(null);
+  const [missionFeedback, setMissionFeedback] = useState<string | null>(null);
   const [sunColorDraft, setSunColorDraft] = useState(
     cosmosOptions.spaceSunColor || "#ffdd99",
   );
@@ -182,6 +185,8 @@ const SpaceshipHUD: React.FC<Props> = ({
   const sunColorButtonRef = useRef<HTMLButtonElement | null>(null);
   const sunColorRafRef = useRef<number | null>(null);
   const sunColorPendingRef = useRef<string | null>(null);
+  const consoleFeedbackTimeoutRef = useRef<number | null>(null);
+  const missionFeedbackTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!sunColorPickerOpen) return;
@@ -208,6 +213,12 @@ const SpaceshipHUD: React.FC<Props> = ({
     return () => {
       if (sunColorRafRef.current !== null) {
         cancelAnimationFrame(sunColorRafRef.current);
+      }
+      if (consoleFeedbackTimeoutRef.current !== null) {
+        window.clearTimeout(consoleFeedbackTimeoutRef.current);
+      }
+      if (missionFeedbackTimeoutRef.current !== null) {
+        window.clearTimeout(missionFeedbackTimeoutRef.current);
       }
     };
   }, []);
@@ -243,6 +254,59 @@ const SpaceshipHUD: React.FC<Props> = ({
   const clampValue = (value: number, min: number, max: number) => {
     return Math.min(Math.max(value, min), max);
   };
+
+  const showConsoleFeedback = (message: string) => {
+    setConsoleFeedback(message);
+    if (consoleFeedbackTimeoutRef.current !== null) {
+      window.clearTimeout(consoleFeedbackTimeoutRef.current);
+    }
+    consoleFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setConsoleFeedback(null);
+    }, 1200);
+  };
+
+  const showMissionFeedback = (message: string) => {
+    setMissionFeedback(message);
+    if (missionFeedbackTimeoutRef.current !== null) {
+      window.clearTimeout(missionFeedbackTimeoutRef.current);
+    }
+    missionFeedbackTimeoutRef.current = window.setTimeout(() => {
+      setMissionFeedback(null);
+    }, 1200);
+  };
+
+  const universeLogs = consoleLogs.filter(isUniverseLog);
+  const footerHeaderStyle = {
+    padding: "8px 12px",
+    borderBottom: "1px solid rgba(212, 175, 55, 0.2)",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  } as const;
+  const footerHeaderTitleStyle = {
+    color: "#e8c547",
+    fontWeight: 600,
+    fontSize: 12,
+    fontFamily: "'Rajdhani', sans-serif",
+    letterSpacing: 1,
+  } as const;
+  const footerHeaderButtonStyle = {
+    background: "#2a3340",
+    color: "#fff",
+    border: "none",
+    padding: "5px 10px",
+    borderRadius: 4,
+    cursor: "pointer",
+    fontSize: 10,
+    fontFamily: "'Rajdhani', sans-serif",
+  } as const;
+  const footerHeaderFeedbackStyle = {
+    color: "#8bc34a",
+    fontSize: 10,
+    fontFamily: "'Rajdhani', sans-serif",
+    letterSpacing: 0.6,
+  } as const;
 
   // Derived pixel sizes from percents and viewport
   const leftWidthPx = clampValue(
@@ -881,107 +945,36 @@ const SpaceshipHUD: React.FC<Props> = ({
             minHeight: 0,
           }}
         >
-          <div
-            style={{
-              padding: "8px 12px",
-              borderBottom: "1px solid rgba(212, 175, 55, 0.2)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <div
-              style={{
-                color: "#e8c547",
-                fontWeight: 600,
-                fontSize: 12,
-                fontFamily: "'Rajdhani', sans-serif",
-                letterSpacing: 1,
-              }}
-            >
-              Universe Logs
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
+          <div style={footerHeaderStyle}>
+            <div style={footerHeaderTitleStyle}>Universe Logs</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {consoleFeedback && (
+                <span style={footerHeaderFeedbackStyle}>{consoleFeedback}</span>
+              )}
               <button
-                onClick={onConsoleCopy}
-                className="hud-button"
-                style={{
-                  background: "#2a3340",
-                  color: "#fff",
-                  border: "none",
-                  padding: "5px 10px",
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  fontSize: 10,
-                  fontFamily: "'Rajdhani', sans-serif",
+                onClick={() => {
+                  onConsoleCopy();
+                  showConsoleFeedback("COPIED");
                 }}
+                className="hud-button"
+                style={footerHeaderButtonStyle}
               >
                 COPY
               </button>
               <button
-                onClick={onConsoleClear}
-                className="hud-button"
-                style={{
-                  background: "#2a3340",
-                  color: "#fff",
-                  border: "none",
-                  padding: "5px 10px",
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  fontSize: 10,
-                  fontFamily: "'Rajdhani', sans-serif",
+                onClick={() => {
+                  onConsoleClear();
+                  showConsoleFeedback("CLEARED");
                 }}
+                className="hud-button"
+                style={footerHeaderButtonStyle}
               >
                 CLEAR
               </button>
             </div>
           </div>
 
-          {consoleVisible && (
-            <div
-              className="hud-console-panel"
-              style={{
-                flex: 1,
-                background: "#0b0f12",
-                overflowY: "auto",
-                padding: 8,
-                minHeight: 0,
-              }}
-            >
-              {consoleLogs.filter(isUniverseLog).length === 0 ? (
-                <div
-                  style={{
-                    color: "#3a4350",
-                    fontStyle: "italic",
-                    textAlign: "center",
-                    fontSize: 11,
-                    fontFamily: "'Rajdhani', monospace",
-                  }}
-                >
-                  [ UNIVERSE LOGS - READY ]
-                </div>
-              ) : (
-                consoleLogs
-                  .filter(isUniverseLog)
-                  .slice()
-                  .reverse()
-                  .map((l, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        color: "#9aa6b2",
-                        fontFamily: "Courier New, monospace",
-                        fontSize: 12,
-                        padding: "2px 0",
-                      }}
-                    >
-                      {l}
-                    </div>
-                  ))
-              )}
-            </div>
-          )}
+          <UniverseLogsTerminal logs={universeLogs} visible={consoleVisible} />
         </div>
 
         {/* Middle Panel: MISSION CONTROL */}
@@ -996,52 +989,28 @@ const SpaceshipHUD: React.FC<Props> = ({
             minHeight: 0,
           }}
         >
-          <div
-            style={{
-              padding: "8px 12px",
-              borderBottom: "1px solid rgba(212, 175, 55, 0.2)",
-              color: "#e8c547",
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: "'Rajdhani', sans-serif",
-              letterSpacing: 1,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <span>Ship's Logs</span>
-            <div style={{ display: "flex", gap: 6 }}>
+          <div style={footerHeaderStyle}>
+            <span style={footerHeaderTitleStyle}>Ship's Logs</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {missionFeedback && (
+                <span style={footerHeaderFeedbackStyle}>{missionFeedback}</span>
+              )}
               <button
-                onClick={onMissionControlCopy}
-                style={{
-                  background: "transparent",
-                  border: "1px solid rgba(212, 175, 55, 0.3)",
-                  color: "#e8c547",
-                  padding: "2px 6px",
-                  fontSize: 9,
-                  cursor: "pointer",
-                  fontFamily: "'Rajdhani', sans-serif",
-                  letterSpacing: 0.5,
-                  borderRadius: 2,
+                onClick={() => {
+                  onMissionControlCopy();
+                  showMissionFeedback("COPIED");
                 }}
+                style={footerHeaderButtonStyle}
                 title="Copy mission logs"
               >
                 COPY
               </button>
               <button
-                onClick={onMissionControlClear}
-                style={{
-                  background: "transparent",
-                  border: "1px solid rgba(212, 175, 55, 0.3)",
-                  color: "#e8c547",
-                  padding: "2px 6px",
-                  fontSize: 9,
-                  cursor: "pointer",
-                  fontFamily: "'Rajdhani', sans-serif",
-                  letterSpacing: 0.5,
-                  borderRadius: 2,
+                onClick={() => {
+                  onMissionControlClear();
+                  showMissionFeedback("CLEARED");
                 }}
+                style={footerHeaderButtonStyle}
                 title="Clear mission logs"
               >
                 CLEAR
@@ -1102,18 +1071,8 @@ const SpaceshipHUD: React.FC<Props> = ({
             position: "relative",
           }}
         >
-          <div
-            style={{
-              padding: "8px 12px",
-              borderBottom: "1px solid rgba(212, 175, 55, 0.2)",
-              color: "#e8c547",
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: "'Rajdhani', sans-serif",
-              letterSpacing: 1,
-            }}
-          >
-            SYSTEM STATUS
+          <div style={footerHeaderStyle}>
+            <span style={footerHeaderTitleStyle}>SYSTEM STATUS</span>
           </div>
           <div
             style={{
