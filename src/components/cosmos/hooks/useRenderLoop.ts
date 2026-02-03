@@ -42,6 +42,7 @@ export const useRenderLoop = () => {
       invertControlsRef: React.MutableRefObject<boolean>;
       followingSpaceshipRef: React.MutableRefObject<boolean>;
       sceneRef: React.MutableRefObject<SceneRef>;
+      focusedMoonRef: React.MutableRefObject<THREE.Mesh | null>;
       spaceshipEngineLightRef: React.MutableRefObject<THREE.PointLight | null>;
       spaceshipCameraOffsetRef: React.MutableRefObject<THREE.Vector3>;
       shipViewModeRef: React.MutableRefObject<
@@ -56,6 +57,7 @@ export const useRenderLoop = () => {
         camera: THREE.Camera;
         options: any;
       }) => void;
+      renderer: THREE.WebGLRenderer;
       items: OrbitItem[];
       orbitAnchors: OrbitAnchor[];
       camera: THREE.Camera;
@@ -82,6 +84,7 @@ export const useRenderLoop = () => {
         invertControlsRef,
         followingSpaceshipRef,
         sceneRef,
+        focusedMoonRef,
         spaceshipEngineLightRef,
         spaceshipCameraOffsetRef,
         shipViewModeRef,
@@ -89,6 +92,7 @@ export const useRenderLoop = () => {
         optionsRef,
         updateAutopilotNavigation,
         updateOrbitSystem,
+        renderer,
         items,
         orbitAnchors,
         camera,
@@ -517,6 +521,26 @@ export const useRenderLoop = () => {
 
         sunMesh.rotation.y += 0.002;
 
+        const bokehPass = sceneRef.current.bokehPass as
+          | {
+              enabled: boolean;
+              materialBokeh?: { uniforms?: { focus?: { value: number } } };
+            }
+          | undefined;
+        if (bokehPass?.enabled) {
+          const focusedMoon = focusedMoonRef.current;
+          if (focusedMoon) {
+            const moonWorld = new THREE.Vector3();
+            focusedMoon.getWorldPosition(moonWorld);
+            const focusDistance = camera.position.distanceTo(moonWorld);
+            if (bokehPass.materialBokeh?.uniforms?.focus) {
+              bokehPass.materialBokeh.uniforms.focus.value = focusDistance;
+            }
+          } else {
+            bokehPass.enabled = false;
+          }
+        }
+
         updateOrbitSystem({
           items,
           orbitAnchors,
@@ -526,6 +550,15 @@ export const useRenderLoop = () => {
 
         controls.update();
         composer.render();
+
+        const prevMask = camera.layers.mask;
+        camera.layers.set(1);
+        const prevAutoClear = renderer.autoClear;
+        renderer.autoClear = false;
+        renderer.clearDepth();
+        renderer.render(scene, camera);
+        renderer.autoClear = prevAutoClear;
+        camera.layers.mask = prevMask;
         labelRenderer.render(scene, camera);
       };
 

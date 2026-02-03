@@ -12,9 +12,11 @@ export const useOrbitSystem = (params: {
   sceneRef: MutableRefObject<{ camera?: THREE.Camera }>;
   focusedMoonRef: MutableRefObject<THREE.Mesh | null>;
   spaceshipRef: MutableRefObject<THREE.Group | null>;
+  insideShipRef: MutableRefObject<boolean>;
   vlog: (message: string) => void;
 }) => {
-  const { sceneRef, focusedMoonRef, spaceshipRef, vlog } = params;
+  const { sceneRef, focusedMoonRef, spaceshipRef, insideShipRef, vlog } =
+    params;
 
   const updateOrbitSystem = (args: {
     items: OrbitItem[];
@@ -276,14 +278,10 @@ export const useOrbitSystem = (params: {
             }
           }
 
-          if (
-            !isOccluded &&
-            spaceshipRef.current &&
-            spaceshipRef.current.matrixWorld
-          ) {
+          if (!isOccluded && spaceshipRef.current?.matrixWorld) {
             const intersects = raycaster.intersectObject(
               spaceshipRef.current,
-              false,
+              true,
             );
             if (
               intersects.length > 0 &&
@@ -293,9 +291,22 @@ export const useOrbitSystem = (params: {
             }
           }
 
+          if (insideShipRef.current) {
+            isOccluded = true;
+          }
+
           if (label.element) {
+            const focusedMoon = focusedMoonRef.current;
+            const inMoonView = !!focusedMoon;
+            const isFocused = focusedMoon === item.mesh;
+            if (inMoonView && !isFocused) {
+              label.element.style.filter = "blur(2px)";
+              label.element.style.opacity = isOccluded ? "0" : "0.35";
+            } else {
+              label.element.style.filter = "none";
+              label.element.style.opacity = isOccluded ? "0" : "1";
+            }
             label.element.style.transition = "opacity 0.2s ease-in-out";
-            label.element.style.opacity = isOccluded ? "0" : "1";
           }
         } catch (error) {
           // ignore

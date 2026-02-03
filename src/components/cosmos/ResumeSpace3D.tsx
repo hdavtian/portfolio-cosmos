@@ -521,6 +521,7 @@ export default function ResumeSpace3D({
     sceneRef: sceneRef as MutableRefObject<{ camera?: THREE.Camera }>,
     focusedMoonRef,
     spaceshipRef,
+    insideShipRef,
     vlog,
   });
 
@@ -708,42 +709,49 @@ export default function ResumeSpace3D({
     );
 
     // 4. MOONS
-    Object.values(resumeData.experience)
-      .flat()
-      .forEach((job, i) => {
-        // Determine texture based on job ID
-        let textureUrl: string | undefined;
-        if (job.id === "investcloud") {
-          textureUrl = "/textures/custom-planet-textures/texture1.jpg";
-        } else if (job.id === "boingo") {
-          textureUrl = "/textures/custom-planet-textures/texture3.jpg";
-        } else if (job.id === "rpa") {
-          textureUrl = "/textures/custom-planet-textures/texture4-rpa.jpg";
-        }
+    const experienceJobs = Object.values(resumeData.experience).flat();
+    const experienceCount = experienceJobs.length || 1;
+    const experienceStartOffset = Math.PI * 0.15;
 
-        // Job moons should be clickable with section index 2+i
-        // (section 0 = hero+summary, section 1 = skills, sections 2+ = jobs)
-        const moonMesh = createPlanet(
-          job.company,
-          60 + i * 20,
-          5,
-          0xffaadd,
-          expPlanet,
-          0.002 + Math.random() * 0.001,
-          2 + i, // Make job moons clickable with correct section index
-          textureUrl,
-        );
+    experienceJobs.forEach((job, i) => {
+      // Determine texture based on job ID
+      let textureUrl: string | undefined;
+      if (job.id === "investcloud") {
+        textureUrl = "/textures/custom-planet-textures/texture1.jpg";
+      } else if (job.id === "boingo") {
+        textureUrl = "/textures/custom-planet-textures/texture3.jpg";
+      } else if (job.id === "rpa") {
+        textureUrl = "/textures/custom-planet-textures/texture4-rpa.jpg";
+      }
 
-        // Register moon with position emitter for tracking
-        const moonId = `moon-${job.id}`;
-        moonMesh.userData.moonId = moonId;
-        emitterRef.current.registerObject(moonId, moonMesh, 16); // 60fps updates
+      // Job moons should be clickable with section index 2+i
+      // (section 0 = hero+summary, section 1 = skills, sections 2+ = jobs)
+      const moonMesh = createPlanet(
+        job.company,
+        60 + i * 20,
+        5,
+        0xffaadd,
+        expPlanet,
+        0.002 + Math.random() * 0.001,
+        2 + i, // Make job moons clickable with correct section index
+        textureUrl,
+        experienceStartOffset + (i * Math.PI * 2) / experienceCount,
+      );
 
-        // Remove the rotation that might be causing visual issues
-        // moon.rotation.x = Math.PI / 2;
-      });
+      // Register moon with position emitter for tracking
+      const moonId = `moon-${job.id}`;
+      moonMesh.userData.moonId = moonId;
+      emitterRef.current.registerObject(moonId, moonMesh, 16); // 60fps updates
 
-    Object.keys(resumeData.skills).forEach((cat, i) => {
+      // Remove the rotation that might be causing visual issues
+      // moon.rotation.x = Math.PI / 2;
+    });
+
+    const skillCategories = Object.keys(resumeData.skills);
+    const skillsCount = skillCategories.length || 1;
+    const skillsStartOffset = Math.PI * 0.35;
+
+    skillCategories.forEach((cat, i) => {
       createPlanet(
         cat,
         70 + i * 15,
@@ -751,6 +759,9 @@ export default function ResumeSpace3D({
         0xaaddff,
         skillsPlanet,
         0.0015 + Math.random() * 0.001,
+        undefined,
+        undefined,
+        skillsStartOffset + (i * Math.PI * 2) / skillsCount,
       );
     });
 
@@ -868,6 +879,34 @@ export default function ResumeSpace3D({
     const { onPointerDownRotate, onPointerMoveRotate, onPointerUpRotate } =
       buildRotationHandlers({ raycaster, pointer, camera });
 
+    const enableMoonDepthOfField = (moonMesh: THREE.Mesh) => {
+      const bokehPass = sceneRef.current.bokehPass as
+        | {
+            enabled: boolean;
+            materialBokeh?: { uniforms?: { focus?: { value: number } } };
+          }
+        | undefined;
+      if (!bokehPass) return;
+      bokehPass.enabled = true;
+      const moonWorld = new THREE.Vector3();
+      moonMesh.getWorldPosition(moonWorld);
+      const focusDistance = camera.position.distanceTo(moonWorld);
+      if (bokehPass.materialBokeh?.uniforms?.focus) {
+        bokehPass.materialBokeh.uniforms.focus.value = focusDistance;
+      }
+    };
+
+    const disableMoonDepthOfField = () => {
+      const bokehPass = sceneRef.current.bokehPass as
+        | {
+            enabled: boolean;
+          }
+        | undefined;
+      if (bokehPass) {
+        bokehPass.enabled = false;
+      }
+    };
+
     const { enterMoonView, exitMoonView } = createMoonFocusController({
       scene,
       items,
@@ -889,6 +928,8 @@ export default function ResumeSpace3D({
       freezeOrbitalMotion,
       lastMoonOrbitSpeedRef,
       lastMoonSpinSpeedRef,
+      onMoonViewStart: enableMoonDepthOfField,
+      onMoonViewEnd: disableMoonDepthOfField,
     });
 
     enterMoonViewRef.current = enterMoonView;
@@ -1369,6 +1410,7 @@ export default function ResumeSpace3D({
       invertControlsRef,
       followingSpaceshipRef,
       sceneRef,
+      focusedMoonRef,
       spaceshipEngineLightRef,
       spaceshipCameraOffsetRef,
       shipViewModeRef,
@@ -1376,6 +1418,7 @@ export default function ResumeSpace3D({
       optionsRef,
       updateAutopilotNavigation,
       updateOrbitSystem,
+      renderer,
       items,
       orbitAnchors,
       camera,

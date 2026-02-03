@@ -23,18 +23,8 @@ export const createLabel = (text: string, subtext?: string): CSS2DObject => {
   div.style.fontFamily = "Cinzel, serif";
   div.style.textShadow = "0 0 10px #000";
   div.style.textAlign = "center";
-  div.style.pointerEvents = "auto";
-  div.style.cursor = "pointer";
-
-  // Prevent wheel events on labels from triggering browser zoom
-  div.addEventListener(
-    "wheel",
-    (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    },
-    { passive: false },
-  );
+  div.style.pointerEvents = "none";
+  div.style.cursor = "default";
 
   const title = document.createElement("div");
   title.textContent = text;
@@ -522,6 +512,7 @@ export const createPlanetFactory = (deps: {
     orbitSpeed = 0.1,
     sectionIndex?: number,
     textureUrl?: string,
+    startAngleOverride?: number,
   ): THREE.Mesh => {
     // Orbit Path - Render as smooth ellipses instead of segmented torus rings
     // Make rings thinner: main orbits slightly thicker than moon orbits
@@ -711,7 +702,7 @@ export const createPlanetFactory = (deps: {
     // Start position
     const forcedStartAngle = isMainOrbit
       ? resolveMainOrbitStartAngle(name)
-      : undefined;
+      : startAngleOverride;
     const startAngle =
       forcedStartAngle !== undefined
         ? forcedStartAngle
@@ -827,8 +818,8 @@ export const attachMultiNoteOverlaysFactory = (deps: {
           transparent: true,
           // Tone down brightness slightly to reduce bloom/glow
           opacity: options?.opacity ?? 0.88,
-          depthWrite: true,
-          depthTest: true,
+          depthWrite: false,
+          depthTest: false,
           side: THREE.DoubleSide,
         });
         const meshT = new THREE.Mesh(geoT, matT);
@@ -846,6 +837,7 @@ export const attachMultiNoteOverlaysFactory = (deps: {
         meshT.userData.isOverlay = true; // Mark as overlay so raycaster ignores it
         meshT.raycast = () => {}; // Disable raycasting for this overlay - clicks pass through
         meshT.renderOrder = 0; // Use default render order to respect depth
+        meshT.layers.set(1);
         scene.add(meshT);
         overlays.push(meshT);
         // store as planet title overlay reference
@@ -878,8 +870,8 @@ export const attachMultiNoteOverlaysFactory = (deps: {
         map: textTex,
         transparent: true,
         opacity: options?.opacity ?? 0.9,
-        depthWrite: true,
-        depthTest: true,
+        depthWrite: false,
+        depthTest: false,
         side: THREE.DoubleSide,
       });
       const mesh = new THREE.Mesh(geo, mat);
@@ -911,6 +903,7 @@ export const attachMultiNoteOverlaysFactory = (deps: {
       mesh.userData.isOverlay = true; // Mark as overlay so raycaster ignores it
       mesh.raycast = () => {}; // Disable raycasting for this overlay - clicks pass through
       mesh.renderOrder = 0; // Use default render order to respect depth
+      mesh.layers.set(1);
 
       scene.add(mesh);
       overlays.push(mesh);
