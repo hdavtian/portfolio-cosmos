@@ -24,7 +24,7 @@ export const useCosmosLogs = (): UseCosmosLogsResult => {
   const [missionControlLogs, setMissionControlLogs] = useState<string[]>([]);
   const missionControlLogsRef = useRef<string[]>([]);
 
-  const vlog = useCallback<LogFn>((message, data) => {
+  const vlog = useCallback<LogFn>((message, _data) => {
     const timestamp = new Date().toLocaleTimeString("en-US", {
       hour12: false,
       hour: "2-digit",
@@ -34,18 +34,12 @@ export const useCosmosLogs = (): UseCosmosLogsResult => {
     });
     const logMessage = `[${timestamp}] ${message}`;
 
-    if (data !== undefined) {
-      console.log(logMessage, data);
-    } else {
-      console.log(logMessage);
-    }
-
     const newLogs = [...consoleLogsRef.current, logMessage];
     consoleLogsRef.current = newLogs;
     setConsoleLogs(newLogs);
   }, []);
 
-  const missionLog = useCallback<LogFn>((message, data) => {
+  const missionLog = useCallback<LogFn>((message, _data) => {
     const timestamp = new Date().toLocaleTimeString("en-US", {
       hour12: false,
       hour: "2-digit",
@@ -53,10 +47,6 @@ export const useCosmosLogs = (): UseCosmosLogsResult => {
       second: "2-digit",
     });
     const logMessage = `[${timestamp}] ${message}`;
-
-    if (data !== undefined) {
-      console.log(logMessage, data);
-    }
 
     const newLogs = [...missionControlLogsRef.current, logMessage];
     missionControlLogsRef.current = newLogs;

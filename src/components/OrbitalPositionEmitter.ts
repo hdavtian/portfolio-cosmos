@@ -54,7 +54,6 @@ export class OrbitalPositionEmitter {
     updateInterval: number = 16,
   ): void {
     if (this.trackedObjects.has(id)) {
-      console.warn(`Object ${id} already registered`);
       return;
     }
 
@@ -71,8 +70,6 @@ export class OrbitalPositionEmitter {
       previousPosition: worldPosition.clone(),
       isOrbiting: true,
     });
-
-    console.log(`📡 Registered object for tracking: ${id}`);
   }
 
   /**
@@ -83,7 +80,6 @@ export class OrbitalPositionEmitter {
     if (tracked) {
       tracked.subscribers.clear();
       this.trackedObjects.delete(id);
-      console.log(`📴 Unregistered object: ${id}`);
     }
   }
 
@@ -96,14 +92,10 @@ export class OrbitalPositionEmitter {
   public subscribe(id: string, subscriber: PositionSubscriber): () => void {
     const tracked = this.trackedObjects.get(id);
     if (!tracked) {
-      console.error(`Cannot subscribe to unregistered object: ${id}`);
       return () => {};
     }
 
     tracked.subscribers.add(subscriber);
-    console.log(
-      `✅ Subscriber added to ${id} (total: ${tracked.subscribers.size})`,
-    );
 
     // Immediately send current position if available
     if (tracked.lastUpdate) {
@@ -113,9 +105,6 @@ export class OrbitalPositionEmitter {
     // Return unsubscribe function
     return () => {
       tracked.subscribers.delete(subscriber);
-      console.log(
-        `❌ Subscriber removed from ${id} (remaining: ${tracked.subscribers.size})`,
-      );
     };
   }
 
@@ -127,7 +116,6 @@ export class OrbitalPositionEmitter {
     const tracked = this.trackedObjects.get(id);
     if (tracked) {
       tracked.isOrbiting = false;
-      console.log(`⏸️ Paused orbit for: ${id}`);
     }
   }
 
@@ -142,7 +130,6 @@ export class OrbitalPositionEmitter {
       const worldPosition = new THREE.Vector3();
       tracked.mesh.getWorldPosition(worldPosition);
       tracked.previousPosition = worldPosition.clone();
-      console.log(`▶️ Resumed orbit for: ${id}`);
     }
   }
 
@@ -164,7 +151,6 @@ export class OrbitalPositionEmitter {
     if (this.isRunning) return;
     this.isRunning = true;
     this.emit();
-    console.log("🚀 OrbitalPositionEmitter started");
   }
 
   /**
@@ -176,7 +162,6 @@ export class OrbitalPositionEmitter {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-    console.log("🛑 OrbitalPositionEmitter stopped");
   }
 
   /**
@@ -211,9 +196,7 @@ export class OrbitalPositionEmitter {
       tracked.subscribers.forEach((subscriber) => {
         try {
           subscriber(update);
-        } catch (error) {
-          console.error(`Error in subscriber for ${tracked.id}:`, error);
-        }
+        } catch (error) {}
       });
     });
 
@@ -282,7 +265,6 @@ export class OrbitalPositionEmitter {
       tracked.subscribers.clear();
     });
     this.trackedObjects.clear();
-    console.log("🗑️ OrbitalPositionEmitter disposed");
   }
 }
 

@@ -180,8 +180,6 @@ export const createFinalizeFocusOnMoon = (deps: {
       focusedMoonRef.current = moonMesh;
       focusedMoonCameraDistanceRef.current =
         sceneRef.current?.camera?.position.distanceTo(moonWorldPos) || null;
-    } catch (e) {
-      console.warn("Failed to finalize focus on moon:", e);
-    }
+    } catch (e) {}
   };
 };

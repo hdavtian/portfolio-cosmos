@@ -28,7 +28,6 @@ export const useCosmosOptions = (params: {
     if (sceneRef.current.bloomPass && options.spaceSunIntensity !== undefined) {
       const bloomStrength = (options.spaceSunIntensity / 5) * 2;
       sceneRef.current.bloomPass.strength = bloomStrength;
-      console.log("Updated bloom strength to:", bloomStrength);
     }
 
     if (sceneRef.current.sunLight && options.spaceSunIntensity !== undefined) {

@@ -108,7 +108,6 @@ const SpaceshipHUD: React.FC<Props> = ({
   userTitle,
   consoleLogs,
   consoleVisible,
-  onConsoleToggle,
   onConsoleCopy,
   onConsoleClear,
   tourActive,

@@ -645,9 +645,6 @@ export default function ResumeSpace3D({
         const moonId = `moon-${job.id}`;
         moonMesh.userData.moonId = moonId;
         emitterRef.current.registerObject(moonId, moonMesh, 16); // 60fps updates
-        console.log(
-          `📡 Registered moon for tracking: ${moonId} (${job.company})`,
-        );
 
         // Remove the rotation that might be causing visual issues
         // moon.rotation.x = Math.PI / 2;
@@ -664,37 +661,16 @@ export default function ResumeSpace3D({
       );
     });
 
-    // Log final clickable planets array
-    console.log(
-      `🌍 Total clickable planets registered: ${clickablePlanets.length}`,
-      clickablePlanets.map((p) => ({
-        name: p.userData.planetName,
-        sectionIndex: p.userData.sectionIndex,
-        hasHaloLayers: !!p.userData.hasHaloLayers,
-        hasEmissive: !!p.userData.hoverEmissive,
-      })),
-    );
-
     // Enhanced point-based starfield for deep space effect
     const starField = createStarField();
     scene.add(starField);
 
     // --- SPACESHIP LOADING ---
-    console.log("🚀 Initializing spaceship loader...");
     const loader = new GLTFLoader();
     loader.load(
       "/models/spaceship/scene.gltf",
       (gltf) => {
-        console.log("✅ Spaceship GLTF loaded successfully");
         const spaceship = gltf.scene;
-
-        // Log ship structure to find cockpit
-        console.log("🔍 Ship structure:");
-        spaceship.traverse((child) => {
-          if (child.name) {
-            console.log(`  - ${child.name}:`, child.type, child.position);
-          }
-        });
 
         // Scale down the spaceship to be tiny compared to planets
         spaceship.scale.set(0.5, 0.5, 0.5);
@@ -767,22 +743,13 @@ export default function ResumeSpace3D({
 
         scene.add(spaceship);
         spaceshipRef.current = spaceship;
-
-        console.log("🚀 Spaceship added to scene at", spaceship.position);
         vlog("🚀 Spaceship loaded - ready for navigation");
 
         // Initialize navigation system
         initializeNavigationSystem(spaceship, scene);
       },
-      (progress) => {
-        // Loading progress
-        if (progress.total > 0) {
-          const percent = (progress.loaded / progress.total) * 100;
-          console.log(`📦 Loading spaceship: ${Math.round(percent)}%`);
-        }
-      },
-      (error) => {
-        console.error("❌ Error loading spaceship:", error);
+      undefined,
+      () => {
         vlog("❌ Failed to load spaceship model");
       },
     );
@@ -946,7 +913,7 @@ export default function ResumeSpace3D({
             }
           }
         } catch (e) {
-          console.warn("Error finalizing tour waypoint:", e);
+          vlog("⚠️ Error finalizing tour waypoint");
         }
       }
 
@@ -989,11 +956,9 @@ export default function ResumeSpace3D({
           break;
         case "about":
           // Follow the spaceship!
-          console.log("🚀 About Harma clicked - checking spaceship...");
           vlog("🚀 About Harma navigation triggered");
 
           if (spaceshipRef.current) {
-            console.log("✅ Spaceship found, initiating follow mode");
             vlog("🚀 Spaceship located, beginning pursuit...");
 
             // Enable follow mode immediately
@@ -1045,7 +1010,6 @@ export default function ResumeSpace3D({
 
             animateToShip();
           } else {
-            console.warn("⚠️ Spaceship not loaded yet");
             // Fallback to sun if spaceship not loaded yet
             await cameraDirectorRef.current.systemOverview();
             vlog("🌌 Navigated to Sun (About) - spaceship not yet loaded");
@@ -1215,7 +1179,7 @@ export default function ResumeSpace3D({
                       }
                     }
                   } catch (e) {
-                    console.warn("Error resolving waypoint to mesh:", e);
+                    vlog("⚠️ Error resolving waypoint to mesh");
                   }
                   return wp;
                 });
@@ -1333,7 +1297,7 @@ export default function ResumeSpace3D({
           });
         }
       } catch (e) {
-        console.warn("Failed to populate experience submenu:", e);
+        vlog("⚠️ Failed to populate experience submenu");
       }
     }
 
@@ -1373,7 +1337,6 @@ export default function ResumeSpace3D({
 
       // Start the orbital position emitter for tracking moving objects
       emitterRef.current.start();
-      console.log("📡 Orbital position emitter started");
 
       // Add smooth zoom and pan animation
       const startPos = {
@@ -1441,11 +1404,9 @@ export default function ResumeSpace3D({
 
       // Stop orbital position emitter
       emitterRef.current.stop();
-      console.log("📡 Orbital position emitter stopped");
 
       // Cleanup navigation system
       disposeNavigationSystem();
-      console.log("🎯 Navigation system disposed");
 
       // Remove touch event listeners
       renderer.domElement.removeEventListener(
@@ -1863,7 +1824,7 @@ export default function ResumeSpace3D({
                         }
                       }
                     } catch (e) {
-                      console.warn("Error resolving waypoint to mesh:", e);
+                      vlog("⚠️ Error resolving waypoint to mesh");
                     }
                     return wp;
                   });

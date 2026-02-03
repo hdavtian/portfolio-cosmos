@@ -709,19 +709,6 @@ export const createPlanetFactory = (deps: {
     // Add to clickable array if it has a section
     if (sectionIndex !== undefined) {
       clickablePlanets.push(planetMesh);
-      console.log(
-        `✅ Added clickable planet: "${name}" (sectionIndex: ${sectionIndex})`,
-        {
-          hasHaloLayers: !!planetMesh.userData.hasHaloLayers,
-          haloColor: planetMesh.userData.haloColor,
-          haloSize: planetMesh.userData.haloSizeVariance,
-          haloSpeed: planetMesh.userData.haloSpeedVariance,
-          position: planetMesh.position,
-          size: size,
-        },
-      );
-    } else {
-      console.log(`ℹ️ Created non-clickable planet: "${name}"`);
     }
 
     return planetMesh;

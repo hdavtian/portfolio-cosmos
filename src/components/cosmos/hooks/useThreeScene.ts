@@ -48,9 +48,7 @@ export const useThreeScene = (params: {
             globalRenderer.domElement,
           );
         }
-      } catch (e) {
-        console.warn("Error disposing old renderer:", e);
-      }
+      } catch (e) {}
       globalRenderer = null;
     }
 

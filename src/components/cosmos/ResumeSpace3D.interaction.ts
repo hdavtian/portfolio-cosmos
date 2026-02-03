@@ -140,13 +140,6 @@ export const createPointerInteractionHandlers = (deps: {
     raycaster.setFromCamera(pointer, camera);
     const intersects = raycaster.intersectObjects(clickablePlanets, false);
 
-    // Debug: log on every 100th move to avoid spam
-    if (Math.random() < 0.01) {
-      console.log(
-        `🔍 Raycasting: ${clickablePlanets.length} clickable planets, ${intersects.length} intersections`,
-      );
-    }
-
     // Determine the object under pointer (if any)
     const hit = intersects.find(
       (h) => h.object.userData.sectionIndex !== undefined,
@@ -276,18 +269,12 @@ export const createPointerInteractionHandlers = (deps: {
     // Clicking empty space should not exit moon focus — only overlay clicks or navigation/zoom do.
     const intersects = raycaster.intersectObjects(clickablePlanets, false);
 
-    console.log(`🖱️ Click detected: ${intersects.length} intersections`);
-
     if (intersects.length > 0) {
       // Find first object with userData.sectionIndex
       const hit = intersects.find(
         (hit) => hit.object.userData.sectionIndex !== undefined,
       );
       if (hit && hit.object.userData.sectionIndex !== undefined) {
-        console.log(
-          `📍 Navigating to section ${hit.object.userData.sectionIndex} ("${hit.object.userData.planetName}")`,
-        );
-
         const planetName = hit.object.userData.planetName;
 
         // Main planets: Fly to them using handleNavigation (same as quick nav)

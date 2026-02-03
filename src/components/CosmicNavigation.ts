@@ -391,9 +391,7 @@ export class CosmicAudioSystem {
       this.audioElement = new Audio(this.audioTracks[trackName]);
       this.audioElement.volume = this.volume;
       this.audioElement.loop = true;
-      this.audioElement.play().catch((e) => {
-        console.log("Audio play failed (user interaction required):", e);
-      });
+      this.audioElement.play().catch(() => {});
       this.currentTrack = trackName;
     } else {
       this.currentTrack = "";

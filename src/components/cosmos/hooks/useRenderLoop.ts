@@ -80,9 +80,7 @@ export const useRenderLoop = () => {
         if (exitFocusRequestRef.current) {
           try {
             exitMoonView();
-          } catch (e) {
-            console.warn("exitFocusedMoon failed:", e);
-          }
+          } catch (e) {}
           exitFocusRequestRef.current = false;
         }
 

@@ -134,7 +134,6 @@ export class SpaceshipNavigationSystem {
     // Check if target is registered with emitter
     if (!this.emitter.isTracking(targetId)) {
       const errorMsg = `⚠️ Cannot navigate - target not tracked: ${targetId}`;
-      console.error(errorMsg);
       if (this.missionLog) this.missionLog(errorMsg);
       return false;
     }
@@ -143,7 +142,6 @@ export class SpaceshipNavigationSystem {
     this.cancelNavigation();
 
     const logMsg = `🚀 NAV ENGAGE: Target locked - ${targetId} | Turbo: ${useTurbo ? "ENABLED" : "DISABLED"}`;
-    console.log(logMsg);
     if (this.missionLog) this.missionLog(logMsg);
 
     // Subscribe to position updates
@@ -214,7 +212,6 @@ export class SpaceshipNavigationSystem {
     this.lateralBias = null;
 
     this.emitStatusChange();
-    console.log("🛑 Navigation cancelled");
   }
 
   /**
@@ -351,25 +348,6 @@ export class SpaceshipNavigationSystem {
 
       const statusMsg = `📡 NAV STATUS: ${this.currentTarget.id} | Dist: ${distance.toFixed(0)}u | Speed: ${(this.currentSpeed * 100).toFixed(0)}% | ETA: ${etaStr} | ${this.currentTarget.frozen ? "🧊 LOCKED" : this.isTurboActive ? "⚡ TURBO" : "🚀 CRUISE"}`;
 
-      console.log(`🚀 NAV UPDATE:`);
-      console.log(`   Target: ${this.currentTarget.id}`);
-      console.log(
-        `   Ship Pos: [${shipPos.x.toFixed(1)}, ${shipPos.y.toFixed(1)}, ${shipPos.z.toFixed(1)}]`,
-      );
-      console.log(
-        `   Target Pos: [${targetPos.x.toFixed(1)}, ${targetPos.y.toFixed(1)}, ${targetPos.z.toFixed(1)}]`,
-      );
-      console.log(`   Distance: ${distance.toFixed(1)} units`);
-      console.log(
-        `   Speed: ${this.currentSpeed.toFixed(2)}, Target: ${this.targetSpeed.toFixed(2)}`,
-      );
-      console.log(
-        `   Frozen: ${this.currentTarget.frozen}, Turbo: ${this.isTurboActive}`,
-      );
-      console.log(
-        `   Last Velocity: [${this.currentTarget.lastVelocity?.x.toFixed(2) || 0}, ${this.currentTarget.lastVelocity?.y.toFixed(2) || 0}, ${this.currentTarget.lastVelocity?.z.toFixed(2) || 0}]`,
-      );
-
       if (this.missionLog) this.missionLog(statusMsg);
 
       this.lastLogTime = now;
@@ -390,7 +368,6 @@ export class SpaceshipNavigationSystem {
       this.currentTarget.id
     ) {
       const freezeMsg = `🧊 ORBIT FREEZE: Distance ${distance.toFixed(1)} units - Target locked in position`;
-      console.log(freezeMsg);
       if (this.missionLog) this.missionLog(freezeMsg);
       this.emitter.pauseOrbit(this.currentTarget.id);
       this.currentTarget.frozen = true;
@@ -524,7 +501,6 @@ export class SpaceshipNavigationSystem {
   private handleArrival(): void {
     const targetId = this.currentTarget.id;
     const arrivalMsg = `✅ ARRIVAL CONFIRMED: Reached ${targetId} - Navigation complete`;
-    console.log(`✅ ARRIVED at ${targetId}`);
     if (this.missionLog) this.missionLog(arrivalMsg);
 
     // Notify callback
@@ -629,7 +605,6 @@ export class SpaceshipNavigationSystem {
       );
       if (distance > this.config.decelerationDistance) {
         this.isTurboActive = enabled;
-        console.log(`🔥 Turbo ${enabled ? "enabled" : "disabled"}`);
       }
     }
   }
