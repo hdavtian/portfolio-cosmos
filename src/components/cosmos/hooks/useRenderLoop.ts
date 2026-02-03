@@ -12,6 +12,29 @@ export const useRenderLoop = () => {
       exitFocusRequestRef: React.MutableRefObject<boolean>;
       exitMoonView: () => void;
       spaceshipRef: React.MutableRefObject<THREE.Group | null>;
+      shipCinematicRef: React.MutableRefObject<{
+        active: boolean;
+        phase: "orbit" | "approach" | "hover";
+        startTime: number;
+        duration: number;
+        startPos: THREE.Vector3;
+        controlPos: THREE.Vector3;
+        endPos: THREE.Vector3;
+        startQuat: THREE.Quaternion;
+        endQuat: THREE.Quaternion;
+        lightsTriggered?: boolean;
+        orbitStartTime?: number;
+        orbitDuration?: number;
+        orbitCenter?: THREE.Vector3;
+        orbitRadius?: number;
+        orbitStartAngle?: number;
+        orbitEndAngle?: number;
+        hoverStartTime?: number;
+        hoverBasePos?: THREE.Vector3;
+        hoverStartQuat?: THREE.Quaternion;
+      } | null>;
+      shipStagingModeRef: React.MutableRefObject<boolean>;
+      shipStagingKeysRef: React.MutableRefObject<Record<string, boolean>>;
       manualFlightModeRef: React.MutableRefObject<boolean>;
       manualFlightRef: React.MutableRefObject<any>;
       keyboardStateRef: React.MutableRefObject<Record<string, boolean>>;
@@ -49,6 +72,9 @@ export const useRenderLoop = () => {
         exitFocusRequestRef,
         exitMoonView,
         spaceshipRef,
+        shipCinematicRef,
+        shipStagingModeRef,
+        shipStagingKeysRef,
         manualFlightModeRef,
         manualFlightRef,
         keyboardStateRef,
@@ -86,8 +112,149 @@ export const useRenderLoop = () => {
 
         if (spaceshipRef.current) {
           const ship = spaceshipRef.current;
+          const cinematic = shipCinematicRef.current;
 
-          if (manualFlightModeRef.current) {
+          if (shipStagingModeRef.current) {
+            const keys = shipStagingKeysRef.current;
+            const moveSpeed = keys.ShiftLeft ? 2.0 : 0.6;
+            const turnSpeed = keys.ShiftLeft ? 0.02 : 0.01;
+
+            const cameraForward = new THREE.Vector3();
+            camera.getWorldDirection(cameraForward);
+            const cameraUp = new THREE.Vector3(0, 1, 0);
+            const cameraRight = new THREE.Vector3()
+              .crossVectors(cameraForward, cameraUp)
+              .normalize();
+
+            const move = new THREE.Vector3();
+            if (keys.KeyW) move.add(cameraForward);
+            if (keys.KeyS) move.sub(cameraForward);
+            if (keys.KeyA) move.sub(cameraRight);
+            if (keys.KeyD) move.add(cameraRight);
+            if (keys.KeyR) move.add(cameraUp);
+            if (keys.KeyF) move.sub(cameraUp);
+
+            if (move.lengthSq() > 0) {
+              ship.position.add(move.normalize().multiplyScalar(moveSpeed));
+            }
+
+            if (keys.ArrowLeft) ship.rotation.y += turnSpeed;
+            if (keys.ArrowRight) ship.rotation.y -= turnSpeed;
+            if (keys.ArrowUp) ship.rotation.x += turnSpeed;
+            if (keys.ArrowDown) ship.rotation.x -= turnSpeed;
+            if (keys.KeyQ) ship.rotation.z += turnSpeed;
+            if (keys.KeyE) ship.rotation.z -= turnSpeed;
+          } else if (cinematic?.active) {
+            const now = performance.now();
+            const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+            if (cinematic.phase === "orbit") {
+              const orbitDuration = cinematic.orbitDuration || 6000;
+              const orbitStartTime = cinematic.orbitStartTime || now;
+              const orbitProgress = Math.min(
+                (now - orbitStartTime) / orbitDuration,
+                1,
+              );
+              const orbitAngle = THREE.MathUtils.lerp(
+                cinematic.orbitStartAngle || 0,
+                cinematic.orbitEndAngle || Math.PI * 1.2,
+                orbitProgress,
+              );
+              const orbitCenter = cinematic.orbitCenter || new THREE.Vector3();
+              const orbitRadius = cinematic.orbitRadius || 260;
+
+              ship.position.set(
+                orbitCenter.x + Math.cos(orbitAngle) * orbitRadius,
+                orbitCenter.y + Math.sin(orbitAngle * 0.6) * 40,
+                orbitCenter.z + Math.sin(orbitAngle) * orbitRadius,
+              );
+
+              const lookMatrix = new THREE.Matrix4().lookAt(
+                ship.position,
+                orbitCenter,
+                new THREE.Vector3(0, 1, 0),
+              );
+              const orbitQuat = new THREE.Quaternion().setFromRotationMatrix(
+                lookMatrix,
+              );
+              const forwardOffset = ship.userData.forwardOffset as
+                | THREE.Quaternion
+                | undefined;
+              if (forwardOffset) {
+                orbitQuat.multiply(forwardOffset);
+              }
+              ship.quaternion.copy(orbitQuat);
+
+              if (orbitProgress >= 1) {
+                cinematic.phase = "approach";
+                cinematic.startTime = now;
+              }
+            } else if (cinematic.phase === "approach") {
+              const progress = Math.min(
+                (now - cinematic.startTime) / cinematic.duration,
+                1,
+              );
+              const eased = easeOutCubic(progress);
+              const oneMinus = 1 - eased;
+              const currentPos = new THREE.Vector3()
+                .copy(cinematic.startPos)
+                .multiplyScalar(oneMinus * oneMinus)
+                .add(
+                  cinematic.controlPos
+                    .clone()
+                    .multiplyScalar(2 * oneMinus * eased),
+                )
+                .add(cinematic.endPos.clone().multiplyScalar(eased * eased));
+              const approachLook = new THREE.Matrix4().lookAt(
+                currentPos,
+                camera.position,
+                new THREE.Vector3(0, 1, 0),
+              );
+              const approachQuat = new THREE.Quaternion().setFromRotationMatrix(
+                approachLook,
+              );
+              const forwardOffset = ship.userData.forwardOffset as
+                | THREE.Quaternion
+                | undefined;
+              if (forwardOffset) {
+                approachQuat.multiply(forwardOffset);
+              }
+
+              const currentQuat = new THREE.Quaternion().slerpQuaternions(
+                cinematic.startQuat,
+                approachQuat,
+                eased,
+              );
+
+              ship.position.copy(currentPos);
+              ship.quaternion.copy(currentQuat);
+
+              if (progress >= 1) {
+                cinematic.phase = "hover";
+                cinematic.hoverStartTime = now;
+                cinematic.hoverBasePos = currentPos.clone();
+                cinematic.hoverStartQuat = ship.quaternion.clone();
+              }
+            } else {
+              const hoverStart = cinematic.hoverStartTime || now;
+              const hoverElapsed = (now - hoverStart) / 1000;
+              const basePos = cinematic.hoverBasePos || cinematic.endPos;
+              const floatX = Math.sin(hoverElapsed * 0.4) * 0.27;
+              const floatY = Math.sin(hoverElapsed * 0.6) * 0.4;
+              ship.position
+                .copy(basePos)
+                .add(new THREE.Vector3(floatX, floatY, 0));
+
+              const faceProgress = Math.min(hoverElapsed / 6, 1);
+              const easedFaceProgress =
+                faceProgress * faceProgress * (3 - 2 * faceProgress);
+              const hoverStartQuat =
+                cinematic.hoverStartQuat || cinematic.endQuat;
+              ship.quaternion
+                .copy(hoverStartQuat)
+                .slerp(cinematic.endQuat, easedFaceProgress);
+            }
+          } else if (manualFlightModeRef.current) {
             const manual = manualFlightRef.current;
             const keyboard = keyboardStateRef.current;
 

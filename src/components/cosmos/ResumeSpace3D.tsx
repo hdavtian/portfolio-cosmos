@@ -126,6 +126,43 @@ export default function ResumeSpace3D({
     "exterior",
   );
   const spaceshipRef = useRef<THREE.Group | null>(null);
+  const shipStagingModeRef = useRef(false);
+  const shipStagingKeysRef = useRef<Record<string, boolean>>({
+    KeyW: false,
+    KeyA: false,
+    KeyS: false,
+    KeyD: false,
+    KeyR: false,
+    KeyF: false,
+    ArrowUp: false,
+    ArrowDown: false,
+    ArrowLeft: false,
+    ArrowRight: false,
+    KeyQ: false,
+    KeyE: false,
+    ShiftLeft: false,
+  });
+  const shipCinematicRef = useRef<{
+    active: boolean;
+    phase: "orbit" | "approach" | "hover";
+    startTime: number;
+    duration: number;
+    startPos: THREE.Vector3;
+    endPos: THREE.Vector3;
+    controlPos: THREE.Vector3;
+    startQuat: THREE.Quaternion;
+    endQuat: THREE.Quaternion;
+    lightsTriggered?: boolean;
+    orbitStartTime?: number;
+    orbitDuration?: number;
+    orbitCenter?: THREE.Vector3;
+    orbitRadius?: number;
+    orbitStartAngle?: number;
+    orbitEndAngle?: number;
+    hoverStartTime?: number;
+    hoverBasePos?: THREE.Vector3;
+    hoverStartQuat?: THREE.Quaternion;
+  } | null>(null);
   const spaceshipLightsRef = useRef<THREE.PointLight[]>([]);
   const spaceshipEngineLightRef = useRef<THREE.PointLight | null>(null);
 
@@ -1306,6 +1343,9 @@ export default function ResumeSpace3D({
       exitFocusRequestRef,
       exitMoonView,
       spaceshipRef,
+      shipCinematicRef,
+      shipStagingModeRef,
+      shipStagingKeysRef,
       manualFlightModeRef,
       manualFlightRef,
       keyboardStateRef,
@@ -1386,6 +1426,81 @@ export default function ResumeSpace3D({
           introRafId = null;
           controls.enabled = previousControlsEnabled;
           setHudVisible(false);
+
+          const startShipCinematic = (attempts: number = 0) => {
+            const ship = spaceshipRef.current;
+            const currentCamera = sceneRef.current.camera as
+              | THREE.PerspectiveCamera
+              | undefined;
+            const currentControls = sceneRef.current.controls as
+              | { target?: THREE.Vector3 }
+              | undefined;
+
+            if (!ship || !currentCamera || !currentControls?.target) {
+              if (attempts < 10) {
+                window.setTimeout(() => startShipCinematic(attempts + 1), 250);
+              }
+              return;
+            }
+
+            manualFlightModeRef.current = false;
+            setFollowingSpaceship(false);
+            followingSpaceshipRef.current = false;
+
+            const cameraDirection = new THREE.Vector3();
+            currentCamera.getWorldDirection(cameraDirection);
+            const cameraUp = currentCamera.up.clone().normalize();
+            const cameraRight = new THREE.Vector3()
+              .crossVectors(cameraDirection, cameraUp)
+              .normalize();
+            const cameraLeft = cameraRight.clone().multiplyScalar(-1);
+
+            const endPos = new THREE.Vector3(
+              902.1810184349341,
+              29.572186631042992,
+              176.66640623268017,
+            );
+
+            const controlPos = ship.position
+              .clone()
+              .lerp(endPos, 0.65)
+              .add(cameraLeft.clone().multiplyScalar(60))
+              .add(cameraUp.clone().multiplyScalar(50))
+              .add(cameraDirection.clone().multiplyScalar(10));
+
+            const endQuat = new THREE.Quaternion(
+              0.13822341047578124,
+              0.7484587259553863,
+              -0.18943034059866248,
+              -0.6203385933491146,
+            );
+
+            setShipExteriorLights(true);
+
+            const sunPosition = new THREE.Vector3();
+            sunMesh.getWorldPosition(sunPosition);
+
+            shipCinematicRef.current = {
+              active: true,
+              phase: "orbit",
+              startTime: performance.now(),
+              duration: 5000,
+              startPos: ship.position.clone(),
+              controlPos,
+              endPos,
+              startQuat: ship.quaternion.clone(),
+              endQuat,
+              lightsTriggered: true,
+              orbitStartTime: performance.now(),
+              orbitDuration: 6000,
+              orbitCenter: sunPosition,
+              orbitRadius: 260,
+              orbitStartAngle: Math.PI * 0.85,
+              orbitEndAngle: Math.PI * 2.1,
+            };
+          };
+
+          startShipCinematic();
         }
       };
 
@@ -1457,9 +1572,105 @@ export default function ResumeSpace3D({
 
     window.addEventListener("keydown", handleSnapshotKey);
 
+    const handleShipSnapshot = () => {
+      const ship = spaceshipRef.current;
+      if (!ship) return;
+
+      const snapshot = {
+        position: {
+          x: ship.position.x,
+          y: ship.position.y,
+          z: ship.position.z,
+        },
+        rotation: {
+          x: ship.rotation.x,
+          y: ship.rotation.y,
+          z: ship.rotation.z,
+        },
+        quaternion: {
+          x: ship.quaternion.x,
+          y: ship.quaternion.y,
+          z: ship.quaternion.z,
+          w: ship.quaternion.w,
+        },
+        scale: {
+          x: ship.scale.x,
+          y: ship.scale.y,
+          z: ship.scale.z,
+        },
+      };
+
+      console.log("SHIP_SNAPSHOT", snapshot);
+    };
+
+    const handleShipStagingKeyDown = (event: KeyboardEvent) => {
+      if (event.code === "KeyM" && event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        const next = !shipStagingModeRef.current;
+        shipStagingModeRef.current = next;
+        if (next) {
+          if (shipCinematicRef.current) {
+            shipCinematicRef.current.active = false;
+          }
+          setFollowingSpaceship(false);
+          followingSpaceshipRef.current = false;
+          setManualFlightMode(false);
+          manualFlightModeRef.current = false;
+        }
+
+        Object.keys(shipStagingKeysRef.current).forEach((key) => {
+          shipStagingKeysRef.current[key] = false;
+        });
+
+        console.log(
+          `SHIP_STAGING_MODE ${next ? "ENABLED" : "DISABLED"} (WASD/RF move, arrows/QE rotate, Shift for faster).`,
+        );
+        return;
+      }
+
+      if (event.code === "KeyP" && event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        handleShipSnapshot();
+        return;
+      }
+
+      if (
+        shipStagingModeRef.current &&
+        event.code in shipStagingKeysRef.current
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        shipStagingKeysRef.current[event.code] = true;
+      }
+    };
+
+    const handleShipStagingKeyUp = (event: KeyboardEvent) => {
+      if (
+        shipStagingModeRef.current &&
+        event.code in shipStagingKeysRef.current
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        shipStagingKeysRef.current[event.code] = false;
+      }
+    };
+
+    window.addEventListener("keydown", handleShipStagingKeyDown, {
+      capture: true,
+    });
+    window.addEventListener("keyup", handleShipStagingKeyUp, { capture: true });
+
     const cleanup = () => {
       stopRenderLoop();
       window.removeEventListener("resize", handleResize);
+      window.removeEventListener("keydown", handleShipStagingKeyDown, {
+        capture: true,
+      });
+      window.removeEventListener("keyup", handleShipStagingKeyUp, {
+        capture: true,
+      });
       window.removeEventListener("keydown", handleSnapshotKey);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("click", onClick);
