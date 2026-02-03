@@ -160,7 +160,7 @@ const SpaceshipHUD: React.FC<Props> = ({
   onMissionControlClear = () => {},
   onMissionControlCopy = () => {},
 }) => {
-  const [cosmosExpanded, setCosmosExpanded] = useState(true);
+  const [cosmosExpanded, setCosmosExpanded] = useState(false);
   const [contextualPosition, setContextualPosition] = useState({
     right: 20,
     bottom: 20,
@@ -315,12 +315,32 @@ const SpaceshipHUD: React.FC<Props> = ({
   // Locate the left HUD container injected by CosmicNavigation for resizing/portals
   useEffect(() => {
     if (typeof document === "undefined") return;
-    const el = document.querySelector(
-      ".spaceship-hud__left",
-    ) as HTMLElement | null;
-    if (el) {
-      setLeftPanelEl(el);
-    }
+
+    const findLeftPanel = () => {
+      const el = document.querySelector(
+        ".spaceship-hud__left",
+      ) as HTMLElement | null;
+      if (el) {
+        setLeftPanelEl(el);
+        return true;
+      }
+      return false;
+    };
+
+    if (findLeftPanel()) return;
+
+    const observer = new MutationObserver(() => {
+      if (findLeftPanel()) {
+        observer.disconnect();
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => observer.disconnect();
   }, []);
 
   // Track viewport for percentage-based sizing
@@ -850,7 +870,7 @@ const SpaceshipHUD: React.FC<Props> = ({
           className="hud-resize-handle hud-resize-handle--footer"
           onMouseDown={startResize("footer")}
         />
-        {/* Left Panel: TELEMETRY Console */}
+        {/* Left Panel: Universe Logs */}
         <div
           style={{
             flex: "1 1 40%",
@@ -884,24 +904,6 @@ const SpaceshipHUD: React.FC<Props> = ({
               Universe Logs
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={onConsoleToggle}
-                className="hud-button"
-                style={{
-                  background: consoleVisible ? "#e8c547" : "#2a3340",
-                  border: "none",
-                  color: consoleVisible ? "#0f1419" : "#fff",
-                  padding: "5px 10px",
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  fontSize: 11,
-                  fontFamily: "'Rajdhani', sans-serif",
-                  letterSpacing: 0.5,
-                }}
-              >
-                {consoleVisible ? "▼" : "▲"} TELEMETRY
-              </button>
               <button
                 onClick={onConsoleCopy}
                 className="hud-button"
@@ -958,7 +960,7 @@ const SpaceshipHUD: React.FC<Props> = ({
                     fontFamily: "'Rajdhani', monospace",
                   }}
                 >
-                  [ TELEMETRY CONSOLE - READY ]
+                  [ UNIVERSE LOGS - READY ]
                 </div>
               ) : (
                 consoleLogs
@@ -1280,7 +1282,7 @@ const SpaceshipHUD: React.FC<Props> = ({
                     Moon Spin Speed:{" "}
                     {cosmosOptions.spaceMoonSpinSpeed !== undefined
                       ? cosmosOptions.spaceMoonSpinSpeed.toFixed(1)
-                      : "1.0"}
+                      : "0.1"}
                     x
                   </label>
                   <input
@@ -1291,7 +1293,7 @@ const SpaceshipHUD: React.FC<Props> = ({
                     value={
                       cosmosOptions.spaceMoonSpinSpeed !== undefined
                         ? (cosmosOptions.spaceMoonSpinSpeed as number)
-                        : 1.0
+                        : 0.1
                     }
                     onChange={(e) =>
                       handleCosmosOptionChange(

@@ -69,11 +69,11 @@ export const updateOrbit = (params: {
     // Self rotation: use moon spin speed control for moons, base spin for planets
     const isMoonBody = item.mesh.userData?.isMoon === true;
 
-    // Get moon spin speed multiplier from options (default to 1.0 if not set)
+    // Get moon spin speed multiplier from options (default to 0.1 if not set)
     const moonSpinMultiplier =
       options.spaceMoonSpinSpeed !== undefined
         ? options.spaceMoonSpinSpeed
-        : 1.0;
+        : 0.1;
 
     const baseSpin = isMoonBody ? 0.02 * moonSpinMultiplier : 0.008; // moons use multiplier
 

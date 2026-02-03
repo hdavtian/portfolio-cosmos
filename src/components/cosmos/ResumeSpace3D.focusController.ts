@@ -103,7 +103,7 @@ export const createMoonFocusController = (deps: {
           optionsRef.current.spaceMoonOrbitSpeed ?? 0.01;
       }
       lastMoonSpinSpeedRef.current =
-        optionsRef.current.spaceMoonSpinSpeed ?? 1.0;
+        optionsRef.current.spaceMoonSpinSpeed ?? 0.1;
       optionsRef.current = {
         ...optionsRef.current,
         spaceMoonSpinSpeed: 0.1,

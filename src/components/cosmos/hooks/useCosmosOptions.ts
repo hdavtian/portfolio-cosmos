@@ -12,10 +12,18 @@ export const useCosmosOptions = (params: {
 }): MutableRefObject<DiagramStyleOptions> => {
   const { options, sceneRef, frozenSystemStateRef } = params;
 
-  const optionsRef = useRef({ spaceMoonOrbitSpeed: 0.01, ...options });
+  const optionsRef = useRef({
+    spaceMoonOrbitSpeed: 0.01,
+    spaceMoonSpinSpeed: 0.1,
+    ...options,
+  });
 
   useEffect(() => {
-    optionsRef.current = { spaceMoonOrbitSpeed: 0.01, ...options };
+    optionsRef.current = {
+      spaceMoonOrbitSpeed: 0.01,
+      spaceMoonSpinSpeed: 0.1,
+      ...options,
+    };
 
     if (sceneRef.current.bloomPass && options.spaceSunIntensity !== undefined) {
       const bloomStrength = (options.spaceSunIntensity / 5) * 2;
