@@ -162,7 +162,7 @@ export const createAuroraHaloTexture = (): THREE.CanvasTexture => {
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.premultiplyAlpha = true;
-  (tex as any).encoding = (THREE as any).sRGBEncoding;
+  tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
   return tex;
 };
@@ -196,7 +196,7 @@ export const createRingHaloTexture = (): THREE.CanvasTexture => {
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.premultiplyAlpha = true;
-  (tex as any).encoding = (THREE as any).sRGBEncoding;
+  tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
   return tex;
 };

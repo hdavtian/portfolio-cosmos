@@ -70,6 +70,12 @@ type Props = {
   onContentAction?: (action: string) => void;
   cosmosOptions?: DiagramStyleOptions;
   onCosmosOptionsChange?: (options: DiagramStyleOptions) => void;
+  shipMovementDebug?: boolean;
+  onShipMovementDebugChange?: (value: boolean) => void;
+  shipMovementDebugPanel?: React.ReactNode;
+  systemStatusLogs?: string[];
+  onSystemStatusCopy?: () => void;
+  onSystemStatusClear?: () => void;
   onConsoleLog?: (message: string) => void;
   missionControlLogs?: string[];
   onMissionControlLog?: (message: string) => void;
@@ -152,6 +158,12 @@ const SpaceshipHUD: React.FC<Props> = ({
   onContentAction,
   cosmosOptions = {},
   onCosmosOptionsChange = () => {},
+  shipMovementDebug = false,
+  onShipMovementDebugChange,
+  shipMovementDebugPanel,
+  systemStatusLogs = [],
+  onSystemStatusCopy,
+  onSystemStatusClear,
   onConsoleLog,
   hudVisible = true,
   missionControlLogs = [],
@@ -161,6 +173,7 @@ const SpaceshipHUD: React.FC<Props> = ({
   onMissionControlCopy = () => {},
 }) => {
   const [cosmosExpanded, setCosmosExpanded] = useState(false);
+  const [debugExpanded, setDebugExpanded] = useState(false);
   const [contextualPosition, setContextualPosition] = useState({
     right: 20,
     bottom: 20,
@@ -1073,6 +1086,22 @@ const SpaceshipHUD: React.FC<Props> = ({
         >
           <div style={footerHeaderStyle}>
             <span style={footerHeaderTitleStyle}>SYSTEM STATUS</span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                onClick={() => onSystemStatusCopy?.()}
+                style={footerHeaderButtonStyle}
+                title="Copy system status"
+              >
+                COPY
+              </button>
+              <button
+                onClick={() => onSystemStatusClear?.()}
+                style={footerHeaderButtonStyle}
+                title="Clear system status"
+              >
+                CLEAR
+              </button>
+            </div>
           </div>
           <div
             style={{
@@ -1094,15 +1123,33 @@ const SpaceshipHUD: React.FC<Props> = ({
                 SPEED: {Math.round(speed)} u/s
               </div>
             )}
-            <div
-              style={{
-                color: "#50fa7b",
-                fontSize: 11,
-                fontFamily: "'Rajdhani', monospace",
-              }}
-            >
-              ● ALL SYSTEMS NOMINAL
-            </div>
+            {systemStatusLogs.length === 0 ? (
+              <div
+                style={{
+                  color: "#50fa7b",
+                  fontSize: 11,
+                  fontFamily: "'Rajdhani', monospace",
+                }}
+              >
+                ● ALL SYSTEMS NOMINAL
+              </div>
+            ) : (
+              systemStatusLogs.map((log, index) => (
+                <div
+                  key={index}
+                  style={{
+                    color: "#9ec2ff",
+                    fontSize: 11,
+                    fontFamily: "'Rajdhani', monospace",
+                    lineHeight: 1.4,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {log}
+                </div>
+              ))
+            )}
           </div>
         </div>
       </footer>
@@ -1562,6 +1609,78 @@ const SpaceshipHUD: React.FC<Props> = ({
                 </div>
               </div>
             )}
+
+            <div style={{ marginTop: 16 }}>
+              <div
+                onClick={() => setDebugExpanded(!debugExpanded)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  cursor: "pointer",
+                  padding: "8px 0",
+                }}
+              >
+                <div
+                  style={{
+                    color: "#e8c547",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    fontFamily: "'Rajdhani', sans-serif",
+                    letterSpacing: 1,
+                  }}
+                >
+                  DEBUG OPTIONS
+                </div>
+                <div style={{ color: "#e8c547", fontSize: 11 }}>
+                  {debugExpanded ? "▼" : "▶"}
+                </div>
+              </div>
+
+              {debugExpanded && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      color: "#c8d0d8",
+                      fontSize: 12,
+                      fontFamily: "'Rajdhani', sans-serif",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={shipMovementDebug}
+                      onChange={(event) =>
+                        onShipMovementDebugChange?.(event.target.checked)
+                      }
+                    />
+                    Ship movement debug
+                  </label>
+                  {shipMovementDebug && shipMovementDebugPanel && (
+                    <div
+                      style={{
+                        marginTop: 4,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                      }}
+                    >
+                      {shipMovementDebugPanel}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>,
           cosmosContainer,
         )}

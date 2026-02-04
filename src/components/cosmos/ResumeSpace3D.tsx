@@ -148,6 +148,8 @@ export default function ResumeSpace3D({
 
   // HUD visibility state
   const [hudVisible, setHudVisible] = useState(true);
+  const [shipMovementDebug, setShipMovementDebug] = useState(false);
+  const [systemStatusLogs, setSystemStatusLogs] = useState<string[]>([]);
 
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
@@ -318,14 +320,21 @@ export default function ResumeSpace3D({
     ShiftLeft: false,
     KeyQ: false, // Strafe left
     KeyE: false, // Strafe right
-    KeyZ: false, // Roll left
-    KeyC: false, // Roll right
+    KeyW: false, // Forward
+    KeyS: false, // Backward
+    KeyA: false, // Strafe left
+    KeyD: false, // Strafe right
+    KeyR: false, // Ascend
+    KeyF: false, // Descend
+    KeyX: false, // Brake
+    KeyC: false, // Toggle cockpit
   });
 
   const [debugSnapToShip, setDebugSnapToShip] = useState(false);
   const debugSnapToShipRef = useRef(false);
   const startIntroSequenceRef = useRef<(() => void) | null>(null);
 
+  // Debug ship label state
   const [debugShipLabelMode, setDebugShipLabelMode] = useState(false);
   const debugShipLabelModeRef = useRef(false);
   const [debugShipLabel, setDebugShipLabel] =
@@ -347,8 +356,6 @@ export default function ResumeSpace3D({
     y: number;
     t: number;
   } | null>(null);
-
-  // Autopilot navigation state is handled by useNavigationSystem
 
   // Build navigation targets from resume data
   const navigationTargets = [
@@ -596,6 +603,13 @@ export default function ResumeSpace3D({
     },
     [],
   );
+
+  const appendSystemStatusLog = useCallback((message: string) => {
+    setSystemStatusLogs((prev) => {
+      const next = [...prev, message];
+      return next.length > 8 ? next.slice(-8) : next;
+    });
+  }, []);
 
   const { initializeScene, setGlobalCleanup } = useThreeScene({
     mountRef,
@@ -2116,13 +2130,7 @@ export default function ResumeSpace3D({
               transform: "translateX(-50%)",
               zIndex: 20000,
               display: "flex",
-              flexWrap: "wrap",
-              gap: "8px",
               alignItems: "center",
-              padding: "6px 10px",
-              borderRadius: 18,
-              background: "rgba(15,20,25,0.35)",
-              backdropFilter: "blur(6px)",
             }}
           >
             <button
@@ -2144,717 +2152,797 @@ export default function ResumeSpace3D({
             >
               {hudVisible ? "Hide HUD" : "Show HUD"}
             </button>
-            <button
-              onClick={() => {
-                if (!spaceshipRef.current) return;
-                const ship = spaceshipRef.current;
-                if (shipCinematicRef.current) {
-                  shipCinematicRef.current.active = false;
-                  shipCinematicRef.current = null;
-                }
-                setFollowingSpaceship(false);
-                followingSpaceshipRef.current = false;
-                setManualFlightMode(false);
-                manualFlightModeRef.current = false;
-                setInsideShip(false);
-                insideShipRef.current = false;
-                setShipViewMode("exterior");
-                shipViewModeRef.current = "exterior";
-                const randomOffset = new THREE.Vector3(
-                  (Math.random() - 0.5) * 1600,
-                  (Math.random() - 0.5) * 800,
-                  (Math.random() - 0.5) * 1600,
-                );
-                ship.position.copy(randomOffset);
-              }}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 18,
-                border: "1px solid rgba(100, 149, 237, 0.6)",
-                background: "rgba(15,20,25,0.7)",
-                color: "#9ec2ff",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontWeight: 700,
-                letterSpacing: 0.5,
-                cursor: "pointer",
-                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
-              }}
-            >
-              Random Ship
-            </button>
-            <button
-              onClick={() => {
-                if (!spaceshipRef.current) return;
-                const ship = spaceshipRef.current;
-                if (shipCinematicRef.current) {
-                  shipCinematicRef.current.active = false;
-                  shipCinematicRef.current = null;
-                }
-                setFollowingSpaceship(false);
-                followingSpaceshipRef.current = false;
-                setManualFlightMode(false);
-                manualFlightModeRef.current = false;
-
-                const startPos = ship.position.clone();
-                const endPos = getRandomEndPosNearPlanets();
-                if (endPos.distanceTo(startPos) < 300) {
-                  endPos.add(new THREE.Vector3(300, 150, -350));
-                }
-
-                const controlPos = startPos.clone().lerp(endPos, 0.5);
-                const distance = startPos.distanceTo(endPos);
-                const duration = THREE.MathUtils.clamp(
-                  4000 * (distance / 600),
-                  3000,
-                  9000,
-                );
-
-                shipCinematicRef.current = {
-                  active: true,
-                  phase: "approach",
-                  startTime: performance.now(),
-                  duration,
-                  startPos: startPos.clone(),
-                  controlPos,
-                  endPos: endPos.clone(),
-                  startQuat: ship.quaternion.clone(),
-                  endQuat: ship.quaternion.clone(),
-                };
-              }}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 18,
-                border: "1px solid rgba(100, 149, 237, 0.6)",
-                background: "rgba(15,20,25,0.7)",
-                color: "#9ec2ff",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontWeight: 700,
-                letterSpacing: 0.5,
-                cursor: "pointer",
-                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
-              }}
-            >
-              Random Straight
-            </button>
-            <button
-              onClick={() => {
-                if (!spaceshipRef.current) return;
-                const ship = spaceshipRef.current;
-                if (shipCinematicRef.current) {
-                  shipCinematicRef.current.active = false;
-                  shipCinematicRef.current = null;
-                }
-                setFollowingSpaceship(false);
-                followingSpaceshipRef.current = false;
-                setManualFlightMode(false);
-                manualFlightModeRef.current = false;
-
-                const startPos = ship.position.clone();
-                const endPos = getRandomEndPosNearPlanets();
-                if (endPos.distanceTo(startPos) < 300) {
-                  endPos.add(new THREE.Vector3(-350, 120, 280));
-                }
-
-                const cameraDir = new THREE.Vector3();
-                sceneRef.current.camera?.getWorldDirection(cameraDir);
-                const cameraUp = new THREE.Vector3(0, 1, 0);
-                const cameraRight = new THREE.Vector3()
-                  .crossVectors(cameraDir, cameraUp)
-                  .normalize();
-
-                const controlPos = startPos
-                  .clone()
-                  .lerp(endPos, 0.45)
-                  .add(cameraRight.multiplyScalar((Math.random() - 0.5) * 200))
-                  .add(cameraUp.multiplyScalar((Math.random() - 0.5) * 160));
-                const controlPos2 = startPos
-                  .clone()
-                  .lerp(endPos, 0.75)
-                  .add(cameraRight.multiplyScalar((Math.random() - 0.5) * 180))
-                  .add(cameraUp.multiplyScalar((Math.random() - 0.5) * 140));
-
-                const distance = startPos.distanceTo(endPos);
-                const duration = THREE.MathUtils.clamp(
-                  4500 * (distance / 600),
-                  3500,
-                  10000,
-                );
-
-                shipCinematicRef.current = {
-                  active: true,
-                  phase: "approach",
-                  startTime: performance.now(),
-                  duration,
-                  startPos: startPos.clone(),
-                  controlPos,
-                  controlPos2,
-                  endPos: endPos.clone(),
-                  startQuat: ship.quaternion.clone(),
-                  endQuat: ship.quaternion.clone(),
-                };
-              }}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 18,
-                border: "1px solid rgba(100, 149, 237, 0.6)",
-                background: "rgba(15,20,25,0.7)",
-                color: "#9ec2ff",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontWeight: 700,
-                letterSpacing: 0.5,
-                cursor: "pointer",
-                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
-              }}
-            >
-              Random Curved
-            </button>
-            <button
-              onClick={() => {
-                startIntroSequenceRef.current?.();
-              }}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 18,
-                border: "1px solid rgba(232, 197, 71, 0.6)",
-                background: "rgba(15,20,25,0.7)",
-                color: "#e8c547",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontWeight: 700,
-                letterSpacing: 0.5,
-                cursor: "pointer",
-                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
-              }}
-            >
-              Home
-            </button>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "6px 10px",
-                borderRadius: 14,
-                border: "1px solid rgba(232, 197, 71, 0.4)",
-                background: "rgba(15,20,25,0.7)",
-                color: "#e8c547",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontWeight: 700,
-                letterSpacing: 0.4,
-                cursor: "pointer",
-                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={debugSnapToShip}
-                onChange={(event) => {
-                  const next = event.target.checked;
-                  setDebugSnapToShip(next);
-                  debugSnapToShipRef.current = next;
-                }}
-                style={{ cursor: "pointer" }}
-              />
-              Snap
-            </label>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "6px 10px",
-                borderRadius: 14,
-                border: "1px solid rgba(100, 149, 237, 0.5)",
-                background: "rgba(15,20,25,0.7)",
-                color: "#9ec2ff",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontWeight: 700,
-                letterSpacing: 0.4,
-                cursor: "pointer",
-                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={debugShipLabelMode}
-                onChange={(event) => {
-                  const next = event.target.checked;
-                  setDebugShipLabelMode(next);
-                  debugShipLabelModeRef.current = next;
-                }}
-                style={{ cursor: "pointer" }}
-              />
-              Label Ship
-            </label>
-            <select
-              value={debugShipLabel}
-              onChange={(event) =>
-                setDebugShipLabel(event.target.value as ShipLabelTarget)
-              }
-              style={{
-                padding: "6px 8px",
-                borderRadius: 12,
-                border: "1px solid rgba(100, 149, 237, 0.5)",
-                background: "rgba(15,20,25,0.7)",
-                color: "#9ec2ff",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontWeight: 700,
-                letterSpacing: 0.4,
-                cursor: "pointer",
-                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
-              }}
-            >
-              <option value="front">
-                Front{debugShipLabels.front ? " ✓" : ""}
-              </option>
-              <option value="rear">
-                Rear{debugShipLabels.rear ? " ✓" : ""}
-              </option>
-              <option value="left">
-                Left{debugShipLabels.left ? " ✓" : ""}
-              </option>
-              <option value="right">
-                Right{debugShipLabels.right ? " ✓" : ""}
-              </option>
-              <option value="top">Top{debugShipLabels.top ? " ✓" : ""}</option>
-              <option value="bottom">
-                Bottom{debugShipLabels.bottom ? " ✓" : ""}
-              </option>
-              <option value="cockpit">
-                Cockpit{debugShipLabels.cockpit ? " ✓" : ""}
-              </option>
-            </select>
-            <button
-              onClick={() => resetShipLabels()}
-              style={{
-                padding: "8px 10px",
-                borderRadius: 14,
-                border: "1px solid rgba(255, 120, 120, 0.6)",
-                background: "rgba(30,10,10,0.7)",
-                color: "#ff8c8c",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontWeight: 700,
-                letterSpacing: 0.4,
-                cursor: "pointer",
-                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
-              }}
-            >
-              Reset Labels
-            </button>
           </div>
 
-          <div
-            style={{
-              position: "absolute",
-              bottom: "30px",
-              right: "450px",
-              color: "rgba(212, 175, 55, 0.9)",
-              fontFamily: "'Rajdhani', sans-serif",
-              fontSize: "12px",
-              textAlign: "right",
-              pointerEvents: "none",
-              userSelect: "none",
-              zIndex: 10,
-              textShadow: "0 2px 4px rgba(0,0,0,0.8)",
-            }}
-          >
-            <p style={{ margin: "4px 0" }}>↔ DRAG TO ROTATE</p>
-            <p style={{ margin: "4px 0" }}>↕ SCROLL TO ZOOM</p>
-            <p style={{ margin: "4px 0" }}>• CLICK PLANETS TO VISIT</p>
-          </div>
-        </div>
-
-        {/* Spaceship HUD Interface */}
-        <SpaceshipHUD
-          hudVisible={hudVisible}
-          userName="HARMA DAVTIAN"
-          userTitle="Lead Full Stack Engineer"
-          consoleLogs={consoleLogs}
-          consoleVisible={consoleVisible}
-          onConsoleToggle={() => setConsoleVisible(!consoleVisible)}
-          onConsoleCopy={() => {
-            navigator.clipboard.writeText(consoleLogs.join("\n"));
-          }}
-          onConsoleClear={() => {
-            setConsoleLogs([]);
-            consoleLogsRef.current = [];
-          }}
-          missionControlLogs={missionControlLogs}
-          onMissionControlLog={missionLog}
-          onMissionControlClear={() => {
-            setMissionControlLogs([]);
-            missionControlLogsRef.current = [];
-          }}
-          onMissionControlCopy={() => {
-            navigator.clipboard.writeText(missionControlLogs.join("\n"));
-          }}
-          tourActive={tourActive}
-          tourWaypoint={tourWaypoint}
-          tourProgress={tourProgress}
-          onTourPrevious={() => tourGuideRef.current?.previousWaypoint()}
-          onTourNext={() => tourGuideRef.current?.nextWaypoint()}
-          onTourRestart={() => tourGuideRef.current?.restartTour()}
-          onTourEnd={() => {
-            tourGuideRef.current?.stopTour();
-            setTourActive(false);
-            setOverlayContent(null);
-            setContentLoading(false);
-            vlog("🛑 Tour ended");
-          }}
-          followingSpaceship={followingSpaceship}
-          insideShip={insideShip}
-          shipViewMode={shipViewMode}
-          onEnterShip={() => {
-            setInsideShip(true);
-            insideShipRef.current = true;
-            setShipViewMode("interior");
-            shipViewModeRef.current = "interior";
-
-            // Initialize camera inside ship at cabin location (right front)
-            if (
-              spaceshipRef.current &&
-              sceneRef.current.camera &&
-              sceneRef.current.controls
-            ) {
-              const ship = spaceshipRef.current;
-              const shipWorldPos = new THREE.Vector3();
-              const shipWorldQuat = new THREE.Quaternion();
-              ship.getWorldPosition(shipWorldPos);
-              ship.getWorldQuaternion(shipWorldQuat);
-
-              // Cabin is at right front (1.5 right, 0.2 up, 1 forward in ship local space)
-              const cabinLocalPos = new THREE.Vector3(1.5, 0.2, 1);
-              const cabinWorldPos = cabinLocalPos
-                .clone()
-                .applyQuaternion(shipWorldQuat)
-                .add(shipWorldPos);
-
-              // Camera looks into cabin center
-              const cabinLookTarget = new THREE.Vector3(0.5, 0, 0)
-                .applyQuaternion(shipWorldQuat)
-                .add(shipWorldPos);
-
-              sceneRef.current.camera.position.copy(cabinWorldPos);
-              sceneRef.current.controls.target.copy(cabinLookTarget);
-              sceneRef.current.controls.update();
-            }
-
-            vlog("🛸 Entering ship - interior view (cabin)");
-          }}
-          onExitShip={() => {
-            setInsideShip(false);
-            insideShipRef.current = false;
-            setShipViewMode("exterior");
-            shipViewModeRef.current = "exterior";
-            vlog("🚪 Exiting ship - exterior view");
-          }}
-          onGoToCockpit={() => {
-            setShipViewMode("cockpit");
-            shipViewModeRef.current = "cockpit";
-
-            // Position camera in cockpit looking forward
-            if (
-              spaceshipRef.current &&
-              sceneRef.current.camera &&
-              sceneRef.current.controls
-            ) {
-              const ship = spaceshipRef.current;
-              const shipWorldPos = new THREE.Vector3();
-              const shipWorldQuat = new THREE.Quaternion();
-              ship.getWorldPosition(shipWorldPos);
-              ship.getWorldQuaternion(shipWorldQuat);
-
-              // Cockpit position (center, slightly up, forward)
-              const cockpitLocalPos = new THREE.Vector3(0, 0.5, 3);
-              const cockpitWorldPos = cockpitLocalPos
-                .clone()
-                .applyQuaternion(shipWorldQuat)
-                .add(shipWorldPos);
-
-              // Look forward through window
-              const windowTarget = new THREE.Vector3(0, 0.5, 10)
-                .applyQuaternion(shipWorldQuat)
-                .add(shipWorldPos);
-
-              sceneRef.current.camera.position.copy(cockpitWorldPos);
-              sceneRef.current.controls.target.copy(windowTarget);
-              sceneRef.current.controls.update();
-            }
-
-            vlog("✈️ Moving to cockpit");
-          }}
-          onGoToInterior={() => {
-            setShipViewMode("interior");
-            shipViewModeRef.current = "interior";
-
-            // Return to cabin location
-            if (
-              spaceshipRef.current &&
-              sceneRef.current.camera &&
-              sceneRef.current.controls
-            ) {
-              const ship = spaceshipRef.current;
-              const shipWorldPos = new THREE.Vector3();
-              const shipWorldQuat = new THREE.Quaternion();
-              ship.getWorldPosition(shipWorldPos);
-              ship.getWorldQuaternion(shipWorldQuat);
-
-              // Cabin position (right front)
-              const cabinLocalPos = new THREE.Vector3(1.5, 0.2, 1);
-              const cabinWorldPos = cabinLocalPos
-                .clone()
-                .applyQuaternion(shipWorldQuat)
-                .add(shipWorldPos);
-
-              // Look into cabin center
-              const cabinLookTarget = new THREE.Vector3(0.5, 0, 0)
-                .applyQuaternion(shipWorldQuat)
-                .add(shipWorldPos);
-
-              sceneRef.current.camera.position.copy(cabinWorldPos);
-              sceneRef.current.controls.target.copy(cabinLookTarget);
-              sceneRef.current.controls.update();
-            }
-
-            vlog("🚪 Moving to main interior (cabin)");
-          }}
-          shipExteriorLights={shipExteriorLights}
-          onShipExteriorLightsChange={setShipExteriorLights}
-          shipInteriorLights={shipInteriorLights}
-          onShipInteriorLightsChange={setShipInteriorLights}
-          manualFlightMode={manualFlightMode}
-          onManualFlightModeChange={(value) => {
-            vlog(
-              `🕹️ Flight mode changed to: ${value ? "MANUAL" : "AUTOPILOT"}`,
-            );
-            setManualFlightMode(value);
-            manualFlightModeRef.current = value;
-
-            // Reset manual flight state when switching modes
-            if (value) {
-              // Entering manual mode - reset physics
-              vlog(`   Resetting flight physics for manual mode`);
-              manualFlightRef.current.velocity.set(0, 0, 0);
-              manualFlightRef.current.acceleration = 0;
-              manualFlightRef.current.currentSpeed = 0;
-              manualFlightRef.current.pitch = 0;
-              manualFlightRef.current.yaw = 0;
-              manualFlightRef.current.roll = 0;
-              manualFlightRef.current.targetPitch = 0;
-              manualFlightRef.current.targetYaw = 0;
-              manualFlightRef.current.targetRoll = 0;
-              manualFlightRef.current.isAccelerating = false;
-              vlog("✋ Manual flight mode activated - Take control!");
-            } else {
-              // Returning to autopilot
-              vlog("🤖 Autopilot engaged - Ship will resume autonomous flight");
-            }
-          }}
-          manualFlightSpeed={manualFlightRef.current.currentSpeed}
-          manualFlightMaxSpeed={manualFlightRef.current.maxSpeed}
-          keyboardState={keyboardStateRef.current}
-          keyboardUpdateTrigger={keyboardUpdateTrigger}
-          invertControls={invertControls}
-          onInvertControlsChange={(value) => {
-            setInvertControls(value);
-            invertControlsRef.current = value;
-          }}
-          controlSensitivity={controlSensitivity}
-          onControlSensitivityChange={(value) => {
-            setControlSensitivity(value);
-            controlSensitivityRef.current = value;
-          }}
-          onStopFollowing={() => {
-            setFollowingSpaceship(false);
-            followingSpaceshipRef.current = false;
-            setInsideShip(false);
-            insideShipRef.current = false;
-            setShipViewMode("exterior");
-            shipViewModeRef.current = "exterior";
-            if (sceneRef.current.controls) {
-              sceneRef.current.controls.enabled = true;
-            }
-            vlog("🛑 Stopped following spaceship");
-          }}
-          navigationTargets={navigationTargets}
-          onNavigate={handleQuickNav}
-          currentTarget={currentNavigationTarget}
-          navigationDistance={navigationDistance}
-          navigationETA={navigationETA}
-          isTransitioning={false}
-          speed={0}
-          content={overlayContent}
-          contentLoading={contentLoading}
-          cosmosOptions={options}
-          onCosmosOptionsChange={(newOptions) => {
-            // Pass the options change up to the parent component
-            if (onOptionsChange) {
-              onOptionsChange(newOptions);
-            }
-          }}
-          onConsoleLog={(message) => {
-            vlog(message);
-          }}
-          onContentAction={(action: string) => {
-            vlog(`🎬 Content action received: ${action}`);
-
-            // Handle different actions
-            if (action.startsWith("tour:")) {
-              const tourType = action.replace("tour:", "");
-              vlog(`🔍 Tour type: ${tourType}`);
-              vlog(`📦 tourBuilderRef exists: ${!!tourBuilderRef.current}`);
-              vlog(`📦 tourGuideRef exists: ${!!tourGuideRef.current}`);
-
-              if (tourBuilderRef.current && tourGuideRef.current) {
-                vlog(`🚀 Starting ${tourType} tour...`);
-                let tour;
-                switch (tourType) {
-                  case "career-journey":
-                    tour = tourBuilderRef.current.createCareerJourneyTour();
-                    vlog(
-                      `📋 Tour created with ${tour?.waypoints.length || 0} waypoints`,
-                    );
-                    break;
-                  case "technical-deep-dive":
-                    tour = tourBuilderRef.current.createTechnicalDeepDiveTour();
-                    break;
-                  case "leadership-story":
-                    tour = tourBuilderRef.current.createLeadershipStoryTour();
-                    break;
-                }
-
-                if (tour) {
-                  vlog(`✅ Tour object valid, starting...`);
-                  // Resolve experience-moon targets to live world positions
-                  const resolvedWaypoints = tour.waypoints.map((wp) => {
-                    try {
-                      if (wp.id && wp.id.startsWith("experience-moon-")) {
-                        const candidate =
-                          (wp.content && (wp.content as any).title) || wp.name;
-                        let moonMesh: THREE.Mesh | undefined;
-                        sceneRef.current.scene?.traverse((object) => {
-                          if (
-                            object instanceof THREE.Mesh &&
-                            object.userData.planetName
-                          ) {
-                            const pname = (
-                              object.userData.planetName || ""
-                            ).toLowerCase();
-                            if (
-                              candidate &&
-                              pname.includes(
-                                (candidate || "").toLowerCase().split(" ")[0],
-                              )
-                            ) {
-                              moonMesh = object as THREE.Mesh;
-                            }
-                          }
-                        });
-                        if (moonMesh) {
-                          const worldPos = new THREE.Vector3();
-                          moonMesh.getWorldPosition(worldPos);
-                          const offset = new THREE.Vector3(80, 40, 60);
-                          return {
-                            ...wp,
-                            target: {
-                              ...wp.target,
-                              lookAt: worldPos.clone(),
-                              position: worldPos.clone().add(offset),
-                            },
-                          } as typeof wp;
-                        }
-                      }
-                    } catch (e) {
-                      vlog("⚠️ Error resolving waypoint to mesh");
+          {/* Spaceship HUD Interface */}
+          <SpaceshipHUD
+            hudVisible={hudVisible}
+            userName="HARMA DAVTIAN"
+            userTitle="Lead Full Stack Engineer"
+            shipMovementDebug={shipMovementDebug}
+            onShipMovementDebugChange={setShipMovementDebug}
+            shipMovementDebugPanel={
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                <div
+                  style={{
+                    color: "#e8c547",
+                    fontSize: 12,
+                    fontFamily: "'Rajdhani', sans-serif",
+                    letterSpacing: 0.6,
+                  }}
+                >
+                  KEY COMBO HELP
+                </div>
+                <button
+                  onClick={() =>
+                    appendSystemStatusLog(
+                      "Shift+L: Camera snapshot (CAMERA_SNAPSHOT).\nCaptures camera position, target, rotation, FOV, zoom, near/far.",
+                    )
+                  }
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 12,
+                    border: "1px solid rgba(232, 197, 71, 0.6)",
+                    background: "rgba(15,20,25,0.7)",
+                    color: "#e8c547",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                  }}
+                >
+                  Log Shift+L details
+                </button>
+                <button
+                  onClick={() =>
+                    appendSystemStatusLog(
+                      "Shift+M: Toggle Ship Staging Mode.\nControls: WASD/RF move, arrows/QE rotate, Shift = faster.\nShift+P: Ship snapshot (SHIP_SNAPSHOT).",
+                    )
+                  }
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 12,
+                    border: "1px solid rgba(100, 149, 237, 0.6)",
+                    background: "rgba(15,20,25,0.7)",
+                    color: "#9ec2ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                  }}
+                >
+                  Log Shift+M details
+                </button>
+                <button
+                  onClick={() =>
+                    appendSystemStatusLog(
+                      "Shift+J: Dump Ship Labels (SHIP_DEBUG_LABELS).\nUse Label Ship mode + click to mark points, then Shift+J to log.",
+                    )
+                  }
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 12,
+                    border: "1px solid rgba(120, 255, 170, 0.45)",
+                    background: "rgba(15,20,25,0.7)",
+                    color: "#7dffb1",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                  }}
+                >
+                  Log Shift+J details
+                </button>
+                <button
+                  onClick={() => {
+                    if (!spaceshipRef.current) return;
+                    const ship = spaceshipRef.current;
+                    if (shipCinematicRef.current) {
+                      shipCinematicRef.current.active = false;
+                      shipCinematicRef.current = null;
                     }
-                    return wp;
-                  });
+                    setFollowingSpaceship(false);
+                    followingSpaceshipRef.current = false;
+                    setManualFlightMode(false);
+                    manualFlightModeRef.current = false;
+                    setInsideShip(false);
+                    insideShipRef.current = false;
+                    setShipViewMode("exterior");
+                    shipViewModeRef.current = "exterior";
+                    const randomOffset = new THREE.Vector3(
+                      (Math.random() - 0.5) * 1600,
+                      (Math.random() - 0.5) * 800,
+                      (Math.random() - 0.5) * 1600,
+                    );
+                    ship.position.copy(randomOffset);
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(100, 149, 237, 0.6)",
+                    background: "rgba(15,20,25,0.7)",
+                    color: "#9ec2ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                    boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+                  }}
+                >
+                  Random Ship
+                </button>
+                <button
+                  onClick={() => {
+                    if (!spaceshipRef.current) return;
+                    const ship = spaceshipRef.current;
+                    if (shipCinematicRef.current) {
+                      shipCinematicRef.current.active = false;
+                      shipCinematicRef.current = null;
+                    }
+                    setFollowingSpaceship(false);
+                    followingSpaceshipRef.current = false;
+                    setManualFlightMode(false);
+                    manualFlightModeRef.current = false;
 
-                  setTourActive(true);
-                  setOverlayContent(null);
-                  setContentLoading(false);
-                  tourGuideRef.current.startTour(resolvedWaypoints);
-                  vlog(
-                    `✨ Tour started: ${tour.title} (${tour.waypoints.length} waypoints)`,
-                  );
-                } else {
-                  vlog(`❌ Tour object is null or undefined`);
-                }
-              } else {
-                vlog(`❌ Tour refs not initialized`);
+                    const startPos = ship.position.clone();
+                    const endPos = getRandomEndPosNearPlanets();
+                    if (endPos.distanceTo(startPos) < 300) {
+                      endPos.add(new THREE.Vector3(300, 150, -350));
+                    }
+
+                    const controlPos = startPos.clone().lerp(endPos, 0.5);
+                    const distance = startPos.distanceTo(endPos);
+                    const duration = THREE.MathUtils.clamp(
+                      4000 * (distance / 600),
+                      3000,
+                      9000,
+                    );
+
+                    shipCinematicRef.current = {
+                      active: true,
+                      phase: "approach",
+                      startTime: performance.now(),
+                      duration,
+                      startPos: startPos.clone(),
+                      controlPos,
+                      endPos: endPos.clone(),
+                      startQuat: ship.quaternion.clone(),
+                      endQuat: ship.quaternion.clone(),
+                    };
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(100, 149, 237, 0.6)",
+                    background: "rgba(15,20,25,0.7)",
+                    color: "#9ec2ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                    boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+                  }}
+                >
+                  Random Straight
+                </button>
+                <button
+                  onClick={() => {
+                    if (!spaceshipRef.current) return;
+                    const ship = spaceshipRef.current;
+                    if (shipCinematicRef.current) {
+                      shipCinematicRef.current.active = false;
+                      shipCinematicRef.current = null;
+                    }
+                    setFollowingSpaceship(false);
+                    followingSpaceshipRef.current = false;
+                    setManualFlightMode(false);
+                    manualFlightModeRef.current = false;
+
+                    const startPos = ship.position.clone();
+                    const endPos = getRandomEndPosNearPlanets();
+                    if (endPos.distanceTo(startPos) < 300) {
+                      endPos.add(new THREE.Vector3(-350, 120, 280));
+                    }
+
+                    const cameraDir = new THREE.Vector3();
+                    sceneRef.current.camera?.getWorldDirection(cameraDir);
+                    const cameraUp = new THREE.Vector3(0, 1, 0);
+                    const cameraRight = new THREE.Vector3()
+                      .crossVectors(cameraDir, cameraUp)
+                      .normalize();
+
+                    const controlPos = startPos
+                      .clone()
+                      .lerp(endPos, 0.45)
+                      .add(
+                        cameraRight.multiplyScalar((Math.random() - 0.5) * 200),
+                      )
+                      .add(
+                        cameraUp.multiplyScalar((Math.random() - 0.5) * 160),
+                      );
+                    const controlPos2 = startPos
+                      .clone()
+                      .lerp(endPos, 0.75)
+                      .add(
+                        cameraRight.multiplyScalar((Math.random() - 0.5) * 180),
+                      )
+                      .add(
+                        cameraUp.multiplyScalar((Math.random() - 0.5) * 140),
+                      );
+
+                    const distance = startPos.distanceTo(endPos);
+                    const duration = THREE.MathUtils.clamp(
+                      4500 * (distance / 600),
+                      3500,
+                      10000,
+                    );
+
+                    shipCinematicRef.current = {
+                      active: true,
+                      phase: "approach",
+                      startTime: performance.now(),
+                      duration,
+                      startPos: startPos.clone(),
+                      controlPos,
+                      controlPos2,
+                      endPos: endPos.clone(),
+                      startQuat: ship.quaternion.clone(),
+                      endQuat: ship.quaternion.clone(),
+                    };
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(100, 149, 237, 0.6)",
+                    background: "rgba(15,20,25,0.7)",
+                    color: "#9ec2ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                    boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+                  }}
+                >
+                  Random Curved
+                </button>
+                <button
+                  onClick={() => {
+                    startIntroSequenceRef.current?.();
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(232, 197, 71, 0.6)",
+                    background: "rgba(15,20,25,0.7)",
+                    color: "#e8c547",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                    boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+                  }}
+                >
+                  Home
+                </button>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 10px",
+                    borderRadius: 12,
+                    border: "1px solid rgba(232, 197, 71, 0.4)",
+                    background: "rgba(15,20,25,0.7)",
+                    color: "#e8c547",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={debugSnapToShip}
+                    onChange={(event) => {
+                      const next = event.target.checked;
+                      setDebugSnapToShip(next);
+                      debugSnapToShipRef.current = next;
+                    }}
+                    style={{ cursor: "pointer" }}
+                  />
+                  Snap
+                </label>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 10px",
+                    borderRadius: 12,
+                    border: "1px solid rgba(100, 149, 237, 0.5)",
+                    background: "rgba(15,20,25,0.7)",
+                    color: "#9ec2ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={debugShipLabelMode}
+                    onChange={(event) => {
+                      const next = event.target.checked;
+                      setDebugShipLabelMode(next);
+                      debugShipLabelModeRef.current = next;
+                    }}
+                    style={{ cursor: "pointer" }}
+                  />
+                  Label Ship
+                </label>
+                <select
+                  value={debugShipLabel}
+                  onChange={(event) =>
+                    setDebugShipLabel(event.target.value as ShipLabelTarget)
+                  }
+                  style={{
+                    padding: "6px 8px",
+                    borderRadius: 10,
+                    border: "1px solid rgba(100, 149, 237, 0.5)",
+                    background: "rgba(15,20,25,0.7)",
+                    color: "#9ec2ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="front">
+                    Front{debugShipLabels.front ? " ✓" : ""}
+                  </option>
+                  <option value="rear">
+                    Rear{debugShipLabels.rear ? " ✓" : ""}
+                  </option>
+                  <option value="left">
+                    Left{debugShipLabels.left ? " ✓" : ""}
+                  </option>
+                  <option value="right">
+                    Right{debugShipLabels.right ? " ✓" : ""}
+                  </option>
+                  <option value="top">
+                    Top{debugShipLabels.top ? " ✓" : ""}
+                  </option>
+                  <option value="bottom">
+                    Bottom{debugShipLabels.bottom ? " ✓" : ""}
+                  </option>
+                  <option value="cockpit">
+                    Cockpit{debugShipLabels.cockpit ? " ✓" : ""}
+                  </option>
+                </select>
+                <button
+                  onClick={() => resetShipLabels()}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 12,
+                    border: "1px solid rgba(255, 120, 120, 0.6)",
+                    background: "rgba(30,10,10,0.7)",
+                    color: "#ff8c8c",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                  }}
+                >
+                  Reset Labels
+                </button>
+              </div>
+            }
+            consoleLogs={consoleLogs}
+            consoleVisible={consoleVisible}
+            onConsoleToggle={() => setConsoleVisible(!consoleVisible)}
+            onConsoleCopy={() => {
+              navigator.clipboard.writeText(consoleLogs.join("\n"));
+            }}
+            onConsoleClear={() => {
+              setConsoleLogs([]);
+              consoleLogsRef.current = [];
+            }}
+            missionControlLogs={missionControlLogs}
+            onMissionControlLog={missionLog}
+            onMissionControlClear={() => {
+              setMissionControlLogs([]);
+              missionControlLogsRef.current = [];
+            }}
+            onMissionControlCopy={() => {
+              navigator.clipboard.writeText(missionControlLogs.join("\n"));
+            }}
+            systemStatusLogs={systemStatusLogs}
+            onSystemStatusCopy={() => {
+              navigator.clipboard.writeText(systemStatusLogs.join("\n"));
+            }}
+            onSystemStatusClear={() => {
+              setSystemStatusLogs([]);
+            }}
+            tourActive={tourActive}
+            tourWaypoint={tourWaypoint}
+            tourProgress={tourProgress}
+            onTourPrevious={() => tourGuideRef.current?.previousWaypoint()}
+            onTourNext={() => tourGuideRef.current?.nextWaypoint()}
+            onTourRestart={() => tourGuideRef.current?.restartTour()}
+            onTourEnd={() => {
+              tourGuideRef.current?.stopTour();
+              setTourActive(false);
+              setOverlayContent(null);
+              setContentLoading(false);
+              vlog("🛑 Tour ended");
+            }}
+            followingSpaceship={followingSpaceship}
+            insideShip={insideShip}
+            shipViewMode={shipViewMode}
+            onEnterShip={() => {
+              setInsideShip(true);
+              insideShipRef.current = true;
+              setShipViewMode("interior");
+              shipViewModeRef.current = "interior";
+
+              // Initialize camera inside ship at cabin location (right front)
+              if (
+                spaceshipRef.current &&
+                sceneRef.current.camera &&
+                sceneRef.current.controls
+              ) {
+                const ship = spaceshipRef.current;
+                const shipWorldPos = new THREE.Vector3();
+                const shipWorldQuat = new THREE.Quaternion();
+                ship.getWorldPosition(shipWorldPos);
+                ship.getWorldQuaternion(shipWorldQuat);
+
+                // Cabin is at right front (1.5 right, 0.2 up, 1 forward in ship local space)
+                const cabinLocalPos = new THREE.Vector3(1.5, 0.2, 1);
+                const cabinWorldPos = cabinLocalPos
+                  .clone()
+                  .applyQuaternion(shipWorldQuat)
+                  .add(shipWorldPos);
+
+                // Camera looks into cabin center
+                const cabinLookTarget = new THREE.Vector3(0.5, 0, 0)
+                  .applyQuaternion(shipWorldQuat)
+                  .add(shipWorldPos);
+
+                sceneRef.current.camera.position.copy(cabinWorldPos);
+                sceneRef.current.controls.target.copy(cabinLookTarget);
+                sceneRef.current.controls.update();
               }
-            } else if (action.startsWith("navigate:")) {
-              const target = action.replace("navigate:", "");
-              if (cameraDirectorRef.current) {
-                // If navigating away from a focused moon, restore it first
-                if (focusedMoonRef.current) {
-                  exitFocusRequestRef.current = true;
-                }
-                switch (target) {
-                  case "sun":
-                  case "home":
+
+              vlog("🛸 Entering ship - interior view (cabin)");
+            }}
+            onExitShip={() => {
+              setInsideShip(false);
+              insideShipRef.current = false;
+              setShipViewMode("exterior");
+              shipViewModeRef.current = "exterior";
+              vlog("🚪 Exiting ship - exterior view");
+            }}
+            onGoToCockpit={() => {
+              setShipViewMode("cockpit");
+              shipViewModeRef.current = "cockpit";
+
+              // Position camera in cockpit looking forward
+              if (
+                spaceshipRef.current &&
+                sceneRef.current.camera &&
+                sceneRef.current.controls
+              ) {
+                const ship = spaceshipRef.current;
+                const shipWorldPos = new THREE.Vector3();
+                const shipWorldQuat = new THREE.Quaternion();
+                ship.getWorldPosition(shipWorldPos);
+                ship.getWorldQuaternion(shipWorldQuat);
+
+                // Cockpit position (center, slightly up, forward)
+                const cockpitLocalPos = new THREE.Vector3(0, 0.5, 3);
+                const cockpitWorldPos = cockpitLocalPos
+                  .clone()
+                  .applyQuaternion(shipWorldQuat)
+                  .add(shipWorldPos);
+
+                // Look forward through window
+                const windowTarget = new THREE.Vector3(0, 0.5, 10)
+                  .applyQuaternion(shipWorldQuat)
+                  .add(shipWorldPos);
+
+                sceneRef.current.camera.position.copy(cockpitWorldPos);
+                sceneRef.current.controls.target.copy(windowTarget);
+                sceneRef.current.controls.update();
+              }
+
+              vlog("✈️ Moving to cockpit");
+            }}
+            onGoToInterior={() => {
+              setShipViewMode("interior");
+              shipViewModeRef.current = "interior";
+
+              // Return to cabin location
+              if (
+                spaceshipRef.current &&
+                sceneRef.current.camera &&
+                sceneRef.current.controls
+              ) {
+                const ship = spaceshipRef.current;
+                const shipWorldPos = new THREE.Vector3();
+                const shipWorldQuat = new THREE.Quaternion();
+                ship.getWorldPosition(shipWorldPos);
+                ship.getWorldQuaternion(shipWorldQuat);
+
+                // Cabin position (right front)
+                const cabinLocalPos = new THREE.Vector3(1.5, 0.2, 1);
+                const cabinWorldPos = cabinLocalPos
+                  .clone()
+                  .applyQuaternion(shipWorldQuat)
+                  .add(shipWorldPos);
+
+                // Look into cabin center
+                const cabinLookTarget = new THREE.Vector3(0.5, 0, 0)
+                  .applyQuaternion(shipWorldQuat)
+                  .add(shipWorldPos);
+
+                sceneRef.current.camera.position.copy(cabinWorldPos);
+                sceneRef.current.controls.target.copy(cabinLookTarget);
+                sceneRef.current.controls.update();
+              }
+
+              vlog("🚪 Moving to main interior (cabin)");
+            }}
+            shipExteriorLights={shipExteriorLights}
+            onShipExteriorLightsChange={setShipExteriorLights}
+            shipInteriorLights={shipInteriorLights}
+            onShipInteriorLightsChange={setShipInteriorLights}
+            manualFlightMode={manualFlightMode}
+            onManualFlightModeChange={(value) => {
+              vlog(
+                `🕹️ Flight mode changed to: ${value ? "MANUAL" : "AUTOPILOT"}`,
+              );
+              setManualFlightMode(value);
+              manualFlightModeRef.current = value;
+
+              // Reset manual flight state when switching modes
+              if (value) {
+                // Entering manual mode - reset physics
+                vlog(`   Resetting flight physics for manual mode`);
+                manualFlightRef.current.velocity.set(0, 0, 0);
+                manualFlightRef.current.acceleration = 0;
+                manualFlightRef.current.currentSpeed = 0;
+                manualFlightRef.current.pitch = 0;
+                manualFlightRef.current.yaw = 0;
+                manualFlightRef.current.roll = 0;
+                manualFlightRef.current.targetPitch = 0;
+                manualFlightRef.current.targetYaw = 0;
+                manualFlightRef.current.targetRoll = 0;
+                manualFlightRef.current.isAccelerating = false;
+                vlog("✋ Manual flight mode activated - Take control!");
+              } else {
+                // Returning to autopilot
+                vlog(
+                  "🤖 Autopilot engaged - Ship will resume autonomous flight",
+                );
+              }
+            }}
+            manualFlightSpeed={manualFlightRef.current.currentSpeed}
+            manualFlightMaxSpeed={manualFlightRef.current.maxSpeed}
+            keyboardState={keyboardStateRef.current}
+            keyboardUpdateTrigger={keyboardUpdateTrigger}
+            invertControls={invertControls}
+            onInvertControlsChange={(value) => {
+              setInvertControls(value);
+              invertControlsRef.current = value;
+            }}
+            controlSensitivity={controlSensitivity}
+            onControlSensitivityChange={(value) => {
+              setControlSensitivity(value);
+              controlSensitivityRef.current = value;
+            }}
+            onStopFollowing={() => {
+              setFollowingSpaceship(false);
+              followingSpaceshipRef.current = false;
+              setInsideShip(false);
+              insideShipRef.current = false;
+              setShipViewMode("exterior");
+              shipViewModeRef.current = "exterior";
+              if (sceneRef.current.controls) {
+                sceneRef.current.controls.enabled = true;
+              }
+              vlog("🛑 Stopped following spaceship");
+            }}
+            navigationTargets={navigationTargets}
+            onNavigate={handleQuickNav}
+            currentTarget={currentNavigationTarget}
+            navigationDistance={navigationDistance}
+            navigationETA={navigationETA}
+            isTransitioning={false}
+            speed={0}
+            content={overlayContent}
+            contentLoading={contentLoading}
+            cosmosOptions={options}
+            onCosmosOptionsChange={(newOptions) => {
+              // Pass the options change up to the parent component
+              if (onOptionsChange) {
+                onOptionsChange(newOptions);
+              }
+            }}
+            onConsoleLog={(message) => {
+              vlog(message);
+            }}
+            onContentAction={(action: string) => {
+              vlog(`🎬 Content action received: ${action}`);
+
+              // Handle different actions
+              if (action.startsWith("tour:")) {
+                const tourType = action.replace("tour:", "");
+                vlog(`🔍 Tour type: ${tourType}`);
+                vlog(`📦 tourBuilderRef exists: ${!!tourBuilderRef.current}`);
+                vlog(`📦 tourGuideRef exists: ${!!tourGuideRef.current}`);
+
+                if (tourBuilderRef.current && tourGuideRef.current) {
+                  vlog(`🚀 Starting ${tourType} tour...`);
+                  let tour;
+                  switch (tourType) {
+                    case "career-journey":
+                      tour = tourBuilderRef.current.createCareerJourneyTour();
+                      vlog(
+                        `📋 Tour created with ${tour?.waypoints.length || 0} waypoints`,
+                      );
+                      break;
+                    case "technical-deep-dive":
+                      tour =
+                        tourBuilderRef.current.createTechnicalDeepDiveTour();
+                      break;
+                    case "leadership-story":
+                      tour = tourBuilderRef.current.createLeadershipStoryTour();
+                      break;
+                  }
+
+                  if (tour) {
+                    vlog(`✅ Tour object valid, starting...`);
+                    // Resolve experience-moon targets to live world positions
+                    const resolvedWaypoints = tour.waypoints.map((wp) => {
+                      try {
+                        if (wp.id && wp.id.startsWith("experience-moon-")) {
+                          const candidate =
+                            (wp.content && (wp.content as any).title) ||
+                            wp.name;
+                          let moonMesh: THREE.Mesh | undefined;
+                          sceneRef.current.scene?.traverse((object) => {
+                            if (
+                              object instanceof THREE.Mesh &&
+                              object.userData.planetName
+                            ) {
+                              const pname = (
+                                object.userData.planetName || ""
+                              ).toLowerCase();
+                              if (
+                                candidate &&
+                                pname.includes(
+                                  (candidate || "").toLowerCase().split(" ")[0],
+                                )
+                              ) {
+                                moonMesh = object as THREE.Mesh;
+                              }
+                            }
+                          });
+                          if (moonMesh) {
+                            const worldPos = new THREE.Vector3();
+                            moonMesh.getWorldPosition(worldPos);
+                            const offset = new THREE.Vector3(80, 40, 60);
+                            return {
+                              ...wp,
+                              target: {
+                                ...wp.target,
+                                lookAt: worldPos.clone(),
+                                position: worldPos.clone().add(offset),
+                              },
+                            } as typeof wp;
+                          }
+                        }
+                      } catch (e) {
+                        vlog("⚠️ Error resolving waypoint to mesh");
+                      }
+                      return wp;
+                    });
+
+                    setTourActive(true);
                     setOverlayContent(null);
                     setContentLoading(false);
-                    if (originalMinDistanceRef.current > 0) {
-                      setMinDistance(
-                        originalMinDistanceRef.current,
-                        "restore on navigate home",
-                      );
-                    }
-                    if (startIntroSequenceRef.current) {
-                      startIntroSequenceRef.current();
-                    } else {
-                      cameraDirectorRef.current.systemOverview();
-                    }
-                    break;
-                  case "experience":
-                    const expData = planetsDataRef.current.get("experience");
-                    if (expData) {
-                      cameraDirectorRef.current.flyTo({
-                        position: new THREE.Vector3(
-                          expData.position.x + 300,
-                          expData.position.y + 150,
-                          expData.position.z + 200,
-                        ),
-                        lookAt: expData.position,
-                        duration: 2,
-                      });
-                    }
-                    break;
-                  case "skills":
-                    const skillsData = planetsDataRef.current.get("skills");
-                    if (skillsData) {
-                      cameraDirectorRef.current.flyTo({
-                        position: new THREE.Vector3(
-                          skillsData.position.x + 350,
-                          skillsData.position.y + 150,
-                          skillsData.position.z + 250,
-                        ),
-                        lookAt: skillsData.position,
-                        duration: 2,
-                      });
-                    }
-                    break;
-                  case "projects":
-                    const projectsData = planetsDataRef.current.get("projects");
-                    if (projectsData) {
-                      cameraDirectorRef.current.flyTo({
-                        position: new THREE.Vector3(
-                          projectsData.position.x + 400,
-                          projectsData.position.y + 200,
-                          projectsData.position.z + 300,
-                        ),
-                        lookAt: projectsData.position,
-                        duration: 2,
-                      });
-                    }
-                    break;
+                    tourGuideRef.current.startTour(resolvedWaypoints);
+                    vlog(
+                      `✨ Tour started: ${tour.title} (${tour.waypoints.length} waypoints)`,
+                    );
+                  } else {
+                    vlog(`❌ Tour object is null or undefined`);
+                  }
+                } else {
+                  vlog(`❌ Tour refs not initialized`);
                 }
+              } else if (action.startsWith("navigate:")) {
+                const target = action.replace("navigate:", "");
+                if (cameraDirectorRef.current) {
+                  // If navigating away from a focused moon, restore it first
+                  if (focusedMoonRef.current) {
+                    exitFocusRequestRef.current = true;
+                  }
+                  switch (target) {
+                    case "sun":
+                    case "home":
+                      setOverlayContent(null);
+                      setContentLoading(false);
+                      if (originalMinDistanceRef.current > 0) {
+                        setMinDistance(
+                          originalMinDistanceRef.current,
+                          "restore on navigate home",
+                        );
+                      }
+                      if (startIntroSequenceRef.current) {
+                        startIntroSequenceRef.current();
+                      } else {
+                        cameraDirectorRef.current.systemOverview();
+                      }
+                      break;
+                    case "experience":
+                      const expData = planetsDataRef.current.get("experience");
+                      if (expData) {
+                        cameraDirectorRef.current.flyTo({
+                          position: new THREE.Vector3(
+                            expData.position.x + 300,
+                            expData.position.y + 150,
+                            expData.position.z + 200,
+                          ),
+                          lookAt: expData.position,
+                          duration: 2,
+                        });
+                      }
+                      break;
+                    case "skills":
+                      const skillsData = planetsDataRef.current.get("skills");
+                      if (skillsData) {
+                        cameraDirectorRef.current.flyTo({
+                          position: new THREE.Vector3(
+                            skillsData.position.x + 350,
+                            skillsData.position.y + 150,
+                            skillsData.position.z + 250,
+                          ),
+                          lookAt: skillsData.position,
+                          duration: 2,
+                        });
+                      }
+                      break;
+                    case "projects":
+                      const projectsData =
+                        planetsDataRef.current.get("projects");
+                      if (projectsData) {
+                        cameraDirectorRef.current.flyTo({
+                          position: new THREE.Vector3(
+                            projectsData.position.x + 400,
+                            projectsData.position.y + 200,
+                            projectsData.position.z + 300,
+                          ),
+                          lookAt: projectsData.position,
+                          duration: 2,
+                        });
+                      }
+                      break;
+                  }
+                }
+              } else if (action === "mode:free") {
+                tourGuideRef.current?.stopTour();
               }
-            } else if (action === "mode:free") {
-              tourGuideRef.current?.stopTour();
-            }
-          }}
-        />
+            }}
+          />
+        </div>
       </div>
     </>
   );
