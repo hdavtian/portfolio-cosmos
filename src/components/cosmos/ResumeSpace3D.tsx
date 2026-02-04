@@ -30,7 +30,6 @@ import {
   type FrozenSystemState,
 } from "./ResumeSpace3D.systemFreeze";
 import type { ResumeSpace3DProps, SceneRef } from "./ResumeSpace3D.types";
-
 // Import our new cosmic systems
 import {
   CosmosCameraDirector,
@@ -54,6 +53,7 @@ import { useOrbitSystem } from "./hooks/useOrbitSystem";
 import { createMoonFocusController } from "./ResumeSpace3D.focusController";
 import { useNavigationSystem } from "./hooks/useNavigationSystem";
 import { useRenderLoop } from "./hooks/useRenderLoop";
+import { createIntroSequenceRunner } from "./introSequence";
 
 // Extend window for logging timestamps
 declare global {
@@ -61,6 +61,54 @@ declare global {
     lastAutopilotLog?: number;
   }
 }
+
+type ShipLabelTarget =
+  | "front"
+  | "rear"
+  | "left"
+  | "right"
+  | "top"
+  | "bottom"
+  | "cockpit";
+
+type ShipLabelInfo = { name: string; uuid: string };
+type ShipLabelMark = {
+  label: ShipLabelTarget;
+  meshName: string;
+  meshUuid: string;
+  localPoint: [number, number, number];
+};
+
+// --- SHIP_DEBUG_LABELS (2026-02-03 snapshot) ---
+// Each entry is a small circle used to indicate the larger region direction.
+// 0) top
+//    mesh: Mesh_0067_Tex_0095_1dds_0, uuid: 01fc05a3-a0e9-44ac-96ce-6cbd4aa6d96c
+//    localPoint: [0.9122422225127416, 1.5442983446762355, -0.08458437473518643]
+//    worldPoint: [901.876508524019, 30.86552548906256, 176.7214114626555]
+// 1) bottom
+//    mesh: Mesh_0067_Tex_0095_1dds_0, uuid: 01fc05a3-a0e9-44ac-96ce-6cbd4aa6d96c
+//    localPoint: [-1.4762680590244663, -1.3492305317464002, 0.05729344316409879]
+//    worldPoint: [902.0770672662713, 29.04214646060716, 176.32207436292234]
+// 2) left
+//    mesh: Mesh_0068_Tex_0095_2dds_0_1, uuid: ed9824f4-1419-47df-b81c-2bbc9e466d8c
+//    localPoint: [6.660106363163475, -2.9067988739019484, -0.003916184310810422]
+//    worldPoint: [901.3472866873808, 30.15029999385027, 180.24597607903206]
+// 3) right
+//    mesh: Mesh_0068_Tex_0095_2dds_0, uuid: 63d700a8-400e-48f1-a8f4-fef1b732149d
+//    localPoint: [-6.682026754811734, 2.856149957649478, -0.017892472447783803]
+//    worldPoint: [902.5549716380164, 29.767504829162657, 173.09048604694686]
+// 4) rear
+//    mesh: SurfPatch_Material001_0, uuid: 6282dfed-c415-413c-aecc-52a7744b17b5
+//    localPoint: [-0.1861477066534185, -0.009953896327260736, -7.4621855991877055]
+//    worldPoint: [905.6224600479799, 30.344568169496842, 177.17883984434613]
+// 5) front
+//    mesh: Mesh_0068_Tex_0095_2dds_0_1, uuid: ed9824f4-1419-47df-b81c-2bbc9e466d8c
+//    localPoint: [-0.011301192244236091, -0.27918260784130666, 7.259686497338635]
+//    worldPoint: [898.388639671934, 29.438446524413816, 176.1493109769936]
+// 6) cockpit
+//    mesh: Mesh_0067_Tex_0095_1dds_0, uuid: 01fc05a3-a0e9-44ac-96ce-6cbd4aa6d96c
+//    localPoint: [-6.1963774447354645, 3.5916143936170215, 7.127732464864266]
+//    worldPoint: [898.99317807436, 29.801697414970644, 172.56929777924128]
 
 export default function ResumeSpace3D({
   options,
@@ -85,7 +133,6 @@ export default function ResumeSpace3D({
   // How many world units change in camera-to-moon distance should trigger exiting focus
   // Tune this to allow small zoom adjustments without losing focus.
   const zoomExitThresholdRef = useRef<number>(DEFAULT_ZOOM_EXIT_THRESHOLD); // units (default suggestion)
-
   const {
     consoleVisible,
     setConsoleVisible,
@@ -150,8 +197,11 @@ export default function ResumeSpace3D({
     startPos: THREE.Vector3;
     endPos: THREE.Vector3;
     controlPos: THREE.Vector3;
+    controlPos2?: THREE.Vector3;
+    flybyPoint?: THREE.Vector3;
     startQuat: THREE.Quaternion;
     endQuat: THREE.Quaternion;
+    approachLookAt?: THREE.Vector3;
     lightsTriggered?: boolean;
     orbitStartTime?: number;
     orbitDuration?: number;
@@ -162,10 +212,14 @@ export default function ResumeSpace3D({
     hoverStartTime?: number;
     hoverBasePos?: THREE.Vector3;
     hoverStartQuat?: THREE.Quaternion;
+    spinStartOffset?: number;
+    spinDuration?: number;
+    spinTurns?: number;
+    settleTargetPos?: THREE.Vector3;
+    settleDuration?: number;
   } | null>(null);
   const spaceshipLightsRef = useRef<THREE.PointLight[]>([]);
   const spaceshipEngineLightRef = useRef<THREE.PointLight | null>(null);
-
   const spaceshipCameraOffsetRef = useRef<THREE.Vector3>(
     new THREE.Vector3(0, 20, -60),
   );
@@ -268,6 +322,32 @@ export default function ResumeSpace3D({
     KeyC: false, // Roll right
   });
 
+  const [debugSnapToShip, setDebugSnapToShip] = useState(false);
+  const debugSnapToShipRef = useRef(false);
+  const startIntroSequenceRef = useRef<(() => void) | null>(null);
+
+  const [debugShipLabelMode, setDebugShipLabelMode] = useState(false);
+  const debugShipLabelModeRef = useRef(false);
+  const [debugShipLabel, setDebugShipLabel] =
+    useState<ShipLabelTarget>("front");
+  const debugShipLabelRef = useRef<ShipLabelTarget>("front");
+  const [debugShipLabels, setDebugShipLabels] = useState<
+    Partial<Record<ShipLabelTarget, ShipLabelInfo>>
+  >({});
+  const debugShipLabelsRef = useRef<
+    Partial<Record<ShipLabelTarget, ShipLabelInfo>>
+  >({});
+  const debugHitMarkerRef = useRef<THREE.Mesh | null>(null);
+  const debugShipLabelMarkersRef = useRef<THREE.Mesh[]>([]);
+  const debugShipLabelMarksRef = useRef<
+    Partial<Record<ShipLabelTarget, ShipLabelMark[]>>
+  >({});
+  const debugPointerDownRef = useRef<{
+    x: number;
+    y: number;
+    t: number;
+  } | null>(null);
+
   // Autopilot navigation state is handled by useNavigationSystem
 
   // Build navigation targets from resume data
@@ -276,14 +356,27 @@ export default function ResumeSpace3D({
       id: "experience",
       label: "Experience",
       type: "section" as const,
-      icon: "🌍",
+      icon: "🚀",
     },
-    { id: "skills", label: "Skills", type: "section" as const, icon: "⚡" },
+    { id: "skills", label: "Skills", type: "section" as const, icon: "🧠" },
+    {
+      id: "projects",
+      label: "Projects",
+      type: "section" as const,
+      icon: "🪐",
+    },
+    {
+      id: "about",
+      label: "About",
+      type: "section" as const,
+      icon: "👨‍🚀",
+    },
+    { id: "home", label: "Home", type: "section" as const, icon: "☀️" },
     ...resumeData.experience.map((exp) => ({
       id: exp.id,
       label: exp.navLabel || exp.company,
       type: "moon" as const,
-      icon: "🏢",
+      icon: "🌕",
     })),
   ];
 
@@ -538,6 +631,107 @@ export default function ResumeSpace3D({
   // - createMoonFocusController: moon enter/exit + overlays
 
   // Update spaceship exterior lights
+  useEffect(() => {
+    debugShipLabelRef.current = debugShipLabel;
+  }, [debugShipLabel]);
+
+  useEffect(() => {
+    debugShipLabelModeRef.current = debugShipLabelMode;
+  }, [debugShipLabelMode]);
+
+  useEffect(() => {
+    debugShipLabelsRef.current = debugShipLabels;
+  }, [debugShipLabels]);
+
+  const getRandomEndPosNearPlanets = useCallback(() => {
+    const camera = sceneRef.current.camera as
+      | THREE.PerspectiveCamera
+      | undefined;
+    const cameraPos = camera?.position.clone() ?? new THREE.Vector3();
+    const cameraDir = new THREE.Vector3(0, 0, 1);
+    if (camera) {
+      camera.getWorldDirection(cameraDir);
+    }
+    const cameraUp =
+      camera?.up.clone().normalize() ?? new THREE.Vector3(0, 1, 0);
+    const cameraRight = new THREE.Vector3()
+      .crossVectors(cameraDir, cameraUp)
+      .normalize();
+
+    const targets: Array<{ pos: THREE.Vector3; radius: number }> = [];
+    const exp = planetsDataRef.current.get("experience")?.position;
+    const skills = planetsDataRef.current.get("skills")?.position;
+    const projects = planetsDataRef.current.get("projects")?.position;
+    if (exp) targets.push({ pos: exp.clone(), radius: 320 });
+    if (skills) targets.push({ pos: skills.clone(), radius: 360 });
+    if (projects) targets.push({ pos: projects.clone(), radius: 340 });
+    // Sun is centered at origin; keep a tighter band so it's in view.
+    targets.push({ pos: new THREE.Vector3(0, 0, 0), radius: 260 });
+
+    if (targets.length === 0) {
+      return new THREE.Vector3(
+        (Math.random() - 0.5) * 1600,
+        (Math.random() - 0.5) * 800,
+        (Math.random() - 0.5) * 1600,
+      );
+    }
+
+    const pick = targets[Math.floor(Math.random() * targets.length)];
+    const inViewThreshold = 0.25;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const radius = pick.radius * (0.55 + Math.random() * 0.75);
+      const offset = new THREE.Vector3(
+        (Math.random() - 0.5) * radius,
+        (Math.random() - 0.5) * (radius * 0.6),
+        (Math.random() - 0.5) * radius,
+      );
+      const candidate = pick.pos.clone().add(offset);
+      if (!camera) return candidate;
+
+      const toCandidate = candidate.clone().sub(cameraPos).normalize();
+      if (toCandidate.dot(cameraDir) > inViewThreshold) {
+        return candidate;
+      }
+    }
+
+    const forwardDistance = 700 + Math.random() * 700;
+    const spread = 320 + Math.random() * 180;
+    const fallback = cameraPos
+      .clone()
+      .add(cameraDir.clone().multiplyScalar(forwardDistance))
+      .add(cameraRight.clone().multiplyScalar((Math.random() - 0.5) * spread))
+      .add(
+        cameraUp.clone().multiplyScalar((Math.random() - 0.5) * spread * 0.5),
+      );
+
+    return fallback.clone().lerp(pick.pos, 0.35);
+  }, []);
+
+  const resetShipLabels = useCallback(() => {
+    if (!spaceshipRef.current) return;
+    spaceshipRef.current.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        delete object.userData.debugSide;
+      }
+    });
+    setDebugShipLabels({});
+    debugShipLabelMarksRef.current = {};
+    debugShipLabelMarkersRef.current.forEach((marker) => {
+      marker.parent?.remove(marker);
+      marker.geometry.dispose();
+      if (Array.isArray(marker.material)) {
+        marker.material.forEach((mat) => mat.dispose());
+      } else {
+        marker.material.dispose();
+      }
+    });
+    debugShipLabelMarkersRef.current = [];
+    if (debugHitMarkerRef.current) {
+      debugHitMarkerRef.current.visible = false;
+    }
+  }, []);
+
   useEffect(() => {
     if (spaceshipLightsRef.current.length > 0) {
       spaceshipLightsRef.current.forEach((light) => {
@@ -821,7 +1015,7 @@ export default function ResumeSpace3D({
         spaceshipLightsRef.current = exteriorLights;
 
         // Create dedicated engine light for boost effects
-        const engineLight = new THREE.PointLight(0x6699ff, 0.5, 30);
+        const engineLight = new THREE.PointLight(0x6699ff, 0.8, 220);
         engineLight.position.set(0, 0, -4); // Back of ship
         spaceship.add(engineLight);
         spaceshipEngineLightRef.current = engineLight;
@@ -875,6 +1069,17 @@ export default function ResumeSpace3D({
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
+    const debugHitMarker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.5, 16, 16),
+      new THREE.MeshStandardMaterial({
+        color: 0xffff66,
+        emissive: 0xffee88,
+        emissiveIntensity: 1.2,
+      }),
+    );
+    debugHitMarker.visible = false;
+    scene.add(debugHitMarker);
+    debugHitMarkerRef.current = debugHitMarker;
 
     const { onPointerDownRotate, onPointerMoveRotate, onPointerUpRotate } =
       buildRotationHandlers({ raycaster, pointer, camera });
@@ -1086,7 +1291,11 @@ export default function ResumeSpace3D({
             if (sceneRef.current.controls)
               sceneRef.current.controls.enabled = true;
           }
-          await cameraDirectorRef.current.systemOverview();
+          if (startIntroSequenceRef.current) {
+            startIntroSequenceRef.current();
+          } else {
+            await cameraDirectorRef.current.systemOverview();
+          }
           break;
         case "about":
           // Follow the spaceship!
@@ -1359,6 +1568,186 @@ export default function ResumeSpace3D({
     window.addEventListener("pointermove", onPointerMoveRotate);
     window.addEventListener("pointerup", onPointerUpRotate);
 
+    const onDebugPointerMove = (event: PointerEvent) => {
+      if (!debugShipLabelModeRef.current || !spaceshipRef.current) {
+        if (debugHitMarkerRef.current) {
+          debugHitMarkerRef.current.visible = false;
+        }
+        return;
+      }
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      const hits = raycaster.intersectObjects(
+        spaceshipRef.current.children,
+        true,
+      );
+      const hit = hits.find((entry) => entry.object instanceof THREE.Mesh);
+
+      if (!hit || !(hit.object instanceof THREE.Mesh)) {
+        if (debugHitMarkerRef.current) {
+          debugHitMarkerRef.current.visible = false;
+        }
+        return;
+      }
+
+      if (debugHitMarkerRef.current) {
+        debugHitMarkerRef.current.visible = true;
+        debugHitMarkerRef.current.position.copy(hit.point);
+      }
+    };
+
+    const applyDebugLabel = (event: PointerEvent) => {
+      if (!debugShipLabelModeRef.current || !spaceshipRef.current) return;
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      const hits = raycaster.intersectObjects(
+        spaceshipRef.current.children,
+        true,
+      );
+      const hit = hits.find((entry) => entry.object instanceof THREE.Mesh);
+      if (!hit || !(hit.object instanceof THREE.Mesh)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const mesh = hit.object as THREE.Mesh;
+      const labelColorMap: Record<string, number> = {
+        front: 0x00ffcc,
+        rear: 0xffaa00,
+        left: 0x6699ff,
+        right: 0xff66cc,
+        top: 0x66ff66,
+        bottom: 0xff6666,
+        cockpit: 0xc084ff,
+      };
+      const label = debugShipLabelRef.current;
+      const labelColor = labelColorMap[label];
+      const ship = spaceshipRef.current;
+      if (!ship) return;
+      const localPoint = ship.worldToLocal(hit.point.clone());
+      const marker = new THREE.Mesh(
+        new THREE.SphereGeometry(0.45, 14, 14),
+        new THREE.MeshStandardMaterial({
+          color: labelColor,
+          emissive: labelColor,
+          emissiveIntensity: 1.4,
+        }),
+      );
+      marker.position.copy(localPoint);
+      marker.userData.debugLabel = label;
+      marker.userData.debugLabelTarget = mesh.uuid;
+      ship.add(marker);
+      debugShipLabelMarkersRef.current.push(marker);
+
+      const mark: ShipLabelMark = {
+        label,
+        meshName: mesh.name,
+        meshUuid: mesh.uuid,
+        localPoint: [localPoint.x, localPoint.y, localPoint.z],
+      };
+      const nextMarks = debugShipLabelMarksRef.current[label]
+        ? [...(debugShipLabelMarksRef.current[label] as ShipLabelMark[]), mark]
+        : [mark];
+      debugShipLabelMarksRef.current = {
+        ...debugShipLabelMarksRef.current,
+        [label]: nextMarks,
+      };
+      setDebugShipLabels((prev) => ({
+        ...prev,
+        [label]: prev[label] || { name: mesh.name, uuid: mesh.uuid },
+      }));
+
+      console.log("SHIP_DEBUG_LABEL", {
+        label,
+        mesh: mesh.name,
+        uuid: mesh.uuid,
+        localPoint: mark.localPoint,
+      });
+
+      if (debugHitMarkerRef.current) {
+        const markerMat = debugHitMarkerRef.current
+          .material as THREE.MeshStandardMaterial;
+        markerMat.color.setHex(labelColor);
+        markerMat.emissive.setHex(labelColor);
+      }
+    };
+
+    const onDebugPointerDown = (event: PointerEvent) => {
+      if (!debugShipLabelModeRef.current) return;
+      debugPointerDownRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+        t: performance.now(),
+      };
+    };
+
+    const onDebugPointerUp = (event: PointerEvent) => {
+      if (!debugShipLabelModeRef.current) return;
+      const start = debugPointerDownRef.current;
+      debugPointerDownRef.current = null;
+      if (!start) return;
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > 6) return;
+      applyDebugLabel(event);
+    };
+
+    const dumpShipLabels = () => {
+      if (!spaceshipRef.current) return;
+      const ship = spaceshipRef.current;
+      const labelEntries = Object.entries(debugShipLabelMarksRef.current);
+      const marks: Array<{
+        label: ShipLabelTarget;
+        mesh: string;
+        uuid: string;
+        localPoint: [number, number, number];
+        worldPoint: [number, number, number];
+      }> = [];
+
+      labelEntries.forEach(([label, entries]) => {
+        (entries as ShipLabelMark[] | undefined)?.forEach((entry) => {
+          const local = new THREE.Vector3(
+            entry.localPoint[0],
+            entry.localPoint[1],
+            entry.localPoint[2],
+          );
+          const world = ship.localToWorld(local.clone());
+          marks.push({
+            label: label as ShipLabelTarget,
+            mesh: entry.meshName,
+            uuid: entry.meshUuid,
+            localPoint: entry.localPoint,
+            worldPoint: [world.x, world.y, world.z],
+          });
+        });
+      });
+
+      console.log("SHIP_DEBUG_LABELS", marks);
+    };
+
+    window.addEventListener("pointermove", onDebugPointerMove);
+    window.addEventListener("pointerdown", onDebugPointerDown, true);
+    window.addEventListener("pointerup", onDebugPointerUp, true);
+
+    const onDebugLabelKey = (event: KeyboardEvent) => {
+      if (event.code === "KeyJ" && event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        dumpShipLabels();
+      }
+    };
+
+    window.addEventListener("keydown", onDebugLabelKey, { capture: true });
+
     // Initialize navigation interface
     if (container) {
       navigationInterfaceRef.current = new NavigationInterface(
@@ -1415,6 +1804,7 @@ export default function ResumeSpace3D({
       spaceshipCameraOffsetRef,
       shipViewModeRef,
       insideShipRef,
+      debugSnapToShipRef,
       optionsRef,
       updateAutopilotNavigation,
       updateOrbitSystem,
@@ -1431,139 +1821,30 @@ export default function ResumeSpace3D({
     });
 
     // Trigger loading complete with camera animation
-    let introRafId: number | null = null;
+    const { startIntroSequence, cancelIntroSequence } =
+      createIntroSequenceRunner({
+        camera,
+        controls,
+        sceneRef,
+        spaceshipRef,
+        shipCinematicRef,
+        manualFlightModeRef,
+        setFollowingSpaceship,
+        followingSpaceshipRef,
+        setHudVisible,
+        setShipExteriorLights,
+        sunMesh,
+      });
+
+    startIntroSequenceRef.current = startIntroSequence;
+
     setTimeout(() => {
       setSceneReady(true);
 
       // Start the orbital position emitter for tracking moving objects
       emitterRef.current.start();
 
-      // Intro: zoom to provided camera snapshot
-      const startPos = camera.position.clone();
-      const startTarget = controls.target.clone();
-      const endPos = new THREE.Vector3(
-        919.9426740762151,
-        35.549232587905905,
-        180.65560343913018,
-      );
-      const endTarget = new THREE.Vector3(
-        599.99999808,
-        0,
-        -0.04079999995648001,
-      );
-
-      const duration = 5000; // ms
-      const startTime = performance.now();
-      const previousControlsEnabled = controls.enabled;
-      controls.enabled = false;
-
-      const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
-
-      const animateCamera = () => {
-        const elapsed = performance.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const eased = easeOutCubic(progress);
-
-        const currentPos = new THREE.Vector3().lerpVectors(
-          startPos,
-          endPos,
-          eased,
-        );
-        const currentTarget = new THREE.Vector3().lerpVectors(
-          startTarget,
-          endTarget,
-          eased,
-        );
-
-        camera.position.copy(currentPos);
-        controls.target.copy(currentTarget);
-        controls.update();
-
-        if (progress < 1) {
-          introRafId = requestAnimationFrame(animateCamera);
-        } else {
-          introRafId = null;
-          controls.enabled = previousControlsEnabled;
-          setHudVisible(false);
-
-          const startShipCinematic = (attempts: number = 0) => {
-            const ship = spaceshipRef.current;
-            const currentCamera = sceneRef.current.camera as
-              | THREE.PerspectiveCamera
-              | undefined;
-            const currentControls = sceneRef.current.controls as
-              | { target?: THREE.Vector3 }
-              | undefined;
-
-            if (!ship || !currentCamera || !currentControls?.target) {
-              if (attempts < 10) {
-                window.setTimeout(() => startShipCinematic(attempts + 1), 250);
-              }
-              return;
-            }
-
-            manualFlightModeRef.current = false;
-            setFollowingSpaceship(false);
-            followingSpaceshipRef.current = false;
-
-            const cameraDirection = new THREE.Vector3();
-            currentCamera.getWorldDirection(cameraDirection);
-            const cameraUp = currentCamera.up.clone().normalize();
-            const cameraRight = new THREE.Vector3()
-              .crossVectors(cameraDirection, cameraUp)
-              .normalize();
-            const cameraLeft = cameraRight.clone().multiplyScalar(-1);
-
-            const endPos = new THREE.Vector3(
-              902.1810184349341,
-              29.572186631042992,
-              176.66640623268017,
-            );
-
-            const controlPos = ship.position
-              .clone()
-              .lerp(endPos, 0.65)
-              .add(cameraLeft.clone().multiplyScalar(60))
-              .add(cameraUp.clone().multiplyScalar(50))
-              .add(cameraDirection.clone().multiplyScalar(10));
-
-            const endQuat = new THREE.Quaternion(
-              0.13822341047578124,
-              0.7484587259553863,
-              -0.18943034059866248,
-              -0.6203385933491146,
-            );
-
-            setShipExteriorLights(true);
-
-            const sunPosition = new THREE.Vector3();
-            sunMesh.getWorldPosition(sunPosition);
-
-            shipCinematicRef.current = {
-              active: true,
-              phase: "orbit",
-              startTime: performance.now(),
-              duration: 5000,
-              startPos: ship.position.clone(),
-              controlPos,
-              endPos,
-              startQuat: ship.quaternion.clone(),
-              endQuat,
-              lightsTriggered: true,
-              orbitStartTime: performance.now(),
-              orbitDuration: 6000,
-              orbitCenter: sunPosition,
-              orbitRadius: 260,
-              orbitStartAngle: Math.PI * 0.85,
-              orbitEndAngle: Math.PI * 2.1,
-            };
-          };
-
-          startShipCinematic();
-        }
-      };
-
-      introRafId = requestAnimationFrame(animateCamera);
+      startIntroSequence();
     }, 100);
 
     // --- CLEANUP ---
@@ -1736,11 +2017,12 @@ export default function ResumeSpace3D({
       window.removeEventListener("pointerdown", onPointerDownRotate);
       window.removeEventListener("pointermove", onPointerMoveRotate);
       window.removeEventListener("pointerup", onPointerUpRotate);
+      window.removeEventListener("pointermove", onDebugPointerMove);
+      window.removeEventListener("pointerdown", onDebugPointerDown, true);
+      window.removeEventListener("pointerup", onDebugPointerUp, true);
+      window.removeEventListener("keydown", onDebugLabelKey, { capture: true });
 
-      if (introRafId !== null) {
-        cancelAnimationFrame(introRafId);
-        introRafId = null;
-      }
+      cancelIntroSequence();
 
       // Stop orbital position emitter
       emitterRef.current.stop();
@@ -1777,6 +2059,16 @@ export default function ResumeSpace3D({
           }
         }
       });
+
+      if (debugHitMarkerRef.current) {
+        debugHitMarkerRef.current.geometry.dispose();
+        if (Array.isArray(debugHitMarkerRef.current.material)) {
+          debugHitMarkerRef.current.material.forEach((mat) => mat.dispose());
+        } else {
+          debugHitMarkerRef.current.material.dispose();
+        }
+        debugHitMarkerRef.current = null;
+      }
     };
     setGlobalCleanup(cleanup);
 
@@ -1816,31 +2108,339 @@ export default function ResumeSpace3D({
             }}
           />
 
-          {/* HUD Toggle Button */}
-          <button
-            onClick={() => setHudVisible((v) => !v)}
+          <div
             style={{
               position: "absolute",
               top: 10,
               left: "50%",
               transform: "translateX(-50%)",
               zIndex: 20000,
-              padding: "8px 14px",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px",
+              alignItems: "center",
+              padding: "6px 10px",
               borderRadius: 18,
-              border: "1px solid rgba(232, 197, 71, 0.6)",
-              background: hudVisible
-                ? "rgba(15,20,25,0.9)"
-                : "rgba(15,20,25,0.6)",
-              color: "#e8c547",
-              fontFamily: "'Rajdhani', sans-serif",
-              fontWeight: 700,
-              letterSpacing: 0.5,
-              cursor: "pointer",
-              boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              background: "rgba(15,20,25,0.35)",
+              backdropFilter: "blur(6px)",
             }}
           >
-            {hudVisible ? "Hide HUD" : "Show HUD"}
-          </button>
+            <button
+              onClick={() => setHudVisible((v) => !v)}
+              style={{
+                padding: "8px 14px",
+                borderRadius: 18,
+                border: "1px solid rgba(232, 197, 71, 0.6)",
+                background: hudVisible
+                  ? "rgba(15,20,25,0.9)"
+                  : "rgba(15,20,25,0.6)",
+                color: "#e8c547",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontWeight: 700,
+                letterSpacing: 0.5,
+                cursor: "pointer",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              }}
+            >
+              {hudVisible ? "Hide HUD" : "Show HUD"}
+            </button>
+            <button
+              onClick={() => {
+                if (!spaceshipRef.current) return;
+                const ship = spaceshipRef.current;
+                if (shipCinematicRef.current) {
+                  shipCinematicRef.current.active = false;
+                  shipCinematicRef.current = null;
+                }
+                setFollowingSpaceship(false);
+                followingSpaceshipRef.current = false;
+                setManualFlightMode(false);
+                manualFlightModeRef.current = false;
+                setInsideShip(false);
+                insideShipRef.current = false;
+                setShipViewMode("exterior");
+                shipViewModeRef.current = "exterior";
+                const randomOffset = new THREE.Vector3(
+                  (Math.random() - 0.5) * 1600,
+                  (Math.random() - 0.5) * 800,
+                  (Math.random() - 0.5) * 1600,
+                );
+                ship.position.copy(randomOffset);
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 18,
+                border: "1px solid rgba(100, 149, 237, 0.6)",
+                background: "rgba(15,20,25,0.7)",
+                color: "#9ec2ff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontWeight: 700,
+                letterSpacing: 0.5,
+                cursor: "pointer",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              }}
+            >
+              Random Ship
+            </button>
+            <button
+              onClick={() => {
+                if (!spaceshipRef.current) return;
+                const ship = spaceshipRef.current;
+                if (shipCinematicRef.current) {
+                  shipCinematicRef.current.active = false;
+                  shipCinematicRef.current = null;
+                }
+                setFollowingSpaceship(false);
+                followingSpaceshipRef.current = false;
+                setManualFlightMode(false);
+                manualFlightModeRef.current = false;
+
+                const startPos = ship.position.clone();
+                const endPos = getRandomEndPosNearPlanets();
+                if (endPos.distanceTo(startPos) < 300) {
+                  endPos.add(new THREE.Vector3(300, 150, -350));
+                }
+
+                const controlPos = startPos.clone().lerp(endPos, 0.5);
+                const distance = startPos.distanceTo(endPos);
+                const duration = THREE.MathUtils.clamp(
+                  4000 * (distance / 600),
+                  3000,
+                  9000,
+                );
+
+                shipCinematicRef.current = {
+                  active: true,
+                  phase: "approach",
+                  startTime: performance.now(),
+                  duration,
+                  startPos: startPos.clone(),
+                  controlPos,
+                  endPos: endPos.clone(),
+                  startQuat: ship.quaternion.clone(),
+                  endQuat: ship.quaternion.clone(),
+                };
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 18,
+                border: "1px solid rgba(100, 149, 237, 0.6)",
+                background: "rgba(15,20,25,0.7)",
+                color: "#9ec2ff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontWeight: 700,
+                letterSpacing: 0.5,
+                cursor: "pointer",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              }}
+            >
+              Random Straight
+            </button>
+            <button
+              onClick={() => {
+                if (!spaceshipRef.current) return;
+                const ship = spaceshipRef.current;
+                if (shipCinematicRef.current) {
+                  shipCinematicRef.current.active = false;
+                  shipCinematicRef.current = null;
+                }
+                setFollowingSpaceship(false);
+                followingSpaceshipRef.current = false;
+                setManualFlightMode(false);
+                manualFlightModeRef.current = false;
+
+                const startPos = ship.position.clone();
+                const endPos = getRandomEndPosNearPlanets();
+                if (endPos.distanceTo(startPos) < 300) {
+                  endPos.add(new THREE.Vector3(-350, 120, 280));
+                }
+
+                const cameraDir = new THREE.Vector3();
+                sceneRef.current.camera?.getWorldDirection(cameraDir);
+                const cameraUp = new THREE.Vector3(0, 1, 0);
+                const cameraRight = new THREE.Vector3()
+                  .crossVectors(cameraDir, cameraUp)
+                  .normalize();
+
+                const controlPos = startPos
+                  .clone()
+                  .lerp(endPos, 0.45)
+                  .add(cameraRight.multiplyScalar((Math.random() - 0.5) * 200))
+                  .add(cameraUp.multiplyScalar((Math.random() - 0.5) * 160));
+                const controlPos2 = startPos
+                  .clone()
+                  .lerp(endPos, 0.75)
+                  .add(cameraRight.multiplyScalar((Math.random() - 0.5) * 180))
+                  .add(cameraUp.multiplyScalar((Math.random() - 0.5) * 140));
+
+                const distance = startPos.distanceTo(endPos);
+                const duration = THREE.MathUtils.clamp(
+                  4500 * (distance / 600),
+                  3500,
+                  10000,
+                );
+
+                shipCinematicRef.current = {
+                  active: true,
+                  phase: "approach",
+                  startTime: performance.now(),
+                  duration,
+                  startPos: startPos.clone(),
+                  controlPos,
+                  controlPos2,
+                  endPos: endPos.clone(),
+                  startQuat: ship.quaternion.clone(),
+                  endQuat: ship.quaternion.clone(),
+                };
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 18,
+                border: "1px solid rgba(100, 149, 237, 0.6)",
+                background: "rgba(15,20,25,0.7)",
+                color: "#9ec2ff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontWeight: 700,
+                letterSpacing: 0.5,
+                cursor: "pointer",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              }}
+            >
+              Random Curved
+            </button>
+            <button
+              onClick={() => {
+                startIntroSequenceRef.current?.();
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 18,
+                border: "1px solid rgba(232, 197, 71, 0.6)",
+                background: "rgba(15,20,25,0.7)",
+                color: "#e8c547",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontWeight: 700,
+                letterSpacing: 0.5,
+                cursor: "pointer",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              }}
+            >
+              Home
+            </button>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 10px",
+                borderRadius: 14,
+                border: "1px solid rgba(232, 197, 71, 0.4)",
+                background: "rgba(15,20,25,0.7)",
+                color: "#e8c547",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontWeight: 700,
+                letterSpacing: 0.4,
+                cursor: "pointer",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={debugSnapToShip}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setDebugSnapToShip(next);
+                  debugSnapToShipRef.current = next;
+                }}
+                style={{ cursor: "pointer" }}
+              />
+              Snap
+            </label>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 10px",
+                borderRadius: 14,
+                border: "1px solid rgba(100, 149, 237, 0.5)",
+                background: "rgba(15,20,25,0.7)",
+                color: "#9ec2ff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontWeight: 700,
+                letterSpacing: 0.4,
+                cursor: "pointer",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={debugShipLabelMode}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setDebugShipLabelMode(next);
+                  debugShipLabelModeRef.current = next;
+                }}
+                style={{ cursor: "pointer" }}
+              />
+              Label Ship
+            </label>
+            <select
+              value={debugShipLabel}
+              onChange={(event) =>
+                setDebugShipLabel(event.target.value as ShipLabelTarget)
+              }
+              style={{
+                padding: "6px 8px",
+                borderRadius: 12,
+                border: "1px solid rgba(100, 149, 237, 0.5)",
+                background: "rgba(15,20,25,0.7)",
+                color: "#9ec2ff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontWeight: 700,
+                letterSpacing: 0.4,
+                cursor: "pointer",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              }}
+            >
+              <option value="front">
+                Front{debugShipLabels.front ? " ✓" : ""}
+              </option>
+              <option value="rear">
+                Rear{debugShipLabels.rear ? " ✓" : ""}
+              </option>
+              <option value="left">
+                Left{debugShipLabels.left ? " ✓" : ""}
+              </option>
+              <option value="right">
+                Right{debugShipLabels.right ? " ✓" : ""}
+              </option>
+              <option value="top">Top{debugShipLabels.top ? " ✓" : ""}</option>
+              <option value="bottom">
+                Bottom{debugShipLabels.bottom ? " ✓" : ""}
+              </option>
+              <option value="cockpit">
+                Cockpit{debugShipLabels.cockpit ? " ✓" : ""}
+              </option>
+            </select>
+            <button
+              onClick={() => resetShipLabels()}
+              style={{
+                padding: "8px 10px",
+                borderRadius: 14,
+                border: "1px solid rgba(255, 120, 120, 0.6)",
+                background: "rgba(30,10,10,0.7)",
+                color: "#ff8c8c",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontWeight: 700,
+                letterSpacing: 0.4,
+                cursor: "pointer",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              }}
+            >
+              Reset Labels
+            </button>
+          </div>
 
           <div
             style={{
@@ -2200,7 +2800,11 @@ export default function ResumeSpace3D({
                         "restore on navigate home",
                       );
                     }
-                    cameraDirectorRef.current.systemOverview();
+                    if (startIntroSequenceRef.current) {
+                      startIntroSequenceRef.current();
+                    } else {
+                      cameraDirectorRef.current.systemOverview();
+                    }
                     break;
                   case "experience":
                     const expData = planetsDataRef.current.get("experience");

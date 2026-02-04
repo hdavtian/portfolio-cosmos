@@ -19,9 +19,15 @@ export const useRenderLoop = () => {
         duration: number;
         startPos: THREE.Vector3;
         controlPos: THREE.Vector3;
+        controlPos2?: THREE.Vector3;
         endPos: THREE.Vector3;
+        flybyPoint?: THREE.Vector3;
         startQuat: THREE.Quaternion;
         endQuat: THREE.Quaternion;
+        approachLookAt?: THREE.Vector3;
+        spinStartOffset?: number;
+        spinDuration?: number;
+        spinTurns?: number;
         lightsTriggered?: boolean;
         orbitStartTime?: number;
         orbitDuration?: number;
@@ -32,6 +38,8 @@ export const useRenderLoop = () => {
         hoverStartTime?: number;
         hoverBasePos?: THREE.Vector3;
         hoverStartQuat?: THREE.Quaternion;
+        settleTargetPos?: THREE.Vector3;
+        settleDuration?: number;
       } | null>;
       shipStagingModeRef: React.MutableRefObject<boolean>;
       shipStagingKeysRef: React.MutableRefObject<Record<string, boolean>>;
@@ -49,6 +57,7 @@ export const useRenderLoop = () => {
         "exterior" | "interior" | "cockpit"
       >;
       insideShipRef: React.MutableRefObject<boolean>;
+      debugSnapToShipRef: React.MutableRefObject<boolean>;
       optionsRef: React.MutableRefObject<{ spaceFollowDistance?: number }>;
       updateAutopilotNavigation: () => void;
       updateOrbitSystem: (params: {
@@ -89,6 +98,7 @@ export const useRenderLoop = () => {
         spaceshipCameraOffsetRef,
         shipViewModeRef,
         insideShipRef,
+        debugSnapToShipRef,
         optionsRef,
         updateAutopilotNavigation,
         updateOrbitSystem,
@@ -200,20 +210,79 @@ export const useRenderLoop = () => {
                 (now - cinematic.startTime) / cinematic.duration,
                 1,
               );
-              const eased = easeOutCubic(progress);
-              const oneMinus = 1 - eased;
-              const currentPos = new THREE.Vector3()
-                .copy(cinematic.startPos)
-                .multiplyScalar(oneMinus * oneMinus)
-                .add(
-                  cinematic.controlPos
-                    .clone()
-                    .multiplyScalar(2 * oneMinus * eased),
-                )
-                .add(cinematic.endPos.clone().multiplyScalar(eased * eased));
+              const passThrough = Boolean(cinematic.approachLookAt);
+              const posProgress = passThrough
+                ? Math.min(progress, 0.9)
+                : progress;
+              const easedPos = easeOutCubic(posProgress);
+              const oneMinus = 1 - easedPos;
+              let currentPos: THREE.Vector3;
+
+              if (cinematic.flybyPoint) {
+                const mid = cinematic.flybyPoint;
+                const segT =
+                  easedPos < 0.5 ? easedPos / 0.5 : (easedPos - 0.5) / 0.5;
+                const segOneMinus = 1 - segT;
+                if (easedPos < 0.5) {
+                  currentPos = new THREE.Vector3()
+                    .copy(cinematic.startPos)
+                    .multiplyScalar(segOneMinus * segOneMinus)
+                    .add(
+                      cinematic.controlPos
+                        .clone()
+                        .multiplyScalar(2 * segOneMinus * segT),
+                    )
+                    .add(mid.clone().multiplyScalar(segT * segT));
+                } else {
+                  const controlTwo =
+                    cinematic.controlPos2 || cinematic.controlPos;
+                  currentPos = new THREE.Vector3()
+                    .copy(mid)
+                    .multiplyScalar(segOneMinus * segOneMinus)
+                    .add(
+                      controlTwo.clone().multiplyScalar(2 * segOneMinus * segT),
+                    )
+                    .add(cinematic.endPos.clone().multiplyScalar(segT * segT));
+                }
+              } else if (cinematic.controlPos2) {
+                currentPos = new THREE.Vector3()
+                  .copy(cinematic.startPos)
+                  .multiplyScalar(oneMinus * oneMinus * oneMinus)
+                  .add(
+                    cinematic.controlPos
+                      .clone()
+                      .multiplyScalar(3 * oneMinus * oneMinus * easedPos),
+                  )
+                  .add(
+                    cinematic.controlPos2
+                      .clone()
+                      .multiplyScalar(3 * oneMinus * easedPos * easedPos),
+                  )
+                  .add(
+                    cinematic.endPos
+                      .clone()
+                      .multiplyScalar(easedPos * easedPos * easedPos),
+                  );
+              } else {
+                currentPos = new THREE.Vector3()
+                  .copy(cinematic.startPos)
+                  .multiplyScalar(oneMinus * oneMinus)
+                  .add(
+                    cinematic.controlPos
+                      .clone()
+                      .multiplyScalar(2 * oneMinus * easedPos),
+                  )
+                  .add(
+                    cinematic.endPos
+                      .clone()
+                      .multiplyScalar(easedPos * easedPos),
+                  );
+              }
+
+              const lookAtTarget = cinematic.approachLookAt || camera.position;
               const approachLook = new THREE.Matrix4().lookAt(
                 currentPos,
-                camera.position,
+                lookAtTarget,
                 new THREE.Vector3(0, 1, 0),
               );
               const approachQuat = new THREE.Quaternion().setFromRotationMatrix(
@@ -226,11 +295,41 @@ export const useRenderLoop = () => {
                 approachQuat.multiply(forwardOffset);
               }
 
+              const easedRot = easeOutCubic(progress);
               const currentQuat = new THREE.Quaternion().slerpQuaternions(
                 cinematic.startQuat,
                 approachQuat,
-                eased,
+                easedRot,
               );
+
+              if (cinematic.approachLookAt && progress >= 0.9) {
+                cinematic.endQuat = currentQuat.clone();
+              }
+
+              if (cinematic.spinDuration && cinematic.spinTurns) {
+                const spinStart =
+                  cinematic.startTime + (cinematic.spinStartOffset || 0);
+                const spinEnd = spinStart + cinematic.spinDuration;
+                if (now >= spinStart && now <= spinEnd) {
+                  const spinT = (now - spinStart) / cinematic.spinDuration;
+                  const clampedSpinT = Math.min(Math.max(spinT, 0), 1);
+                  const easedSpin = THREE.MathUtils.smootherstep(
+                    clampedSpinT,
+                    0,
+                    1,
+                  );
+                  const angle =
+                    easedSpin * Math.PI * 2 * (cinematic.spinTurns || 1);
+                  const rollAxis = new THREE.Vector3(0, 0, -1)
+                    .applyQuaternion(currentQuat)
+                    .normalize();
+                  const spinQuat = new THREE.Quaternion().setFromAxisAngle(
+                    rollAxis,
+                    angle,
+                  );
+                  currentQuat.multiply(spinQuat);
+                }
+              }
 
               ship.position.copy(currentPos);
               ship.quaternion.copy(currentQuat);
@@ -240,11 +339,28 @@ export const useRenderLoop = () => {
                 cinematic.hoverStartTime = now;
                 cinematic.hoverBasePos = currentPos.clone();
                 cinematic.hoverStartQuat = ship.quaternion.clone();
+                if (passThrough) {
+                  cinematic.settleTargetPos = cinematic.endPos.clone();
+                  cinematic.settleDuration = Math.max(
+                    2200,
+                    cinematic.duration * 0.5,
+                  );
+                }
               }
             } else {
               const hoverStart = cinematic.hoverStartTime || now;
               const hoverElapsed = (now - hoverStart) / 1000;
-              const basePos = cinematic.hoverBasePos || cinematic.endPos;
+              let basePos = cinematic.hoverBasePos || cinematic.endPos;
+              if (cinematic.settleTargetPos && cinematic.settleDuration) {
+                const settleT = Math.min(
+                  (now - hoverStart) / cinematic.settleDuration,
+                  1,
+                );
+                const easedSettle = THREE.MathUtils.smootherstep(settleT, 0, 1);
+                basePos = basePos
+                  .clone()
+                  .lerp(cinematic.settleTargetPos, easedSettle);
+              }
               const floatX = Math.sin(hoverElapsed * 0.4) * 0.27;
               const floatY = Math.sin(hoverElapsed * 0.6) * 0.4;
               ship.position
@@ -259,6 +375,52 @@ export const useRenderLoop = () => {
               ship.quaternion
                 .copy(hoverStartQuat)
                 .slerp(cinematic.endQuat, easedFaceProgress);
+            }
+
+            if (debugSnapToShipRef.current && sceneRef.current.controls) {
+              const cameraDistance = 60;
+              const cameraHeight = 20;
+              const backwardDirection = new THREE.Vector3(0, 0, -1);
+              backwardDirection.applyQuaternion(ship.quaternion);
+              const cameraTargetPos = ship.position
+                .clone()
+                .add(backwardDirection.multiplyScalar(cameraDistance))
+                .add(new THREE.Vector3(0, cameraHeight, 0));
+
+              camera.position.lerp(cameraTargetPos, 0.12);
+              sceneRef.current.controls.target.lerp(ship.position, 0.12);
+              sceneRef.current.controls.update();
+            }
+
+            if (spaceshipEngineLightRef.current) {
+              const engineLight = spaceshipEngineLightRef.current;
+              const lastPos = ship.userData.cinematicLastPos as
+                | THREE.Vector3
+                | undefined;
+              const lastTime = ship.userData.cinematicLastTime as
+                | number
+                | undefined;
+              let speed = 0;
+
+              if (lastPos && lastTime) {
+                const dt = Math.max((now - lastTime) / 1000, 1 / 120);
+                speed = ship.position.distanceTo(lastPos) / dt;
+              }
+
+              ship.userData.cinematicLastPos = ship.position.clone();
+              ship.userData.cinematicLastTime = now;
+
+              const speedFactor = Math.min(speed / 60, 1.6);
+              const baseIntensity = 0.8;
+              engineLight.intensity = baseIntensity + speedFactor * 3.2;
+              engineLight.distance = 220 + speedFactor * 140;
+
+              const blueAmount = 0.3 + speedFactor * 0.7;
+              engineLight.color.setRGB(
+                blueAmount * 0.3,
+                blueAmount * 0.6,
+                blueAmount * 1.0,
+              );
             }
           } else if (manualFlightModeRef.current) {
             const manual = manualFlightRef.current;
@@ -370,6 +532,7 @@ export const useRenderLoop = () => {
               const turboBoost = manual.isTurboActive ? 3 : 0;
               const boostIntensity = manual.acceleration * 8 + turboBoost;
               engineLight.intensity = baseIntensity + boostIntensity;
+              engineLight.distance = 220 + boostIntensity * 40;
 
               if (manual.acceleration > 0) {
                 const blueAmount = 0.3 + manual.acceleration * 0.7;
