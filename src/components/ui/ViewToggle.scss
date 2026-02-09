@@ -1,0 +1,59 @@
+@use '../../styles/hud-mixins' as hud;
+
+.view-toggle {
+  @include hud.screen-anchor('bottom-left');
+  @include hud.glass-panel;
+  z-index: var(--z-hud);
+
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  border: 1px solid var(--panel-border);
+  background: var(--hud-bg);
+  transition: all var(--duration-fast) var(--ease-appear);
+  outline: none;
+
+  &:hover {
+    border-color: var(--panel-border-hover);
+    box-shadow:
+      var(--panel-shadow),
+      0 0 12px var(--hud-primary-glow);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--hud-primary);
+    outline-offset: 2px;
+  }
+
+  &__icon {
+    font-size: var(--text-lg);
+    line-height: 1;
+  }
+
+  &__label {
+    font-family: var(--font-hud);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--hud-primary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  &__hint {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--hud-text-dim);
+    border: 1px solid var(--panel-border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    line-height: 1.4;
+    margin-left: var(--space-xs);
+  }
+}

@@ -42,7 +42,7 @@ import {
   TourDefinitionBuilder,
   type PlanetData,
 } from "../TourDefinitionBuilder";
-import SpaceshipHUD from "../SpaceshipHUDClean.tsx";
+import SpaceshipHUD from "../ui/SpaceshipHUD";
 import { getOrbitalPositionEmitter } from "../OrbitalPositionEmitter";
 import { useCosmosLogs } from "./hooks/useCosmosLogs";
 import { useCosmosOptions } from "./hooks/useCosmosOptions";
@@ -146,8 +146,6 @@ export default function ResumeSpace3D({
     missionLog,
   } = useCosmosLogs();
 
-  // HUD visibility state
-  const [hudVisible, setHudVisible] = useState(true);
   const [shipMovementDebug, setShipMovementDebug] = useState(false);
   const [systemStatusLogs, setSystemStatusLogs] = useState<string[]>([]);
 
@@ -267,6 +265,27 @@ export default function ResumeSpace3D({
       overlayOffsets?: number[];
       overlayHeights?: number[];
     }[]
+  >([]);
+
+  // Ship Explore Mode — debug FPS camera to locate cockpit and other positions
+  const [shipExploreMode, setShipExploreMode] = useState(false);
+  const shipExploreModeRef = useRef(false);
+  const shipExploreKeysRef = useRef<Record<string, boolean>>({
+    KeyW: false, KeyA: false, KeyS: false, KeyD: false,
+    KeyQ: false, KeyE: false,
+    ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false,
+    ShiftLeft: false, ShiftRight: false,
+  });
+  const shipExploreCoordsRef = useRef<{
+    local: [number, number, number];
+    world: [number, number, number];
+  }>({ local: [0, 0, 0], world: [0, 0, 0] });
+  const [exploreCoords, setExploreCoords] = useState<{
+    local: [number, number, number];
+    world: [number, number, number];
+  }>({ local: [0, 0, 0], world: [0, 0, 0] });
+  const [exploreSavedPositions, setExploreSavedPositions] = useState<
+    { label: string; local: [number, number, number] }[]
   >([]);
 
   // Manual flight control state
@@ -513,14 +532,6 @@ export default function ResumeSpace3D({
       sceneRef,
     });
 
-  // HUD show/hide control
-  const hudRefs = useRef<{
-    top: HTMLElement | null;
-    right: HTMLElement | null;
-    left: HTMLElement | null;
-    footer: HTMLElement | null;
-  }>({ top: null, right: null, left: null, footer: null });
-
   const optionsRef = useCosmosOptions({
     options,
     sceneRef,
@@ -531,6 +542,7 @@ export default function ResumeSpace3D({
     currentNavigationTarget,
     navigationDistance,
     navigationETA,
+    handleAutopilotNavigation,
     initializeNavigationSystem,
     updateAutopilotNavigation,
     disposeNavigationSystem,
@@ -594,6 +606,14 @@ export default function ResumeSpace3D({
 
   const handleQuickNav = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
+      if (
+        (followingSpaceshipRef.current || insideShipRef.current) &&
+        !manualFlightModeRef.current
+      ) {
+        handleAutopilotNavigation(targetId, targetType);
+        return;
+      }
+
       const target =
         targetType === "moon" ? `experience-${targetId}` : targetId;
 
@@ -601,8 +621,11 @@ export default function ResumeSpace3D({
         handleNavigationRef.current(target);
       }
     },
-    [],
+    [handleAutopilotNavigation],
   );
+
+  // Legacy left-panel hide/show logic removed — old CosmicNavigation
+  // interface no longer exists. Navigation is handled by the new game UI.
 
   const appendSystemStatusLog = useCallback((message: string) => {
     setSystemStatusLogs((prev) => {
@@ -1057,6 +1080,23 @@ export default function ResumeSpace3D({
         spaceshipRef.current = spaceship;
         vlog("🚀 Spaceship loaded - ready for navigation");
 
+        // --- COCKPIT POSITION ---
+        // Reference points from the ship-labeling system:
+        //   cockpit exterior surface: [-6.20, 3.59, 7.13]  (right side, forward)
+        //   right hull edge:          [-6.68, 2.86, 0.00]  (-X is starboard)
+        //   front edge:               [-0.01, -0.28, 7.26] (+Z is forward)
+        //
+        // The cockpit tube protrudes right-forward from the disc.
+        // Interior offset from surface: ~0.8 inward (+X), ~0.5 lower (seated
+        // eye height), ~1.1 back from windshield (behind pilot chair).
+        // NOTE: render loop multiplies these by ship.scale (0.5) during
+        //       the local→world transformation.
+        const cockpitCamLocal = new THREE.Vector3(-6.05, 3.16, 5.36);
+        const cockpitLookLocal = new THREE.Vector3(-6.05, 3.16, 11.36); // forward through window
+        spaceship.userData.cockpitCameraLocal = cockpitCamLocal;
+        spaceship.userData.cockpitLookLocal = cockpitLookLocal;
+        vlog(`✈️ Cockpit interior position: camera [${cockpitCamLocal.x.toFixed(1)}, ${cockpitCamLocal.y.toFixed(1)}, ${cockpitCamLocal.z.toFixed(1)}], look [${cockpitLookLocal.x.toFixed(1)}, ${cockpitLookLocal.y.toFixed(1)}, ${cockpitLookLocal.z.toFixed(1)}]`);
+
         // Initialize navigation system
         initializeNavigationSystem(spaceship, scene);
       },
@@ -1067,20 +1107,6 @@ export default function ResumeSpace3D({
     );
 
     // --- INTERACTION ---
-    // Cache HUD panel elements for show/hide animations
-    hudRefs.current.top = document.querySelector(
-      ".spaceship-hud__top",
-    ) as HTMLElement | null;
-    hudRefs.current.right = document.querySelector(
-      ".spaceship-hud__right",
-    ) as HTMLElement | null;
-    hudRefs.current.left = document.querySelector(
-      ".spaceship-hud__left",
-    ) as HTMLElement | null;
-    hudRefs.current.footer = document.querySelector(
-      ".spaceship-hud__footer",
-    ) as HTMLElement | null;
-
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const debugHitMarker = new THREE.Mesh(
@@ -1318,54 +1344,39 @@ export default function ResumeSpace3D({
           if (spaceshipRef.current) {
             vlog("🚀 Spaceship located, beginning pursuit...");
 
-            // Enable follow mode immediately
-            setFollowingSpaceship(true);
-            followingSpaceshipRef.current = true;
-
-            // Fly camera to behind the spaceship
+            // Fly camera to behind the spaceship, then enable follow mode
             const shipPos = spaceshipRef.current.position.clone();
-
-            // Get the ship's backward direction (behind it)
             const shipDirection = new THREE.Vector3();
             spaceshipRef.current.getWorldDirection(shipDirection);
-            const behindOffset = shipDirection.multiplyScalar(-60); // 60 units behind
-            const heightOffset = new THREE.Vector3(0, 20, 0); // 20 units above
-
+            const behindOffset = shipDirection.multiplyScalar(-60);
+            const heightOffset = new THREE.Vector3(0, 20, 0);
             const targetCameraPos = shipPos
               .clone()
               .add(behindOffset)
               .add(heightOffset);
 
-            // Animate camera to behind spaceship
-            const startPos = camera.position.clone();
-            const duration = 2000; // 2 seconds
-            const startTime = Date.now();
+            // Animate camera to behind ship using camera director (no conflict with render loop)
+            await cameraDirectorRef.current.flyTo({
+              position: targetCameraPos,
+              lookAt: shipPos,
+              duration: 1.5,
+              ease: "power2.inOut",
+            });
 
-            const animateToShip = () => {
-              const elapsed = Date.now() - startTime;
-              const progress = Math.min(elapsed / duration, 1);
-              const eased = progress * progress * (3 - 2 * progress); // smooth ease
+            // Now enable follow mode - render loop takes over cleanly
+            setFollowingSpaceship(true);
+            followingSpaceshipRef.current = true;
 
-              const currentShipPos = spaceshipRef.current!.position.clone();
-              camera.position.lerpVectors(startPos, targetCameraPos, eased);
-              camera.lookAt(currentShipPos);
-
-              if (progress < 1) {
-                requestAnimationFrame(animateToShip);
-              } else {
-                // Set orbit controls to follow the ship
-                if (sceneRef.current.controls) {
-                  sceneRef.current.controls.target.copy(currentShipPos);
-                  sceneRef.current.controls.enabled = true;
-                  sceneRef.current.controls.enableDamping = true;
-                }
-                vlog(
-                  "🎯 Following spaceship engaged - orbit around ship enabled",
-                );
-              }
-            };
-
-            animateToShip();
+            if (sceneRef.current.controls) {
+              sceneRef.current.controls.target.copy(
+                spaceshipRef.current.position,
+              );
+              sceneRef.current.controls.enabled = true;
+              sceneRef.current.controls.enableDamping = true;
+            }
+            vlog(
+              "🎯 Following spaceship engaged - orbit around ship enabled",
+            );
           } else {
             // Fallback to sun if spaceship not loaded yet
             await cameraDirectorRef.current.systemOverview();
@@ -1819,6 +1830,9 @@ export default function ResumeSpace3D({
       shipViewModeRef,
       insideShipRef,
       debugSnapToShipRef,
+      shipExploreModeRef,
+      shipExploreKeysRef,
+      shipExploreCoordsRef,
       optionsRef,
       updateAutopilotNavigation,
       updateOrbitSystem,
@@ -1845,7 +1859,7 @@ export default function ResumeSpace3D({
         manualFlightModeRef,
         setFollowingSpaceship,
         followingSpaceshipRef,
-        setHudVisible,
+        setHudVisible: () => {},  // legacy — old HUD panels removed
         setShipExteriorLights,
         sunMesh,
       });
@@ -2016,6 +2030,65 @@ export default function ResumeSpace3D({
     });
     window.addEventListener("keyup", handleShipStagingKeyUp, { capture: true });
 
+    // ─── SHIP EXPLORE MODE ─────────────────────────────────────
+    // Ctrl+Shift+` (backtick) toggles explore mode for cockpit identification.
+    const handleExploreKeyDown = (e: KeyboardEvent) => {
+      // Toggle with Ctrl+Shift+`
+      if (e.ctrlKey && e.shiftKey && e.code === "Backquote") {
+        e.preventDefault();
+        const entering = !shipExploreModeRef.current;
+        shipExploreModeRef.current = entering;
+        setShipExploreMode(entering);
+
+        if (entering && spaceshipRef.current) {
+          // Teleport camera near the ship center
+          const ship = spaceshipRef.current;
+          const shipPos = new THREE.Vector3();
+          ship.getWorldPosition(shipPos);
+          camera.position.copy(shipPos).add(new THREE.Vector3(0, 1, 3));
+          if (sceneRef.current.controls) {
+            const oc = sceneRef.current.controls as any;
+            oc.target.copy(shipPos).add(new THREE.Vector3(0, 0, 5));
+          }
+          vlog("🔍 Ship explore mode ACTIVATED — use WASD to move, mouse to look");
+        } else {
+          vlog("🔍 Ship explore mode DEACTIVATED");
+          // Restore near plane
+          if (camera instanceof THREE.PerspectiveCamera) {
+            camera.near = 1;
+            camera.updateProjectionMatrix();
+          }
+        }
+        return;
+      }
+
+      // Track keys while explore mode is active
+      if (shipExploreModeRef.current) {
+        if (e.code in shipExploreKeysRef.current) {
+          shipExploreKeysRef.current[e.code] = true;
+        }
+      }
+    };
+
+    const handleExploreKeyUp = (e: KeyboardEvent) => {
+      if (shipExploreModeRef.current) {
+        if (e.code in shipExploreKeysRef.current) {
+          shipExploreKeysRef.current[e.code] = false;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleExploreKeyDown, { capture: true });
+    window.addEventListener("keyup", handleExploreKeyUp, { capture: true });
+
+    // Poll explore coords into React state for the overlay (4 Hz is enough)
+    const explorePollInterval = setInterval(() => {
+      if (shipExploreModeRef.current) {
+        setExploreCoords({ ...shipExploreCoordsRef.current });
+      }
+    }, 250);
+    // ─── END SHIP EXPLORE MODE ─────────────────────────────────
+
     const cleanup = () => {
       stopRenderLoop();
       window.removeEventListener("resize", handleResize);
@@ -2035,6 +2108,9 @@ export default function ResumeSpace3D({
       window.removeEventListener("pointerdown", onDebugPointerDown, true);
       window.removeEventListener("pointerup", onDebugPointerUp, true);
       window.removeEventListener("keydown", onDebugLabelKey, { capture: true });
+      window.removeEventListener("keydown", handleExploreKeyDown, { capture: true });
+      window.removeEventListener("keyup", handleExploreKeyUp, { capture: true });
+      clearInterval(explorePollInterval);
 
       cancelIntroSequence();
 
@@ -2122,41 +2198,431 @@ export default function ResumeSpace3D({
             }}
           />
 
-          <div
-            style={{
-              position: "absolute",
-              top: 10,
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 20000,
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
-            <button
-              onClick={() => setHudVisible((v) => !v)}
+          {/* Ship Explore Mode Overlay */}
+          {shipExploreMode && (
+            <div
               style={{
-                padding: "8px 14px",
-                borderRadius: 18,
-                border: "1px solid rgba(232, 197, 71, 0.6)",
-                background: hudVisible
-                  ? "rgba(15,20,25,0.9)"
-                  : "rgba(15,20,25,0.6)",
-                color: "#e8c547",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontWeight: 700,
-                letterSpacing: 0.5,
-                cursor: "pointer",
-                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 99999,
+                pointerEvents: "none",
+                fontFamily: "'JetBrains Mono', 'Rajdhani', monospace",
               }}
             >
-              {hudVisible ? "Hide HUD" : "Show HUD"}
-            </button>
-          </div>
+              {/* Top banner */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: 12,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  background: "rgba(255, 60, 60, 0.85)",
+                  color: "#fff",
+                  padding: "8px 24px",
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  letterSpacing: 1.2,
+                  textTransform: "uppercase",
+                  pointerEvents: "auto",
+                  zIndex: 100000,
+                }}
+              >
+                SHIP EXPLORE MODE &nbsp;|&nbsp; Ctrl+Shift+` to exit
+              </div>
+
+              {/* Crosshair */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  width: 20,
+                  height: 20,
+                  border: "2px solid rgba(0, 255, 150, 0.7)",
+                  borderRadius: "50%",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    width: 4,
+                    height: 4,
+                    background: "rgba(0, 255, 150, 0.9)",
+                    borderRadius: "50%",
+                  }}
+                />
+              </div>
+
+              {/* Coordinates panel (bottom-left) */}
+              <div
+                onMouseDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{
+                  position: "absolute",
+                  bottom: 16,
+                  left: 16,
+                  background: "rgba(0, 0, 0, 0.85)",
+                  border: "1px solid rgba(0, 255, 150, 0.5)",
+                  borderRadius: 8,
+                  padding: "12px 16px",
+                  color: "#0f6",
+                  fontSize: 13,
+                  lineHeight: 1.8,
+                  minWidth: 320,
+                  pointerEvents: "auto",
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, color: "#fff" }}>
+                  CAMERA POSITION (ship-local)
+                </div>
+                <div>
+                  X: <span style={{ color: "#ff6b6b" }}>{exploreCoords.local[0].toFixed(2)}</span>
+                  &nbsp;&nbsp;
+                  Y: <span style={{ color: "#51cf66" }}>{exploreCoords.local[1].toFixed(2)}</span>
+                  &nbsp;&nbsp;
+                  Z: <span style={{ color: "#339af0" }}>{exploreCoords.local[2].toFixed(2)}</span>
+                </div>
+                <div style={{ color: "#888", fontSize: 11, marginTop: 4 }}>
+                  World: [{exploreCoords.world[0]}, {exploreCoords.world[1]}, {exploreCoords.world[2]}]
+                </div>
+              </div>
+
+              {/* Right panel — View + Mark + Log controls */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: 55,
+                  right: 16,
+                  bottom: 16,
+                  width: 260,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  pointerEvents: "auto",
+                  overflowY: "auto",
+                }}
+              >
+                {/* ── CONTROLS REFERENCE ── */}
+                <div style={{
+                  background: "rgba(0,0,0,0.85)",
+                  border: "1px solid rgba(255,200,50,0.5)",
+                  borderRadius: 8,
+                  padding: "10px 14px",
+                  color: "#ffd43b",
+                  fontSize: 11,
+                  lineHeight: 1.7,
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 4, color: "#fff" }}>CONTROLS</div>
+                  <div><span style={{ color: "#aaa" }}>WASD</span> Move &nbsp; <span style={{ color: "#aaa" }}>Q/E</span> Down/Up &nbsp; <span style={{ color: "#aaa" }}>Shift</span> Fast</div>
+                  <div><span style={{ color: "#aaa" }}>Mouse drag</span> Look around</div>
+                </div>
+
+                {/* ── VIEW ALIGNMENT BUTTONS ── */}
+                <div
+                  style={{
+                    background: "rgba(0,0,0,0.85)",
+                    border: "1px solid rgba(100,200,255,0.5)",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, color: "#fff" }}>LOOK DIRECTION</div>
+                  {(() => {
+                    const viewBtnStyle: React.CSSProperties = {
+                      padding: "7px 8px",
+                      background: "rgba(100,200,255,0.2)",
+                      color: "#8ecfff",
+                      border: "1px solid rgba(100,200,255,0.4)",
+                      borderRadius: 5,
+                      fontFamily: "'Rajdhani', sans-serif",
+                      fontWeight: 700,
+                      fontSize: 11,
+                      cursor: "pointer",
+                      textTransform: "uppercase" as const,
+                      flex: "1 1 auto",
+                      textAlign: "center" as const,
+                    };
+                    const cam = sceneRef.current.camera;
+                    // Helper: orient camera to look in a ship-local direction
+                    const lookShipDir = (localDir: [number, number, number], e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      if (!cam || !spaceshipRef.current || !sceneRef.current.controls) return;
+                      const ship = spaceshipRef.current;
+                      const quat = new THREE.Quaternion();
+                      ship.getWorldQuaternion(quat);
+                      const dir = new THREE.Vector3(...localDir).applyQuaternion(quat).normalize();
+                      const oc = sceneRef.current.controls as any;
+                      oc.target.copy(cam.position).addScaledVector(dir, 2);
+                    };
+                    const stopEvt = (e: React.MouseEvent) => { e.stopPropagation(); e.preventDefault(); };
+                    return (
+                      <>
+                        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([0, 0, 1], e)}>Look Forward</button>
+                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([0, 0, -1], e)}>Look Back</button>
+                        </div>
+                        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([-1, 0, 0], e)}>Look Right</button>
+                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([1, 0, 0], e)}>Look Left</button>
+                        </div>
+                        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([0, 1, 0], e)}>Look Up</button>
+                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([0, -1, 0], e)}>Look Down</button>
+                        </div>
+                        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                          <button
+                            style={{ ...viewBtnStyle, background: "rgba(255, 180, 50, 0.3)", color: "#ffcc66", border: "1px solid rgba(255,180,50,0.5)", flex: "1 1 100%" }}
+                            onMouseDown={stopEvt}
+                            onClick={(e) => {
+                              stopEvt(e);
+                              if (!cam || !sceneRef.current.controls) return;
+                              const oc = sceneRef.current.controls as any;
+                              const lookDir = new THREE.Vector3();
+                              cam.getWorldDirection(lookDir);
+                              lookDir.negate();
+                              oc.target.copy(cam.position).addScaledVector(lookDir, 2);
+                            }}
+                          >
+                            Turn Around
+                          </button>
+                        </div>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button
+                            style={{ ...viewBtnStyle, background: "rgba(0,255,150,0.2)", color: "#0f6", border: "1px solid rgba(0,255,150,0.4)", flex: "1 1 100%" }}
+                            onMouseDown={stopEvt}
+                            onClick={(e) => {
+                              stopEvt(e);
+                              if (!cam) return;
+                              // Roll left: rotate camera's up vector around the look direction
+                              const fwd = new THREE.Vector3();
+                              cam.getWorldDirection(fwd);
+                              const rollQuat = new THREE.Quaternion().setFromAxisAngle(fwd, Math.PI / 36); // 5° CCW
+                              cam.up.applyQuaternion(rollQuat).normalize();
+                            }}
+                          >
+                            Roll Left
+                          </button>
+                          <button
+                            style={{ ...viewBtnStyle, background: "rgba(0,255,150,0.2)", color: "#0f6", border: "1px solid rgba(0,255,150,0.4)", flex: "1 1 100%" }}
+                            onMouseDown={stopEvt}
+                            onClick={(e) => {
+                              stopEvt(e);
+                              if (!cam) return;
+                              // Roll right: rotate camera's up vector around the look direction
+                              const fwd = new THREE.Vector3();
+                              cam.getWorldDirection(fwd);
+                              const rollQuat = new THREE.Quaternion().setFromAxisAngle(fwd, -Math.PI / 36); // 5° CW
+                              cam.up.applyQuaternion(rollQuat).normalize();
+                            }}
+                          >
+                            Roll Right
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {/* ── MARK BUTTONS ── */}
+                <div
+                  style={{
+                    background: "rgba(0,0,0,0.85)",
+                    border: "1px solid rgba(180,130,255,0.5)",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, color: "#fff" }}>MARK POSITION</div>
+                  {(() => {
+                    const markBtnBase: React.CSSProperties = {
+                      padding: "7px 12px",
+                      color: "#fff",
+                      borderRadius: 6,
+                      fontFamily: "'Rajdhani', sans-serif",
+                      fontWeight: 700,
+                      fontSize: 12,
+                      letterSpacing: 0.8,
+                      cursor: "pointer",
+                      textTransform: "uppercase" as const,
+                      width: "100%",
+                      textAlign: "center" as const,
+                    };
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <button
+                          style={{ ...markBtnBase, background: "rgba(255,60,60,0.85)", border: "2px solid rgba(255,100,100,0.7)" }}
+                          onClick={() => {
+                            const coords = shipExploreCoordsRef.current.local;
+                            setExploreSavedPositions((prev) => [...prev, { label: "COCKPIT", local: [...coords] }]);
+                            if (spaceshipRef.current) {
+                              const cam = new THREE.Vector3(coords[0], coords[1], coords[2]);
+                              const look = new THREE.Vector3(coords[0], coords[1], coords[2] + 6);
+                              spaceshipRef.current.userData.cockpitCameraLocal = cam;
+                              spaceshipRef.current.userData.cockpitLookLocal = look;
+                              vlog(`COCKPIT MARKED at local [${coords[0]}, ${coords[1]}, ${coords[2]}]`);
+                            }
+                          }}
+                        >Mark Cockpit</button>
+                        <button
+                          style={{ ...markBtnBase, background: "rgba(50,150,255,0.85)", border: "2px solid rgba(100,180,255,0.7)" }}
+                          onClick={() => {
+                            const coords = shipExploreCoordsRef.current.local;
+                            setExploreSavedPositions((prev) => [...prev, { label: "CABIN", local: [...coords] }]);
+                            vlog(`CABIN MARKED at local [${coords[0]}, ${coords[1]}, ${coords[2]}]`);
+                          }}
+                        >Mark Cabin</button>
+                        <button
+                          style={{ ...markBtnBase, background: "rgba(50,200,100,0.85)", border: "2px solid rgba(100,220,150,0.7)" }}
+                          onClick={() => {
+                            const coords = shipExploreCoordsRef.current.local;
+                            setExploreSavedPositions((prev) => [...prev, { label: "CUSTOM", local: [...coords] }]);
+                            vlog(`CUSTOM MARKED at local [${coords[0]}, ${coords[1]}, ${coords[2]}]`);
+                          }}
+                        >Mark Custom</button>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* ── LOG TO CONSOLE ── */}
+                <button
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const positions = exploreSavedPositions;
+                    const current = shipExploreCoordsRef.current;
+                    console.log("\n%c═══ SHIP EXPLORE MODE — SAVED POSITIONS ═══", "color: #ff6b6b; font-weight: bold; font-size: 14px;");
+                    console.log("%cCurrent camera (ship-local):", "color: #0f6; font-weight: bold;", current.local);
+                    console.log("%cCurrent camera (world):", "color: #888;", current.world);
+                    console.log("");
+                    positions.forEach((p, i) => {
+                      const color = p.label === "COCKPIT" ? "#ff6b6b" : p.label === "CABIN" ? "#339af0" : "#51cf66";
+                      console.log(`%c${p.label}:`, `color: ${color}; font-weight: bold;`, `new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]})`);
+                    });
+                    console.log("");
+                    console.log("%c── Copy-paste ready code ──", "color: #ffd43b; font-weight: bold;");
+                    const codeLines = [
+                      "// ═══ Ship Explore Mode — Saved Positions ═══",
+                      `// Generated at ${new Date().toISOString()}`,
+                      `// Ship scale: ${spaceshipRef.current?.scale.x ?? "unknown"}`,
+                      "",
+                    ];
+                    positions.forEach((p) => {
+                      codeLines.push(`// ${p.label}`);
+                      codeLines.push(`const ${p.label.toLowerCase()}CamLocal = new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]});`);
+                      codeLines.push(`const ${p.label.toLowerCase()}LookLocal = new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2] + 6});`);
+                      codeLines.push("");
+                    });
+                    if (positions.length === 0) {
+                      codeLines.push("// (no positions marked yet — current camera position below)");
+                      codeLines.push(`const currentLocal = new THREE.Vector3(${current.local[0]}, ${current.local[1]}, ${current.local[2]});`);
+                    }
+                    const codeStr = codeLines.join("\n");
+                    console.log(codeStr);
+                    console.log("%c═══ END ═══", "color: #ff6b6b; font-weight: bold;");
+                    // Also try to copy to clipboard
+                    navigator.clipboard.writeText(codeStr).then(
+                      () => console.log("%cCopied to clipboard!", "color: #0f6; font-weight: bold;"),
+                      () => console.log("%cClipboard copy failed — please copy from above.", "color: #ff0;"),
+                    );
+                  }}
+                  style={{
+                    padding: "10px 14px",
+                    background: "rgba(255, 200, 50, 0.9)",
+                    color: "#000",
+                    border: "2px solid rgba(255, 220, 100, 0.8)",
+                    borderRadius: 8,
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    letterSpacing: 1,
+                    cursor: "pointer",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  LOG ALL TO CONSOLE + COPY
+                </button>
+              </div>
+
+              {/* Saved positions log (top-left) */}
+              {exploreSavedPositions.length > 0 && (
+                <div
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  style={{
+                    position: "absolute",
+                    top: 60,
+                    left: 16,
+                    background: "rgba(0, 0, 0, 0.85)",
+                    border: "1px solid rgba(180, 130, 255, 0.5)",
+                    borderRadius: 8,
+                    padding: "12px 16px",
+                    color: "#d0bfff",
+                    fontSize: 12,
+                    lineHeight: 1.8,
+                    minWidth: 280,
+                    maxHeight: 300,
+                    overflowY: "auto",
+                    pointerEvents: "auto",
+                  }}
+                >
+                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, color: "#fff" }}>
+                    SAVED POSITIONS
+                  </div>
+                  {exploreSavedPositions.map((pos, i) => (
+                    <div key={i} style={{ borderBottom: "1px solid rgba(180,130,255,0.2)", paddingBottom: 4, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, color: pos.label === "COCKPIT" ? "#ff6b6b" : pos.label === "CABIN" ? "#339af0" : "#51cf66" }}>
+                        {pos.label}
+                      </span>
+                      : [{pos.local[0]}, {pos.local[1]}, {pos.local[2]}]
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => {
+                      // Copy all saved positions to clipboard as code
+                      const code = exploreSavedPositions
+                        .map((p) => `// ${p.label}: new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]})`)
+                        .join("\n");
+                      navigator.clipboard.writeText(code).then(() => {
+                        vlog("📋 Positions copied to clipboard!");
+                      });
+                    }}
+                    style={{
+                      marginTop: 8,
+                      padding: "6px 14px",
+                      background: "rgba(180, 130, 255, 0.3)",
+                      color: "#d0bfff",
+                      border: "1px solid rgba(180,130,255,0.5)",
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      fontSize: 11,
+                      fontFamily: "'Rajdhani', sans-serif",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Copy All to Clipboard
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Spaceship HUD Interface */}
           <SpaceshipHUD
-            hudVisible={hudVisible}
             userName="HARMA DAVTIAN"
             userTitle="Lead Full Stack Engineer"
             shipMovementDebug={shipMovementDebug}
@@ -2586,6 +3052,16 @@ export default function ResumeSpace3D({
             insideShip={insideShip}
             shipViewMode={shipViewMode}
             onEnterShip={() => {
+              if (!followingSpaceship) {
+                setFollowingSpaceship(true);
+                followingSpaceshipRef.current = true;
+              }
+
+              if (manualFlightModeRef.current) {
+                setManualFlightMode(false);
+                manualFlightModeRef.current = false;
+              }
+
               setInsideShip(true);
               insideShipRef.current = true;
               setShipViewMode("interior");
@@ -2603,15 +3079,16 @@ export default function ResumeSpace3D({
                 ship.getWorldPosition(shipWorldPos);
                 ship.getWorldQuaternion(shipWorldQuat);
 
-                // Cabin is at right front (1.5 right, 0.2 up, 1 forward in ship local space)
-                const cabinLocalPos = new THREE.Vector3(1.5, 0.2, 1);
-                const cabinWorldPos = cabinLocalPos
-                  .clone()
+                // Cabin anchor — from explore mode labeling
+                const shipScale = ship.scale.x;
+                const cabinWorldPos = new THREE.Vector3(0, -0.64, -4.49)
+                  .multiplyScalar(shipScale)
                   .applyQuaternion(shipWorldQuat)
                   .add(shipWorldPos);
 
-                // Camera looks into cabin center
-                const cabinLookTarget = new THREE.Vector3(0.5, 0, 0)
+                // Camera looks forward from cabin
+                const cabinLookTarget = new THREE.Vector3(0, -0.64, 1.51)
+                  .multiplyScalar(shipScale)
                   .applyQuaternion(shipWorldQuat)
                   .add(shipWorldPos);
 
@@ -2627,13 +3104,25 @@ export default function ResumeSpace3D({
               insideShipRef.current = false;
               setShipViewMode("exterior");
               shipViewModeRef.current = "exterior";
+
+              // Restore camera constraints from interior mode
+              if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
+                sceneRef.current.camera.near = 0.1;
+                sceneRef.current.camera.updateProjectionMatrix();
+              }
+              if (sceneRef.current.controls) {
+                const oc = sceneRef.current.controls as any;
+                oc.minPolarAngle = 0;
+                oc.maxPolarAngle = Math.PI;
+              }
+
               vlog("🚪 Exiting ship - exterior view");
             }}
             onGoToCockpit={() => {
               setShipViewMode("cockpit");
               shipViewModeRef.current = "cockpit";
 
-              // Position camera in cockpit looking forward
+              // Position camera inside model's actual cockpit
               if (
                 spaceshipRef.current &&
                 sceneRef.current.camera &&
@@ -2645,20 +3134,34 @@ export default function ResumeSpace3D({
                 ship.getWorldPosition(shipWorldPos);
                 ship.getWorldQuaternion(shipWorldQuat);
 
-                // Cockpit position (center, slightly up, forward)
-                const cockpitLocalPos = new THREE.Vector3(0, 0.5, 3);
-                const cockpitWorldPos = cockpitLocalPos
+                // Use dynamically detected cockpit position or fallback
+                const cockpitCamLocal = (ship.userData.cockpitCameraLocal as THREE.Vector3)
+                  ?? new THREE.Vector3(-6.05, 3.16, 5.36);
+                const cockpitLookLocal = (ship.userData.cockpitLookLocal as THREE.Vector3)
+                  ?? new THREE.Vector3(-6.05, 3.16, 11.36);
+
+                const shipScale = ship.scale.x;
+                const cockpitWorldPos = cockpitCamLocal
                   .clone()
+                  .multiplyScalar(shipScale)
                   .applyQuaternion(shipWorldQuat)
                   .add(shipWorldPos);
 
-                // Look forward through window
-                const windowTarget = new THREE.Vector3(0, 0.5, 10)
+                const windowTarget = cockpitLookLocal
+                  .clone()
+                  .multiplyScalar(shipScale)
                   .applyQuaternion(shipWorldQuat)
                   .add(shipWorldPos);
 
                 sceneRef.current.camera.position.copy(cockpitWorldPos);
                 sceneRef.current.controls.target.copy(windowTarget);
+
+                // Reduce near clipping plane so cockpit geometry is visible
+                if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
+                  sceneRef.current.camera.near = 0.01;
+                  sceneRef.current.camera.updateProjectionMatrix();
+                }
+
                 sceneRef.current.controls.update();
               }
 
@@ -2680,20 +3183,28 @@ export default function ResumeSpace3D({
                 ship.getWorldPosition(shipWorldPos);
                 ship.getWorldQuaternion(shipWorldQuat);
 
-                // Cabin position (right front)
-                const cabinLocalPos = new THREE.Vector3(1.5, 0.2, 1);
-                const cabinWorldPos = cabinLocalPos
-                  .clone()
+                // Cabin anchor — from explore mode labeling
+                const shipScale = ship.scale.x;
+                const cabinWorldPos = new THREE.Vector3(0, -0.64, -4.49)
+                  .multiplyScalar(shipScale)
                   .applyQuaternion(shipWorldQuat)
                   .add(shipWorldPos);
 
-                // Look into cabin center
-                const cabinLookTarget = new THREE.Vector3(0.5, 0, 0)
+                // Look forward from cabin
+                const cabinLookTarget = new THREE.Vector3(0, -0.64, 1.51)
+                  .multiplyScalar(shipScale)
                   .applyQuaternion(shipWorldQuat)
                   .add(shipWorldPos);
 
                 sceneRef.current.camera.position.copy(cabinWorldPos);
                 sceneRef.current.controls.target.copy(cabinLookTarget);
+
+                // Restore near clipping plane when leaving cockpit
+                if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
+                  sceneRef.current.camera.near = 0.1;
+                  sceneRef.current.camera.updateProjectionMatrix();
+                }
+
                 sceneRef.current.controls.update();
               }
 
@@ -2755,7 +3266,15 @@ export default function ResumeSpace3D({
               setShipViewMode("exterior");
               shipViewModeRef.current = "exterior";
               if (sceneRef.current.controls) {
-                sceneRef.current.controls.enabled = true;
+                const oc = sceneRef.current.controls as any;
+                oc.enabled = true;
+                oc.minPolarAngle = 0;
+                oc.maxPolarAngle = Math.PI;
+              }
+              // Restore near clipping plane
+              if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
+                sceneRef.current.camera.near = 0.1;
+                sceneRef.current.camera.updateProjectionMatrix();
               }
               vlog("🛑 Stopped following spaceship");
             }}

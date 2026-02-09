@@ -416,7 +416,10 @@ export class NavigationInterface {
     this.container = container;
     this.onNavigate = onNavigate;
     this.audioSystem = new CosmicAudioSystem();
-    this.createInterface();
+    // UI creation disabled — the old left-panel interface has been replaced
+    // by the new minimal game UI (src/components/ui/).  Navigation is now
+    // handled through the new SpaceshipHUD sub-components.
+    // this.createInterface();
   }
 
   private createInterface(): void {

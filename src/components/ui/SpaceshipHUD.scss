@@ -1,0 +1,16 @@
+// ============================================================
+// SpaceshipHUD — Minimal game UI shell
+// ============================================================
+@use '../../styles/tokens';
+
+.game-hud {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-hud);
+  pointer-events: none; // let clicks pass through to 3D canvas
+
+  // All interactive children re-enable pointer events
+  > * {
+    pointer-events: auto;
+  }
+}

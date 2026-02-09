@@ -1,0 +1,53 @@
+@use '../../styles/hud-mixins' as hud;
+
+.id-badge {
+  @include hud.screen-anchor('top-left');
+  @include hud.glass-panel;
+  z-index: var(--z-hud);
+  padding: var(--space-sm) var(--space-md);
+  max-width: 180px;
+  overflow: hidden;
+  transition:
+    max-width var(--duration-normal) var(--ease-appear),
+    padding var(--duration-normal) var(--ease-appear);
+  cursor: default;
+
+  &--expanded {
+    max-width: 320px;
+    padding: var(--space-md) var(--space-lg);
+  }
+
+  &__name {
+    font-family: var(--font-hud);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--hud-primary);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  &__detail {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+      max-height var(--duration-normal) var(--ease-appear),
+      opacity var(--duration-normal) var(--ease-appear);
+
+    .id-badge--expanded & {
+      max-height: 60px;
+      opacity: 1;
+    }
+  }
+
+  &__title {
+    font-family: var(--font-hud);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--hud-text-dim);
+    letter-spacing: 0.06em;
+    margin-top: var(--space-xs);
+    white-space: nowrap;
+  }
+}

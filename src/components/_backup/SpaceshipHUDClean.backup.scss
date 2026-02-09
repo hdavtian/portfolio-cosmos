@@ -1,0 +1,687 @@
+/* Navigation Drawer - Left-side autopilot navigation */
+
+.spaceship-nav-drawer {
+    position: fixed;
+    /* Dynamic positioning via inline styles */
+    width: 240px;
+    max-height: 500px;
+    background: rgba(17, 20, 24, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    animation: slideInFromRight 0.4s ease-out;
+    overflow: hidden;
+}
+
+@keyframes slideInFromRight {
+    from {
+        transform: translateX(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.nav-drawer__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(0, 0, 0, 0.3) 100%);
+    border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.nav-drawer__icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.nav-drawer__title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: #e8c547;
+    margin: 0;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.nav-drawer__list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+
+    /* Custom scrollbar */
+    &::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.3);
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: rgba(212, 175, 55, 0.3);
+        border-radius: 3px;
+
+        &:hover {
+            background: rgba(212, 175, 55, 0.5);
+        }
+    }
+}
+
+.nav-drawer__item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 8px;
+    color: #a0aab5;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+
+    &:hover {
+        background: rgba(212, 175, 55, 0.15);
+        border-color: rgba(212, 175, 55, 0.4);
+        color: #e8c547;
+        transform: translateX(4px);
+
+        .nav-drawer__item-badge {
+            transform: scale(1.2) rotate(10deg);
+        }
+    }
+
+    &.active {
+        background: rgba(212, 175, 55, 0.25);
+        border-color: #e8c547;
+        color: #e8c547;
+        box-shadow: 0 0 12px rgba(232, 197, 71, 0.3);
+
+        &::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: #e8c547;
+            border-radius: 0 3px 3px 0;
+        }
+    }
+
+    &--moon {
+        padding-left: 24px;
+        font-size: 12px;
+
+        &::after {
+            content: '';
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 4px;
+            background: rgba(212, 175, 55, 0.5);
+            border-radius: 50%;
+        }
+    }
+}
+
+.nav-drawer__item-icon {
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.nav-drawer__item-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nav-drawer__item-badge {
+    font-size: 14px;
+    opacity: 0.7;
+    transition: all 0.2s ease;
+}
+
+.nav-drawer__status {
+    padding: 12px 16px;
+    background: rgba(0, 0, 0, 0.5);
+    border-top: 1px solid rgba(212, 175, 55, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.nav-drawer__status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 11px;
+}
+
+.nav-drawer__status-label {
+    color: #6a7380;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.nav-drawer__status-value {
+    color: #e8c547;
+    font-weight: 600;
+    font-family: 'Orbitron', monospace;
+}
+
+/* Cosmos Options styles */
+
+
+.cosmos-options {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+}
+
+.cosmos-options__label {
+    color: #8a9199;
+    font-size: 11px;
+    display: block;
+    margin-bottom: 4px;
+    font-family: 'Rajdhani', sans-serif;
+}
+
+.cosmos-options__label--spaced {
+    margin: 8px 0 4px 0;
+}
+
+.cosmos-options__range {
+    width: 100%;
+}
+
+.cosmos-options__color-input {
+    width: 56px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid rgba(212, 175, 55, 0.5);
+    border-radius: 6px;
+    background: #0f1419;
+}
+
+.cosmos-options__checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #8a9199;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: 'Rajdhani', sans-serif;
+}
+
+/* Contextual Controls - Floating ship controls */
+
+.contextual-controls {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+
+    background: rgba(15, 20, 25, 0.95);
+    border: 2px solid rgba(212, 175, 55, 0.6);
+    border-radius: 12px;
+    padding: 16px 24px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+        0 0 20px rgba(212, 175, 55, 0.3);
+
+    font-family: 'Rajdhani', sans-serif;
+    z-index: 1000;
+
+    min-width: 280px;
+    max-width: 320px;
+
+    animation: slideInRight 0.4s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.contextual-controls-header {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #d4af37;
+    letter-spacing: 2px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+}
+
+.contextual-control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        color: #8a9199;
+        font-size: 12px;
+        cursor: pointer;
+
+        input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #d4af37;
+            margin-right: 8px;
+        }
+
+        input[type="range"] {
+            cursor: pointer;
+
+            &::-webkit-slider-thumb {
+                background: #d4af37;
+            }
+
+            &::-moz-range-thumb {
+                background: #d4af37;
+            }
+        }
+
+        .value {
+            text-align: right;
+            font-weight: 700;
+            color: #d4af37;
+        }
+
+        >span:first-child {
+            font-weight: 600;
+            color: #a8b2bd;
+        }
+    }
+}
+
+.contextual-stop-button,
+.contextual-action-button {
+    border: 2px solid rgba(220, 38, 38, 0.6);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+
+    &:hover {
+        box-shadow: 0 0 15px rgba(100, 149, 237, 0.5);
+        transform: scale(1.02);
+    }
+
+    &:active {
+        transform: scale(0.98);
+    }
+}
+
+.contextual-stop-button {
+    background: rgba(220, 38, 38, 0.2);
+    border-color: rgba(220, 38, 38, 0.6);
+    color: #ff5555;
+
+    &:hover {
+        background: rgba(220, 38, 38, 0.4);
+        border-color: rgba(220, 38, 38, 0.8);
+        box-shadow: 0 0 15px rgba(220, 38, 38, 0.5);
+    }
+}
+
+/* HUD resize handles */
+.hud-resize-handle {
+    position: absolute;
+    background: rgba(232, 197, 71, 0.4);
+    transition: background 0.2s ease;
+    z-index: 3;
+
+    &:hover {
+        background: rgba(232, 197, 71, 0.7);
+    }
+}
+
+.hud-resize-handle--left {
+    top: 0;
+    bottom: 0;
+    right: -2px;
+    width: 4px;
+    cursor: col-resize;
+}
+
+.hud-resize-handle--right {
+    top: 0;
+    bottom: 0;
+    left: -2px;
+    width: 4px;
+    cursor: col-resize;
+}
+
+.hud-resize-handle--footer {
+    top: -2px;
+    left: 0;
+    right: 0;
+    height: 4px;
+    cursor: row-resize;
+}
+
+/* Flight Mode Toggle */
+.flight-mode-toggle {
+    margin: 12px 0;
+
+    .mode-buttons {
+        display: flex;
+        gap: 8px;
+
+        .mode-button {
+            flex: 1;
+            padding: 10px 12px;
+            background: rgba(15, 20, 25, 0.6);
+            border: 1px solid rgba(138, 145, 153, 0.3);
+            border-radius: 6px;
+            color: #8a9199;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+
+            &:hover {
+                background: rgba(30, 40, 50, 0.8);
+                border-color: rgba(100, 149, 237, 0.5);
+            }
+
+            &.active {
+                background: linear-gradient(135deg, rgba(100, 149, 237, 0.3) 0%, rgba(65, 105, 225, 0.3) 100%);
+                border-color: rgba(100, 149, 237, 0.8);
+                color: #6495ed;
+                box-shadow: 0 0 15px rgba(100, 149, 237, 0.4);
+            }
+        }
+    }
+}
+
+/* Manual Flight Controls */
+.manual-flight-controls {
+    animation: slideIn 0.4s ease-out;
+    margin: 16px 0;
+    padding: 12px;
+    background: linear-gradient(135deg, rgba(15, 20, 25, 0.9) 0%, rgba(25, 35, 45, 0.9) 100%);
+    border: 1px solid rgba(100, 149, 237, 0.4);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Speedometer */
+.speedometer {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border: 1px solid rgba(100, 149, 237, 0.3);
+
+    .speed-label {
+        font-size: 10px;
+        color: #6495ed;
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+        font-weight: 600;
+    }
+
+    .speed-value {
+        font-size: 32px;
+        font-weight: bold;
+        color: #87ceeb;
+        line-height: 1;
+        font-family: 'Orbitron', monospace;
+        text-shadow: 0 0 10px rgba(135, 206, 235, 0.5);
+
+        .speed-unit {
+            font-size: 16px;
+            color: #6495ed;
+            margin-left: 4px;
+        }
+    }
+
+    .speed-bar {
+        margin-top: 8px;
+        height: 6px;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 3px;
+        overflow: hidden;
+        border: 1px solid rgba(100, 149, 237, 0.3);
+
+        .speed-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4169e1 0%, #87ceeb 50%, #00ffff 100%);
+            transition: width 0.2s ease;
+            box-shadow: 0 0 10px rgba(135, 206, 235, 0.8);
+        }
+    }
+}
+
+/* Navigation Keypad */
+.nav-keypad {
+    .nav-instructions {
+        font-size: 10px;
+        color: #8a9199;
+        text-align: center;
+        margin-bottom: 12px;
+        font-family: 'Rajdhani', sans-serif;
+        letter-spacing: 0.5px;
+    }
+
+    .nav-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        max-width: 200px;
+        margin: 0 auto;
+    }
+
+    .nav-key {
+        aspect-ratio: 1;
+        background: linear-gradient(135deg, rgba(30, 40, 50, 0.6) 0%, rgba(15, 25, 35, 0.8) 100%);
+        border: 2px solid rgba(100, 149, 237, 0.3);
+        border-radius: 8px;
+        color: #6495ed;
+        font-size: 20px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+
+        &:hover {
+            background: linear-gradient(135deg, rgba(40, 60, 80, 0.8) 0%, rgba(25, 40, 55, 0.9) 100%);
+            border-color: rgba(100, 149, 237, 0.6);
+            box-shadow: 0 0 15px rgba(100, 149, 237, 0.4);
+            transform: scale(1.05);
+        }
+
+        &:active,
+        &.active {
+            background: linear-gradient(135deg, rgba(100, 149, 237, 0.4) 0%, rgba(65, 105, 225, 0.5) 100%);
+            border-color: rgba(135, 206, 235, 0.8);
+            box-shadow: 0 0 20px rgba(135, 206, 235, 0.6);
+            transform: scale(0.95);
+            color: #87ceeb;
+        }
+
+        &.center-key {
+            font-size: 24px;
+
+            &.boost-active {
+                background: linear-gradient(135deg, rgba(255, 140, 0, 0.4) 0%, rgba(255, 69, 0, 0.5) 100%);
+                border-color: rgba(255, 140, 0, 0.8);
+                box-shadow: 0 0 25px rgba(255, 140, 0, 0.8);
+                animation: pulse 0.5s ease-in-out infinite;
+            }
+        }
+    }
+
+    .nav-key-spacer {
+        aspect-ratio: 1;
+    }
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 25px rgba(255, 140, 0, 0.8);
+    }
+
+    50% {
+        box-shadow: 0 0 35px rgba(255, 140, 0, 1);
+    }
+}
+
+/* Flight Settings */
+.flight-settings {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border: 1px solid rgba(100, 149, 237, 0.3);
+
+    .setting-row {
+        margin-bottom: 8px;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #8a9199;
+            font-size: 11px;
+            cursor: pointer;
+            font-family: 'Rajdhani', sans-serif;
+
+            input[type="checkbox"] {
+                cursor: pointer;
+            }
+
+            input[type="range"] {
+                flex: 1;
+                cursor: pointer;
+            }
+
+            span {
+                white-space: nowrap;
+            }
+
+            .value {
+                color: #6495ed;
+                font-weight: 600;
+                min-width: 35px;
+                text-align: right;
+            }
+        }
+    }
+}
+
+/* Flight Settings */
+.flight-settings {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    border: 1px solid rgba(100, 149, 237, 0.3);
+
+    .setting-row {
+        margin-bottom: 8px;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #8a9199;
+            font-size: 11px;
+            cursor: pointer;
+            font-family: 'Rajdhani', sans-serif;
+
+            input[type=checkbox] {
+                cursor: pointer;
+            }
+
+            input[type=range] {
+                flex: 1;
+                cursor: pointer;
+            }
+
+            span {
+                white-space: nowrap;
+            }
+
+            .value {
+                color: #6495ed;
+                font-weight: 600;
+                min-width: 35px;
+                text-align: right;
+            }
+        }
+    }
+}

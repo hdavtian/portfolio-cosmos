@@ -1,0 +1,85 @@
+// ============================================================
+// Design Tokens — Single source of truth for the game UI
+// ============================================================
+// Override any token by redefining the custom property in a
+// theme class:  .theme-rebel { --hud-primary: #44aaff; }
+// ============================================================
+
+:root {
+  // ── Color Palette ──────────────────────────────────────────
+  // Primary: warm gold (WoW quest text, Elite HUD)
+  --hud-primary:             #d4a845;
+  --hud-primary-dim:         #a07830;
+  --hud-primary-glow:        rgba(212, 168, 69, 0.4);
+  --hud-primary-bright:      #f0d060;
+
+  // Secondary: cool blue (instruments, sci-fi accents)
+  --hud-secondary:           #5ba4cf;
+  --hud-secondary-dim:       #3a7aaa;
+  --hud-secondary-glow:      rgba(91, 164, 207, 0.3);
+
+  // Accent: soft green (positive, complete, accept)
+  --hud-accent:              #5cb85c;
+  --hud-accent-glow:         rgba(92, 184, 92, 0.3);
+
+  // Danger / alert / decline
+  --hud-danger:              #cf5b5b;
+  --hud-danger-glow:         rgba(207, 91, 91, 0.3);
+
+  // Neutrals
+  --hud-text:                #e8e0d0;
+  --hud-text-dim:            #9a9080;
+  --hud-text-bright:         #fff8ee;
+  --hud-bg:                  rgba(10, 8, 16, 0.75);
+  --hud-bg-solid:            #0a0810;
+  --hud-bg-subtle:           rgba(10, 8, 16, 0.5);
+
+  // ── Panel & Glass ──────────────────────────────────────────
+  --panel-border:            rgba(212, 168, 69, 0.25);
+  --panel-border-hover:      rgba(212, 168, 69, 0.55);
+  --panel-blur:              12px;
+  --panel-radius:            6px;
+  --panel-radius-lg:         12px;
+  --panel-shadow:            0 0 20px rgba(0, 0, 0, 0.6),
+                             inset 0 0 30px rgba(212, 168, 69, 0.04);
+
+  // ── Typography ─────────────────────────────────────────────
+  --font-hud:                'Rajdhani', 'Segoe UI', sans-serif;
+  --font-narrative:          'Crimson Text', 'Georgia', serif;
+  --font-mono:               'JetBrains Mono', 'Consolas', monospace;
+
+  --text-xs:                 clamp(0.65rem, 1.2vw, 0.75rem);
+  --text-sm:                 clamp(0.75rem, 1.4vw, 0.875rem);
+  --text-base:               clamp(0.875rem, 1.6vw, 1rem);
+  --text-lg:                 clamp(1rem, 2vw, 1.25rem);
+  --text-xl:                 clamp(1.25rem, 2.5vw, 1.5rem);
+  --text-2xl:                clamp(1.5rem, 3vw, 1.75rem);
+
+  // ── Spacing ────────────────────────────────────────────────
+  --space-2xs:               2px;
+  --space-xs:                4px;
+  --space-sm:                8px;
+  --space-md:                16px;
+  --space-lg:                24px;
+  --space-xl:                32px;
+  --space-2xl:               48px;
+
+  // ── Animation ──────────────────────────────────────────────
+  --ease-appear:             cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-dismiss:            cubic-bezier(0.4, 0, 1, 1);
+  --ease-bounce:             cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-instant:        80ms;
+  --duration-fast:           150ms;
+  --duration-normal:         300ms;
+  --duration-slow:           600ms;
+  --duration-cinematic:      1200ms;
+
+  // ── Z-Index Layers ─────────────────────────────────────────
+  --z-hud:                   100;
+  --z-prompt:                150;
+  --z-dialogue:              200;
+  --z-nav:                   250;
+  --z-overlay:               300;
+  --z-modal:                 400;
+  --z-dev:                   500;
+}

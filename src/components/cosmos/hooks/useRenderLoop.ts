@@ -1,11 +1,14 @@
 import type React from "react";
 import { useCallback, useRef } from "react";
 import * as THREE from "three";
+import { physicsWorld } from "../PhysicsWorld";
+import { PhysicsTravelAnchor } from "../PhysicsTravelAnchor";
 import type { OrbitAnchor, OrbitItem } from "../ResumeSpace3D.orbital";
 import type { SceneRef } from "../ResumeSpace3D.types";
 
 export const useRenderLoop = () => {
   const animationFrameRef = useRef<number | null>(null);
+  const travelAnchorRef = useRef<PhysicsTravelAnchor | null>(null);
 
   const startRenderLoop = useCallback(
     (params: {
@@ -58,6 +61,12 @@ export const useRenderLoop = () => {
       >;
       insideShipRef: React.MutableRefObject<boolean>;
       debugSnapToShipRef: React.MutableRefObject<boolean>;
+      shipExploreModeRef: React.MutableRefObject<boolean>;
+      shipExploreKeysRef: React.MutableRefObject<Record<string, boolean>>;
+      shipExploreCoordsRef: React.MutableRefObject<{
+        local: [number, number, number];
+        world: [number, number, number];
+      }>;
       optionsRef: React.MutableRefObject<{ spaceFollowDistance?: number }>;
       updateAutopilotNavigation: () => void;
       updateOrbitSystem: (params: {
@@ -99,6 +108,9 @@ export const useRenderLoop = () => {
         shipViewModeRef,
         insideShipRef,
         debugSnapToShipRef,
+        shipExploreModeRef,
+        shipExploreKeysRef,
+        shipExploreCoordsRef,
         optionsRef,
         updateAutopilotNavigation,
         updateOrbitSystem,
@@ -114,8 +126,48 @@ export const useRenderLoop = () => {
         vlog,
       } = params;
 
+      if (!travelAnchorRef.current) {
+        travelAnchorRef.current = new PhysicsTravelAnchor();
+      }
+
+      void physicsWorld.init();
+      let lastFrameTime = performance.now();
+      // Default cockpit/cabin positions — from ship-labeling system.
+      // Cockpit INTERIOR — offset inward from the exterior surface label.
+      // Exterior surface was (-6.2, 3.6, 7.1). Interior: ~0.8 inward (+X),
+      // ~0.5 lower (seated eye), ~1.1 behind windshield.
+      // NOTE: these are multiplied by ship.scale (0.5) in the transform below.
+      const cockpitLocalPos = new THREE.Vector3(-6.05, 3.16, 5.36);
+      const cockpitTargetLocal = new THREE.Vector3(-6.05, 3.16, 11.36);
+      const cabinLocalPos = new THREE.Vector3(0, -0.64, -4.49);
+      const cabinTargetLocal = new THREE.Vector3(0, -0.64, 1.51);
+      let cockpitPosResolved = false;
+      const shipWorldPos = new THREE.Vector3();
+      const shipWorldQuat = new THREE.Quaternion();
+      const desiredCameraPos = new THREE.Vector3();
+      const desiredTargetPos = new THREE.Vector3();
+      const interiorAnchorPos = new THREE.Vector3();
+      let interiorAnchorReady = false;
+      let wasInsideShip = false; // track enter/exit transitions
+
+      // Reusable temp vectors to avoid per-frame allocations
+      const _tmpOffset = new THREE.Vector3();
+      const _tmpScaled = new THREE.Vector3();
+      const _tmpDesired = new THREE.Vector3();
+      const _tmpHoverFloat = new THREE.Vector3();
+      const _tmpLookDir = new THREE.Vector3();
+
       const animate = () => {
         animationFrameRef.current = requestAnimationFrame(animate);
+
+        const frameNow = performance.now();
+        const deltaSeconds = Math.min(
+          Math.max((frameNow - lastFrameTime) / 1000, 0),
+          0.1,
+        );
+        lastFrameTime = frameNow;
+        const travelAnchor = travelAnchorRef.current;
+        let activeShip: THREE.Object3D | null = null;
 
         if (exitFocusRequestRef.current) {
           try {
@@ -124,9 +176,104 @@ export const useRenderLoop = () => {
           exitFocusRequestRef.current = false;
         }
 
+        // ─── SHIP EXPLORE MODE ──────────────────────────────────
+        // FPS-style free-cam locked near the ship. WASD to move,
+        // mouse drag handled by OrbitControls for rotation.
+        // The UI overlay reads shipExploreCoordsRef to show the
+        // user their current position in ship-local space.
+        if (shipExploreModeRef.current && spaceshipRef.current) {
+          const ship = spaceshipRef.current;
+          const keys = shipExploreKeysRef.current;
+          const speed = (keys.ShiftLeft || keys.ShiftRight) ? 0.25 : 0.06;
+          const oc = sceneRef.current.controls as any;
+
+          // Disable orbit panning but allow rotation (look around)
+          if (oc) {
+            oc.enablePan = false;
+            oc.enableZoom = false;
+            oc.enableRotate = true;
+            oc.minDistance = 0.01;
+            oc.maxDistance = 1000;
+            oc.minPolarAngle = 0;
+            oc.maxPolarAngle = Math.PI;
+          }
+
+          // Near plane very small so we see nearby geometry
+          if (camera instanceof THREE.PerspectiveCamera) {
+            if (camera.near > 0.005) {
+              camera.near = 0.005;
+              camera.updateProjectionMatrix();
+            }
+          }
+
+          // Build movement vector from pressed keys
+          const moveDir = _tmpOffset.set(0, 0, 0);
+          if (keys.KeyW || keys.ArrowUp) moveDir.z -= 1;
+          if (keys.KeyS || keys.ArrowDown) moveDir.z += 1;
+          if (keys.KeyA || keys.ArrowLeft) moveDir.x -= 1;
+          if (keys.KeyD || keys.ArrowRight) moveDir.x += 1;
+          if (keys.KeyQ) moveDir.y -= 1;
+          if (keys.KeyE) moveDir.y += 1;
+
+          if (moveDir.lengthSq() > 0) {
+            moveDir.normalize().multiplyScalar(speed);
+            // Move relative to camera orientation
+            const camRight = _tmpScaled.set(1, 0, 0).applyQuaternion(camera.quaternion);
+            const camUp = _tmpDesired.set(0, 1, 0).applyQuaternion(camera.quaternion);
+            camera.getWorldDirection(_tmpLookDir);
+            camera.position
+              .addScaledVector(_tmpLookDir, -moveDir.z)
+              .addScaledVector(camRight, moveDir.x)
+              .addScaledVector(camUp, moveDir.y);
+            // Move target with camera so orbit center follows
+            if (oc) {
+              oc.target
+                .addScaledVector(_tmpLookDir, -moveDir.z)
+                .addScaledVector(camRight, moveDir.x)
+                .addScaledVector(camUp, moveDir.y);
+            }
+          }
+
+          // Compute ship-local coordinates of the camera
+          const localPos = _tmpHoverFloat.copy(camera.position);
+          ship.worldToLocal(localPos);
+          shipExploreCoordsRef.current.local = [
+            parseFloat(localPos.x.toFixed(2)),
+            parseFloat(localPos.y.toFixed(2)),
+            parseFloat(localPos.z.toFixed(2)),
+          ];
+          shipExploreCoordsRef.current.world = [
+            parseFloat(camera.position.x.toFixed(2)),
+            parseFloat(camera.position.y.toFixed(2)),
+            parseFloat(camera.position.z.toFixed(2)),
+          ];
+
+          // Update OrbitControls for user rotation
+          if (oc) oc.update();
+
+          // Render scene
+          sunMesh.rotation.y += 0.002;
+          composer.render();
+          return; // Skip all other camera/render logic
+        }
+        // ─── END EXPLORE MODE ───────────────────────────────────
+
         if (spaceshipRef.current) {
           const ship = spaceshipRef.current;
           const cinematic = shipCinematicRef.current;
+          activeShip = ship;
+
+          // Resolve cockpit position from model data (once)
+          if (!cockpitPosResolved && ship.userData.cockpitCameraLocal) {
+            cockpitLocalPos.copy(ship.userData.cockpitCameraLocal as THREE.Vector3);
+            cockpitTargetLocal.copy(
+              (ship.userData.cockpitLookLocal as THREE.Vector3) ?? cockpitLocalPos,
+            );
+            cockpitPosResolved = true;
+            vlog(
+              `✈️ Render loop: cockpit resolved [${cockpitLocalPos.x.toFixed(2)}, ${cockpitLocalPos.y.toFixed(2)}, ${cockpitLocalPos.z.toFixed(2)}]`,
+            );
+          }
 
           if (shipStagingModeRef.current) {
             const keys = shipStagingKeysRef.current;
@@ -361,11 +508,11 @@ export const useRenderLoop = () => {
                   .clone()
                   .lerp(cinematic.settleTargetPos, easedSettle);
               }
-              const floatX = Math.sin(hoverElapsed * 0.4) * 0.27;
-              const floatY = Math.sin(hoverElapsed * 0.6) * 0.4;
-              ship.position
-                .copy(basePos)
-                .add(new THREE.Vector3(floatX, floatY, 0));
+              // Subtle idle hover — reduced amplitude for realism
+              const floatX = Math.sin(hoverElapsed * 0.3) * 0.06;
+              const floatY = Math.sin(hoverElapsed * 0.45) * 0.08;
+              _tmpHoverFloat.set(floatX, floatY, 0);
+              ship.position.copy(basePos).add(_tmpHoverFloat);
 
               const faceProgress = Math.min(hoverElapsed / 6, 1);
               const easedFaceProgress =
@@ -378,16 +525,13 @@ export const useRenderLoop = () => {
             }
 
             if (debugSnapToShipRef.current && sceneRef.current.controls) {
-              const cameraDistance = 60;
-              const cameraHeight = 20;
-              const backwardDirection = new THREE.Vector3(0, 0, -1);
-              backwardDirection.applyQuaternion(ship.quaternion);
-              const cameraTargetPos = ship.position
-                .clone()
-                .add(backwardDirection.multiplyScalar(cameraDistance))
-                .add(new THREE.Vector3(0, cameraHeight, 0));
+              _tmpOffset.set(0, 0, -1).applyQuaternion(ship.quaternion);
+              _tmpDesired
+                .copy(ship.position)
+                .addScaledVector(_tmpOffset, 60)
+                .y += 20;
 
-              camera.position.lerp(cameraTargetPos, 0.12);
+              camera.position.lerp(_tmpDesired, 0.12);
               sceneRef.current.controls.target.lerp(ship.position, 0.12);
               sceneRef.current.controls.update();
             }
@@ -547,132 +691,211 @@ export const useRenderLoop = () => {
               }
             }
 
-            ship.traverse((child) => {
-              if (child instanceof THREE.Mesh && child.material) {
-                const materials = Array.isArray(child.material)
-                  ? child.material
-                  : [child.material];
-                materials.forEach((mat) => {
-                  if (mat.emissive && mat.emissive.getHex() > 0) {
-                    const baseEmissive =
-                      mat.userData.baseEmissive || mat.emissive.clone();
-                    if (!mat.userData.baseEmissive) {
-                      mat.userData.baseEmissive = baseEmissive;
+            // Throttle expensive emissive traverse to once every ~6 frames
+            const emissiveKey =
+              (manual.acceleration * 100) | 0 + (manual.isTurboActive ? 1000 : 0);
+            if (
+              emissiveKey !== (ship.userData._lastEmissiveKey as number | undefined)
+            ) {
+              ship.userData._lastEmissiveKey = emissiveKey;
+              ship.traverse((child) => {
+                if (child instanceof THREE.Mesh && child.material) {
+                  const materials = Array.isArray(child.material)
+                    ? child.material
+                    : [child.material];
+                  materials.forEach((mat) => {
+                    if (mat.emissive && mat.emissive.getHex() > 0) {
+                      const baseEmissive =
+                        mat.userData.baseEmissive || mat.emissive.clone();
+                      if (!mat.userData.baseEmissive) {
+                        mat.userData.baseEmissive = baseEmissive;
+                      }
+                      const turboBoost = manual.isTurboActive ? 3 : 0;
+                      const boostFactor =
+                        1 + manual.acceleration * 6 + turboBoost;
+                      mat.emissive
+                        .copy(baseEmissive)
+                        .multiplyScalar(boostFactor);
+                      mat.emissiveIntensity =
+                        1 + manual.acceleration * 4 + turboBoost;
                     }
-                    const turboBoost = manual.isTurboActive ? 3 : 0;
-                    const boostFactor =
-                      1 + manual.acceleration * 6 + turboBoost;
-                    mat.emissive.copy(baseEmissive).multiplyScalar(boostFactor);
-                    mat.emissiveIntensity =
-                      1 + manual.acceleration * 4 + turboBoost;
-                  }
-                });
-              }
-            });
+                  });
+                }
+              });
+            }
           } else {
             updateAutopilotNavigation();
 
             if (followingSpaceshipRef.current) {
               if (insideShipRef.current) {
-                const shipWorldPos = new THREE.Vector3();
-                const shipWorldQuat = new THREE.Quaternion();
                 ship.getWorldPosition(shipWorldPos);
                 ship.getWorldQuaternion(shipWorldQuat);
 
+                if (!interiorAnchorReady) {
+                  interiorAnchorPos.copy(shipWorldPos);
+                  interiorAnchorReady = true;
+                } else {
+                  const anchorAlpha = 1 - Math.exp(-3 * deltaSeconds);
+                  interiorAnchorPos.lerp(shipWorldPos, anchorAlpha);
+                }
+
                 if (sceneRef.current.controls) {
-                  const targetOffset =
-                    shipViewModeRef.current === "cockpit"
-                      ? new THREE.Vector3(0, 0.5, 10)
-                      : new THREE.Vector3(0.5, 0, 0);
+                  const useCockpit = shipViewModeRef.current === "cockpit";
+                  const localCamera = useCockpit
+                    ? cockpitLocalPos
+                    : cabinLocalPos;
+                  const localTarget = useCockpit
+                    ? cockpitTargetLocal
+                    : cabinTargetLocal;
 
-                  const localTargetOffset = targetOffset
-                    .clone()
-                    .applyQuaternion(shipWorldQuat);
-                  const worldTarget = shipWorldPos
-                    .clone()
-                    .add(localTargetOffset);
+                  // IMPORTANT: the labeled local coordinates are in the mesh's
+                  // local space.  The ship group has scale 0.5, so we must
+                  // apply scale before rotation — otherwise the camera ends up
+                  // at 2× the correct distance (outside the hull).
+                  const shipScale = ship.scale.x; // uniform scale
+                  desiredCameraPos
+                    .copy(localCamera)
+                    .multiplyScalar(shipScale)
+                    .applyQuaternion(shipWorldQuat)
+                    .add(interiorAnchorPos);
+                  desiredTargetPos
+                    .copy(localTarget)
+                    .multiplyScalar(shipScale)
+                    .applyQuaternion(shipWorldQuat)
+                    .add(interiorAnchorPos);
 
-                  const currentCameraOffset = camera.position
-                    .clone()
-                    .sub(sceneRef.current.controls.target);
+                  const oc = sceneRef.current.controls as any;
 
-                  sceneRef.current.controls.target.copy(worldTarget);
+                  // --- First-person "look around" approach ---
+                  // OrbitControls normally orbits the camera around the target,
+                  // which moves the camera outside the ship.  Instead we:
+                  //   1. Let OrbitControls process user drag → it rotates the view
+                  //   2. Capture the resulting look direction
+                  //   3. Pin the camera back to the fixed interior position
+                  //   4. Reconstruct the target from that direction
+                  // Result: the user looks around freely but never leaves the ship.
 
-                  const desiredCameraPos = worldTarget
-                    .clone()
-                    .add(currentCameraOffset);
-
-                  const shipLocalCameraPos = desiredCameraPos
-                    .clone()
-                    .sub(shipWorldPos);
-                  const inverseQuat = shipWorldQuat.clone().invert();
-                  shipLocalCameraPos.applyQuaternion(inverseQuat);
-
-                  const bounds =
-                    shipViewModeRef.current === "cockpit"
-                      ? { x: 1.2, y: 1, z: 6 }
-                      : { x: 2.5, y: 1.2, z: 3 };
-
-                  shipLocalCameraPos.x = Math.max(
-                    -bounds.x,
-                    Math.min(bounds.x, shipLocalCameraPos.x),
-                  );
-                  shipLocalCameraPos.y = Math.max(
-                    -bounds.y,
-                    Math.min(bounds.y, shipLocalCameraPos.y),
-                  );
-                  shipLocalCameraPos.z = Math.max(
-                    -bounds.z,
-                    Math.min(bounds.z, shipLocalCameraPos.z),
-                  );
-
-                  shipLocalCameraPos.applyQuaternion(shipWorldQuat);
-                  const constrainedCameraPos = shipWorldPos
-                    .clone()
-                    .add(shipLocalCameraPos);
-
-                  camera.position.copy(constrainedCameraPos);
-
-                  sceneRef.current.controls.enablePan = false;
-                  sceneRef.current.controls.enableRotate = true;
-                  sceneRef.current.controls.enableZoom = true;
-
-                  if (shipViewModeRef.current === "cockpit") {
-                    sceneRef.current.controls.minDistance = 0.3;
-                    sceneRef.current.controls.maxDistance = 4;
-                  } else {
-                    sceneRef.current.controls.minDistance = 0.5;
-                    sceneRef.current.controls.maxDistance = 3.5;
+                  if (!wasInsideShip) {
+                    // Transition IN: seed camera + target so OrbitControls
+                    // starts from a sane state
+                    camera.position.copy(desiredCameraPos);
+                    oc.target.copy(desiredTargetPos);
+                    wasInsideShip = true;
                   }
 
-                  sceneRef.current.controls.update();
+                  oc.enablePan = false;
+                  oc.enableZoom = false;
+                  oc.enableRotate = true;
+                  // Distance doesn't matter – we override position anyway –
+                  // but keep it non-zero so OrbitControls math stays stable.
+                  oc.minDistance = 0.5;
+                  oc.maxDistance = 5;
+                  // Vertical look limits (prevents looking through floor/ceiling)
+                  oc.minPolarAngle = useCockpit
+                    ? Math.PI * 0.25
+                    : Math.PI * 0.1;
+                  oc.maxPolarAngle = useCockpit
+                    ? Math.PI * 0.75
+                    : Math.PI * 0.9;
+
+                  // Near clipping plane — very small so cockpit instruments
+                  // and chair directly in front of the camera are visible.
+                  if (camera instanceof THREE.PerspectiveCamera) {
+                    const desiredNear = useCockpit ? 0.005 : 0.05;
+                    if (Math.abs(camera.near - desiredNear) > 0.001) {
+                      camera.near = desiredNear;
+                      camera.updateProjectionMatrix();
+                    }
+                  }
+
+                  // Let OrbitControls process any pending user rotation
+                  oc.update();
+
+                  // Capture the look direction that rotation produced
+                  camera.getWorldDirection(_tmpLookDir);
+
+                  // --- Clamp look direction to prevent seeing through walls ---
+                  // Compute ship's local forward direction in world space (+Z).
+                  const shipForward = _tmpOffset
+                    .set(0, 0, 1)
+                    .applyQuaternion(shipWorldQuat)
+                    .normalize();
+
+                  // Angle between current look direction and ship forward
+                  const dot = _tmpLookDir.dot(shipForward);
+                  // Max look cone: cockpit ~100°, cabin ~130° (from forward axis)
+                  const maxAngle = useCockpit
+                    ? Math.PI * 0.55   // ~100°
+                    : Math.PI * 0.72;  // ~130°
+                  const cosMax = Math.cos(maxAngle);
+
+                  if (dot < cosMax) {
+                    // Look direction is outside the allowed cone — clamp it.
+                    // Project look dir onto the forward axis and the perpendicular.
+                    const fwdComponent = _tmpScaled
+                      .copy(shipForward)
+                      .multiplyScalar(dot);
+                    const perpComponent = _tmpDesired
+                      .copy(_tmpLookDir)
+                      .sub(fwdComponent);
+                    const perpLen = perpComponent.length();
+                    if (perpLen > 0.0001) {
+                      // Reconstruct at the max angle boundary
+                      const sinMax = Math.sin(maxAngle);
+                      _tmpLookDir
+                        .copy(shipForward)
+                        .multiplyScalar(cosMax)
+                        .addScaledVector(
+                          perpComponent.normalize(),
+                          sinMax,
+                        )
+                        .normalize();
+                    }
+                  }
+
+                  // Pin camera to fixed interior position
+                  camera.position.copy(desiredCameraPos);
+
+                  // Reconstruct target: fixed pos + look direction
+                  oc.target
+                    .copy(desiredCameraPos)
+                    .addScaledVector(_tmpLookDir, 2);
                 }
               } else {
+                // Reset interior flag when outside the ship
+                if (wasInsideShip) {
+                  wasInsideShip = false;
+                  interiorAnchorReady = false;
+                }
                 const followDistance =
                   optionsRef.current.spaceFollowDistance || 60;
 
-                const currentOffset = camera.position
-                  .clone()
-                  .sub(ship.position);
+                // Use ship position directly (not travel anchor) to avoid
+                // steering-controller oscillation when the ship is stationary.
+                const followTarget = ship.position;
+
+                _tmpOffset.copy(camera.position).sub(followTarget);
 
                 if (
-                  currentOffset.distanceTo(spaceshipCameraOffsetRef.current) > 1
+                  _tmpOffset.distanceTo(spaceshipCameraOffsetRef.current) > 1
                 ) {
-                  spaceshipCameraOffsetRef.current.copy(currentOffset);
+                  spaceshipCameraOffsetRef.current.copy(_tmpOffset);
                 }
 
-                const scaledOffset = spaceshipCameraOffsetRef.current
-                  .clone()
+                _tmpScaled
+                  .copy(spaceshipCameraOffsetRef.current)
                   .normalize()
                   .multiplyScalar(followDistance);
 
-                const desiredCameraPos = ship.position
-                  .clone()
-                  .add(scaledOffset);
-                camera.position.copy(desiredCameraPos);
+                _tmpDesired.copy(followTarget).add(_tmpScaled);
+                const followAlpha = 1 - Math.exp(-6 * deltaSeconds);
+                camera.position.lerp(_tmpDesired, followAlpha);
 
                 if (sceneRef.current.controls) {
-                  sceneRef.current.controls.target.copy(ship.position);
+                  sceneRef.current.controls.target.lerp(
+                    followTarget,
+                    followAlpha,
+                  );
                   sceneRef.current.controls.enablePan = true;
                   sceneRef.current.controls.maxDistance = 1000;
                   sceneRef.current.controls.update();
@@ -682,25 +905,47 @@ export const useRenderLoop = () => {
           }
         }
 
+        // Physics only needed when ship is actively navigating somewhere.
+        // Skipping when idle eliminates RAPIER + YUKA overhead (~2-4 ms/frame).
+        if (activeShip && physicsWorld.isReady() && travelAnchor) {
+          const world = physicsWorld.getWorld();
+          if (world && !travelAnchor.isInitialized()) {
+            travelAnchor.init(world, scene, activeShip.position);
+          }
+
+          if (travelAnchor.isInitialized()) {
+            travelAnchor.setTarget(activeShip.position);
+            travelAnchor.preStep(deltaSeconds);
+            physicsWorld.step(deltaSeconds);
+            travelAnchor.postStep();
+          }
+        }
+
         sunMesh.rotation.y += 0.002;
 
-        const bokehPass = sceneRef.current.bokehPass as
-          | {
-              enabled: boolean;
-              materialBokeh?: { uniforms?: { focus?: { value: number } } };
+        // Bokeh depth-of-field is irrelevant when inside the ship and
+        // allocates a Vector3 each frame — skip entirely for interior.
+        if (!insideShipRef.current) {
+          const bokehPass = sceneRef.current.bokehPass as
+            | {
+                enabled: boolean;
+                materialBokeh?: {
+                  uniforms?: { focus?: { value: number } };
+                };
+              }
+            | undefined;
+          if (bokehPass?.enabled) {
+            const focusedMoon = focusedMoonRef.current;
+            if (focusedMoon) {
+              const moonWorld = new THREE.Vector3();
+              focusedMoon.getWorldPosition(moonWorld);
+              const focusDistance = camera.position.distanceTo(moonWorld);
+              if (bokehPass.materialBokeh?.uniforms?.focus) {
+                bokehPass.materialBokeh.uniforms.focus.value = focusDistance;
+              }
+            } else {
+              bokehPass.enabled = false;
             }
-          | undefined;
-        if (bokehPass?.enabled) {
-          const focusedMoon = focusedMoonRef.current;
-          if (focusedMoon) {
-            const moonWorld = new THREE.Vector3();
-            focusedMoon.getWorldPosition(moonWorld);
-            const focusDistance = camera.position.distanceTo(moonWorld);
-            if (bokehPass.materialBokeh?.uniforms?.focus) {
-              bokehPass.materialBokeh.uniforms.focus.value = focusDistance;
-            }
-          } else {
-            bokehPass.enabled = false;
           }
         }
 
@@ -711,18 +956,28 @@ export const useRenderLoop = () => {
           options: optionsRef.current,
         });
 
-        controls.update();
+        // Only call controls.update() here when NOT inside the ship —
+        // interior mode already called it in the block above.
+        if (!insideShipRef.current) {
+          controls.update();
+        }
+
         composer.render();
 
-        const prevMask = camera.layers.mask;
-        camera.layers.set(1);
-        const prevAutoClear = renderer.autoClear;
-        renderer.autoClear = false;
-        renderer.clearDepth();
-        renderer.render(scene, camera);
-        renderer.autoClear = prevAutoClear;
-        camera.layers.mask = prevMask;
-        labelRenderer.render(scene, camera);
+        // Skip the extra render passes when inside the ship — the
+        // layer-1 overlay meshes and CSS2D labels aren't visible from
+        // the interior, so rendering them just wastes GPU time.
+        if (!insideShipRef.current) {
+          const prevMask = camera.layers.mask;
+          camera.layers.set(1);
+          const prevAutoClear = renderer.autoClear;
+          renderer.autoClear = false;
+          renderer.clearDepth();
+          renderer.render(scene, camera);
+          renderer.autoClear = prevAutoClear;
+          camera.layers.mask = prevMask;
+          labelRenderer.render(scene, camera);
+        }
       };
 
       animate();
@@ -735,6 +990,7 @@ export const useRenderLoop = () => {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    physicsWorld.reset();
   }, []);
 
   return { startRenderLoop, stopRenderLoop };

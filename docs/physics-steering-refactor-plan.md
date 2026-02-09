@@ -3,10 +3,10 @@
 ## Progress Checklist
 
 - [ ] Step 0 — Baseline
-- [ ] Step 1 — Install Rapier
-- [ ] Step 2 — Add YUKA steering
-- [ ] Step 3 — Physics-driven travel anchor
-- [ ] Step 4 — Camera follow rig
+- [x] Step 1 — Install Rapier
+- [x] Step 2 — Add YUKA steering
+- [x] Step 3 — Physics-driven travel anchor
+- [x] Step 4 — Camera follow rig
 - [ ] Step 5 — Replace travel entry points
 - [ ] Step 6 — Cleanup & tuning
 - [ ] Step 7 — Physics-based orbital motion
@@ -20,6 +20,21 @@ Replace GSAP camera travel with **live physics + steering** (no parallel version
 - Physics: **Rapier** (fast WASM physics)
 - Steering/AI: **YUKA** (arrive/seek, follow, behavior blending)
 - Camera rig: **camera-controls** (damped camera follow) or a small custom spring-damper
+
+### Best‑of‑breed rationale
+
+- **Rapier** is currently the most performant and stable WASM physics stack for Three.js, with excellent determinism and active maintenance.
+- **camera-controls** is the most feature‑complete and battle‑tested camera rig for Three.js; it offers smooth damping, constraints, and target locking.
+- **Steering**: YUKA remains a solid choice for behavior blending. If we want less dependency surface or more control, we can swap to a **small custom steering layer** (arrive/seek + braking) without changing the API.
+
+### Implementation best practices (applies to all steps)
+
+- **Fixed physics timestep** with accumulator (e.g., 60 Hz), render interpolation for smooth visuals.
+- **Avoid allocations** in the render loop (reuse `Vector3`/`Quaternion`).
+- **Collision groups** and `sensor` bodies to avoid unintended collisions for the camera anchor.
+- **Unit scale**: define 1 unit = 1 meter and keep speeds/forces consistent.
+- **Determinism**: make physics step the single source of truth for travel state.
+- **Escape hatches**: allow fallback to analytic travel if physics is disabled for debugging.
 
 ## High-Level Flow
 
@@ -68,9 +83,9 @@ Replace GSAP camera travel with **live physics + steering** (no parallel version
 
 ## Step 1 — Install and wire physics (Rapier)
 
-- Add dependencies: `@dimforge/rapier3d-compat`.
+- Add dependencies: `@dimforge/rapier3d` (preferred) or `@dimforge/rapier3d-compat` if Vite bundling requires it.
 - Create a minimal **PhysicsWorld** module with init + step methods.
-- Add world to render loop (one source of truth).
+- Add world to render loop with **fixed timestep** + accumulator.
 
 **Replace**: none yet (just live physics ticking).
 **Exit criteria**: app runs with physics loop active (no behavior change).
@@ -83,6 +98,8 @@ Replace GSAP camera travel with **live physics + steering** (no parallel version
 - Create a **SteeringController** with a single `Vehicle`.
 - Wire `arrive` behavior to a target.
 
+**Alternative**: if YUKA feels heavy, implement a small in‑house `arrive()` + `seek()` function set and keep the same API surface.
+
 **Replace**: GSAP travel trigger _logic only_ (no camera changes yet).
 **Exit criteria**: steering entity updates in the loop without errors.
 
@@ -94,6 +111,8 @@ Replace GSAP camera travel with **live physics + steering** (no parallel version
 - On each frame: apply steering output → velocity/force on physics body.
 - Sync a THREE.Object3D to the body position.
 
+**Best practice**: use a **kinematic** body for the camera anchor (no collisions), or a dynamic body in a collision‑free group if interactions are needed.
+
 **Replace**: GSAP `flyTo` movement for travel anchor.
 **Exit criteria**: anchor moves with steering, no GSAP travel used.
 
@@ -104,6 +123,8 @@ Replace GSAP camera travel with **live physics + steering** (no parallel version
 - Add camera follow target to the anchor.
 - Use **camera-controls** or a custom spring‑damper.
 - Keep look-at locked to travel target during flight.
+
+**Best practice**: clamp camera speed and target rotation to avoid nausea during fast turns.
 
 **Replace**: GSAP camera travel fully.
 **Exit criteria**: all travel uses physics+steering; GSAP travel removed.
@@ -128,6 +149,8 @@ Replace GSAP camera travel with **live physics + steering** (no parallel version
 - Add tuning controls (speed, damping, arrival radius).
 - Validate performance and stability.
 
+**Validation**: log step time variance, peak acceleration, and overshoot counts to ensure travel is stable.
+
 ---
 
 ## Notes
@@ -143,6 +166,8 @@ Replace GSAP camera travel with **live physics + steering** (no parallel version
   with physics‑driven orbits.
 - Use **Rapier** bodies + **custom gravity forces** per update.
 - Keep art‑direction controls (orbit radius, speed) as clamps or targets.
+
+**Risk note**: full physics orbits can be unstable and expensive. Consider **hybrid orbits** (analytic orbit path + physics for local perturbations) if stability or performance becomes an issue.
 
 **Replace**: parametric orbit + spin logic.
 **Exit criteria**: planets/moons orbit via physics with stable, tunable motion.

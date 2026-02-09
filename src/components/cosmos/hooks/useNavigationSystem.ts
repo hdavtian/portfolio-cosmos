@@ -229,15 +229,26 @@ export const useNavigationSystem = (deps: {
         let targetPosition: THREE.Vector3 | null = null;
         let targetName = targetId;
 
-        sceneRef.current.scene?.traverse((object) => {
-          if (object instanceof THREE.Mesh && object.userData.planetName) {
-            const objName = (object.userData.planetName || "").toLowerCase();
-            if (objName === targetName.toLowerCase()) {
-              targetPosition = new THREE.Vector3();
-              object.getWorldPosition(targetPosition);
+        // Special handling for section targets that don't have matching planets
+        if (targetId === "home") {
+          // Navigate to the sun/origin
+          targetPosition = new THREE.Vector3(0, 0, 0);
+          vlog("🏠 Navigating to Home (Sun)");
+        } else if (targetId === "about") {
+          // Already following the ship - nothing to navigate to
+          vlog("ℹ️ Already following ship - 'About' navigation is current view");
+          return;
+        } else {
+          sceneRef.current.scene?.traverse((object) => {
+            if (object instanceof THREE.Mesh && object.userData.planetName) {
+              const objName = (object.userData.planetName || "").toLowerCase();
+              if (objName === targetName.toLowerCase()) {
+                targetPosition = new THREE.Vector3();
+                object.getWorldPosition(targetPosition);
+              }
             }
-          }
-        });
+          });
+        }
 
         if (targetPosition && spaceshipRef.current) {
           const shipPos = spaceshipRef.current.position.clone();
