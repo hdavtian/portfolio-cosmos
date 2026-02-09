@@ -26,6 +26,7 @@
   },
   "include": ["src"],
   "exclude": [
-    "src/components/SpaceshipHUD.tsx"
+    "src/components/SpaceshipHUD.tsx",
+    "src/components/_backup/**"
   ]
 }

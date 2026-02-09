@@ -2509,7 +2509,7 @@ export default function ResumeSpace3D({
                     console.log("%cCurrent camera (ship-local):", "color: #0f6; font-weight: bold;", current.local);
                     console.log("%cCurrent camera (world):", "color: #888;", current.world);
                     console.log("");
-                    positions.forEach((p, i) => {
+                    positions.forEach((p) => {
                       const color = p.label === "COCKPIT" ? "#ff6b6b" : p.label === "CABIN" ? "#339af0" : "#51cf66";
                       console.log(`%c${p.label}:`, `color: ${color}; font-weight: bold;`, `new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]})`);
                     });
@@ -2583,8 +2583,8 @@ export default function ResumeSpace3D({
                   <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, color: "#fff" }}>
                     SAVED POSITIONS
                   </div>
-                  {exploreSavedPositions.map((pos, i) => (
-                    <div key={i} style={{ borderBottom: "1px solid rgba(180,130,255,0.2)", paddingBottom: 4, marginBottom: 4 }}>
+                  {exploreSavedPositions.map((pos, idx) => (
+                    <div key={idx} style={{ borderBottom: "1px solid rgba(180,130,255,0.2)", paddingBottom: 4, marginBottom: 4 }}>
                       <span style={{ fontWeight: 700, color: pos.label === "COCKPIT" ? "#ff6b6b" : pos.label === "CABIN" ? "#339af0" : "#51cf66" }}>
                         {pos.label}
                       </span>

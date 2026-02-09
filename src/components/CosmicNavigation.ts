@@ -422,6 +422,7 @@ export class NavigationInterface {
     // this.createInterface();
   }
 
+  // @ts-ignore — kept for reference, may be re-enabled later
   private createInterface(): void {
     const navHTML = `
       <div class="spaceship-hud__left" style="

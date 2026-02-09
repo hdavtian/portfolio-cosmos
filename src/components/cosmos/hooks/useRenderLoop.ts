@@ -146,8 +146,6 @@ export const useRenderLoop = () => {
       const shipWorldQuat = new THREE.Quaternion();
       const desiredCameraPos = new THREE.Vector3();
       const desiredTargetPos = new THREE.Vector3();
-      const interiorAnchorPos = new THREE.Vector3();
-      let interiorAnchorReady = false;
       let wasInsideShip = false; // track enter/exit transitions
 
       // Reusable temp vectors to avoid per-frame allocations
@@ -257,6 +255,8 @@ export const useRenderLoop = () => {
           return; // Skip all other camera/render logic
         }
         // ─── END EXPLORE MODE ───────────────────────────────────
+
+        let shipIsIdleHover = false; // true when ship is just floating (no nav)
 
         if (spaceshipRef.current) {
           const ship = spaceshipRef.current;
@@ -508,9 +508,12 @@ export const useRenderLoop = () => {
                   .clone()
                   .lerp(cinematic.settleTargetPos, easedSettle);
               }
-              // Subtle idle hover — reduced amplitude for realism
-              const floatX = Math.sin(hoverElapsed * 0.3) * 0.06;
-              const floatY = Math.sin(hoverElapsed * 0.45) * 0.08;
+              shipIsIdleHover = true; // flag to skip physics this frame
+
+              // Subtle idle hover — very gentle so it looks alive but
+              // doesn't cause visible bobbing inside the cockpit.
+              const floatX = Math.sin(hoverElapsed * 0.25) * 0.02;
+              const floatY = Math.sin(hoverElapsed * 0.35) * 0.03;
               _tmpHoverFloat.set(floatX, floatY, 0);
               ship.position.copy(basePos).add(_tmpHoverFloat);
 
@@ -726,188 +729,153 @@ export const useRenderLoop = () => {
           } else {
             updateAutopilotNavigation();
 
-            if (followingSpaceshipRef.current) {
-              if (insideShipRef.current) {
-                ship.getWorldPosition(shipWorldPos);
-                ship.getWorldQuaternion(shipWorldQuat);
+            // Exterior follow camera (only when NOT inside ship)
+            if (followingSpaceshipRef.current && !insideShipRef.current) {
+              // Reset interior flag when outside the ship
+              if (wasInsideShip) {
+                wasInsideShip = false;
+              }
+              const followDistance =
+                optionsRef.current.spaceFollowDistance || 60;
 
-                if (!interiorAnchorReady) {
-                  interiorAnchorPos.copy(shipWorldPos);
-                  interiorAnchorReady = true;
-                } else {
-                  const anchorAlpha = 1 - Math.exp(-3 * deltaSeconds);
-                  interiorAnchorPos.lerp(shipWorldPos, anchorAlpha);
-                }
+              // Use ship position directly (not travel anchor) to avoid
+              // steering-controller oscillation when the ship is stationary.
+              const followTarget = ship.position;
 
-                if (sceneRef.current.controls) {
-                  const useCockpit = shipViewModeRef.current === "cockpit";
-                  const localCamera = useCockpit
-                    ? cockpitLocalPos
-                    : cabinLocalPos;
-                  const localTarget = useCockpit
-                    ? cockpitTargetLocal
-                    : cabinTargetLocal;
+              _tmpOffset.copy(camera.position).sub(followTarget);
 
-                  // IMPORTANT: the labeled local coordinates are in the mesh's
-                  // local space.  The ship group has scale 0.5, so we must
-                  // apply scale before rotation — otherwise the camera ends up
-                  // at 2× the correct distance (outside the hull).
-                  const shipScale = ship.scale.x; // uniform scale
-                  desiredCameraPos
-                    .copy(localCamera)
-                    .multiplyScalar(shipScale)
-                    .applyQuaternion(shipWorldQuat)
-                    .add(interiorAnchorPos);
-                  desiredTargetPos
-                    .copy(localTarget)
-                    .multiplyScalar(shipScale)
-                    .applyQuaternion(shipWorldQuat)
-                    .add(interiorAnchorPos);
+              if (
+                _tmpOffset.distanceTo(spaceshipCameraOffsetRef.current) > 1
+              ) {
+                spaceshipCameraOffsetRef.current.copy(_tmpOffset);
+              }
 
-                  const oc = sceneRef.current.controls as any;
+              _tmpScaled
+                .copy(spaceshipCameraOffsetRef.current)
+                .normalize()
+                .multiplyScalar(followDistance);
 
-                  // --- First-person "look around" approach ---
-                  // OrbitControls normally orbits the camera around the target,
-                  // which moves the camera outside the ship.  Instead we:
-                  //   1. Let OrbitControls process user drag → it rotates the view
-                  //   2. Capture the resulting look direction
-                  //   3. Pin the camera back to the fixed interior position
-                  //   4. Reconstruct the target from that direction
-                  // Result: the user looks around freely but never leaves the ship.
+              _tmpDesired.copy(followTarget).add(_tmpScaled);
+              const followAlpha = 1 - Math.exp(-6 * deltaSeconds);
+              camera.position.lerp(_tmpDesired, followAlpha);
 
-                  if (!wasInsideShip) {
-                    // Transition IN: seed camera + target so OrbitControls
-                    // starts from a sane state
-                    camera.position.copy(desiredCameraPos);
-                    oc.target.copy(desiredTargetPos);
-                    wasInsideShip = true;
-                  }
-
-                  oc.enablePan = false;
-                  oc.enableZoom = false;
-                  oc.enableRotate = true;
-                  // Distance doesn't matter – we override position anyway –
-                  // but keep it non-zero so OrbitControls math stays stable.
-                  oc.minDistance = 0.5;
-                  oc.maxDistance = 5;
-                  // Vertical look limits (prevents looking through floor/ceiling)
-                  oc.minPolarAngle = useCockpit
-                    ? Math.PI * 0.25
-                    : Math.PI * 0.1;
-                  oc.maxPolarAngle = useCockpit
-                    ? Math.PI * 0.75
-                    : Math.PI * 0.9;
-
-                  // Near clipping plane — very small so cockpit instruments
-                  // and chair directly in front of the camera are visible.
-                  if (camera instanceof THREE.PerspectiveCamera) {
-                    const desiredNear = useCockpit ? 0.005 : 0.05;
-                    if (Math.abs(camera.near - desiredNear) > 0.001) {
-                      camera.near = desiredNear;
-                      camera.updateProjectionMatrix();
-                    }
-                  }
-
-                  // Let OrbitControls process any pending user rotation
-                  oc.update();
-
-                  // Capture the look direction that rotation produced
-                  camera.getWorldDirection(_tmpLookDir);
-
-                  // --- Clamp look direction to prevent seeing through walls ---
-                  // Compute ship's local forward direction in world space (+Z).
-                  const shipForward = _tmpOffset
-                    .set(0, 0, 1)
-                    .applyQuaternion(shipWorldQuat)
-                    .normalize();
-
-                  // Angle between current look direction and ship forward
-                  const dot = _tmpLookDir.dot(shipForward);
-                  // Max look cone: cockpit ~100°, cabin ~130° (from forward axis)
-                  const maxAngle = useCockpit
-                    ? Math.PI * 0.55   // ~100°
-                    : Math.PI * 0.72;  // ~130°
-                  const cosMax = Math.cos(maxAngle);
-
-                  if (dot < cosMax) {
-                    // Look direction is outside the allowed cone — clamp it.
-                    // Project look dir onto the forward axis and the perpendicular.
-                    const fwdComponent = _tmpScaled
-                      .copy(shipForward)
-                      .multiplyScalar(dot);
-                    const perpComponent = _tmpDesired
-                      .copy(_tmpLookDir)
-                      .sub(fwdComponent);
-                    const perpLen = perpComponent.length();
-                    if (perpLen > 0.0001) {
-                      // Reconstruct at the max angle boundary
-                      const sinMax = Math.sin(maxAngle);
-                      _tmpLookDir
-                        .copy(shipForward)
-                        .multiplyScalar(cosMax)
-                        .addScaledVector(
-                          perpComponent.normalize(),
-                          sinMax,
-                        )
-                        .normalize();
-                    }
-                  }
-
-                  // Pin camera to fixed interior position
-                  camera.position.copy(desiredCameraPos);
-
-                  // Reconstruct target: fixed pos + look direction
-                  oc.target
-                    .copy(desiredCameraPos)
-                    .addScaledVector(_tmpLookDir, 2);
-                }
-              } else {
-                // Reset interior flag when outside the ship
-                if (wasInsideShip) {
-                  wasInsideShip = false;
-                  interiorAnchorReady = false;
-                }
-                const followDistance =
-                  optionsRef.current.spaceFollowDistance || 60;
-
-                // Use ship position directly (not travel anchor) to avoid
-                // steering-controller oscillation when the ship is stationary.
-                const followTarget = ship.position;
-
-                _tmpOffset.copy(camera.position).sub(followTarget);
-
-                if (
-                  _tmpOffset.distanceTo(spaceshipCameraOffsetRef.current) > 1
-                ) {
-                  spaceshipCameraOffsetRef.current.copy(_tmpOffset);
-                }
-
-                _tmpScaled
-                  .copy(spaceshipCameraOffsetRef.current)
-                  .normalize()
-                  .multiplyScalar(followDistance);
-
-                _tmpDesired.copy(followTarget).add(_tmpScaled);
-                const followAlpha = 1 - Math.exp(-6 * deltaSeconds);
-                camera.position.lerp(_tmpDesired, followAlpha);
-
-                if (sceneRef.current.controls) {
-                  sceneRef.current.controls.target.lerp(
-                    followTarget,
-                    followAlpha,
-                  );
-                  sceneRef.current.controls.enablePan = true;
-                  sceneRef.current.controls.maxDistance = 1000;
-                  sceneRef.current.controls.update();
-                }
+              if (sceneRef.current.controls) {
+                sceneRef.current.controls.target.lerp(
+                  followTarget,
+                  followAlpha,
+                );
+                sceneRef.current.controls.enablePan = true;
+                sceneRef.current.controls.maxDistance = 1000;
+                sceneRef.current.controls.update();
               }
             }
           }
+
+          // ─── INTERIOR CAMERA ──────────────────────────────────
+          // This runs AFTER both cinematic and autopilot paths so the
+          // camera is always rigidly attached to the ship, regardless of
+          // which code path moved the ship this frame (hover bob, travel,
+          // manual flight, etc.).
+          if (insideShipRef.current && sceneRef.current.controls) {
+            ship.getWorldPosition(shipWorldPos);
+            ship.getWorldQuaternion(shipWorldQuat);
+
+            const useCockpit = shipViewModeRef.current === "cockpit";
+            const localCamera = useCockpit ? cockpitLocalPos : cabinLocalPos;
+            const localTarget = useCockpit
+              ? cockpitTargetLocal
+              : cabinTargetLocal;
+
+            // Apply ship scale before rotation (ship is scaled 0.5)
+            const shipScale = ship.scale.x;
+            desiredCameraPos
+              .copy(localCamera)
+              .multiplyScalar(shipScale)
+              .applyQuaternion(shipWorldQuat)
+              .add(shipWorldPos);
+            desiredTargetPos
+              .copy(localTarget)
+              .multiplyScalar(shipScale)
+              .applyQuaternion(shipWorldQuat)
+              .add(shipWorldPos);
+
+            const oc = sceneRef.current.controls as any;
+
+            // --- First-person "look around" approach ---
+            if (!wasInsideShip) {
+              camera.position.copy(desiredCameraPos);
+              oc.target.copy(desiredTargetPos);
+              wasInsideShip = true;
+            }
+
+            oc.enablePan = false;
+            oc.enableZoom = false;
+            oc.enableRotate = true;
+            oc.minDistance = 0.5;
+            oc.maxDistance = 5;
+            oc.minPolarAngle = useCockpit ? Math.PI * 0.25 : Math.PI * 0.1;
+            oc.maxPolarAngle = useCockpit ? Math.PI * 0.75 : Math.PI * 0.9;
+
+            // Near clipping plane — very small so cockpit instruments
+            // and chair directly in front of the camera are visible.
+            if (camera instanceof THREE.PerspectiveCamera) {
+              const desiredNear = useCockpit ? 0.005 : 0.05;
+              if (Math.abs(camera.near - desiredNear) > 0.001) {
+                camera.near = desiredNear;
+                camera.updateProjectionMatrix();
+              }
+            }
+
+            // Let OrbitControls process any pending user rotation
+            oc.update();
+
+            // Capture the look direction that rotation produced
+            camera.getWorldDirection(_tmpLookDir);
+
+            // --- Clamp look direction to prevent seeing through walls ---
+            const shipForward = _tmpOffset
+              .set(0, 0, 1)
+              .applyQuaternion(shipWorldQuat)
+              .normalize();
+
+            const dot = _tmpLookDir.dot(shipForward);
+            const maxAngle = useCockpit
+              ? Math.PI * 0.55
+              : Math.PI * 0.72;
+            const cosMax = Math.cos(maxAngle);
+
+            if (dot < cosMax) {
+              const fwdComponent = _tmpScaled
+                .copy(shipForward)
+                .multiplyScalar(dot);
+              const perpComponent = _tmpDesired
+                .copy(_tmpLookDir)
+                .sub(fwdComponent);
+              const perpLen = perpComponent.length();
+              if (perpLen > 0.0001) {
+                const sinMax = Math.sin(maxAngle);
+                _tmpLookDir
+                  .copy(shipForward)
+                  .multiplyScalar(cosMax)
+                  .addScaledVector(perpComponent.normalize(), sinMax)
+                  .normalize();
+              }
+            }
+
+            // Pin camera to fixed interior position
+            camera.position.copy(desiredCameraPos);
+
+            // Reconstruct target: fixed pos + look direction
+            oc.target
+              .copy(desiredCameraPos)
+              .addScaledVector(_tmpLookDir, 2);
+          }
+          // ─── END INTERIOR CAMERA ──────────────────────────────
         }
 
         // Physics only needed when ship is actively navigating somewhere.
-        // Skipping when idle eliminates RAPIER + YUKA overhead (~2-4 ms/frame).
-        if (activeShip && physicsWorld.isReady() && travelAnchor) {
+        // Skipping when idle/hovering eliminates RAPIER + YUKA overhead (~2-4 ms/frame).
+        if (activeShip && !shipIsIdleHover && physicsWorld.isReady() && travelAnchor) {
           const world = physicsWorld.getWorld();
           if (world && !travelAnchor.isInitialized()) {
             travelAnchor.init(world, scene, activeShip.position);
