@@ -231,10 +231,10 @@ export class SpaceshipNavigationSystem {
 
     const now = Date.now();
 
-    // Obstacle avoidance: only for longer trips and non-moon obstacles
+    // Obstacle avoidance: check for celestial bodies in the path
     const baseDistance = shipPos.distanceTo(baseTargetPos);
     if (
-      baseDistance > 200 &&
+      baseDistance > 50 &&
       !this.intermediateWaypoint &&
       this.obstaclesProvider &&
       now > this.avoidanceCooldownUntil
@@ -246,7 +246,6 @@ export class SpaceshipNavigationSystem {
 
       for (const obs of obstacles) {
         if (obs.id && obs.id === this.currentTarget.id) continue;
-        if (obs.id && obs.id.startsWith("moon-")) continue;
 
         // If we recently generated a waypoint, avoid flapping by keeping it for a few frames
         if (this.avoidanceMemory && this.avoidanceMemory.id === obs.id) {
@@ -262,12 +261,12 @@ export class SpaceshipNavigationSystem {
         const toObs = obs.position.clone().sub(shipPos);
         const t = Math.max(
           0,
-          Math.min(1, toObs.dot(dir) / Math.max(segLen * segLen, 0.0001)),
+          Math.min(1, toObs.dot(dir) / Math.max(segLen, 0.0001)),
         );
         const closestPoint = shipPos
           .clone()
           .add(dir.clone().multiplyScalar(segLen * t));
-        const clearance = obs.radius + 40; // safety margin
+        const clearance = obs.radius; // radii already include safety margin
         const distToPath = obs.position.distanceTo(closestPoint);
 
         if (distToPath < clearance) {
@@ -278,8 +277,10 @@ export class SpaceshipNavigationSystem {
             lateral = new THREE.Vector3(1, 0, 0);
           }
           lateral.normalize();
-          const avoidOffset = obs.radius + 80;
-          const sign = Math.random() > 0.5 ? 1 : -1;
+          const avoidOffset = obs.radius * 1.3; // route well clear
+          // Steer to whichever side the ship is already on (deterministic)
+          const shipSide = toObs.dot(lateral);
+          const sign = shipSide < 0 ? 1 : -1;
           this.intermediateWaypoint = obs.position
             .clone()
             .add(lateral.multiplyScalar(avoidOffset * sign));

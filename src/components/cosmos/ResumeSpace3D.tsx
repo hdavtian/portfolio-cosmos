@@ -812,18 +812,20 @@ export default function ResumeSpace3D({
     shipViewModeRef.current = "exterior";
     setShipUIPhase("ship-engaged");
 
-    // Point camera at ship at a proper 3rd-person distance
+    // Point camera behind and above the ship using the ship's orientation
     if (sceneRef.current.controls && spaceshipRef.current) {
       const cc = sceneRef.current.controls;
-      const sp = spaceshipRef.current.position;
+      const ship = spaceshipRef.current;
       const followDist = optionsRef.current.spaceFollowDistance ?? 60;
 
-      // Position camera behind and slightly above the ship
-      const camPos = sp.clone().add(new THREE.Vector3(0, 20, -followDist));
+      // Camera behind ship (-Z in ship's local space) and elevated
+      const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion);
+      const camPos = ship.position.clone().addScaledVector(behind, followDist);
+      camPos.y += 25;
       cc.setLookAt(
         camPos.x, camPos.y, camPos.z,
-        sp.x, sp.y, sp.z,
-        true, // smooth transition
+        ship.position.x, ship.position.y, ship.position.z,
+        true,
       );
     }
 
@@ -968,15 +970,17 @@ export default function ResumeSpace3D({
           cc.maxDistance = 6000;
         }
 
-        // Reposition camera outside the ship at a proper 3rd-person distance
+        // Reposition camera behind and above the ship using its orientation
         if (sceneRef.current.controls && spaceshipRef.current) {
           const cc = sceneRef.current.controls;
-          const sp = spaceshipRef.current.position;
+          const ship = spaceshipRef.current;
           const followDist = optionsRef.current.spaceFollowDistance ?? 60;
-          const camPos = sp.clone().add(new THREE.Vector3(0, 20, -followDist));
+          const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion);
+          const camPos = ship.position.clone().addScaledVector(behind, followDist);
+          camPos.y += 25;
           cc.setLookAt(
             camPos.x, camPos.y, camPos.z,
-            sp.x, sp.y, sp.z,
+            ship.position.x, ship.position.y, ship.position.z,
             true,
           );
         }

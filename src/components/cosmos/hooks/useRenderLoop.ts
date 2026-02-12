@@ -517,8 +517,8 @@ export const useRenderLoop = () => {
               _tmpOffset.set(0, 0, -1).applyQuaternion(ship.quaternion);
               _tmpDesired
                 .copy(ship.position)
-                .addScaledVector(_tmpOffset, 60)
-                .y += 20;
+                .addScaledVector(_tmpOffset, 60);
+              _tmpDesired.y += 25;
 
               sceneRef.current.controls.setLookAt(
                 _tmpDesired.x, _tmpDesired.y, _tmpDesired.z,
@@ -646,7 +646,7 @@ export const useRenderLoop = () => {
 
             if (followingSpaceshipRef.current && sceneRef.current.controls) {
               const cameraDistance = 60;
-              const cameraHeight = 20;
+              const cameraHeight = 25;
 
               const backwardDirection = new THREE.Vector3(0, 0, -1);
               backwardDirection.applyQuaternion(ship.quaternion);
@@ -721,10 +721,12 @@ export const useRenderLoop = () => {
             updateAutopilotNavigation();
 
             // Exterior follow camera (only when NOT inside ship)
-            // Move only the orbit center (target) so it tracks the ship.
-            // The user's azimuth / polar / distance are preserved by
-            // camera-controls, allowing free pan, orbit, and zoom while
-            // the camera follows the ship.
+            // Move the orbit center to track the ship's position.
+            // The user's azimuth, polar angle, and zoom distance are
+            // preserved by camera-controls, allowing free orbit/pan
+            // while the camera follows the ship.
+            // (Initial behind-and-above placement is done once in
+            // handleUseShip / handleShipViewChange via setLookAt.)
             if (followingSpaceshipRef.current && !insideShipRef.current) {
               if (wasInsideShip) {
                 wasInsideShip = false;

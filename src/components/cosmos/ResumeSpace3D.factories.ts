@@ -322,6 +322,7 @@ export const createSunMesh = (
 
   const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
   sunMesh.position.set(0, 0, 0);
+  sunMesh.userData.isSun = true;
 
   // Try to apply a sun texture to preserve detail
   try {

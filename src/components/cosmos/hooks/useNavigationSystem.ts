@@ -68,6 +68,7 @@ export const useNavigationSystem = (deps: {
     startPosition: THREE.Vector3 | null;
     startTime: number;
     useTurbo: boolean;
+    targetRadius?: number; // actual radius of the destination body
     lastUpdateFrame?: number;
     turboLogged?: boolean;
     decelerationLogged?: boolean;
@@ -94,6 +95,75 @@ export const useNavigationSystem = (deps: {
   // Exposed to render loop: true while the ship is in the "turning" phase
   const navTurnActiveRef = useRef(false);
 
+  // Scratch vectors for obstacle avoidance (reused to avoid GC pressure)
+  const _avoidDir = useRef(new THREE.Vector3());
+  const _avoidToObs = useRef(new THREE.Vector3());
+  const _avoidClosest = useRef(new THREE.Vector3());
+  const _avoidLateral = useRef(new THREE.Vector3());
+
+  // Section-travel avoidance state
+  const sectionAvoidWaypoint = useRef<THREE.Vector3 | null>(null);
+  const sectionAvoidCooldown = useRef(0); // timestamp
+
+  // ── Shared obstacle gathering for both nav paths ──────────────
+  // Scans the scene for all celestial bodies (sun, planets, moons)
+  // and returns them with realistic collision radii + safety margin.
+  const gatherObstacles = useCallback(
+    (excludeTargetId: string | null) => {
+      const obstacles: {
+        id: string;
+        position: THREE.Vector3;
+        radius: number;
+      }[] = [];
+
+      const scene = sceneRef.current.scene;
+      if (!scene) return obstacles;
+
+      scene.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh)) return;
+
+        const ud = obj.userData;
+
+        // ── Sun ───────────────────────────────────────────
+        if (ud.isSun) {
+          obstacles.push({
+            id: "sun",
+            position: obj.getWorldPosition(new THREE.Vector3()),
+            radius: 200, // actual radius 60, glow sprite 180 — keep well clear
+          });
+          return;
+        }
+
+        // ── Planets & Moons ──────────────────────────────
+        if (ud.isPlanet) {
+          const id = ud.moonId || ud.systemId || ud.planetName || "";
+          // Don't include the destination as an obstacle
+          if (excludeTargetId && (id === excludeTargetId || ud.planetName === excludeTargetId)) return;
+
+          // Get actual geometry radius and add safety margin
+          const geo = obj.geometry;
+          let actualRadius = 20; // fallback
+          if (geo && geo.parameters && (geo.parameters as any).radius) {
+            actualRadius = (geo.parameters as any).radius;
+          }
+
+          // Safety margin: 3x actual radius for planets, 4x for moons
+          // (moons are small — need proportionally more clearance)
+          const safetyMultiplier = ud.isMoon ? 4 : 3;
+
+          obstacles.push({
+            id,
+            position: obj.getWorldPosition(new THREE.Vector3()),
+            radius: actualRadius * safetyMultiplier,
+          });
+        }
+      });
+
+      return obstacles;
+    },
+    [sceneRef],
+  );
+
   const initializeNavigationSystem = useCallback(
     (spaceship: THREE.Object3D, scene: THREE.Scene) => {
       navigationSystemRef.current = new SpaceshipNavigationSystem(spaceship, {
@@ -117,26 +187,9 @@ export const useNavigationSystem = (deps: {
       navigationSystemRef.current.setMissionLog(missionLog);
 
       navigationSystemRef.current.setObstaclesProvider(() => {
-        const obstacles: {
-          id?: string;
-          position: THREE.Vector3;
-          radius: number;
-        }[] = [];
-
-        const ids = emitterRef.current.getRegisteredObjectIds();
-        ids.forEach((id) => {
-          if (id === navigationSystemRef.current?.getStatus().targetId) return;
-          const pos = emitterRef.current.getCurrentPosition(id);
-          if (pos) {
-            obstacles.push({
-              id,
-              position: pos.worldPosition.clone(),
-              radius: id.startsWith("moon-") ? 50 : 100,
-            });
-          }
-        });
-
-        return obstacles;
+        return gatherObstacles(
+          navigationSystemRef.current?.getStatus().targetId ?? null,
+        );
       });
 
       navigationSystemRef.current.setOnArrival((targetId: string) => {
@@ -215,6 +268,10 @@ export const useNavigationSystem = (deps: {
 
       vlog(`🎯 Autopilot navigation to ${targetType}: ${targetId}`);
 
+      // Clear any prior avoidance state from previous navigation
+      sectionAvoidWaypoint.current = null;
+      sectionAvoidCooldown.current = 0;
+
       if (targetType === "moon") {
         const moonId = `moon-${targetId}`;
 
@@ -268,11 +325,13 @@ export const useNavigationSystem = (deps: {
       } else if (targetType === "section") {
         let targetPosition: THREE.Vector3 | null = null;
         let targetName = targetId;
+        let targetRadius = 60; // default (sun)
 
         // Special handling for section targets that don't have matching planets
         if (targetId === "home") {
           // Navigate to the sun/origin
           targetPosition = new THREE.Vector3(0, 0, 0);
+          targetRadius = 60; // sun radius
           vlog("🏠 Navigating to Home (Sun)");
         } else if (targetId === "about") {
           // Already following the ship - nothing to navigate to
@@ -285,6 +344,11 @@ export const useNavigationSystem = (deps: {
               if (objName === targetName.toLowerCase()) {
                 targetPosition = new THREE.Vector3();
                 object.getWorldPosition(targetPosition);
+                // Extract actual geometry radius
+                const geo = object.geometry;
+                if (geo && geo.parameters && (geo.parameters as any).radius) {
+                  targetRadius = (geo.parameters as any).radius;
+                }
               }
             }
           });
@@ -317,6 +381,7 @@ export const useNavigationSystem = (deps: {
             startPosition: shipPos.clone(),
             startTime: Date.now(),
             useTurbo: distance > 500,
+            targetRadius,
             turnPhase: "turning",
             turnStartTime: performance.now(),
             turnStartQuat: spaceshipRef.current.quaternion.clone(),
@@ -436,7 +501,7 @@ export const useNavigationSystem = (deps: {
           // Camera behind ship, facing the destination
           camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
           camPos.multiplyScalar(60).add(ship.position);
-          camPos.y += 20;
+          camPos.y += 25;
 
           sceneRef.current.controls.setLookAt(
             camPos.x,
@@ -493,20 +558,88 @@ export const useNavigationSystem = (deps: {
         return; // Hold position during pause
       }
 
-      // ── TRAVEL PHASE: move toward target ──────────────────────
+      // Arrival distance: stop at a comfortable viewing distance from the body.
+      // Use 4x the target's radius (or min 80 units) so we can see the
+      // planet and its moons from a nice orbital perspective.
+      const planetRadius = target.targetRadius || 20;
+      const arrivalDistance = Math.max(planetRadius * 4, 80);
+
+      // ── TRAVEL PHASE: move toward target with obstacle avoidance ──
+
+      // --- Obstacle avoidance for section travel ---
+      // Check if the straight-line path to the target intersects any
+      // celestial body. If so, compute a lateral waypoint to route around.
+      const avoidWp = sectionAvoidWaypoint.current;
+      if (
+        distance > 50 &&
+        !avoidWp &&
+        now > sectionAvoidCooldown.current
+      ) {
+        const obstacles = gatherObstacles(target.id);
+        const dir = _avoidDir.current.subVectors(targetPos, ship.position).normalize();
+        const segLen = distance;
+
+        for (const obs of obstacles) {
+          const toObs = _avoidToObs.current.subVectors(obs.position, ship.position);
+          const proj = toObs.dot(dir);
+          const t = Math.max(0, Math.min(1, proj / Math.max(segLen, 0.001)));
+          const closest = _avoidClosest.current
+            .copy(ship.position)
+            .addScaledVector(dir, segLen * t);
+          const distToPath = obs.position.distanceTo(closest);
+
+          if (distToPath < obs.radius) {
+            // Path is blocked — compute lateral waypoint
+            const up = new THREE.Vector3(0, 1, 0);
+            const lateral = _avoidLateral.current.crossVectors(dir, up);
+            if (lateral.lengthSq() < 0.0001) lateral.set(1, 0, 0);
+            lateral.normalize();
+
+            // Deterministic: steer to the side the ship is already on
+            const shipSide = toObs.dot(lateral);
+            const sign = shipSide < 0 ? 1 : -1;
+            const avoidOffset = obs.radius * 1.3;
+
+            sectionAvoidWaypoint.current = obs.position
+              .clone()
+              .addScaledVector(lateral, avoidOffset * sign);
+            sectionAvoidWaypoint.current.y = ship.position.y; // keep altitude
+            sectionAvoidCooldown.current = now + 1500; // prevent re-trigger
+
+            vlog(
+              `🛰️ AVOIDANCE: Routing around ${obs.id} (${(avoidOffset * sign).toFixed(0)}u lateral)`,
+            );
+            break;
+          }
+        }
+      }
+
+      // If we have an avoidance waypoint, check if we've passed it
+      if (avoidWp) {
+        const distToWp = ship.position.distanceTo(avoidWp);
+        if (distToWp < 40) {
+          // Cleared the obstacle — resume direct path
+          sectionAvoidWaypoint.current = null;
+          vlog("✅ Avoidance waypoint cleared — resuming direct path");
+        }
+      }
+
+      // Steer toward avoidance waypoint if active, otherwise toward target
+      const steerTarget = sectionAvoidWaypoint.current || targetPos;
       const direction = _navDir.current
-        .subVectors(targetPos, ship.position)
+        .subVectors(steerTarget, ship.position)
         .normalize();
 
       let targetSpeed = 0.5;
-      const decelerationDistance = 100;
+      // Start decelerating well before the arrival zone for a smooth stop
+      const decelerationDistance = arrivalDistance + 80;
 
       if (distance > decelerationDistance) {
         if (target.useTurbo && distance > 200) {
-          targetSpeed = 4.0;
-          manualFlightRef.current.acceleration = 1.0;
-          manualFlightRef.current.isTurboActive = true;
-          if (!target.turboLogged) {
+          targetSpeed = sectionAvoidWaypoint.current ? 2.0 : 4.0; // slow down for avoidance
+          manualFlightRef.current.acceleration = sectionAvoidWaypoint.current ? 0.6 : 1.0;
+          manualFlightRef.current.isTurboActive = !sectionAvoidWaypoint.current;
+          if (!target.turboLogged && !sectionAvoidWaypoint.current) {
             vlog(`🔥 TURBO MODE: Engaged at distance ${distance.toFixed(1)}`);
             target.turboLogged = true;
           }
@@ -529,7 +662,7 @@ export const useNavigationSystem = (deps: {
       pathData.speed += (targetSpeed - pathData.speed) * 0.05;
       ship.position.addScaledVector(direction, pathData.speed);
 
-      ship.lookAt(targetPos);
+      ship.lookAt(steerTarget);
 
       // Only update exterior follow camera when NOT inside the ship —
       // the interior camera block in the render loop handles cockpit/cabin.
@@ -541,7 +674,7 @@ export const useNavigationSystem = (deps: {
         const camPos = _navCamPos.current;
         camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
         camPos.multiplyScalar(60).add(ship.position);
-        camPos.y += 20;
+        camPos.y += 25;
 
         sceneRef.current.controls.setLookAt(
           camPos.x, camPos.y, camPos.z,
@@ -550,7 +683,7 @@ export const useNavigationSystem = (deps: {
         );
       }
 
-      if (distance < 20) {
+      if (distance < arrivalDistance) {
         vlog(`✅ ARRIVED at ${target.id}`);
         vlog(`   Final distance: ${distance.toFixed(2)} units`);
         vlog(
@@ -562,6 +695,7 @@ export const useNavigationSystem = (deps: {
         setNavigationDistance(null);
         setNavigationETA(null);
         navTurnActiveRef.current = false;
+        sectionAvoidWaypoint.current = null;
         navigationTargetRef.current = {
           id: null,
           type: null,
