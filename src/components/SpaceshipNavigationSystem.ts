@@ -504,10 +504,16 @@ export class SpaceshipNavigationSystem {
     const arrivalMsg = `✅ ARRIVAL CONFIRMED: Reached ${targetId} - Navigation complete`;
     if (this.missionLog) this.missionLog(arrivalMsg);
 
-    // Notify callback
+    // Notify callback — this typically triggers enterMoonView which
+    // freezes the moon's orbital motion for the focused-moon experience.
     if (this.onArrival && targetId) {
       this.onArrival(targetId);
     }
+
+    // Clear the frozen flag BEFORE cancelNavigation so it does NOT call
+    // emitter.resumeOrbit — the onArrival callback has already set up
+    // its own orbital freeze and resumeOrbit would undo it.
+    this.currentTarget.frozen = false;
 
     // Clean up navigation
     this.cancelNavigation();

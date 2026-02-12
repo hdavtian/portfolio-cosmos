@@ -230,6 +230,12 @@ export default function ResumeSpace3D({
   const cockpitSteerActiveRef = useRef(false);
   const cockpitSteerStartRef = useRef<{ x: number; y: number } | null>(null);
 
+  // Manual roll (bank) control — -1 = roll left, 0 = idle, 1 = roll right
+  const rollInputRef = useRef<number>(0);
+  // Accumulated user roll offset (radians) — persists across navigation
+  const shipRollOffsetRef = useRef<number>(0);
+  const [displayRollAngle, setDisplayRollAngle] = useState(0);
+
   const spaceshipLightsRef = useRef<THREE.PointLight[]>([]);
   const spaceshipEngineLightRef = useRef<THREE.PointLight | null>(null);
   const spaceshipPathRef = useRef<{
@@ -572,6 +578,7 @@ export default function ResumeSpace3D({
     manualFlightRef,
     spaceshipPathRef,
     enterMoonViewRef,
+    shipRollOffsetRef,
   });
 
   const handleExperienceCompanyNavigation = useCallback(
@@ -1103,6 +1110,33 @@ export default function ResumeSpace3D({
     },
     [followingSpaceship, vlog],
   );
+
+  // ── Roll (bank) control handlers ────────────────────
+  const handleRollStart = useCallback(
+    (direction: -1 | 1) => {
+      rollInputRef.current = direction;
+    },
+    [],
+  );
+
+  const handleRollStop = useCallback(() => {
+    rollInputRef.current = 0;
+    // Snap display to final value
+    setDisplayRollAngle(shipRollOffsetRef.current);
+  }, []);
+
+  // Poll roll angle for display while rolling
+  useEffect(() => {
+    let raf: number;
+    const poll = () => {
+      if (rollInputRef.current !== 0) {
+        setDisplayRollAngle(shipRollOffsetRef.current);
+      }
+      raf = requestAnimationFrame(poll);
+    };
+    raf = requestAnimationFrame(poll);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   // ── FOV zoom when inside ship (scroll wheel) ──────
   useEffect(() => {
@@ -1680,7 +1714,54 @@ export default function ResumeSpace3D({
       onMoonViewEnd: disableMoonDepthOfField,
     });
 
-    enterMoonViewRef.current = enterMoonView;
+    // Wrap enterMoonView so that when arriving via ship navigation
+    // (useFlight: false) in 3rd-person exterior mode, the camera is
+    // gently repositioned behind the ship for a good view of the moon.
+    // The user's current view mode (cockpit, cabin, exterior) is preserved.
+    enterMoonViewRef.current = async (params) => {
+      // Reposition camera in exterior follow mode for a clean arrival view
+      if (
+        !params.useFlight &&
+        !insideShipRef.current &&
+        followingSpaceshipRef.current &&
+        sceneRef.current.controls &&
+        spaceshipRef.current
+      ) {
+        const cc = sceneRef.current.controls;
+        const ship = spaceshipRef.current;
+        const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(
+          ship.quaternion,
+        );
+        const camPos = ship.position.clone().addScaledVector(behind, 50);
+        camPos.y += 20;
+        cc.setLookAt(
+          camPos.x, camPos.y, camPos.z,
+          ship.position.x, ship.position.y, ship.position.z,
+          true,
+        );
+      }
+
+      await enterMoonView(params);
+
+      // When arriving via ship navigation, the camera is being
+      // repositioned programmatically (setLookAt, moveTo). These
+      // moves fire camera-controls "update" events which would
+      // trip the zoom-exit handler (distance change > threshold).
+      // Suppress zoom-exit detection for a settling period by
+      // nulling the baseline — the handler falls back to
+      // `base = currentDist`, making diff = 0.
+      if (!params.useFlight) {
+        focusedMoonCameraDistanceRef.current = null;
+        setTimeout(() => {
+          if (focusedMoonRef.current && sceneRef.current.camera) {
+            const mw = new THREE.Vector3();
+            focusedMoonRef.current.getWorldPosition(mw);
+            focusedMoonCameraDistanceRef.current =
+              sceneRef.current.camera.position.distanceTo(mw);
+          }
+        }, 2500);
+      }
+    };
 
     // freezeOrbitalMotion moved earlier in the file to avoid hoisting issues
 
@@ -2320,6 +2401,8 @@ export default function ResumeSpace3D({
       shipExploreCoordsRef,
       cockpitSteerRef,
       cockpitSteerActiveRef,
+      rollInputRef,
+      shipRollOffsetRef,
       navTurnActiveRef,
       optionsRef,
       updateAutopilotNavigation,
@@ -3119,6 +3202,9 @@ export default function ResumeSpace3D({
             onLeaveShip={handleLeaveShip}
             onSummonFalcon={handleSummonFalcon}
             onViewChange={handleShipViewChange}
+            onRollStart={handleRollStart}
+            onRollStop={handleRollStop}
+            rollAngle={displayRollAngle}
           />
 
           {/* Cockpit/Cabin keyboard hints */}

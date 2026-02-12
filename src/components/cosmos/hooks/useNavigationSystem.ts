@@ -34,6 +34,7 @@ export const useNavigationSystem = (deps: {
       }) => void)
     | null
   >;
+  shipRollOffsetRef: React.MutableRefObject<number>;
 }) => {
   const {
     resumeData,
@@ -51,7 +52,25 @@ export const useNavigationSystem = (deps: {
     manualFlightRef,
     spaceshipPathRef,
     enterMoonViewRef,
+    shipRollOffsetRef,
   } = deps;
+
+  // Reusable objects for baking the user's roll offset into lookAt quaternions
+  const _rollAxis = useRef(new THREE.Vector3());
+  const _rollQuat = useRef(new THREE.Quaternion());
+
+  /** Apply the user's manual roll offset to a quaternion (in-place). */
+  const applyRollOffset = (quat: THREE.Quaternion) => {
+    const rollAngle = shipRollOffsetRef.current;
+    if (Math.abs(rollAngle) > 0.0001) {
+      // Roll around the quaternion's local Z axis
+      _rollQuat.current.setFromAxisAngle(
+        _rollAxis.current.set(0, 0, 1),
+        rollAngle,
+      );
+      quat.multiply(_rollQuat.current);
+    }
+  };
 
   const [currentNavigationTarget, setCurrentNavigationTarget] = useState<
     string | null
@@ -291,13 +310,14 @@ export const useNavigationSystem = (deps: {
         const ship = spaceshipRef.current!;
         vlog(`🎯 Starting turn toward moon: ${moonId}`);
 
-        // Compute facing quaternion toward moon
+        // Compute facing quaternion toward moon (preserving user roll)
         const turnTargetQuat = new THREE.Quaternion();
         if (currentPos) {
           const tmpObj = new THREE.Object3D();
           tmpObj.position.copy(ship.position);
           tmpObj.lookAt(currentPos.worldPosition);
           turnTargetQuat.copy(tmpObj.quaternion);
+          applyRollOffset(turnTargetQuat);
         }
 
         // Set up turn phase — navigateToObject is delayed until turn completes
@@ -368,11 +388,13 @@ export const useNavigationSystem = (deps: {
           vlog(`📏 Distance: ${distance.toFixed(1)} units`);
 
           // Compute the quaternion the ship needs to face the target
+          // (preserving the user's manual roll adjustment)
           const turnTargetQuat = new THREE.Quaternion();
           const tmpObj = new THREE.Object3D();
           tmpObj.position.copy(spaceshipRef.current.position);
           tmpObj.lookAt(targetPos);
           turnTargetQuat.copy(tmpObj.quaternion);
+          applyRollOffset(turnTargetQuat);
 
           navigationTargetRef.current = {
             id: targetId,
@@ -565,6 +587,9 @@ export const useNavigationSystem = (deps: {
       const arrivalDistance = Math.max(planetRadius * 4, 80);
 
       // ── TRAVEL PHASE: move toward target with obstacle avoidance ──
+      // targetPos is guaranteed non-null here (moon-turn phases return
+      // earlier, and section travel exits if targetPos is null).
+      if (!targetPos) return;
 
       // --- Obstacle avoidance for section travel ---
       // Check if the straight-line path to the target intersects any
@@ -663,6 +688,7 @@ export const useNavigationSystem = (deps: {
       ship.position.addScaledVector(direction, pathData.speed);
 
       ship.lookAt(steerTarget);
+      applyRollOffset(ship.quaternion);
 
       // Only update exterior follow camera when NOT inside the ship —
       // the interior camera block in the render loop handles cockpit/cabin.

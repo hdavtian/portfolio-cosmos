@@ -70,6 +70,8 @@ export const useRenderLoop = () => {
       }>;
       cockpitSteerRef: React.MutableRefObject<{ x: number; y: number }>;
       cockpitSteerActiveRef: React.MutableRefObject<boolean>;
+      rollInputRef: React.MutableRefObject<number>;
+      shipRollOffsetRef: React.MutableRefObject<number>;
       navTurnActiveRef: React.MutableRefObject<boolean>;
       optionsRef: React.MutableRefObject<{ spaceFollowDistance?: number }>;
       updateAutopilotNavigation: () => void;
@@ -117,6 +119,8 @@ export const useRenderLoop = () => {
         shipExploreCoordsRef,
         cockpitSteerRef,
         cockpitSteerActiveRef,
+        rollInputRef,
+        shipRollOffsetRef,
         navTurnActiveRef,
         optionsRef,
         updateAutopilotNavigation,
@@ -733,15 +737,56 @@ export const useRenderLoop = () => {
               }
               const cc = sceneRef.current.controls;
               if (cc) {
-                cc.moveTo(
-                  ship.position.x,
-                  ship.position.y,
-                  ship.position.z,
-                  true, // smooth transition
-                );
-                cc.minDistance = 5;
-                cc.maxDistance = 1000;
+                // When a moon is focused, orbit around the moon instead
+                // of the ship so the camera stays centred on the moon
+                // and bokeh/DOF remains sharp on the target.
+                const focusedMoon = focusedMoonRef.current;
+                if (focusedMoon) {
+                  const moonWorld = new THREE.Vector3();
+                  focusedMoon.getWorldPosition(moonWorld);
+                  cc.moveTo(moonWorld.x, moonWorld.y, moonWorld.z, true);
+                  cc.minDistance = 0;
+                  cc.maxDistance = 1000;
+                } else {
+                  cc.moveTo(
+                    ship.position.x,
+                    ship.position.y,
+                    ship.position.z,
+                    true, // smooth transition
+                  );
+                  cc.minDistance = 5;
+                  cc.maxDistance = 1000;
+                }
               }
+            }
+          }
+
+          // ─── MANUAL ROLL (BANK) CONTROL ─────────────────────────
+          // Applied from the UI roll buttons.  Works in every flight mode
+          // (manual, autopilot, cinematic hover, cockpit steer) by
+          // rotating the ship around its local forward (Z) axis.
+          // The accumulated offset is stored in shipRollOffsetRef so
+          // navigation code can preserve it through lookAt / slerp.
+          const rollDir = rollInputRef.current; // -1 | 0 | 1
+          if (rollDir !== 0) {
+            const rollSpeed = 0.6; // radians / sec — feels responsive
+            const angle = rollDir * rollSpeed * deltaSeconds;
+
+            // Accumulate persistent offset
+            shipRollOffsetRef.current += angle;
+
+            if (manualFlightModeRef.current) {
+              // Manual flight uses Euler angles on ship.rotation
+              ship.rotation.z += angle;
+            } else {
+              // All other modes use quaternions — rotate around ship's
+              // local forward axis (local +Z after forwardOffset).
+              const localForward = _tmpOffset.set(0, 0, 1)
+                .applyQuaternion(ship.quaternion)
+                .normalize();
+              const rollQuat = _tmpQuat.setFromAxisAngle(localForward, angle);
+              ship.quaternion.premultiply(rollQuat);
+              ship.quaternion.normalize();
             }
           }
 
@@ -951,10 +996,11 @@ export const useRenderLoop = () => {
 
         composer.render();
 
-        // Skip the extra render passes when inside the ship — the
-        // layer-1 overlay meshes and CSS2D labels aren't visible from
-        // the interior, so rendering them just wastes GPU time.
-        if (!insideShipRef.current) {
+        // Render layer-1 overlay meshes and CSS2D labels.
+        // Normally skipped when inside the ship (not visible from interior
+        // and wastes GPU), BUT we still render them when a moon is focused
+        // so cockpit/cabin users can see the moon's text labels.
+        if (!insideShipRef.current || focusedMoonRef.current) {
           const prevMask = camera.layers.mask;
           camera.layers.set(1);
           const prevAutoClear = renderer.autoClear;
