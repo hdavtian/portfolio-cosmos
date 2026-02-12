@@ -7,6 +7,30 @@ import {
 } from "../../SpaceshipNavigationSystem";
 import type { SceneRef } from "../ResumeSpace3D.types";
 
+// ── PLANET VIEWPOINTS ─────────────────────────────────────────────
+// Each entry defines a camera offset relative to the planet centre.
+// The ship will fly to a staging point along this axis, and the
+// camera will end up at approximately the captured position.
+//
+// To add new viewpoints:
+//   1. Navigate to a planet, orbit/zoom the camera to the desired view
+//   2. Press Shift+F8 or run __captureViewpoint("planetName") in console
+//   3. Copy the offset from the console output and paste it here
+//   4. Multiple entries per planet → random selection each visit
+// ─────────────────────────────────────────────────────────────────
+interface PlanetViewpoint {
+  offset: { x: number; y: number; z: number };
+  distance: number;
+}
+
+const PLANET_VIEWPOINTS: Record<string, PlanetViewpoint[]> = {
+  experience: [
+    { offset: { x: -15.8, y: 344.5, z: 131.8 }, distance: 369.1 },
+  ],
+  // skills: [],
+  // projects: [],
+};
+
 export const useNavigationSystem = (deps: {
   resumeData: any;
   emitterRef: React.MutableRefObject<{
@@ -92,7 +116,7 @@ export const useNavigationSystem = (deps: {
     turboLogged?: boolean;
     decelerationLogged?: boolean;
     // Turn-toward-target phase: ship rotates to face destination before moving
-    turnPhase?: "turning" | "pausing" | "traveling";
+    turnPhase?: "turning" | "pausing" | "traveling" | "settling";
     turnStartTime?: number;
     turnPauseStartTime?: number;
     turnStartQuat?: THREE.Quaternion;
@@ -100,6 +124,15 @@ export const useNavigationSystem = (deps: {
     // Pending moon navigation — delayed until turn completes
     pendingMoonId?: string;
     pendingMoonTurbo?: boolean;
+    // Orbital approach: the real planet centre (position is the staging point)
+    planetCenter?: THREE.Vector3;
+    // Gentle arc travel: an intermediate waypoint near the planet at the
+    // ship's starting altitude, and the initial distance for progress calc.
+    arcMidPoint?: THREE.Vector3;
+    arcInitialDistance?: number;
+    settleStartTime?: number;
+    settleStartQuat?: THREE.Quaternion;
+    settleTargetQuat?: THREE.Quaternion;
   }>({
     id: null,
     type: null,
@@ -123,6 +156,11 @@ export const useNavigationSystem = (deps: {
   // Section-travel avoidance state
   const sectionAvoidWaypoint = useRef<THREE.Vector3 | null>(null);
   const sectionAvoidCooldown = useRef(0); // timestamp
+
+  // After a planet-approach settle, the camera should orbit around the
+  // planet centre (not the ship) to keep the perpendicular view.
+  // Cleared when new navigation starts.
+  const settledViewTargetRef = useRef<THREE.Vector3 | null>(null);
 
   // ── Shared obstacle gathering for both nav paths ──────────────
   // Scans the scene for all celestial bodies (sun, planets, moons)
@@ -287,9 +325,10 @@ export const useNavigationSystem = (deps: {
 
       vlog(`🎯 Autopilot navigation to ${targetType}: ${targetId}`);
 
-      // Clear any prior avoidance state from previous navigation
+      // Clear any prior avoidance / settled-view state from previous navigation
       sectionAvoidWaypoint.current = null;
       sectionAvoidCooldown.current = 0;
+      settledViewTargetRef.current = null;
 
       if (targetType === "moon") {
         const moonId = `moon-${targetId}`;
@@ -376,42 +415,99 @@ export const useNavigationSystem = (deps: {
 
         if (targetPosition && spaceshipRef.current) {
           const shipPos = spaceshipRef.current.position.clone();
-          const targetPos = targetPosition as THREE.Vector3;
-          const distance = shipPos.distanceTo(targetPos);
+          const planetCenter = (targetPosition as THREE.Vector3).clone();
+          const distance = shipPos.distanceTo(planetCenter);
 
           vlog(
-            `✅ Target found at [${targetPos.x.toFixed(1)}, ${targetPos.y.toFixed(1)}, ${targetPos.z.toFixed(1)}]`,
+            `✅ Target found at [${planetCenter.x.toFixed(1)}, ${planetCenter.y.toFixed(1)}, ${planetCenter.z.toFixed(1)}]`,
           );
           vlog(
             `📍 Ship at [${shipPos.x.toFixed(1)}, ${shipPos.y.toFixed(1)}, ${shipPos.z.toFixed(1)}]`,
           );
           vlog(`📏 Distance: ${distance.toFixed(1)} units`);
 
-          // Compute the quaternion the ship needs to face the target
-          // (preserving the user's manual roll adjustment)
+          // ── ORBITAL APPROACH ──────────────────────────────────────
+          // Use a user-defined viewpoint if available for this planet,
+          // otherwise fall back to a random above/below staging point.
+          // The staging point is where the SHIP parks; the camera is
+          // then placed ~80 u further along the same axis during settle.
+          const viewpoints = PLANET_VIEWPOINTS[targetId.toLowerCase()];
+          let stagingPoint: THREE.Vector3;
+
+          if (viewpoints && viewpoints.length > 0) {
+            // Pick a random viewpoint
+            const vp =
+              viewpoints[Math.floor(Math.random() * viewpoints.length)];
+            const camOffset = new THREE.Vector3(vp.offset.x, vp.offset.y, vp.offset.z);
+            // Camera would be at planetCenter + camOffset.
+            // Ship parks 80 u closer to the planet along the same axis.
+            const dir = camOffset.clone().normalize();
+            stagingPoint = planetCenter
+              .clone()
+              .add(camOffset)
+              .addScaledVector(dir, -80);
+
+            vlog(
+              `🛸 Using viewpoint preset for "${targetId}" (${viewpoints.length} available)`,
+            );
+          } else {
+            // Fallback: random above/below
+            const upOrDown = Math.random() > 0.5 ? 1 : -1;
+            const heightOffset = Math.max(targetRadius * 6, 200);
+            stagingPoint = new THREE.Vector3(
+              planetCenter.x,
+              planetCenter.y + upOrDown * heightOffset,
+              planetCenter.z,
+            );
+            vlog(
+              `🛸 Orbital approach: ${upOrDown > 0 ? "ABOVE" : "BELOW"} system at height ${heightOffset.toFixed(0)}u`,
+            );
+          }
+
+          vlog(
+            `   Staging point: [${stagingPoint.x.toFixed(1)}, ${stagingPoint.y.toFixed(1)}, ${stagingPoint.z.toFixed(1)}]`,
+          );
+
+          const distToStaging = shipPos.distanceTo(stagingPoint);
+
+          // Arc mid-point: a position near the planet at the ship's
+          // starting altitude.  The ship approaches horizontally toward
+          // this point, then curves up/down to the staging point,
+          // creating a gentle arc rather than a straight-line flight.
+          const arcMidPoint = new THREE.Vector3(
+            planetCenter.x,
+            shipPos.y,
+            planetCenter.z,
+          );
+
+          // The initial turn faces the arc mid-point (horizontal approach)
+          // rather than the staging point directly.
           const turnTargetQuat = new THREE.Quaternion();
           const tmpObj = new THREE.Object3D();
           tmpObj.position.copy(spaceshipRef.current.position);
-          tmpObj.lookAt(targetPos);
+          tmpObj.lookAt(arcMidPoint);
           turnTargetQuat.copy(tmpObj.quaternion);
           applyRollOffset(turnTargetQuat);
 
           navigationTargetRef.current = {
             id: targetId,
             type: targetType,
-            position: targetPos,
+            position: stagingPoint,
             startPosition: shipPos.clone(),
             startTime: Date.now(),
-            useTurbo: distance > 500,
+            useTurbo: distToStaging > 500,
             targetRadius,
             turnPhase: "turning",
             turnStartTime: performance.now(),
             turnStartQuat: spaceshipRef.current.quaternion.clone(),
             turnTargetQuat,
+            planetCenter,
+            arcMidPoint,
+            arcInitialDistance: distToStaging,
           };
 
           vlog(
-            `📏 Distance to target: ${distance.toFixed(1)} units ${navigationTargetRef.current.useTurbo ? "(TURBO enabled)" : ""}`,
+            `📏 Distance to staging: ${distToStaging.toFixed(1)} units ${navigationTargetRef.current.useTurbo ? "(TURBO enabled)" : ""}`,
           );
         } else {
           vlog(`❌ Could not find target: ${targetId}`);
@@ -580,11 +676,91 @@ export const useNavigationSystem = (deps: {
         return; // Hold position during pause
       }
 
-      // Arrival distance: stop at a comfortable viewing distance from the body.
-      // Use 4x the target's radius (or min 80 units) so we can see the
-      // planet and its moons from a nice orbital perspective.
+      // ── SETTLING PHASE: ship has reached the staging point and now
+      // smoothly rotates to face the planet center from above/below.
+      // The camera moves behind the ship on the same axis so both
+      // ship nose and camera point straight at the planet — giving a
+      // perpendicular view of the orbital plane. ──
+      if (target.turnPhase === "settling") {
+        const SETTLE_DURATION = 2.0; // seconds — smooth, cinematic turn
+        const elapsed =
+          (performance.now() - (target.settleStartTime || 0)) / 1000;
+        const t = Math.min(elapsed / SETTLE_DURATION, 1);
+        const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+        if (target.settleStartQuat && target.settleTargetQuat) {
+          ship.quaternion
+            .copy(target.settleStartQuat)
+            .slerp(target.settleTargetQuat, eased);
+        }
+
+        // Position camera on the same axis as ship→planet, further
+        // behind the ship.  Both the ship and camera look at the
+        // planet centre, perpendicular to the orbital plane.
+        if (
+          followingSpaceshipRef.current &&
+          !insideShipRef.current &&
+          sceneRef.current.controls &&
+          target.planetCenter
+        ) {
+          // Direction from planet to ship (the "up" axis of the view)
+          const awayFromPlanet = _navCamPos.current
+            .subVectors(ship.position, target.planetCenter)
+            .normalize();
+
+          // Camera is 80 units further along that same axis
+          const camPos = ship.position
+            .clone()
+            .addScaledVector(awayFromPlanet, 80);
+
+          sceneRef.current.controls.setLookAt(
+            camPos.x, camPos.y, camPos.z,
+            target.planetCenter.x,
+            target.planetCenter.y,
+            target.planetCenter.z,
+            true,
+          );
+        }
+
+        if (t >= 1) {
+          vlog("🛸 Settle complete — ship now facing planet system");
+
+          // ── Directly run arrival cleanup here instead of falling
+          // through to the travel code, which would override the
+          // ship's settled orientation and camera position. ──
+          setCurrentNavigationTarget(null);
+          setNavigationDistance(null);
+          setNavigationETA(null);
+          navTurnActiveRef.current = false;
+          sectionAvoidWaypoint.current = null;
+          navigationTargetRef.current = {
+            id: null,
+            type: null,
+            position: null,
+            startPosition: null,
+            startTime: 0,
+            useTurbo: false,
+            lastUpdateFrame: undefined,
+          };
+          manualFlightRef.current.acceleration = 0;
+          manualFlightRef.current.isTurboActive = false;
+          pathData.visitingMoon = false;
+          pathData.currentMoonTarget = null;
+          if (sceneRef.current.controls) {
+            sceneRef.current.controls.enabled = true;
+          }
+          vlog("🏁 Planet approach complete");
+          return;
+        }
+        return; // Still settling — don't move or check arrival
+      }
+
+      // Arrival distance depends on whether we're heading to a staging
+      // point (orbital approach) or directly to a body.
       const planetRadius = target.targetRadius || 20;
-      const arrivalDistance = Math.max(planetRadius * 4, 80);
+      const arrivalDistance = target.planetCenter
+        ? 30 // Get close to the staging point before settling
+        : Math.max(planetRadius * 4, 80);
 
       // ── TRAVEL PHASE: move toward target with obstacle avoidance ──
       // targetPos is guaranteed non-null here (moon-turn phases return
@@ -649,8 +825,21 @@ export const useNavigationSystem = (deps: {
         }
       }
 
-      // Steer toward avoidance waypoint if active, otherwise toward target
-      const steerTarget = sectionAvoidWaypoint.current || targetPos;
+      // Steer target: for orbital approaches, blend between the arc
+      // mid-point (horizontal approach) and the staging point (vertical
+      // ascent/descent) based on travel progress to create a gentle arc.
+      let steerTarget: THREE.Vector3;
+      if (sectionAvoidWaypoint.current) {
+        steerTarget = sectionAvoidWaypoint.current;
+      } else if (target.arcMidPoint && target.arcInitialDistance) {
+        // Progress 0→1 from start to staging point
+        const arcProgress = 1 - Math.min(distance / target.arcInitialDistance, 1);
+        // Ease-in: steer more toward staging point as we get closer
+        const blend = arcProgress * arcProgress;
+        steerTarget = target.arcMidPoint.clone().lerp(targetPos, blend);
+      } else {
+        steerTarget = targetPos;
+      }
       const direction = _navDir.current
         .subVectors(steerTarget, ship.position)
         .normalize();
@@ -710,6 +899,55 @@ export const useNavigationSystem = (deps: {
       }
 
       if (distance < arrivalDistance) {
+        // ── For sections: transition to "settling" phase where the ship
+        // turns to face the planet centre from the staging point, giving
+        // the user a top-down or bottom-up view of the system. ──
+        if (target.type === "section" && target.planetCenter) {
+          vlog(`🛸 Reached staging point — settling to face planet`);
+          pathData.speed = 0;
+
+          // Compute the quaternion to face the planet centre from here.
+          // The staging point is almost directly above/below the planet,
+          // so the look direction is nearly along the Y axis.  The default
+          // Object3D.lookAt uses (0,1,0) as up — which becomes degenerate
+          // when looking straight down or up.  Use Matrix4.lookAt with a
+          // safe up vector (world +Z) instead.
+          const dir = new THREE.Vector3()
+            .subVectors(target.planetCenter, ship.position)
+            .normalize();
+          // Choose an up vector that isn't parallel to the look direction
+          const safeUp = Math.abs(dir.y) > 0.9
+            ? new THREE.Vector3(0, 0, 1)
+            : new THREE.Vector3(0, 1, 0);
+          const settleMatrix = new THREE.Matrix4().lookAt(
+            ship.position,
+            target.planetCenter,
+            safeUp,
+          );
+          const settleQuat = new THREE.Quaternion().setFromRotationMatrix(
+            settleMatrix,
+          );
+          // Flip 180° around Y so the cockpit (visual front) faces
+          // the planet instead of the rear.
+          const flip180 = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(0, 1, 0),
+            Math.PI,
+          );
+          settleQuat.multiply(flip180);
+          applyRollOffset(settleQuat);
+
+          // Set the settled view target NOW so the render loop's follow
+          // camera orbits around the planet (not the ship) during the
+          // entire settling animation — preventing a camera jump.
+          settledViewTargetRef.current = target.planetCenter.clone();
+
+          target.turnPhase = "settling";
+          target.settleStartTime = performance.now();
+          target.settleStartQuat = ship.quaternion.clone();
+          target.settleTargetQuat = settleQuat;
+          return;
+        }
+
         vlog(`✅ ARRIVED at ${target.id}`);
         vlog(`   Final distance: ${distance.toFixed(2)} units`);
         vlog(
@@ -809,6 +1047,7 @@ export const useNavigationSystem = (deps: {
     navigationDistance,
     navigationETA,
     navTurnActiveRef,
+    settledViewTargetRef,
     handleAutopilotNavigation,
     initializeNavigationSystem,
     updateAutopilotNavigation,

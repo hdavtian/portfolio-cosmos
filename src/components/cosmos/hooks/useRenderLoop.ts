@@ -73,6 +73,7 @@ export const useRenderLoop = () => {
       rollInputRef: React.MutableRefObject<number>;
       shipRollOffsetRef: React.MutableRefObject<number>;
       navTurnActiveRef: React.MutableRefObject<boolean>;
+      settledViewTargetRef: React.MutableRefObject<THREE.Vector3 | null>;
       optionsRef: React.MutableRefObject<{ spaceFollowDistance?: number }>;
       updateAutopilotNavigation: () => void;
       updateOrbitSystem: (params: {
@@ -122,6 +123,7 @@ export const useRenderLoop = () => {
         rollInputRef,
         shipRollOffsetRef,
         navTurnActiveRef,
+        settledViewTargetRef,
         optionsRef,
         updateAutopilotNavigation,
         updateOrbitSystem,
@@ -741,12 +743,25 @@ export const useRenderLoop = () => {
                 // of the ship so the camera stays centred on the moon
                 // and bokeh/DOF remains sharp on the target.
                 const focusedMoon = focusedMoonRef.current;
+                const settledTarget = settledViewTargetRef.current;
                 if (focusedMoon) {
                   const moonWorld = new THREE.Vector3();
                   focusedMoon.getWorldPosition(moonWorld);
                   cc.moveTo(moonWorld.x, moonWorld.y, moonWorld.z, true);
                   cc.minDistance = 0;
                   cc.maxDistance = 1000;
+                } else if (settledTarget) {
+                  // After an orbital planet approach, keep the camera
+                  // orbiting around the planet centre so the
+                  // perpendicular top-down / bottom-up view is preserved.
+                  cc.moveTo(
+                    settledTarget.x,
+                    settledTarget.y,
+                    settledTarget.z,
+                    true,
+                  );
+                  cc.minDistance = 5;
+                  cc.maxDistance = 2000;
                 } else {
                   cc.moveTo(
                     ship.position.x,

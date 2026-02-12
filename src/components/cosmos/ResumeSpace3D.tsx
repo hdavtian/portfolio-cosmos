@@ -558,6 +558,7 @@ export default function ResumeSpace3D({
     navigationDistance,
     navigationETA,
     navTurnActiveRef,
+    settledViewTargetRef,
     handleAutopilotNavigation,
     initializeNavigationSystem,
     updateAutopilotNavigation,
@@ -1829,6 +1830,141 @@ export default function ResumeSpace3D({
 
     registerPlanetData();
 
+    // ── CAMERA DEBUG TOOL ──────────────────────────────────────────
+    // Exposes window.__captureViewpoint(planetName?) to log the
+    // current camera position, angle, and distance relative to a
+    // planet.  The user can then communicate exact viewpoint data.
+    // Press Shift+F8 in the browser as a shortcut.
+    (window as any).__captureViewpoint = (planetName?: string) => {
+      const cam = sceneRef.current.camera;
+      const cc = sceneRef.current.controls;
+      if (!cam) {
+        console.log("❌ No camera available");
+        return;
+      }
+
+      const camPos = cam.position.clone();
+      const orbitTarget = new THREE.Vector3();
+      if (cc) (cc as any).getTarget(orbitTarget);
+
+      // Gather all planets
+      const planets: Array<{
+        name: string;
+        worldPos: THREE.Vector3;
+        radius: number;
+      }> = [];
+      sceneRef.current.scene?.traverse((obj: any) => {
+        if (obj.isMesh && obj.userData?.sectionId) {
+          const wp = new THREE.Vector3();
+          obj.getWorldPosition(wp);
+          const geo = obj.geometry;
+          const r =
+            geo?.parameters?.radius ??
+            (geo?.boundingSphere
+              ? (geo.computeBoundingSphere(), geo.boundingSphere?.radius ?? 10)
+              : 10);
+          planets.push({ name: obj.userData.sectionId, worldPos: wp, radius: r });
+        }
+      });
+
+      // If planetName provided, filter to it
+      let targets = planets;
+      if (planetName) {
+        targets = planets.filter(
+          (p) => p.name.toLowerCase() === planetName.toLowerCase(),
+        );
+      }
+
+      console.log("═══════════════════════════════════════");
+      console.log("📷 CAMERA VIEWPOINT CAPTURE");
+      console.log("═══════════════════════════════════════");
+      console.log(
+        `Camera position: { x: ${camPos.x.toFixed(1)}, y: ${camPos.y.toFixed(1)}, z: ${camPos.z.toFixed(1)} }`,
+      );
+      console.log(
+        `Orbit target:    { x: ${orbitTarget.x.toFixed(1)}, y: ${orbitTarget.y.toFixed(1)}, z: ${orbitTarget.z.toFixed(1)} }`,
+      );
+
+      if (targets.length === 0 && planets.length > 0) {
+        // If no sectionId found, try planetName userData
+        sceneRef.current.scene?.traverse((obj: any) => {
+          if (obj.isMesh && obj.userData?.planetName) {
+            const wp = new THREE.Vector3();
+            obj.getWorldPosition(wp);
+            const geo = obj.geometry;
+            const r = geo?.parameters?.radius ?? 10;
+            const pn = obj.userData.planetName as string;
+            if (
+              !planetName ||
+              pn.toLowerCase().includes(planetName.toLowerCase())
+            ) {
+              targets.push({ name: pn, worldPos: wp, radius: r });
+            }
+          }
+        });
+      }
+
+      // Also check planetsDataRef
+      if (targets.length === 0) {
+        planetsDataRef.current.forEach((data, key) => {
+          if (!planetName || key.toLowerCase().includes(planetName.toLowerCase())) {
+            targets.push({
+              name: key,
+              worldPos: data.position.clone(),
+              radius: (data as any).radius ?? 20,
+            });
+          }
+        });
+      }
+
+      for (const planet of targets) {
+        const offset = camPos.clone().sub(planet.worldPos);
+        const dist = camPos.distanceTo(planet.worldPos);
+        // Compute spherical angles relative to the planet
+        const theta = Math.atan2(offset.x, offset.z) * (180 / Math.PI); // azimuth
+        const phi =
+          Math.asin(
+            Math.min(1, Math.max(-1, offset.y / Math.max(dist, 0.001))),
+          ) * (180 / Math.PI); // elevation
+
+        console.log(`\n🪐 Planet: ${planet.name}`);
+        console.log(
+          `   Planet world pos: { x: ${planet.worldPos.x.toFixed(1)}, y: ${planet.worldPos.y.toFixed(1)}, z: ${planet.worldPos.z.toFixed(1)} }`,
+        );
+        console.log(`   Planet radius: ${planet.radius.toFixed(1)}`);
+        console.log(`   Camera distance: ${dist.toFixed(1)}`);
+        console.log(
+          `   Camera offset:   { x: ${offset.x.toFixed(1)}, y: ${offset.y.toFixed(1)}, z: ${offset.z.toFixed(1)} }`,
+        );
+        console.log(`   Azimuth: ${theta.toFixed(1)}°  Elevation: ${phi.toFixed(1)}°`);
+        console.log(
+          `   Distance / radius: ${(dist / planet.radius).toFixed(1)}x`,
+        );
+
+        // Output a copy-pasteable viewpoint object
+        console.log(`   📋 Viewpoint data:`);
+        console.log(
+          `   { offset: { x: ${offset.x.toFixed(1)}, y: ${offset.y.toFixed(1)}, z: ${offset.z.toFixed(1)} }, distance: ${dist.toFixed(1)}, azimuth: ${theta.toFixed(1)}, elevation: ${phi.toFixed(1)} }`,
+        );
+      }
+
+      if (targets.length === 0) {
+        console.log("\n⚠️ No planets found. Available planet names:");
+        planets.forEach((p) => console.log(`   - ${p.name}`));
+        console.log("   (Also try: 'experience', 'skills', 'projects')");
+      }
+      console.log("═══════════════════════════════════════");
+    };
+
+    // Keyboard shortcut: Shift+F8 to capture viewpoint
+    const handleDebugKey = (e: KeyboardEvent) => {
+      if (e.key === "F8" && e.shiftKey) {
+        e.preventDefault();
+        (window as any).__captureViewpoint();
+      }
+    };
+    window.addEventListener("keydown", handleDebugKey);
+
     // Initialize tour guide with content display handler
     const handleContentDisplay = (waypoint: NavigationWaypoint) => {
       vlog(`🎬 Tour waypoint: ${waypoint.name}`);
@@ -2404,6 +2540,7 @@ export default function ResumeSpace3D({
       rollInputRef,
       shipRollOffsetRef,
       navTurnActiveRef,
+      settledViewTargetRef,
       optionsRef,
       updateAutopilotNavigation,
       updateOrbitSystem,
