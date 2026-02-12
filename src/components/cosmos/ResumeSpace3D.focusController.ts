@@ -219,8 +219,10 @@ export const createMoonFocusController = (deps: {
 
       // Log controls target BEFORE flyTo
       if (sceneRef.current.controls) {
+        const _tgt = new THREE.Vector3();
+        sceneRef.current.controls.getTarget(_tgt);
         vlog(
-          `🎯 Before flyTo - target: [${sceneRef.current.controls.target
+          `🎯 Before flyTo - target: [${_tgt
             .toArray()
             .map((n) => n.toFixed(1))
             .join(", ")}]`,
@@ -236,19 +238,18 @@ export const createMoonFocusController = (deps: {
 
       vlog(`✈️ Flight to ${company.company} complete`);
 
-      // CRITICAL: Update OrbitControls target AFTER flyTo completes
+      // CRITICAL: Update controls target AFTER flyTo completes
       // This allows manual zoom to work toward the moon, not the sun!
       if (sceneRef.current.controls && sceneRef.current.camera) {
         vlog(`🎯 After flyTo, updating target to moon...`);
-        sceneRef.current.controls.target.copy(moonWorldPos);
+        sceneRef.current.controls.setTarget(moonWorldPos.x, moonWorldPos.y, moonWorldPos.z, false);
         setMinDistance(0, "allow zoom to moon surface");
-        sceneRef.current.controls.update(); // Force update to apply changes
 
-        const camToTarget = sceneRef.current.camera.position.distanceTo(
-          sceneRef.current.controls.target,
-        );
+        const _tgt2 = new THREE.Vector3();
+        sceneRef.current.controls.getTarget(_tgt2);
+        const camToTarget = sceneRef.current.camera.position.distanceTo(_tgt2);
         vlog(
-          `✓ Target updated: [${sceneRef.current.controls.target
+          `✓ Target updated: [${_tgt2
             .toArray()
             .map((n) => n.toFixed(1))
             .join(", ")}]`,

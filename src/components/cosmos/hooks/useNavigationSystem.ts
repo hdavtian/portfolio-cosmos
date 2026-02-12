@@ -20,6 +20,8 @@ export const useNavigationSystem = (deps: {
   manualFlightModeRef: React.MutableRefObject<boolean>;
   focusedMoonRef: React.MutableRefObject<THREE.Mesh | null>;
   exitFocusRequestRef: React.MutableRefObject<boolean>;
+  shipCinematicRef: React.MutableRefObject<{ active: boolean } | null>;
+  insideShipRef: React.MutableRefObject<boolean>;
   missionLog: (message: string) => void;
   vlog: (message: string) => void;
   manualFlightRef: React.MutableRefObject<any>;
@@ -42,6 +44,8 @@ export const useNavigationSystem = (deps: {
     manualFlightModeRef,
     focusedMoonRef,
     exitFocusRequestRef,
+    shipCinematicRef,
+    insideShipRef,
     missionLog,
     vlog,
     manualFlightRef,
@@ -67,6 +71,15 @@ export const useNavigationSystem = (deps: {
     lastUpdateFrame?: number;
     turboLogged?: boolean;
     decelerationLogged?: boolean;
+    // Turn-toward-target phase: ship rotates to face destination before moving
+    turnPhase?: "turning" | "pausing" | "traveling";
+    turnStartTime?: number;
+    turnPauseStartTime?: number;
+    turnStartQuat?: THREE.Quaternion;
+    turnTargetQuat?: THREE.Quaternion;
+    // Pending moon navigation — delayed until turn completes
+    pendingMoonId?: string;
+    pendingMoonTurbo?: boolean;
   }>({
     id: null,
     type: null,
@@ -77,6 +90,9 @@ export const useNavigationSystem = (deps: {
   });
 
   const navigationSystemRef = useRef<SpaceshipNavigationSystem | null>(null);
+
+  // Exposed to render loop: true while the ship is in the "turning" phase
+  const navTurnActiveRef = useRef(false);
 
   const initializeNavigationSystem = useCallback(
     (spaceship: THREE.Object3D, scene: THREE.Scene) => {
@@ -172,12 +188,24 @@ export const useNavigationSystem = (deps: {
         vlog("↩️ Exiting previous focused moon before new navigation");
       }
 
-      if (!followingSpaceshipRef.current || manualFlightModeRef.current) {
-        vlog("⚠️ Navigation only available in autopilot mode");
-        vlog(
-          `   Following: ${followingSpaceshipRef.current}, Manual: ${manualFlightModeRef.current}`,
-        );
+      if (manualFlightModeRef.current) {
+        vlog("⚠️ Navigation unavailable in manual flight mode");
         return;
+      }
+
+      if (!followingSpaceshipRef.current) {
+        // Auto-engage ship follow if we were called while the ship exists
+        // (e.g. click-to-navigate while inside ship sets followingSpaceship)
+        vlog("⚠️ Ship follow not active — cannot use autopilot");
+        return;
+      }
+
+      // ── Stop cinematic hover/orbit so the ship can move ────────
+      // The render loop's cinematic branch blocks autopilot updates,
+      // so we must deactivate it before the ship can navigate.
+      if (shipCinematicRef.current?.active) {
+        vlog("🎬 Deactivating cinematic to allow navigation");
+        shipCinematicRef.current.active = false;
       }
 
       if (!navigationSystemRef.current) {
@@ -203,28 +231,40 @@ export const useNavigationSystem = (deps: {
               ) > 500
             : true;
 
-        vlog(`🎯 Starting navigation to moon: ${moonId}`);
-        vlog(`   Emitter tracking: ${emitterRef.current.isTracking(moonId)}`);
-        vlog(`   Nav system exists: ${!!navigationSystemRef.current}`);
-        vlog(`   Ship exists: ${!!spaceshipRef.current}`);
+        const ship = spaceshipRef.current!;
+        vlog(`🎯 Starting turn toward moon: ${moonId}`);
 
-        const success = navigationSystemRef.current.navigateToObject(
-          moonId,
-          useTurbo,
-        );
-
-        if (success) {
-          setCurrentNavigationTarget(targetId);
-          vlog(
-            `✅ Navigation started to moon: ${targetId} (turbo: ${useTurbo})`,
-          );
-          missionLog(
-            `🎯 NAVIGATION INITIATED: Target - ${targetId} | Distance: ${currentPos ? spaceshipRef.current!.position.distanceTo(currentPos.worldPosition).toFixed(0) : "unknown"}u`,
-          );
-        } else {
-          vlog(`❌ Failed to start navigation to moon: ${targetId}`);
-          missionLog(`⚠️ NAVIGATION FAILED: Unable to lock onto ${targetId}`);
+        // Compute facing quaternion toward moon
+        const turnTargetQuat = new THREE.Quaternion();
+        if (currentPos) {
+          const tmpObj = new THREE.Object3D();
+          tmpObj.position.copy(ship.position);
+          tmpObj.lookAt(currentPos.worldPosition);
+          turnTargetQuat.copy(tmpObj.quaternion);
         }
+
+        // Set up turn phase — navigateToObject is delayed until turn completes
+        navigationTargetRef.current = {
+          id: targetId,
+          type: targetType,
+          position: currentPos?.worldPosition ?? null,
+          startPosition: ship.position.clone(),
+          startTime: Date.now(),
+          useTurbo,
+          turnPhase: "turning",
+          turnStartTime: performance.now(),
+          turnStartQuat: ship.quaternion.clone(),
+          turnTargetQuat,
+          pendingMoonId: moonId,
+          pendingMoonTurbo: useTurbo,
+        };
+        setCurrentNavigationTarget(targetId);
+        vlog(
+          `✅ Turn initiated toward moon: ${targetId} (turbo: ${useTurbo})`,
+        );
+        missionLog(
+          `🎯 NAVIGATION INITIATED: Target - ${targetId} | Distance: ${currentPos ? spaceshipRef.current!.position.distanceTo(currentPos.worldPosition).toFixed(0) : "unknown"}u`,
+        );
       } else if (targetType === "section") {
         let targetPosition: THREE.Vector3 | null = null;
         let targetName = targetId;
@@ -263,6 +303,13 @@ export const useNavigationSystem = (deps: {
           );
           vlog(`📏 Distance: ${distance.toFixed(1)} units`);
 
+          // Compute the quaternion the ship needs to face the target
+          const turnTargetQuat = new THREE.Quaternion();
+          const tmpObj = new THREE.Object3D();
+          tmpObj.position.copy(spaceshipRef.current.position);
+          tmpObj.lookAt(targetPos);
+          turnTargetQuat.copy(tmpObj.quaternion);
+
           navigationTargetRef.current = {
             id: targetId,
             type: targetType,
@@ -270,6 +317,10 @@ export const useNavigationSystem = (deps: {
             startPosition: shipPos.clone(),
             startTime: Date.now(),
             useTurbo: distance > 500,
+            turnPhase: "turning",
+            turnStartTime: performance.now(),
+            turnStartQuat: spaceshipRef.current.quaternion.clone(),
+            turnTargetQuat,
           };
 
           vlog(
@@ -287,6 +338,7 @@ export const useNavigationSystem = (deps: {
       focusedMoonRef,
       followingSpaceshipRef,
       manualFlightModeRef,
+      shipCinematicRef,
       missionLog,
       sceneRef,
       spaceshipRef,
@@ -294,20 +346,22 @@ export const useNavigationSystem = (deps: {
     ],
   );
 
+  // Reusable scratch vectors — avoid per-frame allocations
+  const _navDir = useRef(new THREE.Vector3());
+  const _navCamPos = useRef(new THREE.Vector3());
+
   const updateAutopilotNavigation = useCallback(() => {
     const ship = spaceshipRef.current;
     if (!ship) return;
 
     const pathData = spaceshipPathRef.current;
+    const now = Date.now();
 
-    if (
-      !window.lastAutopilotLog ||
-      Date.now() - window.lastAutopilotLog > 2000
-    ) {
+    if (!window.lastAutopilotLog || now - window.lastAutopilotLog > 2000) {
       vlog(
         `🤖 AUTOPILOT: nav=${!!navigationTargetRef.current.id}, system=${!!navigationSystemRef.current?.getStatus().isNavigating}`,
       );
-      window.lastAutopilotLog = Date.now();
+      window.lastAutopilotLog = now;
     }
 
     if (navigationSystemRef.current) {
@@ -315,44 +369,133 @@ export const useNavigationSystem = (deps: {
       const status = navigationSystemRef.current.getStatus();
       if (
         (status.isNavigating && !(window as any).lastNavSystemLog) ||
-        Date.now() - ((window as any).lastNavSystemLog || 0) > 2000
+        now - ((window as any).lastNavSystemLog || 0) > 2000
       ) {
         vlog(
           `🎯 Nav System Active: ${status.targetId}, dist: ${status.distance?.toFixed(1)}`,
         );
-        (window as any).lastNavSystemLog = Date.now();
+        (window as any).lastNavSystemLog = now;
       }
       navigationSystemRef.current.update(deltaTime);
     }
 
-    if (
-      navigationTargetRef.current.id &&
-      navigationTargetRef.current.position &&
-      navigationTargetRef.current.type === "section"
-    ) {
+    // Handle both section travel AND moon turn phase
+    const navTarget = navigationTargetRef.current;
+    const isSectionTravel =
+      navTarget.id && navTarget.position && navTarget.type === "section";
+    const isMoonTurnPhase =
+      navTarget.id &&
+      navTarget.type === "moon" &&
+      (navTarget.turnPhase === "turning" || navTarget.turnPhase === "pausing");
+
+    if (isSectionTravel || isMoonTurnPhase) {
       const target = navigationTargetRef.current;
-      const shipPos = ship.position.clone();
       const targetPos = target.position;
 
-      if (!targetPos) {
+      // For section travel, targetPos is required for movement
+      // For moon turn phase, we only need the quaternion slerp
+      if (!targetPos && !isMoonTurnPhase) {
         vlog("⚠️ Navigation target position is null");
         return;
       }
 
-      const distance = shipPos.distanceTo(targetPos);
+      const distance = targetPos
+        ? ship.position.distanceTo(targetPos)
+        : 0;
 
-      if (
-        !target.lastUpdateFrame ||
-        Date.now() - target.lastUpdateFrame > 500
-      ) {
+      if (targetPos && (!target.lastUpdateFrame || now - target.lastUpdateFrame > 500)) {
         setNavigationDistance(distance);
         const estimatedSpeed = target.useTurbo ? 4.0 : 2.0;
         setNavigationETA(distance / estimatedSpeed);
-        target.lastUpdateFrame = Date.now();
+        target.lastUpdateFrame = now;
       }
 
-      const direction = new THREE.Vector3()
-        .subVectors(targetPos, shipPos)
+      // ── TURN PHASE: smoothly rotate ship toward target before moving ──
+      if (target.turnPhase === "turning") {
+        navTurnActiveRef.current = true;
+        const TURN_DURATION = 1.5; // seconds
+        const elapsed =
+          (performance.now() - (target.turnStartTime || 0)) / 1000;
+        const t = Math.min(elapsed / TURN_DURATION, 1);
+        // Smooth ease-in-out
+        const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+        if (target.turnStartQuat && target.turnTargetQuat) {
+          ship.quaternion
+            .copy(target.turnStartQuat)
+            .slerp(target.turnTargetQuat, eased);
+        }
+
+        // In 3rd person: gently swing the camera to look toward the destination
+        if (
+          !insideShipRef.current &&
+          followingSpaceshipRef.current &&
+          sceneRef.current.controls
+        ) {
+          const camPos = _navCamPos.current;
+          // Camera behind ship, facing the destination
+          camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
+          camPos.multiplyScalar(60).add(ship.position);
+          camPos.y += 20;
+
+          sceneRef.current.controls.setLookAt(
+            camPos.x,
+            camPos.y,
+            camPos.z,
+            ship.position.x,
+            ship.position.y,
+            ship.position.z,
+            true,
+          );
+        }
+
+        if (t >= 1) {
+          // Turn finished — enter a brief pause before travel begins
+          target.turnPhase = "pausing";
+          target.turnPauseStartTime = performance.now();
+          navTurnActiveRef.current = false;
+          vlog("🔄 Turn complete — pausing before travel");
+        }
+        return; // Don't move yet, just rotate
+      }
+
+      // ── PAUSE PHASE: short beat after turn, before travel ──
+      if (target.turnPhase === "pausing") {
+        const PAUSE_DURATION = 500; // ms
+        const pauseElapsed =
+          performance.now() - (target.turnPauseStartTime || 0);
+
+        if (pauseElapsed >= PAUSE_DURATION) {
+          // If this was a moon turn, start the navigation system now
+          if (target.pendingMoonId && navigationSystemRef.current) {
+            const success = navigationSystemRef.current.navigateToObject(
+              target.pendingMoonId,
+              target.pendingMoonTurbo ?? true,
+            );
+            if (success) {
+              vlog(`▶️ Pause done — moon navigation started: ${target.pendingMoonId}`);
+            }
+            // Clear the section-type navigation since moon system takes over
+            navigationTargetRef.current = {
+              id: target.id,
+              type: target.type,
+              position: null,
+              startPosition: null,
+              startTime: 0,
+              useTurbo: false,
+            };
+          } else {
+            target.turnPhase = "traveling";
+            pathData.speed = 0; // start from zero speed
+            vlog("▶️ Pause done — beginning travel");
+          }
+        }
+        return; // Hold position during pause
+      }
+
+      // ── TRAVEL PHASE: move toward target ──────────────────────
+      const direction = _navDir.current
+        .subVectors(targetPos, ship.position)
         .normalize();
 
       let targetSpeed = 0.5;
@@ -384,28 +527,27 @@ export const useNavigationSystem = (deps: {
       }
 
       pathData.speed += (targetSpeed - pathData.speed) * 0.05;
-      ship.position.add(direction.multiplyScalar(pathData.speed));
+      ship.position.addScaledVector(direction, pathData.speed);
 
-      const lookTarget = targetPos.clone();
-      ship.lookAt(lookTarget);
+      ship.lookAt(targetPos);
 
-      if (followingSpaceshipRef.current && sceneRef.current.controls) {
-        const camera = sceneRef.current.camera;
-        if (camera) {
-          const cameraDistance = 60;
-          const cameraHeight = 20;
-          const backwardDirection = new THREE.Vector3(0, 0, -1);
-          backwardDirection.applyQuaternion(ship.quaternion);
+      // Only update exterior follow camera when NOT inside the ship —
+      // the interior camera block in the render loop handles cockpit/cabin.
+      if (
+        followingSpaceshipRef.current &&
+        !insideShipRef.current &&
+        sceneRef.current.controls
+      ) {
+        const camPos = _navCamPos.current;
+        camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
+        camPos.multiplyScalar(60).add(ship.position);
+        camPos.y += 20;
 
-          const cameraTargetPos = ship.position
-            .clone()
-            .add(backwardDirection.multiplyScalar(cameraDistance))
-            .add(new THREE.Vector3(0, cameraHeight, 0));
-
-          camera.position.lerp(cameraTargetPos, 0.1);
-          sceneRef.current.controls.target.lerp(ship.position, 0.1);
-          sceneRef.current.controls.update();
-        }
+        sceneRef.current.controls.setLookAt(
+          camPos.x, camPos.y, camPos.z,
+          ship.position.x, ship.position.y, ship.position.z,
+          true,
+        );
       }
 
       if (distance < 20) {
@@ -419,6 +561,7 @@ export const useNavigationSystem = (deps: {
         setCurrentNavigationTarget(null);
         setNavigationDistance(null);
         setNavigationETA(null);
+        navTurnActiveRef.current = false;
         navigationTargetRef.current = {
           id: null,
           type: null,
@@ -439,9 +582,7 @@ export const useNavigationSystem = (deps: {
 
         if (sceneRef.current.controls) {
           sceneRef.current.controls.enabled = true;
-          sceneRef.current.controls.enableZoom = true;
-          sceneRef.current.controls.enablePan = true;
-          vlog(`🎮 Controls enabled: zoom=true, pan=true`);
+          vlog(`🎮 Controls re-enabled`);
         }
 
         if (target.type === "moon") {
@@ -487,6 +628,7 @@ export const useNavigationSystem = (deps: {
   }, [
     enterMoonViewRef,
     followingSpaceshipRef,
+    insideShipRef,
     manualFlightRef,
     resumeData,
     sceneRef,
@@ -506,6 +648,7 @@ export const useNavigationSystem = (deps: {
     currentNavigationTarget,
     navigationDistance,
     navigationETA,
+    navTurnActiveRef,
     handleAutopilotNavigation,
     initializeNavigationSystem,
     updateAutopilotNavigation,

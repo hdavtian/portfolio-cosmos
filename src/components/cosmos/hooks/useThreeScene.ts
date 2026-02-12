@@ -1,7 +1,10 @@
 import { useCallback } from "react";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import CameraControls from "camera-controls";
 import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+
+// Install camera-controls with THREE subset (required once before use)
+CameraControls.install({ THREE });
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -100,19 +103,19 @@ export const useThreeScene = (params: {
       labelRenderer.domElement.style.display = "none";
     }
 
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new CameraControls(camera, renderer.domElement);
     sceneRef.current.controls = controls;
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.minDistance = 0;
-    controls.maxDistance = 6000;
-    controls.autoRotate = false;
-    controls.autoRotateSpeed = 0.5;
 
-    controls.addEventListener("start", () => {
+    // Smooth damping — camera-controls uses smoothTime (seconds to reach target)
+    controls.smoothTime = 0.25;
+    controls.draggingSmoothTime = 0.12;
+    controls.minDistance = 0.01;
+    controls.maxDistance = 6000;
+
+    controls.addEventListener("controlstart", () => {
       controlsDraggingRef.current = true;
     });
-    controls.addEventListener("change", () => {
+    controls.addEventListener("update", () => {
       try {
         if (focusedMoonRef.current && !isDraggingRef.current) {
           const moonWorld = new THREE.Vector3();
@@ -131,22 +134,6 @@ export const useThreeScene = (params: {
         // ignore
       }
     });
-
-    renderer.domElement.addEventListener(
-      "wheel",
-      () => {
-        // handled via controls change
-      },
-      { passive: true },
-    );
-
-    renderer.domElement.addEventListener(
-      "touchstart",
-      () => {
-        // handled via controls change
-      },
-      { passive: true },
-    );
 
     const composer = new EffectComposer(renderer);
     const renderPass = new RenderPass(scene, camera);

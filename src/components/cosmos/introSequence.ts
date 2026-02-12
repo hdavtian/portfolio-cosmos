@@ -1,5 +1,6 @@
 import type { MutableRefObject } from "react";
 import * as THREE from "three";
+import type CameraControls from "camera-controls";
 import type { SceneRef } from "./ResumeSpace3D.types";
 
 // --- INTRO SNAPSHOTS (do not edit unless re-snapshotting) ---
@@ -83,7 +84,7 @@ export type ShipCinematicState = {
 
 export type IntroSequenceRunnerParams = {
   camera: THREE.PerspectiveCamera;
-  controls: { target: THREE.Vector3; enabled: boolean; update: () => void };
+  controls: CameraControls;
   sceneRef: MutableRefObject<SceneRef>;
   spaceshipRef: MutableRefObject<THREE.Group | null>;
   shipCinematicRef: MutableRefObject<ShipCinematicState | null>;
@@ -301,7 +302,8 @@ export const createIntroSequenceRunner = (
     cancelIntroSequence();
 
     const startPos = camera.position.clone();
-    const startTarget = controls.target.clone();
+    const startTarget = new THREE.Vector3();
+    controls.getTarget(startTarget);
     const endPos = INTRO_CAMERA_FINAL_POS.clone();
     const endTarget = INTRO_CAMERA_FINAL_TARGET.clone();
 
@@ -327,9 +329,11 @@ export const createIntroSequenceRunner = (
         eased,
       );
 
-      camera.position.copy(currentPos);
-      controls.target.copy(currentTarget);
-      controls.update();
+      controls.setLookAt(
+        currentPos.x, currentPos.y, currentPos.z,
+        currentTarget.x, currentTarget.y, currentTarget.z,
+        false,
+      );
 
       if (progress < 1) {
         introRafId = requestAnimationFrame(animateCamera);
@@ -343,11 +347,9 @@ export const createIntroSequenceRunner = (
           const currentCamera = sceneRef.current.camera as
             | THREE.PerspectiveCamera
             | undefined;
-          const currentControls = sceneRef.current.controls as
-            | { target?: THREE.Vector3 }
-            | undefined;
+          const currentControls = sceneRef.current.controls;
 
-          if (!ship || !currentCamera || !currentControls?.target) {
+          if (!ship || !currentCamera || !currentControls) {
             if (attempts < 10) {
               window.setTimeout(() => startShipCinematic(attempts + 1), 250);
             }

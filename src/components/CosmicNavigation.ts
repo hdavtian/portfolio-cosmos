@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { gsap } from "gsap";
+import type CameraControls from "camera-controls";
 
 export interface CameraTarget {
   position: THREE.Vector3;
@@ -20,11 +21,11 @@ export interface NavigationWaypoint {
 
 export class CosmosCameraDirector {
   private camera: THREE.PerspectiveCamera;
-  private controls: any; // OrbitControls
+  private controls: CameraControls;
   private isAnimating = false;
   private currentTween?: gsap.core.Tween;
 
-  constructor(camera: THREE.PerspectiveCamera, controls: any) {
+  constructor(camera: THREE.PerspectiveCamera, controls: CameraControls) {
     this.camera = camera;
     this.controls = controls;
   }
@@ -40,7 +41,8 @@ export class CosmosCameraDirector {
       this.controls.enabled = false;
 
       const startPosition = this.camera.position.clone();
-      const startTarget = this.controls.target.clone();
+      const startTarget = new THREE.Vector3();
+      this.controls.getTarget(startTarget);
 
       this.currentTween = gsap.to(
         {},
@@ -50,23 +52,23 @@ export class CosmosCameraDirector {
           onUpdate: () => {
             const progress = this.currentTween?.progress() || 0;
 
-            // Interpolate camera position
             const currentPosition = new THREE.Vector3().lerpVectors(
               startPosition,
               target.position,
               progress,
             );
 
-            // Interpolate look-at target
             const currentLookAt = new THREE.Vector3().lerpVectors(
               startTarget,
               target.lookAt,
               progress,
             );
 
-            this.camera.position.copy(currentPosition);
-            this.controls.target.copy(currentLookAt);
-            this.controls.update();
+            this.controls.setLookAt(
+              currentPosition.x, currentPosition.y, currentPosition.z,
+              currentLookAt.x, currentLookAt.y, currentLookAt.z,
+              false,
+            );
           },
           onComplete: () => {
             this.isAnimating = false;
@@ -110,10 +112,11 @@ export class CosmosCameraDirector {
             const x = center.x + Math.cos(angle) * radius;
             const z = center.z + Math.sin(angle) * radius;
 
-            this.camera.position.set(x, this.camera.position.y, z);
-            this.camera.lookAt(center);
-            this.controls.target.copy(center);
-            this.controls.update();
+            this.controls.setLookAt(
+              x, this.camera.position.y, z,
+              center.x, center.y, center.z,
+              false,
+            );
           },
           onComplete: () => {
             this.isAnimating = false;

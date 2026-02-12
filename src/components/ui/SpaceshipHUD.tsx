@@ -1,7 +1,7 @@
 import React from "react";
 import type { DiagramStyleOptions } from "../DiagramSettings";
 import IdentityBadge from "./IdentityBadge";
-import ViewToggle from "./ViewToggle";
+
 import "./SpaceshipHUD.scss";
 
 // ============================================================
@@ -90,35 +90,10 @@ type Props = {
 const SpaceshipHUD: React.FC<Props> = ({
   userName,
   userTitle,
-  followingSpaceship = false,
-  insideShip = false,
-  shipViewMode = "exterior",
-  onEnterShip,
-  onExitShip,
-  onGoToCockpit,
-  onGoToInterior,
-  onNavigate,
 }) => {
-  // Start following the ship by navigating to "about" (flies camera to ship)
-  const handleStartFollowing = () => {
-    onNavigate?.("about", "section");
-  };
-
   return (
     <div className="game-hud">
-      {/* Phase 1: Identity + View Toggle */}
       <IdentityBadge name={userName} title={userTitle} />
-
-      <ViewToggle
-        followingSpaceship={followingSpaceship}
-        insideShip={insideShip}
-        shipViewMode={shipViewMode}
-        onStartFollowing={handleStartFollowing}
-        onEnterShip={onEnterShip}
-        onExitShip={onExitShip}
-        onGoToCockpit={onGoToCockpit}
-        onGoToInterior={onGoToInterior}
-      />
     </div>
   );
 };
