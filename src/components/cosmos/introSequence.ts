@@ -2,6 +2,15 @@ import type { MutableRefObject } from "react";
 import * as THREE from "three";
 import type CameraControls from "camera-controls";
 import type { SceneRef } from "./ResumeSpace3D.types";
+import {
+  INTRO_CAM_CLEARANCE,
+  INTRO_DETOUR_THRESHOLD,
+  INTRO_DETOUR_MIN,
+  INTRO_DETOUR_MAX,
+  INTRO_ORBIT_ENABLED_DIST,
+  INTRO_DIST_FACTOR_DIV,
+  INTRO_ORBIT_RADIUS,
+} from "./scaleConfig";
 
 // --- INTRO SNAPSHOTS (do not edit unless re-snapshotting) ---
 // Camera final snapshot (position/target/rotation):
@@ -41,16 +50,12 @@ const INTRO_SHIP_ORBIT_DURATION_MS = Math.round(6000 * INTRO_TIME_SCALE);
 const INTRO_PASS_THROUGH_CHANCE = 0.45;
 const INTRO_ORBIT_CHANCE = 0.6;
 const INTRO_STRAIGHT_PATH_CHANCE = 0.25;
-const INTRO_DETOUR_DISTANCE_THRESHOLD = 220;
-const INTRO_DETOUR_DISTANCE_MIN = 380;
-const INTRO_DETOUR_DISTANCE_MAX = 680;
 const INTRO_SPIN_CHANCE = 0.55;
 const INTRO_SPIN_MIN_MS = 1200;
 const INTRO_SPIN_MAX_MS = 2000;
 const INTRO_SPIN_MIN_TURNS = 1;
 const INTRO_SPIN_MAX_TURNS = 1.35;
 const INTRO_CAMERA_FLYBY_CHANCE = 0.35;
-const INTRO_CAMERA_CLEARANCE = 80;
 
 export type ShipCinematicState = {
   active: boolean;
@@ -125,7 +130,7 @@ export const buildDynamicShipCinematic = (params: {
   const startPos = ship.position.clone();
 
   const distanceToFinal = startPos.distanceTo(endPos);
-  const shouldDetour = distanceToFinal < INTRO_DETOUR_DISTANCE_THRESHOLD;
+  const shouldDetour = distanceToFinal < INTRO_DETOUR_THRESHOLD;
   const shouldCameraFlyby = Math.random() < INTRO_CAMERA_FLYBY_CHANCE;
 
   const routeRoll = Math.random();
@@ -175,14 +180,14 @@ export const buildDynamicShipCinematic = (params: {
   if (shouldDetour) {
     const cameraPos = camera.position.clone();
     const detourDistance = getRandomBetween(
-      INTRO_DETOUR_DISTANCE_MIN,
-      INTRO_DETOUR_DISTANCE_MAX,
+      INTRO_DETOUR_MIN,
+      INTRO_DETOUR_MAX,
     );
 
     if (shouldCameraFlyby) {
       flybyPoint = cameraPos
         .clone()
-        .add(cameraDirection.clone().multiplyScalar(INTRO_CAMERA_CLEARANCE));
+        .add(cameraDirection.clone().multiplyScalar(INTRO_CAM_CLEARANCE));
       approachLookAt = endPos.clone();
       controlPos = startPos
         .clone()
@@ -223,7 +228,7 @@ export const buildDynamicShipCinematic = (params: {
     const cameraPos = camera.position.clone();
     flybyPoint = cameraPos
       .clone()
-      .add(cameraDirection.clone().multiplyScalar(INTRO_CAMERA_CLEARANCE));
+      .add(cameraDirection.clone().multiplyScalar(INTRO_CAM_CLEARANCE));
     approachLookAt = endPos.clone();
     controlPos = startPos
       .clone()
@@ -248,9 +253,9 @@ export const buildDynamicShipCinematic = (params: {
     Math.random() < INTRO_ORBIT_CHANCE &&
     !shouldDetour &&
     !isStraightRoute &&
-    distanceToSun < 420;
+    distanceToSun < INTRO_ORBIT_ENABLED_DIST;
 
-  const distanceFactor = THREE.MathUtils.clamp(distanceToFinal / 600, 0.6, 1.4);
+  const distanceFactor = THREE.MathUtils.clamp(distanceToFinal / INTRO_DIST_FACTOR_DIV, 0.6, 1.4);
   const approachDuration =
     INTRO_SHIP_APPROACH_DURATION_MS *
     distanceFactor *
@@ -401,7 +406,7 @@ export const createIntroSequenceRunner = (
               ? INTRO_SHIP_ORBIT_DURATION_MS
               : undefined,
             orbitCenter: cinematicPath.orbitCenter,
-            orbitRadius: orbitEnabled ? 260 : undefined,
+            orbitRadius: orbitEnabled ? INTRO_ORBIT_RADIUS : undefined,
             orbitStartAngle: orbitEnabled ? Math.PI * 0.85 : undefined,
             orbitEndAngle: orbitEnabled ? Math.PI * 2.1 : undefined,
             spinStartOffset,

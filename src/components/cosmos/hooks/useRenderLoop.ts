@@ -7,6 +7,28 @@ import { PhysicsTravelAnchor } from "../PhysicsTravelAnchor";
 import type { OrbitAnchor, OrbitItem } from "../ResumeSpace3D.orbital";
 import type { SceneRef } from "../ResumeSpace3D.types";
 import type { StarDestroyerCruiser } from "../../StarDestroyerCruiser";
+import {
+  COCKPIT_LOCAL_POS,
+  COCKPIT_TARGET_LOCAL,
+  CABIN_LOCAL_POS,
+  CABIN_TARGET_LOCAL,
+  NEAR_EXPLORE,
+  NEAR_CABIN,
+  DEBUG_SNAP_DIST,
+  DEBUG_SNAP_HEIGHT,
+  ENGINE_LIGHT_BASE_DIST,
+  ENGINE_LIGHT_RANGE,
+  SD_ENGINE_LIGHT_RANGE,
+  FOLLOW_DISTANCE,
+  FOLLOW_HEIGHT,
+  SD_ESCORT_STARBOARD,
+  SD_ESCORT_ABOVE,
+  SD_ESCORT_BEHIND,
+  COCKPIT_THRUST_SPEED,
+  INTERIOR_MIN_DIST,
+  INTERIOR_MAX_DIST,
+  INTRO_ORBIT_RADIUS,
+} from "../scaleConfig";
 
 export const useRenderLoop = () => {
   const animationFrameRef = useRef<number | null>(null);
@@ -159,10 +181,10 @@ export const useRenderLoop = () => {
       // Exterior surface was (-6.2, 3.6, 7.1). Interior: ~0.8 inward (+X),
       // ~0.5 lower (seated eye), ~1.1 behind windshield.
       // NOTE: these are multiplied by ship.scale (0.5) in the transform below.
-      const cockpitLocalPos = new THREE.Vector3(-6.05, 3.16, 5.36);
-      const cockpitTargetLocal = new THREE.Vector3(-6.05, 3.16, 11.36);
-      const cabinLocalPos = new THREE.Vector3(0, -0.64, -4.49);
-      const cabinTargetLocal = new THREE.Vector3(0, -0.64, 1.51);
+      const cockpitLocalPos = new THREE.Vector3(COCKPIT_LOCAL_POS.x, COCKPIT_LOCAL_POS.y, COCKPIT_LOCAL_POS.z);
+      const cockpitTargetLocal = new THREE.Vector3(COCKPIT_TARGET_LOCAL.x, COCKPIT_TARGET_LOCAL.y, COCKPIT_TARGET_LOCAL.z);
+      const cabinLocalPos = new THREE.Vector3(CABIN_LOCAL_POS.x, CABIN_LOCAL_POS.y, CABIN_LOCAL_POS.z);
+      const cabinTargetLocal = new THREE.Vector3(CABIN_TARGET_LOCAL.x, CABIN_TARGET_LOCAL.y, CABIN_TARGET_LOCAL.z);
       let cockpitPosResolved = false;
       const shipWorldPos = new THREE.Vector3();
       const shipWorldQuat = new THREE.Quaternion();
@@ -218,8 +240,8 @@ export const useRenderLoop = () => {
 
           // Near plane very small so we see nearby geometry
           if (camera instanceof THREE.PerspectiveCamera) {
-            if (camera.near > 0.005) {
-              camera.near = 0.005;
+            if (camera.near > NEAR_EXPLORE) {
+              camera.near = NEAR_EXPLORE;
               camera.updateProjectionMatrix();
             }
           }
@@ -323,7 +345,7 @@ export const useRenderLoop = () => {
                 orbitProgress,
               );
               const orbitCenter = cinematic.orbitCenter || new THREE.Vector3();
-              const orbitRadius = cinematic.orbitRadius || 260;
+              const orbitRadius = cinematic.orbitRadius || INTRO_ORBIT_RADIUS;
 
               ship.position.set(
                 orbitCenter.x + Math.cos(orbitAngle) * orbitRadius,
@@ -532,8 +554,8 @@ export const useRenderLoop = () => {
               _tmpOffset.set(0, 0, -1).applyQuaternion(ship.quaternion);
               _tmpDesired
                 .copy(ship.position)
-                .addScaledVector(_tmpOffset, 60);
-              _tmpDesired.y += 25;
+                .addScaledVector(_tmpOffset, DEBUG_SNAP_DIST);
+              _tmpDesired.y += DEBUG_SNAP_HEIGHT;
 
               sceneRef.current.controls.setLookAt(
                 _tmpDesired.x, _tmpDesired.y, _tmpDesired.z,
@@ -564,7 +586,7 @@ export const useRenderLoop = () => {
               const speedFactor = Math.min(speed / 60, 1.6);
               const baseIntensity = 0.8;
               engineLight.intensity = baseIntensity + speedFactor * 3.2;
-              engineLight.distance = 220 + speedFactor * 140;
+              engineLight.distance = ENGINE_LIGHT_BASE_DIST + speedFactor * ENGINE_LIGHT_RANGE;
 
               const blueAmount = 0.3 + speedFactor * 0.7;
               engineLight.color.setRGB(
@@ -660,8 +682,8 @@ export const useRenderLoop = () => {
             ship.position.add(direction.multiplyScalar(manual.currentSpeed));
 
             if (followingSpaceshipRef.current && sceneRef.current.controls) {
-              const cameraDistance = 60;
-              const cameraHeight = 25;
+              const cameraDistance = FOLLOW_DISTANCE;
+              const cameraHeight = FOLLOW_HEIGHT;
 
               const backwardDirection = new THREE.Vector3(0, 0, -1);
               backwardDirection.applyQuaternion(ship.quaternion);
@@ -685,7 +707,7 @@ export const useRenderLoop = () => {
               const turboBoost = manual.isTurboActive ? 3 : 0;
               const boostIntensity = manual.acceleration * 8 + turboBoost;
               engineLight.intensity = baseIntensity + boostIntensity;
-              engineLight.distance = 220 + boostIntensity * 40;
+              engineLight.distance = ENGINE_LIGHT_BASE_DIST + boostIntensity * 40;
 
               if (manual.acceleration > 0) {
                 const blueAmount = 0.3 + manual.acceleration * 0.7;
@@ -753,7 +775,6 @@ export const useRenderLoop = () => {
             // This two-step approach eliminates the "always catching up"
             // choppiness visible at close camera distances.
 
-            const sd = starDestroyerRef.current;
             const cruiser = starDestroyerCruiserRef.current;
 
             // 1. SD's travel direction & speed
@@ -772,9 +793,9 @@ export const useRenderLoop = () => {
 
             // 4. Formation position: starboard, slightly above, slightly behind
             const formationPos = sdTruePos.clone()
-              .addScaledVector(sdRight, 40)                     // 40 units starboard
-              .addScaledVector(new THREE.Vector3(0, 1, 0), 8)   // 8 above
-              .addScaledVector(sdFwd, -15);                      // 15 behind
+              .addScaledVector(sdRight, SD_ESCORT_STARBOARD)     // starboard
+              .addScaledVector(new THREE.Vector3(0, 1, 0), SD_ESCORT_ABOVE) // above
+              .addScaledVector(sdFwd, -SD_ESCORT_BEHIND);        // behind
 
             // 5. Distance to formation point (before moving)
             const dist = ship.position.distanceTo(formationPos);
@@ -813,7 +834,7 @@ export const useRenderLoop = () => {
               const el = spaceshipEngineLightRef.current;
               const speedFactor = Math.min(dist / 200, 1.2);
               el.intensity = 0.8 + speedFactor * 3.0;
-              el.distance = 220 + speedFactor * 100;
+              el.distance = ENGINE_LIGHT_BASE_DIST + speedFactor * SD_ENGINE_LIGHT_RANGE;
             }
           } else {
             updateAutopilotNavigation();
@@ -858,7 +879,7 @@ export const useRenderLoop = () => {
                 cc.minDistance = 1;
                 cc.maxDistance = 1000;
 
-                const wantDist = optionsRef.current.spaceFollowDistance ?? 60;
+                const wantDist = optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
                 if (Math.abs(cc.distance - wantDist) > 0.5) {
                   cc.dollyTo(wantDist, true);
                 }
@@ -926,7 +947,7 @@ export const useRenderLoop = () => {
             if (cockpitSteerActiveRef.current && (steer.x !== 0 || steer.y !== 0)) {
               const yawRate = 0.8;   // radians/sec at full deflection
               const pitchRate = 0.5; // radians/sec at full deflection
-              const thrustSpeed = 40; // units/sec while steering
+              const thrustSpeed = COCKPIT_THRUST_SPEED; // units/sec while steering
 
               // Yaw (turn left/right) around ship's local Y axis
               const yawAngle = steer.x * yawRate * deltaSeconds;
@@ -974,14 +995,14 @@ export const useRenderLoop = () => {
             }
 
             // Configure first-person constraints
-            cc.minDistance = 0.01;
-            cc.maxDistance = 0.02; // keep camera at the target (first-person)
+            cc.minDistance = INTERIOR_MIN_DIST;
+            cc.maxDistance = INTERIOR_MAX_DIST; // keep camera at the target (first-person)
             cc.minPolarAngle = useCockpit ? Math.PI * 0.25 : Math.PI * 0.1;
             cc.maxPolarAngle = useCockpit ? Math.PI * 0.75 : Math.PI * 0.9;
 
             // Near clipping plane for cockpit instruments
             if (camera instanceof THREE.PerspectiveCamera) {
-              const desiredNear = useCockpit ? 0.005 : 0.05;
+              const desiredNear = useCockpit ? NEAR_EXPLORE : NEAR_CABIN;
               if (Math.abs(camera.near - desiredNear) > 0.001) {
                 camera.near = desiredNear;
                 camera.updateProjectionMatrix();

@@ -1,5 +1,11 @@
 import * as THREE from "three";
 import type { OverlayContent } from "../CosmicContentOverlay";
+import {
+  COCKPIT_LOCAL_POS,
+  COCKPIT_PANEL_WIDTH,
+  COCKPIT_PANEL_DEPTH,
+  COCKPIT_PANEL_STEP,
+} from "./scaleConfig";
 
 // ═══════════════════════════════════════════════════════════════════
 // CockpitHologramPanels — frosted glass holographic panels floating
@@ -16,15 +22,15 @@ const HEADER_BG = "rgba(8, 18, 38, 0.3)";
 const SECTION_BG = "rgba(6, 14, 28, 0.25)";
 const BORDER_COLOR = "rgba(80, 200, 255, 0.35)";
 
-// Cockpit camera local position (unscaled)
-const CAM_POS = new THREE.Vector3(-6.05, 3.16, 5.36);
+// Cockpit camera local position (unscaled) — from scaleConfig
+const CAM_POS = new THREE.Vector3(COCKPIT_LOCAL_POS.x, COCKPIT_LOCAL_POS.y, COCKPIT_LOCAL_POS.z);
 
 // Panel world-unit width in ship-local space
-const PANEL_LOCAL_WIDTH = 1.4;
+const PANEL_LOCAL_WIDTH = COCKPIT_PANEL_WIDTH;
 
 // How far in front of the camera (local Z offset) to place panels
-const BASE_DEPTH = 1.5; // closest panel
-const DEPTH_STEP = 0.3; // each subsequent panel is further back
+const BASE_DEPTH = COCKPIT_PANEL_DEPTH; // closest panel
+const DEPTH_STEP = COCKPIT_PANEL_STEP; // each subsequent panel is further back
 
 // Entry animation
 const FLOAT_IN_DURATION = 0.8; // seconds per panel

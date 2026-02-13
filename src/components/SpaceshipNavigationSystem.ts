@@ -19,6 +19,10 @@ import {
   getOrbitalPositionEmitter,
   type PositionUpdate,
 } from "./OrbitalPositionEmitter";
+import {
+  NAV_LATERAL_BIAS,
+  NAV_AVOID_COOLDOWN_DIST,
+} from "./cosmos/scaleConfig";
 
 export interface NavigationConfig {
   maxSpeed: number; // Maximum travel speed
@@ -175,7 +179,7 @@ export class SpaceshipNavigationSystem {
       const lateral = new THREE.Vector3().crossVectors(dir, up);
       if (lateral.lengthSq() > 0.0001) {
         const sign = Math.random() > 0.5 ? 1 : -1;
-        this.lateralBias = lateral.normalize().multiplyScalar(12 * sign);
+        this.lateralBias = lateral.normalize().multiplyScalar(NAV_LATERAL_BIAS * sign);
       }
     }
 
@@ -305,7 +309,7 @@ export class SpaceshipNavigationSystem {
 
     let targetPos = this.intermediateWaypoint || baseTargetPos;
     if (!this.intermediateWaypoint && this.lateralBias) {
-      const falloff = Math.min(Math.max(baseDistance / 500, 0), 1);
+      const falloff = Math.min(Math.max(baseDistance / NAV_AVOID_COOLDOWN_DIST, 0), 1);
       targetPos = targetPos
         .clone()
         .add(this.lateralBias.clone().multiplyScalar(falloff));

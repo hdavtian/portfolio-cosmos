@@ -10,6 +10,7 @@ import {
 import type { SceneRef } from "./ResumeSpace3D.types";
 import type { CosmosCameraDirector } from "../CosmicNavigation";
 import type { OverlayContent } from "../CosmicContentOverlay";
+import { MOON_FOCUS_DISTANCE } from "./scaleConfig";
 
 export const createMoonFocusController = (deps: {
   scene: THREE.Scene;
@@ -203,7 +204,7 @@ export const createMoonFocusController = (deps: {
       );
 
       // Calculate camera position - simplified to just be directly in front
-      const distance = 25; // Distance from moon center - testing value
+      const distance = MOON_FOCUS_DISTANCE; // Distance from moon center
 
       // Simple: position camera directly along one axis from moon
       const cameraPos = new THREE.Vector3(

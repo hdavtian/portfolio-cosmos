@@ -1,6 +1,16 @@
 import { useCallback } from "react";
 import * as THREE from "three";
 import CameraControls from "camera-controls";
+import {
+  CAMERA_FOV,
+  CAMERA_NEAR,
+  CAMERA_FAR,
+  CAMERA_INITIAL_POS,
+  CONTROLS_MIN_DIST,
+  CONTROLS_MAX_DIST,
+  ZOOM_EXIT_THRESHOLD,
+  BOKEH_FOCUS,
+} from "../scaleConfig";
 import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 
 // Install camera-controls with THREE subset (required once before use)
@@ -69,17 +79,17 @@ export const useThreeScene = (params: {
     const scene = new THREE.Scene();
 
     const camera = new THREE.PerspectiveCamera(
-      45,
+      CAMERA_FOV,
       container.clientWidth / container.clientHeight,
-      0.1,
-      10000,
+      CAMERA_NEAR,
+      CAMERA_FAR,
     );
-    camera.position.set(0, 400, 600);
+    camera.position.set(CAMERA_INITIAL_POS.x, CAMERA_INITIAL_POS.y, CAMERA_INITIAL_POS.z);
     camera.lookAt(0, 0, 0);
 
     const renderer =
       globalRenderer ||
-      new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      new THREE.WebGLRenderer({ antialias: true, alpha: true, logarithmicDepthBuffer: true });
     renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.domElement.style.position = "absolute";
@@ -109,8 +119,8 @@ export const useThreeScene = (params: {
     // Smooth damping — camera-controls uses smoothTime (seconds to reach target)
     controls.smoothTime = 0.25;
     controls.draggingSmoothTime = 0.12;
-    controls.minDistance = 0.01;
-    controls.maxDistance = 6000;
+    controls.minDistance = CONTROLS_MIN_DIST;
+    controls.maxDistance = CONTROLS_MAX_DIST;
 
     controls.addEventListener("controlstart", () => {
       controlsDraggingRef.current = true;
@@ -125,7 +135,7 @@ export const useThreeScene = (params: {
 
           const base = focusedMoonCameraDistanceRef.current ?? currentDist;
           const diff = Math.abs(currentDist - base);
-          const threshold = zoomExitThresholdRef.current || 12;
+          const threshold = zoomExitThresholdRef.current || ZOOM_EXIT_THRESHOLD;
           if (diff > threshold) {
             exitFocusRequestRef.current = true;
           }
@@ -140,7 +150,7 @@ export const useThreeScene = (params: {
     composer.addPass(renderPass);
 
     const bokehPass = new BokehPass(scene, camera, {
-      focus: 25,
+      focus: BOKEH_FOCUS,
       aperture: 0.00035,
       maxblur: 0.008,
     });

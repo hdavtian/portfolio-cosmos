@@ -61,6 +61,48 @@ import { createMoonFocusController } from "./ResumeSpace3D.focusController";
 import { useNavigationSystem } from "./hooks/useNavigationSystem";
 import { useRenderLoop } from "./hooks/useRenderLoop";
 import { createIntroSequenceRunner } from "./introSequence";
+import {
+  SUN_GLOW_SPRITE_SIZE,
+  SUN_LABEL_Y,
+  EXPERIENCE_ORBIT,
+  EXPERIENCE_RADIUS,
+  SKILLS_ORBIT,
+  SKILLS_RADIUS,
+  PROJECTS_ORBIT,
+  PROJECTS_RADIUS,
+  SCROLLING_MOON_ORBIT,
+  SCROLLING_MOON_RADIUS,
+  EXP_MOON_ORBIT_BASE,
+  EXP_MOON_ORBIT_STEP,
+  EXP_MOON_RADIUS,
+  SKILL_MOON_ORBIT_BASE,
+  SKILL_MOON_ORBIT_STEP,
+  SKILL_MOON_RADIUS,
+  FALCON_SCALE,
+  FALCON_INITIAL_POS,
+  SD_SCALE,
+  SD_INITIAL_POS,
+  NEAR_DEFAULT,
+  NEAR_COCKPIT,
+  NEAR_OVERVIEW,
+  CONTROLS_MAX_DIST,
+  CAMERA_FOV,
+  FOLLOW_DISTANCE,
+  FOLLOW_HEIGHT,
+  EXP_WANDER_RADIUS,
+  SKILLS_WANDER_RADIUS,
+  PROJ_WANDER_RADIUS,
+  SUN_WANDER_RADIUS,
+  CINE_BEHIND_DIST,
+  CINE_BEHIND_HEIGHT,
+  CINE_FRONT_DIST,
+  CINE_FRONT_HEIGHT,
+  CINE_CONTROL_HEIGHT,
+  NAV_CAMERA_BEHIND,
+  EXP_FOCUS_DIST,
+  SKILLS_FOCUS_DIST,
+  PROJ_FOCUS_DIST,
+} from "./scaleConfig";
 
 // Extend window for logging timestamps
 declare global {
@@ -860,12 +902,12 @@ export default function ResumeSpace3D({
     if (sceneRef.current.controls && spaceshipRef.current) {
       const cc = sceneRef.current.controls;
       const ship = spaceshipRef.current;
-      const followDist = optionsRef.current.spaceFollowDistance ?? 60;
+      const followDist = optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
 
       // Camera behind ship (-Z in ship's local space) and elevated
       const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion);
       const camPos = ship.position.clone().addScaledVector(behind, followDist);
-      camPos.y += 25;
+      camPos.y += FOLLOW_HEIGHT;
       cc.setLookAt(
         camPos.x, camPos.y, camPos.z,
         ship.position.x, ship.position.y, ship.position.z,
@@ -895,8 +937,8 @@ export default function ResumeSpace3D({
   const handleLeaveShip = useCallback(() => {
     // Restore camera constraints
     if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-      sceneRef.current.camera.near = 0.1;
-      sceneRef.current.camera.fov = 45;
+      sceneRef.current.camera.near = NEAR_DEFAULT;
+      sceneRef.current.camera.fov = CAMERA_FOV;
       sceneRef.current.camera.updateProjectionMatrix();
     }
     if (sceneRef.current.controls) {
@@ -904,7 +946,7 @@ export default function ResumeSpace3D({
       cc.minPolarAngle = 0;
       cc.maxPolarAngle = Math.PI;
       cc.minDistance = 0.01;
-      cc.maxDistance = 6000;
+      cc.maxDistance = CONTROLS_MAX_DIST;
     }
 
     setFollowingSpaceship(false);
@@ -940,16 +982,16 @@ export default function ResumeSpace3D({
     cam.getWorldDirection(camDir);
     const behindCamera = cam.position
       .clone()
-      .add(camDir.clone().multiplyScalar(-150))
-      .add(new THREE.Vector3(0, 30, 0));
+      .add(camDir.clone().multiplyScalar(-CINE_BEHIND_DIST))
+      .add(new THREE.Vector3(0, CINE_BEHIND_HEIGHT, 0));
 
     ship.position.copy(behindCamera);
 
     // Target position in front of camera
     const frontOfCamera = cam.position
       .clone()
-      .add(camDir.clone().multiplyScalar(80))
-      .add(new THREE.Vector3(0, -5, 0));
+      .add(camDir.clone().multiplyScalar(CINE_FRONT_DIST))
+      .add(new THREE.Vector3(0, CINE_FRONT_HEIGHT, 0));
 
     // Face the ship toward the arrival point
     const tmpObj = new THREE.Object3D();
@@ -958,7 +1000,7 @@ export default function ResumeSpace3D({
     ship.quaternion.copy(tmpObj.quaternion);
 
     const controlPos = behindCamera.clone().lerp(frontOfCamera, 0.5);
-    controlPos.y += 20;
+    controlPos.y += CINE_CONTROL_HEIGHT;
 
     shipCinematicRef.current = {
       active: true,
@@ -1030,8 +1072,8 @@ export default function ResumeSpace3D({
 
         // Restore camera constraints
         if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-          sceneRef.current.camera.near = 0.1;
-          sceneRef.current.camera.fov = 45;
+          sceneRef.current.camera.near = NEAR_DEFAULT;
+          sceneRef.current.camera.fov = CAMERA_FOV;
           sceneRef.current.camera.updateProjectionMatrix();
         }
         if (sceneRef.current.controls) {
@@ -1039,17 +1081,17 @@ export default function ResumeSpace3D({
           cc.minPolarAngle = 0;
           cc.maxPolarAngle = Math.PI;
           cc.minDistance = 1;
-          cc.maxDistance = 6000;
+          cc.maxDistance = CONTROLS_MAX_DIST;
         }
 
         // Reposition camera behind and above the ship using its orientation
         if (sceneRef.current.controls && spaceshipRef.current) {
           const cc = sceneRef.current.controls;
           const ship = spaceshipRef.current;
-          const followDist = optionsRef.current.spaceFollowDistance ?? 60;
+          const followDist = optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
           const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion);
           const camPos = ship.position.clone().addScaledVector(behind, followDist);
-          camPos.y += 25;
+          camPos.y += FOLLOW_HEIGHT;
           cc.setLookAt(
             camPos.x, camPos.y, camPos.z,
             ship.position.x, ship.position.y, ship.position.z,
@@ -1096,7 +1138,7 @@ export default function ResumeSpace3D({
             .add(shipWorldPos);
 
           if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-            sceneRef.current.camera.fov = 45;
+            sceneRef.current.camera.fov = CAMERA_FOV;
             sceneRef.current.camera.updateProjectionMatrix();
           }
 
@@ -1154,8 +1196,8 @@ export default function ResumeSpace3D({
             .add(shipWorldPos);
 
           if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-            sceneRef.current.camera.near = 0.01;
-            sceneRef.current.camera.fov = 45;
+            sceneRef.current.camera.near = NEAR_COCKPIT;
+            sceneRef.current.camera.fov = CAMERA_FOV;
             sceneRef.current.camera.updateProjectionMatrix();
           }
 
@@ -1301,11 +1343,11 @@ export default function ResumeSpace3D({
     const exp = planetsDataRef.current.get("experience")?.position;
     const skills = planetsDataRef.current.get("skills")?.position;
     const projects = planetsDataRef.current.get("projects")?.position;
-    if (exp) targets.push({ pos: exp.clone(), radius: 320 });
-    if (skills) targets.push({ pos: skills.clone(), radius: 360 });
-    if (projects) targets.push({ pos: projects.clone(), radius: 340 });
+    if (exp) targets.push({ pos: exp.clone(), radius: EXP_WANDER_RADIUS });
+    if (skills) targets.push({ pos: skills.clone(), radius: SKILLS_WANDER_RADIUS });
+    if (projects) targets.push({ pos: projects.clone(), radius: PROJ_WANDER_RADIUS });
     // Sun is centered at origin; keep a tighter band so it's in view.
-    targets.push({ pos: new THREE.Vector3(0, 0, 0), radius: 260 });
+    targets.push({ pos: new THREE.Vector3(0, 0, 0), radius: SUN_WANDER_RADIUS });
 
     if (targets.length === 0) {
       return new THREE.Vector3(
@@ -1476,7 +1518,7 @@ export default function ResumeSpace3D({
       blending: THREE.AdditiveBlending,
     });
     const sprite = new THREE.Sprite(spriteMaterial);
-    sprite.scale.set(180, 180, 1);
+    sprite.scale.set(SUN_GLOW_SPRITE_SIZE, SUN_GLOW_SPRITE_SIZE, 1);
     sunMesh.add(sprite);
     sceneRef.current.sunGlowMaterial = spriteMaterial;
 
@@ -1485,7 +1527,7 @@ export default function ResumeSpace3D({
       resumeData.personal.name,
       resumeData.personal.title,
     );
-    sunLabel.position.set(0, 50, 0);
+    sunLabel.position.set(0, SUN_LABEL_Y, 0);
     sunMesh.add(sunLabel);
 
     // 2. HELPER: Create Planet
@@ -1503,8 +1545,8 @@ export default function ResumeSpace3D({
     // 3. PLANETS (Sections)
     const expPlanet = createPlanet(
       "Experience",
-      600,
-      15,
+      EXPERIENCE_ORBIT,
+      EXPERIENCE_RADIUS,
       0xff5533,
       scene,
       0.0002,
@@ -1514,8 +1556,8 @@ export default function ResumeSpace3D({
 
     const skillsPlanet = createPlanet(
       "Skills",
-      1000,
-      20,
+      SKILLS_ORBIT,
+      SKILLS_RADIUS,
       0x3388ff,
       scene,
       0.00015,
@@ -1525,8 +1567,8 @@ export default function ResumeSpace3D({
 
     const projectsPlanet = createPlanet(
       "Projects",
-      900,
-      18,
+      PROJECTS_ORBIT,
+      PROJECTS_RADIUS,
       0x9933ff,
       scene,
       0.0001,
@@ -1535,8 +1577,8 @@ export default function ResumeSpace3D({
     );
     createPlanet(
       "Scrolling Resume",
-      40,
-      5,
+      SCROLLING_MOON_ORBIT,
+      SCROLLING_MOON_RADIUS,
       0xcc99ff,
       projectsPlanet,
       0.003,
@@ -1564,8 +1606,8 @@ export default function ResumeSpace3D({
       // (section 0 = hero+summary, section 1 = skills, sections 2+ = jobs)
       const moonMesh = createPlanet(
         job.company,
-        60 + i * 20,
-        5,
+        EXP_MOON_ORBIT_BASE + i * EXP_MOON_ORBIT_STEP,
+        EXP_MOON_RADIUS,
         0xffaadd,
         expPlanet,
         0.002 + Math.random() * 0.001,
@@ -1590,8 +1632,8 @@ export default function ResumeSpace3D({
     skillCategories.forEach((cat, i) => {
       createPlanet(
         cat,
-        70 + i * 15,
-        6,
+        SKILL_MOON_ORBIT_BASE + i * SKILL_MOON_ORBIT_STEP,
+        SKILL_MOON_RADIUS,
         0xaaddff,
         skillsPlanet,
         0.0015 + Math.random() * 0.001,
@@ -1613,7 +1655,7 @@ export default function ResumeSpace3D({
         const spaceship = gltf.scene;
 
         // Scale down the spaceship to be tiny compared to planets
-        spaceship.scale.set(0.5, 0.5, 0.5);
+        spaceship.scale.set(FALCON_SCALE, FALCON_SCALE, FALCON_SCALE);
 
         // Align model forward axis (model front is +Z; navigation lookAt uses -Z)
         spaceship.userData.forwardOffset = new THREE.Quaternion().setFromEuler(
@@ -1621,7 +1663,7 @@ export default function ResumeSpace3D({
         );
 
         // Position it initially near the sun
-        spaceship.position.set(50, 20, 50);
+        spaceship.position.set(FALCON_INITIAL_POS.x, FALCON_INITIAL_POS.y, FALCON_INITIAL_POS.z);
 
         // Add a subtle point light to the spaceship for visibility
         const shipLight = new THREE.PointLight(0x6699ff, 0.5, 50);
@@ -1728,10 +1770,10 @@ export default function ResumeSpace3D({
         starDestroyer.add(model);
 
         // Scale: 0.06 → ~44 world-units long (~6× larger than the Falcon)
-        starDestroyer.scale.set(0.06, 0.06, 0.06);
+        starDestroyer.scale.set(SD_SCALE, SD_SCALE, SD_SCALE);
 
         // Initial position — outer area of the system, above the orbital plane
-        starDestroyer.position.set(400, 40, -300);
+        starDestroyer.position.set(SD_INITIAL_POS.x, SD_INITIAL_POS.y, SD_INITIAL_POS.z);
 
         // Forward offset: the model's visual nose is at +Z after centering,
         // but lookAt faces -Z. Rotate 180° around Y so the nose leads.
@@ -2211,7 +2253,7 @@ export default function ResumeSpace3D({
             const shipPos = spaceshipRef.current.position.clone();
             const shipDirection = new THREE.Vector3();
             spaceshipRef.current.getWorldDirection(shipDirection);
-            const behindOffset = shipDirection.multiplyScalar(-60);
+            const behindOffset = shipDirection.multiplyScalar(-NAV_CAMERA_BEHIND);
             const heightOffset = new THREE.Vector3(0, 20, 0);
             const targetCameraPos = shipPos
               .clone()
@@ -2320,7 +2362,7 @@ export default function ResumeSpace3D({
           }
 
           const planetMesh = target === "experience" ? expPlanet : target === "skills" ? skillsPlanet : projectsPlanet;
-          const planetDist = target === "experience" ? 300 : target === "skills" ? 350 : 400;
+          const planetDist = target === "experience" ? EXP_FOCUS_DIST : target === "skills" ? SKILLS_FOCUS_DIST : PROJ_FOCUS_DIST;
           await cameraDirectorRef.current.focusPlanet(planetMesh, planetDist);
           setMinDistance(
             originalMinDistanceRef.current,
@@ -2912,7 +2954,7 @@ export default function ResumeSpace3D({
           vlog("🔍 Ship explore mode DEACTIVATED");
           // Restore near plane
           if (camera instanceof THREE.PerspectiveCamera) {
-            camera.near = 1;
+            camera.near = NEAR_OVERVIEW;
             camera.updateProjectionMatrix();
           }
         }
@@ -3500,7 +3542,7 @@ export default function ResumeSpace3D({
             rollAngle={displayRollAngle}
             isFollowingSD={followingStarDestroyer}
             onDisengage={stopFollowingStarDestroyer}
-            zoomLevel={options.spaceFollowDistance ?? 60}
+            zoomLevel={options.spaceFollowDistance ?? FOLLOW_DISTANCE}
             onZoomChange={overlayContent ? undefined : (value) => {
               if (onOptionsChange) {
                 onOptionsChange({ ...options, spaceFollowDistance: value });
@@ -4012,7 +4054,7 @@ export default function ResumeSpace3D({
 
               // Restore camera constraints from interior mode
               if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-                sceneRef.current.camera.near = 0.1;
+                sceneRef.current.camera.near = NEAR_DEFAULT;
                 sceneRef.current.camera.updateProjectionMatrix();
               }
               if (sceneRef.current.controls) {
@@ -4020,7 +4062,7 @@ export default function ResumeSpace3D({
                 cc.minPolarAngle = 0;
                 cc.maxPolarAngle = Math.PI;
                 cc.minDistance = 0.01;
-                cc.maxDistance = 6000;
+                cc.maxDistance = CONTROLS_MAX_DIST;
               }
 
               vlog("🚪 Exiting ship - exterior view");
@@ -4061,7 +4103,7 @@ export default function ResumeSpace3D({
 
                 // Reduce near clipping plane so cockpit geometry is visible
                 if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-                  sceneRef.current.camera.near = 0.01;
+                  sceneRef.current.camera.near = NEAR_COCKPIT;
                   sceneRef.current.camera.updateProjectionMatrix();
                 }
 
@@ -4105,7 +4147,7 @@ export default function ResumeSpace3D({
 
                 // Restore near clipping plane when leaving cockpit
                 if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-                  sceneRef.current.camera.near = 0.1;
+                  sceneRef.current.camera.near = NEAR_DEFAULT;
                   sceneRef.current.camera.updateProjectionMatrix();
                 }
 
@@ -4179,11 +4221,11 @@ export default function ResumeSpace3D({
                 cc.minPolarAngle = 0;
                 cc.maxPolarAngle = Math.PI;
                 cc.minDistance = 0.01;
-                cc.maxDistance = 6000;
+                cc.maxDistance = CONTROLS_MAX_DIST;
               }
               // Restore near clipping plane
               if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-                sceneRef.current.camera.near = 0.1;
+                sceneRef.current.camera.near = NEAR_DEFAULT;
                 sceneRef.current.camera.updateProjectionMatrix();
               }
               vlog("🛑 Stopped following spaceship");

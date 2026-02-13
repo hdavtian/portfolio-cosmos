@@ -1,5 +1,15 @@
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import {
+  SUN_RADIUS,
+  STARFIELD_RADIUS,
+  SKYFIELD_RADIUS,
+  SUN_LIGHT_DISTANCE,
+  FILL_LIGHT_POS,
+  MAIN_ORBIT_TUBE_RADIUS,
+  MOON_ORBIT_TUBE_RADIUS,
+  LABEL_Y_PADDING,
+} from "./scaleConfig";
 
 type OrbitItem = {
   mesh: THREE.Mesh;
@@ -253,7 +263,7 @@ export const createStarfieldMeshes = (
   // Background - Large distant starfield (skybox approach)
   // Create a much larger sphere to avoid visible sphere edge on zoom out
   const starTexture = textureLoader.load("/textures/8k_stars.jpg");
-  const starGeo = new THREE.SphereGeometry(8000, 64, 64); // Much larger sphere
+  const starGeo = new THREE.SphereGeometry(STARFIELD_RADIUS, 64, 64); // Much larger sphere
   const starMat = new THREE.MeshBasicMaterial({
     map: starTexture,
     side: THREE.BackSide,
@@ -264,7 +274,7 @@ export const createStarfieldMeshes = (
 
   // Inner layer: Secondary star layer for depth
   const skyTexture = textureLoader.load("/textures/stars.jpg");
-  const skyGeo = new THREE.SphereGeometry(7800, 64, 64); // Much larger sphere
+  const skyGeo = new THREE.SphereGeometry(SKYFIELD_RADIUS, 64, 64); // Much larger sphere
   const skyMat = new THREE.MeshBasicMaterial({
     map: skyTexture,
     side: THREE.BackSide,
@@ -280,43 +290,17 @@ export const createStarfieldMeshes = (
 
 export const createSunMesh = (
   textureLoader: THREE.TextureLoader,
-): { sunMesh: THREE.Mesh; sunMaterial: THREE.ShaderMaterial } => {
+): { sunMesh: THREE.Mesh; sunMaterial: THREE.MeshBasicMaterial } => {
   // Sun mesh (visual center object)
-  const sunGeometry = new THREE.SphereGeometry(60, 32, 32);
-  const fallbackTexture = new THREE.DataTexture(
-    new Uint8Array([255, 255, 255, 255]),
-    1,
-    1,
-    THREE.RGBAFormat,
-  );
-  fallbackTexture.needsUpdate = true;
+  // Uses MeshBasicMaterial instead of custom ShaderMaterial for reliable
+  // logarithmicDepthBuffer compatibility. The color tint is applied via the
+  // material's color property (texture × color). The existing options system
+  // in useCosmosOptions already handles MeshBasicMaterial through its
+  // `"color" in sunMaterial` path.
+  const sunGeometry = new THREE.SphereGeometry(SUN_RADIUS, 32, 32);
 
-  const sunMaterial = new THREE.ShaderMaterial({
-    uniforms: {
-      map: { value: fallbackTexture },
-      tintColor: { value: new THREE.Color("#ffdd99") },
-      tintStrength: { value: 1.0 },
-    },
-    vertexShader: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragmentShader: `
-      uniform sampler2D map;
-      uniform vec3 tintColor;
-      uniform float tintStrength;
-      varying vec2 vUv;
-      void main() {
-        vec4 tex = texture2D(map, vUv);
-        float luma = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
-        vec3 tinted = luma * tintColor;
-        vec3 finalColor = mix(tex.rgb, tinted, tintStrength);
-        gl_FragColor = vec4(finalColor, tex.a);
-      }
-    `,
+  const sunMaterial = new THREE.MeshBasicMaterial({
+    color: new THREE.Color("#ffdd99"),
     toneMapped: false,
   });
 
@@ -329,7 +313,7 @@ export const createSunMesh = (
     textureLoader.load("/textures/sun.jpg", (tex) => {
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
-      sunMaterial.uniforms.map.value = tex;
+      sunMaterial.map = tex;
       sunMaterial.needsUpdate = true;
     });
   } catch {}
@@ -347,7 +331,7 @@ export const createLighting = (options: { spaceSunIntensity?: number }) => {
   const sunLight = new THREE.PointLight(
     new THREE.Color(1.0, 1.0, 1.0),
     (options.spaceSunIntensity || 2.5) * 4, // Multiply by 4 to match original's 10.0 default
-    2200, // Distance (extended to reach far planets)
+    SUN_LIGHT_DISTANCE, // Distance (extended to reach far planets)
     0.35, // Decay for softer falloff across the system
   );
   sunLight.position.set(0, 0, 0);
@@ -360,7 +344,7 @@ export const createLighting = (options: { spaceSunIntensity?: number }) => {
     100,
     1,
   );
-  fillLight.position.set(50, 50, -100);
+  fillLight.position.set(FILL_LIGHT_POS.x, FILL_LIGHT_POS.y, FILL_LIGHT_POS.z);
 
   return { ambientLight, sunLight, fillLight };
 };
@@ -544,7 +528,7 @@ export const createPlanetFactory = (deps: {
       }
       orbitContainer = parentData.orbitAnchor as THREE.Object3D;
     }
-    const tubeRadius = isMainOrbit ? 0.12 : 0.08;
+    const tubeRadius = isMainOrbit ? MAIN_ORBIT_TUBE_RADIUS : MOON_ORBIT_TUBE_RADIUS;
     const systemId = isMainOrbit
       ? name.toLowerCase()
       : (
@@ -724,7 +708,7 @@ export const createPlanetFactory = (deps: {
 
     // Label
     const label = createLabel(name);
-    label.position.set(0, size + 10, 0);
+    label.position.set(0, size + LABEL_Y_PADDING, 0);
     planetMesh.add(label);
 
     // Interaction data - merge with existing userData to preserve haloSprite

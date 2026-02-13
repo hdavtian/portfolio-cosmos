@@ -21,6 +21,15 @@
  */
 
 import * as THREE from "three";
+import {
+  SD_WAYPOINT_MIN_R,
+  SD_WAYPOINT_MAX_R,
+  SD_WAYPOINT_MAX_H,
+  SD_WAYPOINT_ARRIVE,
+  SD_MIN_TRAVEL_DIST,
+  SD_ENGINE_LIGHT_BASE,
+  SD_ENGINE_LIGHT_RANGE,
+} from "./cosmos/scaleConfig";
 
 // ── Configuration ────────────────────────────────────────────────
 
@@ -61,13 +70,13 @@ const DEFAULT_CONFIG: CruiserConfig = {
   deceleration: 2.0,
   maxTurnRate: 0.08,
   idleDriftSpeed: 0.3,
-  waypointArrivalDist: 40,
+  waypointArrivalDist: SD_WAYPOINT_ARRIVE,
   turnAlignThreshold: 0.15, // ~8.6°
   minIdleDuration: 4,
   maxIdleDuration: 10,
-  waypointMinRadius: 200,
-  waypointMaxRadius: 900,
-  waypointMaxHeight: 80,
+  waypointMinRadius: SD_WAYPOINT_MIN_R,
+  waypointMaxRadius: SD_WAYPOINT_MAX_R,
+  waypointMaxHeight: SD_WAYPOINT_MAX_H,
   bankFactor: 0.2,
   maxBankAngle: 0.18, // ~10°
 };
@@ -400,8 +409,8 @@ export class StarDestroyerCruiser {
       Math.sin(angle) * radius,
     );
 
-    // Ensure minimum travel distance (at least 150 units)
-    const minDist = 150;
+    // Ensure minimum travel distance
+    const minDist = SD_MIN_TRAVEL_DIST;
     if (this.mesh.position.distanceTo(this.waypoint) < minDist) {
       const dir = this.waypoint
         .clone()
@@ -618,7 +627,7 @@ export class StarDestroyerCruiser {
 
     // Intensity ramps with speed
     engineLight.intensity = 0.5 + speedFraction * 3.5;
-    engineLight.distance = 60 + speedFraction * 100;
+    engineLight.distance = SD_ENGINE_LIGHT_BASE + speedFraction * SD_ENGINE_LIGHT_RANGE;
 
     // Color shifts: dim blue → bright blue-white
     const r = 0.2 + speedFraction * 0.4;

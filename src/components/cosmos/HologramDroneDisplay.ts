@@ -1,5 +1,10 @@
 import * as THREE from "three";
 import type { OverlayContent } from "../CosmicContentOverlay";
+import {
+  HOLO_PANEL_WIDTH,
+  HOLO_SIDE_OFFSET,
+  HOLO_REF_DISTANCE,
+} from "./scaleConfig";
 
 // ═══════════════════════════════════════════════════════════════════
 // HologramDroneDisplay — a geometric probe that projects holographic
@@ -8,7 +13,7 @@ import type { OverlayContent } from "../CosmicContentOverlay";
 
 // ── Constants ─────────────────────────────────────────────────────
 const CANVAS_W = 768;
-const BASE_PANEL_WORLD_WIDTH = 14; // world-unit width at reference distance
+const BASE_PANEL_WORLD_WIDTH = HOLO_PANEL_WIDTH; // world-unit width at reference distance
 const PADDING = 28; // canvas-pixel padding inside panels
 const BORDER_MARGIN = 6; // canvas-pixel inset for border rect
 
@@ -22,9 +27,9 @@ const BORDER_DRAW_DURATION = 1.6; // seconds to trace the full border
 const CONTENT_FADE_DURATION = 0.5; // seconds for text to fade in after border
 const PANEL_STAGGER = 0.9; // seconds between each panel reveal start
 
-const BASE_SIDE_OFFSET = 10; // world units to the right of the moon at reference dist
+const BASE_SIDE_OFFSET = HOLO_SIDE_OFFSET; // world units to the right of the moon at reference dist
 const DRONE_FORWARD_RATIO = 0.3; // drone: 30% from moon toward camera
-const REFERENCE_DISTANCE = 60; // camera distance at which base sizes are correct
+const REFERENCE_DISTANCE = HOLO_REF_DISTANCE; // camera distance at which base sizes are correct
 const MIN_SCALE = 0.85; // don't shrink panels below 85% even when very close
 const MAX_SCALE = 1.6; // don't grow panels beyond 160% even when very far
 const SCALE_POWER = 0.6; // sub-linear scaling — panels grow gently, not 1:1 with distance

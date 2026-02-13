@@ -6,6 +6,23 @@ import {
   type NavigationStatus,
 } from "../../SpaceshipNavigationSystem";
 import type { SceneRef } from "../ResumeSpace3D.types";
+import {
+  SUN_OBSTACLE_RADIUS,
+  NAV_FALLBACK_PLANET_R,
+  NAV_MAX_SPEED,
+  NAV_TURBO_SPEED,
+  NAV_DECEL_DISTANCE,
+  NAV_ARRIVAL_DIST,
+  NAV_FREEZE_DIST,
+  NAV_HEIGHT_OFFSET_MIN,
+  NAV_ARC_CLEARANCE_MIN,
+  NAV_STAGING_OFFSET,
+  NAV_CAMERA_BEHIND,
+  NAV_CAMERA_HEIGHT,
+  NAV_SETTLE_OFFSET,
+  NAV_TURBO_ENGAGE_DIST,
+  NAV_WAYPOINT_CLEAR,
+} from "../scaleConfig";
 
 // ── PLANET VIEWPOINTS ─────────────────────────────────────────────
 // Each entry defines a camera offset relative to the planet centre.
@@ -193,7 +210,7 @@ export const useNavigationSystem = (deps: {
           obstacles.push({
             id: "sun",
             position: obj.getWorldPosition(new THREE.Vector3()),
-            radius: 350, // actual radius 60, glow sprite 180 — keep well clear
+            radius: SUN_OBSTACLE_RADIUS, // actual radius 60, glow sprite 180 — keep well clear
           });
           return;
         }
@@ -206,7 +223,7 @@ export const useNavigationSystem = (deps: {
 
           // Get actual geometry radius and add safety margin
           const geo = obj.geometry;
-          let actualRadius = 20; // fallback
+          let actualRadius = NAV_FALLBACK_PLANET_R; // fallback
           if (geo && geo.parameters && (geo.parameters as any).radius) {
             actualRadius = (geo.parameters as any).radius;
           }
@@ -231,14 +248,14 @@ export const useNavigationSystem = (deps: {
   const initializeNavigationSystem = useCallback(
     (spaceship: THREE.Object3D, scene: THREE.Scene) => {
       navigationSystemRef.current = new SpaceshipNavigationSystem(spaceship, {
-        maxSpeed: 3.0,
-        turboSpeed: 6.0,
+        maxSpeed: NAV_MAX_SPEED,
+        turboSpeed: NAV_TURBO_SPEED,
         accelerationRate: 0.12,
-        decelerationDistance: 150,
-        arrivalDistance: 30,
+        decelerationDistance: NAV_DECEL_DISTANCE,
+        arrivalDistance: NAV_ARRIVAL_DIST,
         usePredictiveIntercept: true,
         freezeOrbitOnApproach: true,
-        freezeDistance: 60,
+        freezeDistance: NAV_FREEZE_DIST,
       });
 
       navigationSystemRef.current.setOnStatusChange(
@@ -459,7 +476,7 @@ export const useNavigationSystem = (deps: {
             stagingPoint = planetCenter
               .clone()
               .add(camOffset)
-              .addScaledVector(dir, -80);
+              .addScaledVector(dir, -NAV_STAGING_OFFSET);
 
             vlog(
               `🛸 Using viewpoint preset for "${targetId}" (${viewpoints.length} available)`,
@@ -467,7 +484,7 @@ export const useNavigationSystem = (deps: {
           } else {
             // Fallback: random above/below
             const upOrDown = Math.random() > 0.5 ? 1 : -1;
-            const heightOffset = Math.max(targetRadius * 6, 200);
+            const heightOffset = Math.max(targetRadius * 6, NAV_HEIGHT_OFFSET_MIN);
             stagingPoint = new THREE.Vector3(
               planetCenter.x,
               planetCenter.y + upOrDown * heightOffset,
@@ -508,7 +525,7 @@ export const useNavigationSystem = (deps: {
           const stagingLateral = new THREE.Vector3()
             .subVectors(stagingPoint, rawArcMid);
           const sideSign = stagingLateral.dot(lateralDir) >= 0 ? 1 : -1;
-          const arcClearance = Math.max(targetRadius * 5, 120);
+          const arcClearance = Math.max(targetRadius * 5, NAV_ARC_CLEARANCE_MIN);
           const arcMidPoint = rawArcMid.addScaledVector(
             lateralDir,
             sideSign * arcClearance,
@@ -652,8 +669,8 @@ export const useNavigationSystem = (deps: {
           const camPos = _navCamPos.current;
           // Camera behind ship, facing the destination
           camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
-          camPos.multiplyScalar(60).add(ship.position);
-          camPos.y += 25;
+          camPos.multiplyScalar(NAV_CAMERA_BEHIND).add(ship.position);
+          camPos.y += NAV_CAMERA_HEIGHT;
 
           sceneRef.current.controls.setLookAt(
             camPos.x,
@@ -745,7 +762,7 @@ export const useNavigationSystem = (deps: {
           // Camera is 80 units further along that same axis
           const camPos = ship.position
             .clone()
-            .addScaledVector(awayFromPlanet, 80);
+            .addScaledVector(awayFromPlanet, NAV_SETTLE_OFFSET);
 
           sceneRef.current.controls.setLookAt(
             camPos.x, camPos.y, camPos.z,
@@ -791,7 +808,7 @@ export const useNavigationSystem = (deps: {
 
       // Arrival distance depends on whether we're heading to a staging
       // point (orbital approach) or directly to a body.
-      const planetRadius = target.targetRadius || 20;
+      const planetRadius = target.targetRadius || NAV_FALLBACK_PLANET_R;
       const arrivalDistance = target.planetCenter
         ? 30 // Get close to the staging point before settling
         : Math.max(planetRadius * 4, 80);
@@ -852,7 +869,7 @@ export const useNavigationSystem = (deps: {
       // If we have an avoidance waypoint, check if we've passed it
       if (avoidWp) {
         const distToWp = ship.position.distanceTo(avoidWp);
-        if (distToWp < 40) {
+        if (distToWp < NAV_WAYPOINT_CLEAR) {
           // Cleared the obstacle — resume direct path
           sectionAvoidWaypoint.current = null;
           vlog("✅ Avoidance waypoint cleared — resuming direct path");
@@ -883,7 +900,7 @@ export const useNavigationSystem = (deps: {
       const decelerationDistance = arrivalDistance + 80;
 
       if (distance > decelerationDistance) {
-        if (target.useTurbo && distance > 200) {
+        if (target.useTurbo && distance > NAV_TURBO_ENGAGE_DIST) {
           targetSpeed = sectionAvoidWaypoint.current ? 2.0 : 4.0; // slow down for avoidance
           manualFlightRef.current.acceleration = sectionAvoidWaypoint.current ? 0.6 : 1.0;
           manualFlightRef.current.isTurboActive = !sectionAvoidWaypoint.current;
@@ -945,8 +962,8 @@ export const useNavigationSystem = (deps: {
       ) {
         const camPos = _navCamPos.current;
         camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
-        camPos.multiplyScalar(60).add(ship.position);
-        camPos.y += 25;
+        camPos.multiplyScalar(NAV_CAMERA_BEHIND).add(ship.position);
+        camPos.y += NAV_CAMERA_HEIGHT;
 
         sceneRef.current.controls.setLookAt(
           camPos.x, camPos.y, camPos.z,

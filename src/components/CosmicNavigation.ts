@@ -1,6 +1,12 @@
 import * as THREE from "three";
 import { gsap } from "gsap";
 import type CameraControls from "camera-controls";
+import {
+  OVERVIEW_POS_Y,
+  OVERVIEW_POS_Z,
+  DEFAULT_FOCUS_DISTANCE,
+  CINEMATIC_APPROACH_H,
+} from "./cosmos/scaleConfig";
 
 export interface CameraTarget {
   position: THREE.Vector3;
@@ -132,7 +138,7 @@ export class CosmosCameraDirector {
   public cinematicApproach(
     target: THREE.Object3D,
     finalDistance: number,
-    approachHeight: number = 200,
+    approachHeight: number = CINEMATIC_APPROACH_H,
   ): Promise<void> {
     const targetPosition = target.position.clone();
 
@@ -183,7 +189,7 @@ export class CosmosCameraDirector {
 
   // Quick system overview
   public systemOverview(): Promise<void> {
-    const overviewPosition = new THREE.Vector3(0, 800, 1200);
+    const overviewPosition = new THREE.Vector3(0, OVERVIEW_POS_Y, OVERVIEW_POS_Z);
     const centerLookAt = new THREE.Vector3(0, 0, 0);
 
     return this.flyTo({
@@ -197,7 +203,7 @@ export class CosmosCameraDirector {
   // Focus on specific planet
   public focusPlanet(
     planetMesh: THREE.Object3D,
-    distance: number = 300,
+    distance: number = DEFAULT_FOCUS_DISTANCE,
   ): Promise<void> {
     const planetPos = planetMesh.position.clone();
     const focusPosition = new THREE.Vector3(
