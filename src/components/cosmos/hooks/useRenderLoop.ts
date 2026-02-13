@@ -75,6 +75,7 @@ export const useRenderLoop = () => {
       navTurnActiveRef: React.MutableRefObject<boolean>;
       settledViewTargetRef: React.MutableRefObject<THREE.Vector3 | null>;
       optionsRef: React.MutableRefObject<{ spaceFollowDistance?: number }>;
+      hologramDroneRef: React.MutableRefObject<{ update: (delta: number, camera: THREE.Camera) => void; isActive: () => boolean } | null>;
       updateAutopilotNavigation: () => void;
       updateOrbitSystem: (params: {
         items: OrbitItem[];
@@ -125,6 +126,7 @@ export const useRenderLoop = () => {
         navTurnActiveRef,
         settledViewTargetRef,
         optionsRef,
+        hologramDroneRef,
         updateAutopilotNavigation,
         updateOrbitSystem,
         renderer,
@@ -970,8 +972,12 @@ export const useRenderLoop = () => {
             }
           | undefined;
 
-        if (insideShipRef.current) {
-          // Cockpit view: no depth-of-field blur at all
+        // Disable DOF when hologram drone is active — the panels sit between
+        // moon and camera and would otherwise be blurred out.
+        const droneActive = hologramDroneRef.current?.isActive();
+
+        if (insideShipRef.current || droneActive) {
+          // Cockpit view or drone active: no depth-of-field blur
           if (bokehPass?.enabled) {
             bokehPass.enabled = false;
           }
@@ -1007,6 +1013,11 @@ export const useRenderLoop = () => {
         // interior mode already called it in the block above.
         if (!insideShipRef.current) {
           controls.update(deltaSeconds);
+        }
+
+        // Update hologram drone animation
+        if (hologramDroneRef.current) {
+          hologramDroneRef.current.update(deltaSeconds, camera);
         }
 
         composer.render();

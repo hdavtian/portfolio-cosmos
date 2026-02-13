@@ -37,7 +37,7 @@ export const createFinalizeFocusOnMoon = (deps: {
   const {
     scene,
     items,
-    attachMultiNoteOverlays,
+    attachMultiNoteOverlays: _attachMultiNoteOverlays,
     setContentLoading,
     setOverlayContent,
     vlog,
@@ -104,11 +104,11 @@ export const createFinalizeFocusOnMoon = (deps: {
         setContentLoading(false);
       }, 300);
 
-      // Attach overlays
-      attachMultiNoteOverlays(moonMesh, overlayDefs, {
-        radiusOffset: 0.04,
-        opacity: 0.95,
-      });
+      // Attach overlays — disabled for now while testing content display variants
+      // attachMultiNoteOverlays(moonMesh, overlayDefs, {
+      //   radiusOffset: 0.04,
+      //   opacity: 0.95,
+      // });
 
       // Mark moon as focused: pause orbital revolution but allow spinning/interaction
       moonMesh.userData.pauseOrbit = true;

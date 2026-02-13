@@ -47,6 +47,7 @@ import ShipControlBar, { type ShipUIPhase, type ShipView } from "../ui/ShipContr
 import CockpitHints from "../ui/CockpitHints";
 import CockpitNavPanel from "../ui/CockpitNavPanel";
 import { MissionBriefingTerminal } from "../ui/MissionBriefingTerminal";
+import { HologramDroneDisplay } from "./HologramDroneDisplay";
 import { getOrbitalPositionEmitter } from "../OrbitalPositionEmitter";
 import { useCosmosLogs } from "./hooks/useCosmosLogs";
 import { useCosmosOptions } from "./hooks/useCosmosOptions";
@@ -131,14 +132,36 @@ export default function ResumeSpace3D({
   );
   const [contentLoading, setContentLoading] = useState(false);
 
-  // Content display variant: "mission-briefing" (Variant 5) or "classic" (original right panel)
-  type ContentDisplayVariant = "mission-briefing" | "classic";
+  // Content display variant
+  type ContentDisplayVariant = "mission-briefing" | "hologram-drone" | "classic";
   const CONTENT_VARIANTS: { id: ContentDisplayVariant; label: string }[] = [
     { id: "mission-briefing", label: "Terminal" },
+    { id: "hologram-drone", label: "Drone" },
     { id: "classic", label: "Classic" },
   ];
   const [contentDisplayVariant, setContentDisplayVariant] =
     useState<ContentDisplayVariant>("mission-briefing");
+
+  // Hologram Drone display instance
+  const hologramDroneRef = useRef<HologramDroneDisplay | null>(null);
+
+  // Drive hologram drone based on content and variant
+  useEffect(() => {
+    const drone = hologramDroneRef.current;
+    if (!drone) return;
+    if (contentDisplayVariant === "hologram-drone" && overlayContent) {
+      const moon = focusedMoonRef.current;
+      const cam = sceneRef.current.camera;
+      if (moon && cam) {
+        const moonWorldPos = new THREE.Vector3();
+        moon.getWorldPosition(moonWorldPos);
+        drone.showContent(overlayContent, moonWorldPos, cam);
+      }
+    } else {
+      drone.hideContent();
+    }
+  }, [overlayContent, contentDisplayVariant]);
+
   const originalMinDistanceRef = useRef<number>(0);
   // Request flag to tell the scene effect to exit focused moon (cross-scope safe)
   const exitFocusRequestRef = useRef<boolean>(false);
@@ -1398,6 +1421,9 @@ export default function ResumeSpace3D({
     scene.add(sunMesh);
     sceneRef.current.sunMaterial = sunMaterial;
 
+    // Hologram Drone display
+    hologramDroneRef.current = new HologramDroneDisplay(scene);
+
     // --- OBJECTS ---
     const items: OrbitItem[] = [];
 
@@ -2552,6 +2578,7 @@ export default function ResumeSpace3D({
       navTurnActiveRef,
       settledViewTargetRef,
       optionsRef,
+      hologramDroneRef,
       updateAutopilotNavigation,
       updateOrbitSystem,
       renderer,
@@ -2837,6 +2864,12 @@ export default function ResumeSpace3D({
 
       // Cleanup navigation system
       disposeNavigationSystem();
+
+      // Cleanup hologram drone
+      if (hologramDroneRef.current) {
+        hologramDroneRef.current.dispose();
+        hologramDroneRef.current = null;
+      }
 
       // Remove touch event listeners
       renderer.domElement.removeEventListener(
