@@ -48,6 +48,7 @@ import CockpitHints from "../ui/CockpitHints";
 import CockpitNavPanel from "../ui/CockpitNavPanel";
 import { MissionBriefingTerminal } from "../ui/MissionBriefingTerminal";
 import { HologramDroneDisplay } from "./HologramDroneDisplay";
+// CockpitHologramPanels kept for potential future use
 import { getOrbitalPositionEmitter } from "../OrbitalPositionEmitter";
 import { useCosmosLogs } from "./hooks/useCosmosLogs";
 import { useCosmosOptions } from "./hooks/useCosmosOptions";
@@ -130,26 +131,16 @@ export default function ResumeSpace3D({
   const [overlayContent, setOverlayContent] = useState<OverlayContent | null>(
     null,
   );
-  const [contentLoading, setContentLoading] = useState(false);
+  const [, setContentLoading] = useState(false);
 
-  // Content display variant
-  type ContentDisplayVariant = "mission-briefing" | "hologram-drone" | "classic";
-  const CONTENT_VARIANTS: { id: ContentDisplayVariant; label: string }[] = [
-    { id: "mission-briefing", label: "Terminal" },
-    { id: "hologram-drone", label: "Drone" },
-    { id: "classic", label: "Classic" },
-  ];
-  const [contentDisplayVariant, setContentDisplayVariant] =
-    useState<ContentDisplayVariant>("mission-briefing");
-
-  // Hologram Drone display instance
+  // Hologram Drone display instance — always shown when content is active
   const hologramDroneRef = useRef<HologramDroneDisplay | null>(null);
 
-  // Drive hologram drone based on content and variant
+  // Drive hologram drone whenever overlay content changes
   useEffect(() => {
     const drone = hologramDroneRef.current;
     if (!drone) return;
-    if (contentDisplayVariant === "hologram-drone" && overlayContent) {
+    if (overlayContent) {
       const moon = focusedMoonRef.current;
       const cam = sceneRef.current.camera;
       if (moon && cam) {
@@ -160,7 +151,7 @@ export default function ResumeSpace3D({
     } else {
       drone.hideContent();
     }
-  }, [overlayContent, contentDisplayVariant]);
+  }, [overlayContent]);
 
   const originalMinDistanceRef = useRef<number>(0);
   // Request flag to tell the scene effect to exit focused moon (cross-scope safe)
@@ -209,6 +200,8 @@ export default function ResumeSpace3D({
     "exterior",
   );
   const spaceshipRef = useRef<THREE.Group | null>(null);
+
+
   const shipStagingModeRef = useRef(false);
   const shipStagingKeysRef = useRef<Record<string, boolean>>({
     KeyW: false,
@@ -2871,6 +2864,7 @@ export default function ResumeSpace3D({
         hologramDroneRef.current = null;
       }
 
+
       // Remove touch event listeners
       renderer.domElement.removeEventListener(
         "touchstart",
@@ -4074,8 +4068,8 @@ export default function ResumeSpace3D({
             navigationETA={navigationETA}
             isTransitioning={false}
             speed={0}
-            content={contentDisplayVariant === "classic" ? overlayContent : null}
-            contentLoading={contentDisplayVariant === "classic" ? contentLoading : false}
+            content={null}
+            contentLoading={false}
             cosmosOptions={options}
             onCosmosOptionsChange={(newOptions) => {
               // Pass the options change up to the parent component
@@ -4253,78 +4247,13 @@ export default function ResumeSpace3D({
         </div>
       </div>
 
-      {/* Mission Briefing Terminal — moon visit content display (Variant 5) */}
-      {contentDisplayVariant === "mission-briefing" && (
+      {/* Mission Briefing Terminal — cockpit only */}
+      {insideShip && (
         <MissionBriefingTerminal
           content={overlayContent}
-          isCockpit={insideShip}
+          isCockpit={true}
           onClose={() => setOverlayContent(null)}
         />
-      )}
-
-      {/* Content display variant switcher — only visible when content is active */}
-      {overlayContent && shipUIPhase === "ship-engaged" && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 72,
-            left: "50%",
-            transform: "translateX(-50%)",
-            display: "flex",
-            gap: 2,
-            background: "rgba(5, 12, 28, 0.85)",
-            border: "1px solid rgba(79, 255, 176, 0.2)",
-            borderRadius: 6,
-            padding: 3,
-            zIndex: 10001,
-            fontFamily: "'Rajdhani', sans-serif",
-            backdropFilter: "blur(8px)",
-          }}
-        >
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              letterSpacing: 1.5,
-              color: "rgba(79, 255, 176, 0.45)",
-              textTransform: "uppercase",
-              padding: "4px 8px",
-              alignSelf: "center",
-            }}
-          >
-            DISPLAY
-          </span>
-          {CONTENT_VARIANTS.map((v) => (
-            <button
-              key={v.id}
-              onClick={() => setContentDisplayVariant(v.id)}
-              style={{
-                background:
-                  contentDisplayVariant === v.id
-                    ? "rgba(79, 255, 176, 0.15)"
-                    : "transparent",
-                border:
-                  contentDisplayVariant === v.id
-                    ? "1px solid rgba(79, 255, 176, 0.35)"
-                    : "1px solid transparent",
-                color:
-                  contentDisplayVariant === v.id
-                    ? "#4fffb0"
-                    : "rgba(200, 216, 232, 0.5)",
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 600,
-                fontFamily: "'Rajdhani', sans-serif",
-                borderRadius: 4,
-                padding: "4px 12px",
-                letterSpacing: 0.5,
-                transition: "all 0.2s",
-              }}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
       )}
     </>
   );

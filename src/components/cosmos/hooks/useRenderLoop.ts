@@ -1020,6 +1020,7 @@ export const useRenderLoop = () => {
           hologramDroneRef.current.update(deltaSeconds, camera);
         }
 
+
         composer.render();
 
         // Render layer-1 overlay meshes and CSS2D labels.
