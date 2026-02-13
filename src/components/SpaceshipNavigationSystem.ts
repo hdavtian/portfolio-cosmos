@@ -277,7 +277,7 @@ export class SpaceshipNavigationSystem {
             lateral = new THREE.Vector3(1, 0, 0);
           }
           lateral.normalize();
-          const avoidOffset = obs.radius * 1.3; // route well clear
+          const avoidOffset = obs.radius * 1.8; // route well clear
           // Steer to whichever side the ship is already on (deterministic)
           const shipSide = toObs.dot(lateral);
           const sign = shipSide < 0 ? 1 : -1;
@@ -397,6 +397,28 @@ export class SpaceshipNavigationSystem {
 
     // Move spaceship
     this.spaceship.position.add(direction.multiplyScalar(this.currentSpeed));
+
+    // ── Real-time deflection: gently push ship out of any obstacle ──
+    if (this.obstaclesProvider) {
+      const obstacles = this.obstaclesProvider();
+      const shipPos2 = this.spaceship.position;
+      for (const obs of obstacles) {
+        if (obs.id && obs.id === this.currentTarget.id) continue;
+        const dx = shipPos2.x - obs.position.x;
+        const dy = shipPos2.y - obs.position.y;
+        const dz = shipPos2.z - obs.position.z;
+        const distToCenter = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (distToCenter < obs.radius && distToCenter > 0.01) {
+          const penetration = 1 - distToCenter / obs.radius;
+          const pushStrength = penetration * obs.radius * 0.15;
+          const invDist = 1 / distToCenter;
+          shipPos2.x += dx * invDist * pushStrength;
+          shipPos2.y += dy * invDist * pushStrength;
+          shipPos2.z += dz * invDist * pushStrength;
+          this.currentSpeed *= Math.max(0.3, 1 - penetration);
+        }
+      }
+    }
 
     // Orient spaceship toward target (smooth rotation)
     const desiredMatrix = new THREE.Matrix4().lookAt(

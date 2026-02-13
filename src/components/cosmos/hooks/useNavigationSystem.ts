@@ -152,6 +152,7 @@ export const useNavigationSystem = (deps: {
   const _avoidToObs = useRef(new THREE.Vector3());
   const _avoidClosest = useRef(new THREE.Vector3());
   const _avoidLateral = useRef(new THREE.Vector3());
+  const _deflectPush = useRef(new THREE.Vector3());
 
   // Section-travel avoidance state
   const sectionAvoidWaypoint = useRef<THREE.Vector3 | null>(null);
@@ -186,7 +187,7 @@ export const useNavigationSystem = (deps: {
           obstacles.push({
             id: "sun",
             position: obj.getWorldPosition(new THREE.Vector3()),
-            radius: 200, // actual radius 60, glow sprite 180 — keep well clear
+            radius: 350, // actual radius 60, glow sprite 180 — keep well clear
           });
           return;
         }
@@ -204,9 +205,9 @@ export const useNavigationSystem = (deps: {
             actualRadius = (geo.parameters as any).radius;
           }
 
-          // Safety margin: 3x actual radius for planets, 4x for moons
+          // Safety margin: 5x actual radius for planets, 6x for moons
           // (moons are small — need proportionally more clearance)
-          const safetyMultiplier = ud.isMoon ? 4 : 3;
+          const safetyMultiplier = ud.isMoon ? 6 : 5;
 
           obstacles.push({
             id,
@@ -471,13 +472,33 @@ export const useNavigationSystem = (deps: {
           const distToStaging = shipPos.distanceTo(stagingPoint);
 
           // Arc mid-point: a position near the planet at the ship's
-          // starting altitude.  The ship approaches horizontally toward
-          // this point, then curves up/down to the staging point,
-          // creating a gentle arc rather than a straight-line flight.
-          const arcMidPoint = new THREE.Vector3(
+          // starting altitude, but OFFSET laterally so the ship doesn't
+          // fly through the planet on its way to the staging point.
+          // The offset pushes the arc mid-point to the side the ship
+          // is approaching from, keeping the planet safely to one side.
+          const rawArcMid = new THREE.Vector3(
             planetCenter.x,
             shipPos.y,
             planetCenter.z,
+          );
+          // Lateral offset: perpendicular to approach direction, in the
+          // horizontal plane, scaled by planet radius for safe clearance
+          const approachDir = new THREE.Vector3()
+            .subVectors(rawArcMid, shipPos)
+            .setY(0)
+            .normalize();
+          const worldUp = new THREE.Vector3(0, 1, 0);
+          const lateralDir = new THREE.Vector3()
+            .crossVectors(approachDir, worldUp)
+            .normalize();
+          // Pick the side to offset: whichever side the staging point leans toward
+          const stagingLateral = new THREE.Vector3()
+            .subVectors(stagingPoint, rawArcMid);
+          const sideSign = stagingLateral.dot(lateralDir) >= 0 ? 1 : -1;
+          const arcClearance = Math.max(targetRadius * 5, 120);
+          const arcMidPoint = rawArcMid.addScaledVector(
+            lateralDir,
+            sideSign * arcClearance,
           );
 
           // The initial turn faces the arc mid-point (horizontal approach)
@@ -799,7 +820,7 @@ export const useNavigationSystem = (deps: {
             // Deterministic: steer to the side the ship is already on
             const shipSide = toObs.dot(lateral);
             const sign = shipSide < 0 ? 1 : -1;
-            const avoidOffset = obs.radius * 1.3;
+            const avoidOffset = obs.radius * 1.8;
 
             sectionAvoidWaypoint.current = obs.position
               .clone()
@@ -875,6 +896,29 @@ export const useNavigationSystem = (deps: {
 
       pathData.speed += (targetSpeed - pathData.speed) * 0.05;
       ship.position.addScaledVector(direction, pathData.speed);
+
+      // ── Real-time deflection: gently push ship out of any obstacle ──
+      // This catches cases where path-planning avoidance wasn't enough
+      // (e.g. an orbiting planet moved into the ship's path).
+      // Uses null (no exclusion) so even the destination planet deflects —
+      // the ship should never pass through ANY celestial body.
+      {
+        const deflectObstacles = gatherObstacles(null);
+        for (const obs of deflectObstacles) {
+          const toShip = _deflectPush.current.subVectors(ship.position, obs.position);
+          const distToCenter = toShip.length();
+          if (distToCenter < obs.radius && distToCenter > 0.01) {
+            // How deeply inside: 1.0 = at center, 0.0 = at edge
+            const penetration = 1 - distToCenter / obs.radius;
+            // Push strength: gentle but escalates if deeply inside
+            const pushStrength = penetration * obs.radius * 0.15;
+            toShip.normalize();
+            ship.position.addScaledVector(toShip, pushStrength);
+            // Slow down when deflecting to avoid tunnelling further in
+            pathData.speed *= Math.max(0.3, 1 - penetration);
+          }
+        }
+      }
 
       ship.lookAt(steerTarget);
       applyRollOffset(ship.quaternion);

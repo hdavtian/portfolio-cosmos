@@ -8,7 +8,7 @@ import type { OverlayContent } from "../CosmicContentOverlay";
 
 // ── Constants ─────────────────────────────────────────────────────
 const CANVAS_W = 768;
-const PANEL_WORLD_WIDTH = 14; // world-unit width (height varies per panel)
+const BASE_PANEL_WORLD_WIDTH = 14; // world-unit width at reference distance
 const PADDING = 28; // canvas-pixel padding inside panels
 const BORDER_MARGIN = 6; // canvas-pixel inset for border rect
 
@@ -22,8 +22,12 @@ const BORDER_DRAW_DURATION = 1.6; // seconds to trace the full border
 const CONTENT_FADE_DURATION = 0.5; // seconds for text to fade in after border
 const PANEL_STAGGER = 0.9; // seconds between each panel reveal start
 
-const SIDE_OFFSET = 10; // world units to the right of the moon
+const BASE_SIDE_OFFSET = 10; // world units to the right of the moon at reference dist
 const DRONE_FORWARD_RATIO = 0.3; // drone: 30% from moon toward camera
+const REFERENCE_DISTANCE = 60; // camera distance at which base sizes are correct
+const MIN_SCALE = 0.85; // don't shrink panels below 85% even when very close
+const MAX_SCALE = 1.6; // don't grow panels beyond 160% even when very far
+const SCALE_POWER = 0.6; // sub-linear scaling — panels grow gently, not 1:1 with distance
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -233,12 +237,18 @@ export class HologramDroneDisplay {
       this.sideDir.set(1, 0, 0);
     }
 
+    // Scale factor: panels grow/shrink sub-linearly with camera distance
+    // Using pow(ratio, 0.6) so doubling the distance only grows panels ~52%
+    const rawRatio = dist / REFERENCE_DISTANCE;
+    const distScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.pow(rawRatio, SCALE_POWER)));
+    const sideOffset = BASE_SIDE_OFFSET * distScale;
+
     // Drone end position: near moon, offset to the side + slightly toward camera + above
     const endPos = moonWorldPos
       .clone()
       .addScaledVector(forward, dist * DRONE_FORWARD_RATIO)
-      .addScaledVector(this.sideDir, SIDE_OFFSET)
-      .add(new THREE.Vector3(0, 5, 0));
+      .addScaledVector(this.sideDir, sideOffset)
+      .add(new THREE.Vector3(0, 5 * distScale, 0));
     this.flyEndPos.copy(endPos);
 
     // Fly-in start: behind/above camera
@@ -248,7 +258,7 @@ export class HologramDroneDisplay {
       .add(new THREE.Vector3(0, 8, 0));
 
     // Build panels
-    this.buildTextPanels(content, camera);
+    this.buildTextPanels(content, camera, distScale);
 
     this.rootGroup.visible = true;
     this.rootGroup.position.copy(this.flyStartPos);
@@ -512,8 +522,10 @@ export class HologramDroneDisplay {
 
   // ── Build text panels ───────────────────────────────────────────
 
-  private buildTextPanels(content: OverlayContent, camera: THREE.Camera): void {
+  private buildTextPanels(content: OverlayContent, camera: THREE.Camera, distScale: number = 1): void {
     const panelDataList: { title: string; lines: string[]; isHeader: boolean }[] = [];
+
+    const panelWorldWidth = BASE_PANEL_WORLD_WIDTH * distScale;
 
     // Header
     panelDataList.push({
@@ -543,14 +555,31 @@ export class HologramDroneDisplay {
       .subVectors(camera.position, this.flyEndPos)
       .normalize();
 
-    let yAccum = 0; // accumulate downward offset for stacking
+    const panelGap = 0.8 * distScale; // gap between panels scales too
+
+    // ── First pass: measure all panel heights ──────────────────────
+    const panelHeights: number[] = [];
+    const canvasHeights: number[] = [];
+    for (const data of panelDataList) {
+      const canvasH = this.measureContentHeight(data.title, data.lines, data.isHeader);
+      canvasHeights.push(canvasH);
+      panelHeights.push(panelWorldWidth * (canvasH / CANVAS_W));
+    }
+
+    // Total stack height — used to vertically position the stack.
+    // Bias toward keeping panels *below* the drone so the top panel
+    // stays in the viewport instead of flying off-screen.
+    const totalHeight = panelHeights.reduce((sum, h) => sum + h, 0) + panelGap * (panelHeights.length - 1);
+
+    // ── Second pass: create panels ────────────────────────────────
+    // Start just above drone level (only 20% of total height above center)
+    // so most of the stack is below — visible in the camera's view.
+    let yAccum = totalHeight * 0.2; // start from top
 
     for (let i = 0; i < panelDataList.length; i++) {
       const data = panelDataList[i];
-
-      // Measure needed height
-      const canvasH = this.measureContentHeight(data.title, data.lines, data.isHeader);
-      const panelH = PANEL_WORLD_WIDTH * (canvasH / CANVAS_W);
+      const canvasH = canvasHeights[i];
+      const panelH = panelHeights[i];
 
       // Create content canvas (text only, no bg/border)
       const contentCanvas = this.createContentCanvas(
@@ -571,7 +600,7 @@ export class HologramDroneDisplay {
       texture.minFilter = THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
 
-      const geo = new THREE.PlaneGeometry(PANEL_WORLD_WIDTH, panelH);
+      const geo = new THREE.PlaneGeometry(panelWorldWidth, panelH);
       const mat = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
@@ -581,10 +610,10 @@ export class HologramDroneDisplay {
       });
       const mesh = new THREE.Mesh(geo, mat);
 
-      // Position: stack vertically, pushed toward camera, offset to the side
-      const forwardPush = droneToCamera.clone().multiplyScalar(3);
-      const yOff = -yAccum - panelH / 2 - 2; // start below drone
-      yAccum += panelH + 1.0; // gap between panels
+      // Position: centered vertical stack, pushed toward camera
+      const forwardPush = droneToCamera.clone().multiplyScalar(3 * distScale);
+      const yOff = yAccum - panelH / 2; // center of this panel
+      yAccum -= panelH + panelGap; // move down for next panel
 
       mesh.position.set(forwardPush.x, yOff, forwardPush.z);
 
@@ -598,7 +627,7 @@ export class HologramDroneDisplay {
         displayCtx,
         canvasW: CANVAS_W,
         canvasH,
-        panelW: PANEL_WORLD_WIDTH,
+        panelW: panelWorldWidth,
         panelH,
         targetOpacity: 0.94,
         revealTime: i * PANEL_STAGGER,

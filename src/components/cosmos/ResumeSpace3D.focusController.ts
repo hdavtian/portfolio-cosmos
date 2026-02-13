@@ -159,6 +159,9 @@ export const createMoonFocusController = (deps: {
 
     exitFocusedMoon();
 
+    // Clear overlay content so UI elements (zoom slider, etc.) reappear
+    setOverlayContent(null);
+
     onMoonViewEnd?.();
 
     if (applyOptions && onOptionsChange && !shouldExitRestoreOptions) {

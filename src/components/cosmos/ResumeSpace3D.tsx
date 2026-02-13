@@ -1000,7 +1000,7 @@ export default function ResumeSpace3D({
           const cc = sceneRef.current.controls;
           cc.minPolarAngle = 0;
           cc.maxPolarAngle = Math.PI;
-          cc.minDistance = 5;
+          cc.minDistance = 1;
           cc.maxDistance = 6000;
         }
 
@@ -3379,6 +3379,12 @@ export default function ResumeSpace3D({
             onRollStart={handleRollStart}
             onRollStop={handleRollStop}
             rollAngle={displayRollAngle}
+            zoomLevel={options.spaceFollowDistance ?? 60}
+            onZoomChange={overlayContent ? undefined : (value) => {
+              if (onOptionsChange) {
+                onOptionsChange({ ...options, spaceFollowDistance: value });
+              }
+            }}
           />
 
           {/* Cockpit/Cabin keyboard hints */}

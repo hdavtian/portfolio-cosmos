@@ -771,8 +771,15 @@ export const useRenderLoop = () => {
                     ship.position.z,
                     true, // smooth transition
                   );
-                  cc.minDistance = 5;
+                  cc.minDistance = 1;
                   cc.maxDistance = 1000;
+
+                  // Live-track the zoom slider: smoothly dolly to the
+                  // current follow distance whenever the user drags it.
+                  const wantDist = optionsRef.current.spaceFollowDistance ?? 60;
+                  if (Math.abs(cc.distance - wantDist) > 0.5) {
+                    cc.dollyTo(wantDist, true);
+                  }
                 }
               }
             }
