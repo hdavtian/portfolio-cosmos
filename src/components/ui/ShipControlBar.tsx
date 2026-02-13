@@ -27,6 +27,10 @@ interface Props {
   onRollStart?: (direction: -1 | 1) => void;
   onRollStop?: () => void;
   rollAngle?: number;
+  /** True when Falcon is escorting the Star Destroyer */
+  isFollowingSD?: boolean;
+  /** Called to break formation with the Star Destroyer */
+  onDisengage?: () => void;
   zoomLevel?: number; // 10..150
   onZoomChange?: (value: number) => void;
 }
@@ -42,6 +46,8 @@ const ShipControlBar: React.FC<Props> = ({
   onRollStart,
   onRollStop,
   rollAngle = 0,
+  isFollowingSD = false,
+  onDisengage,
   zoomLevel = 60,
   onZoomChange,
 }) => {
@@ -365,6 +371,26 @@ const ShipControlBar: React.FC<Props> = ({
             }}>
               {zoomLevel}
             </span>
+          </div>
+        )}
+
+        {/* Star Destroyer escort — Disengage button */}
+        {isFollowingSD && onDisengage && (
+          <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
+            <button
+              style={{
+                ...btnBase,
+                background: "rgba(80, 200, 255, 0.15)",
+                border: "1px solid rgba(80, 200, 255, 0.45)",
+                color: "#60ccff",
+                fontSize: 12,
+                letterSpacing: 1.2,
+              }}
+              onClick={() => onDisengage()}
+              onMouseDown={stopEvt}
+            >
+              Disengage
+            </button>
           </div>
         )}
 

@@ -6,6 +6,7 @@ import { physicsWorld } from "../PhysicsWorld";
 import { PhysicsTravelAnchor } from "../PhysicsTravelAnchor";
 import type { OrbitAnchor, OrbitItem } from "../ResumeSpace3D.orbital";
 import type { SceneRef } from "../ResumeSpace3D.types";
+import type { StarDestroyerCruiser } from "../../StarDestroyerCruiser";
 
 export const useRenderLoop = () => {
   const animationFrameRef = useRef<number | null>(null);
@@ -76,6 +77,9 @@ export const useRenderLoop = () => {
       settledViewTargetRef: React.MutableRefObject<THREE.Vector3 | null>;
       optionsRef: React.MutableRefObject<{ spaceFollowDistance?: number }>;
       hologramDroneRef: React.MutableRefObject<{ update: (delta: number, camera: THREE.Camera) => void; isActive: () => boolean } | null>;
+      starDestroyerCruiserRef: React.MutableRefObject<StarDestroyerCruiser | null>;
+      starDestroyerRef: React.MutableRefObject<THREE.Group | null>;
+      followingStarDestroyerRef: React.MutableRefObject<boolean>;
       updateAutopilotNavigation: () => void;
       updateOrbitSystem: (params: {
         items: OrbitItem[];
@@ -127,6 +131,9 @@ export const useRenderLoop = () => {
         settledViewTargetRef,
         optionsRef,
         hologramDroneRef,
+        starDestroyerCruiserRef,
+        starDestroyerRef,
+        followingStarDestroyerRef,
         updateAutopilotNavigation,
         updateOrbitSystem,
         renderer,
@@ -725,61 +732,135 @@ export const useRenderLoop = () => {
                 }
               });
             }
+          } else if (
+            followingStarDestroyerRef.current &&
+            starDestroyerRef.current &&
+            starDestroyerCruiserRef.current
+          ) {
+            // ─── STAR DESTROYER ESCORT ──────────────────────────────
+            // The Falcon approaches and maintains formation alongside
+            // the Star Destroyer, matching its heading and speed.
+            //
+            // Smooth-motion strategy:
+            //   1. Compute formation target using the SD's TRUE position
+            //      (without ambient drift) to eliminate micro-jitter.
+            //   2. VELOCITY MATCH first: move the Falcon by the SD's
+            //      velocity each frame so it keeps pace automatically.
+            //   3. CORRECTIVE LERP: nudge toward the exact formation
+            //      point using frame-rate-independent exponential decay
+            //      (1 − e^(−rate·dt)) so behavior is identical at any FPS.
+            //
+            // This two-step approach eliminates the "always catching up"
+            // choppiness visible at close camera distances.
+
+            const sd = starDestroyerRef.current;
+            const cruiser = starDestroyerCruiserRef.current;
+
+            // 1. SD's travel direction & speed
+            const sdFwd = new THREE.Vector3();
+            cruiser.getForwardDirection(sdFwd);
+            const sdSpeed = cruiser.getCurrentSpeed();
+
+            // 2. SD's true position (without ambient drift oscillation)
+            const sdTruePos = new THREE.Vector3();
+            cruiser.getTruePosition(sdTruePos);
+
+            // 3. Build a "right" vector perpendicular to SD's heading
+            const sdRight = new THREE.Vector3()
+              .crossVectors(sdFwd, new THREE.Vector3(0, 1, 0))
+              .normalize();
+
+            // 4. Formation position: starboard, slightly above, slightly behind
+            const formationPos = sdTruePos.clone()
+              .addScaledVector(sdRight, 40)                     // 40 units starboard
+              .addScaledVector(new THREE.Vector3(0, 1, 0), 8)   // 8 above
+              .addScaledVector(sdFwd, -15);                      // 15 behind
+
+            // 5. Distance to formation point (before moving)
+            const dist = ship.position.distanceTo(formationPos);
+
+            // 6. VELOCITY MATCH — move the Falcon at the same speed as
+            //    the SD so it doesn't constantly fall behind.
+            ship.position.addScaledVector(sdFwd, sdSpeed * deltaSeconds);
+
+            // 7. CORRECTIVE LERP — frame-rate-independent exponential
+            //    smoothing to converge on the exact formation offset.
+            //    Formula: alpha = 1 − exp(−rate × dt)
+            //    Higher rate → faster correction (tighter formation).
+            const correctionRate = dist > 80 ? 2.0 : 5.0;
+            const correctionAlpha = 1 - Math.exp(-correctionRate * deltaSeconds);
+            ship.position.lerp(formationPos, correctionAlpha);
+
+            // 8. Heading: face the same direction as the SD.
+            //    Frame-rate-independent slerp using the same exp decay.
+            const lookTarget = ship.position.clone().add(sdFwd);
+            const escortLookMat = new THREE.Matrix4().lookAt(
+              ship.position, lookTarget, new THREE.Vector3(0, 1, 0),
+            );
+            const targetQuat = _tmpQuat.setFromRotationMatrix(escortLookMat);
+            const forwardOffset = ship.userData.forwardOffset as THREE.Quaternion | undefined;
+            if (forwardOffset) {
+              targetQuat.multiply(forwardOffset);
+            }
+
+            const headingRate = dist > 80 ? 1.5 : 4.0;
+            const headingAlpha = 1 - Math.exp(-headingRate * deltaSeconds);
+            ship.quaternion.slerp(targetQuat, headingAlpha);
+            ship.quaternion.normalize();
+
+            // 9. Engine light: intensity based on approach distance
+            if (spaceshipEngineLightRef.current) {
+              const el = spaceshipEngineLightRef.current;
+              const speedFactor = Math.min(dist / 200, 1.2);
+              el.intensity = 0.8 + speedFactor * 3.0;
+              el.distance = 220 + speedFactor * 100;
+            }
           } else {
             updateAutopilotNavigation();
+          }
 
-            // Exterior follow camera (only when NOT inside ship)
-            // Move the orbit center to track the ship's position.
-            // The user's azimuth, polar angle, and zoom distance are
-            // preserved by camera-controls, allowing free orbit/pan
-            // while the camera follows the ship.
-            // (Initial behind-and-above placement is done once in
-            // handleUseShip / handleShipViewChange via setLookAt.)
-            if (followingSpaceshipRef.current && !insideShipRef.current) {
-              if (wasInsideShip) {
-                wasInsideShip = false;
-              }
-              const cc = sceneRef.current.controls;
-              if (cc) {
-                // When a moon is focused, orbit around the moon instead
-                // of the ship so the camera stays centred on the moon
-                // and bokeh/DOF remains sharp on the target.
-                const focusedMoon = focusedMoonRef.current;
-                const settledTarget = settledViewTargetRef.current;
-                if (focusedMoon) {
-                  const moonWorld = new THREE.Vector3();
-                  focusedMoon.getWorldPosition(moonWorld);
-                  cc.moveTo(moonWorld.x, moonWorld.y, moonWorld.z, true);
-                  cc.minDistance = 0;
-                  cc.maxDistance = 1000;
-                } else if (settledTarget) {
-                  // After an orbital planet approach, keep the camera
-                  // orbiting around the planet centre so the
-                  // perpendicular top-down / bottom-up view is preserved.
-                  cc.moveTo(
-                    settledTarget.x,
-                    settledTarget.y,
-                    settledTarget.z,
-                    true,
-                  );
-                  cc.minDistance = 5;
-                  cc.maxDistance = 2000;
-                } else {
-                  cc.moveTo(
-                    ship.position.x,
-                    ship.position.y,
-                    ship.position.z,
-                    true, // smooth transition
-                  );
-                  cc.minDistance = 1;
-                  cc.maxDistance = 1000;
+          // ─── EXTERIOR FOLLOW CAMERA ─────────────────────────────
+          // Runs for BOTH autopilot navigation AND Star Destroyer escort.
+          // Moves the orbit center to track the Falcon's position.
+          // The user's azimuth, polar angle, and zoom distance are
+          // preserved by camera-controls, allowing free orbit/pan
+          // around the ship from any angle.
+          if (followingSpaceshipRef.current && !insideShipRef.current) {
+            if (wasInsideShip) {
+              wasInsideShip = false;
+            }
+            const cc = sceneRef.current.controls;
+            if (cc) {
+              const focusedMoon = focusedMoonRef.current;
+              const settledTarget = settledViewTargetRef.current;
+              if (focusedMoon) {
+                const moonWorld = new THREE.Vector3();
+                focusedMoon.getWorldPosition(moonWorld);
+                cc.moveTo(moonWorld.x, moonWorld.y, moonWorld.z, true);
+                cc.minDistance = 0;
+                cc.maxDistance = 1000;
+              } else if (settledTarget) {
+                cc.moveTo(
+                  settledTarget.x,
+                  settledTarget.y,
+                  settledTarget.z,
+                  true,
+                );
+                cc.minDistance = 5;
+                cc.maxDistance = 2000;
+              } else {
+                cc.moveTo(
+                  ship.position.x,
+                  ship.position.y,
+                  ship.position.z,
+                  true,
+                );
+                cc.minDistance = 1;
+                cc.maxDistance = 1000;
 
-                  // Live-track the zoom slider: smoothly dolly to the
-                  // current follow distance whenever the user drags it.
-                  const wantDist = optionsRef.current.spaceFollowDistance ?? 60;
-                  if (Math.abs(cc.distance - wantDist) > 0.5) {
-                    cc.dollyTo(wantDist, true);
-                  }
+                const wantDist = optionsRef.current.spaceFollowDistance ?? 60;
+                if (Math.abs(cc.distance - wantDist) > 0.5) {
+                  cc.dollyTo(wantDist, true);
                 }
               }
             }
@@ -962,6 +1043,13 @@ export const useRenderLoop = () => {
             physicsWorld.step(deltaSeconds);
             travelAnchor.postStep();
           }
+        }
+
+        // ─── STAR DESTROYER CRUISER ────────────────────────────────
+        // Autonomous movement: the cruiser handles its own heading,
+        // throttle, banking, and waypoint selection each frame.
+        if (starDestroyerCruiserRef.current) {
+          starDestroyerCruiserRef.current.update(deltaSeconds);
         }
 
         sunMesh.rotation.y += 0.002;

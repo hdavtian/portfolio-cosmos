@@ -12,10 +12,11 @@ export const useOrbitSystem = (params: {
   sceneRef: MutableRefObject<{ camera?: THREE.Camera }>;
   focusedMoonRef: MutableRefObject<THREE.Mesh | null>;
   spaceshipRef: MutableRefObject<THREE.Group | null>;
+  starDestroyerRef: MutableRefObject<THREE.Group | null>;
   insideShipRef: MutableRefObject<boolean>;
   vlog: (message: string) => void;
 }) => {
-  const { sceneRef, focusedMoonRef, spaceshipRef, insideShipRef, vlog } =
+  const { sceneRef, focusedMoonRef, spaceshipRef, starDestroyerRef, insideShipRef, vlog } =
     params;
 
   const updateOrbitSystem = (args: {
@@ -291,6 +292,22 @@ export const useOrbitSystem = (params: {
             }
           }
 
+          // Star Destroyer occlusion — the SD is large enough to hide
+          // labels behind it.  Use recursive intersect (true) so that
+          // the full GLTF sub-mesh hierarchy is tested.
+          if (!isOccluded && starDestroyerRef.current?.matrixWorld) {
+            const intersects = raycaster.intersectObject(
+              starDestroyerRef.current,
+              true,
+            );
+            if (
+              intersects.length > 0 &&
+              intersects[0].distance < distanceToLabel - 5
+            ) {
+              isOccluded = true;
+            }
+          }
+
           if (insideShipRef.current) {
             isOccluded = true;
           }
@@ -313,6 +330,52 @@ export const useOrbitSystem = (params: {
         }
       }
     });
+
+    // ── 3D overlay occlusion (title / bullet planes) ────────────
+    // These meshes use depthTest:false so they render on top of
+    // everything.  Raycast from the camera to each visible overlay;
+    // if the Star Destroyer blocks the line of sight, fade it out.
+    if (starDestroyerRef.current?.matrixWorld) {
+      const sdGroup = starDestroyerRef.current;
+      const ovPos = new THREE.Vector3();
+      const ovDir = new THREE.Vector3();
+
+      items.forEach((item) => {
+        const overlays = item.mesh.userData.detailOverlays as
+          | THREE.Mesh[]
+          | undefined;
+        if (!overlays?.length) return;
+
+        overlays.forEach((ov) => {
+          if (!ov.visible) return;
+
+          ov.getWorldPosition(ovPos);
+          ovDir.copy(ovPos).sub(camera.position).normalize();
+          raycaster.set(camera.position, ovDir);
+
+          const distToOverlay = camera.position.distanceTo(ovPos);
+          const hits = raycaster.intersectObject(sdGroup, true);
+
+          const occluded =
+            hits.length > 0 && hits[0].distance < distToOverlay - 5;
+
+          // Smoothly fade via material opacity
+          const mat = ov.material as THREE.MeshBasicMaterial;
+          if (mat && mat.transparent) {
+            const baseOpacity =
+              (ov.userData.baseOpacity as number | undefined) ??
+              mat.opacity;
+            // Store the base opacity the first time so we can restore it
+            if (ov.userData.baseOpacity === undefined) {
+              ov.userData.baseOpacity = mat.opacity;
+            }
+            const targetOpacity = occluded ? 0 : baseOpacity;
+            // Simple per-frame lerp toward target (acts as a fade)
+            mat.opacity += (targetOpacity - mat.opacity) * 0.15;
+          }
+        });
+      });
+    }
   };
 
   return { updateOrbitSystem };

@@ -59,6 +59,10 @@ export const useNavigationSystem = (deps: {
     | null
   >;
   shipRollOffsetRef: React.MutableRefObject<number>;
+  /** When true, Falcon is escorting the Star Destroyer */
+  followingStarDestroyerRef: React.MutableRefObject<boolean>;
+  /** Set React state for SD escort (paired with the ref) */
+  setFollowingStarDestroyer: (v: boolean) => void;
 }) => {
   const {
     resumeData,
@@ -77,6 +81,8 @@ export const useNavigationSystem = (deps: {
     spaceshipPathRef,
     enterMoonViewRef,
     shipRollOffsetRef,
+    followingStarDestroyerRef,
+    setFollowingStarDestroyer,
   } = deps;
 
   // Reusable objects for baking the user's roll offset into lookAt quaternions
@@ -293,6 +299,13 @@ export const useNavigationSystem = (deps: {
   const handleAutopilotNavigation = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
       vlog(`🖱️ CLICK: Navigation button clicked - ${targetType}: ${targetId}`);
+
+      // Disengage Star Destroyer escort if active
+      if (followingStarDestroyerRef.current) {
+        followingStarDestroyerRef.current = false;
+        setFollowingStarDestroyer(false);
+        vlog("🔺 Star Destroyer escort disengaged — navigating elsewhere");
+      }
 
       if (focusedMoonRef.current) {
         exitFocusRequestRef.current = true;

@@ -103,6 +103,10 @@ export const createPointerInteractionHandlers = (deps: {
   resumeData: any;
   exitFocusedMoon: () => void;
   vlog: (message: string) => void;
+  /** Optional: ref to the Star Destroyer group for click/hover detection */
+  starDestroyerRef?: React.MutableRefObject<THREE.Group | null>;
+  /** Callback when the Star Destroyer is clicked */
+  onStarDestroyerClick?: () => void;
 }) => {
   const {
     mountRef,
@@ -115,6 +119,8 @@ export const createPointerInteractionHandlers = (deps: {
     resumeData,
     exitFocusedMoon,
     vlog,
+    starDestroyerRef,
+    onStarDestroyerClick,
   } = deps;
 
   let hoveredObject: THREE.Object3D | null = null;
@@ -227,9 +233,22 @@ export const createPointerInteractionHandlers = (deps: {
           prev.userData.ringTargetOpacity = 0;
           prev.userData.coreTargetOpacity = 0;
         }
-        document.body.style.cursor = "default";
         hoveredObject = null;
       }
+
+      // Check Star Destroyer hover (pointer cursor when over it)
+      if (starDestroyerRef?.current) {
+        const sdHits = raycaster.intersectObject(
+          starDestroyerRef.current,
+          true,
+        );
+        if (sdHits.length > 0) {
+          document.body.style.cursor = "pointer";
+          return;
+        }
+      }
+
+      document.body.style.cursor = "default";
     }
   };
 
@@ -253,6 +272,20 @@ export const createPointerInteractionHandlers = (deps: {
       // Exit focused moon view when overlay is clicked
       exitFocusedMoon();
       return;
+    }
+
+    // Check Star Destroyer click (recursive — GLTF model has nested meshes)
+    if (starDestroyerRef?.current && onStarDestroyerClick) {
+      const sdHits = raycaster.intersectObject(
+        starDestroyerRef.current,
+        true,
+      );
+      if (sdHits.length > 0) {
+        vlog("🔺 Star Destroyer clicked — initiating escort");
+        exitFocusedMoon();          // leave moon view if active
+        onStarDestroyerClick();
+        return;
+      }
     }
 
     // Clicking empty space should not exit moon focus — only overlay clicks or navigation/zoom do.

@@ -46,6 +46,8 @@ export const usePointerInteractions = (params: {
       resumeData: any;
       exitFocusedMoon: () => void;
       vlog: (message: string) => void;
+      starDestroyerRef?: MutableRefObject<THREE.Group | null>;
+      onStarDestroyerClick?: () => void;
     }) =>
       createPointerInteractionHandlers({
         mountRef,
@@ -58,6 +60,8 @@ export const usePointerInteractions = (params: {
         resumeData: args.resumeData,
         exitFocusedMoon: args.exitFocusedMoon,
         vlog: args.vlog,
+        starDestroyerRef: args.starDestroyerRef,
+        onStarDestroyerClick: args.onStarDestroyerClick,
       }),
     [mountRef],
   );

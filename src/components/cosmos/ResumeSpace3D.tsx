@@ -50,6 +50,7 @@ import { MissionBriefingTerminal } from "../ui/MissionBriefingTerminal";
 import { HologramDroneDisplay } from "./HologramDroneDisplay";
 // CockpitHologramPanels kept for potential future use
 import { getOrbitalPositionEmitter } from "../OrbitalPositionEmitter";
+import { StarDestroyerCruiser } from "../StarDestroyerCruiser";
 import { useCosmosLogs } from "./hooks/useCosmosLogs";
 import { useCosmosOptions } from "./hooks/useCosmosOptions";
 import { useKeyboardControls } from "./hooks/useKeyboardControls";
@@ -291,6 +292,12 @@ export default function ResumeSpace3D({
     moonVisitDuration: DEFAULT_MOON_VISIT_DURATION, // 10 seconds
     currentMoonTarget: null,
   });
+
+  // --- STAR DESTROYER refs ---
+  const starDestroyerRef = useRef<THREE.Group | null>(null);
+  const starDestroyerCruiserRef = useRef<StarDestroyerCruiser | null>(null);
+  const [followingStarDestroyer, setFollowingStarDestroyer] = useState(false);
+  const followingStarDestroyerRef = useRef(false);
 
   // Items ref to track orbital objects (moons, planets)
   const itemsRef = useRef<
@@ -606,6 +613,8 @@ export default function ResumeSpace3D({
     spaceshipPathRef,
     enterMoonViewRef,
     shipRollOffsetRef,
+    followingStarDestroyerRef,
+    setFollowingStarDestroyer,
   });
 
   const handleExperienceCompanyNavigation = useCallback(
@@ -707,6 +716,7 @@ export default function ResumeSpace3D({
     sceneRef: sceneRef as MutableRefObject<{ camera?: THREE.Camera }>,
     focusedMoonRef,
     spaceshipRef,
+    starDestroyerRef,
     insideShipRef,
     vlog,
   });
@@ -899,6 +909,8 @@ export default function ResumeSpace3D({
 
     setFollowingSpaceship(false);
     followingSpaceshipRef.current = false;
+    setFollowingStarDestroyer(false);
+    followingStarDestroyerRef.current = false;
     setInsideShip(false);
     insideShipRef.current = false;
     setShipViewMode("exterior");
@@ -967,6 +979,32 @@ export default function ResumeSpace3D({
 
     vlog("🦅 Summoning Falcon...");
   }, [stopShipWander, handleUseShip, vlog]);
+
+  // --- STAR DESTROYER escort handlers ---
+
+  const stopFollowingStarDestroyer = useCallback(() => {
+    setFollowingStarDestroyer(false);
+    followingStarDestroyerRef.current = false;
+    vlog("🔺 Disengaged from Star Destroyer escort");
+  }, [vlog]);
+
+  const handleStarDestroyerClick = useCallback(() => {
+    // Only allow when aboard the Falcon
+    if (!followingSpaceshipRef.current && !insideShipRef.current) {
+      vlog("🔺 Must be aboard the Falcon to escort the Star Destroyer");
+      return;
+    }
+    if (!starDestroyerRef.current || !spaceshipRef.current) return;
+
+    // Cancel any active cinematic or navigation
+    if (shipCinematicRef.current) {
+      shipCinematicRef.current.active = false;
+    }
+
+    setFollowingStarDestroyer(true);
+    followingStarDestroyerRef.current = true;
+    vlog("🔺 Engaging Star Destroyer escort — matching course and speed");
+  }, [vlog]);
 
   // ── Cockpit destination navigation ─────────────────
   const handleCockpitNavigate = useCallback(
@@ -1673,6 +1711,75 @@ export default function ResumeSpace3D({
       },
     );
 
+    // --- STAR DESTROYER LOADING ---
+    loader.load(
+      "/models/star-destroyer/scene.gltf",
+      (gltf) => {
+        const model = gltf.scene;
+
+        // Center the model at the group origin so position/rotation
+        // are relative to the ship's geometric center.
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.sub(center);
+
+        // Wrap in a group for clean transforms
+        const starDestroyer = new THREE.Group();
+        starDestroyer.add(model);
+
+        // Scale: 0.06 → ~44 world-units long (~6× larger than the Falcon)
+        starDestroyer.scale.set(0.06, 0.06, 0.06);
+
+        // Initial position — outer area of the system, above the orbital plane
+        starDestroyer.position.set(400, 40, -300);
+
+        // Forward offset: the model's visual nose is at +Z after centering,
+        // but lookAt faces -Z. Rotate 180° around Y so the nose leads.
+        // (Same pattern as the Millennium Falcon.)
+        starDestroyer.userData.forwardOffset =
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0));
+
+        // --- Lights ---
+        // Engine glow (back of ship is +Z in centered local space)
+        const engineLight = new THREE.PointLight(0x4488ff, 2, 80);
+        engineLight.position.set(0, 0, 360);
+        starDestroyer.add(engineLight);
+        starDestroyer.userData.engineLight = engineLight;
+
+        // Bridge tower light
+        const bridgeLight = new THREE.PointLight(0xaaccff, 0.4, 40);
+        bridgeLight.position.set(0, 260, 200);
+        starDestroyer.add(bridgeLight);
+
+        // Navigation lights (port=red, starboard=green)
+        const portLight = new THREE.PointLight(0xff2200, 0.3, 30);
+        portLight.position.set(-230, 80, 0);
+        starDestroyer.add(portLight);
+
+        const starboardLight = new THREE.PointLight(0x00ff22, 0.3, 30);
+        starboardLight.position.set(230, 80, 0);
+        starDestroyer.add(starboardLight);
+
+        // Forward searchlight
+        const forwardLight = new THREE.PointLight(0x88aaff, 0.5, 60);
+        forwardLight.position.set(0, 40, -360);
+        starDestroyer.add(forwardLight);
+
+        scene.add(starDestroyer);
+        starDestroyerRef.current = starDestroyer;
+
+        // Initialize the cruiser AI
+        const cruiser = new StarDestroyerCruiser(starDestroyer);
+        starDestroyerCruiserRef.current = cruiser;
+
+        vlog("🔺 Star Destroyer loaded — cruising initiated");
+      },
+      undefined,
+      () => {
+        vlog("❌ Failed to load Star Destroyer model");
+      },
+    );
+
     // --- INTERACTION ---
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
@@ -2071,6 +2178,13 @@ export default function ResumeSpace3D({
         exitFocusRequestRef.current = true;
       }
 
+      // Any navigation cancels Star Destroyer escort
+      if (followingStarDestroyerRef.current) {
+        setFollowingStarDestroyer(false);
+        followingStarDestroyerRef.current = false;
+        vlog("🔺 Star Destroyer escort disengaged — navigating elsewhere");
+      }
+
       switch (target) {
         case "home":
           // Stop following spaceship if we were
@@ -2316,6 +2430,8 @@ export default function ResumeSpace3D({
       resumeData,
       exitFocusedMoon: exitMoonView,
       vlog,
+      starDestroyerRef,
+      onStarDestroyerClick: handleStarDestroyerClick,
     });
 
     window.addEventListener("pointermove", onPointerMove);
@@ -2572,6 +2688,9 @@ export default function ResumeSpace3D({
       settledViewTargetRef,
       optionsRef,
       hologramDroneRef,
+      starDestroyerCruiserRef,
+      starDestroyerRef,
+      followingStarDestroyerRef,
       updateAutopilotNavigation,
       updateOrbitSystem,
       renderer,
@@ -3379,6 +3498,8 @@ export default function ResumeSpace3D({
             onRollStart={handleRollStart}
             onRollStop={handleRollStop}
             rollAngle={displayRollAngle}
+            isFollowingSD={followingStarDestroyer}
+            onDisengage={stopFollowingStarDestroyer}
             zoomLevel={options.spaceFollowDistance ?? 60}
             onZoomChange={overlayContent ? undefined : (value) => {
               if (onOptionsChange) {
