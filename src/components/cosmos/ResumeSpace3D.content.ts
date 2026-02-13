@@ -95,13 +95,6 @@ export const createFinalizeFocusOnMoon = (deps: {
           company.positions?.[0]?.responsibilities?.[0] ||
           `Professional experience at ${company.company}.`,
         sections,
-        actions: [
-          {
-            label: "View Career Journey",
-            action: "tour:career-journey",
-            icon: "📈",
-          },
-        ],
       };
 
       // Show right-pane content (simulate load)

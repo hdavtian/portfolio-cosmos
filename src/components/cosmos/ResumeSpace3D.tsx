@@ -46,6 +46,7 @@ import SpaceshipHUD from "../ui/SpaceshipHUD";
 import ShipControlBar, { type ShipUIPhase, type ShipView } from "../ui/ShipControlBar";
 import CockpitHints from "../ui/CockpitHints";
 import CockpitNavPanel from "../ui/CockpitNavPanel";
+import { MissionBriefingTerminal } from "../ui/MissionBriefingTerminal";
 import { getOrbitalPositionEmitter } from "../OrbitalPositionEmitter";
 import { useCosmosLogs } from "./hooks/useCosmosLogs";
 import { useCosmosOptions } from "./hooks/useCosmosOptions";
@@ -129,6 +130,15 @@ export default function ResumeSpace3D({
     null,
   );
   const [contentLoading, setContentLoading] = useState(false);
+
+  // Content display variant: "mission-briefing" (Variant 5) or "classic" (original right panel)
+  type ContentDisplayVariant = "mission-briefing" | "classic";
+  const CONTENT_VARIANTS: { id: ContentDisplayVariant; label: string }[] = [
+    { id: "mission-briefing", label: "Terminal" },
+    { id: "classic", label: "Classic" },
+  ];
+  const [contentDisplayVariant, setContentDisplayVariant] =
+    useState<ContentDisplayVariant>("mission-briefing");
   const originalMinDistanceRef = useRef<number>(0);
   // Request flag to tell the scene effect to exit focused moon (cross-scope safe)
   const exitFocusRequestRef = useRef<boolean>(false);
@@ -4031,8 +4041,8 @@ export default function ResumeSpace3D({
             navigationETA={navigationETA}
             isTransitioning={false}
             speed={0}
-            content={overlayContent}
-            contentLoading={contentLoading}
+            content={contentDisplayVariant === "classic" ? overlayContent : null}
+            contentLoading={contentDisplayVariant === "classic" ? contentLoading : false}
             cosmosOptions={options}
             onCosmosOptionsChange={(newOptions) => {
               // Pass the options change up to the parent component
@@ -4209,6 +4219,80 @@ export default function ResumeSpace3D({
           />
         </div>
       </div>
+
+      {/* Mission Briefing Terminal — moon visit content display (Variant 5) */}
+      {contentDisplayVariant === "mission-briefing" && (
+        <MissionBriefingTerminal
+          content={overlayContent}
+          isCockpit={insideShip}
+          onClose={() => setOverlayContent(null)}
+        />
+      )}
+
+      {/* Content display variant switcher — only visible when content is active */}
+      {overlayContent && shipUIPhase === "ship-engaged" && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 72,
+            left: "50%",
+            transform: "translateX(-50%)",
+            display: "flex",
+            gap: 2,
+            background: "rgba(5, 12, 28, 0.85)",
+            border: "1px solid rgba(79, 255, 176, 0.2)",
+            borderRadius: 6,
+            padding: 3,
+            zIndex: 10001,
+            fontFamily: "'Rajdhani', sans-serif",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: 1.5,
+              color: "rgba(79, 255, 176, 0.45)",
+              textTransform: "uppercase",
+              padding: "4px 8px",
+              alignSelf: "center",
+            }}
+          >
+            DISPLAY
+          </span>
+          {CONTENT_VARIANTS.map((v) => (
+            <button
+              key={v.id}
+              onClick={() => setContentDisplayVariant(v.id)}
+              style={{
+                background:
+                  contentDisplayVariant === v.id
+                    ? "rgba(79, 255, 176, 0.15)"
+                    : "transparent",
+                border:
+                  contentDisplayVariant === v.id
+                    ? "1px solid rgba(79, 255, 176, 0.35)"
+                    : "1px solid transparent",
+                color:
+                  contentDisplayVariant === v.id
+                    ? "#4fffb0"
+                    : "rgba(200, 216, 232, 0.5)",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: "'Rajdhani', sans-serif",
+                borderRadius: 4,
+                padding: "4px 12px",
+                letterSpacing: 0.5,
+                transition: "all 0.2s",
+              }}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+      )}
     </>
   );
 }
