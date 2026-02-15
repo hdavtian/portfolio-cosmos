@@ -19,7 +19,6 @@ import {
   createLighting,
   createPlanetFactory,
   createRingHaloTexture,
-  createStarField,
   createStarfieldMeshes,
   createSunMesh,
   createSunGlowTexture,
@@ -82,6 +81,8 @@ import {
   FALCON_INITIAL_POS,
   SD_SCALE,
   SD_INITIAL_POS,
+  SD_CONE_LENGTH,
+  SD_CONE_RADIUS,
   NEAR_DEFAULT,
   NEAR_COCKPIT,
   NEAR_OVERVIEW,
@@ -102,6 +103,10 @@ import {
   EXP_FOCUS_DIST,
   SKILLS_FOCUS_DIST,
   PROJ_FOCUS_DIST,
+  SHIP_WANDER_XZ,
+  SHIP_WANDER_Y,
+  SHIP_WANDER_MIN_DIST,
+  CINE_DURATION_DIVISOR,
 } from "./scaleConfig";
 
 // Extend window for logging timestamps
@@ -811,12 +816,12 @@ export default function ResumeSpace3D({
       const startPos = ship.position.clone();
       // Pick a random position within the solar system bounds
       const endPos = new THREE.Vector3(
-        (Math.random() - 0.5) * 1200,
-        (Math.random() - 0.5) * 400,
-        (Math.random() - 0.5) * 1200,
+        (Math.random() - 0.5) * SHIP_WANDER_XZ,
+        (Math.random() - 0.5) * SHIP_WANDER_Y,
+        (Math.random() - 0.5) * SHIP_WANDER_XZ,
       );
       // Make sure it's reasonably far
-      if (endPos.distanceTo(startPos) < 200) {
+      if (endPos.distanceTo(startPos) < SHIP_WANDER_MIN_DIST) {
         endPos.add(
           new THREE.Vector3(
             (Math.random() - 0.5) * 400,
@@ -840,7 +845,7 @@ export default function ResumeSpace3D({
 
       const distance = startPos.distanceTo(endPos);
       const duration = THREE.MathUtils.clamp(
-        6000 * (distance / 600),
+        6000 * (distance / CINE_DURATION_DIVISOR),
         5000,
         14000,
       );
@@ -1415,20 +1420,31 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     if (spaceshipLightsRef.current.length > 0) {
+      // When inside the ship, turn off exterior lights completely —
+      // they shine through the hull and add unwanted brightness.
+      // When outside: 12 × 0.15 = 1.8 total additive — soft fill.
+      const intensity = insideShip ? 0 : (shipExteriorLights ? 0.15 : 0);
       spaceshipLightsRef.current.forEach((light) => {
-        light.intensity = shipExteriorLights ? 1.5 : 0;
+        light.intensity = intensity;
       });
     }
-  }, [shipExteriorLights]);
+  }, [shipExteriorLights, insideShip]);
 
-  // Update spaceship interior lights
+  // Update spaceship interior lights — ONLY active when inside the ship.
+  // When viewed from exterior, interior lights create a massive glow sphere
+  // (each light has 4-unit range but ship is only 0.8 units long).
+  // Cockpit gets moderate light (windshield lets some in); cabin is dimmer.
   useEffect(() => {
     if (spaceshipInteriorLightsRef.current.length > 0) {
+      const on = insideShip && shipInteriorLights;
+      const isCockpit = shipViewMode === "cockpit";
+      // 5 lights: cockpit 5×0.4=2.0 total, cabin 5×0.15=0.75 total
+      const intensity = on ? (isCockpit ? 0.4 : 0.15) : 0;
       spaceshipInteriorLightsRef.current.forEach((light) => {
-        light.intensity = shipInteriorLights ? 2 : 0;
+        light.intensity = intensity;
       });
     }
-  }, [shipInteriorLights]);
+  }, [shipInteriorLights, insideShip, shipViewMode]);
 
   useKeyboardControls({
     enabled: manualFlightMode,
@@ -1489,6 +1505,7 @@ export default function ResumeSpace3D({
     scene.add(sunLight);
     scene.add(fillLight);
     sceneRef.current.sunLight = sunLight;
+    sceneRef.current.fillLight = fillLight;
 
     const { sunMesh, sunMaterial } = createSunMesh(textureLoader);
     scene.add(sunMesh);
@@ -1643,9 +1660,9 @@ export default function ResumeSpace3D({
       );
     });
 
-    // Enhanced point-based starfield for deep space effect
-    const starField = createStarField();
-    scene.add(starField);
+    // Point-based starfield removed — the texture skyboxes (starfield +
+    // skyfield) already provide a realistic backdrop that doesn't cluster
+    // when the camera travels through the expanded universe.
 
     // --- SPACESHIP LOADING ---
     const loader = new GLTFLoader();
@@ -1665,8 +1682,9 @@ export default function ResumeSpace3D({
         // Position it initially near the sun
         spaceship.position.set(FALCON_INITIAL_POS.x, FALCON_INITIAL_POS.y, FALCON_INITIAL_POS.z);
 
-        // Add a subtle point light to the spaceship for visibility
-        const shipLight = new THREE.PointLight(0x6699ff, 0.5, 50);
+        // Subtle ambient light on the ship hull — just enough to see detail.
+        // Ship is ~0.8 units long; distance 1.5 = ~2× ship length (tight glow).
+        const shipLight = new THREE.PointLight(0x6699ff, 0.15, 1.5);
         spaceship.add(shipLight);
 
         // Create exterior lights (initially off)
@@ -1690,7 +1708,7 @@ export default function ResumeSpace3D({
         ];
 
         lightPositions.forEach((pos) => {
-          const light = new THREE.PointLight(0xffffff, 0, 15);
+          const light = new THREE.PointLight(0xffffff, 0, 3); // was 15, scaled to ship size
           light.position.copy(pos);
           spaceship.add(light);
           exteriorLights.push(light);
@@ -1698,9 +1716,10 @@ export default function ResumeSpace3D({
 
         spaceshipLightsRef.current = exteriorLights;
 
-        // Create dedicated engine light for boost effects
-        const engineLight = new THREE.PointLight(0x6699ff, 0.8, 220);
-        engineLight.position.set(0, 0, -4); // Back of ship
+        // Create dedicated engine light for boost effects.
+        // Initial distance matches ENGINE_LIGHT_BASE_DIST (2); render loop updates it.
+        const engineLight = new THREE.PointLight(0x6699ff, 0.8, 2);
+        engineLight.position.set(0, 0, -4); // Back of ship (model space)
         spaceship.add(engineLight);
         spaceshipEngineLightRef.current = engineLight;
 
@@ -1715,7 +1734,7 @@ export default function ResumeSpace3D({
         ];
 
         interiorLightPositions.forEach((pos) => {
-          const light = new THREE.PointLight(0xffd9b3, 2, 8); // Warm interior lighting
+          const light = new THREE.PointLight(0xffd9b3, 0, 4); // Start OFF — useEffect won't catch async load
           light.position.copy(pos);
           spaceship.add(light);
           interiorLights.push(light);
@@ -1782,28 +1801,29 @@ export default function ResumeSpace3D({
           new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0));
 
         // --- Lights ---
+        // SD is ~4.4 units long at scale 0.006. Keep light distances proportional.
         // Engine glow (back of ship is +Z in centered local space)
-        const engineLight = new THREE.PointLight(0x4488ff, 2, 80);
+        const engineLight = new THREE.PointLight(0x4488ff, 1.5, 8);
         engineLight.position.set(0, 0, 360);
         starDestroyer.add(engineLight);
         starDestroyer.userData.engineLight = engineLight;
 
         // Bridge tower light
-        const bridgeLight = new THREE.PointLight(0xaaccff, 0.4, 40);
+        const bridgeLight = new THREE.PointLight(0xaaccff, 0.3, 5);
         bridgeLight.position.set(0, 260, 200);
         starDestroyer.add(bridgeLight);
 
         // Navigation lights (port=red, starboard=green)
-        const portLight = new THREE.PointLight(0xff2200, 0.3, 30);
+        const portLight = new THREE.PointLight(0xff2200, 0.2, 4);
         portLight.position.set(-230, 80, 0);
         starDestroyer.add(portLight);
 
-        const starboardLight = new THREE.PointLight(0x00ff22, 0.3, 30);
+        const starboardLight = new THREE.PointLight(0x00ff22, 0.2, 4);
         starboardLight.position.set(230, 80, 0);
         starDestroyer.add(starboardLight);
 
         // Forward searchlight
-        const forwardLight = new THREE.PointLight(0x88aaff, 0.5, 60);
+        const forwardLight = new THREE.PointLight(0x88aaff, 0.3, 6);
         forwardLight.position.set(0, 40, -360);
         starDestroyer.add(forwardLight);
 
@@ -1814,7 +1834,216 @@ export default function ResumeSpace3D({
         const cruiser = new StarDestroyerCruiser(starDestroyer);
         starDestroyerCruiserRef.current = cruiser;
 
-        vlog("🔺 Star Destroyer loaded — cruising initiated");
+        // Register all planets and moons as visitable destinations.
+        // getWorldPosition() is called live each frame so orbiting bodies
+        // return their current position, not a stale snapshot.
+        const sdDests: import("../StarDestroyerCruiser").SDDestination[] = [];
+        scene.traverse((obj: any) => {
+          if (obj.isMesh && obj.userData?.planetName) {
+            const name = obj.userData.planetName as string;
+            const mesh = obj as THREE.Mesh;
+            sdDests.push({
+              name,
+              getWorldPosition: () => {
+                const wp = new THREE.Vector3();
+                mesh.getWorldPosition(wp);
+                return wp;
+              },
+            });
+          }
+        });
+        cruiser.setDestinations(sdDests);
+
+        // Create hyperspace jump cone — a scene-level mesh (not parented
+        // to the SD group, since the SD has scale 0.006 which would
+        // make the cone invisible).  The cruiser positions/orients it
+        // each frame and manages opacity fade-in/out.
+        const coneGeo = new THREE.ConeGeometry(SD_CONE_RADIUS, SD_CONE_LENGTH, 24, 1, true);
+        // Default cone: tip at +Y, base at -Y.
+        // Rotate so tip points along +Z (lookAt direction).
+        coneGeo.rotateX(Math.PI / 2);
+        // Shift so the narrow end (apex) is at origin (ship pos)
+        // and the wide base extends along +Z toward the destination.
+        coneGeo.translate(0, 0, SD_CONE_LENGTH / 2);
+
+        // Per-vertex alpha: bright at the apex (ship), fading toward base (destination)
+        const posAttr = coneGeo.getAttribute("position");
+        const colors = new Float32Array(posAttr.count * 4);
+        for (let i = 0; i < posAttr.count; i++) {
+          const z = posAttr.getZ(i);
+          // z ranges from 0 (apex/ship) to SD_CONE_LENGTH (base/destination)
+          const t = z / SD_CONE_LENGTH; // 0 at ship, 1 at destination
+          const alpha = 1 - t * t;       // quadratic falloff — depletes toward destination
+          colors[i * 4] = 0.3 + 0.4 * (1 - t);   // R: blue-white at base
+          colors[i * 4 + 1] = 0.5 + 0.3 * (1 - t); // G
+          colors[i * 4 + 2] = 1.0;                  // B: always blue
+          colors[i * 4 + 3] = alpha;
+        }
+        coneGeo.setAttribute("color", new THREE.BufferAttribute(colors, 4));
+
+        const coneMat = new THREE.MeshBasicMaterial({
+          color: 0x88bbff,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          vertexColors: true,
+        });
+        const jumpCone = new THREE.Mesh(coneGeo, coneMat);
+        jumpCone.visible = false;
+        jumpCone.renderOrder = 999; // render on top for additive glow
+        scene.add(jumpCone);
+        cruiser.setJumpCone(jumpCone);
+
+        vlog(`🔺 Star Destroyer loaded — ${sdDests.length} destinations registered`);
+
+        // Console commands for directing the Star Destroyer
+        (window as any).sendSD = (name: string) => {
+          if (!name) {
+            const status = cruiser.getStatus();
+            console.log("Usage: sendSD('planet or moon name')");
+            console.log("Available destinations:", status.destinations.join(", "));
+            return;
+          }
+          const ok = cruiser.sendTo(name);
+          if (ok) {
+            const s = cruiser.getStatus();
+            console.log(`🔺 Star Destroyer dispatched to "${name}"`);
+            console.log(`   State: ${s.hlState} | Speed: ${s.speed.toFixed(1)} | From: ${s.currentDest ?? "none"}`);
+            console.log(`   SD position:`, starDestroyerRef.current?.position.toArray().map((n: number) => +n.toFixed(0)));
+          } else {
+            const status = cruiser.getStatus();
+            console.log(`❌ Destination "${name}" not found. Available:`, status.destinations.join(", "));
+          }
+        };
+        (window as any).sdStatus = () => {
+          const s = cruiser.getStatus();
+          console.log("=== STAR DESTROYER STATUS ===");
+          console.log("  High-level state:", s.hlState);
+          console.log("  Local state:", s.localState);
+          console.log("  Speed:", s.speed.toFixed(1), "u/s");
+          console.log("  Current system:", s.currentDest ?? "(none)");
+          console.log("  Next destination:", s.nextDest ?? "(none)");
+          console.log("  Local patrols:", s.localPatrols);
+          console.log("  All destinations:", s.destinations.join(", "));
+          return s;
+        };
+
+        // ── Visual locate beacons ─────────────────────────────────
+        // Console: locateFalcon()  or  locateSD()
+        // Spawns a dramatic expanding ring + vertical pillar effect
+        // at the ship's position that fades over a few seconds.
+        const createLocateBeacon = (
+          target: THREE.Object3D,
+          color: THREE.ColorRepresentation,
+          label: string,
+        ) => {
+          const wp = new THREE.Vector3();
+          target.getWorldPosition(wp);
+
+          const group = new THREE.Group();
+          group.position.copy(wp);
+          scene.add(group);
+
+          // ── Vertical pillar (thin cylinder stretching up & down) ──
+          const pillarHeight = 2000;
+          const pillarGeo = new THREE.CylinderGeometry(2, 2, pillarHeight, 8, 1, true);
+          const pillarMat = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.6,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          });
+          const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+          group.add(pillar);
+
+          // ── Expanding rings (3 staggered) ──
+          const rings: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; delay: number }[] = [];
+          for (let i = 0; i < 3; i++) {
+            const ringGeo = new THREE.TorusGeometry(20, 1.5, 8, 64);
+            ringGeo.rotateX(Math.PI / 2); // flat horizontal
+            const ringMat = new THREE.MeshBasicMaterial({
+              color,
+              transparent: true,
+              opacity: 0.8,
+              blending: THREE.AdditiveBlending,
+              depthWrite: false,
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            group.add(ring);
+            rings.push({ mesh: ring, mat: ringMat, delay: i * 0.4 });
+          }
+
+          // ── Central pulse sphere ──
+          const pulseGeo = new THREE.SphereGeometry(8, 16, 16);
+          const pulseMat = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.9,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          });
+          const pulse = new THREE.Mesh(pulseGeo, pulseMat);
+          group.add(pulse);
+
+          // ── Animation ──
+          const startTime = performance.now();
+          const duration = 4000; // 4 seconds total
+
+          const animate = () => {
+            const elapsed = performance.now() - startTime;
+            const t = elapsed / duration; // 0 → 1
+
+            if (t >= 1) {
+              scene.remove(group);
+              pillarGeo.dispose(); pillarMat.dispose();
+              pulseGeo.dispose(); pulseMat.dispose();
+              rings.forEach((r) => { r.mesh.geometry.dispose(); r.mat.dispose(); });
+              return; // stop animation
+            }
+
+            // Track the ship's live position
+            target.getWorldPosition(wp);
+            group.position.copy(wp);
+
+            // Pillar: fade out, slight vertical stretch
+            pillarMat.opacity = 0.6 * (1 - t * t);
+            pillar.scale.y = 1 + t * 0.5;
+
+            // Rings: expand outward with staggered timing
+            rings.forEach(({ mesh, mat, delay }) => {
+              const rt = Math.max(0, (elapsed - delay * 1000) / (duration - delay * 1000));
+              const ringScale = 1 + rt * 25; // expand to 25× original
+              mesh.scale.set(ringScale, ringScale, ringScale);
+              mat.opacity = 0.8 * Math.max(0, 1 - rt * rt);
+            });
+
+            // Pulse: throb and fade
+            const pulseScale = 1 + Math.sin(t * Math.PI * 6) * 0.4 * (1 - t);
+            pulse.scale.set(pulseScale, pulseScale, pulseScale);
+            pulseMat.opacity = 0.9 * (1 - t);
+
+            requestAnimationFrame(animate);
+          };
+          requestAnimationFrame(animate);
+
+          console.log(`🎯 ${label} located at [${wp.x.toFixed(0)}, ${wp.y.toFixed(0)}, ${wp.z.toFixed(0)}]`);
+        };
+
+        (window as any).locateFalcon = () => {
+          const falcon = spaceshipRef.current;
+          if (!falcon) { console.log("❌ Falcon not loaded yet"); return; }
+          createLocateBeacon(falcon, 0x4499ff, "Millennium Falcon");
+        };
+
+        (window as any).locateSD = () => {
+          const sd = starDestroyerRef.current;
+          if (!sd) { console.log("❌ Star Destroyer not loaded yet"); return; }
+          createLocateBeacon(sd, 0xff4422, "Star Destroyer");
+        };
       },
       undefined,
       () => {
@@ -3710,7 +3939,7 @@ export default function ResumeSpace3D({
                     const controlPos = startPos.clone().lerp(endPos, 0.5);
                     const distance = startPos.distanceTo(endPos);
                     const duration = THREE.MathUtils.clamp(
-                      4000 * (distance / 600),
+                      4000 * (distance / CINE_DURATION_DIVISOR),
                       3000,
                       9000,
                     );
@@ -3789,7 +4018,7 @@ export default function ResumeSpace3D({
 
                     const distance = startPos.distanceTo(endPos);
                     const duration = THREE.MathUtils.clamp(
-                      4500 * (distance / 600),
+                      4500 * (distance / CINE_DURATION_DIVISOR),
                       3500,
                       10000,
                     );

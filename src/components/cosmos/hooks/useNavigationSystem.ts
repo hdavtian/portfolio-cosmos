@@ -22,6 +22,12 @@ import {
   NAV_SETTLE_OFFSET,
   NAV_TURBO_ENGAGE_DIST,
   NAV_WAYPOINT_CLEAR,
+  NAV_TURBO_THRESHOLD,
+  NAV_DECEL_EXTRA,
+  NAV_LIGHTSPEED,
+  NAV_LIGHTSPEED_ENGAGE_DIST,
+  NAV_LIGHTSPEED_DECEL_DIST,
+  NAV_LIGHTSPEED_LERP,
 } from "../scaleConfig";
 
 // ── PLANET VIEWPOINTS ─────────────────────────────────────────────
@@ -137,6 +143,7 @@ export const useNavigationSystem = (deps: {
     targetRadius?: number; // actual radius of the destination body
     lastUpdateFrame?: number;
     turboLogged?: boolean;
+    lightspeedLogged?: boolean;
     decelerationLogged?: boolean;
     // Turn-toward-target phase: ship rotates to face destination before moving
     turnPhase?: "turning" | "pausing" | "traveling" | "settling";
@@ -228,9 +235,12 @@ export const useNavigationSystem = (deps: {
             actualRadius = (geo.parameters as any).radius;
           }
 
-          // Safety margin: 5x actual radius for planets, 6x for moons
-          // (moons are small — need proportionally more clearance)
-          const safetyMultiplier = ud.isMoon ? 6 : 5;
+          // Safety margin: scaled bodies are much larger now — use modest
+          // clearance so the ship doesn't zigzag through empty space.
+          // Planet radius + 40 units ≈ 1.3–1.4× radius (plenty of visual gap).
+          // Moon radius + 20 units ≈ 1.5–1.7× radius.
+          const safetyMargin = ud.isMoon ? 20 : 40;
+          const safetyMultiplier = (actualRadius + safetyMargin) / actualRadius;
 
           obstacles.push({
             id,
@@ -374,7 +384,7 @@ export const useNavigationSystem = (deps: {
           currentPos && spaceshipRef.current
             ? spaceshipRef.current.position.distanceTo(
                 currentPos.worldPosition,
-              ) > 500
+              ) > NAV_TURBO_THRESHOLD
             : true;
 
         const ship = spaceshipRef.current!;
@@ -546,7 +556,7 @@ export const useNavigationSystem = (deps: {
             position: stagingPoint,
             startPosition: shipPos.clone(),
             startTime: Date.now(),
-            useTurbo: distToStaging > 500,
+            useTurbo: distToStaging > NAV_TURBO_THRESHOLD,
             targetRadius,
             turnPhase: "turning",
             turnStartTime: performance.now(),
@@ -896,12 +906,28 @@ export const useNavigationSystem = (deps: {
         .normalize();
 
       let targetSpeed = 0.5;
-      // Start decelerating well before the arrival zone for a smooth stop
-      const decelerationDistance = arrivalDistance + 80;
+      let lerpAlpha = 0.05; // default smoothing
 
-      if (distance > decelerationDistance) {
-        if (target.useTurbo && distance > NAV_TURBO_ENGAGE_DIST) {
-          targetSpeed = sectionAvoidWaypoint.current ? 2.0 : 4.0; // slow down for avoidance
+      // Determine speed tier based on distance.
+      // Lightspeed for long inter-planet hops; turbo for medium; normal for close.
+      const decelDist = distance > NAV_LIGHTSPEED_ENGAGE_DIST
+        ? NAV_LIGHTSPEED_DECEL_DIST   // lightspeed needs longer to slow down
+        : arrivalDistance + NAV_DECEL_EXTRA;
+
+      if (distance > decelDist) {
+        if (target.useTurbo && distance > NAV_LIGHTSPEED_ENGAGE_DIST && !sectionAvoidWaypoint.current) {
+          // ── LIGHTSPEED: inter-planet travel ──
+          targetSpeed = NAV_LIGHTSPEED;
+          lerpAlpha = NAV_LIGHTSPEED_LERP;
+          manualFlightRef.current.acceleration = 1.0;
+          manualFlightRef.current.isTurboActive = true;
+          if (!target.lightspeedLogged) {
+            vlog(`⚡ LIGHTSPEED: Engaged at distance ${distance.toFixed(0)}`);
+            target.lightspeedLogged = true;
+          }
+        } else if (target.useTurbo && distance > NAV_TURBO_ENGAGE_DIST) {
+          // ── TURBO: medium distance ──
+          targetSpeed = sectionAvoidWaypoint.current ? 2.0 : 4.0;
           manualFlightRef.current.acceleration = sectionAvoidWaypoint.current ? 0.6 : 1.0;
           manualFlightRef.current.isTurboActive = !sectionAvoidWaypoint.current;
           if (!target.turboLogged && !sectionAvoidWaypoint.current) {
@@ -909,13 +935,16 @@ export const useNavigationSystem = (deps: {
             target.turboLogged = true;
           }
         } else {
+          // ── NORMAL: close approach ──
           targetSpeed = 2.0;
           manualFlightRef.current.acceleration = 0.6;
           manualFlightRef.current.isTurboActive = false;
         }
       } else {
-        const progress = distance / decelerationDistance;
-        targetSpeed = Math.max(0.1, progress * 2.0);
+        // ── DECELERATION: smooth stop ──
+        const progress = distance / decelDist;
+        targetSpeed = Math.max(0.1, progress * 4.0);
+        lerpAlpha = 0.06; // slightly faster lerp for responsive decel
         manualFlightRef.current.acceleration = progress * 0.6;
         manualFlightRef.current.isTurboActive = false;
         if (!target.decelerationLogged) {
@@ -924,7 +953,7 @@ export const useNavigationSystem = (deps: {
         }
       }
 
-      pathData.speed += (targetSpeed - pathData.speed) * 0.05;
+      pathData.speed += (targetSpeed - pathData.speed) * lerpAlpha;
       ship.position.addScaledVector(direction, pathData.speed);
 
       // ── Real-time deflection: gently push ship out of any obstacle ──

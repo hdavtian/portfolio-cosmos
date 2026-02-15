@@ -330,19 +330,19 @@ export const createLighting = (options: { spaceSunIntensity?: number }) => {
 
   const sunLight = new THREE.PointLight(
     new THREE.Color(1.0, 1.0, 1.0),
-    (options.spaceSunIntensity || 2.5) * 4, // Multiply by 4 to match original's 10.0 default
+    (options.spaceSunIntensity || 4.5) * 4, // Default 18 — bright sunny/dark sides on planets
     SUN_LIGHT_DISTANCE, // Distance (extended to reach far planets)
-    0.35, // Decay for softer falloff across the system
+    0.5, // Gentler decay — light carries further across the expanded universe
   );
   sunLight.position.set(0, 0, 0);
   sunLight.castShadow = false;
 
-  // Fill light for ambient illumination (matches original)
+  // Fill light — cool ambient from offset position, reaches all planets
   const fillLight = new THREE.PointLight(
     new THREE.Color(0.2, 0.4, 1.0),
-    2.0,
-    100,
-    1,
+    3.0,
+    20_000, // Must reach planets at 12,000–13,600 units
+    0.6,
   );
   fillLight.position.set(FILL_LIGHT_POS.x, FILL_LIGHT_POS.y, FILL_LIGHT_POS.z);
 

@@ -28,6 +28,7 @@ import {
   INTERIOR_MIN_DIST,
   INTERIOR_MAX_DIST,
   INTRO_ORBIT_RADIUS,
+  CONTROLS_MAX_DIST,
 } from "../scaleConfig";
 
 export const useRenderLoop = () => {
@@ -191,6 +192,7 @@ export const useRenderLoop = () => {
       const desiredCameraPos = new THREE.Vector3();
       const desiredTargetPos = new THREE.Vector3();
       let wasInsideShip = false; // track enter/exit transitions
+      let wasInsideShipEmissiveClamped = false; // track emissive override
 
       // Reusable temp vectors to avoid per-frame allocations
       const _tmpOffset = new THREE.Vector3();
@@ -233,7 +235,7 @@ export const useRenderLoop = () => {
           // Configure for explore mode
           if (cc) {
             cc.minDistance = 0.01;
-            cc.maxDistance = 1000;
+            cc.maxDistance = CONTROLS_MAX_DIST;
             cc.minPolarAngle = 0;
             cc.maxPolarAngle = Math.PI;
           }
@@ -707,7 +709,7 @@ export const useRenderLoop = () => {
               const turboBoost = manual.isTurboActive ? 3 : 0;
               const boostIntensity = manual.acceleration * 8 + turboBoost;
               engineLight.intensity = baseIntensity + boostIntensity;
-              engineLight.distance = ENGINE_LIGHT_BASE_DIST + boostIntensity * 40;
+              engineLight.distance = ENGINE_LIGHT_BASE_DIST + boostIntensity * ENGINE_LIGHT_RANGE;
 
               if (manual.acceleration > 0) {
                 const blueAmount = 0.3 + manual.acceleration * 0.7;
@@ -741,14 +743,17 @@ export const useRenderLoop = () => {
                       if (!mat.userData.baseEmissive) {
                         mat.userData.baseEmissive = baseEmissive;
                       }
-                      const turboBoost = manual.isTurboActive ? 3 : 0;
+                      // Reduced boost factors to prevent "glowing flashlight" effect
+                      // Old: turboBoost=3, acceleration*6, intensity +4
+                      // New: turboBoost=0.5, acceleration*1.5, intensity +1
+                      const turboBoost = manual.isTurboActive ? 0.5 : 0;
                       const boostFactor =
-                        1 + manual.acceleration * 6 + turboBoost;
+                        1 + manual.acceleration * 1.5 + turboBoost;
                       mat.emissive
                         .copy(baseEmissive)
                         .multiplyScalar(boostFactor);
                       mat.emissiveIntensity =
-                        1 + manual.acceleration * 4 + turboBoost;
+                        1 + manual.acceleration * 1.0 + turboBoost;
                     }
                   });
                 }
@@ -846,6 +851,30 @@ export const useRenderLoop = () => {
           // The user's azimuth, polar angle, and zoom distance are
           // preserved by camera-controls, allowing free orbit/pan
           // around the ship from any angle.
+          // Restore lighting whenever NOT inside the ship.
+          // (Interior block dims sun/fill and clamps emissives.)
+          if (!insideShipRef.current) {
+            const sl = sceneRef.current.sunLight as THREE.PointLight | undefined;
+            if (sl && sl.intensity < 18) sl.intensity = 18;
+            const fl = sceneRef.current.fillLight as THREE.PointLight | undefined;
+            if (fl && fl.intensity < 3) fl.intensity = 3;
+            // Restore emissive materials that were clamped while inside
+            if (wasInsideShipEmissiveClamped && activeShip) {
+              wasInsideShipEmissiveClamped = false;
+              activeShip.traverse((child: any) => {
+                if (child.isMesh && child.material) {
+                  const mats = Array.isArray(child.material) ? child.material : [child.material];
+                  mats.forEach((mat: any) => {
+                    if (mat._origEmissiveIntensity !== undefined) {
+                      mat.emissiveIntensity = mat._origEmissiveIntensity;
+                      delete mat._origEmissiveIntensity;
+                    }
+                  });
+                }
+              });
+            }
+          }
+
           if (followingSpaceshipRef.current && !insideShipRef.current) {
             if (wasInsideShip) {
               wasInsideShip = false;
@@ -859,7 +888,7 @@ export const useRenderLoop = () => {
                 focusedMoon.getWorldPosition(moonWorld);
                 cc.moveTo(moonWorld.x, moonWorld.y, moonWorld.z, true);
                 cc.minDistance = 0;
-                cc.maxDistance = 1000;
+                cc.maxDistance = CONTROLS_MAX_DIST;
               } else if (settledTarget) {
                 cc.moveTo(
                   settledTarget.x,
@@ -868,7 +897,7 @@ export const useRenderLoop = () => {
                   true,
                 );
                 cc.minDistance = 5;
-                cc.maxDistance = 2000;
+                cc.maxDistance = CONTROLS_MAX_DIST;
               } else {
                 cc.moveTo(
                   ship.position.x,
@@ -876,11 +905,11 @@ export const useRenderLoop = () => {
                   ship.position.z,
                   true,
                 );
-                cc.minDistance = 1;
-                cc.maxDistance = 1000;
+                cc.minDistance = 0.5;
+                cc.maxDistance = CONTROLS_MAX_DIST;
 
                 const wantDist = optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
-                if (Math.abs(cc.distance - wantDist) > 0.5) {
+                if (Math.abs(cc.distance - wantDist) > 0.1) {
                   cc.dollyTo(wantDist, true);
                 }
               }
@@ -1007,6 +1036,45 @@ export const useRenderLoop = () => {
                 camera.near = desiredNear;
                 camera.updateProjectionMatrix();
               }
+            }
+
+            // ── Interior lighting overrides ──────────────────────────
+            // Three.js PointLights pass through geometry, so when we're
+            // inside the ship we must manually dim/disable lights that
+            // the hull would block in reality.
+
+            // 1. Dim the sun (cockpit has windshield → some light; cabin is enclosed)
+            //    Full exterior value is 18; cockpit gets ~6%, cabin ~0.5%.
+            const sl = sceneRef.current.sunLight as THREE.PointLight | undefined;
+            if (sl) {
+              sl.intensity = useCockpit ? 1.2 : 0.1;
+            }
+            // 2. Dim the fill light (same idea — hull blocks ambient fill)
+            //    Full exterior value is 3; cockpit gets ~15%, cabin ~2%.
+            const fl = sceneRef.current.fillLight as THREE.PointLight | undefined;
+            if (fl) {
+              fl.intensity = useCockpit ? 0.5 : 0.06;
+            }
+
+            // 3. Clamp emissive materials on GLTF meshes (cockpit light
+            //    panels baked at emissiveIntensity 10 are blinding).
+            //    Only traverse once per transition via wasInsideShipEmissiveClamped flag.
+            if (!wasInsideShipEmissiveClamped) {
+              wasInsideShipEmissiveClamped = true;
+              ship.traverse((child: any) => {
+                if (child.isMesh && child.material) {
+                  const mats = Array.isArray(child.material) ? child.material : [child.material];
+                  mats.forEach((mat: any) => {
+                    if (mat.emissiveIntensity > 1) {
+                      // Store original so we can restore on exit
+                      if (mat._origEmissiveIntensity === undefined) {
+                        mat._origEmissiveIntensity = mat.emissiveIntensity;
+                      }
+                      mat.emissiveIntensity = 0.6;
+                    }
+                  });
+                }
+              });
             }
 
             // Let camera-controls handle user rotation input,

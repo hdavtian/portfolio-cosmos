@@ -15,6 +15,7 @@ export interface SceneRef {
   camera?: THREE.PerspectiveCamera;
   controls?: CameraControls;
   sunLight?: THREE.PointLight;
+  fillLight?: THREE.PointLight;
   labelRendererDom?: HTMLElement;
   bloomPass?: UnrealBloomPass;
   bokehPass?: BokehPass;

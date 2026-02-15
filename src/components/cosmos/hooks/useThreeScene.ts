@@ -162,10 +162,167 @@ export const useThreeScene = (params: {
       new THREE.Vector2(container.clientWidth, container.clientHeight),
       Math.min((optionsRef.current.spaceSunIntensity || 2.5) * 0.4, 3),
       0.6,
-      0.5,
+      0.92, // Threshold: only very bright pixels bloom (sun surface, not reflections)
     );
     composer.addPass(bloomPass);
     sceneRef.current.bloomPass = bloomPass;
+
+    // Debug helper: inspect scene lights from browser console via window.debugLights()
+    (window as any).debugLights = () => {
+      const lights: any[] = [];
+      scene.traverse((o: any) => {
+        if (o.isLight) {
+          const wp = new THREE.Vector3();
+          o.getWorldPosition(wp);
+          lights.push({
+            type: o.type,
+            intensity: o.intensity,
+            distance: o.distance || "infinite",
+            decay: o.decay,
+            color: "#" + o.color?.getHexString(),
+            parent: o.parent?.name || o.parent?.type || "root",
+            worldPos: wp.toArray().map((n: number) => +n.toFixed(1)),
+          });
+        }
+      });
+      console.table(lights);
+      console.log("Bloom threshold:", bloomPass.threshold, "strength:", bloomPass.strength);
+      console.log("Renderer toneMapping:", renderer.toneMapping, "(0=None, 1=Linear, 4=ACES)");
+      return lights;
+    };
+
+    // Debug: inspect ship materials, lights, sun state, and emissive properties.
+    // Call from console while in cockpit/cabin to diagnose brightness issues.
+    (window as any).debugShip = () => {
+      console.log("============================================");
+      console.log("=== COCKPIT / CABIN LIGHTING DEBUG ===");
+      console.log("============================================");
+
+      // --- Sun light state ---
+      // The sun PointLight sits at world origin (0,0,0), parented directly to scene.
+      let sunLight: any = null;
+      scene.traverse((o: any) => {
+        if (o.isPointLight && o.parent === scene) {
+          const wp = new THREE.Vector3();
+          o.getWorldPosition(wp);
+          if (wp.length() < 1) sunLight = o; // at origin = sun
+        }
+      });
+      if (sunLight) {
+        console.log("--- SUN LIGHT ---");
+        console.log("  intensity:", sunLight.intensity);
+        console.log("  distance:", sunLight.distance);
+        console.log("  decay:", sunLight.decay);
+        const wp = new THREE.Vector3();
+        sunLight.getWorldPosition(wp);
+        console.log("  worldPos:", wp.toArray().map((n: number) => +n.toFixed(0)));
+      } else {
+        console.log("Sun light: NOT FOUND (scene.sunLight may not be set)");
+      }
+
+      // --- Bloom ---
+      console.log("--- BLOOM ---");
+      console.log("  threshold:", bloomPass.threshold, "strength:", bloomPass.strength, "radius:", bloomPass.radius);
+      console.log("  toneMapping:", renderer.toneMapping, "(0=None,1=Linear,4=ACES)", "exposure:", renderer.toneMappingExposure);
+
+      // --- Ship ---
+      let shipGroup: THREE.Object3D | null = null;
+      scene.traverse((o: any) => {
+        if (o.userData?.cockpitCameraLocal) shipGroup = o;
+      });
+      if (!shipGroup) { console.log("Ship not found in scene"); return; }
+      console.log("--- SHIP ---");
+      console.log("  scale:", (shipGroup as any).scale.x);
+      const sp = (shipGroup as any).position;
+      console.log("  position:", [sp.x, sp.y, sp.z].map((n: number) => +n.toFixed(1)));
+
+      // --- Camera ---
+      console.log("--- CAMERA ---");
+      const cam = camera;
+      console.log("  position:", cam.position.toArray().map((n: number) => +n.toFixed(1)));
+      const distToShip = cam.position.distanceTo(sp);
+      console.log("  distToShip:", +distToShip.toFixed(2));
+      if (sunLight) {
+        const sunWp = new THREE.Vector3();
+        sunLight.getWorldPosition(sunWp);
+        console.log("  distToSun:", +cam.position.distanceTo(sunWp).toFixed(0));
+      }
+
+      // --- All lights parented to ship ---
+      const shipLights: any[] = [];
+      (shipGroup as THREE.Object3D).traverse((child: any) => {
+        if (child.isLight) {
+          shipLights.push({
+            type: child.type,
+            intensity: child.intensity,
+            distance: child.distance,
+            color: "#" + child.color?.getHexString(),
+            name: child.name || child.parent?.name || "unnamed",
+            localPos: child.position.toArray().map((n: number) => +n.toFixed(2)),
+          });
+        }
+      });
+      console.log("--- SHIP LIGHTS (" + shipLights.length + ") ---");
+      console.table(shipLights);
+
+      // --- Emissive materials on ship ---
+      const mats: any[] = [];
+      (shipGroup as THREE.Object3D).traverse((child: any) => {
+        if (child.isMesh && child.material) {
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((mat: any) => {
+            const hasEmissive = mat.emissive && mat.emissive.getHex() !== 0x000000;
+            const hasMap = !!mat.emissiveMap;
+            const hasIntensity = (mat.emissiveIntensity ?? 0) > 0;
+            if (hasEmissive || hasMap || hasIntensity) {
+              mats.push({
+                mesh: child.name || "unnamed",
+                matType: mat.type,
+                emissive: mat.emissive ? "#" + mat.emissive.getHexString() : "none",
+                emissiveInt: mat.emissiveIntensity ?? 0,
+                hasEmissiveMap: hasMap,
+                metalness: mat.metalness ?? "N/A",
+                roughness: mat.roughness ?? "N/A",
+              });
+            }
+          });
+        }
+      });
+      console.log("--- EMISSIVE MATERIALS (" + mats.length + ") ---");
+      if (mats.length > 0) console.table(mats);
+      else console.log("  (none found)");
+
+      // --- All scene lights that AREN'T part of the ship ---
+      const sceneLights: any[] = [];
+      scene.traverse((o: any) => {
+        if (o.isLight && o.intensity > 0) {
+          // Check if it's inside the ship group
+          let isShipChild = false;
+          let p = o.parent;
+          while (p) {
+            if (p === shipGroup) { isShipChild = true; break; }
+            p = p.parent;
+          }
+          if (!isShipChild) {
+            const wp = new THREE.Vector3();
+            o.getWorldPosition(wp);
+            sceneLights.push({
+              type: o.type,
+              intensity: o.intensity,
+              distance: o.distance,
+              decay: o.decay,
+              worldPos: wp.toArray().map((n: number) => +n.toFixed(0)),
+              name: o.name || o.parent?.name || "scene",
+            });
+          }
+        }
+      });
+      console.log("--- SCENE LIGHTS (non-ship, active) (" + sceneLights.length + ") ---");
+      if (sceneLights.length > 0) console.table(sceneLights);
+
+      console.log("============================================");
+      return { shipLights, emissives: mats, sceneLights, sunIntensity: sunLight?.intensity };
+    };
 
     const preventDefaultTouch = (e: Event) => {
       if ((e as TouchEvent).touches && (e as TouchEvent).touches.length > 1) {

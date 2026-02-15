@@ -1,4 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { FOLLOW_DISTANCE } from "../cosmos/scaleConfig";
+
+// Zoom slider range: 0% = farthest (ZOOM_MAX_DIST), 100% = closest (ZOOM_MIN_DIST).
+// Camera follow-distance is stored as world units on spaceFollowDistance.
+const ZOOM_MIN_DIST = 1;   // closest camera distance (100% zoom)
+const ZOOM_MAX_DIST = 9;   // farthest camera distance (0% zoom)
 
 // ============================================================
 // ShipControlBar — Main ship engagement UI
@@ -31,7 +37,7 @@ interface Props {
   isFollowingSD?: boolean;
   /** Called to break formation with the Star Destroyer */
   onDisengage?: () => void;
-  zoomLevel?: number; // 10..150
+  zoomLevel?: number;
   onZoomChange?: (value: number) => void;
 }
 
@@ -48,7 +54,7 @@ const ShipControlBar: React.FC<Props> = ({
   rollAngle = 0,
   isFollowingSD = false,
   onDisengage,
-  zoomLevel = 60,
+  zoomLevel = FOLLOW_DISTANCE,
   onZoomChange,
 }) => {
   const [fadeIn, setFadeIn] = useState(false);
@@ -345,13 +351,16 @@ const ShipControlBar: React.FC<Props> = ({
             </span>
             <input
               type="range"
-              min={3}
-              max={150}
+              min={0}
+              max={100}
               step={1}
-              value={153 - zoomLevel}
+              value={Math.round(((ZOOM_MAX_DIST - zoomLevel) / (ZOOM_MAX_DIST - ZOOM_MIN_DIST)) * 100)}
               onChange={(e) => {
                 e.stopPropagation();
-                onZoomChange(153 - parseInt(e.target.value));
+                const pct = parseFloat(e.target.value);
+                // 0% → farthest (ZOOM_MAX_DIST), 100% → closest (ZOOM_MIN_DIST)
+                const dist = ZOOM_MAX_DIST - (pct / 100) * (ZOOM_MAX_DIST - ZOOM_MIN_DIST);
+                onZoomChange(Math.round(dist * 10) / 10);
               }}
               onPointerDown={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
@@ -366,10 +375,10 @@ const ShipControlBar: React.FC<Props> = ({
               fontSize: 10,
               fontFamily: "monospace",
               color: "rgba(180, 200, 255, 0.7)",
-              minWidth: 24,
+              minWidth: 30,
               textAlign: "right" as const,
             }}>
-              {zoomLevel}
+              {Math.round(((ZOOM_MAX_DIST - zoomLevel) / (ZOOM_MAX_DIST - ZOOM_MIN_DIST)) * 100)}%
             </span>
           </div>
         )}
