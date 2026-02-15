@@ -10,45 +10,35 @@ import {
   INTRO_ORBIT_ENABLED_DIST,
   INTRO_DIST_FACTOR_DIV,
   INTRO_ORBIT_RADIUS,
-  EXPERIENCE_ORBIT,
 } from "./scaleConfig";
 
-// --- INTRO SNAPSHOTS (do not edit unless re-snapshotting) ---
-// Camera final snapshot (position/target/rotation):
-// position: [919.9426740762151, 35.549232587905905, 180.65560343913018]
-// target: [599.99999808, 0, -0.04079999995648001]
-// rotation: [-0.19390809049345268, 1.0854016846633376, 0.19319978993809295]
-// Ship final snapshot (position/quaternion):
-// position: [902.1810184349341, 29.572186631042992, 176.66640623268017]
-// quaternion: [0.13822341047578124, 0.7484587259553863, -0.18943034059866248, -0.6203385933491146]
+// --- INTRO FINAL POSITIONS (captured via debugCamera → F9) ---
+// Camera settles at Experience planet vantage point.
+// Ship is placed just ahead of camera in the look direction.
 
 export const INTRO_TIME_SCALE = 2 / 3;
 
-// Scale the old snapshot positions so the intro ends near the Experience planet.
-// Original snapshot had camera target at x≈600 (the old Experience orbit).
-// Scale factor: EXPERIENCE_ORBIT / 600 (currently 12000/600 = 20).
-const INTRO_SCALE = EXPERIENCE_ORBIT / 600;
-
 export const INTRO_CAMERA_FINAL_POS = new THREE.Vector3(
-  919.9426740762151 * INTRO_SCALE,
-  35.549232587905905 * INTRO_SCALE,
-  180.65560343913018 * INTRO_SCALE,
+  14954.5,
+  246.3,
+  -1044.6,
 );
 export const INTRO_CAMERA_FINAL_TARGET = new THREE.Vector3(
-  599.99999808 * INTRO_SCALE,
-  0,
-  -0.04079999995648001 * INTRO_SCALE,
+  14946.7,
+  244.7,
+  -1045.2,
 );
+// Ship ends up just in front of the camera (camera looks in roughly -x)
 export const INTRO_SHIP_FINAL_POS = new THREE.Vector3(
-  902.1810184349341 * INTRO_SCALE,
-  29.572186631042992 * INTRO_SCALE,
-  176.66640623268017 * INTRO_SCALE,
+  14940,
+  242,
+  -1046,
 );
-export const INTRO_SHIP_FINAL_QUAT = new THREE.Quaternion(
-  0.13822341047578124,
-  0.7484587259553863,
-  -0.18943034059866248,
-  -0.6203385933491146,
+// Ship faces roughly -x (toward the Experience planet).
+// The Falcon's rendered forward is +Z (due to forwardOffset), so
+// Euler(0, -PI/2, 0) maps +Z → -X, placing the camera behind in +X.
+export const INTRO_SHIP_FINAL_QUAT = new THREE.Quaternion().setFromEuler(
+  new THREE.Euler(0, -Math.PI / 2, 0),
 );
 
 const INTRO_CAMERA_DURATION_MS = Math.round(5000 * INTRO_TIME_SCALE);
@@ -371,60 +361,85 @@ export const createIntroSequenceRunner = (
           manualFlightModeRef.current = false;
           setFollowingSpaceship(false);
           followingSpaceshipRef.current = false;
-
-          const cinematicPath = buildDynamicShipCinematic({
-            ship,
-            camera: currentCamera,
-            sunMesh,
-          });
-
-          const spinEnabled = Math.random() < INTRO_SPIN_CHANCE;
-          const spinTurns = spinEnabled
-            ? getRandomBetween(INTRO_SPIN_MIN_TURNS, INTRO_SPIN_MAX_TURNS)
-            : undefined;
-          const spinDuration = spinEnabled
-            ? getRandomBetween(INTRO_SPIN_MIN_MS, INTRO_SPIN_MAX_MS)
-            : undefined;
-          const spinStartOffset = spinEnabled
-            ? (cinematicPath.approachDuration ||
-                INTRO_SHIP_APPROACH_DURATION_MS) * getRandomBetween(0.25, 0.6)
-            : undefined;
-
           setShipExteriorLights(true);
 
-          const orbitEnabled = cinematicPath.orbitEnabled !== false;
-          shipCinematicRef.current = {
-            active: true,
-            phase: orbitEnabled ? "orbit" : "approach",
-            startTime: orbitEnabled ? performance.now() : performance.now(),
-            duration:
-              cinematicPath.approachDuration || INTRO_SHIP_APPROACH_DURATION_MS,
-            startPos: ship.position.clone(),
-            controlPos: cinematicPath.controlPos,
-            controlPos2: cinematicPath.controlPos2,
-            flybyPoint: cinematicPath.flybyPoint,
-            endPos: cinematicPath.endPos,
-            startQuat: ship.quaternion.clone(),
-            endQuat: cinematicPath.endQuat,
-            approachLookAt: cinematicPath.approachLookAt,
-            lightsTriggered: true,
-            orbitStartTime: orbitEnabled ? performance.now() : undefined,
-            orbitDuration: orbitEnabled
-              ? INTRO_SHIP_ORBIT_DURATION_MS
-              : undefined,
-            orbitCenter: cinematicPath.orbitCenter,
-            orbitRadius: orbitEnabled ? INTRO_ORBIT_RADIUS : undefined,
-            orbitStartAngle: orbitEnabled ? Math.PI * 0.85 : undefined,
-            orbitEndAngle: orbitEnabled ? Math.PI * 2.1 : undefined,
-            spinStartOffset,
-            spinDuration,
-            spinTurns,
-          };
+          // Check if the ship is already close to its final position
+          // (e.g. gentle zoom-in intro — no elaborate cinematic needed).
+          const distToFinal = ship.position.distanceTo(INTRO_SHIP_FINAL_POS);
+          if (distToFinal < 200) {
+            // Ship is already at/near its spot — place it precisely and
+            // go straight to "hover" phase so auto-engage kicks in quickly.
+            ship.position.copy(INTRO_SHIP_FINAL_POS);
+            ship.quaternion.copy(INTRO_SHIP_FINAL_QUAT);
 
-          if (!orbitEnabled) {
-            shipCinematicRef.current.startTime = performance.now();
-            shipCinematicRef.current.startPos = ship.position.clone();
-            shipCinematicRef.current.startQuat = ship.quaternion.clone();
+            shipCinematicRef.current = {
+              active: true,
+              phase: "hover",
+              startTime: performance.now(),
+              duration: 1000,
+              startPos: INTRO_SHIP_FINAL_POS.clone(),
+              controlPos: INTRO_SHIP_FINAL_POS.clone(),
+              endPos: INTRO_SHIP_FINAL_POS.clone(),
+              startQuat: INTRO_SHIP_FINAL_QUAT.clone(),
+              endQuat: INTRO_SHIP_FINAL_QUAT.clone(),
+              hoverStartTime: performance.now(),
+              hoverBasePos: INTRO_SHIP_FINAL_POS.clone(),
+              hoverStartQuat: INTRO_SHIP_FINAL_QUAT.clone(),
+            };
+          } else {
+            // Ship is far away — play the full cinematic approach
+            const cinematicPath = buildDynamicShipCinematic({
+              ship,
+              camera: currentCamera,
+              sunMesh,
+            });
+
+            const spinEnabled = Math.random() < INTRO_SPIN_CHANCE;
+            const spinTurns = spinEnabled
+              ? getRandomBetween(INTRO_SPIN_MIN_TURNS, INTRO_SPIN_MAX_TURNS)
+              : undefined;
+            const spinDuration = spinEnabled
+              ? getRandomBetween(INTRO_SPIN_MIN_MS, INTRO_SPIN_MAX_MS)
+              : undefined;
+            const spinStartOffset = spinEnabled
+              ? (cinematicPath.approachDuration ||
+                  INTRO_SHIP_APPROACH_DURATION_MS) * getRandomBetween(0.25, 0.6)
+              : undefined;
+
+            const orbitEnabled = cinematicPath.orbitEnabled !== false;
+            shipCinematicRef.current = {
+              active: true,
+              phase: orbitEnabled ? "orbit" : "approach",
+              startTime: orbitEnabled ? performance.now() : performance.now(),
+              duration:
+                cinematicPath.approachDuration || INTRO_SHIP_APPROACH_DURATION_MS,
+              startPos: ship.position.clone(),
+              controlPos: cinematicPath.controlPos,
+              controlPos2: cinematicPath.controlPos2,
+              flybyPoint: cinematicPath.flybyPoint,
+              endPos: cinematicPath.endPos,
+              startQuat: ship.quaternion.clone(),
+              endQuat: cinematicPath.endQuat,
+              approachLookAt: cinematicPath.approachLookAt,
+              lightsTriggered: true,
+              orbitStartTime: orbitEnabled ? performance.now() : undefined,
+              orbitDuration: orbitEnabled
+                ? INTRO_SHIP_ORBIT_DURATION_MS
+                : undefined,
+              orbitCenter: cinematicPath.orbitCenter,
+              orbitRadius: orbitEnabled ? INTRO_ORBIT_RADIUS : undefined,
+              orbitStartAngle: orbitEnabled ? Math.PI * 0.85 : undefined,
+              orbitEndAngle: orbitEnabled ? Math.PI * 2.1 : undefined,
+              spinStartOffset,
+              spinDuration,
+              spinTurns,
+            };
+
+            if (!orbitEnabled) {
+              shipCinematicRef.current.startTime = performance.now();
+              shipCinematicRef.current.startPos = ship.position.clone();
+              shipCinematicRef.current.startQuat = ship.quaternion.clone();
+            }
           }
         };
 

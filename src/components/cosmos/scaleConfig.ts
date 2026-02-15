@@ -107,11 +107,11 @@ export const FALCON_SCALE = 0.5 * SCALE.ship;
 // Star Destroyer  (orig scale: 0.06)
 export const SD_SCALE = 0.06 * SCALE.ship;
 
-// Initial positions — Falcon near Experience orbit, SD in inner system
+// Initial positions — Falcon near the intro camera's final view
 export const FALCON_INITIAL_POS = {
-  x: 11_000,   // near Experience orbit (12,000)
-  y: 20,
-  z: 100,
+  x: 14_940,   // slightly ahead of camera (camera looks in -x direction)
+  y: 242,
+  z: -1_046,
 };
 // SD starts near Experience planet — offset so it's visible but not overlapping
 export const SD_INITIAL_POS = {
@@ -127,12 +127,12 @@ export const CAMERA_FOV = 45;
 export const CAMERA_NEAR = 0.1;
 export const CAMERA_FAR = 50_000;
 
-// Initial camera position — far enough to frame the system.
-// Distance from origin: sqrt(5000²+15000²) ≈ 15811. Sun subtends ~0.9° of FOV.
+// Initial camera position — slightly behind the final spot for a gentle zoom-in.
+// The intro animates from here to the final position near the Experience planet.
 export const CAMERA_INITIAL_POS = {
-  x: 0,
-  y: 5_000,
-  z: 15_000,
+  x: 15_350,
+  y: 340,
+  z: -950,
 };
 
 // Camera controls distance limits

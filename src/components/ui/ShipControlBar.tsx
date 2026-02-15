@@ -7,28 +7,27 @@ const ZOOM_MIN_DIST = 1;   // closest camera distance (100% zoom)
 const ZOOM_MAX_DIST = 9;   // farthest camera distance (0% zoom)
 
 // ============================================================
-// ShipControlBar — Main ship engagement UI
+// ShipControlBar — Ship control bar UI
 // ============================================================
-// Phase 1: Initial choice ("Use Millennium Falcon" / "Freely Explore")
-// Phase 2: Ship control bar (Leave Ship, 3rd Person, Cabin, Cockpit)
-// Phase 3: Free explore with "Summon Falcon" button
+// Phases: hidden (before intro completes) → ship-engaged (control bar visible)
+// Ship auto-engages after the intro cinematic — no manual choice needed.
 // ============================================================
 
 export type ShipUIPhase =
-  | "hidden"        // before ship settles
-  | "initial"       // initial choice buttons
+  | "hidden"        // before ship settles / intro completes
+  | "initial"       // (legacy — unused, auto-transitions to ship-engaged)
   | "ship-engaged"  // using the ship — control bar visible
-  | "free-explore"; // freely exploring — summon button visible
+  | "free-explore"; // (legacy — unused)
 
 export type ShipView = "exterior" | "interior" | "cockpit";
 
 interface Props {
   phase: ShipUIPhase;
   activeView: ShipView;
-  onUseShip: () => void;
-  onFreeExplore: () => void;
+  onUseShip?: () => void;       // legacy — unused (ship auto-engages)
+  onFreeExplore?: () => void;   // legacy — unused
   onLeaveShip: () => void;
-  onSummonFalcon: () => void;
+  onSummonFalcon?: () => void;  // legacy — unused
   onViewChange: (view: ShipView) => void;
   onRollStart?: (direction: -1 | 1) => void;
   onRollStop?: () => void;
@@ -44,10 +43,8 @@ interface Props {
 const ShipControlBar: React.FC<Props> = ({
   phase,
   activeView,
-  onUseShip,
-  onFreeExplore,
+  // onUseShip, onFreeExplore, onSummonFalcon — no longer used (auto-engage)
   onLeaveShip,
-  onSummonFalcon,
   onViewChange,
   onRollStart,
   onRollStop,
@@ -139,19 +136,6 @@ const ShipControlBar: React.FC<Props> = ({
 
   if (phase === "hidden") return null;
 
-  const baseStyle: React.CSSProperties = {
-    position: "fixed",
-    bottom: 32,
-    left: "50%",
-    transform: "translateX(-50%)",
-    display: "flex",
-    gap: 8,
-    zIndex: 1000,
-    opacity: fadeIn ? 1 : 0,
-    transition: "opacity 1s ease-in-out",
-    pointerEvents: "auto",
-  };
-
   const btnBase: React.CSSProperties = {
     padding: "10px 20px",
     borderRadius: 8,
@@ -174,13 +158,6 @@ const ShipControlBar: React.FC<Props> = ({
     border: "1px solid rgba(100, 160, 255, 0.6)",
     color: "#ffffff",
     boxShadow: "0 0 12px rgba(80, 140, 255, 0.25)",
-  };
-
-  const btnAccent: React.CSSProperties = {
-    ...btnBase,
-    background: "rgba(232, 197, 71, 0.15)",
-    border: "1px solid rgba(232, 197, 71, 0.45)",
-    color: "#e8c547",
   };
 
   const btnDanger: React.CSSProperties = {
@@ -278,28 +255,6 @@ const ShipControlBar: React.FC<Props> = ({
     e.stopPropagation();
     e.preventDefault();
   };
-
-  // ── Phase: Initial choice ──────────────────────────
-  if (phase === "initial") {
-    return (
-      <div style={baseStyle} onMouseDown={stopEvt} onPointerDown={stopEvt}>
-        <button
-          style={btnAccent}
-          onClick={() => onUseShip()}
-          onMouseDown={stopEvt}
-        >
-          Use Millennium Falcon
-        </button>
-        <button
-          style={btnBase}
-          onClick={() => onFreeExplore()}
-          onMouseDown={stopEvt}
-        >
-          Freely Explore Universe
-        </button>
-      </div>
-    );
-  }
 
   // ── Phase: Ship engaged — control bar ──────────────
   if (phase === "ship-engaged") {
@@ -486,21 +441,6 @@ const ShipControlBar: React.FC<Props> = ({
             </button>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  // ── Phase: Free explore — summon button ────────────
-  if (phase === "free-explore") {
-    return (
-      <div style={baseStyle} onMouseDown={stopEvt} onPointerDown={stopEvt}>
-        <button
-          style={btnAccent}
-          onClick={() => onSummonFalcon()}
-          onMouseDown={stopEvt}
-        >
-          Summon Falcon
-        </button>
       </div>
     );
   }

@@ -94,18 +94,10 @@ import {
   SKILLS_WANDER_RADIUS,
   PROJ_WANDER_RADIUS,
   SUN_WANDER_RADIUS,
-  CINE_BEHIND_DIST,
-  CINE_BEHIND_HEIGHT,
-  CINE_FRONT_DIST,
-  CINE_FRONT_HEIGHT,
-  CINE_CONTROL_HEIGHT,
   NAV_CAMERA_BEHIND,
   EXP_FOCUS_DIST,
   SKILLS_FOCUS_DIST,
   PROJ_FOCUS_DIST,
-  SHIP_WANDER_XZ,
-  SHIP_WANDER_Y,
-  SHIP_WANDER_MIN_DIST,
   CINE_DURATION_DIVISOR,
 } from "./scaleConfig";
 
@@ -297,7 +289,7 @@ export default function ResumeSpace3D({
   } | null>(null);
   // Ship UI phase (controls which buttons are visible)
   const [shipUIPhase, setShipUIPhase] = useState<ShipUIPhase>("hidden");
-  const shipWanderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // shipWanderIntervalRef removed — ship no longer wanders autonomously
 
   // Cockpit steering (shift+drag) — yaw/pitch input to turn the ship
   const cockpitSteerRef = useRef<THREE.Vector2>(new THREE.Vector2(0, 0));
@@ -670,65 +662,27 @@ export default function ResumeSpace3D({
 
       vlog(`🌙 Initiating moon navigation: ${companyId}`);
 
-      // ── Ship-engaged mode → autopilot ──────────────────────────
-      // If the user is following the ship (or inside it) and not in
-      // manual flight, the ship itself should travel to the moon.
-      if (
-        (followingSpaceshipRef.current || insideShipRef.current) &&
-        !manualFlightModeRef.current
-      ) {
-        vlog(`🚀 Ship engaged — routing to autopilot navigation`);
+      // Always use autopilot — ship flies to the moon, then moon view activates
+      if (!manualFlightModeRef.current) {
         handleAutopilotNavigation(companyId, "moon");
         return;
       }
 
-      // ── Camera-only mode → fly camera directly ────────────────
-      const company = resumeData.experience.find(
-        (exp) =>
-          exp.company.toLowerCase().includes(companyId) || exp.id === companyId,
-      );
-
-      if (!company) return;
-
-      let moonMesh: THREE.Mesh | undefined;
-
-      sceneRef.current.scene?.traverse((object) => {
-        if (object instanceof THREE.Mesh && object.userData.planetName) {
-          const planetName = object.userData.planetName.toLowerCase();
-          if (
-            planetName.includes(companyId.toLowerCase()) ||
-            planetName.includes(company.company.toLowerCase())
-          ) {
-            moonMesh = object;
-          }
-        }
-      });
-
-      if (!moonMesh) {
-        vlog(`⚠️ Moon not found for company: ${companyId}`);
-        return;
-      }
-
-      vlog(`✅ Moon found: ${company.company} (camera-only flight)`);
-
-      await enterMoonViewRef.current?.({ moonMesh, company, useFlight: true });
+      vlog(`⚠️ Cannot navigate in manual flight mode`);
     },
     [vlog, handleAutopilotNavigation],
   );
 
   const handleQuickNav = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
-      if (
-        (followingSpaceshipRef.current || insideShipRef.current) &&
-        !manualFlightModeRef.current
-      ) {
+      // Always use autopilot — ship is always engaged
+      if (!manualFlightModeRef.current) {
         handleAutopilotNavigation(targetId, targetType);
         return;
       }
-
+      // Fallback for manual flight mode
       const target =
         targetType === "moon" ? `experience-${targetId}` : targetId;
-
       if (handleNavigationRef.current) {
         handleNavigationRef.current(target);
       }
@@ -780,8 +734,9 @@ export default function ResumeSpace3D({
   // - useRenderLoop: animation loop + ship movement
   // - createMoonFocusController: moon enter/exit + overlays
 
-  // ── Ship UI phase detection ──────────────────────────
-  // Poll for ship hover state to show initial buttons
+  // ── Ship auto-engage on intro completion ──────────────
+  // When the intro cinematic reaches "hover", auto-engage ship mode
+  // (no more choice between "Use Falcon" / "Freely Explore").
   useEffect(() => {
     if (shipUIPhase !== "hidden") return;
     const check = setInterval(() => {
@@ -789,155 +744,42 @@ export default function ResumeSpace3D({
         shipCinematicRef.current?.active &&
         shipCinematicRef.current.phase === "hover"
       ) {
-        setShipUIPhase("initial");
         clearInterval(check);
+        // Auto-engage the ship — same as the old handleUseShip path
+        if (shipCinematicRef.current) {
+          shipCinematicRef.current.active = false;
+        }
+        setFollowingSpaceship(true);
+        followingSpaceshipRef.current = true;
+        setInsideShip(false);
+        insideShipRef.current = false;
+        setShipViewMode("exterior");
+        shipViewModeRef.current = "exterior";
+        setShipUIPhase("ship-engaged");
+
+        if (sceneRef.current.controls && spaceshipRef.current) {
+          const cc = sceneRef.current.controls;
+          const ship = spaceshipRef.current;
+          const followDist = optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
+          const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion);
+          const camPos = ship.position.clone().addScaledVector(behind, followDist);
+          camPos.y += FOLLOW_HEIGHT;
+          cc.setLookAt(
+            camPos.x, camPos.y, camPos.z,
+            ship.position.x, ship.position.y, ship.position.z,
+            true,
+          );
+        }
       }
     }, 500);
     return () => clearInterval(check);
   }, [shipUIPhase]);
 
   // ── Autonomous ship wander ─────────────────────────
-  const startShipWander = useCallback(() => {
-    if (shipWanderIntervalRef.current) {
-      clearInterval(shipWanderIntervalRef.current);
-    }
-    const wander = () => {
-      const ship = spaceshipRef.current;
-      if (!ship) return;
-      // If something else took over (user engaged ship), stop
-      if (followingSpaceshipRef.current || insideShipRef.current) {
-        if (shipWanderIntervalRef.current) {
-          clearInterval(shipWanderIntervalRef.current);
-          shipWanderIntervalRef.current = null;
-        }
-        return;
-      }
-
-      const startPos = ship.position.clone();
-      // Pick a random position within the solar system bounds
-      const endPos = new THREE.Vector3(
-        (Math.random() - 0.5) * SHIP_WANDER_XZ,
-        (Math.random() - 0.5) * SHIP_WANDER_Y,
-        (Math.random() - 0.5) * SHIP_WANDER_XZ,
-      );
-      // Make sure it's reasonably far
-      if (endPos.distanceTo(startPos) < SHIP_WANDER_MIN_DIST) {
-        endPos.add(
-          new THREE.Vector3(
-            (Math.random() - 0.5) * 400,
-            (Math.random() - 0.5) * 200,
-            (Math.random() - 0.5) * 400,
-          ),
-        );
-      }
-
-      // Build a gentle bezier curve
-      const mid = startPos.clone().lerp(endPos, 0.5);
-      const controlPos = mid
-        .clone()
-        .add(
-          new THREE.Vector3(
-            (Math.random() - 0.5) * 300,
-            (Math.random() - 0.5) * 150,
-            (Math.random() - 0.5) * 300,
-          ),
-        );
-
-      const distance = startPos.distanceTo(endPos);
-      const duration = THREE.MathUtils.clamp(
-        6000 * (distance / CINE_DURATION_DIVISOR),
-        5000,
-        14000,
-      );
-
-      // Compute a facing quaternion toward the end position
-      const lookTarget = endPos.clone();
-      const tmpObj = new THREE.Object3D();
-      tmpObj.position.copy(startPos);
-      tmpObj.lookAt(lookTarget);
-      const endQuat = tmpObj.quaternion.clone();
-
-      shipCinematicRef.current = {
-        active: true,
-        phase: "approach",
-        startTime: performance.now(),
-        duration,
-        startPos: startPos.clone(),
-        controlPos,
-        endPos: endPos.clone(),
-        startQuat: ship.quaternion.clone(),
-        endQuat,
-      };
-    };
-
-    // Start first wander immediately
-    wander();
-    // Then re-wander every 8-15 seconds
-    shipWanderIntervalRef.current = setInterval(
-      wander,
-      8000 + Math.random() * 7000,
-    );
-  }, []);
-
-  const stopShipWander = useCallback(() => {
-    if (shipWanderIntervalRef.current) {
-      clearInterval(shipWanderIntervalRef.current);
-      shipWanderIntervalRef.current = null;
-    }
-  }, []);
+  // startShipWander / stopShipWander removed — ship is always player-controlled
 
   // ── Ship control bar handlers ──────────────────────
-  const handleUseShip = useCallback(() => {
-    stopShipWander();
-
-    // Deactivate cinematic so autopilot/follow can run
-    if (shipCinematicRef.current) {
-      shipCinematicRef.current.active = false;
-    }
-
-    setFollowingSpaceship(true);
-    followingSpaceshipRef.current = true;
-    setInsideShip(false);
-    insideShipRef.current = false;
-    setShipViewMode("exterior");
-    shipViewModeRef.current = "exterior";
-    setShipUIPhase("ship-engaged");
-
-    // Point camera behind and above the ship using the ship's orientation
-    if (sceneRef.current.controls && spaceshipRef.current) {
-      const cc = sceneRef.current.controls;
-      const ship = spaceshipRef.current;
-      const followDist = optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
-
-      // Camera behind ship (-Z in ship's local space) and elevated
-      const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion);
-      const camPos = ship.position.clone().addScaledVector(behind, followDist);
-      camPos.y += FOLLOW_HEIGHT;
-      cc.setLookAt(
-        camPos.x, camPos.y, camPos.z,
-        ship.position.x, ship.position.y, ship.position.z,
-        true,
-      );
-    }
-
-    vlog("🚀 Ship engaged — 3rd person view");
-  }, [stopShipWander, vlog]);
-
-  const handleFreeExplore = useCallback(() => {
-    // Disengage from ship
-    setFollowingSpaceship(false);
-    followingSpaceshipRef.current = false;
-    setInsideShip(false);
-    insideShipRef.current = false;
-    setShipViewMode("exterior");
-    shipViewModeRef.current = "exterior";
-    setShipUIPhase("free-explore");
-
-    // Start the ship wandering autonomously
-    startShipWander();
-
-    vlog("🌌 Free explore — Falcon will roam the universe");
-  }, [startShipWander, vlog]);
+  // handleUseShip / handleFreeExplore removed — ship auto-engages after intro
 
   const handleLeaveShip = useCallback(() => {
     // Restore camera constraints
@@ -954,78 +796,22 @@ export default function ResumeSpace3D({
       cc.maxDistance = CONTROLS_MAX_DIST;
     }
 
-    setFollowingSpaceship(false);
-    followingSpaceshipRef.current = false;
+    // Stay following the ship in 3rd person exterior — no free-explore mode
     setFollowingStarDestroyer(false);
     followingStarDestroyerRef.current = false;
     setInsideShip(false);
     insideShipRef.current = false;
     setShipViewMode("exterior");
     shipViewModeRef.current = "exterior";
-    setShipUIPhase("free-explore");
+    // Keep ship-engaged and following
+    setFollowingSpaceship(true);
+    followingSpaceshipRef.current = true;
+    setShipUIPhase("ship-engaged");
 
-    // Start ship wandering
-    startShipWander();
+    vlog("🚪 Exited to 3rd person exterior view");
+  }, [vlog]);
 
-    vlog("🚪 Left the ship — Falcon roaming freely");
-  }, [startShipWander, vlog]);
-
-  const handleSummonFalcon = useCallback(() => {
-    stopShipWander();
-
-    const ship = spaceshipRef.current;
-    const cam = sceneRef.current.camera;
-    if (!ship || !cam) return;
-
-    // Deactivate any active cinematic
-    if (shipCinematicRef.current) {
-      shipCinematicRef.current.active = false;
-    }
-
-    // Position the ship behind the camera and fly it in
-    const camDir = new THREE.Vector3();
-    cam.getWorldDirection(camDir);
-    const behindCamera = cam.position
-      .clone()
-      .add(camDir.clone().multiplyScalar(-CINE_BEHIND_DIST))
-      .add(new THREE.Vector3(0, CINE_BEHIND_HEIGHT, 0));
-
-    ship.position.copy(behindCamera);
-
-    // Target position in front of camera
-    const frontOfCamera = cam.position
-      .clone()
-      .add(camDir.clone().multiplyScalar(CINE_FRONT_DIST))
-      .add(new THREE.Vector3(0, CINE_FRONT_HEIGHT, 0));
-
-    // Face the ship toward the arrival point
-    const tmpObj = new THREE.Object3D();
-    tmpObj.position.copy(behindCamera);
-    tmpObj.lookAt(frontOfCamera);
-    ship.quaternion.copy(tmpObj.quaternion);
-
-    const controlPos = behindCamera.clone().lerp(frontOfCamera, 0.5);
-    controlPos.y += CINE_CONTROL_HEIGHT;
-
-    shipCinematicRef.current = {
-      active: true,
-      phase: "approach",
-      startTime: performance.now(),
-      duration: 3000,
-      startPos: behindCamera.clone(),
-      controlPos,
-      endPos: frontOfCamera.clone(),
-      startQuat: ship.quaternion.clone(),
-      endQuat: tmpObj.quaternion.clone(),
-    };
-
-    // After 3 seconds, auto-engage 3rd person
-    setTimeout(() => {
-      handleUseShip();
-    }, 3200);
-
-    vlog("🦅 Summoning Falcon...");
-  }, [stopShipWander, handleUseShip, vlog]);
+  // handleSummonFalcon removed — ship is always engaged
 
   // --- STAR DESTROYER escort handlers ---
 
@@ -2044,6 +1830,168 @@ export default function ResumeSpace3D({
           if (!sd) { console.log("❌ Star Destroyer not loaded yet"); return; }
           createLocateBeacon(sd, 0xff4422, "Star Destroyer");
         };
+
+        // ── Debug Camera Mode ────────────────────────────────────────
+        // Console: debugCamera()  — enter free-flight debug mode
+        //          exitDebugCamera() — re-engage ship follow
+        // Controls:
+        //   WASD      — move forward/left/backward/right
+        //   Q / E     — move down / up
+        //   Shift     — 10x speed boost
+        //   Ctrl      — 0.1x slow precision mode
+        //   Mouse     — orbit (camera-controls native)
+        //   Scroll    — zoom (camera-controls native)
+        //   F9        — capture camera position to console
+        //   Escape    — exit debug camera mode
+        let debugCamActive = false;
+        let debugCamRAF = 0;
+        const debugKeys: Record<string, boolean> = {};
+        const DEBUG_BASE_SPEED = 200; // units/sec — tune for universe scale
+
+        const debugKeyDown = (e: KeyboardEvent) => {
+          debugKeys[e.key.toLowerCase()] = true;
+          if (e.key === "F9") {
+            e.preventDefault();
+            const cam = sceneRef.current.camera;
+            if (!cam) return;
+            const p = cam.position;
+            const target = new THREE.Vector3();
+            (sceneRef.current.controls as any)?.getTarget(target);
+            console.log("═══════════════════════════════════════════════════");
+            console.log("📷 DEBUG CAMERA — Position Capture");
+            console.log("═══════════════════════════════════════════════════");
+            console.log(`Camera position : { x: ${p.x.toFixed(1)}, y: ${p.y.toFixed(1)}, z: ${p.z.toFixed(1)} }`);
+            console.log(`Look-at target  : { x: ${target.x.toFixed(1)}, y: ${target.y.toFixed(1)}, z: ${target.z.toFixed(1)} }`);
+            console.log("");
+            console.log("📋 Copy-paste for code:");
+            console.log(`  camera: { x: ${p.x.toFixed(1)}, y: ${p.y.toFixed(1)}, z: ${p.z.toFixed(1)} }`);
+            console.log(`  target: { x: ${target.x.toFixed(1)}, y: ${target.y.toFixed(1)}, z: ${target.z.toFixed(1)} }`);
+            console.log(`  setLookAt(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}, ${target.x.toFixed(1)}, ${target.y.toFixed(1)}, ${target.z.toFixed(1)}, false);`);
+            console.log("═══════════════════════════════════════════════════");
+          }
+          if (e.key === "Escape" && debugCamActive) {
+            e.preventDefault();
+            (window as any).exitDebugCamera();
+          }
+        };
+        const debugKeyUp = (e: KeyboardEvent) => {
+          debugKeys[e.key.toLowerCase()] = false;
+        };
+
+        const debugCamLoop = () => {
+          if (!debugCamActive) return;
+          const cam = sceneRef.current.camera;
+          const cc = sceneRef.current.controls;
+          if (!cam || !cc) { debugCamRAF = requestAnimationFrame(debugCamLoop); return; }
+
+          const dt = 1 / 60; // approximate
+          let speed = DEBUG_BASE_SPEED;
+          if (debugKeys["shift"]) speed *= 10;
+          if (debugKeys["control"]) speed *= 0.1;
+          const step = speed * dt;
+
+          // Build movement vector in camera-local space
+          const move = new THREE.Vector3();
+          if (debugKeys["w"]) move.z -= step;
+          if (debugKeys["s"]) move.z += step;
+          if (debugKeys["a"]) move.x -= step;
+          if (debugKeys["d"]) move.x += step;
+          if (debugKeys["e"]) move.y += step;
+          if (debugKeys["q"]) move.y -= step;
+
+          if (move.lengthSq() > 0) {
+            // Transform to world space using camera orientation
+            move.applyQuaternion(cam.quaternion);
+            // Move both camera and orbit target together (truck-style)
+            const target = new THREE.Vector3();
+            (cc as any).getTarget(target);
+            const newCam = cam.position.clone().add(move);
+            const newTarget = target.clone().add(move);
+            (cc as any).setLookAt(
+              newCam.x, newCam.y, newCam.z,
+              newTarget.x, newTarget.y, newTarget.z,
+              false,
+            );
+          }
+
+          debugCamRAF = requestAnimationFrame(debugCamLoop);
+        };
+
+        (window as any).debugCamera = () => {
+          if (debugCamActive) {
+            console.log("⚠️ Debug camera already active. Use exitDebugCamera() to exit.");
+            return;
+          }
+          debugCamActive = true;
+
+          // Disengage ship following
+          followingSpaceshipRef.current = false;
+          setFollowingSpaceship(false);
+          insideShipRef.current = false;
+          setInsideShip(false);
+
+          // Unlock camera controls for free orbiting
+          const cc = sceneRef.current.controls;
+          if (cc) {
+            cc.minDistance = 0.01;
+            cc.maxDistance = 999999;
+            cc.enabled = true;
+          }
+
+          // Start movement loop
+          window.addEventListener("keydown", debugKeyDown);
+          window.addEventListener("keyup", debugKeyUp);
+          debugCamRAF = requestAnimationFrame(debugCamLoop);
+
+          console.log("═══════════════════════════════════════════════════");
+          console.log("🎥 DEBUG CAMERA MODE — ACTIVE");
+          console.log("═══════════════════════════════════════════════════");
+          console.log("  WASD        — fly forward/left/back/right");
+          console.log("  Q / E       — descend / ascend");
+          console.log("  Shift       — 10× speed boost");
+          console.log("  Ctrl        — 0.1× precision mode");
+          console.log("  Mouse drag  — orbit / look around");
+          console.log("  Scroll      — zoom in/out");
+          console.log("  F9          — 📷 capture position to console");
+          console.log("  Escape      — exit debug mode");
+          console.log("═══════════════════════════════════════════════════");
+          console.log("  exitDebugCamera() — re-engage ship follow");
+          console.log("═══════════════════════════════════════════════════");
+        };
+
+        (window as any).exitDebugCamera = () => {
+          if (!debugCamActive) {
+            console.log("⚠️ Debug camera not active.");
+            return;
+          }
+          debugCamActive = false;
+          cancelAnimationFrame(debugCamRAF);
+          window.removeEventListener("keydown", debugKeyDown);
+          window.removeEventListener("keyup", debugKeyUp);
+          // Clear stuck keys
+          Object.keys(debugKeys).forEach(k => debugKeys[k] = false);
+
+          // Re-engage ship following
+          followingSpaceshipRef.current = true;
+          setFollowingSpaceship(true);
+          setShipUIPhase("ship-engaged");
+
+          // Snap camera behind ship
+          const cc = sceneRef.current.controls;
+          const ship = spaceshipRef.current;
+          if (cc && ship) {
+            const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion);
+            const camPos = ship.position.clone().addScaledVector(behind, FOLLOW_DISTANCE);
+            camPos.y += FOLLOW_HEIGHT;
+            cc.setLookAt(
+              camPos.x, camPos.y, camPos.z,
+              ship.position.x, ship.position.y, ship.position.z,
+              true,
+            );
+          }
+
+          console.log("✅ Debug camera exited — ship follow re-engaged");
+        };
       },
       undefined,
       () => {
@@ -2572,24 +2520,13 @@ export default function ResumeSpace3D({
           const planetLabel = target === "experience" ? "🌍 Experience" : target === "skills" ? "⚡ Skills" : "💡 Projects";
           vlog(`${planetLabel} — Traveling to ${target} Planet...`);
 
-          // Ship-engaged → autopilot navigation to the planet
-          if (
-            (followingSpaceshipRef.current || insideShipRef.current) &&
-            !manualFlightModeRef.current
-          ) {
-            vlog(`🚀 Ship engaged — routing planet travel to autopilot`);
+          // Always use autopilot — ship is always engaged
+          if (!manualFlightModeRef.current) {
             handleAutopilotNavigation(target, "section");
             break;
           }
 
-          // Camera-only mode — stop following ship and fly camera directly
-          if (followingSpaceship) {
-            setFollowingSpaceship(false);
-            followingSpaceshipRef.current = false;
-            if (sceneRef.current.controls)
-              sceneRef.current.controls.enabled = true;
-          }
-
+          // Fallback: manual flight mode — direct camera
           const planetMesh = target === "experience" ? expPlanet : target === "skills" ? skillsPlanet : projectsPlanet;
           const planetDist = target === "experience" ? EXP_FOCUS_DIST : target === "skills" ? SKILLS_FOCUS_DIST : PROJ_FOCUS_DIST;
           await cameraDirectorRef.current.focusPlanet(planetMesh, planetDist);
@@ -3757,14 +3694,11 @@ export default function ResumeSpace3D({
             </div>
           )}
 
-          {/* Ship Control Bar — initial choice + view controls */}
+          {/* Ship Control Bar — view controls (ship auto-engages) */}
           <ShipControlBar
             phase={shipUIPhase}
             activeView={insideShip ? shipViewMode : "exterior"}
-            onUseShip={handleUseShip}
-            onFreeExplore={handleFreeExplore}
             onLeaveShip={handleLeaveShip}
-            onSummonFalcon={handleSummonFalcon}
             onViewChange={handleShipViewChange}
             onRollStart={handleRollStart}
             onRollStop={handleRollStop}

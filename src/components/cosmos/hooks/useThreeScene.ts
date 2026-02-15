@@ -85,7 +85,8 @@ export const useThreeScene = (params: {
       CAMERA_FAR,
     );
     camera.position.set(CAMERA_INITIAL_POS.x, CAMERA_INITIAL_POS.y, CAMERA_INITIAL_POS.z);
-    camera.lookAt(0, 0, 0);
+    // Look toward the final intro target (Experience planet area)
+    camera.lookAt(14946.7, 244.7, -1045.2);
 
     const renderer =
       globalRenderer ||
