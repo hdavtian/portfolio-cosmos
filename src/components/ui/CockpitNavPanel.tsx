@@ -1,9 +1,9 @@
 import React from "react";
 
 // ============================================================
-// CockpitNavPanel — Destination buttons visible only in cockpit
+// CockpitNavPanel — Destination navigation panel
 // ============================================================
-// Right-side column showing planets (sections) and moons
+// Left-side column showing planets (sections) and moons
 // (experience companies) in a compact, hierarchical layout.
 // ============================================================
 
@@ -48,7 +48,7 @@ const CockpitNavPanel: React.FC<Props> = ({
   const panelStyle: React.CSSProperties = {
     position: "fixed",
     top: "50%",
-    right: 16,
+    left: 16,
     transform: "translateY(-50%)",
     display: "flex",
     flexDirection: "column",

@@ -104,6 +104,16 @@ export const useRenderLoop = () => {
       starDestroyerRef: React.MutableRefObject<THREE.Group | null>;
       followingStarDestroyerRef: React.MutableRefObject<boolean>;
       updateAutopilotNavigation: () => void;
+      /** Moon orbit update — returns camera instruction or null when idle */
+      updateMoonOrbit: (dt: number, ship: THREE.Object3D) => {
+        cameraPosition: THREE.Vector3;
+        cameraTarget: THREE.Vector3;
+        lerpFactor: number;
+        cameraUp?: THREE.Vector3;
+        userCameraFree?: boolean;
+      } | null;
+      /** True when moon orbit is in any non-idle phase */
+      isMoonOrbiting: () => boolean;
       updateOrbitSystem: (params: {
         items: OrbitItem[];
         orbitAnchors: OrbitAnchor[];
@@ -122,6 +132,7 @@ export const useRenderLoop = () => {
       scene: THREE.Scene;
       sunMesh: THREE.Object3D;
       vlog: (message: string) => void;
+      debugLog: (source: string, message: string) => void;
     }) => {
       const {
         exitFocusRequestRef,
@@ -158,6 +169,8 @@ export const useRenderLoop = () => {
         starDestroyerRef,
         followingStarDestroyerRef,
         updateAutopilotNavigation,
+        updateMoonOrbit,
+        isMoonOrbiting,
         updateOrbitSystem,
         renderer,
         items,
@@ -169,6 +182,7 @@ export const useRenderLoop = () => {
         scene,
         sunMesh,
         vlog,
+        debugLog,
       } = params;
 
       if (!travelAnchorRef.current) {
@@ -186,6 +200,15 @@ export const useRenderLoop = () => {
       const cockpitTargetLocal = new THREE.Vector3(COCKPIT_TARGET_LOCAL.x, COCKPIT_TARGET_LOCAL.y, COCKPIT_TARGET_LOCAL.z);
       const cabinLocalPos = new THREE.Vector3(CABIN_LOCAL_POS.x, CABIN_LOCAL_POS.y, CABIN_LOCAL_POS.z);
       const cabinTargetLocal = new THREE.Vector3(CABIN_TARGET_LOCAL.x, CABIN_TARGET_LOCAL.y, CABIN_TARGET_LOCAL.z);
+      // Temp vector for orbit camera target retrieval
+      const _orbitCamTarget = new THREE.Vector3();
+      let _orbitDbgTimer = 0;
+      let _orbitDbgOnce = false;
+      let _orbitFirstFrameLogged = false;
+      let _orbitLastWritePos: THREE.Vector3 | null = null;
+      // For orbit camera "up" lerp (ISS roll effect)
+      const _orbitCurUp = new THREE.Vector3(0, 1, 0);
+      let _orbitUpActive = false; // true while we're lerping camera.up
       let cockpitPosResolved = false;
       const shipWorldPos = new THREE.Vector3();
       const shipWorldQuat = new THREE.Quaternion();
@@ -282,6 +305,8 @@ export const useRenderLoop = () => {
         // ─── END EXPLORE MODE ───────────────────────────────────
 
         let shipIsIdleHover = false; // true when ship is just floating (no nav)
+        let moonOrbitActive = false; // true when orbit camera has exclusive control
+        let orbitUserCamFree = false; // true when user can drag camera during orbit
 
         if (spaceshipRef.current) {
           const ship = spaceshipRef.current;
@@ -845,6 +870,153 @@ export const useRenderLoop = () => {
             updateAutopilotNavigation();
           }
 
+          // ─── MOON ORBIT CAMERA OVERRIDE ───────────────────────────
+          // When orbiting a moon, the orbit hook positions the ship AND
+          // returns camera instructions.  We DIRECTLY set camera.position
+          // and camera.lookAt, then sync camera-controls.  controls.update()
+          // is skipped entirely during orbit to prevent any fighting.
+          const _orbitIsActive = isMoonOrbiting();
+          if (_orbitIsActive && ship) {
+            const camInstr = updateMoonOrbit(deltaSeconds, ship);
+
+            // ── Diagnostic: detect if something overwrote our camera between frames
+            if (_orbitLastWritePos) {
+              const dx = Math.abs(camera.position.x - _orbitLastWritePos.x);
+              const dy = Math.abs(camera.position.y - _orbitLastWritePos.y);
+              const dz = Math.abs(camera.position.z - _orbitLastWritePos.z);
+              if (dx > 0.5 || dy > 0.5 || dz > 0.5) {
+                debugLog("render", `⚠️ CAMERA OVERRIDDEN! wrote=[${_orbitLastWritePos.x.toFixed(0)},${_orbitLastWritePos.y.toFixed(0)},${_orbitLastWritePos.z.toFixed(0)}] now=[${camera.position.x.toFixed(0)},${camera.position.y.toFixed(0)},${camera.position.z.toFixed(0)}] delta=[${dx.toFixed(1)},${dy.toFixed(1)},${dz.toFixed(1)}]`);
+              }
+            }
+
+            // Throttled debug logging (once per second)
+            if (!_orbitDbgTimer) _orbitDbgTimer = 0;
+            _orbitDbgTimer += deltaSeconds;
+            if (_orbitDbgTimer > 1.0) {
+              _orbitDbgTimer = 0;
+              const hasInstr = !!camInstr;
+              const hasCc = !!sceneRef.current.controls;
+              debugLog("render", `orbitTick: instr=${hasInstr}, cc=${hasCc}, ship=[${ship.position.x.toFixed(0)},${ship.position.y.toFixed(0)},${ship.position.z.toFixed(0)}]`);
+              if (camInstr) {
+                const cp = camInstr.cameraPosition;
+                const ct = camInstr.cameraTarget;
+                const distToTarget = Math.sqrt(
+                  (cp.x - camera.position.x) ** 2 +
+                  (cp.y - camera.position.y) ** 2 +
+                  (cp.z - camera.position.z) ** 2,
+                );
+                debugLog("render", `  camTarget=[${cp.x.toFixed(0)},${cp.y.toFixed(0)},${cp.z.toFixed(0)}] lookAt=[${ct.x.toFixed(0)},${ct.y.toFixed(0)},${ct.z.toFixed(0)}] lf=${camInstr.lerpFactor.toFixed(3)}`);
+                debugLog("render", `  curCam=[${camera.position.x.toFixed(0)},${camera.position.y.toFixed(0)},${camera.position.z.toFixed(0)}] distToTarget=${distToTarget.toFixed(1)}`);
+              }
+            }
+
+            if (camInstr && sceneRef.current.controls) {
+              moonOrbitActive = true;
+              const cc = sceneRef.current.controls;
+              const cp = camInstr.cameraPosition;
+              const ct = camInstr.cameraTarget;
+              const lf = camInstr.lerpFactor;
+
+              // ── User-camera-free mode (orbiting phase) ──
+              // Ship still drifts, but the user can drag/rotate the camera.
+              // We only update the cc target (so camera follows ship drift)
+              // but don't force camera position.
+              if (camInstr.userCameraFree) {
+                orbitUserCamFree = true;
+                if (!cc.enabled) {
+                  cc.enabled = true;
+                  debugLog("render", `🔓 cc.enabled=true (user camera free)`);
+                }
+                // Gently update cc target to track the drifting ship
+                const curTarget = cc.getTarget(_orbitCamTarget);
+                const smoothTgt = 0.03;
+                cc.setTarget(
+                  curTarget.x + (ct.x - curTarget.x) * smoothTgt,
+                  curTarget.y + (ct.y - curTarget.y) * smoothTgt,
+                  curTarget.z + (ct.z - curTarget.z) * smoothTgt,
+                  false,
+                );
+              } else {
+                // ── Orbit camera drives — lock user input ──
+                // Lerp current camera pos/target toward the orbit instruction
+                const curPos = camera.position;
+                const lerpedPosX = curPos.x + (cp.x - curPos.x) * lf;
+                const lerpedPosY = curPos.y + (cp.y - curPos.y) * lf;
+                const lerpedPosZ = curPos.z + (cp.z - curPos.z) * lf;
+
+                // Get current look-at target from camera-controls
+                const curTarget = cc.getTarget(_orbitCamTarget);
+                const lerpedTgtX = curTarget.x + (ct.x - curTarget.x) * lf;
+                const lerpedTgtY = curTarget.y + (ct.y - curTarget.y) * lf;
+                const lerpedTgtZ = curTarget.z + (ct.z - curTarget.z) * lf;
+
+                // ── DIRECT camera write — bypasses camera-controls entirely ──
+                camera.position.set(lerpedPosX, lerpedPosY, lerpedPosZ);
+
+                // ISS ROLL: lerp camera.up toward moon's outward direction
+                // This makes the moon surface appear as the "ground" / horizon.
+                if (camInstr.cameraUp) {
+                  _orbitUpActive = true;
+                  _orbitCurUp.lerp(camInstr.cameraUp, lf * 2);
+                  _orbitCurUp.normalize();
+                  camera.up.copy(_orbitCurUp);
+                }
+
+                camera.lookAt(lerpedTgtX, lerpedTgtY, lerpedTgtZ);
+                camera.updateMatrixWorld();
+
+                // Store what we wrote so next frame we can detect overrides
+                if (!_orbitLastWritePos) _orbitLastWritePos = new THREE.Vector3();
+                _orbitLastWritePos.set(lerpedPosX, lerpedPosY, lerpedPosZ);
+
+                // Sync camera-controls internal state
+                cc.setLookAt(
+                  lerpedPosX, lerpedPosY, lerpedPosZ,
+                  lerpedTgtX, lerpedTgtY, lerpedTgtZ,
+                  false,
+                );
+
+                // LOCK camera-controls
+                if (cc.enabled) {
+                  cc.enabled = false;
+                  debugLog("render", `🔒 cc.enabled=false (orbit lock)`);
+                }
+              }
+
+              // First-frame log with full detail
+              if (!_orbitFirstFrameLogged) {
+                _orbitFirstFrameLogged = true;
+                debugLog("render", `🚀 ORBIT_CAM first frame — pos=[${cp.x.toFixed(0)},${cp.y.toFixed(0)},${cp.z.toFixed(0)}] target=[${ct.x.toFixed(0)},${ct.y.toFixed(0)},${ct.z.toFixed(0)}] userFree=${!!camInstr.userCameraFree}`);
+              }
+            } else if (camInstr && !sceneRef.current.controls) {
+              debugLog("render", `⚠️ ORBIT: camInstr exists but NO controls!`);
+            } else if (!camInstr) {
+              debugLog("render", `⚠️ ORBIT: updateMoonOrbit returned null`);
+            }
+          } else {
+            // Not orbiting — reset orbit diagnostics & re-enable controls
+            if (_orbitFirstFrameLogged) {
+              // Orbit just ended — re-enable camera-controls
+              if (sceneRef.current.controls && !sceneRef.current.controls.enabled) {
+                sceneRef.current.controls.enabled = true;
+                debugLog("render", `🔓 cc.enabled=true (orbit ended)`);
+              }
+            }
+            // Restore camera.up to world-Y after orbit roll
+            if (_orbitUpActive) {
+              _orbitCurUp.set(0, 1, 0);
+              camera.up.set(0, 1, 0);
+              _orbitUpActive = false;
+              debugLog("render", `🔄 camera.up reset to world-Y`);
+            }
+            _orbitFirstFrameLogged = false;
+            _orbitLastWritePos = null;
+            if (_orbitDbgOnce !== _orbitIsActive) {
+              _orbitDbgOnce = _orbitIsActive;
+              debugLog("render", `isMoonOrbiting=${_orbitIsActive}, ship=${!!ship}`);
+            }
+          }
+
           // ─── EXTERIOR FOLLOW CAMERA ─────────────────────────────
           // Runs for BOTH autopilot navigation AND Star Destroyer escort.
           // Moves the orbit center to track the Falcon's position.
@@ -875,12 +1047,16 @@ export const useRenderLoop = () => {
             }
           }
 
-          if (followingSpaceshipRef.current && !insideShipRef.current) {
+          if (followingSpaceshipRef.current && !insideShipRef.current && !moonOrbitActive) {
             if (wasInsideShip) {
               wasInsideShip = false;
             }
             const cc = sceneRef.current.controls;
             if (cc) {
+              // ─ Diagnostic: if orbiting was just active, log that follow cam is taking over
+              if (_orbitIsActive) {
+                debugLog("render", `⚠️ FOLLOW_CAM running while isMoonOrbiting=true! moonOrbitActive=${moonOrbitActive}`);
+              }
               const focusedMoon = focusedMoonRef.current;
               const settledTarget = settledViewTargetRef.current;
               if (focusedMoon) {
@@ -1195,7 +1371,12 @@ export const useRenderLoop = () => {
 
         // Only call controls.update() here when NOT inside the ship —
         // interior mode already called it in the block above.
-        if (!insideShipRef.current) {
+        // ALSO skip during moon orbit — the orbit camera writes directly
+        // to camera.position / camera.lookAt and syncs cc.setLookAt(false).
+        // Running controls.update() would apply damping/smooth transitions
+        // that fight the orbit camera positioning — UNLESS user-camera-free
+        // mode is active (orbiting phase), where the user can drag/rotate.
+        if (!insideShipRef.current && (!moonOrbitActive || orbitUserCamFree)) {
           controls.update(deltaSeconds);
         }
 

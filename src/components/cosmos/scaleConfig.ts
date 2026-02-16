@@ -384,3 +384,67 @@ export const NAV_LIGHTSPEED = 50;               // units/frame (~3,000 u/s at 60
 export const NAV_LIGHTSPEED_ENGAGE_DIST = 2_000; // only engage for long distances
 export const NAV_LIGHTSPEED_DECEL_DIST = 1_500;  // start slowing from this distance
 export const NAV_LIGHTSPEED_LERP = 0.08;         // faster lerp for lightspeed accel
+
+// ─── MOON ORBIT (Stationary Hover) ──────────────────────────────────────────
+// The ship parks above the moon and hovers.  Camera is behind/above
+// the ship looking past it down at the moon surface — ISS-style view.
+// The moon's surface fills the bottom ~half of the screen.
+
+// Hover altitude — multiplier of moon radius.
+// Lower = closer to the surface, more dramatic horizon.
+// 0.15× — user-tuned via F8 debug mode.
+export const ORBIT_ALTITUDE_MULT = 0.15;
+
+// Arrival hold — seconds to pause upon reaching the moon before
+// transitioning the camera to the hover view.
+export const ORBIT_HOLD_DURATION = 2.0;
+
+// Entry transition — seconds to smoothly glide into the hover position
+// and re-orient the camera.
+export const ORBIT_ENTRY_DURATION = 4.0;
+
+// Gentle hover drift — amplitude & frequency for a subtle breathing motion
+// so the ship doesn't look frozen.
+export const ORBIT_DRIFT_AMP = 0.06;   // fraction of moon radius — subtle at close range
+export const ORBIT_DRIFT_FREQ = 0.08;  // Hz — very slow breathing
+
+// Camera placement (relative to moon radius):
+//   CAM_BEHIND — distance behind the ship along its TANGENT direction
+//     (the direction the ship faces along the surface).
+//     Small = close cockpit-cam feel; large = wider cinematic.
+//   CAM_ABOVE  — extra height above the ship in the RADIAL / outward direction
+//     (further from the moon surface, NOT world-Y).
+//     Gives the elevated "looking down" perspective.
+//   CAM_PITCH_BLEND — where the camera looks.
+//     0 = look at ship, 1 = look at the surface point directly below the ship.
+//     0.6 aims past the ship toward the moon surface — ISS horizon view.
+export const ORBIT_CAM_BEHIND = 0.58;   // × moon radius — user-tuned via F8 debug
+export const ORBIT_CAM_ABOVE = 0.49;    // × moon radius — user-tuned via F8 debug
+// PITCH_BLEND: 0 = look at surface below ship, 0.5 = look at ship, 1 = look at sky above.
+// 0.55 — user-tuned via F8 debug.
+export const ORBIT_CAM_PITCH_BLEND = 0.55;
+
+// ─── Orbit Debug — live-tweakable overrides (F8 toggle) ─────────────────────
+// When orbitDebug.active is true, useMoonOrbit reads from these instead of the
+// constants above.  Keyboard nudges modify these values in real-time.
+export const orbitDebug = {
+  active: false,
+  altitudeMult: ORBIT_ALTITUDE_MULT,
+  camBehind: ORBIT_CAM_BEHIND,
+  camAbove: ORBIT_CAM_ABOVE,
+  pitchBlend: ORBIT_CAM_PITCH_BLEND,
+  noseTilt: -7.8,                       // negative = nose down toward surface — user-tuned via F8
+  /** Reset all overrides back to the current const values */
+  reset() {
+    this.altitudeMult = ORBIT_ALTITUDE_MULT;
+    this.camBehind = ORBIT_CAM_BEHIND;
+    this.camAbove = ORBIT_CAM_ABOVE;
+    this.pitchBlend = ORBIT_CAM_PITCH_BLEND;
+    this.noseTilt = -1.5;
+  },
+};
+
+// Exit manoeuvre — gentle pull-away
+export const ORBIT_EXIT_DURATION = 4.0;
+export const ORBIT_EXIT_ANGLE = 0.61;  // ~35° bank outward
+export const ORBIT_EXIT_ACCEL = 3.0;

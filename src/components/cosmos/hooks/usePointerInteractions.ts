@@ -12,8 +12,10 @@ export const usePointerInteractions = (params: {
   isDraggingRef: MutableRefObject<boolean>;
   lastPointerRef: MutableRefObject<{ x: number; y: number; t: number } | null>;
   sceneRef: MutableRefObject<{ controls?: { enabled: boolean } | undefined }>;
+  /** When true, moon rotation drag and overlay-exit clicks are suppressed */
+  orbitActiveRef?: MutableRefObject<boolean>;
 }) => {
-  const { mountRef, focusedMoonRef, isDraggingRef, lastPointerRef, sceneRef } =
+  const { mountRef, focusedMoonRef, isDraggingRef, lastPointerRef, sceneRef, orbitActiveRef } =
     params;
 
   const buildRotationHandlers = useCallback(
@@ -31,8 +33,9 @@ export const usePointerInteractions = (params: {
         raycaster: args.raycaster,
         pointer: args.pointer,
         camera: args.camera,
+        orbitActiveRef,
       }),
-    [mountRef, focusedMoonRef, isDraggingRef, lastPointerRef, sceneRef],
+    [mountRef, focusedMoonRef, isDraggingRef, lastPointerRef, sceneRef, orbitActiveRef],
   );
 
   const buildPointerHandlers = useCallback(
@@ -62,8 +65,9 @@ export const usePointerInteractions = (params: {
         vlog: args.vlog,
         starDestroyerRef: args.starDestroyerRef,
         onStarDestroyerClick: args.onStarDestroyerClick,
+        orbitActiveRef,
       }),
-    [mountRef],
+    [mountRef, orbitActiveRef],
   );
 
   return { buildRotationHandlers, buildPointerHandlers };

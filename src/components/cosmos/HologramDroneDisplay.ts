@@ -81,6 +81,7 @@ export class HologramDroneDisplay {
   private hideProgress = 0;
   private idleTime = 0;
   private sideDir = new THREE.Vector3();
+  private isOrbitMode = false; // true when showing content during moon orbit
 
   // Temps
   private _tmpV = new THREE.Vector3();
@@ -216,6 +217,8 @@ export class HologramDroneDisplay {
     content: OverlayContent,
     moonWorldPos: THREE.Vector3,
     camera: THREE.Camera,
+    /** Optional: anchor point for orbit mode (e.g. ship position above moon) */
+    orbitAnchor?: THREE.Vector3,
   ): void {
     this.clearPanels();
     this.active = true;
@@ -230,6 +233,7 @@ export class HologramDroneDisplay {
     this.scannerLight.intensity = 0;
 
     this.targetWorldPos.copy(moonWorldPos);
+    this.isOrbitMode = !!orbitAnchor;
 
     // Compute side direction: camera-right projected to horizontal plane
     const moonToCamera = this._tmpV.subVectors(camera.position, moonWorldPos);
@@ -245,15 +249,33 @@ export class HologramDroneDisplay {
     // Scale factor: panels grow/shrink sub-linearly with camera distance
     // Using pow(ratio, 0.6) so doubling the distance only grows panels ~52%
     const rawRatio = dist / REFERENCE_DISTANCE;
-    const distScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.pow(rawRatio, SCALE_POWER)));
-    const sideOffset = BASE_SIDE_OFFSET * distScale;
+    let distScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.pow(rawRatio, SCALE_POWER)));
 
-    // Drone end position: near moon, offset to the side + slightly toward camera + above
-    const endPos = moonWorldPos
-      .clone()
-      .addScaledVector(forward, dist * DRONE_FORWARD_RATIO)
-      .addScaledVector(this.sideDir, sideOffset)
-      .add(new THREE.Vector3(0, 5 * distScale, 0));
+    let endPos: THREE.Vector3;
+    if (orbitAnchor) {
+      // Orbit mode: camera is close — use a moderate fixed scale
+      distScale = 0.3;
+
+      // Position drone above the ship using camera's "up" direction (outward from moon).
+      // This keeps the drone visually above the ship regardless of camera roll.
+      const camUp = camera.up.clone().normalize();
+      const camRight = new THREE.Vector3()
+        .crossVectors(camera.getWorldDirection(new THREE.Vector3()), camUp)
+        .normalize();
+
+      endPos = orbitAnchor
+        .clone()
+        .addScaledVector(camUp, 6)     // above the ship in camera's "up"
+        .addScaledVector(camRight, 3);  // slightly to the right
+    } else {
+      // Standard mode: near moon, offset to the side + slightly toward camera + above
+      const sideOffset = BASE_SIDE_OFFSET * distScale;
+      endPos = moonWorldPos
+        .clone()
+        .addScaledVector(forward, dist * DRONE_FORWARD_RATIO)
+        .addScaledVector(this.sideDir, sideOffset)
+        .add(new THREE.Vector3(0, 5 * distScale, 0));
+    }
     this.flyEndPos.copy(endPos);
 
     // Fly-in start: behind/above camera
@@ -318,9 +340,10 @@ export class HologramDroneDisplay {
     this.contentStartTime += delta;
     this.idleTime += delta;
 
-    // Idle hover
-    const hoverY = Math.sin(this.idleTime * 1.8) * 0.15;
-    const hoverX = Math.sin(this.idleTime * 1.1 + 1) * 0.05;
+    // Idle hover — much gentler in orbit mode (close camera)
+    const hoverScale = this.isOrbitMode ? 0.015 : 1.0;
+    const hoverY = Math.sin(this.idleTime * 1.8) * 0.15 * hoverScale;
+    const hoverX = Math.sin(this.idleTime * 1.1 + 1) * 0.05 * hoverScale;
     this.rootGroup.position.copy(this.flyEndPos);
     this.rootGroup.position.y += hoverY;
     this.rootGroup.position.x += hoverX;
@@ -336,7 +359,13 @@ export class HologramDroneDisplay {
 
     // Billboard panels toward camera
     for (const panel of this.panels) {
-      panel.mesh.lookAt(camera.position);
+      if (this.isOrbitMode) {
+        // During orbit the camera is rolled — copy its quaternion so panels
+        // always appear screen-aligned (upright in the camera's view).
+        panel.mesh.quaternion.copy(camera.quaternion);
+      } else {
+        panel.mesh.lookAt(camera.position);
+      }
     }
 
     // ── Animate panels (border draw → content fade) ──
@@ -560,7 +589,8 @@ export class HologramDroneDisplay {
       .subVectors(camera.position, this.flyEndPos)
       .normalize();
 
-    const panelGap = 0.8 * distScale; // gap between panels scales too
+    // Wider gap in orbit mode to prevent heavy overlap at close range
+    const panelGap = this.isOrbitMode ? 1.2 * distScale : 0.8 * distScale;
 
     // ── First pass: measure all panel heights ──────────────────────
     const panelHeights: number[] = [];
@@ -571,15 +601,25 @@ export class HologramDroneDisplay {
       panelHeights.push(panelWorldWidth * (canvasH / CANVAS_W));
     }
 
-    // Total stack height — used to vertically position the stack.
-    // Bias toward keeping panels *below* the drone so the top panel
-    // stays in the viewport instead of flying off-screen.
+    // Total stack height — used to vertically position the stack (non-orbit).
     const totalHeight = panelHeights.reduce((sum, h) => sum + h, 0) + panelGap * (panelHeights.length - 1);
 
-    // ── Second pass: create panels ────────────────────────────────
-    // Start just above drone level (only 20% of total height above center)
-    // so most of the stack is below — visible in the camera's view.
-    let yAccum = totalHeight * 0.2; // start from top
+    // In orbit mode: lay panels side-by-side left → right using camera's right vector.
+    // In normal mode: stack top → bottom using world-Y.
+    const panelWidths = panelHeights.map(() => panelWorldWidth); // all same width
+    const totalWidth = panelWidths.reduce((s, w) => s + w, 0) + panelGap * (panelWidths.length - 1);
+
+    // Camera basis vectors for orbit layout
+    const camUp = this.isOrbitMode ? camera.up.clone().normalize() : new THREE.Vector3(0, 1, 0);
+    const camRight = this.isOrbitMode
+      ? new THREE.Vector3().crossVectors(
+          camera.getWorldDirection(new THREE.Vector3()),
+          camUp,
+        ).normalize()
+      : new THREE.Vector3(); // unused in normal mode
+
+    let yAccum = totalHeight * 0.2; // vertical accumulator (normal mode)
+    let xAccum = -totalWidth / 2 - totalWidth * 0.15; // shift 15% left of center
 
     for (let i = 0; i < panelDataList.length; i++) {
       const data = panelDataList[i];
@@ -615,12 +655,21 @@ export class HologramDroneDisplay {
       });
       const mesh = new THREE.Mesh(geo, mat);
 
-      // Position: centered vertical stack, pushed toward camera
       const forwardPush = droneToCamera.clone().multiplyScalar(3 * distScale);
-      const yOff = yAccum - panelH / 2; // center of this panel
-      yAccum -= panelH + panelGap; // move down for next panel
 
-      mesh.position.set(forwardPush.x, yOff, forwardPush.z);
+      if (this.isOrbitMode) {
+        // Side-by-side: offset along camera-right, vertically centered
+        const xCenter = xAccum + panelWorldWidth / 2;
+        xAccum += panelWorldWidth + panelGap;
+        const pos = forwardPush.clone()
+          .addScaledVector(camRight, xCenter);  // left → right
+        mesh.position.copy(pos);
+      } else {
+        // Normal vertical stack
+        const yOff = yAccum - panelH / 2;
+        yAccum -= panelH + panelGap;
+        mesh.position.set(forwardPush.x, yOff, forwardPush.z);
+      }
 
       this.panelGroup.add(mesh);
       this.panels.push({

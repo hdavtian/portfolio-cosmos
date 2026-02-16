@@ -16,6 +16,7 @@ export const createFocusedMoonRotationHandlers = (deps: {
   raycaster: THREE.Raycaster;
   pointer: THREE.Vector2;
   camera: THREE.Camera;
+  orbitActiveRef?: React.MutableRefObject<boolean>;
 }) => {
   const {
     mountRef,
@@ -26,9 +27,12 @@ export const createFocusedMoonRotationHandlers = (deps: {
     raycaster,
     pointer,
     camera,
+    orbitActiveRef,
   } = deps;
 
   const onPointerDownRotate = (event: PointerEvent) => {
+    // During orbit, don't intercept drags for moon rotation — let camera-controls handle them
+    if (orbitActiveRef?.current) return;
     if (!mountRef.current || !focusedMoonRef.current) return;
     const rect = mountRef.current.getBoundingClientRect();
     const px = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -107,6 +111,8 @@ export const createPointerInteractionHandlers = (deps: {
   starDestroyerRef?: React.MutableRefObject<THREE.Group | null>;
   /** Callback when the Star Destroyer is clicked */
   onStarDestroyerClick?: () => void;
+  /** When true, overlay-exit and same-moon clicks are suppressed */
+  orbitActiveRef?: React.MutableRefObject<boolean>;
 }) => {
   const {
     mountRef,
@@ -121,6 +127,7 @@ export const createPointerInteractionHandlers = (deps: {
     vlog,
     starDestroyerRef,
     onStarDestroyerClick,
+    orbitActiveRef,
   } = deps;
 
   let hoveredObject: THREE.Object3D | null = null;
@@ -253,6 +260,12 @@ export const createPointerInteractionHandlers = (deps: {
   };
 
   const onClick = (event: MouseEvent) => {
+    // Don't process clicks on UI elements (buttons, sliders, etc.)
+    // Only raycast when the click lands on the 3D canvas itself.
+    if (mountRef.current && !mountRef.current.contains(event.target as Node)) {
+      return;
+    }
+
     // Update pointer from the actual click position to avoid stale coords
     if (mountRef.current) {
       const rect = mountRef.current.getBoundingClientRect();
@@ -263,15 +276,16 @@ export const createPointerInteractionHandlers = (deps: {
     raycaster.setFromCamera(pointer, camera);
 
     // First, check for overlay clicks (exit focused moon)
-    // Filter out objects marked as overlays since they should not block interaction
-    const overlayHits = raycaster.intersectObjects(
-      overlayClickables.filter((o) => !o.userData.isOverlay),
-      false,
-    );
-    if (overlayHits.length > 0) {
-      // Exit focused moon view when overlay is clicked
-      exitFocusedMoon();
-      return;
+    // Skip during orbit — clicking the moon should not exit focus.
+    if (!orbitActiveRef?.current) {
+      const overlayHits = raycaster.intersectObjects(
+        overlayClickables.filter((o) => !o.userData.isOverlay),
+        false,
+      );
+      if (overlayHits.length > 0) {
+        exitFocusedMoon();
+        return;
+      }
     }
 
     // Check Star Destroyer click (recursive — GLTF model has nested meshes)

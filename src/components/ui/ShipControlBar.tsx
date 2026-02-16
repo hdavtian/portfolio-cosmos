@@ -38,6 +38,10 @@ interface Props {
   onDisengage?: () => void;
   zoomLevel?: number;
   onZoomChange?: (value: number) => void;
+  /** Current moon orbit phase — shows Leave Orbit button when orbiting */
+  orbitPhase?: "idle" | "hold" | "entering" | "orbiting" | "exiting";
+  /** Called when user clicks Leave Orbit */
+  onLeaveOrbit?: () => void;
 }
 
 const ShipControlBar: React.FC<Props> = ({
@@ -53,6 +57,8 @@ const ShipControlBar: React.FC<Props> = ({
   onDisengage,
   zoomLevel = FOLLOW_DISTANCE,
   onZoomChange,
+  orbitPhase = "idle",
+  onLeaveOrbit,
 }) => {
   const [fadeIn, setFadeIn] = useState(false);
   const [rollingDir, setRollingDir] = useState<-1 | 0 | 1>(0);
@@ -354,6 +360,28 @@ const ShipControlBar: React.FC<Props> = ({
               onMouseDown={stopEvt}
             >
               Disengage
+            </button>
+          </div>
+        )}
+
+        {/* Leave Orbit button — visible during hold, entering, or orbiting */}
+        {(orbitPhase === "hold" || orbitPhase === "entering" || orbitPhase === "orbiting") && onLeaveOrbit && (
+          <div style={{ display: "flex", justifyContent: "center", width: "100%", marginBottom: 4 }}>
+            <button
+              style={{
+                ...btnBase,
+                background: "rgba(0, 255, 120, 0.12)",
+                border: "1px solid rgba(0, 255, 120, 0.4)",
+                color: "#00ff78",
+                fontSize: 12,
+                letterSpacing: 1.5,
+                padding: "8px 24px",
+                textTransform: "uppercase" as const,
+              }}
+              onClick={() => onLeaveOrbit()}
+              onMouseDown={stopEvt}
+            >
+              Leave Orbit
             </button>
           </div>
         )}

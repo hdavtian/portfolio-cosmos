@@ -71,6 +71,8 @@ export const useNavigationSystem = (deps: {
   insideShipRef: React.MutableRefObject<boolean>;
   missionLog: (message: string) => void;
   vlog: (message: string) => void;
+  shipLog: (message: string, category?: "nav" | "orbit" | "system" | "info" | "cmd" | "error") => void;
+  debugLog: (source: string, message: string) => void;
   manualFlightRef: React.MutableRefObject<any>;
   spaceshipPathRef: React.MutableRefObject<any>;
   enterMoonViewRef: React.MutableRefObject<
@@ -100,6 +102,8 @@ export const useNavigationSystem = (deps: {
     insideShipRef,
     missionLog,
     vlog,
+    shipLog,
+    debugLog,
     manualFlightRef,
     spaceshipPathRef,
     enterMoonViewRef,
@@ -132,6 +136,11 @@ export const useNavigationSystem = (deps: {
     null,
   );
   const [navigationETA, setNavigationETA] = useState<number | null>(null);
+
+  /** Callback fired when ship arrives at a moon — set by ResumeSpace3D to trigger orbit */
+  const onMoonOrbitArrivalRef = useRef<
+    ((moonMesh: THREE.Mesh, company: any) => void) | null
+  >(null);
 
   const navigationTargetRef = useRef<{
     id: string | null;
@@ -285,6 +294,8 @@ export const useNavigationSystem = (deps: {
 
       navigationSystemRef.current.setOnArrival((targetId: string) => {
         vlog(`✅ ARRIVED at ${targetId}`);
+        shipLog("Destination reached", "nav");
+        debugLog("nav", `setOnArrival fired for targetId="${targetId}"`);
 
         const companyId = targetId.replace("moon-", "");
         const company = resumeData.experience.find(
@@ -315,12 +326,22 @@ export const useNavigationSystem = (deps: {
           `🌙 STATION CONTACT: Arrived at ${company.company} - Establishing connection`,
         );
 
-        enterMoonViewRef.current?.({ moonMesh, company, useFlight: false });
+        // Hand off to orbit system (set by ResumeSpace3D) instead of
+        // directly entering the content overlay.
+        debugLog("nav", `moonMesh found: ${!!moonMesh}, onMoonOrbitArrivalRef set: ${!!onMoonOrbitArrivalRef.current}`);
+        if (onMoonOrbitArrivalRef.current) {
+          debugLog("nav", "Calling onMoonOrbitArrivalRef (orbit path)");
+          onMoonOrbitArrivalRef.current(moonMesh, company);
+        } else {
+          debugLog("nav", "FALLBACK: onMoonOrbitArrivalRef not set, using enterMoonView");
+          // Fallback if orbit system not wired yet
+          enterMoonViewRef.current?.({ moonMesh, company, useFlight: false });
+        }
       });
 
       vlog("🎯 Navigation system initialized");
     },
-    [emitterRef, enterMoonViewRef, missionLog, resumeData, vlog],
+    [debugLog, emitterRef, enterMoonViewRef, missionLog, resumeData, shipLog, vlog],
   );
 
   const handleAutopilotNavigation = useCallback(
@@ -365,6 +386,8 @@ export const useNavigationSystem = (deps: {
       }
 
       vlog(`🎯 Autopilot navigation to ${targetType}: ${targetId}`);
+      const displayName = targetId.charAt(0).toUpperCase() + targetId.slice(1).replace(/-/g, " ");
+      shipLog(`Setting course for ${displayName}`, "nav");
 
       // Clear any prior avoidance / settled-view state from previous navigation
       sectionAvoidWaypoint.current = null;
@@ -584,6 +607,7 @@ export const useNavigationSystem = (deps: {
       manualFlightModeRef,
       shipCinematicRef,
       missionLog,
+      shipLog,
       sceneRef,
       spaceshipRef,
       vlog,
@@ -831,6 +855,9 @@ export const useNavigationSystem = (deps: {
       // --- Obstacle avoidance for section travel ---
       // Check if the straight-line path to the target intersects any
       // celestial body. If so, compute a lateral waypoint to route around.
+      // Also handles "departure": if the ship is currently INSIDE an
+      // obstacle (e.g. just visited a moon), push the waypoint further out
+      // so the ship clears the body before heading to the new destination.
       const avoidWp = sectionAvoidWaypoint.current;
       if (
         distance > 50 &&
@@ -843,6 +870,13 @@ export const useNavigationSystem = (deps: {
 
         for (const obs of obstacles) {
           const toObs = _avoidToObs.current.subVectors(obs.position, ship.position);
+          const distShipToObs = ship.position.distanceTo(obs.position);
+
+          // ── Ship inside obstacle radius → departure push ──
+          // After a moon visit the ship sits right at the body.
+          // Push the avoidance waypoint outward so it clears fully.
+          const insideObstacle = distShipToObs < obs.radius * 1.2;
+
           const proj = toObs.dot(dir);
           const t = Math.max(0, Math.min(1, proj / Math.max(segLen, 0.001)));
           const closest = _avoidClosest.current
@@ -850,8 +884,8 @@ export const useNavigationSystem = (deps: {
             .addScaledVector(dir, segLen * t);
           const distToPath = obs.position.distanceTo(closest);
 
-          if (distToPath < obs.radius) {
-            // Path is blocked — compute lateral waypoint
+          if (distToPath < obs.radius || insideObstacle) {
+            // Path is blocked or ship is inside body — compute lateral waypoint
             const up = new THREE.Vector3(0, 1, 0);
             const lateral = _avoidLateral.current.crossVectors(dir, up);
             if (lateral.lengthSq() < 0.0001) lateral.set(1, 0, 0);
@@ -860,7 +894,11 @@ export const useNavigationSystem = (deps: {
             // Deterministic: steer to the side the ship is already on
             const shipSide = toObs.dot(lateral);
             const sign = shipSide < 0 ? 1 : -1;
-            const avoidOffset = obs.radius * 1.8;
+            // 50% more clearance than before (was 1.8×, now 2.7×).
+            // When departing from inside an obstacle, add extra distance.
+            const avoidOffset = insideObstacle
+              ? obs.radius * 3.2   // generous departure clearance
+              : obs.radius * 2.7;  // standard avoidance (+50%)
 
             sectionAvoidWaypoint.current = obs.position
               .clone()
@@ -869,7 +907,7 @@ export const useNavigationSystem = (deps: {
             sectionAvoidCooldown.current = now + 1500; // prevent re-trigger
 
             vlog(
-              `🛰️ AVOIDANCE: Routing around ${obs.id} (${(avoidOffset * sign).toFixed(0)}u lateral)`,
+              `🛰️ ${insideObstacle ? "DEPARTURE" : "AVOIDANCE"}: Routing around ${obs.id} (${(avoidOffset * sign).toFixed(0)}u lateral)`,
             );
             break;
           }
@@ -923,6 +961,7 @@ export const useNavigationSystem = (deps: {
           manualFlightRef.current.isTurboActive = true;
           if (!target.lightspeedLogged) {
             vlog(`⚡ LIGHTSPEED: Engaged at distance ${distance.toFixed(0)}`);
+            shipLog("Lightspeed engaged", "nav");
             target.lightspeedLogged = true;
           }
         } else if (target.useTurbo && distance > NAV_TURBO_ENGAGE_DIST) {
@@ -1052,6 +1091,7 @@ export const useNavigationSystem = (deps: {
         }
 
         vlog(`✅ ARRIVED at ${target.id}`);
+        shipLog("Arriving at destination", "nav");
         vlog(`   Final distance: ${distance.toFixed(2)} units`);
         vlog(
           `   Ship position: [${ship.position.x.toFixed(1)}, ${ship.position.y.toFixed(1)}, ${ship.position.z.toFixed(1)}]`,
@@ -1088,8 +1128,10 @@ export const useNavigationSystem = (deps: {
 
         if (target.type === "moon") {
           vlog(
-            `🌙 Arrived at moon - showing overlays and enabling exploration`,
+            `🌙 Arrived at moon — initiating orbit sequence`,
           );
+          shipLog("Entering orbit", "orbit");
+          debugLog("nav", `updateAutopilot ARRIVED at moon target.id="${target.id}"`);
 
           const company = resumeData.experience.find(
             (exp: any) => exp.id === target.id,
@@ -1113,12 +1155,14 @@ export const useNavigationSystem = (deps: {
             }
           });
 
+          debugLog("nav", `company="${company?.company ?? "null"}", moonMesh=${!!moonMesh}, orbitRef=${!!onMoonOrbitArrivalRef.current}`);
           if (moonMesh && company) {
-            enterMoonViewRef.current?.({
-              moonMesh,
-              company,
-              useFlight: false,
-            });
+            // Fire the orbit-arrival callback (set by ResumeSpace3D)
+            // which triggers the orbit state machine instead of
+            // immediately showing content overlays.
+            onMoonOrbitArrivalRef.current?.(moonMesh, company);
+          } else {
+            debugLog("nav", "WARN: moonMesh or company not found — orbit skipped");
           }
         }
 
@@ -1127,12 +1171,14 @@ export const useNavigationSystem = (deps: {
       }
     }
   }, [
+    debugLog,
     enterMoonViewRef,
     followingSpaceshipRef,
     insideShipRef,
     manualFlightRef,
     resumeData,
     sceneRef,
+    shipLog,
     spaceshipPathRef,
     spaceshipRef,
     vlog,
@@ -1155,5 +1201,7 @@ export const useNavigationSystem = (deps: {
     initializeNavigationSystem,
     updateAutopilotNavigation,
     disposeNavigationSystem,
+    /** Set this to receive moon arrival events (triggers orbit) */
+    onMoonOrbitArrivalRef,
   };
 };

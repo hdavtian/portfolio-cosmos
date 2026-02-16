@@ -46,6 +46,7 @@ import ShipControlBar, { type ShipUIPhase, type ShipView } from "../ui/ShipContr
 import CockpitHints from "../ui/CockpitHints";
 import CockpitNavPanel from "../ui/CockpitNavPanel";
 import { MissionBriefingTerminal } from "../ui/MissionBriefingTerminal";
+import ShipTerminal from "../ui/ShipTerminal";
 import { HologramDroneDisplay } from "./HologramDroneDisplay";
 // CockpitHologramPanels kept for potential future use
 import { getOrbitalPositionEmitter } from "../OrbitalPositionEmitter";
@@ -57,6 +58,7 @@ import { usePointerInteractions } from "./hooks/usePointerInteractions";
 import { useThreeScene } from "./hooks/useThreeScene";
 import { useOrbitSystem } from "./hooks/useOrbitSystem";
 import { createMoonFocusController } from "./ResumeSpace3D.focusController";
+import { useMoonOrbit, type OrbitPhase } from "./hooks/useMoonOrbit";
 import { useNavigationSystem } from "./hooks/useNavigationSystem";
 import { useRenderLoop } from "./hooks/useRenderLoop";
 import { createIntroSequenceRunner } from "./introSequence";
@@ -99,6 +101,7 @@ import {
   SKILLS_FOCUS_DIST,
   PROJ_FOCUS_DIST,
   CINE_DURATION_DIVISOR,
+  orbitDebug,
 } from "./scaleConfig";
 
 // Extend window for logging timestamps
@@ -176,23 +179,7 @@ export default function ResumeSpace3D({
   // Hologram Drone display instance — always shown when content is active
   const hologramDroneRef = useRef<HologramDroneDisplay | null>(null);
 
-  // Drive hologram drone whenever overlay content changes
-  useEffect(() => {
-    const drone = hologramDroneRef.current;
-    if (!drone) return;
-    if (overlayContent) {
-      const moon = focusedMoonRef.current;
-      const cam = sceneRef.current.camera;
-      if (moon && cam) {
-        const moonWorldPos = new THREE.Vector3();
-        moon.getWorldPosition(moonWorldPos);
-        drone.showContent(overlayContent, moonWorldPos, cam);
-      }
-    } else {
-      drone.hideContent();
-    }
-  }, [overlayContent]);
-
+  // ── Moon Orbit System (declared early so useEffect below can reference orbitPhase) ──
   const originalMinDistanceRef = useRef<number>(0);
   // Request flag to tell the scene effect to exit focused moon (cross-scope safe)
   const exitFocusRequestRef = useRef<boolean>(false);
@@ -211,7 +198,59 @@ export default function ResumeSpace3D({
     setMissionControlLogs,
     vlog,
     missionLog,
+    shipLog,
+    shipLogs,
+    debugLog,
+    debugLogs,
+    debugLogsRef,
+    setDebugLogs,
+    debugLogTotal,
   } = useCosmosLogs();
+
+  const {
+    enterOrbit,
+    exitOrbit,
+    updateOrbit,
+    isOrbiting,
+    onExitCompleteRef: orbitExitCompleteRef,
+    onOrbitEstablishedRef,
+  } = useMoonOrbit(debugLog);
+
+  // Track orbit phase as React state for UI (Leave Orbit button, etc.)
+  const [orbitPhase, setOrbitPhase] = useState<OrbitPhase>("idle");
+
+  // Keep orbitActiveRef in sync for pointer handlers
+  useEffect(() => {
+    orbitActiveRef.current = orbitPhase !== "idle";
+  }, [orbitPhase]);
+
+  // Drive hologram drone whenever overlay content changes
+  useEffect(() => {
+    const drone = hologramDroneRef.current;
+    if (!drone) {
+      debugLog("drone", "useEffect: no drone ref");
+      return;
+    }
+    if (overlayContent) {
+      const moon = focusedMoonRef.current;
+      const cam = sceneRef.current.camera;
+      if (moon && cam) {
+        const moonWorldPos = new THREE.Vector3();
+        moon.getWorldPosition(moonWorldPos);
+        // During orbit, anchor the drone above the ship rather than beside the moon
+        const ship = spaceshipRef.current;
+        const anchor = (orbitPhase === "orbiting" && ship)
+          ? ship.position.clone()
+          : undefined;
+        debugLog("drone", `showContent called — orbitPhase=${orbitPhase}, anchor=${anchor ? `[${anchor.x.toFixed(0)},${anchor.y.toFixed(0)},${anchor.z.toFixed(0)}]` : "none"}, moonPos=[${moonWorldPos.x.toFixed(0)},${moonWorldPos.y.toFixed(0)},${moonWorldPos.z.toFixed(0)}]`);
+        drone.showContent(overlayContent, moonWorldPos, cam, anchor);
+      } else {
+        debugLog("drone", `useEffect: missing moon=${!!moon} cam=${!!cam}`);
+      }
+    } else {
+      drone.hideContent();
+    }
+  }, [overlayContent, orbitPhase]);
 
   const [shipMovementDebug, setShipMovementDebug] = useState(false);
   const [systemStatusLogs, setSystemStatusLogs] = useState<string[]>([]);
@@ -610,6 +649,10 @@ export default function ResumeSpace3D({
   const lastMoonOrbitSpeedRef = useRef<number | null>(null);
   const lastMoonSpinSpeedRef = useRef<number | null>(null);
 
+  // Ref that stays true whenever moon orbit is active — used by pointer
+  // interaction handlers to suppress moon-rotation drags and overlay-exit clicks.
+  const orbitActiveRef = useRef(false);
+
   const { buildRotationHandlers, buildPointerHandlers } =
     usePointerInteractions({
       mountRef,
@@ -617,6 +660,7 @@ export default function ResumeSpace3D({
       isDraggingRef,
       lastPointerRef,
       sceneRef,
+      orbitActiveRef,
     });
 
   const optionsRef = useCosmosOptions({
@@ -635,6 +679,7 @@ export default function ResumeSpace3D({
     initializeNavigationSystem,
     updateAutopilotNavigation,
     disposeNavigationSystem,
+    onMoonOrbitArrivalRef,
   } = useNavigationSystem({
     resumeData,
     emitterRef,
@@ -648,6 +693,8 @@ export default function ResumeSpace3D({
     insideShipRef,
     missionLog,
     vlog,
+    shipLog,
+    debugLog,
     manualFlightRef,
     spaceshipPathRef,
     enterMoonViewRef,
@@ -660,7 +707,27 @@ export default function ResumeSpace3D({
     async (companyId: string) => {
       if (!companyId) return;
 
+      // If already orbiting this moon, ignore — don't re-trigger orbit.
+      // Clicking the same moon you're hovering over should be a no-op.
+      if (isOrbiting() && focusedMoonRef.current) {
+        const focusedName = focusedMoonRef.current.userData?.planetName;
+        if (focusedName) {
+          const focusedId = focusedName.toLowerCase().replace(/\s+/g, "-");
+          if (focusedId === companyId) {
+            debugLog("nav", `Ignored click on same moon "${companyId}" — already orbiting`);
+            return;
+          }
+        }
+      }
+
       vlog(`🌙 Initiating moon navigation: ${companyId}`);
+
+      // Exit orbit if currently orbiting (different moon)
+      if (isOrbiting()) {
+        exitOrbit();
+        setOrbitPhase("exiting");
+        shipLog("Departing orbit — new destination", "orbit");
+      }
 
       // Always use autopilot — ship flies to the moon, then moon view activates
       if (!manualFlightModeRef.current) {
@@ -670,11 +737,18 @@ export default function ResumeSpace3D({
 
       vlog(`⚠️ Cannot navigate in manual flight mode`);
     },
-    [vlog, handleAutopilotNavigation],
+    [vlog, handleAutopilotNavigation, isOrbiting, exitOrbit, shipLog, debugLog],
   );
 
   const handleQuickNav = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
+      // Exit orbit if currently orbiting
+      if (isOrbiting()) {
+        exitOrbit();
+        setOrbitPhase("exiting");
+        shipLog("Departing orbit — new destination", "orbit");
+      }
+
       // Always use autopilot — ship is always engaged
       if (!manualFlightModeRef.current) {
         handleAutopilotNavigation(targetId, targetType);
@@ -699,6 +773,83 @@ export default function ResumeSpace3D({
       return next.length > 8 ? next.slice(-8) : next;
     });
   }, []);
+
+  // ── Orbit Debug Mode (F8 toggle) ─────────────────────────────────────────
+  // Lets you nudge orbit camera/ship params live during orbit, then dump
+  // final values to the ship terminal for copy-paste.
+  useEffect(() => {
+    let active = false;
+
+    const STEP_SMALL = 0.02;
+    const STEP_TILT = 0.3;
+
+    const dumpValues = () => {
+      const lines = [
+        "══════ ORBIT DEBUG VALUES ══════",
+        `ORBIT_ALTITUDE_MULT  = ${orbitDebug.altitudeMult.toFixed(3)}`,
+        `ORBIT_CAM_BEHIND     = ${orbitDebug.camBehind.toFixed(3)}`,
+        `ORBIT_CAM_ABOVE      = ${orbitDebug.camAbove.toFixed(3)}`,
+        `ORBIT_CAM_PITCH_BLEND= ${orbitDebug.pitchBlend.toFixed(3)}`,
+        `noseTilt             = ${orbitDebug.noseTilt.toFixed(2)}`,
+        "════════════════════════════════",
+      ];
+      lines.forEach((l) => shipLog(l, "debug"));
+      console.log(lines.join("\n"));
+    };
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "F8") {
+        e.preventDefault();
+        active = !active;
+        orbitDebug.active = active;
+        if (active) {
+          orbitDebug.reset();
+          shipLog("ORBIT DEBUG ON — W/S alt, A/D behind, Q/E above, R/F pitch, T/G tilt, F9 dump", "debug");
+        } else {
+          shipLog("ORBIT DEBUG OFF", "debug");
+        }
+        return;
+      }
+
+      if (!active) return;
+
+      if (e.key === "F9") {
+        e.preventDefault();
+        dumpValues();
+        return;
+      }
+
+      const k = e.key.toLowerCase();
+      let changed = true;
+
+      switch (k) {
+        case "w": orbitDebug.altitudeMult += STEP_SMALL; break;
+        case "s": orbitDebug.altitudeMult = Math.max(0.05, orbitDebug.altitudeMult - STEP_SMALL); break;
+        case "a": orbitDebug.camBehind += STEP_SMALL; break;
+        case "d": orbitDebug.camBehind = Math.max(0.05, orbitDebug.camBehind - STEP_SMALL); break;
+        case "q": orbitDebug.camAbove += STEP_SMALL; break;
+        case "e": orbitDebug.camAbove = Math.max(0, orbitDebug.camAbove - STEP_SMALL); break;
+        case "r": orbitDebug.pitchBlend = Math.min(1, orbitDebug.pitchBlend + STEP_SMALL); break;
+        case "f": orbitDebug.pitchBlend = Math.max(0, orbitDebug.pitchBlend - STEP_SMALL); break;
+        case "t": orbitDebug.noseTilt -= STEP_TILT; break;
+        case "g": orbitDebug.noseTilt += STEP_TILT; break;
+        default: changed = false;
+      }
+
+      if (changed) {
+        e.preventDefault();
+        debugLog("orbitDbg",
+          `alt=${orbitDebug.altitudeMult.toFixed(3)} behind=${orbitDebug.camBehind.toFixed(3)} above=${orbitDebug.camAbove.toFixed(3)} pitch=${orbitDebug.pitchBlend.toFixed(3)} tilt=${orbitDebug.noseTilt.toFixed(2)}`
+        );
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      orbitDebug.active = false;
+    };
+  }, [shipLog, debugLog]);
 
   const { initializeScene, setGlobalCleanup } = useThreeScene({
     mountRef,
@@ -854,6 +1005,14 @@ export default function ResumeSpace3D({
 
   const handleShipViewChange = useCallback(
     (view: ShipView) => {
+      // If currently in orbit, exit orbit first so the orbit camera
+      // stops fighting with the view-mode camera placement.
+      if (isOrbiting()) {
+        exitOrbit();
+        setOrbitPhase("exiting");
+        debugLog("view", `View change to "${view}" — exiting orbit`);
+      }
+
       if (view === "exterior") {
         // Go to 3rd person
         setInsideShip(false);
@@ -1006,7 +1165,7 @@ export default function ResumeSpace3D({
         vlog("✈️ Cockpit view");
       }
     },
-    [followingSpaceship, vlog],
+    [followingSpaceship, vlog, isOrbiting, exitOrbit, debugLog],
   );
 
   // ── Roll (bank) control handlers ────────────────────
@@ -2119,6 +2278,90 @@ export default function ResumeSpace3D({
       }
     };
 
+    // ── Moon orbit arrival handler ─────────────────────────────────────────────
+    // When the nav system reports arrival at a moon, we kick off the orbit
+    // state machine instead of immediately entering the content overlay.
+    // Content / drone will appear once orbit is established.
+    onMoonOrbitArrivalRef.current = (moonMesh: THREE.Mesh, company: any) => {
+      const ship = spaceshipRef.current;
+      const name = company.navLabel || company.company;
+      debugLog("orbit", `onMoonOrbitArrival fired for "${name}"`);
+      if (!ship) {
+        debugLog("orbit", "ABORT — spaceshipRef is null");
+        return;
+      }
+
+      // Compute moon radius from its geometry bounding sphere
+      const geo = moonMesh.geometry;
+      if (!geo.boundingSphere) geo.computeBoundingSphere();
+      const moonRadius = (geo.boundingSphere?.radius ?? 30) * moonMesh.scale.x;
+      debugLog("orbit", `moonRadius=${moonRadius.toFixed(1)}, scale=${moonMesh.scale.x.toFixed(2)}`);
+
+      const shipPos = ship.position;
+      const moonPos = new THREE.Vector3();
+      moonMesh.getWorldPosition(moonPos);
+      debugLog("orbit", `ship=[${shipPos.x.toFixed(1)},${shipPos.y.toFixed(1)},${shipPos.z.toFixed(1)}]`);
+      debugLog("orbit", `moon=[${moonPos.x.toFixed(1)},${moonPos.y.toFixed(1)},${moonPos.z.toFixed(1)}]`);
+
+      // Kick off orbit
+      enterOrbit(moonMesh, moonRadius, ship);
+      setOrbitPhase("hold");
+      shipLog(`Orbit hold — ${name}`, "orbit");
+      debugLog("orbit", "Phase → hold");
+
+      // Slow moon self-rotation to 1/3 during orbit for a calm view
+      const prevSpinSpeed = optionsRef.current.spaceMoonSpinSpeed ?? 0.1;
+      optionsRef.current = {
+        ...optionsRef.current,
+        spaceMoonSpinSpeed: prevSpinSpeed / 3,
+      };
+      debugLog("orbit", `Moon spin slowed: ${prevSpinSpeed.toFixed(3)} → ${(prevSpinSpeed / 3).toFixed(3)}`);
+
+      // Suppress zoom-exit detection while in orbit — camera moves continuously
+      focusedMoonCameraDistanceRef.current = null;
+
+      // When orbit is fully established, show drone content
+      onOrbitEstablishedRef.current = () => {
+        setOrbitPhase("orbiting");
+        shipLog("Stable orbit established", "orbit");
+        debugLog("orbit", "Phase → orbiting — calling enterMoonView");
+
+        // Now trigger the content overlay via the old enterMoonView path
+        enterMoonView({
+          moonMesh,
+          company,
+          useFlight: false,
+        });
+
+        // Keep zoom-exit suppressed during orbiting
+        focusedMoonCameraDistanceRef.current = null;
+        debugLog("orbit", "enterMoonView called, zoom-exit suppressed");
+      };
+
+      // When orbit exit finishes, clean up
+      orbitExitCompleteRef.current = () => {
+        setOrbitPhase("idle");
+        shipLog("Orbit departed", "orbit");
+        debugLog("orbit", "Phase → idle (exit complete)");
+
+        // Restore moon self-rotation to original speed
+        optionsRef.current = {
+          ...optionsRef.current,
+          spaceMoonSpinSpeed: prevSpinSpeed,
+        };
+        debugLog("orbit", `Moon spin restored: ${prevSpinSpeed.toFixed(3)}`);
+
+        // Fully exit moon focus — clears focusedMoonRef, overlayContent,
+        // hides hologram drone, and restores frozen orbital motion.
+        // Without this, the moon stays "focused" and can re-trigger orbit.
+        exitMoonView();
+        debugLog("orbit", "exitMoonView called — full cleanup");
+
+        // Re-enable zoom-exit detection
+        focusedMoonCameraDistanceRef.current = null;
+      };
+    };
+
     // freezeOrbitalMotion moved earlier in the file to avoid hoisting issues
 
     // --- COSMIC SYSTEMS INITIALIZATION ---
@@ -2900,6 +3143,8 @@ export default function ResumeSpace3D({
       starDestroyerRef,
       followingStarDestroyerRef,
       updateAutopilotNavigation,
+      updateMoonOrbit: updateOrbit,
+      isMoonOrbiting: isOrbiting,
       updateOrbitSystem,
       renderer,
       items,
@@ -2911,6 +3156,7 @@ export default function ResumeSpace3D({
       scene,
       sunMesh,
       vlog,
+      debugLog,
     });
 
     // Trigger loading complete with camera animation
@@ -2933,6 +3179,10 @@ export default function ResumeSpace3D({
 
     setTimeout(() => {
       setSceneReady(true);
+
+      // Boot message in ship terminal
+      shipLog("Systems online", "system");
+      shipLog("Navigation ready — autopilot engaged", "nav");
 
       // Start the orbital position emitter for tracking moving objects
       emitterRef.current.start();
@@ -3711,6 +3961,27 @@ export default function ResumeSpace3D({
                 onOptionsChange({ ...options, spaceFollowDistance: value });
               }
             }}
+            orbitPhase={orbitPhase}
+            onLeaveOrbit={() => {
+              exitOrbit();
+              setOrbitPhase("exiting");
+              shipLog("Departing orbit", "orbit");
+            }}
+          />
+
+          {/* Ship Terminal — top-right CRT log + command input */}
+          <ShipTerminal
+            logs={shipLogs}
+            debugLogs={debugLogs}
+            debugLogTotal={debugLogTotal}
+            onCommand={(cmd) => {
+              shipLog(`$ ${cmd}`, "cmd");
+              // Command execution will be wired later
+            }}
+            onClearDebug={() => {
+              debugLogsRef.current = [];
+              setDebugLogs([]);
+            }}
           />
 
           {/* Cockpit/Cabin keyboard hints */}
@@ -3719,7 +3990,7 @@ export default function ResumeSpace3D({
             shipViewMode={shipViewMode}
           />
 
-          {/* Ship destination nav panel — right side (all ship modes) */}
+          {/* Ship destination nav panel — left side (all ship modes) */}
           {shipUIPhase === "ship-engaged" && (
             <CockpitNavPanel
               targets={navigationTargets}
