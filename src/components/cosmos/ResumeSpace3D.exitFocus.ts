@@ -144,8 +144,8 @@ export const createExitFocusedMoon = (deps: {
       if (onOptionsChange) {
         onOptionsChange({
           ...optionsRef.current,
-          spaceOrbitSpeed: frozen.parentPlanetOrbitSpeed ?? 0.1,
-          spaceMoonOrbitSpeed: frozen.parentPlanetMoonOrbitSpeed ?? 0.01,
+          spaceOrbitSpeed: frozen.parentPlanetOrbitSpeed ?? 0,
+          spaceMoonOrbitSpeed: frozen.parentPlanetMoonOrbitSpeed ?? 0,
         });
       }
 

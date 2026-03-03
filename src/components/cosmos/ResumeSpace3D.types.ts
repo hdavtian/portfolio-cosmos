@@ -1,7 +1,6 @@
 import type * as THREE from "three";
 import type CameraControls from "camera-controls";
 import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import type { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
 import type { DiagramStyleOptions } from "../DiagramSettings";
 
 export interface ResumeSpace3DProps {
@@ -18,7 +17,7 @@ export interface SceneRef {
   fillLight?: THREE.PointLight;
   labelRendererDom?: HTMLElement;
   bloomPass?: UnrealBloomPass;
-  bokehPass?: BokehPass;
+  bokehPass?: unknown;
   sunMaterial?: THREE.MeshBasicMaterial | THREE.ShaderMaterial;
   sunGlowMaterial?: THREE.SpriteMaterial;
 }

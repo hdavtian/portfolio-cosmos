@@ -110,9 +110,9 @@ const CockpitNavPanel: React.FC<Props> = ({
   const btnActivePlanet: React.CSSProperties = {
     ...btnPlanet,
     background: "rgba(50, 200, 140, 0.2)",
-    border: "1px solid rgba(50, 200, 140, 0.5)",
+    border: "1px solid rgba(50, 200, 140, 0.45)",
     color: "#ffffff",
-    boxShadow: "0 0 10px rgba(50, 200, 140, 0.2)",
+    boxShadow: "0 0 8px rgba(50, 200, 140, 0.15)",
   };
 
   const btnActiveMoon: React.CSSProperties = {

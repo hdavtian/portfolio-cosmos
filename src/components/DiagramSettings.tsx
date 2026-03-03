@@ -52,6 +52,13 @@ export interface DiagramStyleOptions {
   spaceSunColor?: string;
   spaceTintSunMesh?: boolean;
   spaceFollowDistance?: number;
+  spaceFollowHeight?: number;
+  spaceCameraSmoothTime?: number;
+  spaceNavCameraBehind?: number;
+  spaceNavCameraHeight?: number;
+  spaceMoonNavMaxSpeed?: number;
+  spaceMoonNavTurboSpeed?: number;
+  spaceMoonNavTurboThreshold?: number;
   spaceTravelSpeed?: number;
 }
 

@@ -31,16 +31,16 @@ export const updateOrbit = (params: {
   const planetSpeedMultiplier = Math.max(
     0,
     Number(
-      options.spaceOrbitSpeed !== undefined ? options.spaceOrbitSpeed : 0.1,
-    ) || 0.1,
+      options.spaceOrbitSpeed !== undefined ? options.spaceOrbitSpeed : 0,
+    ) || 0,
   );
   const moonSpeedMultiplier = Math.max(
     0,
     Number(
       options.spaceMoonOrbitSpeed !== undefined
         ? options.spaceMoonOrbitSpeed
-        : (options.spaceOrbitSpeed ?? 0.01),
-    ) || 0.01,
+        : (options.spaceOrbitSpeed ?? 0),
+    ) || 0,
   );
 
   // Animate orbital positions only when speed is greater than zero

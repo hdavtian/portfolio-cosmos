@@ -149,15 +149,13 @@ export const NEAR_OVERVIEW = 1.0; // ship explore mode (overview)
 // Zoom exit threshold
 export const ZOOM_EXIT_THRESHOLD = 24;
 
-// Bokeh focus
-export const BOKEH_FOCUS = 50;
 
 // ─── SHIP CAMERA — FOLLOW & INTERIOR ─────────────────────────────────────────
 
 // Exterior follow camera  (orig: 60 behind, 25 above)
 // Falcon is now ~0.8 units long. Follow at 8 = ~10× ship length (good framing).
 export const FOLLOW_DISTANCE = 8;
-export const FOLLOW_HEIGHT = 3;
+export const FOLLOW_HEIGHT = 0.8; // low height keeps ship near screen center during travel
 
 // Cockpit local position — model space, multiplied by ship.scale at runtime
 // (orig: -6.05, 3.16, 5.36)
@@ -206,10 +204,15 @@ export const NAV_STAGING_OFFSET = 160;
 
 // Camera behind ship during travel/turn
 export const NAV_CAMERA_BEHIND = 8;
-export const NAV_CAMERA_HEIGHT = 3;
+export const NAV_CAMERA_HEIGHT = 0.8; // low height keeps ship near screen center during travel
 
 // Settle camera offset from planet
 export const NAV_SETTLE_OFFSET = 160;
+
+// Cruise — gentle speed for moon-to-moon travel within same planet system
+export const NAV_CRUISE_SPEED = 2.5;           // units/frame — between normal (2.0) and turbo (4.0)
+export const NAV_CRUISE_ENGAGE_DIST = 200;     // engage cruise above this distance
+export const NAV_CRUISE_LERP = 0.05;           // smooth acceleration
 
 // Turbo engagement distance threshold
 export const NAV_TURBO_ENGAGE_DIST = 1_000;
@@ -329,6 +332,13 @@ export const COCKPIT_PANEL_STEP = 0.3;
 // Light radius ~2–4 units ≈ 3–5× ship length — visible glow, not a fireball.
 export const ENGINE_LIGHT_BASE_DIST = 2;
 export const ENGINE_LIGHT_RANGE = 2;
+
+// Lightspeed afterburner — bright blue-yellow exhaust visible from afar
+export const ENGINE_LIGHTSPEED_INTENSITY = 25;  // very bright point light
+export const ENGINE_LIGHTSPEED_DISTANCE = 60;   // visible from far away
+export const ENGINE_LIGHTSPEED_COLOR_R = 0.55;  // warm yellow-blue blend
+export const ENGINE_LIGHTSPEED_COLOR_G = 0.7;
+export const ENGINE_LIGHTSPEED_COLOR_B = 1.0;
 
 // ─── CINEMATIC CAMERA OFFSETS (ResumeSpace3D.tsx) ────────────────────────────
 

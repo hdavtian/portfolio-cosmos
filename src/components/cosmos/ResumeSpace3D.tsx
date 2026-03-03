@@ -96,7 +96,11 @@ import {
   SKILLS_WANDER_RADIUS,
   PROJ_WANDER_RADIUS,
   SUN_WANDER_RADIUS,
+  NAV_MAX_SPEED,
+  NAV_TURBO_SPEED,
+  NAV_TURBO_THRESHOLD,
   NAV_CAMERA_BEHIND,
+  NAV_CAMERA_HEIGHT,
   EXP_FOCUS_DIST,
   SKILLS_FOCUS_DIST,
   PROJ_FOCUS_DIST,
@@ -279,6 +283,9 @@ export default function ResumeSpace3D({
     "exterior",
   );
   const spaceshipRef = useRef<THREE.Group | null>(null);
+  const spaceshipCameraOffsetRef = useRef(
+    new THREE.Vector3(0, FOLLOW_HEIGHT, FOLLOW_DISTANCE),
+  );
 
 
   const shipStagingModeRef = useRef(false);
@@ -439,6 +446,7 @@ export default function ResumeSpace3D({
     direction: { forward: number; right: number; up: number };
     turboStartTime: number;
     isTurboActive: boolean;
+    isLightspeedActive: boolean;
   }>({
     velocity: new THREE.Vector3(),
     acceleration: 0,
@@ -454,6 +462,7 @@ export default function ResumeSpace3D({
     direction: { forward: 0, right: 0, up: 0 },
     turboStartTime: 0,
     isTurboActive: false,
+    isLightspeedActive: false,
   });
 
   // Keyboard state for manual controls
@@ -567,7 +576,7 @@ export default function ResumeSpace3D({
     );
 
     lastMoonOrbitSpeedRef.current =
-      optionsRef.current.spaceMoonOrbitSpeed ?? 0.01;
+      optionsRef.current.spaceMoonOrbitSpeed ?? 0;
 
     if (sceneRef.current.scene) {
       freezeSystemForMoon({
@@ -652,6 +661,22 @@ export default function ResumeSpace3D({
   // Ref that stays true whenever moon orbit is active — used by pointer
   // interaction handlers to suppress moon-rotation drags and overlay-exit clicks.
   const orbitActiveRef = useRef(false);
+  const pendingOrbitExitNavigationRef = useRef<{
+    targetId: string;
+    targetType: "section" | "moon";
+    departure?: { moonCenter: THREE.Vector3; moonRadius: number };
+  } | null>(null);
+
+  const captureMoonDepartureContext = useCallback(() => {
+    const moon = focusedMoonRef.current;
+    if (!moon) return undefined;
+    const moonCenter = new THREE.Vector3();
+    moon.getWorldPosition(moonCenter);
+    const geo = moon.geometry;
+    if (!geo.boundingSphere) geo.computeBoundingSphere();
+    const moonRadius = (geo.boundingSphere?.radius ?? 30) * moon.scale.x;
+    return { moonCenter, moonRadius };
+  }, []);
 
   const { buildRotationHandlers, buildPointerHandlers } =
     usePointerInteractions({
@@ -668,6 +693,15 @@ export default function ResumeSpace3D({
     sceneRef,
     frozenSystemStateRef,
   });
+  const [showFlightTuning, setShowFlightTuning] = useState(false);
+  const applyFlightTuning = useCallback(
+    (patch: Partial<typeof options>) => {
+      const next = { ...optionsRef.current, ...patch };
+      optionsRef.current = next;
+      onOptionsChange?.(next);
+    },
+    [onOptionsChange, optionsRef],
+  );
 
   const {
     currentNavigationTarget,
@@ -699,6 +733,7 @@ export default function ResumeSpace3D({
     spaceshipPathRef,
     enterMoonViewRef,
     shipRollOffsetRef,
+    optionsRef,
     followingStarDestroyerRef,
     setFollowingStarDestroyer,
   });
@@ -724,9 +759,15 @@ export default function ResumeSpace3D({
 
       // Exit orbit if currently orbiting (different moon)
       if (isOrbiting()) {
+        pendingOrbitExitNavigationRef.current = {
+          targetId: companyId,
+          targetType: "moon",
+          departure: captureMoonDepartureContext(),
+        };
         exitOrbit();
         setOrbitPhase("exiting");
         shipLog("Departing orbit — new destination", "orbit");
+        return;
       }
 
       // Always use autopilot — ship flies to the moon, then moon view activates
@@ -737,16 +778,30 @@ export default function ResumeSpace3D({
 
       vlog(`⚠️ Cannot navigate in manual flight mode`);
     },
-    [vlog, handleAutopilotNavigation, isOrbiting, exitOrbit, shipLog, debugLog],
+    [
+      vlog,
+      handleAutopilotNavigation,
+      isOrbiting,
+      exitOrbit,
+      shipLog,
+      debugLog,
+      captureMoonDepartureContext,
+    ],
   );
 
   const handleQuickNav = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
       // Exit orbit if currently orbiting
       if (isOrbiting()) {
+        pendingOrbitExitNavigationRef.current = {
+          targetId,
+          targetType,
+          departure: captureMoonDepartureContext(),
+        };
         exitOrbit();
         setOrbitPhase("exiting");
         shipLog("Departing orbit — new destination", "orbit");
+        return;
       }
 
       // Always use autopilot — ship is always engaged
@@ -761,7 +816,13 @@ export default function ResumeSpace3D({
         handleNavigationRef.current(target);
       }
     },
-    [handleAutopilotNavigation],
+    [
+      handleAutopilotNavigation,
+      isOrbiting,
+      exitOrbit,
+      shipLog,
+      captureMoonDepartureContext,
+    ],
   );
 
   // Legacy left-panel hide/show logic removed — old CosmicNavigation
@@ -793,7 +854,7 @@ export default function ResumeSpace3D({
         `noseTilt             = ${orbitDebug.noseTilt.toFixed(2)}`,
         "════════════════════════════════",
       ];
-      lines.forEach((l) => shipLog(l, "debug"));
+      lines.forEach((l) => shipLog(l, "info"));
       console.log(lines.join("\n"));
     };
 
@@ -804,9 +865,9 @@ export default function ResumeSpace3D({
         orbitDebug.active = active;
         if (active) {
           orbitDebug.reset();
-          shipLog("ORBIT DEBUG ON — W/S alt, A/D behind, Q/E above, R/F pitch, T/G tilt, F9 dump", "debug");
+          shipLog("ORBIT DEBUG ON — W/S alt, A/D behind, Q/E above, R/F pitch, T/G tilt, F9 dump", "info");
         } else {
-          shipLog("ORBIT DEBUG OFF", "debug");
+          shipLog("ORBIT DEBUG OFF", "info");
         }
         return;
       }
@@ -997,21 +1058,21 @@ export default function ResumeSpace3D({
       if (targetType === "moon") {
         handleExperienceCompanyNavigation(targetId);
       } else {
-        handleAutopilotNavigation(targetId, "section");
+        // Route section nav through the unified quick-nav path so orbit-exit
+        // clearance/deferred navigation is always honored.
+        handleQuickNav(targetId, "section");
       }
     },
-    [handleExperienceCompanyNavigation, handleAutopilotNavigation, vlog],
+    [handleExperienceCompanyNavigation, handleQuickNav, vlog],
   );
 
   const handleShipViewChange = useCallback(
     (view: ShipView) => {
-      // If currently in orbit, exit orbit first so the orbit camera
-      // stops fighting with the view-mode camera placement.
-      if (isOrbiting()) {
-        exitOrbit();
-        setOrbitPhase("exiting");
-        debugLog("view", `View change to "${view}" — exiting orbit`);
-      }
+      // View mode changes are now safe during orbit:
+      // - Exterior: orbit camera drives (3rd-person ISS view)
+      // - Interior/cockpit: interior camera drives (cockpit seat, windshield view)
+      // The orbit system keeps positioning the ship; only the camera
+      // attachment changes.  No need to exit orbit on view switch.
 
       if (view === "exterior") {
         // Go to 3rd person
@@ -1034,8 +1095,9 @@ export default function ResumeSpace3D({
           cc.maxDistance = CONTROLS_MAX_DIST;
         }
 
-        // Reposition camera behind and above the ship using its orientation
-        if (sceneRef.current.controls && spaceshipRef.current) {
+        // Reposition camera behind and above the ship using its orientation.
+        // Skip during orbit — the orbit camera will resume on the next frame.
+        if (sceneRef.current.controls && spaceshipRef.current && !isOrbiting()) {
           const cc = sceneRef.current.controls;
           const ship = spaceshipRef.current;
           const followDist = optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
@@ -1047,11 +1109,6 @@ export default function ResumeSpace3D({
             ship.position.x, ship.position.y, ship.position.z,
             true,
           );
-        }
-
-        // Re-enable depth-of-field if there's a focused moon
-        if (focusedMoonRef.current && sceneRef.current.bokehPass) {
-          (sceneRef.current.bokehPass as { enabled: boolean }).enabled = true;
         }
 
         vlog("🎥 3rd person view");
@@ -2176,34 +2233,6 @@ export default function ResumeSpace3D({
     const { onPointerDownRotate, onPointerMoveRotate, onPointerUpRotate } =
       buildRotationHandlers({ raycaster, pointer, camera });
 
-    const enableMoonDepthOfField = (moonMesh: THREE.Mesh) => {
-      const bokehPass = sceneRef.current.bokehPass as
-        | {
-            enabled: boolean;
-            materialBokeh?: { uniforms?: { focus?: { value: number } } };
-          }
-        | undefined;
-      if (!bokehPass) return;
-      bokehPass.enabled = true;
-      const moonWorld = new THREE.Vector3();
-      moonMesh.getWorldPosition(moonWorld);
-      const focusDistance = camera.position.distanceTo(moonWorld);
-      if (bokehPass.materialBokeh?.uniforms?.focus) {
-        bokehPass.materialBokeh.uniforms.focus.value = focusDistance;
-      }
-    };
-
-    const disableMoonDepthOfField = () => {
-      const bokehPass = sceneRef.current.bokehPass as
-        | {
-            enabled: boolean;
-          }
-        | undefined;
-      if (bokehPass) {
-        bokehPass.enabled = false;
-      }
-    };
-
     const { enterMoonView, exitMoonView } = createMoonFocusController({
       scene,
       items,
@@ -2225,8 +2254,6 @@ export default function ResumeSpace3D({
       freezeOrbitalMotion,
       lastMoonOrbitSpeedRef,
       lastMoonSpinSpeedRef,
-      onMoonViewStart: enableMoonDepthOfField,
-      onMoonViewEnd: disableMoonDepthOfField,
     });
 
     // Wrap enterMoonView so that when arriving via ship navigation
@@ -2359,6 +2386,20 @@ export default function ResumeSpace3D({
 
         // Re-enable zoom-exit detection
         focusedMoonCameraDistanceRef.current = null;
+
+        const pendingNav = pendingOrbitExitNavigationRef.current;
+        pendingOrbitExitNavigationRef.current = null;
+        if (pendingNav && !manualFlightModeRef.current) {
+          debugLog(
+            "orbit",
+            `Running deferred nav after orbit exit: ${pendingNav.targetType}:${pendingNav.targetId}`,
+          );
+          handleAutopilotNavigation(
+            pendingNav.targetId,
+            pendingNav.targetType,
+            pendingNav.departure,
+          );
+        }
       };
     };
 
@@ -2765,7 +2806,8 @@ export default function ResumeSpace3D({
 
           // Always use autopilot — ship is always engaged
           if (!manualFlightModeRef.current) {
-            handleAutopilotNavigation(target, "section");
+            // Use unified quick-nav path to ensure moon-exit clearance applies.
+            handleQuickNav(target, "section");
             break;
           }
 
@@ -3125,6 +3167,7 @@ export default function ResumeSpace3D({
       sceneRef,
       focusedMoonRef,
       spaceshipEngineLightRef,
+      spaceshipCameraOffsetRef,
       shipViewModeRef,
       insideShipRef,
       debugSnapToShipRef,
@@ -3995,10 +4038,189 @@ export default function ResumeSpace3D({
             <CockpitNavPanel
               targets={navigationTargets}
               currentTarget={currentNavigationTarget}
-              isNavigating={!!currentNavigationTarget}
+              isNavigating={navigationDistance !== null}
               onNavigate={handleCockpitNavigate}
             />
           )}
+
+          {/* Flight tuning controls (hidden behind a gear in bottom-right) */}
+          <div
+            style={{
+              position: "fixed",
+              right: 14,
+              bottom: 14,
+              zIndex: 1200,
+              pointerEvents: "auto",
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {showFlightTuning && (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  bottom: 54,
+                  width: 320,
+                  maxHeight: "62vh",
+                  overflowY: "auto",
+                  padding: 12,
+                  borderRadius: 10,
+                  border: "1px solid rgba(140, 190, 255, 0.35)",
+                  background: "rgba(8, 12, 22, 0.92)",
+                  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)",
+                  backdropFilter: "blur(10px)",
+                  color: "#d7e7ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.8, marginBottom: 10 }}>
+                  FLIGHT + CAMERA TUNING
+                </div>
+
+                <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 10 }}>
+                  Live values update while flying
+                </div>
+
+                {[
+                  {
+                    key: "spaceMoonNavMaxSpeed",
+                    label: "Moon Max Speed",
+                    min: 1,
+                    max: 20,
+                    step: 0.1,
+                    value: options.spaceMoonNavMaxSpeed ?? NAV_MAX_SPEED,
+                  },
+                  {
+                    key: "spaceMoonNavTurboSpeed",
+                    label: "Moon Turbo Speed",
+                    min: 2,
+                    max: 40,
+                    step: 0.1,
+                    value: options.spaceMoonNavTurboSpeed ?? NAV_TURBO_SPEED,
+                  },
+                  {
+                    key: "spaceMoonNavTurboThreshold",
+                    label: "Moon Turbo Threshold",
+                    min: 200,
+                    max: 6000,
+                    step: 50,
+                    value:
+                      options.spaceMoonNavTurboThreshold ?? NAV_TURBO_THRESHOLD,
+                  },
+                  {
+                    key: "spaceFollowDistance",
+                    label: "Follow Distance",
+                    min: 4,
+                    max: 40,
+                    step: 0.5,
+                    value: options.spaceFollowDistance ?? FOLLOW_DISTANCE,
+                  },
+                  {
+                    key: "spaceFollowHeight",
+                    label: "Follow Height",
+                    min: 0,
+                    max: 8,
+                    step: 0.1,
+                    value: options.spaceFollowHeight ?? FOLLOW_HEIGHT,
+                  },
+                  {
+                    key: "spaceCameraSmoothTime",
+                    label: "Camera Smooth Time",
+                    min: 0.05,
+                    max: 1.2,
+                    step: 0.01,
+                    value: options.spaceCameraSmoothTime ?? 0.25,
+                  },
+                  {
+                    key: "spaceNavCameraBehind",
+                    label: "Nav Camera Behind",
+                    min: 4,
+                    max: 24,
+                    step: 0.5,
+                    value: options.spaceNavCameraBehind ?? NAV_CAMERA_BEHIND,
+                  },
+                  {
+                    key: "spaceNavCameraHeight",
+                    label: "Nav Camera Height",
+                    min: 0,
+                    max: 8,
+                    step: 0.1,
+                    value: options.spaceNavCameraHeight ?? NAV_CAMERA_HEIGHT,
+                  },
+                ].map((control) => (
+                  <div key={control.key} style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                      <span>{control.label}</span>
+                      <span>{Number(control.value).toFixed(control.step < 1 ? 2 : 0)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={control.min}
+                      max={control.max}
+                      step={control.step}
+                      value={control.value}
+                      onChange={(e) =>
+                        applyFlightTuning({
+                          [control.key]: Number(e.target.value),
+                        } as Partial<typeof options>)
+                      }
+                      style={{ width: "100%" }}
+                    />
+                  </div>
+                ))}
+
+                <button
+                  onClick={() =>
+                    applyFlightTuning({
+                      spaceMoonNavMaxSpeed: NAV_MAX_SPEED,
+                      spaceMoonNavTurboSpeed: NAV_TURBO_SPEED,
+                      spaceMoonNavTurboThreshold: NAV_TURBO_THRESHOLD,
+                      spaceFollowDistance: FOLLOW_DISTANCE,
+                      spaceFollowHeight: FOLLOW_HEIGHT,
+                      spaceCameraSmoothTime: 0.25,
+                      spaceNavCameraBehind: NAV_CAMERA_BEHIND,
+                      spaceNavCameraHeight: NAV_CAMERA_HEIGHT,
+                    })
+                  }
+                  style={{
+                    marginTop: 4,
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(160, 190, 255, 0.45)",
+                    background: "rgba(32, 56, 96, 0.45)",
+                    color: "#e8f2ff",
+                    cursor: "pointer",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Reset Tuning Defaults
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowFlightTuning((v) => !v)}
+              title="Flight and camera tuning"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                border: "1px solid rgba(140, 190, 255, 0.45)",
+                background: "rgba(8, 12, 22, 0.88)",
+                color: "#cde4ff",
+                cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.35)",
+                fontSize: 18,
+                lineHeight: "36px",
+              }}
+            >
+              ⚙
+            </button>
+          </div>
 
           {/* Spaceship HUD Interface */}
           <SpaceshipHUD

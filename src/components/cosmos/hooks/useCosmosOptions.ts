@@ -13,14 +13,16 @@ export const useCosmosOptions = (params: {
   const { options, sceneRef, frozenSystemStateRef } = params;
 
   const optionsRef = useRef({
-    spaceMoonOrbitSpeed: 0.01,
+    spaceOrbitSpeed: 0,
+    spaceMoonOrbitSpeed: 0,
     spaceMoonSpinSpeed: 0.1,
     ...options,
   });
 
   useEffect(() => {
     optionsRef.current = {
-      spaceMoonOrbitSpeed: 0.01,
+      spaceOrbitSpeed: 0,
+      spaceMoonOrbitSpeed: 0,
       spaceMoonSpinSpeed: 0.1,
       ...options,
     };

@@ -330,7 +330,7 @@ export const createLighting = (options: { spaceSunIntensity?: number }) => {
 
   const sunLight = new THREE.PointLight(
     new THREE.Color(1.0, 1.0, 1.0),
-    (options.spaceSunIntensity || 4.5) * 4, // Default 18 — bright sunny/dark sides on planets
+    (options.spaceSunIntensity || 12.5) * 4, // Default 50 — bright universe
     SUN_LIGHT_DISTANCE, // Distance (extended to reach far planets)
     0.5, // Gentler decay — light carries further across the expanded universe
   );

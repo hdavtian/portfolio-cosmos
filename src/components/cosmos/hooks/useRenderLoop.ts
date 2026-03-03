@@ -6,29 +6,17 @@ import { physicsWorld } from "../PhysicsWorld";
 import { PhysicsTravelAnchor } from "../PhysicsTravelAnchor";
 import type { OrbitAnchor, OrbitItem } from "../ResumeSpace3D.orbital";
 import type { SceneRef } from "../ResumeSpace3D.types";
-import type { StarDestroyerCruiser } from "../../StarDestroyerCruiser";
 import {
-  COCKPIT_LOCAL_POS,
-  COCKPIT_TARGET_LOCAL,
-  CABIN_LOCAL_POS,
-  CABIN_TARGET_LOCAL,
-  NEAR_EXPLORE,
-  NEAR_CABIN,
-  DEBUG_SNAP_DIST,
-  DEBUG_SNAP_HEIGHT,
-  ENGINE_LIGHT_BASE_DIST,
-  ENGINE_LIGHT_RANGE,
-  SD_ENGINE_LIGHT_RANGE,
   FOLLOW_DISTANCE,
   FOLLOW_HEIGHT,
-  SD_ESCORT_STARBOARD,
-  SD_ESCORT_ABOVE,
-  SD_ESCORT_BEHIND,
-  COCKPIT_THRUST_SPEED,
+  INTRO_ORBIT_RADIUS,
+  ENGINE_LIGHT_BASE_DIST,
+  ENGINE_LIGHT_RANGE,
+  NEAR_EXPLORE,
+  CONTROLS_MAX_DIST,
+  NEAR_CABIN,
   INTERIOR_MIN_DIST,
   INTERIOR_MAX_DIST,
-  INTRO_ORBIT_RADIUS,
-  CONTROLS_MAX_DIST,
 } from "../scaleConfig";
 
 export const useRenderLoop = () => {
@@ -80,7 +68,7 @@ export const useRenderLoop = () => {
       sceneRef: React.MutableRefObject<SceneRef>;
       focusedMoonRef: React.MutableRefObject<THREE.Mesh | null>;
       spaceshipEngineLightRef: React.MutableRefObject<THREE.PointLight | null>;
-
+      spaceshipCameraOffsetRef: React.MutableRefObject<THREE.Vector3>;
       shipViewModeRef: React.MutableRefObject<
         "exterior" | "interior" | "cockpit"
       >;
@@ -92,19 +80,17 @@ export const useRenderLoop = () => {
         local: [number, number, number];
         world: [number, number, number];
       }>;
-      cockpitSteerRef: React.MutableRefObject<{ x: number; y: number }>;
-      cockpitSteerActiveRef: React.MutableRefObject<boolean>;
-      rollInputRef: React.MutableRefObject<number>;
-      shipRollOffsetRef: React.MutableRefObject<number>;
       navTurnActiveRef: React.MutableRefObject<boolean>;
       settledViewTargetRef: React.MutableRefObject<THREE.Vector3 | null>;
-      optionsRef: React.MutableRefObject<{ spaceFollowDistance?: number }>;
-      hologramDroneRef: React.MutableRefObject<{ update: (delta: number, camera: THREE.Camera) => void; isActive: () => boolean } | null>;
-      starDestroyerCruiserRef: React.MutableRefObject<StarDestroyerCruiser | null>;
-      starDestroyerRef: React.MutableRefObject<THREE.Group | null>;
-      followingStarDestroyerRef: React.MutableRefObject<boolean>;
-      updateAutopilotNavigation: () => void;
-      /** Moon orbit update — returns camera instruction or null when idle */
+      optionsRef: React.MutableRefObject<{
+        spaceFollowDistance?: number;
+        spaceFollowHeight?: number;
+        spaceCameraSmoothTime?: number;
+      }>;
+      hologramDroneRef: React.MutableRefObject<{
+        update: (delta: number, camera: THREE.Camera) => void;
+        isActive: () => boolean;
+      } | null>;
       updateMoonOrbit: (dt: number, ship: THREE.Object3D) => {
         cameraPosition: THREE.Vector3;
         cameraTarget: THREE.Vector3;
@@ -112,8 +98,8 @@ export const useRenderLoop = () => {
         cameraUp?: THREE.Vector3;
         userCameraFree?: boolean;
       } | null;
-      /** True when moon orbit is in any non-idle phase */
       isMoonOrbiting: () => boolean;
+      updateAutopilotNavigation: () => void;
       updateOrbitSystem: (params: {
         items: OrbitItem[];
         orbitAnchors: OrbitAnchor[];
@@ -133,6 +119,7 @@ export const useRenderLoop = () => {
       sunMesh: THREE.Object3D;
       vlog: (message: string) => void;
       debugLog: (source: string, message: string) => void;
+      [key: string]: unknown;
     }) => {
       const {
         exitFocusRequestRef,
@@ -150,27 +137,19 @@ export const useRenderLoop = () => {
         sceneRef,
         focusedMoonRef,
         spaceshipEngineLightRef,
-
         shipViewModeRef,
         insideShipRef,
         debugSnapToShipRef,
         shipExploreModeRef,
         shipExploreKeysRef,
         shipExploreCoordsRef,
-        cockpitSteerRef,
-        cockpitSteerActiveRef,
-        rollInputRef,
-        shipRollOffsetRef,
-        navTurnActiveRef,
         settledViewTargetRef,
         optionsRef,
         hologramDroneRef,
-        starDestroyerCruiserRef,
-        starDestroyerRef,
-        followingStarDestroyerRef,
-        updateAutopilotNavigation,
+        navTurnActiveRef,
         updateMoonOrbit,
         isMoonOrbiting,
+        updateAutopilotNavigation,
         updateOrbitSystem,
         renderer,
         items,
@@ -182,7 +161,6 @@ export const useRenderLoop = () => {
         scene,
         sunMesh,
         vlog,
-        debugLog,
       } = params;
 
       if (!travelAnchorRef.current) {
@@ -196,34 +174,91 @@ export const useRenderLoop = () => {
       // Exterior surface was (-6.2, 3.6, 7.1). Interior: ~0.8 inward (+X),
       // ~0.5 lower (seated eye), ~1.1 behind windshield.
       // NOTE: these are multiplied by ship.scale (0.5) in the transform below.
-      const cockpitLocalPos = new THREE.Vector3(COCKPIT_LOCAL_POS.x, COCKPIT_LOCAL_POS.y, COCKPIT_LOCAL_POS.z);
-      const cockpitTargetLocal = new THREE.Vector3(COCKPIT_TARGET_LOCAL.x, COCKPIT_TARGET_LOCAL.y, COCKPIT_TARGET_LOCAL.z);
-      const cabinLocalPos = new THREE.Vector3(CABIN_LOCAL_POS.x, CABIN_LOCAL_POS.y, CABIN_LOCAL_POS.z);
-      const cabinTargetLocal = new THREE.Vector3(CABIN_TARGET_LOCAL.x, CABIN_TARGET_LOCAL.y, CABIN_TARGET_LOCAL.z);
-      // Temp vector for orbit camera target retrieval
-      const _orbitCamTarget = new THREE.Vector3();
-      let _orbitDbgTimer = 0;
-      let _orbitDbgOnce = false;
-      let _orbitFirstFrameLogged = false;
-      let _orbitLastWritePos: THREE.Vector3 | null = null;
-      // For orbit camera "up" lerp (ISS roll effect)
-      const _orbitCurUp = new THREE.Vector3(0, 1, 0);
-      let _orbitUpActive = false; // true while we're lerping camera.up
+      const cockpitLocalPos = new THREE.Vector3(-6.05, 3.16, 5.36);
+      const cockpitTargetLocal = new THREE.Vector3(-6.05, 3.16, 11.36);
+      const cabinLocalPos = new THREE.Vector3(0, -0.64, -4.49);
+      const cabinTargetLocal = new THREE.Vector3(0, -0.64, 1.51);
       let cockpitPosResolved = false;
       const shipWorldPos = new THREE.Vector3();
       const shipWorldQuat = new THREE.Quaternion();
       const desiredCameraPos = new THREE.Vector3();
       const desiredTargetPos = new THREE.Vector3();
       let wasInsideShip = false; // track enter/exit transitions
-      let wasInsideShipEmissiveClamped = false; // track emissive override
+      let wasInsideShipEmissiveClamped = false;
 
       // Reusable temp vectors to avoid per-frame allocations
       const _tmpOffset = new THREE.Vector3();
-
+      const _tmpScaled = new THREE.Vector3();
       const _tmpDesired = new THREE.Vector3();
       const _tmpHoverFloat = new THREE.Vector3();
       const _tmpLookDir = new THREE.Vector3();
-      const _tmpQuat = new THREE.Quaternion();
+      const _tmpControlTarget = new THREE.Vector3();
+      const _orbitCamTarget = new THREE.Vector3();
+      const _orbitCurUp = new THREE.Vector3(0, 1, 0);
+      let _orbitUpActive = false;
+      const LIGHTSPEED_STREAK_COUNT = 140;
+      let lightspeedStreakGroup: THREE.LineSegments | null = null;
+      let lightspeedStreakPositions: Float32Array | null = null;
+      let lightspeedStreakMeta: Float32Array | null = null; // x,y,z,len,speed
+      let lightspeedVisualIntensity = 0;
+      let lightspeedEnterAt = 0;
+      let lightspeedWasActive = false;
+      let lightspeedPitchWasActive = false;
+      let lightspeedRigPitchRad = 0; // camera-rig pitch bias (camera-only)
+      let lightspeedPitchKickAt = 0;
+      let lightspeedPitchPendingDir: -1 | 0 | 1 = 0;
+      const baseCameraFov =
+        camera instanceof THREE.PerspectiveCamera ? camera.fov : null;
+
+      const resetLightspeedStreak = (i: number) => {
+        if (!lightspeedStreakMeta || !lightspeedStreakPositions) return;
+        const mi = i * 5;
+        const pi = i * 6;
+        const x = (Math.random() - 0.5) * 160;
+        const y = (Math.random() - 0.5) * 80;
+        const z = -(30 + Math.random() * 280);
+        const len = 40 + Math.random() * 120;
+        const speed = 90 + Math.random() * 130;
+        lightspeedStreakMeta[mi] = x;
+        lightspeedStreakMeta[mi + 1] = y;
+        lightspeedStreakMeta[mi + 2] = z;
+        lightspeedStreakMeta[mi + 3] = len;
+        lightspeedStreakMeta[mi + 4] = speed;
+        // Start point closer to camera, end point converges toward forward focus.
+        lightspeedStreakPositions[pi] = x;
+        lightspeedStreakPositions[pi + 1] = y;
+        lightspeedStreakPositions[pi + 2] = z;
+        lightspeedStreakPositions[pi + 3] = x * 0.2;
+        lightspeedStreakPositions[pi + 4] = y * 0.2;
+        lightspeedStreakPositions[pi + 5] = z - len;
+      };
+
+      const ensureLightspeedStreaks = () => {
+        if (lightspeedStreakGroup) return;
+        lightspeedStreakPositions = new Float32Array(LIGHTSPEED_STREAK_COUNT * 6);
+        lightspeedStreakMeta = new Float32Array(LIGHTSPEED_STREAK_COUNT * 5);
+        for (let i = 0; i < LIGHTSPEED_STREAK_COUNT; i += 1) {
+          resetLightspeedStreak(i);
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute(
+          "position",
+          new THREE.BufferAttribute(lightspeedStreakPositions, 3),
+        );
+        const mat = new THREE.LineBasicMaterial({
+          color: 0xbfd9ff,
+          transparent: true,
+          opacity: 0.45,
+          depthTest: false,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          toneMapped: false,
+        });
+        lightspeedStreakGroup = new THREE.LineSegments(geo, mat);
+        lightspeedStreakGroup.visible = false;
+        lightspeedStreakGroup.renderOrder = 999;
+        scene.add(lightspeedStreakGroup);
+      };
 
       const animate = () => {
         animationFrameRef.current = requestAnimationFrame(animate);
@@ -244,6 +279,37 @@ export const useRenderLoop = () => {
           exitFocusRequestRef.current = false;
         }
 
+        // Lightspeed camera-rig "seat push" inertia (camera-only):
+        // - engage: upward pitch kick
+        // - during travel: slowly settle toward level
+        // - disengage/decel: downward kick then recover to level
+        const lsNow = !!manualFlightRef.current?.isLightspeedActive;
+        if (lsNow && !lightspeedPitchWasActive) {
+          lightspeedPitchKickAt = performance.now();
+          lightspeedPitchPendingDir = 1;
+        } else if (!lsNow && lightspeedPitchWasActive) {
+          lightspeedPitchKickAt = performance.now();
+          lightspeedPitchPendingDir = -1;
+        }
+        lightspeedPitchWasActive = lsNow;
+        if (lightspeedPitchPendingDir !== 0) {
+          const kickDelayMs = lightspeedPitchPendingDir > 0 ? 220 : 120;
+          if (performance.now() - lightspeedPitchKickAt >= kickDelayMs) {
+            lightspeedRigPitchRad +=
+              lightspeedPitchPendingDir > 0 ? 0.11 : -0.085;
+            lightspeedPitchPendingDir = 0;
+          }
+        }
+        const pitchSettleRate = lsNow ? 0.85 : 1.35;
+        lightspeedRigPitchRad +=
+          (0 - lightspeedRigPitchRad) *
+          (1 - Math.exp(-pitchSettleRate * deltaSeconds));
+        lightspeedRigPitchRad = THREE.MathUtils.clamp(
+          lightspeedRigPitchRad,
+          -0.14,
+          0.16,
+        );
+
         // ─── SHIP EXPLORE MODE ──────────────────────────────────
         // FPS-style free-cam locked near the ship. WASD to move,
         // mouse drag handled by OrbitControls for rotation.
@@ -252,15 +318,18 @@ export const useRenderLoop = () => {
         if (shipExploreModeRef.current && spaceshipRef.current) {
           const ship = spaceshipRef.current;
           const keys = shipExploreKeysRef.current;
-          const speed = (keys.ShiftLeft || keys.ShiftRight) ? 0.25 : 0.06;
-          const cc = sceneRef.current.controls;
+          const speed = keys.ShiftLeft || keys.ShiftRight ? 0.25 : 0.06;
+          const oc = sceneRef.current.controls as any;
 
-          // Configure for explore mode
-          if (cc) {
-            cc.minDistance = 0.01;
-            cc.maxDistance = CONTROLS_MAX_DIST;
-            cc.minPolarAngle = 0;
-            cc.maxPolarAngle = Math.PI;
+          // Disable orbit panning but allow rotation (look around)
+          if (oc) {
+            oc.enablePan = false;
+            oc.enableZoom = false;
+            oc.enableRotate = true;
+            oc.minDistance = 0.01;
+            oc.maxDistance = 1000;
+            oc.minPolarAngle = 0;
+            oc.maxPolarAngle = Math.PI;
           }
 
           // Near plane very small so we see nearby geometry
@@ -271,16 +340,36 @@ export const useRenderLoop = () => {
             }
           }
 
-          // Build movement from pressed keys using camera-controls API
-          if (cc) {
-            if (keys.KeyW || keys.ArrowUp) cc.forward(speed, false);
-            if (keys.KeyS || keys.ArrowDown) cc.forward(-speed, false);
-            if (keys.KeyA || keys.ArrowLeft) cc.truck(-speed, 0, false);
-            if (keys.KeyD || keys.ArrowRight) cc.truck(speed, 0, false);
-            if (keys.KeyQ) cc.elevate(-speed, false);
-            if (keys.KeyE) cc.elevate(speed, false);
+          // Build movement vector from pressed keys
+          const moveDir = _tmpOffset.set(0, 0, 0);
+          if (keys.KeyW || keys.ArrowUp) moveDir.z -= 1;
+          if (keys.KeyS || keys.ArrowDown) moveDir.z += 1;
+          if (keys.KeyA || keys.ArrowLeft) moveDir.x -= 1;
+          if (keys.KeyD || keys.ArrowRight) moveDir.x += 1;
+          if (keys.KeyQ) moveDir.y -= 1;
+          if (keys.KeyE) moveDir.y += 1;
 
-            cc.update(deltaSeconds);
+          if (moveDir.lengthSq() > 0) {
+            moveDir.normalize().multiplyScalar(speed);
+            // Move relative to camera orientation
+            const camRight = _tmpScaled
+              .set(1, 0, 0)
+              .applyQuaternion(camera.quaternion);
+            const camUp = _tmpDesired
+              .set(0, 1, 0)
+              .applyQuaternion(camera.quaternion);
+            camera.getWorldDirection(_tmpLookDir);
+            camera.position
+              .addScaledVector(_tmpLookDir, -moveDir.z)
+              .addScaledVector(camRight, moveDir.x)
+              .addScaledVector(camUp, moveDir.y);
+            // Move target with camera so orbit center follows
+            if (oc) {
+              oc.target
+                .addScaledVector(_tmpLookDir, -moveDir.z)
+                .addScaledVector(camRight, moveDir.x)
+                .addScaledVector(camUp, moveDir.y);
+            }
           }
 
           // Compute ship-local coordinates of the camera
@@ -297,6 +386,9 @@ export const useRenderLoop = () => {
             parseFloat(camera.position.z.toFixed(2)),
           ];
 
+          // Update OrbitControls for user rotation
+          if (oc) oc.update();
+
           // Render scene
           sunMesh.rotation.y += 0.002;
           composer.render();
@@ -304,10 +396,9 @@ export const useRenderLoop = () => {
         }
         // ─── END EXPLORE MODE ───────────────────────────────────
 
-        let shipIsIdleHover = false; // true when ship is just floating (no nav)
-        let moonOrbitActive = false; // true when orbit camera has exclusive control
-        let orbitUserCamFree = false; // true when user can drag camera during orbit
-
+        let shipIsIdleHover = false;
+        let moonOrbitActive = false;
+        let orbitUserCamFree = false;
         if (spaceshipRef.current) {
           const ship = spaceshipRef.current;
           const cinematic = shipCinematicRef.current;
@@ -315,9 +406,12 @@ export const useRenderLoop = () => {
 
           // Resolve cockpit position from model data (once)
           if (!cockpitPosResolved && ship.userData.cockpitCameraLocal) {
-            cockpitLocalPos.copy(ship.userData.cockpitCameraLocal as THREE.Vector3);
+            cockpitLocalPos.copy(
+              ship.userData.cockpitCameraLocal as THREE.Vector3,
+            );
             cockpitTargetLocal.copy(
-              (ship.userData.cockpitLookLocal as THREE.Vector3) ?? cockpitLocalPos,
+              (ship.userData.cockpitLookLocal as THREE.Vector3) ??
+                cockpitLocalPos,
             );
             cockpitPosResolved = true;
             vlog(
@@ -558,12 +652,10 @@ export const useRenderLoop = () => {
                   .clone()
                   .lerp(cinematic.settleTargetPos, easedSettle);
               }
-              shipIsIdleHover = true; // flag to skip physics this frame
-
-              // Subtle idle hover — very gentle so it looks alive but
-              // doesn't cause visible bobbing inside the cockpit.
-              const floatX = Math.sin(hoverElapsed * 0.25) * 0.02;
-              const floatY = Math.sin(hoverElapsed * 0.35) * 0.03;
+              shipIsIdleHover = true; // skip physics while idling in cinematic hover
+              // Subtle idle hover — reduced amplitude for realism
+              const floatX = Math.sin(hoverElapsed * 0.3) * 0.06;
+              const floatY = Math.sin(hoverElapsed * 0.45) * 0.08;
               _tmpHoverFloat.set(floatX, floatY, 0);
               ship.position.copy(basePos).add(_tmpHoverFloat);
 
@@ -581,15 +673,23 @@ export const useRenderLoop = () => {
               _tmpOffset.set(0, 0, -1).applyQuaternion(ship.quaternion);
               _tmpDesired
                 .copy(ship.position)
-                .addScaledVector(_tmpOffset, DEBUG_SNAP_DIST);
-              _tmpDesired.y += DEBUG_SNAP_HEIGHT;
+                .addScaledVector(_tmpOffset, 60).y += 20;
 
-              sceneRef.current.controls.setLookAt(
-                _tmpDesired.x, _tmpDesired.y, _tmpDesired.z,
-                ship.position.x, ship.position.y, ship.position.z,
-                true,
+              const cc = sceneRef.current.controls;
+              camera.position.lerp(_tmpDesired, 0.12);
+              const lerpedPos = camera.position;
+              const curTarget = cc.getTarget(_tmpControlTarget);
+              curTarget.lerp(ship.position, 0.12);
+              cc.setLookAt(
+                lerpedPos.x,
+                lerpedPos.y,
+                lerpedPos.z,
+                curTarget.x,
+                curTarget.y,
+                curTarget.z,
+                false,
               );
-              sceneRef.current.controls.update(deltaSeconds);
+              cc.update(deltaSeconds);
             }
 
             if (spaceshipEngineLightRef.current) {
@@ -709,8 +809,10 @@ export const useRenderLoop = () => {
             ship.position.add(direction.multiplyScalar(manual.currentSpeed));
 
             if (followingSpaceshipRef.current && sceneRef.current.controls) {
-              const cameraDistance = FOLLOW_DISTANCE;
-              const cameraHeight = FOLLOW_HEIGHT;
+              const cameraDistance =
+                optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
+              const cameraHeight =
+                optionsRef.current.spaceFollowHeight ?? FOLLOW_HEIGHT;
 
               const backwardDirection = new THREE.Vector3(0, 0, -1);
               backwardDirection.applyQuaternion(ship.quaternion);
@@ -720,12 +822,21 @@ export const useRenderLoop = () => {
                 .add(backwardDirection.multiplyScalar(cameraDistance))
                 .add(new THREE.Vector3(0, cameraHeight, 0));
 
-              sceneRef.current.controls.setLookAt(
-                cameraTargetPos.x, cameraTargetPos.y, cameraTargetPos.z,
-                ship.position.x, ship.position.y, ship.position.z,
-                true,
+              const cc = sceneRef.current.controls;
+              camera.position.lerp(cameraTargetPos, 0.1);
+              const lerpedPos = camera.position;
+              const curTarget = cc.getTarget(_tmpControlTarget);
+              curTarget.lerp(ship.position, 0.1);
+              cc.setLookAt(
+                lerpedPos.x,
+                lerpedPos.y,
+                lerpedPos.z,
+                curTarget.x,
+                curTarget.y,
+                curTarget.z,
+                false,
               );
-              sceneRef.current.controls.update(deltaSeconds);
+              cc.update(deltaSeconds);
             }
 
             if (spaceshipEngineLightRef.current) {
@@ -751,9 +862,11 @@ export const useRenderLoop = () => {
 
             // Throttle expensive emissive traverse to once every ~6 frames
             const emissiveKey =
-              (manual.acceleration * 100) | 0 + (manual.isTurboActive ? 1000 : 0);
+              (manual.acceleration * 100) |
+              (0 + (manual.isTurboActive ? 1000 : 0));
             if (
-              emissiveKey !== (ship.userData._lastEmissiveKey as number | undefined)
+              emissiveKey !==
+              (ship.userData._lastEmissiveKey as number | undefined)
             ) {
               ship.userData._lastEmissiveKey = emissiveKey;
               ship.traverse((child) => {
@@ -768,9 +881,7 @@ export const useRenderLoop = () => {
                       if (!mat.userData.baseEmissive) {
                         mat.userData.baseEmissive = baseEmissive;
                       }
-                      // Reduced boost factors to prevent "glowing flashlight" effect
-                      // Old: turboBoost=3, acceleration*6, intensity +4
-                      // New: turboBoost=0.5, acceleration*1.5, intensity +1
+                      // Keep emissive boost subtle to avoid "glowing flashlight" Falcon.
                       const turboBoost = manual.isTurboActive ? 0.5 : 0;
                       const boostFactor =
                         1 + manual.acceleration * 1.5 + turboBoost;
@@ -784,519 +895,336 @@ export const useRenderLoop = () => {
                 }
               });
             }
-          } else if (
-            followingStarDestroyerRef.current &&
-            starDestroyerRef.current &&
-            starDestroyerCruiserRef.current
-          ) {
-            // ─── STAR DESTROYER ESCORT ──────────────────────────────
-            // The Falcon approaches and maintains formation alongside
-            // the Star Destroyer, matching its heading and speed.
-            //
-            // Smooth-motion strategy:
-            //   1. Compute formation target using the SD's TRUE position
-            //      (without ambient drift) to eliminate micro-jitter.
-            //   2. VELOCITY MATCH first: move the Falcon by the SD's
-            //      velocity each frame so it keeps pace automatically.
-            //   3. CORRECTIVE LERP: nudge toward the exact formation
-            //      point using frame-rate-independent exponential decay
-            //      (1 − e^(−rate·dt)) so behavior is identical at any FPS.
-            //
-            // This two-step approach eliminates the "always catching up"
-            // choppiness visible at close camera distances.
-
-            const cruiser = starDestroyerCruiserRef.current;
-
-            // 1. SD's travel direction & speed
-            const sdFwd = new THREE.Vector3();
-            cruiser.getForwardDirection(sdFwd);
-            const sdSpeed = cruiser.getCurrentSpeed();
-
-            // 2. SD's true position (without ambient drift oscillation)
-            const sdTruePos = new THREE.Vector3();
-            cruiser.getTruePosition(sdTruePos);
-
-            // 3. Build a "right" vector perpendicular to SD's heading
-            const sdRight = new THREE.Vector3()
-              .crossVectors(sdFwd, new THREE.Vector3(0, 1, 0))
-              .normalize();
-
-            // 4. Formation position: starboard, slightly above, slightly behind
-            const formationPos = sdTruePos.clone()
-              .addScaledVector(sdRight, SD_ESCORT_STARBOARD)     // starboard
-              .addScaledVector(new THREE.Vector3(0, 1, 0), SD_ESCORT_ABOVE) // above
-              .addScaledVector(sdFwd, -SD_ESCORT_BEHIND);        // behind
-
-            // 5. Distance to formation point (before moving)
-            const dist = ship.position.distanceTo(formationPos);
-
-            // 6. VELOCITY MATCH — move the Falcon at the same speed as
-            //    the SD so it doesn't constantly fall behind.
-            ship.position.addScaledVector(sdFwd, sdSpeed * deltaSeconds);
-
-            // 7. CORRECTIVE LERP — frame-rate-independent exponential
-            //    smoothing to converge on the exact formation offset.
-            //    Formula: alpha = 1 − exp(−rate × dt)
-            //    Higher rate → faster correction (tighter formation).
-            const correctionRate = dist > 80 ? 2.0 : 5.0;
-            const correctionAlpha = 1 - Math.exp(-correctionRate * deltaSeconds);
-            ship.position.lerp(formationPos, correctionAlpha);
-
-            // 8. Heading: face the same direction as the SD.
-            //    Frame-rate-independent slerp using the same exp decay.
-            const lookTarget = ship.position.clone().add(sdFwd);
-            const escortLookMat = new THREE.Matrix4().lookAt(
-              ship.position, lookTarget, new THREE.Vector3(0, 1, 0),
-            );
-            const targetQuat = _tmpQuat.setFromRotationMatrix(escortLookMat);
-            const forwardOffset = ship.userData.forwardOffset as THREE.Quaternion | undefined;
-            if (forwardOffset) {
-              targetQuat.multiply(forwardOffset);
-            }
-
-            const headingRate = dist > 80 ? 1.5 : 4.0;
-            const headingAlpha = 1 - Math.exp(-headingRate * deltaSeconds);
-            ship.quaternion.slerp(targetQuat, headingAlpha);
-            ship.quaternion.normalize();
-
-            // 9. Engine light: intensity based on approach distance
-            if (spaceshipEngineLightRef.current) {
-              const el = spaceshipEngineLightRef.current;
-              const speedFactor = Math.min(dist / 200, 1.2);
-              el.intensity = 0.8 + speedFactor * 3.0;
-              el.distance = ENGINE_LIGHT_BASE_DIST + speedFactor * SD_ENGINE_LIGHT_RANGE;
-            }
           } else {
             updateAutopilotNavigation();
-          }
 
-          // ─── MOON ORBIT CAMERA OVERRIDE ───────────────────────────
-          // When orbiting a moon, the orbit hook positions the ship AND
-          // returns camera instructions.  We DIRECTLY set camera.position
-          // and camera.lookAt, then sync camera-controls.  controls.update()
-          // is skipped entirely during orbit to prevent any fighting.
-          const _orbitIsActive = isMoonOrbiting();
-          if (_orbitIsActive && ship) {
-            const camInstr = updateMoonOrbit(deltaSeconds, ship);
-
-            // ── Diagnostic: detect if something overwrote our camera between frames
-            if (_orbitLastWritePos) {
-              const dx = Math.abs(camera.position.x - _orbitLastWritePos.x);
-              const dy = Math.abs(camera.position.y - _orbitLastWritePos.y);
-              const dz = Math.abs(camera.position.z - _orbitLastWritePos.z);
-              if (dx > 0.5 || dy > 0.5 || dz > 0.5) {
-                debugLog("render", `⚠️ CAMERA OVERRIDDEN! wrote=[${_orbitLastWritePos.x.toFixed(0)},${_orbitLastWritePos.y.toFixed(0)},${_orbitLastWritePos.z.toFixed(0)}] now=[${camera.position.x.toFixed(0)},${camera.position.y.toFixed(0)},${camera.position.z.toFixed(0)}] delta=[${dx.toFixed(1)},${dy.toFixed(1)},${dz.toFixed(1)}]`);
-              }
-            }
-
-            // Throttled debug logging (once per second)
-            if (!_orbitDbgTimer) _orbitDbgTimer = 0;
-            _orbitDbgTimer += deltaSeconds;
-            if (_orbitDbgTimer > 1.0) {
-              _orbitDbgTimer = 0;
-              const hasInstr = !!camInstr;
-              const hasCc = !!sceneRef.current.controls;
-              debugLog("render", `orbitTick: instr=${hasInstr}, cc=${hasCc}, ship=[${ship.position.x.toFixed(0)},${ship.position.y.toFixed(0)},${ship.position.z.toFixed(0)}]`);
-              if (camInstr) {
+            // Moon orbit camera override (restores orbit behavior after arrival)
+            if (isMoonOrbiting() && !navTurnActiveRef.current) {
+              const camInstr = updateMoonOrbit(deltaSeconds, ship);
+              if (camInstr && sceneRef.current.controls) {
+                moonOrbitActive = true;
+                const cc = sceneRef.current.controls;
                 const cp = camInstr.cameraPosition;
                 const ct = camInstr.cameraTarget;
-                const distToTarget = Math.sqrt(
-                  (cp.x - camera.position.x) ** 2 +
-                  (cp.y - camera.position.y) ** 2 +
-                  (cp.z - camera.position.z) ** 2,
-                );
-                debugLog("render", `  camTarget=[${cp.x.toFixed(0)},${cp.y.toFixed(0)},${cp.z.toFixed(0)}] lookAt=[${ct.x.toFixed(0)},${ct.y.toFixed(0)},${ct.z.toFixed(0)}] lf=${camInstr.lerpFactor.toFixed(3)}`);
-                debugLog("render", `  curCam=[${camera.position.x.toFixed(0)},${camera.position.y.toFixed(0)},${camera.position.z.toFixed(0)}] distToTarget=${distToTarget.toFixed(1)}`);
-              }
-            }
+                const lf = camInstr.lerpFactor;
 
-            if (camInstr && sceneRef.current.controls) {
-              moonOrbitActive = true;
-              const cc = sceneRef.current.controls;
-              const cp = camInstr.cameraPosition;
-              const ct = camInstr.cameraTarget;
-              const lf = camInstr.lerpFactor;
+                if (!insideShipRef.current) {
+                  if (camInstr.userCameraFree) {
+                    orbitUserCamFree = true;
+                    if (!cc.enabled) cc.enabled = true;
+                    const curTarget = cc.getTarget(_orbitCamTarget);
+                    const smoothTgt = 0.03;
+                    cc.setTarget(
+                      curTarget.x + (ct.x - curTarget.x) * smoothTgt,
+                      curTarget.y + (ct.y - curTarget.y) * smoothTgt,
+                      curTarget.z + (ct.z - curTarget.z) * smoothTgt,
+                      false,
+                    );
+                  } else {
+                    const curPos = camera.position;
+                    const lerpedPosX = curPos.x + (cp.x - curPos.x) * lf;
+                    const lerpedPosY = curPos.y + (cp.y - curPos.y) * lf;
+                    const lerpedPosZ = curPos.z + (cp.z - curPos.z) * lf;
+                    const curTarget = cc.getTarget(_orbitCamTarget);
+                    const lerpedTgtX = curTarget.x + (ct.x - curTarget.x) * lf;
+                    const lerpedTgtY = curTarget.y + (ct.y - curTarget.y) * lf;
+                    const lerpedTgtZ = curTarget.z + (ct.z - curTarget.z) * lf;
 
-              // ── User-camera-free mode (orbiting phase) ──
-              // Ship still drifts, but the user can drag/rotate the camera.
-              // We only update the cc target (so camera follows ship drift)
-              // but don't force camera position.
-              if (camInstr.userCameraFree) {
-                orbitUserCamFree = true;
-                if (!cc.enabled) {
-                  cc.enabled = true;
-                  debugLog("render", `🔓 cc.enabled=true (user camera free)`);
-                }
-                // Gently update cc target to track the drifting ship
-                const curTarget = cc.getTarget(_orbitCamTarget);
-                const smoothTgt = 0.03;
-                cc.setTarget(
-                  curTarget.x + (ct.x - curTarget.x) * smoothTgt,
-                  curTarget.y + (ct.y - curTarget.y) * smoothTgt,
-                  curTarget.z + (ct.z - curTarget.z) * smoothTgt,
-                  false,
-                );
-              } else {
-                // ── Orbit camera drives — lock user input ──
-                // Lerp current camera pos/target toward the orbit instruction
-                const curPos = camera.position;
-                const lerpedPosX = curPos.x + (cp.x - curPos.x) * lf;
-                const lerpedPosY = curPos.y + (cp.y - curPos.y) * lf;
-                const lerpedPosZ = curPos.z + (cp.z - curPos.z) * lf;
-
-                // Get current look-at target from camera-controls
-                const curTarget = cc.getTarget(_orbitCamTarget);
-                const lerpedTgtX = curTarget.x + (ct.x - curTarget.x) * lf;
-                const lerpedTgtY = curTarget.y + (ct.y - curTarget.y) * lf;
-                const lerpedTgtZ = curTarget.z + (ct.z - curTarget.z) * lf;
-
-                // ── DIRECT camera write — bypasses camera-controls entirely ──
-                camera.position.set(lerpedPosX, lerpedPosY, lerpedPosZ);
-
-                // ISS ROLL: lerp camera.up toward moon's outward direction
-                // This makes the moon surface appear as the "ground" / horizon.
-                if (camInstr.cameraUp) {
-                  _orbitUpActive = true;
-                  _orbitCurUp.lerp(camInstr.cameraUp, lf * 2);
-                  _orbitCurUp.normalize();
-                  camera.up.copy(_orbitCurUp);
-                }
-
-                camera.lookAt(lerpedTgtX, lerpedTgtY, lerpedTgtZ);
-                camera.updateMatrixWorld();
-
-                // Store what we wrote so next frame we can detect overrides
-                if (!_orbitLastWritePos) _orbitLastWritePos = new THREE.Vector3();
-                _orbitLastWritePos.set(lerpedPosX, lerpedPosY, lerpedPosZ);
-
-                // Sync camera-controls internal state
-                cc.setLookAt(
-                  lerpedPosX, lerpedPosY, lerpedPosZ,
-                  lerpedTgtX, lerpedTgtY, lerpedTgtZ,
-                  false,
-                );
-
-                // LOCK camera-controls
-                if (cc.enabled) {
-                  cc.enabled = false;
-                  debugLog("render", `🔒 cc.enabled=false (orbit lock)`);
+                    camera.position.set(lerpedPosX, lerpedPosY, lerpedPosZ);
+                    if (camInstr.cameraUp) {
+                      _orbitUpActive = true;
+                      _orbitCurUp.lerp(camInstr.cameraUp, lf * 2);
+                      _orbitCurUp.normalize();
+                      camera.up.copy(_orbitCurUp);
+                    }
+                    camera.lookAt(lerpedTgtX, lerpedTgtY, lerpedTgtZ);
+                    camera.updateMatrixWorld();
+                    cc.setLookAt(
+                      lerpedPosX,
+                      lerpedPosY,
+                      lerpedPosZ,
+                      lerpedTgtX,
+                      lerpedTgtY,
+                      lerpedTgtZ,
+                      false,
+                    );
+                    if (cc.enabled) cc.enabled = false;
+                  }
+                } else {
+                  if (!cc.enabled) cc.enabled = true;
+                  if (_orbitUpActive) {
+                    _orbitCurUp.set(0, 1, 0);
+                    camera.up.set(0, 1, 0);
+                    _orbitUpActive = false;
+                  }
                 }
               }
-
-              // First-frame log with full detail
-              if (!_orbitFirstFrameLogged) {
-                _orbitFirstFrameLogged = true;
-                debugLog("render", `🚀 ORBIT_CAM first frame — pos=[${cp.x.toFixed(0)},${cp.y.toFixed(0)},${cp.z.toFixed(0)}] target=[${ct.x.toFixed(0)},${ct.y.toFixed(0)},${ct.z.toFixed(0)}] userFree=${!!camInstr.userCameraFree}`);
-              }
-            } else if (camInstr && !sceneRef.current.controls) {
-              debugLog("render", `⚠️ ORBIT: camInstr exists but NO controls!`);
-            } else if (!camInstr) {
-              debugLog("render", `⚠️ ORBIT: updateMoonOrbit returned null`);
-            }
-          } else {
-            // Not orbiting — reset orbit diagnostics & re-enable controls
-            if (_orbitFirstFrameLogged) {
-              // Orbit just ended — re-enable camera-controls
+            } else {
               if (sceneRef.current.controls && !sceneRef.current.controls.enabled) {
                 sceneRef.current.controls.enabled = true;
-                debugLog("render", `🔓 cc.enabled=true (orbit ended)`);
+              }
+              if (_orbitUpActive) {
+                _orbitCurUp.set(0, 1, 0);
+                camera.up.set(0, 1, 0);
+                _orbitUpActive = false;
               }
             }
-            // Restore camera.up to world-Y after orbit roll
-            if (_orbitUpActive) {
-              _orbitCurUp.set(0, 1, 0);
-              camera.up.set(0, 1, 0);
-              _orbitUpActive = false;
-              debugLog("render", `🔄 camera.up reset to world-Y`);
-            }
-            _orbitFirstFrameLogged = false;
-            _orbitLastWritePos = null;
-            if (_orbitDbgOnce !== _orbitIsActive) {
-              _orbitDbgOnce = _orbitIsActive;
-              debugLog("render", `isMoonOrbiting=${_orbitIsActive}, ship=${!!ship}`);
-            }
-          }
 
-          // ─── EXTERIOR FOLLOW CAMERA ─────────────────────────────
-          // Runs for BOTH autopilot navigation AND Star Destroyer escort.
-          // Moves the orbit center to track the Falcon's position.
-          // The user's azimuth, polar angle, and zoom distance are
-          // preserved by camera-controls, allowing free orbit/pan
-          // around the ship from any angle.
-          // Restore lighting whenever NOT inside the ship.
-          // (Interior block dims sun/fill and clamps emissives.)
-          if (!insideShipRef.current) {
-            const sl = sceneRef.current.sunLight as THREE.PointLight | undefined;
-            if (sl && sl.intensity < 18) sl.intensity = 18;
-            const fl = sceneRef.current.fillLight as THREE.PointLight | undefined;
-            if (fl && fl.intensity < 3) fl.intensity = 3;
-            // Restore emissive materials that were clamped while inside
-            if (wasInsideShipEmissiveClamped && activeShip) {
-              wasInsideShipEmissiveClamped = false;
-              activeShip.traverse((child: any) => {
-                if (child.isMesh && child.material) {
-                  const mats = Array.isArray(child.material) ? child.material : [child.material];
-                  mats.forEach((mat: any) => {
-                    if (mat._origEmissiveIntensity !== undefined) {
-                      mat.emissiveIntensity = mat._origEmissiveIntensity;
-                      delete mat._origEmissiveIntensity;
+            if (followingSpaceshipRef.current) {
+              if (insideShipRef.current) {
+                ship.getWorldPosition(shipWorldPos);
+                ship.getWorldQuaternion(shipWorldQuat);
+                if (sceneRef.current.controls) {
+                  const useCockpit = shipViewModeRef.current === "cockpit";
+                  const localCamera = useCockpit
+                    ? cockpitLocalPos
+                    : cabinLocalPos;
+                  const localTarget = useCockpit
+                    ? cockpitTargetLocal
+                    : cabinTargetLocal;
+
+                  // IMPORTANT: the labeled local coordinates are in the mesh's
+                  // local space.  The ship group has scale 0.5, so we must
+                  // apply scale before rotation — otherwise the camera ends up
+                  // at 2× the correct distance (outside the hull).
+                  const shipScale = ship.scale.x; // uniform scale
+                  desiredCameraPos
+                    .copy(localCamera)
+                    .multiplyScalar(shipScale)
+                    .applyQuaternion(shipWorldQuat)
+                    .add(shipWorldPos);
+                  desiredTargetPos
+                    .copy(localTarget)
+                    .multiplyScalar(shipScale)
+                    .applyQuaternion(shipWorldQuat)
+                    .add(shipWorldPos);
+
+                  const cc = sceneRef.current.controls;
+
+                  if (!wasInsideShip) {
+                    cc.setLookAt(
+                      desiredCameraPos.x,
+                      desiredCameraPos.y,
+                      desiredCameraPos.z,
+                      desiredTargetPos.x,
+                      desiredTargetPos.y,
+                      desiredTargetPos.z,
+                      false,
+                    );
+                    wasInsideShip = true;
+                  }
+
+                  cc.minDistance = INTERIOR_MIN_DIST;
+                  cc.maxDistance = INTERIOR_MAX_DIST;
+                  cc.minPolarAngle = useCockpit ? Math.PI * 0.25 : Math.PI * 0.1;
+                  cc.maxPolarAngle = useCockpit ? Math.PI * 0.75 : Math.PI * 0.9;
+
+                  if (camera instanceof THREE.PerspectiveCamera) {
+                    const desiredNear = useCockpit ? NEAR_EXPLORE : NEAR_CABIN;
+                    if (Math.abs(camera.near - desiredNear) > 0.001) {
+                      camera.near = desiredNear;
+                      camera.updateProjectionMatrix();
                     }
-                  });
-                }
-              });
-            }
-          }
+                  }
 
-          if (followingSpaceshipRef.current && !insideShipRef.current && !moonOrbitActive) {
-            if (wasInsideShip) {
-              wasInsideShip = false;
-            }
-            const cc = sceneRef.current.controls;
-            if (cc) {
-              // ─ Diagnostic: if orbiting was just active, log that follow cam is taking over
-              if (_orbitIsActive) {
-                debugLog("render", `⚠️ FOLLOW_CAM running while isMoonOrbiting=true! moonOrbitActive=${moonOrbitActive}`);
-              }
-              const focusedMoon = focusedMoonRef.current;
-              const settledTarget = settledViewTargetRef.current;
-              if (focusedMoon) {
-                const moonWorld = new THREE.Vector3();
-                focusedMoon.getWorldPosition(moonWorld);
-                cc.moveTo(moonWorld.x, moonWorld.y, moonWorld.z, true);
-                cc.minDistance = 0;
-                cc.maxDistance = CONTROLS_MAX_DIST;
-              } else if (settledTarget) {
-                cc.moveTo(
-                  settledTarget.x,
-                  settledTarget.y,
-                  settledTarget.z,
-                  true,
-                );
-                cc.minDistance = 5;
-                cc.maxDistance = CONTROLS_MAX_DIST;
-              } else {
-                cc.moveTo(
-                  ship.position.x,
-                  ship.position.y,
-                  ship.position.z,
-                  true,
-                );
-                cc.minDistance = 0.5;
-                cc.maxDistance = CONTROLS_MAX_DIST;
+                  const sl = sceneRef.current.sunLight as
+                    | THREE.PointLight
+                    | undefined;
+                  if (sl) {
+                    sl.intensity = useCockpit ? 1.2 : 0.1;
+                  }
+                  const fl = sceneRef.current.fillLight as
+                    | THREE.PointLight
+                    | undefined;
+                  if (fl) {
+                    fl.intensity = useCockpit ? 0.5 : 0.06;
+                  }
 
-                const wantDist = optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
-                if (Math.abs(cc.distance - wantDist) > 0.1) {
-                  cc.dollyTo(wantDist, true);
-                }
-              }
-            }
-          }
-
-          // ─── MANUAL ROLL (BANK) CONTROL ─────────────────────────
-          // Applied from the UI roll buttons.  Works in every flight mode
-          // (manual, autopilot, cinematic hover, cockpit steer) by
-          // rotating the ship around its local forward (Z) axis.
-          // The accumulated offset is stored in shipRollOffsetRef so
-          // navigation code can preserve it through lookAt / slerp.
-          const rollDir = rollInputRef.current; // -1 | 0 | 1
-          if (rollDir !== 0) {
-            const rollSpeed = 0.6; // radians / sec — feels responsive
-            const angle = rollDir * rollSpeed * deltaSeconds;
-
-            // Accumulate persistent offset
-            shipRollOffsetRef.current += angle;
-
-            if (manualFlightModeRef.current) {
-              // Manual flight uses Euler angles on ship.rotation
-              ship.rotation.z += angle;
-            } else {
-              // All other modes use quaternions — rotate around ship's
-              // local forward axis (local +Z after forwardOffset).
-              const localForward = _tmpOffset.set(0, 0, 1)
-                .applyQuaternion(ship.quaternion)
-                .normalize();
-              const rollQuat = _tmpQuat.setFromAxisAngle(localForward, angle);
-              ship.quaternion.premultiply(rollQuat);
-              ship.quaternion.normalize();
-            }
-          }
-
-          // ─── INTERIOR CAMERA ──────────────────────────────────
-          // Runs AFTER both cinematic and autopilot paths so the camera
-          // is always rigidly attached to the ship regardless of which
-          // code path moved the ship this frame.
-          if (insideShipRef.current && sceneRef.current.controls) {
-            ship.getWorldPosition(shipWorldPos);
-            ship.getWorldQuaternion(shipWorldQuat);
-
-            const useCockpit = shipViewModeRef.current === "cockpit";
-            const localCamera = useCockpit ? cockpitLocalPos : cabinLocalPos;
-            const localTarget = useCockpit
-              ? cockpitTargetLocal
-              : cabinTargetLocal;
-
-            const shipScale = ship.scale.x;
-            desiredCameraPos
-              .copy(localCamera)
-              .multiplyScalar(shipScale)
-              .applyQuaternion(shipWorldQuat)
-              .add(shipWorldPos);
-            desiredTargetPos
-              .copy(localTarget)
-              .multiplyScalar(shipScale)
-              .applyQuaternion(shipWorldQuat)
-              .add(shipWorldPos);
-
-            // Apply shift+drag steering — rotate the ship and move it forward
-            const steer = cockpitSteerRef.current;
-            if (cockpitSteerActiveRef.current && (steer.x !== 0 || steer.y !== 0)) {
-              const yawRate = 0.8;   // radians/sec at full deflection
-              const pitchRate = 0.5; // radians/sec at full deflection
-              const thrustSpeed = COCKPIT_THRUST_SPEED; // units/sec while steering
-
-              // Yaw (turn left/right) around ship's local Y axis
-              const yawAngle = steer.x * yawRate * deltaSeconds;
-              const yawQuat = _tmpQuat.setFromAxisAngle(_tmpOffset.set(0, 1, 0), yawAngle);
-              ship.quaternion.multiply(yawQuat);
-
-              // Pitch (tilt up/down) around ship's local X axis
-              const pitchAngle = steer.y * pitchRate * deltaSeconds;
-              const pitchQuat = _tmpQuat.setFromAxisAngle(_tmpOffset.set(1, 0, 0), pitchAngle);
-              ship.quaternion.multiply(pitchQuat);
-
-              ship.quaternion.normalize();
-
-              // Move ship forward along its local +Z axis
-              const forward = _tmpOffset.set(0, 0, 1).applyQuaternion(ship.quaternion);
-              ship.position.addScaledVector(forward, thrustSpeed * deltaSeconds);
-
-              // Recompute world pos/quat after rotating the ship
-              ship.getWorldPosition(shipWorldPos);
-              ship.getWorldQuaternion(shipWorldQuat);
-
-              // Recompute desired camera/target positions with updated ship transform
-              desiredCameraPos
-                .copy(localCamera)
-                .multiplyScalar(shipScale)
-                .applyQuaternion(shipWorldQuat)
-                .add(shipWorldPos);
-              desiredTargetPos
-                .copy(localTarget)
-                .multiplyScalar(shipScale)
-                .applyQuaternion(shipWorldQuat)
-                .add(shipWorldPos);
-            }
-
-            const cc = sceneRef.current.controls;
-
-            if (!wasInsideShip) {
-              // Transition IN — snap camera to interior position
-              cc.setLookAt(
-                desiredCameraPos.x, desiredCameraPos.y, desiredCameraPos.z,
-                desiredTargetPos.x, desiredTargetPos.y, desiredTargetPos.z,
-                false, // instant, no transition
-              );
-              wasInsideShip = true;
-            }
-
-            // Configure first-person constraints
-            cc.minDistance = INTERIOR_MIN_DIST;
-            cc.maxDistance = INTERIOR_MAX_DIST; // keep camera at the target (first-person)
-            cc.minPolarAngle = useCockpit ? Math.PI * 0.25 : Math.PI * 0.1;
-            cc.maxPolarAngle = useCockpit ? Math.PI * 0.75 : Math.PI * 0.9;
-
-            // Near clipping plane for cockpit instruments
-            if (camera instanceof THREE.PerspectiveCamera) {
-              const desiredNear = useCockpit ? NEAR_EXPLORE : NEAR_CABIN;
-              if (Math.abs(camera.near - desiredNear) > 0.001) {
-                camera.near = desiredNear;
-                camera.updateProjectionMatrix();
-              }
-            }
-
-            // ── Interior lighting overrides ──────────────────────────
-            // Three.js PointLights pass through geometry, so when we're
-            // inside the ship we must manually dim/disable lights that
-            // the hull would block in reality.
-
-            // 1. Dim the sun (cockpit has windshield → some light; cabin is enclosed)
-            //    Full exterior value is 18; cockpit gets ~6%, cabin ~0.5%.
-            const sl = sceneRef.current.sunLight as THREE.PointLight | undefined;
-            if (sl) {
-              sl.intensity = useCockpit ? 1.2 : 0.1;
-            }
-            // 2. Dim the fill light (same idea — hull blocks ambient fill)
-            //    Full exterior value is 3; cockpit gets ~15%, cabin ~2%.
-            const fl = sceneRef.current.fillLight as THREE.PointLight | undefined;
-            if (fl) {
-              fl.intensity = useCockpit ? 0.5 : 0.06;
-            }
-
-            // 3. Clamp emissive materials on GLTF meshes (cockpit light
-            //    panels baked at emissiveIntensity 10 are blinding).
-            //    Only traverse once per transition via wasInsideShipEmissiveClamped flag.
-            if (!wasInsideShipEmissiveClamped) {
-              wasInsideShipEmissiveClamped = true;
-              ship.traverse((child: any) => {
-                if (child.isMesh && child.material) {
-                  const mats = Array.isArray(child.material) ? child.material : [child.material];
-                  mats.forEach((mat: any) => {
-                    if (mat.emissiveIntensity > 1) {
-                      // Store original so we can restore on exit
-                      if (mat._origEmissiveIntensity === undefined) {
-                        mat._origEmissiveIntensity = mat.emissiveIntensity;
+                  if (!wasInsideShipEmissiveClamped) {
+                    wasInsideShipEmissiveClamped = true;
+                    ship.traverse((child: any) => {
+                      if (child.isMesh && child.material) {
+                        const mats = Array.isArray(child.material)
+                          ? child.material
+                          : [child.material];
+                        mats.forEach((mat: any) => {
+                          if (mat.emissiveIntensity > 1) {
+                            if (mat._origEmissiveIntensity === undefined) {
+                              mat._origEmissiveIntensity = mat.emissiveIntensity;
+                            }
+                            mat.emissiveIntensity = 0.6;
+                          }
+                        });
                       }
-                      mat.emissiveIntensity = 0.6;
-                    }
-                  });
+                    });
+                  }
+
+                  cc.update(deltaSeconds);
+
+                  if (navTurnActiveRef.current) {
+                    const savedSmooth = cc.smoothTime;
+                    cc.smoothTime = 0.06;
+                    cc.setLookAt(
+                      desiredCameraPos.x,
+                      desiredCameraPos.y,
+                      desiredCameraPos.z,
+                      desiredTargetPos.x,
+                      desiredTargetPos.y,
+                      desiredTargetPos.z,
+                      true,
+                    );
+                    cc.update(deltaSeconds);
+                    cc.smoothTime = savedSmooth;
+                  } else {
+                    camera.getWorldDirection(_tmpLookDir);
+                    camera.position.copy(desiredCameraPos);
+                    _tmpDesired
+                      .copy(desiredCameraPos)
+                      .addScaledVector(_tmpLookDir, 2);
+                    cc.setTarget(_tmpDesired.x, _tmpDesired.y, _tmpDesired.z, false);
+                    cc.setPosition(
+                      desiredCameraPos.x,
+                      desiredCameraPos.y,
+                      desiredCameraPos.z,
+                      false,
+                    );
+                  }
                 }
-              });
-            }
-
-            // Let camera-controls handle user rotation input,
-            // then override position to pin inside ship.
-            cc.update(deltaSeconds);
-
-            if (navTurnActiveRef.current) {
-              // During navigation turn phase: pilot is "strapped in" —
-              // force camera to look forward through the cockpit window.
-              //
-              // Temporarily tighten smoothTime so the camera tracks the
-              // ship's rotation closely (minimal drift off-center) while
-              // still avoiding the micro-snap jerkiness of instant mode.
-              const savedSmooth = cc.smoothTime;
-              cc.smoothTime = 0.06; // tight follow — ~60ms to reach target
-              cc.setLookAt(
-                desiredCameraPos.x, desiredCameraPos.y, desiredCameraPos.z,
-                desiredTargetPos.x, desiredTargetPos.y, desiredTargetPos.z,
-                true,
-              );
-              // Run an extra update tick so the tighter smoothTime takes
-              // effect immediately this frame.
-              cc.update(deltaSeconds);
-              cc.smoothTime = savedSmooth; // restore for normal interaction
-            } else {
-              // Normal operation: preserve user's look direction while
-              // pinning position to the ship's interior.
-              camera.getWorldDirection(_tmpLookDir);
-
-              // Pin camera to fixed interior position (rigid attachment)
-              camera.position.copy(desiredCameraPos);
-
-              // Reconstruct the target from pinned position + look direction
-              _tmpDesired.copy(desiredCameraPos).addScaledVector(_tmpLookDir, 2);
-              cc.setTarget(_tmpDesired.x, _tmpDesired.y, _tmpDesired.z, false);
-              cc.setPosition(desiredCameraPos.x, desiredCameraPos.y, desiredCameraPos.z, false);
+              } else {
+                // Reset interior flag when outside the ship
+                if (wasInsideShip) {
+                  wasInsideShip = false;
+                  const sl = sceneRef.current.sunLight as
+                    | THREE.PointLight
+                    | undefined;
+                  if (sl) sl.intensity = 18;
+                  const fl = sceneRef.current.fillLight as
+                    | THREE.PointLight
+                    | undefined;
+                  if (fl) fl.intensity = 3;
+                  if (wasInsideShipEmissiveClamped) {
+                    wasInsideShipEmissiveClamped = false;
+                    const EXTERIOR_EMISSIVE_RESTORE_CAP = 1.2;
+                    ship.traverse((child: any) => {
+                      if (child.isMesh && child.material) {
+                        const mats = Array.isArray(child.material)
+                          ? child.material
+                          : [child.material];
+                        mats.forEach((mat: any) => {
+                          if (mat._origEmissiveIntensity !== undefined) {
+                            mat.emissiveIntensity = Math.min(
+                              mat._origEmissiveIntensity,
+                              EXTERIOR_EMISSIVE_RESTORE_CAP,
+                            );
+                          }
+                        });
+                      }
+                    });
+                  }
+                }
+                if (
+                  sceneRef.current.controls &&
+                  !moonOrbitActive &&
+                  !navTurnActiveRef.current
+                ) {
+                  const cc = sceneRef.current.controls;
+                  const focusedMoon = focusedMoonRef.current;
+                  const settledTarget = settledViewTargetRef.current;
+                  if (focusedMoon) {
+                    const moonWorld = new THREE.Vector3();
+                    focusedMoon.getWorldPosition(moonWorld);
+                    cc.moveTo(moonWorld.x, moonWorld.y, moonWorld.z, true);
+                    cc.minDistance = 0;
+                    cc.maxDistance = CONTROLS_MAX_DIST;
+                  } else if (settledTarget) {
+                    cc.moveTo(
+                      settledTarget.x,
+                      settledTarget.y,
+                      settledTarget.z,
+                      true,
+                    );
+                    cc.minDistance = 5;
+                    cc.maxDistance = CONTROLS_MAX_DIST;
+                  } else {
+                    const lightspeedActive = !!manualFlightRef.current?.isLightspeedActive;
+                    cc.moveTo(
+                      ship.position.x,
+                      ship.position.y,
+                      ship.position.z,
+                      !lightspeedActive,
+                    );
+                    cc.minDistance = 0.5;
+                    cc.maxDistance = CONTROLS_MAX_DIST;
+                    const baseFollowDist =
+                      optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
+                    // Keep ship visible during high-speed travel (especially
+                    // long planet-to-planet lightspeed legs) by tightening
+                    // chase distance while lightspeed is active.
+                    const wantDist = manualFlightRef.current?.isLightspeedActive
+                      ? Math.max(2.8, baseFollowDist / 12)
+                      : baseFollowDist;
+                    const normalSmooth = optionsRef.current.spaceCameraSmoothTime ?? 0.25;
+                    cc.smoothTime = manualFlightRef.current?.isLightspeedActive
+                      ? Math.max(0.03, normalSmooth / 10)
+                      : normalSmooth;
+                    if (Math.abs(cc.distance - wantDist) > 0.1) {
+                      cc.dollyTo(wantDist, !lightspeedActive);
+                    }
+                    // During lightspeed, keep ship pinned to screen center:
+                    // enforce behind-ship camera and exact target each frame.
+                    if (lightspeedActive) {
+                      const followHeight =
+                        optionsRef.current.spaceFollowHeight ?? FOLLOW_HEIGHT;
+                      const back = _tmpOffset
+                        .set(0, 0, -1)
+                        .applyQuaternion(ship.quaternion)
+                        .normalize();
+                      const desiredCam = _tmpDesired
+                        .copy(ship.position)
+                        .addScaledVector(back, wantDist)
+                        .addScaledVector(new THREE.Vector3(0, 1, 0), followHeight);
+                      // Camera-only rig pitch: rotate boom vector around ship-right axis.
+                      const rel = _tmpScaled.copy(desiredCam).sub(ship.position);
+                      const toShip = _tmpLookDir
+                        .copy(ship.position)
+                        .sub(desiredCam)
+                        .normalize();
+                      const right = _tmpHoverFloat
+                        .crossVectors(toShip, new THREE.Vector3(0, 1, 0))
+                        .normalize();
+                      if (right.lengthSq() > 1e-6 && Math.abs(lightspeedRigPitchRad) > 1e-4) {
+                        rel.applyAxisAngle(right, lightspeedRigPitchRad);
+                        desiredCam.copy(ship.position).add(rel);
+                      }
+                      camera.position.lerp(desiredCam, 0.22);
+                      cc.setLookAt(
+                        camera.position.x,
+                        camera.position.y,
+                        camera.position.z,
+                        ship.position.x,
+                        ship.position.y,
+                        ship.position.z,
+                        false,
+                      );
+                    }
+                  }
+                }
+              }
             }
           }
-          // ─── END INTERIOR CAMERA ──────────────────────────────
         }
 
-        // Physics only needed when ship is actively navigating somewhere
-        // AND the user is NOT inside the ship (cockpit steering is handled
-        // directly in the interior camera block, not via physics).
-        // Skipping when idle/hovering or inside eliminates RAPIER + YUKA overhead (~2-4 ms/frame).
-        if (activeShip && !shipIsIdleHover && !insideShipRef.current && physicsWorld.isReady() && travelAnchor) {
+        // Physics only needed when ship is actively moving in exterior view.
+        // Skip during idle cinematic hover and interior mode to prevent camera/ship tugging.
+        if (
+          activeShip &&
+          !shipIsIdleHover &&
+          !navTurnActiveRef.current &&
+          !manualFlightRef.current?.isLightspeedActive &&
+          !insideShipRef.current &&
+          physicsWorld.isReady() &&
+          travelAnchor
+        ) {
           const world = physicsWorld.getWorld();
           if (world && !travelAnchor.isInitialized()) {
             travelAnchor.init(world, scene, activeShip.position);
@@ -1310,19 +1238,8 @@ export const useRenderLoop = () => {
           }
         }
 
-        // ─── STAR DESTROYER CRUISER ────────────────────────────────
-        // Autonomous movement: the cruiser handles its own heading,
-        // throttle, banking, and waypoint selection each frame.
-        if (starDestroyerCruiserRef.current) {
-          starDestroyerCruiserRef.current.update(deltaSeconds);
-        }
-
         sunMesh.rotation.y += 0.002;
 
-        // Depth-of-field handling ─────────────────────────────────
-        // When inside the cockpit, disable bokeh entirely so cockpit
-        // instruments and the destination planet/moon stay crisp.
-        // When outside, update focus distance to the focused moon.
         const bokehPass = sceneRef.current.bokehPass as
           | {
               enabled: boolean;
@@ -1331,67 +1248,114 @@ export const useRenderLoop = () => {
               };
             }
           | undefined;
-
-        // Disable DOF when hologram drone is active — the panels sit between
-        // moon and camera and would otherwise be blurred out.
         const droneActive = hologramDroneRef.current?.isActive();
-
         if (insideShipRef.current || droneActive) {
-          // Cockpit view or drone active: no depth-of-field blur
           if (bokehPass?.enabled) {
             bokehPass.enabled = false;
           }
-        } else if (bokehPass) {
-          if (bokehPass.enabled) {
-            const focusedMoon = focusedMoonRef.current;
-            if (focusedMoon) {
-              const moonWorld = new THREE.Vector3();
-              focusedMoon.getWorldPosition(moonWorld);
-              const focusDistance = camera.position.distanceTo(moonWorld);
-              if (bokehPass.materialBokeh?.uniforms?.focus) {
-                bokehPass.materialBokeh.uniforms.focus.value = focusDistance;
-              }
-            } else {
-              bokehPass.enabled = false;
+        } else if (bokehPass?.enabled) {
+          const focusedMoon = focusedMoonRef.current;
+          if (focusedMoon) {
+            const moonWorld = new THREE.Vector3();
+            focusedMoon.getWorldPosition(moonWorld);
+            const focusDistance = camera.position.distanceTo(moonWorld);
+            if (bokehPass.materialBokeh?.uniforms?.focus) {
+              bokehPass.materialBokeh.uniforms.focus.value = focusDistance;
             }
+          } else {
+            bokehPass.enabled = false;
           }
         }
 
-        // Skip orbit system updates when inside the ship — the orbit
-        // labels and position calculations aren't visible from the interior
-        // and waste CPU time.
-        if (!insideShipRef.current) {
-          updateOrbitSystem({
-            items,
-            orbitAnchors,
-            camera,
-            options: optionsRef.current,
-          });
-        }
+        updateOrbitSystem({
+          items,
+          orbitAnchors,
+          camera,
+          options: optionsRef.current,
+        });
 
         // Only call controls.update() here when NOT inside the ship —
         // interior mode already called it in the block above.
-        // ALSO skip during moon orbit — the orbit camera writes directly
-        // to camera.position / camera.lookAt and syncs cc.setLookAt(false).
-        // Running controls.update() would apply damping/smooth transitions
-        // that fight the orbit camera positioning — UNLESS user-camera-free
-        // mode is active (orbiting phase), where the user can drag/rotate.
         if (!insideShipRef.current && (!moonOrbitActive || orbitUserCamFree)) {
           controls.update(deltaSeconds);
         }
 
-        // Update hologram drone animation
         if (hologramDroneRef.current) {
           hologramDroneRef.current.update(deltaSeconds, camera);
         }
 
+        // Third-person lightspeed streaks (Star Wars-style star lines).
+        // Only active in exterior follow mode while lightspeed is engaged.
+        const lightspeedActive =
+          !!manualFlightRef.current?.isLightspeedActive &&
+          followingSpaceshipRef.current &&
+          !insideShipRef.current &&
+          shipViewModeRef.current === "exterior";
+        if (lightspeedActive && !lightspeedWasActive) {
+          lightspeedEnterAt = performance.now();
+        }
+        lightspeedWasActive = lightspeedActive;
+        const sinceEnter = performance.now() - lightspeedEnterAt;
+        // Let ship dart first, then kick in visuals/FOV after a short delay.
+        const visualTarget =
+          lightspeedActive && sinceEnter > 350 ? 1 : 0;
+        const visualLerp = 1 - Math.exp(-4.5 * deltaSeconds);
+        lightspeedVisualIntensity +=
+          (visualTarget - lightspeedVisualIntensity) * visualLerp;
+
+        if (camera instanceof THREE.PerspectiveCamera && baseCameraFov !== null) {
+          const desiredFov = baseCameraFov + 2.2 * lightspeedVisualIntensity;
+          if (Math.abs(camera.fov - desiredFov) > 0.02) {
+            camera.fov = desiredFov;
+            camera.updateProjectionMatrix();
+          }
+        }
+
+        ensureLightspeedStreaks();
+        if (lightspeedStreakGroup && lightspeedStreakPositions && lightspeedStreakMeta) {
+          lightspeedStreakGroup.visible = lightspeedVisualIntensity > 0.02;
+          const mat = lightspeedStreakGroup.material as THREE.LineBasicMaterial;
+          mat.opacity = 0.12 + 0.38 * lightspeedVisualIntensity;
+          if (lightspeedVisualIntensity > 0.02) {
+            // Keep streak field locked in front of camera in world space.
+            lightspeedStreakGroup.position.copy(camera.position);
+            lightspeedStreakGroup.quaternion.copy(camera.quaternion);
+            const posAttr = lightspeedStreakGroup.geometry.getAttribute(
+              "position",
+            ) as THREE.BufferAttribute;
+            for (let i = 0; i < LIGHTSPEED_STREAK_COUNT; i += 1) {
+              const mi = i * 5;
+              const pi = i * 6;
+              lightspeedStreakMeta[mi + 2] +=
+                lightspeedStreakMeta[mi + 4] *
+                deltaSeconds *
+                (7 + lightspeedVisualIntensity * 4);
+              if (lightspeedStreakMeta[mi + 2] > -6) {
+                resetLightspeedStreak(i);
+                continue;
+              }
+              const x = lightspeedStreakMeta[mi];
+              const y = lightspeedStreakMeta[mi + 1];
+              const z = lightspeedStreakMeta[mi + 2];
+              const len = lightspeedStreakMeta[mi + 3];
+              const endZ = z - len;
+              lightspeedStreakPositions[pi] = x;
+              lightspeedStreakPositions[pi + 1] = y;
+              lightspeedStreakPositions[pi + 2] = z;
+              // Force one single, stable vanishing point at center.
+              lightspeedStreakPositions[pi + 3] = 0;
+              lightspeedStreakPositions[pi + 4] = 0;
+              lightspeedStreakPositions[pi + 5] = endZ;
+            }
+            posAttr.needsUpdate = true;
+          }
+        }
 
         composer.render();
 
-        // Render layer-1 overlay meshes and CSS2D labels.
-        // Normally skipped when inside the ship (not visible from interior
-        // and wastes GPU), BUT we still render them when a moon is focused
-        // so cockpit/cabin users can see the moon's text labels.
+        // Skip the extra render passes when inside the ship — the
+        // layer-1 overlay meshes and CSS2D labels aren't visible from
+        // the interior, so rendering them just wastes GPU time.
         if (!insideShipRef.current || focusedMoonRef.current) {
           const prevMask = camera.layers.mask;
           camera.layers.set(1);

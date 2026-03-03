@@ -51,8 +51,6 @@ export const createMoonFocusController = (deps: {
   freezeOrbitalMotion: (moonMesh: THREE.Mesh) => void;
   lastMoonOrbitSpeedRef: React.MutableRefObject<number | null>;
   lastMoonSpinSpeedRef: React.MutableRefObject<number | null>;
-  onMoonViewStart?: (moonMesh: THREE.Mesh) => void;
-  onMoonViewEnd?: () => void;
 }) => {
   const {
     scene,
@@ -75,8 +73,6 @@ export const createMoonFocusController = (deps: {
     freezeOrbitalMotion,
     lastMoonOrbitSpeedRef,
     lastMoonSpinSpeedRef,
-    onMoonViewStart,
-    onMoonViewEnd,
   } = deps;
 
   const exitFocusedMoon = createExitFocusedMoon({
@@ -105,7 +101,7 @@ export const createMoonFocusController = (deps: {
     onFocus: () => {
       if (lastMoonOrbitSpeedRef.current === null) {
         lastMoonOrbitSpeedRef.current =
-          optionsRef.current.spaceMoonOrbitSpeed ?? 0.01;
+          optionsRef.current.spaceMoonOrbitSpeed ?? 0;
       }
       lastMoonSpinSpeedRef.current =
         optionsRef.current.spaceMoonSpinSpeed ?? 0.1;
@@ -162,8 +158,6 @@ export const createMoonFocusController = (deps: {
 
     // Clear overlay content so UI elements (zoom slider, etc.) reappear
     setOverlayContent(null);
-
-    onMoonViewEnd?.();
 
     if (applyOptions && onOptionsChange && !shouldExitRestoreOptions) {
       onOptionsChange(nextOptions);
@@ -266,7 +260,6 @@ export const createMoonFocusController = (deps: {
 
     // After arriving, finalize focus/overlays for the moon (extracted)
     finalizeFocusOnMoon(moonMesh, company);
-    onMoonViewStart?.(moonMesh);
   };
 
   return { enterMoonView, exitMoonView };

@@ -9,7 +9,6 @@ import {
   CONTROLS_MIN_DIST,
   CONTROLS_MAX_DIST,
   ZOOM_EXIT_THRESHOLD,
-  BOKEH_FOCUS,
 } from "../scaleConfig";
 import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 
@@ -18,7 +17,6 @@ CameraControls.install({ THREE });
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
 import type { MutableRefObject, RefObject } from "react";
 import type { SceneRef } from "../ResumeSpace3D.types";
 
@@ -150,14 +148,8 @@ export const useThreeScene = (params: {
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
 
-    const bokehPass = new BokehPass(scene, camera, {
-      focus: BOKEH_FOCUS,
-      aperture: 0.00035,
-      maxblur: 0.008,
-    });
-    bokehPass.enabled = false;
-    composer.addPass(bokehPass);
-    sceneRef.current.bokehPass = bokehPass;
+    // Bokeh / depth-of-field pass removed — it caused a visible hitch
+    // when entering moon view and is no longer needed with the orbit experience.
 
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(container.clientWidth, container.clientHeight),
