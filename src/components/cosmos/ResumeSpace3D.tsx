@@ -96,11 +96,7 @@ import {
   SKILLS_WANDER_RADIUS,
   PROJ_WANDER_RADIUS,
   SUN_WANDER_RADIUS,
-  NAV_MAX_SPEED,
-  NAV_TURBO_SPEED,
-  NAV_TURBO_THRESHOLD,
   NAV_CAMERA_BEHIND,
-  NAV_CAMERA_HEIGHT,
   EXP_FOCUS_DIST,
   SKILLS_FOCUS_DIST,
   PROJ_FOCUS_DIST,
@@ -218,7 +214,7 @@ export default function ResumeSpace3D({
     isOrbiting,
     onExitCompleteRef: orbitExitCompleteRef,
     onOrbitEstablishedRef,
-  } = useMoonOrbit(debugLog);
+  } = useMoonOrbit(debugLog, shipLog);
 
   // Track orbit phase as React state for UI (Leave Orbit button, etc.)
   const [orbitPhase, setOrbitPhase] = useState<OrbitPhase>("idle");
@@ -693,15 +689,6 @@ export default function ResumeSpace3D({
     sceneRef,
     frozenSystemStateRef,
   });
-  const [showFlightTuning, setShowFlightTuning] = useState(false);
-  const applyFlightTuning = useCallback(
-    (patch: Partial<typeof options>) => {
-      const next = { ...optionsRef.current, ...patch };
-      optionsRef.current = next;
-      onOptionsChange?.(next);
-    },
-    [onOptionsChange, optionsRef],
-  );
 
   const {
     currentNavigationTarget,
@@ -4042,185 +4029,6 @@ export default function ResumeSpace3D({
               onNavigate={handleCockpitNavigate}
             />
           )}
-
-          {/* Flight tuning controls (hidden behind a gear in bottom-right) */}
-          <div
-            style={{
-              position: "fixed",
-              right: 14,
-              bottom: 14,
-              zIndex: 1200,
-              pointerEvents: "auto",
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            {showFlightTuning && (
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  bottom: 54,
-                  width: 320,
-                  maxHeight: "62vh",
-                  overflowY: "auto",
-                  padding: 12,
-                  borderRadius: 10,
-                  border: "1px solid rgba(140, 190, 255, 0.35)",
-                  background: "rgba(8, 12, 22, 0.92)",
-                  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)",
-                  backdropFilter: "blur(10px)",
-                  color: "#d7e7ff",
-                  fontFamily: "'Rajdhani', sans-serif",
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.8, marginBottom: 10 }}>
-                  FLIGHT + CAMERA TUNING
-                </div>
-
-                <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 10 }}>
-                  Live values update while flying
-                </div>
-
-                {[
-                  {
-                    key: "spaceMoonNavMaxSpeed",
-                    label: "Moon Max Speed",
-                    min: 1,
-                    max: 20,
-                    step: 0.1,
-                    value: options.spaceMoonNavMaxSpeed ?? NAV_MAX_SPEED,
-                  },
-                  {
-                    key: "spaceMoonNavTurboSpeed",
-                    label: "Moon Turbo Speed",
-                    min: 2,
-                    max: 40,
-                    step: 0.1,
-                    value: options.spaceMoonNavTurboSpeed ?? NAV_TURBO_SPEED,
-                  },
-                  {
-                    key: "spaceMoonNavTurboThreshold",
-                    label: "Moon Turbo Threshold",
-                    min: 200,
-                    max: 6000,
-                    step: 50,
-                    value:
-                      options.spaceMoonNavTurboThreshold ?? NAV_TURBO_THRESHOLD,
-                  },
-                  {
-                    key: "spaceFollowDistance",
-                    label: "Follow Distance",
-                    min: 4,
-                    max: 40,
-                    step: 0.5,
-                    value: options.spaceFollowDistance ?? FOLLOW_DISTANCE,
-                  },
-                  {
-                    key: "spaceFollowHeight",
-                    label: "Follow Height",
-                    min: 0,
-                    max: 8,
-                    step: 0.1,
-                    value: options.spaceFollowHeight ?? FOLLOW_HEIGHT,
-                  },
-                  {
-                    key: "spaceCameraSmoothTime",
-                    label: "Camera Smooth Time",
-                    min: 0.05,
-                    max: 1.2,
-                    step: 0.01,
-                    value: options.spaceCameraSmoothTime ?? 0.25,
-                  },
-                  {
-                    key: "spaceNavCameraBehind",
-                    label: "Nav Camera Behind",
-                    min: 4,
-                    max: 24,
-                    step: 0.5,
-                    value: options.spaceNavCameraBehind ?? NAV_CAMERA_BEHIND,
-                  },
-                  {
-                    key: "spaceNavCameraHeight",
-                    label: "Nav Camera Height",
-                    min: 0,
-                    max: 8,
-                    step: 0.1,
-                    value: options.spaceNavCameraHeight ?? NAV_CAMERA_HEIGHT,
-                  },
-                ].map((control) => (
-                  <div key={control.key} style={{ marginBottom: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-                      <span>{control.label}</span>
-                      <span>{Number(control.value).toFixed(control.step < 1 ? 2 : 0)}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={control.min}
-                      max={control.max}
-                      step={control.step}
-                      value={control.value}
-                      onChange={(e) =>
-                        applyFlightTuning({
-                          [control.key]: Number(e.target.value),
-                        } as Partial<typeof options>)
-                      }
-                      style={{ width: "100%" }}
-                    />
-                  </div>
-                ))}
-
-                <button
-                  onClick={() =>
-                    applyFlightTuning({
-                      spaceMoonNavMaxSpeed: NAV_MAX_SPEED,
-                      spaceMoonNavTurboSpeed: NAV_TURBO_SPEED,
-                      spaceMoonNavTurboThreshold: NAV_TURBO_THRESHOLD,
-                      spaceFollowDistance: FOLLOW_DISTANCE,
-                      spaceFollowHeight: FOLLOW_HEIGHT,
-                      spaceCameraSmoothTime: 0.25,
-                      spaceNavCameraBehind: NAV_CAMERA_BEHIND,
-                      spaceNavCameraHeight: NAV_CAMERA_HEIGHT,
-                    })
-                  }
-                  style={{
-                    marginTop: 4,
-                    width: "100%",
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(160, 190, 255, 0.45)",
-                    background: "rgba(32, 56, 96, 0.45)",
-                    color: "#e8f2ff",
-                    cursor: "pointer",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontWeight: 700,
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  Reset Tuning Defaults
-                </button>
-              </div>
-            )}
-
-            <button
-              onClick={() => setShowFlightTuning((v) => !v)}
-              title="Flight and camera tuning"
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: "50%",
-                border: "1px solid rgba(140, 190, 255, 0.45)",
-                background: "rgba(8, 12, 22, 0.88)",
-                color: "#cde4ff",
-                cursor: "pointer",
-                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.35)",
-                fontSize: 18,
-                lineHeight: "36px",
-              }}
-            >
-              ⚙
-            </button>
-          </div>
 
           {/* Spaceship HUD Interface */}
           <SpaceshipHUD

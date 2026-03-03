@@ -38,6 +38,7 @@ export interface OrbitCameraInstruction {
 }
 
 type DebugLogFn = (source: string, message: string) => void;
+type ShipLogFn = (message: string, category?: "orbit" | "info" | "nav" | "system" | "error" | "cmd") => void;
 
 export interface UseMoonOrbitReturn {
   phaseRef: React.MutableRefObject<OrbitPhase>;
@@ -68,7 +69,14 @@ const SHIP_FORWARD_OFFSET = new THREE.Quaternion().setFromEuler(
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
-export const useMoonOrbit = (debugLog: DebugLogFn): UseMoonOrbitReturn => {
+export const useMoonOrbit = (
+  debugLog: DebugLogFn,
+  shipLog?: ShipLogFn,
+): UseMoonOrbitReturn => {
+  // Keep moon-arrival handoff snappy so it cannot feel like "moving away".
+  const HOLD_DURATION = Math.min(ORBIT_HOLD_DURATION, 0.25);
+  const ENTRY_TURN_PHASE_END = 0.12;
+
   const phaseRef = useRef<OrbitPhase>("idle");
   const orbitMoonRef = useRef<THREE.Mesh | null>(null);
   const onExitCompleteRef = useRef<(() => void) | null>(null);
@@ -87,6 +95,12 @@ export const useMoonOrbit = (debugLog: DebugLogFn): UseMoonOrbitReturn => {
   // Entry blend
   const entryPosRef = useRef(new THREE.Vector3());
   const entryQuatRef = useRef(new THREE.Quaternion());
+  const entryHoverTargetRef = useRef(new THREE.Vector3());
+  const entryStartRadiusRef = useRef(0);
+  const entryTargetRadiusRef = useRef(0);
+  const entryMaxRadiusRef = useRef(0);
+  const instantEntryRef = useRef(false);
+  const orbitDriftTimeRef = useRef(0);
 
   // Exit state
   const exitDirRef = useRef(new THREE.Vector3());
@@ -101,6 +115,20 @@ export const useMoonOrbit = (debugLog: DebugLogFn): UseMoonOrbitReturn => {
     throttleRef.current[tag] = now;
     debugLog("orbit", `[${tag}] ${msg}`);
   }, [debugLog]);
+
+  const shipDiagThrottleRef = useRef<Record<string, number>>({});
+  const shipDiag = useCallback((tag: string, msg: string, minMs = 800) => {
+    if (!shipLog) return;
+    const now = performance.now();
+    if (
+      shipDiagThrottleRef.current[tag] &&
+      now - shipDiagThrottleRef.current[tag] < minMs
+    ) {
+      return;
+    }
+    shipDiagThrottleRef.current[tag] = now;
+    shipLog(`DIAG ${tag} | ${msg}`, "orbit");
+  }, [shipLog]);
 
   // ── Compute the hover station above the moon ──────────────────
 
@@ -140,6 +168,7 @@ export const useMoonOrbit = (debugLog: DebugLogFn): UseMoonOrbitReturn => {
       moonRadiusRef.current = moonRadius;
       phaseTimerRef.current = 0;
       totalTimeRef.current = 0;
+      orbitDriftTimeRef.current = 0;
 
       moonMesh.getWorldPosition(moonCenterRef.current);
       debugLog("orbit", `enterOrbit() moonCenter=[${moonCenterRef.current.x.toFixed(0)},${moonCenterRef.current.y.toFixed(0)},${moonCenterRef.current.z.toFixed(0)}]`);
@@ -148,10 +177,19 @@ export const useMoonOrbit = (debugLog: DebugLogFn): UseMoonOrbitReturn => {
 
       entryPosRef.current.copy(shipObj.position);
       entryQuatRef.current.copy(shipObj.quaternion);
+      entryStartRadiusRef.current = shipObj.position.distanceTo(moonCenterRef.current);
+      entryTargetRadiusRef.current = hoverPosRef.current.distanceTo(moonCenterRef.current);
+      entryMaxRadiusRef.current = entryStartRadiusRef.current;
+      instantEntryRef.current = false;
 
-      debugLog("orbit", `enterOrbit() DONE → phase=hold, hoverPos=[${hoverPosRef.current.x.toFixed(0)},${hoverPosRef.current.y.toFixed(0)},${hoverPosRef.current.z.toFixed(0)}], outward=[${hoverOutwardRef.current.x.toFixed(2)},${hoverOutwardRef.current.y.toFixed(2)},${hoverOutwardRef.current.z.toFixed(2)}]`);
+      debugLog("orbit", `enterOrbit() DONE → phase=hold, hoverPos=[${hoverPosRef.current.x.toFixed(0)},${hoverPosRef.current.y.toFixed(0)},${hoverPosRef.current.z.toFixed(0)}], outward=[${hoverOutwardRef.current.x.toFixed(2)},${hoverOutwardRef.current.y.toFixed(2)},${hoverOutwardRef.current.z.toFixed(2)}], rStart=${entryStartRadiusRef.current.toFixed(1)} rTarget=${entryTargetRadiusRef.current.toFixed(1)}`);
+      shipDiag(
+        "entry-init",
+        `rStart=${entryStartRadiusRef.current.toFixed(1)} rTarget=${entryTargetRadiusRef.current.toFixed(1)} delta=${(entryTargetRadiusRef.current - entryStartRadiusRef.current).toFixed(1)}`,
+        0,
+      );
     },
-    [computeHoverStation, debugLog],
+    [computeHoverStation, debugLog, shipDiag],
   );
 
   // ── Exit orbit ───────────────────────────────────────────────
@@ -184,15 +222,60 @@ export const useMoonOrbit = (debugLog: DebugLogFn): UseMoonOrbitReturn => {
 
       // ── HOLD phase ─────────────────────────────────────────────
       if (phase === "hold") {
-        const holdT = Math.min(phaseTimerRef.current / ORBIT_HOLD_DURATION, 1.0);
+        const holdT = Math.min(phaseTimerRef.current / HOLD_DURATION, 1.0);
+        // Lock ship at initial arrival point during hold so any residual
+        // autopilot/physics momentum cannot pull it away before entry descent.
+        const preLockOffset = shipObj.position.distanceTo(entryPosRef.current);
+        if (preLockOffset > 0.5) {
+          throttledLog("holdDrift", `drift-detected preLockOffset=${preLockOffset.toFixed(2)} (forcing lock)`);
+          shipDiag("hold-drift", `preLockOffset=${preLockOffset.toFixed(2)} forcingLock=1`);
+        }
+        shipObj.position.copy(entryPosRef.current);
 
-        if (phaseTimerRef.current >= ORBIT_HOLD_DURATION) {
+        if (phaseTimerRef.current >= HOLD_DURATION) {
           debugLog("orbit", `▶ TRANSITION: hold → entering (timer=${phaseTimerRef.current.toFixed(2)}s)`);
           phaseRef.current = "entering";
           phaseTimerRef.current = 0;
           entryPosRef.current.copy(shipObj.position);
           entryQuatRef.current.copy(shipObj.quaternion);
           computeHoverStation(moonCenterRef.current, moonR, shipObj.position);
+
+          // Build an entry target that never "bounces away" from the moon:
+          // if the computed hover radius is farther than current arrival radius,
+          // clamp it inward so the transition is turn -> descend.
+          const startOutward = new THREE.Vector3()
+            .subVectors(entryPosRef.current, moonCenterRef.current);
+          const arrivalRadius = Math.max(startOutward.length(), moonR * 1.1);
+          startOutward.normalize();
+          const desiredHoverRadius = hoverPosRef.current.distanceTo(moonCenterRef.current);
+          const clampedHoverRadius = Math.min(
+            desiredHoverRadius,
+            Math.max(moonR * 1.05, arrivalRadius - moonR * 0.12),
+          );
+          entryHoverTargetRef.current
+            .copy(moonCenterRef.current)
+            .addScaledVector(startOutward, clampedHoverRadius);
+          entryStartRadiusRef.current = entryPosRef.current.distanceTo(moonCenterRef.current);
+          entryTargetRadiusRef.current = entryHoverTargetRef.current.distanceTo(moonCenterRef.current);
+          entryMaxRadiusRef.current = entryStartRadiusRef.current;
+          instantEntryRef.current =
+            Math.abs(entryStartRadiusRef.current - entryTargetRadiusRef.current) < 5;
+          debugLog(
+            "orbit",
+            `entry-init rStart=${entryStartRadiusRef.current.toFixed(1)} rTarget=${entryTargetRadiusRef.current.toFixed(1)} desiredHoverR=${desiredHoverRadius.toFixed(1)} clampedHoverR=${clampedHoverRadius.toFixed(1)} (delta=${(entryTargetRadiusRef.current - entryStartRadiusRef.current).toFixed(1)})`,
+          );
+          shipDiag(
+            "entry-target",
+            `rStart=${entryStartRadiusRef.current.toFixed(1)} rTarget=${entryTargetRadiusRef.current.toFixed(1)} desired=${desiredHoverRadius.toFixed(1)} clamped=${clampedHoverRadius.toFixed(1)}`,
+            0,
+          );
+          if (instantEntryRef.current) {
+            shipDiag(
+              "entry-instant",
+              `delta=${(entryTargetRadiusRef.current - entryStartRadiusRef.current).toFixed(2)} immediate=1`,
+              0,
+            );
+          }
         }
 
         const camInstr = computeHoverCamera(
@@ -207,32 +290,109 @@ export const useMoonOrbit = (debugLog: DebugLogFn): UseMoonOrbitReturn => {
 
       // ── ENTERING phase ─────────────────────────────────────────
       if (phase === "entering") {
+        if (instantEntryRef.current) {
+          shipObj.position.copy(entryHoverTargetRef.current);
+          orientShipForHover(shipObj, hoverOutwardRef.current, 1.0);
+          debugLog("orbit", "▶ TRANSITION: entering → orbiting (instant)");
+          shipDiag(
+            "entry-complete",
+            `instant=1 rFinal=${shipObj.position.distanceTo(moonCenterRef.current).toFixed(1)} rStart=${entryStartRadiusRef.current.toFixed(1)} rTarget=${entryTargetRadiusRef.current.toFixed(1)}`,
+            0,
+          );
+          phaseRef.current = "orbiting";
+          phaseTimerRef.current = 0;
+          orbitDriftTimeRef.current = 0;
+          onOrbitEstablishedRef.current?.();
+
+          const camInstr = computeHoverCamera(
+            shipObj.position, moonCenterRef.current, hoverOutwardRef.current, moonR, 0, throttledLog,
+          );
+          return camInstr;
+        }
+
         const t = Math.min(phaseTimerRef.current / ORBIT_ENTRY_DURATION, 1.0);
         const ease = t * t * (3 - 2 * t);
 
+        // Keep final hover station anchored to the arrival outward vector.
         computeHoverStation(moonCenterRef.current, moonR, entryPosRef.current);
-        shipObj.position.lerpVectors(entryPosRef.current, hoverPosRef.current, ease);
-        orientShipForHover(shipObj, outward, ease);
+
+        // Two-stage path: rotate first (hold position), then descend/translate.
+        // This avoids the "bounce up then down" look from arcing waypoints.
+        const turnPhaseEnd = ENTRY_TURN_PHASE_END;
+        if (ease < turnPhaseEnd) {
+          shipObj.position.copy(entryPosRef.current);
+        } else {
+          const u = (ease - turnPhaseEnd) / (1 - turnPhaseEnd);
+          const uEase = u * u * (3 - 2 * u);
+          shipObj.position.lerpVectors(
+            entryPosRef.current,
+            entryHoverTargetRef.current,
+            uEase,
+          );
+        }
+
+        const currentRadius = shipObj.position.distanceTo(moonCenterRef.current);
+        if (currentRadius > entryMaxRadiusRef.current) {
+          entryMaxRadiusRef.current = currentRadius;
+        }
+        throttledLog(
+          "entryRadius",
+          `t=${t.toFixed(2)} ease=${ease.toFixed(2)} rNow=${currentRadius.toFixed(1)} rStart=${entryStartRadiusRef.current.toFixed(1)} rTarget=${entryTargetRadiusRef.current.toFixed(1)} away=${(currentRadius - entryStartRadiusRef.current).toFixed(2)} toTarget=${(currentRadius - entryTargetRadiusRef.current).toFixed(2)}`,
+        );
+        shipDiag(
+          "entry-radius",
+          `t=${t.toFixed(2)} rNow=${currentRadius.toFixed(1)} away=${(currentRadius - entryStartRadiusRef.current).toFixed(2)} toTarget=${(currentRadius - entryTargetRadiusRef.current).toFixed(2)}`,
+          600,
+        );
+
+        // Use current outward each frame so orientation/camera naturally follows
+        // the descent into station instead of "bouncing".
+        const entryOutward = new THREE.Vector3()
+          .subVectors(shipObj.position, moonCenterRef.current);
+        if (entryOutward.lengthSq() < 0.01) entryOutward.copy(outward);
+        entryOutward.normalize();
+        orientShipForHover(shipObj, entryOutward, ease);
 
         throttledLog("entering", `t=${t.toFixed(2)} ease=${ease.toFixed(2)} ship=[${shipObj.position.x.toFixed(0)},${shipObj.position.y.toFixed(0)},${shipObj.position.z.toFixed(0)}]`);
 
         if (t >= 1.0) {
           debugLog("orbit", `▶ TRANSITION: entering → orbiting`);
+          shipObj.position.copy(entryHoverTargetRef.current);
+          entryPosRef.current.copy(entryHoverTargetRef.current);
+          debugLog(
+            "orbit",
+            `entry-complete rFinal=${shipObj.position.distanceTo(moonCenterRef.current).toFixed(1)} rMax=${entryMaxRadiusRef.current.toFixed(1)} rStart=${entryStartRadiusRef.current.toFixed(1)} rTarget=${entryTargetRadiusRef.current.toFixed(1)}`,
+          );
+          shipDiag(
+            "entry-complete",
+            `rFinal=${shipObj.position.distanceTo(moonCenterRef.current).toFixed(1)} rMax=${entryMaxRadiusRef.current.toFixed(1)} rStart=${entryStartRadiusRef.current.toFixed(1)} rTarget=${entryTargetRadiusRef.current.toFixed(1)}`,
+            0,
+          );
           phaseRef.current = "orbiting";
           phaseTimerRef.current = 0;
+          orbitDriftTimeRef.current = 0;
           debugLog("orbit", `onOrbitEstablishedRef set=${!!onOrbitEstablishedRef.current} — calling it`);
           onOrbitEstablishedRef.current?.();
         }
 
         const camInstr = computeHoverCamera(
-          shipObj.position, moonCenterRef.current, outward, moonR, 0, throttledLog,
+          shipObj.position, moonCenterRef.current, entryOutward, moonR, 0, throttledLog,
+          {
+            // Keep camera horizon steadier at entry start and blend to moon-ground framing.
+            upBlend: ease,
+            targetBlend: THREE.MathUtils.lerp(0.86, _pitch(), ease),
+            lerpFactor: THREE.MathUtils.lerp(0.028, 0.04, ease),
+          },
         );
         return camInstr;
       }
 
       // ── ORBITING phase (stationary hover) ──────────────────────
       if (phase === "orbiting") {
-        const driftTime = totalTimeRef.current;
+        orbitDriftTimeRef.current += dt;
+        const driftTime = orbitDriftTimeRef.current;
+        // Ease-in drift so orbit start does not look like a "bounce/pop".
+        const driftRamp = THREE.MathUtils.clamp(driftTime / 1.1, 0, 1);
         const driftAmt = moonR * ORBIT_DRIFT_AMP;
         const freq = ORBIT_DRIFT_FREQ * Math.PI * 2;
 
@@ -244,9 +404,9 @@ export const useMoonOrbit = (debugLog: DebugLogFn): UseMoonOrbitReturn => {
           .crossVectors(outward, tangentA)
           .normalize();
 
-        const driftX = Math.sin(driftTime * freq) * driftAmt;
-        const driftZ = Math.sin(driftTime * freq * 0.7 + 1.3) * driftAmt * 0.6;
-        const driftY = Math.sin(driftTime * freq * 0.4 + 2.1) * driftAmt * 0.3;
+        const driftX = Math.sin(driftTime * freq) * driftAmt * driftRamp;
+        const driftZ = Math.sin(driftTime * freq * 0.7 + 1.3) * driftAmt * 0.6 * driftRamp;
+        const driftY = Math.sin(driftTime * freq * 0.4 + 2.1) * driftAmt * 0.3 * driftRamp;
 
         computeHoverStation(moonCenterRef.current, moonR, entryPosRef.current);
         shipObj.position
@@ -257,7 +417,7 @@ export const useMoonOrbit = (debugLog: DebugLogFn): UseMoonOrbitReturn => {
 
         orientShipForHover(shipObj, outward, 1.0);
 
-        throttledLog("orbiting", `drift=[${driftX.toFixed(1)},${driftZ.toFixed(1)},${driftY.toFixed(1)}] ship=[${shipObj.position.x.toFixed(0)},${shipObj.position.y.toFixed(0)},${shipObj.position.z.toFixed(0)}]`);
+        throttledLog("orbiting", `drift=[${driftX.toFixed(1)},${driftZ.toFixed(1)},${driftY.toFixed(1)}] ramp=${driftRamp.toFixed(2)} ship=[${shipObj.position.x.toFixed(0)},${shipObj.position.y.toFixed(0)},${shipObj.position.z.toFixed(0)}]`);
 
         const camInstr = computeHoverCamera(
           shipObj.position, moonCenterRef.current, outward, moonR, driftTime, throttledLog,
@@ -343,6 +503,11 @@ function computeHoverCamera(
   moonR: number,
   _time: number,
   log: ThrottledLogFn,
+  options?: {
+    upBlend?: number;
+    targetBlend?: number;
+    lerpFactor?: number;
+  },
 ): OrbitCameraInstruction {
   const tangent = new THREE.Vector3().crossVectors(outward, _up).normalize();
   if (tangent.lengthSq() < 0.01) tangent.set(1, 0, 0);
@@ -362,20 +527,25 @@ function computeHoverCamera(
   const skyAbove = new THREE.Vector3()
     .copy(shipPos)
     .addScaledVector(outward, moonR * 0.5);
+  const targetBlend = options?.targetBlend ?? _pitch();
   const camTarget = new THREE.Vector3().lerpVectors(
     surfaceBelow,
     skyAbove,
-    _pitch(),
+    targetBlend,
   );
+  const camUp = new THREE.Vector3()
+    .copy(_up)
+    .lerp(outward, THREE.MathUtils.clamp(options?.upBlend ?? 1, 0, 1))
+    .normalize();
 
-  log("hoverCam", `tangent=[${tangent.x.toFixed(2)},${tangent.y.toFixed(2)},${tangent.z.toFixed(2)}] behind=${behindDist.toFixed(0)} above=${aboveDist.toFixed(0)} | camPos=[${camPos.x.toFixed(0)},${camPos.y.toFixed(0)},${camPos.z.toFixed(0)}] lookAt=[${camTarget.x.toFixed(0)},${camTarget.y.toFixed(0)},${camTarget.z.toFixed(0)}] | surfBelow=[${surfaceBelow.x.toFixed(0)},${surfaceBelow.y.toFixed(0)},${surfaceBelow.z.toFixed(0)}] blend=${_pitch()}`);
+  log("hoverCam", `tangent=[${tangent.x.toFixed(2)},${tangent.y.toFixed(2)},${tangent.z.toFixed(2)}] behind=${behindDist.toFixed(0)} above=${aboveDist.toFixed(0)} | camPos=[${camPos.x.toFixed(0)},${camPos.y.toFixed(0)},${camPos.z.toFixed(0)}] lookAt=[${camTarget.x.toFixed(0)},${camTarget.y.toFixed(0)},${camTarget.z.toFixed(0)}] | surfBelow=[${surfaceBelow.x.toFixed(0)},${surfaceBelow.y.toFixed(0)},${surfaceBelow.z.toFixed(0)}] blend=${targetBlend.toFixed(2)} upBlend=${THREE.MathUtils.clamp(options?.upBlend ?? 1, 0, 1).toFixed(2)}`);
 
   return {
     cameraPosition: camPos,
     cameraTarget: camTarget,
-    lerpFactor: 0.04,
+    lerpFactor: options?.lerpFactor ?? 0.04,
     // "Up" = outward from moon surface → makes the moon appear as ground/horizon
-    cameraUp: outward.clone(),
+    cameraUp: camUp,
   };
 }
 

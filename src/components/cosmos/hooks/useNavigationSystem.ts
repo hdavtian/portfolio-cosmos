@@ -39,6 +39,8 @@ const NAV_ORBIT_EXIT_CLEAR_AWAY_BLEND = 0.4; // 40% biased away from moon surfac
 const NAV_ORBIT_EXIT_CLEAR_MIN_DIST = 180;
 const NAV_ORBIT_EXIT_CLEAR_MAX_DIST = 320;
 const NAV_ORBIT_EXIT_CLEAR_SPEED = 0.9;
+const NAV_MOON_ARRIVAL_DISTANCE = 36;
+const NAV_MOON_FREEZE_DISTANCE = 42;
 const NAV_PLANET_STAGING_MIN_DIST = 420;
 const NAV_PLANET_STAGING_RADIUS_MULT = 3.8;
 
@@ -497,6 +499,13 @@ export const useNavigationSystem = (deps: {
       if (targetType === "moon") {
         navTrace("handleAutopilotNavigation()", `moon-flow:${targetId}`);
         const moonId = `moon-${targetId}`;
+        navigationSystemRef.current.updateConfig({
+          maxSpeed: optionsRef.current.spaceMoonNavMaxSpeed ?? NAV_MAX_SPEED,
+          turboSpeed: optionsRef.current.spaceMoonNavTurboSpeed ?? NAV_TURBO_SPEED,
+          arrivalDistance: NAV_MOON_ARRIVAL_DISTANCE,
+          freezeDistance: NAV_MOON_FREEZE_DISTANCE,
+          freezeOrbitOnApproach: true,
+        });
 
         if (!emitterRef.current.isTracking(moonId)) {
           navTrace("handleAutopilotNavigation()", `moon-not-tracked:${moonId}`);
@@ -595,6 +604,11 @@ export const useNavigationSystem = (deps: {
           `🎯 NAVIGATION INITIATED: Target - ${targetId} | Distance: ${currentPos ? spaceshipRef.current!.position.distanceTo(currentPos.worldPosition).toFixed(0) : "unknown"}u`,
         );
       } else if (targetType === "section") {
+        navigationSystemRef.current.updateConfig({
+          arrivalDistance: NAV_ARRIVAL_DIST,
+          freezeDistance: NAV_FREEZE_DIST,
+          freezeOrbitOnApproach: true,
+        });
         if (
           currentNavigationTarget === targetId &&
           navigationDistance === null &&
@@ -1240,7 +1254,11 @@ export const useNavigationSystem = (deps: {
       const planetRadius = target.targetRadius || NAV_FALLBACK_PLANET_R;
       const arrivalDistance = target.planetCenter
         ? 30 // Get close to the staging point before settling
-        : Math.max(planetRadius * 4, 80);
+        : target.type === "moon"
+          // Moon arrivals must finish near the hover station; arriving far out
+          // creates the visible "bounce" handoff before orbit settles.
+          ? Math.max(28, Math.min(42, planetRadius * 1.2))
+          : Math.max(planetRadius * 4, 80);
 
       // ── TRAVEL PHASE: move toward target with obstacle avoidance ──
       // targetPos is guaranteed non-null here (moon-turn phases return
