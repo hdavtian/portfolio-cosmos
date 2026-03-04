@@ -1,0 +1,162 @@
+[
+  {
+    "id": "acecount-01",
+    "title": "acecount.com",
+    "image": "/images/legacy-web/acecount.com 1.png",
+    "phone": "",
+    "description": "Early 2000s marketing/business website screenshot.",
+    "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "acecount-02",
+    "title": "acecount.com",
+    "image": "/images/legacy-web/acecount.com 2.png",
+    "phone": "",
+    "description": "Alternative page/state from acecount.com archive-era build.",
+    "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "acecount-03",
+    "title": "acecount.com",
+    "image": "/images/legacy-web/acecount.com 3.png",
+    "phone": "",
+    "description": "Legacy acecount.com capture from non-responsive desktop era.",
+    "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "acecount-04",
+    "title": "acecount.com",
+    "image": "/images/legacy-web/acecount.com 4.png",
+    "phone": "",
+    "description": "acecount.com portfolio capture showing classic fixed-width design.",
+    "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "bwvideoproductions-01",
+    "title": "bwvideoproductions.com",
+    "image": "/images/legacy-web/bwvideoproductions.com 1.png",
+    "phone": "",
+    "description": "Legacy production-site screenshot from early career work.",
+    "technologies": ["HTML", "CSS", "JavaScript"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "racewithhonda-01",
+    "title": "racewithhonda.com",
+    "image": "/images/legacy-web/racewithhonda.com 1.png",
+    "phone": "",
+    "description": "Campaign microsite screenshot featuring period visual style.",
+    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "racewithhonda-02",
+    "title": "racewithhonda.com",
+    "image": "/images/legacy-web/racewithhonda.com 2.png",
+    "phone": "",
+    "description": "racewithhonda.com alternate page capture.",
+    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "racewithhonda-03",
+    "title": "racewithhonda.com",
+    "image": "/images/legacy-web/racewithhonda.com 3.png",
+    "phone": "",
+    "description": "Legacy racewithhonda.com screenshot (fixed desktop layout).",
+    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "racewithhonda-04",
+    "title": "racewithhonda.com",
+    "image": "/images/legacy-web/racewithhonda.com 4.png",
+    "phone": "",
+    "description": "racewithhonda.com archive-era visual and content state.",
+    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "racewithhonda-05",
+    "title": "racewithhonda.com",
+    "image": "/images/legacy-web/racewithhonda.com 5.png",
+    "phone": "",
+    "description": "Additional racewithhonda.com capture from the same project period.",
+    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "simmonsforgovernor-01",
+    "title": "simmonsforgovernor.com",
+    "image": "/images/legacy-web/simmonsforgovernor.com.png",
+    "phone": "",
+    "description": "Political campaign website screenshot from early 2000s web stack.",
+    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "stormscape-demo",
+    "title": "Stormscape (Demo Sites)",
+    "image": "/images/legacy-web/stormscape - demo sites.png",
+    "phone": "",
+    "description": "Stormscape portfolio demo-sites index capture.",
+    "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "stormscape-live",
+    "title": "Stormscape (Live Sites)",
+    "image": "/images/legacy-web/stormscape - live sites.png",
+    "phone": "",
+    "description": "Stormscape portfolio live-sites index screenshot.",
+    "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "stormscape-under-construction",
+    "title": "Stormscape (Under Construction Sites)",
+    "image": "/images/legacy-web/stormscape - under construction sites.png",
+    "phone": "",
+    "description": "Stormscape under-construction listing from archive period.",
+    "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "unitedlayer-01",
+    "title": "unitedlayer.com",
+    "image": "/images/legacy-web/unitedlayer.com 1.png",
+    "phone": "",
+    "description": "UnitedLayer legacy website screenshot, desktop-first layout.",
+    "technologies": ["HTML", "CSS", "JavaScript"],
+    "year": null,
+    "published": true
+  },
+  {
+    "id": "unitedlayer-02",
+    "title": "unitedlayer.com",
+    "image": "/images/legacy-web/unitedlayer.com 2.png",
+    "phone": "",
+    "description": "Second UnitedLayer page/state screenshot from the same era.",
+    "technologies": ["HTML", "CSS", "JavaScript"],
+    "year": null,
+    "published": true
+  }
+]
