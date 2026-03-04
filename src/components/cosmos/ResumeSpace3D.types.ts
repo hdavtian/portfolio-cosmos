@@ -13,6 +13,7 @@ export interface SceneRef {
   scene?: THREE.Scene;
   camera?: THREE.PerspectiveCamera;
   controls?: CameraControls;
+  ambientLight?: THREE.AmbientLight;
   sunLight?: THREE.PointLight;
   fillLight?: THREE.PointLight;
   labelRendererDom?: HTMLElement;

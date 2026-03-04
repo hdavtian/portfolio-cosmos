@@ -193,9 +193,17 @@ export const useRenderLoop = () => {
       const _tmpHoverFloat = new THREE.Vector3();
       const _tmpLookDir = new THREE.Vector3();
       const _tmpControlTarget = new THREE.Vector3();
+      const _tmpCamLocal = new THREE.Vector3();
+      const _tmpCamClamped = new THREE.Vector3();
       const _orbitCamTarget = new THREE.Vector3();
       const _orbitCurUp = new THREE.Vector3(0, 1, 0);
       let _orbitUpActive = false;
+      let interiorLightSnapshot: {
+        sun?: number;
+        fill?: number;
+        ambient?: number;
+        exposure: number;
+      } | null = null;
       const LIGHTSPEED_STREAK_COUNT = 140;
       const LIGHTSPEED_THICK_STREAK_COUNT = 42;
       const LIGHTSPEED_THICK_COPIES = 5;
@@ -1147,15 +1155,32 @@ export const useRenderLoop = () => {
                   const sl = sceneRef.current.sunLight as
                     | THREE.PointLight
                     | undefined;
+                  const al = sceneRef.current.ambientLight as
+                    | THREE.AmbientLight
+                    | undefined;
                   if (sl) {
-                    sl.intensity = useCockpit ? 1.2 : 0.1;
+                    if (!interiorLightSnapshot) {
+                      interiorLightSnapshot = {
+                        sun: sl.intensity,
+                        fill: sceneRef.current.fillLight?.intensity,
+                        ambient: al?.intensity,
+                        exposure: renderer.toneMappingExposure,
+                      };
+                    }
+                    // Cabin has no windows: block external sun contribution.
+                    // Cockpit gets a small amount through windshield.
+                    sl.intensity = useCockpit ? 0.22 : 0.0;
                   }
                   const fl = sceneRef.current.fillLight as
                     | THREE.PointLight
                     | undefined;
                   if (fl) {
-                    fl.intensity = useCockpit ? 0.5 : 0.06;
+                    fl.intensity = useCockpit ? 0.09 : 0.0;
                   }
+                  if (al) {
+                    al.intensity = useCockpit ? 0.06 : 0.03;
+                  }
+                  renderer.toneMappingExposure = useCockpit ? 0.74 : 0.56;
 
                   if (!wasInsideShipEmissiveClamped) {
                     wasInsideShipEmissiveClamped = true;
@@ -1169,7 +1194,7 @@ export const useRenderLoop = () => {
                             if (mat._origEmissiveIntensity === undefined) {
                               mat._origEmissiveIntensity = mat.emissiveIntensity;
                             }
-                            mat.emissiveIntensity = 0.6;
+                            mat.emissiveIntensity = 0.35;
                           }
                         });
                       }
@@ -1206,6 +1231,41 @@ export const useRenderLoop = () => {
                       false,
                     );
                   }
+
+                  // Hard interior volume clamp (local ship space): allows free look
+                  // but prevents the camera from drifting outside the hull.
+                  const invShipQuat = shipWorldQuat.clone().invert();
+                  _tmpCamLocal
+                    .copy(camera.position)
+                    .sub(shipWorldPos)
+                    .applyQuaternion(invShipQuat)
+                    .divideScalar(shipScale);
+
+                  const anchor = useCockpit ? cockpitLocalPos : cabinLocalPos;
+                  const xPad = useCockpit ? 0.85 : 2.05;
+                  const yPad = useCockpit ? 0.72 : 1.05;
+                  const zBack = useCockpit ? 1.15 : 2.55;
+                  const zFront = useCockpit ? 0.55 : 1.55;
+
+                  _tmpCamClamped.set(
+                    THREE.MathUtils.clamp(_tmpCamLocal.x, anchor.x - xPad, anchor.x + xPad),
+                    THREE.MathUtils.clamp(_tmpCamLocal.y, anchor.y - yPad, anchor.y + yPad),
+                    THREE.MathUtils.clamp(_tmpCamLocal.z, anchor.z - zBack, anchor.z + zFront),
+                  );
+
+                  if (_tmpCamClamped.distanceToSquared(_tmpCamLocal) > 1e-6) {
+                    _tmpCamClamped
+                      .multiplyScalar(shipScale)
+                      .applyQuaternion(shipWorldQuat)
+                      .add(shipWorldPos);
+                    camera.position.copy(_tmpCamClamped);
+                    cc.setPosition(
+                      _tmpCamClamped.x,
+                      _tmpCamClamped.y,
+                      _tmpCamClamped.z,
+                      false,
+                    );
+                  }
                 }
               } else {
                 // Reset interior flag when outside the ship
@@ -1214,11 +1274,24 @@ export const useRenderLoop = () => {
                   const sl = sceneRef.current.sunLight as
                     | THREE.PointLight
                     | undefined;
-                  if (sl) sl.intensity = 18;
+                  if (sl) {
+                    sl.intensity = interiorLightSnapshot?.sun ?? 18;
+                  }
                   const fl = sceneRef.current.fillLight as
                     | THREE.PointLight
                     | undefined;
-                  if (fl) fl.intensity = 3;
+                  if (fl) {
+                    fl.intensity = interiorLightSnapshot?.fill ?? 3;
+                  }
+                  const al = sceneRef.current.ambientLight as
+                    | THREE.AmbientLight
+                    | undefined;
+                  if (al) {
+                    al.intensity = interiorLightSnapshot?.ambient ?? 0.5;
+                  }
+                  renderer.toneMappingExposure =
+                    interiorLightSnapshot?.exposure ?? 1;
+                  interiorLightSnapshot = null;
                   if (wasInsideShipEmissiveClamped) {
                     wasInsideShipEmissiveClamped = false;
                     const EXTERIOR_EMISSIVE_RESTORE_CAP = 1.2;

@@ -111,6 +111,7 @@ export const createPointerInteractionHandlers = (deps: {
   starDestroyerRef?: React.MutableRefObject<THREE.Group | null>;
   /** Callback when the Star Destroyer is clicked */
   onStarDestroyerClick?: () => void;
+  insideShipRef?: React.MutableRefObject<boolean>;
   /** When true, overlay-exit and same-moon clicks are suppressed */
   orbitActiveRef?: React.MutableRefObject<boolean>;
 }) => {
@@ -127,12 +128,18 @@ export const createPointerInteractionHandlers = (deps: {
     vlog,
     starDestroyerRef,
     onStarDestroyerClick,
+    insideShipRef,
     orbitActiveRef,
   } = deps;
 
   let hoveredObject: THREE.Object3D | null = null;
 
   const onPointerMove = (event: MouseEvent) => {
+    // Interior mode: ship hull blocks all external object hover interactions.
+    if (insideShipRef?.current) {
+      document.body.style.cursor = "default";
+      return;
+    }
     if (!mountRef.current) return;
     const rect = mountRef.current.getBoundingClientRect();
     pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -260,6 +267,9 @@ export const createPointerInteractionHandlers = (deps: {
   };
 
   const onClick = (event: MouseEvent) => {
+    // Interior mode: ship hull blocks all external object clicks.
+    if (insideShipRef?.current) return;
+
     // Don't process clicks on UI elements (buttons, sliders, etc.)
     // Only raycast when the click lands on the 3D canvas itself.
     if (mountRef.current && !mountRef.current.contains(event.target as Node)) {

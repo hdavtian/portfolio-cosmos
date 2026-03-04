@@ -12,10 +12,11 @@ export const usePointerInteractions = (params: {
   isDraggingRef: MutableRefObject<boolean>;
   lastPointerRef: MutableRefObject<{ x: number; y: number; t: number } | null>;
   sceneRef: MutableRefObject<{ controls?: { enabled: boolean } | undefined }>;
+  insideShipRef?: MutableRefObject<boolean>;
   /** When true, moon rotation drag and overlay-exit clicks are suppressed */
   orbitActiveRef?: MutableRefObject<boolean>;
 }) => {
-  const { mountRef, focusedMoonRef, isDraggingRef, lastPointerRef, sceneRef, orbitActiveRef } =
+  const { mountRef, focusedMoonRef, isDraggingRef, lastPointerRef, sceneRef, insideShipRef, orbitActiveRef } =
     params;
 
   const buildRotationHandlers = useCallback(
@@ -51,6 +52,7 @@ export const usePointerInteractions = (params: {
       vlog: (message: string) => void;
       starDestroyerRef?: MutableRefObject<THREE.Group | null>;
       onStarDestroyerClick?: () => void;
+      insideShipRef?: MutableRefObject<boolean>;
     }) =>
       createPointerInteractionHandlers({
         mountRef,
@@ -65,9 +67,10 @@ export const usePointerInteractions = (params: {
         vlog: args.vlog,
         starDestroyerRef: args.starDestroyerRef,
         onStarDestroyerClick: args.onStarDestroyerClick,
+        insideShipRef: args.insideShipRef ?? insideShipRef,
         orbitActiveRef,
       }),
-    [mountRef, orbitActiveRef],
+    [insideShipRef, mountRef, orbitActiveRef],
   );
 
   return { buildRotationHandlers, buildPointerHandlers };

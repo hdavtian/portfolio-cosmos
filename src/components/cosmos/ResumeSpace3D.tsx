@@ -681,6 +681,7 @@ export default function ResumeSpace3D({
       isDraggingRef,
       lastPointerRef,
       sceneRef,
+      insideShipRef,
       orbitActiveRef,
     });
 
@@ -1427,8 +1428,8 @@ export default function ResumeSpace3D({
     if (spaceshipInteriorLightsRef.current.length > 0) {
       const on = insideShip && shipInteriorLights;
       const isCockpit = shipViewMode === "cockpit";
-      // 5 lights: cockpit 5×0.4=2.0 total, cabin 5×0.15=0.75 total
-      const intensity = on ? (isCockpit ? 0.4 : 0.15) : 0;
+      // Keep interior illumination controlled; cabin should be notably dim.
+      const intensity = on ? (isCockpit ? 0.2 : 0.05) : 0;
       spaceshipInteriorLightsRef.current.forEach((light) => {
         light.intensity = intensity;
       });
@@ -1493,6 +1494,7 @@ export default function ResumeSpace3D({
     scene.add(ambientLight);
     scene.add(sunLight);
     scene.add(fillLight);
+    sceneRef.current.ambientLight = ambientLight;
     sceneRef.current.sunLight = sunLight;
     sceneRef.current.fillLight = fillLight;
 
@@ -2912,6 +2914,7 @@ export default function ResumeSpace3D({
       vlog,
       starDestroyerRef,
       onStarDestroyerClick: handleStarDestroyerClick,
+      insideShipRef,
     });
 
     window.addEventListener("pointermove", onPointerMove);
