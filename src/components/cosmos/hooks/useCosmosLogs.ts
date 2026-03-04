@@ -49,7 +49,7 @@ let _shipLogId = 0;
 let _debugLogId = 0;
 
 export const useCosmosLogs = (): UseCosmosLogsResult => {
-  const [consoleVisible, setConsoleVisible] = useState(true);
+  const [consoleVisible, setConsoleVisible] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
   const consoleLogsRef = useRef<string[]>([]);
 

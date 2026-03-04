@@ -240,6 +240,49 @@ export const useOrbitSystem = (params: {
     const raycaster = new THREE.Raycaster();
     raycaster.camera = camera;
     const cameraDirection = new THREE.Vector3();
+    const cameraPos = camera.position;
+
+    // Context boost: when the camera is close to a main planet,
+    // keep that planet's moon labels somewhat visible so they are discoverable.
+    let nearbySystemId: string | null = null;
+    let nearbySystemBoost = 0;
+    {
+      const nearestPlanet = items
+        .filter((it) => !!it.mesh?.userData?.isMainPlanet)
+        .reduce<{
+          id: string | null;
+          dist: number;
+          radius: number;
+        }>(
+          (best, it) => {
+            const sid =
+              ((it.mesh.userData?.systemId as string | undefined) || "").toLowerCase();
+            if (!sid) return best;
+            const dist = cameraPos.distanceTo(it.mesh.position);
+            if (dist >= best.dist) return best;
+            const radius =
+              ((it.mesh.geometry as any)?.parameters?.radius as number | undefined) ||
+              (it.mesh.geometry.boundingSphere?.radius ?? 80);
+            return { id: sid, dist, radius };
+          },
+          { id: null, dist: Number.POSITIVE_INFINITY, radius: 80 },
+        );
+
+      if (nearestPlanet.id) {
+        // Extended range so labels are still visible from the new
+        // farther planet staging endpoint.
+        const near = Math.max(420, nearestPlanet.radius * 6.5);
+        const far = Math.max(2600, nearestPlanet.radius * 28.0);
+        const u = THREE.MathUtils.clamp(
+          (nearestPlanet.dist - near) / Math.max(1, far - near),
+          0,
+          1,
+        );
+        const proximity = 1 - u;
+        nearbySystemId = nearestPlanet.id;
+        nearbySystemBoost = proximity * proximity * (3 - 2 * proximity);
+      }
+    }
 
     items.forEach((item) => {
       if (!item.mesh || !item.mesh.matrixWorld) return;
@@ -316,14 +359,114 @@ export const useOrbitSystem = (params: {
             const focusedMoon = focusedMoonRef.current;
             const inMoonView = !!focusedMoon;
             const isFocused = focusedMoon === item.mesh;
-            if (inMoonView && !isFocused) {
-              label.element.style.filter = "blur(2px)";
-              label.element.style.opacity = isOccluded ? "0" : "0.35";
-            } else {
-              label.element.style.filter = "none";
-              label.element.style.opacity = isOccluded ? "0" : "1";
+            const isMoon = !!(item.mesh.userData?.moonId);
+            const meshRadius =
+              ((item.mesh.geometry as any)?.parameters?.radius as number | undefined) ||
+              (item.mesh.geometry.boundingSphere?.radius ?? 20);
+            // Moons need a longer fade range than planets, otherwise they
+            // disappear too early during normal approach.
+            const nearDist = isMoon
+              ? Math.max(220, meshRadius * 10.0)
+              : Math.max(90, meshRadius * 7.0);
+            const farDist = isMoon
+              ? Math.max(1200, meshRadius * 38.0)
+              : Math.max(220, meshRadius * 18.0);
+            const t = THREE.MathUtils.clamp(
+              (distanceToLabel - nearDist) / Math.max(1, farDist - nearDist),
+              0,
+              1,
+            );
+            const proximity = 1 - t;
+            const easedProximity = proximity * proximity * (3 - 2 * proximity);
+            const moonViewCap = inMoonView && !isFocused ? 0.35 : 1.0;
+            let targetOpacity = isOccluded
+              ? 0
+              : Math.max(0, moonViewCap * easedProximity);
+            const inActiveSystem =
+              !!nearbySystemId &&
+              ((item.mesh.userData?.systemId as string | undefined) || "").toLowerCase() === nearbySystemId;
+
+            // If we're near a main planet, keep that whole system readable:
+            // destination planet + its moons remain visible from distance,
+            // and brighten as we get closer.
+            if (inActiveSystem && !isOccluded) {
+              const systemFloor = isMoon
+                ? 0.70 + 0.30 * nearbySystemBoost
+                : 0.82 + 0.18 * nearbySystemBoost;
+              targetOpacity = Math.max(targetOpacity, systemFloor);
+              // Two extra visibility steps at destination/system-view range.
+              targetOpacity = Math.min(1, targetOpacity * 1.8);
             }
-            label.element.style.transition = "opacity 0.2s ease-in-out";
+
+            // Color shift by type:
+            // - Blue/white only palette (no green tones)
+            const nearColor = isMoon
+              ? new THREE.Color(0xe7f2ff)
+              : new THREE.Color(0xd8ecff);
+            const farColor = isMoon
+              ? new THREE.Color(0x8fcfff)
+              : new THREE.Color(0x8ac6ff);
+            const blended = nearColor.lerp(farColor, t);
+            const titleEl = label.element.firstElementChild as HTMLElement | null;
+            const subEl = label.element.children[1] as HTMLElement | undefined;
+
+            if (titleEl) {
+              titleEl.style.color = `rgb(${Math.round(blended.r * 255)}, ${Math.round(blended.g * 255)}, ${Math.round(blended.b * 255)})`;
+            }
+            if (subEl) {
+              const subScale = 0.82;
+              subEl.style.color = `rgb(${Math.round(blended.r * 255 * subScale)}, ${Math.round(blended.g * 255 * subScale)}, ${Math.round(blended.b * 255 * subScale)})`;
+            }
+
+            // Neon-outline legibility:
+            // Keep labels readable at system staging distance, then diffuse with range.
+            const readability = THREE.MathUtils.clamp(
+              targetOpacity * 1.9 + nearbySystemBoost * 0.55,
+              0,
+              1,
+            );
+            const strokePx = 0.65 + readability * 1.25;
+            const glowA = 0.32 + readability * 0.62;
+            const haloA = 0.24 + readability * 0.58;
+            const neonCore = isMoon
+              ? `rgba(238, 246, 255, ${glowA.toFixed(3)})`
+              : `rgba(238, 246, 255, ${glowA.toFixed(3)})`;
+            const neonHalo = isMoon
+              ? `rgba(136, 206, 255, ${haloA.toFixed(3)})`
+              : `rgba(124, 194, 255, ${haloA.toFixed(3)})`;
+            const crispInRange = inActiveSystem && nearbySystemBoost > 0.55;
+            if (titleEl) {
+              if (crispInRange) {
+                titleEl.style.webkitTextStroke = "0px rgba(255,255,255,0)";
+                titleEl.style.textShadow = "0 0 2px rgba(0,0,0,0.82)";
+              } else {
+                titleEl.style.webkitTextStroke = `${strokePx.toFixed(2)}px rgba(255,255,255,${(0.35 + readability * 0.45).toFixed(3)})`;
+                titleEl.style.textShadow =
+                  `0 0 ${(3 + readability * 7).toFixed(1)}px ${neonCore}, ` +
+                  `0 0 ${(8 + readability * 16).toFixed(1)}px ${neonHalo}, ` +
+                  "0 0 8px rgba(0,0,0,0.55)";
+              }
+            }
+            if (subEl) {
+              if (crispInRange) {
+                subEl.style.webkitTextStroke = "0px rgba(255,255,255,0)";
+                subEl.style.textShadow = "0 0 2px rgba(0,0,0,0.78)";
+              } else {
+                subEl.style.webkitTextStroke = `${Math.max(0.25, strokePx * 0.7).toFixed(2)}px rgba(255,255,255,${(0.24 + readability * 0.35).toFixed(3)})`;
+                subEl.style.textShadow =
+                  `0 0 ${(2 + readability * 4).toFixed(1)}px ${neonCore}, ` +
+                  `0 0 ${(6 + readability * 10).toFixed(1)}px ${neonHalo}, ` +
+                  "0 0 6px rgba(0,0,0,0.45)";
+              }
+            }
+
+            const blurPart = inMoonView && !isFocused ? "blur(2px) " : "";
+            const filterPart = crispInRange
+              ? "saturate(1.06) brightness(1.12)"
+              : `saturate(${0.6 + proximity * 0.5}) brightness(${0.5 + proximity * 0.6})`;
+            label.element.style.filter = `${blurPart}${filterPart}`.trim();
+            label.element.style.opacity = targetOpacity < 0.02 ? "0" : targetOpacity.toFixed(3);
+            label.element.style.transition = "opacity 0.22s ease, filter 0.22s ease, color 0.22s ease";
           }
         } catch (error) {
           // ignore

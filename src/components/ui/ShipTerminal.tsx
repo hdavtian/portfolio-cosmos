@@ -180,7 +180,7 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
     <div
       style={{
         position: "fixed",
-        top: 16,
+        top: 116,
         right: 16,
         width: 340,
         zIndex: 900,

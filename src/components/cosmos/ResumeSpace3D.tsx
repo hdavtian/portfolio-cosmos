@@ -3550,6 +3550,45 @@ export default function ResumeSpace3D({
             }}
           />
 
+          {!isLoading && (
+            <button
+              type="button"
+              aria-label={consoleVisible ? "Hide console logs" : "Show console logs"}
+              title={consoleVisible ? "Hide console logs" : "Show console logs"}
+              onClick={() => setConsoleVisible(!consoleVisible)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                position: "absolute",
+                top: 14,
+                right: 14,
+                zIndex: 10002,
+                width: 38,
+                height: 38,
+                borderRadius: "50%",
+                border: "1px solid rgba(150, 170, 190, 0.45)",
+                background: consoleVisible
+                  ? "rgba(38, 46, 58, 0.88)"
+                  : "rgba(24, 30, 40, 0.84)",
+                color: consoleVisible ? "#d8e7ff" : "#b6c6da",
+                boxShadow: consoleVisible
+                  ? "0 2px 8px rgba(8, 12, 18, 0.45)"
+                  : "0 1px 6px rgba(8, 12, 18, 0.35)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 13,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontWeight: 700,
+                lineHeight: 1,
+                userSelect: "none",
+              }}
+            >
+              <span aria-hidden="true">&gt;_</span>
+            </button>
+          )}
+
           {/* Ship Explore Mode Overlay */}
           {shipExploreMode && (
             <div
@@ -4004,6 +4043,7 @@ export default function ResumeSpace3D({
             logs={shipLogs}
             debugLogs={debugLogs}
             debugLogTotal={debugLogTotal}
+            visible={consoleVisible}
             onCommand={(cmd) => {
               shipLog(`$ ${cmd}`, "cmd");
               // Command execution will be wired later

@@ -41,8 +41,8 @@ const NAV_ORBIT_EXIT_CLEAR_MAX_DIST = 320;
 const NAV_ORBIT_EXIT_CLEAR_SPEED = 0.9;
 const NAV_MOON_ARRIVAL_DISTANCE = 36;
 const NAV_MOON_FREEZE_DISTANCE = 42;
-const NAV_PLANET_STAGING_MIN_DIST = 420;
-const NAV_PLANET_STAGING_RADIUS_MULT = 3.8;
+const NAV_PLANET_STAGING_MIN_DIST = 1680;
+const NAV_PLANET_STAGING_RADIUS_MULT = 15.2;
 
 export const useNavigationSystem = (deps: {
   resumeData: any;
@@ -1275,7 +1275,8 @@ export const useNavigationSystem = (deps: {
       if (
         distance > 50 &&
         !avoidWp &&
-        now > sectionAvoidCooldown.current
+        now > sectionAvoidCooldown.current &&
+        !target.forceLightspeed
       ) {
         const obstacles = gatherObstacles(target.id);
         const dir = _avoidDir.current.subVectors(targetPos, ship.position).normalize();
@@ -1410,9 +1411,9 @@ export const useNavigationSystem = (deps: {
 
       if (distance > decelDist) {
         if (
-          (target.forceLightspeed ||
-            (target.useTurbo && distance > NAV_LIGHTSPEED_ENGAGE_DIST)) &&
-          !sectionAvoidWaypoint.current
+          target.forceLightspeed ||
+          ((target.useTurbo && distance > NAV_LIGHTSPEED_ENGAGE_DIST) &&
+            !sectionAvoidWaypoint.current)
         ) {
           // ── LIGHTSPEED: inter-planet travel ──
           targetSpeed = NAV_LIGHTSPEED;
