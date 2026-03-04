@@ -12,6 +12,7 @@ interface NavTarget {
   label: string;
   type: "section" | "moon";
   icon?: string;
+  parentId?: string;
 }
 
 interface Props {
@@ -156,8 +157,11 @@ const CockpitNavPanel: React.FC<Props> = ({
       {sortedPlanets.map((planet) => {
         const isCurrent = currentTarget === planet.id;
         const isNav = isNavigating && isCurrent;
-        // Moons belong under Experience
-        const childMoons = planet.id === "experience" ? moons : [];
+        // Child destinations are grouped under their parent planet.
+        // Backward compatibility: moons without parentId still belong to Experience.
+        const childMoons = moons.filter((moon) =>
+          moon.parentId ? moon.parentId === planet.id : planet.id === "experience",
+        );
 
         return (
           <React.Fragment key={planet.id}>

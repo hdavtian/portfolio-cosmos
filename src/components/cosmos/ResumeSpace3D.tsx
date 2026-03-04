@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
+import legacyWebsites from "../../data/legacyWebsites.json";
 import CosmosLoader from "../CosmosLoader";
 import {
   DEFAULT_CONTROL_SENSITIVITY,
@@ -126,6 +127,19 @@ type ShipLabelMark = {
   meshName: string;
   meshUuid: string;
   localPoint: [number, number, number];
+};
+
+const PROJECT_SHOWCASE_NAV_ID = "project-showcase";
+const PROJECT_SHOWCASE_LAYER = 2;
+const PROJECT_SHOWCASE_CARD_LAYER = 1;
+
+type ShowcaseEntry = {
+  id: string;
+  title: string;
+  image: string;
+  description?: string;
+  technologies?: string[];
+  year?: number | null;
 };
 
 // --- SHIP_DEBUG_LABELS (2026-02-03 snapshot) ---
@@ -279,6 +293,37 @@ export default function ResumeSpace3D({
     "exterior",
   );
   const spaceshipRef = useRef<THREE.Group | null>(null);
+  const projectShowcaseRootRef = useRef<THREE.Group | null>(null);
+  const [projectShowcaseReady, setProjectShowcaseReady] = useState(false);
+  const [projectShowcaseActive, setProjectShowcaseActive] = useState(false);
+  const [projectShowcasePlaying, setProjectShowcasePlaying] = useState(true);
+  const [projectShowcaseFocusIndex, setProjectShowcaseFocusIndex] = useState(0);
+  const projectShowcaseActiveRef = useRef(false);
+  const projectShowcasePlayingRef = useRef(true);
+  const projectShowcaseFocusIndexRef = useRef(0);
+  const projectShowcaseLastTickRef = useRef<number | null>(null);
+  const projectShowcasePanelsRef = useRef<
+    Array<{ group: THREE.Group; runPos: number; entry: ShowcaseEntry }>
+  >([]);
+  const projectShowcaseTrackRef = useRef<{
+    axis: "x" | "z";
+    minRun: number;
+    maxRun: number;
+    centerCross: number;
+    cameraHeight: number;
+    lookAhead: number;
+    speed: number;
+    cullHalfWindow: number;
+  } | null>(null);
+  const projectShowcaseRunPosRef = useRef(0);
+  const projectShowcasePrevControlsEnabledRef = useRef(true);
+  const pendingProjectShowcaseEntryRef = useRef(false);
+  const projectShowcasePrevStateRef = useRef<{
+    followingSpaceship: boolean;
+    insideShip: boolean;
+    shipViewMode: ShipView;
+    shipVisible: boolean;
+  } | null>(null);
   const spaceshipCameraOffsetRef = useRef(
     new THREE.Vector3(0, FOLLOW_HEIGHT, FOLLOW_DISTANCE),
   );
@@ -534,7 +579,15 @@ export default function ResumeSpace3D({
       label: exp.navLabel || exp.company,
       type: "moon" as const,
       icon: "🌕",
+      parentId: "experience",
     })),
+    {
+      id: PROJECT_SHOWCASE_NAV_ID,
+      label: "Project Showcase",
+      type: "moon" as const,
+      icon: "🛰️",
+      parentId: "projects",
+    },
   ];
 
   // RULES
@@ -726,9 +779,149 @@ export default function ResumeSpace3D({
     setFollowingStarDestroyer,
   });
 
+  const setProjectShowcaseFocus = useCallback((index: number) => {
+    const panels = projectShowcasePanelsRef.current;
+    if (panels.length === 0) return;
+    const safeIndex = THREE.MathUtils.clamp(index, 0, panels.length - 1);
+    projectShowcaseFocusIndexRef.current = safeIndex;
+    setProjectShowcaseFocusIndex(safeIndex);
+  }, []);
+
+  const setProjectShowcaseRunPosition = useCallback((runPos: number) => {
+    projectShowcaseRunPosRef.current = runPos;
+    const panels = projectShowcasePanelsRef.current;
+    if (panels.length === 0) return;
+
+    // Find nearest panel for metadata display.
+    let bestIndex = 0;
+    let bestDist = Infinity;
+    panels.forEach((panel, idx) => {
+      const d = Math.abs(panel.runPos - runPos);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIndex = idx;
+      }
+    });
+    setProjectShowcaseFocus(bestIndex);
+
+    const track = projectShowcaseTrackRef.current;
+    if (!track) return;
+    const halfWindow = track.cullHalfWindow;
+    panels.forEach((panel) => {
+      panel.group.visible = Math.abs(panel.runPos - runPos) <= halfWindow;
+    });
+  }, [setProjectShowcaseFocus]);
+
+  const exitProjectShowcase = useCallback(() => {
+    const showcaseRoot = projectShowcaseRootRef.current;
+    if (showcaseRoot) {
+      showcaseRoot.visible = false;
+    }
+    if (sceneRef.current.camera) {
+      sceneRef.current.camera.layers.disable(PROJECT_SHOWCASE_LAYER);
+    }
+    if (sceneRef.current.controls) {
+      sceneRef.current.controls.enabled =
+        projectShowcasePrevControlsEnabledRef.current;
+    }
+
+    const prev = projectShowcasePrevStateRef.current;
+    if (prev) {
+      setFollowingSpaceship(prev.followingSpaceship);
+      followingSpaceshipRef.current = prev.followingSpaceship;
+      setInsideShip(prev.insideShip);
+      insideShipRef.current = prev.insideShip;
+      setShipViewMode(prev.shipViewMode);
+      shipViewModeRef.current = prev.shipViewMode;
+      if (spaceshipRef.current) {
+        spaceshipRef.current.visible = prev.shipVisible;
+      }
+      projectShowcasePrevStateRef.current = null;
+    } else if (spaceshipRef.current) {
+      spaceshipRef.current.visible = true;
+    }
+
+    projectShowcaseActiveRef.current = false;
+    setProjectShowcaseActive(false);
+    projectShowcasePlayingRef.current = true;
+    setProjectShowcasePlaying(true);
+    projectShowcaseLastTickRef.current = null;
+    pendingProjectShowcaseEntryRef.current = false;
+    vlog("🛰️ Project Showcase exited");
+  }, [vlog]);
+
+  const enterProjectShowcase = useCallback(() => {
+    const showcaseRoot = projectShowcaseRootRef.current;
+    const controls = sceneRef.current.controls;
+    const camera = sceneRef.current.camera;
+    if (!showcaseRoot || !controls || !camera) {
+      vlog("⚠️ Project Showcase is not ready yet");
+      return;
+    }
+
+    if (projectShowcaseActiveRef.current) return;
+
+    projectShowcasePrevStateRef.current = {
+      followingSpaceship: followingSpaceshipRef.current,
+      insideShip: insideShipRef.current,
+      shipViewMode: shipViewModeRef.current,
+      shipVisible: spaceshipRef.current?.visible ?? true,
+    };
+
+    setFollowingSpaceship(false);
+    followingSpaceshipRef.current = false;
+    setInsideShip(false);
+    insideShipRef.current = false;
+    setShipViewMode("exterior");
+    shipViewModeRef.current = "exterior";
+    if (spaceshipRef.current) spaceshipRef.current.visible = false;
+
+    showcaseRoot.visible = true;
+
+    projectShowcasePrevControlsEnabledRef.current = controls.enabled;
+    controls.enabled = false;
+    camera.layers.enable(PROJECT_SHOWCASE_LAYER);
+
+    const track = projectShowcaseTrackRef.current;
+    if (track) {
+      const startRun = track.minRun + 8;
+      setProjectShowcaseRunPosition(startRun);
+      projectShowcaseLastTickRef.current = performance.now();
+    }
+    projectShowcasePlayingRef.current = true;
+    setProjectShowcasePlaying(true);
+
+    projectShowcaseActiveRef.current = true;
+    setProjectShowcaseActive(true);
+    pendingProjectShowcaseEntryRef.current = false;
+    vlog("🛰️ Entered Project Showcase");
+  }, [setProjectShowcaseRunPosition, vlog]);
+
+  const toggleProjectShowcasePlayback = useCallback(() => {
+    const next = !projectShowcasePlayingRef.current;
+    projectShowcasePlayingRef.current = next;
+    setProjectShowcasePlaying(next);
+  }, []);
+
+  const stepProjectShowcaseFocus = useCallback(
+    (direction: -1 | 1) => {
+      const panels = projectShowcasePanelsRef.current;
+      if (panels.length === 0) return;
+      const current = projectShowcaseFocusIndexRef.current;
+      const next =
+        (current + direction + panels.length) % panels.length;
+      setProjectShowcaseFocus(next);
+      setProjectShowcaseRunPosition(panels[next].runPos);
+    },
+    [setProjectShowcaseFocus, setProjectShowcaseRunPosition],
+  );
+
   const handleExperienceCompanyNavigation = useCallback(
     async (companyId: string) => {
       if (!companyId) return;
+      if (projectShowcaseActiveRef.current) {
+        exitProjectShowcase();
+      }
 
       // If already orbiting this moon, ignore — don't re-trigger orbit.
       // Clicking the same moon you're hovering over should be a no-op.
@@ -774,11 +967,15 @@ export default function ResumeSpace3D({
       shipLog,
       debugLog,
       captureMoonDepartureContext,
+      exitProjectShowcase,
     ],
   );
 
   const handleQuickNav = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
+      if (projectShowcaseActiveRef.current) {
+        exitProjectShowcase();
+      }
       // Exit orbit if currently orbiting
       if (isOrbiting()) {
         pendingOrbitExitNavigationRef.current = {
@@ -810,6 +1007,7 @@ export default function ResumeSpace3D({
       exitOrbit,
       shipLog,
       captureMoonDepartureContext,
+      exitProjectShowcase,
     ],
   );
 
@@ -1043,6 +1241,28 @@ export default function ResumeSpace3D({
   const handleCockpitNavigate = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
       vlog(`🎯 Cockpit nav → ${targetType}: ${targetId}`);
+      if (targetId === PROJECT_SHOWCASE_NAV_ID) {
+        if (!projectShowcaseReady) {
+          vlog("⚠️ Project Showcase is loading");
+          return;
+        }
+        if (projectShowcaseActiveRef.current) {
+          exitProjectShowcase();
+          return;
+        }
+
+        const atProjects =
+          currentNavigationTarget === "projects" && navigationDistance === null;
+        if (atProjects) {
+          enterProjectShowcase();
+        } else {
+          pendingProjectShowcaseEntryRef.current = true;
+          handleQuickNav("projects", "section");
+          vlog("🛰️ Routing to Projects — Project Showcase will open on arrival");
+        }
+        return;
+      }
+
       if (targetType === "moon") {
         handleExperienceCompanyNavigation(targetId);
       } else {
@@ -1051,7 +1271,16 @@ export default function ResumeSpace3D({
         handleQuickNav(targetId, "section");
       }
     },
-    [handleExperienceCompanyNavigation, handleQuickNav, vlog],
+    [
+      currentNavigationTarget,
+      navigationDistance,
+      projectShowcaseReady,
+      handleExperienceCompanyNavigation,
+      handleQuickNav,
+      enterProjectShowcase,
+      exitProjectShowcase,
+      vlog,
+    ],
   );
 
   const handleShipViewChange = useCallback(
@@ -1212,6 +1441,80 @@ export default function ResumeSpace3D({
     },
     [followingSpaceship, vlog, isOrbiting, exitOrbit, debugLog],
   );
+
+  useEffect(() => {
+    if (
+      pendingProjectShowcaseEntryRef.current &&
+      !projectShowcaseActiveRef.current &&
+      currentNavigationTarget === "projects" &&
+      navigationDistance === null
+    ) {
+      enterProjectShowcase();
+    }
+  }, [currentNavigationTarget, navigationDistance, enterProjectShowcase]);
+
+  useEffect(() => {
+    if (!projectShowcaseActive) return;
+    let raf = 0;
+
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const controls = sceneRef.current.controls;
+      const camera = sceneRef.current.camera;
+      const track = projectShowcaseTrackRef.current;
+      const showcaseRoot = projectShowcaseRootRef.current;
+      if (!controls || !camera || !track || !showcaseRoot) return;
+
+      const now = performance.now();
+      const last = projectShowcaseLastTickRef.current ?? now;
+      const dt = Math.min((now - last) / 1000, 0.08);
+      projectShowcaseLastTickRef.current = now;
+
+      if (projectShowcasePlayingRef.current) {
+        let nextRun = projectShowcaseRunPosRef.current + track.speed * dt;
+        const endPad = 10;
+        if (nextRun > track.maxRun - endPad) {
+          nextRun = track.minRun + endPad;
+        }
+        setProjectShowcaseRunPosition(nextRun);
+      }
+
+      const run = projectShowcaseRunPosRef.current;
+      const sway = Math.sin(run * 0.025) * 1.2;
+      const rootPos = new THREE.Vector3();
+      showcaseRoot.getWorldPosition(rootPos);
+      if (track.axis === "z") {
+        const camX = rootPos.x + track.centerCross + sway;
+        const camY = rootPos.y + track.cameraHeight;
+        const camZ = rootPos.z + run;
+        controls.setLookAt(
+          camX,
+          camY,
+          camZ,
+          rootPos.x + track.centerCross,
+          rootPos.y + track.cameraHeight - 0.3,
+          rootPos.z + run + track.lookAhead,
+          false,
+        );
+      } else {
+        const camX = rootPos.x + run;
+        const camY = rootPos.y + track.cameraHeight;
+        const camZ = rootPos.z + track.centerCross + sway;
+        controls.setLookAt(
+          camX,
+          camY,
+          camZ,
+          rootPos.x + run + track.lookAhead,
+          rootPos.y + track.cameraHeight - 0.3,
+          rootPos.z + track.centerCross,
+          false,
+        );
+      }
+    };
+
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, [projectShowcaseActive, setProjectShowcaseRunPosition]);
 
   // ── Roll (bank) control handlers ────────────────────
   const handleRollStart = useCallback(
@@ -2293,6 +2596,285 @@ export default function ResumeSpace3D({
         }, 2500);
       }
     };
+
+    // --- PROJECT SHOWCASE (Trench Run) ---
+    loader.load(
+      "/models/star-wars-trench-run/scene.gltf",
+      (gltf) => {
+        const showcaseRoot = new THREE.Group();
+        showcaseRoot.name = "ProjectShowcaseRoot";
+        showcaseRoot.visible = false;
+        showcaseRoot.position
+          .copy(projectsPlanet.position)
+          .add(new THREE.Vector3(0, -220, 0));
+
+        const trench = gltf.scene;
+        const trenchDiffuseCache = new Map<string, THREE.Texture>();
+        const trenchDiffusePending = new Map<
+          string,
+          THREE.MeshStandardMaterial[]
+        >();
+        const ensureTrenchDiffuseMap = (mat: THREE.MeshStandardMaterial) => {
+          if (mat.map || !mat.name) return;
+          const key = mat.name;
+          const cached = trenchDiffuseCache.get(key);
+          if (cached) {
+            mat.map = cached;
+            mat.needsUpdate = true;
+            return;
+          }
+          const pending = trenchDiffusePending.get(key);
+          if (pending) {
+            pending.push(mat);
+            return;
+          }
+          trenchDiffusePending.set(key, [mat]);
+
+          const basePath = `/models/star-wars-trench-run/textures/${key}_diffuse`;
+          const exts = ["jpeg", "jpg", "png"];
+          const tryLoad = (idx: number) => {
+            if (idx >= exts.length) {
+              trenchDiffusePending.delete(key);
+              return;
+            }
+            textureLoader.load(
+              `${basePath}.${exts[idx]}`,
+              (texture) => {
+                texture.colorSpace = THREE.SRGBColorSpace;
+                trenchDiffuseCache.set(key, texture);
+                const waiters = trenchDiffusePending.get(key) ?? [];
+                waiters.forEach((waitMat) => {
+                  waitMat.map = texture;
+                  waitMat.needsUpdate = true;
+                });
+                trenchDiffusePending.delete(key);
+              },
+              undefined,
+              () => tryLoad(idx + 1),
+            );
+          };
+          tryLoad(0);
+        };
+
+        trench.traverse((obj) => {
+          const o = obj as THREE.Object3D & {
+            isMesh?: boolean;
+            isLight?: boolean;
+            name?: string;
+            visible?: boolean;
+            material?: THREE.Material | THREE.Material[];
+          };
+          const name = (o.name || "").toLowerCase();
+
+          // Disable embedded source lights and cinematic FX props.
+          if (o.isLight) {
+            o.visible = false;
+            return;
+          }
+
+          if (!o.isMesh) return;
+          if (!name.startsWith("trench_")) {
+            o.visible = false;
+            return;
+          }
+          if (
+            name.includes("xwing") ||
+            name.includes("tie") ||
+            name.includes("fighter") ||
+            name.includes("turret") ||
+            name.includes("laser") ||
+            name.includes("blaster") ||
+            name.includes("bolt") ||
+            name.includes("beam") ||
+            name.includes("explosion") ||
+            name.includes("sun")
+          ) {
+            o.visible = false;
+            return;
+          }
+
+          // Keep original PBR materials and do minimal normalization only.
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          mats.forEach((mat) => {
+            const src = mat as THREE.MeshStandardMaterial & {
+              emissive?: THREE.Color;
+              emissiveMap?: THREE.Texture | null;
+              emissiveIntensity?: number;
+              map?: THREE.Texture | null;
+              metalness?: number;
+              roughness?: number;
+              color?: THREE.Color;
+              toneMapped?: boolean;
+              vertexColors?: boolean;
+            };
+            if (src.map) src.map.colorSpace = THREE.SRGBColorSpace;
+            if (src.emissiveMap) src.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+            if (typeof src.metalness === "number") {
+              src.metalness = Math.min(src.metalness, 0.22);
+            }
+            if (typeof src.roughness === "number") {
+              src.roughness = Math.max(src.roughness, 0.62);
+            }
+            if (typeof src.emissiveIntensity === "number") {
+              src.emissiveIntensity = Math.min(src.emissiveIntensity, 0.35);
+            }
+            // This asset carries vertex colors that tint surfaces cyan in our pipeline.
+            src.vertexColors = false;
+            if (src.color) src.color.set(0xffffff);
+            src.side = THREE.DoubleSide;
+            ensureTrenchDiffuseMap(src);
+            src.needsUpdate = true;
+          });
+        });
+
+        // Normalize model scale so first-pass placement is predictable.
+        const trenchBounds = new THREE.Box3().setFromObject(trench);
+        const trenchSize = trenchBounds.getSize(new THREE.Vector3());
+        const trenchMaxDim = Math.max(trenchSize.x, trenchSize.y, trenchSize.z, 1);
+        const desiredMaxDim = 420;
+        const trenchScale = desiredMaxDim / trenchMaxDim;
+        trench.scale.setScalar(trenchScale);
+        trenchBounds.setFromObject(trench);
+        const trenchSizeScaled = trenchBounds.getSize(new THREE.Vector3());
+        const trenchCenter = trenchBounds.getCenter(new THREE.Vector3());
+        trench.position.sub(trenchCenter);
+        showcaseRoot.add(trench);
+
+        // Isolate trench rendering/lighting from the main cosmos sun.
+        showcaseRoot.traverse((obj) => {
+          obj.layers.set(PROJECT_SHOWCASE_LAYER);
+        });
+
+        const showcaseAmbient = new THREE.AmbientLight(0xffffff, 0.5);
+        const showcaseKey = new THREE.DirectionalLight(0xdde8ff, 1.15);
+        showcaseKey.position.set(70, 110, 50);
+        const showcaseRim = new THREE.DirectionalLight(0x8db8ff, 0.45);
+        showcaseRim.position.set(-80, 30, -40);
+        showcaseAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseKey.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseRim.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseRoot.add(showcaseAmbient, showcaseKey, showcaseRim);
+
+        const publishedShowcase = (legacyWebsites as ShowcaseEntry[]).filter(
+          (entry) => (entry as { published?: boolean }).published !== false,
+        );
+
+        const runAxis: "x" | "z" =
+          trenchSizeScaled.z >= trenchSizeScaled.x ? "z" : "x";
+        const runLength =
+          runAxis === "z" ? trenchSizeScaled.z : trenchSizeScaled.x;
+        const trenchWidth =
+          runAxis === "z" ? trenchSizeScaled.x : trenchSizeScaled.z;
+        const panelOffset = THREE.MathUtils.clamp(trenchWidth * 0.075, 3.6, 7.4);
+        const panelY = THREE.MathUtils.clamp(trenchSizeScaled.y * 0.015, 2.2, 5.4);
+        const panelWidth = THREE.MathUtils.clamp(trenchWidth * 0.2304, 9.072, 13.536);
+        const panelHeight = panelWidth * (9 / 16);
+        const panelSpacing = THREE.MathUtils.clamp(
+          runLength / Math.max(6, publishedShowcase.length + 2),
+          18,
+          36,
+        );
+        const runStart = -((publishedShowcase.length - 1) * panelSpacing) / 2;
+        const panelRecords: Array<{
+          group: THREE.Group;
+          runPos: number;
+          entry: ShowcaseEntry;
+        }> = [];
+
+        publishedShowcase.forEach((entry, index) => {
+          const side = index % 2 === 0 ? -1 : 1;
+          const panelGroup = new THREE.Group();
+          const runPos = runStart + index * panelSpacing;
+          if (runAxis === "z") {
+            panelGroup.position.set(
+              side * panelOffset,
+              panelY + ((index % 3) - 1) * 0.9,
+              runPos,
+            );
+          } else {
+            panelGroup.position.set(
+              runPos,
+              panelY + ((index % 3) - 1) * 0.9,
+              side * panelOffset,
+            );
+          }
+          panelGroup.lookAt(0, panelGroup.position.y - 0.2, 0);
+          panelGroup.rotateY(Math.PI);
+
+          const frame = new THREE.Mesh(
+            new THREE.PlaneGeometry(panelWidth * 1.03, panelHeight * 1.08),
+            new THREE.MeshBasicMaterial({
+              color: 0x72c6ff,
+              transparent: true,
+              opacity: 0.22,
+              side: THREE.DoubleSide,
+            }),
+          );
+          frame.position.z = -0.15;
+
+          const imageMat = new THREE.MeshBasicMaterial({
+            color: 0xb8b8b8,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+          });
+          const imagePlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(panelWidth, panelHeight),
+            imageMat,
+          );
+          textureLoader.load(
+            entry.image,
+            (texture) => {
+              texture.colorSpace = THREE.SRGBColorSpace;
+              imageMat.map = texture;
+              imageMat.color.set(0xffffff);
+              imageMat.needsUpdate = true;
+            },
+            undefined,
+            () => {
+              imageMat.color.set(0x5c6a86);
+            },
+          );
+
+          panelGroup.add(frame);
+          panelGroup.add(imagePlane);
+          // Render cards in the overlay layer so they bypass HDR bloom/tonemapping.
+          panelGroup.traverse((child) => {
+            child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+          });
+          showcaseRoot.add(panelGroup);
+          panelRecords.push({ group: panelGroup, runPos, entry });
+        });
+
+        projectShowcasePanelsRef.current = panelRecords;
+        const minRun = runStart;
+        const maxRun = runStart + (publishedShowcase.length - 1) * panelSpacing;
+        projectShowcaseTrackRef.current = {
+          axis: runAxis,
+          minRun,
+          maxRun,
+          centerCross: 0,
+          cameraHeight: panelY,
+          lookAhead: THREE.MathUtils.clamp(panelSpacing * 1.9, 22, 48),
+          speed: THREE.MathUtils.clamp(panelSpacing * 0.1625, 2.5, 5.5),
+          cullHalfWindow: THREE.MathUtils.clamp(panelSpacing * 4.4, 70, 130),
+        };
+        const initialRun = minRun + 8;
+        projectShowcaseRunPosRef.current = initialRun;
+        setProjectShowcaseRunPosition(initialRun);
+        setProjectShowcaseFocus(0);
+
+        scene.add(showcaseRoot);
+        projectShowcaseRootRef.current = showcaseRoot;
+        setProjectShowcaseReady(true);
+        vlog("🛰️ Project Showcase trench loaded");
+      },
+      undefined,
+      () => {
+        projectShowcaseRootRef.current = null;
+        setProjectShowcaseReady(false);
+        vlog("⚠️ Failed to load Project Showcase trench model");
+      },
+    );
 
     // ── Moon orbit arrival handler ─────────────────────────────────────────────
     // When the nav system reports arrival at a moon, we kick off the orbit
@@ -3474,6 +4056,10 @@ export default function ResumeSpace3D({
         hologramDroneRef.current = null;
       }
 
+      projectShowcaseRootRef.current = null;
+      projectShowcasePanelsRef.current = [];
+      projectShowcaseTrackRef.current = null;
+
 
       // Remove touch event listeners
       renderer.domElement.removeEventListener(
@@ -3519,6 +4105,9 @@ export default function ResumeSpace3D({
 
     return cleanup;
   }, []);
+
+  const focusedProjectShowcaseEntry =
+    projectShowcasePanelsRef.current[projectShowcaseFocusIndex]?.entry ?? null;
 
   return (
     <>
@@ -4071,6 +4660,144 @@ export default function ResumeSpace3D({
               isNavigating={navigationDistance !== null}
               onNavigate={handleCockpitNavigate}
             />
+          )}
+
+          {projectShowcaseActive && (
+            <div
+              style={{
+                position: "fixed",
+                right: 18,
+                top: 96,
+                zIndex: 1100,
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                alignItems: "flex-end",
+                maxWidth: 320,
+              }}
+            >
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(114, 198, 255, 0.45)",
+                  background: "rgba(8, 16, 26, 0.78)",
+                  color: "#c7e9ff",
+                  fontSize: 12,
+                  fontFamily: "'Rajdhani', sans-serif",
+                  letterSpacing: 0.6,
+                }}
+              >
+                PROJECT SHOWCASE
+              </div>
+              {focusedProjectShowcaseEntry && (
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(114, 198, 255, 0.3)",
+                    background: "rgba(7, 13, 24, 0.84)",
+                    color: "#d9e6ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 12,
+                    lineHeight: 1.35,
+                  }}
+                >
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>
+                    {focusedProjectShowcaseEntry.title}
+                  </div>
+                  {focusedProjectShowcaseEntry.description && (
+                    <div style={{ opacity: 0.82, marginTop: 4 }}>
+                      {focusedProjectShowcaseEntry.description}
+                    </div>
+                  )}
+                  {focusedProjectShowcaseEntry.technologies &&
+                    focusedProjectShowcaseEntry.technologies.length > 0 && (
+                    <div style={{ opacity: 0.9, marginTop: 6 }}>
+                      {focusedProjectShowcaseEntry.technologies
+                        .slice(0, 4)
+                        .join(" • ")}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                }}
+              >
+                <button
+                  onClick={() => stepProjectShowcaseFocus(-1)}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(200, 220, 255, 0.35)",
+                    background: "rgba(10, 12, 20, 0.75)",
+                    color: "#e8ebff",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                  }}
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={toggleProjectShowcasePlayback}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(200, 220, 255, 0.35)",
+                    background: "rgba(10, 12, 20, 0.75)",
+                    color: "#e8ebff",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    minWidth: 64,
+                  }}
+                >
+                  {projectShowcasePlaying ? "Pause" : "Play"}
+                </button>
+                <button
+                  onClick={() => stepProjectShowcaseFocus(1)}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(200, 220, 255, 0.35)",
+                    background: "rgba(10, 12, 20, 0.75)",
+                    color: "#e8ebff",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+              <button
+                onClick={exitProjectShowcase}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(220, 220, 255, 0.35)",
+                  background: "rgba(10, 12, 20, 0.75)",
+                  color: "#e8ebff",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontWeight: 700,
+                  letterSpacing: 0.5,
+                }}
+              >
+                Back to Projects
+              </button>
+            </div>
           )}
 
           {/* Spaceship HUD Interface */}
