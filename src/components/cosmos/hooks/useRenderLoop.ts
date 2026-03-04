@@ -197,9 +197,16 @@ export const useRenderLoop = () => {
       const _orbitCurUp = new THREE.Vector3(0, 1, 0);
       let _orbitUpActive = false;
       const LIGHTSPEED_STREAK_COUNT = 140;
+      const LIGHTSPEED_THICK_STREAK_COUNT = 42;
+      const LIGHTSPEED_THICK_COPIES = 5;
       let lightspeedStreakGroup: THREE.LineSegments | null = null;
       let lightspeedStreakPositions: Float32Array | null = null;
       let lightspeedStreakMeta: Float32Array | null = null; // x,y,z,len,speed
+      let lightspeedStreakColors: Float32Array | null = null;
+      let lightspeedThickGroup: THREE.LineSegments | null = null;
+      let lightspeedThickPositions: Float32Array | null = null;
+      let lightspeedThickMeta: Float32Array | null = null; // x,y,z,len,speed
+      let lightspeedThickColors: Float32Array | null = null;
       let lightspeedVisualIntensity = 0;
       let lightspeedEnterAt = 0;
       let lightspeedWasActive = false;
@@ -231,12 +238,83 @@ export const useRenderLoop = () => {
         lightspeedStreakPositions[pi + 3] = x * 0.2;
         lightspeedStreakPositions[pi + 4] = y * 0.2;
         lightspeedStreakPositions[pi + 5] = z - len;
+        if (lightspeedStreakColors) {
+          const ci = i * 6;
+          // Some streaks intentionally fainter for depth layering.
+          const tone = Math.random() < 0.34 ? 0.26 + Math.random() * 0.22 : 0.62 + Math.random() * 0.38;
+          const r = 0.72 * tone;
+          const g = 0.85 * tone;
+          const b = 1.00 * tone;
+          lightspeedStreakColors[ci] = r;
+          lightspeedStreakColors[ci + 1] = g;
+          lightspeedStreakColors[ci + 2] = b;
+          lightspeedStreakColors[ci + 3] = r;
+          lightspeedStreakColors[ci + 4] = g;
+          lightspeedStreakColors[ci + 5] = b;
+        }
+      };
+
+      const writeThickStreakCopies = (i: number, x: number, y: number, z: number, endZ: number) => {
+        if (!lightspeedThickPositions) return;
+        const base = i * LIGHTSPEED_THICK_COPIES * 6;
+        // 3 close parallel lines read visually as "thicker streaks".
+        const offsets: Array<[number, number]> = [
+          [0, 0],
+          [1.1, 0.55],
+          [-1.1, -0.55],
+          [2.0, 1.05],
+          [-2.0, -1.05],
+        ];
+        for (let c = 0; c < LIGHTSPEED_THICK_COPIES; c += 1) {
+          const off = offsets[c];
+          const pi = base + c * 6;
+          lightspeedThickPositions[pi] = x + off[0];
+          lightspeedThickPositions[pi + 1] = y + off[1];
+          lightspeedThickPositions[pi + 2] = z;
+          lightspeedThickPositions[pi + 3] = 0;
+          lightspeedThickPositions[pi + 4] = 0;
+          lightspeedThickPositions[pi + 5] = endZ;
+        }
+      };
+
+      const resetLightspeedThickStreak = (i: number) => {
+        if (!lightspeedThickMeta) return;
+        const mi = i * 5;
+        const x = (Math.random() - 0.5) * 190;
+        const y = (Math.random() - 0.5) * 92;
+        const z = -(26 + Math.random() * 300);
+        const len = 56 + Math.random() * 150;
+        const speed = 92 + Math.random() * 120;
+        lightspeedThickMeta[mi] = x;
+        lightspeedThickMeta[mi + 1] = y;
+        lightspeedThickMeta[mi + 2] = z;
+        lightspeedThickMeta[mi + 3] = len;
+        lightspeedThickMeta[mi + 4] = speed;
+        writeThickStreakCopies(i, x, y, z, z - len);
+        if (lightspeedThickColors) {
+          const base = i * LIGHTSPEED_THICK_COPIES * 6;
+          // Thick lines also get faint variants, but generally brighter than thin set.
+          const tone = Math.random() < 0.28 ? 0.34 + Math.random() * 0.24 : 0.68 + Math.random() * 0.32;
+          const r = 0.78 * tone;
+          const g = 0.90 * tone;
+          const b = 1.00 * tone;
+          for (let c = 0; c < LIGHTSPEED_THICK_COPIES; c += 1) {
+            const ci = base + c * 6;
+            lightspeedThickColors[ci] = r;
+            lightspeedThickColors[ci + 1] = g;
+            lightspeedThickColors[ci + 2] = b;
+            lightspeedThickColors[ci + 3] = r;
+            lightspeedThickColors[ci + 4] = g;
+            lightspeedThickColors[ci + 5] = b;
+          }
+        }
       };
 
       const ensureLightspeedStreaks = () => {
-        if (lightspeedStreakGroup) return;
+        if (lightspeedStreakGroup && lightspeedThickGroup) return;
         lightspeedStreakPositions = new Float32Array(LIGHTSPEED_STREAK_COUNT * 6);
         lightspeedStreakMeta = new Float32Array(LIGHTSPEED_STREAK_COUNT * 5);
+        lightspeedStreakColors = new Float32Array(LIGHTSPEED_STREAK_COUNT * 6);
         for (let i = 0; i < LIGHTSPEED_STREAK_COUNT; i += 1) {
           resetLightspeedStreak(i);
         }
@@ -245,10 +323,15 @@ export const useRenderLoop = () => {
           "position",
           new THREE.BufferAttribute(lightspeedStreakPositions, 3),
         );
+        geo.setAttribute(
+          "color",
+          new THREE.BufferAttribute(lightspeedStreakColors, 3),
+        );
         const mat = new THREE.LineBasicMaterial({
           color: 0xbfd9ff,
           transparent: true,
           opacity: 0.45,
+          vertexColors: true,
           depthTest: false,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
@@ -258,6 +341,40 @@ export const useRenderLoop = () => {
         lightspeedStreakGroup.visible = false;
         lightspeedStreakGroup.renderOrder = 999;
         scene.add(lightspeedStreakGroup);
+
+        lightspeedThickPositions = new Float32Array(
+          LIGHTSPEED_THICK_STREAK_COUNT * LIGHTSPEED_THICK_COPIES * 6,
+        );
+        lightspeedThickMeta = new Float32Array(LIGHTSPEED_THICK_STREAK_COUNT * 5);
+        lightspeedThickColors = new Float32Array(
+          LIGHTSPEED_THICK_STREAK_COUNT * LIGHTSPEED_THICK_COPIES * 6,
+        );
+        for (let i = 0; i < LIGHTSPEED_THICK_STREAK_COUNT; i += 1) {
+          resetLightspeedThickStreak(i);
+        }
+        const thickGeo = new THREE.BufferGeometry();
+        thickGeo.setAttribute(
+          "position",
+          new THREE.BufferAttribute(lightspeedThickPositions, 3),
+        );
+        thickGeo.setAttribute(
+          "color",
+          new THREE.BufferAttribute(lightspeedThickColors, 3),
+        );
+        const thickMat = new THREE.LineBasicMaterial({
+          color: 0xe8f4ff,
+          transparent: true,
+          opacity: 0.30,
+          vertexColors: true,
+          depthTest: false,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          toneMapped: false,
+        });
+        lightspeedThickGroup = new THREE.LineSegments(thickGeo, thickMat);
+        lightspeedThickGroup.visible = false;
+        lightspeedThickGroup.renderOrder = 1000;
+        scene.add(lightspeedThickGroup);
       };
 
       const animate = () => {
@@ -1348,6 +1465,35 @@ export const useRenderLoop = () => {
               lightspeedStreakPositions[pi + 5] = endZ;
             }
             posAttr.needsUpdate = true;
+          }
+        }
+        if (lightspeedThickGroup && lightspeedThickPositions && lightspeedThickMeta) {
+          lightspeedThickGroup.visible = lightspeedVisualIntensity > 0.08;
+          const thickMat = lightspeedThickGroup.material as THREE.LineBasicMaterial;
+          thickMat.opacity = 0.11 + 0.36 * lightspeedVisualIntensity;
+          if (lightspeedVisualIntensity > 0.08) {
+            lightspeedThickGroup.position.copy(camera.position);
+            lightspeedThickGroup.quaternion.copy(camera.quaternion);
+            const thickPosAttr = lightspeedThickGroup.geometry.getAttribute(
+              "position",
+            ) as THREE.BufferAttribute;
+            for (let i = 0; i < LIGHTSPEED_THICK_STREAK_COUNT; i += 1) {
+              const mi = i * 5;
+              lightspeedThickMeta[mi + 2] +=
+                lightspeedThickMeta[mi + 4] *
+                deltaSeconds *
+                (6.5 + lightspeedVisualIntensity * 4.5);
+              if (lightspeedThickMeta[mi + 2] > -6) {
+                resetLightspeedThickStreak(i);
+                continue;
+              }
+              const x = lightspeedThickMeta[mi];
+              const y = lightspeedThickMeta[mi + 1];
+              const z = lightspeedThickMeta[mi + 2];
+              const len = lightspeedThickMeta[mi + 3];
+              writeThickStreakCopies(i, x, y, z, z - len);
+            }
+            thickPosAttr.needsUpdate = true;
           }
         }
 
