@@ -185,6 +185,11 @@ type SkillsLatticeNodeRecord = {
   lineInfluence: number;
 };
 
+type SkillsLatticeLinkSegment = {
+  from: THREE.Vector3;
+  to: THREE.Vector3;
+};
+
 // --- SHIP_DEBUG_LABELS (2026-02-03 snapshot) ---
 // Each entry is a small circle used to indicate the larger region direction.
 // 0) top
@@ -400,6 +405,20 @@ export default function ResumeSpace3D({
   const skillsLatticeRootRef = useRef<THREE.Group | null>(null);
   const skillsLatticeNodesRef = useRef<SkillsLatticeNodeRecord[]>([]);
   const skillsLatticeLineMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
+  const skillsLatticeLinkSegmentsRef = useRef<SkillsLatticeLinkSegment[]>([]);
+  const skillsLatticeFlowPointsRef = useRef<THREE.Points | null>(null);
+  const skillsLatticeFlowMetaRef = useRef<
+    Array<{ segmentIndex: number; offset: number; speed: number }>
+  >([]);
+  const skillsLatticeRippleRef = useRef<{
+    active: boolean;
+    center: THREE.Vector3;
+    startedAt: number;
+  }>({
+    active: false,
+    center: new THREE.Vector3(),
+    startedAt: 0,
+  });
   const skillsLatticeSelectedNodeRef = useRef<SkillsLatticeNodeRecord | null>(null);
   const skillsLegacyBodiesRef = useRef<THREE.Object3D[]>([]);
   const skillsLatticePendingEntryRef = useRef(false);
@@ -1721,6 +1740,9 @@ export default function ResumeSpace3D({
       if (!controls || !camera || !skillsLatticeActiveRef.current) return;
       const worldPos = new THREE.Vector3();
       node.mesh.getWorldPosition(worldPos);
+      skillsLatticeRippleRef.current.active = true;
+      skillsLatticeRippleRef.current.center.copy(worldPos);
+      skillsLatticeRippleRef.current.startedAt = performance.now();
       const camPos = camera.position.clone();
       const dir = camPos.sub(worldPos).normalize();
       const nextCam = worldPos.clone().addScaledVector(dir, 62).add(new THREE.Vector3(0, 9, 0));
@@ -1764,6 +1786,7 @@ export default function ResumeSpace3D({
     skillsLatticePrevStateRef.current = null;
     skillsLatticeActiveRef.current = false;
     setSkillsLatticeActive(false);
+    skillsLatticeRippleRef.current.active = false;
     skillsLatticeSelectedNodeRef.current = null;
     setSkillsLatticeSelection(null);
     vlog("🧠 Skills lattice exited");
@@ -2314,10 +2337,20 @@ export default function ResumeSpace3D({
   useEffect(() => {
     if (!sceneReady) return;
     let raf = 0;
+    const worldNodePos = new THREE.Vector3();
+    const flowPos = new THREE.Vector3();
     const tick = () => {
       if (skillsLatticeActiveRef.current) {
         const t = performance.now() * 0.001;
         const selected = skillsLatticeSelectedNodeRef.current;
+        const ripple = skillsLatticeRippleRef.current;
+        const nowMs = performance.now();
+        let rippleRadius = -1;
+        if (ripple.active) {
+          const rt = THREE.MathUtils.clamp((nowMs - ripple.startedAt) / 1200, 0, 1);
+          rippleRadius = rt * 90;
+          if (rt >= 1) ripple.active = false;
+        }
         skillsLatticeNodesRef.current.forEach((node) => {
           const pulse = 1 + Math.sin(t * 1.7 + node.phase) * 0.08;
           const selectedBoost = selected?.mesh === node.mesh ? 1.28 : 1;
@@ -2325,13 +2358,35 @@ export default function ResumeSpace3D({
           if (node.halo?.material) {
             const hMat = node.halo.material as THREE.SpriteMaterial;
             const focusAlpha = selected?.mesh === node.mesh ? 0.62 : 0.22;
-            hMat.opacity = focusAlpha + Math.sin(t * 2.2 + node.phase) * 0.06;
+            let rippleBoost = 0;
+            if (ripple.active && rippleRadius >= 0) {
+              node.mesh.getWorldPosition(worldNodePos);
+              const d = worldNodePos.distanceTo(ripple.center);
+              rippleBoost = Math.max(0, 1 - Math.abs(d - rippleRadius) / 14) * 0.42;
+            }
+            hMat.opacity =
+              focusAlpha + Math.sin(t * 2.2 + node.phase) * 0.06 + rippleBoost;
           }
         });
         skillsLatticeLineMatsRef.current.forEach((mat, idx) => {
           const wave = 0.34 + 0.14 * Math.sin(t * 1.2 + idx * 0.7);
-          mat.opacity = wave;
+          const rippleBoost = ripple.active && rippleRadius >= 0 ? 0.18 : 0;
+          mat.opacity = Math.min(0.9, wave + rippleBoost);
         });
+        const flow = skillsLatticeFlowPointsRef.current;
+        const flowMeta = skillsLatticeFlowMetaRef.current;
+        const segs = skillsLatticeLinkSegmentsRef.current;
+        if (flow && flowMeta.length > 0 && segs.length > 0) {
+          const attr = flow.geometry.getAttribute("position") as THREE.BufferAttribute;
+          for (let i = 0; i < flowMeta.length; i += 1) {
+            const meta = flowMeta[i];
+            const seg = segs[meta.segmentIndex % segs.length];
+            const p = (t * meta.speed + meta.offset) % 1;
+            flowPos.lerpVectors(seg.from, seg.to, p);
+            attr.setXYZ(i, flowPos.x, flowPos.y, flowPos.z);
+          }
+          attr.needsUpdate = true;
+        }
       }
       raf = requestAnimationFrame(tick);
     };
@@ -3161,6 +3216,7 @@ export default function ResumeSpace3D({
     const skillNodeRadius = 1.25;
     const latticeRadius = 58;
     const latticeNodes: SkillsLatticeNodeRecord[] = [];
+    const latticeLinkSegments: SkillsLatticeLinkSegment[] = [];
 
     const categoryPositions = categoryEntries.map((_, idx) => {
       const a = (idx / Math.max(1, categoryEntries.length)) * Math.PI * 2;
@@ -3218,6 +3274,10 @@ export default function ResumeSpace3D({
       categoryPositions.forEach((pos, i) => {
         const next = categoryPositions[(i + 1) % categoryPositions.length];
         linePoints.push(pos.x, pos.y, pos.z, next.x, next.y, next.z);
+        latticeLinkSegments.push({
+          from: pos.clone(),
+          to: next.clone(),
+        });
       });
       const geom = new THREE.BufferGeometry();
       geom.setAttribute(
@@ -3333,6 +3393,10 @@ export default function ResumeSpace3D({
         skillLabel.position.set(sPos.x, sPos.y + 2.4, sPos.z);
         skillsLatticeRoot.add(skillLabel);
         skillLinePoints.push(cPos.x, cPos.y, cPos.z, sPos.x, sPos.y, sPos.z);
+        latticeLinkSegments.push({
+          from: cPos.clone(),
+          to: sPos.clone(),
+        });
       });
       const skillGeom = new THREE.BufferGeometry();
       skillGeom.setAttribute(
@@ -3355,10 +3419,44 @@ export default function ResumeSpace3D({
     skillsLatticeRoot.traverse((obj) => {
       obj.layers.set(SKILLS_LATTICE_LAYER);
     });
+    // Data packets flowing along lattice links.
+    if (latticeLinkSegments.length > 0) {
+      const flowCount = Math.min(320, latticeLinkSegments.length * 3);
+      const flowPositions = new Float32Array(flowCount * 3);
+      const flowGeom = new THREE.BufferGeometry();
+      flowGeom.setAttribute(
+        "position",
+        new THREE.BufferAttribute(flowPositions, 3),
+      );
+      const flowMat = new THREE.PointsMaterial({
+        color: 0xe8f6ff,
+        size: 0.72,
+        transparent: true,
+        opacity: 0.78,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        sizeAttenuation: true,
+      });
+      const flowPoints = new THREE.Points(flowGeom, flowMat);
+      flowPoints.layers.set(SKILLS_LATTICE_LAYER);
+      flowPoints.renderOrder = 8;
+      skillsLatticeRoot.add(flowPoints);
+      const flowMeta: Array<{ segmentIndex: number; offset: number; speed: number }> = [];
+      for (let i = 0; i < flowCount; i += 1) {
+        flowMeta.push({
+          segmentIndex: Math.floor(Math.random() * latticeLinkSegments.length),
+          offset: Math.random(),
+          speed: 0.08 + Math.random() * 0.26,
+        });
+      }
+      skillsLatticeFlowPointsRef.current = flowPoints;
+      skillsLatticeFlowMetaRef.current = flowMeta;
+    }
     scene.add(skillsLatticeRoot);
     skillsLatticeRootRef.current = skillsLatticeRoot;
     skillsLatticeNodesRef.current = latticeNodes;
     skillsLatticeLineMatsRef.current = latticeLineMats;
+    skillsLatticeLinkSegmentsRef.current = latticeLinkSegments;
     skillsLegacyBodiesRef.current = [skillsPlanet, ...skillMoonMeshes];
 
     // Point-based starfield removed — the texture skyboxes (starfield +
@@ -5725,6 +5823,10 @@ export default function ResumeSpace3D({
       skillsLatticeRootRef.current = null;
       skillsLatticeNodesRef.current = [];
       skillsLatticeLineMatsRef.current = [];
+      skillsLatticeLinkSegmentsRef.current = [];
+      skillsLatticeFlowPointsRef.current = null;
+      skillsLatticeFlowMetaRef.current = [];
+      skillsLatticeRippleRef.current.active = false;
       skillsLatticeSelectedNodeRef.current = null;
       setSkillsLatticeSelection(null);
       setSkillsLatticeActive(false);
