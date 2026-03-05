@@ -41,9 +41,7 @@ import {
 } from "../TourDefinitionBuilder";
 import SpaceshipHUD from "../ui/SpaceshipHUD";
 import ShipControlBar, { type ShipUIPhase, type ShipView } from "../ui/ShipControlBar";
-import CockpitHints from "../ui/CockpitHints";
 import CockpitNavPanel from "../ui/CockpitNavPanel";
-import { MissionBriefingTerminal } from "../ui/MissionBriefingTerminal";
 import ShipTerminal from "../ui/ShipTerminal";
 import { HologramDroneDisplay } from "./HologramDroneDisplay";
 // CockpitHologramPanels kept for potential future use
@@ -80,10 +78,8 @@ import {
   SD_CONE_LENGTH,
   SD_CONE_RADIUS,
   NEAR_DEFAULT,
-  NEAR_COCKPIT,
   NEAR_OVERVIEW,
   CONTROLS_MAX_DIST,
-  CAMERA_FOV,
   FOLLOW_DISTANCE,
   FOLLOW_HEIGHT,
   EXP_WANDER_RADIUS,
@@ -454,11 +450,8 @@ export default function ResumeSpace3D({
   const cockpitSteerActiveRef = useRef(false);
   const cockpitSteerStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Manual roll (bank) control — -1 = roll left, 0 = idle, 1 = roll right
-  const rollInputRef = useRef<number>(0);
-  // Accumulated user roll offset (radians) — persists across navigation
+  // Accumulated roll offset (radians), kept for nav orientation consistency.
   const shipRollOffsetRef = useRef<number>(0);
-  const [displayRollAngle, setDisplayRollAngle] = useState(0);
 
   const spaceshipLightsRef = useRef<THREE.PointLight[]>([]);
   const spaceshipEngineLightRef = useRef<THREE.PointLight | null>(null);
@@ -2013,39 +2006,7 @@ export default function ResumeSpace3D({
   // startShipWander / stopShipWander removed — ship is always player-controlled
 
   // ── Ship control bar handlers ──────────────────────
-  // handleUseShip / handleFreeExplore removed — ship auto-engages after intro
-
-  const handleLeaveShip = useCallback(() => {
-    // Restore camera constraints
-    if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-      sceneRef.current.camera.near = NEAR_DEFAULT;
-      sceneRef.current.camera.fov = CAMERA_FOV;
-      sceneRef.current.camera.updateProjectionMatrix();
-    }
-    if (sceneRef.current.controls) {
-      const cc = sceneRef.current.controls;
-      cc.minPolarAngle = 0;
-      cc.maxPolarAngle = Math.PI;
-      cc.minDistance = 0.01;
-      cc.maxDistance = CONTROLS_MAX_DIST;
-    }
-
-    // Stay following the ship in 3rd person exterior — no free-explore mode
-    setFollowingStarDestroyer(false);
-    followingStarDestroyerRef.current = false;
-    setInsideShip(false);
-    insideShipRef.current = false;
-    setShipViewMode("exterior");
-    shipViewModeRef.current = "exterior";
-    // Keep ship-engaged and following
-    setFollowingSpaceship(true);
-    followingSpaceshipRef.current = true;
-    setShipUIPhase("ship-engaged");
-
-    vlog("🚪 Exited to 3rd person exterior view");
-  }, [vlog]);
-
-  // handleSummonFalcon removed — ship is always engaged
+  // handleUseShip / handleFreeExplore / handleSummonFalcon removed — ship auto-engages after intro
 
   // --- STAR DESTROYER escort handlers ---
 
@@ -2137,165 +2098,6 @@ export default function ResumeSpace3D({
       exitProjectShowcase,
       vlog,
     ],
-  );
-
-  const handleShipViewChange = useCallback(
-    (view: ShipView) => {
-      // View mode changes are now safe during orbit:
-      // - Exterior: orbit camera drives (3rd-person ISS view)
-      // - Interior/cockpit: interior camera drives (cockpit seat, windshield view)
-      // The orbit system keeps positioning the ship; only the camera
-      // attachment changes.  No need to exit orbit on view switch.
-
-      if (view === "exterior") {
-        // Go to 3rd person
-        setInsideShip(false);
-        insideShipRef.current = false;
-        setShipViewMode("exterior");
-        shipViewModeRef.current = "exterior";
-
-        // Restore camera constraints
-        if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-          sceneRef.current.camera.near = NEAR_DEFAULT;
-          sceneRef.current.camera.fov = CAMERA_FOV;
-          sceneRef.current.camera.updateProjectionMatrix();
-        }
-        if (sceneRef.current.controls) {
-          const cc = sceneRef.current.controls;
-          cc.minPolarAngle = 0;
-          cc.maxPolarAngle = Math.PI;
-          cc.minDistance = 1;
-          cc.maxDistance = CONTROLS_MAX_DIST;
-        }
-
-        // Reposition camera behind and above the ship using its orientation.
-        // Skip during orbit — the orbit camera will resume on the next frame.
-        if (sceneRef.current.controls && spaceshipRef.current && !isOrbiting()) {
-          const cc = sceneRef.current.controls;
-          const ship = spaceshipRef.current;
-          const followDist = optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
-          const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion);
-          const camPos = ship.position.clone().addScaledVector(behind, followDist);
-          camPos.y += FOLLOW_HEIGHT;
-          cc.setLookAt(
-            camPos.x, camPos.y, camPos.z,
-            ship.position.x, ship.position.y, ship.position.z,
-            true,
-          );
-        }
-
-        vlog("🎥 3rd person view");
-      } else if (view === "interior") {
-        // Go to cabin
-        if (!followingSpaceship) {
-          setFollowingSpaceship(true);
-          followingSpaceshipRef.current = true;
-        }
-        setInsideShip(true);
-        insideShipRef.current = true;
-        setShipViewMode("interior");
-        shipViewModeRef.current = "interior";
-
-        if (
-          spaceshipRef.current &&
-          sceneRef.current.camera &&
-          sceneRef.current.controls
-        ) {
-          const ship = spaceshipRef.current;
-          const shipWorldPos = new THREE.Vector3();
-          const shipWorldQuat = new THREE.Quaternion();
-          ship.getWorldPosition(shipWorldPos);
-          ship.getWorldQuaternion(shipWorldQuat);
-
-          const shipScale = ship.scale.x;
-          const cabinWorldPos = new THREE.Vector3(0, -0.64, -4.49)
-            .multiplyScalar(shipScale)
-            .applyQuaternion(shipWorldQuat)
-            .add(shipWorldPos);
-          const cabinLookTarget = new THREE.Vector3(0, -0.64, 1.51)
-            .multiplyScalar(shipScale)
-            .applyQuaternion(shipWorldQuat)
-            .add(shipWorldPos);
-
-          if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-            sceneRef.current.camera.fov = CAMERA_FOV;
-            sceneRef.current.camera.updateProjectionMatrix();
-          }
-
-          sceneRef.current.controls.setLookAt(
-            cabinWorldPos.x,
-            cabinWorldPos.y,
-            cabinWorldPos.z,
-            cabinLookTarget.x,
-            cabinLookTarget.y,
-            cabinLookTarget.z,
-            false,
-          );
-        }
-
-        vlog("🪟 Cabin view");
-      } else if (view === "cockpit") {
-        // Go to cockpit
-        if (!followingSpaceship) {
-          setFollowingSpaceship(true);
-          followingSpaceshipRef.current = true;
-        }
-        setInsideShip(true);
-        insideShipRef.current = true;
-        setShipViewMode("cockpit");
-        shipViewModeRef.current = "cockpit";
-
-        if (
-          spaceshipRef.current &&
-          sceneRef.current.camera &&
-          sceneRef.current.controls
-        ) {
-          const ship = spaceshipRef.current;
-          const shipWorldPos = new THREE.Vector3();
-          const shipWorldQuat = new THREE.Quaternion();
-          ship.getWorldPosition(shipWorldPos);
-          ship.getWorldQuaternion(shipWorldQuat);
-
-          const cockpitCamLocal =
-            (ship.userData.cockpitCameraLocal as THREE.Vector3) ??
-            new THREE.Vector3(-6.05, 3.16, 5.36);
-          const cockpitLookLocal =
-            (ship.userData.cockpitLookLocal as THREE.Vector3) ??
-            new THREE.Vector3(-6.05, 3.16, 11.36);
-
-          const shipScale = ship.scale.x;
-          const cockpitWorldPos = cockpitCamLocal
-            .clone()
-            .multiplyScalar(shipScale)
-            .applyQuaternion(shipWorldQuat)
-            .add(shipWorldPos);
-          const windowTarget = cockpitLookLocal
-            .clone()
-            .multiplyScalar(shipScale)
-            .applyQuaternion(shipWorldQuat)
-            .add(shipWorldPos);
-
-          if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-            sceneRef.current.camera.near = NEAR_COCKPIT;
-            sceneRef.current.camera.fov = CAMERA_FOV;
-            sceneRef.current.camera.updateProjectionMatrix();
-          }
-
-          sceneRef.current.controls.setLookAt(
-            cockpitWorldPos.x,
-            cockpitWorldPos.y,
-            cockpitWorldPos.z,
-            windowTarget.x,
-            windowTarget.y,
-            windowTarget.z,
-            false,
-          );
-        }
-
-        vlog("✈️ Cockpit view");
-      }
-    },
-    [followingSpaceship, vlog, isOrbiting, exitOrbit, debugLog],
   );
 
   useEffect(() => {
@@ -2772,33 +2574,6 @@ export default function ResumeSpace3D({
     bumpProjectShowcaseViewportTick,
     setProjectShowcasePanelZoom,
   ]);
-
-  // ── Roll (bank) control handlers ────────────────────
-  const handleRollStart = useCallback(
-    (direction: -1 | 1) => {
-      rollInputRef.current = direction;
-    },
-    [],
-  );
-
-  const handleRollStop = useCallback(() => {
-    rollInputRef.current = 0;
-    // Snap display to final value
-    setDisplayRollAngle(shipRollOffsetRef.current);
-  }, []);
-
-  // Poll roll angle for display while rolling
-  useEffect(() => {
-    let raf: number;
-    const poll = () => {
-      if (rollInputRef.current !== 0) {
-        setDisplayRollAngle(shipRollOffsetRef.current);
-      }
-      raf = requestAnimationFrame(poll);
-    };
-    raf = requestAnimationFrame(poll);
-    return () => cancelAnimationFrame(raf);
-  }, []);
 
   // ── FOV zoom when inside ship (scroll wheel) ──────
   useEffect(() => {
@@ -5241,7 +5016,6 @@ export default function ResumeSpace3D({
       shipExploreCoordsRef,
       cockpitSteerRef,
       cockpitSteerActiveRef,
-      rollInputRef,
       shipRollOffsetRef,
       navTurnActiveRef,
       settledViewTargetRef,
@@ -6188,20 +5962,8 @@ export default function ResumeSpace3D({
           {!projectShowcaseActive && (
             <ShipControlBar
               phase={shipUIPhase}
-              activeView={insideShip ? shipViewMode : "exterior"}
-              onLeaveShip={handleLeaveShip}
-              onViewChange={handleShipViewChange}
-              onRollStart={handleRollStart}
-              onRollStop={handleRollStop}
-              rollAngle={displayRollAngle}
               isFollowingSD={followingStarDestroyer}
               onDisengage={stopFollowingStarDestroyer}
-              zoomLevel={options.spaceFollowDistance ?? FOLLOW_DISTANCE}
-              onZoomChange={overlayContent ? undefined : (value) => {
-                if (onOptionsChange) {
-                  onOptionsChange({ ...options, spaceFollowDistance: value });
-                }
-              }}
               orbitPhase={orbitPhase}
               onLeaveOrbit={() => {
                 exitOrbit();
@@ -6225,12 +5987,6 @@ export default function ResumeSpace3D({
               debugLogsRef.current = [];
               setDebugLogs([]);
             }}
-          />
-
-          {/* Cockpit/Cabin keyboard hints */}
-          <CockpitHints
-            insideShip={insideShip}
-            shipViewMode={shipViewMode}
           />
 
           {/* Ship destination nav panel — left side (all ship modes) */}
@@ -7069,173 +6825,6 @@ export default function ResumeSpace3D({
               setContentLoading(false);
               vlog("🛑 Tour ended");
             }}
-            followingSpaceship={followingSpaceship}
-            insideShip={insideShip}
-            shipViewMode={shipViewMode}
-            onEnterShip={() => {
-              if (!followingSpaceship) {
-                setFollowingSpaceship(true);
-                followingSpaceshipRef.current = true;
-              }
-
-              if (manualFlightModeRef.current) {
-                setManualFlightMode(false);
-                manualFlightModeRef.current = false;
-              }
-
-              setInsideShip(true);
-              insideShipRef.current = true;
-              setShipViewMode("interior");
-              shipViewModeRef.current = "interior";
-
-              // Initialize camera inside ship at cabin location (right front)
-              if (
-                spaceshipRef.current &&
-                sceneRef.current.camera &&
-                sceneRef.current.controls
-              ) {
-                const ship = spaceshipRef.current;
-                const shipWorldPos = new THREE.Vector3();
-                const shipWorldQuat = new THREE.Quaternion();
-                ship.getWorldPosition(shipWorldPos);
-                ship.getWorldQuaternion(shipWorldQuat);
-
-                // Cabin anchor — from explore mode labeling
-                const shipScale = ship.scale.x;
-                const cabinWorldPos = new THREE.Vector3(0, -0.64, -4.49)
-                  .multiplyScalar(shipScale)
-                  .applyQuaternion(shipWorldQuat)
-                  .add(shipWorldPos);
-
-                // Camera looks forward from cabin
-                const cabinLookTarget = new THREE.Vector3(0, -0.64, 1.51)
-                  .multiplyScalar(shipScale)
-                  .applyQuaternion(shipWorldQuat)
-                  .add(shipWorldPos);
-
-                sceneRef.current.controls.setLookAt(
-                  cabinWorldPos.x, cabinWorldPos.y, cabinWorldPos.z,
-                  cabinLookTarget.x, cabinLookTarget.y, cabinLookTarget.z,
-                  false, // instant
-                );
-              }
-
-              vlog("🛸 Entering ship - interior view (cabin)");
-            }}
-            onExitShip={() => {
-              setInsideShip(false);
-              insideShipRef.current = false;
-              setShipViewMode("exterior");
-              shipViewModeRef.current = "exterior";
-
-              // Restore camera constraints from interior mode
-              if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-                sceneRef.current.camera.near = NEAR_DEFAULT;
-                sceneRef.current.camera.updateProjectionMatrix();
-              }
-              if (sceneRef.current.controls) {
-                const cc = sceneRef.current.controls;
-                cc.minPolarAngle = 0;
-                cc.maxPolarAngle = Math.PI;
-                cc.minDistance = 0.01;
-                cc.maxDistance = CONTROLS_MAX_DIST;
-              }
-
-              vlog("🚪 Exiting ship - exterior view");
-            }}
-            onGoToCockpit={() => {
-              setShipViewMode("cockpit");
-              shipViewModeRef.current = "cockpit";
-
-              // Position camera inside model's actual cockpit
-              if (
-                spaceshipRef.current &&
-                sceneRef.current.camera &&
-                sceneRef.current.controls
-              ) {
-                const ship = spaceshipRef.current;
-                const shipWorldPos = new THREE.Vector3();
-                const shipWorldQuat = new THREE.Quaternion();
-                ship.getWorldPosition(shipWorldPos);
-                ship.getWorldQuaternion(shipWorldQuat);
-
-                const cockpitCamLocal = (ship.userData.cockpitCameraLocal as THREE.Vector3)
-                  ?? new THREE.Vector3(-6.05, 3.16, 5.36);
-                const cockpitLookLocal = (ship.userData.cockpitLookLocal as THREE.Vector3)
-                  ?? new THREE.Vector3(-6.05, 3.16, 11.36);
-
-                const shipScale = ship.scale.x;
-                const cockpitWorldPos = cockpitCamLocal
-                  .clone()
-                  .multiplyScalar(shipScale)
-                  .applyQuaternion(shipWorldQuat)
-                  .add(shipWorldPos);
-
-                const windowTarget = cockpitLookLocal
-                  .clone()
-                  .multiplyScalar(shipScale)
-                  .applyQuaternion(shipWorldQuat)
-                  .add(shipWorldPos);
-
-                // Reduce near clipping plane so cockpit geometry is visible
-                if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-                  sceneRef.current.camera.near = NEAR_COCKPIT;
-                  sceneRef.current.camera.updateProjectionMatrix();
-                }
-
-                sceneRef.current.controls.setLookAt(
-                  cockpitWorldPos.x, cockpitWorldPos.y, cockpitWorldPos.z,
-                  windowTarget.x, windowTarget.y, windowTarget.z,
-                  false, // instant
-                );
-              }
-
-              vlog("✈️ Moving to cockpit");
-            }}
-            onGoToInterior={() => {
-              setShipViewMode("interior");
-              shipViewModeRef.current = "interior";
-
-              // Return to cabin location
-              if (
-                spaceshipRef.current &&
-                sceneRef.current.camera &&
-                sceneRef.current.controls
-              ) {
-                const ship = spaceshipRef.current;
-                const shipWorldPos = new THREE.Vector3();
-                const shipWorldQuat = new THREE.Quaternion();
-                ship.getWorldPosition(shipWorldPos);
-                ship.getWorldQuaternion(shipWorldQuat);
-
-                // Cabin anchor — from explore mode labeling
-                const shipScale = ship.scale.x;
-                const cabinWorldPos = new THREE.Vector3(0, -0.64, -4.49)
-                  .multiplyScalar(shipScale)
-                  .applyQuaternion(shipWorldQuat)
-                  .add(shipWorldPos);
-
-                // Look forward from cabin
-                const cabinLookTarget = new THREE.Vector3(0, -0.64, 1.51)
-                  .multiplyScalar(shipScale)
-                  .applyQuaternion(shipWorldQuat)
-                  .add(shipWorldPos);
-
-                // Restore near clipping plane when leaving cockpit
-                if (sceneRef.current.camera instanceof THREE.PerspectiveCamera) {
-                  sceneRef.current.camera.near = NEAR_DEFAULT;
-                  sceneRef.current.camera.updateProjectionMatrix();
-                }
-
-                sceneRef.current.controls.setLookAt(
-                  cabinWorldPos.x, cabinWorldPos.y, cabinWorldPos.z,
-                  cabinLookTarget.x, cabinLookTarget.y, cabinLookTarget.z,
-                  false, // instant
-                );
-              }
-
-              vlog("🚪 Moving to main interior (cabin)");
-            }}
             shipExteriorLights={shipExteriorLights}
             onShipExteriorLightsChange={setShipExteriorLights}
             shipInteriorLights={shipInteriorLights}
@@ -7492,14 +7081,6 @@ export default function ResumeSpace3D({
         </div>
       </div>
 
-      {/* Mission Briefing Terminal — cockpit only */}
-      {insideShip && (
-        <MissionBriefingTerminal
-          content={overlayContent}
-          isCockpit={true}
-          onClose={() => setOverlayContent(null)}
-        />
-      )}
     </>
   );
 }
