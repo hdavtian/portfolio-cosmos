@@ -7,7 +7,7 @@
     "description": "Early 2000s marketing/business website screenshot.",
     "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
     "year": null,
-    "fit": "contain",
+    "fit": "cover",
     "published": true
   },
   {
@@ -29,6 +29,7 @@
     "description": "Legacy acecount.com capture from non-responsive desktop era.",
     "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
     "year": null,
+    "fit": "cover",
     "published": true
   },
   {
@@ -39,6 +40,7 @@
     "description": "acecount.com portfolio capture showing classic fixed-width design.",
     "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
     "year": null,
+    "fit": "cover",
     "published": true
   },
   {
@@ -119,7 +121,7 @@
     "description": "Stormscape portfolio demo-sites index capture.",
     "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
     "year": null,
-    "fit": "contain",
+    "fit": "cover",
     "published": true
   },
   {
@@ -130,7 +132,7 @@
     "description": "Stormscape portfolio live-sites index screenshot.",
     "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
     "year": null,
-    "fit": "contain",
+    "fit": "cover",
     "published": true
   },
   {
@@ -141,7 +143,7 @@
     "description": "Stormscape under-construction listing from archive period.",
     "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
     "year": null,
-    "fit": "contain",
+    "fit": "cover",
     "published": true
   },
   {

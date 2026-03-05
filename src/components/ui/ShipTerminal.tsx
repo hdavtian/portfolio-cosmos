@@ -183,7 +183,7 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
         top: 116,
         right: 16,
         width: 340,
-        zIndex: 900,
+        zIndex: 10050,
         fontFamily: "'Courier New', 'Consolas', monospace",
         fontSize: 11,
         lineHeight: 1.5,

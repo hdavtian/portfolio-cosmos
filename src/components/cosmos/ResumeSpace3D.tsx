@@ -132,6 +132,21 @@ type ShipLabelMark = {
 const PROJECT_SHOWCASE_NAV_ID = "project-showcase";
 const PROJECT_SHOWCASE_LAYER = 2;
 const PROJECT_SHOWCASE_CARD_LAYER = 1;
+const PROJECT_SHOWCASE_MIN_ANGLE_PERCENT = 0;
+const PROJECT_SHOWCASE_MAX_ANGLE_PERCENT = 100;
+const PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT = 25;
+const PROJECT_SHOWCASE_MAX_CANT_RADIANS = 0.62;
+const PROJECT_SHOWCASE_SHOW_IMAGE_MANIPULATION_CONTROLS = false;
+const PROJECT_SHOWCASE_NAV_STOP_BACK_OFFSET = 15;
+const PROJECT_SHOWCASE_FILTER_OPTIONS = [
+  "Angular",
+  "C#",
+  "Java",
+  "JavaScript",
+  "TypeScript",
+  "React",
+  "Node",
+] as const;
 
 type ShowcaseEntry = {
   id: string;
@@ -148,9 +163,12 @@ type ShowcasePanelRecord = {
   runPos: number;
   entry: ShowcaseEntry;
   fitMode: "contain" | "cover";
-  baseRotationY: number;
+  inwardRotationY: number;
+  frontFacingRotationY: number;
+  cantSign: -1 | 1;
   focusBlend: number;
   frameMat: THREE.MeshBasicMaterial;
+  imageMesh: THREE.Mesh;
   imageMat: THREE.MeshBasicMaterial;
   texture: THREE.Texture | null;
   baseRepeat: THREE.Vector2;
@@ -317,15 +335,21 @@ export default function ResumeSpace3D({
   const [projectShowcaseActive, setProjectShowcaseActive] = useState(false);
   const [projectShowcasePlaying, setProjectShowcasePlaying] = useState(false);
   const [projectShowcaseLeverValue, setProjectShowcaseLeverValue] = useState(0);
+  const [projectShowcaseAnglePercent, setProjectShowcaseAnglePercentState] =
+    useState(PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT);
   const [projectShowcaseFocusIndex, setProjectShowcaseFocusIndex] = useState(0);
   const [, setProjectShowcaseViewportTick] = useState(0);
   const projectShowcaseActiveRef = useRef(false);
   const projectShowcasePlayingRef = useRef(false);
   const projectShowcaseLeverValueRef = useRef(0);
+  const projectShowcaseAnglePercentRef = useRef(
+    PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT,
+  );
   const projectShowcaseLeverDraggingRef = useRef(false);
   const projectShowcaseLeverFlickRef = useRef(0);
   const projectShowcaseVelocityRef = useRef(0);
   const projectShowcaseJumpTargetRef = useRef<number | null>(null);
+  const projectShowcaseForcedFocusIndexRef = useRef<number | null>(null);
   const projectShowcaseLeverRectRef = useRef<DOMRect | null>(null);
   const projectShowcaseLeverLastSampleRef = useRef<{
     value: number;
@@ -820,20 +844,28 @@ export default function ResumeSpace3D({
     projectShowcaseRunPosRef.current = runPos;
     const panels = projectShowcasePanelsRef.current;
     if (panels.length === 0) return;
-
-    // Find nearest panel for metadata display.
-    let bestIndex = 0;
-    let bestDist = Infinity;
-    panels.forEach((panel, idx) => {
-      const d = Math.abs(panel.runPos - runPos);
-      if (d < bestDist) {
-        bestDist = d;
-        bestIndex = idx;
-      }
-    });
-    setProjectShowcaseFocus(bestIndex);
-
     const track = projectShowcaseTrackRef.current;
+    const minRun = track ? track.minRun + 10 : -Infinity;
+    const maxRun = track ? track.maxRun - 10 : Infinity;
+
+    const forcedIndex = projectShowcaseForcedFocusIndexRef.current;
+    if (forcedIndex !== null) {
+      setProjectShowcaseFocus(forcedIndex);
+    } else {
+      // Find nearest panel by true panel centers for stable highlight timing.
+      let bestIndex = 0;
+      let bestDist = Infinity;
+      panels.forEach((panel, idx) => {
+        const panelCenter = THREE.MathUtils.clamp(panel.runPos, minRun, maxRun);
+        const d = Math.abs(panelCenter - runPos);
+        if (d < bestDist) {
+          bestDist = d;
+          bestIndex = idx;
+        }
+      });
+      setProjectShowcaseFocus(bestIndex);
+    }
+
     if (!track) return;
     const halfWindow = track.cullHalfWindow;
     panels.forEach((panel) => {
@@ -845,6 +877,16 @@ export default function ResumeSpace3D({
     const clamped = THREE.MathUtils.clamp(value, -1, 1);
     projectShowcaseLeverValueRef.current = clamped;
     setProjectShowcaseLeverValue(clamped);
+  }, []);
+
+  const setProjectShowcaseAnglePercent = useCallback((value: number) => {
+    const clamped = THREE.MathUtils.clamp(
+      value,
+      PROJECT_SHOWCASE_MIN_ANGLE_PERCENT,
+      PROJECT_SHOWCASE_MAX_ANGLE_PERCENT,
+    );
+    projectShowcaseAnglePercentRef.current = clamped;
+    setProjectShowcaseAnglePercentState(clamped);
   }, []);
 
   const getFocusedProjectShowcasePanel = useCallback(() => {
@@ -987,6 +1029,7 @@ export default function ResumeSpace3D({
         setProjectShowcasePlaying(false);
       }
       projectShowcaseJumpTargetRef.current = null;
+      projectShowcaseForcedFocusIndexRef.current = null;
       projectShowcaseLeverDraggingRef.current = true;
       projectShowcaseLeverFlickRef.current = 0;
       const value = updateProjectShowcaseLeverFromClientY(clientY, rect);
@@ -1093,6 +1136,7 @@ export default function ResumeSpace3D({
     setProjectShowcasePlaying(false);
     projectShowcaseVelocityRef.current = 0;
     projectShowcaseJumpTargetRef.current = null;
+    projectShowcaseForcedFocusIndexRef.current = null;
     projectShowcaseLeverDraggingRef.current = false;
     projectShowcaseLeverFlickRef.current = 0;
     projectShowcaseLeverLastSampleRef.current = null;
@@ -1147,6 +1191,7 @@ export default function ResumeSpace3D({
     setProjectShowcasePlaying(false);
     projectShowcaseVelocityRef.current = 0;
     projectShowcaseJumpTargetRef.current = null;
+    projectShowcaseForcedFocusIndexRef.current = null;
     projectShowcaseLeverDraggingRef.current = false;
     projectShowcaseLeverFlickRef.current = 0;
     projectShowcaseLeverLastSampleRef.current = null;
@@ -1165,9 +1210,32 @@ export default function ResumeSpace3D({
     if (next) {
       projectShowcaseVelocityRef.current = 0;
       projectShowcaseJumpTargetRef.current = null;
+      projectShowcaseForcedFocusIndexRef.current = null;
       setProjectShowcaseLever(0);
     }
   }, [setProjectShowcaseLever]);
+
+  const getProjectShowcaseStopRunForIndex = useCallback((index: number) => {
+    const panels = projectShowcasePanelsRef.current;
+    if (panels.length === 0) return 0;
+    const safeIndex = THREE.MathUtils.clamp(index, 0, panels.length - 1);
+    const track = projectShowcaseTrackRef.current;
+    const minRun = track ? track.minRun + 10 : -Infinity;
+    const maxRun = track ? track.maxRun - 10 : Infinity;
+    const current = panels[safeIndex].runPos;
+    const prev = safeIndex > 0 ? panels[safeIndex - 1].runPos : undefined;
+    const next =
+      safeIndex < panels.length - 1 ? panels[safeIndex + 1].runPos : undefined;
+    const lowerBound =
+      prev !== undefined ? (prev + current) * 0.5 + 0.02 : minRun;
+    const upperBound =
+      next !== undefined ? (current + next) * 0.5 - 0.02 : maxRun;
+    return THREE.MathUtils.clamp(
+      current - PROJECT_SHOWCASE_NAV_STOP_BACK_OFFSET,
+      Math.max(minRun, lowerBound),
+      Math.min(maxRun, upperBound),
+    );
+  }, []);
 
   const stepProjectShowcaseFocus = useCallback(
     (direction: -1 | 1) => {
@@ -1177,10 +1245,15 @@ export default function ResumeSpace3D({
       const current = projectShowcaseFocusIndexRef.current;
       const next =
         (current + direction + panels.length) % panels.length;
+      projectShowcaseForcedFocusIndexRef.current = next;
       setProjectShowcaseFocus(next);
-      setProjectShowcaseRunPosition(panels[next].runPos);
+      setProjectShowcaseRunPosition(getProjectShowcaseStopRunForIndex(next));
     },
-    [setProjectShowcaseFocus, setProjectShowcaseRunPosition],
+    [
+      getProjectShowcaseStopRunForIndex,
+      setProjectShowcaseFocus,
+      setProjectShowcaseRunPosition,
+    ],
   );
 
   const jumpProjectShowcaseToIndex = useCallback(
@@ -1191,14 +1264,16 @@ export default function ResumeSpace3D({
       projectShowcasePlayingRef.current = false;
       setProjectShowcasePlaying(false);
       projectShowcaseVelocityRef.current = 0;
-    projectShowcaseJumpTargetRef.current = null;
+      projectShowcaseJumpTargetRef.current = null;
       projectShowcaseLeverDraggingRef.current = false;
       projectShowcaseLeverFlickRef.current = 0;
       projectShowcaseLeverLastSampleRef.current = null;
       setProjectShowcaseLever(0);
-      projectShowcaseJumpTargetRef.current = panels[safeIndex].runPos;
+      projectShowcaseForcedFocusIndexRef.current = safeIndex;
+      projectShowcaseJumpTargetRef.current =
+        getProjectShowcaseStopRunForIndex(safeIndex);
     },
-    [setProjectShowcaseLever],
+    [getProjectShowcaseStopRunForIndex, setProjectShowcaseLever],
   );
 
   const handleExperienceCompanyNavigation = useCallback(
@@ -1802,22 +1877,36 @@ export default function ResumeSpace3D({
         setProjectShowcaseRunPosition(nextRun);
         if (remaining < 0.18) {
           const direction = goForward ? 1 : -1;
-          let settleRun = normalizedTarget + direction * 0.05;
-          if (settleRun > maxRun) settleRun -= loopLen;
-          if (settleRun < minRun) settleRun += loopLen;
+          const edgeGuard = 0.28;
+          const nearEdge =
+            normalizedTarget <= minRun + edgeGuard ||
+            normalizedTarget >= maxRun - edgeGuard;
+          const settleRun = nearEdge
+            ? normalizedTarget
+            : THREE.MathUtils.clamp(
+                normalizedTarget + direction * 0.05,
+                minRun,
+                maxRun,
+              );
           setProjectShowcaseRunPosition(settleRun);
           projectShowcaseJumpTargetRef.current = null;
           // Small opposite impulse gives a "heavy shuttle" settle bounce.
-          projectShowcaseVelocityRef.current = -direction * track.speed * 0.12;
+          projectShowcaseVelocityRef.current = nearEdge
+            ? 0
+            : -direction * track.speed * 0.12;
           setProjectShowcaseLever(0);
         }
       } else {
-        const maxManualSpeed = track.speed * 2.4;
+        const maxManualSpeed = track.speed * 11.4;
         let targetVelocity = 0;
         if (projectShowcasePlayingRef.current) {
           targetVelocity = track.speed * 0.75;
         } else if (projectShowcaseLeverDraggingRef.current) {
-          targetVelocity = projectShowcaseLeverValueRef.current * maxManualSpeed;
+          const lever = projectShowcaseLeverValueRef.current;
+          // Non-linear response: fine near center, stronger at extremes.
+          const shapedLever =
+            Math.sign(lever) * Math.pow(Math.abs(lever), 1.35);
+          targetVelocity = shapedLever * maxManualSpeed;
         }
         const velocitySmooth = projectShowcaseLeverDraggingRef.current ? 20 : 4;
         projectShowcaseVelocityRef.current = THREE.MathUtils.damp(
@@ -1836,6 +1925,11 @@ export default function ResumeSpace3D({
             nextRun = maxRun;
           }
           setProjectShowcaseRunPosition(nextRun);
+        } else if (
+          !projectShowcasePlayingRef.current &&
+          !projectShowcaseLeverDraggingRef.current
+        ) {
+          projectShowcaseForcedFocusIndexRef.current = null;
         }
       }
 
@@ -1844,10 +1938,25 @@ export default function ResumeSpace3D({
         0,
         Math.max(0, projectShowcasePanelsRef.current.length - 1),
       );
+      const angleT = THREE.MathUtils.clamp(
+        projectShowcaseAnglePercentRef.current /
+          (PROJECT_SHOWCASE_MAX_ANGLE_PERCENT -
+            PROJECT_SHOWCASE_MIN_ANGLE_PERCENT),
+        0,
+        1,
+      );
       projectShowcasePanelsRef.current.forEach((panel, idx) => {
         const target = idx === focusIndex ? 1 : 0;
         panel.focusBlend = THREE.MathUtils.damp(panel.focusBlend, target, 8, dt);
-        panel.group.rotation.y = panel.baseRotationY;
+        const toFrontDelta = Math.atan2(
+          Math.sin(panel.frontFacingRotationY - panel.inwardRotationY),
+          Math.cos(panel.frontFacingRotationY - panel.inwardRotationY),
+        );
+        const readableCant = PROJECT_SHOWCASE_MAX_CANT_RADIANS * (1 - angleT);
+        panel.group.rotation.y =
+          panel.inwardRotationY +
+          toFrontDelta * angleT +
+          panel.cantSign * readableCant;
         const scaleBoost = 1 + panel.focusBlend * 0.055;
         panel.group.scale.setScalar(scaleBoost);
         panel.frameMat.opacity = 0.22 + panel.focusBlend * 0.26;
@@ -1896,17 +2005,35 @@ export default function ResumeSpace3D({
     if (!mount) return;
 
     let dragging = false;
+    let activePanel: ShowcasePanelRecord | null = null;
     let lastX = 0;
     let lastY = 0;
+    const raycaster = new THREE.Raycaster();
+    raycaster.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+    const pointer = new THREE.Vector2();
 
-    const getInteractivePanel = () => {
+    const getInteractivePanelAtPointer = (
+      clientX: number,
+      clientY: number,
+    ): ShowcasePanelRecord | null => {
       if (!projectShowcaseActiveRef.current) return null;
-      const panel = getFocusedProjectShowcasePanel();
-      if (!panel || !panel.texture || panel.fitMode !== "cover") return null;
-      const croppedX = panel.baseRepeat.x < 0.999;
-      const croppedY = panel.baseRepeat.y < 0.999;
-      if (!croppedX && !croppedY) return null;
-      return panel;
+      const cam = sceneRef.current.camera;
+      if (!cam) return null;
+      const panels = projectShowcasePanelsRef.current.filter(
+        (panel) => panel.fitMode === "cover" && !!panel.texture && panel.group.visible,
+      );
+      if (panels.length === 0) return null;
+      const rect = mount.getBoundingClientRect();
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, cam);
+      const hits = raycaster.intersectObjects(
+        panels.map((panel) => panel.imageMesh),
+        false,
+      );
+      if (hits.length === 0) return null;
+      const hitObj = hits[0].object;
+      return panels.find((panel) => panel.imageMesh === hitObj) ?? null;
     };
 
     const pauseShowcasePlayback = () => {
@@ -1920,10 +2047,11 @@ export default function ResumeSpace3D({
       if (!e.shiftKey) return;
       const target = e.target as HTMLElement | null;
       if (target?.closest("button, input, select, textarea, a")) return;
-      const panel = getInteractivePanel();
+      const panel = getInteractivePanelAtPointer(e.clientX, e.clientY);
       if (!panel) return;
       pauseShowcasePlayback();
       dragging = true;
+      activePanel = panel;
       lastX = e.clientX;
       lastY = e.clientY;
       e.preventDefault();
@@ -1933,7 +2061,7 @@ export default function ResumeSpace3D({
 
     const onPointerMove = (e: PointerEvent) => {
       if (!dragging) return;
-      const panel = getInteractivePanel();
+      const panel = activePanel;
       if (!panel) return;
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
@@ -1957,11 +2085,12 @@ export default function ResumeSpace3D({
 
     const onPointerUp = () => {
       dragging = false;
+      activePanel = null;
     };
 
     const onWheel = (e: WheelEvent) => {
       if (!e.shiftKey) return;
-      const panel = getInteractivePanel();
+      const panel = getInteractivePanelAtPointer(e.clientX, e.clientY);
       if (!panel) return;
       pauseShowcasePlayback();
       const zoomDir = e.deltaY < 0 ? 1 : -1;
@@ -1987,7 +2116,6 @@ export default function ResumeSpace3D({
       mount.removeEventListener("wheel", onWheel, { capture: true });
     };
   }, [
-    getFocusedProjectShowcasePanel,
     applyProjectShowcasePanelViewport,
     bumpProjectShowcaseViewportTick,
     setProjectShowcasePanelZoom,
@@ -3276,17 +3404,23 @@ export default function ResumeSpace3D({
               side * panelOffset,
             );
           }
-          // Keep a fixed readable angle for all cards (no focus swing animation).
-          let baseRotationY = 0;
-          const readableCant = 0.62;
+          // Keep inward-facing baseline; user controls extra readable cant via slider.
+          let inwardRotationY = 0;
+          let frontFacingRotationY = 0;
+          let cantSign: -1 | 1 = 1;
           if (runAxis === "z") {
-            const inward = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-            baseRotationY = inward + (side < 0 ? readableCant : -readableCant);
+            inwardRotationY = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+            // Plane front normal points toward -Z (toward incoming camera travel).
+            frontFacingRotationY = Math.PI;
+            cantSign = side < 0 ? 1 : -1;
           } else {
-            const inward = side < 0 ? 0 : Math.PI;
-            baseRotationY = inward + (side < 0 ? -readableCant : readableCant);
+            inwardRotationY = side < 0 ? 0 : Math.PI;
+            // Plane front normal points toward -X when traveling +X.
+            frontFacingRotationY = Math.PI / 2;
+            cantSign = side < 0 ? -1 : 1;
           }
-          panelGroup.rotation.y = baseRotationY;
+          panelGroup.rotation.y =
+            inwardRotationY + cantSign * PROJECT_SHOWCASE_MAX_CANT_RADIANS;
 
           const frame = new THREE.Mesh(
             new THREE.PlaneGeometry(panelWidth * 1.03, panelHeight * 1.08),
@@ -3315,9 +3449,12 @@ export default function ResumeSpace3D({
             runPos,
             entry,
             fitMode,
-            baseRotationY,
+            inwardRotationY,
+            frontFacingRotationY,
+            cantSign,
             focusBlend: 0,
             frameMat,
+            imageMesh: imagePlane,
             imageMat,
             texture: null,
             baseRepeat: new THREE.Vector2(1, 1),
@@ -3359,7 +3496,8 @@ export default function ResumeSpace3D({
                 } else {
                   const visibleY = imageAspect / frameAspect;
                   panelRecord.baseRepeat.set(1, visibleY);
-                  panelRecord.baseOffset.set(0, (1 - visibleY) * 0.5);
+                  // Top-align cover images when vertical crop is applied.
+                  panelRecord.baseOffset.set(0, 1 - visibleY);
                 }
                 texture.repeat.copy(panelRecord.baseRepeat);
                 texture.offset.copy(panelRecord.baseOffset);
@@ -3407,6 +3545,40 @@ export default function ResumeSpace3D({
 
           panelGroup.add(frame);
           panelGroup.add(imagePlane);
+          const detailLines = [
+            entry.title,
+            ...(entry.description ? [entry.description] : []),
+            ...((entry.technologies || []).slice(0, 5).map((t) => `• ${t}`)),
+          ];
+          const detailTexture = createDetailTexture(detailLines, {
+            width: 1024,
+            height: 512,
+            bgColor: "rgba(6, 12, 22, 0.82)",
+            lineColor: "rgba(120, 180, 255, 0.75)",
+            textColor: "rgba(228, 240, 255, 0.96)",
+            showLine: true,
+            fontSize: 25,
+            lineSpacing: 36,
+            textAlign: "left",
+            padding: 54,
+          });
+          const detailMat = new THREE.MeshBasicMaterial({
+            map: detailTexture,
+            transparent: true,
+            opacity: 0.94,
+            toneMapped: false,
+            side: THREE.DoubleSide,
+          });
+          const detailPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(panelWidth * 0.88, panelHeight * 0.76),
+            detailMat,
+          );
+          detailPlane.position.set(
+            side < 0 ? -panelWidth * 0.96 : panelWidth * 0.96,
+            0,
+            -0.08,
+          );
+          panelGroup.add(detailPlane);
           // Render cards in the overlay layer so they bypass HDR bloom/tonemapping.
           panelGroup.traverse((child) => {
             child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
@@ -4697,13 +4869,25 @@ export default function ResumeSpace3D({
     return cleanup;
   }, []);
 
-  const focusedProjectShowcaseEntry =
-    projectShowcasePanelsRef.current[projectShowcaseFocusIndex]?.entry ?? null;
   const focusedProjectShowcasePanel =
     projectShowcasePanelsRef.current[projectShowcaseFocusIndex] ?? null;
   const projectShowcaseNavEntries = projectShowcasePanelsRef.current.map(
     (panel) => panel.entry,
   );
+  const projectShowcaseNavRows = [
+    ...projectShowcaseNavEntries.map((entry, index) => ({
+      key: `${entry.id}-${index}`,
+      title: `${index + 1}. ${entry.title}`,
+      index,
+      placeholder: false,
+    })),
+    ...Array.from({ length: 8 }, (_, idx) => ({
+      key: `placeholder-${idx}`,
+      title: "",
+      index: -1,
+      placeholder: true,
+    })),
+  ];
   const focusedProjectShowcaseHasCoverCrop =
     focusedProjectShowcasePanel?.fitMode === "cover" &&
     ((focusedProjectShowcasePanel.baseRepeat.x ?? 1) < 0.999 ||
@@ -4711,6 +4895,20 @@ export default function ResumeSpace3D({
 
   return (
     <>
+      <style>{`
+        .project-showcase-nav-scroll::-webkit-scrollbar {
+          width: 8px;
+        }
+        .project-showcase-nav-scroll::-webkit-scrollbar-track {
+          background: rgba(10, 16, 28, 0.72);
+          border-radius: 6px;
+        }
+        .project-showcase-nav-scroll::-webkit-scrollbar-thumb {
+          background: rgba(110, 165, 230, 0.72);
+          border-radius: 6px;
+          border: 1px solid rgba(160, 200, 255, 0.25);
+        }
+      `}</style>
       {/* Show loader while scene is setting up */}
       {isLoading && (
         <CosmosLoader
@@ -5275,7 +5473,8 @@ export default function ResumeSpace3D({
                 flexDirection: "column",
                 gap: 8,
                 alignItems: "flex-end",
-                maxWidth: 320,
+                width: 332,
+                maxWidth: 332,
               }}
             >
               <div
@@ -5296,7 +5495,7 @@ export default function ResumeSpace3D({
                 style={{
                   display: "flex",
                   gap: 6,
-                  width: "100%",
+                  alignSelf: "flex-start",
                 }}
               >
                 <button
@@ -5312,8 +5511,6 @@ export default function ResumeSpace3D({
                     fontFamily: "'Rajdhani', sans-serif",
                     fontWeight: 700,
                     letterSpacing: 0.4,
-                    minWidth: 72,
-                    flex: "1 1 0",
                   }}
                 >
                   Prev
@@ -5331,8 +5528,6 @@ export default function ResumeSpace3D({
                     fontFamily: "'Rajdhani', sans-serif",
                     fontWeight: 700,
                     letterSpacing: 0.4,
-                    minWidth: 72,
-                    flex: "1 1 0",
                   }}
                 >
                   {projectShowcasePlaying ? "Pause" : "Play"}
@@ -5350,8 +5545,6 @@ export default function ResumeSpace3D({
                     fontFamily: "'Rajdhani', sans-serif",
                     fontWeight: 700,
                     letterSpacing: 0.4,
-                    minWidth: 72,
-                    flex: "1 1 0",
                   }}
                 >
                   Next
@@ -5360,21 +5553,29 @@ export default function ResumeSpace3D({
               <div
                 style={{
                   width: "100%",
-                  padding: "8px 12px 10px",
+                  padding: "8px 10px 10px",
                   borderRadius: 8,
                   border: "1px solid rgba(114, 198, 255, 0.3)",
                   background: "rgba(7, 13, 24, 0.84)",
                   color: "#c7e9ff",
                   fontFamily: "'Rajdhani', sans-serif",
                   display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
+                  gap: 10,
+                  alignItems: "stretch",
+                  minHeight: 290,
                 }}
               >
-                <div style={{ fontSize: 11, letterSpacing: 0.5, opacity: 0.92 }}>
-                  SHUTTLE LEVER (drag up/down)
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div
+                  style={{
+                    width: 54,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 6,
+                    flexShrink: 0,
+                  }}
+                >
+                  <div style={{ fontSize: 13, lineHeight: 1, opacity: 0.92 }}>▲</div>
                   <div
                     onPointerDown={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
@@ -5386,7 +5587,7 @@ export default function ResumeSpace3D({
                     style={{
                       position: "relative",
                       width: 30,
-                      height: 116,
+                      height: 232,
                       borderRadius: 999,
                       border: "1px solid rgba(160, 205, 255, 0.38)",
                       background:
@@ -5422,48 +5623,104 @@ export default function ResumeSpace3D({
                       }}
                     />
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 11 }}>
-                    <div>↑ Forward</div>
-                    <div>Center = coast</div>
-                    <div>↓ Reverse</div>
-                    <div style={{ opacity: 0.8 }}>
-                      Velocity: {projectShowcaseVelocityRef.current.toFixed(2)}
-                    </div>
+                  <div style={{ fontSize: 13, lineHeight: 1, opacity: 0.92 }}>▼</div>
+                </div>
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                    }}
+                  >
+                    {PROJECT_SHOWCASE_FILTER_OPTIONS.map((opt) => (
+                      <button
+                        key={opt}
+                        style={{
+                          padding: "4px 7px",
+                          borderRadius: 6,
+                          border: "1px solid rgba(120, 165, 225, 0.32)",
+                          background: "rgba(10, 16, 28, 0.78)",
+                          color: "#c5dcff",
+                          cursor: "pointer",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          fontSize: 10,
+                          letterSpacing: 0.35,
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                  <div
+                    className="project-showcase-nav-scroll"
+                    style={{
+                      flex: 1,
+                      minHeight: 188,
+                      maxHeight: 230,
+                      overflowY: "auto",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: 6,
+                      paddingRight: 4,
+                      scrollbarWidth: "thin",
+                      scrollbarColor:
+                        "rgba(110, 165, 230, 0.7) rgba(10, 16, 28, 0.72)",
+                    }}
+                  >
+                    {projectShowcaseNavRows.map((row) => {
+                      const active = row.index === projectShowcaseFocusIndex;
+                      return (
+                        <button
+                          key={row.key}
+                          onClick={() => {
+                            if (row.placeholder || row.index < 0) return;
+                            jumpProjectShowcaseToIndex(row.index);
+                          }}
+                          style={{
+                            padding: "5px 7px",
+                            borderRadius: 6,
+                            border: active
+                              ? "1px solid rgba(155, 220, 255, 0.78)"
+                              : "1px solid rgba(120, 165, 225, 0.32)",
+                            background: active
+                              ? "rgba(34, 92, 140, 0.88)"
+                              : "rgba(10, 16, 28, 0.78)",
+                            color: active ? "#ecf6ff" : "#c5dcff",
+                            cursor: row.placeholder ? "default" : "pointer",
+                            textAlign: "left",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 10,
+                            fontWeight: active ? 700 : 600,
+                            letterSpacing: 0.32,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            opacity: row.placeholder ? 0.52 : 1,
+                            minHeight: 24,
+                            maxWidth: "100%",
+                          }}
+                          title={row.placeholder ? "" : row.title}
+                        >
+                          {row.title}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
-              {focusedProjectShowcaseEntry && (
-                <div
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(114, 198, 255, 0.3)",
-                    background: "rgba(7, 13, 24, 0.84)",
-                    color: "#d9e6ff",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 12,
-                    lineHeight: 1.35,
-                  }}
-                >
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>
-                    {focusedProjectShowcaseEntry.title}
-                  </div>
-                  {focusedProjectShowcaseEntry.description && (
-                    <div style={{ opacity: 0.82, marginTop: 4 }}>
-                      {focusedProjectShowcaseEntry.description}
-                    </div>
-                  )}
-                  {focusedProjectShowcaseEntry.technologies &&
-                    focusedProjectShowcaseEntry.technologies.length > 0 && (
-                    <div style={{ opacity: 0.9, marginTop: 6 }}>
-                      {focusedProjectShowcaseEntry.technologies
-                        .slice(0, 4)
-                        .join(" • ")}
-                    </div>
-                  )}
-                </div>
-              )}
-              {focusedProjectShowcaseHasCoverCrop && (
+              {PROJECT_SHOWCASE_SHOW_IMAGE_MANIPULATION_CONTROLS &&
+                focusedProjectShowcaseHasCoverCrop && (
                 <div
                   style={{
                     padding: "10px 12px",
@@ -5571,90 +5828,36 @@ export default function ResumeSpace3D({
                   </button>
                 </div>
               )}
-              <button
-                onClick={exitProjectShowcase}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(220, 220, 255, 0.35)",
-                  background: "rgba(10, 12, 20, 0.75)",
-                  color: "#e8ebff",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontFamily: "'Rajdhani', sans-serif",
-                  fontWeight: 700,
-                  letterSpacing: 0.5,
-                }}
-              >
-                Back to Projects
-              </button>
-            </div>
-          )}
-
-          {projectShowcaseActive && projectShowcaseNavEntries.length > 0 && (
-            <div
-              style={{
-                position: "fixed",
-                right: 18,
-                top: 430,
-                zIndex: 1090,
-                width: 220,
-                maxHeight: "42vh",
-                overflowY: "auto",
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-                padding: "8px 8px 10px",
-                borderRadius: 10,
-                border: "1px solid rgba(120, 170, 255, 0.34)",
-                background: "rgba(8, 14, 24, 0.82)",
-                backdropFilter: "blur(3px)",
-              }}
-            >
               <div
                 style={{
-                  color: "#99beff",
+                  width: "100%",
+                  padding: "8px 10px 10px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(114, 198, 255, 0.3)",
+                  background: "rgba(7, 13, 24, 0.84)",
+                  color: "#d9e6ff",
                   fontFamily: "'Rajdhani', sans-serif",
-                  fontSize: 11,
-                  letterSpacing: 0.6,
-                  opacity: 0.9,
-                  padding: "0 4px 2px",
+                  fontSize: 10,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
                 }}
               >
-                IMAGE NAV
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>IMAGE ANGLE</span>
+                  <span>{projectShowcaseAnglePercent.toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={PROJECT_SHOWCASE_MIN_ANGLE_PERCENT}
+                  max={PROJECT_SHOWCASE_MAX_ANGLE_PERCENT}
+                  step={1}
+                  value={projectShowcaseAnglePercent}
+                  onChange={(e) =>
+                    setProjectShowcaseAnglePercent(Number(e.target.value))
+                  }
+                />
               </div>
-              {projectShowcaseNavEntries.map((entry, index) => {
-                const active = index === projectShowcaseFocusIndex;
-                return (
-                  <button
-                    key={`${entry.id}-${index}`}
-                    onClick={() => jumpProjectShowcaseToIndex(index)}
-                    style={{
-                      padding: "6px 8px",
-                      borderRadius: 8,
-                      border: active
-                        ? "1px solid rgba(155, 220, 255, 0.78)"
-                        : "1px solid rgba(120, 165, 225, 0.32)",
-                      background: active
-                        ? "rgba(34, 92, 140, 0.88)"
-                        : "rgba(10, 16, 28, 0.78)",
-                      color: active ? "#ecf6ff" : "#c5dcff",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      fontFamily: "'Rajdhani', sans-serif",
-                      fontSize: 11,
-                      fontWeight: active ? 700 : 600,
-                      letterSpacing: 0.35,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                    title={entry.title}
-                  >
-                    {index + 1}. {entry.title}
-                  </button>
-                );
-              })}
             </div>
           )}
 
