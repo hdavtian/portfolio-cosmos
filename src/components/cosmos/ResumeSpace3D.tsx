@@ -190,6 +190,12 @@ type SkillsLatticeLinkSegment = {
   to: THREE.Vector3;
 };
 
+type SkillsLatticeLineGroup = {
+  material: THREE.LineBasicMaterial;
+  kind: "ring" | "skill";
+  category?: string;
+};
+
 // --- SHIP_DEBUG_LABELS (2026-02-03 snapshot) ---
 // Each entry is a small circle used to indicate the larger region direction.
 // 0) top
@@ -405,6 +411,7 @@ export default function ResumeSpace3D({
   const skillsLatticeRootRef = useRef<THREE.Group | null>(null);
   const skillsLatticeNodesRef = useRef<SkillsLatticeNodeRecord[]>([]);
   const skillsLatticeLineMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
+  const skillsLatticeLineGroupsRef = useRef<SkillsLatticeLineGroup[]>([]);
   const skillsLatticeLinkSegmentsRef = useRef<SkillsLatticeLinkSegment[]>([]);
   const skillsLatticeFlowPointsRef = useRef<THREE.Points | null>(null);
   const skillsLatticeFlowMetaRef = useRef<
@@ -2353,25 +2360,41 @@ export default function ResumeSpace3D({
         }
         skillsLatticeNodesRef.current.forEach((node) => {
           const pulse = 1 + Math.sin(t * 1.7 + node.phase) * 0.08;
-          const selectedBoost = selected?.mesh === node.mesh ? 1.28 : 1;
+          const isSelected = selected?.mesh === node.mesh;
+          const isRelated = !selected
+            || (selected.nodeType === "category"
+              ? node.category === selected.category
+              : node.category === selected.category || node.label === selected.label);
+          const selectedBoost = isSelected ? 1.28 : isRelated ? 1.03 : 0.96;
           node.mesh.scale.setScalar(node.baseScale * pulse * selectedBoost);
+          const bodyMat = node.mesh.material as THREE.MeshBasicMaterial;
+          const baseNodeOpacity = node.nodeType === "category" ? 0.9 : 0.82;
+          bodyMat.opacity = isRelated ? baseNodeOpacity : 0.2;
           if (node.halo?.material) {
             const hMat = node.halo.material as THREE.SpriteMaterial;
-            const focusAlpha = selected?.mesh === node.mesh ? 0.62 : 0.22;
+            const focusAlpha = isSelected ? 0.62 : isRelated ? 0.24 : 0.08;
             let rippleBoost = 0;
             if (ripple.active && rippleRadius >= 0) {
               node.mesh.getWorldPosition(worldNodePos);
               const d = worldNodePos.distanceTo(ripple.center);
               rippleBoost = Math.max(0, 1 - Math.abs(d - rippleRadius) / 14) * 0.42;
             }
-            hMat.opacity =
-              focusAlpha + Math.sin(t * 2.2 + node.phase) * 0.06 + rippleBoost;
+            hMat.opacity = THREE.MathUtils.clamp(
+              focusAlpha + Math.sin(t * 2.2 + node.phase) * 0.06 + rippleBoost,
+              0.04,
+              0.9,
+            );
           }
         });
-        skillsLatticeLineMatsRef.current.forEach((mat, idx) => {
-          const wave = 0.34 + 0.14 * Math.sin(t * 1.2 + idx * 0.7);
-          const rippleBoost = ripple.active && rippleRadius >= 0 ? 0.18 : 0;
-          mat.opacity = Math.min(0.9, wave + rippleBoost);
+        skillsLatticeLineGroupsRef.current.forEach((group, idx) => {
+          const wave = 0.3 + 0.14 * Math.sin(t * 1.15 + idx * 0.68);
+          const isRelated = !selected
+            || (group.kind === "ring"
+              ? selected.nodeType === "category"
+              : group.category === selected.category);
+          const baseOpacity = isRelated ? wave : 0.08;
+          const rippleBoost = ripple.active && rippleRadius >= 0 ? 0.12 : 0;
+          group.material.opacity = THREE.MathUtils.clamp(baseOpacity + rippleBoost, 0.04, 0.9);
         });
         const flow = skillsLatticeFlowPointsRef.current;
         const flowMeta = skillsLatticeFlowMetaRef.current;
@@ -3267,6 +3290,49 @@ export default function ResumeSpace3D({
       return sprite;
     };
     const latticeLineMats: THREE.LineBasicMaterial[] = [];
+    const latticeLineGroups: SkillsLatticeLineGroup[] = [];
+
+    const rawExperience = (resumeData as { experience?: unknown }).experience;
+    const experienceEntries = (
+      Array.isArray(rawExperience)
+        ? rawExperience
+        : Object.values((rawExperience as Record<string, unknown[]>) ?? {}).flat()
+    ) as Array<{
+      company?: string;
+      navLabel?: string;
+      positions?: Array<{ responsibilities?: string[] }>;
+    }>;
+
+    const findSkillEvidence = (skill: string): string[] => {
+      const needle = skill.trim().toLowerCase();
+      if (!needle) return [];
+      const evidence: string[] = [];
+      experienceEntries.forEach((entry) => {
+        const company = entry.navLabel || entry.company || "Experience";
+        const responsibilities = (entry.positions ?? []).flatMap(
+          (position) => position.responsibilities ?? [],
+        );
+        const match = responsibilities.find((line) => line.toLowerCase().includes(needle));
+        if (!match) return;
+        const clipped = match.length > 86 ? `${match.slice(0, 83)}...` : match;
+        evidence.push(`${company}: ${clipped}`);
+      });
+      return evidence.slice(0, 6);
+    };
+
+    const findCategoryEvidence = (skills: string[]): string[] => {
+      const companies = new Set<string>();
+      skills.forEach((skill) => {
+        findSkillEvidence(skill).forEach((line) => {
+          const company = line.split(":")[0]?.trim();
+          if (company) companies.add(company);
+        });
+      });
+      if (companies.size === 0) return [];
+      return Array.from(companies)
+        .slice(0, 6)
+        .map((company) => `Used at ${company}`);
+    };
 
     // Category ring links.
     {
@@ -3293,7 +3359,12 @@ export default function ResumeSpace3D({
           depthWrite: false,
         }),
       );
-      latticeLineMats.push(lines.material as THREE.LineBasicMaterial);
+      const ringMat = lines.material as THREE.LineBasicMaterial;
+      latticeLineMats.push(ringMat);
+      latticeLineGroups.push({
+        material: ringMat,
+        kind: "ring",
+      });
       skillsLatticeRoot.add(lines);
     }
 
@@ -3333,7 +3404,7 @@ export default function ResumeSpace3D({
         label: category,
         nodeType: "category",
         category,
-        detailItems: skills,
+        detailItems: [...skills.slice(0, 8), ...findCategoryEvidence(skills)],
         halo: catHalo ?? undefined,
         lineInfluence: idx,
       });
@@ -3378,6 +3449,7 @@ export default function ResumeSpace3D({
           skillHalo.position.copy(sPos);
           skillsLatticeRoot.add(skillHalo);
         }
+        const skillEvidence = findSkillEvidence(skill);
         latticeNodes.push({
           mesh: skillNode,
           baseScale: 1,
@@ -3385,7 +3457,9 @@ export default function ResumeSpace3D({
           label: skill,
           nodeType: "skill",
           category,
-          detailItems: [category],
+          detailItems: skillEvidence.length
+            ? [category, ...skillEvidence]
+            : [category, "No mapped evidence yet (add responsibilities with this skill term)."],
           halo: skillHalo ?? undefined,
           lineInfluence: idx + sIdx * 0.15,
         });
@@ -3412,7 +3486,13 @@ export default function ResumeSpace3D({
           depthWrite: false,
         }),
       );
-      latticeLineMats.push(skillLines.material as THREE.LineBasicMaterial);
+      const skillMatRef = skillLines.material as THREE.LineBasicMaterial;
+      latticeLineMats.push(skillMatRef);
+      latticeLineGroups.push({
+        material: skillMatRef,
+        kind: "skill",
+        category,
+      });
       skillsLatticeRoot.add(skillLines);
     });
 
@@ -3456,6 +3536,7 @@ export default function ResumeSpace3D({
     skillsLatticeRootRef.current = skillsLatticeRoot;
     skillsLatticeNodesRef.current = latticeNodes;
     skillsLatticeLineMatsRef.current = latticeLineMats;
+    skillsLatticeLineGroupsRef.current = latticeLineGroups;
     skillsLatticeLinkSegmentsRef.current = latticeLinkSegments;
     skillsLegacyBodiesRef.current = [skillsPlanet, ...skillMoonMeshes];
 
@@ -5823,6 +5904,7 @@ export default function ResumeSpace3D({
       skillsLatticeRootRef.current = null;
       skillsLatticeNodesRef.current = [];
       skillsLatticeLineMatsRef.current = [];
+      skillsLatticeLineGroupsRef.current = [];
       skillsLatticeLinkSegmentsRef.current = [];
       skillsLatticeFlowPointsRef.current = null;
       skillsLatticeFlowMetaRef.current = [];
