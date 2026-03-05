@@ -13,13 +13,10 @@ import {
 } from "./ResumeSpace3D.constants";
 import {
   attachMultiNoteOverlaysFactory,
-  createAuroraHaloTexture,
-  createCoreHaloTexture,
   createDetailTexture,
   createLabel,
   createLighting,
   createPlanetFactory,
-  createRingHaloTexture,
   createStarfieldMeshes,
   createSunMesh,
   createSunGlowTexture,
@@ -1132,8 +1129,8 @@ export default function ResumeSpace3D({
 
     projectShowcaseActiveRef.current = false;
     setProjectShowcaseActive(false);
-    projectShowcasePlayingRef.current = false;
-    setProjectShowcasePlaying(false);
+    projectShowcasePlayingRef.current = true;
+    setProjectShowcasePlaying(true);
     projectShowcaseVelocityRef.current = 0;
     projectShowcaseJumpTargetRef.current = null;
     projectShowcaseForcedFocusIndexRef.current = null;
@@ -1187,8 +1184,8 @@ export default function ResumeSpace3D({
       setProjectShowcaseRunPosition(startRun);
       projectShowcaseLastTickRef.current = performance.now();
     }
-    projectShowcasePlayingRef.current = false;
-    setProjectShowcasePlaying(false);
+    projectShowcasePlayingRef.current = true;
+    setProjectShowcasePlaying(true);
     projectShowcaseVelocityRef.current = 0;
     projectShowcaseJumpTargetRef.current = null;
     projectShowcaseForcedFocusIndexRef.current = null;
@@ -2371,17 +2368,6 @@ export default function ResumeSpace3D({
       preventDefaultTouch,
     } = sceneSetup;
 
-    // Create sprite materials/textures for halo layers
-    const auroraTexture = createAuroraHaloTexture();
-    auroraTexture.minFilter = THREE.LinearFilter;
-    auroraTexture.magFilter = THREE.LinearFilter;
-
-    const ringTexture = createRingHaloTexture();
-    ringTexture.minFilter = THREE.LinearFilter;
-    ringTexture.magFilter = THREE.LinearFilter;
-
-    const coreTexture = createCoreHaloTexture();
-
     // clickable overlay registry (planes that should be raycast-targeted)
     const overlayClickables: THREE.Object3D[] = [];
 
@@ -2458,9 +2444,6 @@ export default function ResumeSpace3D({
       items,
       orbitAnchors,
       clickablePlanets,
-      auroraTexture,
-      ringTexture,
-      coreTexture,
     });
 
     // 3. PLANETS (Sections)

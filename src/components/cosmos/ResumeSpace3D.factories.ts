@@ -451,20 +451,8 @@ export const createPlanetFactory = (deps: {
   items: OrbitItem[];
   orbitAnchors: OrbitAnchor[];
   clickablePlanets: THREE.Object3D[];
-  auroraTexture: THREE.Texture;
-  ringTexture: THREE.Texture;
-  coreTexture: THREE.Texture;
 }) => {
-  const {
-    scene,
-    textureLoader,
-    items,
-    orbitAnchors,
-    clickablePlanets,
-    auroraTexture,
-    ringTexture,
-    coreTexture,
-  } = deps;
+  const { scene, textureLoader, items, orbitAnchors, clickablePlanets } = deps;
 
   const mainOrbitInclinations: Record<string, { x: number; z: number }> = {
     experience: { x: 8, z: -4 },
@@ -566,7 +554,12 @@ export const createPlanetFactory = (deps: {
     });
 
     // Planet Mesh - Use MeshStandardMaterial for physically-based rendering (matches original)
-    const planetGeometry = new THREE.SphereGeometry(size, 32, 32);
+    const sphereSegments = parent === scene ? 48 : 64;
+    const planetGeometry = new THREE.SphereGeometry(
+      size,
+      sphereSegments,
+      sphereSegments,
+    );
     const planetMaterial = new THREE.MeshStandardMaterial({
       color: textureUrl ? 0xffffff : color,
       map: textureUrl ? textureLoader.load(textureUrl) : null,
@@ -590,99 +583,53 @@ export const createPlanetFactory = (deps: {
     planetMesh.castShadow = false;
     planetMesh.receiveShadow = false;
 
-    // Add multi-layer halo effect for hover (only for clickable planets)
-    if (sectionIndex !== undefined) {
-      // Generate random properties for this planet's halo (within 50% variance)
-      const sizeVariance = 0.75 + Math.random() * 0.5; // 0.75 to 1.25
-      const speedVariance = 0.75 + Math.random() * 0.5; // 0.75 to 1.25
-
-      // Generate random halo color - vibrant colors in cool/warm spectrum
-      const hue = Math.random(); // 0 to 1
-      let haloColor: THREE.Color;
-      if (hue < 0.33) {
-        // Cool blues/cyans
-        haloColor = new THREE.Color().setHSL(
-          0.5 + Math.random() * 0.15,
-          0.7 + Math.random() * 0.3,
-          0.6,
-        );
-      } else if (hue < 0.66) {
-        // Purples/magentas
-        haloColor = new THREE.Color().setHSL(
-          0.75 + Math.random() * 0.15,
-          0.6 + Math.random() * 0.3,
-          0.55,
-        );
-      } else {
-        // Warm oranges/yellows/greens
-        haloColor = new THREE.Color().setHSL(
-          0.15 + Math.random() * 0.25,
-          0.7 + Math.random() * 0.3,
-          0.55,
-        );
-      }
-
-      // Store random properties
-      planetMesh.userData.haloSizeVariance = sizeVariance;
-      planetMesh.userData.haloSpeedVariance = speedVariance;
-      planetMesh.userData.haloColor = haloColor;
-
-      // Create sprite-based halo layers (aurora, ring, core)
-      const auroraMaterial = new THREE.SpriteMaterial({
-        map: auroraTexture,
-        color: haloColor,
-        transparent: true,
-        opacity: 0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-      const auroraSprite = new THREE.Sprite(auroraMaterial);
-      auroraSprite.scale.set(
-        size * 4 * sizeVariance,
-        size * 4 * sizeVariance,
-        1,
-      );
-      auroraSprite.position.set(0, 0, 0);
-      planetMesh.add(auroraSprite);
-
-      const ringMaterial = new THREE.SpriteMaterial({
-        map: ringTexture,
-        color: haloColor,
-        transparent: true,
-        opacity: 0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-      const ringSprite = new THREE.Sprite(ringMaterial);
-      ringSprite.scale.set(
-        size * 2.6 * sizeVariance,
-        size * 2.6 * sizeVariance,
-        1,
-      );
-      ringSprite.position.set(0, 0, 0);
-      planetMesh.add(ringSprite);
-
-      const coreMaterial = new THREE.SpriteMaterial({
-        map: coreTexture,
-        color: new THREE.Color(1, 0.95, 0.85),
-        transparent: true,
-        opacity: 0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-      const coreSprite = new THREE.Sprite(coreMaterial);
-      coreSprite.scale.set(size * 1.2, size * 1.2, 1);
-      coreSprite.position.set(0, 0, 0);
-      planetMesh.add(coreSprite);
-
-      planetMesh.userData.auroraSprite = auroraSprite;
-      planetMesh.userData.ringSprite = ringSprite;
-      planetMesh.userData.coreSprite = coreSprite;
-      planetMesh.userData.auroraTargetOpacity = 0;
-      planetMesh.userData.ringTargetOpacity = 0;
-      planetMesh.userData.coreTargetOpacity = 0;
-      planetMesh.userData.hasHaloLayers = true;
-    }
+    // Add a subtle, neutral rim atmosphere so silhouettes look softer/natural.
+    const atmosphereScale = 1.045;
+    const atmosphereGeometry = new THREE.SphereGeometry(
+      size * atmosphereScale,
+      sphereSegments,
+      sphereSegments,
+    );
+    const atmosphereMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        rimColor: { value: new THREE.Color(0xb8c8ff) },
+        rimStrength: { value: parent === scene ? 0.105 : 0.082 },
+        rimPower: { value: 2.25 },
+      },
+      vertexShader: `
+        varying vec3 vNormal;
+        varying vec3 vViewPosition;
+        void main() {
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          vViewPosition = -mvPosition.xyz;
+          vNormal = normalize(normalMatrix * normal);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 rimColor;
+        uniform float rimStrength;
+        uniform float rimPower;
+        varying vec3 vNormal;
+        varying vec3 vViewPosition;
+        void main() {
+          float ndv = max(dot(normalize(vNormal), normalize(vViewPosition)), 0.0);
+          float fresnel = pow(1.0 - ndv, rimPower);
+          float alpha = smoothstep(0.0, 1.0, fresnel) * rimStrength;
+          gl_FragColor = vec4(rimColor, alpha);
+        }
+      `,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      side: THREE.BackSide,
+      depthWrite: false,
+    });
+    const atmosphereShell = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+    atmosphereShell.name = `${name}-atmosphere-shell`;
+    atmosphereShell.castShadow = false;
+    atmosphereShell.receiveShadow = false;
+    planetMesh.add(atmosphereShell);
+    planetMesh.userData.atmosphereShell = atmosphereShell;
 
     // Start position
     const forcedStartAngle = isMainOrbit
@@ -711,7 +658,7 @@ export const createPlanetFactory = (deps: {
     label.position.set(0, size + LABEL_Y_PADDING, 0);
     planetMesh.add(label);
 
-    // Interaction data - merge with existing userData to preserve haloSprite
+    // Interaction data
     planetMesh.userData = {
       ...planetMesh.userData,
       isPlanet: true,
