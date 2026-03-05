@@ -148,6 +148,9 @@ type ShowcasePanelRecord = {
   runPos: number;
   entry: ShowcaseEntry;
   fitMode: "contain" | "cover";
+  baseRotationY: number;
+  focusBlend: number;
+  frameMat: THREE.MeshBasicMaterial;
   imageMat: THREE.MeshBasicMaterial;
   texture: THREE.Texture | null;
   baseRepeat: THREE.Vector2;
@@ -308,14 +311,15 @@ export default function ResumeSpace3D({
     "exterior",
   );
   const spaceshipRef = useRef<THREE.Group | null>(null);
+  const sunLabelRef = useRef<THREE.Object3D | null>(null);
   const projectShowcaseRootRef = useRef<THREE.Group | null>(null);
   const [projectShowcaseReady, setProjectShowcaseReady] = useState(false);
   const [projectShowcaseActive, setProjectShowcaseActive] = useState(false);
-  const [projectShowcasePlaying, setProjectShowcasePlaying] = useState(true);
+  const [projectShowcasePlaying, setProjectShowcasePlaying] = useState(false);
   const [projectShowcaseFocusIndex, setProjectShowcaseFocusIndex] = useState(0);
   const [, setProjectShowcaseViewportTick] = useState(0);
   const projectShowcaseActiveRef = useRef(false);
-  const projectShowcasePlayingRef = useRef(true);
+  const projectShowcasePlayingRef = useRef(false);
   const projectShowcaseFocusIndexRef = useRef(0);
   const projectShowcaseLastTickRef = useRef<number | null>(null);
   const projectShowcasePanelsRef = useRef<ShowcasePanelRecord[]>([]);
@@ -954,6 +958,9 @@ export default function ResumeSpace3D({
     if (showcaseRoot) {
       showcaseRoot.visible = false;
     }
+    if (sunLabelRef.current) {
+      sunLabelRef.current.visible = true;
+    }
     if (sceneRef.current.camera) {
       sceneRef.current.camera.layers.disable(PROJECT_SHOWCASE_LAYER);
     }
@@ -980,8 +987,8 @@ export default function ResumeSpace3D({
 
     projectShowcaseActiveRef.current = false;
     setProjectShowcaseActive(false);
-    projectShowcasePlayingRef.current = true;
-    setProjectShowcasePlaying(true);
+    projectShowcasePlayingRef.current = false;
+    setProjectShowcasePlaying(false);
     projectShowcaseLastTickRef.current = null;
     pendingProjectShowcaseEntryRef.current = false;
     vlog("🛰️ Project Showcase exited");
@@ -1014,6 +1021,9 @@ export default function ResumeSpace3D({
     if (spaceshipRef.current) spaceshipRef.current.visible = false;
 
     showcaseRoot.visible = true;
+    if (sunLabelRef.current) {
+      sunLabelRef.current.visible = false;
+    }
 
     projectShowcasePrevControlsEnabledRef.current = controls.enabled;
     controls.enabled = false;
@@ -1025,8 +1035,8 @@ export default function ResumeSpace3D({
       setProjectShowcaseRunPosition(startRun);
       projectShowcaseLastTickRef.current = performance.now();
     }
-    projectShowcasePlayingRef.current = true;
-    setProjectShowcasePlaying(true);
+    projectShowcasePlayingRef.current = false;
+    setProjectShowcasePlaying(false);
 
     projectShowcaseActiveRef.current = true;
     setProjectShowcaseActive(true);
@@ -1616,6 +1626,20 @@ export default function ResumeSpace3D({
         setProjectShowcaseRunPosition(nextRun);
       }
 
+      const focusIndex = THREE.MathUtils.clamp(
+        projectShowcaseFocusIndexRef.current,
+        0,
+        Math.max(0, projectShowcasePanelsRef.current.length - 1),
+      );
+      projectShowcasePanelsRef.current.forEach((panel, idx) => {
+        const target = idx === focusIndex ? 1 : 0;
+        panel.focusBlend = THREE.MathUtils.damp(panel.focusBlend, target, 8, dt);
+        panel.group.rotation.y = panel.baseRotationY;
+        const scaleBoost = 1 + panel.focusBlend * 0.055;
+        panel.group.scale.setScalar(scaleBoost);
+        panel.frameMat.opacity = 0.22 + panel.focusBlend * 0.26;
+      });
+
       const run = projectShowcaseRunPosRef.current;
       const sway = Math.sin(run * 0.025) * 1.2;
       const rootPos = new THREE.Vector3();
@@ -2083,6 +2107,7 @@ export default function ResumeSpace3D({
     );
     sunLabel.position.set(0, SUN_LABEL_Y, 0);
     sunMesh.add(sunLabel);
+    sunLabelRef.current = sunLabel;
 
     // 2. HELPER: Create Planet
     const createPlanet = createPlanetFactory({
@@ -3037,15 +3062,17 @@ export default function ResumeSpace3D({
               side * panelOffset,
             );
           }
-          // Force deterministic inward-facing card orientation per side.
-          // This prevents some cards from showing the mirrored back face.
+          // Keep a fixed readable angle for all cards (no focus swing animation).
+          let baseRotationY = 0;
+          const readableCant = 0.62;
           if (runAxis === "z") {
-            // Cards sit on +/-X walls and should face corridor center.
-            panelGroup.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+            const inward = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+            baseRotationY = inward + (side < 0 ? readableCant : -readableCant);
           } else {
-            // Cards sit on +/-Z walls and should face corridor center.
-            panelGroup.rotation.y = side < 0 ? 0 : Math.PI;
+            const inward = side < 0 ? 0 : Math.PI;
+            baseRotationY = inward + (side < 0 ? -readableCant : readableCant);
           }
+          panelGroup.rotation.y = baseRotationY;
 
           const frame = new THREE.Mesh(
             new THREE.PlaneGeometry(panelWidth * 1.03, panelHeight * 1.08),
@@ -3056,6 +3083,7 @@ export default function ResumeSpace3D({
               side: THREE.DoubleSide,
             }),
           );
+          const frameMat = frame.material as THREE.MeshBasicMaterial;
           frame.position.z = -0.15;
 
           const imageMat = new THREE.MeshBasicMaterial({
@@ -3073,6 +3101,9 @@ export default function ResumeSpace3D({
             runPos,
             entry,
             fitMode,
+            baseRotationY,
+            focusBlend: 0,
+            frameMat,
             imageMat,
             texture: null,
             baseRepeat: new THREE.Vector2(1, 1),
@@ -4957,30 +4988,32 @@ export default function ResumeSpace3D({
             </div>
           )}
 
-          {/* Ship Control Bar — view controls (ship auto-engages) */}
-          <ShipControlBar
-            phase={shipUIPhase}
-            activeView={insideShip ? shipViewMode : "exterior"}
-            onLeaveShip={handleLeaveShip}
-            onViewChange={handleShipViewChange}
-            onRollStart={handleRollStart}
-            onRollStop={handleRollStop}
-            rollAngle={displayRollAngle}
-            isFollowingSD={followingStarDestroyer}
-            onDisengage={stopFollowingStarDestroyer}
-            zoomLevel={options.spaceFollowDistance ?? FOLLOW_DISTANCE}
-            onZoomChange={overlayContent ? undefined : (value) => {
-              if (onOptionsChange) {
-                onOptionsChange({ ...options, spaceFollowDistance: value });
-              }
-            }}
-            orbitPhase={orbitPhase}
-            onLeaveOrbit={() => {
-              exitOrbit();
-              setOrbitPhase("exiting");
-              shipLog("Departing orbit", "orbit");
-            }}
-          />
+          {/* Ship Control Bar — hidden while Project Showcase is active */}
+          {!projectShowcaseActive && (
+            <ShipControlBar
+              phase={shipUIPhase}
+              activeView={insideShip ? shipViewMode : "exterior"}
+              onLeaveShip={handleLeaveShip}
+              onViewChange={handleShipViewChange}
+              onRollStart={handleRollStart}
+              onRollStop={handleRollStop}
+              rollAngle={displayRollAngle}
+              isFollowingSD={followingStarDestroyer}
+              onDisengage={stopFollowingStarDestroyer}
+              zoomLevel={options.spaceFollowDistance ?? FOLLOW_DISTANCE}
+              onZoomChange={overlayContent ? undefined : (value) => {
+                if (onOptionsChange) {
+                  onOptionsChange({ ...options, spaceFollowDistance: value });
+                }
+              }}
+              orbitPhase={orbitPhase}
+              onLeaveOrbit={() => {
+                exitOrbit();
+                setOrbitPhase("exiting");
+                shipLog("Departing orbit", "orbit");
+              }}
+            />
+          )}
 
           {/* Ship Terminal — top-right CRT log + command input */}
           <ShipTerminal
