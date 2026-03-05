@@ -67,10 +67,6 @@ import {
   EXPERIENCE_RADIUS,
   SKILLS_ORBIT,
   SKILLS_RADIUS,
-  PROJECTS_ORBIT,
-  PROJECTS_RADIUS,
-  SCROLLING_MOON_ORBIT,
-  SCROLLING_MOON_RADIUS,
   EXP_MOON_ORBIT_BASE,
   EXP_MOON_ORBIT_STEP,
   EXP_MOON_RADIUS,
@@ -95,9 +91,9 @@ import {
   PROJ_WANDER_RADIUS,
   SUN_WANDER_RADIUS,
   NAV_CAMERA_BEHIND,
+  SKYFIELD_RADIUS,
   EXP_FOCUS_DIST,
   SKILLS_FOCUS_DIST,
-  PROJ_FOCUS_DIST,
   CINE_DURATION_DIVISOR,
   orbitDebug,
 } from "./scaleConfig";
@@ -132,9 +128,11 @@ const PROJECT_SHOWCASE_CARD_LAYER = 1;
 const PROJECT_SHOWCASE_MIN_ANGLE_PERCENT = 0;
 const PROJECT_SHOWCASE_MAX_ANGLE_PERCENT = 100;
 const PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT = 25;
-const PROJECT_SHOWCASE_MAX_CANT_RADIANS = 0.62;
 const PROJECT_SHOWCASE_SHOW_IMAGE_MANIPULATION_CONTROLS = false;
 const PROJECT_SHOWCASE_NAV_STOP_BACK_OFFSET = 15;
+const PROJECT_SHOWCASE_USE_NEBULA_REALM = true;
+const PROJECT_SHOWCASE_NEBULA_GLB_PATH = "/models/nebula/nebula_skybox_16k.glb";
+const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const PROJECT_SHOWCASE_FILTER_OPTIONS = [
   "Angular",
   "C#",
@@ -331,6 +329,9 @@ export default function ResumeSpace3D({
   const [projectShowcaseReady, setProjectShowcaseReady] = useState(false);
   const [projectShowcaseActive, setProjectShowcaseActive] = useState(false);
   const [projectShowcasePlaying, setProjectShowcasePlaying] = useState(false);
+  const [cosmosIntroOverlayOpacity, setCosmosIntroOverlayOpacity] = useState(0);
+  const [projectShowcaseEntryOverlayOpacity, setProjectShowcaseEntryOverlayOpacity] =
+    useState(0);
   const [projectShowcaseLeverValue, setProjectShowcaseLeverValue] = useState(0);
   const [projectShowcaseAnglePercent, setProjectShowcaseAnglePercentState] =
     useState(PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT);
@@ -368,6 +369,25 @@ export default function ResumeSpace3D({
   const projectShowcaseRunPosRef = useRef(0);
   const projectShowcasePrevControlsEnabledRef = useRef(true);
   const pendingProjectShowcaseEntryRef = useRef(false);
+  const projectShowcaseAwaitingProjectsArrivalRef = useRef(false);
+  const projectShowcaseSawProjectsTravelRef = useRef(false);
+  const projectShowcaseEntrySequenceRef = useRef<{
+    active: boolean;
+    raf: number | null;
+  }>({ active: false, raf: null });
+  const projectShowcaseExitSequenceRef = useRef<{
+    active: boolean;
+    raf: number | null;
+  }>({ active: false, raf: null });
+  const projectShowcaseQueuedNavRef = useRef<{
+    targetId: string;
+    targetType: "section" | "moon";
+  } | null>(null);
+  const projectShowcaseWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
+  const projectShowcaseNebulaRootRef = useRef<THREE.Object3D | null>(null);
+  const projectShowcaseAngleIntroRef = useRef<{
+    raf: number | null;
+  }>({ raf: null });
   const projectShowcasePrevStateRef = useRef<{
     followingSpaceship: boolean;
     insideShip: boolean;
@@ -377,6 +397,7 @@ export default function ResumeSpace3D({
   const spaceshipCameraOffsetRef = useRef(
     new THREE.Vector3(0, FOLLOW_HEIGHT, FOLLOW_DISTANCE),
   );
+  const cosmosIntroPlayedRef = useRef(false);
 
 
   const shipStagingModeRef = useRef(false);
@@ -631,13 +652,6 @@ export default function ResumeSpace3D({
       icon: "🌕",
       parentId: "experience",
     })),
-    {
-      id: PROJECT_SHOWCASE_NAV_ID,
-      label: "Project Showcase",
-      type: "moon" as const,
-      icon: "🛰️",
-      parentId: "projects",
-    },
   ];
 
   // RULES
@@ -827,6 +841,12 @@ export default function ResumeSpace3D({
     optionsRef,
     followingStarDestroyerRef,
     setFollowingStarDestroyer,
+    resolveSpecialSectionTarget: (targetId) => {
+      if (targetId !== "projects") return null;
+      return projectShowcaseWorldAnchorRef.current
+        ? projectShowcaseWorldAnchorRef.current.clone()
+        : null;
+    },
   });
 
   const setProjectShowcaseFocus = useCallback((index: number) => {
@@ -885,6 +905,28 @@ export default function ResumeSpace3D({
     projectShowcaseAnglePercentRef.current = clamped;
     setProjectShowcaseAnglePercentState(clamped);
   }, []);
+
+  function applyProjectShowcaseNebulaFade(alphaValue: number) {
+    const nebulaRoot = projectShowcaseNebulaRootRef.current;
+    if (!nebulaRoot) return;
+    const alpha = THREE.MathUtils.clamp(alphaValue, 0, 1);
+    nebulaRoot.visible = alpha > 0.001;
+    nebulaRoot.traverse((obj: THREE.Object3D) => {
+      const mesh = obj as THREE.Mesh;
+      if (!(mesh as any).isMesh || !mesh.material) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      mats.forEach((mat) => {
+        const m = mat as THREE.Material & {
+          transparent?: boolean;
+          opacity?: number;
+          userData?: Record<string, unknown>;
+        };
+        const base = Number((m.userData?.nebulaBaseOpacity as number) ?? 1);
+        m.transparent = true;
+        m.opacity = base * alpha;
+      });
+    });
+  }
 
   const getFocusedProjectShowcasePanel = useCallback(() => {
     const panels = projectShowcasePanelsRef.current;
@@ -1096,6 +1138,22 @@ export default function ResumeSpace3D({
   }, [endProjectShowcaseLeverDrag, moveProjectShowcaseLeverDrag]);
 
   const exitProjectShowcase = useCallback(() => {
+    if (projectShowcaseAngleIntroRef.current.raf !== null) {
+      cancelAnimationFrame(projectShowcaseAngleIntroRef.current.raf);
+      projectShowcaseAngleIntroRef.current.raf = null;
+    }
+    if (projectShowcaseExitSequenceRef.current.raf !== null) {
+      cancelAnimationFrame(projectShowcaseExitSequenceRef.current.raf);
+      projectShowcaseExitSequenceRef.current.raf = null;
+    }
+    projectShowcaseExitSequenceRef.current.active = false;
+    projectShowcaseQueuedNavRef.current = null;
+    if (projectShowcaseEntrySequenceRef.current.raf !== null) {
+      cancelAnimationFrame(projectShowcaseEntrySequenceRef.current.raf);
+      projectShowcaseEntrySequenceRef.current.raf = null;
+    }
+    projectShowcaseEntrySequenceRef.current.active = false;
+    setProjectShowcaseEntryOverlayOpacity(0);
     const showcaseRoot = projectShowcaseRootRef.current;
     if (showcaseRoot) {
       showcaseRoot.visible = false;
@@ -1140,10 +1198,27 @@ export default function ResumeSpace3D({
     setProjectShowcaseLever(0);
     projectShowcaseLastTickRef.current = null;
     pendingProjectShowcaseEntryRef.current = false;
+    projectShowcaseAwaitingProjectsArrivalRef.current = false;
+    projectShowcaseSawProjectsTravelRef.current = false;
     vlog("🛰️ Project Showcase exited");
   }, [setProjectShowcaseLever, vlog]);
 
   const enterProjectShowcase = useCallback(() => {
+    if (projectShowcaseAngleIntroRef.current.raf !== null) {
+      cancelAnimationFrame(projectShowcaseAngleIntroRef.current.raf);
+      projectShowcaseAngleIntroRef.current.raf = null;
+    }
+    if (projectShowcaseExitSequenceRef.current.raf !== null) {
+      cancelAnimationFrame(projectShowcaseExitSequenceRef.current.raf);
+      projectShowcaseExitSequenceRef.current.raf = null;
+    }
+    projectShowcaseExitSequenceRef.current.active = false;
+    projectShowcaseQueuedNavRef.current = null;
+    if (projectShowcaseEntrySequenceRef.current.raf !== null) {
+      cancelAnimationFrame(projectShowcaseEntrySequenceRef.current.raf);
+      projectShowcaseEntrySequenceRef.current.raf = null;
+    }
+    projectShowcaseEntrySequenceRef.current.active = false;
     const showcaseRoot = projectShowcaseRootRef.current;
     const controls = sceneRef.current.controls;
     const camera = sceneRef.current.camera;
@@ -1184,8 +1259,8 @@ export default function ResumeSpace3D({
       setProjectShowcaseRunPosition(startRun);
       projectShowcaseLastTickRef.current = performance.now();
     }
-    projectShowcasePlayingRef.current = true;
-    setProjectShowcasePlaying(true);
+    projectShowcasePlayingRef.current = false;
+    setProjectShowcasePlaying(false);
     projectShowcaseVelocityRef.current = 0;
     projectShowcaseJumpTargetRef.current = null;
     projectShowcaseForcedFocusIndexRef.current = null;
@@ -1197,8 +1272,15 @@ export default function ResumeSpace3D({
     projectShowcaseActiveRef.current = true;
     setProjectShowcaseActive(true);
     pendingProjectShowcaseEntryRef.current = false;
+    projectShowcaseAwaitingProjectsArrivalRef.current = false;
+    projectShowcaseSawProjectsTravelRef.current = false;
+    startProjectShowcaseAngleIntroSequence();
     vlog("🛰️ Entered Project Showcase");
-  }, [setProjectShowcaseLever, setProjectShowcaseRunPosition, vlog]);
+  }, [
+    setProjectShowcaseLever,
+    setProjectShowcaseRunPosition,
+    vlog,
+  ]);
 
   const toggleProjectShowcasePlayback = useCallback(() => {
     const next = !projectShowcasePlayingRef.current;
@@ -1211,6 +1293,403 @@ export default function ResumeSpace3D({
       setProjectShowcaseLever(0);
     }
   }, [setProjectShowcaseLever]);
+
+  function startProjectShowcaseAngleIntroSequence() {
+    if (projectShowcaseAngleIntroRef.current.raf !== null) {
+      cancelAnimationFrame(projectShowcaseAngleIntroRef.current.raf);
+      projectShowcaseAngleIntroRef.current.raf = null;
+    }
+    // Step 1: immediately parallel to trench wall.
+    setProjectShowcaseAnglePercent(0);
+    projectShowcasePlayingRef.current = false;
+    setProjectShowcasePlaying(false);
+
+    const holdBeforeAngleMs = 2000;
+    const angleAnimMs = 1000;
+    const holdAfterAngleMs = 1000;
+    const totalMs = holdBeforeAngleMs + angleAnimMs + holdAfterAngleMs;
+    const startedAt = performance.now();
+    const tick = () => {
+      if (!projectShowcaseActiveRef.current) {
+        projectShowcaseAngleIntroRef.current.raf = null;
+        return;
+      }
+      const elapsed = performance.now() - startedAt;
+      if (elapsed < holdBeforeAngleMs) {
+        // Step 1: hold for 2s with images parallel to trench walls.
+        setProjectShowcaseAnglePercent(0);
+      } else if (elapsed < holdBeforeAngleMs + angleAnimMs) {
+        // Step 2: animate to 50% over 1s.
+        const t = THREE.MathUtils.clamp(
+          (elapsed - holdBeforeAngleMs) / angleAnimMs,
+          0,
+          1,
+        );
+        const eased = t * t * (3 - 2 * t);
+        setProjectShowcaseAnglePercent(THREE.MathUtils.lerp(0, 50, eased));
+      } else {
+        // Step 3: hold at 50% for 1s.
+        setProjectShowcaseAnglePercent(50);
+      }
+
+      if (elapsed >= totalMs) {
+        // Step 4: start autoplay after full choreography.
+        projectShowcasePlayingRef.current = true;
+        setProjectShowcasePlaying(true);
+        projectShowcaseAngleIntroRef.current.raf = null;
+        return;
+      }
+      projectShowcaseAngleIntroRef.current.raf = requestAnimationFrame(tick);
+    };
+    projectShowcaseAngleIntroRef.current.raf = requestAnimationFrame(tick);
+  }
+
+  const startProjectShowcaseEntrySequence = useCallback(() => {
+    if (projectShowcaseActiveRef.current) return;
+    if (projectShowcaseEntrySequenceRef.current.active) return;
+    const showcaseRoot = projectShowcaseRootRef.current;
+    const controls = sceneRef.current.controls;
+    const camera = sceneRef.current.camera;
+    const track = projectShowcaseTrackRef.current;
+    if (!showcaseRoot || !controls || !camera || !track) {
+      enterProjectShowcase();
+      return;
+    }
+
+    pendingProjectShowcaseEntryRef.current = false;
+    projectShowcaseAwaitingProjectsArrivalRef.current = false;
+    projectShowcaseSawProjectsTravelRef.current = false;
+    projectShowcaseEntrySequenceRef.current.active = true;
+    setProjectShowcaseEntryOverlayOpacity(0);
+    showcaseRoot.visible = true;
+    camera.layers.enable(PROJECT_SHOWCASE_LAYER);
+    controls.enabled = false;
+    setFollowingSpaceship(false);
+    followingSpaceshipRef.current = false;
+    setFollowingStarDestroyer(false);
+    followingStarDestroyerRef.current = false;
+    setInsideShip(false);
+    insideShipRef.current = false;
+    setShipViewMode("exterior");
+    shipViewModeRef.current = "exterior";
+    if (shipCinematicRef.current) {
+      shipCinematicRef.current.active = false;
+    }
+
+    const rootPos = new THREE.Vector3();
+    showcaseRoot.getWorldPosition(rootPos);
+    const run = track.minRun + 8;
+    const sway = Math.sin(run * 0.025) * 1.2;
+    const travelAxis =
+      track.axis === "z" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+    const crossAxis =
+      track.axis === "z" ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, -1);
+    const trenchCam = new THREE.Vector3();
+    const trenchTarget = new THREE.Vector3();
+    if (track.axis === "z") {
+      trenchCam.set(
+        rootPos.x + track.centerCross + sway,
+        rootPos.y + track.cameraHeight,
+        rootPos.z + run,
+      );
+      trenchTarget.set(
+        rootPos.x + track.centerCross,
+        rootPos.y + track.cameraHeight - 0.3,
+        rootPos.z + run + track.lookAhead,
+      );
+    } else {
+      trenchCam.set(
+        rootPos.x + run,
+        rootPos.y + track.cameraHeight,
+        rootPos.z + track.centerCross + sway,
+      );
+      trenchTarget.set(
+        rootPos.x + run + track.lookAhead,
+        rootPos.y + track.cameraHeight - 0.3,
+        rootPos.z + track.centerCross,
+      );
+    }
+
+    const startCam = camera.position.clone();
+    const startTarget = new THREE.Vector3();
+    const controlsAny = controls as unknown as {
+      getTarget?: (out: THREE.Vector3) => void;
+    };
+    if (controlsAny.getTarget) {
+      controlsAny.getTarget(startTarget);
+    } else {
+      const fallbackDir = new THREE.Vector3();
+      camera.getWorldDirection(fallbackDir);
+      startTarget.copy(startCam).addScaledVector(fallbackDir, 24);
+    }
+
+    // Road-to-horizon style final: long, mostly level approach from behind.
+    const finalApproachDist = track.lookAhead * 5.8;
+    const approachCam = trenchCam
+      .clone()
+      .addScaledVector(travelAxis, -finalApproachDist)
+      .addScaledVector(crossAxis, 1.2)
+      .add(new THREE.Vector3(0, 5.2, 0));
+    const approachTarget = trenchTarget
+      .clone()
+      .addScaledVector(travelAxis, -finalApproachDist * 0.26)
+      .addScaledVector(crossAxis, 0.45)
+      .add(new THREE.Vector3(0, 1.1, 0));
+    // Hold near-horizon altitude for most of the entry run.
+    const horizonY = THREE.MathUtils.lerp(startCam.y, trenchCam.y + 5.2, 0.14);
+    approachCam.y = horizonY;
+    approachTarget.y = horizonY - 0.25;
+
+    const ship = spaceshipRef.current;
+    if (ship) ship.visible = true;
+
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+    const smoothstep = (t: number) => t * t * (3 - 2 * t);
+    const durationMs = 4400;
+    const phaseSplit = 0.84;
+    const startedAt = performance.now();
+    const tempCam = new THREE.Vector3();
+    const tempTarget = new THREE.Vector3();
+    vlog("🎬 Project Showcase entry sequence start");
+    const tick = () => {
+      if (!projectShowcaseEntrySequenceRef.current.active) return;
+      const elapsed = performance.now() - startedAt;
+      const t = THREE.MathUtils.clamp(elapsed / durationMs, 0, 1);
+      if (t < phaseSplit) {
+        const p = easeOutCubic(t / phaseSplit);
+        tempCam.lerpVectors(startCam, approachCam, p);
+        tempTarget.lerpVectors(startTarget, approachTarget, p);
+      } else {
+        const p = smoothstep((t - phaseSplit) / (1 - phaseSplit));
+        tempCam.lerpVectors(approachCam, trenchCam, p);
+        tempTarget.lerpVectors(approachTarget, trenchTarget, p);
+      }
+      controls.setLookAt(
+        tempCam.x,
+        tempCam.y,
+        tempCam.z,
+        tempTarget.x,
+        tempTarget.y,
+        tempTarget.z,
+        false,
+      );
+
+      if (ship) {
+        const shipForward = tempTarget.clone().sub(tempCam).normalize();
+        const shipPos = tempCam
+          .clone()
+          .addScaledVector(shipForward, 8.4)
+          .add(new THREE.Vector3(0, -1.8, 0));
+        const glideNoseDown = THREE.MathUtils.lerp(-0.28, -0.06, t);
+        const shipAim = shipPos
+          .clone()
+          .addScaledVector(shipForward, 18)
+          .add(new THREE.Vector3(0, -glideNoseDown, 0));
+        ship.position.copy(shipPos);
+        const lookMat = new THREE.Matrix4();
+        lookMat.lookAt(shipPos, shipAim, new THREE.Vector3(0, 1, 0));
+        ship.quaternion.setFromRotationMatrix(lookMat);
+        const forwardOffset = ship.userData?.forwardOffset as
+          | THREE.Quaternion
+          | undefined;
+        if (forwardOffset) ship.quaternion.multiply(forwardOffset);
+      }
+
+      const overlayOpacity =
+        t < 0.78
+          ? THREE.MathUtils.lerp(0.02, 0.16, t / 0.78)
+          : THREE.MathUtils.lerp(0.16, 0.9, (t - 0.78) / 0.22);
+      setProjectShowcaseEntryOverlayOpacity(overlayOpacity);
+      const nebulaFade = THREE.MathUtils.clamp((t - 0.06) / 0.58, 0, 1);
+      applyProjectShowcaseNebulaFade(nebulaFade);
+
+      if (t >= 1) {
+        vlog("🎬 Project Showcase entry sequence complete");
+        applyProjectShowcaseNebulaFade(1);
+        enterProjectShowcase();
+        window.setTimeout(() => {
+          setProjectShowcaseEntryOverlayOpacity(0);
+          projectShowcaseEntrySequenceRef.current.active = false;
+          projectShowcaseEntrySequenceRef.current.raf = null;
+        }, 180);
+        return;
+      }
+      projectShowcaseEntrySequenceRef.current.raf = requestAnimationFrame(tick);
+    };
+
+    projectShowcaseEntrySequenceRef.current.raf = requestAnimationFrame(tick);
+  }, [
+    enterProjectShowcase,
+    setFollowingStarDestroyer,
+    setProjectShowcaseEntryOverlayOpacity,
+  ]);
+
+  const startProjectShowcaseExitSequence = useCallback(
+    (targetId: string, targetType: "section" | "moon") => {
+      projectShowcaseQueuedNavRef.current = { targetId, targetType };
+      if (projectShowcaseExitSequenceRef.current.active) return true;
+      if (!projectShowcaseActiveRef.current) return false;
+
+      const showcaseRoot = projectShowcaseRootRef.current;
+      const controls = sceneRef.current.controls;
+      const camera = sceneRef.current.camera;
+      const track = projectShowcaseTrackRef.current;
+      if (!showcaseRoot || !controls || !camera || !track) {
+        exitProjectShowcase();
+        return false;
+      }
+
+      if (projectShowcaseEntrySequenceRef.current.raf !== null) {
+        cancelAnimationFrame(projectShowcaseEntrySequenceRef.current.raf);
+        projectShowcaseEntrySequenceRef.current.raf = null;
+      }
+      projectShowcaseEntrySequenceRef.current.active = false;
+      projectShowcaseExitSequenceRef.current.active = true;
+      setFollowingSpaceship(false);
+      followingSpaceshipRef.current = false;
+      setInsideShip(false);
+      insideShipRef.current = false;
+      setShipViewMode("exterior");
+      shipViewModeRef.current = "exterior";
+      if (shipCinematicRef.current) {
+        shipCinematicRef.current.active = false;
+      }
+
+      projectShowcasePlayingRef.current = false;
+      setProjectShowcasePlaying(false);
+      projectShowcaseVelocityRef.current = 0;
+      projectShowcaseJumpTargetRef.current = null;
+
+      const rootPos = new THREE.Vector3();
+      showcaseRoot.getWorldPosition(rootPos);
+      const startCam = camera.position.clone();
+      const startTarget = new THREE.Vector3();
+      const controlsAny = controls as unknown as {
+        getTarget?: (out: THREE.Vector3) => void;
+      };
+      if (controlsAny.getTarget) {
+        controlsAny.getTarget(startTarget);
+      } else {
+        startTarget
+          .copy(startCam)
+          .add(track.axis === "z" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0))
+          .add(new THREE.Vector3(0, -1.2, 0));
+      }
+      const flightDir = startTarget.clone().sub(startCam).normalize();
+      if (flightDir.lengthSq() < 1e-4) {
+        flightDir.copy(track.axis === "z" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0));
+      }
+
+      const pullUpCam = startCam
+        .clone()
+        .addScaledVector(flightDir, track.lookAhead * 0.95)
+        .add(new THREE.Vector3(0, 12, 0));
+      const pullUpTarget = startTarget
+        .clone()
+        .addScaledVector(flightDir, track.lookAhead * 1.8)
+        .add(new THREE.Vector3(0, 2, 0));
+      const jumpCam = pullUpCam
+        .clone()
+        .addScaledVector(flightDir, track.lookAhead * 2.35)
+        .add(new THREE.Vector3(0, 10, 0));
+      const jumpTarget = jumpCam
+        .clone()
+        .addScaledVector(flightDir, track.lookAhead * 2.5)
+        .add(new THREE.Vector3(0, 1, 0));
+      const ship = spaceshipRef.current;
+      if (ship) ship.visible = true;
+      applyProjectShowcaseNebulaFade(1);
+
+      const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+      const smoothstep = (t: number) => t * t * (3 - 2 * t);
+      const durationMs = 2400;
+      const split = 0.62;
+      const startedAt = performance.now();
+      const tempCam = new THREE.Vector3();
+      const tempTarget = new THREE.Vector3();
+      vlog("🎬 Project Showcase exit sequence start");
+      const tick = () => {
+        if (!projectShowcaseExitSequenceRef.current.active) return;
+        const elapsed = performance.now() - startedAt;
+        const t = THREE.MathUtils.clamp(elapsed / durationMs, 0, 1);
+        if (t < split) {
+          const p = easeOutCubic(t / split);
+          tempCam.lerpVectors(startCam, pullUpCam, p);
+          tempTarget.lerpVectors(startTarget, pullUpTarget, p);
+        } else {
+          const p = smoothstep((t - split) / (1 - split));
+          tempCam.lerpVectors(pullUpCam, jumpCam, p);
+          tempTarget.lerpVectors(pullUpTarget, jumpTarget, p);
+        }
+        controls.setLookAt(
+          tempCam.x,
+          tempCam.y,
+          tempCam.z,
+          tempTarget.x,
+          tempTarget.y,
+          tempTarget.z,
+          false,
+        );
+        if (ship) {
+          const shipForward = tempTarget.clone().sub(tempCam).normalize();
+          const shipPos = tempCam
+            .clone()
+            .addScaledVector(shipForward, 8.8)
+            .add(new THREE.Vector3(0, -2.0, 0));
+          const climbNoseUp = THREE.MathUtils.lerp(1.4, 5.2, t);
+          const shipAim = shipPos
+            .clone()
+            .addScaledVector(shipForward, 18)
+            .add(new THREE.Vector3(0, climbNoseUp, 0));
+          ship.position.copy(shipPos);
+          const lookMat = new THREE.Matrix4();
+          lookMat.lookAt(shipPos, shipAim, new THREE.Vector3(0, 1, 0));
+          ship.quaternion.setFromRotationMatrix(lookMat);
+          const forwardOffset = ship.userData?.forwardOffset as
+            | THREE.Quaternion
+            | undefined;
+          if (forwardOffset) ship.quaternion.multiply(forwardOffset);
+        }
+
+        const overlayOpacity = THREE.MathUtils.lerp(0.08, 0.72, t);
+        setProjectShowcaseEntryOverlayOpacity(overlayOpacity);
+
+        if (t >= 1) {
+          projectShowcaseExitSequenceRef.current.active = false;
+          projectShowcaseExitSequenceRef.current.raf = null;
+          const queued = projectShowcaseQueuedNavRef.current;
+          projectShowcaseQueuedNavRef.current = null;
+          exitProjectShowcase();
+          setProjectShowcaseEntryOverlayOpacity(0);
+          if (queued) {
+            setFollowingSpaceship(true);
+            followingSpaceshipRef.current = true;
+            if (!manualFlightModeRef.current) {
+              handleAutopilotNavigation(queued.targetId, queued.targetType);
+            } else {
+              const fallbackTarget =
+                queued.targetType === "moon"
+                  ? `experience-${queued.targetId}`
+                  : queued.targetId;
+              handleNavigationRef.current?.(fallbackTarget);
+            }
+          }
+          vlog("🎬 Project Showcase exit sequence complete");
+          return;
+        }
+        projectShowcaseExitSequenceRef.current.raf = requestAnimationFrame(tick);
+      };
+
+      projectShowcaseExitSequenceRef.current.raf = requestAnimationFrame(tick);
+      return true;
+    },
+    [
+      exitProjectShowcase,
+      handleAutopilotNavigation,
+      setProjectShowcaseEntryOverlayOpacity,
+      vlog,
+    ],
+  );
 
   const getProjectShowcaseStopRunForIndex = useCallback((index: number) => {
     const panels = projectShowcasePanelsRef.current;
@@ -1276,8 +1755,8 @@ export default function ResumeSpace3D({
   const handleExperienceCompanyNavigation = useCallback(
     async (companyId: string) => {
       if (!companyId) return;
-      if (projectShowcaseActiveRef.current) {
-        exitProjectShowcase();
+      if (startProjectShowcaseExitSequence(companyId, "moon")) {
+        return;
       }
 
       // If already orbiting this moon, ignore — don't re-trigger orbit.
@@ -1324,14 +1803,14 @@ export default function ResumeSpace3D({
       shipLog,
       debugLog,
       captureMoonDepartureContext,
-      exitProjectShowcase,
+      startProjectShowcaseExitSequence,
     ],
   );
 
   const handleQuickNav = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
-      if (projectShowcaseActiveRef.current) {
-        exitProjectShowcase();
+      if (startProjectShowcaseExitSequence(targetId, targetType)) {
+        return;
       }
       // Exit orbit if currently orbiting
       if (isOrbiting()) {
@@ -1364,7 +1843,7 @@ export default function ResumeSpace3D({
       exitOrbit,
       shipLog,
       captureMoonDepartureContext,
-      exitProjectShowcase,
+      startProjectShowcaseExitSequence,
     ],
   );
 
@@ -1598,22 +2077,42 @@ export default function ResumeSpace3D({
   const handleCockpitNavigate = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
       vlog(`🎯 Cockpit nav → ${targetType}: ${targetId}`);
-      if (targetId === PROJECT_SHOWCASE_NAV_ID) {
+      if (targetId === "projects" || targetId === PROJECT_SHOWCASE_NAV_ID) {
         if (!projectShowcaseReady) {
           vlog("⚠️ Project Showcase is loading");
           return;
         }
+        setFollowingSpaceship(true);
+        followingSpaceshipRef.current = true;
+        setInsideShip(false);
+        insideShipRef.current = false;
+        setShipViewMode("exterior");
+        shipViewModeRef.current = "exterior";
+        if (spaceshipRef.current) spaceshipRef.current.visible = true;
         if (projectShowcaseActiveRef.current) {
           exitProjectShowcase();
           return;
         }
 
+        const trenchAnchor = projectShowcaseWorldAnchorRef.current;
+        const shipPos = spaceshipRef.current?.position;
+        const nearTrenchAnchor =
+          !!trenchAnchor &&
+          !!shipPos &&
+          shipPos.distanceTo(trenchAnchor) <= PROJECT_SHOWCASE_NEAR_ANCHOR_DIST;
         const atProjects =
-          currentNavigationTarget === "projects" && navigationDistance === null;
+          currentNavigationTarget === "projects" &&
+          navigationDistance === null &&
+          nearTrenchAnchor;
         if (atProjects) {
-          enterProjectShowcase();
+          projectShowcaseAwaitingProjectsArrivalRef.current = false;
+          projectShowcaseSawProjectsTravelRef.current = false;
+          pendingProjectShowcaseEntryRef.current = true;
+          startProjectShowcaseEntrySequence();
         } else {
           pendingProjectShowcaseEntryRef.current = true;
+          projectShowcaseAwaitingProjectsArrivalRef.current = true;
+          projectShowcaseSawProjectsTravelRef.current = false;
           handleQuickNav("projects", "section");
           vlog("🛰️ Routing to Projects — Project Showcase will open on arrival");
         }
@@ -1634,7 +2133,7 @@ export default function ResumeSpace3D({
       projectShowcaseReady,
       handleExperienceCompanyNavigation,
       handleQuickNav,
-      enterProjectShowcase,
+      startProjectShowcaseEntrySequence,
       exitProjectShowcase,
       vlog,
     ],
@@ -1801,14 +2300,171 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     if (
-      pendingProjectShowcaseEntryRef.current &&
-      !projectShowcaseActiveRef.current &&
-      currentNavigationTarget === "projects" &&
-      navigationDistance === null
+      !pendingProjectShowcaseEntryRef.current ||
+      projectShowcaseActiveRef.current ||
+      projectShowcaseEntrySequenceRef.current.active
     ) {
-      enterProjectShowcase();
+      return;
     }
-  }, [currentNavigationTarget, navigationDistance, enterProjectShowcase]);
+
+    if (projectShowcaseAwaitingProjectsArrivalRef.current) {
+      if (currentNavigationTarget === "projects" && navigationDistance !== null) {
+        projectShowcaseSawProjectsTravelRef.current = true;
+      }
+      if (
+        projectShowcaseSawProjectsTravelRef.current &&
+        navigationDistance === null
+      ) {
+        startProjectShowcaseEntrySequence();
+      }
+      return;
+    }
+
+    if (navigationDistance === null) {
+      startProjectShowcaseEntrySequence();
+    }
+  }, [
+    currentNavigationTarget,
+    navigationDistance,
+    startProjectShowcaseEntrySequence,
+  ]);
+
+  useEffect(() => {
+    if (isLoading || !sceneReady) return;
+    let raf = 0;
+    const tick = () => {
+      const sceneCtx = sceneRef.current;
+      const ship = spaceshipRef.current;
+      const camera = sceneCtx?.camera;
+      if (!sceneCtx || !ship || !camera) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+
+      const shouldFadeDuringOutboundTravel =
+        pendingProjectShowcaseEntryRef.current &&
+        !projectShowcaseActiveRef.current &&
+        !projectShowcaseEntrySequenceRef.current.active &&
+        !projectShowcaseExitSequenceRef.current.active;
+      const shouldFadeDuringReturnTravel =
+        !pendingProjectShowcaseEntryRef.current &&
+        !projectShowcaseActiveRef.current &&
+        !projectShowcaseEntrySequenceRef.current.active &&
+        !projectShowcaseExitSequenceRef.current.active &&
+        currentNavigationTarget !== "projects" &&
+        navigationDistance !== null;
+
+      if (shouldFadeDuringOutboundTravel || shouldFadeDuringReturnTravel) {
+        const distFromKnownCenter = ship.position.length();
+        const fadeStart = SKYFIELD_RADIUS * 0.9;
+        const fadeEnd = SKYFIELD_RADIUS * 1.18;
+        const realmAlpha = THREE.MathUtils.clamp(
+          (distFromKnownCenter - fadeStart) / Math.max(1, fadeEnd - fadeStart),
+          0,
+          1,
+        );
+        applyProjectShowcaseNebulaFade(realmAlpha);
+        if (realmAlpha > 0.001) {
+          camera.layers.enable(PROJECT_SHOWCASE_LAYER);
+        }
+      } else if (
+        !projectShowcaseActiveRef.current &&
+        !projectShowcaseEntrySequenceRef.current.active
+      ) {
+        applyProjectShowcaseNebulaFade(0);
+        camera.layers.disable(PROJECT_SHOWCASE_LAYER);
+      }
+
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [currentNavigationTarget, isLoading, navigationDistance, sceneReady]);
+
+  useEffect(() => {
+    return () => {
+      if (projectShowcaseEntrySequenceRef.current.raf !== null) {
+        cancelAnimationFrame(projectShowcaseEntrySequenceRef.current.raf);
+        projectShowcaseEntrySequenceRef.current.raf = null;
+      }
+      if (projectShowcaseExitSequenceRef.current.raf !== null) {
+        cancelAnimationFrame(projectShowcaseExitSequenceRef.current.raf);
+        projectShowcaseExitSequenceRef.current.raf = null;
+      }
+      if (projectShowcaseAngleIntroRef.current.raf !== null) {
+        cancelAnimationFrame(projectShowcaseAngleIntroRef.current.raf);
+        projectShowcaseAngleIntroRef.current.raf = null;
+      }
+      projectShowcaseEntrySequenceRef.current.active = false;
+      projectShowcaseExitSequenceRef.current.active = false;
+      projectShowcaseQueuedNavRef.current = null;
+      projectShowcaseAwaitingProjectsArrivalRef.current = false;
+      projectShowcaseSawProjectsTravelRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isLoading || !sceneReady) return;
+    if (cosmosIntroPlayedRef.current) return;
+    const ship = spaceshipRef.current;
+    const controls = sceneRef.current.controls;
+    const camera = sceneRef.current.camera;
+    if (!ship || !controls || !camera) return;
+    cosmosIntroPlayedRef.current = true;
+    setCosmosIntroOverlayOpacity(0.42);
+
+    const baseShipPos = ship.position.clone();
+    const baseShipQuat = ship.quaternion.clone();
+    const startCam = camera.position.clone();
+    const startTarget = new THREE.Vector3();
+    const controlsAny = controls as unknown as {
+      getTarget?: (out: THREE.Vector3) => void;
+    };
+    if (controlsAny.getTarget) {
+      controlsAny.getTarget(startTarget);
+    } else {
+      const dir = new THREE.Vector3();
+      camera.getWorldDirection(dir);
+      startTarget.copy(startCam).addScaledVector(dir, 30);
+    }
+    const endCam = startCam.clone().lerp(startTarget, 0.075);
+
+    const durationMs = 2800;
+    const startedAt = performance.now();
+    let raf = 0;
+    const tick = () => {
+      const elapsed = performance.now() - startedAt;
+      const t = THREE.MathUtils.clamp(elapsed / durationMs, 0, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+
+      const bob = Math.sin(elapsed * 0.0017) * 0.18;
+      const sway = Math.cos(elapsed * 0.0012) * 0.08;
+      ship.position.set(baseShipPos.x + sway, baseShipPos.y + bob, baseShipPos.z);
+      ship.quaternion.slerp(baseShipQuat, 0.14);
+
+      const camPos = new THREE.Vector3().lerpVectors(startCam, endCam, ease);
+      controls.setLookAt(
+        camPos.x,
+        camPos.y,
+        camPos.z,
+        startTarget.x,
+        startTarget.y,
+        startTarget.z,
+        false,
+      );
+
+      setCosmosIntroOverlayOpacity(THREE.MathUtils.lerp(0.42, 0, ease));
+      if (t >= 1) {
+        setCosmosIntroOverlayOpacity(0);
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [isLoading, sceneReady]);
 
   useEffect(() => {
     if (!projectShowcaseActive) return;
@@ -1821,6 +2477,7 @@ export default function ResumeSpace3D({
       const track = projectShowcaseTrackRef.current;
       const showcaseRoot = projectShowcaseRootRef.current;
       if (!controls || !camera || !track || !showcaseRoot) return;
+      if (projectShowcaseExitSequenceRef.current.active) return;
 
       const now = performance.now();
       const last = projectShowcaseLastTickRef.current ?? now;
@@ -1949,11 +2606,9 @@ export default function ResumeSpace3D({
           Math.sin(panel.frontFacingRotationY - panel.inwardRotationY),
           Math.cos(panel.frontFacingRotationY - panel.inwardRotationY),
         );
-        const readableCant = PROJECT_SHOWCASE_MAX_CANT_RADIANS * (1 - angleT);
         panel.group.rotation.y =
           panel.inwardRotationY +
-          toFrontDelta * angleT +
-          panel.cantSign * readableCant;
+          toFrontDelta * angleT;
         const scaleBoost = 1 + panel.focusBlend * 0.055;
         panel.group.scale.setScalar(scaleBoost);
         panel.frameMat.opacity = 0.22 + panel.focusBlend * 0.26;
@@ -2467,27 +3122,6 @@ export default function ResumeSpace3D({
       0.00015,
       2,
       "/textures/earth.jpg",
-    );
-
-    const projectsPlanet = createPlanet(
-      "Projects",
-      PROJECTS_ORBIT,
-      PROJECTS_RADIUS,
-      0x9933ff,
-      scene,
-      0.0001,
-      3,
-      "/textures/jupiter.jpg",
-    );
-    createPlanet(
-      "Scrolling Resume",
-      SCROLLING_MOON_ORBIT,
-      SCROLLING_MOON_RADIUS,
-      0xcc99ff,
-      projectsPlanet,
-      0.003,
-      undefined,
-      "/textures/neptune.jpg",
     );
 
     // 4. MOONS
@@ -3197,9 +3831,8 @@ export default function ResumeSpace3D({
         const showcaseRoot = new THREE.Group();
         showcaseRoot.name = "ProjectShowcaseRoot";
         showcaseRoot.visible = false;
-        showcaseRoot.position
-          .copy(projectsPlanet.position)
-          .add(new THREE.Vector3(0, -220, 0));
+        const trenchWorldAnchor = new THREE.Vector3(-24800, 420, 18600);
+        showcaseRoot.position.copy(trenchWorldAnchor).add(new THREE.Vector3(0, -36, 0));
 
         const trench = gltf.scene;
         const trenchDiffuseCache = new Map<string, THREE.Texture>();
@@ -3338,10 +3971,10 @@ export default function ResumeSpace3D({
           obj.layers.set(PROJECT_SHOWCASE_LAYER);
         });
 
-        const showcaseAmbient = new THREE.AmbientLight(0xffffff, 0.5);
-        const showcaseKey = new THREE.DirectionalLight(0xdde8ff, 1.15);
+        const showcaseAmbient = new THREE.AmbientLight(0xffffff, 0.38);
+        const showcaseKey = new THREE.DirectionalLight(0xdde8ff, 1.0);
         showcaseKey.position.set(70, 110, 50);
-        const showcaseRim = new THREE.DirectionalLight(0x8db8ff, 0.45);
+        const showcaseRim = new THREE.DirectionalLight(0x8db8ff, 0.32);
         showcaseRim.position.set(-80, 30, -40);
         showcaseAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
         showcaseKey.layers.set(PROJECT_SHOWCASE_LAYER);
@@ -3354,6 +3987,115 @@ export default function ResumeSpace3D({
 
         const runAxis: "x" | "z" =
           trenchSizeScaled.z >= trenchSizeScaled.x ? "z" : "x";
+        const trenchForward =
+          runAxis === "z" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+        const trenchLateral =
+          runAxis === "z" ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, -1);
+        // Trench-realm sun source: a strong angled key + beam into trench.
+        const showcaseSun = new THREE.DirectionalLight(0xffe6c1, 1.85);
+        showcaseSun.position.copy(
+          trenchForward
+            .clone()
+            .multiplyScalar(-340)
+            .add(trenchLateral.clone().multiplyScalar(150))
+            .add(new THREE.Vector3(0, 220, 0)),
+        );
+        const showcaseSunTarget = new THREE.Object3D();
+        showcaseSunTarget.position.copy(
+          trenchForward.clone().multiplyScalar(280).add(new THREE.Vector3(0, 22, 0)),
+        );
+        const showcaseSunBeam = new THREE.SpotLight(
+          0xfff1d8,
+          2.35,
+          2800,
+          Math.PI / 7.2,
+          0.58,
+          1.2,
+        );
+        showcaseSunBeam.position.copy(
+          trenchForward
+            .clone()
+            .multiplyScalar(-460)
+            .add(trenchLateral.clone().multiplyScalar(160))
+            .add(new THREE.Vector3(0, 250, 0)),
+        );
+        const showcaseSunBeamTarget = new THREE.Object3D();
+        showcaseSunBeamTarget.position.copy(
+          trenchForward.clone().multiplyScalar(220).add(new THREE.Vector3(0, 4, 0)),
+        );
+        showcaseSun.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseSunTarget.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseSunBeam.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseSunBeamTarget.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseSun.target = showcaseSunTarget;
+        showcaseSunBeam.target = showcaseSunBeamTarget;
+        showcaseRoot.add(
+          showcaseSunTarget,
+          showcaseSun,
+          showcaseSunBeamTarget,
+          showcaseSunBeam,
+        );
+        // Keep trench well away from Projects planet so entry can be a true long final.
+        showcaseRoot.position
+          .copy(trenchWorldAnchor)
+          .addScaledVector(trenchForward, 860)
+          .addScaledVector(trenchLateral, 95)
+          .add(new THREE.Vector3(0, -36, 0));
+        if (PROJECT_SHOWCASE_USE_NEBULA_REALM) {
+          const nebulaLoader = new GLTFLoader();
+          nebulaLoader.load(
+            PROJECT_SHOWCASE_NEBULA_GLB_PATH,
+            (nebulaGltf) => {
+              const nebulaRoot = nebulaGltf.scene;
+              nebulaRoot.name = "ProjectShowcaseNebulaRealm";
+              const nebulaBounds = new THREE.Box3().setFromObject(nebulaRoot);
+              const nebulaCenter = nebulaBounds.getCenter(new THREE.Vector3());
+              const nebulaSize = nebulaBounds.getSize(new THREE.Vector3());
+              const maxDim = Math.max(nebulaSize.x, nebulaSize.y, nebulaSize.z, 1);
+              const desiredMaxDim = 52000;
+              const nebulaScale = desiredMaxDim / maxDim;
+              nebulaRoot.scale.setScalar(nebulaScale);
+              nebulaRoot.position.sub(nebulaCenter.multiplyScalar(nebulaScale));
+              nebulaRoot.position.add(showcaseRoot.position);
+              nebulaRoot.traverse((obj: THREE.Object3D) => {
+                obj.layers.set(PROJECT_SHOWCASE_LAYER);
+                obj.frustumCulled = false;
+                const mesh = obj as THREE.Mesh;
+                if ((mesh as any).isMesh) {
+                  mesh.castShadow = false;
+                  mesh.receiveShadow = false;
+                  const mats = Array.isArray(mesh.material)
+                    ? mesh.material
+                    : [mesh.material];
+                  mats.forEach((mat) => {
+                    const m = mat as THREE.Material & {
+                      depthWrite?: boolean;
+                      toneMapped?: boolean;
+                      transparent?: boolean;
+                      opacity?: number;
+                      userData?: Record<string, unknown>;
+                    };
+                    m.depthWrite = false;
+                    m.toneMapped = false;
+                    m.transparent = true;
+                    m.userData = m.userData || {};
+                    if (m.userData.nebulaBaseOpacity === undefined) {
+                      m.userData.nebulaBaseOpacity = m.opacity ?? 1;
+                    }
+                  });
+                }
+              });
+              scene.add(nebulaRoot);
+              projectShowcaseNebulaRootRef.current = nebulaRoot;
+              applyProjectShowcaseNebulaFade(0);
+              vlog("🌌 Project showcase nebula realm loaded");
+            },
+            undefined,
+            () => {
+              vlog("⚠️ Project showcase nebula failed — using default cosmos outside trench");
+            },
+          );
+        }
         const runLength =
           runAxis === "z" ? trenchSizeScaled.z : trenchSizeScaled.x;
         const trenchWidth =
@@ -3402,8 +4144,7 @@ export default function ResumeSpace3D({
             frontFacingRotationY = Math.PI / 2;
             cantSign = side < 0 ? -1 : 1;
           }
-          panelGroup.rotation.y =
-            inwardRotationY + cantSign * PROJECT_SHOWCASE_MAX_CANT_RADIANS;
+          panelGroup.rotation.y = inwardRotationY;
 
           const frame = new THREE.Mesh(
             new THREE.PlaneGeometry(panelWidth * 1.03, panelHeight * 1.08),
@@ -3590,12 +4331,18 @@ export default function ResumeSpace3D({
 
         scene.add(showcaseRoot);
         projectShowcaseRootRef.current = showcaseRoot;
+        projectShowcaseWorldAnchorRef.current = showcaseRoot.position.clone();
         setProjectShowcaseReady(true);
         vlog("🛰️ Project Showcase trench loaded");
       },
       undefined,
       () => {
         projectShowcaseRootRef.current = null;
+        projectShowcaseWorldAnchorRef.current = null;
+        if (projectShowcaseNebulaRootRef.current) {
+          scene.remove(projectShowcaseNebulaRootRef.current);
+          projectShowcaseNebulaRootRef.current = null;
+        }
         setProjectShowcaseReady(false);
         vlog("⚠️ Failed to load Project Showcase trench model");
       },
@@ -3744,23 +4491,11 @@ export default function ResumeSpace3D({
         })),
       };
 
-      // Register Projects Planet
-      const projectsPlanetData: PlanetData = {
-        name: "Projects",
-        position: projectsPlanet.position.clone(),
-        data: {
-          name: "Projects",
-          description: "Creative projects and innovations",
-        },
-      };
-
       tourBuilderRef.current?.registerPlanet("experience", expPlanetData);
       tourBuilderRef.current?.registerPlanet("skills", skillsPlanetData);
-      tourBuilderRef.current?.registerPlanet("projects", projectsPlanetData);
 
       planetsDataRef.current.set("experience", expPlanetData);
       planetsDataRef.current.set("skills", skillsPlanetData);
-      planetsDataRef.current.set("projects", projectsPlanetData);
     };
 
     registerPlanetData();
@@ -4098,7 +4833,11 @@ export default function ResumeSpace3D({
         case "skills":
         case "projects": {
           const planetLabel = target === "experience" ? "🌍 Experience" : target === "skills" ? "⚡ Skills" : "💡 Projects";
-          vlog(`${planetLabel} — Traveling to ${target} Planet...`);
+          vlog(
+            target === "projects"
+              ? `${planetLabel} — Routing to trench destination...`
+              : `${planetLabel} — Traveling to ${target} Planet...`,
+          );
 
           // Always use autopilot — ship is always engaged
           if (!manualFlightModeRef.current) {
@@ -4107,9 +4846,17 @@ export default function ResumeSpace3D({
             break;
           }
 
+          if (target === "projects") {
+            pendingProjectShowcaseEntryRef.current = true;
+            projectShowcaseAwaitingProjectsArrivalRef.current = false;
+            projectShowcaseSawProjectsTravelRef.current = false;
+            startProjectShowcaseEntrySequence();
+            break;
+          }
+
           // Fallback: manual flight mode — direct camera
-          const planetMesh = target === "experience" ? expPlanet : target === "skills" ? skillsPlanet : projectsPlanet;
-          const planetDist = target === "experience" ? EXP_FOCUS_DIST : target === "skills" ? SKILLS_FOCUS_DIST : PROJ_FOCUS_DIST;
+          const planetMesh = target === "experience" ? expPlanet : skillsPlanet;
+          const planetDist = target === "experience" ? EXP_FOCUS_DIST : SKILLS_FOCUS_DIST;
           await cameraDirectorRef.current.focusPlanet(planetMesh, planetDist);
           setMinDistance(
             originalMinDistanceRef.current,
@@ -4803,6 +5550,8 @@ export default function ResumeSpace3D({
       }
 
       projectShowcaseRootRef.current = null;
+      projectShowcaseWorldAnchorRef.current = null;
+      projectShowcaseNebulaRootRef.current = null;
       projectShowcasePanelsRef.current = [];
       projectShowcaseTrackRef.current = null;
 
@@ -4911,6 +5660,55 @@ export default function ResumeSpace3D({
         }}
       >
         <div style={{ width: "100%", height: "100%", position: "relative" }}>
+          {cosmosIntroOverlayOpacity > 0.001 && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 10035,
+                pointerEvents: "none",
+                background: `rgba(2, 4, 10, ${cosmosIntroOverlayOpacity.toFixed(3)})`,
+              }}
+            />
+          )}
+          {projectShowcaseEntryOverlayOpacity > 0.001 && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 10040,
+                pointerEvents: "none",
+                background: `radial-gradient(ellipse at 50% 42%, rgba(8, 16, 30, ${(
+                  projectShowcaseEntryOverlayOpacity * 0.32
+                ).toFixed(3)}), rgba(2, 5, 12, ${projectShowcaseEntryOverlayOpacity.toFixed(
+                  3,
+                )}) 82%)`,
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "center",
+                paddingBottom: 72,
+              }}
+            >
+              <div
+                style={{
+                  color: "rgba(193, 215, 255, 0.9)",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontWeight: 700,
+                  letterSpacing: "0.16em",
+                  fontSize: 13,
+                  textTransform: "uppercase",
+                  textShadow: "0 0 14px rgba(80, 130, 220, 0.42)",
+                  opacity: THREE.MathUtils.clamp(
+                    projectShowcaseEntryOverlayOpacity * 1.4,
+                    0,
+                    1,
+                  ),
+                }}
+              >
+                Entering Project Showcase
+              </div>
+            </div>
+          )}
           <div
             ref={mountRef}
             className="width-full height-full"

@@ -79,6 +79,8 @@ export const useNavigationSystem = (deps: {
   followingStarDestroyerRef: React.MutableRefObject<boolean>;
   /** Set React state for SD escort (paired with the ref) */
   setFollowingStarDestroyer: (v: boolean) => void;
+  /** Optional non-planet section anchors (e.g., Projects trench) */
+  resolveSpecialSectionTarget?: (targetId: string) => THREE.Vector3 | null;
 }) => {
   const {
     resumeData,
@@ -102,6 +104,7 @@ export const useNavigationSystem = (deps: {
     optionsRef,
     followingStarDestroyerRef,
     setFollowingStarDestroyer,
+    resolveSpecialSectionTarget,
   } = deps;
 
   const navTraceLastAtRef = useRef<Record<string, number>>({});
@@ -625,9 +628,17 @@ export const useNavigationSystem = (deps: {
         let targetPosition: THREE.Vector3 | null = null;
         let targetName = targetId;
         let targetRadius = 60; // default (sun)
+        const specialSectionTarget = resolveSpecialSectionTarget
+          ? resolveSpecialSectionTarget(targetId)
+          : null;
+        const isDirectSectionApproach = !!specialSectionTarget;
 
         // Special handling for section targets that don't have matching planets
-        if (targetId === "home") {
+        if (specialSectionTarget) {
+          targetPosition = specialSectionTarget.clone();
+          targetRadius = NAV_FALLBACK_PLANET_R;
+          vlog(`🛰️ Navigating to ${targetId} anchor`);
+        } else if (targetId === "home") {
           // Navigate to the sun/origin
           targetPosition = new THREE.Vector3(0, 0, 0);
           targetRadius = 60; // sun radius
@@ -669,28 +680,33 @@ export const useNavigationSystem = (deps: {
           );
           vlog(`📏 Distance: ${distance.toFixed(1)} units`);
 
-          // ── PLANET STAGING (REPLACED MODEL) ──────────────────────
-          // Final ship position is perpendicular to the moon-orbit plane:
-          // above or below the planet, at a distance that frames planet+moons.
-          const key = targetId.toLowerCase();
-          const remembered = sectionFallbackSideRef.current[key];
-          const upOrDown: 1 | -1 = remembered ?? (Math.random() > 0.5 ? 1 : -1);
-          sectionFallbackSideRef.current[key] = upOrDown;
-          const planeNormal = new THREE.Vector3(0, 1, 0);
-          const stagingDistance = Math.max(
-            targetRadius * NAV_PLANET_STAGING_RADIUS_MULT,
-            NAV_PLANET_STAGING_MIN_DIST,
-          );
-          const stagingPoint = planetCenter
-            .clone()
-            .addScaledVector(planeNormal, upOrDown * stagingDistance);
-          vlog(
-            `🛸 Planet staging: ${upOrDown > 0 ? "ABOVE" : "BELOW"} at ${stagingDistance.toFixed(0)}u`,
-          );
-
-          vlog(
-            `   Staging point: [${stagingPoint.x.toFixed(1)}, ${stagingPoint.y.toFixed(1)}, ${stagingPoint.z.toFixed(1)}]`,
-          );
+          // Standard sections stage above/below planet; direct sections route
+          // straight to anchor (used by Projects trench destination).
+          let stagingPoint = planetCenter.clone();
+          if (!isDirectSectionApproach) {
+            const key = targetId.toLowerCase();
+            const remembered = sectionFallbackSideRef.current[key];
+            const upOrDown: 1 | -1 = remembered ?? (Math.random() > 0.5 ? 1 : -1);
+            sectionFallbackSideRef.current[key] = upOrDown;
+            const planeNormal = new THREE.Vector3(0, 1, 0);
+            const stagingDistance = Math.max(
+              targetRadius * NAV_PLANET_STAGING_RADIUS_MULT,
+              NAV_PLANET_STAGING_MIN_DIST,
+            );
+            stagingPoint = planetCenter
+              .clone()
+              .addScaledVector(planeNormal, upOrDown * stagingDistance);
+            vlog(
+              `🛸 Planet staging: ${upOrDown > 0 ? "ABOVE" : "BELOW"} at ${stagingDistance.toFixed(0)}u`,
+            );
+            vlog(
+              `   Staging point: [${stagingPoint.x.toFixed(1)}, ${stagingPoint.y.toFixed(1)}, ${stagingPoint.z.toFixed(1)}]`,
+            );
+          } else {
+            vlog(
+              `🛫 Direct approach point: [${stagingPoint.x.toFixed(1)}, ${stagingPoint.y.toFixed(1)}, ${stagingPoint.z.toFixed(1)}]`,
+            );
+          }
 
           const distToStaging = shipPos.distanceTo(stagingPoint);
           let clearanceTarget: THREE.Vector3 | undefined;
@@ -793,6 +809,7 @@ export const useNavigationSystem = (deps: {
       optionsRef,
       resolveMoonSystemId,
       resolveCurrentSystemId,
+      resolveSpecialSectionTarget,
       vlog,
     ],
   );

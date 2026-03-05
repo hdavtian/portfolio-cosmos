@@ -390,9 +390,9 @@ export const NAV_FALLBACK_PLANET_R = 140;  // use largest planet as fallback
 
 // ─── LIGHTSPEED TRAVEL ──────────────────────────────────────────────────────
 // For inter-planet journeys: covers 12,000 units in ~5 seconds.
-export const NAV_LIGHTSPEED = 50;               // units/frame (~3,000 u/s at 60fps)
+export const NAV_LIGHTSPEED = 87.5;             // +75% faster long-range travel
 export const NAV_LIGHTSPEED_ENGAGE_DIST = 2_000; // only engage for long distances
-export const NAV_LIGHTSPEED_DECEL_DIST = 1_500;  // start slowing from this distance
+export const NAV_LIGHTSPEED_DECEL_DIST = 2_625;  // scaled with lightspeed for stable braking
 export const NAV_LIGHTSPEED_LERP = 0.08;         // faster lerp for lightspeed accel
 
 // ─── MOON ORBIT (Stationary Hover) ──────────────────────────────────────────

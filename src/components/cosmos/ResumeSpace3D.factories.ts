@@ -31,7 +31,7 @@ export const createLabel = (text: string, subtext?: string): CSS2DObject => {
   div.className = "space-label";
   div.style.color = "rgba(255, 255, 255, 0.9)";
   div.style.fontFamily = "Cinzel, serif";
-  div.style.textShadow = "0 0 10px #000";
+  div.style.textShadow = "none";
   div.style.textAlign = "center";
   div.style.pointerEvents = "none";
   div.style.cursor = "default";

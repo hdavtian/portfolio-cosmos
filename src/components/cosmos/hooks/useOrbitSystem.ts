@@ -418,52 +418,18 @@ export const useOrbitSystem = (params: {
               subEl.style.color = `rgb(${Math.round(blended.r * 255 * subScale)}, ${Math.round(blended.g * 255 * subScale)}, ${Math.round(blended.b * 255 * subScale)})`;
             }
 
-            // Neon-outline legibility:
-            // Keep labels readable at system staging distance, then diffuse with range.
-            const readability = THREE.MathUtils.clamp(
-              targetOpacity * 1.9 + nearbySystemBoost * 0.55,
-              0,
-              1,
-            );
-            const strokePx = 0.65 + readability * 1.25;
-            const glowA = 0.32 + readability * 0.62;
-            const haloA = 0.24 + readability * 0.58;
-            const neonCore = isMoon
-              ? `rgba(238, 246, 255, ${glowA.toFixed(3)})`
-              : `rgba(238, 246, 255, ${glowA.toFixed(3)})`;
-            const neonHalo = isMoon
-              ? `rgba(136, 206, 255, ${haloA.toFixed(3)})`
-              : `rgba(124, 194, 255, ${haloA.toFixed(3)})`;
-            const crispInRange = inActiveSystem && nearbySystemBoost > 0.55;
             if (titleEl) {
-              if (crispInRange) {
-                titleEl.style.webkitTextStroke = "0px rgba(255,255,255,0)";
-                titleEl.style.textShadow = "0 0 2px rgba(0,0,0,0.82)";
-              } else {
-                titleEl.style.webkitTextStroke = `${strokePx.toFixed(2)}px rgba(255,255,255,${(0.35 + readability * 0.45).toFixed(3)})`;
-                titleEl.style.textShadow =
-                  `0 0 ${(3 + readability * 7).toFixed(1)}px ${neonCore}, ` +
-                  `0 0 ${(8 + readability * 16).toFixed(1)}px ${neonHalo}, ` +
-                  "0 0 8px rgba(0,0,0,0.55)";
-              }
+              titleEl.style.webkitTextStroke = "0px rgba(255,255,255,0)";
+              titleEl.style.textShadow = "none";
             }
             if (subEl) {
-              if (crispInRange) {
-                subEl.style.webkitTextStroke = "0px rgba(255,255,255,0)";
-                subEl.style.textShadow = "0 0 2px rgba(0,0,0,0.78)";
-              } else {
-                subEl.style.webkitTextStroke = `${Math.max(0.25, strokePx * 0.7).toFixed(2)}px rgba(255,255,255,${(0.24 + readability * 0.35).toFixed(3)})`;
-                subEl.style.textShadow =
-                  `0 0 ${(2 + readability * 4).toFixed(1)}px ${neonCore}, ` +
-                  `0 0 ${(6 + readability * 10).toFixed(1)}px ${neonHalo}, ` +
-                  "0 0 6px rgba(0,0,0,0.45)";
-              }
+              subEl.style.webkitTextStroke = "0px rgba(255,255,255,0)";
+              subEl.style.textShadow = "none";
             }
 
             const blurPart = inMoonView && !isFocused ? "blur(2px) " : "";
-            const filterPart = crispInRange
-              ? "saturate(1.06) brightness(1.12)"
-              : `saturate(${0.6 + proximity * 0.5}) brightness(${0.5 + proximity * 0.6})`;
+            const filterPart =
+              `saturate(${0.6 + proximity * 0.5}) brightness(${0.5 + proximity * 0.6})`;
             label.element.style.filter = `${blurPart}${filterPart}`.trim();
             label.element.style.opacity = targetOpacity < 0.02 ? "0" : targetOpacity.toFixed(3);
             label.element.style.transition = "opacity 0.22s ease, filter 0.22s ease, color 0.22s ease";
