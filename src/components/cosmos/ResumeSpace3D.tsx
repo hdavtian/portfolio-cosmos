@@ -140,6 +140,21 @@ type ShowcaseEntry = {
   description?: string;
   technologies?: string[];
   year?: number | null;
+  fit?: "contain" | "cover";
+};
+
+type ShowcasePanelRecord = {
+  group: THREE.Group;
+  runPos: number;
+  entry: ShowcaseEntry;
+  fitMode: "contain" | "cover";
+  imageMat: THREE.MeshBasicMaterial;
+  texture: THREE.Texture | null;
+  baseRepeat: THREE.Vector2;
+  baseOffset: THREE.Vector2;
+  zoom: number;
+  panX: number;
+  panY: number;
 };
 
 // --- SHIP_DEBUG_LABELS (2026-02-03 snapshot) ---
@@ -298,13 +313,12 @@ export default function ResumeSpace3D({
   const [projectShowcaseActive, setProjectShowcaseActive] = useState(false);
   const [projectShowcasePlaying, setProjectShowcasePlaying] = useState(true);
   const [projectShowcaseFocusIndex, setProjectShowcaseFocusIndex] = useState(0);
+  const [, setProjectShowcaseViewportTick] = useState(0);
   const projectShowcaseActiveRef = useRef(false);
   const projectShowcasePlayingRef = useRef(true);
   const projectShowcaseFocusIndexRef = useRef(0);
   const projectShowcaseLastTickRef = useRef<number | null>(null);
-  const projectShowcasePanelsRef = useRef<
-    Array<{ group: THREE.Group; runPos: number; entry: ShowcaseEntry }>
-  >([]);
+  const projectShowcasePanelsRef = useRef<ShowcasePanelRecord[]>([]);
   const projectShowcaseTrackRef = useRef<{
     axis: "x" | "z";
     minRun: number;
@@ -811,6 +825,129 @@ export default function ResumeSpace3D({
       panel.group.visible = Math.abs(panel.runPos - runPos) <= halfWindow;
     });
   }, [setProjectShowcaseFocus]);
+
+  const getFocusedProjectShowcasePanel = useCallback(() => {
+    const panels = projectShowcasePanelsRef.current;
+    if (panels.length === 0) return null;
+    const idx = THREE.MathUtils.clamp(
+      projectShowcaseFocusIndexRef.current,
+      0,
+      panels.length - 1,
+    );
+    return panels[idx];
+  }, []);
+
+  const bumpProjectShowcaseViewportTick = useCallback(() => {
+    setProjectShowcaseViewportTick((v) => v + 1);
+  }, []);
+
+  const applyProjectShowcasePanelViewport = useCallback(
+    (panel: ShowcasePanelRecord) => {
+      const texture = panel.texture;
+      if (!texture) return;
+
+      const baseRepeatX = panel.baseRepeat.x;
+      const baseRepeatY = panel.baseRepeat.y;
+      const zoom = THREE.MathUtils.clamp(panel.zoom, 1, 4);
+      panel.zoom = zoom;
+      const repX = baseRepeatX / zoom;
+      const repY = baseRepeatY / zoom;
+      const minPanX = -panel.baseOffset.x;
+      const maxPanX = (1 - repX) - panel.baseOffset.x;
+      const minPanY = -panel.baseOffset.y;
+      const maxPanY = (1 - repY) - panel.baseOffset.y;
+      panel.panX = THREE.MathUtils.clamp(panel.panX, minPanX, maxPanX);
+      panel.panY = THREE.MathUtils.clamp(panel.panY, minPanY, maxPanY);
+
+      texture.repeat.set(repX, repY);
+      texture.offset.set(
+        panel.baseOffset.x + panel.panX,
+        panel.baseOffset.y + panel.panY,
+      );
+      texture.needsUpdate = true;
+    },
+    [],
+  );
+
+  const resetProjectShowcasePanelViewport = useCallback(
+    (index?: number) => {
+      const panels = projectShowcasePanelsRef.current;
+      if (panels.length === 0) return;
+      const safeIndex =
+        index ??
+        THREE.MathUtils.clamp(
+          projectShowcaseFocusIndexRef.current,
+          0,
+          panels.length - 1,
+        );
+      const panel = panels[safeIndex];
+      if (projectShowcasePlayingRef.current) {
+        projectShowcasePlayingRef.current = false;
+        setProjectShowcasePlaying(false);
+      }
+      panel.zoom = 1;
+      panel.panX = 0;
+      panel.panY = 0;
+      applyProjectShowcasePanelViewport(panel);
+      bumpProjectShowcaseViewportTick();
+    },
+    [applyProjectShowcasePanelViewport, bumpProjectShowcaseViewportTick],
+  );
+
+  const nudgeProjectShowcasePanelViewport = useCallback(
+    (xDir: -1 | 0 | 1, yDir: -1 | 0 | 1) => {
+      const panel = getFocusedProjectShowcasePanel();
+      if (!panel || !panel.texture) return;
+      if (projectShowcasePlayingRef.current) {
+        projectShowcasePlayingRef.current = false;
+        setProjectShowcasePlaying(false);
+      }
+      const zoom = THREE.MathUtils.clamp(panel.zoom, 1, 4);
+      const repX = panel.baseRepeat.x / zoom;
+      const repY = panel.baseRepeat.y / zoom;
+      const panRangeX = Math.max(0, 1 - repX);
+      const panRangeY = Math.max(0, 1 - repY);
+      const stepX = Math.max(panRangeX * 0.14, 0.008);
+      const stepY = Math.max(panRangeY * 0.14, 0.008);
+      panel.panX += xDir * stepX;
+      panel.panY += yDir * stepY;
+      applyProjectShowcasePanelViewport(panel);
+      bumpProjectShowcaseViewportTick();
+    },
+    [
+      getFocusedProjectShowcasePanel,
+      applyProjectShowcasePanelViewport,
+      bumpProjectShowcaseViewportTick,
+    ],
+  );
+
+  const setProjectShowcasePanelZoom = useCallback(
+    (zoom: number) => {
+      const panel = getFocusedProjectShowcasePanel();
+      if (!panel || !panel.texture) return;
+      if (projectShowcasePlayingRef.current) {
+        projectShowcasePlayingRef.current = false;
+        setProjectShowcasePlaying(false);
+      }
+      const prevZoom = THREE.MathUtils.clamp(panel.zoom, 1, 4);
+      const nextZoom = THREE.MathUtils.clamp(zoom, 1, 4);
+      const prevRepX = panel.baseRepeat.x / prevZoom;
+      const prevRepY = panel.baseRepeat.y / prevZoom;
+      const nextRepX = panel.baseRepeat.x / nextZoom;
+      const nextRepY = panel.baseRepeat.y / nextZoom;
+      // Keep zoom centered on the current viewport center.
+      panel.panX += (prevRepX - nextRepX) * 0.5;
+      panel.panY += (prevRepY - nextRepY) * 0.5;
+      panel.zoom = nextZoom;
+      applyProjectShowcasePanelViewport(panel);
+      bumpProjectShowcaseViewportTick();
+    },
+    [
+      getFocusedProjectShowcasePanel,
+      applyProjectShowcasePanelViewport,
+      bumpProjectShowcaseViewportTick,
+    ],
+  );
 
   const exitProjectShowcase = useCallback(() => {
     const showcaseRoot = projectShowcaseRootRef.current;
@@ -1516,6 +1653,108 @@ export default function ResumeSpace3D({
     return () => cancelAnimationFrame(raf);
   }, [projectShowcaseActive, setProjectShowcaseRunPosition]);
 
+  // ── Project showcase image controls: Shift+drag / Shift+wheel ─────────
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    const getInteractivePanel = () => {
+      if (!projectShowcaseActiveRef.current) return null;
+      const panel = getFocusedProjectShowcasePanel();
+      if (!panel || !panel.texture || panel.fitMode !== "cover") return null;
+      const croppedX = panel.baseRepeat.x < 0.999;
+      const croppedY = panel.baseRepeat.y < 0.999;
+      if (!croppedX && !croppedY) return null;
+      return panel;
+    };
+
+    const pauseShowcasePlayback = () => {
+      if (!projectShowcasePlayingRef.current) return;
+      projectShowcasePlayingRef.current = false;
+      setProjectShowcasePlaying(false);
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (!e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("button, input, select, textarea, a")) return;
+      const panel = getInteractivePanel();
+      if (!panel) return;
+      pauseShowcasePlayback();
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragging) return;
+      const panel = getInteractivePanel();
+      if (!panel) return;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      const zoom = THREE.MathUtils.clamp(panel.zoom, 1, 4);
+      const repX = panel.baseRepeat.x / zoom;
+      const repY = panel.baseRepeat.y / zoom;
+      const rangeX = Math.max(0, 1 - repX);
+      const rangeY = Math.max(0, 1 - repY);
+      const width = Math.max(mount.clientWidth, 1);
+      const height = Math.max(mount.clientHeight, 1);
+      panel.panX += (dx / width) * rangeX * 1.3;
+      panel.panY += (dy / height) * rangeY * 1.3;
+      applyProjectShowcasePanelViewport(panel);
+      bumpProjectShowcaseViewportTick();
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    const onPointerUp = () => {
+      dragging = false;
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (!e.shiftKey) return;
+      const panel = getInteractivePanel();
+      if (!panel) return;
+      pauseShowcasePlayback();
+      const zoomDir = e.deltaY < 0 ? 1 : -1;
+      setProjectShowcasePanelZoom(panel.zoom + zoomDir * 0.12);
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    mount.addEventListener("pointerdown", onPointerDown, { capture: true });
+    window.addEventListener("pointermove", onPointerMove, { capture: true });
+    window.addEventListener("pointerup", onPointerUp, { capture: true });
+    mount.addEventListener("wheel", onWheel, { passive: false, capture: true });
+
+    return () => {
+      mount.removeEventListener("pointerdown", onPointerDown, {
+        capture: true,
+      });
+      window.removeEventListener("pointermove", onPointerMove, {
+        capture: true,
+      });
+      window.removeEventListener("pointerup", onPointerUp, { capture: true });
+      mount.removeEventListener("wheel", onWheel, { capture: true });
+    };
+  }, [
+    getFocusedProjectShowcasePanel,
+    applyProjectShowcasePanelViewport,
+    bumpProjectShowcaseViewportTick,
+    setProjectShowcasePanelZoom,
+  ]);
+
   // ── Roll (bank) control handlers ────────────────────
   const handleRollStart = useCallback(
     (direction: -1 | 1) => {
@@ -1546,6 +1785,9 @@ export default function ResumeSpace3D({
   // ── FOV zoom when inside ship (scroll wheel) ──────
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
+      if (projectShowcaseActiveRef.current) {
+        return;
+      }
       if (!insideShipRef.current) return;
       const cam = sceneRef.current.camera;
       if (!(cam instanceof THREE.PerspectiveCamera)) return;
@@ -1575,6 +1817,7 @@ export default function ResumeSpace3D({
     const STEER_SENSITIVITY = 0.003;
 
     const onPointerDown = (e: PointerEvent) => {
+      if (projectShowcaseActiveRef.current) return;
       if (!insideShipRef.current || !e.shiftKey) return;
       cockpitSteerActiveRef.current = true;
       cockpitSteerStartRef.current = { x: e.clientX, y: e.clientY };
@@ -2775,11 +3018,7 @@ export default function ResumeSpace3D({
           36,
         );
         const runStart = -((publishedShowcase.length - 1) * panelSpacing) / 2;
-        const panelRecords: Array<{
-          group: THREE.Group;
-          runPos: number;
-          entry: ShowcaseEntry;
-        }> = [];
+        const panelRecords: ShowcasePanelRecord[] = [];
 
         publishedShowcase.forEach((entry, index) => {
           const side = index % 2 === 0 ? -1 : 1;
@@ -2798,8 +3037,15 @@ export default function ResumeSpace3D({
               side * panelOffset,
             );
           }
-          panelGroup.lookAt(0, panelGroup.position.y - 0.2, 0);
-          panelGroup.rotateY(Math.PI);
+          // Force deterministic inward-facing card orientation per side.
+          // This prevents some cards from showing the mirrored back face.
+          if (runAxis === "z") {
+            // Cards sit on +/-X walls and should face corridor center.
+            panelGroup.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+          } else {
+            // Cards sit on +/-Z walls and should face corridor center.
+            panelGroup.rotation.y = side < 0 ? 0 : Math.PI;
+          }
 
           const frame = new THREE.Mesh(
             new THREE.PlaneGeometry(panelWidth * 1.03, panelHeight * 1.08),
@@ -2814,19 +3060,98 @@ export default function ResumeSpace3D({
 
           const imageMat = new THREE.MeshBasicMaterial({
             color: 0xb8b8b8,
-            side: THREE.DoubleSide,
+            side: THREE.FrontSide,
             toneMapped: false,
           });
           const imagePlane = new THREE.Mesh(
-            new THREE.PlaneGeometry(panelWidth, panelHeight),
+            new THREE.PlaneGeometry(1, 1),
             imageMat,
           );
+          const fitMode = entry.fit ?? "contain";
+          const panelRecord: ShowcasePanelRecord = {
+            group: panelGroup,
+            runPos,
+            entry,
+            fitMode,
+            imageMat,
+            texture: null,
+            baseRepeat: new THREE.Vector2(1, 1),
+            baseOffset: new THREE.Vector2(0, 0),
+            zoom: 1,
+            panX: 0,
+            panY: 0,
+          };
+          const applyImageFit = (
+            imageAspect?: number,
+            texture?: THREE.Texture,
+          ) => {
+            if (!imageAspect || !Number.isFinite(imageAspect) || imageAspect <= 0) {
+              imagePlane.scale.set(panelWidth, panelHeight, 1);
+              if (texture) {
+                panelRecord.baseRepeat.set(1, 1);
+                panelRecord.baseOffset.set(0, 0);
+                texture.repeat.copy(panelRecord.baseRepeat);
+                texture.offset.copy(panelRecord.baseOffset);
+                texture.needsUpdate = true;
+              }
+              return;
+            }
+            const frameAspect = panelWidth / panelHeight;
+            let displayWidth = panelWidth;
+            let displayHeight = panelHeight;
+            if (fitMode === "cover") {
+              // Cover mode uses UV crop in a fixed viewport, which gives us
+              // CSS-like overflow:hidden behavior and a stable base for pan/zoom.
+              displayWidth = panelWidth;
+              displayHeight = panelHeight;
+              if (texture) {
+                texture.wrapS = THREE.ClampToEdgeWrapping;
+                texture.wrapT = THREE.ClampToEdgeWrapping;
+                if (imageAspect > frameAspect) {
+                  const visibleX = frameAspect / imageAspect;
+                  panelRecord.baseRepeat.set(visibleX, 1);
+                  panelRecord.baseOffset.set((1 - visibleX) * 0.5, 0);
+                } else {
+                  const visibleY = imageAspect / frameAspect;
+                  panelRecord.baseRepeat.set(1, visibleY);
+                  panelRecord.baseOffset.set(0, (1 - visibleY) * 0.5);
+                }
+                texture.repeat.copy(panelRecord.baseRepeat);
+                texture.offset.copy(panelRecord.baseOffset);
+                texture.needsUpdate = true;
+              }
+            } else {
+              if (texture) {
+                panelRecord.baseRepeat.set(1, 1);
+                panelRecord.baseOffset.set(0, 0);
+                texture.repeat.copy(panelRecord.baseRepeat);
+                texture.offset.copy(panelRecord.baseOffset);
+                texture.needsUpdate = true;
+              }
+              if (imageAspect > frameAspect) {
+                displayWidth = panelWidth;
+                displayHeight = panelWidth / imageAspect;
+              } else {
+                displayHeight = panelHeight;
+                displayWidth = panelHeight * imageAspect;
+              }
+            }
+            imagePlane.scale.set(displayWidth, displayHeight, 1);
+          };
+          applyImageFit();
           textureLoader.load(
             entry.image,
             (texture) => {
               texture.colorSpace = THREE.SRGBColorSpace;
               imageMat.map = texture;
               imageMat.color.set(0xffffff);
+              panelRecord.texture = texture;
+              const img = texture.image as
+                | { width?: number; height?: number }
+                | undefined;
+              const imgAspect =
+                img?.width && img?.height ? img.width / img.height : undefined;
+              applyImageFit(imgAspect, texture);
               imageMat.needsUpdate = true;
             },
             undefined,
@@ -2842,7 +3167,7 @@ export default function ResumeSpace3D({
             child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
           });
           showcaseRoot.add(panelGroup);
-          panelRecords.push({ group: panelGroup, runPos, entry });
+          panelRecords.push(panelRecord);
         });
 
         projectShowcasePanelsRef.current = panelRecords;
@@ -3499,12 +3824,33 @@ export default function ResumeSpace3D({
       insideShipRef,
     });
 
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("click", onClick);
+    const onPointerMoveGlobal = (event: PointerEvent) => {
+      if (projectShowcaseActiveRef.current) return;
+      onPointerMove(event);
+    };
+    const onClickGlobal = (event: MouseEvent) => {
+      if (projectShowcaseActiveRef.current) return;
+      onClick(event);
+    };
+    const onPointerDownRotateGlobal = (event: PointerEvent) => {
+      if (projectShowcaseActiveRef.current) return;
+      onPointerDownRotate(event);
+    };
+    const onPointerMoveRotateGlobal = (event: PointerEvent) => {
+      if (projectShowcaseActiveRef.current) return;
+      onPointerMoveRotate(event);
+    };
+    const onPointerUpRotateGlobal = (event: PointerEvent) => {
+      if (projectShowcaseActiveRef.current) return;
+      onPointerUpRotate(event);
+    };
+
+    window.addEventListener("pointermove", onPointerMoveGlobal);
+    window.addEventListener("click", onClickGlobal);
     // Add rotate handlers
-    window.addEventListener("pointerdown", onPointerDownRotate);
-    window.addEventListener("pointermove", onPointerMoveRotate);
-    window.addEventListener("pointerup", onPointerUpRotate);
+    window.addEventListener("pointerdown", onPointerDownRotateGlobal);
+    window.addEventListener("pointermove", onPointerMoveRotateGlobal);
+    window.addEventListener("pointerup", onPointerUpRotateGlobal);
 
     const onDebugPointerMove = (event: PointerEvent) => {
       if (!debugShipLabelModeRef.current || !spaceshipRef.current) {
@@ -4029,11 +4375,11 @@ export default function ResumeSpace3D({
         capture: true,
       });
       window.removeEventListener("keydown", handleSnapshotKey);
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("click", onClick);
-      window.removeEventListener("pointerdown", onPointerDownRotate);
-      window.removeEventListener("pointermove", onPointerMoveRotate);
-      window.removeEventListener("pointerup", onPointerUpRotate);
+      window.removeEventListener("pointermove", onPointerMoveGlobal);
+      window.removeEventListener("click", onClickGlobal);
+      window.removeEventListener("pointerdown", onPointerDownRotateGlobal);
+      window.removeEventListener("pointermove", onPointerMoveRotateGlobal);
+      window.removeEventListener("pointerup", onPointerUpRotateGlobal);
       window.removeEventListener("pointermove", onDebugPointerMove);
       window.removeEventListener("pointerdown", onDebugPointerDown, true);
       window.removeEventListener("pointerup", onDebugPointerUp, true);
@@ -4108,6 +4454,12 @@ export default function ResumeSpace3D({
 
   const focusedProjectShowcaseEntry =
     projectShowcasePanelsRef.current[projectShowcaseFocusIndex]?.entry ?? null;
+  const focusedProjectShowcasePanel =
+    projectShowcasePanelsRef.current[projectShowcaseFocusIndex] ?? null;
+  const focusedProjectShowcaseHasCoverCrop =
+    focusedProjectShowcasePanel?.fitMode === "cover" &&
+    ((focusedProjectShowcasePanel.baseRepeat.x ?? 1) < 0.999 ||
+      (focusedProjectShowcasePanel.baseRepeat.y ?? 1) < 0.999);
 
   return (
     <>
@@ -4690,6 +5042,71 @@ export default function ResumeSpace3D({
               >
                 PROJECT SHOWCASE
               </div>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  width: "100%",
+                }}
+              >
+                <button
+                  onClick={() => stepProjectShowcaseFocus(-1)}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(200, 220, 255, 0.35)",
+                    background: "rgba(10, 12, 20, 0.75)",
+                    color: "#e8ebff",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    minWidth: 72,
+                    flex: "1 1 0",
+                  }}
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={toggleProjectShowcasePlayback}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(200, 220, 255, 0.35)",
+                    background: "rgba(10, 12, 20, 0.75)",
+                    color: "#e8ebff",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    minWidth: 72,
+                    flex: "1 1 0",
+                  }}
+                >
+                  {projectShowcasePlaying ? "Pause" : "Play"}
+                </button>
+                <button
+                  onClick={() => stepProjectShowcaseFocus(1)}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(200, 220, 255, 0.35)",
+                    background: "rgba(10, 12, 20, 0.75)",
+                    color: "#e8ebff",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    minWidth: 72,
+                    flex: "1 1 0",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
               {focusedProjectShowcaseEntry && (
                 <div
                   style={{
@@ -4721,65 +5138,114 @@ export default function ResumeSpace3D({
                   )}
                 </div>
               )}
-              <div
-                style={{
-                  display: "flex",
-                  gap: 6,
-                }}
-              >
-                <button
-                  onClick={() => stepProjectShowcaseFocus(-1)}
+              {focusedProjectShowcaseHasCoverCrop && (
+                <div
                   style={{
-                    padding: "8px 10px",
+                    padding: "10px 12px",
                     borderRadius: 8,
-                    border: "1px solid rgba(200, 220, 255, 0.35)",
-                    background: "rgba(10, 12, 20, 0.75)",
-                    color: "#e8ebff",
-                    cursor: "pointer",
-                    fontSize: 12,
+                    border: "1px solid rgba(130, 170, 255, 0.35)",
+                    background: "rgba(8, 12, 20, 0.75)",
+                    color: "#c8d8ff",
                     fontFamily: "'Rajdhani', sans-serif",
-                    fontWeight: 700,
-                    letterSpacing: 0.4,
+                    fontSize: 11,
+                    lineHeight: 1.3,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
                   }}
                 >
-                  Prev
-                </button>
-                <button
-                  onClick={toggleProjectShowcasePlayback}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(200, 220, 255, 0.35)",
-                    background: "rgba(10, 12, 20, 0.75)",
-                    color: "#e8ebff",
-                    cursor: "pointer",
-                    fontSize: 12,
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontWeight: 700,
-                    letterSpacing: 0.4,
-                    minWidth: 64,
-                  }}
-                >
-                  {projectShowcasePlaying ? "Pause" : "Play"}
-                </button>
-                <button
-                  onClick={() => stepProjectShowcaseFocus(1)}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(200, 220, 255, 0.35)",
-                    background: "rgba(10, 12, 20, 0.75)",
-                    color: "#e8ebff",
-                    cursor: "pointer",
-                    fontSize: 12,
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontWeight: 700,
-                    letterSpacing: 0.4,
-                  }}
-                >
-                  Next
-                </button>
-              </div>
+                  <div style={{ fontWeight: 700, letterSpacing: 0.35 }}>
+                    IMAGE CONTROLS
+                  </div>
+                  <div style={{ opacity: 0.9 }}>
+                    Cover image is cropped. Use arrows and zoom slider.
+                  </div>
+                  <div style={{ opacity: 0.78 }}>
+                    Shift+Drag pan • Shift+Wheel zoom
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, 1fr)",
+                      gap: 4,
+                    }}
+                  >
+                    {[
+                      { label: "↖", dx: -1 as const, dy: 1 as const },
+                      { label: "↑", dx: 0 as const, dy: 1 as const },
+                      { label: "↗", dx: 1 as const, dy: 1 as const },
+                      { label: "←", dx: -1 as const, dy: 0 as const },
+                      { label: "•", dx: 0 as const, dy: 0 as const },
+                      { label: "→", dx: 1 as const, dy: 0 as const },
+                      { label: "↙", dx: -1 as const, dy: -1 as const },
+                      { label: "↓", dx: 0 as const, dy: -1 as const },
+                      { label: "↘", dx: 1 as const, dy: -1 as const },
+                    ].map((dir) => (
+                      <button
+                        key={dir.label}
+                        onClick={() => {
+                          if (dir.dx === 0 && dir.dy === 0) {
+                            resetProjectShowcasePanelViewport();
+                            return;
+                          }
+                          nudgeProjectShowcasePanelViewport(dir.dx, dir.dy);
+                        }}
+                        style={{
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          border: "1px solid rgba(190, 215, 255, 0.35)",
+                          background:
+                            dir.dx === 0 && dir.dy === 0
+                              ? "rgba(24, 60, 86, 0.85)"
+                              : "rgba(10, 12, 20, 0.75)",
+                          color: "#e8ebff",
+                          cursor: "pointer",
+                          fontSize: 12,
+                          fontFamily: "'Rajdhani', sans-serif",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {dir.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span>Zoom</span>
+                      <span>
+                        {(focusedProjectShowcasePanel?.zoom ?? 1).toFixed(2)}x
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={4}
+                      step={0.01}
+                      value={focusedProjectShowcasePanel?.zoom ?? 1}
+                      onChange={(e) =>
+                        setProjectShowcasePanelZoom(Number(e.target.value))
+                      }
+                    />
+                  </div>
+                  <button
+                    onClick={() => resetProjectShowcasePanelViewport()}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      border: "1px solid rgba(200, 220, 255, 0.35)",
+                      background: "rgba(10, 12, 20, 0.75)",
+                      color: "#e8ebff",
+                      cursor: "pointer",
+                      fontSize: 11,
+                      fontFamily: "'Rajdhani', sans-serif",
+                      fontWeight: 700,
+                      letterSpacing: 0.35,
+                    }}
+                  >
+                    Reset View
+                  </button>
+                </div>
+              )}
               <button
                 onClick={exitProjectShowcase}
                 style={{
