@@ -398,14 +398,9 @@ export const useOrbitSystem = (params: {
               targetOpacity = Math.min(1, targetOpacity * 1.8);
             }
 
-            // Color shift by type:
-            // - Blue/white only palette (no green tones)
-            const nearColor = isMoon
-              ? new THREE.Color(0xe7f2ff)
-              : new THREE.Color(0xd8ecff);
-            const farColor = isMoon
-              ? new THREE.Color(0x8fcfff)
-              : new THREE.Color(0x8ac6ff);
+            // Keep labels neutral white (no hue shift).
+            const nearColor = new THREE.Color(0xffffff);
+            const farColor = new THREE.Color(0xffffff);
             const blended = nearColor.lerp(farColor, t);
             const titleEl = label.element.firstElementChild as HTMLElement | null;
             const subEl = label.element.children[1] as HTMLElement | undefined;

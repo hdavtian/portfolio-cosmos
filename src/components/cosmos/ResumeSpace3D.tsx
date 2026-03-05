@@ -40,7 +40,7 @@ import {
   type PlanetData,
 } from "../TourDefinitionBuilder";
 import SpaceshipHUD from "../ui/SpaceshipHUD";
-import ShipControlBar, { type ShipUIPhase, type ShipView } from "../ui/ShipControlBar";
+import ShipControlBar, { type ShipUIPhase } from "../ui/ShipControlBar";
 import CockpitNavPanel from "../ui/CockpitNavPanel";
 import ShipTerminal from "../ui/ShipTerminal";
 import { HologramDroneDisplay } from "./HologramDroneDisplay";
@@ -80,6 +80,7 @@ import {
   NEAR_DEFAULT,
   NEAR_OVERVIEW,
   CONTROLS_MAX_DIST,
+  CAMERA_FAR,
   FOLLOW_DISTANCE,
   FOLLOW_HEIGHT,
   EXP_WANDER_RADIUS,
@@ -127,7 +128,8 @@ const PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT = 25;
 const PROJECT_SHOWCASE_SHOW_IMAGE_MANIPULATION_CONTROLS = false;
 const PROJECT_SHOWCASE_NAV_STOP_BACK_OFFSET = 15;
 const PROJECT_SHOWCASE_USE_NEBULA_REALM = true;
-const PROJECT_SHOWCASE_NEBULA_GLB_PATH = "/models/nebula/nebula_skybox_16k.glb";
+const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
+  "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const PROJECT_SHOWCASE_FILTER_OPTIONS = [
   "Angular",
@@ -381,13 +383,13 @@ export default function ResumeSpace3D({
   } | null>(null);
   const projectShowcaseWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const projectShowcaseNebulaRootRef = useRef<THREE.Object3D | null>(null);
+  const projectShowcaseNebulaDebugLastLogMsRef = useRef(0);
+  const projectShowcaseNebulaDebugLastAlphaBucketRef = useRef(-1);
   const projectShowcaseAngleIntroRef = useRef<{
     raf: number | null;
   }>({ raf: null });
   const projectShowcasePrevStateRef = useRef<{
     followingSpaceship: boolean;
-    insideShip: boolean;
-    shipViewMode: ShipView;
     shipVisible: boolean;
   } | null>(null);
   const spaceshipCameraOffsetRef = useRef(
@@ -444,11 +446,6 @@ export default function ResumeSpace3D({
   // Ship UI phase (controls which buttons are visible)
   const [shipUIPhase, setShipUIPhase] = useState<ShipUIPhase>("hidden");
   // shipWanderIntervalRef removed — ship no longer wanders autonomously
-
-  // Cockpit steering (shift+drag) — yaw/pitch input to turn the ship
-  const cockpitSteerRef = useRef<THREE.Vector2>(new THREE.Vector2(0, 0));
-  const cockpitSteerActiveRef = useRef(false);
-  const cockpitSteerStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Accumulated roll offset (radians), kept for nav orientation consistency.
   const shipRollOffsetRef = useRef<number>(0);
@@ -919,6 +916,13 @@ export default function ResumeSpace3D({
         m.opacity = base * alpha;
       });
     });
+    const alphaBucket = Math.round(alpha * 10);
+    if (alphaBucket !== projectShowcaseNebulaDebugLastAlphaBucketRef.current) {
+      projectShowcaseNebulaDebugLastAlphaBucketRef.current = alphaBucket;
+      vlog(
+        `🌌 Nebula fade alpha=${alpha.toFixed(2)} visible=${nebulaRoot.visible ? "yes" : "no"}`,
+      );
+    }
   }
 
   const getFocusedProjectShowcasePanel = useCallback(() => {
@@ -1166,10 +1170,6 @@ export default function ResumeSpace3D({
     if (prev) {
       setFollowingSpaceship(prev.followingSpaceship);
       followingSpaceshipRef.current = prev.followingSpaceship;
-      setInsideShip(prev.insideShip);
-      insideShipRef.current = prev.insideShip;
-      setShipViewMode(prev.shipViewMode);
-      shipViewModeRef.current = prev.shipViewMode;
       if (spaceshipRef.current) {
         spaceshipRef.current.visible = prev.shipVisible;
       }
@@ -1224,8 +1224,6 @@ export default function ResumeSpace3D({
 
     projectShowcasePrevStateRef.current = {
       followingSpaceship: followingSpaceshipRef.current,
-      insideShip: insideShipRef.current,
-      shipViewMode: shipViewModeRef.current,
       shipVisible: spaceshipRef.current?.visible ?? true,
     };
 
@@ -1488,11 +1486,6 @@ export default function ResumeSpace3D({
         if (forwardOffset) ship.quaternion.multiply(forwardOffset);
       }
 
-      const overlayOpacity =
-        t < 0.78
-          ? THREE.MathUtils.lerp(0.02, 0.16, t / 0.78)
-          : THREE.MathUtils.lerp(0.16, 0.9, (t - 0.78) / 0.22);
-      setProjectShowcaseEntryOverlayOpacity(overlayOpacity);
       const nebulaFade = THREE.MathUtils.clamp((t - 0.06) / 0.58, 0, 1);
       applyProjectShowcaseNebulaFade(nebulaFade);
 
@@ -1643,9 +1636,6 @@ export default function ResumeSpace3D({
             | undefined;
           if (forwardOffset) ship.quaternion.multiply(forwardOffset);
         }
-
-        const overlayOpacity = THREE.MathUtils.lerp(0.08, 0.72, t);
-        setProjectShowcaseEntryOverlayOpacity(overlayOpacity);
 
         if (t >= 1) {
           projectShowcaseExitSequenceRef.current.active = false;
@@ -2142,6 +2132,16 @@ export default function ResumeSpace3D({
         raf = requestAnimationFrame(tick);
         return;
       }
+      const nebulaRoot = projectShowcaseNebulaRootRef.current;
+      if (nebulaRoot?.visible) {
+        const nebulaCenterOffset = nebulaRoot.userData?.nebulaCenterOffset as
+          | THREE.Vector3
+          | undefined;
+        nebulaRoot.position.copy(camera.position);
+        if (nebulaCenterOffset) {
+          nebulaRoot.position.sub(nebulaCenterOffset);
+        }
+      }
 
       const shouldFadeDuringOutboundTravel =
         pendingProjectShowcaseEntryRef.current &&
@@ -2168,6 +2168,16 @@ export default function ResumeSpace3D({
         applyProjectShowcaseNebulaFade(realmAlpha);
         if (realmAlpha > 0.001) {
           camera.layers.enable(PROJECT_SHOWCASE_LAYER);
+        }
+        const now = performance.now();
+        if (now - projectShowcaseNebulaDebugLastLogMsRef.current > 2600) {
+          projectShowcaseNebulaDebugLastLogMsRef.current = now;
+          const nebulaVisible = projectShowcaseNebulaRootRef.current?.visible ?? false;
+          vlog(
+            `🌌 Nebula travel dbg: dist=${distFromKnownCenter.toFixed(0)} alpha=${realmAlpha.toFixed(
+              2,
+            )} camLayer=${camera.layers.isEnabled(PROJECT_SHOWCASE_LAYER) ? "on" : "off"} visible=${nebulaVisible ? "yes" : "no"}`,
+          );
         }
       } else if (
         !projectShowcaseActiveRef.current &&
@@ -2574,76 +2584,6 @@ export default function ResumeSpace3D({
     bumpProjectShowcaseViewportTick,
     setProjectShowcasePanelZoom,
   ]);
-
-  // ── FOV zoom when inside ship (scroll wheel) ──────
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      if (projectShowcaseActiveRef.current) {
-        return;
-      }
-      if (!insideShipRef.current) return;
-      const cam = sceneRef.current.camera;
-      if (!(cam instanceof THREE.PerspectiveCamera)) return;
-
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? 2 : -2;
-      cam.fov = THREE.MathUtils.clamp(cam.fov + delta, 20, 90);
-      cam.updateProjectionMatrix();
-    };
-
-    const mount = mountRef.current;
-    if (mount) {
-      mount.addEventListener("wheel", handleWheel, { passive: false });
-    }
-    return () => {
-      if (mount) {
-        mount.removeEventListener("wheel", handleWheel);
-      }
-    };
-  }, []);
-
-  // ── Shift+drag steering when inside ship ────────────
-  // Shift+drag turns the ship in the drag direction (yaw/pitch).
-  // The render loop applies the rotation to the ship quaternion and
-  // adds forward thrust so the ship moves toward where you steer.
-  useEffect(() => {
-    const STEER_SENSITIVITY = 0.003;
-
-    const onPointerDown = (e: PointerEvent) => {
-      if (projectShowcaseActiveRef.current) return;
-      if (!insideShipRef.current || !e.shiftKey) return;
-      cockpitSteerActiveRef.current = true;
-      cockpitSteerStartRef.current = { x: e.clientX, y: e.clientY };
-      cockpitSteerRef.current.set(0, 0);
-    };
-    const onPointerMove = (e: PointerEvent) => {
-      if (!cockpitSteerActiveRef.current || !cockpitSteerStartRef.current)
-        return;
-      // dx → yaw (left/right), dy → pitch (up/down)
-      const dx =
-        (e.clientX - cockpitSteerStartRef.current.x) * STEER_SENSITIVITY;
-      const dy =
-        (e.clientY - cockpitSteerStartRef.current.y) * STEER_SENSITIVITY;
-      cockpitSteerRef.current.set(
-        THREE.MathUtils.clamp(-dx, -1, 1), // yaw: drag-right → turn right (negative yaw)
-        THREE.MathUtils.clamp(-dy, -1, 1), // pitch: drag-down → pitch down
-      );
-    };
-    const onPointerUp = () => {
-      cockpitSteerActiveRef.current = false;
-      cockpitSteerStartRef.current = null;
-      cockpitSteerRef.current.set(0, 0);
-    };
-
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-    };
-  }, []);
 
   // Update spaceship exterior lights
   useEffect(() => {
@@ -3817,57 +3757,50 @@ export default function ResumeSpace3D({
           .addScaledVector(trenchLateral, 95)
           .add(new THREE.Vector3(0, -36, 0));
         if (PROJECT_SHOWCASE_USE_NEBULA_REALM) {
-          const nebulaLoader = new GLTFLoader();
-          nebulaLoader.load(
-            PROJECT_SHOWCASE_NEBULA_GLB_PATH,
-            (nebulaGltf) => {
-              const nebulaRoot = nebulaGltf.scene;
-              nebulaRoot.name = "ProjectShowcaseNebulaRealm";
-              const nebulaBounds = new THREE.Box3().setFromObject(nebulaRoot);
-              const nebulaCenter = nebulaBounds.getCenter(new THREE.Vector3());
-              const nebulaSize = nebulaBounds.getSize(new THREE.Vector3());
-              const maxDim = Math.max(nebulaSize.x, nebulaSize.y, nebulaSize.z, 1);
-              const desiredMaxDim = 52000;
-              const nebulaScale = desiredMaxDim / maxDim;
-              nebulaRoot.scale.setScalar(nebulaScale);
-              nebulaRoot.position.sub(nebulaCenter.multiplyScalar(nebulaScale));
-              nebulaRoot.position.add(showcaseRoot.position);
-              nebulaRoot.traverse((obj: THREE.Object3D) => {
-                obj.layers.set(PROJECT_SHOWCASE_LAYER);
-                obj.frustumCulled = false;
-                const mesh = obj as THREE.Mesh;
-                if ((mesh as any).isMesh) {
-                  mesh.castShadow = false;
-                  mesh.receiveShadow = false;
-                  const mats = Array.isArray(mesh.material)
-                    ? mesh.material
-                    : [mesh.material];
-                  mats.forEach((mat) => {
-                    const m = mat as THREE.Material & {
-                      depthWrite?: boolean;
-                      toneMapped?: boolean;
-                      transparent?: boolean;
-                      opacity?: number;
-                      userData?: Record<string, unknown>;
-                    };
-                    m.depthWrite = false;
-                    m.toneMapped = false;
-                    m.transparent = true;
-                    m.userData = m.userData || {};
-                    if (m.userData.nebulaBaseOpacity === undefined) {
-                      m.userData.nebulaBaseOpacity = m.opacity ?? 1;
-                    }
-                  });
-                }
+          textureLoader.load(
+            PROJECT_SHOWCASE_NEBULA_JPG_PATH,
+            (nebulaTexture) => {
+              nebulaTexture.colorSpace = THREE.SRGBColorSpace;
+              nebulaTexture.mapping = THREE.EquirectangularReflectionMapping;
+              nebulaTexture.wrapS = THREE.RepeatWrapping;
+              nebulaTexture.wrapT = THREE.ClampToEdgeWrapping;
+              nebulaTexture.needsUpdate = true;
+
+              const domeRadius = CAMERA_FAR * 0.48;
+              const nebulaGeo = new THREE.SphereGeometry(domeRadius, 96, 64);
+              const nebulaMat = new THREE.MeshBasicMaterial({
+                map: nebulaTexture,
+                color: 0xffffff,
+                side: THREE.BackSide,
+                transparent: true,
+                opacity: 1,
+                depthWrite: false,
               });
+              nebulaMat.toneMapped = false;
+              nebulaMat.userData = nebulaMat.userData || {};
+              nebulaMat.userData.nebulaBaseOpacity = 1;
+
+              const nebulaRoot = new THREE.Mesh(nebulaGeo, nebulaMat);
+              nebulaRoot.name = "ProjectShowcaseNebulaRealm";
+              nebulaRoot.layers.set(PROJECT_SHOWCASE_LAYER);
+              nebulaRoot.frustumCulled = false;
+              nebulaRoot.renderOrder = -1000;
+              nebulaRoot.rotation.y = Math.PI * 0.1;
+
               scene.add(nebulaRoot);
               projectShowcaseNebulaRootRef.current = nebulaRoot;
               applyProjectShowcaseNebulaFade(0);
-              vlog("🌌 Project showcase nebula realm loaded");
+              vlog(
+                `🌌 Project showcase JPG sky loaded radius=${domeRadius.toFixed(
+                  0,
+                )} path=${PROJECT_SHOWCASE_NEBULA_JPG_PATH}`,
+              );
             },
             undefined,
             () => {
-              vlog("⚠️ Project showcase nebula failed — using default cosmos outside trench");
+              vlog(
+                "⚠️ Project showcase JPG sky failed — using default cosmos outside trench",
+              );
             },
           );
         }
@@ -5014,8 +4947,6 @@ export default function ResumeSpace3D({
       shipExploreModeRef,
       shipExploreKeysRef,
       shipExploreCoordsRef,
-      cockpitSteerRef,
-      cockpitSteerActiveRef,
       shipRollOffsetRef,
       navTurnActiveRef,
       settledViewTargetRef,
@@ -5964,12 +5895,6 @@ export default function ResumeSpace3D({
               phase={shipUIPhase}
               isFollowingSD={followingStarDestroyer}
               onDisengage={stopFollowingStarDestroyer}
-              orbitPhase={orbitPhase}
-              onLeaveOrbit={() => {
-                exitOrbit();
-                setOrbitPhase("exiting");
-                shipLog("Departing orbit", "orbit");
-              }}
             />
           )}
 

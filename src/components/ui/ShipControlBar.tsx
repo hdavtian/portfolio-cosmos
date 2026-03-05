@@ -21,18 +21,12 @@ interface Props {
   isFollowingSD?: boolean;
   /** Called to break formation with the Star Destroyer */
   onDisengage?: () => void;
-  /** Current moon orbit phase — shows Leave Orbit button when orbiting */
-  orbitPhase?: "idle" | "hold" | "entering" | "orbiting" | "exiting";
-  /** Called when user clicks Leave Orbit */
-  onLeaveOrbit?: () => void;
 }
 
 const ShipControlBar: React.FC<Props> = ({
   phase,
   isFollowingSD = false,
   onDisengage,
-  orbitPhase = "idle",
-  onLeaveOrbit,
 }) => {
   const [fadeIn, setFadeIn] = useState(false);
 
@@ -63,25 +57,12 @@ const ShipControlBar: React.FC<Props> = ({
     whiteSpace: "nowrap" as const,
   };
 
-  const btnActive: React.CSSProperties = {
-    ...btnBase,
-    background: "rgba(80, 140, 255, 0.3)",
-    border: "1px solid rgba(100, 160, 255, 0.6)",
-    color: "#ffffff",
-    boxShadow: "0 0 12px rgba(80, 140, 255, 0.25)",
-  };
-
   const stopEvt = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
   };
 
-  const showControls =
-    (isFollowingSD && !!onDisengage) ||
-    ((orbitPhase === "hold" ||
-      orbitPhase === "entering" ||
-      orbitPhase === "orbiting") &&
-      !!onLeaveOrbit);
+  const showControls = isFollowingSD && !!onDisengage;
   if (!showControls) return null;
 
   // ── Phase: Ship engaged — control bar ──────────────
@@ -125,27 +106,6 @@ const ShipControlBar: React.FC<Props> = ({
           </div>
         )}
 
-        {/* Leave Orbit button — visible during hold, entering, or orbiting */}
-        {(orbitPhase === "hold" || orbitPhase === "entering" || orbitPhase === "orbiting") && onLeaveOrbit && (
-          <div style={{ display: "flex", justifyContent: "center", width: "100%", marginBottom: 4 }}>
-            <button
-              style={{
-                ...btnBase,
-                background: "rgba(0, 255, 120, 0.12)",
-                border: "1px solid rgba(0, 255, 120, 0.4)",
-                color: "#00ff78",
-                fontSize: 12,
-                letterSpacing: 1.5,
-                padding: "8px 24px",
-                textTransform: "uppercase" as const,
-              }}
-              onClick={() => onLeaveOrbit()}
-              onMouseDown={stopEvt}
-            >
-              Leave Orbit
-            </button>
-          </div>
-        )}
       </div>
     );
   }
