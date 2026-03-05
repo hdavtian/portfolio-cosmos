@@ -122,6 +122,7 @@ type ShipLabelMark = {
 const PROJECT_SHOWCASE_NAV_ID = "project-showcase";
 const PROJECT_SHOWCASE_LAYER = 2;
 const PROJECT_SHOWCASE_CARD_LAYER = 1;
+const SKILLS_LATTICE_LAYER = 3;
 const PROJECT_SHOWCASE_MIN_ANGLE_PERCENT = 0;
 const PROJECT_SHOWCASE_MAX_ANGLE_PERCENT = 100;
 const PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT = 25;
@@ -131,6 +132,7 @@ const PROJECT_SHOWCASE_USE_NEBULA_REALM = true;
 const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
+const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 const PROJECT_SHOWCASE_FILTER_OPTIONS = [
   "Angular",
   "C#",
@@ -169,6 +171,18 @@ type ShowcasePanelRecord = {
   zoom: number;
   panX: number;
   panY: number;
+};
+
+type SkillsLatticeNodeRecord = {
+  mesh: THREE.Mesh;
+  baseScale: number;
+  phase: number;
+  label: string;
+  nodeType: "category" | "skill";
+  category: string;
+  detailItems: string[];
+  halo?: THREE.Sprite;
+  lineInfluence: number;
 };
 
 // --- SHIP_DEBUG_LABELS (2026-02-03 snapshot) ---
@@ -383,8 +397,27 @@ export default function ResumeSpace3D({
   } | null>(null);
   const projectShowcaseWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const projectShowcaseNebulaRootRef = useRef<THREE.Object3D | null>(null);
+  const skillsLatticeRootRef = useRef<THREE.Group | null>(null);
+  const skillsLatticeNodesRef = useRef<SkillsLatticeNodeRecord[]>([]);
+  const skillsLatticeLineMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
+  const skillsLatticeSelectedNodeRef = useRef<SkillsLatticeNodeRecord | null>(null);
+  const skillsLegacyBodiesRef = useRef<THREE.Object3D[]>([]);
+  const skillsLatticePendingEntryRef = useRef(false);
+  const skillsLatticeActiveRef = useRef(false);
+  const [skillsLatticeActive, setSkillsLatticeActive] = useState(false);
+  const skillsLatticePrevStateRef = useRef<{
+    followingSpaceship: boolean;
+    shipVisible: boolean;
+    controlsEnabled: boolean;
+  } | null>(null);
   const projectShowcaseNebulaDebugLastLogMsRef = useRef(0);
   const projectShowcaseNebulaDebugLastAlphaBucketRef = useRef(-1);
+  const [skillsLatticeSelection, setSkillsLatticeSelection] = useState<{
+    label: string;
+    nodeType: "category" | "skill";
+    category: string;
+    detailItems: string[];
+  } | null>(null);
   const projectShowcaseAngleIntroRef = useRef<{
     raf: number | null;
   }>({ raf: null });
@@ -1674,6 +1707,130 @@ export default function ResumeSpace3D({
     ],
   );
 
+  const focusSkillsLatticeNode = useCallback(
+    (node: SkillsLatticeNodeRecord, animate = true) => {
+      skillsLatticeSelectedNodeRef.current = node;
+      setSkillsLatticeSelection({
+        label: node.label,
+        nodeType: node.nodeType,
+        category: node.category,
+        detailItems: node.detailItems,
+      });
+      const controls = sceneRef.current.controls;
+      const camera = sceneRef.current.camera;
+      if (!controls || !camera || !skillsLatticeActiveRef.current) return;
+      const worldPos = new THREE.Vector3();
+      node.mesh.getWorldPosition(worldPos);
+      const camPos = camera.position.clone();
+      const dir = camPos.sub(worldPos).normalize();
+      const nextCam = worldPos.clone().addScaledVector(dir, 62).add(new THREE.Vector3(0, 9, 0));
+      controls.setLookAt(
+        nextCam.x,
+        nextCam.y,
+        nextCam.z,
+        worldPos.x,
+        worldPos.y + 1.2,
+        worldPos.z,
+        animate,
+      );
+    },
+    [],
+  );
+
+  const exitSkillsLattice = useCallback(() => {
+    const latticeRoot = skillsLatticeRootRef.current;
+    const camera = sceneRef.current.camera;
+    const controls = sceneRef.current.controls;
+    if (latticeRoot) latticeRoot.visible = false;
+    if (camera) camera.layers.disable(SKILLS_LATTICE_LAYER);
+    const prev = skillsLatticePrevStateRef.current;
+    if (prev) {
+      setFollowingSpaceship(prev.followingSpaceship);
+      followingSpaceshipRef.current = prev.followingSpaceship;
+      if (spaceshipRef.current) {
+        spaceshipRef.current.visible = prev.shipVisible;
+      }
+      if (controls) controls.enabled = prev.controlsEnabled;
+    } else {
+      setFollowingSpaceship(true);
+      followingSpaceshipRef.current = true;
+      if (spaceshipRef.current) spaceshipRef.current.visible = true;
+      if (controls) controls.enabled = true;
+    }
+    skillsLegacyBodiesRef.current.forEach((obj) => {
+      obj.visible = true;
+    });
+    skillsLatticePendingEntryRef.current = false;
+    skillsLatticePrevStateRef.current = null;
+    skillsLatticeActiveRef.current = false;
+    setSkillsLatticeActive(false);
+    skillsLatticeSelectedNodeRef.current = null;
+    setSkillsLatticeSelection(null);
+    vlog("🧠 Skills lattice exited");
+  }, [vlog]);
+
+  const enterSkillsLattice = useCallback(() => {
+    if (skillsLatticeActiveRef.current) return;
+    const latticeRoot = skillsLatticeRootRef.current;
+    const controls = sceneRef.current.controls;
+    const camera = sceneRef.current.camera;
+    if (!latticeRoot || !controls || !camera) return;
+
+    skillsLatticePendingEntryRef.current = false;
+    skillsLatticePrevStateRef.current = {
+      followingSpaceship: followingSpaceshipRef.current,
+      shipVisible: spaceshipRef.current?.visible ?? true,
+      controlsEnabled: controls.enabled,
+    };
+    setFollowingSpaceship(false);
+    followingSpaceshipRef.current = false;
+    if (spaceshipRef.current) spaceshipRef.current.visible = false;
+    skillsLegacyBodiesRef.current.forEach((obj) => {
+      obj.visible = false;
+    });
+    latticeRoot.visible = true;
+    camera.layers.enable(SKILLS_LATTICE_LAYER);
+
+    const latticePos = new THREE.Vector3();
+    latticeRoot.getWorldPosition(latticePos);
+    const startCam = camera.position.clone();
+    const startTarget = controls.getTarget(new THREE.Vector3());
+    const endCam = latticePos
+      .clone()
+      .add(new THREE.Vector3(0, 42, 118));
+    const endTarget = latticePos.clone().add(new THREE.Vector3(0, 8, 0));
+    const startedAt = performance.now();
+    const durationMs = 1800;
+    controls.enabled = false;
+
+    const tick = () => {
+      const t = THREE.MathUtils.clamp(
+        (performance.now() - startedAt) / durationMs,
+        0,
+        1,
+      );
+      const ease = 1 - Math.pow(1 - t, 3);
+      const cam = new THREE.Vector3().lerpVectors(startCam, endCam, ease);
+      const target = new THREE.Vector3().lerpVectors(startTarget, endTarget, ease);
+      controls.setLookAt(cam.x, cam.y, cam.z, target.x, target.y, target.z, false);
+      if (t >= 1) {
+        controls.enabled = true;
+        skillsLatticeActiveRef.current = true;
+        setSkillsLatticeActive(true);
+        const firstNode = skillsLatticeNodesRef.current.find(
+          (n) => n.nodeType === "category",
+        );
+        if (firstNode) {
+          focusSkillsLatticeNode(firstNode, false);
+        }
+        vlog("🧠 Skills lattice entered");
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [focusSkillsLatticeNode, vlog]);
+
   const getProjectShowcaseStopRunForIndex = useCallback((index: number) => {
     const panels = projectShowcasePanelsRef.current;
     if (panels.length === 0) return 0;
@@ -2028,6 +2185,28 @@ export default function ResumeSpace3D({
   const handleCockpitNavigate = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
       vlog(`🎯 Cockpit nav → ${targetType}: ${targetId}`);
+      if (skillsLatticeActiveRef.current && targetId !== "skills") {
+        exitSkillsLattice();
+      }
+      if (targetId === "skills" || targetId === SKILLS_LATTICE_NAV_ID) {
+        if (skillsLatticeActiveRef.current) {
+          vlog("🧠 Skills lattice already active");
+          return;
+        }
+        setFollowingSpaceship(true);
+        followingSpaceshipRef.current = true;
+        if (spaceshipRef.current) spaceshipRef.current.visible = true;
+        const atSkills =
+          currentNavigationTarget === "skills" && navigationDistance === null;
+        skillsLatticePendingEntryRef.current = true;
+        if (atSkills) {
+          enterSkillsLattice();
+        } else {
+          handleQuickNav("skills", "section");
+          vlog("🧠 Routing to Skills — lattice will open on arrival");
+        }
+        return;
+      }
       if (targetId === "projects" || targetId === PROJECT_SHOWCASE_NAV_ID) {
         if (!projectShowcaseReady) {
           vlog("⚠️ Project Showcase is loading");
@@ -2082,9 +2261,11 @@ export default function ResumeSpace3D({
       currentNavigationTarget,
       navigationDistance,
       projectShowcaseReady,
+      enterSkillsLattice,
       handleExperienceCompanyNavigation,
       handleQuickNav,
       startProjectShowcaseEntrySequence,
+      exitSkillsLattice,
       exitProjectShowcase,
       vlog,
     ],
@@ -2120,6 +2301,74 @@ export default function ResumeSpace3D({
     navigationDistance,
     startProjectShowcaseEntrySequence,
   ]);
+
+  useEffect(() => {
+    if (!skillsLatticePendingEntryRef.current || skillsLatticeActiveRef.current) {
+      return;
+    }
+    if (currentNavigationTarget === "skills" && navigationDistance === null) {
+      enterSkillsLattice();
+    }
+  }, [currentNavigationTarget, navigationDistance, enterSkillsLattice]);
+
+  useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
+    const tick = () => {
+      if (skillsLatticeActiveRef.current) {
+        const t = performance.now() * 0.001;
+        const selected = skillsLatticeSelectedNodeRef.current;
+        skillsLatticeNodesRef.current.forEach((node) => {
+          const pulse = 1 + Math.sin(t * 1.7 + node.phase) * 0.08;
+          const selectedBoost = selected?.mesh === node.mesh ? 1.28 : 1;
+          node.mesh.scale.setScalar(node.baseScale * pulse * selectedBoost);
+          if (node.halo?.material) {
+            const hMat = node.halo.material as THREE.SpriteMaterial;
+            const focusAlpha = selected?.mesh === node.mesh ? 0.62 : 0.22;
+            hMat.opacity = focusAlpha + Math.sin(t * 2.2 + node.phase) * 0.06;
+          }
+        });
+        skillsLatticeLineMatsRef.current.forEach((mat, idx) => {
+          const wave = 0.34 + 0.14 * Math.sin(t * 1.2 + idx * 0.7);
+          mat.opacity = wave;
+        });
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [sceneReady]);
+
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!skillsLatticeActiveRef.current) return;
+      const camera = sceneRef.current.camera;
+      if (!camera) return;
+      const rect = mount.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const pointer = new THREE.Vector2(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.layers.set(SKILLS_LATTICE_LAYER);
+      raycaster.setFromCamera(pointer, camera as THREE.Camera);
+      const meshes = skillsLatticeNodesRef.current.map((n) => n.mesh);
+      const hits = raycaster.intersectObjects(meshes, false);
+      if (hits.length === 0) return;
+      const hitMesh = hits[0].object as THREE.Mesh;
+      const node = skillsLatticeNodesRef.current.find((n) => n.mesh === hitMesh);
+      if (!node) return;
+      focusSkillsLatticeNode(node, true);
+      event.stopPropagation();
+    };
+    mount.addEventListener("pointerdown", onPointerDown, { capture: true });
+    return () => {
+      mount.removeEventListener("pointerdown", onPointerDown, { capture: true });
+    };
+  }, [focusSkillsLatticeNode]);
 
   useEffect(() => {
     if (isLoading || !sceneReady) return;
@@ -2214,6 +2463,8 @@ export default function ResumeSpace3D({
       projectShowcaseQueuedNavRef.current = null;
       projectShowcaseAwaitingProjectsArrivalRef.current = false;
       projectShowcaseSawProjectsTravelRef.current = false;
+      skillsLatticePendingEntryRef.current = false;
+      skillsLatticeActiveRef.current = false;
     };
   }, []);
 
@@ -2881,9 +3132,10 @@ export default function ResumeSpace3D({
     const skillCategories = Object.keys(resumeData.skills);
     const skillsCount = skillCategories.length || 1;
     const skillsStartOffset = Math.PI * 0.35;
+    const skillMoonMeshes: THREE.Object3D[] = [];
 
     skillCategories.forEach((cat, i) => {
-      createPlanet(
+      const moon = createPlanet(
         cat,
         SKILL_MOON_ORBIT_BASE + i * SKILL_MOON_ORBIT_STEP,
         SKILL_MOON_RADIUS,
@@ -2894,7 +3146,220 @@ export default function ResumeSpace3D({
         undefined,
         skillsStartOffset + (i * Math.PI * 2) / skillsCount,
       );
+      skillMoonMeshes.push(moon);
     });
+
+    // Skills constellation lattice (unique skills representation)
+    const skillsLatticeRoot = new THREE.Group();
+    skillsLatticeRoot.name = "SkillsConstellationLattice";
+    skillsLatticeRoot.position.copy(skillsPlanet.position).add(new THREE.Vector3(0, 8, 0));
+    skillsLatticeRoot.visible = false;
+    const categoryEntries = Object.entries(resumeData.skills) as Array<
+      [string, string[]]
+    >;
+    const categoryNodeRadius = 3.2;
+    const skillNodeRadius = 1.25;
+    const latticeRadius = 58;
+    const latticeNodes: SkillsLatticeNodeRecord[] = [];
+
+    const categoryPositions = categoryEntries.map((_, idx) => {
+      const a = (idx / Math.max(1, categoryEntries.length)) * Math.PI * 2;
+      const y = Math.sin(idx * 0.9) * 6;
+      return new THREE.Vector3(
+        Math.cos(a) * latticeRadius,
+        y,
+        Math.sin(a) * latticeRadius,
+      );
+    });
+
+    const categoryMat = new THREE.MeshBasicMaterial({
+      color: 0x8fd3ff,
+      transparent: true,
+      opacity: 0.92,
+      depthWrite: false,
+    });
+    const skillMat = new THREE.MeshBasicMaterial({
+      color: 0xdaf1ff,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false,
+    });
+    const makeNodeHalo = (radius: number, color: number) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, "rgba(255,255,255,0.9)");
+      grad.addColorStop(0.35, "rgba(180,220,255,0.42)");
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 64, 64);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.needsUpdate = true;
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        color,
+        transparent: true,
+        opacity: 0.28,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.setScalar(radius * 4.6);
+      return sprite;
+    };
+    const latticeLineMats: THREE.LineBasicMaterial[] = [];
+
+    // Category ring links.
+    {
+      const linePoints: number[] = [];
+      categoryPositions.forEach((pos, i) => {
+        const next = categoryPositions[(i + 1) % categoryPositions.length];
+        linePoints.push(pos.x, pos.y, pos.z, next.x, next.y, next.z);
+      });
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(linePoints, 3),
+      );
+      const lines = new THREE.LineSegments(
+        geom,
+        new THREE.LineBasicMaterial({
+          color: 0x66c6ff,
+          transparent: true,
+          opacity: 0.42,
+          depthWrite: false,
+        }),
+      );
+      latticeLineMats.push(lines.material as THREE.LineBasicMaterial);
+      skillsLatticeRoot.add(lines);
+    }
+
+    categoryEntries.forEach(([category, skills], idx) => {
+      const cPos = categoryPositions[idx];
+      const categoryNode = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(categoryNodeRadius, 1),
+        categoryMat.clone(),
+      );
+      const categoryEdges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(categoryNode.geometry),
+        new THREE.LineBasicMaterial({
+          color: 0xeaf6ff,
+          transparent: true,
+          opacity: 0.82,
+          depthWrite: false,
+        }),
+      );
+      categoryEdges.scale.setScalar(1.012);
+      categoryNode.add(categoryEdges);
+      categoryNode.position.copy(cPos);
+      categoryNode.userData.skillsNode = {
+        label: category,
+        nodeType: "category",
+        category,
+      };
+      skillsLatticeRoot.add(categoryNode);
+      const catHalo = makeNodeHalo(categoryNodeRadius, 0x8fd3ff);
+      if (catHalo) {
+        catHalo.position.copy(cPos);
+        skillsLatticeRoot.add(catHalo);
+      }
+      latticeNodes.push({
+        mesh: categoryNode,
+        baseScale: 1,
+        phase: idx * 1.73,
+        label: category,
+        nodeType: "category",
+        category,
+        detailItems: skills,
+        halo: catHalo ?? undefined,
+        lineInfluence: idx,
+      });
+
+      const catLabel = createLabel(category, `${skills.length} skills`);
+      catLabel.position.set(cPos.x, cPos.y + 6.6, cPos.z);
+      skillsLatticeRoot.add(catLabel);
+
+      const skillLinePoints: number[] = [];
+      const skillOrbitR = 11 + Math.min(7, skills.length * 0.7);
+      skills.forEach((skill, sIdx) => {
+        const sa = (sIdx / Math.max(1, skills.length)) * Math.PI * 2 + idx * 0.35;
+        const sPos = new THREE.Vector3(
+          cPos.x + Math.cos(sa) * skillOrbitR,
+          cPos.y + Math.sin(sa * 1.4) * 2.2,
+          cPos.z + Math.sin(sa) * skillOrbitR,
+        );
+        const skillNode = new THREE.Mesh(
+          new THREE.OctahedronGeometry(skillNodeRadius, 0),
+          skillMat.clone(),
+        );
+        const skillEdges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(skillNode.geometry),
+          new THREE.LineBasicMaterial({
+            color: 0xf4fbff,
+            transparent: true,
+            opacity: 0.75,
+            depthWrite: false,
+          }),
+        );
+        skillEdges.scale.setScalar(1.018);
+        skillNode.add(skillEdges);
+        skillNode.position.copy(sPos);
+        skillNode.userData.skillsNode = {
+          label: skill,
+          nodeType: "skill",
+          category,
+        };
+        skillsLatticeRoot.add(skillNode);
+        const skillHalo = makeNodeHalo(skillNodeRadius, 0xdaf1ff);
+        if (skillHalo) {
+          skillHalo.position.copy(sPos);
+          skillsLatticeRoot.add(skillHalo);
+        }
+        latticeNodes.push({
+          mesh: skillNode,
+          baseScale: 1,
+          phase: idx * 2.13 + sIdx * 0.77,
+          label: skill,
+          nodeType: "skill",
+          category,
+          detailItems: [category],
+          halo: skillHalo ?? undefined,
+          lineInfluence: idx + sIdx * 0.15,
+        });
+        const skillLabel = createLabel(skill);
+        skillLabel.position.set(sPos.x, sPos.y + 2.4, sPos.z);
+        skillsLatticeRoot.add(skillLabel);
+        skillLinePoints.push(cPos.x, cPos.y, cPos.z, sPos.x, sPos.y, sPos.z);
+      });
+      const skillGeom = new THREE.BufferGeometry();
+      skillGeom.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(skillLinePoints, 3),
+      );
+      const skillLines = new THREE.LineSegments(
+        skillGeom,
+        new THREE.LineBasicMaterial({
+          color: 0x9ad9ff,
+          transparent: true,
+          opacity: 0.36,
+          depthWrite: false,
+        }),
+      );
+      latticeLineMats.push(skillLines.material as THREE.LineBasicMaterial);
+      skillsLatticeRoot.add(skillLines);
+    });
+
+    skillsLatticeRoot.traverse((obj) => {
+      obj.layers.set(SKILLS_LATTICE_LAYER);
+    });
+    scene.add(skillsLatticeRoot);
+    skillsLatticeRootRef.current = skillsLatticeRoot;
+    skillsLatticeNodesRef.current = latticeNodes;
+    skillsLatticeLineMatsRef.current = latticeLineMats;
+    skillsLegacyBodiesRef.current = [skillsPlanet, ...skillMoonMeshes];
 
     // Point-based starfield removed — the texture skyboxes (starfield +
     // skyfield) already provide a realistic backdrop that doesn't cluster
@@ -5257,6 +5722,13 @@ export default function ResumeSpace3D({
       projectShowcaseRootRef.current = null;
       projectShowcaseWorldAnchorRef.current = null;
       projectShowcaseNebulaRootRef.current = null;
+      skillsLatticeRootRef.current = null;
+      skillsLatticeNodesRef.current = [];
+      skillsLatticeLineMatsRef.current = [];
+      skillsLatticeSelectedNodeRef.current = null;
+      setSkillsLatticeSelection(null);
+      setSkillsLatticeActive(false);
+      skillsLegacyBodiesRef.current = [];
       projectShowcasePanelsRef.current = [];
       projectShowcaseTrackRef.current = null;
 
@@ -5922,6 +6394,74 @@ export default function ResumeSpace3D({
               isNavigating={navigationDistance !== null}
               onNavigate={handleCockpitNavigate}
             />
+          )}
+
+          {skillsLatticeActive && skillsLatticeSelection && (
+            <div
+              style={{
+                position: "fixed",
+                right: 18,
+                top: 108,
+                width: 296,
+                zIndex: 1120,
+                borderRadius: 10,
+                border: "1px solid rgba(110, 210, 255, 0.42)",
+                background: "rgba(6, 14, 26, 0.86)",
+                color: "#d8eeff",
+                padding: "12px 12px 10px",
+                fontFamily: "'Rajdhani', sans-serif",
+                backdropFilter: "blur(6px)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  letterSpacing: 1.4,
+                  color: "#8fcfff",
+                  marginBottom: 5,
+                }}
+              >
+                SKILLS CONSTELLATION
+              </div>
+              <div
+                style={{
+                  fontSize: 20,
+                  fontWeight: 700,
+                  lineHeight: 1.1,
+                  color: "#f2f8ff",
+                }}
+              >
+                {skillsLatticeSelection.label}
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 12,
+                  color: "rgba(180,220,255,0.92)",
+                }}
+              >
+                {skillsLatticeSelection.nodeType === "category"
+                  ? "Category"
+                  : `Skill in ${skillsLatticeSelection.category}`}
+              </div>
+              <div
+                style={{
+                  marginTop: 9,
+                  maxHeight: 180,
+                  overflowY: "auto",
+                  borderTop: "1px solid rgba(120,170,220,0.24)",
+                  paddingTop: 8,
+                  fontSize: 12,
+                  lineHeight: 1.4,
+                }}
+              >
+                {skillsLatticeSelection.detailItems.map((item) => (
+                  <div key={item} style={{ marginBottom: 5, color: "#c6ddf5" }}>
+                    - {item}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {projectShowcaseActive && (
