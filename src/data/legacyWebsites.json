@@ -119,6 +119,7 @@
     "description": "Stormscape portfolio demo-sites index capture.",
     "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
     "year": null,
+    "fit": "contain",
     "published": true
   },
   {
@@ -129,6 +130,7 @@
     "description": "Stormscape portfolio live-sites index screenshot.",
     "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
     "year": null,
+    "fit": "contain",
     "published": true
   },
   {
@@ -139,6 +141,7 @@
     "description": "Stormscape under-construction listing from archive period.",
     "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
     "year": null,
+    "fit": "contain",
     "published": true
   },
   {

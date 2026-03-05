@@ -316,10 +316,21 @@ export default function ResumeSpace3D({
   const [projectShowcaseReady, setProjectShowcaseReady] = useState(false);
   const [projectShowcaseActive, setProjectShowcaseActive] = useState(false);
   const [projectShowcasePlaying, setProjectShowcasePlaying] = useState(false);
+  const [projectShowcaseLeverValue, setProjectShowcaseLeverValue] = useState(0);
   const [projectShowcaseFocusIndex, setProjectShowcaseFocusIndex] = useState(0);
   const [, setProjectShowcaseViewportTick] = useState(0);
   const projectShowcaseActiveRef = useRef(false);
   const projectShowcasePlayingRef = useRef(false);
+  const projectShowcaseLeverValueRef = useRef(0);
+  const projectShowcaseLeverDraggingRef = useRef(false);
+  const projectShowcaseLeverFlickRef = useRef(0);
+  const projectShowcaseVelocityRef = useRef(0);
+  const projectShowcaseJumpTargetRef = useRef<number | null>(null);
+  const projectShowcaseLeverRectRef = useRef<DOMRect | null>(null);
+  const projectShowcaseLeverLastSampleRef = useRef<{
+    value: number;
+    t: number;
+  } | null>(null);
   const projectShowcaseFocusIndexRef = useRef(0);
   const projectShowcaseLastTickRef = useRef<number | null>(null);
   const projectShowcasePanelsRef = useRef<ShowcasePanelRecord[]>([]);
@@ -830,6 +841,12 @@ export default function ResumeSpace3D({
     });
   }, [setProjectShowcaseFocus]);
 
+  const setProjectShowcaseLever = useCallback((value: number) => {
+    const clamped = THREE.MathUtils.clamp(value, -1, 1);
+    projectShowcaseLeverValueRef.current = clamped;
+    setProjectShowcaseLeverValue(clamped);
+  }, []);
+
   const getFocusedProjectShowcasePanel = useCallback(() => {
     const panels = projectShowcasePanelsRef.current;
     if (panels.length === 0) return null;
@@ -953,6 +970,91 @@ export default function ResumeSpace3D({
     ],
   );
 
+  const updateProjectShowcaseLeverFromClientY = useCallback(
+    (clientY: number, rect: DOMRect) => {
+      const centerY = rect.top + rect.height * 0.5;
+      const normalized = (centerY - clientY) / Math.max(1, rect.height * 0.5);
+      setProjectShowcaseLever(normalized);
+      return THREE.MathUtils.clamp(normalized, -1, 1);
+    },
+    [setProjectShowcaseLever],
+  );
+
+  const startProjectShowcaseLeverDrag = useCallback(
+    (clientY: number, rect: DOMRect) => {
+      if (projectShowcasePlayingRef.current) {
+        projectShowcasePlayingRef.current = false;
+        setProjectShowcasePlaying(false);
+      }
+      projectShowcaseJumpTargetRef.current = null;
+      projectShowcaseLeverDraggingRef.current = true;
+      projectShowcaseLeverFlickRef.current = 0;
+      const value = updateProjectShowcaseLeverFromClientY(clientY, rect);
+      projectShowcaseLeverLastSampleRef.current = {
+        value,
+        t: performance.now(),
+      };
+    },
+    [updateProjectShowcaseLeverFromClientY],
+  );
+
+  const moveProjectShowcaseLeverDrag = useCallback(
+    (clientY: number, rect: DOMRect) => {
+      if (!projectShowcaseLeverDraggingRef.current) return;
+      const value = updateProjectShowcaseLeverFromClientY(clientY, rect);
+      const now = performance.now();
+      const sample = projectShowcaseLeverLastSampleRef.current;
+      if (sample) {
+        const dt = Math.max((now - sample.t) / 1000, 1 / 240);
+        const dv = value - sample.value;
+        projectShowcaseLeverFlickRef.current = THREE.MathUtils.clamp(
+          dv / dt,
+          -4,
+          4,
+        );
+      }
+      projectShowcaseLeverLastSampleRef.current = { value, t: now };
+    },
+    [updateProjectShowcaseLeverFromClientY],
+  );
+
+  const endProjectShowcaseLeverDrag = useCallback(() => {
+    if (!projectShowcaseLeverDraggingRef.current) return;
+    projectShowcaseLeverDraggingRef.current = false;
+    projectShowcaseLeverLastSampleRef.current = null;
+    const track = projectShowcaseTrackRef.current;
+    if (track) {
+      const maxManualSpeed = track.speed * 2.4;
+      const impulse = projectShowcaseLeverFlickRef.current * track.speed * 0.15;
+      projectShowcaseVelocityRef.current = THREE.MathUtils.clamp(
+        projectShowcaseVelocityRef.current + impulse,
+        -maxManualSpeed,
+        maxManualSpeed,
+      );
+    }
+    projectShowcaseLeverFlickRef.current = 0;
+    setProjectShowcaseLever(0);
+  }, [setProjectShowcaseLever]);
+
+  useEffect(() => {
+    const onPointerMove = (e: PointerEvent) => {
+      if (!projectShowcaseLeverDraggingRef.current) return;
+      const rect = projectShowcaseLeverRectRef.current;
+      if (!rect) return;
+      moveProjectShowcaseLeverDrag(e.clientY, rect);
+      e.preventDefault();
+    };
+    const onPointerUp = () => {
+      endProjectShowcaseLeverDrag();
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [endProjectShowcaseLeverDrag, moveProjectShowcaseLeverDrag]);
+
   const exitProjectShowcase = useCallback(() => {
     const showcaseRoot = projectShowcaseRootRef.current;
     if (showcaseRoot) {
@@ -989,10 +1091,16 @@ export default function ResumeSpace3D({
     setProjectShowcaseActive(false);
     projectShowcasePlayingRef.current = false;
     setProjectShowcasePlaying(false);
+    projectShowcaseVelocityRef.current = 0;
+    projectShowcaseJumpTargetRef.current = null;
+    projectShowcaseLeverDraggingRef.current = false;
+    projectShowcaseLeverFlickRef.current = 0;
+    projectShowcaseLeverLastSampleRef.current = null;
+    setProjectShowcaseLever(0);
     projectShowcaseLastTickRef.current = null;
     pendingProjectShowcaseEntryRef.current = false;
     vlog("🛰️ Project Showcase exited");
-  }, [vlog]);
+  }, [setProjectShowcaseLever, vlog]);
 
   const enterProjectShowcase = useCallback(() => {
     const showcaseRoot = projectShowcaseRootRef.current;
@@ -1037,23 +1145,35 @@ export default function ResumeSpace3D({
     }
     projectShowcasePlayingRef.current = false;
     setProjectShowcasePlaying(false);
+    projectShowcaseVelocityRef.current = 0;
+    projectShowcaseJumpTargetRef.current = null;
+    projectShowcaseLeverDraggingRef.current = false;
+    projectShowcaseLeverFlickRef.current = 0;
+    projectShowcaseLeverLastSampleRef.current = null;
+    setProjectShowcaseLever(0);
 
     projectShowcaseActiveRef.current = true;
     setProjectShowcaseActive(true);
     pendingProjectShowcaseEntryRef.current = false;
     vlog("🛰️ Entered Project Showcase");
-  }, [setProjectShowcaseRunPosition, vlog]);
+  }, [setProjectShowcaseLever, setProjectShowcaseRunPosition, vlog]);
 
   const toggleProjectShowcasePlayback = useCallback(() => {
     const next = !projectShowcasePlayingRef.current;
     projectShowcasePlayingRef.current = next;
     setProjectShowcasePlaying(next);
-  }, []);
+    if (next) {
+      projectShowcaseVelocityRef.current = 0;
+      projectShowcaseJumpTargetRef.current = null;
+      setProjectShowcaseLever(0);
+    }
+  }, [setProjectShowcaseLever]);
 
   const stepProjectShowcaseFocus = useCallback(
     (direction: -1 | 1) => {
       const panels = projectShowcasePanelsRef.current;
       if (panels.length === 0) return;
+      projectShowcaseJumpTargetRef.current = null;
       const current = projectShowcaseFocusIndexRef.current;
       const next =
         (current + direction + panels.length) % panels.length;
@@ -1061,6 +1181,24 @@ export default function ResumeSpace3D({
       setProjectShowcaseRunPosition(panels[next].runPos);
     },
     [setProjectShowcaseFocus, setProjectShowcaseRunPosition],
+  );
+
+  const jumpProjectShowcaseToIndex = useCallback(
+    (index: number) => {
+      const panels = projectShowcasePanelsRef.current;
+      if (panels.length === 0) return;
+      const safeIndex = THREE.MathUtils.clamp(index, 0, panels.length - 1);
+      projectShowcasePlayingRef.current = false;
+      setProjectShowcasePlaying(false);
+      projectShowcaseVelocityRef.current = 0;
+    projectShowcaseJumpTargetRef.current = null;
+      projectShowcaseLeverDraggingRef.current = false;
+      projectShowcaseLeverFlickRef.current = 0;
+      projectShowcaseLeverLastSampleRef.current = null;
+      setProjectShowcaseLever(0);
+      projectShowcaseJumpTargetRef.current = panels[safeIndex].runPos;
+    },
+    [setProjectShowcaseLever],
   );
 
   const handleExperienceCompanyNavigation = useCallback(
@@ -1617,13 +1755,88 @@ export default function ResumeSpace3D({
       const dt = Math.min((now - last) / 1000, 0.08);
       projectShowcaseLastTickRef.current = now;
 
-      if (projectShowcasePlayingRef.current) {
-        let nextRun = projectShowcaseRunPosRef.current + track.speed * dt;
-        const endPad = 10;
-        if (nextRun > track.maxRun - endPad) {
-          nextRun = track.minRun + endPad;
+      const endPad = 10;
+      const minRun = track.minRun + endPad;
+      const maxRun = track.maxRun - endPad;
+      const loopLen = Math.max(1, maxRun - minRun);
+      const currentRun = projectShowcaseRunPosRef.current;
+      const jumpTarget = projectShowcaseJumpTargetRef.current;
+
+      if (jumpTarget !== null) {
+        const normalizedCurrent = THREE.MathUtils.euclideanModulo(
+          currentRun - minRun,
+          loopLen,
+        ) + minRun;
+        const normalizedTarget = THREE.MathUtils.euclideanModulo(
+          jumpTarget - minRun,
+          loopLen,
+        ) + minRun;
+        const forwardDist =
+          normalizedTarget >= normalizedCurrent
+            ? normalizedTarget - normalizedCurrent
+            : normalizedTarget + loopLen - normalizedCurrent;
+        const backwardDist =
+          normalizedCurrent >= normalizedTarget
+            ? normalizedCurrent - normalizedTarget
+            : normalizedCurrent + loopLen - normalizedTarget;
+        const goForward = forwardDist <= backwardDist;
+        const remaining = Math.min(forwardDist, backwardDist);
+        // Two-phase profile: keep a fast clip while far, then brake near target.
+        const cruiseSpeed = track.speed * 25;
+        const minApproachSpeed = track.speed * 0.14;
+        const brakeDistance = 1.7;
+        let dynamicSpeed = cruiseSpeed;
+        if (remaining < brakeDistance) {
+          const t = THREE.MathUtils.clamp(remaining / brakeDistance, 0, 1);
+          const eased = t * t * (3 - 2 * t);
+          dynamicSpeed = THREE.MathUtils.lerp(
+            minApproachSpeed,
+            cruiseSpeed,
+            eased,
+          );
         }
+        const step = Math.min(remaining, dynamicSpeed * dt);
+        let nextRun = normalizedCurrent + (goForward ? step : -step);
+        if (nextRun > maxRun) nextRun -= loopLen;
+        if (nextRun < minRun) nextRun += loopLen;
         setProjectShowcaseRunPosition(nextRun);
+        if (remaining < 0.18) {
+          const direction = goForward ? 1 : -1;
+          let settleRun = normalizedTarget + direction * 0.05;
+          if (settleRun > maxRun) settleRun -= loopLen;
+          if (settleRun < minRun) settleRun += loopLen;
+          setProjectShowcaseRunPosition(settleRun);
+          projectShowcaseJumpTargetRef.current = null;
+          // Small opposite impulse gives a "heavy shuttle" settle bounce.
+          projectShowcaseVelocityRef.current = -direction * track.speed * 0.12;
+          setProjectShowcaseLever(0);
+        }
+      } else {
+        const maxManualSpeed = track.speed * 2.4;
+        let targetVelocity = 0;
+        if (projectShowcasePlayingRef.current) {
+          targetVelocity = track.speed * 0.75;
+        } else if (projectShowcaseLeverDraggingRef.current) {
+          targetVelocity = projectShowcaseLeverValueRef.current * maxManualSpeed;
+        }
+        const velocitySmooth = projectShowcaseLeverDraggingRef.current ? 20 : 4;
+        projectShowcaseVelocityRef.current = THREE.MathUtils.damp(
+          projectShowcaseVelocityRef.current,
+          targetVelocity,
+          velocitySmooth,
+          dt,
+        );
+
+        if (Math.abs(projectShowcaseVelocityRef.current) > 0.002) {
+          let nextRun =
+            projectShowcaseRunPosRef.current + projectShowcaseVelocityRef.current * dt;
+          if (nextRun > maxRun) {
+            nextRun = minRun;
+          } else if (nextRun < minRun) {
+            nextRun = maxRun;
+          }
+          setProjectShowcaseRunPosition(nextRun);
+        }
       }
 
       const focusIndex = THREE.MathUtils.clamp(
@@ -1700,6 +1913,7 @@ export default function ResumeSpace3D({
       if (!projectShowcasePlayingRef.current) return;
       projectShowcasePlayingRef.current = false;
       setProjectShowcasePlaying(false);
+      projectShowcaseJumpTargetRef.current = null;
     };
 
     const onPointerDown = (e: PointerEvent) => {
@@ -4487,6 +4701,9 @@ export default function ResumeSpace3D({
     projectShowcasePanelsRef.current[projectShowcaseFocusIndex]?.entry ?? null;
   const focusedProjectShowcasePanel =
     projectShowcasePanelsRef.current[projectShowcaseFocusIndex] ?? null;
+  const projectShowcaseNavEntries = projectShowcasePanelsRef.current.map(
+    (panel) => panel.entry,
+  );
   const focusedProjectShowcaseHasCoverCrop =
     focusedProjectShowcasePanel?.fitMode === "cover" &&
     ((focusedProjectShowcasePanel.baseRepeat.x ?? 1) < 0.999 ||
@@ -5140,6 +5357,81 @@ export default function ResumeSpace3D({
                   Next
                 </button>
               </div>
+              <div
+                style={{
+                  width: "100%",
+                  padding: "8px 12px 10px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(114, 198, 255, 0.3)",
+                  background: "rgba(7, 13, 24, 0.84)",
+                  color: "#c7e9ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}
+              >
+                <div style={{ fontSize: 11, letterSpacing: 0.5, opacity: 0.92 }}>
+                  SHUTTLE LEVER (drag up/down)
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    onPointerDown={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      projectShowcaseLeverRectRef.current = rect;
+                      startProjectShowcaseLeverDrag(e.clientY, rect);
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    style={{
+                      position: "relative",
+                      width: 30,
+                      height: 116,
+                      borderRadius: 999,
+                      border: "1px solid rgba(160, 205, 255, 0.38)",
+                      background:
+                        "linear-gradient(180deg, rgba(22,40,58,0.95) 0%, rgba(10,18,28,0.9) 100%)",
+                      cursor: "ns-resize",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 5,
+                        right: 5,
+                        top: "50%",
+                        height: 1,
+                        background: "rgba(160, 200, 255, 0.45)",
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 4,
+                        right: 4,
+                        width: 22,
+                        height: 22,
+                        borderRadius: "50%",
+                        border: "1px solid rgba(220, 235, 255, 0.65)",
+                        background:
+                          "radial-gradient(circle at 30% 30%, rgba(180,220,255,0.95) 0%, rgba(96,154,210,0.95) 35%, rgba(30,64,94,0.98) 100%)",
+                        boxShadow: "0 2px 8px rgba(5, 10, 16, 0.5)",
+                        top: `${50 - projectShowcaseLeverValue * 40}%`,
+                        transform: "translateY(-50%)",
+                        pointerEvents: "none",
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 11 }}>
+                    <div>↑ Forward</div>
+                    <div>Center = coast</div>
+                    <div>↓ Reverse</div>
+                    <div style={{ opacity: 0.8 }}>
+                      Velocity: {projectShowcaseVelocityRef.current.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              </div>
               {focusedProjectShowcaseEntry && (
                 <div
                   style={{
@@ -5296,6 +5588,73 @@ export default function ResumeSpace3D({
               >
                 Back to Projects
               </button>
+            </div>
+          )}
+
+          {projectShowcaseActive && projectShowcaseNavEntries.length > 0 && (
+            <div
+              style={{
+                position: "fixed",
+                right: 18,
+                top: 430,
+                zIndex: 1090,
+                width: 220,
+                maxHeight: "42vh",
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                padding: "8px 8px 10px",
+                borderRadius: 10,
+                border: "1px solid rgba(120, 170, 255, 0.34)",
+                background: "rgba(8, 14, 24, 0.82)",
+                backdropFilter: "blur(3px)",
+              }}
+            >
+              <div
+                style={{
+                  color: "#99beff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 11,
+                  letterSpacing: 0.6,
+                  opacity: 0.9,
+                  padding: "0 4px 2px",
+                }}
+              >
+                IMAGE NAV
+              </div>
+              {projectShowcaseNavEntries.map((entry, index) => {
+                const active = index === projectShowcaseFocusIndex;
+                return (
+                  <button
+                    key={`${entry.id}-${index}`}
+                    onClick={() => jumpProjectShowcaseToIndex(index)}
+                    style={{
+                      padding: "6px 8px",
+                      borderRadius: 8,
+                      border: active
+                        ? "1px solid rgba(155, 220, 255, 0.78)"
+                        : "1px solid rgba(120, 165, 225, 0.32)",
+                      background: active
+                        ? "rgba(34, 92, 140, 0.88)"
+                        : "rgba(10, 16, 28, 0.78)",
+                      color: active ? "#ecf6ff" : "#c5dcff",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "'Rajdhani', sans-serif",
+                      fontSize: 11,
+                      fontWeight: active ? 700 : 600,
+                      letterSpacing: 0.35,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                    title={entry.title}
+                  >
+                    {index + 1}. {entry.title}
+                  </button>
+                );
+              })}
             </div>
           )}
 
