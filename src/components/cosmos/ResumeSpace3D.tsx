@@ -1907,6 +1907,9 @@ export default function ResumeSpace3D({
     const camera = sceneRef.current.camera;
     const controls = sceneRef.current.controls;
     if (latticeRoot) latticeRoot.visible = false;
+    skillsLatticeNodeLabelsRef.current.forEach((label) => {
+      label.visible = false;
+    });
     if (latticeBeacon) {
       latticeBeacon.visible = true;
       latticeBeacon.userData.sectionIndex = 2;
@@ -1970,6 +1973,9 @@ export default function ResumeSpace3D({
     skillsLatticeEnvelopeInsideRef.current = false;
 
     skillsLatticePendingEntryRef.current = false;
+    skillsLatticeNodeLabelsRef.current.forEach((label) => {
+      label.visible = false;
+    });
     if (!skillsLatticeSystemActiveRef.current || !skillsLatticePrevStateRef.current) {
       skillsLatticePrevStateRef.current = {
         followingSpaceship: followingSpaceshipRef.current,
@@ -2032,19 +2038,15 @@ export default function ResumeSpace3D({
         controls.enabled = true;
         skillsLatticeActiveRef.current = true;
         setSkillsLatticeActive(true);
-        const firstNode = skillsLatticeNodesRef.current.find(
-          (n) => n.nodeType === "category",
-        );
-        if (firstNode) {
-          focusSkillsLatticeNode(firstNode, false);
-        }
+        skillsLatticeSelectedNodeRef.current = null;
+        setSkillsLatticeSelection(null);
         vlog("🧠 Skills lattice entered");
         return;
       }
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  }, [focusSkillsLatticeNode, placeStarDestroyerNearSkills, vlog]);
+  }, [placeStarDestroyerNearSkills, vlog]);
 
   const resumeSkillsLatticeInPlace = useCallback(() => {
     if (!skillsLatticeSystemActiveRef.current || skillsLatticeActiveRef.current) return;
