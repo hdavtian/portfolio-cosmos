@@ -1954,9 +1954,20 @@ export default function ResumeSpace3D({
     if (skillsLatticeActiveRef.current) return;
     const latticeRoot = skillsLatticeRootRef.current;
     const latticeBeacon = skillsLatticeBeaconRef.current;
+    const shellMat = skillsLatticeEnvelopeMatRef.current;
     const controls = sceneRef.current.controls;
     const camera = sceneRef.current.camera;
     if (!latticeRoot || !controls || !camera) return;
+    if (shellMat) {
+      // Start approach with an opaque outer shell; transparency is only enabled
+      // once the camera is genuinely inside the shell.
+      shellMat.side = THREE.FrontSide;
+      shellMat.transparent = false;
+      shellMat.depthWrite = true;
+      shellMat.opacity = 1;
+      shellMat.needsUpdate = true;
+    }
+    skillsLatticeEnvelopeInsideRef.current = false;
 
     skillsLatticePendingEntryRef.current = false;
     if (!skillsLatticeSystemActiveRef.current || !skillsLatticePrevStateRef.current) {
@@ -2004,7 +2015,7 @@ export default function ResumeSpace3D({
       .add(new THREE.Vector3(0, 38, 156));
     const endTarget = latticePos.clone().add(new THREE.Vector3(0, 8, 0));
     const startedAt = performance.now();
-    const durationMs = 4600;
+    const durationMs = 6800;
     controls.enabled = false;
 
     const tick = () => {
@@ -2411,8 +2422,22 @@ export default function ResumeSpace3D({
   const handleCockpitNavigate = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
       vlog(`🎯 Cockpit nav → ${targetType}: ${targetId}`);
-      if ((skillsLatticeActiveRef.current || skillsLatticeSystemActiveRef.current) && targetId !== "skills") {
+      if (targetId !== "skills" && targetId !== SKILLS_LATTICE_NAV_ID) {
+        skillsLatticePendingEntryRef.current = false;
+      }
+      const leavingSkillsLattice =
+        (skillsLatticeActiveRef.current || skillsLatticeSystemActiveRef.current) &&
+        targetId !== "skills";
+      if (leavingSkillsLattice) {
         exitSkillsLattice({ restoreShip: true, clearSystem: true });
+        // Ensure autopilot can start immediately for non-Projects targets too.
+        setFollowingSpaceship(true);
+        followingSpaceshipRef.current = true;
+        setInsideShip(false);
+        insideShipRef.current = false;
+        setShipViewMode("exterior");
+        shipViewModeRef.current = "exterior";
+        if (spaceshipRef.current) spaceshipRef.current.visible = true;
       }
       if (targetId === "skills" || targetId === SKILLS_LATTICE_NAV_ID) {
         if (skillsLatticeActiveRef.current) {
@@ -2547,8 +2572,8 @@ export default function ResumeSpace3D({
       && ship.position.distanceTo(anchor) <= SKILLS_LATTICE_ENTRY_TRIGGER_DIST
       && navigationDistance === null;
     if (arrivedAtSkills) {
-      // Immediate non-ship handoff at lightspeed end to avoid camera
-      // fighting between ship-follow and lattice-entry framing.
+      // Continuous handoff: lightspeed ends outside shell and immediately
+      // transitions to non-ship glide into lattice (no artificial pause).
       setFollowingSpaceship(false);
       followingSpaceshipRef.current = false;
       if (spaceshipRef.current) spaceshipRef.current.visible = false;
@@ -4116,10 +4141,10 @@ export default function ResumeSpace3D({
         specular: new THREE.Color(0xc9e8ff),
         emissive: 0x101828,
         emissiveIntensity: 0.08,
-        transparent: true,
-        opacity: 0.06,
-        side: THREE.DoubleSide,
-        depthWrite: false,
+        transparent: false,
+        opacity: 1,
+        side: THREE.FrontSide,
+        depthWrite: true,
       }),
     );
     (latticeEnvelope.material as THREE.MeshPhongMaterial).toneMapped = false;
