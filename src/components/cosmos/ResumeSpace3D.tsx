@@ -464,6 +464,7 @@ export default function ResumeSpace3D({
   const skillsLatticeNodeLabelsRef = useRef<THREE.Object3D[]>([]);
   const skillsLatticeSystemActiveRef = useRef(false);
   const skillsLatticeCausticLightsRef = useRef<THREE.PointLight[]>([]);
+  const externalCosmosLabelsHiddenForLatticeRef = useRef(false);
   const skillsLatticeRippleRef = useRef<{
     active: boolean;
     center: THREE.Vector3;
@@ -1896,6 +1897,25 @@ export default function ResumeSpace3D({
     shipLog("SD repositioned near Skills", "info");
   }, [shipLog, vlog]);
 
+  const setExternalCosmosLabelsHiddenForLattice = useCallback((hidden: boolean) => {
+    const scene = sceneRef.current.scene;
+    if (!scene) return;
+    if (externalCosmosLabelsHiddenForLatticeRef.current === hidden) return;
+    externalCosmosLabelsHiddenForLatticeRef.current = hidden;
+    // In lattice mode we now do per-label occlusion checks instead of
+    // blanket hiding. Keep visibility restoration when mode ends.
+    if (hidden) return;
+    scene.traverse((obj) => {
+      const maybeCss = obj as THREE.Object3D & {
+        isCSS2DObject?: boolean;
+        userData: Record<string, unknown>;
+      };
+      if (!maybeCss.isCSS2DObject) return;
+      if (maybeCss.userData?.skillsLatticeLabel) return;
+      maybeCss.visible = !hidden;
+    });
+  }, []);
+
   const exitSkillsLattice = useCallback((options?: {
     restoreShip?: boolean;
     clearSystem?: boolean;
@@ -1943,6 +1963,7 @@ export default function ResumeSpace3D({
     if (clearSystem) {
       skillsLatticePrevStateRef.current = null;
       skillsLatticeSystemActiveRef.current = false;
+      setExternalCosmosLabelsHiddenForLattice(false);
     }
     skillsLatticeActiveRef.current = false;
     setSkillsLatticeActive(false);
@@ -1951,7 +1972,7 @@ export default function ResumeSpace3D({
     setSkillsLatticeSelection(null);
     skillsLatticeEnvelopeInsideRef.current = null;
     vlog("🧠 Skills lattice exited");
-  }, [vlog]);
+  }, [setExternalCosmosLabelsHiddenForLattice, vlog]);
 
   const enterSkillsLattice = useCallback(() => {
     if (skillsLatticeActiveRef.current) return;
@@ -1984,6 +2005,7 @@ export default function ResumeSpace3D({
       };
     }
     skillsLatticeSystemActiveRef.current = true;
+    setExternalCosmosLabelsHiddenForLattice(true);
     setFollowingSpaceship(false);
     followingSpaceshipRef.current = false;
     if (spaceshipRef.current) spaceshipRef.current.visible = false;
@@ -2016,13 +2038,66 @@ export default function ResumeSpace3D({
       startTarget.z,
       false,
     );
-    const endCam = latticePos
-      .clone()
-      .add(new THREE.Vector3(0, 38, 156));
-    const endTarget = latticePos.clone().add(new THREE.Vector3(0, 8, 0));
+
+    // Compute a perpendicular view to the lattice category-node plane so the
+    // full pentagram-like spread is visible in one clean framing.
+    const worldCategoryPoints = skillsLatticeNodesRef.current
+      .filter((n) => n.nodeType === "category")
+      .map((n) => n.mesh.getWorldPosition(new THREE.Vector3()));
+    const worldAllPoints = skillsLatticeNodesRef.current
+      .map((n) => n.mesh.getWorldPosition(new THREE.Vector3()));
+
+    const centroid = new THREE.Vector3();
+    if (worldAllPoints.length > 0) {
+      worldAllPoints.forEach((p) => centroid.add(p));
+      centroid.multiplyScalar(1 / worldAllPoints.length);
+    } else {
+      centroid.copy(latticePos);
+    }
+
+    const planeNormal = new THREE.Vector3(0, 1, 0);
+    if (worldCategoryPoints.length >= 3) {
+      // Newell normal from ordered category ring points.
+      const n = new THREE.Vector3();
+      for (let i = 0; i < worldCategoryPoints.length; i += 1) {
+        const a = worldCategoryPoints[i];
+        const b = worldCategoryPoints[(i + 1) % worldCategoryPoints.length];
+        n.x += (a.y - b.y) * (a.z + b.z);
+        n.y += (a.z - b.z) * (a.x + b.x);
+        n.z += (a.x - b.x) * (a.y + b.y);
+      }
+      if (n.lengthSq() > 1e-6) {
+        planeNormal.copy(n.normalize());
+      }
+    }
+    // Keep the camera on the same side we're currently on to avoid a hard flip.
+    const toCam = startCam.clone().sub(centroid);
+    if (planeNormal.dot(toCam) < 0) planeNormal.multiplyScalar(-1);
+
+    // Fit all nodes in frame using projected in-plane radius.
+    let maxInPlaneRadius = 1;
+    const inPlane = new THREE.Vector3();
+    worldAllPoints.forEach((p) => {
+      inPlane.copy(p).sub(centroid);
+      inPlane.addScaledVector(planeNormal, -inPlane.dot(planeNormal));
+      maxInPlaneRadius = Math.max(maxInPlaneRadius, inPlane.length());
+    });
+    const fovRad = THREE.MathUtils.degToRad(
+      (camera as THREE.PerspectiveCamera).fov || 45,
+    );
+    const fitDistance = (maxInPlaneRadius * 1.25) / Math.tan(fovRad * 0.5);
+    const finalDistance = THREE.MathUtils.clamp(fitDistance, 150, 300);
+
+    const revealCam = centroid.clone().addScaledVector(planeNormal, finalDistance * 0.78);
+    const revealTarget = centroid.clone().add(new THREE.Vector3(0, 2, 0));
+    const finalCam = centroid.clone().addScaledVector(planeNormal, finalDistance);
+    const finalTarget = centroid.clone().add(new THREE.Vector3(0, 2, 0));
     const startedAt = performance.now();
-    const durationMs = 6800;
+    const durationMs = 7000;
     controls.enabled = false;
+    const cam = new THREE.Vector3();
+    const target = new THREE.Vector3();
+    const smooth = (u: number) => u * u * (3 - 2 * u);
 
     const tick = () => {
       const t = THREE.MathUtils.clamp(
@@ -2030,9 +2105,17 @@ export default function ResumeSpace3D({
         0,
         1,
       );
-      const ease = 1 - Math.pow(1 - t, 3);
-      const cam = new THREE.Vector3().lerpVectors(startCam, endCam, ease);
-      const target = new THREE.Vector3().lerpVectors(startTarget, endTarget, ease);
+      if (t < 0.38) {
+        const u = t / 0.38;
+        const s = 1 - Math.pow(1 - u, 2.6);
+        cam.lerpVectors(startCam, revealCam, s);
+        target.lerpVectors(startTarget, revealTarget, s);
+      } else {
+        const u = (t - 0.38) / 0.62;
+        const s = smooth(u);
+        cam.lerpVectors(revealCam, finalCam, s);
+        target.lerpVectors(revealTarget, finalTarget, s);
+      }
       controls.setLookAt(cam.x, cam.y, cam.z, target.x, target.y, target.z, false);
       if (t >= 1) {
         controls.enabled = true;
@@ -2046,7 +2129,7 @@ export default function ResumeSpace3D({
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  }, [placeStarDestroyerNearSkills, vlog]);
+  }, [placeStarDestroyerNearSkills, setExternalCosmosLabelsHiddenForLattice, vlog]);
 
   const resumeSkillsLatticeInPlace = useCallback(() => {
     if (!skillsLatticeSystemActiveRef.current || skillsLatticeActiveRef.current) return;
@@ -2063,13 +2146,14 @@ export default function ResumeSpace3D({
     }
     latticeRoot.visible = true;
     camera.layers.enable(SKILLS_LATTICE_LAYER);
+    setExternalCosmosLabelsHiddenForLattice(true);
     setFollowingSpaceship(false);
     followingSpaceshipRef.current = false;
     if (spaceshipRef.current) spaceshipRef.current.visible = false;
     controls.enabled = true;
     skillsLatticeActiveRef.current = true;
     setSkillsLatticeActive(true);
-  }, []);
+  }, [setExternalCosmosLabelsHiddenForLattice]);
 
   const getProjectShowcaseStopRunForIndex = useCallback((index: number) => {
     const panels = projectShowcasePanelsRef.current;
@@ -2587,15 +2671,44 @@ export default function ResumeSpace3D({
     if (!sceneReady) return;
     let raf = 0;
     const shellCenter = new THREE.Vector3();
+    const labelWorld = new THREE.Vector3();
+    const toLabel = new THREE.Vector3();
+    const raycaster = new THREE.Raycaster();
     const tick = () => {
       raf = requestAnimationFrame(tick);
       if (!skillsLatticeSystemActiveRef.current || skillsLatticeActiveRef.current) return;
       const camera = sceneRef.current.camera;
       const shell = skillsLatticeEnvelopeRef.current;
-      if (!camera || !shell) return;
+      const scene = sceneRef.current.scene;
+      if (!camera || !shell || !scene) return;
       shell.getWorldPosition(shellCenter);
       const shellRadius = Math.max(1, skillsLatticeEnvelopeRadiusRef.current);
       const distance = camera.position.distanceTo(shellCenter);
+      // Occlude external CSS2D labels only when the shell blocks line-of-sight.
+      if (externalCosmosLabelsHiddenForLatticeRef.current) {
+        scene.traverse((obj) => {
+          const maybeCss = obj as THREE.Object3D & {
+            isCSS2DObject?: boolean;
+            userData: Record<string, unknown>;
+          };
+          if (!maybeCss.isCSS2DObject) return;
+          if (maybeCss.userData?.skillsLatticeLabel) return;
+          maybeCss.getWorldPosition(labelWorld);
+          toLabel.subVectors(labelWorld, camera.position);
+          const labelDist = toLabel.length();
+          if (labelDist < 0.001) {
+            maybeCss.visible = true;
+            return;
+          }
+          toLabel.multiplyScalar(1 / labelDist);
+          raycaster.set(camera.position, toLabel);
+          raycaster.near = 0.01;
+          raycaster.far = labelDist;
+          const hits = raycaster.intersectObject(shell, true);
+          const blocked = hits.some((h) => h.distance < labelDist - 0.25);
+          maybeCss.visible = !blocked;
+        });
+      }
       // Hysteresis: exit happens farther out; re-enter only once clearly back in.
       if (distance <= shellRadius * 1.03) {
         resumeSkillsLatticeInPlace();
@@ -2639,6 +2752,7 @@ export default function ResumeSpace3D({
         const shellMat = skillsLatticeEnvelopeMatRef.current;
         const shellEdgeMat = skillsLatticeEnvelopeEdgeMatRef.current;
         const shell = skillsLatticeEnvelopeRef.current;
+        let latticeInternalsVisible = true;
         if (camera && shellMat && shellEdgeMat && shell) {
           shell.rotation.x += dt * shellSpin.x;
           shell.rotation.y += dt * shellSpin.y;
@@ -2658,6 +2772,7 @@ export default function ResumeSpace3D({
           );
           const outsideT = 1 - insideT;
           const insideShell = insideT > 0.54;
+          latticeInternalsVisible = insideShell;
           if (skillsLatticeEnvelopeInsideRef.current !== insideShell) {
             skillsLatticeEnvelopeInsideRef.current = insideShell;
             if (insideShell) {
@@ -2741,7 +2856,7 @@ export default function ResumeSpace3D({
           node.mesh.scale.setScalar(node.baseScale * pulse * selectedBoost);
           const bodyMat = node.mesh.material as THREE.MeshBasicMaterial;
           const baseNodeOpacity = node.nodeType === "category" ? 0.9 : 0.82;
-          bodyMat.opacity = isRelated ? baseNodeOpacity : 0.2;
+          bodyMat.opacity = latticeInternalsVisible ? (isRelated ? baseNodeOpacity : 0.2) : 0;
           if (plasmaActive) {
             const baseColor =
               node.nodeType === "category"
@@ -2774,6 +2889,7 @@ export default function ResumeSpace3D({
               0.04,
               0.9,
             );
+            if (!latticeInternalsVisible) hMat.opacity = 0;
           }
         });
         skillsLatticeLineGroupsRef.current.forEach((group, idx) => {
@@ -2784,7 +2900,9 @@ export default function ResumeSpace3D({
               : group.category === selected.category);
           const baseOpacity = isRelated ? wave : 0.08;
           const rippleBoost = ripple.active && rippleRadius >= 0 ? 0.12 : 0;
-          group.material.opacity = THREE.MathUtils.clamp(baseOpacity + rippleBoost, 0.04, 0.9);
+          group.material.opacity = latticeInternalsVisible
+            ? THREE.MathUtils.clamp(baseOpacity + rippleBoost, 0.04, 0.9)
+            : 0;
           if (plasmaActive) {
             const lineBase = group.kind === "ring" ? 0x66c6ff : 0x9ad9ff;
             const linePlasma = 0xce93ff;
@@ -2799,8 +2917,18 @@ export default function ResumeSpace3D({
         const segs = skillsLatticeLinkSegmentsRef.current;
         if (flow && flowMeta.length > 0 && segs.length > 0) {
           const flowMat = flow.material as THREE.PointsMaterial;
-          flowMat.opacity = plasmaActive ? 0.9 : 0.78;
+          flowMat.opacity = latticeInternalsVisible ? (plasmaActive ? 0.9 : 0.78) : 0;
           flowMat.size = plasmaActive ? 0.82 : 0.72;
+          if (!latticeInternalsVisible) {
+            const arcs = skillsLatticeArcRecordsRef.current;
+            arcs.forEach((arc) => {
+              const mat = arc.line.material as THREE.LineBasicMaterial;
+              mat.opacity = 0;
+              arc.line.visible = false;
+            });
+            raf = requestAnimationFrame(tick);
+            return;
+          }
           const attr = flow.geometry.getAttribute("position") as THREE.BufferAttribute;
           const colorAttr = flow.geometry.getAttribute("color") as THREE.BufferAttribute | null;
           for (let i = 0; i < flowMeta.length; i += 1) {
@@ -4215,6 +4343,7 @@ export default function ResumeSpace3D({
     beaconEdges.scale.setScalar(1.004);
     skillsBeacon.add(beaconEdges);
     const beaconLabel = createLabel("Skills", "Constellation Lattice");
+    beaconLabel.userData.skillsLatticeLabel = true;
     beaconLabel.position.set(0, latticeEnvelopeRadius * 0.82, 0);
     const labelEl = (beaconLabel as unknown as { element?: HTMLElement }).element;
     if (labelEl) {
@@ -4403,6 +4532,7 @@ export default function ResumeSpace3D({
       });
 
       const catLabel = createLabel(category, `${skills.length} skills`);
+      catLabel.userData.skillsLatticeLabel = true;
       catLabel.position.set(cPos.x, cPos.y + 6.6, cPos.z);
       catLabel.visible = false;
       skillsLatticeRoot.add(catLabel);
@@ -4459,6 +4589,7 @@ export default function ResumeSpace3D({
           lineInfluence: idx + sIdx * 0.15,
         });
         const skillLabel = createLabel(skill);
+        skillLabel.userData.skillsLatticeLabel = true;
         skillLabel.position.set(sPos.x, sPos.y + 2.4, sPos.z);
         skillLabel.visible = false;
         skillsLatticeRoot.add(skillLabel);
@@ -7052,6 +7183,7 @@ export default function ResumeSpace3D({
       skillsLatticeNodeLabelsRef.current = [];
       skillsLatticeSystemActiveRef.current = false;
       skillsLatticeCausticLightsRef.current = [];
+      externalCosmosLabelsHiddenForLatticeRef.current = false;
       skillsLatticeRippleRef.current.active = false;
       skillsLatticeSelectedNodeRef.current = null;
       setSkillsLatticeSelection(null);
