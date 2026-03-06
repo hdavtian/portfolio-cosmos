@@ -196,6 +196,23 @@ type SkillsLatticeLineGroup = {
   category?: string;
 };
 
+type SkillsLatticeArcRecord = {
+  line: THREE.Line;
+  points: Float32Array;
+  targetIndex: number;
+  phase: number;
+  sway: number;
+  speed: number;
+};
+
+type SkillsLatticeFlowMeta = {
+  segmentIndex: number;
+  offset: number;
+  speed: number;
+  hue: number;
+  hueDrift: number;
+};
+
 // --- SHIP_DEBUG_LABELS (2026-02-03 snapshot) ---
 // Each entry is a small circle used to indicate the larger region direction.
 // 0) top
@@ -413,10 +430,9 @@ export default function ResumeSpace3D({
   const skillsLatticeLineMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
   const skillsLatticeLineGroupsRef = useRef<SkillsLatticeLineGroup[]>([]);
   const skillsLatticeLinkSegmentsRef = useRef<SkillsLatticeLinkSegment[]>([]);
+  const skillsLatticeArcRecordsRef = useRef<SkillsLatticeArcRecord[]>([]);
   const skillsLatticeFlowPointsRef = useRef<THREE.Points | null>(null);
-  const skillsLatticeFlowMetaRef = useRef<
-    Array<{ segmentIndex: number; offset: number; speed: number }>
-  >([]);
+  const skillsLatticeFlowMetaRef = useRef<SkillsLatticeFlowMeta[]>([]);
   const skillsLatticeRippleRef = useRef<{
     active: boolean;
     center: THREE.Vector3;
@@ -2346,10 +2362,19 @@ export default function ResumeSpace3D({
     let raf = 0;
     const worldNodePos = new THREE.Vector3();
     const flowPos = new THREE.Vector3();
+    const selectedPos = new THREE.Vector3();
+    const targetPos = new THREE.Vector3();
+    const direct = new THREE.Vector3();
+    const ortho = new THREE.Vector3();
+    const bend = new THREE.Vector3();
+    const arcPos = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    const flowColor = new THREE.Color();
     const tick = () => {
       if (skillsLatticeActiveRef.current) {
         const t = performance.now() * 0.001;
         const selected = skillsLatticeSelectedNodeRef.current;
+        const plasmaActive = !!selected;
         const ripple = skillsLatticeRippleRef.current;
         const nowMs = performance.now();
         let rippleRadius = -1;
@@ -2370,6 +2395,24 @@ export default function ResumeSpace3D({
           const bodyMat = node.mesh.material as THREE.MeshBasicMaterial;
           const baseNodeOpacity = node.nodeType === "category" ? 0.9 : 0.82;
           bodyMat.opacity = isRelated ? baseNodeOpacity : 0.2;
+          if (plasmaActive) {
+            const baseColor =
+              node.nodeType === "category"
+                ? new THREE.Color(0x8fd3ff)
+                : new THREE.Color(0xdaf1ff);
+            const plasmaColor = new THREE.Color(0xc18bff);
+            let plasmaMix = selected?.mesh === node.mesh ? 0.42 : 0;
+            if (selected) {
+              selected.mesh.getWorldPosition(selectedPos);
+              node.mesh.getWorldPosition(worldNodePos);
+              const d = worldNodePos.distanceTo(selectedPos);
+              const bandRadius = ((t * 1.7) % 1) * 92;
+              plasmaMix = Math.max(plasmaMix, Math.max(0, 1 - Math.abs(d - bandRadius) / 12) * 0.55);
+            }
+            bodyMat.color.copy(baseColor).lerp(plasmaColor, plasmaMix);
+          } else {
+            bodyMat.color.set(node.nodeType === "category" ? 0x8fd3ff : 0xdaf1ff);
+          }
           if (node.halo?.material) {
             const hMat = node.halo.material as THREE.SpriteMaterial;
             const focusAlpha = isSelected ? 0.62 : isRelated ? 0.24 : 0.08;
@@ -2395,20 +2438,114 @@ export default function ResumeSpace3D({
           const baseOpacity = isRelated ? wave : 0.08;
           const rippleBoost = ripple.active && rippleRadius >= 0 ? 0.12 : 0;
           group.material.opacity = THREE.MathUtils.clamp(baseOpacity + rippleBoost, 0.04, 0.9);
+          if (plasmaActive) {
+            const lineBase = group.kind === "ring" ? 0x66c6ff : 0x9ad9ff;
+            const linePlasma = 0xce93ff;
+            const lineMix = (isRelated ? 0.2 : 0.08) + 0.16 * Math.sin(t * 1.9 + idx * 0.55);
+            group.material.color.set(lineBase).lerp(new THREE.Color(linePlasma), lineMix);
+          } else {
+            group.material.color.set(group.kind === "ring" ? 0x66c6ff : 0x9ad9ff);
+          }
         });
         const flow = skillsLatticeFlowPointsRef.current;
         const flowMeta = skillsLatticeFlowMetaRef.current;
         const segs = skillsLatticeLinkSegmentsRef.current;
         if (flow && flowMeta.length > 0 && segs.length > 0) {
+          const flowMat = flow.material as THREE.PointsMaterial;
+          flowMat.opacity = plasmaActive ? 0.9 : 0.78;
+          flowMat.size = plasmaActive ? 0.82 : 0.72;
           const attr = flow.geometry.getAttribute("position") as THREE.BufferAttribute;
+          const colorAttr = flow.geometry.getAttribute("color") as THREE.BufferAttribute | null;
           for (let i = 0; i < flowMeta.length; i += 1) {
             const meta = flowMeta[i];
             const seg = segs[meta.segmentIndex % segs.length];
             const p = (t * meta.speed + meta.offset) % 1;
             flowPos.lerpVectors(seg.from, seg.to, p);
             attr.setXYZ(i, flowPos.x, flowPos.y, flowPos.z);
+            if (colorAttr) {
+              if (plasmaActive) {
+                const hue = THREE.MathUtils.euclideanModulo(
+                  meta.hue + t * meta.hueDrift + Math.sin(t * 1.5 + i * 0.37) * 0.03,
+                  1,
+                );
+                flowColor.setHSL(hue, 0.85, 0.7);
+              } else {
+                flowColor.set(0xe8f6ff);
+              }
+              colorAttr.setXYZ(i, flowColor.r, flowColor.g, flowColor.b);
+            }
           }
           attr.needsUpdate = true;
+          if (colorAttr) colorAttr.needsUpdate = true;
+        }
+        const arcs = skillsLatticeArcRecordsRef.current;
+        const sourceNode = selected;
+        if (arcs.length > 0) {
+          if (!plasmaActive || !sourceNode) {
+            arcs.forEach((arc) => {
+              const mat = arc.line.material as THREE.LineBasicMaterial;
+              mat.opacity = THREE.MathUtils.damp(mat.opacity, 0, 7, 0.016);
+              arc.line.visible = mat.opacity > 0.02;
+            });
+          } else {
+            sourceNode.mesh.getWorldPosition(selectedPos);
+            const nodes = skillsLatticeNodesRef.current;
+            arcs.forEach((arc, idx) => {
+              if (nodes.length === 0) return;
+              const cycle = (t * arc.speed + arc.phase) % 1;
+              if (cycle < 0.035 || arc.targetIndex >= nodes.length) {
+                let pool = nodes;
+                if (selected) {
+                  pool = nodes.filter(
+                    (n) =>
+                      n.mesh !== sourceNode.mesh
+                      && (n.category === selected.category || n.label === selected.label),
+                  );
+                  if (pool.length === 0) {
+                    pool = nodes.filter((n) => n.mesh !== sourceNode.mesh);
+                  }
+                }
+                const pick = pool[Math.floor(Math.random() * Math.max(1, pool.length))];
+                const nextIdx = nodes.findIndex((n) => n.mesh === pick.mesh);
+                arc.targetIndex = nextIdx >= 0 ? nextIdx : arc.targetIndex;
+              }
+              const targetNode = nodes[arc.targetIndex] ?? nodes[0];
+              targetNode.mesh.getWorldPosition(targetPos);
+              direct.subVectors(targetPos, selectedPos);
+              const dist = Math.max(2, direct.length());
+              direct.normalize();
+              ortho.crossVectors(direct, up);
+              if (ortho.lengthSq() < 0.0001) {
+                ortho.set(1, 0, 0);
+              } else {
+                ortho.normalize();
+              }
+              bend.crossVectors(direct, ortho).normalize();
+              for (let p = 0; p < arc.points.length / 3; p += 1) {
+                const alpha = p / ((arc.points.length / 3) - 1);
+                arcPos.lerpVectors(selectedPos, targetPos, alpha);
+                const envelope = Math.sin(alpha * Math.PI);
+                const jitter =
+                  Math.sin((alpha * 10 + t * 8 + idx * 1.2) * (1 + arc.sway * 0.22))
+                  * (0.8 + 0.2 * Math.sin(t * 13 + idx));
+                const helix =
+                  Math.cos(alpha * 12 + t * 7 + idx * 0.8) * 0.45;
+                arcPos.addScaledVector(ortho, envelope * jitter * arc.sway);
+                arcPos.addScaledVector(bend, envelope * helix * arc.sway * 0.72);
+                arcPos.addScaledVector(direct, Math.sin(alpha * Math.PI * 5 + t * 16) * 0.06);
+                arc.points[p * 3] = arcPos.x;
+                arc.points[p * 3 + 1] = arcPos.y;
+                arc.points[p * 3 + 2] = arcPos.z;
+              }
+              const attr = arc.line.geometry.getAttribute("position") as THREE.BufferAttribute;
+              attr.needsUpdate = true;
+              const mat = arc.line.material as THREE.LineBasicMaterial;
+              const energy = 0.35 + 0.3 * Math.sin(t * 12 + idx * 2.1) + Math.min(0.35, dist / 140);
+              mat.opacity = THREE.MathUtils.clamp(energy, 0.2, 0.9);
+              mat.color.setHSL((0.62 + 0.08 * Math.sin(t * 0.8 + idx)) % 1, 0.8, 0.72);
+              arc.line.visible = true;
+            });
+          }
         }
       }
       raf = requestAnimationFrame(tick);
@@ -2420,24 +2557,28 @@ export default function ResumeSpace3D({
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!skillsLatticeActiveRef.current) return;
+    const pickNodeAtPointer = (clientX: number, clientY: number) => {
       const camera = sceneRef.current.camera;
-      if (!camera) return;
+      if (!camera || !skillsLatticeActiveRef.current) return null;
       const rect = mount.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return;
+      if (rect.width <= 0 || rect.height <= 0) return null;
       const pointer = new THREE.Vector2(
-        ((event.clientX - rect.left) / rect.width) * 2 - 1,
-        -((event.clientY - rect.top) / rect.height) * 2 + 1,
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
       );
       const raycaster = new THREE.Raycaster();
       raycaster.layers.set(SKILLS_LATTICE_LAYER);
       raycaster.setFromCamera(pointer, camera as THREE.Camera);
       const meshes = skillsLatticeNodesRef.current.map((n) => n.mesh);
       const hits = raycaster.intersectObjects(meshes, false);
-      if (hits.length === 0) return;
+      if (hits.length === 0) return null;
       const hitMesh = hits[0].object as THREE.Mesh;
-      const node = skillsLatticeNodesRef.current.find((n) => n.mesh === hitMesh);
+      return skillsLatticeNodesRef.current.find((n) => n.mesh === hitMesh) ?? null;
+    };
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!skillsLatticeActiveRef.current) return;
+      const node = pickNodeAtPointer(event.clientX, event.clientY);
       if (!node) return;
       focusSkillsLatticeNode(node, true);
       event.stopPropagation();
@@ -3503,34 +3644,81 @@ export default function ResumeSpace3D({
     if (latticeLinkSegments.length > 0) {
       const flowCount = Math.min(320, latticeLinkSegments.length * 3);
       const flowPositions = new Float32Array(flowCount * 3);
+      const flowColors = new Float32Array(flowCount * 3);
       const flowGeom = new THREE.BufferGeometry();
       flowGeom.setAttribute(
         "position",
         new THREE.BufferAttribute(flowPositions, 3),
       );
+      flowGeom.setAttribute("color", new THREE.BufferAttribute(flowColors, 3));
       const flowMat = new THREE.PointsMaterial({
-        color: 0xe8f6ff,
+        color: 0xffffff,
         size: 0.72,
         transparent: true,
         opacity: 0.78,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         sizeAttenuation: true,
+        vertexColors: true,
       });
       const flowPoints = new THREE.Points(flowGeom, flowMat);
       flowPoints.layers.set(SKILLS_LATTICE_LAYER);
       flowPoints.renderOrder = 8;
+      // Positions are updated every frame; disable frustum culling so packets
+      // do not disappear/freeze visually when camera gets very close.
+      flowPoints.frustumCulled = false;
       skillsLatticeRoot.add(flowPoints);
-      const flowMeta: Array<{ segmentIndex: number; offset: number; speed: number }> = [];
+      const flowMeta: SkillsLatticeFlowMeta[] = [];
+      const initialColor = new THREE.Color();
       for (let i = 0; i < flowCount; i += 1) {
+        const hue = 0.56 + Math.random() * 0.28;
+        initialColor.setHSL(hue, 0.84, 0.69);
+        flowColors[i * 3] = initialColor.r;
+        flowColors[i * 3 + 1] = initialColor.g;
+        flowColors[i * 3 + 2] = initialColor.b;
         flowMeta.push({
           segmentIndex: Math.floor(Math.random() * latticeLinkSegments.length),
           offset: Math.random(),
           speed: 0.08 + Math.random() * 0.26,
+          hue,
+          hueDrift: 0.045 + Math.random() * 0.11,
         });
       }
       skillsLatticeFlowPointsRef.current = flowPoints;
       skillsLatticeFlowMetaRef.current = flowMeta;
+    }
+    // Plasma-style touch arcs that can lock on hover/selection.
+    {
+      const arcRecords: SkillsLatticeArcRecord[] = [];
+      const arcCount = 9;
+      const arcPointCount = 14;
+      for (let i = 0; i < arcCount; i += 1) {
+        const points = new Float32Array(arcPointCount * 3);
+        const arcGeom = new THREE.BufferGeometry();
+        arcGeom.setAttribute("position", new THREE.BufferAttribute(points, 3));
+        const arcMat = new THREE.LineBasicMaterial({
+          color: 0xb8c8ff,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const line = new THREE.Line(arcGeom, arcMat);
+        line.layers.set(SKILLS_LATTICE_LAYER);
+        line.renderOrder = 10;
+        line.frustumCulled = false;
+        line.visible = false;
+        skillsLatticeRoot.add(line);
+        arcRecords.push({
+          line,
+          points,
+          targetIndex: Math.floor(Math.random() * Math.max(1, latticeNodes.length)),
+          phase: Math.random(),
+          sway: 0.8 + Math.random() * 0.9,
+          speed: 0.72 + Math.random() * 0.9,
+        });
+      }
+      skillsLatticeArcRecordsRef.current = arcRecords;
     }
     scene.add(skillsLatticeRoot);
     skillsLatticeRootRef.current = skillsLatticeRoot;
@@ -5906,6 +6094,7 @@ export default function ResumeSpace3D({
       skillsLatticeLineMatsRef.current = [];
       skillsLatticeLineGroupsRef.current = [];
       skillsLatticeLinkSegmentsRef.current = [];
+      skillsLatticeArcRecordsRef.current = [];
       skillsLatticeFlowPointsRef.current = null;
       skillsLatticeFlowMetaRef.current = [];
       skillsLatticeRippleRef.current.active = false;
