@@ -63,6 +63,7 @@ type HighLevelState =
 
 export class StarDestroyerCruiser {
   private mesh: THREE.Group;
+  private enabled = true;
 
   // ── High-level navigation ──
   private hlState: HighLevelState = "local_patrol";
@@ -179,6 +180,10 @@ export class StarDestroyerCruiser {
 
   /** Main frame update. */
   public update(deltaTime: number): void {
+    if (!this.enabled) {
+      if (this.jumpCone) this.jumpCone.visible = false;
+      return;
+    }
     const dt = Math.min(deltaTime, 0.1);
 
     // Remove previous drift
@@ -214,6 +219,25 @@ export class StarDestroyerCruiser {
 
     // Hyperspace cone effect
     this.updateJumpCone(dt);
+  }
+
+  /** Enable/disable autonomous SD behavior. */
+  public setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    if (!enabled) {
+      this.currentSpeed = 0;
+      this.lightspeedSpeed = 0;
+      this.waypoint = null;
+      this.nextDest = null;
+      this.hlState = "local_patrol";
+      this.localState = "idle_drift";
+      if (this.jumpCone) this.jumpCone.visible = false;
+    }
+  }
+
+  /** Current autonomy mode state. */
+  public isEnabled(): boolean {
+    return this.enabled;
   }
 
   /** Get pure heading quaternion (no bank) for formation matching. */

@@ -9,7 +9,6 @@ import {
   INTRO_DETOUR_MAX,
   INTRO_ORBIT_ENABLED_DIST,
   INTRO_DIST_FACTOR_DIV,
-  INTRO_ORBIT_RADIUS,
 } from "./scaleConfig";
 
 // --- INTRO FINAL POSITIONS (captured via debugCamera → F9) ---
@@ -43,15 +42,9 @@ export const INTRO_SHIP_FINAL_QUAT = new THREE.Quaternion().setFromEuler(
 
 const INTRO_CAMERA_DURATION_MS = Math.round(5000 * INTRO_TIME_SCALE);
 const INTRO_SHIP_APPROACH_DURATION_MS = Math.round(5000 * INTRO_TIME_SCALE);
-const INTRO_SHIP_ORBIT_DURATION_MS = Math.round(6000 * INTRO_TIME_SCALE);
 const INTRO_PASS_THROUGH_CHANCE = 0.45;
 const INTRO_ORBIT_CHANCE = 0.6;
 const INTRO_STRAIGHT_PATH_CHANCE = 0.25;
-const INTRO_SPIN_CHANCE = 0.55;
-const INTRO_SPIN_MIN_MS = 1200;
-const INTRO_SPIN_MAX_MS = 2000;
-const INTRO_SPIN_MIN_TURNS = 1;
-const INTRO_SPIN_MAX_TURNS = 1.35;
 const INTRO_CAMERA_FLYBY_CHANCE = 0.35;
 
 export type ShipCinematicState = {
@@ -288,7 +281,6 @@ export const createIntroSequenceRunner = (
     followingSpaceshipRef,
     setHudVisible,
     setShipExteriorLights,
-    sunMesh,
   } = params;
 
   let introRafId: number | null = null;
@@ -308,28 +300,37 @@ export const createIntroSequenceRunner = (
     controls.getTarget(startTarget);
     const endPos = INTRO_CAMERA_FINAL_POS.clone();
     const endTarget = INTRO_CAMERA_FINAL_TARGET.clone();
+    const pathMid = startPos
+      .clone()
+      .lerp(endPos, 0.5)
+      .add(new THREE.Vector3(95, 38, -62));
+    const targetMid = startTarget
+      .clone()
+      .lerp(endTarget, 0.5)
+      .add(new THREE.Vector3(34, 8, -24));
 
     const startTime = performance.now();
     const previousControlsEnabled = controls.enabled;
     controls.enabled = false;
 
-    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+    const easeInOut = (t: number) =>
+      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
     const animateCamera = () => {
       const elapsed = performance.now() - startTime;
       const progress = Math.min(elapsed / INTRO_CAMERA_DURATION_MS, 1);
-      const eased = easeOutCubic(progress);
-
-      const currentPos = new THREE.Vector3().lerpVectors(
-        startPos,
-        endPos,
-        eased,
-      );
-      const currentTarget = new THREE.Vector3().lerpVectors(
-        startTarget,
-        endTarget,
-        eased,
-      );
+      const eased = easeInOut(progress);
+      const oneMinus = 1 - eased;
+      const currentPos = new THREE.Vector3()
+        .copy(startPos)
+        .multiplyScalar(oneMinus * oneMinus)
+        .add(pathMid.clone().multiplyScalar(2 * oneMinus * eased))
+        .add(endPos.clone().multiplyScalar(eased * eased));
+      const currentTarget = new THREE.Vector3()
+        .copy(startTarget)
+        .multiplyScalar(oneMinus * oneMinus)
+        .add(targetMid.clone().multiplyScalar(2 * oneMinus * eased))
+        .add(endTarget.clone().multiplyScalar(eased * eased));
 
       controls.setLookAt(
         currentPos.x, currentPos.y, currentPos.z,
@@ -363,84 +364,76 @@ export const createIntroSequenceRunner = (
           followingSpaceshipRef.current = false;
           setShipExteriorLights(true);
 
-          // Check if the ship is already close to its final position
-          // (e.g. gentle zoom-in intro — no elaborate cinematic needed).
+          // Deterministic hero entrance:
+          // 1) Spawn behind camera
+          // 2) Sweep into frame
+          // 3) Stop with the ship rear facing the viewer
           const distToFinal = ship.position.distanceTo(INTRO_SHIP_FINAL_POS);
-          if (distToFinal < 200) {
-            // Ship is already at/near its spot — place it precisely and
-            // go straight to "hover" phase so auto-engage kicks in quickly.
-            ship.position.copy(INTRO_SHIP_FINAL_POS);
-            ship.quaternion.copy(INTRO_SHIP_FINAL_QUAT);
-
-            shipCinematicRef.current = {
-              active: true,
-              phase: "hover",
-              startTime: performance.now(),
-              duration: 1000,
-              startPos: INTRO_SHIP_FINAL_POS.clone(),
-              controlPos: INTRO_SHIP_FINAL_POS.clone(),
-              endPos: INTRO_SHIP_FINAL_POS.clone(),
-              startQuat: INTRO_SHIP_FINAL_QUAT.clone(),
-              endQuat: INTRO_SHIP_FINAL_QUAT.clone(),
-              hoverStartTime: performance.now(),
-              hoverBasePos: INTRO_SHIP_FINAL_POS.clone(),
-              hoverStartQuat: INTRO_SHIP_FINAL_QUAT.clone(),
-            };
-          } else {
-            // Ship is far away — play the full cinematic approach
-            const cinematicPath = buildDynamicShipCinematic({
-              ship,
-              camera: currentCamera,
-              sunMesh,
-            });
-
-            const spinEnabled = Math.random() < INTRO_SPIN_CHANCE;
-            const spinTurns = spinEnabled
-              ? getRandomBetween(INTRO_SPIN_MIN_TURNS, INTRO_SPIN_MAX_TURNS)
-              : undefined;
-            const spinDuration = spinEnabled
-              ? getRandomBetween(INTRO_SPIN_MIN_MS, INTRO_SPIN_MAX_MS)
-              : undefined;
-            const spinStartOffset = spinEnabled
-              ? (cinematicPath.approachDuration ||
-                  INTRO_SHIP_APPROACH_DURATION_MS) * getRandomBetween(0.25, 0.6)
-              : undefined;
-
-            const orbitEnabled = cinematicPath.orbitEnabled !== false;
-            shipCinematicRef.current = {
-              active: true,
-              phase: orbitEnabled ? "orbit" : "approach",
-              startTime: orbitEnabled ? performance.now() : performance.now(),
-              duration:
-                cinematicPath.approachDuration || INTRO_SHIP_APPROACH_DURATION_MS,
-              startPos: ship.position.clone(),
-              controlPos: cinematicPath.controlPos,
-              controlPos2: cinematicPath.controlPos2,
-              flybyPoint: cinematicPath.flybyPoint,
-              endPos: cinematicPath.endPos,
-              startQuat: ship.quaternion.clone(),
-              endQuat: cinematicPath.endQuat,
-              approachLookAt: cinematicPath.approachLookAt,
-              lightsTriggered: true,
-              orbitStartTime: orbitEnabled ? performance.now() : undefined,
-              orbitDuration: orbitEnabled
-                ? INTRO_SHIP_ORBIT_DURATION_MS
-                : undefined,
-              orbitCenter: cinematicPath.orbitCenter,
-              orbitRadius: orbitEnabled ? INTRO_ORBIT_RADIUS : undefined,
-              orbitStartAngle: orbitEnabled ? Math.PI * 0.85 : undefined,
-              orbitEndAngle: orbitEnabled ? Math.PI * 2.1 : undefined,
-              spinStartOffset,
-              spinDuration,
-              spinTurns,
-            };
-
-            if (!orbitEnabled) {
-              shipCinematicRef.current.startTime = performance.now();
-              shipCinematicRef.current.startPos = ship.position.clone();
-              shipCinematicRef.current.startQuat = ship.quaternion.clone();
-            }
+          const camDir = new THREE.Vector3();
+          currentCamera.getWorldDirection(camDir);
+          const camUp = currentCamera.up.clone().normalize();
+          const camRight = new THREE.Vector3().crossVectors(camDir, camUp).normalize();
+          const endHeroPos = INTRO_SHIP_FINAL_POS.clone();
+          const startHeroPos = currentCamera.position
+            .clone()
+            .addScaledVector(camDir, -260)
+            .addScaledVector(camUp, 20)
+            .addScaledVector(camRight, 22);
+          const controlA = currentCamera.position
+            .clone()
+            .addScaledVector(camDir, -76)
+            .addScaledVector(camUp, 28)
+            .addScaledVector(camRight, 64);
+          const controlB = endHeroPos
+            .clone()
+            .addScaledVector(camRight, 84)
+            .addScaledVector(camUp, 24);
+          const endLookAt = endHeroPos.clone().addScaledVector(camDir, 140);
+          const startLookMat = new THREE.Matrix4().lookAt(
+            startHeroPos,
+            controlA,
+            new THREE.Vector3(0, 1, 0),
+          );
+          const endLookMat = new THREE.Matrix4().lookAt(
+            endHeroPos,
+            endLookAt,
+            new THREE.Vector3(0, 1, 0),
+          );
+          const startHeroQuat = new THREE.Quaternion().setFromRotationMatrix(startLookMat);
+          const endHeroQuat = new THREE.Quaternion().setFromRotationMatrix(endLookMat);
+          // Slight side bias so the final orientation is rear-facing but not perfectly straight.
+          const sideBias = new THREE.Quaternion().setFromAxisAngle(
+            new THREE.Vector3(0, 1, 0),
+            -0.14,
+          );
+          endHeroQuat.premultiply(sideBias);
+          const forwardOffset = ship.userData.forwardOffset as
+            | THREE.Quaternion
+            | undefined;
+          if (forwardOffset) {
+            startHeroQuat.multiply(forwardOffset);
+            endHeroQuat.multiply(forwardOffset);
           }
+          ship.position.copy(startHeroPos);
+          ship.quaternion.copy(startHeroQuat);
+          shipCinematicRef.current = {
+            active: true,
+            phase: "approach",
+            startTime: performance.now(),
+            duration: Math.round((3600 + Math.min(1200, distToFinal * 1.2)) * INTRO_TIME_SCALE),
+            startPos: startHeroPos.clone(),
+            controlPos: controlA,
+            controlPos2: controlB,
+            flybyPoint: currentCamera.position
+              .clone()
+              .addScaledVector(camDir, 22)
+              .addScaledVector(camRight, 18),
+            endPos: endHeroPos,
+            startQuat: ship.quaternion.clone(),
+            endQuat: endHeroQuat,
+            approachLookAt: endLookAt,
+            lightsTriggered: true,
+          };
         };
 
         startShipCinematic();

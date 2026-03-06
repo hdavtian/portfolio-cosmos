@@ -133,6 +133,10 @@ const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
+const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(16500, 220, -14800);
+const SKILLS_LATTICE_ARRIVAL_DIST = 900;
+const SKILLS_SD_PATROL_RADIUS = 150;
+const SKILLS_SD_PATROL_SPEED = 0.03;
 const PROJECT_SHOWCASE_FILTER_OPTIONS = [
   "Angular",
   "C#",
@@ -291,6 +295,16 @@ export default function ResumeSpace3D({
     setDebugLogs,
     debugLogTotal,
   } = useCosmosLogs();
+  const [emitFalconLocationLogs, setEmitFalconLocationLogs] = useState(false);
+  const [emitSDLocationLogs, setEmitSDLocationLogs] = useState(false);
+  const emitFalconLocationLogsRef = useRef(false);
+  const emitSDLocationLogsRef = useRef(false);
+  useEffect(() => {
+    emitFalconLocationLogsRef.current = emitFalconLocationLogs;
+  }, [emitFalconLocationLogs]);
+  useEffect(() => {
+    emitSDLocationLogsRef.current = emitSDLocationLogs;
+  }, [emitSDLocationLogs]);
 
   const {
     enterOrbit,
@@ -424,6 +438,9 @@ export default function ResumeSpace3D({
     targetType: "section" | "moon";
   } | null>(null);
   const projectShowcaseWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
+  const skillsLatticeWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
+  const skillsSDPatrolStateRef = useRef<{ angle: number }>({ angle: Math.PI * 0.25 });
+  const skillsSDLockActiveRef = useRef(false);
   const projectShowcaseNebulaRootRef = useRef<THREE.Object3D | null>(null);
   const skillsLatticeRootRef = useRef<THREE.Group | null>(null);
   const skillsLatticeNodesRef = useRef<SkillsLatticeNodeRecord[]>([]);
@@ -471,6 +488,7 @@ export default function ResumeSpace3D({
     new THREE.Vector3(0, FOLLOW_HEIGHT, FOLLOW_DISTANCE),
   );
   const cosmosIntroPlayedRef = useRef(false);
+  const cosmosIntroCompletedRef = useRef(false);
 
 
   const shipStagingModeRef = useRef(false);
@@ -558,6 +576,27 @@ export default function ResumeSpace3D({
   // --- STAR DESTROYER refs ---
   const starDestroyerRef = useRef<THREE.Group | null>(null);
   const starDestroyerCruiserRef = useRef<StarDestroyerCruiser | null>(null);
+  const starDestroyerIntroFlybyPlayedRef = useRef(false);
+  const starDestroyerDebugLastLogMsRef = useRef(0);
+  const starDestroyerSkillsSnapPendingRef = useRef(false);
+  const shipTelemetryLastLogMsRef = useRef(0);
+  const starDestroyerIntroFlybyRef = useRef<{
+    active: boolean;
+    startAt: number;
+    durationMs: number;
+    holdMs: number;
+    holdEndAt: number;
+    startPos: THREE.Vector3;
+    endPos: THREE.Vector3;
+  }>({
+    active: false,
+    startAt: 0,
+    durationMs: 15000,
+    holdMs: 1000,
+    holdEndAt: 0,
+    startPos: new THREE.Vector3(),
+    endPos: new THREE.Vector3(),
+  });
   const [followingStarDestroyer, setFollowingStarDestroyer] = useState(false);
   const followingStarDestroyerRef = useRef(false);
 
@@ -602,6 +641,7 @@ export default function ResumeSpace3D({
   const [manualFlightMode, setManualFlightMode] = useState(false);
   const manualFlightModeRef = useRef(false);
   const [keyboardUpdateTrigger, setKeyboardUpdateTrigger] = useState(0);
+  const currentNavigationTargetRef = useRef<string | null>(null);
   const [invertControls, setInvertControls] = useState(false);
   const invertControlsRef = useRef(false);
   const [controlSensitivity, setControlSensitivity] = useState(
@@ -907,12 +947,23 @@ export default function ResumeSpace3D({
     followingStarDestroyerRef,
     setFollowingStarDestroyer,
     resolveSpecialSectionTarget: (targetId) => {
-      if (targetId !== "projects") return null;
-      return projectShowcaseWorldAnchorRef.current
-        ? projectShowcaseWorldAnchorRef.current.clone()
-        : null;
+      if (targetId === "projects") {
+        return projectShowcaseWorldAnchorRef.current
+          ? projectShowcaseWorldAnchorRef.current.clone()
+          : null;
+      }
+      if (targetId === "skills") {
+        return skillsLatticeWorldAnchorRef.current
+          ? skillsLatticeWorldAnchorRef.current.clone()
+          : null;
+      }
+      return null;
     },
   });
+
+  useEffect(() => {
+    currentNavigationTargetRef.current = currentNavigationTarget;
+  }, [currentNavigationTarget]);
 
   const setProjectShowcaseFocus = useCallback((index: number) => {
     const panels = projectShowcasePanelsRef.current;
@@ -1782,6 +1833,44 @@ export default function ResumeSpace3D({
     [],
   );
 
+  const placeStarDestroyerNearSkills = useCallback(() => {
+    const sd = starDestroyerRef.current;
+    const anchor = skillsLatticeWorldAnchorRef.current;
+    if (!sd || !anchor) {
+      starDestroyerSkillsSnapPendingRef.current = true;
+      return;
+    }
+    const a = skillsSDPatrolStateRef.current.angle;
+    sd.position.set(
+      anchor.x + Math.cos(a) * (SKILLS_SD_PATROL_RADIUS * 0.9),
+      anchor.y + 96,
+      anchor.z + Math.sin(a) * (SKILLS_SD_PATROL_RADIUS * 0.9),
+    );
+    const lookAtPos = new THREE.Vector3(
+      anchor.x + Math.cos(a + 0.35) * SKILLS_SD_PATROL_RADIUS,
+      anchor.y + 84,
+      anchor.z + Math.sin(a + 0.35) * SKILLS_SD_PATROL_RADIUS,
+    );
+    const lookMat = new THREE.Matrix4().lookAt(sd.position, lookAtPos, new THREE.Vector3(0, 1, 0));
+    const q = new THREE.Quaternion().setFromRotationMatrix(lookMat);
+    const forwardOffset = sd.userData?.forwardOffset as THREE.Quaternion | undefined;
+    if (forwardOffset) q.multiply(forwardOffset);
+    sd.quaternion.copy(q);
+    sd.visible = true;
+    const readabilityKey = sd.userData.readabilityKey as THREE.PointLight | undefined;
+    const readabilityRim = sd.userData.readabilityRim as THREE.PointLight | undefined;
+    if (readabilityKey) readabilityKey.intensity = 1.1;
+    if (readabilityRim) readabilityRim.intensity = 0.95;
+    skillsSDLockActiveRef.current = true;
+    starDestroyerSkillsSnapPendingRef.current = false;
+    vlog(
+      `🔺 SD snapped near Skills @ [${sd.position.x.toFixed(0)}, ${sd.position.y.toFixed(
+        0,
+      )}, ${sd.position.z.toFixed(0)}]`,
+    );
+    shipLog("SD repositioned near Skills", "info");
+  }, [shipLog, vlog]);
+
   const exitSkillsLattice = useCallback(() => {
     const latticeRoot = skillsLatticeRootRef.current;
     const camera = sceneRef.current.camera;
@@ -1834,6 +1923,7 @@ export default function ResumeSpace3D({
     skillsLegacyBodiesRef.current.forEach((obj) => {
       obj.visible = false;
     });
+    placeStarDestroyerNearSkills();
     latticeRoot.visible = true;
     camera.layers.enable(SKILLS_LATTICE_LAYER);
 
@@ -1875,7 +1965,7 @@ export default function ResumeSpace3D({
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  }, [focusSkillsLatticeNode, vlog]);
+  }, [focusSkillsLatticeNode, placeStarDestroyerNearSkills, vlog]);
 
   const getProjectShowcaseStopRunForIndex = useCallback((index: number) => {
     const panels = projectShowcasePanelsRef.current;
@@ -2166,9 +2256,8 @@ export default function ResumeSpace3D({
       ) {
         clearInterval(check);
         // Auto-engage the ship — same as the old handleUseShip path
-        if (shipCinematicRef.current) {
-          shipCinematicRef.current.active = false;
-        }
+        // Keep cinematic hover active so the Falcon continues a subtle
+        // motion after entering frame, instead of freezing immediately.
         setFollowingSpaceship(true);
         followingSpaceshipRef.current = true;
         setInsideShip(false);
@@ -2242,9 +2331,16 @@ export default function ResumeSpace3D({
         setFollowingSpaceship(true);
         followingSpaceshipRef.current = true;
         if (spaceshipRef.current) spaceshipRef.current.visible = true;
-        const atSkills =
-          currentNavigationTarget === "skills" && navigationDistance === null;
+        const skillsAnchor = skillsLatticeWorldAnchorRef.current;
+        const ship = spaceshipRef.current;
+        const nearSkillsAnchor =
+          !!skillsAnchor &&
+          !!ship &&
+          ship.position.distanceTo(skillsAnchor) <= SKILLS_LATTICE_ARRIVAL_DIST;
+        const atSkills = nearSkillsAnchor && navigationDistance === null;
         skillsLatticePendingEntryRef.current = true;
+        starDestroyerSkillsSnapPendingRef.current = true;
+        placeStarDestroyerNearSkills();
         if (atSkills) {
           enterSkillsLattice();
         } else {
@@ -2310,6 +2406,7 @@ export default function ResumeSpace3D({
       enterSkillsLattice,
       handleExperienceCompanyNavigation,
       handleQuickNav,
+      placeStarDestroyerNearSkills,
       startProjectShowcaseEntrySequence,
       exitSkillsLattice,
       exitProjectShowcase,
@@ -2352,7 +2449,14 @@ export default function ResumeSpace3D({
     if (!skillsLatticePendingEntryRef.current || skillsLatticeActiveRef.current) {
       return;
     }
-    if (currentNavigationTarget === "skills" && navigationDistance === null) {
+    const ship = spaceshipRef.current;
+    const anchor = skillsLatticeWorldAnchorRef.current;
+    const arrivedAtSkills =
+      !!ship &&
+      !!anchor &&
+      ship.position.distanceTo(anchor) <= SKILLS_LATTICE_ARRIVAL_DIST &&
+      navigationDistance === null;
+    if (currentNavigationTarget === "skills" && arrivedAtSkills) {
       enterSkillsLattice();
     }
   }, [currentNavigationTarget, navigationDistance, enterSkillsLattice]);
@@ -2555,6 +2659,76 @@ export default function ResumeSpace3D({
   }, [sceneReady]);
 
   useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
+    let last = performance.now();
+    const desiredPos = new THREE.Vector3();
+    const lookAtPos = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    const tick = () => {
+      const now = performance.now();
+      const dt = Math.min((now - last) / 1000, 0.08);
+      last = now;
+      const sd = starDestroyerRef.current;
+      const anchor = skillsLatticeWorldAnchorRef.current;
+      const skillsRouteActive = currentNavigationTargetRef.current === "skills";
+      const holdNearSkills = skillsLatticeActiveRef.current || skillsRouteActive;
+      if (sd && anchor && holdNearSkills) {
+        if (!skillsSDLockActiveRef.current) {
+          skillsSDLockActiveRef.current = true;
+          const a0 = skillsSDPatrolStateRef.current.angle;
+          sd.position.set(
+            anchor.x + Math.cos(a0) * (SKILLS_SD_PATROL_RADIUS * 0.9),
+            anchor.y + 96,
+            anchor.z + Math.sin(a0) * (SKILLS_SD_PATROL_RADIUS * 0.9),
+          );
+          vlog("🔺 SD skills-lock engaged");
+            shipLog("SD lock engaged (Skills)", "info");
+        }
+        sd.visible = true;
+        skillsSDPatrolStateRef.current.angle += dt * SKILLS_SD_PATROL_SPEED;
+        const a = skillsSDPatrolStateRef.current.angle;
+        desiredPos.set(
+          anchor.x + Math.cos(a) * SKILLS_SD_PATROL_RADIUS,
+          anchor.y + 92 + Math.sin(a * 1.6) * 11,
+          anchor.z + Math.sin(a) * SKILLS_SD_PATROL_RADIUS,
+        );
+        lookAtPos.set(
+          anchor.x + Math.cos(a + 0.4) * SKILLS_SD_PATROL_RADIUS,
+          anchor.y + 84,
+          anchor.z + Math.sin(a + 0.4) * SKILLS_SD_PATROL_RADIUS,
+        );
+        sd.position.lerp(desiredPos, 0.028);
+        const lookMat = new THREE.Matrix4().lookAt(sd.position, lookAtPos, up);
+        const targetQuat = new THREE.Quaternion().setFromRotationMatrix(lookMat);
+        const forwardOffset = sd.userData?.forwardOffset as
+          | THREE.Quaternion
+          | undefined;
+        if (forwardOffset) targetQuat.multiply(forwardOffset);
+        sd.quaternion.slerp(targetQuat, 0.02);
+        const nowMs = performance.now();
+        if (nowMs - starDestroyerDebugLastLogMsRef.current > 3200) {
+          starDestroyerDebugLastLogMsRef.current = nowMs;
+          vlog(
+            `🔺 SD near Skills [${sd.position.x.toFixed(0)}, ${sd.position.y.toFixed(
+              0,
+            )}, ${sd.position.z.toFixed(0)}]`,
+          );
+        }
+      } else {
+        if (skillsSDLockActiveRef.current) {
+          vlog("🔺 SD skills-lock released");
+          shipLog("SD lock released", "info");
+        }
+        skillsSDLockActiveRef.current = false;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [navigationDistance, sceneReady, shipLog, vlog]);
+
+  useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
     const pickNodeAtPointer = (clientX: number, clientY: number) => {
@@ -2655,6 +2829,36 @@ export default function ResumeSpace3D({
         camera.layers.disable(PROJECT_SHOWCASE_LAYER);
       }
 
+      const nowMs = performance.now();
+      if (nowMs - shipTelemetryLastLogMsRef.current >= 1000) {
+        shipTelemetryLastLogMsRef.current = nowMs;
+        const wantsFalcon = emitFalconLocationLogsRef.current;
+        const wantsSD = emitSDLocationLogsRef.current;
+        if (wantsFalcon || wantsSD) {
+          const sd = starDestroyerRef.current;
+          const shipPos = ship.position;
+          const sdPos = sd?.position;
+          const sdDist = sdPos ? shipPos.distanceTo(sdPos) : null;
+          const parts: string[] = [];
+          if (wantsFalcon) {
+            parts.push(
+              `Falcon [${shipPos.x.toFixed(0)}, ${shipPos.y.toFixed(0)}, ${shipPos.z.toFixed(0)}]`,
+            );
+          }
+          if (wantsSD) {
+            parts.push(
+              `SD ${sdPos
+                ? `[${sdPos.x.toFixed(0)}, ${sdPos.y.toFixed(0)}, ${sdPos.z.toFixed(0)}]`
+                : "[not-loaded]"}`,
+            );
+          }
+          if (wantsFalcon && wantsSD && sdDist !== null) {
+            parts.push(`d=${sdDist.toFixed(0)}`);
+          }
+          shipLog(`TELEM ${parts.join(" | ")}`, "info");
+        }
+      }
+
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -2740,6 +2944,7 @@ export default function ResumeSpace3D({
       setCosmosIntroOverlayOpacity(THREE.MathUtils.lerp(0.42, 0, ease));
       if (t >= 1) {
         setCosmosIntroOverlayOpacity(0);
+        cosmosIntroCompletedRef.current = true;
         return;
       }
       raf = requestAnimationFrame(tick);
@@ -2747,6 +2952,129 @@ export default function ResumeSpace3D({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [isLoading, sceneReady]);
+
+  useEffect(() => {
+    if (isLoading || !sceneReady) return;
+    if (starDestroyerIntroFlybyPlayedRef.current) return;
+    let raf = 0;
+    const camDir = new THREE.Vector3();
+    const camUp = new THREE.Vector3();
+    const camRight = new THREE.Vector3();
+    const p = new THREE.Vector3();
+    const lookTarget = new THREE.Vector3();
+    const lookMat = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const tick = () => {
+      const sd = starDestroyerRef.current;
+      const camera = sceneRef.current.camera;
+      if (sd && camera) {
+        if (!cosmosIntroCompletedRef.current) {
+          raf = requestAnimationFrame(tick);
+          return;
+        }
+        const flyby = starDestroyerIntroFlybyRef.current;
+        if (!flyby.active) {
+          camera.getWorldDirection(camDir);
+          camUp.copy(camera.up).normalize();
+          camRight.crossVectors(camDir, camUp).normalize();
+          flyby.startPos
+            .copy(camera.position)
+            .addScaledVector(camDir, 900)
+            .addScaledVector(camUp, 40)
+            .addScaledVector(camRight, 210);
+          flyby.endPos
+            .copy(camera.position)
+            .addScaledVector(camDir, -320)
+            .addScaledVector(camUp, -24)
+            .addScaledVector(camRight, -170);
+          sd.position.copy(flyby.startPos);
+          sd.visible = true;
+          const readabilityKey = sd.userData.readabilityKey as THREE.PointLight | undefined;
+          const readabilityRim = sd.userData.readabilityRim as THREE.PointLight | undefined;
+          if (readabilityKey) readabilityKey.intensity = 1.8;
+          if (readabilityRim) readabilityRim.intensity = 1.35;
+          flyby.startAt = performance.now();
+          flyby.durationMs = 14000;
+          flyby.holdEndAt = 0;
+          flyby.active = true;
+          starDestroyerIntroFlybyPlayedRef.current = true;
+          vlog("🔺 SD intro flyby started");
+          shipLog("SD flyby started", "info");
+        }
+        if (flyby.active) {
+          const nowMs = performance.now();
+          const tLinear = THREE.MathUtils.clamp(
+            (nowMs - flyby.startAt) / Math.max(1, flyby.durationMs),
+            0,
+            1,
+          );
+          // Dynamically seek the camera forward axis so the flyby stays centered
+          // even if camera framing changes while the intro is running.
+          camera.getWorldDirection(camDir);
+          camUp.copy(camera.up).normalize();
+          camRight.crossVectors(camDir, camUp).normalize();
+          const passPoint = camera.position
+            .clone()
+            .addScaledVector(camDir, -36)
+            .addScaledVector(camUp, -2)
+            .addScaledVector(camRight, 0);
+          const exitPoint = passPoint
+            .clone()
+            .addScaledVector(camDir, -360)
+            .addScaledVector(camUp, -20)
+            .addScaledVector(camRight, -90);
+          if (tLinear < 0.82) {
+            const tApproach = tLinear / 0.82;
+            p.lerpVectors(flyby.startPos, passPoint, tApproach);
+          } else {
+            const tExit = (tLinear - 0.82) / 0.18;
+            p.lerpVectors(passPoint, exitPoint, tExit);
+          }
+          lookTarget
+            .copy(p)
+            .add(
+              (tLinear < 0.82 ? passPoint : exitPoint)
+                .clone()
+                .sub(p)
+                .normalize()
+                .multiplyScalar(1400),
+            );
+          lookMat.lookAt(p, lookTarget, new THREE.Vector3(0, 1, 0));
+          q.setFromRotationMatrix(lookMat);
+          const forwardOffset = sd.userData?.forwardOffset as THREE.Quaternion | undefined;
+          if (forwardOffset) q.multiply(forwardOffset);
+          sd.position.copy(p);
+          sd.quaternion.copy(q);
+          if (tLinear >= 1) {
+            if (flyby.holdEndAt === 0) {
+              flyby.holdEndAt = nowMs + flyby.holdMs;
+            }
+            if (nowMs < flyby.holdEndAt) {
+              raf = requestAnimationFrame(tick);
+              return;
+            }
+            flyby.active = false;
+            // Hide SD after intro pass; it will be re-shown by Skills lock.
+            const readabilityKey = sd.userData.readabilityKey as THREE.PointLight | undefined;
+            const readabilityRim = sd.userData.readabilityRim as THREE.PointLight | undefined;
+            if (readabilityKey) readabilityKey.intensity = 0.1;
+            if (readabilityRim) readabilityRim.intensity = 0.08;
+            sd.visible = false;
+            vlog("🔺 SD intro flyby complete");
+            shipLog("SD flyby complete", "info");
+          }
+        }
+      }
+      if (!starDestroyerIntroFlybyPlayedRef.current || starDestroyerIntroFlybyRef.current.active) {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      starDestroyerIntroFlybyRef.current.active = false;
+    };
+  }, [isLoading, sceneReady, shipLog, vlog]);
 
   useEffect(() => {
     if (!projectShowcaseActive) return;
@@ -3308,6 +3636,19 @@ export default function ResumeSpace3D({
       2,
       "/textures/earth.jpg",
     );
+    // Move Skills destination deep in the known universe so travel to the
+    // lattice consistently engages long-haul lightspeed.
+    {
+      const anchor = SKILLS_LATTICE_WORLD_ANCHOR.clone();
+      skillsPlanet.position.copy(anchor);
+      const skillsOrbitItem = items.find((item) => item.mesh === skillsPlanet);
+      if (skillsOrbitItem) {
+        skillsOrbitItem.distance = Math.hypot(anchor.x, anchor.z);
+        skillsOrbitItem.angle = Math.atan2(-anchor.z, anchor.x);
+        skillsOrbitItem.orbitSpeed = 0;
+      }
+      skillsLatticeWorldAnchorRef.current = anchor.clone();
+    }
 
     // 4. MOONS
     const experienceJobs = Object.values(resumeData.experience).flat();
@@ -3750,6 +4091,64 @@ export default function ResumeSpace3D({
         // Position it initially near the sun
         spaceship.position.set(FALCON_INITIAL_POS.x, FALCON_INITIAL_POS.y, FALCON_INITIAL_POS.z);
 
+        // Cache rear blue engine-panel materials so render loop can drive
+        // emissive intensity directly from ship speed.
+        spaceship.updateMatrixWorld(true);
+        const enginePanelMaterials: Array<{
+          material: THREE.Material & {
+            emissive?: THREE.Color;
+            emissiveIntensity?: number;
+            userData?: Record<string, unknown>;
+          };
+          baseEmissive: THREE.Color;
+          baseIntensity: number;
+        }> = [];
+        const seenMaterialUuids = new Set<string>();
+        spaceship.traverse((obj) => {
+          if (!(obj instanceof THREE.Mesh) || !obj.material) return;
+          const mesh = obj as THREE.Mesh;
+          if (mesh.geometry && !mesh.geometry.boundingSphere) {
+            mesh.geometry.computeBoundingSphere();
+          }
+          const worldCenter = mesh.geometry?.boundingSphere
+            ? mesh.geometry.boundingSphere.center.clone().applyMatrix4(mesh.matrixWorld)
+            : mesh.getWorldPosition(new THREE.Vector3());
+          const localToShip = spaceship.worldToLocal(worldCenter.clone());
+          const isRearSection = localToShip.z < -0.65;
+          if (!isRearSection) return;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mats.forEach((material) => {
+            const mat = material as THREE.Material & {
+              uuid?: string;
+              emissive?: THREE.Color;
+              emissiveIntensity?: number;
+              userData?: Record<string, unknown>;
+            };
+            if (!mat.emissive) return;
+            const e = mat.emissive;
+            const isBlueEmissive =
+              e.b > 0.08 &&
+              e.b > e.r * 1.2 &&
+              e.b > e.g * 1.15;
+            if (!isBlueEmissive) return;
+            if (seenMaterialUuids.has(mat.uuid)) return;
+            seenMaterialUuids.add(mat.uuid);
+            if (!mat.userData) mat.userData = {};
+            const baseEmissive = e.clone();
+            const baseIntensity =
+              typeof mat.emissiveIntensity === "number" ? mat.emissiveIntensity : 1;
+            mat.userData.engineBaseEmissive = baseEmissive.clone();
+            mat.userData.engineBaseIntensity = baseIntensity;
+            enginePanelMaterials.push({
+              material: mat,
+              baseEmissive,
+              baseIntensity,
+            });
+          });
+        });
+        spaceship.userData.enginePanelMaterials = enginePanelMaterials;
+        vlog(`🚀 Falcon engine panel mats detected: ${enginePanelMaterials.length}`);
+
         // Subtle ambient light on the ship hull — just enough to see detail.
         // Ship is ~0.8 units long; distance 1.5 = ~2× ship length (tight glow).
         const shipLight = new THREE.PointLight(0x6699ff, 0.15, 1.5);
@@ -3895,12 +4294,29 @@ export default function ResumeSpace3D({
         forwardLight.position.set(0, 40, -360);
         starDestroyer.add(forwardLight);
 
+        // Readability light rig: keeps hull details visible when SD is
+        // away from strong scene lights (especially during intro flyby).
+        const readabilityKey = new THREE.PointLight(0xe6efff, 0.22, 2200);
+        readabilityKey.position.set(0, 120, -260);
+        starDestroyer.add(readabilityKey);
+        const readabilityRim = new THREE.PointLight(0x3f8dff, 0.2, 2200);
+        readabilityRim.position.set(0, 90, 320);
+        starDestroyer.add(readabilityRim);
+        starDestroyer.userData.readabilityKey = readabilityKey;
+        starDestroyer.userData.readabilityRim = readabilityRim;
+
         scene.add(starDestroyer);
         starDestroyerRef.current = starDestroyer;
 
         // Initialize the cruiser AI
         const cruiser = new StarDestroyerCruiser(starDestroyer);
         starDestroyerCruiserRef.current = cruiser;
+        // We keep SD under scene-script control (skills lock + intro flyby),
+        // so disable autonomous cruising by default.
+        cruiser.setEnabled(false);
+        if (starDestroyerSkillsSnapPendingRef.current) {
+          placeStarDestroyerNearSkills();
+        }
 
         // Register all planets and moons as visitable destinations.
         // getWorldPosition() is called live each frame so orbiting bodies
@@ -3965,6 +4381,7 @@ export default function ResumeSpace3D({
         cruiser.setJumpCone(jumpCone);
 
         vlog(`🔺 Star Destroyer loaded — ${sdDests.length} destinations registered`);
+        shipLog("Star Destroyer online", "system");
 
         // Console commands for directing the Star Destroyer
         (window as any).sendSD = (name: string) => {
@@ -3988,6 +4405,7 @@ export default function ResumeSpace3D({
         (window as any).sdStatus = () => {
           const s = cruiser.getStatus();
           console.log("=== STAR DESTROYER STATUS ===");
+          console.log("  Autonomy enabled:", cruiser.isEnabled());
           console.log("  High-level state:", s.hlState);
           console.log("  Local state:", s.localState);
           console.log("  Speed:", s.speed.toFixed(1), "u/s");
@@ -3996,6 +4414,14 @@ export default function ResumeSpace3D({
           console.log("  Local patrols:", s.localPatrols);
           console.log("  All destinations:", s.destinations.join(", "));
           return s;
+        };
+        (window as any).sdAutonomyOn = () => {
+          cruiser.setEnabled(true);
+          console.log("🔺 SD autonomy: ON");
+        };
+        (window as any).sdAutonomyOff = () => {
+          cruiser.setEnabled(false);
+          console.log("🔺 SD autonomy: OFF");
         };
 
         // ── Visual locate beacons ─────────────────────────────────
@@ -5765,6 +6191,7 @@ export default function ResumeSpace3D({
       shipStagingKeysRef,
       manualFlightModeRef,
       manualFlightRef,
+      currentNavigationTargetRef,
       keyboardStateRef,
       controlSensitivityRef,
       invertControlsRef,
@@ -6088,6 +6515,7 @@ export default function ResumeSpace3D({
 
       projectShowcaseRootRef.current = null;
       projectShowcaseWorldAnchorRef.current = null;
+      skillsLatticeWorldAnchorRef.current = null;
       projectShowcaseNebulaRootRef.current = null;
       skillsLatticeRootRef.current = null;
       skillsLatticeNodesRef.current = [];
@@ -6749,6 +7177,10 @@ export default function ResumeSpace3D({
             debugLogs={debugLogs}
             debugLogTotal={debugLogTotal}
             visible={consoleVisible}
+            emitFalconLocation={emitFalconLocationLogs}
+            emitSDLocation={emitSDLocationLogs}
+            onEmitFalconLocationChange={setEmitFalconLocationLogs}
+            onEmitSDLocationChange={setEmitSDLocationLogs}
             onCommand={(cmd) => {
               shipLog(`$ ${cmd}`, "cmd");
               // Command execution will be wired later

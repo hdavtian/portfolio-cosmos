@@ -61,6 +61,7 @@ export const useRenderLoop = () => {
       shipStagingKeysRef: React.MutableRefObject<Record<string, boolean>>;
       manualFlightModeRef: React.MutableRefObject<boolean>;
       manualFlightRef: React.MutableRefObject<any>;
+      currentNavigationTargetRef?: React.MutableRefObject<string | null>;
       keyboardStateRef: React.MutableRefObject<Record<string, boolean>>;
       controlSensitivityRef: React.MutableRefObject<number>;
       invertControlsRef: React.MutableRefObject<boolean>;
@@ -130,6 +131,7 @@ export const useRenderLoop = () => {
         shipStagingKeysRef,
         manualFlightModeRef,
         manualFlightRef,
+        currentNavigationTargetRef,
         keyboardStateRef,
         controlSensitivityRef,
         invertControlsRef,
@@ -197,6 +199,8 @@ export const useRenderLoop = () => {
       const _tmpCamClamped = new THREE.Vector3();
       const _orbitCamTarget = new THREE.Vector3();
       const _orbitCurUp = new THREE.Vector3(0, 1, 0);
+      const _engineTint = new THREE.Color(0x5aa7ff);
+      const _lightspeedColor = new THREE.Color();
       let _orbitUpActive = false;
       let interiorLightSnapshot: {
         sun?: number;
@@ -778,9 +782,10 @@ export const useRenderLoop = () => {
                   .lerp(cinematic.settleTargetPos, easedSettle);
               }
               shipIsIdleHover = true; // skip physics while idling in cinematic hover
-              // Subtle idle hover — reduced amplitude for realism
-              const floatX = Math.sin(hoverElapsed * 0.3) * 0.06;
-              const floatY = Math.sin(hoverElapsed * 0.45) * 0.08;
+              // Cinematic idle hover — intentionally visible so the ship never
+              // looks frozen after the intro settles.
+              const floatX = Math.sin(hoverElapsed * 0.36) * 0.11;
+              const floatY = Math.sin(hoverElapsed * 0.52) * 0.17;
               _tmpHoverFloat.set(floatX, floatY, 0);
               ship.position.copy(basePos).add(_tmpHoverFloat);
 
@@ -1404,6 +1409,56 @@ export const useRenderLoop = () => {
           }
         }
 
+        // Drive Falcon rear blue-panel emissive by actual ship speed.
+        if (activeShip && !insideShipRef.current) {
+          const ship = activeShip as THREE.Object3D & {
+            userData: Record<string, unknown>;
+          };
+          const now = performance.now();
+          const prevPos = ship.userData._enginePanelPrevPos as THREE.Vector3 | undefined;
+          const prevTime = ship.userData._enginePanelPrevTime as number | undefined;
+          let speedUnitsPerSec = 0;
+          if (prevPos && prevTime) {
+            const dt = Math.max((now - prevTime) / 1000, 1 / 120);
+            speedUnitsPerSec = ship.position.distanceTo(prevPos) / dt;
+          }
+          ship.userData._enginePanelPrevPos = ship.position.clone();
+          ship.userData._enginePanelPrevTime = now;
+          const panelMaterials = ship.userData.enginePanelMaterials as
+            | Array<{
+                material: THREE.Material & {
+                  emissive?: THREE.Color;
+                  emissiveIntensity?: number;
+                };
+                baseEmissive: THREE.Color;
+                baseIntensity: number;
+              }>
+            | undefined;
+          if (panelMaterials && panelMaterials.length > 0) {
+            const lightspeedActive = !!manualFlightRef.current?.isLightspeedActive;
+            let speedNorm = THREE.MathUtils.clamp(speedUnitsPerSec / 220, 0, 1.8);
+            if (lightspeedActive) {
+              speedNorm = Math.max(speedNorm, 1.1);
+            }
+            panelMaterials.forEach((entry) => {
+              const mat = entry.material;
+              if (!mat.emissive || typeof mat.emissiveIntensity !== "number") return;
+              const baseIntensity = Math.max(0.15, entry.baseIntensity || 1);
+              const tintMix = 0.22 + Math.min(0.42, speedNorm * 0.24);
+              const intensityBoost = 1 + speedNorm * 2.5 + (lightspeedActive ? 2.3 : 0);
+              mat.emissive
+                .copy(entry.baseEmissive)
+                .lerp(_engineTint, tintMix)
+                .multiplyScalar(1 + speedNorm * 1.7 + (lightspeedActive ? 1.15 : 0));
+              mat.emissiveIntensity = THREE.MathUtils.clamp(
+                baseIntensity * intensityBoost,
+                baseIntensity * 0.8,
+                baseIntensity * 8,
+              );
+            });
+          }
+        }
+
         // Physics only needed when ship is actively moving in exterior view.
         // Skip during idle cinematic hover and interior mode to prevent camera/ship tugging.
         if (
@@ -1503,9 +1558,16 @@ export const useRenderLoop = () => {
 
         ensureLightspeedStreaks();
         if (lightspeedStreakGroup && lightspeedStreakPositions && lightspeedStreakMeta) {
+          const isSkillsLightspeedTravel =
+            lightspeedActive &&
+            (currentNavigationTargetRef?.current === "skills"
+              || currentNavigationTargetRef?.current === "skills-lattice");
           lightspeedStreakGroup.visible = lightspeedVisualIntensity > 0.02;
           const mat = lightspeedStreakGroup.material as THREE.LineBasicMaterial;
           mat.opacity = 0.12 + 0.38 * lightspeedVisualIntensity;
+          const colorAttr = lightspeedStreakGroup.geometry.getAttribute(
+            "color",
+          ) as THREE.BufferAttribute;
           if (lightspeedVisualIntensity > 0.02) {
             // Keep streak field locked in front of camera in world space.
             lightspeedStreakGroup.position.copy(camera.position);
@@ -1536,13 +1598,34 @@ export const useRenderLoop = () => {
               lightspeedStreakPositions[pi + 3] = 0;
               lightspeedStreakPositions[pi + 4] = 0;
               lightspeedStreakPositions[pi + 5] = endZ;
+              if (isSkillsLightspeedTravel) {
+                const hue = (performance.now() * 0.00008 + i * 0.013) % 1;
+                _lightspeedColor.setHSL(hue, 0.95, 0.68);
+              } else {
+                // Original cool-white tunnel palette.
+                const t = 0.74 + 0.24 * (0.5 + 0.5 * Math.sin(i * 1.7));
+                _lightspeedColor.setRGB(0.7 * t, 0.82 * t, 1.0 * t);
+              }
+              colorAttr.setXYZ(i * 2, _lightspeedColor.r, _lightspeedColor.g, _lightspeedColor.b);
+              colorAttr.setXYZ(i * 2 + 1, _lightspeedColor.r, _lightspeedColor.g, _lightspeedColor.b);
             }
             posAttr.needsUpdate = true;
+            colorAttr.needsUpdate = true;
           }
         }
         if (lightspeedThickGroup && lightspeedThickPositions && lightspeedThickMeta) {
           lightspeedThickGroup.visible = lightspeedVisualIntensity > 0.08;
           const thickMat = lightspeedThickGroup.material as THREE.LineBasicMaterial;
+          const isSkillsLightspeedTravel =
+            lightspeedActive &&
+            (currentNavigationTargetRef?.current === "skills"
+              || currentNavigationTargetRef?.current === "skills-lattice");
+          if (isSkillsLightspeedTravel) {
+            const h = (performance.now() * 0.00006) % 1;
+            thickMat.color.setHSL(h, 0.9, 0.7);
+          } else {
+            thickMat.color.set(0xe8f4ff);
+          }
           thickMat.opacity = 0.11 + 0.36 * lightspeedVisualIntensity;
           if (lightspeedVisualIntensity > 0.08) {
             lightspeedThickGroup.position.copy(camera.position);

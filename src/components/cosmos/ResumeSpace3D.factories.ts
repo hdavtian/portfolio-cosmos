@@ -583,53 +583,56 @@ export const createPlanetFactory = (deps: {
     planetMesh.castShadow = false;
     planetMesh.receiveShadow = false;
 
-    // Add a subtle, neutral rim atmosphere so silhouettes look softer/natural.
-    const atmosphereScale = 1.045;
-    const atmosphereGeometry = new THREE.SphereGeometry(
-      size * atmosphereScale,
-      sphereSegments,
-      sphereSegments,
-    );
-    const atmosphereMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        rimColor: { value: new THREE.Color(0xb8c8ff) },
-        rimStrength: { value: parent === scene ? 0.105 : 0.082 },
-        rimPower: { value: 2.25 },
-      },
-      vertexShader: `
-        varying vec3 vNormal;
-        varying vec3 vViewPosition;
-        void main() {
-          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          vViewPosition = -mvPosition.xyz;
-          vNormal = normalize(normalMatrix * normal);
-          gl_Position = projectionMatrix * mvPosition;
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 rimColor;
-        uniform float rimStrength;
-        uniform float rimPower;
-        varying vec3 vNormal;
-        varying vec3 vViewPosition;
-        void main() {
-          float ndv = max(dot(normalize(vNormal), normalize(vViewPosition)), 0.0);
-          float fresnel = pow(1.0 - ndv, rimPower);
-          float alpha = smoothstep(0.0, 1.0, fresnel) * rimStrength;
-          gl_FragColor = vec4(rimColor, alpha);
-        }
-      `,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      side: THREE.BackSide,
-      depthWrite: false,
-    });
-    const atmosphereShell = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
-    atmosphereShell.name = `${name}-atmosphere-shell`;
-    atmosphereShell.castShadow = false;
-    atmosphereShell.receiveShadow = false;
-    planetMesh.add(atmosphereShell);
-    planetMesh.userData.atmosphereShell = atmosphereShell;
+    // Keep the soft rim shell only on main planets; moon overlays can flash
+    // as white discs during fast camera transitions (reported artifact).
+    if (parent === scene) {
+      const atmosphereScale = 1.045;
+      const atmosphereGeometry = new THREE.SphereGeometry(
+        size * atmosphereScale,
+        sphereSegments,
+        sphereSegments,
+      );
+      const atmosphereMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+          rimColor: { value: new THREE.Color(0xb8c8ff) },
+          rimStrength: { value: 0.105 },
+          rimPower: { value: 2.25 },
+        },
+        vertexShader: `
+          varying vec3 vNormal;
+          varying vec3 vViewPosition;
+          void main() {
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            vViewPosition = -mvPosition.xyz;
+            vNormal = normalize(normalMatrix * normal);
+            gl_Position = projectionMatrix * mvPosition;
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 rimColor;
+          uniform float rimStrength;
+          uniform float rimPower;
+          varying vec3 vNormal;
+          varying vec3 vViewPosition;
+          void main() {
+            float ndv = max(dot(normalize(vNormal), normalize(vViewPosition)), 0.0);
+            float fresnel = pow(1.0 - ndv, rimPower);
+            float alpha = smoothstep(0.0, 1.0, fresnel) * rimStrength;
+            gl_FragColor = vec4(rimColor, alpha);
+          }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        side: THREE.BackSide,
+        depthWrite: false,
+      });
+      const atmosphereShell = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+      atmosphereShell.name = `${name}-atmosphere-shell`;
+      atmosphereShell.castShadow = false;
+      atmosphereShell.receiveShadow = false;
+      planetMesh.add(atmosphereShell);
+      planetMesh.userData.atmosphereShell = atmosphereShell;
+    }
 
     // Start position
     const forcedStartAngle = isMainOrbit

@@ -24,6 +24,10 @@ interface ShipTerminalProps {
   debugLogTotal?: number;
   onCommand?: (command: string) => void;
   onClearDebug?: () => void;
+  emitFalconLocation?: boolean;
+  emitSDLocation?: boolean;
+  onEmitFalconLocationChange?: (enabled: boolean) => void;
+  onEmitSDLocationChange?: (enabled: boolean) => void;
   visible?: boolean;
 }
 
@@ -62,6 +66,10 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
   debugLogTotal = 0,
   onCommand,
   onClearDebug,
+  emitFalconLocation = false,
+  emitSDLocation = false,
+  onEmitFalconLocationChange,
+  onEmitSDLocationChange,
   visible = true,
 }) => {
   const logScrollRef = useRef<HTMLDivElement>(null);
@@ -285,6 +293,38 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
               </span>
             )}
           </button>
+        </div>
+
+        {/* Telemetry toggles */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "4px 10px",
+            borderBottom: "1px solid rgba(0, 255, 65, 0.08)",
+            color: "rgba(0, 255, 65, 0.65)",
+            fontSize: 9,
+          }}
+        >
+          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={emitFalconLocation}
+              onChange={(e) => onEmitFalconLocationChange?.(e.target.checked)}
+              style={{ accentColor: "#00ff41", width: 12, height: 12 }}
+            />
+            Falcon location
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={emitSDLocation}
+              onChange={(e) => onEmitSDLocationChange?.(e.target.checked)}
+              style={{ accentColor: "#00ff41", width: 12, height: 12 }}
+            />
+            SD location
+          </label>
         </div>
 
         {/* Log area */}
