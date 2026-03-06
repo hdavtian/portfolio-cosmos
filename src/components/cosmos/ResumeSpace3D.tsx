@@ -450,6 +450,17 @@ export default function ResumeSpace3D({
   const skillsLatticeArcRecordsRef = useRef<SkillsLatticeArcRecord[]>([]);
   const skillsLatticeFlowPointsRef = useRef<THREE.Points | null>(null);
   const skillsLatticeFlowMetaRef = useRef<SkillsLatticeFlowMeta[]>([]);
+  const skillsLatticeEnvelopeRef = useRef<THREE.Mesh | null>(null);
+  const skillsLatticeEnvelopeMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const skillsLatticeEnvelopeEdgeMatRef = useRef<THREE.LineBasicMaterial | null>(null);
+  const skillsLatticeEnvelopeRadiusRef = useRef(0);
+  const skillsLatticeEnvelopeInsideRef = useRef<boolean | null>(null);
+  const skillsLatticeBeaconRef = useRef<THREE.Mesh | null>(null);
+  const skillsLatticeBeaconMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const skillsLatticeBeaconEdgeMatRef = useRef<THREE.LineBasicMaterial | null>(null);
+  const skillsLatticeBeaconLabelRef = useRef<THREE.Object3D | null>(null);
+  const skillsLatticeNodeLabelsRef = useRef<THREE.Object3D[]>([]);
+  const skillsLatticeSystemActiveRef = useRef(false);
   const skillsLatticeRippleRef = useRef<{
     active: boolean;
     center: THREE.Vector3;
@@ -1871,52 +1882,77 @@ export default function ResumeSpace3D({
     shipLog("SD repositioned near Skills", "info");
   }, [shipLog, vlog]);
 
-  const exitSkillsLattice = useCallback(() => {
+  const exitSkillsLattice = useCallback((options?: {
+    restoreShip?: boolean;
+    clearSystem?: boolean;
+  }) => {
+    const restoreShip = options?.restoreShip ?? true;
+    const clearSystem = options?.clearSystem ?? true;
     const latticeRoot = skillsLatticeRootRef.current;
+    const latticeBeacon = skillsLatticeBeaconRef.current;
     const camera = sceneRef.current.camera;
     const controls = sceneRef.current.controls;
     if (latticeRoot) latticeRoot.visible = false;
+    if (latticeBeacon) {
+      latticeBeacon.visible = true;
+      latticeBeacon.userData.sectionIndex = 2;
+      latticeBeacon.userData.planetName = "Skills";
+      latticeBeacon.userData.sectionId = "skills";
+    }
     if (camera) camera.layers.disable(SKILLS_LATTICE_LAYER);
     const prev = skillsLatticePrevStateRef.current;
-    if (prev) {
+    if (restoreShip && prev) {
       setFollowingSpaceship(prev.followingSpaceship);
       followingSpaceshipRef.current = prev.followingSpaceship;
       if (spaceshipRef.current) {
         spaceshipRef.current.visible = prev.shipVisible;
       }
       if (controls) controls.enabled = prev.controlsEnabled;
-    } else {
+    } else if (restoreShip) {
       setFollowingSpaceship(true);
       followingSpaceshipRef.current = true;
       if (spaceshipRef.current) spaceshipRef.current.visible = true;
+      if (controls) controls.enabled = true;
+    } else {
+      setFollowingSpaceship(false);
+      followingSpaceshipRef.current = false;
+      if (spaceshipRef.current) spaceshipRef.current.visible = false;
       if (controls) controls.enabled = true;
     }
     skillsLegacyBodiesRef.current.forEach((obj) => {
       obj.visible = true;
     });
     skillsLatticePendingEntryRef.current = false;
-    skillsLatticePrevStateRef.current = null;
+    if (clearSystem) {
+      skillsLatticePrevStateRef.current = null;
+      skillsLatticeSystemActiveRef.current = false;
+    }
     skillsLatticeActiveRef.current = false;
     setSkillsLatticeActive(false);
     skillsLatticeRippleRef.current.active = false;
     skillsLatticeSelectedNodeRef.current = null;
     setSkillsLatticeSelection(null);
+    skillsLatticeEnvelopeInsideRef.current = null;
     vlog("🧠 Skills lattice exited");
   }, [vlog]);
 
   const enterSkillsLattice = useCallback(() => {
     if (skillsLatticeActiveRef.current) return;
     const latticeRoot = skillsLatticeRootRef.current;
+    const latticeBeacon = skillsLatticeBeaconRef.current;
     const controls = sceneRef.current.controls;
     const camera = sceneRef.current.camera;
     if (!latticeRoot || !controls || !camera) return;
 
     skillsLatticePendingEntryRef.current = false;
-    skillsLatticePrevStateRef.current = {
-      followingSpaceship: followingSpaceshipRef.current,
-      shipVisible: spaceshipRef.current?.visible ?? true,
-      controlsEnabled: controls.enabled,
-    };
+    if (!skillsLatticeSystemActiveRef.current || !skillsLatticePrevStateRef.current) {
+      skillsLatticePrevStateRef.current = {
+        followingSpaceship: followingSpaceshipRef.current,
+        shipVisible: spaceshipRef.current?.visible ?? true,
+        controlsEnabled: controls.enabled,
+      };
+    }
+    skillsLatticeSystemActiveRef.current = true;
     setFollowingSpaceship(false);
     followingSpaceshipRef.current = false;
     if (spaceshipRef.current) spaceshipRef.current.visible = false;
@@ -1924,6 +1960,12 @@ export default function ResumeSpace3D({
       obj.visible = false;
     });
     placeStarDestroyerNearSkills();
+    if (latticeBeacon) {
+      latticeBeacon.visible = false;
+      delete latticeBeacon.userData.sectionIndex;
+      delete latticeBeacon.userData.planetName;
+      delete latticeBeacon.userData.sectionId;
+    }
     latticeRoot.visible = true;
     camera.layers.enable(SKILLS_LATTICE_LAYER);
 
@@ -1966,6 +2008,29 @@ export default function ResumeSpace3D({
     };
     requestAnimationFrame(tick);
   }, [focusSkillsLatticeNode, placeStarDestroyerNearSkills, vlog]);
+
+  const resumeSkillsLatticeInPlace = useCallback(() => {
+    if (!skillsLatticeSystemActiveRef.current || skillsLatticeActiveRef.current) return;
+    const latticeRoot = skillsLatticeRootRef.current;
+    const latticeBeacon = skillsLatticeBeaconRef.current;
+    const camera = sceneRef.current.camera;
+    const controls = sceneRef.current.controls;
+    if (!latticeRoot || !camera || !controls) return;
+    if (latticeBeacon) {
+      latticeBeacon.visible = false;
+      delete latticeBeacon.userData.sectionIndex;
+      delete latticeBeacon.userData.planetName;
+      delete latticeBeacon.userData.sectionId;
+    }
+    latticeRoot.visible = true;
+    camera.layers.enable(SKILLS_LATTICE_LAYER);
+    setFollowingSpaceship(false);
+    followingSpaceshipRef.current = false;
+    if (spaceshipRef.current) spaceshipRef.current.visible = false;
+    controls.enabled = true;
+    skillsLatticeActiveRef.current = true;
+    setSkillsLatticeActive(true);
+  }, []);
 
   const getProjectShowcaseStopRunForIndex = useCallback((index: number) => {
     const panels = projectShowcasePanelsRef.current;
@@ -2320,8 +2385,8 @@ export default function ResumeSpace3D({
   const handleCockpitNavigate = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
       vlog(`🎯 Cockpit nav → ${targetType}: ${targetId}`);
-      if (skillsLatticeActiveRef.current && targetId !== "skills") {
-        exitSkillsLattice();
+      if ((skillsLatticeActiveRef.current || skillsLatticeSystemActiveRef.current) && targetId !== "skills") {
+        exitSkillsLattice({ restoreShip: true, clearSystem: true });
       }
       if (targetId === "skills" || targetId === SKILLS_LATTICE_NAV_ID) {
         if (skillsLatticeActiveRef.current) {
@@ -2337,7 +2402,7 @@ export default function ResumeSpace3D({
           !!skillsAnchor &&
           !!ship &&
           ship.position.distanceTo(skillsAnchor) <= SKILLS_LATTICE_ARRIVAL_DIST;
-        const atSkills = nearSkillsAnchor && navigationDistance === null;
+        const atSkills = nearSkillsAnchor;
         skillsLatticePendingEntryRef.current = true;
         starDestroyerSkillsSnapPendingRef.current = true;
         placeStarDestroyerNearSkills();
@@ -2451,12 +2516,10 @@ export default function ResumeSpace3D({
     }
     const ship = spaceshipRef.current;
     const anchor = skillsLatticeWorldAnchorRef.current;
-    const arrivedAtSkills =
-      !!ship &&
-      !!anchor &&
-      ship.position.distanceTo(anchor) <= SKILLS_LATTICE_ARRIVAL_DIST &&
-      navigationDistance === null;
-    if (currentNavigationTarget === "skills" && arrivedAtSkills) {
+    const arrivedAtSkills = !!ship
+      && !!anchor
+      && ship.position.distanceTo(anchor) <= SKILLS_LATTICE_ARRIVAL_DIST;
+    if (arrivedAtSkills) {
       enterSkillsLattice();
     }
   }, [currentNavigationTarget, navigationDistance, enterSkillsLattice]);
@@ -2464,6 +2527,29 @@ export default function ResumeSpace3D({
   useEffect(() => {
     if (!sceneReady) return;
     let raf = 0;
+    const shellCenter = new THREE.Vector3();
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (!skillsLatticeSystemActiveRef.current || skillsLatticeActiveRef.current) return;
+      const camera = sceneRef.current.camera;
+      const shell = skillsLatticeEnvelopeRef.current;
+      if (!camera || !shell) return;
+      shell.getWorldPosition(shellCenter);
+      const shellRadius = Math.max(1, skillsLatticeEnvelopeRadiusRef.current);
+      const distance = camera.position.distanceTo(shellCenter);
+      // Hysteresis: exit happens farther out; re-enter only once clearly back in.
+      if (distance <= shellRadius * 1.03) {
+        resumeSkillsLatticeInPlace();
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [sceneReady, resumeSkillsLatticeInPlace]);
+
+  useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
+    let lastTickMs = performance.now();
     const worldNodePos = new THREE.Vector3();
     const flowPos = new THREE.Vector3();
     const selectedPos = new THREE.Vector3();
@@ -2474,13 +2560,79 @@ export default function ResumeSpace3D({
     const arcPos = new THREE.Vector3();
     const up = new THREE.Vector3(0, 1, 0);
     const flowColor = new THREE.Color();
+    const shellCenter = new THREE.Vector3();
+    const shellSpin = new THREE.Vector3(0.01, 0.016, 0.007);
     const tick = () => {
       if (skillsLatticeActiveRef.current) {
-        const t = performance.now() * 0.001;
+        const nowMs = performance.now();
+        const dt = Math.min((nowMs - lastTickMs) / 1000, 0.05);
+        lastTickMs = nowMs;
+        const t = nowMs * 0.001;
         const selected = skillsLatticeSelectedNodeRef.current;
         const plasmaActive = !!selected;
         const ripple = skillsLatticeRippleRef.current;
-        const nowMs = performance.now();
+        const camera = sceneRef.current.camera;
+        const shellMat = skillsLatticeEnvelopeMatRef.current;
+        const shellEdgeMat = skillsLatticeEnvelopeEdgeMatRef.current;
+        const shell = skillsLatticeEnvelopeRef.current;
+        if (camera && shellMat && shellEdgeMat && shell) {
+          shell.rotation.x += dt * shellSpin.x;
+          shell.rotation.y += dt * shellSpin.y;
+          shell.rotation.z += dt * shellSpin.z;
+          shell.getWorldPosition(shellCenter);
+          const shellRadius = Math.max(1, skillsLatticeEnvelopeRadiusRef.current);
+          const distance = camera.position.distanceTo(shellCenter);
+          if (distance > shellRadius * 1.14) {
+            exitSkillsLattice({ restoreShip: false, clearSystem: false });
+            raf = requestAnimationFrame(tick);
+            return;
+          }
+          const insideT = THREE.MathUtils.clamp(
+            (shellRadius * 0.94 - distance) / (shellRadius * 0.38),
+            0,
+            1,
+          );
+          const outsideT = 1 - insideT;
+          const insideShell = insideT > 0.54;
+          if (skillsLatticeEnvelopeInsideRef.current !== insideShell) {
+            skillsLatticeEnvelopeInsideRef.current = insideShell;
+            if (insideShell) {
+              shellMat.side = THREE.BackSide;
+              shellMat.transparent = true;
+              shellMat.depthWrite = false;
+            } else {
+              shellMat.side = THREE.FrontSide;
+              shellMat.transparent = false;
+              shellMat.depthWrite = true;
+              shellMat.opacity = 1;
+            }
+            shellMat.needsUpdate = true;
+          }
+          const pulse = 0.5 + 0.5 * Math.sin(t * 0.95);
+          if (insideShell) {
+            shellMat.opacity = THREE.MathUtils.clamp(
+              THREE.MathUtils.lerp(0.08, 0.22, 1 - outsideT) + pulse * 0.03,
+              0.06,
+              0.28,
+            );
+          }
+          shellMat.emissive.setHSL(0.58 + pulse * 0.02, 0.55, 0.34);
+          shellMat.emissiveIntensity = THREE.MathUtils.clamp(
+            THREE.MathUtils.lerp(0.16, 0.46, outsideT) + pulse * 0.1,
+            0.1,
+            0.62,
+          );
+          shellEdgeMat.opacity = THREE.MathUtils.clamp(
+            THREE.MathUtils.lerp(0.06, 0.34, outsideT) + pulse * 0.06,
+            0.03,
+            0.5,
+          );
+          shellEdgeMat.color.setHSL(0.58 + pulse * 0.03, 0.72, 0.67);
+          const showNodeLabels = insideT > 0.55;
+          skillsLatticeNodeLabelsRef.current.forEach((label) => {
+            label.visible = showNodeLabels;
+          });
+        }
         let rippleRadius = -1;
         if (ripple.active) {
           const rt = THREE.MathUtils.clamp((nowMs - ripple.startedAt) / 1200, 0, 1);
@@ -2653,6 +2805,49 @@ export default function ResumeSpace3D({
         }
       }
       raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [sceneReady, exitSkillsLattice]);
+
+  useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
+    let lastMs = performance.now();
+    let nextPulseAt = lastMs + 1800 + Math.random() * 2400;
+    let pulseEndAt = 0;
+    let pulseStartAt = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const beacon = skillsLatticeBeaconRef.current;
+      const beaconMat = skillsLatticeBeaconMatRef.current;
+      const edgeMat = skillsLatticeBeaconEdgeMatRef.current;
+      if (!beacon || !beaconMat || !edgeMat) return;
+      if (!beacon.visible) return;
+
+      const now = performance.now();
+      const dt = Math.min((now - lastMs) / 1000, 0.05);
+      lastMs = now;
+      const t = now * 0.001;
+      beacon.rotation.x += dt * 0.006;
+      beacon.rotation.y += dt * 0.009;
+      beacon.rotation.z += dt * 0.0045;
+
+      if (now >= nextPulseAt) {
+        pulseStartAt = now;
+        pulseEndAt = now + 720 + Math.random() * 520;
+        nextPulseAt = pulseEndAt + 2800 + Math.random() * 4200;
+      }
+      const pulseDur = Math.max(1, pulseEndAt - pulseStartAt);
+      const pulseP = pulseEndAt > now ? (now - pulseStartAt) / pulseDur : 0;
+      const periodic = 0.5 + 0.5 * Math.sin(t * 0.75);
+      const pulse = pulseEndAt > now ? Math.sin(pulseP * Math.PI) : 0;
+      const boost = periodic * 0.22 + pulse * 0.95;
+
+      beaconMat.emissive.setHSL(0.58 + 0.03 * periodic, 0.62, 0.42);
+      beaconMat.emissiveIntensity = THREE.MathUtils.clamp(0.22 + boost * 0.52, 0.18, 0.9);
+      edgeMat.opacity = THREE.MathUtils.clamp(0.17 + boost * 0.2, 0.12, 0.42);
+      edgeMat.color.setHSL(0.57 + 0.03 * periodic, 0.78, 0.69);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -3383,6 +3578,85 @@ export default function ResumeSpace3D({
     setProjectShowcasePanelZoom,
   ]);
 
+  // ── Skills lattice controls: Shift+drag to pan camera rig ────────────────
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    const camPos = new THREE.Vector3();
+    const targetPos = new THREE.Vector3();
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    const panOffset = new THREE.Vector3();
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (!skillsLatticeActiveRef.current || !e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("button, input, select, textarea, a")) return;
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragging || !skillsLatticeActiveRef.current) return;
+      const controls = sceneRef.current.controls;
+      const camera = sceneRef.current.camera;
+      if (!controls || !camera) return;
+
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      camPos.copy(camera.position);
+      controls.getTarget(targetPos);
+      camera.getWorldDirection(forward);
+      right.crossVectors(forward, camera.up).normalize();
+      up.copy(camera.up).normalize();
+      const distance = camPos.distanceTo(targetPos);
+      const panScale = Math.max(0.06, distance * 0.0016);
+      panOffset
+        .copy(right)
+        .multiplyScalar(-dx * panScale)
+        .addScaledVector(up, dy * panScale);
+
+      camPos.add(panOffset);
+      targetPos.add(panOffset);
+      controls.setLookAt(
+        camPos.x,
+        camPos.y,
+        camPos.z,
+        targetPos.x,
+        targetPos.y,
+        targetPos.z,
+        false,
+      );
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    const onPointerUp = () => {
+      dragging = false;
+    };
+
+    mount.addEventListener("pointerdown", onPointerDown, { capture: true });
+    window.addEventListener("pointermove", onPointerMove, { capture: true });
+    window.addEventListener("pointerup", onPointerUp, { capture: true });
+    return () => {
+      mount.removeEventListener("pointerdown", onPointerDown, { capture: true });
+      window.removeEventListener("pointermove", onPointerMove, { capture: true });
+      window.removeEventListener("pointerup", onPointerUp, { capture: true });
+    };
+  }, [sceneReady]);
+
   // Update spaceship exterior lights
   useEffect(() => {
     debugShipLabelRef.current = debugShipLabel;
@@ -3720,8 +3994,133 @@ export default function ResumeSpace3D({
     const categoryNodeRadius = 3.2;
     const skillNodeRadius = 1.25;
     const latticeRadius = 58;
+    const latticeEnvelopeRadius = 396;
     const latticeNodes: SkillsLatticeNodeRecord[] = [];
     const latticeLinkSegments: SkillsLatticeLinkSegment[] = [];
+
+    // Muted, larger outer "glass drone" shell around the lattice.
+    const latticeEnvelopeGeometry = new THREE.IcosahedronGeometry(latticeEnvelopeRadius, 1)
+      .toNonIndexed();
+    const envelopePosAttr = latticeEnvelopeGeometry.getAttribute(
+      "position",
+    ) as THREE.BufferAttribute;
+    const envelopeColors = new Float32Array(envelopePosAttr.count * 3);
+    const envelopePalette = [
+      new THREE.Color(0x5da0ff), // cobalt
+      new THREE.Color(0x7ed5ff), // cyan
+      new THREE.Color(0x8c7dff), // violet
+      new THREE.Color(0x57c6ff), // azure
+      new THREE.Color(0x4f7fff), // deep blue
+      new THREE.Color(0x6dd1c9), // teal
+    ];
+    const envelopeWork = new THREE.Color();
+    for (let i = 0; i < envelopePosAttr.count; i += 3) {
+      // Keep each triangle on a single, visibly distinct hue.
+      // Using coarse buckets creates larger perceived stained-glass regions.
+      const bucket = Math.floor((i / 3) / 4) % envelopePalette.length;
+      envelopeWork.copy(envelopePalette[bucket]);
+      const shadeJitter = 0.78 + Math.random() * 0.34;
+      envelopeWork.multiplyScalar(shadeJitter);
+      for (let v = 0; v < 3; v += 1) {
+        const idx = (i + v) * 3;
+        envelopeColors[idx] = envelopeWork.r;
+        envelopeColors[idx + 1] = envelopeWork.g;
+        envelopeColors[idx + 2] = envelopeWork.b;
+      }
+    }
+    latticeEnvelopeGeometry.setAttribute(
+      "color",
+      new THREE.BufferAttribute(envelopeColors, 3),
+    );
+    const latticeEnvelope = new THREE.Mesh(
+      latticeEnvelopeGeometry,
+      new THREE.MeshStandardMaterial({
+        color: 0xc8e7ff,
+        vertexColors: true,
+        flatShading: true,
+        roughness: 0.14,
+        metalness: 0.78,
+        envMapIntensity: 1.45,
+        emissive: 0x4f7fb8,
+        emissiveIntensity: 0.12,
+        transparent: true,
+        opacity: 0.06,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    latticeEnvelope.renderOrder = 1;
+    const latticeEnvelopeEdges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(latticeEnvelope.geometry),
+      new THREE.LineBasicMaterial({
+        color: 0xaed9ff,
+        transparent: true,
+        opacity: 0.22,
+        depthWrite: false,
+      }),
+    );
+    latticeEnvelopeEdges.scale.setScalar(1.004);
+    latticeEnvelope.add(latticeEnvelopeEdges);
+    skillsLatticeRoot.add(latticeEnvelope);
+    skillsLatticeEnvelopeRef.current = latticeEnvelope;
+    skillsLatticeEnvelopeMatRef.current = latticeEnvelope.material as THREE.MeshStandardMaterial;
+    skillsLatticeEnvelopeEdgeMatRef.current =
+      latticeEnvelopeEdges.material as THREE.LineBasicMaterial;
+    skillsLatticeEnvelopeRadiusRef.current = latticeEnvelopeRadius;
+
+    // Long-range beacon shell: visible from afar and clickable for Skills travel.
+    const beaconGeom = latticeEnvelopeGeometry.clone();
+    const beaconMat = new THREE.MeshStandardMaterial({
+      color: 0xbfe2ff,
+      vertexColors: true,
+      flatShading: true,
+      roughness: 0.1,
+      metalness: 0.82,
+      envMapIntensity: 1.8,
+      emissive: 0x3f73ad,
+      emissiveIntensity: 0.18,
+      transparent: false,
+      opacity: 1,
+      side: THREE.DoubleSide,
+      depthWrite: true,
+    });
+    const skillsBeacon = new THREE.Mesh(beaconGeom, beaconMat);
+    skillsBeacon.position.copy(skillsLatticeRoot.position);
+    skillsBeacon.userData.sectionIndex = 2;
+    skillsBeacon.userData.planetName = "Skills";
+    skillsBeacon.userData.sectionId = "skills";
+    skillsBeacon.renderOrder = 1;
+    skillsBeacon.frustumCulled = false;
+    const beaconEdges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(beaconGeom),
+      new THREE.LineBasicMaterial({
+        color: 0x8fcbff,
+        transparent: true,
+        opacity: 0.23,
+        depthWrite: false,
+      }),
+    );
+    beaconEdges.scale.setScalar(1.004);
+    skillsBeacon.add(beaconEdges);
+    const beaconLabel = createLabel("Skills", "Constellation Lattice");
+    beaconLabel.position.set(0, latticeEnvelopeRadius * 0.82, 0);
+    const labelEl = (beaconLabel as unknown as { element?: HTMLElement }).element;
+    if (labelEl) {
+      labelEl.style.pointerEvents = "none";
+      labelEl.style.textShadow = "0 0 10px rgba(120,190,255,0.9)";
+      const title = labelEl.firstElementChild as HTMLElement | null;
+      if (title) {
+        title.style.fontSize = "22px";
+        title.style.letterSpacing = "1.5px";
+      }
+    }
+    skillsBeacon.add(beaconLabel);
+    scene.add(skillsBeacon);
+    clickablePlanets.push(skillsBeacon);
+    skillsLatticeBeaconRef.current = skillsBeacon;
+    skillsLatticeBeaconMatRef.current = beaconMat;
+    skillsLatticeBeaconEdgeMatRef.current = beaconEdges.material as THREE.LineBasicMaterial;
+    skillsLatticeBeaconLabelRef.current = beaconLabel;
 
     const categoryPositions = categoryEntries.map((_, idx) => {
       const a = (idx / Math.max(1, categoryEntries.length)) * Math.PI * 2;
@@ -3893,7 +4292,9 @@ export default function ResumeSpace3D({
 
       const catLabel = createLabel(category, `${skills.length} skills`);
       catLabel.position.set(cPos.x, cPos.y + 6.6, cPos.z);
+      catLabel.visible = false;
       skillsLatticeRoot.add(catLabel);
+      skillsLatticeNodeLabelsRef.current.push(catLabel);
 
       const skillLinePoints: number[] = [];
       const skillOrbitR = 11 + Math.min(7, skills.length * 0.7);
@@ -3947,7 +4348,9 @@ export default function ResumeSpace3D({
         });
         const skillLabel = createLabel(skill);
         skillLabel.position.set(sPos.x, sPos.y + 2.4, sPos.z);
+        skillLabel.visible = false;
         skillsLatticeRoot.add(skillLabel);
+        skillsLatticeNodeLabelsRef.current.push(skillLabel);
         skillLinePoints.push(cPos.x, cPos.y, cPos.z, sPos.x, sPos.y, sPos.z);
         latticeLinkSegments.push({
           from: cPos.clone(),
@@ -5938,11 +6341,11 @@ export default function ResumeSpace3D({
     });
 
     const onPointerMoveGlobal = (event: PointerEvent) => {
-      if (projectShowcaseActiveRef.current) return;
+      if (projectShowcaseActiveRef.current || skillsLatticeActiveRef.current) return;
       onPointerMove(event);
     };
     const onClickGlobal = (event: MouseEvent) => {
-      if (projectShowcaseActiveRef.current) return;
+      if (projectShowcaseActiveRef.current || skillsLatticeActiveRef.current) return;
       onClick(event);
     };
     const onPointerDownRotateGlobal = (event: PointerEvent) => {
@@ -6525,6 +6928,17 @@ export default function ResumeSpace3D({
       skillsLatticeArcRecordsRef.current = [];
       skillsLatticeFlowPointsRef.current = null;
       skillsLatticeFlowMetaRef.current = [];
+      skillsLatticeEnvelopeRef.current = null;
+      skillsLatticeEnvelopeMatRef.current = null;
+      skillsLatticeEnvelopeEdgeMatRef.current = null;
+      skillsLatticeEnvelopeRadiusRef.current = 0;
+      skillsLatticeEnvelopeInsideRef.current = null;
+      skillsLatticeBeaconRef.current = null;
+      skillsLatticeBeaconMatRef.current = null;
+      skillsLatticeBeaconEdgeMatRef.current = null;
+      skillsLatticeBeaconLabelRef.current = null;
+      skillsLatticeNodeLabelsRef.current = [];
+      skillsLatticeSystemActiveRef.current = false;
       skillsLatticeRippleRef.current.active = false;
       skillsLatticeSelectedNodeRef.current = null;
       setSkillsLatticeSelection(null);
@@ -7266,6 +7680,29 @@ export default function ResumeSpace3D({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+          {skillsLatticeActive && (
+            <div
+              style={{
+                position: "fixed",
+                left: "50%",
+                bottom: 18,
+                transform: "translateX(-50%)",
+                zIndex: 1115,
+                borderRadius: 8,
+                border: "1px solid rgba(120, 170, 220, 0.3)",
+                background: "rgba(6, 12, 22, 0.52)",
+                color: "rgba(196, 224, 246, 0.72)",
+                padding: "7px 12px",
+                fontSize: 11,
+                fontFamily: "'Rajdhani', sans-serif",
+                letterSpacing: 0.45,
+                pointerEvents: "none",
+                backdropFilter: "blur(4px)",
+              }}
+            >
+              Hint: Hold Shift + drag to pan around the lattice
             </div>
           )}
 
