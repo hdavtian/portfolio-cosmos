@@ -63,14 +63,9 @@ import {
   SUN_LABEL_Y,
   EXPERIENCE_ORBIT,
   EXPERIENCE_RADIUS,
-  SKILLS_ORBIT,
-  SKILLS_RADIUS,
   EXP_MOON_ORBIT_BASE,
   EXP_MOON_ORBIT_STEP,
   EXP_MOON_RADIUS,
-  SKILL_MOON_ORBIT_BASE,
-  SKILL_MOON_ORBIT_STEP,
-  SKILL_MOON_RADIUS,
   FALCON_SCALE,
   FALCON_INITIAL_POS,
   SD_SCALE,
@@ -4126,29 +4121,10 @@ export default function ResumeSpace3D({
       "/textures/mars.jpg",
     );
 
-    const skillsPlanet = createPlanet(
-      "Skills",
-      SKILLS_ORBIT,
-      SKILLS_RADIUS,
-      0x3388ff,
-      scene,
-      0.00015,
-      2,
-      "/textures/earth.jpg",
-    );
-    // Move Skills destination deep in the known universe so travel to the
-    // lattice consistently engages long-haul lightspeed.
-    {
-      const anchor = SKILLS_LATTICE_WORLD_ANCHOR.clone();
-      skillsPlanet.position.copy(anchor);
-      const skillsOrbitItem = items.find((item) => item.mesh === skillsPlanet);
-      if (skillsOrbitItem) {
-        skillsOrbitItem.distance = Math.hypot(anchor.x, anchor.z);
-        skillsOrbitItem.angle = Math.atan2(-anchor.z, anchor.x);
-        skillsOrbitItem.orbitSpeed = 0;
-      }
-      skillsLatticeWorldAnchorRef.current = anchor.clone();
-    }
+    // Skills no longer uses legacy planet/moon bodies.
+    // The lattice itself is the only representation, anchored in deep space.
+    const skillsAnchor = SKILLS_LATTICE_WORLD_ANCHOR.clone();
+    skillsLatticeWorldAnchorRef.current = skillsAnchor.clone();
 
     // 4. MOONS
     const experienceJobs = Object.values(resumeData.experience).flat();
@@ -4189,30 +4165,10 @@ export default function ResumeSpace3D({
       // moon.rotation.x = Math.PI / 2;
     });
 
-    const skillCategories = Object.keys(resumeData.skills);
-    const skillsCount = skillCategories.length || 1;
-    const skillsStartOffset = Math.PI * 0.35;
-    const skillMoonMeshes: THREE.Object3D[] = [];
-
-    skillCategories.forEach((cat, i) => {
-      const moon = createPlanet(
-        cat,
-        SKILL_MOON_ORBIT_BASE + i * SKILL_MOON_ORBIT_STEP,
-        SKILL_MOON_RADIUS,
-        0xaaddff,
-        skillsPlanet,
-        0.0015 + Math.random() * 0.001,
-        undefined,
-        undefined,
-        skillsStartOffset + (i * Math.PI * 2) / skillsCount,
-      );
-      skillMoonMeshes.push(moon);
-    });
-
     // Skills constellation lattice (unique skills representation)
     const skillsLatticeRoot = new THREE.Group();
     skillsLatticeRoot.name = "SkillsConstellationLattice";
-    skillsLatticeRoot.position.copy(skillsPlanet.position).add(new THREE.Vector3(0, 8, 0));
+    skillsLatticeRoot.position.copy(skillsAnchor).add(new THREE.Vector3(0, 8, 0));
     skillsLatticeRoot.visible = false;
     const categoryEntries = Object.entries(resumeData.skills) as Array<
       [string, string[]]
@@ -4713,7 +4669,7 @@ export default function ResumeSpace3D({
     skillsLatticeLineMatsRef.current = latticeLineMats;
     skillsLatticeLineGroupsRef.current = latticeLineGroups;
     skillsLatticeLinkSegmentsRef.current = latticeLinkSegments;
-    skillsLegacyBodiesRef.current = [skillsPlanet, ...skillMoonMeshes];
+    skillsLegacyBodiesRef.current = [];
 
     // Point-based starfield removed — the texture skyboxes (starfield +
     // skyfield) already provide a realistic backdrop that doesn't cluster
@@ -6090,14 +6046,14 @@ export default function ResumeSpace3D({
       // Register Skills Planet
       const skillsPlanetData: PlanetData = {
         name: "Skills",
-        position: skillsPlanet.position.clone(),
+        position: skillsAnchor.clone(),
         data: resumeData.skills,
         moons: Object.keys(resumeData.skills).map((category, index) => ({
           name: category,
           position: new THREE.Vector3(
-            skillsPlanet.position.x + (70 + index * 15) * Math.cos(index * 1.2),
-            skillsPlanet.position.y + (index % 2 === 0 ? 15 : -15),
-            skillsPlanet.position.z + (70 + index * 15) * Math.sin(index * 1.2),
+            skillsAnchor.x + (70 + index * 15) * Math.cos(index * 1.2),
+            skillsAnchor.y + (index % 2 === 0 ? 15 : -15),
+            skillsAnchor.z + (70 + index * 15) * Math.sin(index * 1.2),
           ),
           data: (resumeData.skills as any)[category],
         })),
@@ -6467,9 +6423,26 @@ export default function ResumeSpace3D({
           }
 
           // Fallback: manual flight mode — direct camera
-          const planetMesh = target === "experience" ? expPlanet : skillsPlanet;
-          const planetDist = target === "experience" ? EXP_FOCUS_DIST : SKILLS_FOCUS_DIST;
-          await cameraDirectorRef.current.focusPlanet(planetMesh, planetDist);
+          if (target === "experience") {
+            await cameraDirectorRef.current.focusPlanet(expPlanet, EXP_FOCUS_DIST);
+          } else {
+            const skillsFocusObject =
+              skillsLatticeBeaconRef.current
+              ?? skillsLatticeRootRef.current
+              ?? (() => {
+                const anchor = skillsLatticeWorldAnchorRef.current;
+                if (!anchor) return null;
+                const proxy = new THREE.Object3D();
+                proxy.position.copy(anchor);
+                return proxy;
+              })();
+            if (skillsFocusObject) {
+              await cameraDirectorRef.current.focusPlanet(
+                skillsFocusObject,
+                SKILLS_FOCUS_DIST,
+              );
+            }
+          }
           setMinDistance(
             originalMinDistanceRef.current,
             `restore after ${target}`,
@@ -7947,7 +7920,7 @@ export default function ResumeSpace3D({
                 backdropFilter: "blur(4px)",
               }}
             >
-              Hint: Hold Shift + drag to pan around the lattice
+              Hint: Shift click to pan, mouse wheel zoom in/out, click nodes to inspect
             </div>
           )}
 
