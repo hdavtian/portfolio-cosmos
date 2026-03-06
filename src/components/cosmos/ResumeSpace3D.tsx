@@ -135,6 +135,8 @@ const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(16500, 220, -14800);
 const SKILLS_LATTICE_ARRIVAL_DIST = 900;
+const SKILLS_LATTICE_NAV_STANDOFF_DIST = 1200;
+const SKILLS_LATTICE_ENTRY_TRIGGER_DIST = 1800;
 const SKILLS_SD_PATROL_RADIUS = 150;
 const SKILLS_SD_PATROL_SPEED = 0.03;
 const PROJECT_SHOWCASE_FILTER_OPTIONS = [
@@ -451,16 +453,17 @@ export default function ResumeSpace3D({
   const skillsLatticeFlowPointsRef = useRef<THREE.Points | null>(null);
   const skillsLatticeFlowMetaRef = useRef<SkillsLatticeFlowMeta[]>([]);
   const skillsLatticeEnvelopeRef = useRef<THREE.Mesh | null>(null);
-  const skillsLatticeEnvelopeMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const skillsLatticeEnvelopeMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
   const skillsLatticeEnvelopeEdgeMatRef = useRef<THREE.LineBasicMaterial | null>(null);
   const skillsLatticeEnvelopeRadiusRef = useRef(0);
   const skillsLatticeEnvelopeInsideRef = useRef<boolean | null>(null);
   const skillsLatticeBeaconRef = useRef<THREE.Mesh | null>(null);
-  const skillsLatticeBeaconMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const skillsLatticeBeaconMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
   const skillsLatticeBeaconEdgeMatRef = useRef<THREE.LineBasicMaterial | null>(null);
   const skillsLatticeBeaconLabelRef = useRef<THREE.Object3D | null>(null);
   const skillsLatticeNodeLabelsRef = useRef<THREE.Object3D[]>([]);
   const skillsLatticeSystemActiveRef = useRef(false);
+  const skillsLatticeCausticLightsRef = useRef<THREE.PointLight[]>([]);
   const skillsLatticeRippleRef = useRef<{
     active: boolean;
     center: THREE.Vector3;
@@ -964,9 +967,20 @@ export default function ResumeSpace3D({
           : null;
       }
       if (targetId === "skills") {
-        return skillsLatticeWorldAnchorRef.current
-          ? skillsLatticeWorldAnchorRef.current.clone()
-          : null;
+        const anchor = skillsLatticeWorldAnchorRef.current;
+        if (!anchor) return null;
+        const ship = spaceshipRef.current;
+        if (!ship) {
+          return anchor
+            .clone()
+            .add(new THREE.Vector3(0, 40, SKILLS_LATTICE_NAV_STANDOFF_DIST));
+        }
+        const outward = ship.position.clone().sub(anchor);
+        if (outward.lengthSq() < 1e-5) outward.set(0, 0.1, 1);
+        outward.normalize();
+        return anchor
+          .clone()
+          .addScaledVector(outward, SKILLS_LATTICE_NAV_STANDOFF_DIST);
       }
       return null;
     },
@@ -1972,13 +1986,25 @@ export default function ResumeSpace3D({
     const latticePos = new THREE.Vector3();
     latticeRoot.getWorldPosition(latticePos);
     const startCam = camera.position.clone();
-    const startTarget = controls.getTarget(new THREE.Vector3());
+    const camDir = camera.getWorldDirection(new THREE.Vector3()).normalize();
+    const startTarget = startCam.clone().addScaledVector(camDir, 1200);
+    // Freeze controls at the current camera orientation so we do not snap
+    // sideways to any prior ship-follow target before the lattice push begins.
+    controls.setLookAt(
+      startCam.x,
+      startCam.y,
+      startCam.z,
+      startTarget.x,
+      startTarget.y,
+      startTarget.z,
+      false,
+    );
     const endCam = latticePos
       .clone()
-      .add(new THREE.Vector3(0, 42, 118));
+      .add(new THREE.Vector3(0, 38, 156));
     const endTarget = latticePos.clone().add(new THREE.Vector3(0, 8, 0));
     const startedAt = performance.now();
-    const durationMs = 1800;
+    const durationMs = 4600;
     controls.enabled = false;
 
     const tick = () => {
@@ -2518,8 +2544,14 @@ export default function ResumeSpace3D({
     const anchor = skillsLatticeWorldAnchorRef.current;
     const arrivedAtSkills = !!ship
       && !!anchor
-      && ship.position.distanceTo(anchor) <= SKILLS_LATTICE_ARRIVAL_DIST;
+      && ship.position.distanceTo(anchor) <= SKILLS_LATTICE_ENTRY_TRIGGER_DIST
+      && navigationDistance === null;
     if (arrivedAtSkills) {
+      // Immediate non-ship handoff at lightspeed end to avoid camera
+      // fighting between ship-follow and lattice-entry framing.
+      setFollowingSpaceship(false);
+      followingSpaceshipRef.current = false;
+      if (spaceshipRef.current) spaceshipRef.current.visible = false;
       enterSkillsLattice();
     }
   }, [currentNavigationTarget, navigationDistance, enterSkillsLattice]);
@@ -2562,6 +2594,11 @@ export default function ResumeSpace3D({
     const flowColor = new THREE.Color();
     const shellCenter = new THREE.Vector3();
     const shellSpin = new THREE.Vector3(0.01, 0.016, 0.007);
+    const shellQuat = new THREE.Quaternion();
+    const shellForward = new THREE.Vector3();
+    const shellRight = new THREE.Vector3();
+    const shellUp = new THREE.Vector3();
+    const sunDir = new THREE.Vector3();
     const tick = () => {
       if (skillsLatticeActiveRef.current) {
         const nowMs = performance.now();
@@ -2609,6 +2646,19 @@ export default function ResumeSpace3D({
             shellMat.needsUpdate = true;
           }
           const pulse = 0.5 + 0.5 * Math.sin(t * 0.95);
+          const sunLight = sceneRef.current.sunLight;
+          let glintBoost = 0.12;
+          if (sunLight) {
+            shell.getWorldQuaternion(shellQuat);
+            shellForward.set(0, 0, 1).applyQuaternion(shellQuat).normalize();
+            shellRight.set(1, 0, 0).applyQuaternion(shellQuat).normalize();
+            shellUp.set(0, 1, 0).applyQuaternion(shellQuat).normalize();
+            sunDir.subVectors(sunLight.position, shellCenter).normalize();
+            const a = Math.max(0, shellForward.dot(sunDir));
+            const b = Math.max(0, shellRight.dot(sunDir));
+            const c = Math.max(0, shellUp.dot(sunDir));
+            glintBoost = 0.08 + a * 0.22 + b * 0.16 + c * 0.12;
+          }
           if (insideShell) {
             shellMat.opacity = THREE.MathUtils.clamp(
               THREE.MathUtils.lerp(0.08, 0.22, 1 - outsideT) + pulse * 0.03,
@@ -2618,16 +2668,30 @@ export default function ResumeSpace3D({
           }
           shellMat.emissive.setHSL(0.58 + pulse * 0.02, 0.55, 0.34);
           shellMat.emissiveIntensity = THREE.MathUtils.clamp(
-            THREE.MathUtils.lerp(0.16, 0.46, outsideT) + pulse * 0.1,
+            THREE.MathUtils.lerp(0.2, 0.58, outsideT) + pulse * 0.14 + glintBoost * 0.45,
             0.1,
-            0.62,
+            0.95,
           );
           shellEdgeMat.opacity = THREE.MathUtils.clamp(
-            THREE.MathUtils.lerp(0.06, 0.34, outsideT) + pulse * 0.06,
+            THREE.MathUtils.lerp(0.08, 0.4, outsideT) + pulse * 0.08 + glintBoost * 0.34,
             0.03,
-            0.5,
+            0.74,
           );
-          shellEdgeMat.color.setHSL(0.58 + pulse * 0.03, 0.72, 0.67);
+          shellEdgeMat.color.setHSL(0.58 + pulse * 0.04 + glintBoost * 0.03, 0.76, 0.7);
+          const caustics = skillsLatticeCausticLightsRef.current;
+          if (caustics.length > 0) {
+            const baseInt = insideShell ? 0.85 : 0.08;
+            caustics.forEach((light, idx) => {
+              const p0 = t * (0.3 + idx * 0.09);
+              light.position.set(
+                Math.cos(p0 * 1.3 + idx) * (40 + idx * 8),
+                6 + Math.sin(p0 * 1.9 + idx * 0.7) * (18 + idx * 4),
+                Math.sin(p0 * 1.15 + idx * 1.4) * (34 + idx * 10),
+              );
+              light.intensity =
+                baseInt + (insideShell ? 0.45 : 0.06) * (0.5 + 0.5 * Math.sin(t * 1.7 + idx * 1.3));
+            });
+          }
           const showNodeLabels = insideT > 0.55;
           skillsLatticeNodeLabelsRef.current.forEach((label) => {
             label.visible = showNodeLabels;
@@ -2814,6 +2878,7 @@ export default function ResumeSpace3D({
     if (!sceneReady) return;
     let raf = 0;
     let lastMs = performance.now();
+    let lastAnimStepMs = 0;
     let nextPulseAt = lastMs + 1800 + Math.random() * 2400;
     let pulseEndAt = 0;
     let pulseStartAt = 0;
@@ -2826,6 +2891,10 @@ export default function ResumeSpace3D({
       if (!beacon.visible) return;
 
       const now = performance.now();
+      // Limit beacon animation updates to ~30fps to reduce load during
+      // high-speed approach when the shell fills more of the screen.
+      if (now - lastAnimStepMs < 33) return;
+      lastAnimStepMs = now;
       const dt = Math.min((now - lastMs) / 1000, 0.05);
       lastMs = now;
       const t = now * 0.001;
@@ -2845,9 +2914,11 @@ export default function ResumeSpace3D({
       const boost = periodic * 0.22 + pulse * 0.95;
 
       // Pulse brightness only; keep emissive hue neutral so panel colors stay distinct.
+      const shimmerHue = 0.58 + 0.025 * Math.sin(t * 3.1) + pulse * 0.03;
+      beaconMat.emissive.setHSL(shimmerHue % 1, 0.28, 0.22);
       beaconMat.emissiveIntensity = THREE.MathUtils.clamp(0.06 + boost * 0.22, 0.05, 0.34);
-      edgeMat.opacity = THREE.MathUtils.clamp(0.17 + boost * 0.2, 0.12, 0.42);
-      edgeMat.color.setHSL(0.57 + 0.03 * periodic, 0.78, 0.69);
+      edgeMat.opacity = THREE.MathUtils.clamp(0.17 + boost * 0.24, 0.12, 0.5);
+      edgeMat.color.setHSL((0.57 + 0.03 * periodic + pulse * 0.04) % 1, 0.82, 0.7);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -4006,12 +4077,12 @@ export default function ResumeSpace3D({
     ) as THREE.BufferAttribute;
     const envelopeColors = new Float32Array(envelopePosAttr.count * 3);
     const envelopePalette = [
-      new THREE.Color(0x4f8eff), // cobalt
-      new THREE.Color(0x72d7ff), // cyan
-      new THREE.Color(0x8f79ff), // violet
-      new THREE.Color(0xd08bff), // magenta
-      new THREE.Color(0x6fd7c8), // teal
-      new THREE.Color(0xffc978), // amber
+      new THREE.Color(0x2f6fff), // electric cobalt
+      new THREE.Color(0x27dcff), // neon cyan
+      new THREE.Color(0x6f47ff), // strong violet
+      new THREE.Color(0xdb43ff), // strong magenta
+      new THREE.Color(0x28e0b7), // vivid teal
+      new THREE.Color(0xffb13a), // stained-glass amber
     ];
     const envelopeWork = new THREE.Color();
     for (let i = 0; i < envelopePosAttr.count; i += 3) {
@@ -4019,7 +4090,10 @@ export default function ResumeSpace3D({
       // Using coarse buckets creates larger perceived stained-glass regions.
       const bucket = Math.floor((i / 3) / 4) % envelopePalette.length;
       envelopeWork.copy(envelopePalette[bucket]);
-      const shadeJitter = 0.92 + Math.random() * 0.16;
+      const hsl = { h: 0, s: 0, l: 0 };
+      envelopeWork.getHSL(hsl);
+      envelopeWork.setHSL(hsl.h, Math.min(1, hsl.s * 1.18), Math.min(0.74, hsl.l * 1.06));
+      const shadeJitter = 1.02 + Math.random() * 0.1;
       envelopeWork.multiplyScalar(shadeJitter);
       for (let v = 0; v < 3; v += 1) {
         const idx = (i + v) * 3;
@@ -4034,23 +4108,21 @@ export default function ResumeSpace3D({
     );
     const latticeEnvelope = new THREE.Mesh(
       latticeEnvelopeGeometry,
-      new THREE.MeshPhysicalMaterial({
+      new THREE.MeshPhongMaterial({
         color: 0xffffff,
         vertexColors: true,
         flatShading: true,
-        roughness: 0.2,
-        metalness: 0.14,
-        clearcoat: 0.95,
-        clearcoatRoughness: 0.14,
-        envMapIntensity: 1.45,
-        emissive: 0x0b1320,
-        emissiveIntensity: 0.06,
+        shininess: 90,
+        specular: new THREE.Color(0xc9e8ff),
+        emissive: 0x101828,
+        emissiveIntensity: 0.08,
         transparent: true,
         opacity: 0.06,
         side: THREE.DoubleSide,
         depthWrite: false,
       }),
     );
+    (latticeEnvelope.material as THREE.MeshPhongMaterial).toneMapped = false;
     latticeEnvelope.renderOrder = 1;
     const latticeEnvelopeEdges = new THREE.LineSegments(
       new THREE.EdgesGeometry(latticeEnvelope.geometry),
@@ -4065,29 +4137,38 @@ export default function ResumeSpace3D({
     latticeEnvelope.add(latticeEnvelopeEdges);
     skillsLatticeRoot.add(latticeEnvelope);
     skillsLatticeEnvelopeRef.current = latticeEnvelope;
-    skillsLatticeEnvelopeMatRef.current = latticeEnvelope.material as THREE.MeshStandardMaterial;
+    skillsLatticeEnvelopeMatRef.current = latticeEnvelope.material as THREE.MeshPhongMaterial;
     skillsLatticeEnvelopeEdgeMatRef.current =
       latticeEnvelopeEdges.material as THREE.LineBasicMaterial;
     skillsLatticeEnvelopeRadiusRef.current = latticeEnvelopeRadius;
 
+    // Interior caustic-like drift lights (subtle, only noticeable inside).
+    const causticLights: THREE.PointLight[] = [];
+    const causticPalette = [0x6fc7ff, 0x9f86ff, 0x67e2d2];
+    causticPalette.forEach((color, idx) => {
+      const light = new THREE.PointLight(color, 0.2, 540, 2);
+      light.position.set(0, 4 + idx * 3, 0);
+      skillsLatticeRoot.add(light);
+      causticLights.push(light);
+    });
+    skillsLatticeCausticLightsRef.current = causticLights;
+
     // Long-range beacon shell: visible from afar and clickable for Skills travel.
     const beaconGeom = latticeEnvelopeGeometry.clone();
-    const beaconMat = new THREE.MeshPhysicalMaterial({
+    const beaconMat = new THREE.MeshPhongMaterial({
       color: 0xffffff,
       vertexColors: true,
       flatShading: true,
-      roughness: 0.18,
-      metalness: 0.16,
-      clearcoat: 1,
-      clearcoatRoughness: 0.1,
-      envMapIntensity: 1.8,
-      emissive: 0x0b1320,
-      emissiveIntensity: 0.08,
+      shininess: 96,
+      specular: new THREE.Color(0xd9efff),
+      emissive: 0x121a2a,
+      emissiveIntensity: 0.1,
       transparent: false,
       opacity: 1,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
       depthWrite: true,
     });
+    beaconMat.toneMapped = false;
     const skillsBeacon = new THREE.Mesh(beaconGeom, beaconMat);
     skillsBeacon.position.copy(skillsLatticeRoot.position);
     skillsBeacon.userData.sectionIndex = 2;
@@ -6943,6 +7024,7 @@ export default function ResumeSpace3D({
       skillsLatticeBeaconLabelRef.current = null;
       skillsLatticeNodeLabelsRef.current = [];
       skillsLatticeSystemActiveRef.current = false;
+      skillsLatticeCausticLightsRef.current = [];
       skillsLatticeRippleRef.current.active = false;
       skillsLatticeSelectedNodeRef.current = null;
       setSkillsLatticeSelection(null);

@@ -909,6 +909,10 @@ export const useNavigationSystem = (deps: {
       const distance = targetPos
         ? ship.position.distanceTo(targetPos)
         : 0;
+      const suppressShipFollowCameraForSkills =
+        target.type === "section" &&
+        target.id === "skills" &&
+        distance < 2600;
 
       if (targetPos && (!target.lastUpdateFrame || now - target.lastUpdateFrame > 500)) {
         setNavigationDistance(distance);
@@ -945,7 +949,8 @@ export const useNavigationSystem = (deps: {
         if (
           !insideShipRef.current &&
           followingSpaceshipRef.current &&
-          sceneRef.current.controls
+          sceneRef.current.controls &&
+          !suppressShipFollowCameraForSkills
         ) {
           const camPos = _navCamPos.current;
           camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
@@ -1011,7 +1016,8 @@ export const useNavigationSystem = (deps: {
         if (
           !insideShipRef.current &&
           followingSpaceshipRef.current &&
-          sceneRef.current.controls
+          sceneRef.current.controls &&
+          !suppressShipFollowCameraForSkills
         ) {
           const camPos = _navCamPos.current;
           // Camera behind ship, facing the destination
@@ -1529,7 +1535,8 @@ export const useNavigationSystem = (deps: {
       if (
         followingSpaceshipRef.current &&
         !insideShipRef.current &&
-        sceneRef.current.controls
+        sceneRef.current.controls &&
+        !suppressShipFollowCameraForSkills
       ) {
         const camPos = _navCamPos.current;
         camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
@@ -1558,7 +1565,7 @@ export const useNavigationSystem = (deps: {
         // ── For sections: transition to "settling" phase where the ship
         // turns to face the planet centre from the staging point, giving
         // the user a top-down or bottom-up view of the system. ──
-        if (target.type === "section" && target.planetCenter) {
+        if (target.type === "section" && target.planetCenter && target.id !== "skills") {
           vlog(`🛸 Reached staging point — settling to face planet`);
           pathData.speed = 0;
 
