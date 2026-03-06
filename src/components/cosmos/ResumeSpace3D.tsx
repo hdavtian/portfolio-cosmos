@@ -2844,8 +2844,8 @@ export default function ResumeSpace3D({
       const pulse = pulseEndAt > now ? Math.sin(pulseP * Math.PI) : 0;
       const boost = periodic * 0.22 + pulse * 0.95;
 
-      beaconMat.emissive.setHSL(0.58 + 0.03 * periodic, 0.62, 0.42);
-      beaconMat.emissiveIntensity = THREE.MathUtils.clamp(0.22 + boost * 0.52, 0.18, 0.9);
+      // Pulse brightness only; keep emissive hue neutral so panel colors stay distinct.
+      beaconMat.emissiveIntensity = THREE.MathUtils.clamp(0.06 + boost * 0.22, 0.05, 0.34);
       edgeMat.opacity = THREE.MathUtils.clamp(0.17 + boost * 0.2, 0.12, 0.42);
       edgeMat.color.setHSL(0.57 + 0.03 * periodic, 0.78, 0.69);
     };
@@ -4006,12 +4006,12 @@ export default function ResumeSpace3D({
     ) as THREE.BufferAttribute;
     const envelopeColors = new Float32Array(envelopePosAttr.count * 3);
     const envelopePalette = [
-      new THREE.Color(0x5da0ff), // cobalt
-      new THREE.Color(0x7ed5ff), // cyan
-      new THREE.Color(0x8c7dff), // violet
-      new THREE.Color(0x57c6ff), // azure
-      new THREE.Color(0x4f7fff), // deep blue
-      new THREE.Color(0x6dd1c9), // teal
+      new THREE.Color(0x4f8eff), // cobalt
+      new THREE.Color(0x72d7ff), // cyan
+      new THREE.Color(0x8f79ff), // violet
+      new THREE.Color(0xd08bff), // magenta
+      new THREE.Color(0x6fd7c8), // teal
+      new THREE.Color(0xffc978), // amber
     ];
     const envelopeWork = new THREE.Color();
     for (let i = 0; i < envelopePosAttr.count; i += 3) {
@@ -4019,7 +4019,7 @@ export default function ResumeSpace3D({
       // Using coarse buckets creates larger perceived stained-glass regions.
       const bucket = Math.floor((i / 3) / 4) % envelopePalette.length;
       envelopeWork.copy(envelopePalette[bucket]);
-      const shadeJitter = 0.78 + Math.random() * 0.34;
+      const shadeJitter = 0.92 + Math.random() * 0.16;
       envelopeWork.multiplyScalar(shadeJitter);
       for (let v = 0; v < 3; v += 1) {
         const idx = (i + v) * 3;
@@ -4034,15 +4034,17 @@ export default function ResumeSpace3D({
     );
     const latticeEnvelope = new THREE.Mesh(
       latticeEnvelopeGeometry,
-      new THREE.MeshStandardMaterial({
-        color: 0xc8e7ff,
+      new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
         vertexColors: true,
         flatShading: true,
-        roughness: 0.14,
-        metalness: 0.78,
+        roughness: 0.2,
+        metalness: 0.14,
+        clearcoat: 0.95,
+        clearcoatRoughness: 0.14,
         envMapIntensity: 1.45,
-        emissive: 0x4f7fb8,
-        emissiveIntensity: 0.12,
+        emissive: 0x0b1320,
+        emissiveIntensity: 0.06,
         transparent: true,
         opacity: 0.06,
         side: THREE.DoubleSide,
@@ -4070,15 +4072,17 @@ export default function ResumeSpace3D({
 
     // Long-range beacon shell: visible from afar and clickable for Skills travel.
     const beaconGeom = latticeEnvelopeGeometry.clone();
-    const beaconMat = new THREE.MeshStandardMaterial({
-      color: 0xbfe2ff,
+    const beaconMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
       vertexColors: true,
       flatShading: true,
-      roughness: 0.1,
-      metalness: 0.82,
+      roughness: 0.18,
+      metalness: 0.16,
+      clearcoat: 1,
+      clearcoatRoughness: 0.1,
       envMapIntensity: 1.8,
-      emissive: 0x3f73ad,
-      emissiveIntensity: 0.18,
+      emissive: 0x0b1320,
+      emissiveIntensity: 0.08,
       transparent: false,
       opacity: 1,
       side: THREE.DoubleSide,
