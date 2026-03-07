@@ -786,7 +786,7 @@ export const useNavigationSystem = (deps: {
             forceLightspeed: true,
             targetRadius,
             turnPhase:
-              targetId === "about"
+              targetId === "about" || targetId === "projects"
                 ? "traveling"
                 : clearanceTarget
                   ? "clearing"
@@ -835,10 +835,46 @@ export const useNavigationSystem = (deps: {
                 `🌀 About curved staging path armed (offset ${arcOffset.toFixed(0)}u, lift ${arcLift.toFixed(0)}u)`,
               );
             }
+          } else if (targetId === "projects" && isDirectSectionApproach) {
+            const toStage = stagingPoint.clone().sub(shipPos);
+            const travelDist = toStage.length();
+            if (travelDist > 1e-3) {
+              const approachDir = stagingPoint.clone().sub(planetCenter);
+              if (approachDir.lengthSq() < 1e-6) {
+                approachDir.copy(stagingPoint).sub(shipPos);
+                if (approachDir.lengthSq() < 1e-6) approachDir.set(0, 0, 1);
+              }
+              approachDir.normalize();
+              const approachDist = THREE.MathUtils.clamp(travelDist * 0.22, 1200, 5200);
+              const approachPoint = stagingPoint
+                .clone()
+                .addScaledVector(approachDir, approachDist);
+              const toApproach = approachPoint.clone().sub(shipPos).normalize();
+              const up = new THREE.Vector3(0, 1, 0);
+              const lateral = new THREE.Vector3().crossVectors(toApproach, up);
+              if (lateral.lengthSq() < 1e-6) lateral.set(1, 0, 0);
+              lateral.normalize();
+              const centerToShip = shipPos.clone().sub(planetCenter);
+              const lateralSign = centerToShip.dot(lateral) >= 0 ? 1 : -1;
+              const arcOffset = THREE.MathUtils.clamp(travelDist * 0.1, 700, 3400);
+              const arcLift = THREE.MathUtils.clamp(travelDist * 0.055, 300, 1400);
+              const arcMid = shipPos
+                .clone()
+                .lerp(approachPoint, 0.5)
+                .addScaledVector(lateral, arcOffset * lateralSign)
+                .add(new THREE.Vector3(0, arcLift, 0));
+              navigationTargetRef.current.arcMidPoint = arcMid;
+              navigationTargetRef.current.arcFinalApproachPoint = approachPoint;
+              navigationTargetRef.current.arcInitialDistance = shipPos.distanceTo(approachPoint);
+              navigationTargetRef.current.arcPassedMidPoint = false;
+              vlog(
+                `🌀 Projects curved staging path armed (offset ${arcOffset.toFixed(0)}u, lift ${arcLift.toFixed(0)}u)`,
+              );
+            }
           }
-          if (targetId === "about") {
+          if (targetId === "about" || targetId === "projects") {
             navTurnActiveRef.current = false;
-            vlog("🌀 About special-case: skipping turn phase, curving directly");
+            vlog(`🌀 ${targetId === "projects" ? "Projects" : "About"} special-case: skipping turn phase, curving directly`);
           }
           setCurrentNavigationTarget(targetId);
 
@@ -1429,7 +1465,7 @@ export const useNavigationSystem = (deps: {
         steerTarget = targetPos;
         if (
           target.type === "section"
-          && target.id === "about"
+          && (target.id === "about" || target.id === "projects")
           && target.arcMidPoint
           && target.startPosition
           && target.arcFinalApproachPoint
@@ -1439,7 +1475,7 @@ export const useNavigationSystem = (deps: {
             const passThreshold = Math.max(arrivalDistance * 12, 560);
             if (distToApproach <= passThreshold) {
               target.arcPassedMidPoint = true;
-              vlog("🌀 About curved path: aligned on perpendicular approach rail");
+              vlog(`🌀 ${target.id === "projects" ? "Projects" : "About"} curved path: aligned on approach rail`);
             } else {
               const initialDist = Math.max(
                 target.arcInitialDistance ?? target.startPosition.distanceTo(target.arcFinalApproachPoint),
@@ -1451,7 +1487,11 @@ export const useNavigationSystem = (deps: {
                 1,
               );
               // Continuous curve from start to the pre-approach rail point.
-              const lookAheadT = THREE.MathUtils.clamp(progress + 0.16, 0.03, 0.992);
+              const lookAheadT = THREE.MathUtils.clamp(
+                progress + (target.id === "projects" ? 0.18 : 0.16),
+                0.03,
+                0.992,
+              );
               const omt = 1 - lookAheadT;
               const arcPoint = _navArcPoint.current;
               arcPoint.copy(target.startPosition).multiplyScalar(omt * omt);
@@ -1524,7 +1564,7 @@ export const useNavigationSystem = (deps: {
       // Lightspeed for long inter-planet hops; turbo for medium; normal for close.
       if (
         target.type === "section"
-        && target.id === "about"
+        && (target.id === "about" || target.id === "projects")
         && target.startTime > 0
         && now - target.startTime > 45000
       ) {
@@ -1534,7 +1574,7 @@ export const useNavigationSystem = (deps: {
         target.arcFinalApproachPoint = undefined;
         if (!target.aboutFailSafeLogged) {
           target.aboutFailSafeLogged = true;
-          vlog("🛑 About failsafe: forcing final straight-in approach");
+          vlog(`🛑 ${target.id === "projects" ? "Projects" : "About"} failsafe: forcing final straight-in approach`);
         }
       }
       const decelDist = distance > NAV_LIGHTSPEED_ENGAGE_DIST
@@ -1634,7 +1674,7 @@ export const useNavigationSystem = (deps: {
       const _tmpLookObj = new THREE.Object3D();
       const skipAboutHeading =
         target.type === "section"
-        && target.id === "about"
+        && (target.id === "about" || target.id === "projects")
         && !target.arcPassedMidPoint;
       if (!skipAboutHeading) {
         _tmpLookObj.position.copy(ship.position);
@@ -1685,6 +1725,7 @@ export const useNavigationSystem = (deps: {
           && target.planetCenter
           && target.id !== "skills"
           && target.id !== "about"
+          && target.id !== "projects"
         ) {
           vlog(`🛸 Reached staging point — settling to face planet`);
           pathData.speed = 0;

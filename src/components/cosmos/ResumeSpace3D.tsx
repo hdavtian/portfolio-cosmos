@@ -1043,9 +1043,35 @@ export default function ResumeSpace3D({
     setFollowingStarDestroyer,
     resolveSpecialSectionTarget: (targetId) => {
       if (targetId === "projects") {
-        return projectShowcaseWorldAnchorRef.current
-          ? projectShowcaseWorldAnchorRef.current.clone()
-          : null;
+        const rootAnchor = projectShowcaseWorldAnchorRef.current;
+        const track = projectShowcaseTrackRef.current;
+        if (!rootAnchor || !track) {
+          return rootAnchor ? rootAnchor.clone() : null;
+        }
+        const run = track.minRun + 8;
+        const sway = Math.sin(run * 0.025) * 1.2;
+        const travelAxis =
+          track.axis === "z" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+        const crossAxis =
+          track.axis === "z" ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, -1);
+        const trenchCam =
+          track.axis === "z"
+            ? new THREE.Vector3(
+                rootAnchor.x + track.centerCross + sway,
+                rootAnchor.y + track.cameraHeight,
+                rootAnchor.z + run,
+              )
+            : new THREE.Vector3(
+                rootAnchor.x + run,
+                rootAnchor.y + track.cameraHeight,
+                rootAnchor.z + track.centerCross + sway,
+              );
+        const finalApproachDist = track.lookAhead * 6.4;
+        return trenchCam
+          .clone()
+          .addScaledVector(travelAxis, -finalApproachDist)
+          .addScaledVector(crossAxis, 1.1)
+          .add(new THREE.Vector3(0, 14, 0));
       }
       if (targetId === "skills") {
         const anchor = skillsLatticeWorldAnchorRef.current;
@@ -1648,16 +1674,16 @@ export default function ResumeSpace3D({
       .clone()
       .addScaledVector(travelAxis, -finalApproachDist)
       .addScaledVector(crossAxis, 1.2)
-      .add(new THREE.Vector3(0, 5.2, 0));
+      .add(new THREE.Vector3(0, 14.0, 0));
     const approachTarget = trenchTarget
       .clone()
       .addScaledVector(travelAxis, -finalApproachDist * 0.26)
       .addScaledVector(crossAxis, 0.45)
-      .add(new THREE.Vector3(0, 1.1, 0));
-    // Hold near-horizon altitude for most of the entry run.
-    const horizonY = THREE.MathUtils.lerp(startCam.y, trenchCam.y + 5.2, 0.14);
+      .add(new THREE.Vector3(0, 8.2, 0));
+    // Hold a higher approach line so entry can descend like a carrier landing.
+    const horizonY = Math.max(startCam.y, trenchCam.y + 13.2);
     approachCam.y = horizonY;
-    approachTarget.y = horizonY - 0.25;
+    approachTarget.y = horizonY - 1.2;
 
     const ship = spaceshipRef.current;
     if (ship) ship.visible = true;
