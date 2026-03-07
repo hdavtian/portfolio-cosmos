@@ -82,7 +82,6 @@ import {
   SKILLS_WANDER_RADIUS,
   PROJ_WANDER_RADIUS,
   SUN_WANDER_RADIUS,
-  NAV_CAMERA_BEHIND,
   SKYFIELD_RADIUS,
   EXP_FOCUS_DIST,
   SKILLS_FOCUS_DIST,
@@ -123,12 +122,16 @@ const PROJECT_SHOWCASE_MAX_ANGLE_PERCENT = 100;
 const PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT = 25;
 const PROJECT_SHOWCASE_SHOW_IMAGE_MANIPULATION_CONTROLS = false;
 const PROJECT_SHOWCASE_NAV_STOP_BACK_OFFSET = 15;
-const PROJECT_SHOWCASE_USE_NEBULA_REALM = true;
+const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
 const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(16500, 220, -14800);
+const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -18000);
+const ABOUT_MEMORY_SQUARE_NAV_STANDOFF_DIST = 4200;
+const ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST = 4550;
+const ABOUT_MEMORY_SQUARE_CAMERA_STOP_DIST = 3900;
 const SKILLS_LATTICE_ARRIVAL_DIST = 900;
 const SKILLS_LATTICE_NAV_STANDOFF_DIST = 1200;
 const SKILLS_LATTICE_ENTRY_TRIGGER_DIST = 1800;
@@ -354,11 +357,82 @@ export default function ResumeSpace3D({
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
   const [sceneReady, setSceneReady] = useState(false);
+  const [loaderVisualComplete, setLoaderVisualComplete] = useState(false);
+  const [criticalAssetsReady, setCriticalAssetsReady] = useState(false);
 
   // Tour state
   const [tourActive, setTourActive] = useState(false);
   const [tourWaypoint, setTourWaypoint] = useState<string>("");
   const [tourProgress, setTourProgress] = useState({ current: 0, total: 0 });
+
+  useEffect(() => {
+    let cancelled = false;
+    const gltfPreloader = new GLTFLoader();
+    const texturePreloader = new THREE.TextureLoader();
+
+    const loadTextureSafe = async (url: string) => {
+      try {
+        const texture = await texturePreloader.loadAsync(url);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        return texture;
+      } catch {
+        return null;
+      }
+    };
+
+    const preloadCriticalAssets = async () => {
+      try {
+        const [trenchGltf] = await Promise.all([
+          gltfPreloader.loadAsync("/models/star-wars-trench-run/scene.gltf"),
+          gltfPreloader.loadAsync("/models/spaceship/scene.gltf"),
+          gltfPreloader.loadAsync("/models/star-destroyer/scene.gltf"),
+        ]);
+
+        const trenchTextureKeys = new Set<string>();
+        trenchGltf.scene.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (!(mesh as any).isMesh || !mesh.material) return;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mats.forEach((mat) => {
+            const m = mat as THREE.MeshStandardMaterial;
+            if (m.name) trenchTextureKeys.add(m.name);
+          });
+        });
+
+        const trenchTextureJobs: Promise<THREE.Texture | null>[] = [];
+        trenchTextureKeys.forEach((key) => {
+          const basePath = `/models/star-wars-trench-run/textures/${key}_diffuse`;
+          trenchTextureJobs.push((async () => {
+            const exts = ["jpeg", "jpg", "png"];
+            for (const ext of exts) {
+              const tex = await loadTextureSafe(`${basePath}.${ext}`);
+              if (tex) return tex;
+            }
+            return null;
+          })());
+        });
+
+        const showcaseImageJobs = (legacyWebsites as ShowcaseEntry[])
+          .filter((entry) => (entry as { published?: boolean }).published !== false)
+          .map((entry) => loadTextureSafe(entry.image));
+
+        await Promise.all([...trenchTextureJobs, ...showcaseImageJobs]);
+      } finally {
+        if (!cancelled) setCriticalAssetsReady(true);
+      }
+    };
+
+    preloadCriticalAssets();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (loaderVisualComplete && criticalAssetsReady) {
+      setIsLoading(false);
+    }
+  }, [loaderVisualComplete, criticalAssetsReady]);
 
   // Spaceship state
   const [followingSpaceship, setFollowingSpaceship] = useState(false);
@@ -436,6 +510,16 @@ export default function ResumeSpace3D({
   } | null>(null);
   const projectShowcaseWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const skillsLatticeWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
+  const aboutMemorySquareWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
+  const aboutMemorySquareRootRef = useRef<THREE.Group | null>(null);
+  const aboutMemorySquarePendingEntryRef = useRef(false);
+  const aboutMemorySquareActiveRef = useRef(false);
+  const aboutMemorySquareNavIntentUntilRef = useRef(0);
+  const aboutMemorySquarePrevNavTargetRef = useRef<string | null>(null);
+  const aboutMemorySquareEntrySequenceRef = useRef<{
+    active: boolean;
+    raf: number | null;
+  }>({ active: false, raf: null });
   const skillsSDPatrolStateRef = useRef<{ angle: number }>({ angle: Math.PI * 0.25 });
   const skillsSDLockActiveRef = useRef(false);
   const projectShowcaseNebulaRootRef = useRef<THREE.Object3D | null>(null);
@@ -460,6 +544,7 @@ export default function ResumeSpace3D({
   const skillsLatticeSystemActiveRef = useRef(false);
   const skillsLatticeCausticLightsRef = useRef<THREE.PointLight[]>([]);
   const externalCosmosLabelsHiddenForLatticeRef = useRef(false);
+  const externalCosmosLabelsHiddenForAboutRef = useRef(false);
   const skillsLatticeRippleRef = useRef<{
     active: boolean;
     center: THREE.Vector3;
@@ -978,6 +1063,21 @@ export default function ResumeSpace3D({
           .clone()
           .addScaledVector(outward, SKILLS_LATTICE_NAV_STANDOFF_DIST);
       }
+      if (targetId === "about") {
+        const anchor = aboutMemorySquareWorldAnchorRef.current;
+        if (!anchor) return null;
+        const approachNormal = new THREE.Vector3(0, 0, 1);
+        const root = aboutMemorySquareRootRef.current;
+        if (root) {
+          const rootQ = new THREE.Quaternion();
+          root.getWorldQuaternion(rootQ);
+          approachNormal.applyQuaternion(rootQ).normalize();
+        }
+        return anchor
+          .clone()
+          .addScaledVector(approachNormal, ABOUT_MEMORY_SQUARE_NAV_STANDOFF_DIST)
+          .add(new THREE.Vector3(0, 54, 0));
+      }
       return null;
     },
   });
@@ -1437,15 +1537,12 @@ export default function ResumeSpace3D({
       cancelAnimationFrame(projectShowcaseAngleIntroRef.current.raf);
       projectShowcaseAngleIntroRef.current.raf = null;
     }
-    // Step 1: immediately parallel to trench wall.
+    // Start immediately at wall-parallel and open angle while moving.
     setProjectShowcaseAnglePercent(0);
-    projectShowcasePlayingRef.current = false;
-    setProjectShowcasePlaying(false);
+    projectShowcasePlayingRef.current = true;
+    setProjectShowcasePlaying(true);
 
-    const holdBeforeAngleMs = 2000;
-    const angleAnimMs = 1000;
-    const holdAfterAngleMs = 1000;
-    const totalMs = holdBeforeAngleMs + angleAnimMs + holdAfterAngleMs;
+    const angleAnimMs = 1100;
     const startedAt = performance.now();
     const tick = () => {
       if (!projectShowcaseActiveRef.current) {
@@ -1453,30 +1550,14 @@ export default function ResumeSpace3D({
         return;
       }
       const elapsed = performance.now() - startedAt;
-      if (elapsed < holdBeforeAngleMs) {
-        // Step 1: hold for 2s with images parallel to trench walls.
-        setProjectShowcaseAnglePercent(0);
-      } else if (elapsed < holdBeforeAngleMs + angleAnimMs) {
-        // Step 2: animate to 50% over 1s.
-        const t = THREE.MathUtils.clamp(
-          (elapsed - holdBeforeAngleMs) / angleAnimMs,
-          0,
-          1,
-        );
-        const eased = t * t * (3 - 2 * t);
-        setProjectShowcaseAnglePercent(THREE.MathUtils.lerp(0, 50, eased));
-      } else {
-        // Step 3: hold at 50% for 1s.
+      if (elapsed >= angleAnimMs) {
         setProjectShowcaseAnglePercent(50);
-      }
-
-      if (elapsed >= totalMs) {
-        // Step 4: start autoplay after full choreography.
-        projectShowcasePlayingRef.current = true;
-        setProjectShowcasePlaying(true);
         projectShowcaseAngleIntroRef.current.raf = null;
         return;
       }
+      const t = THREE.MathUtils.clamp(elapsed / angleAnimMs, 0, 1);
+      const eased = t * t * (3 - 2 * t);
+      setProjectShowcaseAnglePercent(THREE.MathUtils.lerp(0, 50, eased));
       projectShowcaseAngleIntroRef.current.raf = requestAnimationFrame(tick);
     };
     projectShowcaseAngleIntroRef.current.raf = requestAnimationFrame(tick);
@@ -1640,11 +1721,9 @@ export default function ResumeSpace3D({
         vlog("🎬 Project Showcase entry sequence complete");
         applyProjectShowcaseNebulaFade(1);
         enterProjectShowcase();
-        window.setTimeout(() => {
-          setProjectShowcaseEntryOverlayOpacity(0);
-          projectShowcaseEntrySequenceRef.current.active = false;
-          projectShowcaseEntrySequenceRef.current.raf = null;
-        }, 180);
+        setProjectShowcaseEntryOverlayOpacity(0);
+        projectShowcaseEntrySequenceRef.current.active = false;
+        projectShowcaseEntrySequenceRef.current.raf = null;
         return;
       }
       projectShowcaseEntrySequenceRef.current.raf = requestAnimationFrame(tick);
@@ -1911,6 +1990,22 @@ export default function ResumeSpace3D({
     });
   }, []);
 
+  const setExternalCosmosLabelsHiddenForAbout = useCallback((hidden: boolean) => {
+    const scene = sceneRef.current.scene;
+    if (!scene) return;
+    if (externalCosmosLabelsHiddenForAboutRef.current === hidden) return;
+    externalCosmosLabelsHiddenForAboutRef.current = hidden;
+    scene.traverse((obj) => {
+      const maybeCss = obj as THREE.Object3D & {
+        isCSS2DObject?: boolean;
+        userData: Record<string, unknown>;
+      };
+      if (!maybeCss.isCSS2DObject) return;
+      if (maybeCss.userData?.aboutMemorySquareLabel) return;
+      maybeCss.visible = !hidden;
+    });
+  }, []);
+
   const exitSkillsLattice = useCallback((options?: {
     restoreShip?: boolean;
     clearSystem?: boolean;
@@ -2150,6 +2245,94 @@ export default function ResumeSpace3D({
     setSkillsLatticeActive(true);
   }, [setExternalCosmosLabelsHiddenForLattice]);
 
+  const cancelAboutMemorySquareEntrySequence = useCallback(() => {
+    const seq = aboutMemorySquareEntrySequenceRef.current;
+    if (seq.raf !== null) {
+      cancelAnimationFrame(seq.raf);
+      seq.raf = null;
+    }
+    seq.active = false;
+  }, []);
+
+  const enterAboutMemorySquare = useCallback(() => {
+    if (aboutMemorySquareActiveRef.current || aboutMemorySquareEntrySequenceRef.current.active) {
+      return;
+    }
+    const aboutRoot = aboutMemorySquareRootRef.current;
+    const camera = sceneRef.current.camera;
+    const controls = sceneRef.current.controls;
+    if (!aboutRoot || !camera || !controls) return;
+
+    aboutMemorySquarePendingEntryRef.current = false;
+    aboutMemorySquareNavIntentUntilRef.current = 0;
+    aboutMemorySquareActiveRef.current = true;
+    setExternalCosmosLabelsHiddenForAbout(true);
+    setFollowingSpaceship(false);
+    followingSpaceshipRef.current = false;
+    if (spaceshipRef.current) spaceshipRef.current.visible = false;
+
+    const center = new THREE.Vector3();
+    aboutRoot.getWorldPosition(center);
+    const rootQuat = new THREE.Quaternion();
+    aboutRoot.getWorldQuaternion(rootQuat);
+    const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(rootQuat).normalize();
+    const startCam = camera.position.clone();
+    const startDir = camera.getWorldDirection(new THREE.Vector3()).normalize();
+    const startTarget = startCam.clone().addScaledVector(startDir, 1200);
+    const finalCam = center.clone()
+      .addScaledVector(normal, ABOUT_MEMORY_SQUARE_CAMERA_STOP_DIST)
+      .add(new THREE.Vector3(0, 68, 0));
+    const finalTarget = center.clone().add(new THREE.Vector3(0, 34, 0));
+    const controlCam = startCam.clone()
+      .lerp(finalCam, 0.5)
+      .addScaledVector(normal, 180)
+      .add(new THREE.Vector3(0, 260, 0));
+    const controlTarget = startTarget.clone()
+      .lerp(finalTarget, 0.5)
+      .add(new THREE.Vector3(0, 90, 0));
+    const startedAt = performance.now();
+    const durationMs = 4300;
+    const cam = new THREE.Vector3();
+    const target = new THREE.Vector3();
+    const smooth = (u: number) => u * u * (3 - 2 * u);
+    const bezierPoint = (
+      out: THREE.Vector3,
+      a: THREE.Vector3,
+      b: THREE.Vector3,
+      c: THREE.Vector3,
+      t: number,
+    ) => {
+      const omt = 1 - t;
+      out.copy(a).multiplyScalar(omt * omt);
+      out.addScaledVector(b, 2 * omt * t);
+      out.addScaledVector(c, t * t);
+    };
+    const seq = aboutMemorySquareEntrySequenceRef.current;
+    seq.active = true;
+    controls.enabled = false;
+
+    const tick = () => {
+      const t = THREE.MathUtils.clamp(
+        (performance.now() - startedAt) / durationMs,
+        0,
+        1,
+      );
+      const s = smooth(t);
+      bezierPoint(cam, startCam, controlCam, finalCam, s);
+      bezierPoint(target, startTarget, controlTarget, finalTarget, s);
+      controls.setLookAt(cam.x, cam.y, cam.z, target.x, target.y, target.z, false);
+      if (t >= 1) {
+        controls.enabled = true;
+        seq.active = false;
+        seq.raf = null;
+        vlog("👨‍🚀 About memory square entered");
+        return;
+      }
+      seq.raf = requestAnimationFrame(tick);
+    };
+    seq.raf = requestAnimationFrame(tick);
+  }, [setExternalCosmosLabelsHiddenForAbout, vlog]);
+
   const getProjectShowcaseStopRunForIndex = useCallback((index: number) => {
     const panels = projectShowcasePanelsRef.current;
     if (panels.length === 0) return 0;
@@ -2268,6 +2451,17 @@ export default function ResumeSpace3D({
 
   const handleQuickNav = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
+      if (targetType === "section" && targetId === "about") {
+        aboutMemorySquarePendingEntryRef.current = true;
+        aboutMemorySquareActiveRef.current = false;
+        aboutMemorySquareNavIntentUntilRef.current = performance.now() + 20000;
+      } else if (targetType === "section" && targetId !== "about") {
+        aboutMemorySquarePendingEntryRef.current = false;
+        aboutMemorySquareActiveRef.current = false;
+        aboutMemorySquareNavIntentUntilRef.current = 0;
+        setExternalCosmosLabelsHiddenForAbout(false);
+        cancelAboutMemorySquareEntrySequence();
+      }
       if (startProjectShowcaseExitSequence(targetId, targetType)) {
         return;
       }
@@ -2303,6 +2497,8 @@ export default function ResumeSpace3D({
       shipLog,
       captureMoonDepartureContext,
       startProjectShowcaseExitSequence,
+      cancelAboutMemorySquareEntrySequence,
+      setExternalCosmosLabelsHiddenForAbout,
     ],
   );
 
@@ -2503,6 +2699,13 @@ export default function ResumeSpace3D({
   const handleCockpitNavigate = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
       vlog(`🎯 Cockpit nav → ${targetType}: ${targetId}`);
+      if (targetId !== "about") {
+        aboutMemorySquarePendingEntryRef.current = false;
+        aboutMemorySquareActiveRef.current = false;
+        aboutMemorySquareNavIntentUntilRef.current = 0;
+        setExternalCosmosLabelsHiddenForAbout(false);
+        cancelAboutMemorySquareEntrySequence();
+      }
       if (targetId !== "skills" && targetId !== SKILLS_LATTICE_NAV_ID) {
         skillsLatticePendingEntryRef.current = false;
       }
@@ -2543,6 +2746,30 @@ export default function ResumeSpace3D({
         } else {
           handleQuickNav("skills", "section");
           vlog("🧠 Routing to Skills — lattice will open on arrival");
+        }
+        return;
+      }
+      if (targetId === "about") {
+        setFollowingSpaceship(true);
+        followingSpaceshipRef.current = true;
+        setInsideShip(false);
+        insideShipRef.current = false;
+        setShipViewMode("exterior");
+        shipViewModeRef.current = "exterior";
+        if (spaceshipRef.current) spaceshipRef.current.visible = true;
+        aboutMemorySquarePendingEntryRef.current = true;
+        aboutMemorySquareActiveRef.current = false;
+        aboutMemorySquareNavIntentUntilRef.current = performance.now() + 20000;
+        const aboutAnchor = aboutMemorySquareWorldAnchorRef.current;
+        const ship = spaceshipRef.current;
+        const alreadyNearAbout = !!aboutAnchor
+          && !!ship
+          && ship.position.distanceTo(aboutAnchor) <= ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST;
+        if (alreadyNearAbout) {
+          enterAboutMemorySquare();
+        } else {
+          handleQuickNav("about", "section");
+          vlog("👨‍🚀 Routing to About memory square");
         }
         return;
       }
@@ -2607,6 +2834,7 @@ export default function ResumeSpace3D({
       startProjectShowcaseEntrySequence,
       exitSkillsLattice,
       exitProjectShowcase,
+      setExternalCosmosLabelsHiddenForAbout,
       vlog,
     ],
   );
@@ -2661,6 +2889,45 @@ export default function ResumeSpace3D({
       enterSkillsLattice();
     }
   }, [currentNavigationTarget, navigationDistance, enterSkillsLattice]);
+
+  useEffect(() => {
+    if (
+      aboutMemorySquareActiveRef.current
+      || aboutMemorySquareEntrySequenceRef.current.active
+    ) {
+      return;
+    }
+    const ship = spaceshipRef.current;
+    const anchor = aboutMemorySquareWorldAnchorRef.current;
+    if (!ship || !anchor) return;
+    const nearAbout = ship.position.distanceTo(anchor) <= ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST;
+    if (!nearAbout) return;
+    const now = performance.now();
+    const hasIntent =
+      currentNavigationTarget === "about" || now <= aboutMemorySquareNavIntentUntilRef.current;
+    if (!hasIntent || navigationDistance !== null) return;
+    enterAboutMemorySquare();
+  }, [currentNavigationTarget, navigationDistance, enterAboutMemorySquare]);
+
+  useEffect(() => {
+    const prev = aboutMemorySquarePrevNavTargetRef.current;
+    if (
+      prev === "about"
+      && currentNavigationTarget === null
+      && !aboutMemorySquareActiveRef.current
+      && !aboutMemorySquareEntrySequenceRef.current.active
+      && performance.now() <= aboutMemorySquareNavIntentUntilRef.current
+    ) {
+      enterAboutMemorySquare();
+    }
+    aboutMemorySquarePrevNavTargetRef.current = currentNavigationTarget;
+  }, [currentNavigationTarget, enterAboutMemorySquare]);
+
+  useEffect(() => {
+    if (currentNavigationTarget === "about") {
+      aboutMemorySquareNavIntentUntilRef.current = performance.now() + 20000;
+    }
+  }, [currentNavigationTarget]);
 
   useEffect(() => {
     if (!sceneReady) return;
@@ -3180,7 +3447,7 @@ export default function ResumeSpace3D({
   }, [focusSkillsLatticeNode]);
 
   useEffect(() => {
-    if (isLoading || !sceneReady) return;
+    if (!PROJECT_SHOWCASE_USE_NEBULA_REALM || isLoading || !sceneReady) return;
     let raf = 0;
     const tick = () => {
       const sceneCtx = sceneRef.current;
@@ -3211,7 +3478,7 @@ export default function ResumeSpace3D({
         !projectShowcaseActiveRef.current &&
         !projectShowcaseEntrySequenceRef.current.active &&
         !projectShowcaseExitSequenceRef.current.active &&
-        currentNavigationTarget !== "projects" &&
+        currentNavigationTarget === "projects" &&
         navigationDistance !== null;
 
       if (shouldFadeDuringOutboundTravel || shouldFadeDuringReturnTravel) {
@@ -4125,6 +4392,104 @@ export default function ResumeSpace3D({
     // The lattice itself is the only representation, anchored in deep space.
     const skillsAnchor = SKILLS_LATTICE_WORLD_ANCHOR.clone();
     skillsLatticeWorldAnchorRef.current = skillsAnchor.clone();
+
+    // About memory square (Phase 1+2): a giant floating square destination
+    // in primary universe deep space, used as the About travel anchor.
+    const aboutAnchor = ABOUT_MEMORY_SQUARE_WORLD_ANCHOR.clone();
+    aboutMemorySquareWorldAnchorRef.current = aboutAnchor.clone();
+    const aboutSquareRoot = new THREE.Group();
+    aboutSquareRoot.name = "AboutMemorySquare";
+    aboutSquareRoot.position.copy(aboutAnchor);
+    const aboutSquareSize = 920;
+    const aboutSquareDepth = 26;
+    const aboutTileGap = aboutSquareSize / 20;
+    const aboutTileSpacing = aboutSquareSize + aboutTileGap;
+    const createAboutTile = (
+      x: number,
+      y: number,
+      z: number,
+      tiltXDeg: number,
+      tiltYDeg: number,
+      tiltZDeg: number,
+      gridCellTarget: number,
+    ) => {
+      const tile = new THREE.Group();
+      tile.position.set(x, y, z);
+      tile.rotation.set(
+        THREE.MathUtils.degToRad(tiltXDeg),
+        THREE.MathUtils.degToRad(tiltYDeg),
+        THREE.MathUtils.degToRad(tiltZDeg),
+      );
+      const core = new THREE.Mesh(
+        new THREE.BoxGeometry(aboutSquareSize, aboutSquareSize, aboutSquareDepth),
+        new THREE.MeshPhongMaterial({
+          color: 0x2f4e80,
+          emissive: 0x21406e,
+          emissiveIntensity: 0.58,
+          shininess: 72,
+          specular: new THREE.Color(0x88a3cc),
+          transparent: true,
+          opacity: 0.2,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(core.geometry),
+        new THREE.LineBasicMaterial({
+          color: 0x9fd1ff,
+          transparent: true,
+          opacity: 0.42,
+          depthWrite: false,
+        }),
+      );
+      tile.add(core, edges);
+      const patternPoints: number[] = [];
+      const zf = aboutSquareDepth * 0.5 + 0.8;
+      const half = aboutSquareSize * 0.5;
+      const divisions = Math.max(2, Math.round(Math.sqrt(Math.max(4, gridCellTarget))));
+      const step = aboutSquareSize / divisions;
+      for (let i = 0; i <= divisions; i += 1) {
+        const c = -half + i * step;
+        // vertical lines
+        patternPoints.push(c, -half, zf, c, half, zf);
+        // horizontal lines
+        patternPoints.push(-half, c, zf, half, c, zf);
+      }
+      const patternGeom = new THREE.BufferGeometry();
+      patternGeom.setAttribute("position", new THREE.Float32BufferAttribute(patternPoints, 3));
+      const patternLines = new THREE.LineSegments(
+        patternGeom,
+        new THREE.LineBasicMaterial({
+          color: 0x7fb9ff,
+          transparent: true,
+          opacity: 0.35,
+          depthWrite: false,
+        }),
+      );
+      tile.add(patternLines);
+      return tile;
+    };
+    // Cross-like cluster: original center + 3 additional tiles with small gaps.
+    // Keep tile edges parallel; shape comes from shallow positional "dish".
+    const dishLift = aboutSquareSize * 0.048;
+    const dishDepth = aboutSquareSize * 0.032;
+    const centerZ = -dishDepth * 0.55;
+    const outerZ = dishDepth;
+    aboutSquareRoot.add(
+      createAboutTile(0, 0, centerZ, -2.8, 0, 0, 100),
+      createAboutTile(-aboutTileSpacing, dishLift, outerZ, -2.8, 0, 0, 300),
+      createAboutTile(aboutTileSpacing, dishLift, outerZ, -2.8, 0, 0, 50),
+      createAboutTile(0, aboutTileSpacing + dishLift * 0.3, outerZ, -2.8, 0, 0, 180),
+      createAboutTile(0, -aboutTileSpacing + dishLift * 0.1, outerZ, -2.8, 0, 0, 72),
+    );
+
+    const aboutLabel = createLabel("About", "Memory Square");
+    aboutLabel.userData.aboutMemorySquareLabel = true;
+    aboutLabel.position.set(0, aboutSquareSize * 1.66, aboutSquareDepth * 0.5 + 10);
+    aboutSquareRoot.add(aboutLabel);
+    scene.add(aboutSquareRoot);
+    aboutMemorySquareRootRef.current = aboutSquareRoot;
 
     // 4. MOONS
     const experienceJobs = Object.values(resumeData.experience).flat();
@@ -5406,7 +5771,7 @@ export default function ResumeSpace3D({
         const showcaseRoot = new THREE.Group();
         showcaseRoot.name = "ProjectShowcaseRoot";
         showcaseRoot.visible = false;
-        const trenchWorldAnchor = new THREE.Vector3(-24800, 420, 18600);
+        const trenchWorldAnchor = new THREE.Vector3(-9800, 420, 7800);
         showcaseRoot.position.copy(trenchWorldAnchor).add(new THREE.Vector3(0, -36, 0));
 
         const trench = gltf.scene;
@@ -6274,6 +6639,13 @@ export default function ResumeSpace3D({
     // Initialize navigation interface
     const handleNavigation = async (target: string) => {
       if (!cameraDirectorRef.current) return;
+      if (target !== "about") {
+        aboutMemorySquarePendingEntryRef.current = false;
+        aboutMemorySquareActiveRef.current = false;
+        aboutMemorySquareNavIntentUntilRef.current = 0;
+        setExternalCosmosLabelsHiddenForAbout(false);
+        cancelAboutMemorySquareEntrySequence();
+      }
 
       // If a moon is currently focused, schedule exit so its orbit resumes before navigating
       if (focusedMoonRef.current) {
@@ -6303,94 +6675,41 @@ export default function ResumeSpace3D({
           }
           break;
         case "about":
-          // Follow the spaceship!
-          vlog("🚀 About Harma navigation triggered");
-
-          if (spaceshipRef.current) {
-            vlog("🚀 Spaceship located, beginning pursuit...");
-
-            // Fly camera to behind the spaceship, then enable follow mode
-            const shipPos = spaceshipRef.current.position.clone();
-            const shipDirection = new THREE.Vector3();
-            spaceshipRef.current.getWorldDirection(shipDirection);
-            const behindOffset = shipDirection.multiplyScalar(-NAV_CAMERA_BEHIND);
-            const heightOffset = new THREE.Vector3(0, 20, 0);
-            const targetCameraPos = shipPos
-              .clone()
-              .add(behindOffset)
-              .add(heightOffset);
-
-            // Animate camera to behind ship using camera director (no conflict with render loop)
-            await cameraDirectorRef.current.flyTo({
-              position: targetCameraPos,
-              lookAt: shipPos,
-              duration: 1.5,
-              ease: "power2.inOut",
-            });
-
-            // Now enable follow mode - render loop takes over cleanly
+          vlog("👨‍🚀 About — routing to memory square...");
+          if (!manualFlightModeRef.current) {
             setFollowingSpaceship(true);
             followingSpaceshipRef.current = true;
-
-            if (sceneRef.current.controls) {
-              const sp = spaceshipRef.current.position;
-              sceneRef.current.controls.setTarget(sp.x, sp.y, sp.z, false);
-              sceneRef.current.controls.enabled = true;
-            }
-            vlog(
-              "🎯 Following spaceship engaged - orbit around ship enabled",
-            );
+            setInsideShip(false);
+            insideShipRef.current = false;
+            setShipViewMode("exterior");
+            shipViewModeRef.current = "exterior";
+            if (spaceshipRef.current) spaceshipRef.current.visible = true;
+            aboutMemorySquarePendingEntryRef.current = true;
+            aboutMemorySquareActiveRef.current = false;
+            aboutMemorySquareNavIntentUntilRef.current = performance.now() + 20000;
+            handleQuickNav("about", "section");
           } else {
-            // Fallback to sun if spaceship not loaded yet
-            await cameraDirectorRef.current.systemOverview();
-            vlog("🌌 Navigated to Sun (About) - spaceship not yet loaded");
-          }
-          // Show About overlay regardless
-          const aboutContent: OverlayContent = {
-            title: "About Harma Davtian",
-            subtitle: "Lead Full Stack Engineer",
-            description: resumeData.summary,
-            sections: [
-              {
-                id: "contact",
-                title: "Contact Information",
-                content: [
-                  `📧 ${resumeData.personal.email}`,
-                  `📞 ${resumeData.personal.phone}`,
-                  `📍 ${resumeData.personal.location}`,
-                ],
-                type: "text",
-              },
-              {
-                id: "expertise",
-                title: "Professional Focus",
-                content:
-                  "Specializing in full-stack development with a focus on scalable architecture, team leadership, and innovative problem-solving across diverse technology stacks.",
-                type: "text",
-              },
-            ],
-            actions: [
-              {
-                label: "View Experience",
-                action: "navigate:experience",
-                icon: "🌍",
-              },
-              {
-                label: "Technical Skills",
-                action: "navigate:skills",
-                icon: "⚡",
-              },
-              {
-                label: "Start Career Tour",
-                action: "tour:career-journey",
-                icon: "🚀",
-              },
-            ],
-          };
-          setOverlayContent(aboutContent);
-          setContentLoading(false);
-          if (!spaceshipRef.current) {
-            // Only restore constraints if we're not following spaceship
+            aboutMemorySquarePendingEntryRef.current = false;
+            aboutMemorySquareActiveRef.current = false;
+            aboutMemorySquareNavIntentUntilRef.current = 0;
+            setExternalCosmosLabelsHiddenForAbout(true);
+            const aboutFocusObject =
+              aboutMemorySquareRootRef.current
+              ?? (() => {
+                const anchor = aboutMemorySquareWorldAnchorRef.current;
+                if (!anchor) return null;
+                const proxy = new THREE.Object3D();
+                proxy.position.copy(anchor);
+                return proxy;
+              })();
+            if (aboutFocusObject) {
+              await cameraDirectorRef.current.focusPlanet(
+                aboutFocusObject,
+                ABOUT_MEMORY_SQUARE_CAMERA_STOP_DIST,
+              );
+            } else {
+              await cameraDirectorRef.current.systemOverview();
+            }
             setMinDistance(
               originalMinDistanceRef.current,
               "restore after about",
@@ -7134,6 +7453,13 @@ export default function ResumeSpace3D({
 
       projectShowcaseRootRef.current = null;
       projectShowcaseWorldAnchorRef.current = null;
+      aboutMemorySquareRootRef.current = null;
+      aboutMemorySquareWorldAnchorRef.current = null;
+      aboutMemorySquarePendingEntryRef.current = false;
+      aboutMemorySquareActiveRef.current = false;
+      aboutMemorySquareNavIntentUntilRef.current = 0;
+      setExternalCosmosLabelsHiddenForAbout(false);
+      cancelAboutMemorySquareEntrySequence();
       skillsLatticeWorldAnchorRef.current = null;
       projectShowcaseNebulaRootRef.current = null;
       skillsLatticeRootRef.current = null;
@@ -7157,6 +7483,7 @@ export default function ResumeSpace3D({
       skillsLatticeSystemActiveRef.current = false;
       skillsLatticeCausticLightsRef.current = [];
       externalCosmosLabelsHiddenForLatticeRef.current = false;
+      externalCosmosLabelsHiddenForAboutRef.current = false;
       skillsLatticeRippleRef.current.active = false;
       skillsLatticeSelectedNodeRef.current = null;
       setSkillsLatticeSelection(null);
@@ -7255,7 +7582,7 @@ export default function ResumeSpace3D({
       {isLoading && (
         <CosmosLoader
           onLoadingComplete={() => {
-            setIsLoading(false);
+            setLoaderVisualComplete(true);
           }}
         />
       )}

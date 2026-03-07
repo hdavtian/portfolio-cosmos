@@ -190,7 +190,10 @@ export const useNavigationSystem = (deps: {
     // Gentle arc travel: an intermediate waypoint near the planet at the
     // ship's starting altitude, and the initial distance for progress calc.
     arcMidPoint?: THREE.Vector3;
+    arcFinalApproachPoint?: THREE.Vector3;
     arcInitialDistance?: number;
+    arcPassedMidPoint?: boolean;
+    aboutFailSafeLogged?: boolean;
     settleStartTime?: number;
     settleStartQuat?: THREE.Quaternion;
     settleTargetQuat?: THREE.Quaternion;
@@ -524,10 +527,19 @@ export const useNavigationSystem = (deps: {
           optionsRef.current.spaceMoonNavTurboThreshold ?? NAV_TURBO_THRESHOLD;
         const destinationSystemId = resolveMoonSystemId(moonId);
         const currentSystemId = resolveCurrentSystemId();
-        const isInterSystemMoonJump =
+        const isSystemMismatchMoonJump =
           !!destinationSystemId &&
           !!currentSystemId &&
           destinationSystemId !== currentSystemId;
+        const projectsAnchor = resolveSpecialSectionTarget
+          ? resolveSpecialSectionTarget("projects")
+          : null;
+        const isLeavingProjectsArea =
+          !!projectsAnchor &&
+          !!spaceshipRef.current &&
+          spaceshipRef.current.position.distanceTo(projectsAnchor) <= 3200;
+        const isInterSystemMoonJump =
+          isSystemMismatchMoonJump || isLeavingProjectsArea;
         const useTurbo =
           currentPos && spaceshipRef.current
             ? spaceshipRef.current.position.distanceTo(
@@ -601,7 +613,7 @@ export const useNavigationSystem = (deps: {
         manualFlightRef.current.isLightspeedActive = false;
         setCurrentNavigationTarget(targetId);
         vlog(
-          `✅ Turn initiated toward moon: ${targetId} (turbo: ${useTurbo}${isInterSystemMoonJump ? ", inter-system lightspeed" : ""})`,
+          `✅ Turn initiated toward moon: ${targetId} (turbo: ${useTurbo}${isInterSystemMoonJump ? ", lightspeed route" : ""})`,
         );
         missionLog(
           `🎯 NAVIGATION INITIATED: Target - ${targetId} | Distance: ${currentPos ? spaceshipRef.current!.position.distanceTo(currentPos.worldPosition).toFixed(0) : "unknown"}u`,
@@ -773,7 +785,12 @@ export const useNavigationSystem = (deps: {
             useTurbo: true,
             forceLightspeed: true,
             targetRadius,
-            turnPhase: clearanceTarget ? "clearing" : "turning",
+            turnPhase:
+              targetId === "about"
+                ? "traveling"
+                : clearanceTarget
+                  ? "clearing"
+                  : "turning",
             turnStartTime: performance.now(),
             turnStartQuat: spaceshipRef.current.quaternion.clone(),
             turnTargetQuat,
@@ -781,6 +798,48 @@ export const useNavigationSystem = (deps: {
             clearanceTarget,
             clearanceDistance,
           };
+          if (targetId === "about" && isDirectSectionApproach) {
+            const toStage = stagingPoint.clone().sub(shipPos);
+            const travelDist = toStage.length();
+            if (travelDist > 1e-3) {
+              const approachDir = stagingPoint.clone().sub(planetCenter);
+              if (approachDir.lengthSq() < 1e-6) {
+                approachDir.set(0, 0, 1);
+              } else {
+                approachDir.normalize();
+              }
+              const approachDist = THREE.MathUtils.clamp(travelDist * 0.38, 2600, 9000);
+              const approachPoint = stagingPoint
+                .clone()
+                .addScaledVector(approachDir, approachDist);
+              const toApproach = approachPoint.clone().sub(shipPos);
+              toApproach.normalize();
+              const up = new THREE.Vector3(0, 1, 0);
+              const lateral = new THREE.Vector3().crossVectors(toApproach, up);
+              if (lateral.lengthSq() < 1e-6) lateral.set(1, 0, 0);
+              lateral.normalize();
+              const centerToShip = shipPos.clone().sub(planetCenter);
+              const lateralSign = centerToShip.dot(lateral) >= 0 ? 1 : -1;
+              const arcOffset = THREE.MathUtils.clamp(travelDist * 0.18, 1400, 6200);
+              const arcLift = THREE.MathUtils.clamp(travelDist * 0.04, 240, 1200);
+              const arcMid = shipPos
+                .clone()
+                .lerp(approachPoint, 0.5)
+                .addScaledVector(lateral, arcOffset * lateralSign)
+                .add(new THREE.Vector3(0, arcLift, 0));
+              navigationTargetRef.current.arcMidPoint = arcMid;
+              navigationTargetRef.current.arcFinalApproachPoint = approachPoint;
+              navigationTargetRef.current.arcInitialDistance = shipPos.distanceTo(approachPoint);
+              navigationTargetRef.current.arcPassedMidPoint = false;
+              vlog(
+                `🌀 About curved staging path armed (offset ${arcOffset.toFixed(0)}u, lift ${arcLift.toFixed(0)}u)`,
+              );
+            }
+          }
+          if (targetId === "about") {
+            navTurnActiveRef.current = false;
+            vlog("🌀 About special-case: skipping turn phase, curving directly");
+          }
           setCurrentNavigationTarget(targetId);
 
           vlog(
@@ -822,6 +881,7 @@ export const useNavigationSystem = (deps: {
   const _navControlTarget = useRef(new THREE.Vector3());
   const _navCamForward = useRef(new THREE.Vector3());
   const _navMoonOutward = useRef(new THREE.Vector3());
+  const _navArcPoint = useRef(new THREE.Vector3());
 
   const updateAutopilotNavigation = useCallback(() => {
     navTrace(
@@ -1367,6 +1427,40 @@ export const useNavigationSystem = (deps: {
         steerTarget = sectionAvoidWaypoint.current;
       } else {
         steerTarget = targetPos;
+        if (
+          target.type === "section"
+          && target.id === "about"
+          && target.arcMidPoint
+          && target.startPosition
+          && target.arcFinalApproachPoint
+        ) {
+          if (!target.arcPassedMidPoint) {
+            const distToApproach = ship.position.distanceTo(target.arcFinalApproachPoint);
+            const passThreshold = Math.max(arrivalDistance * 12, 560);
+            if (distToApproach <= passThreshold) {
+              target.arcPassedMidPoint = true;
+              vlog("🌀 About curved path: aligned on perpendicular approach rail");
+            } else {
+              const initialDist = Math.max(
+                target.arcInitialDistance ?? target.startPosition.distanceTo(target.arcFinalApproachPoint),
+                1,
+              );
+              const progress = THREE.MathUtils.clamp(
+                1 - distToApproach / initialDist,
+                0,
+                1,
+              );
+              // Continuous curve from start to the pre-approach rail point.
+              const lookAheadT = THREE.MathUtils.clamp(progress + 0.16, 0.03, 0.992);
+              const omt = 1 - lookAheadT;
+              const arcPoint = _navArcPoint.current;
+              arcPoint.copy(target.startPosition).multiplyScalar(omt * omt);
+              arcPoint.addScaledVector(target.arcMidPoint, 2 * omt * lookAheadT);
+              arcPoint.addScaledVector(target.arcFinalApproachPoint, lookAheadT * lookAheadT);
+              steerTarget = arcPoint;
+            }
+          }
+        }
       }
       if (
         !Number.isFinite(steerTarget.x) ||
@@ -1428,6 +1522,21 @@ export const useNavigationSystem = (deps: {
 
       // Determine speed tier based on distance.
       // Lightspeed for long inter-planet hops; turbo for medium; normal for close.
+      if (
+        target.type === "section"
+        && target.id === "about"
+        && target.startTime > 0
+        && now - target.startTime > 45000
+      ) {
+        target.forceLightspeed = false;
+        target.arcPassedMidPoint = true;
+        target.arcMidPoint = undefined;
+        target.arcFinalApproachPoint = undefined;
+        if (!target.aboutFailSafeLogged) {
+          target.aboutFailSafeLogged = true;
+          vlog("🛑 About failsafe: forcing final straight-in approach");
+        }
+      }
       const decelDist = distance > NAV_LIGHTSPEED_ENGAGE_DIST
         ? NAV_LIGHTSPEED_DECEL_DIST   // lightspeed needs longer to slow down
         : arrivalDistance + NAV_DECEL_EXTRA;
@@ -1523,12 +1632,18 @@ export const useNavigationSystem = (deps: {
 
       // Smooth heading update instead of hard lookAt snap each frame.
       const _tmpLookObj = new THREE.Object3D();
-      _tmpLookObj.position.copy(ship.position);
-      _tmpLookObj.lookAt(steerTarget);
-      const targetQuat = _tmpLookObj.quaternion.clone();
-      applyRollOffset(targetQuat);
-      const turnAlpha = manualFlightRef.current.isLightspeedActive ? 0.24 : 0.12;
-      ship.quaternion.slerp(targetQuat, turnAlpha);
+      const skipAboutHeading =
+        target.type === "section"
+        && target.id === "about"
+        && !target.arcPassedMidPoint;
+      if (!skipAboutHeading) {
+        _tmpLookObj.position.copy(ship.position);
+        _tmpLookObj.lookAt(steerTarget);
+        const targetQuat = _tmpLookObj.quaternion.clone();
+        applyRollOffset(targetQuat);
+        const turnAlpha = manualFlightRef.current.isLightspeedActive ? 0.24 : 0.12;
+        ship.quaternion.slerp(targetQuat, turnAlpha);
+      }
 
       // Only update exterior follow camera when NOT inside the ship —
       // the interior camera block in the render loop handles cockpit/cabin.
@@ -1565,7 +1680,12 @@ export const useNavigationSystem = (deps: {
         // ── For sections: transition to "settling" phase where the ship
         // turns to face the planet centre from the staging point, giving
         // the user a top-down or bottom-up view of the system. ──
-        if (target.type === "section" && target.planetCenter && target.id !== "skills") {
+        if (
+          target.type === "section"
+          && target.planetCenter
+          && target.id !== "skills"
+          && target.id !== "about"
+        ) {
           vlog(`🛸 Reached staging point — settling to face planet`);
           pathData.speed = 0;
 
