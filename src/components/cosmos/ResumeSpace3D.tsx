@@ -132,6 +132,19 @@ const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -18000);
 const ABOUT_MEMORY_SQUARE_NAV_STANDOFF_DIST = 4200;
 const ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST = 4550;
 const ABOUT_MEMORY_SQUARE_CAMERA_STOP_DIST = 3900;
+const ABOUT_CELL_GRID_DIVISIONS = 14;
+const ABOUT_CELL_BACK_GRID_DIVISIONS = 6;
+const ABOUT_SWARM_ASSEMBLED_HOLD_MS = 2800;
+const ABOUT_SWARM_BREAKOUT_MS = 1900;
+const ABOUT_SWARM_MIN_MS = 10000;
+const ABOUT_SWARM_MAX_MS = 20000;
+const ABOUT_SWARM_REFORM_MS = 2600;
+const ABOUT_SWARM_SETTLE_MS = 1150;
+const ABOUT_BREAK_IMPULSE = 120;
+const ABOUT_REFORM_STIFFNESS = 8.8;
+const ABOUT_REFORM_DAMPING = 0.86;
+const ABOUT_SPIN_MAX = 0.9;
+const ABOUT_SWARM_DISTANCE_GATE = 28000;
 const SKILLS_LATTICE_ARRIVAL_DIST = 900;
 const SKILLS_LATTICE_NAV_STANDOFF_DIST = 1200;
 const SKILLS_LATTICE_ENTRY_TRIGGER_DIST = 1800;
@@ -215,6 +228,36 @@ type SkillsLatticeFlowMeta = {
   speed: number;
   hue: number;
   hueDrift: number;
+};
+
+type AboutSwarmPhase = "assembledHold" | "breakOut" | "swarm" | "reform" | "settle";
+
+type AboutCellSlot = {
+  worldPosition: THREE.Vector3;
+  worldQuaternion: THREE.Quaternion;
+  scale: THREE.Vector3;
+  tileIndex: number;
+};
+
+type AboutCellRecord = {
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  quaternion: THREE.Quaternion;
+  angularVelocity: THREE.Vector3;
+  sourceSlotIndex: number;
+  targetSlotIndex: number;
+  pulsePhase: number;
+};
+
+type AboutCellAnimationRuntime = {
+  phase: AboutSwarmPhase;
+  phaseStartedAt: number;
+  phaseDurationMs: number;
+  swarmDurationMs: number;
+  active: boolean;
+  initialized: boolean;
+  lastTickMs: number;
+  distanceGateActive: boolean;
 };
 
 // --- SHIP_DEBUG_LABELS (2026-02-03 snapshot) ---
@@ -520,6 +563,26 @@ export default function ResumeSpace3D({
     active: boolean;
     raf: number | null;
   }>({ active: false, raf: null });
+  const aboutCellSlotsRef = useRef<AboutCellSlot[]>([]);
+  const aboutCellRecordsRef = useRef<AboutCellRecord[]>([]);
+  const aboutCellAnimationRef = useRef<AboutCellAnimationRuntime>({
+    phase: "assembledHold",
+    phaseStartedAt: 0,
+    phaseDurationMs: ABOUT_SWARM_ASSEMBLED_HOLD_MS,
+    swarmDurationMs: ABOUT_SWARM_MIN_MS,
+    active: false,
+    initialized: false,
+    lastTickMs: 0,
+    distanceGateActive: false,
+  });
+  const aboutCellMeshRef = useRef<THREE.InstancedMesh | null>(null);
+  const aboutCellRafRef = useRef<number | null>(null);
+  const aboutSwarmManualTriggerRef = useRef(false);
+  const aboutSwarmManualReformRef = useRef(false);
+  const aboutTileCoreMatsRef = useRef<THREE.MeshPhongMaterial[]>([]);
+  const aboutTileEdgeLineMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
+  const aboutTileGridLineMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
+  const [aboutSwarmTriggerVisible, setAboutSwarmTriggerVisible] = useState(false);
   const skillsSDPatrolStateRef = useRef<{ angle: number }>({ angle: Math.PI * 0.25 });
   const skillsSDLockActiveRef = useRef(false);
   const projectShowcaseNebulaRootRef = useRef<THREE.Object3D | null>(null);
@@ -2955,6 +3018,321 @@ export default function ResumeSpace3D({
     }
   }, [currentNavigationTarget]);
 
+  const triggerAboutSwarmBreakApart = useCallback(() => {
+    aboutSwarmManualTriggerRef.current = true;
+    const runtime = aboutCellAnimationRef.current;
+    runtime.active = true;
+    if (!runtime.initialized) {
+      runtime.initialized = true;
+      runtime.phase = "assembledHold";
+      runtime.phaseStartedAt = performance.now();
+      runtime.phaseDurationMs = 0;
+      runtime.lastTickMs = performance.now();
+    }
+    vlog("🧩 About swarm: manual break-apart trigger");
+  }, [vlog]);
+
+  const triggerAboutSwarmReform = useCallback(() => {
+    aboutSwarmManualReformRef.current = true;
+    const runtime = aboutCellAnimationRef.current;
+    runtime.active = true;
+    if (!runtime.initialized) {
+      runtime.initialized = true;
+      runtime.phase = "swarm";
+      runtime.phaseStartedAt = performance.now();
+      runtime.phaseDurationMs = 0;
+      runtime.lastTickMs = performance.now();
+    }
+    vlog("🧩 About swarm: manual reform trigger");
+  }, [vlog]);
+
+  useEffect(() => {
+    if (!sceneReady) {
+      setAboutSwarmTriggerVisible(false);
+      return;
+    }
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const shouldShow =
+        aboutMemorySquareActiveRef.current
+        && !aboutMemorySquareEntrySequenceRef.current.active
+        && !projectShowcaseActiveRef.current
+        && !skillsLatticeActiveRef.current;
+      setAboutSwarmTriggerVisible((prev) => (prev === shouldShow ? prev : shouldShow));
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      setAboutSwarmTriggerVisible(false);
+    };
+  }, [sceneReady]);
+
+  useEffect(() => {
+    if (!sceneReady) return;
+    const tempMatrix = new THREE.Matrix4();
+    const tempScale = new THREE.Vector3(1, 1, 1);
+    const slotCenter = new THREE.Vector3();
+    const toCenter = new THREE.Vector3();
+    const tangent = new THREE.Vector3();
+    const drift = new THREE.Vector3();
+    const toTarget = new THREE.Vector3();
+    const deltaQuat = new THREE.Quaternion();
+    const targetQuat = new THREE.Quaternion();
+    const swirlAxis = new THREE.Vector3(0, 0, 1);
+
+    const shuffleSlotTargets = () => {
+      const slots = aboutCellSlotsRef.current;
+      const records = aboutCellRecordsRef.current;
+      const targetOrder = Array.from({ length: slots.length }, (_, i) => i);
+      for (let i = targetOrder.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = targetOrder[i];
+        targetOrder[i] = targetOrder[j];
+        targetOrder[j] = tmp;
+      }
+      records.forEach((rec, idx) => {
+        rec.targetSlotIndex = targetOrder[idx] ?? idx;
+      });
+    };
+
+    const setPhase = (phase: AboutSwarmPhase, now: number) => {
+      const runtime = aboutCellAnimationRef.current;
+      runtime.phase = phase;
+      runtime.phaseStartedAt = now;
+      if (phase === "assembledHold") runtime.phaseDurationMs = ABOUT_SWARM_ASSEMBLED_HOLD_MS;
+      if (phase === "breakOut") runtime.phaseDurationMs = ABOUT_SWARM_BREAKOUT_MS;
+      if (phase === "swarm") {
+        runtime.swarmDurationMs = THREE.MathUtils.lerp(
+          ABOUT_SWARM_MIN_MS,
+          ABOUT_SWARM_MAX_MS,
+          Math.random(),
+        );
+        runtime.phaseDurationMs = runtime.swarmDurationMs;
+      }
+      if (phase === "reform") runtime.phaseDurationMs = ABOUT_SWARM_REFORM_MS;
+      if (phase === "settle") runtime.phaseDurationMs = ABOUT_SWARM_SETTLE_MS;
+    };
+
+    const updateGridLineVisibility = (phase: AboutSwarmPhase, phaseT: number) => {
+      let opacity = 0;
+      let coreOpacity = 0;
+      // Keep silhouette and grid hidden until reformation fully completes.
+      if (phase === "assembledHold") {
+        opacity = 0.42;
+        coreOpacity = 0.2;
+      }
+      aboutTileGridLineMatsRef.current.forEach((mat) => {
+        mat.opacity = opacity;
+      });
+      aboutTileEdgeLineMatsRef.current.forEach((mat) => {
+        mat.opacity = opacity;
+      });
+      aboutTileCoreMatsRef.current.forEach((mat) => {
+        mat.opacity = coreOpacity;
+      });
+    };
+
+    const beginBreakOut = (now: number) => {
+      const slots = aboutCellSlotsRef.current;
+      const records = aboutCellRecordsRef.current;
+      slotCenter.set(0, 0, 0);
+      slots.forEach((slot) => slotCenter.add(slot.worldPosition));
+      slotCenter.multiplyScalar(1 / Math.max(1, slots.length));
+      records.forEach((rec, idx) => {
+        const slot = slots[rec.targetSlotIndex] ?? slots[idx];
+        rec.position.copy(slot.worldPosition);
+        rec.quaternion.copy(slot.worldQuaternion);
+        rec.velocity.set(0, 0, 0);
+        toCenter.subVectors(rec.position, slotCenter);
+        const baseLen = Math.max(60, toCenter.length());
+        toCenter.normalize().multiplyScalar(ABOUT_BREAK_IMPULSE * (0.55 + Math.random() * 0.45));
+        tangent.set(-toCenter.y, toCenter.x, (Math.random() - 0.5) * 22);
+        tangent.normalize().multiplyScalar(ABOUT_BREAK_IMPULSE * 0.36);
+        rec.velocity.copy(toCenter.addScaledVector(tangent, 0.55)).multiplyScalar(baseLen / 180);
+        rec.angularVelocity.set(
+          (Math.random() * 2 - 1) * ABOUT_SPIN_MAX,
+          (Math.random() * 2 - 1) * ABOUT_SPIN_MAX,
+          (Math.random() * 2 - 1) * ABOUT_SPIN_MAX,
+        );
+      });
+      setPhase("breakOut", now);
+    };
+
+    const beginReform = (now: number) => {
+      shuffleSlotTargets();
+      setPhase("reform", now);
+    };
+
+    const tick = () => {
+      aboutCellRafRef.current = requestAnimationFrame(tick);
+      const runtime = aboutCellAnimationRef.current;
+      const mesh = aboutCellMeshRef.current;
+      const records = aboutCellRecordsRef.current;
+      const slots = aboutCellSlotsRef.current;
+      if (
+        !runtime.active
+        || !runtime.initialized
+        || !mesh
+        || records.length === 0
+        || slots.length === 0
+      ) {
+        return;
+      }
+
+      const now = performance.now();
+      const dt = Math.min((now - runtime.lastTickMs) / 1000, 0.05);
+      runtime.lastTickMs = now;
+
+      const camera = sceneRef.current.camera;
+      const anchor = aboutMemorySquareWorldAnchorRef.current;
+      if (camera && anchor) {
+        runtime.distanceGateActive =
+          camera.position.distanceTo(anchor) > ABOUT_SWARM_DISTANCE_GATE;
+      }
+      if (runtime.distanceGateActive) {
+        return;
+      }
+
+      const phaseElapsed = now - runtime.phaseStartedAt;
+      const phaseT = THREE.MathUtils.clamp(phaseElapsed / Math.max(1, runtime.phaseDurationMs), 0, 1);
+      updateGridLineVisibility(runtime.phase, phaseT);
+
+      const applyRecordMatrix = (idx: number, rec: AboutCellRecord, pulse = 1) => {
+        const slot = slots[rec.targetSlotIndex] ?? slots[idx];
+        tempScale.copy(slot.scale).multiplyScalar(pulse);
+        tempMatrix.compose(rec.position, rec.quaternion, tempScale);
+        mesh.setMatrixAt(idx, tempMatrix);
+      };
+
+      if (aboutSwarmManualTriggerRef.current) {
+        aboutSwarmManualTriggerRef.current = false;
+        beginBreakOut(now);
+        return;
+      }
+      if (aboutSwarmManualReformRef.current) {
+        aboutSwarmManualReformRef.current = false;
+        beginReform(now);
+        return;
+      }
+
+      if (runtime.phase === "assembledHold") {
+        if (phaseElapsed >= runtime.phaseDurationMs) {
+          beginBreakOut(now);
+          return;
+        }
+      } else if (runtime.phase === "breakOut") {
+        records.forEach((rec, idx) => {
+          const pulse = 1 + Math.sin(now * 0.001 + rec.pulsePhase) * 0.08 * phaseT;
+          tempScale.setScalar(pulse);
+          toCenter.subVectors(rec.position, slotCenter).normalize();
+          tangent.crossVectors(toCenter, swirlAxis).normalize();
+          rec.velocity.addScaledVector(toCenter, ABOUT_BREAK_IMPULSE * dt * 0.22);
+          rec.velocity.addScaledVector(tangent, ABOUT_BREAK_IMPULSE * dt * 0.16);
+          rec.velocity.multiplyScalar(0.986);
+          rec.position.addScaledVector(rec.velocity, dt);
+          deltaQuat.setFromEuler(new THREE.Euler(
+            rec.angularVelocity.x * dt,
+            rec.angularVelocity.y * dt,
+            rec.angularVelocity.z * dt,
+          ));
+          rec.quaternion.multiply(deltaQuat).normalize();
+          applyRecordMatrix(idx, rec, pulse);
+        });
+        if (phaseElapsed >= runtime.phaseDurationMs) {
+          setPhase("swarm", now);
+          return;
+        }
+      } else if (runtime.phase === "swarm") {
+        records.forEach((rec, idx) => {
+          const pulse = 1 + Math.sin(now * 0.0014 + rec.pulsePhase) * 0.1;
+          tempScale.setScalar(pulse);
+          drift.set(
+            Math.sin(rec.position.y * 0.010 + now * 0.00065) * 15,
+            Math.cos(rec.position.x * 0.009 + now * 0.0007) * 15,
+            Math.sin((rec.position.x + rec.position.y) * 0.007 + now * 0.00045) * 10,
+          );
+          tangent.set(-rec.position.y, rec.position.x, 0).normalize();
+          rec.velocity.addScaledVector(drift, dt);
+          rec.velocity.addScaledVector(tangent, dt * 6);
+          rec.velocity.multiplyScalar(0.992);
+          rec.position.addScaledVector(rec.velocity, dt);
+          rec.angularVelocity.multiplyScalar(0.996);
+          const driftLen = drift.length();
+          if (driftLen > 0.0001) {
+            rec.angularVelocity.addScaledVector(drift, (dt * 0.16) / driftLen);
+          }
+          deltaQuat.setFromEuler(new THREE.Euler(
+            rec.angularVelocity.x * dt,
+            rec.angularVelocity.y * dt,
+            rec.angularVelocity.z * dt,
+          ));
+          rec.quaternion.multiply(deltaQuat).normalize();
+          applyRecordMatrix(idx, rec, pulse);
+        });
+        if (phaseElapsed >= runtime.phaseDurationMs) {
+          beginReform(now);
+          return;
+        }
+      } else if (runtime.phase === "reform") {
+        records.forEach((rec, idx) => {
+          const targetSlot = slots[rec.targetSlotIndex] ?? slots[idx];
+          toTarget.subVectors(targetSlot.worldPosition, rec.position);
+          rec.velocity.addScaledVector(toTarget, ABOUT_REFORM_STIFFNESS * dt);
+          rec.velocity.multiplyScalar(Math.pow(ABOUT_REFORM_DAMPING, dt * 60));
+          rec.position.addScaledVector(rec.velocity, dt);
+          rec.angularVelocity.multiplyScalar(0.92);
+          targetQuat.copy(targetSlot.worldQuaternion);
+          rec.quaternion.slerp(targetQuat, THREE.MathUtils.clamp(dt * 5.2, 0, 1));
+          deltaQuat.setFromEuler(new THREE.Euler(
+            rec.angularVelocity.x * dt,
+            rec.angularVelocity.y * dt,
+            rec.angularVelocity.z * dt,
+          ));
+          rec.quaternion.multiply(deltaQuat).normalize();
+          applyRecordMatrix(idx, rec, 1);
+        });
+        if (phaseElapsed >= runtime.phaseDurationMs) {
+          setPhase("settle", now);
+          return;
+        }
+      } else if (runtime.phase === "settle") {
+        records.forEach((rec, idx) => {
+          const targetSlot = slots[rec.targetSlotIndex] ?? slots[idx];
+          rec.position.lerp(targetSlot.worldPosition, THREE.MathUtils.clamp(dt * 9, 0, 1));
+          rec.velocity.multiplyScalar(0.72);
+          rec.quaternion.slerp(targetSlot.worldQuaternion, THREE.MathUtils.clamp(dt * 10, 0, 1));
+          applyRecordMatrix(idx, rec, 1);
+        });
+        if (phaseElapsed >= runtime.phaseDurationMs) {
+          records.forEach((rec) => {
+            rec.sourceSlotIndex = rec.targetSlotIndex;
+          });
+          setPhase("assembledHold", now);
+          return;
+        }
+      }
+
+      if (runtime.phase === "assembledHold") {
+        records.forEach((rec, idx) => {
+          const targetSlot = slots[rec.targetSlotIndex] ?? slots[idx];
+          rec.position.lerp(targetSlot.worldPosition, 0.22);
+          rec.quaternion.slerp(targetSlot.worldQuaternion, 0.22);
+          applyRecordMatrix(idx, rec, 1);
+        });
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+    };
+
+    aboutCellRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (aboutCellRafRef.current !== null) {
+        cancelAnimationFrame(aboutCellRafRef.current);
+      }
+      aboutCellRafRef.current = null;
+    };
+  }, [sceneReady]);
+
   useEffect(() => {
     if (!sceneReady) return;
     let raf = 0;
@@ -4428,6 +4806,12 @@ export default function ResumeSpace3D({
     aboutSquareRoot.position.copy(aboutAnchor);
     const aboutSquareSize = 920;
     const aboutSquareDepth = 26;
+    const aboutCellDepth = Math.max(4, aboutSquareDepth * 0.24);
+    const aboutCellDivisions = ABOUT_CELL_GRID_DIVISIONS;
+    const aboutBackCellDivisions = ABOUT_CELL_BACK_GRID_DIVISIONS;
+    aboutTileCoreMatsRef.current = [];
+    aboutTileGridLineMatsRef.current = [];
+    aboutTileEdgeLineMatsRef.current = [];
     const aboutTileGap = aboutSquareSize / 20;
     const aboutTileSpacing = aboutSquareSize + aboutTileGap;
     const createAboutTile = (
@@ -4437,7 +4821,8 @@ export default function ResumeSpace3D({
       tiltXDeg: number,
       tiltYDeg: number,
       tiltZDeg: number,
-      gridCellTarget: number,
+      tileIndex: number,
+      slots: AboutCellSlot[],
     ) => {
       const tile = new THREE.Group();
       tile.position.set(x, y, z);
@@ -4446,19 +4831,21 @@ export default function ResumeSpace3D({
         THREE.MathUtils.degToRad(tiltYDeg),
         THREE.MathUtils.degToRad(tiltZDeg),
       );
+      const coreMat = new THREE.MeshPhongMaterial({
+        color: 0x2f4e80,
+        emissive: 0x21406e,
+        emissiveIntensity: 0.58,
+        shininess: 72,
+        specular: new THREE.Color(0x88a3cc),
+        transparent: true,
+        opacity: 0.2,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      aboutTileCoreMatsRef.current.push(coreMat);
       const core = new THREE.Mesh(
         new THREE.BoxGeometry(aboutSquareSize, aboutSquareSize, aboutSquareDepth),
-        new THREE.MeshPhongMaterial({
-          color: 0x2f4e80,
-          emissive: 0x21406e,
-          emissiveIntensity: 0.58,
-          shininess: 72,
-          specular: new THREE.Color(0x88a3cc),
-          transparent: true,
-          opacity: 0.2,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-        }),
+        coreMat,
       );
       const edges = new THREE.LineSegments(
         new THREE.EdgesGeometry(core.geometry),
@@ -4469,46 +4856,161 @@ export default function ResumeSpace3D({
           depthWrite: false,
         }),
       );
+      aboutTileEdgeLineMatsRef.current.push(
+        edges.material as THREE.LineBasicMaterial,
+      );
       tile.add(core, edges);
-      const patternPoints: number[] = [];
-      const zf = aboutSquareDepth * 0.5 + 0.8;
+      tile.updateMatrix();
+      const zf = aboutSquareDepth * 0.5 + aboutCellDepth * 0.5 + 0.8;
+      const zb = -aboutSquareDepth * 0.5 - aboutCellDepth * 0.5 - 0.8;
       const half = aboutSquareSize * 0.5;
-      const divisions = Math.max(2, Math.round(Math.sqrt(Math.max(4, gridCellTarget))));
-      const step = aboutSquareSize / divisions;
-      for (let i = 0; i <= divisions; i += 1) {
-        const c = -half + i * step;
-        // vertical lines
-        patternPoints.push(c, -half, zf, c, half, zf);
-        // horizontal lines
-        patternPoints.push(-half, c, zf, half, c, zf);
+      const cellStep = aboutSquareSize / aboutCellDivisions;
+      const backCellStep = aboutSquareSize / aboutBackCellDivisions;
+      const rimCellThickness = Math.max(aboutCellDepth, Math.min(cellStep * 0.36, 22));
+      const rimDivisions = Math.max(6, Math.round(aboutSquareSize / Math.max(rimCellThickness, 18)));
+      const rimStep = aboutSquareSize / rimDivisions;
+      const rimDepthDivisions = Math.max(2, Math.round(aboutSquareDepth / Math.max(aboutCellDepth, 5)));
+      const rimDepthStep = aboutSquareDepth / rimDepthDivisions;
+      const tileQuat = new THREE.Quaternion().setFromEuler(tile.rotation).normalize();
+      const pushSlot = (lx: number, ly: number, lz: number, sx: number, sy: number, sz: number) => {
+        const localPos = new THREE.Vector3(lx, ly, lz);
+        localPos.applyMatrix4(tile.matrix);
+        slots.push({
+          worldPosition: localPos,
+          worldQuaternion: tileQuat.clone(),
+          scale: new THREE.Vector3(sx, sy, sz),
+          tileIndex,
+        });
+      };
+      const patternPoints: number[] = [];
+      for (let i = 0; i <= aboutCellDivisions; i += 1) {
+        const c = -half + i * cellStep;
+        patternPoints.push(c, -half, zf + 0.16, c, half, zf + 0.16);
+        patternPoints.push(-half, c, zf + 0.16, half, c, zf + 0.16);
       }
       const patternGeom = new THREE.BufferGeometry();
       patternGeom.setAttribute("position", new THREE.Float32BufferAttribute(patternPoints, 3));
-      const patternLines = new THREE.LineSegments(
-        patternGeom,
-        new THREE.LineBasicMaterial({
-          color: 0x7fb9ff,
-          transparent: true,
-          opacity: 0.35,
-          depthWrite: false,
-        }),
-      );
+      const patternMat = new THREE.LineBasicMaterial({
+        color: 0x7fb9ff,
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+      });
+      const patternLines = new THREE.LineSegments(patternGeom, patternMat);
       tile.add(patternLines);
+      aboutTileGridLineMatsRef.current.push(patternMat);
+
+      // Front surface (high detail)
+      for (let row = 0; row < aboutCellDivisions; row += 1) {
+        for (let col = 0; col < aboutCellDivisions; col += 1) {
+          pushSlot(
+            -half + (col + 0.5) * cellStep,
+            -half + (row + 0.5) * cellStep,
+            zf,
+            cellStep,
+            cellStep,
+            aboutCellDepth,
+          );
+        }
+      }
+
+      // Back surface (coarser cells)
+      for (let row = 0; row < aboutBackCellDivisions; row += 1) {
+        for (let col = 0; col < aboutBackCellDivisions; col += 1) {
+          pushSlot(
+            -half + (col + 0.5) * backCellStep,
+            -half + (row + 0.5) * backCellStep,
+            zb,
+            backCellStep,
+            backCellStep,
+            aboutCellDepth,
+          );
+        }
+      }
+
+      // Rim micro-cells for tile thickness reconstruction
+      for (let i = 0; i < rimDivisions; i += 1) {
+        const c = -half + (i + 0.5) * rimStep;
+        for (let d = 0; d < rimDepthDivisions; d += 1) {
+          const z = -aboutSquareDepth * 0.5 + (d + 0.5) * rimDepthStep;
+          // Keep rim cells within the tile silhouette so assembled shape stays clean.
+          pushSlot(c, half - rimCellThickness * 0.5, z, rimStep, rimCellThickness, rimDepthStep);
+          pushSlot(c, -half + rimCellThickness * 0.5, z, rimStep, rimCellThickness, rimDepthStep);
+          pushSlot(-half + rimCellThickness * 0.5, c, z, rimCellThickness, rimStep, rimDepthStep);
+          pushSlot(half - rimCellThickness * 0.5, c, z, rimCellThickness, rimStep, rimDepthStep);
+        }
+      }
       return tile;
     };
-    // Cross-like cluster: original center + 3 additional tiles with small gaps.
-    // Keep tile edges parallel; shape comes from shallow positional "dish".
+    // Four-square plate cluster: center + three raised wings with parallel orientation.
     const dishLift = aboutSquareSize * 0.048;
     const dishDepth = aboutSquareSize * 0.032;
     const centerZ = -dishDepth * 0.55;
     const outerZ = dishDepth;
+    const aboutSlots: AboutCellSlot[] = [];
+    const aboutTiles = [
+      createAboutTile(0, 0, centerZ, -2.8, 0, 0, 0, aboutSlots),
+      createAboutTile(-aboutTileSpacing, dishLift, outerZ, -2.8, 0, 0, 1, aboutSlots),
+      createAboutTile(aboutTileSpacing, dishLift, outerZ, -2.8, 0, 0, 2, aboutSlots),
+      createAboutTile(0, aboutTileSpacing + dishLift * 0.3, outerZ, -2.8, 0, 0, 3, aboutSlots),
+    ];
     aboutSquareRoot.add(
-      createAboutTile(0, 0, centerZ, -2.8, 0, 0, 100),
-      createAboutTile(-aboutTileSpacing, dishLift, outerZ, -2.8, 0, 0, 300),
-      createAboutTile(aboutTileSpacing, dishLift, outerZ, -2.8, 0, 0, 50),
-      createAboutTile(0, aboutTileSpacing + dishLift * 0.3, outerZ, -2.8, 0, 0, 180),
-      createAboutTile(0, -aboutTileSpacing + dishLift * 0.1, outerZ, -2.8, 0, 0, 72),
+      ...aboutTiles,
     );
+    aboutSquareRoot.updateWorldMatrix(true, true);
+    aboutCellSlotsRef.current = aboutSlots;
+    const aboutCellGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const aboutCellMaterial = new THREE.MeshPhongMaterial({
+      color: 0xa8d6ff,
+      emissive: 0x2d6ca6,
+      emissiveIntensity: 0.62,
+      specular: new THREE.Color(0xbfdfff),
+      shininess: 110,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const aboutCells = new THREE.InstancedMesh(
+      aboutCellGeometry,
+      aboutCellMaterial,
+      aboutSlots.length,
+    );
+    aboutCells.name = "AboutMemorySquareCells";
+    aboutCells.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    aboutCells.frustumCulled = false;
+    const tempMatrix = new THREE.Matrix4();
+    const records: AboutCellRecord[] = aboutSlots.map((slot, idx) => {
+      tempMatrix.compose(
+        slot.worldPosition,
+        slot.worldQuaternion,
+        slot.scale,
+      );
+      aboutCells.setMatrixAt(idx, tempMatrix);
+      return {
+        position: slot.worldPosition.clone(),
+        velocity: new THREE.Vector3(),
+        quaternion: slot.worldQuaternion.clone(),
+        angularVelocity: new THREE.Vector3(),
+        sourceSlotIndex: idx,
+        targetSlotIndex: idx,
+        pulsePhase: Math.random() * Math.PI * 2,
+      };
+    });
+    aboutCells.instanceMatrix.needsUpdate = true;
+    aboutSquareRoot.add(aboutCells);
+    aboutCellRecordsRef.current = records;
+    aboutCellMeshRef.current = aboutCells;
+    aboutCellAnimationRef.current = {
+      phase: "assembledHold",
+      phaseStartedAt: performance.now(),
+      phaseDurationMs: ABOUT_SWARM_ASSEMBLED_HOLD_MS,
+      swarmDurationMs: ABOUT_SWARM_MIN_MS,
+      active: true,
+      initialized: true,
+      lastTickMs: performance.now(),
+      distanceGateActive: false,
+    };
 
     const aboutLabel = createLabel("About", "Memory Square");
     aboutLabel.userData.aboutMemorySquareLabel = true;
@@ -7486,6 +7988,29 @@ export default function ResumeSpace3D({
       aboutMemorySquareNavIntentUntilRef.current = 0;
       setExternalCosmosLabelsHiddenForAbout(false);
       cancelAboutMemorySquareEntrySequence();
+      if (aboutCellRafRef.current !== null) {
+        cancelAnimationFrame(aboutCellRafRef.current);
+        aboutCellRafRef.current = null;
+      }
+      if (aboutCellMeshRef.current) {
+        aboutCellMeshRef.current.geometry.dispose();
+        const mat = aboutCellMeshRef.current.material;
+        if (Array.isArray(mat)) {
+          mat.forEach((m) => m.dispose());
+        } else {
+          mat.dispose();
+        }
+        aboutCellMeshRef.current = null;
+      }
+      aboutCellSlotsRef.current = [];
+      aboutCellRecordsRef.current = [];
+      aboutCellAnimationRef.current.active = false;
+      aboutCellAnimationRef.current.initialized = false;
+      aboutSwarmManualTriggerRef.current = false;
+      aboutSwarmManualReformRef.current = false;
+      aboutTileCoreMatsRef.current = [];
+      aboutTileGridLineMatsRef.current = [];
+      aboutTileEdgeLineMatsRef.current = [];
       skillsLatticeWorldAnchorRef.current = null;
       projectShowcaseNebulaRootRef.current = null;
       skillsLatticeRootRef.current = null;
@@ -8274,6 +8799,76 @@ export default function ResumeSpace3D({
               }}
             >
               Hint: Shift click to pan, mouse wheel zoom in/out, click nodes to inspect
+            </div>
+          )}
+
+          {aboutSwarmTriggerVisible && (
+            <div
+              style={{
+                position: "fixed",
+                left: "50%",
+                bottom: 22,
+                transform: "translateX(-50%)",
+                zIndex: 1118,
+                pointerEvents: "none",
+                display: "flex",
+                gap: 10,
+              }}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  triggerAboutSwarmBreakApart();
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{
+                  pointerEvents: "auto",
+                  padding: "9px 16px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(150, 215, 255, 0.5)",
+                  background:
+                    "linear-gradient(180deg, rgba(16, 34, 58, 0.88) 0%, rgba(8, 18, 32, 0.9) 100%)",
+                  color: "#d8eeff",
+                  fontSize: 12,
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontWeight: 700,
+                  letterSpacing: 0.8,
+                  textTransform: "uppercase",
+                  boxShadow: "0 8px 20px rgba(4, 10, 20, 0.45)",
+                  cursor: "pointer",
+                }}
+              >
+                Break Apart (Test)
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  triggerAboutSwarmReform();
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{
+                  pointerEvents: "auto",
+                  padding: "9px 16px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(160, 255, 195, 0.5)",
+                  background:
+                    "linear-gradient(180deg, rgba(14, 50, 32, 0.88) 0%, rgba(8, 24, 16, 0.9) 100%)",
+                  color: "#dafce9",
+                  fontSize: 12,
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontWeight: 700,
+                  letterSpacing: 0.8,
+                  textTransform: "uppercase",
+                  boxShadow: "0 8px 20px rgba(4, 14, 10, 0.45)",
+                  cursor: "pointer",
+                }}
+              >
+                Reform Now (Test)
+              </button>
             </div>
           )}
 
