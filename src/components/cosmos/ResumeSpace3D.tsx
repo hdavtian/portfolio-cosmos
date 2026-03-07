@@ -636,6 +636,20 @@ export default function ResumeSpace3D({
   const aboutImageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const aboutSlidePreparedIndexRef = useRef(-1);
   const aboutSlideReadyRef = useRef(false);
+  const aboutSlidePreparePendingRef = useRef(false);
+  const aboutDebugStateRef = useRef<{
+    lastLogMs: number;
+    lastCanShow: boolean | null;
+    lastPhase: AboutSwarmPhase | null;
+    lastPrepared: number;
+    lastReady: boolean;
+  }>({
+    lastLogMs: 0,
+    lastCanShow: null,
+    lastPhase: null,
+    lastPrepared: -1,
+    lastReady: false,
+  });
   const skillsSDPatrolStateRef = useRef<{ angle: number }>({ angle: Math.PI * 0.25 });
   const skillsSDLockActiveRef = useRef(false);
   const projectShowcaseNebulaRootRef = useRef<THREE.Object3D | null>(null);
@@ -2468,12 +2482,18 @@ export default function ResumeSpace3D({
         seq.active = false;
         seq.raf = null;
         vlog("👨‍🚀 About memory square entered");
+        shipLog(
+          `ABOUTDBG arrival phase=${aboutCellAnimationRef.current.phase} prepared=${aboutSlidePreparedIndexRef.current + 1} ready=${aboutSlideReadyRef.current ? 1 : 0} mats=${aboutTileContentMatsRef.current.length} maps=${
+            aboutTileContentMatsRef.current.slice(0, 4).map((m) => (m?.map ? "1" : "0")).join("")
+          }`,
+          "nav",
+        );
         return;
       }
       seq.raf = requestAnimationFrame(tick);
     };
     seq.raf = requestAnimationFrame(tick);
-  }, [setExternalCosmosLabelsHiddenForAbout, vlog]);
+  }, [setExternalCosmosLabelsHiddenForAbout, shipLog, vlog]);
 
   const getProjectShowcaseStopRunForIndex = useCallback((index: number) => {
     const panels = projectShowcasePanelsRef.current;
@@ -3088,6 +3108,15 @@ export default function ResumeSpace3D({
     revealAttr.needsUpdate = true;
   }, []);
 
+  const resetAboutShardContentReveal = useCallback(() => {
+    const revealAttr = aboutCellRevealAttrRef.current;
+    if (!revealAttr) return;
+    for (let i = 0; i < revealAttr.count; i += 1) {
+      revealAttr.setX(i, 0);
+    }
+    revealAttr.needsUpdate = true;
+  }, []);
+
   const triggerAboutSwarmBreakApart = useCallback(() => {
     const run = async () => {
       if (
@@ -3189,6 +3218,38 @@ export default function ResumeSpace3D({
       return canvas;
     });
 
+    const applyCanvasesToSlideTextures = (inputCanvases: HTMLCanvasElement[]) => {
+      const contentMats = aboutTileContentMatsRef.current;
+      const shaderMat = aboutCellShaderMaterialRef.current;
+      const prevTextures = aboutSlideTexturesRef.current;
+      const nextTextures: Array<THREE.Texture | null> = [null, null, null, null];
+      for (let i = 0; i < Math.min(4, contentMats.length); i += 1) {
+        const mat = contentMats[i];
+        if (!mat) continue;
+        const tex = new THREE.CanvasTexture(inputCanvases[i]);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.needsUpdate = true;
+        nextTextures[i] = tex;
+        mat.map = tex;
+        mat.opacity = 0;
+        mat.needsUpdate = true;
+      }
+      if (shaderMat) {
+        shaderMat.uniforms.uTile0.value = nextTextures[0];
+        shaderMat.uniforms.uTile1.value = nextTextures[1];
+        shaderMat.uniforms.uTile2.value = nextTextures[2];
+        shaderMat.uniforms.uTile3.value = nextTextures[3];
+        shaderMat.uniformsNeedUpdate = true;
+      }
+      prevTextures.forEach((tex) => tex?.dispose());
+      aboutSlideTexturesRef.current = nextTextures;
+    };
+
+    // 1) Apply immediate placeholders/text so slides are visible on load.
+    applyCanvasesToSlideTextures(canvases);
+
     await Promise.all(blocks.map(async (block, idx) => {
       if (block.type !== "image" || !block.src) return;
       const canvas = canvases[idx];
@@ -3212,13 +3273,20 @@ export default function ResumeSpace3D({
       const dx = (canvasSize - dw) * 0.5;
       const dy = (canvasSize - dh) * 0.5;
       ctx.clearRect(0, 0, canvasSize, canvasSize);
-      ctx.drawImage(img, dx, dy, dw, dh);
+      try {
+        ctx.drawImage(img, dx, dy, dw, dh);
+      } catch {
+        // Keep fallback gradient/title when image decode fails.
+      }
       ctx.fillStyle = "rgba(8,18,32,0.18)";
       ctx.fillRect(0, 0, canvasSize, canvasSize);
       ctx.fillStyle = "#f4fbff";
       ctx.font = "700 30px Arial";
       ctx.fillText(block.title ?? "Image", 20, canvasSize - 28, canvasSize - 40);
     }));
+
+    // 2) Re-apply with loaded image content once available.
+    applyCanvasesToSlideTextures(canvases);
 
     const images = canvases.map((canvas) => canvas.getContext("2d")!.getImageData(0, 0, canvasSize, canvasSize).data);
     const targetColors = aboutCellTargetColorsRef.current;
@@ -3230,32 +3298,6 @@ export default function ResumeSpace3D({
     const cellReveal = Math.max(900, slide.reveal?.cellRevealMs ?? 1700);
     aboutTileContentRevealStartMsRef.current = performance.now();
     aboutTileContentRevealBlockStaggerMsRef.current = blockStagger;
-    const contentMats = aboutTileContentMatsRef.current;
-    const shaderMat = aboutCellShaderMaterialRef.current;
-    const prevTextures = aboutSlideTexturesRef.current;
-    const nextTextures: Array<THREE.Texture | null> = [null, null, null, null];
-    for (let i = 0; i < Math.min(4, contentMats.length); i += 1) {
-      const mat = contentMats[i];
-      if (!mat) continue;
-      const tex = new THREE.CanvasTexture(canvases[i]);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.wrapS = THREE.ClampToEdgeWrapping;
-      tex.wrapT = THREE.ClampToEdgeWrapping;
-      tex.needsUpdate = true;
-      nextTextures[i] = tex;
-      mat.map = tex;
-      mat.opacity = 0;
-      mat.needsUpdate = true;
-    }
-    if (shaderMat) {
-      shaderMat.uniforms.uTile0.value = nextTextures[0];
-      shaderMat.uniforms.uTile1.value = nextTextures[1];
-      shaderMat.uniforms.uTile2.value = nextTextures[2];
-      shaderMat.uniforms.uTile3.value = nextTextures[3];
-      shaderMat.uniformsNeedUpdate = true;
-    }
-    prevTextures.forEach((tex) => tex?.dispose());
-    aboutSlideTexturesRef.current = nextTextures;
     const slots = aboutCellSlotsRef.current;
     const baseColors = aboutCellBaseColorsRef.current;
     slots.forEach((slot, slotIdx) => {
@@ -3296,6 +3338,36 @@ export default function ResumeSpace3D({
     });
   }
 
+  const ensureAboutSlidePrepared = useCallback(() => {
+    if (aboutSlides.length === 0) return;
+    if (aboutSlidePreparePendingRef.current) return;
+    if (aboutTileContentMatsRef.current.length < 4) return;
+    const hasAllMaps = aboutTileContentMatsRef.current.slice(0, 4).every((m) => !!m?.map);
+    const needsPrepare =
+      aboutSlidePreparedIndexRef.current !== aboutActiveSlideIndex
+      || !aboutSlideReadyRef.current
+      || !hasAllMaps;
+    if (!needsPrepare) return;
+    shipLog(
+      `ABOUTDBG prepare:start slide=${aboutActiveSlideIndex + 1} mats=${aboutTileContentMatsRef.current.length} maps=${hasAllMaps ? "yes" : "no"}`,
+      "nav",
+    );
+    aboutSlidePreparePendingRef.current = true;
+    aboutSlideReadyRef.current = false;
+    void prepareAboutSlide(aboutActiveSlideIndex).then(() => {
+      aboutSlidePreparedIndexRef.current = aboutActiveSlideIndex;
+      aboutSlideReadyRef.current = true;
+      shipLog(
+        `ABOUTDBG prepare:done slide=${aboutActiveSlideIndex + 1} maps=${
+          aboutTileContentMatsRef.current.slice(0, 4).map((m) => (m?.map ? "1" : "0")).join("")
+        }`,
+        "nav",
+      );
+    }).finally(() => {
+      aboutSlidePreparePendingRef.current = false;
+    });
+  }, [aboutSlides.length, aboutActiveSlideIndex, shipLog]);
+
   useEffect(() => {
     if (!sceneReady) {
       setAboutSwarmTriggerVisible(false);
@@ -3324,36 +3396,33 @@ export default function ResumeSpace3D({
     }
     aboutSlideStartedAtRef.current = performance.now();
     aboutSlideAdvanceAfterReformRef.current = false;
-    aboutSlidePreparedIndexRef.current = aboutActiveSlideIndex;
-    aboutSlideReadyRef.current = false;
-    // Force a visible reveal transition on each slide switch.
-    const revealAttr = aboutCellRevealAttrRef.current;
-    if (revealAttr) {
-      const frontSet = new Set(aboutFrontSlotIndicesRef.current);
-      for (let i = 0; i < revealAttr.count; i += 1) {
-        revealAttr.setX(i, frontSet.has(i) ? 0 : 1);
-      }
-      revealAttr.needsUpdate = true;
-    }
-    void prepareAboutSlide(aboutActiveSlideIndex).then(() => {
-      aboutSlideReadyRef.current = true;
-    });
-  }, [sceneReady, aboutActiveSlideIndex, aboutSlides]);
+    // Keep shard texture hidden in assembled mode; planes own the static slide display.
+    resetAboutShardContentReveal();
+    ensureAboutSlidePrepared();
+  }, [
+    sceneReady,
+    aboutActiveSlideIndex,
+    aboutSlides,
+    resetAboutShardContentReveal,
+    ensureAboutSlidePrepared,
+  ]);
 
   useEffect(() => {
     if (!sceneReady || aboutSlides.length === 0) return;
-    if (
-      aboutSlidePreparedIndexRef.current === aboutActiveSlideIndex
-      && aboutSlideReadyRef.current
-    ) {
-      return;
-    }
-    aboutSlideReadyRef.current = false;
-    void prepareAboutSlide(aboutActiveSlideIndex).then(() => {
-      aboutSlidePreparedIndexRef.current = aboutActiveSlideIndex;
-      aboutSlideReadyRef.current = true;
-    });
-  }, [sceneReady, aboutSlides.length, aboutActiveSlideIndex]);
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (
+        aboutSlidePreparedIndexRef.current !== aboutActiveSlideIndex
+        || !aboutSlideReadyRef.current
+        || !aboutTileContentMatsRef.current.slice(0, 4).every((m) => !!m?.map)
+      ) {
+        ensureAboutSlidePrepared();
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [sceneReady, aboutSlides.length, aboutActiveSlideIndex, ensureAboutSlidePrepared]);
 
   useEffect(() => {
     if (!sceneReady) return;
@@ -3481,10 +3550,10 @@ export default function ResumeSpace3D({
       const phaseElapsed = now - runtime.phaseStartedAt;
       const phaseT = THREE.MathUtils.clamp(phaseElapsed / Math.max(1, runtime.phaseDurationMs), 0, 1);
       updateGridLineVisibility(runtime.phase);
+      // In assembled mode, content planes own the visible slide;
+      // hide instanced shards so they do not occlude the planes.
+      mesh.visible = runtime.phase !== "assembledHold";
       const slideCount = Math.max(0, aboutSlides.length);
-      const slideElapsed = now - aboutSlideStartedAtRef.current;
-      const cellRevealRampMs = 420;
-      let touchedColors = false;
 
       const applyRecordMatrix = (idx: number, rec: AboutCellRecord, pulse = 1) => {
         const slot = slots[rec.targetSlotIndex] ?? slots[idx];
@@ -3507,6 +3576,9 @@ export default function ResumeSpace3D({
       if (runtime.distanceGateActive) {
         // Keep slide planes visible at long range; skip heavy shard motion work.
         const canShowSlidePlanes = aboutTileContentMatsRef.current.some((mat) => !!mat?.map);
+        if (!canShowSlidePlanes) {
+          ensureAboutSlidePrepared();
+        }
         let distanceAlpha = 1;
         if (camera && anchor) {
           const d = camera.position.distanceTo(anchor);
@@ -3516,6 +3588,26 @@ export default function ResumeSpace3D({
           if (!mat) return;
           mat.opacity = canShowSlidePlanes ? distanceAlpha : 0;
         });
+        const dbg = aboutDebugStateRef.current;
+        const nowMs = performance.now();
+        const prepChanged =
+          dbg.lastPrepared !== aboutSlidePreparedIndexRef.current
+          || dbg.lastReady !== aboutSlideReadyRef.current;
+        const phaseChanged = dbg.lastPhase !== runtime.phase;
+        const canShowChanged = dbg.lastCanShow !== canShowSlidePlanes;
+        if ((prepChanged || phaseChanged || canShowChanged) && nowMs - dbg.lastLogMs > 600) {
+          dbg.lastLogMs = nowMs;
+          dbg.lastPhase = runtime.phase;
+          dbg.lastCanShow = canShowSlidePlanes;
+          dbg.lastPrepared = aboutSlidePreparedIndexRef.current;
+          dbg.lastReady = aboutSlideReadyRef.current;
+          shipLog(
+            `ABOUTDBG far phase=${runtime.phase} canShow=${canShowSlidePlanes ? 1 : 0} alpha=${distanceAlpha.toFixed(2)} prepared=${aboutSlidePreparedIndexRef.current + 1} ready=${aboutSlideReadyRef.current ? 1 : 0} maps=${
+              aboutTileContentMatsRef.current.slice(0, 4).map((m) => (m?.map ? "1" : "0")).join("")
+            }`,
+            "nav",
+          );
+        }
         return;
       }
 
@@ -3608,6 +3700,7 @@ export default function ResumeSpace3D({
           records.forEach((rec) => {
             rec.sourceSlotIndex = rec.targetSlotIndex;
           });
+          resetAboutShardContentReveal();
           if (aboutSlideAdvanceAfterReformRef.current && slideCount > 0) {
             aboutSlideAdvanceAfterReformRef.current = false;
             const nextIndex = (aboutActiveSlideIndex + 1) % slideCount;
@@ -3639,21 +3732,28 @@ export default function ResumeSpace3D({
           }
           mat.opacity = distanceAlpha;
         });
-        const frontSlots = aboutFrontSlotIndicesRef.current;
-        const revealAt = aboutCellRevealAtMsRef.current;
-        const revealAttr = aboutCellRevealAttrRef.current;
-        if (revealAttr) {
-          frontSlots.forEach((idx) => {
-            const revealProgress = THREE.MathUtils.clamp(
-              (slideElapsed - (revealAt[idx] ?? 0)) / cellRevealRampMs,
-              0,
-              1,
-            );
-            revealAttr.setX(idx, revealProgress);
-            touchedColors = true;
-          });
-          revealAttr.needsUpdate = true;
+        const dbg = aboutDebugStateRef.current;
+        const nowMs = performance.now();
+        const prepChanged =
+          dbg.lastPrepared !== aboutSlidePreparedIndexRef.current
+          || dbg.lastReady !== aboutSlideReadyRef.current;
+        const phaseChanged = dbg.lastPhase !== runtime.phase;
+        const canShowChanged = dbg.lastCanShow !== canShowSlidePlanes;
+        if ((prepChanged || phaseChanged || canShowChanged) && nowMs - dbg.lastLogMs > 600) {
+          dbg.lastLogMs = nowMs;
+          dbg.lastPhase = runtime.phase;
+          dbg.lastCanShow = canShowSlidePlanes;
+          dbg.lastPrepared = aboutSlidePreparedIndexRef.current;
+          dbg.lastReady = aboutSlideReadyRef.current;
+          shipLog(
+            `ABOUTDBG near phase=${runtime.phase} canShow=${canShowSlidePlanes ? 1 : 0} alpha=${distanceAlpha.toFixed(2)} prepared=${aboutSlidePreparedIndexRef.current + 1} ready=${aboutSlideReadyRef.current ? 1 : 0} maps=${
+              aboutTileContentMatsRef.current.slice(0, 4).map((m) => (m?.map ? "1" : "0")).join("")
+            }`,
+            "nav",
+          );
         }
+        // Static assembled display is driven by content planes; shard texture reveal
+        // is enabled only during explode/reform for stamped-fragment effect.
       } else {
         // Hide planes immediately on explode/reform to avoid silhouette linger.
         aboutTileContentMatsRef.current.forEach((mat) => {
@@ -3661,9 +3761,6 @@ export default function ResumeSpace3D({
         });
       }
       mesh.instanceMatrix.needsUpdate = true;
-      if (touchedColors && aboutCellRevealAttrRef.current) {
-        aboutCellRevealAttrRef.current.needsUpdate = true;
-      }
     };
 
     aboutCellRafRef.current = requestAnimationFrame(tick);
@@ -3673,7 +3770,13 @@ export default function ResumeSpace3D({
       }
       aboutCellRafRef.current = null;
     };
-  }, [sceneReady, aboutSlides, aboutActiveSlideIndex]);
+  }, [
+    sceneReady,
+    aboutSlides,
+    aboutActiveSlideIndex,
+    resetAboutShardContentReveal,
+    ensureAboutSlidePrepared,
+  ]);
 
   useEffect(() => {
     if (!sceneReady) return;
@@ -8546,6 +8649,7 @@ export default function ResumeSpace3D({
       aboutSlideAdvanceAfterReformRef.current = false;
       aboutSlidePreparedIndexRef.current = -1;
       aboutSlideReadyRef.current = false;
+      aboutSlidePreparePendingRef.current = false;
       aboutTileContentFadeStartMsRef.current = 0;
       aboutTileCoreMatsRef.current = [];
       aboutTileGridLineMatsRef.current = [];
