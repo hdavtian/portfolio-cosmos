@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#11243d"/>
+      <stop offset="100%" stop-color="#2f6ca5"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1200" fill="url(#g1)"/>
+  <circle cx="300" cy="280" r="180" fill="#6fb9ff" fill-opacity="0.22"/>
+  <circle cx="860" cy="760" r="260" fill="#4da3ff" fill-opacity="0.18"/>
+  <rect x="220" y="580" width="760" height="32" fill="#c4e7ff" fill-opacity="0.45"/>
+  <rect x="220" y="640" width="610" height="22" fill="#c4e7ff" fill-opacity="0.35"/>
+  <text x="220" y="520" fill="#e7f4ff" font-size="66" font-family="Arial, sans-serif" font-weight="700">ABOUT PLACEHOLDER 01</text>
+</svg>

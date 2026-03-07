@@ -1,0 +1,102 @@
+{
+  "aboutDeck": {
+    "slides": [
+      {
+        "id": "foundation",
+        "holdMs": 9000,
+        "explodeAfter": false,
+        "reveal": {
+          "pattern": "scanline",
+          "blockStaggerMs": 380,
+          "cellRevealMs": 1700
+        },
+        "blocks": [
+          {
+            "type": "text",
+            "title": "Who I Am",
+            "body": "Lead full stack engineer focused on clean architecture and dependable delivery."
+          },
+          {
+            "type": "image",
+            "title": "Build Mindset",
+            "src": "/images/about/img1.jpg"
+          },
+          {
+            "type": "text",
+            "title": "How I Work",
+            "body": "I turn ambiguity into execution plans teams can ship with confidence."
+          },
+          {
+            "type": "image",
+            "title": "Team Focus",
+            "src": "/images/about/img2.jpg"
+          }
+        ]
+      },
+      {
+        "id": "impact",
+        "holdMs": 10000,
+        "explodeAfter": true,
+        "reveal": {
+          "pattern": "center-out",
+          "blockStaggerMs": 420,
+          "cellRevealMs": 1900
+        },
+        "blocks": [
+          {
+            "type": "image",
+            "title": "Platform Thinking",
+            "src": "/images/about/img3.jpg"
+          },
+          {
+            "type": "text",
+            "title": "Execution",
+            "body": "From APIs to interfaces, I optimize for maintainability, speed, and outcomes."
+          },
+          {
+            "type": "image",
+            "title": "Reliability",
+            "src": "/images/about/img4.jpg"
+          },
+          {
+            "type": "text",
+            "title": "Leadership",
+            "body": "I mentor engineers through architecture, debugging, and long-term ownership."
+          }
+        ]
+      },
+      {
+        "id": "vision",
+        "holdMs": 9000,
+        "explodeAfter": false,
+        "reveal": {
+          "pattern": "spiral",
+          "blockStaggerMs": 360,
+          "cellRevealMs": 1800
+        },
+        "blocks": [
+          {
+            "type": "text",
+            "title": "North Star",
+            "body": "Build software people trust, and teams are proud to maintain."
+          },
+          {
+            "type": "image",
+            "title": "Systems View",
+            "src": "/images/about/img5.jpg"
+          },
+          {
+            "type": "text",
+            "title": "Principles",
+            "body": "Clarity before cleverness. Observability from day one. Users at the center."
+          },
+          {
+            "type": "image",
+            "title": "Craft",
+            "src": "/images/about/img2.jpg"
+          }
+        ]
+      }
+    ]
+  }
+}

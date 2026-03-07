@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
 import legacyWebsites from "../../data/legacyWebsites.json";
+import aboutDeck from "../../data/aboutDeck.json";
 import CosmosLoader from "../CosmosLoader";
 import {
   DEFAULT_CONTROL_SENSITIVITY,
@@ -232,11 +233,44 @@ type SkillsLatticeFlowMeta = {
 
 type AboutSwarmPhase = "assembledHold" | "breakOut" | "swarm" | "reform" | "settle";
 
+type AboutDeckBlock = {
+  type: "text" | "image";
+  title: string;
+  body?: string;
+  src?: string;
+};
+
+type AboutDeckSlide = {
+  id: string;
+  holdMs?: number;
+  explodeAfter?: boolean;
+  reveal?: {
+    pattern?: "scanline" | "center-out" | "spiral" | "noise-cluster";
+    blockStaggerMs?: number;
+    cellRevealMs?: number;
+  };
+  blocks: AboutDeckBlock[];
+};
+
+type AboutDeckData = {
+  aboutDeck: {
+    slides: AboutDeckSlide[];
+  };
+};
+
 type AboutCellSlot = {
   worldPosition: THREE.Vector3;
   worldQuaternion: THREE.Quaternion;
   scale: THREE.Vector3;
   tileIndex: number;
+  face: "front" | "back" | "rim";
+  u: number;
+  v: number;
+  u0: number;
+  v0: number;
+  u1: number;
+  v1: number;
+  contentStrength: number;
 };
 
 type AboutCellRecord = {
@@ -295,6 +329,8 @@ export default function ResumeSpace3D({
   options,
   onOptionsChange,
 }: ResumeSpace3DProps) {
+  const aboutDeckData = aboutDeck as AboutDeckData;
+  const aboutSlides = aboutDeckData.aboutDeck.slides;
   // EXPORT SURFACE
   // Props: options, onOptionsChange
   // Emits: onOptionsChange (options sync)
@@ -576,13 +612,30 @@ export default function ResumeSpace3D({
     distanceGateActive: false,
   });
   const aboutCellMeshRef = useRef<THREE.InstancedMesh | null>(null);
+  const aboutCellShaderMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
+  const aboutCellRevealAttrRef = useRef<THREE.InstancedBufferAttribute | null>(null);
+  const aboutSlideTexturesRef = useRef<Array<THREE.Texture | null>>([null, null, null, null]);
   const aboutCellRafRef = useRef<number | null>(null);
   const aboutSwarmManualTriggerRef = useRef(false);
   const aboutSwarmManualReformRef = useRef(false);
   const aboutTileCoreMatsRef = useRef<THREE.MeshPhongMaterial[]>([]);
   const aboutTileEdgeLineMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
   const aboutTileGridLineMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
+  const aboutTileContentMatsRef = useRef<THREE.MeshBasicMaterial[]>([]);
+  const aboutTileContentRevealStartMsRef = useRef(0);
+  const aboutTileContentRevealBlockStaggerMsRef = useRef(360);
+  const aboutTileContentFadeStartMsRef = useRef(0);
   const [aboutSwarmTriggerVisible, setAboutSwarmTriggerVisible] = useState(false);
+  const [aboutActiveSlideIndex, setAboutActiveSlideIndex] = useState(0);
+  const aboutFrontSlotIndicesRef = useRef<number[]>([]);
+  const aboutCellBaseColorsRef = useRef<THREE.Color[]>([]);
+  const aboutCellTargetColorsRef = useRef<THREE.Color[]>([]);
+  const aboutCellRevealAtMsRef = useRef<number[]>([]);
+  const aboutSlideStartedAtRef = useRef(0);
+  const aboutSlideAdvanceAfterReformRef = useRef(false);
+  const aboutImageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const aboutSlidePreparedIndexRef = useRef(-1);
+  const aboutSlideReadyRef = useRef(false);
   const skillsSDPatrolStateRef = useRef<{ angle: number }>({ angle: Math.PI * 0.25 });
   const skillsSDLockActiveRef = useRef(false);
   const projectShowcaseNebulaRootRef = useRef<THREE.Object3D | null>(null);
@@ -3018,19 +3071,50 @@ export default function ResumeSpace3D({
     }
   }, [currentNavigationTarget]);
 
-  const triggerAboutSwarmBreakApart = useCallback(() => {
-    aboutSwarmManualTriggerRef.current = true;
-    const runtime = aboutCellAnimationRef.current;
-    runtime.active = true;
-    if (!runtime.initialized) {
-      runtime.initialized = true;
-      runtime.phase = "assembledHold";
-      runtime.phaseStartedAt = performance.now();
-      runtime.phaseDurationMs = 0;
-      runtime.lastTickMs = performance.now();
+  const goToAboutSlide = useCallback((direction: -1 | 1) => {
+    if (aboutSlides.length === 0) return;
+    setAboutActiveSlideIndex((prev) => {
+      const total = aboutSlides.length;
+      return (prev + direction + total) % total;
+    });
+  }, [aboutSlides.length]);
+
+  const stampAboutContentIntoCells = useCallback(() => {
+    const revealAttr = aboutCellRevealAttrRef.current;
+    if (!revealAttr) return;
+    for (let i = 0; i < revealAttr.count; i += 1) {
+      revealAttr.setX(i, 1);
     }
-    vlog("🧩 About swarm: manual break-apart trigger");
-  }, [vlog]);
+    revealAttr.needsUpdate = true;
+  }, []);
+
+  const triggerAboutSwarmBreakApart = useCallback(() => {
+    const run = async () => {
+      if (
+        aboutSlidePreparedIndexRef.current !== aboutActiveSlideIndex
+        || !aboutSlideReadyRef.current
+      ) {
+        aboutSlideReadyRef.current = false;
+        await prepareAboutSlide(aboutActiveSlideIndex);
+        aboutSlidePreparedIndexRef.current = aboutActiveSlideIndex;
+        aboutSlideReadyRef.current = true;
+      }
+      stampAboutContentIntoCells();
+      aboutTileContentFadeStartMsRef.current = performance.now();
+      aboutSwarmManualTriggerRef.current = true;
+      const runtime = aboutCellAnimationRef.current;
+      runtime.active = true;
+      if (!runtime.initialized) {
+        runtime.initialized = true;
+        runtime.phase = "assembledHold";
+        runtime.phaseStartedAt = performance.now();
+        runtime.phaseDurationMs = 0;
+        runtime.lastTickMs = performance.now();
+      }
+      vlog("🧩 About swarm: manual break-apart trigger");
+    };
+    void run();
+  }, [vlog, stampAboutContentIntoCells, aboutActiveSlideIndex]);
 
   const triggerAboutSwarmReform = useCallback(() => {
     aboutSwarmManualReformRef.current = true;
@@ -3045,6 +3129,172 @@ export default function ResumeSpace3D({
     }
     vlog("🧩 About swarm: manual reform trigger");
   }, [vlog]);
+
+  async function prepareAboutSlide(slideIndex: number) {
+    if (!aboutSlides.length) return;
+    const slide = aboutSlides[((slideIndex % aboutSlides.length) + aboutSlides.length) % aboutSlides.length];
+    const blocks = Array.from({ length: 4 }, (_, i) => slide.blocks[i] ?? {
+      type: "text" as const,
+      title: "Placeholder",
+      body: "Content incoming.",
+    });
+    const canvasSize = 384;
+    const canvases = blocks.map((block, idx) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvasSize;
+      canvas.height = canvasSize;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return canvas;
+      const blockPalette = [
+        ["#12355a", "#1d6fa8"],
+        ["#1a2a54", "#4f58a8"],
+        ["#2b3554", "#7c4a9a"],
+        ["#1c3c3e", "#2f8f7d"],
+      ];
+      const [bgA, bgB] = blockPalette[idx % blockPalette.length];
+      const grad = ctx.createLinearGradient(0, 0, canvasSize, canvasSize);
+      grad.addColorStop(0, bgA);
+      grad.addColorStop(1, bgB);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+      if (block.type === "image" && block.src) {
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(0, 0, canvasSize, canvasSize);
+      } else {
+        ctx.fillStyle = "#eff7ff";
+        ctx.font = "700 36px Arial";
+        ctx.fillText(block.title ?? "About", 26, 72, canvasSize - 52);
+        ctx.fillStyle = "rgba(235,246,255,0.98)";
+        ctx.font = "600 24px Arial";
+        const lines = (block.body ?? "").split(" ");
+        let line = "";
+        let y = 128;
+        lines.forEach((word) => {
+          const probe = line ? `${line} ${word}` : word;
+          const width = ctx.measureText(probe).width;
+          if (width > canvasSize - 52 && line) {
+            ctx.fillText(line, 26, y);
+            y += 30;
+            line = word;
+          } else {
+            line = probe;
+          }
+        });
+        if (line) ctx.fillText(line, 26, y);
+      }
+      ctx.fillStyle = "rgba(255,255,255,0.86)";
+      ctx.font = "700 26px Arial";
+      ctx.fillText(`S${slideIndex + 1} • B${idx + 1}`, 24, canvasSize - 26);
+      return canvas;
+    });
+
+    await Promise.all(blocks.map(async (block, idx) => {
+      if (block.type !== "image" || !block.src) return;
+      const canvas = canvases[idx];
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      let img = aboutImageCacheRef.current.get(block.src);
+      if (!img) {
+        img = new Image();
+        img.src = block.src;
+        await new Promise<void>((resolve) => {
+          img!.onload = () => resolve();
+          img!.onerror = () => resolve();
+        });
+        aboutImageCacheRef.current.set(block.src, img);
+      }
+      const iw = Math.max(1, img.naturalWidth || canvasSize);
+      const ih = Math.max(1, img.naturalHeight || canvasSize);
+      const scale = Math.max(canvasSize / iw, canvasSize / ih);
+      const dw = iw * scale;
+      const dh = ih * scale;
+      const dx = (canvasSize - dw) * 0.5;
+      const dy = (canvasSize - dh) * 0.5;
+      ctx.clearRect(0, 0, canvasSize, canvasSize);
+      ctx.drawImage(img, dx, dy, dw, dh);
+      ctx.fillStyle = "rgba(8,18,32,0.18)";
+      ctx.fillRect(0, 0, canvasSize, canvasSize);
+      ctx.fillStyle = "#f4fbff";
+      ctx.font = "700 30px Arial";
+      ctx.fillText(block.title ?? "Image", 20, canvasSize - 28, canvasSize - 40);
+    }));
+
+    const images = canvases.map((canvas) => canvas.getContext("2d")!.getImageData(0, 0, canvasSize, canvasSize).data);
+    const targetColors = aboutCellTargetColorsRef.current;
+    const revealAt = aboutCellRevealAtMsRef.current;
+    const cellOrderNoise = (u: number, v: number) =>
+      Math.abs(Math.sin((u * 12.9898 + v * 78.233 + slideIndex * 17.77) * 43758.5453)) % 1;
+    const pattern = slide.reveal?.pattern ?? "scanline";
+    const blockStagger = Math.max(120, slide.reveal?.blockStaggerMs ?? 360);
+    const cellReveal = Math.max(900, slide.reveal?.cellRevealMs ?? 1700);
+    aboutTileContentRevealStartMsRef.current = performance.now();
+    aboutTileContentRevealBlockStaggerMsRef.current = blockStagger;
+    const contentMats = aboutTileContentMatsRef.current;
+    const shaderMat = aboutCellShaderMaterialRef.current;
+    const prevTextures = aboutSlideTexturesRef.current;
+    const nextTextures: Array<THREE.Texture | null> = [null, null, null, null];
+    for (let i = 0; i < Math.min(4, contentMats.length); i += 1) {
+      const mat = contentMats[i];
+      if (!mat) continue;
+      const tex = new THREE.CanvasTexture(canvases[i]);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.needsUpdate = true;
+      nextTextures[i] = tex;
+      mat.map = tex;
+      mat.opacity = 0;
+      mat.needsUpdate = true;
+    }
+    if (shaderMat) {
+      shaderMat.uniforms.uTile0.value = nextTextures[0];
+      shaderMat.uniforms.uTile1.value = nextTextures[1];
+      shaderMat.uniforms.uTile2.value = nextTextures[2];
+      shaderMat.uniforms.uTile3.value = nextTextures[3];
+      shaderMat.uniformsNeedUpdate = true;
+    }
+    prevTextures.forEach((tex) => tex?.dispose());
+    aboutSlideTexturesRef.current = nextTextures;
+    const slots = aboutCellSlotsRef.current;
+    const baseColors = aboutCellBaseColorsRef.current;
+    slots.forEach((slot, slotIdx) => {
+      const blockIdx = THREE.MathUtils.clamp(slot.tileIndex, 0, 3);
+      const px = THREE.MathUtils.clamp(Math.floor(slot.u * (canvasSize - 1)), 0, canvasSize - 1);
+      const py = THREE.MathUtils.clamp(Math.floor((1 - slot.v) * (canvasSize - 1)), 0, canvasSize - 1);
+      const p = (py * canvasSize + px) * 4;
+      const data = images[blockIdx];
+      const r = data[p] / 255;
+      const g = data[p + 1] / 255;
+      const b = data[p + 2] / 255;
+      const target = targetColors[slotIdx] ?? new THREE.Color();
+      target.setRGB(
+        THREE.MathUtils.clamp(r * (slot.face === "front" ? 1.18 : 0.88), 0, 1),
+        THREE.MathUtils.clamp(g * (slot.face === "front" ? 1.18 : 0.88), 0, 1),
+        THREE.MathUtils.clamp(b * (slot.face === "front" ? 1.18 : 0.88), 0, 1),
+      );
+      targetColors[slotIdx] = target;
+
+      let localOrder = slot.u;
+      if (pattern === "center-out") {
+        const dx = slot.u - 0.5;
+        const dy = slot.v - 0.5;
+        localOrder = THREE.MathUtils.clamp(Math.sqrt(dx * dx + dy * dy) / 0.7072, 0, 1);
+      } else if (pattern === "spiral") {
+        const dx = slot.u - 0.5;
+        const dy = slot.v - 0.5;
+        const angle = (Math.atan2(dy, dx) + Math.PI) / (Math.PI * 2);
+        const radius = THREE.MathUtils.clamp(Math.sqrt(dx * dx + dy * dy) / 0.7072, 0, 1);
+        localOrder = (angle * 0.5 + radius * 0.5) % 1;
+      } else if (pattern === "noise-cluster") {
+        localOrder = cellOrderNoise(slot.u, slot.v);
+      }
+      revealAt[slotIdx] = slot.face === "front"
+        ? blockIdx * blockStagger + localOrder * cellReveal
+        : 0;
+      if (!baseColors[slotIdx]) baseColors[slotIdx] = new THREE.Color(0x8cbcff);
+    });
+  }
 
   useEffect(() => {
     if (!sceneReady) {
@@ -3067,6 +3317,43 @@ export default function ResumeSpace3D({
       setAboutSwarmTriggerVisible(false);
     };
   }, [sceneReady]);
+
+  useEffect(() => {
+    if (!sceneReady || aboutSlides.length === 0) {
+      return;
+    }
+    aboutSlideStartedAtRef.current = performance.now();
+    aboutSlideAdvanceAfterReformRef.current = false;
+    aboutSlidePreparedIndexRef.current = aboutActiveSlideIndex;
+    aboutSlideReadyRef.current = false;
+    // Force a visible reveal transition on each slide switch.
+    const revealAttr = aboutCellRevealAttrRef.current;
+    if (revealAttr) {
+      const frontSet = new Set(aboutFrontSlotIndicesRef.current);
+      for (let i = 0; i < revealAttr.count; i += 1) {
+        revealAttr.setX(i, frontSet.has(i) ? 0 : 1);
+      }
+      revealAttr.needsUpdate = true;
+    }
+    void prepareAboutSlide(aboutActiveSlideIndex).then(() => {
+      aboutSlideReadyRef.current = true;
+    });
+  }, [sceneReady, aboutActiveSlideIndex, aboutSlides]);
+
+  useEffect(() => {
+    if (!sceneReady || aboutSlides.length === 0) return;
+    if (
+      aboutSlidePreparedIndexRef.current === aboutActiveSlideIndex
+      && aboutSlideReadyRef.current
+    ) {
+      return;
+    }
+    aboutSlideReadyRef.current = false;
+    void prepareAboutSlide(aboutActiveSlideIndex).then(() => {
+      aboutSlidePreparedIndexRef.current = aboutActiveSlideIndex;
+      aboutSlideReadyRef.current = true;
+    });
+  }, [sceneReady, aboutSlides.length, aboutActiveSlideIndex]);
 
   useEffect(() => {
     if (!sceneReady) return;
@@ -3114,7 +3401,7 @@ export default function ResumeSpace3D({
       if (phase === "settle") runtime.phaseDurationMs = ABOUT_SWARM_SETTLE_MS;
     };
 
-    const updateGridLineVisibility = (phase: AboutSwarmPhase, phaseT: number) => {
+    const updateGridLineVisibility = (phase: AboutSwarmPhase) => {
       let opacity = 0;
       let coreOpacity = 0;
       // Keep silhouette and grid hidden until reformation fully completes.
@@ -3190,13 +3477,14 @@ export default function ResumeSpace3D({
         runtime.distanceGateActive =
           camera.position.distanceTo(anchor) > ABOUT_SWARM_DISTANCE_GATE;
       }
-      if (runtime.distanceGateActive) {
-        return;
-      }
 
       const phaseElapsed = now - runtime.phaseStartedAt;
       const phaseT = THREE.MathUtils.clamp(phaseElapsed / Math.max(1, runtime.phaseDurationMs), 0, 1);
-      updateGridLineVisibility(runtime.phase, phaseT);
+      updateGridLineVisibility(runtime.phase);
+      const slideCount = Math.max(0, aboutSlides.length);
+      const slideElapsed = now - aboutSlideStartedAtRef.current;
+      const cellRevealRampMs = 420;
+      let touchedColors = false;
 
       const applyRecordMatrix = (idx: number, rec: AboutCellRecord, pulse = 1) => {
         const slot = slots[rec.targetSlotIndex] ?? slots[idx];
@@ -3216,11 +3504,23 @@ export default function ResumeSpace3D({
         return;
       }
 
-      if (runtime.phase === "assembledHold") {
-        if (phaseElapsed >= runtime.phaseDurationMs) {
-          beginBreakOut(now);
-          return;
+      if (runtime.distanceGateActive) {
+        // Keep slide planes visible at long range; skip heavy shard motion work.
+        const canShowSlidePlanes = aboutTileContentMatsRef.current.some((mat) => !!mat?.map);
+        let distanceAlpha = 1;
+        if (camera && anchor) {
+          const d = camera.position.distanceTo(anchor);
+          distanceAlpha = THREE.MathUtils.clamp(1 - (d - 7000) / 36000, 0.24, 1);
         }
+        aboutTileContentMatsRef.current.forEach((mat) => {
+          if (!mat) return;
+          mat.opacity = canShowSlidePlanes ? distanceAlpha : 0;
+        });
+        return;
+      }
+
+      if (runtime.phase === "assembledHold") {
+        // Auto random shatter disabled; About transitions are now user-driven.
       } else if (runtime.phase === "breakOut") {
         records.forEach((rec, idx) => {
           const pulse = 1 + Math.sin(now * 0.001 + rec.pulsePhase) * 0.08 * phaseT;
@@ -3308,6 +3608,11 @@ export default function ResumeSpace3D({
           records.forEach((rec) => {
             rec.sourceSlotIndex = rec.targetSlotIndex;
           });
+          if (aboutSlideAdvanceAfterReformRef.current && slideCount > 0) {
+            aboutSlideAdvanceAfterReformRef.current = false;
+            const nextIndex = (aboutActiveSlideIndex + 1) % slideCount;
+            setAboutActiveSlideIndex(nextIndex);
+          }
           setPhase("assembledHold", now);
           return;
         }
@@ -3320,8 +3625,45 @@ export default function ResumeSpace3D({
           rec.quaternion.slerp(targetSlot.worldQuaternion, 0.22);
           applyRecordMatrix(idx, rec, 1);
         });
+        const canShowSlidePlanes = aboutTileContentMatsRef.current.some((mat) => !!mat?.map);
+        let distanceAlpha = 1;
+        if (camera && anchor) {
+          const d = camera.position.distanceTo(anchor);
+          distanceAlpha = THREE.MathUtils.clamp(1 - (d - 7000) / 36000, 0.24, 1);
+        }
+        aboutTileContentMatsRef.current.forEach((mat) => {
+          if (!mat) return;
+          if (!canShowSlidePlanes) {
+            mat.opacity = 0;
+            return;
+          }
+          mat.opacity = distanceAlpha;
+        });
+        const frontSlots = aboutFrontSlotIndicesRef.current;
+        const revealAt = aboutCellRevealAtMsRef.current;
+        const revealAttr = aboutCellRevealAttrRef.current;
+        if (revealAttr) {
+          frontSlots.forEach((idx) => {
+            const revealProgress = THREE.MathUtils.clamp(
+              (slideElapsed - (revealAt[idx] ?? 0)) / cellRevealRampMs,
+              0,
+              1,
+            );
+            revealAttr.setX(idx, revealProgress);
+            touchedColors = true;
+          });
+          revealAttr.needsUpdate = true;
+        }
+      } else {
+        // Hide planes immediately on explode/reform to avoid silhouette linger.
+        aboutTileContentMatsRef.current.forEach((mat) => {
+          if (mat) mat.opacity = 0;
+        });
       }
       mesh.instanceMatrix.needsUpdate = true;
+      if (touchedColors && aboutCellRevealAttrRef.current) {
+        aboutCellRevealAttrRef.current.needsUpdate = true;
+      }
     };
 
     aboutCellRafRef.current = requestAnimationFrame(tick);
@@ -3331,7 +3673,7 @@ export default function ResumeSpace3D({
       }
       aboutCellRafRef.current = null;
     };
-  }, [sceneReady]);
+  }, [sceneReady, aboutSlides, aboutActiveSlideIndex]);
 
   useEffect(() => {
     if (!sceneReady) return;
@@ -4812,6 +5154,7 @@ export default function ResumeSpace3D({
     aboutTileCoreMatsRef.current = [];
     aboutTileGridLineMatsRef.current = [];
     aboutTileEdgeLineMatsRef.current = [];
+    aboutTileContentMatsRef.current = [];
     const aboutTileGap = aboutSquareSize / 20;
     const aboutTileSpacing = aboutSquareSize + aboutTileGap;
     const createAboutTile = (
@@ -4872,14 +5215,38 @@ export default function ResumeSpace3D({
       const rimDepthDivisions = Math.max(2, Math.round(aboutSquareDepth / Math.max(aboutCellDepth, 5)));
       const rimDepthStep = aboutSquareDepth / rimDepthDivisions;
       const tileQuat = new THREE.Quaternion().setFromEuler(tile.rotation).normalize();
-      const pushSlot = (lx: number, ly: number, lz: number, sx: number, sy: number, sz: number) => {
+      const pushSlot = (
+        lx: number,
+        ly: number,
+        lz: number,
+        sx: number,
+        sy: number,
+        sz: number,
+        face: "front" | "back" | "rim",
+        u = 0.5,
+        v = 0.5,
+      ) => {
         const localPos = new THREE.Vector3(lx, ly, lz);
         localPos.applyMatrix4(tile.matrix);
+        const halfU = THREE.MathUtils.clamp(sx / aboutSquareSize, 0, 1) * 0.5;
+        const halfV = THREE.MathUtils.clamp(sy / aboutSquareSize, 0, 1) * 0.5;
+        const u0 = THREE.MathUtils.clamp(u - halfU, 0, 1);
+        const v0 = THREE.MathUtils.clamp(v - halfV, 0, 1);
+        const u1 = THREE.MathUtils.clamp(u + halfU, 0, 1);
+        const v1 = THREE.MathUtils.clamp(v + halfV, 0, 1);
         slots.push({
           worldPosition: localPos,
           worldQuaternion: tileQuat.clone(),
           scale: new THREE.Vector3(sx, sy, sz),
           tileIndex,
+          face,
+          u,
+          v,
+          u0,
+          v0,
+          u1,
+          v1,
+          contentStrength: face === "front" ? 1 : (face === "back" ? 0.82 : 0.68),
         });
       };
       const patternPoints: number[] = [];
@@ -4899,6 +5266,25 @@ export default function ResumeSpace3D({
       const patternLines = new THREE.LineSegments(patternGeom, patternMat);
       tile.add(patternLines);
       aboutTileGridLineMatsRef.current.push(patternMat);
+      const contentPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(aboutSquareSize * 0.92, aboutSquareSize * 0.92),
+        new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0,
+          toneMapped: false,
+          depthWrite: false,
+          depthTest: false,
+          blending: THREE.NormalBlending,
+          side: THREE.DoubleSide,
+        }),
+      );
+      contentPlane.position.set(0, 0, zf + aboutCellDepth * 1.2);
+      contentPlane.renderOrder = 120;
+      contentPlane.frustumCulled = false;
+      tile.add(contentPlane);
+      aboutTileContentMatsRef.current[tileIndex] =
+        contentPlane.material as THREE.MeshBasicMaterial;
 
       // Front surface (high detail)
       for (let row = 0; row < aboutCellDivisions; row += 1) {
@@ -4910,6 +5296,9 @@ export default function ResumeSpace3D({
             cellStep,
             cellStep,
             aboutCellDepth,
+            "front",
+            (col + 0.5) / aboutCellDivisions,
+            (row + 0.5) / aboutCellDivisions,
           );
         }
       }
@@ -4924,6 +5313,9 @@ export default function ResumeSpace3D({
             backCellStep,
             backCellStep,
             aboutCellDepth,
+            "back",
+            (col + 0.5) / aboutBackCellDivisions,
+            (row + 0.5) / aboutBackCellDivisions,
           );
         }
       }
@@ -4931,13 +5323,54 @@ export default function ResumeSpace3D({
       // Rim micro-cells for tile thickness reconstruction
       for (let i = 0; i < rimDivisions; i += 1) {
         const c = -half + (i + 0.5) * rimStep;
+        const edgeU = (c + half) / aboutSquareSize;
         for (let d = 0; d < rimDepthDivisions; d += 1) {
           const z = -aboutSquareDepth * 0.5 + (d + 0.5) * rimDepthStep;
           // Keep rim cells within the tile silhouette so assembled shape stays clean.
-          pushSlot(c, half - rimCellThickness * 0.5, z, rimStep, rimCellThickness, rimDepthStep);
-          pushSlot(c, -half + rimCellThickness * 0.5, z, rimStep, rimCellThickness, rimDepthStep);
-          pushSlot(-half + rimCellThickness * 0.5, c, z, rimCellThickness, rimStep, rimDepthStep);
-          pushSlot(half - rimCellThickness * 0.5, c, z, rimCellThickness, rimStep, rimDepthStep);
+          pushSlot(
+            c,
+            half - rimCellThickness * 0.5,
+            z,
+            rimStep,
+            rimCellThickness,
+            rimDepthStep,
+            "rim",
+            edgeU,
+            0.98,
+          );
+          pushSlot(
+            c,
+            -half + rimCellThickness * 0.5,
+            z,
+            rimStep,
+            rimCellThickness,
+            rimDepthStep,
+            "rim",
+            edgeU,
+            0.02,
+          );
+          pushSlot(
+            -half + rimCellThickness * 0.5,
+            c,
+            z,
+            rimCellThickness,
+            rimStep,
+            rimDepthStep,
+            "rim",
+            0.02,
+            edgeU,
+          );
+          pushSlot(
+            half - rimCellThickness * 0.5,
+            c,
+            z,
+            rimCellThickness,
+            rimStep,
+            rimDepthStep,
+            "rim",
+            0.98,
+            edgeU,
+          );
         }
       }
       return tile;
@@ -4960,25 +5393,112 @@ export default function ResumeSpace3D({
     aboutSquareRoot.updateWorldMatrix(true, true);
     aboutCellSlotsRef.current = aboutSlots;
     const aboutCellGeometry = new THREE.BoxGeometry(1, 1, 1);
-    const aboutCellMaterial = new THREE.MeshPhongMaterial({
-      color: 0xa8d6ff,
-      emissive: 0x2d6ca6,
-      emissiveIntensity: 0.62,
-      specular: new THREE.Color(0xbfdfff),
-      shininess: 110,
-      transparent: true,
-      opacity: 0.72,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
+    const cellCount = aboutSlots.length;
+    const uvRects = new Float32Array(cellCount * 4);
+    const tileIndexArr = new Float32Array(cellCount);
+    const revealArr = new Float32Array(cellCount);
+    const strengthArr = new Float32Array(cellCount);
+    aboutSlots.forEach((slot, idx) => {
+      uvRects[idx * 4 + 0] = slot.u0;
+      uvRects[idx * 4 + 1] = slot.v0;
+      uvRects[idx * 4 + 2] = slot.u1;
+      uvRects[idx * 4 + 3] = slot.v1;
+      tileIndexArr[idx] = slot.tileIndex;
+      revealArr[idx] = slot.face === "front" ? 0 : 1;
+      strengthArr[idx] = slot.contentStrength;
     });
+    aboutCellGeometry.setAttribute(
+      "instanceUvRect",
+      new THREE.InstancedBufferAttribute(uvRects, 4),
+    );
+    aboutCellGeometry.setAttribute(
+      "instanceTileIndex",
+      new THREE.InstancedBufferAttribute(tileIndexArr, 1),
+    );
+    const revealAttr = new THREE.InstancedBufferAttribute(revealArr, 1);
+    aboutCellGeometry.setAttribute("instanceReveal", revealAttr);
+    aboutCellRevealAttrRef.current = revealAttr;
+    aboutCellGeometry.setAttribute(
+      "instanceContentStrength",
+      new THREE.InstancedBufferAttribute(strengthArr, 1),
+    );
+
+    const aboutCellMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTile0: { value: null },
+        uTile1: { value: null },
+        uTile2: { value: null },
+        uTile3: { value: null },
+        uBaseColor: { value: new THREE.Color(0x132a44) },
+      },
+      vertexShader: `
+        attribute vec4 instanceUvRect;
+        attribute float instanceTileIndex;
+        attribute float instanceReveal;
+        attribute float instanceContentStrength;
+        varying vec2 vUv;
+        varying vec4 vUvRect;
+        varying float vTileIndex;
+        varying float vReveal;
+        varying float vContentStrength;
+        void main() {
+          vUv = uv;
+          vUvRect = instanceUvRect;
+          vTileIndex = instanceTileIndex;
+          vReveal = instanceReveal;
+          vContentStrength = instanceContentStrength;
+          vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D uTile0;
+        uniform sampler2D uTile1;
+        uniform sampler2D uTile2;
+        uniform sampler2D uTile3;
+        uniform vec3 uBaseColor;
+        varying vec2 vUv;
+        varying vec4 vUvRect;
+        varying float vTileIndex;
+        varying float vReveal;
+        varying float vContentStrength;
+        vec4 sampleTile(float idx, vec2 suv) {
+          if (idx < 0.5) return texture2D(uTile0, suv);
+          if (idx < 1.5) return texture2D(uTile1, suv);
+          if (idx < 2.5) return texture2D(uTile2, suv);
+          return texture2D(uTile3, suv);
+        }
+        void main() {
+          vec2 suv = mix(vUvRect.xy, vUvRect.zw, vUv);
+          vec4 texel = sampleTile(vTileIndex, suv);
+          float reveal = clamp(vReveal, 0.0, 1.0);
+          float strength = clamp(vContentStrength, 0.0, 1.0);
+          vec3 revealed = mix(uBaseColor, texel.rgb, reveal * strength);
+          gl_FragColor = vec4(revealed, 1.0);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.NormalBlending,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+    });
+    aboutCellShaderMaterialRef.current = aboutCellMaterial;
     const aboutCells = new THREE.InstancedMesh(
       aboutCellGeometry,
       aboutCellMaterial,
-      aboutSlots.length,
+      cellCount,
     );
     aboutCells.name = "AboutMemorySquareCells";
     aboutCells.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     aboutCells.frustumCulled = false;
+    aboutCells.renderOrder = 130;
+    const baseColor = new THREE.Color(0x132a44);
+    aboutFrontSlotIndicesRef.current = [];
+    aboutCellBaseColorsRef.current = aboutSlots.map(() => baseColor.clone());
+    aboutCellTargetColorsRef.current = aboutSlots.map(() => baseColor.clone());
+    aboutCellRevealAtMsRef.current = aboutSlots.map(() => 0);
     const tempMatrix = new THREE.Matrix4();
     const records: AboutCellRecord[] = aboutSlots.map((slot, idx) => {
       tempMatrix.compose(
@@ -4987,6 +5507,10 @@ export default function ResumeSpace3D({
         slot.scale,
       );
       aboutCells.setMatrixAt(idx, tempMatrix);
+      aboutCells.setColorAt(idx, baseColor);
+      if (slot.face === "front") {
+        aboutFrontSlotIndicesRef.current.push(idx);
+      }
       return {
         position: slot.worldPosition.clone(),
         velocity: new THREE.Vector3(),
@@ -4998,6 +5522,9 @@ export default function ResumeSpace3D({
       };
     });
     aboutCells.instanceMatrix.needsUpdate = true;
+    if (aboutCells.instanceColor) {
+      aboutCells.instanceColor.needsUpdate = true;
+    }
     aboutSquareRoot.add(aboutCells);
     aboutCellRecordsRef.current = records;
     aboutCellMeshRef.current = aboutCells;
@@ -8002,15 +8529,33 @@ export default function ResumeSpace3D({
         }
         aboutCellMeshRef.current = null;
       }
+      aboutCellShaderMaterialRef.current = null;
+      aboutCellRevealAttrRef.current = null;
+      aboutSlideTexturesRef.current.forEach((tex) => tex?.dispose());
+      aboutSlideTexturesRef.current = [null, null, null, null];
       aboutCellSlotsRef.current = [];
       aboutCellRecordsRef.current = [];
+      aboutFrontSlotIndicesRef.current = [];
+      aboutCellBaseColorsRef.current = [];
+      aboutCellTargetColorsRef.current = [];
+      aboutCellRevealAtMsRef.current = [];
       aboutCellAnimationRef.current.active = false;
       aboutCellAnimationRef.current.initialized = false;
       aboutSwarmManualTriggerRef.current = false;
       aboutSwarmManualReformRef.current = false;
+      aboutSlideAdvanceAfterReformRef.current = false;
+      aboutSlidePreparedIndexRef.current = -1;
+      aboutSlideReadyRef.current = false;
+      aboutTileContentFadeStartMsRef.current = 0;
       aboutTileCoreMatsRef.current = [];
       aboutTileGridLineMatsRef.current = [];
       aboutTileEdgeLineMatsRef.current = [];
+      aboutTileContentMatsRef.current.forEach((mat) => {
+        if (!mat) return;
+        if (mat.map) mat.map.dispose();
+        mat.dispose();
+      });
+      aboutTileContentMatsRef.current = [];
       skillsLatticeWorldAnchorRef.current = null;
       projectShowcaseNebulaRootRef.current = null;
       skillsLatticeRootRef.current = null;
@@ -8812,14 +9357,32 @@ export default function ResumeSpace3D({
                 zIndex: 1118,
                 pointerEvents: "none",
                 display: "flex",
+                alignItems: "center",
                 gap: 10,
               }}
             >
+              <div
+                style={{
+                  pointerEvents: "none",
+                  padding: "7px 10px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(140, 195, 255, 0.45)",
+                  background: "rgba(8, 18, 32, 0.78)",
+                  color: "#d6ecff",
+                  fontSize: 11,
+                  fontFamily: "'Rajdhani', sans-serif",
+                  letterSpacing: 0.6,
+                  textTransform: "uppercase",
+                }}
+              >
+                Slide {aboutSlides.length > 0 ? aboutActiveSlideIndex + 1 : 0}/{aboutSlides.length}
+              </div>
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  triggerAboutSwarmBreakApart();
+                  e.preventDefault();
+                  goToAboutSlide(-1);
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -8840,13 +9403,14 @@ export default function ResumeSpace3D({
                   cursor: "pointer",
                 }}
               >
-                Break Apart (Test)
+                Prev Slide
               </button>
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  triggerAboutSwarmReform();
+                  e.preventDefault();
+                  goToAboutSlide(1);
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -8867,7 +9431,63 @@ export default function ResumeSpace3D({
                   cursor: "pointer",
                 }}
               >
-                Reform Now (Test)
+                Next Slide
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  triggerAboutSwarmBreakApart();
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{
+                  pointerEvents: "auto",
+                  padding: "9px 16px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(255, 180, 120, 0.55)",
+                  background:
+                    "linear-gradient(180deg, rgba(62, 30, 16, 0.9) 0%, rgba(34, 16, 8, 0.92) 100%)",
+                  color: "#ffe4cf",
+                  fontSize: 12,
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontWeight: 700,
+                  letterSpacing: 0.8,
+                  textTransform: "uppercase",
+                  boxShadow: "0 8px 20px rgba(20, 8, 2, 0.45)",
+                  cursor: "pointer",
+                }}
+              >
+                Explode
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  triggerAboutSwarmReform();
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{
+                  pointerEvents: "auto",
+                  padding: "9px 16px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(160, 255, 195, 0.55)",
+                  background:
+                    "linear-gradient(180deg, rgba(14, 50, 32, 0.9) 0%, rgba(8, 24, 16, 0.92) 100%)",
+                  color: "#dafce9",
+                  fontSize: 12,
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontWeight: 700,
+                  letterSpacing: 0.8,
+                  textTransform: "uppercase",
+                  boxShadow: "0 8px 20px rgba(4, 14, 10, 0.45)",
+                  cursor: "pointer",
+                }}
+              >
+                Reform
               </button>
             </div>
           )}

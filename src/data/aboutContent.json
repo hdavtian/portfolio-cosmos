@@ -1,0 +1,47 @@
+{
+  "aboutContent": {
+    "headline": "I build systems people trust.",
+    "subline": "Lead full stack engineer focused on resilient platforms, clear product outcomes, and teams that move fast without breaking quality.",
+    "bioShort": "I work across frontend, backend, and platform architecture to turn complex business goals into stable, maintainable software. I enjoy owning ambiguous problems, shaping practical technical direction, and helping teams execute with confidence.",
+    "locationLine": "Based in Los Angeles, collaborating globally.",
+    "principles": [
+      "Design for clarity before cleverness",
+      "Favor observability and reliability from day one",
+      "Keep users and teammates in the loop"
+    ],
+    "cards": [
+      {
+        "id": "architect",
+        "title": "Systems Architect",
+        "body": "From APIs to UI state boundaries, I design systems that scale cleanly and stay understandable months later.",
+        "image": "/images/about/architect.jpg",
+        "revealPattern": "center-out",
+        "durationMs": 9000
+      },
+      {
+        "id": "builder",
+        "title": "Product Builder",
+        "body": "I turn vague requirements into shipped features with measurable impact, balancing speed, quality, and maintainability.",
+        "image": "/images/about/builder.jpg",
+        "revealPattern": "scanline",
+        "durationMs": 8500
+      },
+      {
+        "id": "mentor",
+        "title": "Technical Leader",
+        "body": "I mentor engineers through architecture, debugging, and delivery practices that raise the baseline for the whole team.",
+        "image": "/images/about/mentor.jpg",
+        "revealPattern": "spiral",
+        "durationMs": 10000
+      },
+      {
+        "id": "optimizer",
+        "title": "Performance & Reliability",
+        "body": "I care deeply about production behavior: instrumentation, bottleneck removal, and systems that stay calm under load.",
+        "image": "/images/about/reliability.jpg",
+        "revealPattern": "noise-cluster",
+        "durationMs": 9000
+      }
+    ]
+  }
+}

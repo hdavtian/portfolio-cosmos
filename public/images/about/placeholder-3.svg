@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+  <defs>
+    <linearGradient id="g3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#132b36"/>
+      <stop offset="100%" stop-color="#2f7a65"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1200" fill="url(#g3)"/>
+  <g fill="#c8ffea" fill-opacity="0.18">
+    <rect x="180" y="200" width="110" height="110"/>
+    <rect x="340" y="260" width="140" height="140"/>
+    <rect x="540" y="180" width="180" height="180"/>
+    <rect x="780" y="250" width="210" height="210"/>
+  </g>
+  <rect x="220" y="600" width="760" height="30" fill="#d8ffee" fill-opacity="0.45"/>
+  <rect x="220" y="655" width="585" height="20" fill="#d8ffee" fill-opacity="0.35"/>
+  <text x="220" y="540" fill="#eafff5" font-size="66" font-family="Arial, sans-serif" font-weight="700">ABOUT PLACEHOLDER 03</text>
+</svg>
