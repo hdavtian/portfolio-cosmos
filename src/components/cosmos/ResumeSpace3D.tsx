@@ -44,6 +44,12 @@ import SpaceshipHUD from "../ui/SpaceshipHUD";
 import ShipControlBar, { type ShipUIPhase } from "../ui/ShipControlBar";
 import CockpitNavPanel from "../ui/CockpitNavPanel";
 import ShipTerminal, { type ShipTerminalToolAction } from "../ui/ShipTerminal";
+import UserOnScreenMessages from "../ui/UserOnScreenMessages";
+import {
+  clearOnScreenTelemetry,
+  onScreenMessage,
+  setOnScreenTelemetry,
+} from "../ui/onScreenMessaging";
 import { HologramDroneDisplay } from "./HologramDroneDisplay";
 // CockpitHologramPanels kept for potential future use
 import { getOrbitalPositionEmitter } from "../OrbitalPositionEmitter";
@@ -816,6 +822,19 @@ export default function ResumeSpace3D({
   const starDestroyerDebugLastLogMsRef = useRef(0);
   const starDestroyerSkillsSnapPendingRef = useRef(false);
   const shipTelemetryLastLogMsRef = useRef(0);
+  const navMessageStateRef = useRef<{
+    activeTarget: string | null;
+    targetLabel: string | null;
+    travelStartedAt: number;
+    announcedLightspeed: boolean;
+    lastDistance: number | null;
+  }>({
+    activeTarget: null,
+    targetLabel: null,
+    travelStartedAt: 0,
+    announcedLightspeed: false,
+    lastDistance: null,
+  });
   const starDestroyerIntroFlybyRef = useRef<{
     active: boolean;
     startAt: number;
@@ -835,6 +854,27 @@ export default function ResumeSpace3D({
   });
   const [followingStarDestroyer, setFollowingStarDestroyer] = useState(false);
   const followingStarDestroyerRef = useRef(false);
+
+  const formatNavTargetLabel = useCallback(
+    (targetId: string): string => {
+      const company = resumeData.experience.find((exp: any) => exp.id === targetId);
+      if (company) return company.navLabel || company.company || targetId;
+
+      const known: Record<string, string> = {
+        experience: "Experience",
+        skills: "Skills",
+        projects: "Projects",
+        about: "About",
+        home: "Home",
+      };
+      const lowered = targetId.toLowerCase();
+      if (known[lowered]) return known[lowered];
+      return targetId
+        .replace(/-/g, " ")
+        .replace(/\b\w/g, (ch) => ch.toUpperCase());
+    },
+    [],
+  );
 
   // Items ref to track orbital objects (moons, planets)
   const itemsRef = useRef<
@@ -1252,6 +1292,77 @@ export default function ResumeSpace3D({
   useEffect(() => {
     currentNavigationTargetRef.current = currentNavigationTarget;
   }, [currentNavigationTarget]);
+
+  useEffect(() => {
+    const navState = navMessageStateRef.current;
+
+    if (
+      currentNavigationTarget &&
+      navState.activeTarget !== currentNavigationTarget
+    ) {
+      const targetLabel = formatNavTargetLabel(currentNavigationTarget);
+      navState.activeTarget = currentNavigationTarget;
+      navState.targetLabel = targetLabel;
+      navState.travelStartedAt = Date.now();
+      navState.announcedLightspeed = false;
+      navState.lastDistance = navigationDistance ?? null;
+
+      onScreenMessage(`Navicomputer setting destination to "${targetLabel}"`);
+      if (navigationDistance !== null) {
+        onScreenMessage(
+          `Destination acquired, distance ${navigationDistance.toFixed(0)}u`,
+        );
+      }
+      onScreenMessage("Adjusting Falcon trajectory");
+    }
+
+    if (navState.activeTarget && navigationDistance !== null) {
+      const speed = Math.max(
+        spaceshipPathRef.current.speed || 0,
+        manualFlightRef.current.currentSpeed || 0,
+      );
+      setOnScreenTelemetry({
+        distance: navigationDistance,
+        speed,
+      });
+
+      if (!navState.announcedLightspeed && manualFlightRef.current.isLightspeedActive) {
+        onScreenMessage("Engaging light speed");
+        navState.announcedLightspeed = true;
+      }
+
+      if (
+        navState.lastDistance !== null &&
+        navState.lastDistance >= 420 &&
+        navigationDistance < 420
+      ) {
+        onScreenMessage("Arriving to destination");
+      }
+
+      navState.lastDistance = navigationDistance;
+      return;
+    }
+
+    if (navState.activeTarget && navigationDistance === null && navState.lastDistance !== null) {
+      const label = navState.targetLabel ?? formatNavTargetLabel(navState.activeTarget);
+      onScreenMessage(`Arrived at ${label}`);
+      clearOnScreenTelemetry();
+      navState.activeTarget = null;
+      navState.targetLabel = null;
+      navState.travelStartedAt = 0;
+      navState.announcedLightspeed = false;
+      navState.lastDistance = null;
+      return;
+    }
+
+    if (!navState.activeTarget) {
+      clearOnScreenTelemetry();
+    }
+  }, [
+    currentNavigationTarget,
+    navigationDistance,
+    formatNavTargetLabel,
+  ]);
 
   const setProjectShowcaseFocus = useCallback((index: number) => {
     const panels = projectShowcasePanelsRef.current;
@@ -9568,6 +9679,9 @@ export default function ResumeSpace3D({
               )}
             </div>
           )}
+
+          {/* Ship Control Bar — hidden while Project Showcase is active */}
+          <UserOnScreenMessages />
 
           {/* Ship Control Bar — hidden while Project Showcase is active */}
           {!projectShowcaseActive && (
