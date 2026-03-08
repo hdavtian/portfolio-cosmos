@@ -5487,6 +5487,8 @@ export default function ResumeSpace3D({
       labelRenderer,
       container,
       preventDefaultTouch,
+      handleContextLost,
+      handleContextRestored,
     } = sceneSetup;
 
     // clickable overlay registry (planes that should be raycast-targeted)
@@ -9063,6 +9065,14 @@ export default function ResumeSpace3D({
         preventDefaultTouch,
       );
       renderer.domElement.removeEventListener("touchmove", preventDefaultTouch);
+      renderer.domElement.removeEventListener(
+        "webglcontextlost",
+        handleContextLost as EventListener,
+      );
+      renderer.domElement.removeEventListener(
+        "webglcontextrestored",
+        handleContextRestored as EventListener,
+      );
 
       if (container && container.parentElement) {
         while (container.firstChild) {
@@ -9683,6 +9693,7 @@ export default function ResumeSpace3D({
             projectsAnchorRef={projectShowcaseWorldAnchorRef}
             currentNavigationTarget={currentNavigationTarget}
             onNavigateToTarget={handleCockpitNavigate}
+            onCoordinatePing={(message) => shipLog(message, "info")}
           />
 
           {/* Ship Control Bar — hidden while Project Showcase is active */}

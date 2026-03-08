@@ -12,6 +12,7 @@ type Props = {
   projectsAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
   currentNavigationTarget: string | null;
   onNavigateToTarget: (targetId: string, targetType: "section" | "moon") => void;
+  onCoordinatePing?: (message: string) => void;
 };
 
 type MarkerKind = "ship" | "sun" | "planet" | "moon" | "star-destroyer" | "anchor";
@@ -40,6 +41,7 @@ const MAP_ZOOM_MAX = 4.5;
 const HOVER_PICK_RADIUS_PX = 22;
 const MAP_INNER_RANGE = 2600;
 const MAP_OUTER_RANGE = 36000;
+const PING_TTL_MS = 7000;
 
 const toDisplayLabel = (value: string): string =>
   value
@@ -98,6 +100,24 @@ const compressRadius = (distance: number, maxRadius: number): number => {
   return maxRadius * (0.46 + curved * 0.5);
 };
 
+const decompressRadius = (screenRadius: number, maxRadius: number): number => {
+  const r = Math.max(0, screenRadius);
+  const linearMax = maxRadius * 0.46;
+  if (r <= linearMax || linearMax <= 0) {
+    return (r / Math.max(linearMax, 1e-6)) * MAP_INNER_RANGE;
+  }
+  const curved = THREE.MathUtils.clamp((r / maxRadius - 0.46) / 0.5, 0, 1);
+  const t = (Math.pow(10, curved) - 1) / 9;
+  return MAP_INNER_RANGE + t * (MAP_OUTER_RANGE - MAP_INNER_RANGE);
+};
+
+const formatUnits = (value: number): string => {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M u`;
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}k u`;
+  return `${value.toFixed(0)} u`;
+};
+
 const shortestAngleDelta = (from: number, to: number): number =>
   Math.atan2(Math.sin(to - from), Math.cos(to - from));
 
@@ -111,6 +131,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
   projectsAnchorRef,
   currentNavigationTarget,
   onNavigateToTarget,
+  onCoordinatePing,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [showDirection, setShowDirection] = useState(true);
@@ -136,6 +157,21 @@ const CosmicMiniMap3D: React.FC<Props> = ({
     targetId: string;
     targetType: "section" | "moon";
   }>>([]);
+  const objectPickTargetsRef = useRef<Array<{
+    x: number;
+    y: number;
+    label: string;
+    worldX: number;
+    worldZ: number;
+  }>>([]);
+  const pingMarkersRef = useRef<Array<{
+    id: number;
+    worldX: number;
+    worldZ: number;
+    label: string;
+    expiresAt: number;
+  }>>([]);
+  const nextPingIdRef = useRef(1);
   const sweepPhaseRef = useRef(0);
 
   const resizeStateRef = useRef<{
@@ -285,14 +321,29 @@ const CosmicMiniMap3D: React.FC<Props> = ({
         ctx.save();
         ctx.translate(cx, cy);
 
-        // Static grid
+        // Static grid + distance markers (distance labels are zoom-aware)
         const rings = [0.28, 0.5, 0.72, 0.92];
         ctx.strokeStyle = "rgba(77,165,207,0.42)";
         ctx.lineWidth = 1;
-        rings.forEach((p) => {
+        rings.forEach((p, idx) => {
+          const ringPx = radiusMax * p;
           ctx.beginPath();
-          ctx.arc(0, 0, radiusMax * p, 0, Math.PI * 2);
+          ctx.arc(0, 0, ringPx, 0, Math.PI * 2);
           ctx.stroke();
+
+          // Ring value markers reflect current zoom scaling.
+          const worldDist = decompressRadius(ringPx / Math.max(zoom, 1e-6), radiusMax);
+          const lx = ringPx * 0.72;
+          const ly = -ringPx * 0.72 + idx * 2;
+          const text = formatUnits(worldDist);
+          ctx.save();
+          ctx.fillStyle = "rgba(6, 19, 36, 0.78)";
+          const w = Math.max(42, text.length * 6.4);
+          ctx.fillRect(lx - 4, ly - 8, w, 11);
+          ctx.fillStyle = "rgba(188, 232, 255, 0.94)";
+          ctx.font = "10px Rajdhani, Segoe UI, sans-serif";
+          ctx.fillText(text, lx, ly);
+          ctx.restore();
         });
         ctx.beginPath();
         ctx.moveTo(-radiusMax, 0);
@@ -400,6 +451,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
         const idMap = new Map<string, { x: number; y: number; ent: DrawEntity }>();
         hoverTargetsRef.current = [];
         clickTargetsRef.current = [];
+        objectPickTargetsRef.current = [];
         const targetLower = currentNavigationTarget?.toLowerCase() ?? null;
 
         const drawEntityPoint = (ent: DrawEntity) => {
@@ -453,6 +505,13 @@ const CosmicMiniMap3D: React.FC<Props> = ({
           const canvasX = cx + sx;
           const canvasY = cy + sy;
           hoverTargetsRef.current.push({ x: canvasX, y: canvasY, label: ent.label });
+          objectPickTargetsRef.current.push({
+            x: canvasX,
+            y: canvasY,
+            label: ent.label,
+            worldX: ent.world.x,
+            worldZ: ent.world.z,
+          });
           if (ent.targetId && ent.targetType) {
             clickTargetsRef.current.push({
               x: canvasX,
@@ -489,6 +548,44 @@ const CosmicMiniMap3D: React.FC<Props> = ({
           ctx.lineTo(targetPoint.x, targetPoint.y);
           ctx.stroke();
           ctx.setLineDash([]);
+        }
+
+        // Ephemeral pings (7s) drawn in world-space so they follow map transforms.
+        const now = performance.now();
+        pingMarkersRef.current = pingMarkersRef.current.filter((p) => p.expiresAt > now);
+        for (const ping of pingMarkersRef.current) {
+          const dx = ping.worldX - vCenter.x;
+          const dz = ping.worldZ - vCenter.z;
+          const dist = Math.sqrt(dx * dx + dz * dz);
+          const angle = Math.atan2(dz, dx);
+          const cr = compressRadius(dist, radiusMax);
+          const px = Math.cos(angle + mapYaw) * cr * zoom;
+          const py = Math.sin(angle + mapYaw) * cr * zoom;
+          const age = THREE.MathUtils.clamp((ping.expiresAt - now) / PING_TTL_MS, 0, 1);
+          const alpha = 0.3 + age * 0.7;
+
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.strokeStyle = "rgba(255, 236, 157, 0.95)";
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(px - 6, py);
+          ctx.lineTo(px + 6, py);
+          ctx.moveTo(px, py - 6);
+          ctx.lineTo(px, py + 6);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(px, py, 8, 0, Math.PI * 2);
+          ctx.stroke();
+
+          const txt = ping.label;
+          const tw = Math.max(76, txt.length * 6.1);
+          ctx.fillStyle = "rgba(18, 22, 30, 0.86)";
+          ctx.fillRect(px + 8, py - 18, tw, 14);
+          ctx.fillStyle = "rgba(255, 241, 182, 0.96)";
+          ctx.font = "10px Rajdhani, Segoe UI, sans-serif";
+          ctx.fillText(txt, px + 11, py - 8);
+          ctx.restore();
         }
 
         ctx.restore();
@@ -568,8 +665,8 @@ const CosmicMiniMap3D: React.FC<Props> = ({
       const dx = event.clientX - drag.startX;
       const dy = event.clientY - drag.startY;
       if (drag.mode === "pan") {
-        mapPanRef.current.x = drag.startPanX - dx * 0.16;
-        mapPanRef.current.y = drag.startPanY - dy * 0.16;
+        mapPanRef.current.x = drag.startPanX + dx * 0.28;
+        mapPanRef.current.y = drag.startPanY + dy * 0.28;
         setHoverInfo(null);
         return;
       }
@@ -605,6 +702,63 @@ const CosmicMiniMap3D: React.FC<Props> = ({
     drag.pointerId = -1;
     setIsDraggingMap(false);
     event.currentTarget.releasePointerCapture(event.pointerId);
+
+    if (isTap && drag.mode === "pan") {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const cx = mapWidth * 0.5 + mapPanRef.current.x;
+      const cy = mapSize * 0.5 + mapPanRef.current.y;
+      const sx = (x - cx) / Math.max(mapZoomRef.current, 1e-6);
+      const sy = (y - cy) / Math.max(mapZoomRef.current, 1e-6);
+      const radial = Math.sqrt(sx * sx + sy * sy);
+      const worldDist = decompressRadius(radial, Math.max(24, Math.min(mapWidth, mapSize) * 0.46));
+      const mapYaw = mapYawRef.current;
+      const theta = Math.atan2(sy, sx) - mapYaw;
+      const ship = spaceshipRef.current;
+      const center = ship ? ship.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 0, 0);
+      const worldX = center.x + Math.cos(theta) * worldDist;
+      const worldZ = center.z + Math.sin(theta) * worldDist;
+
+      let nearestObject:
+        | { label: string; worldX: number; worldZ: number; d: number }
+        | null = null;
+      for (const target of objectPickTargetsRef.current) {
+        const dx = target.x - x;
+        const dy = target.y - y;
+        const d = dx * dx + dy * dy;
+        if (d > HOVER_PICK_RADIUS_PX * HOVER_PICK_RADIUS_PX) continue;
+        if (!nearestObject || d < nearestObject.d) {
+          nearestObject = {
+            label: target.label,
+            worldX: target.worldX,
+            worldZ: target.worldZ,
+            d,
+          };
+        }
+      }
+      const snappedX = nearestObject ? nearestObject.worldX : worldX;
+      const snappedZ = nearestObject ? nearestObject.worldZ : worldZ;
+      const coordLabel = `X ${snappedX.toFixed(0)}, Y ${snappedZ.toFixed(0)}`;
+      const label = nearestObject ? `${nearestObject.label} | ${coordLabel}` : coordLabel;
+      pingMarkersRef.current.push({
+        id: nextPingIdRef.current++,
+        worldX: snappedX,
+        worldZ: snappedZ,
+        label,
+        expiresAt: performance.now() + PING_TTL_MS,
+      });
+      onCoordinatePing?.(`MINIMAP PING: ${label}`);
+      try {
+        const clipboardText = nearestObject
+          ? `${nearestObject.label}: ${coordLabel}`
+          : coordLabel;
+        void navigator.clipboard.writeText(clipboardText);
+      } catch {
+        // ignore clipboard write failures (permissions/browser policy)
+      }
+      return;
+    }
 
     if (isTap && drag.mode === "angle") {
       const rect = event.currentTarget.getBoundingClientRect();
@@ -951,6 +1105,18 @@ const CosmicMiniMap3D: React.FC<Props> = ({
         }}
       >
         Ship centered | wheel zoom {zoomUi.toFixed(2)}x | shift+drag pan
+      </div>
+      <div
+        style={{
+          marginTop: 2,
+          color: "rgba(156, 206, 235, 0.62)",
+          fontSize: 8,
+          letterSpacing: 0.35,
+          fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
+          textAlign: "center",
+        }}
+      >
+        Coordinates are sun-origin (0,0) on orbital plane
       </div>
     </div>
   );

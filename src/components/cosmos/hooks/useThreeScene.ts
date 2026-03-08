@@ -89,7 +89,7 @@ export const useThreeScene = (params: {
     const renderer =
       globalRenderer ||
       new THREE.WebGLRenderer({ antialias: true, alpha: true, logarithmicDepthBuffer: true });
-    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.domElement.style.position = "absolute";
     container.appendChild(renderer.domElement);
@@ -330,6 +330,30 @@ export const useThreeScene = (params: {
     });
     renderer.domElement.style.touchAction = "none";
 
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      // Keep canvas alive while the browser restores context.
+      // Without preventDefault many drivers leave a white frame.
+      // eslint-disable-next-line no-console
+      console.warn("[cosmos] WebGL context lost");
+    };
+    const handleContextRestored = () => {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      renderer.setSize(w, h);
+      composer.setSize(w, h);
+      labelRenderer.setSize(w, h);
+      // eslint-disable-next-line no-console
+      console.info("[cosmos] WebGL context restored");
+    };
+    renderer.domElement.addEventListener("webglcontextlost", handleContextLost as EventListener, false);
+    renderer.domElement.addEventListener(
+      "webglcontextrestored",
+      handleContextRestored as EventListener,
+      false,
+    );
+
     return {
       scene,
       camera,
@@ -339,6 +363,8 @@ export const useThreeScene = (params: {
       labelRenderer,
       container,
       preventDefaultTouch,
+      handleContextLost,
+      handleContextRestored,
     };
   }, [
     mountRef,
