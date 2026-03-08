@@ -16,12 +16,19 @@ export interface ShipLogEntry {
   timestamp: string;
 }
 
-type TabId = "log" | "debug";
+type TabId = "log" | "debug" | "tools";
+export type ShipTerminalToolAction = {
+  id: string;
+  label: string;
+  hint?: string;
+  onRun: () => void;
+};
 
 interface ShipTerminalProps {
   logs: ShipLogEntry[];
   debugLogs?: DebugLogEntry[];
   debugLogTotal?: number;
+  toolActions?: ShipTerminalToolAction[];
   onCommand?: (command: string) => void;
   onClearLog?: () => void;
   onClearDebug?: () => void;
@@ -69,6 +76,7 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
   logs,
   debugLogs = [],
   debugLogTotal = 0,
+  toolActions = [],
   onCommand,
   onClearLog,
   onClearDebug,
@@ -238,16 +246,20 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
       text = logs
         .map((e) => `${e.timestamp} ${CATEGORY_PREFIX[e.category]}> ${e.text}`)
         .join("\n");
-    } else {
+    } else if (activeTab === "debug") {
       text = debugLogs
         .map((e) => `${e.timestamp} [${e.source}] ${e.text}`)
+        .join("\n");
+    } else {
+      text = toolActions
+        .map((tool) => `${tool.label}${tool.hint ? ` — ${tool.hint}` : ""}`)
         .join("\n");
     }
     navigator.clipboard.writeText(text).then(() => {
       setCopyFlash(true);
       setTimeout(() => setCopyFlash(false), 1200);
     });
-  }, [activeTab, logs, debugLogs]);
+  }, [activeTab, logs, debugLogs, toolActions]);
 
   if (!visible) return null;
 
@@ -270,7 +282,12 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
     transition: "all 0.15s",
   });
 
-  const currentLogs = activeTab === "log" ? logs : debugLogs;
+  const currentLogs =
+    activeTab === "log"
+      ? logs
+      : activeTab === "debug"
+        ? debugLogs
+        : toolActions;
   const scrollRef = activeTab === "log" ? logScrollRef : debugScrollRef;
 
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -541,6 +558,9 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
               </span>
             )}
           </button>
+          <button style={tabStyle("tools")} onClick={() => setActiveTab("tools")}>
+            Tools
+          </button>
         </div>
 
         {/* Telemetry toggles */}
@@ -652,9 +672,43 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
               );
             })}
 
+          {activeTab === "tools" &&
+            toolActions.map((tool) => (
+              <div key={tool.id} style={{ marginBottom: 7 }}>
+                <button
+                  onClick={tool.onRun}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    background: "rgba(0, 255, 65, 0.07)",
+                    border: "1px solid rgba(0, 255, 65, 0.18)",
+                    color: "rgba(190, 255, 210, 0.92)",
+                    borderRadius: 4,
+                    padding: "6px 8px",
+                    cursor: "pointer",
+                    fontFamily: "'Courier New', monospace",
+                    fontSize: 10,
+                  }}
+                >
+                  {tool.label}
+                </button>
+                {tool.hint && (
+                  <div style={{ marginTop: 2, color: "rgba(0, 255, 65, 0.42)", fontSize: 9 }}>
+                    {tool.hint}
+                  </div>
+                )}
+              </div>
+            ))}
+
           {currentLogs.length === 0 && (
             <div style={{ color: "rgba(0, 255, 65, 0.3)", fontStyle: "italic" }}>
-              {activeTab === "log" ? "Awaiting signal..." : "No debug logs yet."}
+              {activeTab === "log"
+                ? "Awaiting signal..."
+                : activeTab === "debug"
+                  ? "No debug logs yet."
+                  : "No tools available."}
             </div>
           )}
         </div>

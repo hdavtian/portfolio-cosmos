@@ -1,5 +1,5 @@
 import type { MutableRefObject } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
@@ -43,7 +43,7 @@ import {
 import SpaceshipHUD from "../ui/SpaceshipHUD";
 import ShipControlBar, { type ShipUIPhase } from "../ui/ShipControlBar";
 import CockpitNavPanel from "../ui/CockpitNavPanel";
-import ShipTerminal from "../ui/ShipTerminal";
+import ShipTerminal, { type ShipTerminalToolAction } from "../ui/ShipTerminal";
 import { HologramDroneDisplay } from "./HologramDroneDisplay";
 // CockpitHologramPanels kept for potential future use
 import { getOrbitalPositionEmitter } from "../OrbitalPositionEmitter";
@@ -2910,6 +2910,41 @@ export default function ResumeSpace3D({
     followingStarDestroyerRef.current = true;
     vlog("🔺 Engaging Star Destroyer escort — matching course and speed");
   }, [vlog]);
+
+  const terminalToolActions = useMemo<ShipTerminalToolAction[]>(() => {
+    const invoke = (name: string, ...args: unknown[]) => {
+      const registry = window as unknown as Record<string, unknown>;
+      const fn = registry[name];
+      if (typeof fn !== "function") {
+        shipLog(`Tool unavailable: ${name}()`, "error");
+        return;
+      }
+      try {
+        (fn as (...fnArgs: unknown[]) => unknown)(...args);
+      } catch {
+        shipLog(`Tool failed: ${name}()`, "error");
+      }
+    };
+    return [
+      { id: "locate-falcon", label: "locateFalcon()", hint: "Beacon to Millennium Falcon", onRun: () => invoke("locateFalcon") },
+      { id: "locate-sd", label: "locateSD()", hint: "Beacon to Star Destroyer", onRun: () => invoke("locateSD") },
+      { id: "sd-status", label: "sdStatus()", hint: "Print SD status to console", onRun: () => invoke("sdStatus") },
+      { id: "sd-on", label: "sdAutonomyOn()", hint: "Enable SD autonomy", onRun: () => invoke("sdAutonomyOn") },
+      { id: "sd-off", label: "sdAutonomyOff()", hint: "Disable SD autonomy", onRun: () => invoke("sdAutonomyOff") },
+      {
+        id: "send-sd",
+        label: "sendSD(name)",
+        hint: "Prompt for destination",
+        onRun: () => {
+          const name = window.prompt("Destination for sendSD(name):");
+          if (!name) return;
+          invoke("sendSD", name);
+        },
+      },
+      { id: "debug-cam", label: "debugCamera()", hint: "Enter free debug camera mode", onRun: () => invoke("debugCamera") },
+      { id: "debug-cam-exit", label: "exitDebugCamera()", hint: "Exit debug camera mode", onRun: () => invoke("exitDebugCamera") },
+    ];
+  }, [shipLog]);
 
   // ── Cockpit destination navigation ─────────────────
   const handleCockpitNavigate = useCallback(
@@ -9460,6 +9495,7 @@ export default function ResumeSpace3D({
             logs={shipLogs}
             debugLogs={debugLogs}
             debugLogTotal={debugLogTotal}
+            toolActions={terminalToolActions}
             visible={consoleVisible}
             emitFalconLocation={emitFalconLocationLogs}
             emitSDLocation={emitSDLocationLogs}
