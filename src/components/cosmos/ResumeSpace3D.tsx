@@ -45,6 +45,7 @@ import ShipControlBar, { type ShipUIPhase } from "../ui/ShipControlBar";
 import CockpitNavPanel from "../ui/CockpitNavPanel";
 import ShipTerminal, { type ShipTerminalToolAction } from "../ui/ShipTerminal";
 import UserOnScreenMessages from "../ui/UserOnScreenMessages";
+import CosmicMiniMap3D from "../ui/CosmicMiniMap3D";
 import {
   clearOnScreenTelemetry,
   onScreenMessage,
@@ -9111,13 +9112,6 @@ export default function ResumeSpace3D({
       key: `${entry.id}-${index}`,
       title: `${index + 1}. ${entry.title}`,
       index,
-      placeholder: false,
-    })),
-    ...Array.from({ length: 8 }, (_, idx) => ({
-      key: `placeholder-${idx}`,
-      title: "",
-      index: -1,
-      placeholder: true,
     })),
   ];
   const focusedProjectShowcaseHasCoverCrop =
@@ -9221,12 +9215,12 @@ export default function ResumeSpace3D({
             }}
           />
 
-          {!isLoading && !consoleVisible && (
+          {!isLoading && (
             <button
               type="button"
-              aria-label="Show ship terminal"
-              title="Show ship terminal"
-              onClick={() => setConsoleVisible(true)}
+              aria-label={consoleVisible ? "Hide ship terminal" : "Show ship terminal"}
+              title={consoleVisible ? "Hide ship terminal" : "Show ship terminal"}
+              onClick={() => setConsoleVisible((prev) => !prev)}
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
               style={{
@@ -9234,25 +9228,22 @@ export default function ResumeSpace3D({
                 top: 14,
                 right: 14,
                 zIndex: 10002,
-                width: 38,
-                height: 38,
-                borderRadius: "50%",
-                border: "1px solid rgba(150, 170, 190, 0.45)",
-                background: "rgba(24, 30, 40, 0.84)",
-                color: "#b6c6da",
-                boxShadow: "0 1px 6px rgba(8, 12, 18, 0.35)",
+                borderRadius: 8,
+                border: "1px solid rgba(122, 201, 255, 0.55)",
+                background: "rgba(8, 20, 36, 0.84)",
+                color: "rgba(192, 236, 255, 0.95)",
+                padding: "6px 10px",
+                boxShadow: "0 0 12px rgba(75, 163, 255, 0.2)",
                 cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 13,
-                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10,
+                letterSpacing: 0.8,
+                fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
                 fontWeight: 700,
-                lineHeight: 1,
+                lineHeight: 1.1,
                 userSelect: "none",
               }}
             >
-              <span aria-hidden="true">&gt;_</span>
+              {consoleVisible ? "Hide Console" : "Show Console"}
             </button>
           )}
 
@@ -9682,6 +9673,17 @@ export default function ResumeSpace3D({
 
           {/* Ship Control Bar — hidden while Project Showcase is active */}
           <UserOnScreenMessages />
+          <CosmicMiniMap3D
+            visible={!isLoading && sceneReady}
+            spaceshipRef={spaceshipRef}
+            starDestroyerRef={starDestroyerRef}
+            itemsRef={itemsRef}
+            skillsAnchorRef={skillsLatticeWorldAnchorRef}
+            aboutAnchorRef={aboutMemorySquareWorldAnchorRef}
+            projectsAnchorRef={projectShowcaseWorldAnchorRef}
+            currentNavigationTarget={currentNavigationTarget}
+            onNavigateToTarget={handleCockpitNavigate}
+          />
 
           {/* Ship Control Bar — hidden while Project Showcase is active */}
           {!projectShowcaseActive && (
@@ -9987,20 +9989,6 @@ export default function ResumeSpace3D({
             >
               <div
                 style={{
-                  padding: "8px 12px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(114, 198, 255, 0.45)",
-                  background: "rgba(8, 16, 26, 0.78)",
-                  color: "#c7e9ff",
-                  fontSize: 12,
-                  fontFamily: "'Rajdhani', sans-serif",
-                  letterSpacing: 0.6,
-                }}
-              >
-                PROJECT SHOWCASE
-              </div>
-              <div
-                style={{
                   display: "flex",
                   gap: 6,
                   alignSelf: "flex-start",
@@ -10075,15 +10063,33 @@ export default function ResumeSpace3D({
               >
                 <div
                   style={{
-                    width: 54,
+                    width: 74,
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    gap: 6,
+                    gap: 5,
                     flexShrink: 0,
+                    padding: "8px 8px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(114, 198, 255, 0.3)",
+                    background: "rgba(7, 13, 24, 0.84)",
                   }}
                 >
-                  <div style={{ fontSize: 13, lineHeight: 1, opacity: 0.92 }}>▲</div>
+                  <div
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      color: "#d9e6ff",
+                      fontFamily: "'Rajdhani', sans-serif",
+                      fontSize: 10,
+                      letterSpacing: 0.4,
+                    }}
+                  >
+                    <span>THROTTLE</span>
+                    <span>{(projectShowcaseLeverValue * 100).toFixed(0)}%</span>
+                  </div>
                   <div
                     onPointerDown={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
@@ -10094,10 +10100,10 @@ export default function ResumeSpace3D({
                     }}
                     style={{
                       position: "relative",
-                      width: 30,
+                      width: 16,
                       height: 232,
-                      borderRadius: 999,
-                      border: "1px solid rgba(160, 205, 255, 0.38)",
+                      borderRadius: 12,
+                      border: "1px solid rgba(160, 205, 255, 0.42)",
                       background:
                         "linear-gradient(180deg, rgba(22,40,58,0.95) 0%, rgba(10,18,28,0.9) 100%)",
                       cursor: "ns-resize",
@@ -10106,18 +10112,76 @@ export default function ResumeSpace3D({
                     <div
                       style={{
                         position: "absolute",
-                        left: 5,
-                        right: 5,
+                        left: -19,
+                        top: 6,
+                        display: "flex",
+                        flexDirection: "column-reverse",
+                        alignItems: "center",
+                        gap: 1,
+                        fontSize: 8,
+                        lineHeight: 1,
+                        color: "rgba(168, 231, 255, 0.8)",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontWeight: 700,
+                        pointerEvents: "none",
+                      }}
+                    >
+                      {"FORWARD".split("").map((ch, idx) => (
+                        <span key={`forward-${idx}`}>{ch}</span>
+                      ))}
+                    </div>
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: -19,
+                        bottom: 6,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 1,
+                        fontSize: 8,
+                        lineHeight: 1,
+                        color: "rgba(255, 198, 164, 0.8)",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontWeight: 700,
+                        pointerEvents: "none",
+                      }}
+                    >
+                      {"REVERSE".split("").map((ch, idx) => (
+                        <span key={`reverse-${idx}`}>{ch}</span>
+                      ))}
+                    </div>
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 2,
+                        right: 2,
                         top: "50%",
                         height: 1,
                         background: "rgba(160, 200, 255, 0.45)",
                       }}
                     />
+                    {[0, -8, 8].map((offset) => (
+                      <div
+                        key={offset}
+                        style={{
+                          position: "absolute",
+                          left: 2,
+                          right: 2,
+                          top: `calc(50% + ${offset}px)`,
+                          height: 1,
+                          background:
+                            offset === 0
+                              ? "rgba(202, 234, 255, 0.68)"
+                              : "rgba(160, 200, 255, 0.36)",
+                        }}
+                      />
+                    ))}
                     <div
                       style={{
                         position: "absolute",
-                        left: 4,
-                        right: 4,
+                        left: -3,
+                        right: -3,
                         width: 22,
                         height: 22,
                         borderRadius: "50%",
@@ -10131,7 +10195,6 @@ export default function ResumeSpace3D({
                       }}
                     />
                   </div>
-                  <div style={{ fontSize: 13, lineHeight: 1, opacity: 0.92 }}>▼</div>
                 </div>
                 <div
                   style={{
@@ -10144,30 +10207,55 @@ export default function ResumeSpace3D({
                 >
                   <div
                     style={{
+                      width: "100%",
+                      padding: "6px 8px 8px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(126, 184, 245, 0.35)",
+                      background: "rgba(8, 14, 24, 0.72)",
                       display: "flex",
-                      flexWrap: "wrap",
+                      flexDirection: "column",
                       gap: 6,
                     }}
                   >
-                    {PROJECT_SHOWCASE_FILTER_OPTIONS.map((opt) => (
-                      <button
-                        key={opt}
-                        style={{
-                          padding: "4px 7px",
-                          borderRadius: 6,
-                          border: "1px solid rgba(120, 165, 225, 0.32)",
-                          background: "rgba(10, 16, 28, 0.78)",
-                          color: "#c5dcff",
-                          cursor: "pointer",
-                          fontFamily: "'Rajdhani', sans-serif",
-                          fontSize: 10,
-                          letterSpacing: 0.35,
-                          lineHeight: 1.1,
-                        }}
-                      >
-                        {opt}
-                      </button>
-                    ))}
+                    <div
+                      style={{
+                        color: "rgba(171, 214, 255, 0.88)",
+                        fontSize: 10,
+                        letterSpacing: 0.8,
+                        fontWeight: 700,
+                      }}
+                    >
+                      FILTERS
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 6,
+                      }}
+                    >
+                      {PROJECT_SHOWCASE_FILTER_OPTIONS.map((opt) => (
+                        <button
+                          key={opt}
+                          style={{
+                            padding: "4px 7px",
+                            borderRadius: 999,
+                            border: "1px solid rgba(120, 165, 225, 0.4)",
+                            background:
+                              "linear-gradient(180deg, rgba(15,26,44,0.92) 0%, rgba(9,16,30,0.9) 100%)",
+                            color: "#d7e9ff",
+                            cursor: "pointer",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            letterSpacing: 0.35,
+                            lineHeight: 1.1,
+                          }}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div
                     className="project-showcase-nav-scroll"
@@ -10192,7 +10280,7 @@ export default function ResumeSpace3D({
                         <button
                           key={row.key}
                           onClick={() => {
-                            if (row.placeholder || row.index < 0) return;
+                            if (row.index < 0) return;
                             jumpProjectShowcaseToIndex(row.index);
                           }}
                           style={{
@@ -10205,7 +10293,7 @@ export default function ResumeSpace3D({
                               ? "rgba(34, 92, 140, 0.88)"
                               : "rgba(10, 16, 28, 0.78)",
                             color: active ? "#ecf6ff" : "#c5dcff",
-                            cursor: row.placeholder ? "default" : "pointer",
+                            cursor: "pointer",
                             textAlign: "left",
                             fontFamily: "'Rajdhani', sans-serif",
                             fontSize: 10,
@@ -10214,11 +10302,10 @@ export default function ResumeSpace3D({
                             whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
-                            opacity: row.placeholder ? 0.52 : 1,
                             minHeight: 24,
                             maxWidth: "100%",
                           }}
-                          title={row.placeholder ? "" : row.title}
+                          title={row.title}
                         >
                           {row.title}
                         </button>
