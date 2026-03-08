@@ -11,7 +11,7 @@ import {
   LABEL_Y_PADDING,
 } from "./scaleConfig";
 
-const PRIMARY_UNIVERSE_STARFIELD_TEXTURE = "/models/nebula/heic0604a.jpg";
+const PRIMARY_UNIVERSE_STARFIELD_TEXTURE = "/textures/8k_stars.jpg";
 const PRIMARY_UNIVERSE_SKYFIELD_TEXTURE = "/textures/stars.jpg";
 
 type OrbitItem = {
@@ -265,12 +265,7 @@ export const createStarfieldMeshes = (
 ): { starfield: THREE.Mesh; skyfield: THREE.Mesh } => {
   // Background - Large distant starfield (skybox approach)
   // Create a much larger sphere to avoid visible sphere edge on zoom out
-  // Previous texture kept for quick rollback: "/models/nebula/PIA23121.jpg".
   const starTexture = textureLoader.load(PRIMARY_UNIVERSE_STARFIELD_TEXTURE);
-  starTexture.wrapS = THREE.RepeatWrapping;
-  starTexture.wrapT = THREE.ClampToEdgeWrapping;
-  starTexture.colorSpace = THREE.SRGBColorSpace;
-  starTexture.needsUpdate = true;
   const starGeo = new THREE.SphereGeometry(STARFIELD_RADIUS, 64, 64); // Much larger sphere
   const starMat = new THREE.MeshBasicMaterial({
     map: starTexture,
@@ -282,10 +277,6 @@ export const createStarfieldMeshes = (
 
   // Inner layer: Secondary star layer for depth
   const skyTexture = textureLoader.load(PRIMARY_UNIVERSE_SKYFIELD_TEXTURE);
-  skyTexture.wrapS = THREE.RepeatWrapping;
-  skyTexture.wrapT = THREE.ClampToEdgeWrapping;
-  skyTexture.colorSpace = THREE.SRGBColorSpace;
-  skyTexture.needsUpdate = true;
   const skyGeo = new THREE.SphereGeometry(SKYFIELD_RADIUS, 64, 64); // Much larger sphere
   const skyMat = new THREE.MeshBasicMaterial({
     map: skyTexture,

@@ -625,6 +625,9 @@ export default function ResumeSpace3D({
   const aboutTileContentRevealStartMsRef = useRef(0);
   const aboutTileContentRevealBlockStaggerMsRef = useRef(360);
   const aboutTileContentFadeStartMsRef = useRef(0);
+  const [aboutNavHereActive, setAboutNavHereActive] = useState(false);
+  const [projectsNavHereActive, setProjectsNavHereActive] = useState(false);
+  const [skillsNavHereActive, setSkillsNavHereActive] = useState(false);
   const [aboutSwarmTriggerVisible, setAboutSwarmTriggerVisible] = useState(false);
   const [aboutActiveSlideIndex, setAboutActiveSlideIndex] = useState(0);
   const aboutFrontSlotIndicesRef = useRef<number[]>([]);
@@ -1583,6 +1586,7 @@ export default function ResumeSpace3D({
 
     projectShowcaseActiveRef.current = false;
     setProjectShowcaseActive(false);
+    setProjectsNavHereActive(false);
     projectShowcasePlayingRef.current = true;
     setProjectShowcasePlaying(true);
     projectShowcaseVelocityRef.current = 0;
@@ -1597,7 +1601,7 @@ export default function ResumeSpace3D({
     projectShowcaseAwaitingProjectsArrivalRef.current = false;
     projectShowcaseSawProjectsTravelRef.current = false;
     vlog("🛰️ Project Showcase exited");
-  }, [setProjectShowcaseLever, vlog]);
+  }, [setProjectShowcaseLever, setProjectsNavHereActive, vlog]);
 
   const enterProjectShowcase = useCallback(() => {
     if (projectShowcaseAngleIntroRef.current.raf !== null) {
@@ -1665,6 +1669,7 @@ export default function ResumeSpace3D({
 
     projectShowcaseActiveRef.current = true;
     setProjectShowcaseActive(true);
+    setProjectsNavHereActive(true);
     pendingProjectShowcaseEntryRef.current = false;
     projectShowcaseAwaitingProjectsArrivalRef.current = false;
     projectShowcaseSawProjectsTravelRef.current = false;
@@ -1673,6 +1678,7 @@ export default function ResumeSpace3D({
   }, [
     setProjectShowcaseLever,
     setProjectShowcaseRunPosition,
+    setProjectsNavHereActive,
     vlog,
   ]);
 
@@ -2213,12 +2219,13 @@ export default function ResumeSpace3D({
     }
     skillsLatticeActiveRef.current = false;
     setSkillsLatticeActive(false);
+    setSkillsNavHereActive(false);
     skillsLatticeRippleRef.current.active = false;
     skillsLatticeSelectedNodeRef.current = null;
     setSkillsLatticeSelection(null);
     skillsLatticeEnvelopeInsideRef.current = null;
     vlog("🧠 Skills lattice exited");
-  }, [setExternalCosmosLabelsHiddenForLattice, vlog]);
+  }, [setExternalCosmosLabelsHiddenForLattice, setSkillsNavHereActive, vlog]);
 
   const enterSkillsLattice = useCallback(() => {
     if (skillsLatticeActiveRef.current) return;
@@ -2251,6 +2258,7 @@ export default function ResumeSpace3D({
       };
     }
     skillsLatticeSystemActiveRef.current = true;
+    setSkillsNavHereActive(true);
     setExternalCosmosLabelsHiddenForLattice(true);
     setFollowingSpaceship(false);
     followingSpaceshipRef.current = false;
@@ -2375,7 +2383,7 @@ export default function ResumeSpace3D({
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  }, [placeStarDestroyerNearSkills, setExternalCosmosLabelsHiddenForLattice, vlog]);
+  }, [placeStarDestroyerNearSkills, setExternalCosmosLabelsHiddenForLattice, setSkillsNavHereActive, vlog]);
 
   const resumeSkillsLatticeInPlace = useCallback(() => {
     if (!skillsLatticeSystemActiveRef.current || skillsLatticeActiveRef.current) return;
@@ -2399,7 +2407,8 @@ export default function ResumeSpace3D({
     controls.enabled = true;
     skillsLatticeActiveRef.current = true;
     setSkillsLatticeActive(true);
-  }, [setExternalCosmosLabelsHiddenForLattice]);
+    setSkillsNavHereActive(true);
+  }, [setExternalCosmosLabelsHiddenForLattice, setSkillsNavHereActive]);
 
   const cancelAboutMemorySquareEntrySequence = useCallback(() => {
     const seq = aboutMemorySquareEntrySequenceRef.current;
@@ -2422,6 +2431,7 @@ export default function ResumeSpace3D({
     aboutMemorySquarePendingEntryRef.current = false;
     aboutMemorySquareNavIntentUntilRef.current = 0;
     aboutMemorySquareActiveRef.current = true;
+    setAboutNavHereActive(true);
     setExternalCosmosLabelsHiddenForAbout(true);
     setFollowingSpaceship(false);
     followingSpaceshipRef.current = false;
@@ -2559,6 +2569,25 @@ export default function ResumeSpace3D({
   const handleExperienceCompanyNavigation = useCallback(
     async (companyId: string) => {
       if (!companyId) return;
+
+      // When launched from About context, force a clean handoff back to normal
+      // flight mode before routing to moon destinations.
+      aboutMemorySquarePendingEntryRef.current = false;
+      aboutMemorySquareActiveRef.current = false;
+      aboutMemorySquareNavIntentUntilRef.current = 0;
+      setAboutNavHereActive(false);
+      setProjectsNavHereActive(false);
+      setExternalCosmosLabelsHiddenForAbout(false);
+      cancelAboutMemorySquareEntrySequence();
+      setFollowingSpaceship(true);
+      followingSpaceshipRef.current = true;
+      setInsideShip(false);
+      insideShipRef.current = false;
+      setShipViewMode("exterior");
+      shipViewModeRef.current = "exterior";
+      if (spaceshipRef.current) spaceshipRef.current.visible = true;
+      setSkillsNavHereActive(false);
+
       if (startProjectShowcaseExitSequence(companyId, "moon")) {
         return;
       }
@@ -2608,6 +2637,10 @@ export default function ResumeSpace3D({
       debugLog,
       captureMoonDepartureContext,
       startProjectShowcaseExitSequence,
+      setExternalCosmosLabelsHiddenForAbout,
+      cancelAboutMemorySquareEntrySequence,
+      setAboutNavHereActive,
+      setSkillsNavHereActive,
     ],
   );
 
@@ -2617,10 +2650,25 @@ export default function ResumeSpace3D({
         aboutMemorySquarePendingEntryRef.current = true;
         aboutMemorySquareActiveRef.current = false;
         aboutMemorySquareNavIntentUntilRef.current = performance.now() + 20000;
+        setProjectsNavHereActive(false);
+        setSkillsNavHereActive(false);
+      } else if (targetType === "section" && targetId === "projects") {
+        setProjectsNavHereActive(true);
+        setSkillsNavHereActive(false);
+      } else if (targetType === "section" && (targetId === "skills" || targetId === SKILLS_LATTICE_NAV_ID)) {
+        setSkillsNavHereActive(true);
+        setProjectsNavHereActive(false);
       } else if (targetType === "section" && targetId !== "about") {
         aboutMemorySquarePendingEntryRef.current = false;
         aboutMemorySquareActiveRef.current = false;
         aboutMemorySquareNavIntentUntilRef.current = 0;
+        setAboutNavHereActive(false);
+        if (targetId !== "projects") {
+          setProjectsNavHereActive(false);
+        }
+        if (targetId !== "skills" && targetId !== SKILLS_LATTICE_NAV_ID) {
+          setSkillsNavHereActive(false);
+        }
         setExternalCosmosLabelsHiddenForAbout(false);
         cancelAboutMemorySquareEntrySequence();
       }
@@ -2661,6 +2709,9 @@ export default function ResumeSpace3D({
       startProjectShowcaseExitSequence,
       cancelAboutMemorySquareEntrySequence,
       setExternalCosmosLabelsHiddenForAbout,
+      setAboutNavHereActive,
+      setProjectsNavHereActive,
+      setSkillsNavHereActive,
     ],
   );
 
@@ -2865,8 +2916,15 @@ export default function ResumeSpace3D({
         aboutMemorySquarePendingEntryRef.current = false;
         aboutMemorySquareActiveRef.current = false;
         aboutMemorySquareNavIntentUntilRef.current = 0;
+        setAboutNavHereActive(false);
         setExternalCosmosLabelsHiddenForAbout(false);
         cancelAboutMemorySquareEntrySequence();
+      }
+      if (targetId !== "projects" && targetId !== PROJECT_SHOWCASE_NAV_ID) {
+        setProjectsNavHereActive(false);
+      }
+      if (targetId !== "skills" && targetId !== SKILLS_LATTICE_NAV_ID) {
+        setSkillsNavHereActive(false);
       }
       if (targetId !== "skills" && targetId !== SKILLS_LATTICE_NAV_ID) {
         skillsLatticePendingEntryRef.current = false;
@@ -2886,6 +2944,7 @@ export default function ResumeSpace3D({
         if (spaceshipRef.current) spaceshipRef.current.visible = true;
       }
       if (targetId === "skills" || targetId === SKILLS_LATTICE_NAV_ID) {
+        setSkillsNavHereActive(true);
         if (skillsLatticeActiveRef.current) {
           vlog("🧠 Skills lattice already active");
           return;
@@ -2912,6 +2971,7 @@ export default function ResumeSpace3D({
         return;
       }
       if (targetId === "about") {
+        setAboutNavHereActive(true);
         setFollowingSpaceship(true);
         followingSpaceshipRef.current = true;
         setInsideShip(false);
@@ -2936,6 +2996,7 @@ export default function ResumeSpace3D({
         return;
       }
       if (targetId === "projects" || targetId === PROJECT_SHOWCASE_NAV_ID) {
+        setProjectsNavHereActive(true);
         if (!projectShowcaseReady) {
           vlog("⚠️ Project Showcase is loading");
           return;
@@ -2997,6 +3058,9 @@ export default function ResumeSpace3D({
       exitSkillsLattice,
       exitProjectShowcase,
       setExternalCosmosLabelsHiddenForAbout,
+      setAboutNavHereActive,
+      setProjectsNavHereActive,
+      setSkillsNavHereActive,
       vlog,
     ],
   );
@@ -7801,8 +7865,15 @@ export default function ResumeSpace3D({
         aboutMemorySquarePendingEntryRef.current = false;
         aboutMemorySquareActiveRef.current = false;
         aboutMemorySquareNavIntentUntilRef.current = 0;
+        setAboutNavHereActive(false);
         setExternalCosmosLabelsHiddenForAbout(false);
         cancelAboutMemorySquareEntrySequence();
+      }
+      if (target !== "projects") {
+        setProjectsNavHereActive(false);
+      }
+      if (target !== "skills") {
+        setSkillsNavHereActive(false);
       }
 
       // If a moon is currently focused, schedule exit so its orbit resumes before navigating
@@ -7833,6 +7904,7 @@ export default function ResumeSpace3D({
           }
           break;
         case "about":
+          setAboutNavHereActive(true);
           vlog("👨‍🚀 About — routing to memory square...");
           if (!manualFlightModeRef.current) {
             setFollowingSpaceship(true);
@@ -7877,6 +7949,12 @@ export default function ResumeSpace3D({
         case "experience":
         case "skills":
         case "projects": {
+          if (target === "projects") {
+            setProjectsNavHereActive(true);
+          }
+          if (target === "skills") {
+            setSkillsNavHereActive(true);
+          }
           const planetLabel = target === "experience" ? "🌍 Experience" : target === "skills" ? "⚡ Skills" : "💡 Projects";
           vlog(
             target === "projects"
@@ -8616,6 +8694,9 @@ export default function ResumeSpace3D({
       aboutMemorySquarePendingEntryRef.current = false;
       aboutMemorySquareActiveRef.current = false;
       aboutMemorySquareNavIntentUntilRef.current = 0;
+      setAboutNavHereActive(false);
+      setProjectsNavHereActive(false);
+      setSkillsNavHereActive(false);
       setExternalCosmosLabelsHiddenForAbout(false);
       cancelAboutMemorySquareEntrySequence();
       if (aboutCellRafRef.current !== null) {
@@ -9354,7 +9435,13 @@ export default function ResumeSpace3D({
           {shipUIPhase === "ship-engaged" && (
             <CockpitNavPanel
               targets={navigationTargets}
-              currentTarget={currentNavigationTarget}
+              currentTarget={
+                aboutNavHereActive
+                  ? "about"
+                  : (projectsNavHereActive
+                      ? "projects"
+                      : (skillsNavHereActive ? "skills" : currentNavigationTarget))
+              }
               isNavigating={navigationDistance !== null}
               onNavigate={handleCockpitNavigate}
             />
@@ -10494,7 +10581,13 @@ export default function ResumeSpace3D({
             }}
             navigationTargets={navigationTargets}
             onNavigate={handleQuickNav}
-            currentTarget={currentNavigationTarget}
+            currentTarget={
+              aboutNavHereActive
+                ? "about"
+                : (projectsNavHereActive
+                    ? "projects"
+                    : (skillsNavHereActive ? "skills" : currentNavigationTarget))
+            }
             navigationDistance={navigationDistance}
             navigationETA={navigationETA}
             isTransitioning={false}
