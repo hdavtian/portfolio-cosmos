@@ -279,6 +279,10 @@ type AboutCellRecord = {
   quaternion: THREE.Quaternion;
   angularVelocity: THREE.Vector3;
   burstDirection: THREE.Vector3;
+  spinAxisPrimary: THREE.Vector3;
+  spinAxisSecondary: THREE.Vector3;
+  spinRatePrimary: number;
+  spinRateSecondary: number;
   sourceSlotIndex: number;
   targetSlotIndex: number;
   pulsePhase: number;
@@ -628,6 +632,7 @@ export default function ResumeSpace3D({
   const aboutTileContentRevealStartMsRef = useRef(0);
   const aboutTileContentRevealBlockStaggerMsRef = useRef(360);
   const aboutTileContentFadeStartMsRef = useRef(0);
+  const aboutPanelSpinStyleRef = useRef<number[]>([0, 1, 0, 1]);
   const [aboutNavHereActive, setAboutNavHereActive] = useState(false);
   const [projectsNavHereActive, setProjectsNavHereActive] = useState(false);
   const [skillsNavHereActive, setSkillsNavHereActive] = useState(false);
@@ -3541,6 +3546,7 @@ export default function ResumeSpace3D({
     const worldRight = new THREE.Vector3(1, 0, 0);
     const toTarget = new THREE.Vector3();
     const deltaQuat = new THREE.Quaternion();
+    const deltaQuatB = new THREE.Quaternion();
     const targetQuat = new THREE.Quaternion();
 
     const shuffleSlotTargets = () => {
@@ -3598,11 +3604,20 @@ export default function ResumeSpace3D({
     const beginBreakOut = (now: number) => {
       const slots = aboutCellSlotsRef.current;
       const records = aboutCellRecordsRef.current;
+      // Per breakout cycle, each of the 4 large panels randomly picks one spin style:
+      // 0 = graceful twirl, 1 = aggressive tumble.
+      aboutPanelSpinStyleRef.current = Array.from({ length: 4 }, () => (Math.random() < 0.5 ? 0 : 1));
       slotCenter.set(0, 0, 0);
       slots.forEach((slot) => slotCenter.add(slot.worldPosition));
       slotCenter.multiplyScalar(1 / Math.max(1, slots.length));
       records.forEach((rec, idx) => {
         const slot = slots[rec.targetSlotIndex] ?? slots[idx];
+        const sourceSlot = slots[rec.sourceSlotIndex] ?? slot;
+        const panelIdx = THREE.MathUtils.clamp(sourceSlot.tileIndex, 0, 3);
+        const panelSpinStyle = aboutPanelSpinStyleRef.current[panelIdx] ?? 0;
+        const spinRateScale = panelSpinStyle === 1
+          ? (3.2 + Math.random() * 2.5)
+          : (1.25 + Math.random() * 0.95);
         rec.position.copy(slot.worldPosition);
         rec.quaternion.copy(slot.worldQuaternion);
         rec.velocity.set(0, 0, 0);
@@ -3644,6 +3659,19 @@ export default function ResumeSpace3D({
           (Math.random() * 2 - 1) * ABOUT_SPIN_MAX,
           (Math.random() * 2 - 1) * ABOUT_SPIN_MAX,
         );
+        rec.spinAxisPrimary
+          .set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1)
+          .normalize();
+        rec.spinAxisSecondary
+          .set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1)
+          .normalize();
+        if (rec.spinAxisPrimary.lengthSq() < 1e-6) rec.spinAxisPrimary.set(0.47, 0.63, -0.62);
+        if (rec.spinAxisSecondary.lengthSq() < 1e-6) rec.spinAxisSecondary.set(-0.28, 0.86, 0.42);
+        rec.spinRatePrimary = (Math.random() * 2 - 1) * ABOUT_SPIN_MAX * spinRateScale;
+        rec.spinRateSecondary = (Math.random() * 2 - 1)
+          * ABOUT_SPIN_MAX
+          * spinRateScale
+          * (panelSpinStyle === 1 ? 0.9 : 0.72);
       });
       setPhase("breakOut", now);
     };
@@ -3748,6 +3776,11 @@ export default function ResumeSpace3D({
         // Auto random shatter disabled; About transitions are now user-driven.
       } else if (runtime.phase === "breakOut") {
         records.forEach((rec, idx) => {
+          const sourceSlot = slots[rec.sourceSlotIndex] ?? slots[idx];
+          const panelIdx = THREE.MathUtils.clamp(sourceSlot.tileIndex, 0, 3);
+          const panelSpinStyle = aboutPanelSpinStyleRef.current[panelIdx] ?? 0;
+          const spinPrimaryGain = panelSpinStyle === 1 ? 1.48 : 0.82;
+          const spinSecondaryGain = panelSpinStyle === 1 ? 1.28 : 0.72;
           const pulse = 1 + Math.sin(now * 0.001 + rec.pulsePhase) * 0.08 * phaseT;
           tempScale.setScalar(pulse);
           toCenter.subVectors(rec.position, slotCenter).normalize();
@@ -3762,12 +3795,17 @@ export default function ResumeSpace3D({
           rec.velocity.addScaledVector(tangent, ABOUT_BREAK_IMPULSE * dt * 0.17);
           rec.velocity.multiplyScalar(0.986);
           rec.position.addScaledVector(rec.velocity, dt);
-          deltaQuat.setFromEuler(new THREE.Euler(
-            rec.angularVelocity.x * dt,
-            rec.angularVelocity.y * dt,
-            rec.angularVelocity.z * dt,
-          ));
-          rec.quaternion.multiply(deltaQuat).normalize();
+          rec.spinAxisPrimary.addScaledVector(rec.velocity, dt * 0.0022).normalize();
+          rec.spinAxisSecondary.addScaledVector(tangent, dt * 0.0065).normalize();
+          deltaQuat.setFromAxisAngle(
+            rec.spinAxisPrimary,
+            rec.spinRatePrimary * spinPrimaryGain * (1.15 + phaseT * 0.75) * dt,
+          );
+          deltaQuatB.setFromAxisAngle(
+            rec.spinAxisSecondary,
+            rec.spinRateSecondary * spinSecondaryGain * (0.95 + phaseT * 0.45) * dt,
+          );
+          rec.quaternion.multiply(deltaQuat).multiply(deltaQuatB).normalize();
           applyRecordMatrix(idx, rec, pulse);
         });
         if (phaseElapsed >= runtime.phaseDurationMs) {
@@ -3776,6 +3814,11 @@ export default function ResumeSpace3D({
         }
       } else if (runtime.phase === "swarm") {
         records.forEach((rec, idx) => {
+          const sourceSlot = slots[rec.sourceSlotIndex] ?? slots[idx];
+          const panelIdx = THREE.MathUtils.clamp(sourceSlot.tileIndex, 0, 3);
+          const panelSpinStyle = aboutPanelSpinStyleRef.current[panelIdx] ?? 0;
+          const spinPrimaryGain = panelSpinStyle === 1 ? 1.22 : 0.74;
+          const spinSecondaryGain = panelSpinStyle === 1 ? 1.06 : 0.66;
           const pulse = 1 + Math.sin(now * 0.0014 + rec.pulsePhase) * 0.1;
           tempScale.setScalar(pulse);
           drift.set(
@@ -3800,12 +3843,18 @@ export default function ResumeSpace3D({
           if (driftLen > 0.0001) {
             rec.angularVelocity.addScaledVector(drift, (dt * 0.16) / driftLen);
           }
-          deltaQuat.setFromEuler(new THREE.Euler(
-            rec.angularVelocity.x * dt,
-            rec.angularVelocity.y * dt,
-            rec.angularVelocity.z * dt,
-          ));
-          rec.quaternion.multiply(deltaQuat).normalize();
+          rec.spinAxisPrimary.addScaledVector(drift, dt * 0.0016).normalize();
+          rec.spinAxisSecondary.addScaledVector(rec.velocity, dt * 0.0012).normalize();
+          const swarmWobble = 0.7 + 0.3 * Math.sin(now * 0.0018 + rec.pulsePhase);
+          deltaQuat.setFromAxisAngle(
+            rec.spinAxisPrimary,
+            rec.spinRatePrimary * spinPrimaryGain * swarmWobble * dt,
+          );
+          deltaQuatB.setFromAxisAngle(
+            rec.spinAxisSecondary,
+            rec.spinRateSecondary * spinSecondaryGain * (1.05 - 0.25 * swarmWobble) * dt,
+          );
+          rec.quaternion.multiply(deltaQuat).multiply(deltaQuatB).normalize();
           applyRecordMatrix(idx, rec, pulse);
         });
         if (phaseElapsed >= runtime.phaseDurationMs) {
@@ -3814,20 +3863,55 @@ export default function ResumeSpace3D({
         }
       } else if (runtime.phase === "reform") {
         records.forEach((rec, idx) => {
+          const sourceSlot = slots[rec.sourceSlotIndex] ?? slots[idx];
+          const panelIdx = THREE.MathUtils.clamp(sourceSlot.tileIndex, 0, 3);
+          const panelSpinStyle = aboutPanelSpinStyleRef.current[panelIdx] ?? 0;
+          const reformProgress = phaseT;
+          const freeSpinBlend = 1 - reformProgress;
+          const attractionGain = THREE.MathUtils.lerp(0.52, 1.02, reformProgress);
+          const reformSpinDecayPerFrame = panelSpinStyle === 1
+            ? THREE.MathUtils.lerp(0.998, 0.968, reformProgress)
+            : THREE.MathUtils.lerp(0.999, 0.972, reformProgress);
           const targetSlot = slots[rec.targetSlotIndex] ?? slots[idx];
           toTarget.subVectors(targetSlot.worldPosition, rec.position);
-          rec.velocity.addScaledVector(toTarget, ABOUT_REFORM_STIFFNESS * dt);
-          rec.velocity.multiplyScalar(Math.pow(ABOUT_REFORM_DAMPING, dt * 60));
+          spinAxis.copy(rec.spinAxisPrimary);
+          if (spinAxis.lengthSq() < 1e-6) spinAxis.set(0.31, 0.77, -0.55);
+          spinAxis.normalize();
+          tangent.crossVectors(toTarget, spinAxis);
+          if (tangent.lengthSq() < 1e-6) tangent.crossVectors(toTarget, worldUp);
+          if (tangent.lengthSq() < 1e-6) tangent.set(-toTarget.y, toTarget.x, toTarget.z * 0.25);
+          tangent.normalize();
+          randomDir.set(
+            Math.sin(rec.pulsePhase * 1.91 + now * 0.00115),
+            Math.cos(rec.pulsePhase * 1.47 + now * 0.00131),
+            Math.sin(rec.pulsePhase * 2.63 + now * 0.00107),
+          );
+          if (randomDir.lengthSq() < 1e-6) randomDir.set(0.36, -0.48, 0.8);
+          randomDir.normalize();
+          rec.velocity.addScaledVector(toTarget, ABOUT_REFORM_STIFFNESS * attractionGain * dt);
+          rec.velocity.addScaledVector(tangent, dt * 10.5 * freeSpinBlend);
+          rec.velocity.addScaledVector(randomDir, dt * 6.8 * freeSpinBlend);
+          rec.velocity.multiplyScalar(Math.pow(THREE.MathUtils.lerp(ABOUT_REFORM_DAMPING, 0.965, reformProgress), dt * 60));
           rec.position.addScaledVector(rec.velocity, dt);
           rec.angularVelocity.multiplyScalar(0.92);
+          rec.spinRatePrimary *= Math.pow(reformSpinDecayPerFrame, dt * 60);
+          rec.spinRateSecondary *= Math.pow(reformSpinDecayPerFrame, dt * 60);
+          rec.spinAxisPrimary.addScaledVector(rec.velocity, dt * 0.0017 * freeSpinBlend).normalize();
+          rec.spinAxisSecondary.addScaledVector(tangent, dt * 0.0026 * freeSpinBlend).normalize();
           targetQuat.copy(targetSlot.worldQuaternion);
-          rec.quaternion.slerp(targetQuat, THREE.MathUtils.clamp(dt * 5.2, 0, 1));
-          deltaQuat.setFromEuler(new THREE.Euler(
-            rec.angularVelocity.x * dt,
-            rec.angularVelocity.y * dt,
-            rec.angularVelocity.z * dt,
-          ));
-          rec.quaternion.multiply(deltaQuat).normalize();
+          rec.quaternion.slerp(
+            targetQuat,
+            THREE.MathUtils.clamp(dt * THREE.MathUtils.lerp(0.85, 8.8, reformProgress * reformProgress), 0, 1),
+          );
+          deltaQuat.setFromAxisAngle(
+            rec.spinAxisPrimary,
+            rec.spinRatePrimary * (0.55 + 0.95 * freeSpinBlend) * dt,
+          );
+          deltaQuatB.setFromAxisAngle(
+            rec.spinAxisSecondary,
+            rec.spinRateSecondary * (0.5 + 1.05 * freeSpinBlend) * dt,
+          );
+          rec.quaternion.multiply(deltaQuat).multiply(deltaQuatB).normalize();
           applyRecordMatrix(idx, rec, 1);
         });
         if (phaseElapsed >= runtime.phaseDurationMs) {
@@ -5766,6 +5850,10 @@ export default function ResumeSpace3D({
         quaternion: slot.worldQuaternion.clone(),
         angularVelocity: new THREE.Vector3(),
         burstDirection: new THREE.Vector3(0, 0, 1),
+        spinAxisPrimary: new THREE.Vector3(0.53, 0.61, -0.59),
+        spinAxisSecondary: new THREE.Vector3(-0.31, 0.88, 0.35),
+        spinRatePrimary: 0,
+        spinRateSecondary: 0,
         sourceSlotIndex: idx,
         targetSlotIndex: idx,
         pulsePhase: Math.random() * Math.PI * 2,
