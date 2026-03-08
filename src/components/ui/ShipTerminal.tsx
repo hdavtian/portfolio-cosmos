@@ -23,11 +23,13 @@ interface ShipTerminalProps {
   debugLogs?: DebugLogEntry[];
   debugLogTotal?: number;
   onCommand?: (command: string) => void;
+  onClearLog?: () => void;
   onClearDebug?: () => void;
   emitFalconLocation?: boolean;
   emitSDLocation?: boolean;
   onEmitFalconLocationChange?: (enabled: boolean) => void;
   onEmitSDLocationChange?: (enabled: boolean) => void;
+  onClose?: () => void;
   visible?: boolean;
 }
 
@@ -59,17 +61,22 @@ const SOURCE_COLOR: Record<string, string> = {
 
 const TYPE_SPEED = 18;
 const MAX_TYPE_CHARS = 200;
+const TERMINAL_LAYOUT_STORAGE_KEY = "ship-terminal-layout-v1";
+const TERMINAL_MIN_WIDTH = 300;
+const TERMINAL_MIN_HEIGHT = 240;
 
 const ShipTerminal: React.FC<ShipTerminalProps> = ({
   logs,
   debugLogs = [],
   debugLogTotal = 0,
   onCommand,
+  onClearLog,
   onClearDebug,
   emitFalconLocation = false,
   emitSDLocation = false,
   onEmitFalconLocationChange,
   onEmitSDLocationChange,
+  onClose,
   visible = true,
 }) => {
   const logScrollRef = useRef<HTMLDivElement>(null);
@@ -77,6 +84,88 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
   const [inputValue, setInputValue] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("log");
   const [copyFlash, setCopyFlash] = useState(false);
+  const [isDocked, setIsDocked] = useState(true);
+  const [panelWidth, setPanelWidth] = useState(420);
+  const [panelHeight, setPanelHeight] = useState(
+    typeof window !== "undefined" ? Math.max(320, window.innerHeight) : 720,
+  );
+  const [panelX, setPanelX] = useState(
+    typeof window !== "undefined" ? Math.max(24, window.innerWidth - 440) : 900,
+  );
+  const [panelY, setPanelY] = useState(16);
+  const dragStateRef = useRef<{
+    active: boolean;
+    startX: number;
+    startY: number;
+    startPanelX: number;
+    startPanelY: number;
+  }>({
+    active: false,
+    startX: 0,
+    startY: 0,
+    startPanelX: 0,
+    startPanelY: 0,
+  });
+  const resizeStateRef = useRef<{
+    mode: "left" | "right" | "bottom" | "bottom-left" | "bottom-right" | null;
+    startX: number;
+    startY: number;
+    startW: number;
+    startH: number;
+    startPanelX: number;
+  }>({
+    mode: null,
+    startX: 0,
+    startY: 0,
+    startW: 0,
+    startH: 0,
+    startPanelX: 0,
+  });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(TERMINAL_LAYOUT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        isDocked?: boolean;
+        panelWidth?: number;
+        panelHeight?: number;
+        panelX?: number;
+        panelY?: number;
+      };
+      if (typeof parsed.isDocked === "boolean") setIsDocked(parsed.isDocked);
+      if (typeof parsed.panelWidth === "number") setPanelWidth(parsed.panelWidth);
+      if (typeof parsed.panelHeight === "number") setPanelHeight(parsed.panelHeight);
+      if (typeof parsed.panelX === "number") setPanelX(parsed.panelX);
+      if (typeof parsed.panelY === "number") setPanelY(parsed.panelY);
+    } catch {
+      // ignore corrupt persisted layout
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        TERMINAL_LAYOUT_STORAGE_KEY,
+        JSON.stringify({ isDocked, panelWidth, panelHeight, panelX, panelY }),
+      );
+    } catch {
+      // ignore storage write failures
+    }
+  }, [isDocked, panelWidth, panelHeight, panelX, panelY]);
+
+  useEffect(() => {
+    const onWindowResize = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      setPanelWidth((w) => Math.max(TERMINAL_MIN_WIDTH, Math.min(w, vw - 12)));
+      setPanelHeight((h) => Math.max(TERMINAL_MIN_HEIGHT, Math.min(h, vh)));
+      setPanelX((x) => Math.max(6, Math.min(x, vw - TERMINAL_MIN_WIDTH - 6)));
+      setPanelY((y) => Math.max(0, Math.min(y, vh - TERMINAL_MIN_HEIGHT)));
+    };
+    window.addEventListener("resize", onWindowResize);
+    return () => window.removeEventListener("resize", onWindowResize);
+  }, []);
 
   // Typewriter state for Log tab
   const [revealedIds, setRevealedIds] = useState<Set<number>>(new Set());
@@ -184,33 +273,132 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
   const currentLogs = activeTab === "log" ? logs : debugLogs;
   const scrollRef = activeTab === "log" ? logScrollRef : debugScrollRef;
 
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDocked) return;
+    dragStateRef.current = {
+      active: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      startPanelX: panelX,
+      startPanelY: panelY,
+    };
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+  };
+
+  const startResize = (
+    e: React.PointerEvent<HTMLDivElement>,
+    mode: "left" | "right" | "bottom" | "bottom-left" | "bottom-right",
+  ) => {
+    e.stopPropagation();
+    resizeStateRef.current = {
+      mode,
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: panelWidth,
+      startH: panelHeight,
+      startPanelX: panelX,
+    };
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMoveCapture = (e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragStateRef.current;
+    const resize = resizeStateRef.current;
+    if (drag.active) {
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      setPanelX(Math.max(6, Math.min(drag.startPanelX + dx, vw - panelWidth - 6)));
+      setPanelY(Math.max(0, Math.min(drag.startPanelY + dy, vh - panelHeight)));
+      return;
+    }
+    if (!resize.mode) return;
+    const dx = e.clientX - resize.startX;
+    const dy = e.clientY - resize.startY;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let nextW = resize.startW;
+    let nextH = resize.startH;
+    let nextX = resize.startPanelX;
+    if (resize.mode === "right" || resize.mode === "bottom-right") {
+      nextW = resize.startW + dx;
+    }
+    if (resize.mode === "left" || resize.mode === "bottom-left") {
+      nextW = resize.startW - dx;
+      nextX = resize.startPanelX + dx;
+    }
+    if (resize.mode === "bottom" || resize.mode === "bottom-left" || resize.mode === "bottom-right") {
+      nextH = resize.startH + dy;
+    }
+    nextW = Math.max(TERMINAL_MIN_WIDTH, Math.min(nextW, vw - 12));
+    nextH = Math.max(TERMINAL_MIN_HEIGHT, Math.min(nextH, vh));
+    if (!isDocked) {
+      nextX = Math.max(6, Math.min(nextX, vw - nextW - 6));
+      setPanelX(nextX);
+    }
+    setPanelWidth(nextW);
+    setPanelHeight(nextH);
+  };
+
+  const onPointerUpCapture = () => {
+    dragStateRef.current.active = false;
+    resizeStateRef.current.mode = null;
+  };
+
+  const effectiveHeight = Math.max(TERMINAL_MIN_HEIGHT, Math.min(panelHeight, window.innerHeight));
+  const wrapperStyle: React.CSSProperties = isDocked
+    ? {
+      position: "fixed",
+      top: 0,
+      right: 0,
+      width: panelWidth,
+      height: effectiveHeight,
+      zIndex: 10050,
+      fontFamily: "'Courier New', 'Consolas', monospace",
+      fontSize: 11,
+      lineHeight: 1.5,
+      pointerEvents: "auto",
+      userSelect: "text",
+    }
+    : {
+      position: "fixed",
+      left: panelX,
+      top: panelY,
+      width: panelWidth,
+      height: effectiveHeight,
+      zIndex: 10050,
+      fontFamily: "'Courier New', 'Consolas', monospace",
+      fontSize: 11,
+      lineHeight: 1.5,
+      pointerEvents: "auto",
+      userSelect: "text",
+    };
+
   return (
     <div
-      style={{
-        position: "fixed",
-        top: 116,
-        right: 16,
-        width: 340,
-        zIndex: 10050,
-        fontFamily: "'Courier New', 'Consolas', monospace",
-        fontSize: 11,
-        lineHeight: 1.5,
-        pointerEvents: "auto",
-        userSelect: "text",
-      }}
+      style={wrapperStyle}
+      onPointerMove={onPointerMoveCapture}
+      onPointerUp={onPointerUpCapture}
+      onPointerCancel={onPointerUpCapture}
     >
       <div
         style={{
+          width: "100%",
+          height: "100%",
           background: "rgba(0, 12, 4, 0.88)",
           border: "1px solid rgba(0, 255, 65, 0.25)",
           borderRadius: 6,
           boxShadow:
             "0 0 12px rgba(0, 255, 65, 0.08), inset 0 0 30px rgba(0, 20, 8, 0.5)",
           overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {/* Header bar with title + copy button */}
         <div
+          onPointerDown={startDrag}
           style={{
             padding: "4px 10px",
             background: "rgba(0, 255, 65, 0.08)",
@@ -218,6 +406,7 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
             display: "flex",
             alignItems: "center",
             gap: 6,
+            cursor: isDocked ? "default" : "move",
           }}
         >
           <span
@@ -243,6 +432,25 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
             Ship Terminal
           </span>
           <button
+            onClick={() => setIsDocked((prev) => !prev)}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(120, 180, 255, 0.25)",
+              borderRadius: 3,
+              color: "rgba(120, 180, 255, 0.65)",
+              fontSize: 9,
+              fontFamily: "'Courier New', monospace",
+              padding: "1px 6px",
+              cursor: "pointer",
+              letterSpacing: 0.5,
+            }}
+            title={isDocked ? "Detach terminal" : "Dock terminal to side"}
+          >
+            {isDocked ? "DETACH" : "DOCK"}
+          </button>
+          <button
             onClick={handleCopy}
             onMouseDown={(e) => e.stopPropagation()}
             style={{
@@ -260,6 +468,26 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
           >
             {copyFlash ? "COPIED" : "COPY"}
           </button>
+          {activeTab === "log" && onClearLog && (
+            <button
+              onClick={onClearLog}
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                background: "transparent",
+                border: "1px solid rgba(255, 100, 100, 0.2)",
+                borderRadius: 3,
+                color: "rgba(255, 100, 100, 0.5)",
+                fontSize: 9,
+                fontFamily: "'Courier New', monospace",
+                padding: "1px 6px",
+                cursor: "pointer",
+                letterSpacing: 0.5,
+              }}
+            >
+              CLEAR
+            </button>
+          )}
           {activeTab === "debug" && onClearDebug && (
             <button
               onClick={onClearDebug}
@@ -279,6 +507,26 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
               CLEAR
             </button>
           )}
+          <button
+            onClick={onClose}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(255, 140, 140, 0.28)",
+              borderRadius: 3,
+              color: "rgba(255, 140, 140, 0.75)",
+              fontSize: 10,
+              fontFamily: "'Courier New', monospace",
+              padding: "0 6px",
+              cursor: "pointer",
+              fontWeight: 700,
+              lineHeight: 1.2,
+            }}
+            title="Close terminal"
+          >
+            X
+          </button>
         </div>
 
         {/* Tab bar */}
@@ -331,7 +579,8 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
         <div
           ref={scrollRef}
           style={{
-            height: 200,
+            flex: 1,
+            minHeight: 120,
             overflowY: "auto",
             overflowX: "hidden",
             padding: "6px 10px",
@@ -452,6 +701,43 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
           />
         </form>
       </div>
+      {/* Resize handles */}
+      <div
+        onPointerDown={(e) => startResize(e, isDocked ? "left" : "right")}
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          [isDocked ? "left" : "right"]: 0,
+          width: 8,
+          cursor: "ew-resize",
+          zIndex: 2,
+        }}
+      />
+      <div
+        onPointerDown={(e) => startResize(e, "bottom")}
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 8,
+          cursor: "ns-resize",
+          zIndex: 2,
+        }}
+      />
+      <div
+        onPointerDown={(e) => startResize(e, isDocked ? "bottom-left" : "bottom-right")}
+        style={{
+          position: "absolute",
+          bottom: 0,
+          [isDocked ? "left" : "right"]: 0,
+          width: 14,
+          height: 14,
+          cursor: isDocked ? "nesw-resize" : "nwse-resize",
+          zIndex: 3,
+        }}
+      />
 
       <style>{`
         @keyframes terminalBlink {

@@ -369,6 +369,8 @@ export default function ResumeSpace3D({
     missionLog,
     shipLog,
     shipLogs,
+    shipLogsRef,
+    setShipLogs,
     debugLog,
     debugLogs,
     debugLogsRef,
@@ -8985,12 +8987,12 @@ export default function ResumeSpace3D({
             }}
           />
 
-          {!isLoading && (
+          {!isLoading && !consoleVisible && (
             <button
               type="button"
-              aria-label={consoleVisible ? "Hide console logs" : "Show console logs"}
-              title={consoleVisible ? "Hide console logs" : "Show console logs"}
-              onClick={() => setConsoleVisible(!consoleVisible)}
+              aria-label="Show ship terminal"
+              title="Show ship terminal"
+              onClick={() => setConsoleVisible(true)}
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
               style={{
@@ -9002,13 +9004,9 @@ export default function ResumeSpace3D({
                 height: 38,
                 borderRadius: "50%",
                 border: "1px solid rgba(150, 170, 190, 0.45)",
-                background: consoleVisible
-                  ? "rgba(38, 46, 58, 0.88)"
-                  : "rgba(24, 30, 40, 0.84)",
-                color: consoleVisible ? "#d8e7ff" : "#b6c6da",
-                boxShadow: consoleVisible
-                  ? "0 2px 8px rgba(8, 12, 18, 0.45)"
-                  : "0 1px 6px rgba(8, 12, 18, 0.35)",
+                background: "rgba(24, 30, 40, 0.84)",
+                color: "#b6c6da",
+                boxShadow: "0 1px 6px rgba(8, 12, 18, 0.35)",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -9467,6 +9465,11 @@ export default function ResumeSpace3D({
             emitSDLocation={emitSDLocationLogs}
             onEmitFalconLocationChange={setEmitFalconLocationLogs}
             onEmitSDLocationChange={setEmitSDLocationLogs}
+            onClearLog={() => {
+              shipLogsRef.current = [];
+              setShipLogs([]);
+            }}
+            onClose={() => setConsoleVisible(false)}
             onCommand={(cmd) => {
               shipLog(`$ ${cmd}`, "cmd");
               // Command execution will be wired later

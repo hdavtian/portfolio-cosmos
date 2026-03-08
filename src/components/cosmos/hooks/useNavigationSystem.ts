@@ -108,6 +108,8 @@ export const useNavigationSystem = (deps: {
   } = deps;
 
   const navTraceLastAtRef = useRef<Record<string, number>>({});
+  const navTickSignatureRef = useRef("");
+  const navIdleTickLastAtRef = useRef(0);
   const navTrace = (method: string, detail?: string, throttleMs = 0) => {
     if (!NAV_DOUBLE_CLICK_TRACE_LOGS) return;
     const now = Date.now();
@@ -937,11 +939,30 @@ export const useNavigationSystem = (deps: {
   const _navArcPoint = useRef(new THREE.Vector3());
 
   const updateAutopilotNavigation = useCallback(() => {
-    navTrace(
-      "updateAutopilotNavigation()",
-      `tick:target=${navigationTargetRef.current.id ?? "none"} phase=${navigationTargetRef.current.turnPhase ?? "none"}`,
-      2000,
-    );
+    const tickTarget = navigationTargetRef.current.id ?? "none";
+    const tickPhase = navigationTargetRef.current.turnPhase ?? "none";
+    const tickSig = `${tickTarget}:${tickPhase}`;
+    const nowTickMs = Date.now();
+    // Avoid noisy idle spam: log idle only on transition or occasional heartbeat.
+    if (tickSig === "none:none") {
+      if (
+        navTickSignatureRef.current !== tickSig
+        || nowTickMs - navIdleTickLastAtRef.current > 15000
+      ) {
+        navTrace(
+          "updateAutopilotNavigation()",
+          `tick:target=${tickTarget} phase=${tickPhase}`,
+        );
+        navIdleTickLastAtRef.current = nowTickMs;
+      }
+    } else {
+      navTrace(
+        "updateAutopilotNavigation()",
+        `tick:target=${tickTarget} phase=${tickPhase}`,
+        2000,
+      );
+    }
+    navTickSignatureRef.current = tickSig;
     const ship = spaceshipRef.current;
     if (!ship) return;
 
