@@ -278,6 +278,7 @@ type AboutCellRecord = {
   velocity: THREE.Vector3;
   quaternion: THREE.Quaternion;
   angularVelocity: THREE.Vector3;
+  burstDirection: THREE.Vector3;
   sourceSlotIndex: number;
   targetSlotIndex: number;
   pulsePhase: number;
@@ -3496,10 +3497,14 @@ export default function ResumeSpace3D({
     const toCenter = new THREE.Vector3();
     const tangent = new THREE.Vector3();
     const drift = new THREE.Vector3();
+    const randomDir = new THREE.Vector3();
+    const burstDir = new THREE.Vector3();
+    const spinAxis = new THREE.Vector3();
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    const worldRight = new THREE.Vector3(1, 0, 0);
     const toTarget = new THREE.Vector3();
     const deltaQuat = new THREE.Quaternion();
     const targetQuat = new THREE.Quaternion();
-    const swirlAxis = new THREE.Vector3(0, 0, 1);
 
     const shuffleSlotTargets = () => {
       const slots = aboutCellSlotsRef.current;
@@ -3566,10 +3571,37 @@ export default function ResumeSpace3D({
         rec.velocity.set(0, 0, 0);
         toCenter.subVectors(rec.position, slotCenter);
         const baseLen = Math.max(60, toCenter.length());
-        toCenter.normalize().multiplyScalar(ABOUT_BREAK_IMPULSE * (0.55 + Math.random() * 0.45));
-        tangent.set(-toCenter.y, toCenter.x, (Math.random() - 0.5) * 22);
-        tangent.normalize().multiplyScalar(ABOUT_BREAK_IMPULSE * 0.36);
-        rec.velocity.copy(toCenter.addScaledVector(tangent, 0.55)).multiplyScalar(baseLen / 180);
+        if (toCenter.lengthSq() < 1e-6) {
+          toCenter.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
+        }
+        toCenter.normalize();
+        randomDir.set(
+          Math.sin(rec.pulsePhase * 2.13),
+          Math.cos(rec.pulsePhase * 1.71),
+          Math.sin(rec.pulsePhase * 3.07 + 1.2),
+        );
+        if (randomDir.lengthSq() < 1e-6) randomDir.set(0.35, -0.2, 0.9);
+        randomDir.normalize();
+        burstDir
+          .copy(toCenter)
+          .multiplyScalar(0.64)
+          .addScaledVector(randomDir, 0.78)
+          .normalize();
+        rec.burstDirection.copy(burstDir);
+        tangent.crossVectors(burstDir, randomDir);
+        if (tangent.lengthSq() < 1e-6) {
+          tangent.crossVectors(
+            burstDir,
+            Math.abs(burstDir.y) < 0.85 ? worldUp : worldRight,
+          );
+        }
+        tangent.normalize();
+        rec.velocity
+          .copy(burstDir)
+          .multiplyScalar(ABOUT_BREAK_IMPULSE * (0.58 + Math.random() * 0.52))
+          .addScaledVector(tangent, ABOUT_BREAK_IMPULSE * 0.34)
+          .addScaledVector(randomDir, ABOUT_BREAK_IMPULSE * 0.18)
+          .multiplyScalar(baseLen / 180);
         rec.angularVelocity.set(
           (Math.random() * 2 - 1) * ABOUT_SPIN_MAX,
           (Math.random() * 2 - 1) * ABOUT_SPIN_MAX,
@@ -3682,9 +3714,15 @@ export default function ResumeSpace3D({
           const pulse = 1 + Math.sin(now * 0.001 + rec.pulsePhase) * 0.08 * phaseT;
           tempScale.setScalar(pulse);
           toCenter.subVectors(rec.position, slotCenter).normalize();
-          tangent.crossVectors(toCenter, swirlAxis).normalize();
-          rec.velocity.addScaledVector(toCenter, ABOUT_BREAK_IMPULSE * dt * 0.22);
-          rec.velocity.addScaledVector(tangent, ABOUT_BREAK_IMPULSE * dt * 0.16);
+          spinAxis.copy(rec.angularVelocity);
+          if (spinAxis.lengthSq() < 1e-6) spinAxis.set(0.31, 0.87, 0.39);
+          spinAxis.normalize();
+          tangent.crossVectors(toCenter, spinAxis);
+          if (tangent.lengthSq() < 1e-6) tangent.crossVectors(toCenter, worldUp);
+          tangent.normalize();
+          rec.velocity.addScaledVector(rec.burstDirection, ABOUT_BREAK_IMPULSE * dt * 0.26);
+          rec.velocity.addScaledVector(toCenter, ABOUT_BREAK_IMPULSE * dt * 0.14);
+          rec.velocity.addScaledVector(tangent, ABOUT_BREAK_IMPULSE * dt * 0.17);
           rec.velocity.multiplyScalar(0.986);
           rec.position.addScaledVector(rec.velocity, dt);
           deltaQuat.setFromEuler(new THREE.Euler(
@@ -3706,11 +3744,18 @@ export default function ResumeSpace3D({
           drift.set(
             Math.sin(rec.position.y * 0.010 + now * 0.00065) * 15,
             Math.cos(rec.position.x * 0.009 + now * 0.0007) * 15,
-            Math.sin((rec.position.x + rec.position.y) * 0.007 + now * 0.00045) * 10,
+            Math.sin((rec.position.x + rec.position.y + rec.position.z) * 0.007 + now * 0.00045) * 15,
           );
-          tangent.set(-rec.position.y, rec.position.x, 0).normalize();
+          spinAxis.copy(rec.angularVelocity);
+          if (spinAxis.lengthSq() < 1e-6) spinAxis.set(0.21, 0.93, -0.29);
+          spinAxis.normalize();
+          tangent.crossVectors(drift, spinAxis);
+          if (tangent.lengthSq() < 1e-6) tangent.crossVectors(rec.velocity, spinAxis);
+          if (tangent.lengthSq() < 1e-6) tangent.set(-rec.position.y, rec.position.x, rec.position.z * 0.25);
+          tangent.normalize();
           rec.velocity.addScaledVector(drift, dt);
-          rec.velocity.addScaledVector(tangent, dt * 6);
+          rec.velocity.addScaledVector(tangent, dt * 8);
+          rec.velocity.addScaledVector(rec.burstDirection, dt * 2.4);
           rec.velocity.multiplyScalar(0.992);
           rec.position.addScaledVector(rec.velocity, dt);
           rec.angularVelocity.multiplyScalar(0.996);
@@ -5434,7 +5479,7 @@ export default function ResumeSpace3D({
       tile.add(patternLines);
       aboutTileGridLineMatsRef.current.push(patternMat);
       const contentPlane = new THREE.Mesh(
-        new THREE.PlaneGeometry(aboutSquareSize * 0.92, aboutSquareSize * 0.92),
+        new THREE.PlaneGeometry(aboutSquareSize, aboutSquareSize),
         new THREE.MeshBasicMaterial({
           color: 0xffffff,
           transparent: true,
@@ -5683,6 +5728,7 @@ export default function ResumeSpace3D({
         velocity: new THREE.Vector3(),
         quaternion: slot.worldQuaternion.clone(),
         angularVelocity: new THREE.Vector3(),
+        burstDirection: new THREE.Vector3(0, 0, 1),
         sourceSlotIndex: idx,
         targetSlotIndex: idx,
         pulsePhase: Math.random() * Math.PI * 2,
