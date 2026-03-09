@@ -741,6 +741,7 @@ export default function ResumeSpace3D({
     value: number;
     t: number;
   } | null>(null);
+  const projectShowcaseWheelLastInputAtRef = useRef(0);
   const projectShowcaseFocusIndexRef = useRef(0);
   const projectShowcaseLastTickRef = useRef<number | null>(null);
   const projectShowcasePanelsRef = useRef<ShowcasePanelRecord[]>([]);
@@ -1829,6 +1830,64 @@ export default function ResumeSpace3D({
       window.removeEventListener("pointerup", onPointerUp);
     };
   }, [endProjectShowcaseLeverDrag, moveProjectShowcaseLeverDrag]);
+
+  // ── Project showcase movement: wheel-first tunnel control ────────────────
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      // Preserve Shift+wheel image manipulation flow.
+      if (e.shiftKey) return;
+      if (!projectShowcaseActiveRef.current) return;
+      const track = projectShowcaseTrackRef.current;
+      if (!track) return;
+
+      // Wheel interaction takes over from autoplay immediately.
+      if (projectShowcasePlayingRef.current) {
+        projectShowcasePlayingRef.current = false;
+        setProjectShowcasePlaying(false);
+      }
+      projectShowcaseJumpTargetRef.current = null;
+      projectShowcaseForcedFocusIndexRef.current = null;
+      projectShowcaseLeverDraggingRef.current = false;
+      projectShowcaseLeverFlickRef.current = 0;
+      projectShowcaseLeverLastSampleRef.current = null;
+
+      // Reversed mapping per UX request:
+      // Wheel down => move backward, wheel up => move forward.
+      const direction = e.deltaY > 0 ? -1 : 1;
+      const notchStrength = THREE.MathUtils.clamp(Math.abs(e.deltaY) / 120, 0.2, 4);
+      // Single notch is ~50% gentler, while aggressive/rapid wheel input ramps harder.
+      const impulseFactor = 0.725 * Math.pow(notchStrength, 1.65);
+      const maxManualSpeed =
+        track.speed *
+        THREE.MathUtils.lerp(
+          11.4,
+          20,
+          THREE.MathUtils.clamp((notchStrength - 1) / 3, 0, 1),
+        );
+      const impulse = direction * track.speed * impulseFactor;
+      projectShowcaseVelocityRef.current = THREE.MathUtils.clamp(
+        projectShowcaseVelocityRef.current + impulse,
+        -maxManualSpeed,
+        maxManualSpeed,
+      );
+      projectShowcaseWheelLastInputAtRef.current = performance.now();
+
+      // Kick the throttle lever immediately; loop inertia will continue animating it.
+      const leverImpulse =
+        direction *
+        THREE.MathUtils.clamp(0.22 + Math.pow(notchStrength, 0.85) * 0.3, 0.22, 1);
+      setProjectShowcaseLever(leverImpulse);
+
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    return () => {
+      window.removeEventListener("wheel", onWheel, { capture: true });
+    };
+  }, [setProjectShowcaseLever]);
 
   const exitProjectShowcase = useCallback(() => {
     if (projectShowcaseAngleIntroRef.current.raf !== null) {
@@ -5216,7 +5275,13 @@ export default function ResumeSpace3D({
             Math.sign(lever) * Math.pow(Math.abs(lever), 1.35);
           targetVelocity = shapedLever * maxManualSpeed;
         }
-        const velocitySmooth = projectShowcaseLeverDraggingRef.current ? 20 : 4;
+        const wheelRecent =
+          performance.now() - projectShowcaseWheelLastInputAtRef.current < 950;
+        const velocitySmooth = projectShowcaseLeverDraggingRef.current
+          ? 20
+          : wheelRecent
+            ? 1.35
+            : 4;
         projectShowcaseVelocityRef.current = THREE.MathUtils.damp(
           projectShowcaseVelocityRef.current,
           targetVelocity,
@@ -5238,6 +5303,20 @@ export default function ResumeSpace3D({
           !projectShowcaseLeverDraggingRef.current
         ) {
           projectShowcaseForcedFocusIndexRef.current = null;
+        }
+
+        // Mirror current motion on the throttle UI while coasting/stopping.
+        if (!projectShowcaseLeverDraggingRef.current) {
+          const derivedLever = THREE.MathUtils.clamp(
+            projectShowcaseVelocityRef.current / Math.max(track.speed * 6.5, 0.0001),
+            -1,
+            1,
+          );
+          if (
+            Math.abs(derivedLever - projectShowcaseLeverValueRef.current) > 0.02
+          ) {
+            setProjectShowcaseLever(derivedLever);
+          }
         }
       }
 
@@ -5499,6 +5578,9 @@ export default function ResumeSpace3D({
 
     const onWheel = (e: WheelEvent) => {
       if (!projectShowcaseActiveRef.current || e.shiftKey) return;
+      // Wheel now primarily drives tunnel movement. Use Alt+wheel for
+      // explicit description scrolling when needed.
+      if (!e.altKey) return;
       const cam = sceneRef.current.camera;
       if (!cam) return;
       const rect = mount.getBoundingClientRect();
