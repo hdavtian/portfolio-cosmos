@@ -1007,6 +1007,11 @@ export default function ResumeSpace3D({
     announcedLightspeed: false,
     lastDistance: null,
   });
+  const measuredTravelSpeedRef = useRef(0);
+  const measuredSpeedSampleRef = useRef<{
+    t: number;
+    pos: THREE.Vector3;
+  } | null>(null);
   const starDestroyerIntroFlybyRef = useRef<{
     active: boolean;
     startAt: number;
@@ -1465,6 +1470,60 @@ export default function ResumeSpace3D({
     currentNavigationTargetRef.current = currentNavigationTarget;
   }, [currentNavigationTarget]);
 
+  // Track actual ship movement speed from world-position deltas.
+  // This catches every travel mode (autopilot/manual/cinematics/special sections)
+  // so telemetry does not drop to zero while the ship is visibly moving.
+  useEffect(() => {
+    let raf = 0;
+    const tick = (now: number) => {
+      const ship = spaceshipRef.current;
+      if (!ship) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      const sample = measuredSpeedSampleRef.current;
+      if (!sample) {
+        measuredSpeedSampleRef.current = {
+          t: now,
+          pos: ship.position.clone(),
+        };
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      const dt = Math.max((now - sample.t) / 1000, 1 / 240);
+      const dist = ship.position.distanceTo(sample.pos);
+      sample.pos.copy(ship.position);
+      sample.t = now;
+
+      // Ignore long frame gaps (tab switch, breakpoint) to avoid false spikes.
+      if (dt > 0.25) {
+        measuredTravelSpeedRef.current = THREE.MathUtils.damp(
+          measuredTravelSpeedRef.current,
+          0,
+          6,
+          1 / 60,
+        );
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+
+      const instantaneousUnitsPerSecond = dist / dt;
+      const clamped = THREE.MathUtils.clamp(instantaneousUnitsPerSecond, 0, 5000);
+      measuredTravelSpeedRef.current = THREE.MathUtils.lerp(
+        measuredTravelSpeedRef.current,
+        clamped,
+        0.24,
+      );
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      measuredSpeedSampleRef.current = null;
+      measuredTravelSpeedRef.current = 0;
+    };
+  }, []);
+
   useEffect(() => {
     const navState = navMessageStateRef.current;
 
@@ -1489,9 +1548,15 @@ export default function ResumeSpace3D({
     }
 
     if (navState.activeTarget && navigationDistance !== null) {
+      // Normalize legacy frame-based speed values to units/second and
+      // combine with measured world-space speed for robust telemetry.
+      const nominalSpeedPerSecond = Math.max(
+        (spaceshipPathRef.current.speed || 0) * 60,
+        (manualFlightRef.current.currentSpeed || 0) * 60,
+      );
       const speed = Math.max(
-        spaceshipPathRef.current.speed || 0,
-        manualFlightRef.current.currentSpeed || 0,
+        nominalSpeedPerSecond,
+        measuredTravelSpeedRef.current || 0,
       );
       setOnScreenTelemetry({
         distance: navigationDistance,
