@@ -131,6 +131,8 @@ const PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT = 25;
 const PROJECT_SHOWCASE_SHOW_IMAGE_MANIPULATION_CONTROLS = false;
 const PROJECT_SHOWCASE_NAV_STOP_BACK_OFFSET = 15;
 const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
+const PROJECT_SHOWCASE_MODEL_PATH = "/models/projects-scene/spaceship_corridor.glb";
+const PROJECT_SHOWCASE_TEXTURE_BASE_PATH = "/models/projects-scene/textures";
 const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
@@ -640,7 +642,7 @@ export default function ResumeSpace3D({
     const preloadCriticalAssets = async () => {
       try {
         const [trenchGltf] = await Promise.all([
-          gltfPreloader.loadAsync("/models/star-wars-trench-run/scene.gltf"),
+          gltfPreloader.loadAsync(PROJECT_SHOWCASE_MODEL_PATH),
           gltfPreloader.loadAsync("/models/spaceship/scene.gltf"),
           gltfPreloader.loadAsync("/models/star-destroyer/scene.gltf"),
         ]);
@@ -658,7 +660,7 @@ export default function ResumeSpace3D({
 
         const trenchTextureJobs: Promise<THREE.Texture | null>[] = [];
         trenchTextureKeys.forEach((key) => {
-          const basePath = `/models/star-wars-trench-run/textures/${key}_diffuse`;
+          const basePath = `${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}/${key}_diffuse`;
           trenchTextureJobs.push((async () => {
             const exts = ["jpeg", "jpg", "png"];
             for (const ext of exts) {
@@ -7557,7 +7559,7 @@ export default function ResumeSpace3D({
 
     // --- PROJECT SHOWCASE (Trench Run) ---
     loader.load(
-      "/models/star-wars-trench-run/scene.gltf",
+      PROJECT_SHOWCASE_MODEL_PATH,
       (gltf) => {
         const showcaseRoot = new THREE.Group();
         showcaseRoot.name = "ProjectShowcaseRoot";
@@ -7587,7 +7589,7 @@ export default function ResumeSpace3D({
           }
           trenchDiffusePending.set(key, [mat]);
 
-          const basePath = `/models/star-wars-trench-run/textures/${key}_diffuse`;
+          const basePath = `${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}/${key}_diffuse`;
           const exts = ["jpeg", "jpg", "png"];
           const tryLoad = (idx: number) => {
             if (idx >= exts.length) {
@@ -7630,10 +7632,6 @@ export default function ResumeSpace3D({
           }
 
           if (!o.isMesh) return;
-          if (!name.startsWith("trench_")) {
-            o.visible = false;
-            return;
-          }
           if (
             name.includes("xwing") ||
             name.includes("tie") ||
