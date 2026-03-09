@@ -123,6 +123,7 @@ type ShipLabelMark = {
 
 const PROJECT_SHOWCASE_NAV_ID = "project-showcase";
 const PROJECT_SHOWCASE_LAYER = 2;
+// Card layer stays on the overlay pass to avoid bloom/tonemapping washout.
 const PROJECT_SHOWCASE_CARD_LAYER = 1;
 const SKILLS_LATTICE_LAYER = 3;
 const PROJECT_SHOWCASE_MIN_ANGLE_PERCENT = 0;
@@ -234,6 +235,8 @@ type ShowcasePanelRecord = {
   mediaItems: ShowcaseResolvedMediaItem[];
   activeMediaIndex: number;
   setActiveMedia: (mediaIndex: number) => void;
+  mediaFadeStartMs: number;
+  mediaFadeDurationMs: number;
   setThumbnailPageStart: (pageStart: number) => void;
   thumbnailPageStart: number;
   thumbnailHitTargets: ShowcaseThumbnailHitTarget[];
@@ -680,6 +683,9 @@ export default function ResumeSpace3D({
           );
 
         await Promise.all([...trenchTextureJobs, ...showcaseImageJobs]);
+        if (!cancelled) {
+          projectShowcasePreloadedGltfRef.current = trenchGltf as { scene: THREE.Group };
+        }
       } finally {
         if (!cancelled) setCriticalAssetsReady(true);
       }
@@ -745,6 +751,7 @@ export default function ResumeSpace3D({
   const projectShowcaseFocusIndexRef = useRef(0);
   const projectShowcaseLastTickRef = useRef<number | null>(null);
   const projectShowcasePanelsRef = useRef<ShowcasePanelRecord[]>([]);
+  const projectShowcasePreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
   const projectShowcaseTrackRef = useRef<{
     axis: "x" | "z";
     minRun: number;
@@ -1406,7 +1413,7 @@ export default function ResumeSpace3D({
         if (!rootAnchor || !track) {
           return rootAnchor ? rootAnchor.clone() : null;
         }
-        const run = track.minRun + 8;
+        const run = track.minRun + 10;
         const sway = Math.sin(run * 0.025) * 1.2;
         const travelAxis =
           track.axis === "z" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
@@ -1637,8 +1644,10 @@ export default function ResumeSpace3D({
 
     if (!track) return;
     const halfWindow = track.cullHalfWindow;
+    const allowCards = projectShowcaseActiveRef.current;
     panels.forEach((panel) => {
-      panel.group.visible = Math.abs(panel.runPos - runPos) <= halfWindow;
+      panel.group.visible =
+        allowCards && Math.abs(panel.runPos - runPos) <= halfWindow;
     });
   }, [setProjectShowcaseFocus]);
 
@@ -1920,13 +1929,19 @@ export default function ResumeSpace3D({
       // Wheel down => move backward, wheel up => move forward.
       const direction = e.deltaY > 0 ? -1 : 1;
       const notchStrength = THREE.MathUtils.clamp(Math.abs(e.deltaY) / 120, 0.2, 4);
+      const aggressiveBoost = THREE.MathUtils.lerp(
+        1,
+        13.5,
+        THREE.MathUtils.clamp((notchStrength - 1) / 3, 0, 1),
+      );
       // Single notch is ~50% gentler, while aggressive/rapid wheel input ramps harder.
-      const impulseFactor = 0.725 * Math.pow(notchStrength, 1.65);
+      const impulseFactor =
+        0.725 * Math.pow(notchStrength, 1.65) * aggressiveBoost;
       const maxManualSpeed =
         track.speed *
         THREE.MathUtils.lerp(
           11.4,
-          20,
+          270,
           THREE.MathUtils.clamp((notchStrength - 1) / 3, 0, 1),
         );
       const impulse = direction * track.speed * impulseFactor;
@@ -2067,7 +2082,7 @@ export default function ResumeSpace3D({
 
     const track = projectShowcaseTrackRef.current;
     if (track) {
-      const startRun = track.minRun + 8;
+      const startRun = track.minRun + 10;
       setProjectShowcaseRunPosition(startRun);
       projectShowcaseLastTickRef.current = performance.now();
     }
@@ -2084,6 +2099,7 @@ export default function ResumeSpace3D({
     projectShowcaseActiveRef.current = true;
     setProjectShowcaseActive(true);
     setProjectsNavHereActive(true);
+    setProjectShowcaseRunPosition(projectShowcaseRunPosRef.current);
     pendingProjectShowcaseEntryRef.current = false;
     projectShowcaseAwaitingProjectsArrivalRef.current = false;
     projectShowcaseSawProjectsTravelRef.current = false;
@@ -2173,7 +2189,7 @@ export default function ResumeSpace3D({
 
     const rootPos = new THREE.Vector3();
     showcaseRoot.getWorldPosition(rootPos);
-    const run = track.minRun + 8;
+    const run = track.minRun + 10;
     const sway = Math.sin(run * 0.025) * 1.2;
     const travelAxis =
       track.axis === "z" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
@@ -5341,12 +5357,12 @@ export default function ResumeSpace3D({
           targetVelocity = shapedLever * maxManualSpeed;
         }
         const wheelRecent =
-          performance.now() - projectShowcaseWheelLastInputAtRef.current < 950;
+          performance.now() - projectShowcaseWheelLastInputAtRef.current < 620;
         const velocitySmooth = projectShowcaseLeverDraggingRef.current
           ? 20
           : wheelRecent
-            ? 1.35
-            : 4;
+            ? 1.8
+            : 7.5;
         projectShowcaseVelocityRef.current = THREE.MathUtils.damp(
           projectShowcaseVelocityRef.current,
           targetVelocity,
@@ -5409,6 +5425,16 @@ export default function ResumeSpace3D({
           toFrontDelta * angleT;
         panel.group.scale.setScalar(1);
         panel.frameMat.opacity = 0.22 + panel.focusBlend * 0.26;
+        const fadeElapsedMs = now - panel.mediaFadeStartMs;
+        if (fadeElapsedMs < panel.mediaFadeDurationMs) {
+          panel.imageMat.opacity = THREE.MathUtils.clamp(
+            fadeElapsedMs / Math.max(panel.mediaFadeDurationMs, 1),
+            0,
+            1,
+          );
+        } else if (panel.imageMat.opacity < 1) {
+          panel.imageMat.opacity = 1;
+        }
       });
 
       const run = projectShowcaseRunPosRef.current;
@@ -7705,9 +7731,17 @@ export default function ResumeSpace3D({
     };
 
     // --- PROJECT SHOWCASE (Trench Run) ---
-    loader.load(
-      PROJECT_SHOWCASE_MODEL_PATH,
-      (gltf) => {
+    const onProjectShowcaseLoadError = () => {
+      projectShowcaseRootRef.current = null;
+      projectShowcaseWorldAnchorRef.current = null;
+      if (projectShowcaseNebulaRootRef.current) {
+        scene.remove(projectShowcaseNebulaRootRef.current);
+        projectShowcaseNebulaRootRef.current = null;
+      }
+      setProjectShowcaseReady(false);
+      vlog("⚠️ Failed to load Project Showcase trench model");
+    };
+    const onProjectShowcaseLoaded = (gltf: { scene: THREE.Group }) => {
         const showcaseRoot = new THREE.Group();
         showcaseRoot.name = "ProjectShowcaseRoot";
         showcaseRoot.visible = false;
@@ -8032,6 +8066,8 @@ export default function ResumeSpace3D({
 
           const imageMat = new THREE.MeshBasicMaterial({
             color: 0xb8b8b8,
+            transparent: true,
+            opacity: 1,
             side: THREE.FrontSide,
             toneMapped: false,
           });
@@ -8061,6 +8097,8 @@ export default function ResumeSpace3D({
             mediaItems,
             activeMediaIndex: 0,
             setActiveMedia: () => {},
+            mediaFadeStartMs: -Infinity,
+            mediaFadeDurationMs: 240,
             setThumbnailPageStart: () => {},
             thumbnailPageStart: 0,
             thumbnailHitTargets: [],
@@ -8451,6 +8489,7 @@ export default function ResumeSpace3D({
             );
             const media = panelRecord.mediaItems[safeMediaIndex];
             if (!media) return;
+            const mediaChanged = safeMediaIndex !== panelRecord.activeMediaIndex;
             panelRecord.activeMediaIndex = safeMediaIndex;
             panelRecord.fitMode = media.fit;
             panelRecord.zoom = 1;
@@ -8470,6 +8509,12 @@ export default function ResumeSpace3D({
             updateThumbnailVisualState();
             setPanelDetailForMedia(media);
             const loadNonce = ++mediaLoadNonce;
+            const startMainMediaFade = () => {
+              if (!mediaChanged) return;
+              panelRecord.mediaFadeStartMs = performance.now();
+              imageMat.opacity = 0;
+              imageMat.needsUpdate = true;
+            };
             videoCache.forEach(({ video }, idx) => {
               if (idx !== safeMediaIndex) {
                 video.pause();
@@ -8497,6 +8542,7 @@ export default function ResumeSpace3D({
               panelRecord.texture = record.texture;
               const startPlayback = () => {
                 if (loadNonce !== mediaLoadNonce) return;
+                startMainMediaFade();
                 record?.video.play().catch(() => {});
                 const vw = record?.video.videoWidth || 16;
                 const vh = record?.video.videoHeight || 9;
@@ -8515,6 +8561,7 @@ export default function ResumeSpace3D({
               media.textureUrl,
               (texture) => {
                 if (loadNonce !== mediaLoadNonce) return;
+                startMainMediaFade();
                 texture.colorSpace = THREE.SRGBColorSpace;
                 imageMat.map = texture;
                 imageMat.color.set(0xffffff);
@@ -8530,6 +8577,7 @@ export default function ResumeSpace3D({
               undefined,
               () => {
                 if (loadNonce !== mediaLoadNonce) return;
+                startMainMediaFade();
                 panelRecord.texture = null;
                 imageMat.map = null;
                 imageMat.color.set(0x5c6a86);
@@ -8643,8 +8691,10 @@ export default function ResumeSpace3D({
         });
 
         projectShowcasePanelsRef.current = panelRecords;
-        const minRun = runStart;
-        const maxRun = runStart + (publishedShowcase.length - 1) * panelSpacing;
+        const edgeRunPadding = Math.max(14, panelSpacing * 0.9);
+        const minRun = runStart - edgeRunPadding;
+        const maxRun =
+          runStart + (publishedShowcase.length - 1) * panelSpacing + edgeRunPadding;
         projectShowcaseTrackRef.current = {
           axis: runAxis,
           minRun,
@@ -8655,7 +8705,7 @@ export default function ResumeSpace3D({
           speed: THREE.MathUtils.clamp(panelSpacing * 0.1625, 2.5, 5.5),
           cullHalfWindow: THREE.MathUtils.clamp(panelSpacing * 4.4, 70, 130),
         };
-        const initialRun = minRun + 8;
+        const initialRun = minRun + 10;
         projectShowcaseRunPosRef.current = initialRun;
         setProjectShowcaseRunPosition(initialRun);
         setProjectShowcaseFocus(0);
@@ -8665,19 +8715,19 @@ export default function ResumeSpace3D({
         projectShowcaseWorldAnchorRef.current = showcaseRoot.position.clone();
         setProjectShowcaseReady(true);
         vlog("🛰️ Project Showcase trench loaded");
-      },
-      undefined,
-      () => {
-        projectShowcaseRootRef.current = null;
-        projectShowcaseWorldAnchorRef.current = null;
-        if (projectShowcaseNebulaRootRef.current) {
-          scene.remove(projectShowcaseNebulaRootRef.current);
-          projectShowcaseNebulaRootRef.current = null;
-        }
-        setProjectShowcaseReady(false);
-        vlog("⚠️ Failed to load Project Showcase trench model");
-      },
-    );
+    };
+    const preloadedProjectShowcase = projectShowcasePreloadedGltfRef.current;
+    if (preloadedProjectShowcase) {
+      onProjectShowcaseLoaded(preloadedProjectShowcase);
+      projectShowcasePreloadedGltfRef.current = null;
+    } else {
+      loader.load(
+        PROJECT_SHOWCASE_MODEL_PATH,
+        (gltf) => onProjectShowcaseLoaded(gltf as { scene: THREE.Group }),
+        undefined,
+        onProjectShowcaseLoadError,
+      );
+    }
 
     // ── Moon orbit arrival handler ─────────────────────────────────────────────
     // When the nav system reports arrival at a moon, we kick off the orbit

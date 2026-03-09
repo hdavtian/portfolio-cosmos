@@ -1,5 +1,34 @@
 [
   {
+    "id": "haigmats",
+    "title": "haigmats.com",
+    "image": "/images/legacy-web/haigmats-1-1999.jpg",
+    "phone": "",
+    "description": "My very first website for a company making custom car mats in Glendale California",
+    "technologies": ["HTML", "CSS", "JavaScript"],
+    "year": 1999,
+    "fit": "cover",
+    "galleryMedia": [
+      {
+        "id": "haigmats-2",
+        "type": "image",
+        "image": "/images/legacy-web/haigmats-2-1999.jpg",
+        "title": "Coming soon",
+        "description": "Coming soon",
+        "fit": "cover"
+      },
+      {
+        "id": "haigmats-3",
+        "type": "image",
+        "image": "/images/legacy-web/haigmats-3-1999.jpg",
+        "title": "Coming soon",
+        "description": "Coming soon",
+        "fit": "cover"
+      }
+    ],
+    "published": true
+  },
+  {
     "id": "acecount",
     "title": "acecount.com",
     "image": "/images/legacy-web/acecount.com 1.png",
