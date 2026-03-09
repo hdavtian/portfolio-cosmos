@@ -1,6 +1,6 @@
 [
   {
-    "id": "acecount-01",
+    "id": "acecount",
     "title": "acecount.com",
     "image": "/images/legacy-web/acecount.com 1.png",
     "phone": "",
@@ -8,39 +8,32 @@
     "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
     "year": null,
     "fit": "cover",
-    "published": true
-  },
-  {
-    "id": "acecount-02",
-    "title": "acecount.com",
-    "image": "/images/legacy-web/acecount.com 2.png",
-    "phone": "",
-    "description": "Alternative page/state from acecount.com archive-era build.",
-    "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
-    "year": null,
-    "fit": "cover",
-    "published": true
-  },
-  {
-    "id": "acecount-03",
-    "title": "acecount.com",
-    "image": "/images/legacy-web/acecount.com 3.png",
-    "phone": "",
-    "description": "Legacy acecount.com capture from non-responsive desktop era.",
-    "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
-    "year": null,
-    "fit": "cover",
-    "published": true
-  },
-  {
-    "id": "acecount-04",
-    "title": "acecount.com",
-    "image": "/images/legacy-web/acecount.com 4.png",
-    "phone": "",
-    "description": "acecount.com portfolio capture showing classic fixed-width design.",
-    "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
-    "year": null,
-    "fit": "cover",
+    "galleryMedia": [
+      {
+        "id": "acecount-02",
+        "type": "image",
+        "image": "/images/legacy-web/acecount.com 2.png",
+        "title": "acecount.com - View 2",
+        "description": "Alternative page/state from acecount.com archive-era build.",
+        "fit": "cover"
+      },
+      {
+        "id": "acecount-03",
+        "type": "image",
+        "image": "/images/legacy-web/acecount.com 3.png",
+        "title": "acecount.com - View 3",
+        "description": "Legacy acecount.com capture from non-responsive desktop era.",
+        "fit": "cover"
+      },
+      {
+        "id": "acecount-04",
+        "type": "image",
+        "image": "/images/legacy-web/acecount.com 4.png",
+        "title": "acecount.com - View 4",
+        "description": "acecount.com portfolio capture showing classic fixed-width design.",
+        "fit": "cover"
+      }
+    ],
     "published": true
   },
   {
@@ -54,53 +47,36 @@
     "published": true
   },
   {
-    "id": "racewithhonda-01",
+    "id": "racewithhonda",
     "title": "racewithhonda.com",
     "image": "/images/legacy-web/racewithhonda.com 1.png",
     "phone": "",
     "description": "Campaign microsite screenshot featuring period visual style.",
     "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
     "year": null,
-    "published": true
-  },
-  {
-    "id": "racewithhonda-02",
-    "title": "racewithhonda.com",
-    "image": "/images/legacy-web/racewithhonda.com 2.png",
-    "phone": "",
-    "description": "racewithhonda.com alternate page capture.",
-    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
-    "year": null,
-    "published": true
-  },
-  {
-    "id": "racewithhonda-03",
-    "title": "racewithhonda.com",
-    "image": "/images/legacy-web/racewithhonda.com 3.png",
-    "phone": "",
-    "description": "Legacy racewithhonda.com screenshot (fixed desktop layout).",
-    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
-    "year": null,
-    "published": true
-  },
-  {
-    "id": "racewithhonda-04",
-    "title": "racewithhonda.com",
-    "image": "/images/legacy-web/racewithhonda.com 4.png",
-    "phone": "",
-    "description": "racewithhonda.com archive-era visual and content state.",
-    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
-    "year": null,
-    "published": true
-  },
-  {
-    "id": "racewithhonda-05",
-    "title": "racewithhonda.com",
-    "image": "/images/legacy-web/racewithhonda.com 5.png",
-    "phone": "",
-    "description": "Additional racewithhonda.com capture from the same project period.",
-    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
-    "year": null,
+    "galleryMedia": [
+      {
+        "id": "racewithhonda-02",
+        "type": "image",
+        "image": "/images/legacy-web/racewithhonda.com 2.png",
+        "title": "racewithhonda.com - View 2",
+        "description": "racewithhonda.com alternate page capture."
+      },
+      {
+        "id": "racewithhonda-03",
+        "type": "image",
+        "image": "/images/legacy-web/racewithhonda.com 3.png",
+        "title": "racewithhonda.com - View 3",
+        "description": "Legacy racewithhonda.com screenshot (fixed desktop layout)."
+      },
+      {
+        "id": "racewithhonda-04",
+        "type": "image",
+        "image": "/images/legacy-web/racewithhonda.com 4.png",
+        "title": "racewithhonda.com - View 4",
+        "description": "racewithhonda.com archive-era visual and content state."
+      }
+    ],
     "published": true
   },
   {
@@ -114,56 +90,58 @@
     "published": true
   },
   {
-    "id": "stormscape-demo",
-    "title": "Stormscape (Demo Sites)",
+    "id": "stormscape",
+    "title": "Stormscape Portfolio",
     "image": "/images/legacy-web/stormscape - demo sites.png",
     "phone": "",
     "description": "Stormscape portfolio demo-sites index capture.",
     "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
     "year": null,
     "fit": "cover",
+    "galleryMedia": [
+      {
+        "id": "stormscape-live",
+        "type": "image",
+        "image": "/images/legacy-web/stormscape - live sites.png",
+        "title": "Stormscape (Live Sites)",
+        "description": "Stormscape portfolio live-sites index screenshot.",
+        "fit": "cover"
+      },
+      {
+        "id": "stormscape-under-construction",
+        "type": "image",
+        "image": "/images/legacy-web/stormscape - under construction sites.png",
+        "title": "Stormscape (Under Construction Sites)",
+        "description": "Stormscape under-construction listing from archive period.",
+        "fit": "cover"
+      },
+      {
+        "id": "stormscape-youtube-demo",
+        "type": "youtube",
+        "youtubeUrl": "https://youtu.be/-h2NB0blBbs",
+        "title": "YouTube Demo Video",
+        "description": "Embedded YouTube sample used for gallery video testing."
+      }
+    ],
     "published": true
   },
   {
-    "id": "stormscape-live",
-    "title": "Stormscape (Live Sites)",
-    "image": "/images/legacy-web/stormscape - live sites.png",
-    "phone": "",
-    "description": "Stormscape portfolio live-sites index screenshot.",
-    "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
-    "year": null,
-    "fit": "cover",
-    "published": true
-  },
-  {
-    "id": "stormscape-under-construction",
-    "title": "Stormscape (Under Construction Sites)",
-    "image": "/images/legacy-web/stormscape - under construction sites.png",
-    "phone": "",
-    "description": "Stormscape under-construction listing from archive period.",
-    "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
-    "year": null,
-    "fit": "cover",
-    "published": true
-  },
-  {
-    "id": "unitedlayer-01",
+    "id": "unitedlayer",
     "title": "unitedlayer.com",
     "image": "/images/legacy-web/unitedlayer.com 1.png",
     "phone": "",
     "description": "UnitedLayer legacy website screenshot, desktop-first layout.",
     "technologies": ["HTML", "CSS", "JavaScript"],
     "year": null,
-    "published": true
-  },
-  {
-    "id": "unitedlayer-02",
-    "title": "unitedlayer.com",
-    "image": "/images/legacy-web/unitedlayer.com 2.png",
-    "phone": "",
-    "description": "Second UnitedLayer page/state screenshot from the same era.",
-    "technologies": ["HTML", "CSS", "JavaScript"],
-    "year": null,
+    "galleryMedia": [
+      {
+        "id": "unitedlayer-02",
+        "type": "image",
+        "image": "/images/legacy-web/unitedlayer.com 2.png",
+        "title": "unitedlayer.com - View 2",
+        "description": "Second UnitedLayer page/state screenshot from the same era."
+      }
+    ],
     "published": true
   }
 ]

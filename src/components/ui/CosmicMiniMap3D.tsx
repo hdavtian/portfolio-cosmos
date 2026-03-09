@@ -4,6 +4,7 @@ import type { OrbitItem } from "../cosmos/ResumeSpace3D.orbital";
 
 type Props = {
   visible: boolean;
+  projectModeSignal?: boolean;
   spaceshipRef: React.MutableRefObject<THREE.Object3D | null>;
   starDestroyerRef: React.MutableRefObject<THREE.Object3D | null>;
   itemsRef: React.MutableRefObject<OrbitItem[]>;
@@ -123,6 +124,7 @@ const shortestAngleDelta = (from: number, to: number): number =>
 
 const CosmicMiniMap3D: React.FC<Props> = ({
   visible,
+  projectModeSignal = false,
   spaceshipRef,
   starDestroyerRef,
   itemsRef,
@@ -136,6 +138,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [showDirection, setShowDirection] = useState(true);
   const [mapVisible, setMapVisible] = useState(true);
+  const [projectAutoHidden, setProjectAutoHidden] = useState(false);
   const [mapSize, setMapSize] = useState(MAP_DEFAULT_SIZE);
   const [mapWidth, setMapWidth] = useState(MAP_DEFAULT_SIZE);
   const [isDraggingMap, setIsDraggingMap] = useState(false);
@@ -145,6 +148,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
     y: number;
     label: string;
   } | null>(null);
+  const projectSignalPrevRef = useRef(false);
 
   const mapYawRef = useRef(0);
   const headingYawRef = useRef(0);
@@ -224,10 +228,6 @@ const CosmicMiniMap3D: React.FC<Props> = ({
 
   useEffect(() => {
     try {
-      const rawVisible = window.localStorage.getItem(MINIMAP_VISIBLE_STORAGE_KEY);
-      if (rawVisible === "0") setMapVisible(false);
-      if (rawVisible === "1") setMapVisible(true);
-
       const rawH = window.localStorage.getItem(MINIMAP_HEIGHT_STORAGE_KEY);
       if (rawH) {
         const v = Number(rawH);
@@ -260,6 +260,18 @@ const CosmicMiniMap3D: React.FC<Props> = ({
   }, [mapVisible]);
 
   useEffect(() => {
+    const prev = projectSignalPrevRef.current;
+    if (!prev && projectModeSignal) {
+      // Entering Projects: auto-hide by default, but keep user's visibility preference.
+      setProjectAutoHidden(true);
+    } else if (prev && !projectModeSignal) {
+      // Leaving Projects: return to user's map visibility state.
+      setProjectAutoHidden(false);
+    }
+    projectSignalPrevRef.current = projectModeSignal;
+  }, [projectModeSignal]);
+
+  useEffect(() => {
     try {
       window.localStorage.setItem(MINIMAP_HEIGHT_STORAGE_KEY, String(mapSize));
       window.localStorage.setItem(MINIMAP_WIDTH_STORAGE_KEY, String(mapWidth));
@@ -270,7 +282,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !visible || !mapVisible) return;
+    if (!canvas || !visible || !mapVisible || projectAutoHidden) return;
     canvas.width = mapWidth;
     canvas.height = mapSize;
     const ctx = canvas.getContext("2d");
@@ -601,6 +613,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
   }, [
     visible,
     mapVisible,
+    projectAutoHidden,
     mapWidth,
     mapSize,
     showDirection,
@@ -615,12 +628,15 @@ const CosmicMiniMap3D: React.FC<Props> = ({
 
   if (!visible) return null;
 
-  if (!mapVisible) {
+  if (!mapVisible || projectAutoHidden) {
     return (
       <div style={{ position: "fixed", right: 16, bottom: 18, zIndex: 1117, pointerEvents: "auto" }}>
         <button
           type="button"
-          onClick={() => setMapVisible(true)}
+          onClick={() => {
+            setMapVisible(true);
+            setProjectAutoHidden(false);
+          }}
           style={{
             borderRadius: 8,
             border: "1px solid rgba(122, 201, 255, 0.55)",

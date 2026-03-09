@@ -167,6 +167,20 @@ const PROJECT_SHOWCASE_FILTER_OPTIONS = [
   "React",
   "Node",
 ] as const;
+const PROJECT_SHOWCASE_MAX_MEDIA_ITEMS = 12;
+const PROJECT_SHOWCASE_THUMBS_PER_PAGE = 4;
+
+type ShowcaseMediaEntry = {
+  id: string;
+  type?: "image" | "video" | "youtube";
+  image?: string;
+  videoUrl?: string;
+  thumbnail?: string;
+  youtubeUrl?: string;
+  title?: string;
+  description?: string;
+  fit?: "contain" | "cover";
+};
 
 type ShowcaseEntry = {
   id: string;
@@ -176,6 +190,25 @@ type ShowcaseEntry = {
   technologies?: string[];
   year?: number | null;
   fit?: "contain" | "cover";
+  galleryMedia?: ShowcaseMediaEntry[];
+};
+
+type ShowcaseResolvedMediaItem = {
+  id: string;
+  type: "image" | "video" | "youtube";
+  title: string;
+  description?: string;
+  fit: "contain" | "cover";
+  textureUrl: string;
+  videoUrl?: string;
+  youtubeUrl?: string;
+  youtubeEmbedUrl?: string;
+};
+
+type ShowcaseThumbnailHitTarget = {
+  mesh: THREE.Mesh;
+  type: "media" | "prev" | "next";
+  mediaIndex?: number;
 };
 
 type ShowcasePanelRecord = {
@@ -196,6 +229,137 @@ type ShowcasePanelRecord = {
   zoom: number;
   panX: number;
   panY: number;
+  mediaItems: ShowcaseResolvedMediaItem[];
+  activeMediaIndex: number;
+  setActiveMedia: (mediaIndex: number) => void;
+  setThumbnailPageStart: (pageStart: number) => void;
+  thumbnailPageStart: number;
+  thumbnailHitTargets: ShowcaseThumbnailHitTarget[];
+  thumbnailFrameMats: THREE.MeshBasicMaterial[];
+  detailMat: THREE.MeshBasicMaterial;
+  detailTexture: THREE.Texture | null;
+  detailMesh: THREE.Mesh | null;
+  detailScrollThumbMesh: THREE.Mesh | null;
+  detailAllLines: string[];
+  detailVisibleLines: number;
+  detailScrollOffset: number;
+  detailScrollMax: number;
+  updateDetailTexture: () => void;
+};
+
+const extractYouTubeVideoId = (input?: string): string | null => {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const patterns = [
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const pattern of patterns) {
+    const match = trimmed.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+};
+
+const toYouTubeEmbedUrl = (videoId: string) =>
+  `https://www.youtube.com/embed/${videoId}`;
+
+const toYouTubeThumbnailUrl = (videoId: string) =>
+  `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+const resolveShowcaseMediaItems = (entry: ShowcaseEntry): ShowcaseResolvedMediaItem[] => {
+  const primary: ShowcaseMediaEntry = {
+    id: `${entry.id}-main`,
+    type: "image",
+    image: entry.image,
+    title: entry.title,
+    description: entry.description,
+    fit: entry.fit,
+  };
+  const candidates = [primary, ...(entry.galleryMedia ?? [])].slice(
+    0,
+    PROJECT_SHOWCASE_MAX_MEDIA_ITEMS,
+  );
+  const resolved: ShowcaseResolvedMediaItem[] = [];
+  candidates.forEach((item, index) => {
+    const itemType =
+      item.type === "youtube" || item.youtubeUrl
+        ? "youtube"
+        : item.type === "video" || item.videoUrl
+          ? "video"
+          : "image";
+    if (itemType === "youtube") {
+      const videoId = extractYouTubeVideoId(item.youtubeUrl);
+      if (!videoId) return;
+      const textureUrl = item.thumbnail || toYouTubeThumbnailUrl(videoId);
+      resolved.push({
+        id: item.id || `${entry.id}-youtube-${index}`,
+        type: "youtube",
+        title: item.title || "YouTube Video",
+        description: item.description,
+        fit: item.fit ?? "cover",
+        textureUrl,
+        youtubeUrl: item.youtubeUrl,
+        youtubeEmbedUrl: toYouTubeEmbedUrl(videoId),
+      });
+      return;
+    }
+    if (itemType === "video") {
+      if (!item.videoUrl) return;
+      resolved.push({
+        id: item.id || `${entry.id}-video-${index}`,
+        type: "video",
+        title: item.title || "Video",
+        description: item.description,
+        fit: item.fit ?? "cover",
+        textureUrl: item.thumbnail || entry.image,
+        videoUrl: item.videoUrl,
+      });
+      return;
+    }
+    if (!item.image) return;
+    resolved.push({
+      id: item.id || `${entry.id}-image-${index}`,
+      type: "image",
+      title: item.title || entry.title,
+      description: item.description || entry.description,
+      fit: item.fit ?? entry.fit ?? "contain",
+      textureUrl: item.image,
+    });
+  });
+  if (resolved.length === 0) {
+    resolved.push({
+      id: `${entry.id}-fallback`,
+      type: "image",
+      title: entry.title,
+      description: entry.description,
+      fit: entry.fit ?? "contain",
+      textureUrl: entry.image,
+    });
+  }
+  return resolved;
+};
+
+const wrapTextLines = (input: string, maxCharsPerLine = 54): string[] => {
+  const text = (input || "").trim();
+  if (!text) return [];
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let line = "";
+  words.forEach((word) => {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length <= maxCharsPerLine) {
+      line = next;
+      return;
+    }
+    if (line) lines.push(line);
+    line = word;
+  });
+  if (line) lines.push(line);
+  return lines;
 };
 
 type SkillsLatticeNodeRecord = {
@@ -507,7 +671,11 @@ export default function ResumeSpace3D({
 
         const showcaseImageJobs = (legacyWebsites as ShowcaseEntry[])
           .filter((entry) => (entry as { published?: boolean }).published !== false)
-          .map((entry) => loadTextureSafe(entry.image));
+          .flatMap((entry) =>
+            resolveShowcaseMediaItems(entry).map((item) =>
+              loadTextureSafe(item.textureUrl),
+            ),
+          );
 
         await Promise.all([...trenchTextureJobs, ...showcaseImageJobs]);
       } finally {
@@ -5093,8 +5261,7 @@ export default function ResumeSpace3D({
         panel.group.rotation.y =
           panel.inwardRotationY +
           toFrontDelta * angleT;
-        const scaleBoost = 1 + panel.focusBlend * 0.055;
-        panel.group.scale.setScalar(scaleBoost);
+        panel.group.scale.setScalar(1);
         panel.frameMat.opacity = 0.22 + panel.focusBlend * 0.26;
       });
 
@@ -5134,6 +5301,69 @@ export default function ResumeSpace3D({
     tick();
     return () => cancelAnimationFrame(raf);
   }, [projectShowcaseActive, setProjectShowcaseRunPosition]);
+
+  // ── Project showcase thumbnail clicks (in-trench carousel) ───────────────
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+    const raycaster = new THREE.Raycaster();
+    raycaster.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+    const pointer = new THREE.Vector2();
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (!projectShowcaseActiveRef.current || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("button, input, select, textarea, a, iframe")) return;
+      const cam = sceneRef.current.camera;
+      if (!cam) return;
+      const hitTargets = projectShowcasePanelsRef.current.flatMap((panel) =>
+        panel.group.visible
+          ? panel.thumbnailHitTargets
+              .filter((target) => target.mesh.visible)
+              .map((target) => ({ panel, target }))
+          : [],
+      );
+      if (hitTargets.length === 0) return;
+      const rect = mount.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, cam);
+      const hits = raycaster.intersectObjects(
+        hitTargets.map((ht) => ht.target.mesh),
+        false,
+      );
+      if (hits.length === 0) return;
+      const hitMesh = hits[0].object as THREE.Mesh;
+      const hit = hitTargets.find((ht) => ht.target.mesh === hitMesh);
+      if (!hit) return;
+      const { panel, target: hitTarget } = hit;
+      if (projectShowcasePlayingRef.current) {
+        projectShowcasePlayingRef.current = false;
+        setProjectShowcasePlaying(false);
+      }
+      if (hitTarget.type === "media" && typeof hitTarget.mediaIndex === "number") {
+        panel.setActiveMedia(hitTarget.mediaIndex);
+      } else if (hitTarget.type === "prev") {
+        panel.setThumbnailPageStart(
+          panel.thumbnailPageStart - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
+        );
+      } else if (hitTarget.type === "next") {
+        panel.setThumbnailPageStart(
+          panel.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE,
+        );
+      }
+      bumpProjectShowcaseViewportTick();
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    mount.addEventListener("pointerdown", onPointerDown, { capture: true });
+    return () => {
+      mount.removeEventListener("pointerdown", onPointerDown, { capture: true });
+    };
+  }, [bumpProjectShowcaseViewportTick]);
 
   // ── Project showcase image controls: Shift+drag / Shift+wheel ─────────
   useEffect(() => {
@@ -5256,6 +5486,60 @@ export default function ResumeSpace3D({
     bumpProjectShowcaseViewportTick,
     setProjectShowcasePanelZoom,
   ]);
+
+  // ── Project showcase detail pane scroll (wheel on description) ─────────
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+    const raycaster = new THREE.Raycaster();
+    raycaster.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+    const pointer = new THREE.Vector2();
+
+    const onWheel = (e: WheelEvent) => {
+      if (!projectShowcaseActiveRef.current || e.shiftKey) return;
+      const cam = sceneRef.current.camera;
+      if (!cam) return;
+      const rect = mount.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, cam);
+      const details = projectShowcasePanelsRef.current
+        .filter((panel) => panel.group.visible && !!panel.detailMesh)
+        .map((panel) => ({
+          panel,
+          mesh: panel.detailMesh as THREE.Mesh,
+        }));
+      if (details.length === 0) return;
+      const hits = raycaster.intersectObjects(
+        details.map((d) => d.mesh),
+        false,
+      );
+      if (hits.length === 0) return;
+      const hitMesh = hits[0].object as THREE.Mesh;
+      const hit = details.find((d) => d.mesh === hitMesh);
+      if (!hit) return;
+      const panel = hit.panel;
+      if (panel.detailScrollMax <= 0) return;
+      const delta = e.deltaY > 0 ? 1 : -1;
+      const nextOffset = THREE.MathUtils.clamp(
+        panel.detailScrollOffset + delta,
+        0,
+        panel.detailScrollMax,
+      );
+      if (nextOffset === panel.detailScrollOffset) return;
+      panel.detailScrollOffset = nextOffset;
+      panel.updateDetailTexture();
+      bumpProjectShowcaseViewportTick();
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    mount.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    return () => {
+      mount.removeEventListener("wheel", onWheel, { capture: true });
+    };
+  }, [bumpProjectShowcaseViewportTick]);
 
   // ── Skills lattice controls: Shift+drag to pan camera rig ────────────────
   useEffect(() => {
@@ -7556,16 +7840,19 @@ export default function ResumeSpace3D({
           const side = index % 2 === 0 ? -1 : 1;
           const panelGroup = new THREE.Group();
           const runPos = runStart + index * panelSpacing;
+          const mediaItems = resolveShowcaseMediaItems(entry);
+          const hasGalleryMedia = mediaItems.length > 1;
+          const panelVerticalOffset = hasGalleryMedia ? -0.2 : 0;
           if (runAxis === "z") {
             panelGroup.position.set(
               side * panelOffset,
-              panelY + ((index % 3) - 1) * 0.9,
+              panelY + panelVerticalOffset + ((index % 3) - 1) * 0.9,
               runPos,
             );
           } else {
             panelGroup.position.set(
               runPos,
-              panelY + ((index % 3) - 1) * 0.9,
+              panelY + panelVerticalOffset + ((index % 3) - 1) * 0.9,
               side * panelOffset,
             );
           }
@@ -7587,7 +7874,7 @@ export default function ResumeSpace3D({
           panelGroup.rotation.y = inwardRotationY;
 
           const frame = new THREE.Mesh(
-            new THREE.PlaneGeometry(panelWidth * 1.03, panelHeight * 1.08),
+            new THREE.PlaneGeometry(panelWidth * 1.015, panelHeight * 1.015),
             new THREE.MeshBasicMaterial({
               color: 0x72c6ff,
               transparent: true,
@@ -7607,7 +7894,7 @@ export default function ResumeSpace3D({
             new THREE.PlaneGeometry(1, 1),
             imageMat,
           );
-          const fitMode = entry.fit ?? "contain";
+          const fitMode = mediaItems[0]?.fit ?? entry.fit ?? "contain";
           const panelRecord: ShowcasePanelRecord = {
             group: panelGroup,
             runPos,
@@ -7626,11 +7913,35 @@ export default function ResumeSpace3D({
             zoom: 1,
             panX: 0,
             panY: 0,
+            mediaItems,
+            activeMediaIndex: 0,
+            setActiveMedia: () => {},
+            setThumbnailPageStart: () => {},
+            thumbnailPageStart: 0,
+            thumbnailHitTargets: [],
+            thumbnailFrameMats: [],
+            detailMat: new THREE.MeshBasicMaterial({
+              color: 0xffffff,
+              transparent: true,
+              opacity: 1,
+              toneMapped: false,
+              side: THREE.DoubleSide,
+            }),
+            detailTexture: null,
+            detailMesh: null,
+            detailScrollThumbMesh: null,
+            detailAllLines: [],
+            detailVisibleLines: 0,
+            detailScrollOffset: 0,
+            detailScrollMax: 0,
+            updateDetailTexture: () => {},
           };
           const applyImageFit = (
             imageAspect?: number,
             texture?: THREE.Texture,
+            nextFitMode?: "contain" | "cover",
           ) => {
+            const activeFitMode = nextFitMode ?? panelRecord.fitMode;
             if (!imageAspect || !Number.isFinite(imageAspect) || imageAspect <= 0) {
               imagePlane.scale.set(panelWidth, panelHeight, 1);
               if (texture) {
@@ -7645,7 +7956,7 @@ export default function ResumeSpace3D({
             const frameAspect = panelWidth / panelHeight;
             let displayWidth = panelWidth;
             let displayHeight = panelHeight;
-            if (fitMode === "cover") {
+            if (activeFitMode === "cover") {
               // Cover mode uses UV crop in a fixed viewport, which gives us
               // CSS-like overflow:hidden behavior and a stable base for pan/zoom.
               displayWidth = panelWidth;
@@ -7686,63 +7997,498 @@ export default function ResumeSpace3D({
             imagePlane.scale.set(displayWidth, displayHeight, 1);
           };
           applyImageFit();
-          textureLoader.load(
-            entry.image,
-            (texture) => {
-              texture.colorSpace = THREE.SRGBColorSpace;
-              imageMat.map = texture;
-              imageMat.color.set(0xffffff);
-              panelRecord.texture = texture;
-              const img = texture.image as
-                | { width?: number; height?: number }
-                | undefined;
-              const imgAspect =
-                img?.width && img?.height ? img.width / img.height : undefined;
-              applyImageFit(imgAspect, texture);
-              imageMat.needsUpdate = true;
-            },
-            undefined,
-            () => {
-              imageMat.color.set(0x5c6a86);
-            },
-          );
-
-          panelGroup.add(frame);
-          panelGroup.add(imagePlane);
-          const detailLines = [
-            entry.title,
-            ...(entry.description ? [entry.description] : []),
-            ...((entry.technologies || []).slice(0, 5).map((t) => `• ${t}`)),
-          ];
-          const detailTexture = createDetailTexture(detailLines, {
-            width: 1024,
-            height: 512,
-            bgColor: "rgba(6, 12, 22, 0.82)",
+          const detailTextureOpts = {
+            // Match the narrower detail panel aspect to avoid stretched typography.
+            width: 800,
+            height: 1024,
+            bgColor: "rgba(8, 20, 34, 0.58)",
             lineColor: "rgba(120, 180, 255, 0.75)",
             textColor: "rgba(228, 240, 255, 0.96)",
             showLine: true,
             fontSize: 25,
-            lineSpacing: 36,
-            textAlign: "left",
-            padding: 54,
+            lineSpacing: 33,
+            textAlign: "left" as const,
+            padding: 44,
+          };
+          const updateDetailTexture = () => {
+            panelRecord.detailVisibleLines = Math.max(
+              1,
+              Math.floor(
+                (detailTextureOpts.height - detailTextureOpts.padding * 2) /
+                  detailTextureOpts.lineSpacing,
+              ),
+            );
+            panelRecord.detailScrollMax = Math.max(
+              0,
+              panelRecord.detailAllLines.length - panelRecord.detailVisibleLines,
+            );
+            panelRecord.detailScrollOffset = THREE.MathUtils.clamp(
+              panelRecord.detailScrollOffset,
+              0,
+              panelRecord.detailScrollMax,
+            );
+            const visibleLines = panelRecord.detailAllLines.slice(
+              panelRecord.detailScrollOffset,
+              panelRecord.detailScrollOffset + panelRecord.detailVisibleLines,
+            );
+            panelRecord.detailTexture?.dispose();
+            panelRecord.detailTexture = createDetailTexture(
+              visibleLines,
+              detailTextureOpts,
+            );
+            panelRecord.detailMat.map = panelRecord.detailTexture;
+            panelRecord.detailMat.needsUpdate = true;
+            const thumb = panelRecord.detailScrollThumbMesh;
+            if (!thumb) return;
+            const hasOverflow = panelRecord.detailScrollMax > 0;
+            detailScrollTrack.visible = hasOverflow;
+            thumb.visible = hasOverflow;
+            if (!hasOverflow) return;
+            const ratio =
+              panelRecord.detailVisibleLines /
+              Math.max(panelRecord.detailAllLines.length, panelRecord.detailVisibleLines);
+            const trackHeight = 0.78;
+            const thumbHeight = THREE.MathUtils.clamp(trackHeight * ratio, 0.16, 0.78);
+            thumb.scale.y = thumbHeight;
+            const t =
+              panelRecord.detailScrollOffset / Math.max(panelRecord.detailScrollMax, 1);
+            thumb.position.y = THREE.MathUtils.lerp(
+              trackHeight * 0.5 - thumbHeight * 0.5,
+              -trackHeight * 0.5 + thumbHeight * 0.5,
+              t,
+            );
+          };
+          panelRecord.updateDetailTexture = updateDetailTexture;
+          const setPanelDetailForMedia = (media: ShowcaseResolvedMediaItem) => {
+            const mediaLabel =
+              media.type === "youtube"
+                ? "▶ Video (YouTube)"
+                : media.type === "video"
+                  ? "▶ Video"
+                  : "▣ Image";
+            const descriptionLines = wrapTextLines(
+              media.description || entry.description || "",
+              34,
+            );
+            panelRecord.detailAllLines = [
+              media.title || entry.title,
+              mediaLabel,
+              "",
+              ...descriptionLines,
+              "",
+              ...((entry.technologies || []).slice(0, 5).map((t) => `• ${t}`)),
+            ].filter((line) => line !== undefined);
+            panelRecord.detailScrollOffset = 0;
+            updateDetailTexture();
+          };
+
+          const thumbnailRoot = new THREE.Group();
+          const detailWidth = panelWidth * 0.44;
+          const stripWidth = panelWidth + detailWidth;
+          const stripHeight = panelHeight * 0.28;
+          const stripCenterX = side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
+          thumbnailRoot.position.set(
+            stripCenterX,
+            -(panelHeight * 0.5 + stripHeight * 0.5),
+            0.02,
+          );
+          const stripGlass = new THREE.Mesh(
+            new THREE.PlaneGeometry(stripWidth, stripHeight),
+            new THREE.MeshBasicMaterial({
+              color: 0x0e223b,
+              transparent: true,
+              opacity: 0.72,
+              side: THREE.DoubleSide,
+            }),
+          );
+          thumbnailRoot.add(stripGlass);
+          thumbnailRoot.visible = hasGalleryMedia;
+          const stripFrame = new THREE.Mesh(
+            new THREE.PlaneGeometry(stripWidth * 1.015, stripHeight * 1.07),
+            new THREE.MeshBasicMaterial({
+              color: 0x8cd3ff,
+              transparent: true,
+              opacity: 0.22,
+              side: THREE.DoubleSide,
+            }),
+          );
+          stripFrame.position.z = -0.02;
+          thumbnailRoot.add(stripFrame);
+
+          const arrowTextureOpts = {
+            width: 256,
+            height: 256,
+            bgColor: "rgba(10, 16, 28, 0.86)",
+            lineColor: "rgba(145, 205, 255, 0.55)",
+            textColor: "rgba(229, 241, 255, 0.96)",
+            showLine: false,
+            fontSize: 138,
+            lineSpacing: 140,
+            textAlign: "center" as const,
+            padding: 32,
+          };
+          const prevArrowTex = createDetailTexture(["‹"], arrowTextureOpts);
+          const nextArrowTex = createDetailTexture(["›"], arrowTextureOpts);
+          const createArrowButton = (
+            tex: THREE.Texture,
+            x: number,
+            action: "prev" | "next",
+          ) => {
+            const mesh = new THREE.Mesh(
+              new THREE.PlaneGeometry(stripHeight * 0.4, stripHeight * 0.56),
+              new THREE.MeshBasicMaterial({
+                map: tex,
+                transparent: true,
+                opacity: 0.94,
+                side: THREE.DoubleSide,
+              }),
+            );
+            mesh.position.set(x, 0, 0.05);
+            thumbnailRoot.add(mesh);
+            panelRecord.thumbnailHitTargets.push({ mesh, type: action });
+            return mesh;
+          };
+          const prevArrowMesh = createArrowButton(
+            prevArrowTex,
+            -stripWidth * 0.46,
+            "prev",
+          );
+          const nextArrowMesh = createArrowButton(
+            nextArrowTex,
+            stripWidth * 0.46,
+            "next",
+          );
+
+          const thumbSlotsWidth = stripWidth * 0.72;
+          const thumbWidth = thumbSlotsWidth / PROJECT_SHOWCASE_THUMBS_PER_PAGE - 0.08;
+          const thumbHeight = stripHeight * 0.66;
+          const thumbBaseY = 0;
+          const thumbBaseZ = 0.06;
+          const thumbOffsetStart =
+            -((PROJECT_SHOWCASE_THUMBS_PER_PAGE - 1) * (thumbWidth + 0.08)) / 2;
+          const thumbGroups: THREE.Group[] = [];
+          const thumbIndexByGroup = new Map<THREE.Group, number>();
+
+          mediaItems.forEach((mediaItem, mediaIndex) => {
+            const thumbGroup = new THREE.Group();
+            const thumbFrame = new THREE.Mesh(
+              new THREE.PlaneGeometry(thumbWidth + 0.05, thumbHeight + 0.05),
+              new THREE.MeshBasicMaterial({
+                color: 0x88cfff,
+                transparent: true,
+                opacity: 0.26,
+                side: THREE.DoubleSide,
+              }),
+            );
+            const thumbImageMat = new THREE.MeshBasicMaterial({
+              color: 0x95acc8,
+              side: THREE.DoubleSide,
+            });
+            const thumbImage = new THREE.Mesh(
+              new THREE.PlaneGeometry(1, 1),
+              thumbImageMat,
+            );
+            thumbImage.position.z = 0.01;
+            const applyThumbContainFit = (imageAspect?: number) => {
+              if (!imageAspect || !Number.isFinite(imageAspect) || imageAspect <= 0) {
+                thumbImage.scale.set(thumbWidth, thumbHeight, 1);
+                return;
+              }
+              const frameAspect = thumbWidth / thumbHeight;
+              let displayWidth = thumbWidth;
+              let displayHeight = thumbHeight;
+              if (imageAspect > frameAspect) {
+                displayWidth = thumbWidth;
+                displayHeight = thumbWidth / imageAspect;
+              } else {
+                displayHeight = thumbHeight;
+                displayWidth = thumbHeight * imageAspect;
+              }
+              thumbImage.scale.set(displayWidth, displayHeight, 1);
+            };
+            applyThumbContainFit();
+            textureLoader.load(
+              mediaItem.textureUrl,
+              (texture) => {
+                texture.colorSpace = THREE.SRGBColorSpace;
+                texture.wrapS = THREE.ClampToEdgeWrapping;
+                texture.wrapT = THREE.ClampToEdgeWrapping;
+                thumbImageMat.map = texture;
+                thumbImageMat.color.set(0xffffff);
+                const img = texture.image as
+                  | { width?: number; height?: number }
+                  | undefined;
+                const imgAspect =
+                  img?.width && img?.height ? img.width / img.height : undefined;
+                applyThumbContainFit(imgAspect);
+                thumbImageMat.needsUpdate = true;
+              },
+              undefined,
+              () => {
+                thumbImageMat.color.set(0x5c6a86);
+                thumbImageMat.needsUpdate = true;
+              },
+            );
+            thumbGroup.add(thumbFrame, thumbImage);
+            thumbnailRoot.add(thumbGroup);
+            thumbGroups.push(thumbGroup);
+            thumbIndexByGroup.set(thumbGroup, mediaIndex);
+            panelRecord.thumbnailFrameMats.push(
+              thumbFrame.material as THREE.MeshBasicMaterial,
+            );
+            panelRecord.thumbnailHitTargets.push({
+              mesh: thumbImage,
+              type: "media",
+              mediaIndex,
+            });
           });
-          const detailMat = new THREE.MeshBasicMaterial({
-            map: detailTexture,
-            transparent: true,
-            opacity: 0.94,
-            toneMapped: false,
-            side: THREE.DoubleSide,
-          });
+
+          const updateThumbnailLayout = () => {
+            const maxPageStart = Math.max(
+              0,
+              panelRecord.mediaItems.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
+            );
+            panelRecord.thumbnailPageStart = THREE.MathUtils.clamp(
+              panelRecord.thumbnailPageStart,
+              0,
+              maxPageStart,
+            );
+            const pageEnd =
+              panelRecord.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE;
+            thumbGroups.forEach((group) => {
+              const mediaIndex = thumbIndexByGroup.get(group) ?? -1;
+              const visible =
+                mediaIndex >= panelRecord.thumbnailPageStart &&
+                mediaIndex < pageEnd;
+              group.visible = visible;
+              if (!visible) return;
+              const slot = mediaIndex - panelRecord.thumbnailPageStart;
+              group.position.set(
+                thumbOffsetStart + slot * (thumbWidth + 0.08),
+                thumbBaseY,
+                thumbBaseZ,
+              );
+            });
+            const showNav =
+              panelRecord.mediaItems.length > PROJECT_SHOWCASE_THUMBS_PER_PAGE;
+            prevArrowMesh.visible = showNav;
+            nextArrowMesh.visible = showNav;
+            (
+              prevArrowMesh.material as THREE.MeshBasicMaterial
+            ).opacity = panelRecord.thumbnailPageStart > 0 ? 0.95 : 0.35;
+            (
+              nextArrowMesh.material as THREE.MeshBasicMaterial
+            ).opacity =
+              panelRecord.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE <
+              panelRecord.mediaItems.length
+                ? 0.95
+                : 0.35;
+          };
+
+          const updateThumbnailVisualState = () => {
+            panelRecord.thumbnailFrameMats.forEach((mat, mediaIndex) => {
+              const active = mediaIndex === panelRecord.activeMediaIndex;
+              mat.opacity = active ? 0.9 : 0.26;
+              mat.color.set(active ? 0xeaf7ff : 0x88cfff);
+            });
+          };
+
+          let mediaLoadNonce = 0;
+          const videoCache = new Map<
+            number,
+            { video: HTMLVideoElement; texture: THREE.VideoTexture }
+          >();
+          const setActiveMedia = (mediaIndex: number) => {
+            const safeMediaIndex = THREE.MathUtils.clamp(
+              mediaIndex,
+              0,
+              panelRecord.mediaItems.length - 1,
+            );
+            const media = panelRecord.mediaItems[safeMediaIndex];
+            if (!media) return;
+            panelRecord.activeMediaIndex = safeMediaIndex;
+            panelRecord.fitMode = media.fit;
+            panelRecord.zoom = 1;
+            panelRecord.panX = 0;
+            panelRecord.panY = 0;
+            if (
+              panelRecord.activeMediaIndex < panelRecord.thumbnailPageStart ||
+              panelRecord.activeMediaIndex >=
+                panelRecord.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE
+            ) {
+              panelRecord.thumbnailPageStart =
+                Math.floor(
+                  panelRecord.activeMediaIndex / PROJECT_SHOWCASE_THUMBS_PER_PAGE,
+                ) * PROJECT_SHOWCASE_THUMBS_PER_PAGE;
+            }
+            updateThumbnailLayout();
+            updateThumbnailVisualState();
+            setPanelDetailForMedia(media);
+            const loadNonce = ++mediaLoadNonce;
+            videoCache.forEach(({ video }, idx) => {
+              if (idx !== safeMediaIndex) {
+                video.pause();
+              }
+            });
+            if (media.type === "video" && media.videoUrl) {
+              let record = videoCache.get(safeMediaIndex);
+              if (!record) {
+                const video = document.createElement("video");
+                video.src = media.videoUrl;
+                video.crossOrigin = "anonymous";
+                video.loop = true;
+                video.muted = true;
+                video.playsInline = true;
+                video.preload = "auto";
+                const texture = new THREE.VideoTexture(video);
+                texture.colorSpace = THREE.SRGBColorSpace;
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                record = { video, texture };
+                videoCache.set(safeMediaIndex, record);
+              }
+              imageMat.map = record.texture;
+              imageMat.color.set(0xffffff);
+              panelRecord.texture = record.texture;
+              const startPlayback = () => {
+                if (loadNonce !== mediaLoadNonce) return;
+                record?.video.play().catch(() => {});
+                const vw = record?.video.videoWidth || 16;
+                const vh = record?.video.videoHeight || 9;
+                applyImageFit(vw / Math.max(1, vh), record?.texture, media.fit);
+                imageMat.needsUpdate = true;
+              };
+              if (record.video.readyState >= 1) {
+                startPlayback();
+              } else {
+                record.video.onloadedmetadata = startPlayback;
+                record.video.load();
+              }
+              return;
+            }
+            textureLoader.load(
+              media.textureUrl,
+              (texture) => {
+                if (loadNonce !== mediaLoadNonce) return;
+                texture.colorSpace = THREE.SRGBColorSpace;
+                imageMat.map = texture;
+                imageMat.color.set(0xffffff);
+                panelRecord.texture = texture;
+                const img = texture.image as
+                  | { width?: number; height?: number }
+                  | undefined;
+                const imgAspect =
+                  img?.width && img?.height ? img.width / img.height : undefined;
+                applyImageFit(imgAspect, texture, media.fit);
+                imageMat.needsUpdate = true;
+              },
+              undefined,
+              () => {
+                if (loadNonce !== mediaLoadNonce) return;
+                panelRecord.texture = null;
+                imageMat.map = null;
+                imageMat.color.set(0x5c6a86);
+                panelRecord.baseRepeat.set(1, 1);
+                panelRecord.baseOffset.set(0, 0);
+                imageMat.needsUpdate = true;
+              },
+            );
+          };
+          panelRecord.setActiveMedia = setActiveMedia;
+          panelRecord.setThumbnailPageStart = (pageStart: number) => {
+            const maxPageStart = Math.max(
+              0,
+              panelRecord.mediaItems.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
+            );
+            panelRecord.thumbnailPageStart = THREE.MathUtils.clamp(
+              pageStart,
+              0,
+              maxPageStart,
+            );
+            updateThumbnailLayout();
+            updateThumbnailVisualState();
+            bumpProjectShowcaseViewportTick();
+          };
+          updateThumbnailLayout();
+          updateThumbnailVisualState();
+
+          panelGroup.add(frame);
+          panelGroup.add(imagePlane);
+          const detailMat = panelRecord.detailMat;
+          const detailHeight = panelHeight;
           const detailPlane = new THREE.Mesh(
-            new THREE.PlaneGeometry(panelWidth * 0.88, panelHeight * 0.76),
+            new THREE.PlaneGeometry(detailWidth, detailHeight),
             detailMat,
           );
+          panelRecord.detailMesh = detailPlane;
           detailPlane.position.set(
-            side < 0 ? -panelWidth * 0.96 : panelWidth * 0.96,
+            side < 0
+              ? -(panelWidth * 0.5 + detailWidth * 0.5)
+              : panelWidth * 0.5 + detailWidth * 0.5,
             0,
-            -0.08,
+            -0.02,
+          );
+          const detailScrollTrack = new THREE.Mesh(
+            new THREE.PlaneGeometry(0.032, 0.78),
+            new THREE.MeshBasicMaterial({
+              color: 0x2f5c82,
+              transparent: true,
+              opacity: 0.5,
+              side: THREE.DoubleSide,
+            }),
+          );
+          detailScrollTrack.position.set(
+            detailPlane.position.x + (side < 0 ? -1 : 1) * (detailWidth * 0.46),
+            0,
+            detailPlane.position.z + 0.012,
+          );
+          const detailScrollThumb = new THREE.Mesh(
+            new THREE.PlaneGeometry(0.034, 0.28),
+            new THREE.MeshBasicMaterial({
+              color: 0xb8e3ff,
+              transparent: true,
+              opacity: 0.9,
+              side: THREE.DoubleSide,
+            }),
+          );
+          detailScrollThumb.position.set(
+            detailScrollTrack.position.x,
+            detailScrollTrack.position.y,
+            detailScrollTrack.position.z + 0.01,
+          );
+          panelRecord.detailScrollThumbMesh = detailScrollThumb;
+          const detailFrame = new THREE.Mesh(
+            new THREE.PlaneGeometry(detailWidth * 1.015, detailHeight * 1.015),
+            new THREE.MeshBasicMaterial({
+              color: 0x8cd3ff,
+              transparent: true,
+              opacity: 0.2,
+              side: THREE.DoubleSide,
+            }),
+          );
+          detailFrame.position.copy(detailPlane.position);
+          detailFrame.position.z -= 0.04;
+          const moduleFrame = new THREE.Mesh(
+            new THREE.PlaneGeometry(stripWidth * 1.015, (detailHeight + stripHeight) * 1.01),
+            new THREE.MeshBasicMaterial({
+              color: 0x8cd3ff,
+              transparent: true,
+              opacity: 0.14,
+              side: THREE.DoubleSide,
+            }),
+          );
+          moduleFrame.position.set(
+            stripCenterX,
+            -(stripHeight * 0.5),
+            -0.06,
           );
           panelGroup.add(detailPlane);
+          panelGroup.add(detailFrame);
+          panelGroup.add(detailScrollTrack);
+          panelGroup.add(detailScrollThumb);
+          panelGroup.add(thumbnailRoot);
+          panelGroup.add(moduleFrame);
+          panelRecord.setActiveMedia(0);
           // Render cards in the overlay layer so they bypass HDR bloom/tonemapping.
           panelGroup.traverse((child) => {
             child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
@@ -9685,6 +10431,7 @@ export default function ResumeSpace3D({
           <UserOnScreenMessages />
           <CosmicMiniMap3D
             visible={!isLoading && sceneReady}
+            projectModeSignal={projectShowcaseActive}
             spaceshipRef={spaceshipRef}
             starDestroyerRef={starDestroyerRef}
             itemsRef={itemsRef}
@@ -9984,7 +10731,8 @@ export default function ResumeSpace3D({
           )}
 
           {projectShowcaseActive && (
-            <div
+            <>
+              <div
               style={{
                 position: "fixed",
                 right: 18,
@@ -10465,6 +11213,7 @@ export default function ResumeSpace3D({
                 />
               </div>
             </div>
+            </>
           )}
 
           {/* Spaceship HUD Interface */}
