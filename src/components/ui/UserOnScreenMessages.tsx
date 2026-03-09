@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   subscribeOnScreenMessages,
   subscribeOnScreenTelemetry,
@@ -17,7 +17,7 @@ const UserOnScreenMessages: React.FC = () => {
     speed: null,
   });
   const [displayDistance, setDisplayDistance] = useState(0);
-  const [displaySpeed, setDisplaySpeed] = useState(0);
+  const telemetryDistanceRef = useRef<number | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeOnScreenMessages((message) => {
@@ -48,28 +48,22 @@ const UserOnScreenMessages: React.FC = () => {
   useEffect(() => {
     return subscribeOnScreenTelemetry((nextTelemetry) => {
       setTelemetry(nextTelemetry);
+      telemetryDistanceRef.current = nextTelemetry.distance;
     });
   }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       setDisplayDistance((prev) => {
-        const target = telemetry.distance ?? 0;
+        const target = telemetryDistanceRef.current ?? 0;
         if (Math.abs(target - prev) < 0.5) return target;
         const delta = target - prev;
         const step = Math.max(0.8, Math.abs(delta) * 0.18);
         return prev + Math.sign(delta) * step;
       });
-      setDisplaySpeed((prev) => {
-        const target = telemetry.speed ?? 0;
-        if (Math.abs(target - prev) < 0.05) return target;
-        const delta = target - prev;
-        const step = Math.max(0.03, Math.abs(delta) * 0.22);
-        return prev + Math.sign(delta) * step;
-      });
     }, 70);
     return () => window.clearInterval(timer);
-  }, [telemetry.distance, telemetry.speed]);
+  }, []);
 
   const renderedMessages = useMemo(
     () => messages.slice(0, MAX_VISIBLE_MESSAGES),
@@ -135,36 +129,6 @@ const UserOnScreenMessages: React.FC = () => {
             </div>
           )}
 
-          {telemetry.speed !== null && (
-            <div
-              style={{
-                minWidth: 112,
-                padding: "3px 6px",
-                borderRadius: 6,
-                border: "1px solid rgba(124, 247, 170, 0.65)",
-                background: "rgba(4, 20, 14, 0.72)",
-                boxShadow: "0 0 8px rgba(107, 239, 173, 0.2)",
-                fontFamily: "'Orbitron', 'Share Tech Mono', 'Courier New', monospace",
-                textAlign: "center",
-              }}
-            >
-              <div style={{ fontSize: 8, color: "rgba(154, 255, 197, 0.78)", letterSpacing: 0.9 }}>
-                SPEED
-              </div>
-              <div
-                style={{
-                  marginTop: 1,
-                  fontSize: 12,
-                  color: "#d2ffe7",
-                  fontWeight: 700,
-                  letterSpacing: 0.8,
-                  textShadow: "0 0 8px rgba(90, 245, 171, 0.3)",
-                }}
-              >
-                {`${Math.max(0, displaySpeed).toFixed(2)}u/s`}
-              </div>
-            </div>
-          )}
         </div>
       )}
 

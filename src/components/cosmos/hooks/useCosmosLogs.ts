@@ -43,7 +43,7 @@ type UseCosmosLogsResult = {
   debugLogTotal: number;
 };
 
-const MAX_SHIP_LOGS = 50;
+const MAX_SHIP_LOGS = 500;
 const MAX_DEBUG_LOGS = 500;
 let _shipLogId = 0;
 let _debugLogId = 0;

@@ -626,6 +626,7 @@ export default function ResumeSpace3D({
   const [tourActive, setTourActive] = useState(false);
   const [tourWaypoint, setTourWaypoint] = useState<string>("");
   const [tourProgress, setTourProgress] = useState({ current: 0, total: 0 });
+  const [navTelemetryPulse, setNavTelemetryPulse] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -1019,6 +1020,13 @@ export default function ResumeSpace3D({
     t: number;
     pos: THREE.Vector3;
   } | null>(null);
+  const navDistanceDerivedSpeedRef = useRef(0);
+  const navDistanceSampleRef = useRef<{
+    t: number;
+    distance: number;
+  } | null>(null);
+  const telemetryLastNonZeroSpeedRef = useRef(0);
+  const telemetryLastNonZeroAtRef = useRef(0);
   const starDestroyerIntroFlybyRef = useRef<{
     active: boolean;
     startAt: number;
@@ -1477,6 +1485,21 @@ export default function ResumeSpace3D({
     currentNavigationTargetRef.current = currentNavigationTarget;
   }, [currentNavigationTarget]);
 
+  // Keep speed telemetry responsive during active navigation, even when
+  // navigationDistance/state updates are sparse for a short phase window.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (
+        !navMessageStateRef.current.activeTarget &&
+        !currentNavigationTargetRef.current
+      ) {
+        return;
+      }
+      setNavTelemetryPulse((prev) => (prev + 1) % 1000000);
+    }, 120);
+    return () => window.clearInterval(timer);
+  }, []);
+
   // Track actual ship movement speed from world-position deltas.
   // This catches every travel mode (autopilot/manual/cinematics/special sections)
   // so telemetry does not drop to zero while the ship is visibly moving.
@@ -1544,6 +1567,8 @@ export default function ResumeSpace3D({
       navState.travelStartedAt = Date.now();
       navState.announcedLightspeed = false;
       navState.lastDistance = navigationDistance ?? null;
+      navDistanceSampleRef.current = null;
+      navDistanceDerivedSpeedRef.current = 0;
 
       onScreenMessage(`Navicomputer setting destination to "${targetLabel}"`);
       if (navigationDistance !== null) {
@@ -1554,19 +1579,97 @@ export default function ResumeSpace3D({
       onScreenMessage("Adjusting Falcon trajectory");
     }
 
-    if (navState.activeTarget && navigationDistance !== null) {
+    if (navState.activeTarget) {
+      // Navigation has finished; dismiss KPI strip immediately.
+      if (!currentNavigationTarget && navigationDistance === null) {
+        const label = navState.targetLabel ?? formatNavTargetLabel(navState.activeTarget);
+        onScreenMessage(`Arrived at ${label}`);
+        clearOnScreenTelemetry();
+        navDistanceSampleRef.current = null;
+        navDistanceDerivedSpeedRef.current = 0;
+        telemetryLastNonZeroSpeedRef.current = 0;
+        telemetryLastNonZeroAtRef.current = 0;
+        navState.activeTarget = null;
+        navState.targetLabel = null;
+        navState.travelStartedAt = 0;
+        navState.announcedLightspeed = false;
+        navState.lastDistance = null;
+        return;
+      }
+      if (navigationDistance !== null) {
+        const now = performance.now();
+        const navSample = navDistanceSampleRef.current;
+        if (!navSample) {
+          navDistanceSampleRef.current = { t: now, distance: navigationDistance };
+        } else {
+          const dt = Math.max((now - navSample.t) / 1000, 1 / 240);
+          const deltaDist = Math.abs(navigationDistance - navSample.distance);
+          navSample.t = now;
+          navSample.distance = navigationDistance;
+          const instantaneousUnitsPerSecond = deltaDist / dt;
+          const clamped = THREE.MathUtils.clamp(instantaneousUnitsPerSecond, 0, 5000);
+          navDistanceDerivedSpeedRef.current = THREE.MathUtils.lerp(
+            navDistanceDerivedSpeedRef.current,
+            clamped,
+            0.3,
+          );
+        }
+      } else {
+        // Some moon-route phases briefly report null distance while movement
+        // still occurs. Keep speed latched through turbo/lightspeed windows
+        // so telemetry does not momentarily collapse to 0.
+        if (
+          manualFlightRef.current.isLightspeedActive ||
+          manualFlightRef.current.isTurboActive
+        ) {
+          navDistanceDerivedSpeedRef.current = Math.max(
+            navDistanceDerivedSpeedRef.current,
+            (manualFlightRef.current.currentSpeed || 0) * 60,
+          );
+        } else {
+          navDistanceDerivedSpeedRef.current = THREE.MathUtils.damp(
+            navDistanceDerivedSpeedRef.current,
+            0,
+            2.6,
+            1 / 60,
+          );
+        }
+      }
       // Normalize legacy frame-based speed values to units/second and
-      // combine with measured world-space speed for robust telemetry.
+      // combine with measured world-space speed + nav-distance-derived speed
+      // so telemetry stays accurate even when travel is camera-driven.
       const nominalSpeedPerSecond = Math.max(
         (spaceshipPathRef.current.speed || 0) * 60,
         (manualFlightRef.current.currentSpeed || 0) * 60,
       );
-      const speed = Math.max(
+      const speedRaw = Math.max(
         nominalSpeedPerSecond,
         measuredTravelSpeedRef.current || 0,
+        navDistanceDerivedSpeedRef.current || 0,
       );
+      const nowPerf = performance.now();
+      if (speedRaw > 1) {
+        telemetryLastNonZeroSpeedRef.current = speedRaw;
+        telemetryLastNonZeroAtRef.current = nowPerf;
+      }
+      const heldSpeed = (() => {
+        if (
+          !currentNavigationTarget ||
+          (!manualFlightRef.current.isTurboActive &&
+            !manualFlightRef.current.isLightspeedActive)
+        ) {
+          return 0;
+        }
+        const elapsed = nowPerf - telemetryLastNonZeroAtRef.current;
+        if (elapsed >= 450) return 0;
+        const t = 1 - elapsed / 450;
+        return telemetryLastNonZeroSpeedRef.current * Math.max(0.15, t);
+      })();
+      const speed = speedRaw > 0.01 ? speedRaw : heldSpeed;
+      const effectiveDistance =
+        navigationDistance !== null ? navigationDistance : navState.lastDistance;
       setOnScreenTelemetry({
-        distance: navigationDistance,
+        distance: effectiveDistance,
         speed,
       });
 
@@ -1576,6 +1679,7 @@ export default function ResumeSpace3D({
       }
 
       if (
+        navigationDistance !== null &&
         navState.lastDistance !== null &&
         navState.lastDistance >= 420 &&
         navigationDistance < 420
@@ -1583,29 +1687,22 @@ export default function ResumeSpace3D({
         onScreenMessage("Arriving to destination");
       }
 
-      navState.lastDistance = navigationDistance;
-      return;
-    }
-
-    if (navState.activeTarget && navigationDistance === null && navState.lastDistance !== null) {
-      const label = navState.targetLabel ?? formatNavTargetLabel(navState.activeTarget);
-      onScreenMessage(`Arrived at ${label}`);
-      clearOnScreenTelemetry();
-      navState.activeTarget = null;
-      navState.targetLabel = null;
-      navState.travelStartedAt = 0;
-      navState.announcedLightspeed = false;
-      navState.lastDistance = null;
+      if (navigationDistance !== null) {
+        navState.lastDistance = navigationDistance;
+      }
       return;
     }
 
     if (!navState.activeTarget) {
       clearOnScreenTelemetry();
+      telemetryLastNonZeroSpeedRef.current = 0;
+      telemetryLastNonZeroAtRef.current = 0;
     }
   }, [
     currentNavigationTarget,
     navigationDistance,
     formatNavTargetLabel,
+    navTelemetryPulse,
   ]);
 
   const setProjectShowcaseFocus = useCallback((index: number) => {

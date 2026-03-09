@@ -35,6 +35,8 @@ const NAV_REPEAT_SECTION_EPSILON = 1.5;
 const NAV_MOVEMENT_HEARTBEAT_LOGS = false;
 const NAV_DOUBLE_CLICK_TRACE_LOGS = true;
 const NAV_TRACE_TO_SHIP_LOG = true;
+const NAV_DIAGNOSTIC_LOGS = true;
+const NAV_DIAGNOSTIC_INTERVAL_MS = 1000;
 const NAV_ORBIT_EXIT_CLEAR_AWAY_BLEND = 0.4; // 40% biased away from moon surface
 const NAV_ORBIT_EXIT_CLEAR_MIN_DIST = 180;
 const NAV_ORBIT_EXIT_CLEAR_MAX_DIST = 320;
@@ -110,6 +112,7 @@ export const useNavigationSystem = (deps: {
   const navTraceLastAtRef = useRef<Record<string, number>>({});
   const navTickSignatureRef = useRef("");
   const navIdleTickLastAtRef = useRef(0);
+  const navDiagLastAtRef = useRef<Record<string, number>>({});
   const navTrace = (method: string, detail?: string, throttleMs = 0) => {
     if (!NAV_DOUBLE_CLICK_TRACE_LOGS) return;
     const now = Date.now();
@@ -122,6 +125,17 @@ export const useNavigationSystem = (deps: {
     if (NAV_TRACE_TO_SHIP_LOG) {
       shipLog(msg, "nav");
     }
+  };
+  const navDiag = (channel: string, detail: string, throttleMs = NAV_DIAGNOSTIC_INTERVAL_MS) => {
+    if (!NAV_DIAGNOSTIC_LOGS) return;
+    const now = Date.now();
+    const key = `diag:${channel}`;
+    const lastAt = navDiagLastAtRef.current[key] || 0;
+    if (throttleMs > 0 && now - lastAt < throttleMs) return;
+    navDiagLastAtRef.current[key] = now;
+    const msg = `🧪 NAVDIAG ${channel} | ${detail}`;
+    vlog(msg);
+    shipLog(msg, "nav");
   };
 
   // Reusable objects for baking the user's roll offset into lookAt quaternions
@@ -365,6 +379,9 @@ export const useNavigationSystem = (deps: {
         (status: NavigationStatus) => {
           setNavigationDistance(status.distance);
           setNavigationETA(status.eta);
+          // Keep a single authoritative autopilot speed source (units/frame)
+          // so outer telemetry can convert consistently to units/second.
+          manualFlightRef.current.currentSpeed = status.speed;
         },
       );
 
@@ -380,6 +397,25 @@ export const useNavigationSystem = (deps: {
         vlog(`✅ ARRIVED at ${targetId}`);
         shipLog("Destination reached", "nav");
         debugLog("nav", `setOnArrival fired for targetId="${targetId}"`);
+        // Moon navigation has completed; clear global nav indicators so
+        // on-screen distance/speed telemetry can dismiss immediately.
+        setCurrentNavigationTarget(null);
+        setNavigationDistance(null);
+        setNavigationETA(null);
+        navTurnActiveRef.current = false;
+        activeMoonLightspeedRef.current = null;
+        navigationTargetRef.current = {
+          id: null,
+          type: null,
+          position: null,
+          startPosition: null,
+          startTime: 0,
+          useTurbo: false,
+          lastUpdateFrame: undefined,
+        };
+        manualFlightRef.current.acceleration = 0;
+        manualFlightRef.current.isTurboActive = false;
+        manualFlightRef.current.isLightspeedActive = false;
 
         const companyId = targetId.replace("moon-", "");
         const company = resumeData.experience.find(
@@ -503,6 +539,7 @@ export const useNavigationSystem = (deps: {
       // Prevents one-frame tug/yoyo when users retarget quickly.
       navigationSystemRef.current.cancelNavigation();
       activeMoonLightspeedRef.current = null;
+      manualFlightRef.current.currentSpeed = 0;
 
       if (targetType === "moon") {
         navTrace("handleAutopilotNavigation()", `moon-flow:${targetId}`);
@@ -986,28 +1023,45 @@ export const useNavigationSystem = (deps: {
 
     if (navigationSystemRef.current && !isCameraAlignmentHold) {
       const deltaTime = 0.016;
-      const status = navigationSystemRef.current.getStatus();
+      const statusBeforeUpdate = navigationSystemRef.current.getStatus();
       if (
         NAV_MOVEMENT_HEARTBEAT_LOGS &&
-        ((status.isNavigating && !(window as any).lastNavSystemLog) ||
+        ((statusBeforeUpdate.isNavigating && !(window as any).lastNavSystemLog) ||
           now - ((window as any).lastNavSystemLog || 0) > 2000)
       ) {
         vlog(
-          `🎯 Nav System Active: ${status.targetId}, dist: ${status.distance?.toFixed(1)}`,
+          `🎯 Nav System Active: ${statusBeforeUpdate.targetId}, dist: ${statusBeforeUpdate.distance?.toFixed(1)}`,
         );
         (window as any).lastNavSystemLog = now;
       }
       navigationSystemRef.current.update(deltaTime);
-      if (status.isNavigating && activeMoonLightspeedRef.current) {
-        const isLightspeedMoon = status.targetId === activeMoonLightspeedRef.current;
+      const statusAfterUpdate = navigationSystemRef.current.getStatus();
+      if (statusAfterUpdate.isNavigating) {
+        // Keep distance/ETA state in lockstep with the moon navigation system
+        // so on-screen distance telemetry always decrements during travel.
+        setNavigationDistance(statusAfterUpdate.distance);
+        setNavigationETA(statusAfterUpdate.eta);
+      }
+      manualFlightRef.current.currentSpeed = statusAfterUpdate.speed;
+      if (statusAfterUpdate.isNavigating) {
+        const frameSpeed = statusAfterUpdate.speed || 0;
+        const phase = navigationTargetRef.current.turnPhase ?? "none";
+        navDiag(
+          "moon-system",
+          `target=${statusAfterUpdate.targetId ?? "none"} phase=${phase} dist=${statusAfterUpdate.distance?.toFixed(1) ?? "null"} speed=${(frameSpeed * 60).toFixed(1)}u/s frame=${frameSpeed.toFixed(3)} turbo=${statusAfterUpdate.isTurboActive ? 1 : 0} ls=${manualFlightRef.current.isLightspeedActive ? 1 : 0} accel=${(manualFlightRef.current.acceleration || 0).toFixed(2)}`,
+        );
+      }
+      if (statusAfterUpdate.isNavigating && activeMoonLightspeedRef.current) {
+        const isLightspeedMoon =
+          statusAfterUpdate.targetId === activeMoonLightspeedRef.current;
         if (isLightspeedMoon) {
-          const dist = status.distance ?? Infinity;
+          const dist = statusAfterUpdate.distance ?? Infinity;
           const lightspeedOn = dist > NAV_LIGHTSPEED_DECEL_DIST;
           manualFlightRef.current.acceleration = lightspeedOn ? 1.0 : 0.25;
           manualFlightRef.current.isTurboActive = lightspeedOn;
           manualFlightRef.current.isLightspeedActive = lightspeedOn;
         }
-      } else if (!status.isNavigating && activeMoonLightspeedRef.current) {
+      } else if (!statusAfterUpdate.isNavigating && activeMoonLightspeedRef.current) {
         activeMoonLightspeedRef.current = null;
         manualFlightRef.current.isTurboActive = false;
         manualFlightRef.current.isLightspeedActive = false;
@@ -1043,6 +1097,10 @@ export const useNavigationSystem = (deps: {
       const distance = targetPos
         ? ship.position.distanceTo(targetPos)
         : 0;
+      navDiag(
+        "section-flow",
+        `target=${target.id ?? "none"} phase=${target.turnPhase ?? "none"} dist=${distance.toFixed(1)} speed=${((pathData.speed || 0) * 60).toFixed(1)}u/s frame=${(pathData.speed || 0).toFixed(3)} turbo=${manualFlightRef.current.isTurboActive ? 1 : 0} ls=${manualFlightRef.current.isLightspeedActive ? 1 : 0} accel=${(manualFlightRef.current.acceleration || 0).toFixed(2)}`,
+      );
       const suppressShipFollowCameraForSkills =
         target.type === "section" &&
         target.id === "skills" &&
@@ -1060,6 +1118,7 @@ export const useNavigationSystem = (deps: {
         navTrace("updateAutopilotNavigation()", "phase:clearing", 700);
         navTurnActiveRef.current = true;
         pathData.speed = 0;
+        manualFlightRef.current.currentSpeed = 0;
 
         const toClear = _navDir.current
           .subVectors(target.clearanceTarget, ship.position);
@@ -1133,6 +1192,7 @@ export const useNavigationSystem = (deps: {
         navTrace("updateAutopilotNavigation()", "phase:turning", 700);
         navTurnActiveRef.current = true;
         pathData.speed = 0;
+        manualFlightRef.current.currentSpeed = 0;
         const TURN_DURATION = 1.5; // seconds
         const elapsed =
           (performance.now() - (target.turnStartTime || 0)) / 1000;
@@ -1194,6 +1254,7 @@ export const useNavigationSystem = (deps: {
       if (target.turnPhase === "pausing") {
         navTrace("updateAutopilotNavigation()", "phase:pausing", 700);
         pathData.speed = 0;
+        manualFlightRef.current.currentSpeed = 0;
         const MIN_PAUSE_DURATION = 500; // ms
         const pauseElapsed = performance.now() - (target.turnPauseStartTime || 0);
         const alignElapsed =
@@ -1305,10 +1366,11 @@ export const useNavigationSystem = (deps: {
                 ? target.pendingMoonId
                 : null;
             }
-            // Clear the section-type navigation since moon system takes over
+            // Clear the section-type navigation state entirely since
+            // moon system now owns navigation and status updates.
             navigationTargetRef.current = {
-              id: target.id,
-              type: target.type,
+              id: null,
+              type: null,
               position: null,
               startPosition: null,
               startTime: 0,
@@ -1548,6 +1610,7 @@ export const useNavigationSystem = (deps: {
         navTrace("updateAutopilotNavigation()", "abort:invalid-steer-target");
         vlog("⚠️ Invalid steer target detected — aborting navigation safely");
         pathData.speed = 0;
+        manualFlightRef.current.currentSpeed = 0;
         setCurrentNavigationTarget(
           target.type === "section" ? target.id : null,
         );
@@ -1578,6 +1641,7 @@ export const useNavigationSystem = (deps: {
         navTrace("updateAutopilotNavigation()", "abort:invalid-direction");
         vlog("⚠️ Invalid direction vector detected — aborting navigation safely");
         pathData.speed = 0;
+        manualFlightRef.current.currentSpeed = 0;
         setCurrentNavigationTarget(null);
         setNavigationDistance(null);
         setNavigationETA(null);
@@ -1684,6 +1748,7 @@ export const useNavigationSystem = (deps: {
 
       pathData.speed += (targetSpeed - pathData.speed) * lerpAlpha;
       ship.position.addScaledVector(direction, pathData.speed);
+      manualFlightRef.current.currentSpeed = pathData.speed;
 
       // ── Real-time deflection: gently push ship out of any obstacle ──
       // Skip while lightspeed is active to avoid micro-corrections that
@@ -1833,6 +1898,7 @@ export const useNavigationSystem = (deps: {
           lastUpdateFrame: undefined,
         };
         manualFlightRef.current.acceleration = 0;
+        manualFlightRef.current.currentSpeed = 0;
         manualFlightRef.current.isTurboActive = false;
         manualFlightRef.current.isLightspeedActive = false;
 
