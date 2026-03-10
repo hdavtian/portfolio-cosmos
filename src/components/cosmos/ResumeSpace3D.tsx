@@ -1741,10 +1741,8 @@ export default function ResumeSpace3D({
 
     if (!track) return;
     const halfWindow = track.cullHalfWindow;
-    const allowCards = projectShowcaseActiveRef.current;
     panels.forEach((panel) => {
-      panel.group.visible =
-        allowCards && Math.abs(panel.runPos - runPos) <= halfWindow;
+      panel.group.visible = Math.abs(panel.runPos - runPos) <= halfWindow;
     });
   }, [setProjectShowcaseFocus]);
 
@@ -7977,6 +7975,25 @@ export default function ResumeSpace3D({
         showcaseRoot.traverse((obj) => {
           obj.layers.set(PROJECT_SHOWCASE_LAYER);
         });
+
+        // Add a depth-only copy of trench geometry on the card layer so
+        // showcase cards are naturally occluded by tunnel walls from outside.
+        const trenchCardOccluder = trench.clone(true);
+        const trenchCardOccluderMat = new THREE.MeshBasicMaterial({
+          color: 0x000000,
+          side: THREE.DoubleSide,
+        });
+        trenchCardOccluderMat.colorWrite = false;
+        trenchCardOccluderMat.depthWrite = true;
+        trenchCardOccluderMat.depthTest = true;
+        trenchCardOccluder.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (!(mesh as any).isMesh) return;
+          mesh.material = trenchCardOccluderMat;
+          mesh.renderOrder = -250;
+          mesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+        });
+        showcaseRoot.add(trenchCardOccluder);
 
         const showcaseAmbient = new THREE.AmbientLight(0xffffff, 0.38);
         const showcaseKey = new THREE.DirectionalLight(0xdde8ff, 1.0);
