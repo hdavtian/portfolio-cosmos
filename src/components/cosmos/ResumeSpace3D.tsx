@@ -194,6 +194,18 @@ type ShowcaseEntry = {
   year?: number | null;
   fit?: "contain" | "cover";
   galleryMedia?: ShowcaseMediaEntry[];
+  clientVariants?: ShowcaseClientVariant[];
+};
+
+type ShowcaseClientVariant = {
+  id: string;
+  title: string;
+  image?: string;
+  description?: string;
+  technologies?: string[];
+  year?: number | null;
+  fit?: "contain" | "cover";
+  galleryMedia?: ShowcaseMediaEntry[];
 };
 
 type ShowcaseResolvedMediaItem = {
@@ -206,12 +218,18 @@ type ShowcaseResolvedMediaItem = {
   videoUrl?: string;
   youtubeUrl?: string;
   youtubeEmbedUrl?: string;
+  variantIndex?: number;
+  variantTitle?: string;
+  variantDescription?: string;
+  variantTechnologies?: string[];
+  variantYear?: number | null;
 };
 
 type ShowcaseThumbnailHitTarget = {
   mesh: THREE.Mesh;
-  type: "media" | "prev" | "next";
+  type: "media" | "prev" | "next" | "variant";
   mediaIndex?: number;
+  variantIndex?: number;
 };
 
 type ShowcasePanelRecord = {
@@ -232,6 +250,9 @@ type ShowcasePanelRecord = {
   zoom: number;
   panX: number;
   panY: number;
+  clientVariants: ShowcaseClientVariant[];
+  activeVariantIndex: number;
+  setActiveVariant: (variantIndex: number) => void;
   mediaItems: ShowcaseResolvedMediaItem[];
   activeMediaIndex: number;
   setActiveMedia: (mediaIndex: number) => void;
@@ -275,16 +296,27 @@ const toYouTubeEmbedUrl = (videoId: string) =>
 const toYouTubeThumbnailUrl = (videoId: string) =>
   `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 
-const resolveShowcaseMediaItems = (entry: ShowcaseEntry): ShowcaseResolvedMediaItem[] => {
+const resolveShowcaseMediaItems = (
+  entry: ShowcaseEntry,
+  opts?: { variant?: ShowcaseClientVariant; variantIndex?: number },
+): ShowcaseResolvedMediaItem[] => {
+  const variant = opts?.variant;
+  const variantIndex = opts?.variantIndex;
+  const baseId = variant?.id || entry.id;
+  const baseTitle = variant?.title || entry.title;
+  const baseDescription = variant?.description || entry.description;
+  const baseFit = variant?.fit ?? entry.fit;
+  const baseImage = variant?.image || entry.image;
+  const sourceGalleryMedia = variant?.galleryMedia ?? entry.galleryMedia ?? [];
   const primary: ShowcaseMediaEntry = {
-    id: `${entry.id}-main`,
+    id: `${baseId}-main`,
     type: "image",
-    image: entry.image,
-    title: entry.title,
-    description: entry.description,
-    fit: entry.fit,
+    image: baseImage,
+    title: baseTitle,
+    description: baseDescription,
+    fit: baseFit,
   };
-  const candidates = [primary, ...(entry.galleryMedia ?? [])].slice(
+  const candidates = [primary, ...sourceGalleryMedia].slice(
     0,
     PROJECT_SHOWCASE_MAX_MEDIA_ITEMS,
   );
@@ -301,7 +333,7 @@ const resolveShowcaseMediaItems = (entry: ShowcaseEntry): ShowcaseResolvedMediaI
       if (!videoId) return;
       const textureUrl = item.thumbnail || toYouTubeThumbnailUrl(videoId);
       resolved.push({
-        id: item.id || `${entry.id}-youtube-${index}`,
+        id: item.id || `${baseId}-youtube-${index}`,
         type: "youtube",
         title: item.title || "YouTube Video",
         description: item.description,
@@ -309,40 +341,60 @@ const resolveShowcaseMediaItems = (entry: ShowcaseEntry): ShowcaseResolvedMediaI
         textureUrl,
         youtubeUrl: item.youtubeUrl,
         youtubeEmbedUrl: toYouTubeEmbedUrl(videoId),
+        variantIndex,
+        variantTitle: variant?.title,
+        variantDescription: variant?.description,
+        variantTechnologies: variant?.technologies,
+        variantYear: variant?.year,
       });
       return;
     }
     if (itemType === "video") {
       if (!item.videoUrl) return;
       resolved.push({
-        id: item.id || `${entry.id}-video-${index}`,
+        id: item.id || `${baseId}-video-${index}`,
         type: "video",
         title: item.title || "Video",
         description: item.description,
         fit: item.fit ?? "cover",
-        textureUrl: item.thumbnail || entry.image,
+        textureUrl: item.thumbnail || baseImage,
         videoUrl: item.videoUrl,
+        variantIndex,
+        variantTitle: variant?.title,
+        variantDescription: variant?.description,
+        variantTechnologies: variant?.technologies,
+        variantYear: variant?.year,
       });
       return;
     }
     if (!item.image) return;
     resolved.push({
-      id: item.id || `${entry.id}-image-${index}`,
+      id: item.id || `${baseId}-image-${index}`,
       type: "image",
-      title: item.title || entry.title,
-      description: item.description || entry.description,
-      fit: item.fit ?? entry.fit ?? "contain",
+      title: item.title || baseTitle,
+      description: item.description || baseDescription,
+      fit: item.fit ?? baseFit ?? "contain",
       textureUrl: item.image,
+      variantIndex,
+      variantTitle: variant?.title,
+      variantDescription: variant?.description,
+      variantTechnologies: variant?.technologies,
+      variantYear: variant?.year,
     });
   });
   if (resolved.length === 0) {
     resolved.push({
-      id: `${entry.id}-fallback`,
+      id: `${baseId}-fallback`,
       type: "image",
-      title: entry.title,
-      description: entry.description,
-      fit: entry.fit ?? "contain",
-      textureUrl: entry.image,
+      title: baseTitle,
+      description: baseDescription,
+      fit: baseFit ?? "contain",
+      textureUrl: baseImage,
+      variantIndex,
+      variantTitle: variant?.title,
+      variantDescription: variant?.description,
+      variantTechnologies: variant?.technologies,
+      variantYear: variant?.year,
     });
   }
   return resolved;
@@ -677,11 +729,17 @@ export default function ResumeSpace3D({
 
         const showcaseImageJobs = (legacyWebsites as ShowcaseEntry[])
           .filter((entry) => (entry as { published?: boolean }).published !== false)
-          .flatMap((entry) =>
-            resolveShowcaseMediaItems(entry).map((item) =>
-              loadTextureSafe(item.textureUrl),
-            ),
-          );
+          .flatMap((entry) => {
+            const variants =
+              (entry.clientVariants ?? []).filter((variant) => !!variant?.title) ?? [];
+            const items =
+              variants.length > 0
+                ? variants.flatMap((variant, variantIndex) =>
+                    resolveShowcaseMediaItems(entry, { variant, variantIndex }),
+                  )
+                : resolveShowcaseMediaItems(entry);
+            return items.map((item) => loadTextureSafe(item.textureUrl));
+          });
 
         await Promise.all([...trenchTextureJobs, ...showcaseImageJobs]);
         if (!cancelled) {
@@ -1709,7 +1767,11 @@ export default function ResumeSpace3D({
     const panels = projectShowcasePanelsRef.current;
     if (panels.length === 0) return;
     const safeIndex = THREE.MathUtils.clamp(index, 0, panels.length - 1);
+    const previousIndex = projectShowcaseFocusIndexRef.current;
     projectShowcaseFocusIndexRef.current = safeIndex;
+    if (previousIndex !== safeIndex) {
+      panels[safeIndex]?.setActiveVariant(0);
+    }
     setProjectShowcaseFocusIndex(safeIndex);
   }, []);
 
@@ -5583,10 +5645,18 @@ export default function ResumeSpace3D({
       if (target?.closest("button, input, select, textarea, a, iframe")) return;
       const cam = sceneRef.current.camera;
       if (!cam) return;
+      const isHierarchyVisible = (obj: THREE.Object3D | null | undefined) => {
+        let current: THREE.Object3D | null | undefined = obj;
+        while (current) {
+          if (!current.visible) return false;
+          current = current.parent;
+        }
+        return true;
+      };
       const hitTargets = projectShowcasePanelsRef.current.flatMap((panel) =>
         panel.group.visible
           ? panel.thumbnailHitTargets
-              .filter((target) => target.mesh.visible)
+              .filter((target) => isHierarchyVisible(target.mesh))
               .map((target) => ({ panel, target }))
           : [],
       );
@@ -5611,6 +5681,11 @@ export default function ResumeSpace3D({
       }
       if (hitTarget.type === "media" && typeof hitTarget.mediaIndex === "number") {
         panel.setActiveMedia(hitTarget.mediaIndex);
+      } else if (
+        hitTarget.type === "variant" &&
+        typeof hitTarget.variantIndex === "number"
+      ) {
+        panel.setActiveVariant(hitTarget.variantIndex);
       } else if (hitTarget.type === "prev") {
         panel.setThumbnailPageStart(
           panel.thumbnailPageStart - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
@@ -8118,7 +8193,9 @@ export default function ResumeSpace3D({
         const trenchWidth =
           runAxis === "z" ? trenchSizeScaled.x : trenchSizeScaled.z;
         const panelOffset = THREE.MathUtils.clamp(trenchWidth * 0.075, 3.6, 7.4);
-        const panelY = THREE.MathUtils.clamp(trenchSizeScaled.y * 0.015, 2.2, 5.4);
+        // Nudge the entire showcase module up slightly for better composition.
+        const panelY =
+          THREE.MathUtils.clamp(trenchSizeScaled.y * 0.015, 2.2, 5.4) + 0.35;
         const panelWidth = THREE.MathUtils.clamp(trenchWidth * 0.2304, 9.072, 13.536);
         const panelHeight = panelWidth * (9 / 16);
         const panelSpacing = THREE.MathUtils.clamp(
@@ -8133,19 +8210,30 @@ export default function ResumeSpace3D({
           const side = index % 2 === 0 ? -1 : 1;
           const panelGroup = new THREE.Group();
           const runPos = runStart + index * panelSpacing;
-          const mediaItems = resolveShowcaseMediaItems(entry);
-          const hasGalleryMedia = mediaItems.length > 1;
+          const clientVariants =
+            (entry.clientVariants ?? []).filter((variant) => !!variant?.title) ?? [];
+          const mediaItems =
+            clientVariants.length > 0
+              ? clientVariants.flatMap((variant, variantIndex) =>
+                  resolveShowcaseMediaItems(entry, { variant, variantIndex }),
+                )
+              : resolveShowcaseMediaItems(entry);
+          const initialVariantMediaCount =
+            clientVariants.length > 0
+              ? mediaItems.filter((item) => item.variantIndex === 0).length
+              : mediaItems.length;
+          const hasGalleryMedia = initialVariantMediaCount > 1;
           const panelVerticalOffset = hasGalleryMedia ? -0.2 : 0;
           if (runAxis === "z") {
             panelGroup.position.set(
               side * panelOffset,
-              panelY + panelVerticalOffset + ((index % 3) - 1) * 0.9,
+              panelY + panelVerticalOffset,
               runPos,
             );
           } else {
             panelGroup.position.set(
               runPos,
-              panelY + panelVerticalOffset + ((index % 3) - 1) * 0.9,
+              panelY + panelVerticalOffset,
               side * panelOffset,
             );
           }
@@ -8208,6 +8296,9 @@ export default function ResumeSpace3D({
             zoom: 1,
             panX: 0,
             panY: 0,
+            clientVariants,
+            activeVariantIndex: 0,
+            setActiveVariant: () => {},
             mediaItems,
             activeMediaIndex: 0,
             setActiveMedia: () => {},
@@ -8294,6 +8385,8 @@ export default function ResumeSpace3D({
             imagePlane.scale.set(displayWidth, displayHeight, 1);
           };
           applyImageFit();
+          const detailWidth = panelWidth * 0.44;
+          const stripWidth = panelWidth + detailWidth;
           const detailTextureOpts = {
             // Match the narrower detail panel aspect to avoid stretched typography.
             width: 800,
@@ -8363,25 +8456,210 @@ export default function ResumeSpace3D({
                 : media.type === "video"
                   ? "▶ Video"
                   : "▣ Image";
+            const detailDescription =
+              media.description ||
+              media.variantDescription ||
+              entry.description ||
+              "";
+            const detailTechs =
+              media.variantTechnologies ||
+              entry.technologies ||
+              [];
+            const detailYear =
+              media.variantYear ?? entry.year;
             const descriptionLines = wrapTextLines(
-              media.description || entry.description || "",
+              detailDescription,
               34,
             );
             panelRecord.detailAllLines = [
-              media.title || entry.title,
+              media.variantTitle || media.title || entry.title,
               mediaLabel,
               "",
               ...descriptionLines,
               "",
-              ...((entry.technologies || []).slice(0, 5).map((t) => `• ${t}`)),
+              ...(detailTechs.slice(0, 5).map((t) => `• ${t}`)),
+              ...(detailYear ? ["", `Year: ${detailYear}`] : []),
             ].filter((line) => line !== undefined);
             panelRecord.detailScrollOffset = 0;
             updateDetailTexture();
           };
 
+          const tabsRoot = new THREE.Group();
+          const showVariantTabs = panelRecord.clientVariants.length > 1;
+          const categoryBarHeight = panelHeight * 0.105;
+          const tabRowHeight = panelHeight * 0.135;
+          const tabAreaHeight = categoryBarHeight + tabRowHeight;
+          const tabAreaCenterX = side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
+          tabsRoot.position.set(
+            tabAreaCenterX,
+            panelHeight * 0.5 + tabAreaHeight * 0.5,
+            0.03,
+          );
+          tabsRoot.visible = showVariantTabs;
+          const categoryGlass = new THREE.Mesh(
+            new THREE.PlaneGeometry(stripWidth, categoryBarHeight),
+            new THREE.MeshBasicMaterial({
+              color: 0x0b1a2f,
+              transparent: true,
+              opacity: 0.76,
+              side: THREE.DoubleSide,
+            }),
+          );
+          categoryGlass.position.y = tabRowHeight * 0.5;
+          tabsRoot.add(categoryGlass);
+          const categoryFrame = new THREE.Mesh(
+            new THREE.PlaneGeometry(stripWidth * 1.01, categoryBarHeight * 1.04),
+            new THREE.MeshBasicMaterial({
+              color: 0x39d7ff,
+              transparent: true,
+              opacity: 0.34,
+              side: THREE.DoubleSide,
+            }),
+          );
+          categoryFrame.position.copy(categoryGlass.position);
+          categoryFrame.position.z = -0.01;
+          tabsRoot.add(categoryFrame);
+          const categoryLabelTex = createDetailTexture(
+            [
+              `${entry.title.toUpperCase()}  •  ${panelRecord.clientVariants.length} PROJECTS`,
+            ],
+            {
+              // Match very wide title-bar aspect to avoid narrow/tall glyph distortion.
+              width: 4096,
+              height: 128,
+              bgColor: "rgba(0,0,0,0)",
+              lineColor: "rgba(0,0,0,0)",
+              textColor: "rgba(172, 229, 255, 0.96)",
+              showLine: false,
+              fontSize: 32,
+              fontFamily: "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+              fontWeight: 600,
+              lineSpacing: 40,
+              textAlign: "left" as const,
+              padding: 36,
+              centerBlock: true,
+              crispUI: true,
+            },
+          );
+          const categoryLabel = new THREE.Mesh(
+            new THREE.PlaneGeometry(stripWidth * 0.965, categoryBarHeight * 0.66),
+            new THREE.MeshBasicMaterial({
+              map: categoryLabelTex,
+              transparent: true,
+              opacity: 0.98,
+              side: THREE.DoubleSide,
+            }),
+          );
+          categoryLabel.position.copy(categoryGlass.position);
+          categoryLabel.position.z = 0.02;
+          tabsRoot.add(categoryLabel);
+
+          const tabsGlass = new THREE.Mesh(
+            new THREE.PlaneGeometry(stripWidth, tabRowHeight),
+            new THREE.MeshBasicMaterial({
+              color: 0x10263e,
+              transparent: true,
+              opacity: 0.78,
+              side: THREE.DoubleSide,
+            }),
+          );
+          tabsGlass.position.y = -categoryBarHeight * 0.5;
+          tabsRoot.add(tabsGlass);
+
+          const tabPaddingX = stripWidth * 0.03;
+          const tabGap = stripWidth * 0.007;
+          const tabCount = Math.max(1, panelRecord.clientVariants.length);
+          const tabWidth =
+            (stripWidth - tabPaddingX * 2 - tabGap * (tabCount - 1)) / tabCount;
+          const tabFrameMats: THREE.MeshBasicMaterial[] = [];
+          const tabFillMats: THREE.MeshBasicMaterial[] = [];
+          const tabLabelMats: THREE.MeshBasicMaterial[] = [];
+          const updateVariantTabVisualState = () => {
+            tabFrameMats.forEach((mat, tabIndex) => {
+              const active = tabIndex === panelRecord.activeVariantIndex;
+              mat.opacity = active ? 0.98 : 0.22;
+              mat.color.set(active ? 0x8beeff : 0x58a8d5);
+            });
+            tabFillMats.forEach((mat, tabIndex) => {
+              const active = tabIndex === panelRecord.activeVariantIndex;
+              mat.opacity = active ? 0.92 : 0.54;
+              mat.color.set(active ? 0x2a4f6f : 0x1a2f49);
+            });
+            tabLabelMats.forEach((mat, tabIndex) => {
+              const active = tabIndex === panelRecord.activeVariantIndex;
+              mat.opacity = active ? 1 : 0.8;
+            });
+          };
+
+          panelRecord.clientVariants.forEach((variant, variantIndex) => {
+            const tabGroup = new THREE.Group();
+            const x =
+              -stripWidth * 0.5 +
+              tabPaddingX +
+              tabWidth * 0.5 +
+              variantIndex * (tabWidth + tabGap);
+            tabGroup.position.set(x, -categoryBarHeight * 0.5, 0.04);
+            const tabFill = new THREE.Mesh(
+              new THREE.PlaneGeometry(tabWidth * 0.985, tabRowHeight * 0.78),
+              new THREE.MeshBasicMaterial({
+                color: 0x1a2f49,
+                transparent: true,
+                opacity: 0.56,
+                side: THREE.DoubleSide,
+              }),
+            );
+            const tabFrame = new THREE.Mesh(
+              new THREE.PlaneGeometry(tabWidth, tabRowHeight * 0.82),
+              new THREE.MeshBasicMaterial({
+                color: 0x69b7e6,
+                transparent: true,
+                opacity: 0.24,
+                side: THREE.DoubleSide,
+              }),
+            );
+            tabFillMats.push(tabFill.material as THREE.MeshBasicMaterial);
+            tabFrameMats.push(tabFrame.material as THREE.MeshBasicMaterial);
+            const tabLabelTex = createDetailTexture([variant.title], {
+              // Keep texture ratio close to tab geometry ratio to prevent stretch.
+              width: 1536,
+              height: 320,
+              bgColor: "rgba(0,0,0,0)",
+              lineColor: "rgba(0,0,0,0)",
+              textColor: "rgba(235, 244, 255, 0.96)",
+              showLine: false,
+              fontSize: 108,
+              fontFamily: "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+              fontWeight: 500,
+              lineSpacing: 120,
+              textAlign: "center" as const,
+              padding: 24,
+              centerBlock: true,
+              crispUI: true,
+            });
+            const tabLabel = new THREE.Mesh(
+              new THREE.PlaneGeometry(tabWidth * 0.94, tabRowHeight * 0.54),
+              new THREE.MeshBasicMaterial({
+                map: tabLabelTex,
+                transparent: true,
+                opacity: 0.98,
+                side: THREE.DoubleSide,
+              }),
+            );
+            tabLabelMats.push(tabLabel.material as THREE.MeshBasicMaterial);
+            tabLabel.position.z = 0.012;
+            tabGroup.add(tabFill);
+            tabGroup.add(tabFrame);
+            tabGroup.add(tabLabel);
+            tabsRoot.add(tabGroup);
+            panelRecord.thumbnailHitTargets.push({
+              mesh: tabLabel,
+              type: "variant",
+              variantIndex,
+            });
+          });
+          updateVariantTabVisualState();
+
           const thumbnailRoot = new THREE.Group();
-          const detailWidth = panelWidth * 0.44;
-          const stripWidth = panelWidth + detailWidth;
           const stripHeight = panelHeight * 0.28;
           const stripCenterX = side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
           thumbnailRoot.position.set(
@@ -8403,9 +8681,9 @@ export default function ResumeSpace3D({
           const stripFrame = new THREE.Mesh(
             new THREE.PlaneGeometry(stripWidth * 1.015, stripHeight * 1.07),
             new THREE.MeshBasicMaterial({
-              color: 0x8cd3ff,
+              color: 0x39d7ff,
               transparent: true,
-              opacity: 0.22,
+              opacity: 0.32,
               side: THREE.DoubleSide,
             }),
           );
@@ -8465,6 +8743,16 @@ export default function ResumeSpace3D({
             -((PROJECT_SHOWCASE_THUMBS_PER_PAGE - 1) * (thumbWidth + 0.08)) / 2;
           const thumbGroups: THREE.Group[] = [];
           const thumbIndexByGroup = new Map<THREE.Group, number>();
+          const getVariantMediaIndices = () => {
+            if (panelRecord.clientVariants.length === 0) {
+              return panelRecord.mediaItems.map((_, idx) => idx);
+            }
+            return panelRecord.mediaItems
+              .map((item, idx) =>
+                item.variantIndex === panelRecord.activeVariantIndex ? idx : -1,
+              )
+              .filter((idx) => idx >= 0);
+          };
 
           mediaItems.forEach((mediaItem, mediaIndex) => {
             const thumbGroup = new THREE.Group();
@@ -8541,9 +8829,10 @@ export default function ResumeSpace3D({
           });
 
           const updateThumbnailLayout = () => {
+            const variantMediaIndices = getVariantMediaIndices();
             const maxPageStart = Math.max(
               0,
-              panelRecord.mediaItems.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
+              variantMediaIndices.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
             );
             panelRecord.thumbnailPageStart = THREE.MathUtils.clamp(
               panelRecord.thumbnailPageStart,
@@ -8554,12 +8843,13 @@ export default function ResumeSpace3D({
               panelRecord.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE;
             thumbGroups.forEach((group) => {
               const mediaIndex = thumbIndexByGroup.get(group) ?? -1;
+              const filteredPosition = variantMediaIndices.indexOf(mediaIndex);
               const visible =
-                mediaIndex >= panelRecord.thumbnailPageStart &&
-                mediaIndex < pageEnd;
+                filteredPosition >= panelRecord.thumbnailPageStart &&
+                filteredPosition < pageEnd;
               group.visible = visible;
               if (!visible) return;
-              const slot = mediaIndex - panelRecord.thumbnailPageStart;
+              const slot = filteredPosition - panelRecord.thumbnailPageStart;
               group.position.set(
                 thumbOffsetStart + slot * (thumbWidth + 0.08),
                 thumbBaseY,
@@ -8567,7 +8857,7 @@ export default function ResumeSpace3D({
               );
             });
             const showNav =
-              panelRecord.mediaItems.length > PROJECT_SHOWCASE_THUMBS_PER_PAGE;
+              variantMediaIndices.length > PROJECT_SHOWCASE_THUMBS_PER_PAGE;
             prevArrowMesh.visible = showNav;
             nextArrowMesh.visible = showNav;
             (
@@ -8577,7 +8867,7 @@ export default function ResumeSpace3D({
               nextArrowMesh.material as THREE.MeshBasicMaterial
             ).opacity =
               panelRecord.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE <
-              panelRecord.mediaItems.length
+              variantMediaIndices.length
                 ? 0.95
                 : 0.35;
           };
@@ -8596,10 +8886,14 @@ export default function ResumeSpace3D({
             { video: HTMLVideoElement; texture: THREE.VideoTexture }
           >();
           const setActiveMedia = (mediaIndex: number) => {
+            const variantMediaIndices = getVariantMediaIndices();
+            if (variantMediaIndices.length === 0) return;
             const safeMediaIndex = THREE.MathUtils.clamp(
-              mediaIndex,
-              0,
-              panelRecord.mediaItems.length - 1,
+              variantMediaIndices.includes(mediaIndex)
+                ? mediaIndex
+                : variantMediaIndices[0],
+              variantMediaIndices[0],
+              variantMediaIndices[variantMediaIndices.length - 1],
             );
             const media = panelRecord.mediaItems[safeMediaIndex];
             if (!media) return;
@@ -8610,13 +8904,15 @@ export default function ResumeSpace3D({
             panelRecord.panX = 0;
             panelRecord.panY = 0;
             if (
-              panelRecord.activeMediaIndex < panelRecord.thumbnailPageStart ||
-              panelRecord.activeMediaIndex >=
+              variantMediaIndices.indexOf(panelRecord.activeMediaIndex) <
+                panelRecord.thumbnailPageStart ||
+              variantMediaIndices.indexOf(panelRecord.activeMediaIndex) >=
                 panelRecord.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE
             ) {
               panelRecord.thumbnailPageStart =
                 Math.floor(
-                  panelRecord.activeMediaIndex / PROJECT_SHOWCASE_THUMBS_PER_PAGE,
+                  variantMediaIndices.indexOf(panelRecord.activeMediaIndex) /
+                    PROJECT_SHOWCASE_THUMBS_PER_PAGE,
                 ) * PROJECT_SHOWCASE_THUMBS_PER_PAGE;
             }
             updateThumbnailLayout();
@@ -8702,10 +8998,31 @@ export default function ResumeSpace3D({
             );
           };
           panelRecord.setActiveMedia = setActiveMedia;
+          panelRecord.setActiveVariant = (variantIndex: number) => {
+            if (panelRecord.clientVariants.length === 0) return;
+            const safeVariantIndex = THREE.MathUtils.clamp(
+              variantIndex,
+              0,
+              panelRecord.clientVariants.length - 1,
+            );
+            panelRecord.activeVariantIndex = safeVariantIndex;
+            updateVariantTabVisualState();
+            const variantMediaIndices = getVariantMediaIndices();
+            thumbnailRoot.visible = variantMediaIndices.length > 1;
+            panelRecord.thumbnailPageStart = 0;
+            if (variantMediaIndices.length > 0) {
+              panelRecord.setActiveMedia(variantMediaIndices[0]);
+            } else {
+              updateThumbnailLayout();
+              updateThumbnailVisualState();
+              bumpProjectShowcaseViewportTick();
+            }
+          };
           panelRecord.setThumbnailPageStart = (pageStart: number) => {
+            const variantMediaIndices = getVariantMediaIndices();
             const maxPageStart = Math.max(
               0,
-              panelRecord.mediaItems.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
+              variantMediaIndices.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
             );
             panelRecord.thumbnailPageStart = THREE.MathUtils.clamp(
               pageStart,
@@ -8775,27 +9092,36 @@ export default function ResumeSpace3D({
           );
           detailFrame.position.copy(detailPlane.position);
           detailFrame.position.z -= 0.04;
+          const extraTopHeight = showVariantTabs ? tabAreaHeight : 0;
           const moduleFrame = new THREE.Mesh(
-            new THREE.PlaneGeometry(stripWidth * 1.015, (detailHeight + stripHeight) * 1.01),
+            new THREE.PlaneGeometry(
+              stripWidth * 1.015,
+              (detailHeight + stripHeight + extraTopHeight) * 1.01,
+            ),
             new THREE.MeshBasicMaterial({
-              color: 0x8cd3ff,
+              color: 0x39d7ff,
               transparent: true,
-              opacity: 0.14,
+              opacity: 0.24,
               side: THREE.DoubleSide,
             }),
           );
           moduleFrame.position.set(
             stripCenterX,
-            -(stripHeight * 0.5),
+            (extraTopHeight - stripHeight) * 0.5,
             -0.06,
           );
           panelGroup.add(detailPlane);
           panelGroup.add(detailFrame);
           panelGroup.add(detailScrollTrack);
           panelGroup.add(detailScrollThumb);
+          panelGroup.add(tabsRoot);
           panelGroup.add(thumbnailRoot);
           panelGroup.add(moduleFrame);
-          panelRecord.setActiveMedia(0);
+          if (panelRecord.clientVariants.length > 0) {
+            panelRecord.setActiveVariant(0);
+          } else {
+            panelRecord.setActiveMedia(0);
+          }
           // Render cards in the overlay layer so they bypass HDR bloom/tonemapping.
           panelGroup.traverse((child) => {
             child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);

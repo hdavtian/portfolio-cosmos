@@ -119,6 +119,205 @@
     "published": true
   },
   {
+    "id": "political-websites",
+    "title": "Political Websites",
+    "image": "/images/legacy-web/political-martinez-1.png",
+    "phone": "",
+    "description": "Grouped campaign-site examples for political clients from early 2000s web stacks.",
+    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
+    "year": null,
+    "fit": "cover",
+    "clientVariants": [
+      {
+        "id": "simmons-for-governor",
+        "title": "Simmons for Governor",
+        "image": "/images/legacy-web/simmonsforgovernor.com.png",
+        "description": "Political campaign website screenshot from early 2000s web stack.",
+        "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
+        "year": 2003,
+        "fit": "cover",
+        "galleryMedia": [
+          {
+            "id": "simmons-for-governor-02",
+            "type": "image",
+            "image": "/images/legacy-web/political-reed-1.png",
+            "title": "Simmons for Governor - Campaign Layout Study",
+            "description": "Supplemental campaign layout mockup for grouped testing.",
+            "fit": "cover"
+          },
+          {
+            "id": "simmons-for-governor-03",
+            "type": "image",
+            "image": "/images/legacy-web/political-hoffman-1.png",
+            "title": "Simmons for Governor - Alternate Screenshot",
+            "description": "Additional political site style capture for gallery testing.",
+            "fit": "cover"
+          }
+        ]
+      },
+      {
+        "id": "martinez-for-mayor",
+        "title": "Martinez for Mayor",
+        "image": "/images/legacy-web/political-martinez-1.png",
+        "description": "Local mayoral campaign site with classic early-2000s table layout and calls-to-action.",
+        "technologies": ["HTML", "CSS", "JavaScript"],
+        "year": 2003,
+        "fit": "cover",
+        "galleryMedia": [
+          {
+            "id": "martinez-for-mayor-02",
+            "type": "image",
+            "image": "/images/legacy-web/political-martinez-2.png",
+            "title": "Martinez for Mayor - Issues",
+            "description": "Policy page screenshot for campaign messaging.",
+            "fit": "cover"
+          },
+          {
+            "id": "martinez-for-mayor-03",
+            "type": "image",
+            "image": "/images/legacy-web/political-martinez-3.png",
+            "title": "Martinez for Mayor - Volunteer",
+            "description": "Volunteer sign-up flow from the campaign site.",
+            "fit": "cover"
+          }
+        ]
+      },{
+        "id": "martinez-for-mayor2",
+        "title": "Martinez for Mayor",
+        "image": "/images/legacy-web/political-martinez-1.png",
+        "description": "Local mayoral campaign site with classic early-2000s table layout and calls-to-action.",
+        "technologies": ["HTML", "CSS", "JavaScript"],
+        "year": 2003,
+        "fit": "cover",
+        "galleryMedia": [
+          {
+            "id": "martinez-for-mayor-02",
+            "type": "image",
+            "image": "/images/legacy-web/political-martinez-2.png",
+            "title": "Martinez for Mayor - Issues",
+            "description": "Policy page screenshot for campaign messaging.",
+            "fit": "cover"
+          },
+          {
+            "id": "martinez-for-mayor-03",
+            "type": "image",
+            "image": "/images/legacy-web/political-martinez-3.png",
+            "title": "Martinez for Mayor - Volunteer",
+            "description": "Volunteer sign-up flow from the campaign site.",
+            "fit": "cover"
+          }
+        ]
+      },{
+        "id": "martinez-for-mayor3",
+        "title": "Martinez for Mayor",
+        "image": "/images/legacy-web/political-martinez-1.png",
+        "description": "Local mayoral campaign site with classic early-2000s table layout and calls-to-action.",
+        "technologies": ["HTML", "CSS", "JavaScript"],
+        "year": 2003,
+        "fit": "cover",
+        "galleryMedia": [
+          {
+            "id": "martinez-for-mayor-02",
+            "type": "image",
+            "image": "/images/legacy-web/political-martinez-2.png",
+            "title": "Martinez for Mayor - Issues",
+            "description": "Policy page screenshot for campaign messaging.",
+            "fit": "cover"
+          },
+          {
+            "id": "martinez-for-mayor-03",
+            "type": "image",
+            "image": "/images/legacy-web/political-martinez-3.png",
+            "title": "Martinez for Mayor - Volunteer",
+            "description": "Volunteer sign-up flow from the campaign site.",
+            "fit": "cover"
+          }
+        ]
+      },{
+        "id": "martinez-for-mayor4",
+        "title": "Martinez for Mayor",
+        "image": "/images/legacy-web/political-martinez-1.png",
+        "description": "Local mayoral campaign site with classic early-2000s table layout and calls-to-action.",
+        "technologies": ["HTML", "CSS", "JavaScript"],
+        "year": 2003,
+        "fit": "cover",
+        "galleryMedia": [
+          {
+            "id": "martinez-for-mayor-02",
+            "type": "image",
+            "image": "/images/legacy-web/political-martinez-2.png",
+            "title": "Martinez for Mayor - Issues",
+            "description": "Policy page screenshot for campaign messaging.",
+            "fit": "cover"
+          },
+          {
+            "id": "martinez-for-mayor-03",
+            "type": "image",
+            "image": "/images/legacy-web/political-martinez-3.png",
+            "title": "Martinez for Mayor - Volunteer",
+            "description": "Volunteer sign-up flow from the campaign site.",
+            "fit": "cover"
+          }
+        ]
+      },
+      {
+        "id": "ardy-for-city-clerk",
+        "title": "Ardy for City Clerk",
+        "image": "/images/legacy-web/political-chen-1.png",
+        "description": "City clerk campaign site featuring district messaging and community events.",
+        "technologies": ["HTML", "CSS", "JavaScript"],
+        "year": 2006,
+        "fit": "cover",
+        "galleryMedia": [
+          {
+            "id": "ardy-for-city-clerk-02",
+            "type": "image",
+            "image": "/images/legacy-web/political-chen-2.png",
+            "title": "Ardy for City Clerk - Issues",
+            "description": "Issue breakdown page with district-focused policy points.",
+            "fit": "cover"
+          },
+          {
+            "id": "ardy-for-city-clerk-03",
+            "type": "image",
+            "image": "/images/legacy-web/political-chen-3.png",
+            "title": "Ardy for City Clerk - Get Involved",
+            "description": "Volunteer and event sign-up page capture.",
+            "fit": "cover"
+          }
+        ]
+      },
+      {
+        "id": "krekorian-for-congress",
+        "title": "Krekorian for Congress",
+        "image": "/images/legacy-web/political-hoffman-1.png",
+        "description": "Congressional campaign site with endorsement modules and issue highlights.",
+        "technologies": ["HTML", "CSS", "JavaScript"],
+        "year": 2004,
+        "fit": "cover",
+        "galleryMedia": [
+          {
+            "id": "krekorian-for-congress-02",
+            "type": "image",
+            "image": "/images/legacy-web/political-hoffman-2.png",
+            "title": "Krekorian for Congress - Issues",
+            "description": "Issues page with categorized campaign positions.",
+            "fit": "cover"
+          },
+          {
+            "id": "krekorian-for-congress-03",
+            "type": "image",
+            "image": "/images/legacy-web/political-hoffman-3.png",
+            "title": "Krekorian for Congress - Endorsements",
+            "description": "Endorsements grid and supporter quotes.",
+            "fit": "cover"
+          }
+        ]
+      }
+    ],
+    "published": true
+  },
+  {
     "id": "stormscape",
     "title": "Stormscape Portfolio",
     "image": "/images/legacy-web/stormscape - demo sites.png",

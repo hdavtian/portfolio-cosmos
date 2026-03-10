@@ -66,9 +66,13 @@ export const createDetailTexture = (
     textColor?: string;
     showLine?: boolean;
     fontSize?: number;
+    fontFamily?: string;
+    fontWeight?: string | number;
     lineSpacing?: number;
     textAlign?: CanvasTextAlign;
     padding?: number;
+    centerBlock?: boolean;
+    crispUI?: boolean;
   },
 ): THREE.CanvasTexture => {
   const width = options?.width || 1024;
@@ -78,9 +82,13 @@ export const createDetailTexture = (
   const textColor = options?.textColor || "rgba(220,240,255,0.95)";
   const showLine = options?.showLine ?? true;
   const fontSize = options?.fontSize ?? 28;
+  const fontFamily = options?.fontFamily ?? "monospace";
+  const fontWeight = options?.fontWeight ?? "";
   const lineSpacing = options?.lineSpacing ?? Math.round(fontSize * 1.4);
   const textAlign = options?.textAlign ?? ("left" as CanvasTextAlign);
   const padding = options?.padding ?? 64;
+  const centerBlock = options?.centerBlock ?? false;
+  const crispUI = options?.crispUI ?? false;
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -105,18 +113,25 @@ export const createDetailTexture = (
 
   // Render text lines with a monospace/techy font
   ctx.fillStyle = textColor;
-  ctx.font = `${fontSize}px monospace`;
+  ctx.font = `${fontWeight ? `${fontWeight} ` : ""}${fontSize}px ${fontFamily}`;
   ctx.textBaseline = "middle";
   ctx.textAlign = textAlign;
+  const blockHeight =
+    lines.length > 0 ? (lines.length - 1) * lineSpacing : 0;
+  const startY = centerBlock ? (height - blockHeight) * 0.5 : padding;
   lines.forEach((line, i) => {
     const x = textAlign === "left" ? padding : width / 2;
-    ctx.fillText(line, x, padding + i * lineSpacing);
+    ctx.fillText(line, x, startY + i * lineSpacing);
   });
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
+  if (crispUI) {
+    tex.generateMipmaps = false;
+    tex.anisotropy = 8;
+  }
   return tex;
 };
 
