@@ -821,6 +821,9 @@ export default function ResumeSpace3D({
     speed: number;
     cullHalfWindow: number;
   } | null>(null);
+  const projectShowcaseFloorPulseMatsRef = useRef<
+    Array<{ mat: THREE.MeshBasicMaterial; runT: number }>
+  >([]);
   const projectShowcaseRunPosRef = useRef(0);
   const projectShowcasePrevControlsEnabledRef = useRef(true);
   const pendingProjectShowcaseEntryRef = useRef(false);
@@ -5593,6 +5596,26 @@ export default function ResumeSpace3D({
           panel.imageMat.opacity = 1;
         }
       });
+      // Floor lane pulses: travel from forward to aft, looped.
+      const floorPulseRecords = projectShowcaseFloorPulseMatsRef.current;
+      if (floorPulseRecords.length > 0) {
+        const pulseCenter = 1 - ((now * 0.000225) % 1);
+        const pulseTrailCenter = (pulseCenter + 0.42) % 1;
+        const pulseWidth = 0.09;
+        const pulseFalloff = pulseWidth * pulseWidth;
+        floorPulseRecords.forEach(({ mat, runT }) => {
+          const d1 = Math.min(Math.abs(runT - pulseCenter), 1 - Math.abs(runT - pulseCenter));
+          const d2 = Math.min(
+            Math.abs(runT - pulseTrailCenter),
+            1 - Math.abs(runT - pulseTrailCenter),
+          );
+          const i1 = Math.exp(-(d1 * d1) / pulseFalloff);
+          const i2 = Math.exp(-(d2 * d2) / pulseFalloff) * 0.74;
+          const intensity = Math.max(i1, i2);
+          mat.opacity = 0.12 + intensity * 0.72;
+          mat.color.set(intensity > 0.45 ? 0xbdf6ff : 0x38d8ff);
+        });
+      }
 
       const run = projectShowcaseRunPosRef.current;
       const sway = Math.sin(run * 0.025) * 1.2;
@@ -8192,6 +8215,47 @@ export default function ResumeSpace3D({
           runAxis === "z" ? trenchSizeScaled.z : trenchSizeScaled.x;
         const trenchWidth =
           runAxis === "z" ? trenchSizeScaled.x : trenchSizeScaled.z;
+        const floorPulseRecords: Array<{ mat: THREE.MeshBasicMaterial; runT: number }> = [];
+        const floorPulseGroup = new THREE.Group();
+        const floorPulseSegments = 24;
+        const floorPulseStep = runLength / floorPulseSegments;
+        const floorPulseLength = floorPulseStep * 0.82;
+        const floorPulseWidth = THREE.MathUtils.clamp(trenchWidth * 0.038, 0.95, 1.75);
+        // Lift above floor so pulses are visible and not buried by geometry.
+        const floorPulseYOffset = -trenchSizeScaled.y * 0.438;
+        const floorPulseLateral = trenchWidth * 0.286;
+        for (let lane = -1; lane <= 1; lane += 2) {
+          for (let i = 0; i < floorPulseSegments; i += 1) {
+            const seg = new THREE.Mesh(
+              new THREE.PlaneGeometry(floorPulseLength, floorPulseWidth),
+              new THREE.MeshBasicMaterial({
+                color: 0x22cfff,
+                transparent: true,
+                opacity: 0.18,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                toneMapped: false,
+                blending: THREE.AdditiveBlending,
+              }),
+            );
+            seg.rotation.x = -Math.PI * 0.5;
+            seg.renderOrder = 42;
+            const runPos = -runLength * 0.5 + floorPulseStep * (i + 0.5);
+            if (runAxis === "z") {
+              seg.position.set(lane * floorPulseLateral, floorPulseYOffset, runPos);
+            } else {
+              seg.position.set(runPos, floorPulseYOffset, lane * floorPulseLateral);
+            }
+            floorPulseGroup.add(seg);
+            floorPulseRecords.push({
+              mat: seg.material as THREE.MeshBasicMaterial,
+              runT: (i + 0.5) / floorPulseSegments,
+            });
+          }
+        }
+        floorPulseGroup.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseRoot.add(floorPulseGroup);
+        projectShowcaseFloorPulseMatsRef.current = floorPulseRecords;
         const panelOffset = THREE.MathUtils.clamp(trenchWidth * 0.075, 3.6, 7.4);
         // Nudge the entire showcase module up slightly for better composition.
         const panelY =
@@ -10437,6 +10501,7 @@ export default function ResumeSpace3D({
       setSkillsLatticeActive(false);
       skillsLegacyBodiesRef.current = [];
       projectShowcasePanelsRef.current = [];
+      projectShowcaseFloorPulseMatsRef.current = [];
       projectShowcaseTrackRef.current = null;
 
 
