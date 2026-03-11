@@ -342,6 +342,12 @@ type MoonTravelSignRecord = {
   arcEnd?: THREE.Vector3;
 };
 
+type JobMemoryType = "default" | "tech" | "code" | "memory";
+type JobMemoryEntry = {
+  text: string;
+  type: JobMemoryType;
+};
+
 type OrbitSignTuning = {
   timeBetweenMessagesSec: number;
   continuousLoop: boolean;
@@ -419,8 +425,10 @@ const applyTextureCoverTop = (
   return Math.max(0, 1 - repeatY);
 };
 
-const createMoonTravelSignTexture = (text: string): THREE.CanvasTexture => {
+const createMoonTravelSignTexture = (entry: JobMemoryEntry): THREE.CanvasTexture => {
   const canvas = document.createElement("canvas");
+  const text = String(entry?.text ?? "");
+  const type = entry?.type ?? "default";
   const normalized = String(text ?? "")
     .replace(/\s*•\s*/g, " • ")
     .replace(/\s+/g, " ")
@@ -450,12 +458,96 @@ const createMoonTravelSignTexture = (text: string): THREE.CanvasTexture => {
     if (widest <= maxTextWidth) break;
     fontSize -= 3;
   }
-  ctx.font = `700 ${fontSize}px Rajdhani, Segoe UI, sans-serif`;
-  ctx.shadowColor = "rgba(94, 214, 255, 0.55)";
-  ctx.shadowBlur = 14;
+  const styleByType: Record<
+    JobMemoryType,
+    {
+      fontFamily: string;
+      weight: number;
+      shadowColor: string;
+      shadowBlur: number;
+      strokeStyle: string;
+      fillStyle: string;
+      drawBackdrop: boolean;
+      backdropFill?: string;
+      backdropStroke?: string;
+    }
+  > = {
+    default: {
+      fontFamily: "Rajdhani, Segoe UI, sans-serif",
+      weight: 700,
+      shadowColor: "rgba(94, 214, 255, 0.55)",
+      shadowBlur: 14,
+      strokeStyle: "rgba(120, 196, 228, 0.86)",
+      fillStyle: "rgba(200, 236, 248, 0.9)",
+      drawBackdrop: false,
+    },
+    tech: {
+      fontFamily: "Rajdhani, Segoe UI, sans-serif",
+      weight: 700,
+      shadowColor: "rgba(106, 220, 255, 0.62)",
+      shadowBlur: 16,
+      strokeStyle: "rgba(148, 226, 255, 0.92)",
+      fillStyle: "rgba(220, 246, 255, 0.95)",
+      drawBackdrop: false,
+    },
+    code: {
+      fontFamily: "JetBrains Mono, Consolas, monospace",
+      weight: 700,
+      shadowColor: "rgba(255, 255, 255, 0.25)",
+      shadowBlur: 8,
+      strokeStyle: "rgba(245, 245, 245, 0.9)",
+      fillStyle: "rgba(255, 255, 255, 0.98)",
+      drawBackdrop: true,
+      backdropFill: "rgba(8, 8, 10, 0.94)",
+      backdropStroke: "rgba(235, 235, 235, 0.8)",
+    },
+    memory: {
+      fontFamily: "Segoe Script, Brush Script MT, cursive",
+      weight: 700,
+      shadowColor: "rgba(255, 220, 90, 0.58)",
+      shadowBlur: 14,
+      strokeStyle: "rgba(244, 206, 92, 0.85)",
+      fillStyle: "rgba(255, 238, 164, 0.95)",
+      drawBackdrop: false,
+    },
+  };
+  const style = styleByType[type] ?? styleByType.default;
+  ctx.font = `${style.weight} ${fontSize}px ${style.fontFamily}`;
+  ctx.shadowColor = style.shadowColor;
+  ctx.shadowBlur = style.shadowBlur;
   ctx.lineWidth = Math.max(3, Math.floor(fontSize * 0.05));
-  ctx.strokeStyle = "rgba(120, 196, 228, 0.86)";
-  ctx.fillStyle = "rgba(200, 236, 248, 0.9)";
+  ctx.strokeStyle = style.strokeStyle;
+  ctx.fillStyle = style.fillStyle;
+  if (style.drawBackdrop) {
+    const padX = canvas.width * 0.08;
+    const padY = canvas.height * 0.2;
+    const x = padX;
+    const y = padY;
+    const w = canvas.width - padX * 2;
+    const h = canvas.height - padY * 2;
+    const r = Math.min(22, h * 0.2);
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fillStyle = style.backdropFill ?? "rgba(10, 10, 12, 0.9)";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = style.backdropStroke ?? "rgba(220, 220, 220, 0.8)";
+    ctx.stroke();
+    ctx.shadowColor = style.shadowColor;
+    ctx.shadowBlur = style.shadowBlur;
+    ctx.strokeStyle = style.strokeStyle;
+    ctx.fillStyle = style.fillStyle;
+  }
   const x = canvas.width * 0.5;
   const lineGap = fontSize * 1.16;
   const startY = canvas.height * 0.5 - ((lines.length - 1) * lineGap) * 0.5;
@@ -1073,7 +1165,7 @@ export default function ResumeSpace3D({
     index: 0,
     lastSlot: -1,
   });
-  const moonTravelSignPoolRef = useRef<string[]>([]);
+  const moonTravelSignPoolRef = useRef<JobMemoryEntry[]>([]);
   const moonTravelSignPoolCursorRef = useRef(0);
   const moonTravelSignActiveCompanyRef = useRef<string | null>(null);
   const moonTravelSignTextureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
@@ -1222,20 +1314,36 @@ export default function ResumeSpace3D({
     const entries = Array.isArray(experience)
       ? (experience as Array<Record<string, unknown>>)
       : [];
-    const catalog = new Map<string, { pool: string[]; mode: "a" | "b" }>();
+    const normalizeMemoryType = (value: unknown): JobMemoryType => {
+      const raw = String(value ?? "").trim().toLowerCase();
+      if (raw === "tech" || raw === "code" || raw === "memory" || raw === "default") return raw;
+      return "default";
+    };
+    const catalog = new Map<string, { pool: JobMemoryEntry[]; mode: "a" | "b" }>();
     entries.forEach((entry) => {
       const id = String(entry.id ?? "").toLowerCase();
       if (!id) return;
-      const sequence = Array.isArray(entry.travelSequence)
-        ? (entry.travelSequence as unknown[])
-            .map((v) => String(v ?? "").trim())
-            .filter(Boolean)
+      const sequence = Array.isArray(entry.jobMemories)
+        ? (entry.jobMemories as unknown[])
+            .map((v) => {
+              if (typeof v === "string") {
+                const text = v.trim();
+                if (!text) return null;
+                return { text, type: "default" as JobMemoryType };
+              }
+              if (!v || typeof v !== "object") return null;
+              const obj = v as { text?: unknown; type?: unknown };
+              const text = String(obj.text ?? "").trim();
+              if (!text) return null;
+              return { text, type: normalizeMemoryType(obj.type) };
+            })
+            .filter((v): v is JobMemoryEntry => !!v)
         : [];
       const company = String(entry.company ?? "").trim();
       const modeRaw = String(entry.travelSignMode ?? "b").trim().toLowerCase();
       const mode: "a" | "b" = modeRaw === "a" ? "a" : "b";
       if (sequence.length > 0) catalog.set(id, { pool: sequence, mode });
-      else if (company) catalog.set(id, { pool: [company], mode });
+      else if (company) catalog.set(id, { pool: [{ text: company, type: "default" }], mode });
     });
     return catalog;
   }, []);
@@ -1247,18 +1355,18 @@ export default function ResumeSpace3D({
         moonTravelSignActiveCompanyRef.current === id && moonTravelSignPoolRef.current.length > 0
           ? moonTravelSignPoolRef.current
           : (record?.pool ?? []);
-      if (pool.length === 0) return "";
+      if (pool.length === 0) return null;
       const cursor = THREE.MathUtils.euclideanModulo(
         moonTravelSignPoolCursorRef.current,
         pool.length,
       );
-      const text = pool[cursor] ?? "";
+      const item = pool[cursor] ?? null;
       const nextCursor = (cursor + 1) % pool.length;
       moonTravelSignPoolCursorRef.current = nextCursor;
       if (pool.length > 0 && nextCursor === 0) {
         moonTravelSignSequenceWrappedRef.current = true;
       }
-      return text;
+      return item;
     },
     [moonTravelSignCatalog],
   );
@@ -6914,14 +7022,16 @@ export default function ResumeSpace3D({
     ) => {
       const record = moonTravelSignCatalog.get(companyId);
       if (!record) return;
-      const text = buildMoonTravelSignText(companyId);
-      if (!text) return;
+      const memory = buildMoonTravelSignText(companyId);
+      if (!memory) return;
+      const text = memory.text;
       const group = ensureSignGroup();
       if (!group) return;
-      let tex = moonTravelSignTextureCacheRef.current.get(text) ?? null;
+      const textureKey = `${memory.type}::${text}`;
+      let tex = moonTravelSignTextureCacheRef.current.get(textureKey) ?? null;
       if (!tex) {
-        tex = createMoonTravelSignTexture(text);
-        moonTravelSignTextureCacheRef.current.set(text, tex);
+        tex = createMoonTravelSignTexture(memory);
+        moonTravelSignTextureCacheRef.current.set(textureKey, tex);
       }
       const w = THREE.MathUtils.clamp(20 + text.length * 0.48, 20, 48);
       const baseScale = new THREE.Vector3(w, 6.2, 1);

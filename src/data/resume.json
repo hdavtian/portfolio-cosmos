@@ -18,18 +18,18 @@
     {
       "id": "investcloud",
       "company": "InvestCloud Inc.",
-      "travelSequence": [
-        "Angular",
-        "React",
-        "TypeScript",
-        "C# Playwright API",
-        "Azure Container Apps",
-        "RabbitMQ + MongoDB",
-        "I still remember our basketball games",
-        "First major lead role, learned a ton",
-        "Launched global dashboard feature",
-        "Led automation platform initiative",
-        "Mentored cross-functional teams"
+      "jobMemories": [
+        { "type": "tech", "text": "Angular" },
+        { "type": "tech", "text": "React" },
+        { "type": "tech", "text": "TypeScript" },
+        { "type": "code", "text": "C# Playwright API" },
+        { "type": "tech", "text": "Azure Container Apps" },
+        { "type": "tech", "text": "RabbitMQ + MongoDB" },
+        { "type": "memory", "text": "I still remember our basketball games" },
+        { "type": "memory", "text": "First major lead role, learned a ton" },
+        { "type": "memory", "text": "Launched global dashboard feature" },
+        { "type": "memory", "text": "Led automation platform initiative" },
+        { "type": "memory", "text": "Mentored cross-functional teams" }
       ],
       "travelSignMode": "b",
       "navLabel": "InvestCloud",
@@ -72,13 +72,13 @@
     {
       "id": "rpa",
       "company": "RPA (Rubin Postaer & Associates)",
-      "travelSequence": [
-        "React + Redux",
-        "Next.js",
-        "Framer Motion + GSAP",
-        "Spring Boot API",
-        "MySQL + Docker",
-        "AWS + Azure CI/CD"
+      "jobMemories": [
+        { "type": "tech", "text": "React + Redux" },
+        { "type": "code", "text": "Next.js" },
+        { "type": "tech", "text": "Framer Motion + GSAP" },
+        { "type": "code", "text": "Spring Boot API" },
+        { "type": "code", "text": "MySQL + Docker" },
+        { "type": "tech", "text": "AWS + Azure CI/CD" }
       ],
       "navLabel": "RPA",
       "location": "Santa Monica, CA",
@@ -101,15 +101,15 @@
     {
       "id": "boingo",
       "company": "Boingo Wireless Inc.",
-      "travelSequence": [
-        "PHP",
-        "JavaScript + jQuery",
-        "CakePHP + MySQL",
-        "AWS EC2 + RDS + S3",
-        "Agile Scrum",
-        "Managed marketing microsites",
-        "Migrated infra to AWS",
-        "Introduced jQuery to the team"
+      "jobMemories": [
+        { "type": "code", "text": "PHP" },
+        { "type": "code", "text": "JavaScript + jQuery" },
+        { "type": "code", "text": "CakePHP + MySQL" },
+        { "type": "tech", "text": "AWS EC2 + RDS + S3" },
+        { "type": "tech", "text": "Agile Scrum" },
+        { "type": "memory", "text": "Managed marketing microsites" },
+        { "type": "memory", "text": "Migrated infra to AWS" },
+        { "type": "memory", "text": "Introduced jQuery to the team" }
       ],
       "travelSignMode": "a",
       "navLabel": "Boingo",
@@ -135,11 +135,11 @@
     {
       "id": "capital-group",
       "company": "Capital Group Companies",
-      "travelSequence": [
-        "HTML + CSS + JavaScript",
-        "Financial Web Content",
-        "Tax Calculators",
-        "Java Team Integration"
+      "jobMemories": [
+        { "type": "code", "text": "HTML + CSS + JavaScript" },
+        { "type": "tech", "text": "Financial Web Content" },
+        { "type": "tech", "text": "Tax Calculators" },
+        { "type": "tech", "text": "Java Team Integration" }
       ],
       "navLabel": "Capital Group",
       "location": "Los Angeles, CA",
@@ -159,12 +159,12 @@
     {
       "id": "murad",
       "company": "Murad Inc.",
-      "travelSequence": [
-        "Marketing Microsites",
-        "Email Campaign Engineering",
-        "IBM iStore Ecommerce",
-        "SEO + Analytics",
-        "Cross-browser CSS"
+      "jobMemories": [
+        { "type": "tech", "text": "Marketing Microsites" },
+        { "type": "tech", "text": "Email Campaign Engineering" },
+        { "type": "tech", "text": "IBM iStore Ecommerce" },
+        { "type": "tech", "text": "SEO + Analytics" },
+        { "type": "code", "text": "Cross-browser CSS" }
       ],
       "navLabel": "Murad",
       "location": "El Segundo, CA",
@@ -187,10 +187,10 @@
     {
       "id": "unitedlayer",
       "company": "UnitedLayer Inc.",
-      "travelSequence": [
-        "HTML + CSS + PHP",
-        "LAMP Stack Deployment",
-        "Data Center Operations"
+      "jobMemories": [
+        { "type": "code", "text": "HTML + CSS + PHP" },
+        { "type": "tech", "text": "LAMP Stack Deployment" },
+        { "type": "memory", "text": "Data Center Operations" }
       ],
       "navLabel": "UnitedLayer",
       "location": "Los Angeles, CA",
@@ -210,13 +210,13 @@
     {
       "id": "stormscape",
       "company": "Stormscape (DBA for Harma Davtian)",
-      "travelSequence": [
-        "Client Solutions End-to-End",
-        "Drupal + WordPress",
-        "PHP Workflows",
-        "Ecommerce Integrations",
-        "Interactive Flash Era Builds",
-        "Long-term Client Support"
+      "jobMemories": [
+        { "type": "memory", "text": "Client Solutions End-to-End" },
+        { "type": "code", "text": "Drupal + WordPress" },
+        { "type": "code", "text": "PHP Workflows" },
+        { "type": "tech", "text": "Ecommerce Integrations" },
+        { "type": "memory", "text": "Interactive Flash Era Builds" },
+        { "type": "memory", "text": "Long-term Client Support" }
       ],
       "navLabel": "Stormscape",
       "location": "Glendale, CA",
