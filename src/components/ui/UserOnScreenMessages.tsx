@@ -9,7 +9,13 @@ import {
 const MAX_VISIBLE_MESSAGES = 3;
 const FADE_DURATION_MS = 420;
 
-const UserOnScreenMessages: React.FC = () => {
+type UserOnScreenMessagesProps = {
+  hideTelemetry?: boolean;
+};
+
+const UserOnScreenMessages: React.FC<UserOnScreenMessagesProps> = ({
+  hideTelemetry = false,
+}) => {
   const [messages, setMessages] = useState<OnScreenMessage[]>([]);
   const [visibleIds, setVisibleIds] = useState<Record<number, boolean>>({});
   const [telemetry, setTelemetry] = useState<OnScreenTelemetry>({
@@ -69,7 +75,7 @@ const UserOnScreenMessages: React.FC = () => {
     () => messages.slice(0, MAX_VISIBLE_MESSAGES),
     [messages],
   );
-  const showKpis = telemetry.distance !== null || telemetry.speed !== null;
+  const showKpis = !hideTelemetry && (telemetry.distance !== null || telemetry.speed !== null);
   if (!showKpis && renderedMessages.length === 0) return null;
 
   return (

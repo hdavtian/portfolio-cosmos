@@ -131,7 +131,7 @@ const PROJECT_SHOWCASE_LAYER = 2;
 const ORBITAL_PORTFOLIO_NAV_ID = "orbital-portfolio";
 const ORBITAL_PORTFOLIO_LAYER = 4;
 const ORBITAL_PORTFOLIO_DEBUG_LOGS = true;
-const ORBITAL_PORTFOLIO_NONFOCUS_PLATE_OPACITY = 0.16;
+const ORBITAL_PORTFOLIO_NONFOCUS_PLATE_OPACITY = 0.19;
 const ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE = 120;
 const ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE = 70;
 const ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE = 280;
@@ -12915,7 +12915,7 @@ export default function ResumeSpace3D({
           )}
 
           {/* Ship Control Bar — hidden while Project Showcase is active */}
-          <UserOnScreenMessages />
+          <UserOnScreenMessages hideTelemetry={orbitalPortfolioActive} />
           <CosmicMiniMap3D
             visible={!isLoading && sceneReady}
             projectModeSignal={projectShowcaseActive || orbitalPortfolioActive}
@@ -13283,6 +13283,78 @@ export default function ResumeSpace3D({
                       {activeGroup?.title ?? "Loading..."}
                     </div>
 
+                    <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+                      <button
+                        onClick={() => {
+                          const groups = orbitalPortfolioGroupsRef.current;
+                          if (groups.length === 0) return;
+                          const next =
+                            (orbitalPortfolioFocusIndexRef.current - 1 + groups.length) %
+                            groups.length;
+                          focusOrbitalPortfolioStation(next, 0);
+                        }}
+                        style={{
+                          padding: "7px 10px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(170, 225, 255, 0.45)",
+                          background: "rgba(8, 18, 34, 0.82)",
+                          color: "#dff3ff",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Prev
+                      </button>
+                      <button
+                        onClick={toggleOrbitalPortfolioPlayback}
+                        style={{
+                          padding: "7px 10px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(170, 225, 255, 0.45)",
+                          background: "rgba(8, 18, 34, 0.82)",
+                          color: "#dff3ff",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {orbitalPortfolioPlaying ? "Pause" : "Play"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          const groups = orbitalPortfolioGroupsRef.current;
+                          if (groups.length === 0) return;
+                          const next =
+                            (orbitalPortfolioFocusIndexRef.current + 1) % groups.length;
+                          focusOrbitalPortfolioStation(next, 0);
+                        }}
+                        style={{
+                          padding: "7px 10px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(170, 225, 255, 0.45)",
+                          background: "rgba(8, 18, 34, 0.82)",
+                          color: "#dff3ff",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Next
+                      </button>
+                      <button
+                        onClick={exitOrbitalPortfolio}
+                        style={{
+                          padding: "7px 10px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(255, 195, 160, 0.45)",
+                          background: "rgba(28, 14, 10, 0.82)",
+                          color: "#ffe2d5",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Exit
+                      </button>
+                    </div>
+
                     <div
                       style={{
                         marginTop: 8,
@@ -13397,77 +13469,6 @@ export default function ResumeSpace3D({
                       </div>
                     )}
 
-                    <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
-                      <button
-                        onClick={() => {
-                          const groups = orbitalPortfolioGroupsRef.current;
-                          if (groups.length === 0) return;
-                          const next =
-                            (orbitalPortfolioFocusIndexRef.current - 1 + groups.length) %
-                            groups.length;
-                          focusOrbitalPortfolioStation(next, 0);
-                        }}
-                        style={{
-                          padding: "7px 10px",
-                          borderRadius: 8,
-                          border: "1px solid rgba(170, 225, 255, 0.45)",
-                          background: "rgba(8, 18, 34, 0.82)",
-                          color: "#dff3ff",
-                          fontFamily: "'Rajdhani', sans-serif",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Prev
-                      </button>
-                      <button
-                        onClick={toggleOrbitalPortfolioPlayback}
-                        style={{
-                          padding: "7px 10px",
-                          borderRadius: 8,
-                          border: "1px solid rgba(170, 225, 255, 0.45)",
-                          background: "rgba(8, 18, 34, 0.82)",
-                          color: "#dff3ff",
-                          fontFamily: "'Rajdhani', sans-serif",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {orbitalPortfolioPlaying ? "Pause" : "Play"}
-                      </button>
-                      <button
-                        onClick={() => {
-                          const groups = orbitalPortfolioGroupsRef.current;
-                          if (groups.length === 0) return;
-                          const next =
-                            (orbitalPortfolioFocusIndexRef.current + 1) % groups.length;
-                          focusOrbitalPortfolioStation(next, 0);
-                        }}
-                        style={{
-                          padding: "7px 10px",
-                          borderRadius: 8,
-                          border: "1px solid rgba(170, 225, 255, 0.45)",
-                          background: "rgba(8, 18, 34, 0.82)",
-                          color: "#dff3ff",
-                          fontFamily: "'Rajdhani', sans-serif",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Next
-                      </button>
-                      <button
-                        onClick={exitOrbitalPortfolio}
-                        style={{
-                          padding: "7px 10px",
-                          borderRadius: 8,
-                          border: "1px solid rgba(255, 195, 160, 0.45)",
-                          background: "rgba(28, 14, 10, 0.82)",
-                          color: "#ffe2d5",
-                          fontFamily: "'Rajdhani', sans-serif",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Exit
-                      </button>
-                    </div>
                   </div>
                 </div>
               );
