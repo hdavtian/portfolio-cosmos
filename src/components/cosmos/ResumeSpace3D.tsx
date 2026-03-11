@@ -7831,6 +7831,12 @@ export default function ResumeSpace3D({
     });
     orbitalPortfolioOuterRingRef.current = outerOrbit;
     orbitalRoot.traverse((obj) => obj.layers.set(ORBITAL_PORTFOLIO_LAYER));
+    // Render screenshot cards on the overlay layer so bright whites do not bloom-wash.
+    stationRecords.forEach((station) => {
+      station.plate.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+      station.frame.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+      station.mediaHaloGroup.traverse((obj) => obj.layers.set(PROJECT_SHOWCASE_CARD_LAYER));
+    });
     scene.add(orbitalRoot);
     orbitalPortfolioRootRef.current = orbitalRoot;
     orbitalPortfolioStationsRef.current = stationRecords;
