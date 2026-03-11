@@ -309,6 +309,8 @@ type OrbitalPortfolioStationRecord = {
   mediaHaloGroup: THREE.Group;
   variantSatelliteGroup: THREE.Group;
   pulsePhase: number;
+  textureScrollNorm: number;
+  textureMaxOffsetY: number;
 };
 
 const buildCurvedPanelPositions = (
@@ -343,6 +345,39 @@ const morphPanelGeometry = (
     dest[i] = curved[i] * curvedWeight + flat[i] * straightenBlend;
   }
   attr.needsUpdate = true;
+};
+
+const applyTextureCoverTop = (
+  texture: THREE.Texture,
+  panelAspect: number,
+  scrollNorm: number,
+): number => {
+  const image = texture.image as { width?: number; height?: number } | undefined;
+  const iw = image?.width ?? 0;
+  const ih = image?.height ?? 0;
+  if (iw <= 0 || ih <= 0 || panelAspect <= 0) return 0;
+  const imageAspect = iw / ih;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  let repeatX = 1;
+  let repeatY = 1;
+  let offsetX = 0;
+  let offsetY = 0;
+  if (imageAspect > panelAspect) {
+    // Wider image: crop equally left/right (centered).
+    repeatX = panelAspect / imageAspect;
+    offsetX = (1 - repeatX) * 0.5;
+  } else if (imageAspect < panelAspect) {
+    // Taller image: crop vertically, anchor at top; wheel can scroll down.
+    repeatY = imageAspect / panelAspect;
+    const maxOffsetY = Math.max(0, 1 - repeatY);
+    const clampedScroll = THREE.MathUtils.clamp(scrollNorm, 0, 1);
+    offsetY = maxOffsetY * (1 - clampedScroll);
+  }
+  texture.repeat.set(repeatX, repeatY);
+  texture.offset.set(offsetX, offsetY);
+  texture.needsUpdate = true;
+  return Math.max(0, 1 - repeatY);
 };
 
 const extractYouTubeVideoId = (input?: string): string | null => {
@@ -941,6 +976,7 @@ export default function ResumeSpace3D({
   const orbitalPortfolioCameraPosRef = useRef(new THREE.Vector3());
   const orbitalPortfolioCameraTargetRef = useRef(new THREE.Vector3());
   const orbitalPortfolioCameraInitializedRef = useRef(false);
+  const orbitalPortfolioInspectedStationIndexRef = useRef<number | null>(null);
   const orbitalPortfolioDebugLastLogAtRef = useRef(0);
   const orbitalPortfolioDebugDumpedRef = useRef(false);
   const orbitalPortfolioPrevStateRef = useRef<{
@@ -2448,6 +2484,7 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioPlaying(true);
     setOrbitalPortfolioVariantIndex(0);
     setOrbitalPortfolioMediaIndex(0);
+    orbitalPortfolioInspectedStationIndexRef.current = null;
     orbitalPortfolioCameraInitializedRef.current = false;
     orbitalPortfolioDebugDumpedRef.current = false;
     setPortfolioNavHereActive(false);
@@ -2504,7 +2541,7 @@ export default function ResumeSpace3D({
       minDistance?: number;
       maxDistance?: number;
     };
-    controlsAny.minDistance = 180;
+    controlsAny.minDistance = 55;
     controlsAny.maxDistance = 2800;
     camera.layers.disableAll();
     camera.layers.enable(ORBITAL_PORTFOLIO_LAYER);
@@ -2530,6 +2567,7 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioPlaying(true);
     setOrbitalPortfolioVariantIndex(0);
     setOrbitalPortfolioMediaIndex(0);
+    orbitalPortfolioInspectedStationIndexRef.current = null;
     setPortfolioNavHereActive(true);
     const scene = sceneRef.current.scene;
     if (scene) {
@@ -2549,29 +2587,73 @@ export default function ResumeSpace3D({
     vlog("✨ Entered Orbital Portfolio");
   }, [orbitalPortfolioReady, vlog]);
 
-  const stepOrbitalPortfolioFocus = useCallback((direction: -1 | 1) => {
-    const groups = orbitalPortfolioGroupsRef.current;
-    if (groups.length === 0) return;
-    const next =
-      (orbitalPortfolioFocusIndexRef.current + direction + groups.length) %
-      groups.length;
-    orbitalPortfolioFocusIndexRef.current = next;
-    setOrbitalPortfolioFocusIndex(next);
-    setOrbitalPortfolioVariantIndex(0);
-    setOrbitalPortfolioMediaIndex(0);
-    orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 6000;
-  }, []);
-
   const toggleOrbitalPortfolioPlayback = useCallback(() => {
     const next = !orbitalPortfolioPlayingRef.current;
     orbitalPortfolioPlayingRef.current = next;
     setOrbitalPortfolioPlaying(next);
     if (next) {
+      orbitalPortfolioInspectedStationIndexRef.current = null;
       orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
+      orbitalPortfolioManualCameraLockRef.current = false;
     } else {
       orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 10000;
     }
   }, []);
+
+  const focusOrbitalPortfolioStation = useCallback(
+    (stationIndex: number, mediaIndex?: number) => {
+      const stations = orbitalPortfolioStationsRef.current;
+      if (stations.length === 0) return;
+      const next = THREE.MathUtils.clamp(stationIndex, 0, stations.length - 1);
+      const station = stations[next];
+      if (!station) return;
+      orbitalPortfolioFocusIndexRef.current = next;
+      setOrbitalPortfolioFocusIndex(next);
+      if (typeof mediaIndex === "number" && Number.isFinite(mediaIndex)) {
+        const groups = orbitalPortfolioGroupsRef.current;
+        const mediaCount = Math.max(
+          1,
+          groups[next]?.variants?.[0]?.mediaItems?.length ?? 1,
+        );
+        setOrbitalPortfolioVariantIndex(0);
+        setOrbitalPortfolioMediaIndex(
+          THREE.MathUtils.clamp(Math.floor(mediaIndex), 0, mediaCount - 1),
+        );
+      } else {
+        setOrbitalPortfolioVariantIndex(0);
+        setOrbitalPortfolioMediaIndex(0);
+      }
+      orbitalPortfolioInspectedStationIndexRef.current = next;
+      orbitalPortfolioPlayingRef.current = false;
+      setOrbitalPortfolioPlaying(false);
+      orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 12000;
+      orbitalPortfolioManualCameraLockRef.current = true;
+      const controls = sceneRef.current.controls;
+      if (!controls) return;
+      const plateWorld = new THREE.Vector3();
+      station.plate.getWorldPosition(plateWorld);
+      const plateQuat = new THREE.Quaternion();
+      station.plate.getWorldQuaternion(plateQuat);
+      const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(plateQuat).normalize();
+      const up = new THREE.Vector3(0, 1, 0);
+      const camPos = plateWorld
+        .clone()
+        .addScaledVector(normal, 120)
+        .addScaledVector(up, 8);
+      const lookTarget = plateWorld.clone().addScaledVector(normal, 2);
+      controls.setLookAt(
+        camPos.x,
+        camPos.y,
+        camPos.z,
+        lookTarget.x,
+        lookTarget.y,
+        lookTarget.z,
+        true,
+      );
+      shipLog(`Portfolio inspect: sample ${next + 1}`, "info");
+    },
+    [shipLog],
+  );
 
   function startProjectShowcaseAngleIntroSequence() {
     if (projectShowcaseAngleIntroRef.current.raf !== null) {
@@ -6161,11 +6243,13 @@ export default function ResumeSpace3D({
         station.mediaHaloGroup.rotation.y -= dt * 0.28;
         station.mediaHaloGroup.rotation.x = Math.sin(now * 0.00032 + station.pulsePhase) * 0.08;
         const isFocused = idx === orbitalPortfolioFocusIndexRef.current;
-        const straightenTarget = isFocused ? 0.06 : 0;
+        const isInspected = idx === orbitalPortfolioInspectedStationIndexRef.current;
+        const straightenTarget = isInspected ? 0.96 : isFocused ? 0.06 : 0;
+        const straightenDamping = isInspected ? 13.5 : 4.8;
         station.straightenBlend = THREE.MathUtils.damp(
           station.straightenBlend,
           straightenTarget,
-          4.8,
+          straightenDamping,
           dt,
         );
         morphPanelGeometry(
@@ -6316,18 +6400,191 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     if (!orbitalPortfolioActive) return;
+    const stations = orbitalPortfolioStationsRef.current;
+    const groups = orbitalPortfolioGroupsRef.current;
+    if (stations.length === 0 || groups.length === 0) return;
+    const focusIndex = THREE.MathUtils.clamp(
+      orbitalPortfolioFocusIndexRef.current,
+      0,
+      stations.length - 1,
+    );
+    const station = stations[focusIndex];
+    if (!station) return;
+    const group = groups[focusIndex];
+    const variantIndex = THREE.MathUtils.clamp(
+      orbitalPortfolioVariantIndex,
+      0,
+      Math.max(0, (group?.variants?.length ?? 1) - 1),
+    );
+    const variant = group?.variants?.[variantIndex];
+    const mediaItems = variant?.mediaItems ?? [];
+    const mediaIndex = THREE.MathUtils.clamp(
+      orbitalPortfolioMediaIndex,
+      0,
+      Math.max(0, mediaItems.length - 1),
+    );
+    const media = mediaItems[mediaIndex];
+    if (!media?.textureUrl) return;
+    station.textureScrollNorm = 0;
+    station.textureMaxOffsetY = 0;
+    station.plate.userData.textureScrollNorm = 0;
+    station.plate.userData.textureMaxOffsetY = 0;
+    let cancelled = false;
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      media.textureUrl,
+      (tex) => {
+        if (cancelled) return;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const plateMat = station.plate.material as THREE.MeshBasicMaterial;
+        plateMat.map = tex;
+        const maxOffsetY = applyTextureCoverTop(tex, 72 / 42, 0);
+        station.textureMaxOffsetY = maxOffsetY;
+        station.plate.userData.textureMaxOffsetY = maxOffsetY;
+        station.plate.userData.hasLoadedTexture = true;
+        plateMat.needsUpdate = true;
+      },
+      undefined,
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    orbitalPortfolioActive,
+    orbitalPortfolioFocusIndex,
+    orbitalPortfolioMediaIndex,
+    orbitalPortfolioVariantIndex,
+  ]);
+
+  useEffect(() => {
+    if (!orbitalPortfolioActive) return;
     const noteManualIntent = () => {
       orbitalPortfolioManualCameraLockRef.current = true;
     };
     const onPointerDown = () => noteManualIntent();
-    const onWheel = () => noteManualIntent();
+    const onWheel = (event: WheelEvent) => {
+      noteManualIntent();
+      const inspectedIndex = orbitalPortfolioInspectedStationIndexRef.current;
+      if (inspectedIndex === null) return;
+      const station = orbitalPortfolioStationsRef.current[inspectedIndex];
+      if (!station) return;
+      const plateMat = station.plate.material as THREE.MeshBasicMaterial | undefined;
+      const texture = plateMat?.map;
+      if (!texture) return;
+      const maxOffsetY = Math.max(
+        0,
+        Number(station.plate.userData.textureMaxOffsetY ?? station.textureMaxOffsetY ?? 0),
+      );
+      if (maxOffsetY <= 0.0001) return;
+      const prevNorm = THREE.MathUtils.clamp(
+        Number(station.plate.userData.textureScrollNorm ?? station.textureScrollNorm ?? 0),
+        0,
+        1,
+      );
+      const nextNorm = THREE.MathUtils.clamp(prevNorm + event.deltaY * 0.0011, 0, 1);
+      if (Math.abs(nextNorm - prevNorm) < 1e-4) return;
+      station.textureScrollNorm = nextNorm;
+      station.plate.userData.textureScrollNorm = nextNorm;
+      applyTextureCoverTop(texture, 72 / 42, nextNorm);
+      event.preventDefault();
+      event.stopPropagation();
+    };
     window.addEventListener("pointerdown", onPointerDown, { capture: true });
-    window.addEventListener("wheel", onWheel, { passive: true, capture: true });
+    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
     return () => {
       window.removeEventListener("pointerdown", onPointerDown, { capture: true });
       window.removeEventListener("wheel", onWheel, { capture: true });
     };
   }, [orbitalPortfolioActive]);
+
+  // ── Orbital portfolio screenshot inspect clicks ───────────────────────────
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+    const raycaster = new THREE.Raycaster();
+    raycaster.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+    const pointer = new THREE.Vector2();
+    let downX = 0;
+    let downY = 0;
+    let downAt = 0;
+    let pending:
+      | { stationIndex: number; mediaIndex?: number }
+      | null = null;
+
+    const pickPortfolioTarget = (clientX: number, clientY: number) => {
+      if (!orbitalPortfolioActiveRef.current) return null;
+      const cam = sceneRef.current.camera;
+      if (!cam) return null;
+      const rect = mount.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return null;
+      pointer.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycaster.setFromCamera(pointer, cam);
+      const pickables: THREE.Object3D[] = [];
+      orbitalPortfolioStationsRef.current.forEach((station, stationIndex) => {
+        station.plate.userData.orbitalStationIndex = stationIndex;
+        station.plate.userData.orbitalPickKind = "plate";
+        pickables.push(station.plate);
+        station.mediaHaloGroup.children.forEach((child, mediaIndex) => {
+          child.userData.orbitalStationIndex = stationIndex;
+          child.userData.orbitalPickKind = "thumb";
+          child.userData.orbitalMediaIndex = mediaIndex;
+          pickables.push(child);
+        });
+      });
+      const hits = raycaster.intersectObjects(pickables, false);
+      if (hits.length === 0) return null;
+      const hit = hits[0]?.object;
+      if (!hit) return null;
+      const stationIndex = Number(hit.userData?.orbitalStationIndex);
+      if (!Number.isFinite(stationIndex)) return null;
+      const kind = hit.userData?.orbitalPickKind as string | undefined;
+      if (kind === "thumb") {
+        const mediaIndex = Number(hit.userData?.orbitalMediaIndex);
+        if (!Number.isFinite(mediaIndex)) return { stationIndex };
+        return { stationIndex, mediaIndex };
+      }
+      return { stationIndex };
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (!orbitalPortfolioActiveRef.current) return;
+      if (e.button !== 0 || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("button, input, select, textarea, a, iframe")) return;
+      downX = e.clientX;
+      downY = e.clientY;
+      downAt = performance.now();
+      pending = pickPortfolioTarget(e.clientX, e.clientY);
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (!orbitalPortfolioActiveRef.current) return;
+      if (!pending) return;
+      const elapsed = performance.now() - downAt;
+      const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+      const hit = pickPortfolioTarget(e.clientX, e.clientY);
+      const same =
+        !!hit &&
+        hit.stationIndex === pending.stationIndex &&
+        (hit.mediaIndex ?? -1) === (pending.mediaIndex ?? -1);
+      if (elapsed <= 420 && moved <= 7 && same) {
+        focusOrbitalPortfolioStation(pending.stationIndex, pending.mediaIndex);
+        e.stopPropagation();
+      }
+      pending = null;
+    };
+
+    mount.addEventListener("pointerdown", onPointerDown, { capture: true });
+    window.addEventListener("pointerup", onPointerUp, { capture: true });
+    return () => {
+      mount.removeEventListener("pointerdown", onPointerDown, { capture: true });
+      window.removeEventListener("pointerup", onPointerUp, { capture: true });
+    };
+  }, [focusOrbitalPortfolioStation]);
 
   // ── Project showcase thumbnail clicks (in-trench carousel) ───────────────
   useEffect(() => {
@@ -7657,6 +7914,8 @@ export default function ResumeSpace3D({
         }),
       );
       plate.userData.hasLoadedTexture = false;
+      plate.userData.textureScrollNorm = 0;
+      plate.userData.textureMaxOffsetY = 0;
       const framePosAttr = frameGeom.getAttribute("position") as THREE.BufferAttribute;
       const platePosAttr = plateGeom.getAttribute("position") as THREE.BufferAttribute;
       framePosAttr.setUsage(THREE.DynamicDrawUsage);
@@ -7685,9 +7944,16 @@ export default function ResumeSpace3D({
           media.textureUrl,
           (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
-            (plate.material as THREE.MeshBasicMaterial).map = tex;
+            const mat = plate.material as THREE.MeshBasicMaterial;
+            mat.map = tex;
+            const maxOffsetY = applyTextureCoverTop(
+              tex,
+              72 / 42,
+              Number(plate.userData.textureScrollNorm) || 0,
+            );
+            plate.userData.textureMaxOffsetY = maxOffsetY;
             plate.userData.hasLoadedTexture = true;
-            (plate.material as THREE.MeshBasicMaterial).needsUpdate = true;
+            mat.needsUpdate = true;
           },
           undefined,
           () => undefined,
@@ -7760,6 +8026,7 @@ export default function ResumeSpace3D({
               tex.colorSpace = THREE.SRGBColorSpace;
               const thumbMat = thumb.material as THREE.MeshBasicMaterial;
               thumbMat.map = tex;
+              applyTextureCoverTop(tex, 8 / 5, 0);
               thumbMat.needsUpdate = true;
             },
             undefined,
@@ -7790,6 +8057,8 @@ export default function ResumeSpace3D({
         mediaHaloGroup,
         variantSatelliteGroup,
         pulsePhase: Math.random() * Math.PI * 2,
+        textureScrollNorm: 0,
+        textureMaxOffsetY: 0,
       });
     });
     const outerOrbit = new THREE.Line(
@@ -12747,10 +13016,11 @@ export default function ResumeSpace3D({
                           <button
                             key={variant.id}
                             onClick={() => {
+                              focusOrbitalPortfolioStation(
+                                orbitalPortfolioFocusIndexRef.current,
+                                0,
+                              );
                               setOrbitalPortfolioVariantIndex(idx);
-                              setOrbitalPortfolioMediaIndex(0);
-                              orbitalPortfolioAutoRef.current.pausedUntil =
-                                performance.now() + 6000;
                             }}
                             style={{
                               padding: "4px 8px",
@@ -12789,9 +13059,10 @@ export default function ResumeSpace3D({
                           <button
                             key={media.id}
                             onClick={() => {
-                              setOrbitalPortfolioMediaIndex(idx);
-                              orbitalPortfolioAutoRef.current.pausedUntil =
-                                performance.now() + 5000;
+                              focusOrbitalPortfolioStation(
+                                orbitalPortfolioFocusIndexRef.current,
+                                idx,
+                              );
                             }}
                             style={{
                               minWidth: 74,
@@ -12825,7 +13096,14 @@ export default function ResumeSpace3D({
 
                     <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
                       <button
-                        onClick={() => stepOrbitalPortfolioFocus(-1)}
+                        onClick={() => {
+                          const groups = orbitalPortfolioGroupsRef.current;
+                          if (groups.length === 0) return;
+                          const next =
+                            (orbitalPortfolioFocusIndexRef.current - 1 + groups.length) %
+                            groups.length;
+                          focusOrbitalPortfolioStation(next, 0);
+                        }}
                         style={{
                           padding: "7px 10px",
                           borderRadius: 8,
@@ -12853,7 +13131,13 @@ export default function ResumeSpace3D({
                         {orbitalPortfolioPlaying ? "Pause" : "Play"}
                       </button>
                       <button
-                        onClick={() => stepOrbitalPortfolioFocus(1)}
+                        onClick={() => {
+                          const groups = orbitalPortfolioGroupsRef.current;
+                          if (groups.length === 0) return;
+                          const next =
+                            (orbitalPortfolioFocusIndexRef.current + 1) % groups.length;
+                          focusOrbitalPortfolioStation(next, 0);
+                        }}
                         style={{
                           padding: "7px 10px",
                           borderRadius: 8,
