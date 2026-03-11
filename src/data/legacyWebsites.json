@@ -1,374 +1,390 @@
 [
   {
-    "id": "haigmats",
-    "title": "haigmats.com",
-    "image": "/images/legacy-web/haigmats-1-1999.jpg",
-    "phone": "",
-    "description": "My very first website for a company making custom car mats in Glendale California",
-    "technologies": ["HTML", "CSS", "JavaScript"],
-    "year": 1999,
-    "fit": "cover",
-    "galleryMedia": [
-      {
-        "id": "haigmats-2",
-        "type": "image",
-        "image": "/images/legacy-web/haigmats-2-1999.jpg",
-        "title": "Coming soon",
-        "description": "Coming soon",
-        "fit": "cover"
-      },
-      {
-        "id": "haigmats-3",
-        "type": "image",
-        "image": "/images/legacy-web/haigmats-3-1999.jpg",
-        "title": "Coming soon",
-        "description": "Coming soon",
-        "fit": "cover"
-      }
-    ],
-    "published": true
-  },
-  {
-    "id": "acecount",
-    "title": "acecount.com",
+    "id": "equipment-resellers",
+    "title": "Equipment Resellers",
     "image": "/images/legacy-web/acecount.com 1.png",
     "phone": "",
-    "description": "Early 2000s marketing/business website screenshot.",
-    "technologies": ["HTML", "CSS", "JavaScript", "Table Layouts"],
+    "description": "Equipment reseller websites grouped by client.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
     "year": null,
     "fit": "cover",
-    "galleryMedia": [
+    "clientVariants": [
       {
-        "id": "acecount-02",
-        "type": "image",
-        "image": "/images/legacy-web/acecount.com 2.png",
-        "title": "acecount.com - View 2",
-        "description": "Alternative page/state from acecount.com archive-era build.",
-        "fit": "cover"
+        "id": "equipment-acecount",
+        "title": "acecount.com",
+        "image": "/images/legacy-web/acecount.com 1.png",
+        "description": "Equipment reseller storefront and product catalog presentation.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover",
+        "galleryMedia": [
+          { "id": "equipment-acecount-02", "type": "image", "image": "/images/legacy-web/acecount.com 2.png", "title": "acecount.com - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "equipment-acecount-03", "type": "image", "image": "/images/legacy-web/acecount.com 3.png", "title": "acecount.com - View 3", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "equipment-acecount-04", "type": "image", "image": "/images/legacy-web/acecount.com 4.png", "title": "acecount.com - View 4", "description": "Placeholder description.", "fit": "cover" }
+        ]
       },
       {
-        "id": "acecount-03",
-        "type": "image",
-        "image": "/images/legacy-web/acecount.com 3.png",
-        "title": "acecount.com - View 3",
-        "description": "Legacy acecount.com capture from non-responsive desktop era.",
-        "fit": "cover"
+        "id": "equipment-abm-jax",
+        "title": "ABM JAX",
+        "image": "/images/legacy-web/abm-jax-1.jpg",
+        "description": "Placeholder description for ABM JAX.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover",
+        "galleryMedia": [
+          { "id": "equipment-abm-jax-02", "type": "image", "image": "/images/legacy-web/abm-jax-2.jpg", "title": "ABM JAX - View 2", "description": "Placeholder description.", "fit": "cover" }
+        ]
       },
       {
-        "id": "acecount-04",
-        "type": "image",
-        "image": "/images/legacy-web/acecount.com 4.png",
-        "title": "acecount.com - View 4",
-        "description": "acecount.com portfolio capture showing classic fixed-width design.",
-        "fit": "cover"
+        "id": "equipment-financial-equipment",
+        "title": "Financial Equipment",
+        "image": "/images/legacy-web/financial-equipment-1.jpg",
+        "description": "Placeholder description for Financial Equipment.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover",
+        "galleryMedia": [
+          { "id": "equipment-financial-equipment-02", "type": "image", "image": "/images/legacy-web/financial-equipment-2.jpg", "title": "Financial Equipment - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "equipment-financial-equipment-03", "type": "image", "image": "/images/legacy-web/financial-equipment-3.jpg", "title": "Financial Equipment - View 3", "description": "Placeholder description.", "fit": "cover" }
+        ]
       }
     ],
     "published": true
   },
   {
-    "id": "bwvideoproductions-01",
-    "title": "bwvideoproductions.com",
-    "image": "/images/legacy-web/bwvideoproductions.com 1.png",
+    "id": "cultural-organizations",
+    "title": "Cultural Organizations",
+    "image": "/images/legacy-web/agbuypla-1.jpg",
     "phone": "",
-    "description": "Legacy production-site screenshot from early career work.",
-    "technologies": ["HTML", "CSS", "JavaScript"],
+    "description": "Cultural organization websites grouped by chapter/location.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
     "year": null,
-    "published": true
-  },
-  {
-    "id": "racewithhonda",
-    "title": "racewithhonda.com",
-    "image": "/images/legacy-web/racewithhonda.com 1.png",
-    "phone": "",
-    "description": "Campaign microsite screenshot featuring period visual style.",
-    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
-    "year": null,
-    "galleryMedia": [
+    "fit": "cover",
+    "clientVariants": [
       {
-        "id": "racewithhonda-02",
-        "type": "image",
-        "image": "/images/legacy-web/racewithhonda.com 2.png",
-        "title": "racewithhonda.com - View 2",
-        "description": "racewithhonda.com alternate page capture."
+        "id": "cultural-agbuypla",
+        "title": "AGBU YPLA",
+        "image": "/images/legacy-web/agbuypla-1.jpg",
+        "description": "Placeholder description for AGBU YPLA.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover"
       },
       {
-        "id": "racewithhonda-03",
-        "type": "image",
-        "image": "/images/legacy-web/racewithhonda.com 3.png",
-        "title": "racewithhonda.com - View 3",
-        "description": "Legacy racewithhonda.com screenshot (fixed desktop layout)."
-      },
-      {
-        "id": "racewithhonda-04",
-        "type": "image",
-        "image": "/images/legacy-web/racewithhonda.com 4.png",
-        "title": "racewithhonda.com - View 4",
-        "description": "racewithhonda.com archive-era visual and content state."
+        "id": "cultural-agbuypny",
+        "title": "AGBU YPNY",
+        "image": "/images/legacy-web/agbuypny-1.jpg",
+        "description": "Placeholder description for AGBU YPNY.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover",
+        "galleryMedia": [
+          { "id": "cultural-agbuypny-02", "type": "image", "image": "/images/legacy-web/agbuypny-2.jpg", "title": "AGBU YPNY - View 2", "description": "Placeholder description.", "fit": "cover" }
+        ]
       }
     ],
-    "published": true
-  },
-  {
-    "id": "simmonsforgovernor-01",
-    "title": "simmonsforgovernor.com",
-    "image": "/images/legacy-web/simmonsforgovernor.com.png",
-    "phone": "",
-    "description": "Political campaign website screenshot from early 2000s web stack.",
-    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
-    "year": null,
     "published": true
   },
   {
     "id": "political-websites",
     "title": "Political Websites",
-    "image": "/images/legacy-web/political-martinez-1.png",
+    "image": "/images/legacy-web/ardy-for-clerk-1.jpg",
     "phone": "",
-    "description": "Grouped campaign-site examples for political clients from early 2000s web stacks.",
-    "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
+    "description": "Political campaign websites grouped by candidate.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
     "year": null,
     "fit": "cover",
     "clientVariants": [
       {
-        "id": "simmons-for-governor",
+        "id": "political-ardy-for-clerk",
+        "title": "Ardy for Clerk",
+        "image": "/images/legacy-web/ardy-for-clerk-1.jpg",
+        "description": "Placeholder description for Ardy for Clerk.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover",
+        "galleryMedia": [
+          { "id": "political-ardy-for-clerk-02", "type": "image", "image": "/images/legacy-web/ardy-for-clerk-2.jpg", "title": "Ardy for Clerk - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "political-ardy-for-clerk-03", "type": "image", "image": "/images/legacy-web/ardy-for-clerk-3.jpg", "title": "Ardy for Clerk - View 3", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "political-ardy-for-clerk-04", "type": "image", "image": "/images/legacy-web/ardy-for-clerk-4.jpg", "title": "Ardy for Clerk - View 4", "description": "Placeholder description.", "fit": "cover" }
+        ]
+      },
+      {
+        "id": "political-simmons-for-governor",
         "title": "Simmons for Governor",
         "image": "/images/legacy-web/simmonsforgovernor.com.png",
-        "description": "Political campaign website screenshot from early 2000s web stack.",
-        "technologies": ["HTML", "CSS", "JavaScript", "Flash"],
-        "year": 2003,
+        "description": "Placeholder description for Simmons for Governor.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover"
+      },
+      {
+        "id": "political-paul-krekorian",
+        "title": "Paul Krekorian for Congress",
+        "image": "/images/legacy-web/paul-krekorian-1.jpg",
+        "description": "Placeholder description for Paul Krekorian campaign site.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
         "fit": "cover",
         "galleryMedia": [
-          {
-            "id": "simmons-for-governor-02",
-            "type": "image",
-            "image": "/images/legacy-web/political-reed-1.png",
-            "title": "Simmons for Governor - Campaign Layout Study",
-            "description": "Supplemental campaign layout mockup for grouped testing.",
-            "fit": "cover"
-          },
-          {
-            "id": "simmons-for-governor-03",
-            "type": "image",
-            "image": "/images/legacy-web/political-hoffman-1.png",
-            "title": "Simmons for Governor - Alternate Screenshot",
-            "description": "Additional political site style capture for gallery testing.",
-            "fit": "cover"
-          }
+          { "id": "political-paul-krekorian-02", "type": "image", "image": "/images/legacy-web/paul-krekorian-2.jpg", "title": "Paul Krekorian - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "political-paul-krekorian-03", "type": "image", "image": "/images/legacy-web/paul-krekorian-3.jpg", "title": "Paul Krekorian - View 3", "description": "Placeholder description.", "fit": "cover" }
         ]
       },
       {
-        "id": "martinez-for-mayor",
-        "title": "Martinez for Mayor",
-        "image": "/images/legacy-web/political-martinez-1.png",
-        "description": "Local mayoral campaign site with classic early-2000s table layout and calls-to-action.",
-        "technologies": ["HTML", "CSS", "JavaScript"],
-        "year": 2003,
+        "id": "political-judy-for-mayor",
+        "title": "Judy for Mayor",
+        "image": "/images/legacy-web/judy-for-mayor-1.jpg",
+        "description": "Placeholder description for Judy for Mayor.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover"
+      }
+    ],
+    "published": true
+  },
+  {
+    "id": "restaurant-websites",
+    "title": "Restaurant Websites",
+    "image": "/images/legacy-web/arroyo-chop-house-1.jpg",
+    "phone": "",
+    "description": "Restaurant and hospitality websites grouped by client brand.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
+    "year": null,
+    "fit": "cover",
+    "clientVariants": [
+      {
+        "id": "restaurant-arroyo-chop-house",
+        "title": "Arroyo Chop House",
+        "image": "/images/legacy-web/arroyo-chop-house-1.jpg",
+        "description": "Placeholder description for Arroyo Chop House.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
         "fit": "cover",
         "galleryMedia": [
-          {
-            "id": "martinez-for-mayor-02",
-            "type": "image",
-            "image": "/images/legacy-web/political-martinez-2.png",
-            "title": "Martinez for Mayor - Issues",
-            "description": "Policy page screenshot for campaign messaging.",
-            "fit": "cover"
-          },
-          {
-            "id": "martinez-for-mayor-03",
-            "type": "image",
-            "image": "/images/legacy-web/political-martinez-3.png",
-            "title": "Martinez for Mayor - Volunteer",
-            "description": "Volunteer sign-up flow from the campaign site.",
-            "fit": "cover"
-          }
-        ]
-      },{
-        "id": "martinez-for-mayor2",
-        "title": "Martinez for Mayor",
-        "image": "/images/legacy-web/political-martinez-1.png",
-        "description": "Local mayoral campaign site with classic early-2000s table layout and calls-to-action.",
-        "technologies": ["HTML", "CSS", "JavaScript"],
-        "year": 2003,
-        "fit": "cover",
-        "galleryMedia": [
-          {
-            "id": "martinez-for-mayor-02",
-            "type": "image",
-            "image": "/images/legacy-web/political-martinez-2.png",
-            "title": "Martinez for Mayor - Issues",
-            "description": "Policy page screenshot for campaign messaging.",
-            "fit": "cover"
-          },
-          {
-            "id": "martinez-for-mayor-03",
-            "type": "image",
-            "image": "/images/legacy-web/political-martinez-3.png",
-            "title": "Martinez for Mayor - Volunteer",
-            "description": "Volunteer sign-up flow from the campaign site.",
-            "fit": "cover"
-          }
-        ]
-      },{
-        "id": "martinez-for-mayor3",
-        "title": "Martinez for Mayor",
-        "image": "/images/legacy-web/political-martinez-1.png",
-        "description": "Local mayoral campaign site with classic early-2000s table layout and calls-to-action.",
-        "technologies": ["HTML", "CSS", "JavaScript"],
-        "year": 2003,
-        "fit": "cover",
-        "galleryMedia": [
-          {
-            "id": "martinez-for-mayor-02",
-            "type": "image",
-            "image": "/images/legacy-web/political-martinez-2.png",
-            "title": "Martinez for Mayor - Issues",
-            "description": "Policy page screenshot for campaign messaging.",
-            "fit": "cover"
-          },
-          {
-            "id": "martinez-for-mayor-03",
-            "type": "image",
-            "image": "/images/legacy-web/political-martinez-3.png",
-            "title": "Martinez for Mayor - Volunteer",
-            "description": "Volunteer sign-up flow from the campaign site.",
-            "fit": "cover"
-          }
-        ]
-      },{
-        "id": "martinez-for-mayor4",
-        "title": "Martinez for Mayor",
-        "image": "/images/legacy-web/political-martinez-1.png",
-        "description": "Local mayoral campaign site with classic early-2000s table layout and calls-to-action.",
-        "technologies": ["HTML", "CSS", "JavaScript"],
-        "year": 2003,
-        "fit": "cover",
-        "galleryMedia": [
-          {
-            "id": "martinez-for-mayor-02",
-            "type": "image",
-            "image": "/images/legacy-web/political-martinez-2.png",
-            "title": "Martinez for Mayor - Issues",
-            "description": "Policy page screenshot for campaign messaging.",
-            "fit": "cover"
-          },
-          {
-            "id": "martinez-for-mayor-03",
-            "type": "image",
-            "image": "/images/legacy-web/political-martinez-3.png",
-            "title": "Martinez for Mayor - Volunteer",
-            "description": "Volunteer sign-up flow from the campaign site.",
-            "fit": "cover"
-          }
+          { "id": "restaurant-arroyo-chop-house-02", "type": "image", "image": "/images/legacy-web/arroyo-chop-house-2.jpg", "title": "Arroyo Chop House - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "restaurant-arroyo-chop-house-03", "type": "image", "image": "/images/legacy-web/arroyo-chop-house-3.jpg", "title": "Arroyo Chop House - View 3", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "restaurant-arroyo-chop-house-04", "type": "image", "image": "/images/legacy-web/arroyo-chop-house-4.jpg", "title": "Arroyo Chop House - View 4", "description": "Placeholder description.", "fit": "cover" }
         ]
       },
       {
-        "id": "ardy-for-city-clerk",
-        "title": "Ardy for City Clerk",
-        "image": "/images/legacy-web/political-chen-1.png",
-        "description": "City clerk campaign site featuring district messaging and community events.",
-        "technologies": ["HTML", "CSS", "JavaScript"],
-        "year": 2006,
+        "id": "restaurant-parkway-grill",
+        "title": "Parkway Grill",
+        "image": "/images/legacy-web/parkway-grill-1.jpg",
+        "description": "Placeholder description for Parkway Grill.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
         "fit": "cover",
         "galleryMedia": [
-          {
-            "id": "ardy-for-city-clerk-02",
-            "type": "image",
-            "image": "/images/legacy-web/political-chen-2.png",
-            "title": "Ardy for City Clerk - Issues",
-            "description": "Issue breakdown page with district-focused policy points.",
-            "fit": "cover"
-          },
-          {
-            "id": "ardy-for-city-clerk-03",
-            "type": "image",
-            "image": "/images/legacy-web/political-chen-3.png",
-            "title": "Ardy for City Clerk - Get Involved",
-            "description": "Volunteer and event sign-up page capture.",
-            "fit": "cover"
-          }
+          { "id": "restaurant-parkway-grill-02", "type": "image", "image": "/images/legacy-web/parkway-grill-2.jpg", "title": "Parkway Grill - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "restaurant-parkway-grill-03", "type": "image", "image": "/images/legacy-web/parkway-grill-3.jpg", "title": "Parkway Grill - View 3", "description": "Placeholder description.", "fit": "cover" }
         ]
       },
       {
-        "id": "krekorian-for-congress",
-        "title": "Krekorian for Congress",
-        "image": "/images/legacy-web/political-hoffman-1.png",
-        "description": "Congressional campaign site with endorsement modules and issue highlights.",
-        "technologies": ["HTML", "CSS", "JavaScript"],
-        "year": 2004,
+        "id": "restaurant-smittys-grill",
+        "title": "Smitty's Grill",
+        "image": "/images/legacy-web/smittys-grill-1.jpg",
+        "description": "Placeholder description for Smitty's Grill.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
         "fit": "cover",
         "galleryMedia": [
-          {
-            "id": "krekorian-for-congress-02",
-            "type": "image",
-            "image": "/images/legacy-web/political-hoffman-2.png",
-            "title": "Krekorian for Congress - Issues",
-            "description": "Issues page with categorized campaign positions.",
-            "fit": "cover"
-          },
-          {
-            "id": "krekorian-for-congress-03",
-            "type": "image",
-            "image": "/images/legacy-web/political-hoffman-3.png",
-            "title": "Krekorian for Congress - Endorsements",
-            "description": "Endorsements grid and supporter quotes.",
-            "fit": "cover"
-          }
+          { "id": "restaurant-smittys-grill-02", "type": "image", "image": "/images/legacy-web/smittys-grill-2.jpg", "title": "Smitty's Grill - View 2", "description": "Placeholder description.", "fit": "cover" }
+        ]
+      },
+      {
+        "id": "restaurant-smith-brothers-corp",
+        "title": "Smith Brothers Restaurants Corp",
+        "image": "/images/legacy-web/smith-brothers-restaurants-corp-1jpg.jpg",
+        "description": "Placeholder description for Smith Brothers Restaurants Corp.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover",
+        "galleryMedia": [
+          { "id": "restaurant-smith-brothers-corp-02", "type": "image", "image": "/images/legacy-web/smith-brothers-restaurants-corp-2.jpg", "title": "Smith Brothers Restaurants Corp - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "restaurant-smith-brothers-corp-03", "type": "image", "image": "/images/legacy-web/smith-brothers-restaurants-corp-3.jpg", "title": "Smith Brothers Restaurants Corp - View 3", "description": "Placeholder description.", "fit": "cover" }
+        ]
+      },
+      {
+        "id": "restaurant-vibrato-grill-jazz",
+        "title": "Vibrato Grill Jazz",
+        "image": "/images/legacy-web/vibrato-grill-jazz-1.jpg",
+        "description": "Placeholder description for Vibrato Grill Jazz.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover",
+        "galleryMedia": [
+          { "id": "restaurant-vibrato-grill-jazz-02", "type": "image", "image": "/images/legacy-web/vibrato-grill-jazz-2.jpg", "title": "Vibrato Grill Jazz - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "restaurant-vibrato-grill-jazz-03", "type": "image", "image": "/images/legacy-web/vibrato-grill-jazz-3.jpg", "title": "Vibrato Grill Jazz - View 3", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "restaurant-vibrato-grill-jazz-04", "type": "image", "image": "/images/legacy-web/vibrato-grill-jazz-4.jpg", "title": "Vibrato Grill Jazz - View 4", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "restaurant-vibrato-grill-jazz-05", "type": "image", "image": "/images/legacy-web/vibrato-grill-jazz-5.jpg", "title": "Vibrato Grill Jazz - View 5", "description": "Placeholder description.", "fit": "cover" }
+        ]
+      },
+      {
+        "id": "restaurant-brandview-collection",
+        "title": "Brandview Collection",
+        "image": "/images/legacy-web/brandview-collection-1.jpg",
+        "description": "Placeholder description for Brandview Collection.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover",
+        "galleryMedia": [
+          { "id": "restaurant-brandview-collection-02", "type": "image", "image": "/images/legacy-web/brandview-collection-2.jpg", "title": "Brandview Collection - View 2", "description": "Placeholder description.", "fit": "cover" }
+        ]
+      },
+      {
+        "id": "restaurant-caspers-hot-dogs",
+        "title": "Caspers Hot Dogs",
+        "image": "/images/legacy-web/caspers-hot-dogs-1.jpg",
+        "description": "Placeholder description for Caspers Hot Dogs.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover",
+        "galleryMedia": [
+          { "id": "restaurant-caspers-hot-dogs-02", "type": "image", "image": "/images/legacy-web/caspers-hot-dogs-2.jpg", "title": "Caspers Hot Dogs - View 2", "description": "Placeholder description.", "fit": "cover" }
         ]
       }
     ],
     "published": true
   },
   {
-    "id": "stormscape",
-    "title": "Stormscape Portfolio",
-    "image": "/images/legacy-web/stormscape - demo sites.png",
+    "id": "attorney-websites",
+    "title": "Attorney Websites",
+    "image": "/images/legacy-web/ourfalian-law-a-1.jpg",
     "phone": "",
-    "description": "Stormscape portfolio demo-sites index capture.",
-    "technologies": ["HTML", "CSS", "JavaScript", "PHP"],
+    "description": "Attorney website projects grouped by practice presentation.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
+    "year": null,
+    "fit": "cover",
+    "clientVariants": [
+      {
+        "id": "attorney-ourfalian-law-a",
+        "title": "Ourfalian Law (A)",
+        "image": "/images/legacy-web/ourfalian-law-a-1.jpg",
+        "description": "Placeholder description for Ourfalian Law A.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover",
+        "galleryMedia": [
+          { "id": "attorney-ourfalian-law-a-02", "type": "image", "image": "/images/legacy-web/ourfalian-law-a-2.jpg", "title": "Ourfalian Law A - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "attorney-ourfalian-law-a-03", "type": "image", "image": "/images/legacy-web/ourfalian-law-a-3.jpg", "title": "Ourfalian Law A - View 3", "description": "Placeholder description.", "fit": "cover" }
+        ]
+      },
+      {
+        "id": "attorney-ourfalian-law-b",
+        "title": "Ourfalian Law (B)",
+        "image": "/images/legacy-web/ourfalian-law-b-1.jpg",
+        "description": "Placeholder description for Ourfalian Law B.",
+        "technologies": ["php", "mysql", "html", "css", "javascript"],
+        "year": null,
+        "fit": "cover",
+        "galleryMedia": [
+          { "id": "attorney-ourfalian-law-b-02", "type": "image", "image": "/images/legacy-web/ourfalian-law-b-2.jpg", "title": "Ourfalian Law B - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "attorney-ourfalian-law-b-03", "type": "image", "image": "/images/legacy-web/ourfalian-law-b-3.jpg", "title": "Ourfalian Law B - View 3", "description": "Placeholder description.", "fit": "cover" }
+        ]
+      }
+    ],
+    "published": true
+  },
+  {
+    "id": "health",
+    "title": "Health",
+    "image": "/images/legacy-web/ucla-researchcore-1.jpg",
+    "phone": "",
+    "description": "Health and research-related website project examples.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
     "year": null,
     "fit": "cover",
     "galleryMedia": [
-      {
-        "id": "stormscape-live",
-        "type": "image",
-        "image": "/images/legacy-web/stormscape - live sites.png",
-        "title": "Stormscape (Live Sites)",
-        "description": "Stormscape portfolio live-sites index screenshot.",
-        "fit": "cover"
-      },
-      {
-        "id": "stormscape-under-construction",
-        "type": "image",
-        "image": "/images/legacy-web/stormscape - under construction sites.png",
-        "title": "Stormscape (Under Construction Sites)",
-        "description": "Stormscape under-construction listing from archive period.",
-        "fit": "cover"
-      },
-      {
-        "id": "stormscape-youtube-demo",
-        "type": "youtube",
-        "youtubeUrl": "https://youtu.be/-h2NB0blBbs",
-        "title": "YouTube Demo Video",
-        "description": "Embedded YouTube sample used for gallery video testing."
-      }
+      { "id": "health-ucla-researchcore-02", "type": "image", "image": "/images/legacy-web/ucla-researchcore-2.jpg", "title": "UCLA Research Core - View 2", "description": "Placeholder description.", "fit": "cover" },
+      { "id": "health-ucla-researchcore-03", "type": "image", "image": "/images/legacy-web/ucla-researchcore-3.jpg", "title": "UCLA Research Core - View 3", "description": "Placeholder description.", "fit": "cover" }
     ],
     "published": true
   },
   {
-    "id": "unitedlayer",
-    "title": "unitedlayer.com",
+    "id": "bwvideo-productions",
+    "title": "BWVideo Productions",
+    "image": "/images/legacy-web/bwvideoproductions.com 1.png",
+    "phone": "",
+    "description": "Placeholder description for BWVideo Productions.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
+    "year": null,
+    "fit": "cover",
+    "published": true
+  },
+  {
+    "id": "commerce-escrow-company",
+    "title": "Commerce Escrow Company",
+    "image": "/images/legacy-web/commerce-escrow-company-1.jpg",
+    "phone": "",
+    "description": "Placeholder description for Commerce Escrow Company.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
+    "year": null,
+    "fit": "cover",
+    "galleryMedia": [
+      { "id": "commerce-escrow-company-02", "type": "image", "image": "/images/legacy-web/commerce-escrow-company-2.jpg", "title": "Commerce Escrow Company - View 2", "description": "Placeholder description.", "fit": "cover" },
+      { "id": "commerce-escrow-company-03", "type": "image", "image": "/images/legacy-web/commerce-escrow-company-3.jpg", "title": "Commerce Escrow Company - View 3", "description": "Placeholder description.", "fit": "cover" }
+    ],
+    "published": true
+  },
+  {
+    "id": "haigmats-com",
+    "title": "Haigmats.com",
+    "image": "/images/legacy-web/haigmats-1-1999.jpg",
+    "phone": "",
+    "description": "Placeholder description for Haigmats.com.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
+    "year": 1999,
+    "fit": "cover",
+    "galleryMedia": [
+      { "id": "haigmats-com-02", "type": "image", "image": "/images/legacy-web/haigmats-2-1999.jpg", "title": "Haigmats.com - View 2", "description": "Placeholder description.", "fit": "cover" },
+      { "id": "haigmats-com-03", "type": "image", "image": "/images/legacy-web/haigmats-3-1999.jpg", "title": "Haigmats.com - View 3", "description": "Placeholder description.", "fit": "cover" }
+    ],
+    "published": true
+  },
+  {
+    "id": "race-with-honda",
+    "title": "Race with Honda",
+    "image": "/images/legacy-web/racewithhonda.com 1.png",
+    "phone": "",
+    "description": "Placeholder description for Race with Honda.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
+    "year": null,
+    "fit": "cover",
+    "galleryMedia": [
+      { "id": "race-with-honda-02", "type": "image", "image": "/images/legacy-web/racewithhonda.com 2.png", "title": "Race with Honda - View 2", "description": "Placeholder description.", "fit": "cover" },
+      { "id": "race-with-honda-03", "type": "image", "image": "/images/legacy-web/racewithhonda.com 3.png", "title": "Race with Honda - View 3", "description": "Placeholder description.", "fit": "cover" },
+      { "id": "race-with-honda-04", "type": "image", "image": "/images/legacy-web/racewithhonda.com 4.png", "title": "Race with Honda - View 4", "description": "Placeholder description.", "fit": "cover" },
+      { "id": "race-with-honda-05", "type": "image", "image": "/images/legacy-web/racewithhonda.com 5.png", "title": "Race with Honda - View 5", "description": "Placeholder description.", "fit": "cover" }
+    ],
+    "published": true
+  },
+  {
+    "id": "unitedlayer-inc",
+    "title": "UnitedLayer Inc.",
     "image": "/images/legacy-web/unitedlayer.com 1.png",
     "phone": "",
-    "description": "UnitedLayer legacy website screenshot, desktop-first layout.",
-    "technologies": ["HTML", "CSS", "JavaScript"],
+    "description": "Placeholder description for UnitedLayer Inc.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
     "year": null,
+    "fit": "cover",
     "galleryMedia": [
-      {
-        "id": "unitedlayer-02",
-        "type": "image",
-        "image": "/images/legacy-web/unitedlayer.com 2.png",
-        "title": "unitedlayer.com - View 2",
-        "description": "Second UnitedLayer page/state screenshot from the same era."
-      }
+      { "id": "unitedlayer-inc-02", "type": "image", "image": "/images/legacy-web/unitedlayer.com 2.png", "title": "UnitedLayer Inc. - View 2", "description": "Placeholder description.", "fit": "cover" }
+    ],
+    "published": true
+  },
+  {
+    "id": "stormscape-studios",
+    "title": "StormScape Studios",
+    "image": "/images/legacy-web/stormscape - demo sites.png",
+    "phone": "",
+    "description": "Placeholder description for StormScape Studios.",
+    "technologies": ["php", "mysql", "html", "css", "javascript"],
+    "year": null,
+    "fit": "cover",
+    "galleryMedia": [
+      { "id": "stormscape-studios-02", "type": "image", "image": "/images/legacy-web/stormscape - live sites.png", "title": "StormScape Studios - Live Sites", "description": "Placeholder description.", "fit": "cover" },
+      { "id": "stormscape-studios-03", "type": "image", "image": "/images/legacy-web/stormscape - under construction sites.png", "title": "StormScape Studios - Under Construction", "description": "Placeholder description.", "fit": "cover" }
     ],
     "published": true
   }
