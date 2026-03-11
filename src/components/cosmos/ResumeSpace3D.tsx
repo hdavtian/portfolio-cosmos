@@ -6270,8 +6270,8 @@ export default function ResumeSpace3D({
       const stationDebugRows: string[] = [];
       orbitalPortfolioStationsRef.current.forEach((station, idx) => {
         station.group.rotation.y += dt * 0.0;
-        station.variantSatelliteGroup.rotation.y += dt * 0.68;
-        station.mediaHaloGroup.rotation.y -= dt * 0.28;
+        station.variantSatelliteGroup.rotation.y += dt * 0.136;
+        station.mediaHaloGroup.rotation.y -= dt * 0.056;
         station.mediaHaloGroup.rotation.x = Math.sin(now * 0.00032 + station.pulsePhase) * 0.08;
         const isFocused = idx === orbitalPortfolioFocusIndexRef.current;
         const isInspected = idx === orbitalPortfolioInspectedStationIndexRef.current;
@@ -8087,7 +8087,7 @@ export default function ResumeSpace3D({
             () => undefined,
           );
         }
-        thumb.position.set(Math.cos(ma) * 74, Math.sin(ma * 2.1) * 7, Math.sin(ma) * 74);
+        thumb.position.set(Math.cos(ma) * 37, Math.sin(ma * 2.1) * 3.5, Math.sin(ma) * 37);
         thumb.lookAt(new THREE.Vector3(0, 0, 0));
         mediaHaloGroup.add(thumb);
       });
