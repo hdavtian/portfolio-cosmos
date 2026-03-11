@@ -316,6 +316,16 @@ type OrbitalPortfolioStationRecord = {
   textureMaxOffsetY: number;
 };
 
+type OrbitalPortfolioMatterPacketRecord = {
+  mesh: THREE.Mesh;
+  progress: number;
+  speed: number;
+  targetStation: number;
+  phase: number;
+  startOffset: THREE.Vector3;
+  endJitter: THREE.Vector3;
+};
+
 const buildCurvedPanelPositions = (
   flatPositions: Float32Array,
   width: number,
@@ -959,8 +969,13 @@ export default function ResumeSpace3D({
   const orbitalPortfolioGroupsRef = useRef<PortfolioGroupView[]>([]);
   const orbitalPortfolioCoreRootRef = useRef<THREE.Group | null>(null);
   const orbitalPortfolioCoreSliceGroupRef = useRef<THREE.Group | null>(null);
+  const orbitalPortfolioCorePanelMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
+  const orbitalPortfolioCorePanelColorAttrRef = useRef<THREE.BufferAttribute | null>(null);
+  const orbitalPortfolioCorePanelBaseColorsRef = useRef<Float32Array | null>(null);
   const orbitalPortfolioCoreSliceMatsRef = useRef<THREE.MeshBasicMaterial[]>([]);
   const orbitalPortfolioCoreRayMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
+  const orbitalPortfolioMatterGroupRef = useRef<THREE.Group | null>(null);
+  const orbitalPortfolioMatterPacketsRef = useRef<OrbitalPortfolioMatterPacketRecord[]>([]);
   const orbitalPortfolioCoreGlowRef = useRef<THREE.Mesh | null>(null);
   const orbitalPortfolioOuterRingRef = useRef<THREE.Line | null>(null);
   const [orbitalPortfolioReady, setOrbitalPortfolioReady] = useState(false);
@@ -6171,6 +6186,10 @@ export default function ResumeSpace3D({
     const camPos = new THREE.Vector3();
     const anchor = new THREE.Vector3();
     const lookAt = new THREE.Vector3();
+    const matterFrom = new THREE.Vector3();
+    const matterTo = new THREE.Vector3();
+    const matterTarget = new THREE.Vector3();
+    const matterPos = new THREE.Vector3();
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const now = performance.now();
@@ -6370,7 +6389,7 @@ export default function ResumeSpace3D({
         glowMat.opacity = 0.2 + (0.5 + 0.5 * Math.sin(now * 0.0018)) * 0.2;
       }
       if (orbitalPortfolioCoreRootRef.current) {
-        orbitalPortfolioCoreRootRef.current.rotation.y += dt * 0.18;
+        orbitalPortfolioCoreRootRef.current.rotation.y += dt * 0.03;
         orbitalPortfolioCoreRootRef.current.rotation.x =
           Math.sin(now * 0.00037) * 0.08;
       }
@@ -6386,6 +6405,61 @@ export default function ResumeSpace3D({
         const pulse = 0.5 + 0.5 * Math.sin(now * 0.0017 + idx * 0.63);
         mat.opacity = 0.12 + pulse * 0.2;
       });
+      const panelMat = orbitalPortfolioCorePanelMatRef.current;
+      const panelColorAttr = orbitalPortfolioCorePanelColorAttrRef.current;
+      const panelBaseColors = orbitalPortfolioCorePanelBaseColorsRef.current;
+      if (panelMat) {
+        panelMat.opacity = 0.12 + (0.5 + 0.5 * Math.sin(now * 0.0016)) * 0.02;
+      }
+      if (panelColorAttr && panelBaseColors) {
+        const arr = panelColorAttr.array as Float32Array;
+        const lum = 0.86 + (0.5 + 0.5 * Math.sin(now * 0.0012)) * 0.06;
+        for (let i = 0; i < arr.length; i += 3) {
+          const pulse = 0.98 + 0.02 * Math.sin(now * 0.0019 + i * 0.0013);
+          arr[i] = panelBaseColors[i] * lum * pulse;
+          arr[i + 1] = panelBaseColors[i + 1] * lum * pulse;
+          arr[i + 2] = panelBaseColors[i + 2] * lum * pulse;
+        }
+        panelColorAttr.needsUpdate = true;
+      }
+      if (orbitalPortfolioMatterGroupRef.current) {
+        orbitalPortfolioMatterGroupRef.current.rotation.y += dt * 0.14;
+      }
+      const packets = orbitalPortfolioMatterPacketsRef.current;
+      if (packets.length > 0 && orbitalPortfolioCoreRootRef.current) {
+        orbitalPortfolioCoreRootRef.current.getWorldPosition(matterFrom);
+        const stationCount = Math.max(1, orbitalPortfolioStationsRef.current.length);
+        packets.forEach((packet, idx) => {
+          packet.progress += dt * packet.speed;
+          if (packet.progress >= 1) {
+            packet.progress = 0;
+            packet.speed = 0.24 + Math.random() * 0.32;
+            packet.targetStation = Math.floor(Math.random() * stationCount);
+            packet.phase = Math.random() * Math.PI * 2;
+            packet.startOffset.set(
+              (Math.random() - 0.5) * 10,
+              (Math.random() - 0.5) * 10,
+              (Math.random() - 0.5) * 10,
+            );
+            packet.endJitter.set(
+              (Math.random() - 0.5) * 18,
+              (Math.random() - 0.5) * 11,
+              (Math.random() - 0.5) * 18,
+            );
+          }
+          const targetStation = orbitalPortfolioStationsRef.current[packet.targetStation];
+          if (!targetStation) return;
+          targetStation.group.getWorldPosition(matterTo);
+          matterTarget.copy(matterTo).add(packet.endJitter);
+          matterPos.copy(matterFrom).add(packet.startOffset).lerp(matterTarget, packet.progress);
+          const arc = Math.sin(packet.progress * Math.PI) * (8 + (idx % 5) * 1.4);
+          matterPos.y += arc;
+          packet.mesh.position.copy(matterPos);
+          packet.mesh.quaternion.copy(camera.quaternion);
+          const pmat = packet.mesh.material as THREE.MeshBasicMaterial;
+          pmat.opacity = 0.24 + (0.5 + 0.5 * Math.sin(now * 0.004 + packet.phase)) * 0.58;
+        });
+      }
       if (orbitalPortfolioOuterRingRef.current) {
         orbitalPortfolioOuterRingRef.current.rotation.y += dt * 0.18;
       }
@@ -7919,24 +7993,56 @@ export default function ResumeSpace3D({
         toneMapped: false,
       }),
     );
-    const latticeShellGeometry = new THREE.IcosahedronGeometry(46, 1);
+    const latticeShellGeometry = new THREE.IcosahedronGeometry(46, 1).toNonIndexed();
+    const shellPalette = [0x2f6fff, 0x27dcff, 0x6f47ff, 0xdb43ff, 0x28e0b7, 0xffb13a];
+    const shellPosAttr = latticeShellGeometry.getAttribute("position") as THREE.BufferAttribute;
+    const shellColorAttr = new THREE.BufferAttribute(
+      new Float32Array(shellPosAttr.count * 3),
+      3,
+    );
+    const shellBaseColors = new Float32Array(shellPosAttr.count * 3);
+    const shellColor = new THREE.Color();
+    for (let i = 0; i < shellPosAttr.count; i += 3) {
+      const bucket = Math.floor((i / 3) / 4) % shellPalette.length;
+      shellColor.setHex(shellPalette[bucket]);
+      const tint = 0.82 + (((i / 3) % 5) * 0.03);
+      shellColor.multiplyScalar(tint);
+      for (let v = 0; v < 3; v += 1) {
+        const bi = (i + v) * 3;
+        shellBaseColors[bi] = shellColor.r;
+        shellBaseColors[bi + 1] = shellColor.g;
+        shellBaseColors[bi + 2] = shellColor.b;
+        shellColorAttr.array[bi] = shellColor.r;
+        shellColorAttr.array[bi + 1] = shellColor.g;
+        shellColorAttr.array[bi + 2] = shellColor.b;
+      }
+    }
+    latticeShellGeometry.setAttribute("color", shellColorAttr);
     const latticeShell = new THREE.Mesh(
       latticeShellGeometry,
       new THREE.MeshPhongMaterial({
-        color: 0x93dbff,
-        emissive: 0x1f5a8a,
-        shininess: 54,
+        color: 0xffffff,
+        flatShading: true,
+        shininess: 90,
+        specular: new THREE.Color(0xc9e8ff),
+        emissive: 0x101828,
+        emissiveIntensity: 0.08,
+        vertexColors: true,
         transparent: true,
-        opacity: 0.22,
+        opacity: 0.16,
+        side: THREE.FrontSide,
         depthWrite: false,
       }),
     );
+    orbitalPortfolioCorePanelMatRef.current = latticeShell.material as THREE.MeshPhongMaterial;
+    orbitalPortfolioCorePanelColorAttrRef.current = shellColorAttr;
+    orbitalPortfolioCorePanelBaseColorsRef.current = shellBaseColors;
     const latticeEdges = new THREE.LineSegments(
       new THREE.EdgesGeometry(latticeShellGeometry),
       new THREE.LineBasicMaterial({
-        color: 0x76e3ff,
+        color: 0xaed9ff,
         transparent: true,
-        opacity: 0.58,
+        opacity: 0.22,
         depthWrite: false,
       }),
     );
@@ -7988,12 +8094,49 @@ export default function ResumeSpace3D({
       rayGroup.add(ray);
       rayMats.push(rayMat);
     }
+    const matterGroup = new THREE.Group();
+    const matterPackets: OrbitalPortfolioMatterPacketRecord[] = [];
+    const matterPalette = [0x9beaff, 0xa7b6ff, 0xb8ffd9, 0xffb8ef, 0xffe2b3];
+    for (let i = 0; i < 24; i += 1) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: matterPalette[i % matterPalette.length],
+        transparent: true,
+        opacity: 0.72,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+        side: THREE.DoubleSide,
+      });
+      const packetMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7), mat);
+      packetMesh.position.set(0, 0, 0);
+      matterGroup.add(packetMesh);
+      matterPackets.push({
+        mesh: packetMesh,
+        progress: Math.random(),
+        speed: 0.26 + Math.random() * 0.3,
+        targetStation: Math.floor(Math.random() * Math.max(1, orbitalGroups.length)),
+        phase: Math.random() * Math.PI * 2,
+        startOffset: new THREE.Vector3(
+          (Math.random() - 0.5) * 11,
+          (Math.random() - 0.5) * 11,
+          (Math.random() - 0.5) * 11,
+        ),
+        endJitter: new THREE.Vector3(
+          (Math.random() - 0.5) * 16,
+          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 16,
+        ),
+      });
+    }
     coreRoot.add(coreNucleus, coreGlow, latticeShell, latticeEdges, sliceGroup, rayGroup);
+    orbitalRoot.add(matterGroup);
     orbitalRoot.add(coreRoot);
     orbitalPortfolioCoreRootRef.current = coreRoot;
     orbitalPortfolioCoreSliceGroupRef.current = sliceGroup;
     orbitalPortfolioCoreSliceMatsRef.current = sliceMats;
     orbitalPortfolioCoreRayMatsRef.current = rayMats;
+    orbitalPortfolioMatterGroupRef.current = matterGroup;
+    orbitalPortfolioMatterPacketsRef.current = matterPackets;
     orbitalPortfolioCoreGlowRef.current = coreGlow;
     const createOrbitalHaloTexture = () => {
       const canvas = document.createElement("canvas");
@@ -12047,8 +12190,13 @@ export default function ResumeSpace3D({
       orbitalPortfolioGroupsRef.current = [];
       orbitalPortfolioCoreRootRef.current = null;
       orbitalPortfolioCoreSliceGroupRef.current = null;
+      orbitalPortfolioCorePanelMatRef.current = null;
+      orbitalPortfolioCorePanelColorAttrRef.current = null;
+      orbitalPortfolioCorePanelBaseColorsRef.current = null;
       orbitalPortfolioCoreSliceMatsRef.current = [];
       orbitalPortfolioCoreRayMatsRef.current = [];
+      orbitalPortfolioMatterGroupRef.current = null;
+      orbitalPortfolioMatterPacketsRef.current = [];
       orbitalPortfolioCoreGlowRef.current = null;
       orbitalPortfolioOuterRingRef.current = null;
       orbitalPortfolioActiveRef.current = false;
