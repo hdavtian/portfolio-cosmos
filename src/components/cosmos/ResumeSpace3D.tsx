@@ -135,6 +135,8 @@ const ORBITAL_PORTFOLIO_NONFOCUS_PLATE_OPACITY = 0.19;
 const ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE = 120;
 const ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE = 70;
 const ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE = 280;
+const MOON_TRAVEL_SIGN_MAX_ACTIVE = 28;
+const MOON_ORBIT_SIGN_DEBUG_LOGS = true;
 // Card layer stays on the overlay pass to avoid bloom/tonemapping washout.
 const PROJECT_SHOWCASE_CARD_LAYER = 1;
 const SKILLS_LATTICE_LAYER = 3;
@@ -327,6 +329,29 @@ type OrbitalPortfolioMatterPacketRecord = {
   endJitter: THREE.Vector3;
 };
 
+type MoonTravelSignRecord = {
+  object: THREE.Object3D;
+  material: THREE.Material;
+  ageMs: number;
+  ttlMs: number;
+  velocity: THREE.Vector3;
+  mode: "a" | "b";
+  baseScale: THREE.Vector3;
+  arcStart?: THREE.Vector3;
+  arcControl?: THREE.Vector3;
+  arcEnd?: THREE.Vector3;
+};
+
+type OrbitSignTuning = {
+  timeBetweenMessagesSec: number;
+  continuousLoop: boolean;
+  waitAfterStreamSec: number;
+  travelSpeed: number;
+  lightIntensity: number;
+  startFontScale: number;
+  endFontScale: number;
+};
+
 const buildCurvedPanelPositions = (
   flatPositions: Float32Array,
   width: number,
@@ -392,6 +417,60 @@ const applyTextureCoverTop = (
   texture.offset.set(offsetX, offsetY);
   texture.needsUpdate = true;
   return Math.max(0, 1 - repeatY);
+};
+
+const createMoonTravelSignTexture = (text: string): THREE.CanvasTexture => {
+  const canvas = document.createElement("canvas");
+  const normalized = String(text ?? "")
+    .replace(/\s*•\s*/g, " • ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const splitForLines = () => {
+    if (normalized.length <= 48) return [normalized];
+    const parts = normalized.split(" • ").map((p) => p.trim()).filter(Boolean);
+    if (parts.length <= 1) return [normalized];
+    const half = Math.ceil(parts.length * 0.5);
+    const lineA = parts.slice(0, half).join(" • ").trim();
+    const lineB = parts.slice(half).join(" • ").trim();
+    return [lineA, lineB].filter(Boolean);
+  };
+  const lines = splitForLines();
+  canvas.width = 2048;
+  canvas.height = lines.length > 1 ? 512 : 320;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  let fontSize = lines.length > 1 ? 84 : 98;
+  const maxTextWidth = canvas.width * 0.9;
+  while (fontSize > 52) {
+    ctx.font = `700 ${fontSize}px Rajdhani, Segoe UI, sans-serif`;
+    const widest = lines.reduce((max, line) => Math.max(max, ctx.measureText(line).width), 0);
+    if (widest <= maxTextWidth) break;
+    fontSize -= 3;
+  }
+  ctx.font = `700 ${fontSize}px Rajdhani, Segoe UI, sans-serif`;
+  ctx.shadowColor = "rgba(94, 214, 255, 0.55)";
+  ctx.shadowBlur = 14;
+  ctx.lineWidth = Math.max(3, Math.floor(fontSize * 0.05));
+  ctx.strokeStyle = "rgba(120, 196, 228, 0.86)";
+  ctx.fillStyle = "rgba(200, 236, 248, 0.9)";
+  const x = canvas.width * 0.5;
+  const lineGap = fontSize * 1.16;
+  const startY = canvas.height * 0.5 - ((lines.length - 1) * lineGap) * 0.5;
+  lines.forEach((line, idx) => {
+    const y = startY + idx * lineGap;
+    ctx.strokeText(line, x, y);
+    ctx.fillText(line, x, y);
+  });
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  return tex;
 };
 
 const extractYouTubeVideoId = (input?: string): string | null => {
@@ -979,6 +1058,36 @@ export default function ResumeSpace3D({
   const orbitalPortfolioMatterPacketsRef = useRef<OrbitalPortfolioMatterPacketRecord[]>([]);
   const orbitalPortfolioCoreGlowRef = useRef<THREE.Mesh | null>(null);
   const orbitalPortfolioOuterRingRef = useRef<THREE.Line | null>(null);
+  const moonTravelSignGroupRef = useRef<THREE.Group | null>(null);
+  const moonTravelSignsRef = useRef<MoonTravelSignRecord[]>([]);
+  const moonTravelSignLastSpawnAtRef = useRef(0);
+  const moonTravelSignPauseUntilRef = useRef(0);
+  const moonTravelSignSequenceWrappedRef = useRef(false);
+  const moonTravelSignLaneCursorRef = useRef(0);
+  const moonTravelSignPathCycleRef = useRef<{
+    order: number[];
+    index: number;
+    lastSlot: number;
+  }>({
+    order: [0, 2, 4, 1, 3],
+    index: 0,
+    lastSlot: -1,
+  });
+  const moonTravelSignPoolRef = useRef<string[]>([]);
+  const moonTravelSignPoolCursorRef = useRef(0);
+  const moonTravelSignActiveCompanyRef = useRef<string | null>(null);
+  const moonTravelSignTextureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
+  const [orbitSignTuning, setOrbitSignTuning] = useState<OrbitSignTuning>({
+    timeBetweenMessagesSec: 0.8,
+    continuousLoop: true,
+    waitAfterStreamSec: 1.2,
+    travelSpeed: 1,
+    lightIntensity: 0.8,
+    startFontScale: 0.2,
+    endFontScale: 1.2,
+  });
+  const orbitSignTuningRef = useRef<OrbitSignTuning>(orbitSignTuning);
+  const moonOrbitSignDebugLastLogAtRef = useRef(0);
   const [orbitalPortfolioReady, setOrbitalPortfolioReady] = useState(false);
   const [orbitalPortfolioActive, setOrbitalPortfolioActive] = useState(false);
   const orbitalPortfolioActiveRef = useRef(false);
@@ -1012,6 +1121,35 @@ export default function ResumeSpace3D({
     controlsMaxDistance?: number;
   } | null>(null);
   const [portfolioNavHereActive, setPortfolioNavHereActive] = useState(false);
+  useEffect(() => {
+    orbitSignTuningRef.current = orbitSignTuning;
+    // Apply key tuning controls immediately without waiting for next stream cycle.
+    const now = performance.now();
+    if (orbitSignTuning.continuousLoop) {
+      moonTravelSignPauseUntilRef.current = 0;
+    }
+    // Re-evaluate spawn timing right away so message timing changes feel live.
+    moonTravelSignLastSpawnAtRef.current = Math.min(moonTravelSignLastSpawnAtRef.current, now + 90);
+  }, [orbitSignTuning]);
+  const exportOrbitSignTuning = useCallback(() => {
+    const payload = {
+      timeBetweenMessagesSec: Number(orbitSignTuning.timeBetweenMessagesSec.toFixed(2)),
+      continuousLoop: !!orbitSignTuning.continuousLoop,
+      waitAfterStreamSec: Number(orbitSignTuning.waitAfterStreamSec.toFixed(2)),
+      travelSpeed: Number(orbitSignTuning.travelSpeed.toFixed(2)),
+      lightIntensity: Number(orbitSignTuning.lightIntensity.toFixed(2)),
+      startFontScale: Number(orbitSignTuning.startFontScale.toFixed(2)),
+      endFontScale: Number(orbitSignTuning.endFontScale.toFixed(2)),
+    };
+    console.log("[ORBSIGN_SETTINGS]", payload);
+    shipLog(`[ORBSIGN_SETTINGS] ${JSON.stringify(payload)}`, "info");
+    try {
+      void navigator.clipboard?.writeText(JSON.stringify(payload));
+      shipLog("Orbit sign settings copied to clipboard", "info");
+    } catch {
+      // ignore clipboard failures
+    }
+  }, [orbitSignTuning, shipLog]);
   const skillsLatticeWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const aboutMemorySquareWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const aboutMemorySquareRootRef = useRef<THREE.Group | null>(null);
@@ -1079,6 +1217,51 @@ export default function ResumeSpace3D({
     lastReady: false,
   });
   const skillsSDPatrolStateRef = useRef<{ angle: number }>({ angle: Math.PI * 0.25 });
+  const moonTravelSignCatalog = useMemo(() => {
+    const experience = (resumeData as { experience?: unknown }).experience;
+    const entries = Array.isArray(experience)
+      ? (experience as Array<Record<string, unknown>>)
+      : [];
+    const catalog = new Map<string, { pool: string[]; mode: "a" | "b" }>();
+    entries.forEach((entry) => {
+      const id = String(entry.id ?? "").toLowerCase();
+      if (!id) return;
+      const sequence = Array.isArray(entry.travelSequence)
+        ? (entry.travelSequence as unknown[])
+            .map((v) => String(v ?? "").trim())
+            .filter(Boolean)
+        : [];
+      const company = String(entry.company ?? "").trim();
+      const modeRaw = String(entry.travelSignMode ?? "b").trim().toLowerCase();
+      const mode: "a" | "b" = modeRaw === "a" ? "a" : "b";
+      if (sequence.length > 0) catalog.set(id, { pool: sequence, mode });
+      else if (company) catalog.set(id, { pool: [company], mode });
+    });
+    return catalog;
+  }, []);
+  const buildMoonTravelSignText = useCallback(
+    (companyId: string) => {
+      const id = companyId.toLowerCase();
+      const record = moonTravelSignCatalog.get(id);
+      const pool =
+        moonTravelSignActiveCompanyRef.current === id && moonTravelSignPoolRef.current.length > 0
+          ? moonTravelSignPoolRef.current
+          : (record?.pool ?? []);
+      if (pool.length === 0) return "";
+      const cursor = THREE.MathUtils.euclideanModulo(
+        moonTravelSignPoolCursorRef.current,
+        pool.length,
+      );
+      const text = pool[cursor] ?? "";
+      const nextCursor = (cursor + 1) % pool.length;
+      moonTravelSignPoolCursorRef.current = nextCursor;
+      if (pool.length > 0 && nextCursor === 0) {
+        moonTravelSignSequenceWrappedRef.current = true;
+      }
+      return text;
+    },
+    [moonTravelSignCatalog],
+  );
   const skillsSDLockActiveRef = useRef(false);
   const projectShowcaseNebulaRootRef = useRef<THREE.Object3D | null>(null);
   const skillsLatticeRootRef = useRef<THREE.Group | null>(null);
@@ -6647,6 +6830,482 @@ export default function ResumeSpace3D({
       window.removeEventListener("wheel", onWheel, { capture: true });
     };
   }, [orbitalPortfolioActive]);
+
+  // Orbit horizon signage: readable glowing text that rides moon rotation.
+  useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
+    let last = performance.now();
+    const moonCenter = new THREE.Vector3();
+    const camToMoon = new THREE.Vector3();
+    const tangent = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    const camForward = new THREE.Vector3();
+    const camRight = new THREE.Vector3();
+    const camUp = new THREE.Vector3();
+    const moonCenterNdc = new THREE.Vector3();
+    const moonTopNdc = new THREE.Vector3();
+    const moonBottomNdc = new THREE.Vector3();
+    const ndcPick = new THREE.Vector3();
+    const rayNear = new THREE.Vector3();
+    const rayFar = new THREE.Vector3();
+    const rayDir = new THREE.Vector3();
+    const rayToCenter = new THREE.Vector3();
+    const camRightProbeNdc = new THREE.Vector3();
+    const candidatePos = new THREE.Vector3();
+    const candidateNdc = new THREE.Vector3();
+    const activeSignNdc = new THREE.Vector3();
+    const bestPos = new THREE.Vector3();
+    const surfaceNormal = new THREE.Vector3();
+    const arcMid = new THREE.Vector3();
+    let spawnedSinceLastLog = 0;
+    const detachAndClearSigns = () => {
+      const records = moonTravelSignsRef.current;
+      records.forEach((record) => {
+        record.material.dispose();
+        const parent = record.object.parent;
+        if (parent) parent.remove(record.object);
+      });
+      moonTravelSignsRef.current = [];
+    };
+    const ensureSignGroup = () => {
+      let group = moonTravelSignGroupRef.current;
+      if (!group) {
+        group = new THREE.Group();
+        group.name = "MoonOrbitSigns";
+        moonTravelSignGroupRef.current = group;
+        sceneRef.current.scene?.add(group);
+      }
+      return group;
+    };
+    const nextPathSlot = () => {
+      const state = moonTravelSignPathCycleRef.current;
+      if (state.order.length !== 5 || state.index >= state.order.length) {
+        // "Sprinkler" pattern: each 5-message cycle stays spaced apart,
+        // but cycle orientation/order is randomized to avoid repetitive feel.
+        const baseA = [0, 2, 4, 1, 3];
+        const baseB = [4, 2, 0, 3, 1];
+        const base = Math.random() < 0.5 ? baseA : baseB;
+        const reversed = Math.random() < 0.5 ? [...base].reverse() : [...base];
+        const rotateBy = Math.floor(Math.random() * reversed.length);
+        const rotated = reversed.map((_, idx) => reversed[(idx + rotateBy) % reversed.length] ?? 0);
+        // If first choice lands too close to previous lane, rotate once more.
+        const first = rotated[0] ?? 0;
+        if (state.lastSlot >= 0 && Math.abs(first - state.lastSlot) <= 1) {
+          const adjusted = rotated.map(
+            (_, idx) => rotated[(idx + 1) % rotated.length] ?? 0,
+          );
+          state.order = adjusted;
+        } else {
+          state.order = rotated;
+        }
+        state.index = 0;
+      }
+      const slot = state.order[state.index] ?? 2;
+      state.index += 1;
+      state.lastSlot = slot;
+      return slot;
+    };
+    const spawnSign = (
+      companyId: string,
+      moonMesh: THREE.Mesh,
+      moonRadius: number,
+      mode: "a" | "b",
+    ) => {
+      const record = moonTravelSignCatalog.get(companyId);
+      if (!record) return;
+      const text = buildMoonTravelSignText(companyId);
+      if (!text) return;
+      const group = ensureSignGroup();
+      if (!group) return;
+      let tex = moonTravelSignTextureCacheRef.current.get(text) ?? null;
+      if (!tex) {
+        tex = createMoonTravelSignTexture(text);
+        moonTravelSignTextureCacheRef.current.set(text, tex);
+      }
+      const w = THREE.MathUtils.clamp(20 + text.length * 0.48, 20, 48);
+      const baseScale = new THREE.Vector3(w, 6.2, 1);
+      moonMesh.getWorldPosition(moonCenter);
+      const cam = sceneRef.current.camera;
+      if (!cam) return;
+      cam.getWorldDirection(camForward).normalize();
+      camRight.crossVectors(camForward, up);
+      if (camRight.lengthSq() < 1e-5) camRight.set(1, 0, 0);
+      camRight.normalize();
+      camUp.crossVectors(camRight, camForward).normalize();
+      camToMoon.subVectors(cam.position, moonCenter).normalize();
+      tangent.crossVectors(camUp, camToMoon);
+      if (tangent.lengthSq() < 1e-5) tangent.set(1, 0, 0);
+      tangent.normalize();
+      const lanePattern = [-1, -0.5, 0, 0.5, 1] as const;
+      const slot = nextPathSlot();
+      const laneKey = lanePattern[slot] ?? 0;
+      moonTravelSignLaneCursorRef.current += 1;
+      moonCenterNdc.copy(moonCenter).project(cam);
+      camRightProbeNdc.copy(moonCenter).add(camRight).project(cam);
+      // Normalize lane direction to actual screen left/right.
+      const screenRightSign = camRightProbeNdc.x >= moonCenterNdc.x ? 1 : -1;
+      const laneScreen = laneKey * screenRightSign;
+      // Camera-aware spawn: keep signs on visible upper/front moon area.
+      const horizonDistance =
+        mode === "a"
+          ? moonRadius * (1.02 + Math.random() * 0.1)
+          : moonRadius * (1.01 + Math.random() * 0.06);
+      moonTopNdc.copy(moonCenter).addScaledVector(camUp, moonRadius).project(cam);
+      moonBottomNdc.copy(moonCenter).addScaledVector(camUp, -moonRadius).project(cam);
+      const moonNdcRadiusY = Math.max(0.02, Math.abs(moonTopNdc.y - moonBottomNdc.y) * 0.5);
+      const moonNdcRadiusX = Math.max(0.02, moonNdcRadiusY * 0.95);
+      let bestScore = -Infinity;
+      for (let attempt = 0; attempt < 14; attempt += 1) {
+        // Pick a point on the projected, visible upper/front part of the moon disk.
+        const pickX =
+          moonCenterNdc.x +
+          (laneScreen * moonNdcRadiusX * 1.12) +
+          (Math.random() - 0.5) * moonNdcRadiusX * 0.24;
+        const pickY =
+          moonCenterNdc.y +
+          moonNdcRadiusY * (0.18 + Math.random() * 0.7) +
+          (mode === "b" ? 0.03 : 0);
+        ndcPick.set(
+          THREE.MathUtils.clamp(pickX, -0.86, 0.86),
+          THREE.MathUtils.clamp(pickY, -0.72, 0.9),
+          0,
+        );
+        rayNear.set(ndcPick.x, ndcPick.y, -1).unproject(cam);
+        rayFar.set(ndcPick.x, ndcPick.y, 1).unproject(cam);
+        rayDir.subVectors(rayFar, rayNear).normalize();
+        // Ray/sphere intersection against the slightly expanded moon shell.
+        rayToCenter.subVectors(cam.position, moonCenter);
+        const b = rayToCenter.dot(rayDir);
+        const c = rayToCenter.lengthSq() - horizonDistance * horizonDistance;
+        const disc = b * b - c;
+        if (disc > 0) {
+          const s = Math.sqrt(disc);
+          let tHit = -b - s;
+          if (tHit <= 0) tHit = -b + s;
+          if (tHit > 0) {
+            candidatePos.copy(cam.position).addScaledVector(rayDir, tHit);
+          } else {
+            candidatePos
+              .copy(moonCenter)
+              .addScaledVector(camToMoon, horizonDistance)
+              .addScaledVector(tangent, (Math.random() - 0.5) * moonRadius * 0.12)
+              .addScaledVector(camUp, moonRadius * (0.16 + Math.random() * 0.24));
+          }
+        } else {
+          candidatePos
+            .copy(moonCenter)
+            .addScaledVector(camToMoon, horizonDistance)
+            .addScaledVector(tangent, (Math.random() - 0.5) * moonRadius * 0.12)
+            .addScaledVector(camUp, moonRadius * (0.16 + Math.random() * 0.24));
+        }
+        candidateNdc.copy(candidatePos).project(cam);
+        surfaceNormal.subVectors(candidatePos, moonCenter).normalize();
+        const facing = surfaceNormal.dot(camToMoon);
+        const visible =
+          candidateNdc.z > -1 &&
+          candidateNdc.z < 1 &&
+          candidateNdc.x > -0.9 &&
+          candidateNdc.x < 0.9 &&
+          candidateNdc.y > moonCenterNdc.y + moonNdcRadiusY * 0.08 &&
+          candidateNdc.y < moonCenterNdc.y + moonNdcRadiusY * 1.1 &&
+          facing > 0.12;
+        const score =
+          (visible ? 120 : 0) +
+          candidateNdc.y * 14 -
+          Math.abs(candidateNdc.x - moonCenterNdc.x) * 6 +
+          facing * 8;
+        if (score > bestScore) {
+          bestScore = score;
+          bestPos.copy(candidatePos);
+        }
+        if (visible) break;
+      }
+      const worldPos = bestPos.clone();
+      let signObject: THREE.Object3D;
+      let signMaterial: THREE.Material;
+      const tuning = orbitSignTuningRef.current;
+      const lightMul = THREE.MathUtils.clamp(tuning.lightIntensity, 0, 3);
+      let arcStart: THREE.Vector3 | undefined;
+      let arcControl: THREE.Vector3 | undefined;
+      let arcEnd: THREE.Vector3 | undefined;
+      if (mode === "b") {
+        const mat = new THREE.SpriteMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.58 * lightMul,
+          depthWrite: false,
+          depthTest: true,
+          blending: THREE.NormalBlending,
+          toneMapped: false,
+        });
+        const sprite = new THREE.Sprite(mat);
+        // Start tiny near horizon; it grows as it approaches viewer.
+        sprite.scale.copy(baseScale).multiplyScalar(0.2 + Math.random() * 0.08);
+        signObject = sprite;
+        signMaterial = mat;
+      } else {
+        const mat = new THREE.SpriteMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.54 * lightMul,
+          depthWrite: false,
+          depthTest: true,
+          blending: THREE.NormalBlending,
+          toneMapped: false,
+        });
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.copy(baseScale);
+        // Keep the accidental cinematic orientation for mode A.
+        const signFace = camToMoon.clone().multiplyScalar(-1).normalize();
+        const signUp = up.clone();
+        const spriteRight = new THREE.Vector3().crossVectors(signUp, signFace).normalize();
+        const spriteMat4 = new THREE.Matrix4().makeBasis(spriteRight, signUp, signFace);
+        sprite.quaternion.setFromRotationMatrix(spriteMat4);
+        signObject = sprite;
+        signMaterial = mat;
+      }
+      signObject.position.set(
+        worldPos.x,
+        worldPos.y,
+        worldPos.z,
+      );
+      signObject.userData.orbitSign = true;
+      group.add(signObject);
+      if (mode === "b") {
+        arcStart = worldPos.clone();
+        arcEnd = cam.position
+          .clone()
+          .addScaledVector(camForward, -24 - Math.random() * 12)
+          .addScaledVector(camUp, 4 + Math.random() * 8);
+        arcMid
+          .copy(arcStart)
+          .lerp(cam.position, 0.52)
+          .addScaledVector(camUp, 10 + Math.random() * 6)
+          .addScaledVector(camRight, laneScreen * (8 + Math.random() * 4.5));
+        arcControl = arcMid.clone();
+      }
+      const drift =
+        mode === "a"
+          ? camUp
+              .clone()
+              .multiplyScalar(4.6 + Math.random() * 2.4)
+              .add(
+                tangent
+                  .clone()
+                  .multiplyScalar((Math.random() < 0.5 ? -1 : 1) * (1.2 + Math.random() * 1.4)),
+              )
+              .add(camToMoon.clone().multiplyScalar(2.1 + Math.random() * 1.8))
+          : new THREE.Vector3(0, 0, 0);
+      moonTravelSignsRef.current.push({
+        object: signObject,
+        material: signMaterial,
+        ageMs: 0,
+        ttlMs: 9000 + Math.random() * 2400,
+        velocity: drift,
+        mode,
+        baseScale,
+        arcStart,
+        arcControl,
+        arcEnd,
+      });
+      spawnedSinceLastLog += 1;
+      if (MOON_ORBIT_SIGN_DEBUG_LOGS) {
+        const p = signObject.position;
+        shipLog(
+          `[ORBSIGN] spawn mode=${mode} "${text.slice(0, 42)}${text.length > 42 ? "..." : ""}" @ [${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}]`,
+          "info",
+        );
+      }
+    };
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const now = performance.now();
+      const dt = Math.min((now - last) / 1000, 0.08);
+      last = now;
+      const camTick = sceneRef.current.camera;
+      const moonMesh = focusedMoonRef.current;
+      const isOrbitSignageActive =
+        orbitPhase === "orbiting" &&
+        !!moonMesh &&
+        !projectShowcaseActiveRef.current &&
+        !orbitalPortfolioActiveRef.current &&
+        !skillsLatticeActiveRef.current &&
+        !aboutMemorySquareActiveRef.current;
+      if (
+        MOON_ORBIT_SIGN_DEBUG_LOGS &&
+        now - moonOrbitSignDebugLastLogAtRef.current > 2600
+      ) {
+        moonOrbitSignDebugLastLogAtRef.current = now;
+        const moonIdDbg = moonMesh
+          ? String((moonMesh.userData as { moonId?: unknown }).moonId ?? "n/a")
+          : "none";
+        const modeForLog = moonMesh
+          ? moonTravelSignCatalog.get(
+              String((moonMesh.userData as { moonId?: unknown }).moonId ?? "")
+                .toLowerCase()
+                .replace(/^moon-/, ""),
+            )?.mode ?? "n/a"
+          : "n/a";
+        shipLog(
+          `[ORBSIGN] phase=${orbitPhase} active=${isOrbitSignageActive ? 1 : 0} moon=${moonIdDbg} mode=${modeForLog} signs=${moonTravelSignsRef.current.length} spawned=${spawnedSinceLastLog}`,
+          "info",
+        );
+        spawnedSinceLastLog = 0;
+      }
+      if (!isOrbitSignageActive || !moonMesh) {
+        if (moonTravelSignActiveCompanyRef.current) {
+          moonTravelSignActiveCompanyRef.current = null;
+          moonTravelSignPoolRef.current = [];
+          moonTravelSignPoolCursorRef.current = 0;
+          moonTravelSignSequenceWrappedRef.current = false;
+          moonTravelSignLaneCursorRef.current = 0;
+          moonTravelSignPathCycleRef.current = {
+            order: [0, 2, 4, 1, 3],
+            index: 0,
+            lastSlot: -1,
+          };
+          moonTravelSignPauseUntilRef.current = 0;
+          detachAndClearSigns();
+        }
+        return;
+      }
+      const moonIdRaw =
+        String((moonMesh.userData as { moonId?: unknown }).moonId ?? "")
+          .toLowerCase()
+          .replace(/^moon-/, "") ||
+        String((moonMesh.userData as { planetName?: unknown }).planetName ?? "")
+          .toLowerCase()
+          .replace(/\s+/g, "-");
+      const activeCompanyId = moonIdRaw;
+      if (!moonTravelSignCatalog.has(activeCompanyId)) return;
+      const signMode = moonTravelSignCatalog.get(activeCompanyId)?.mode ?? "b";
+      if (moonTravelSignActiveCompanyRef.current !== activeCompanyId) {
+        moonTravelSignActiveCompanyRef.current = activeCompanyId;
+        moonTravelSignPoolRef.current =
+          moonTravelSignCatalog.get(activeCompanyId)?.pool ?? [];
+        moonTravelSignPoolCursorRef.current = 0;
+        moonTravelSignSequenceWrappedRef.current = false;
+        moonTravelSignLaneCursorRef.current = 0;
+        moonTravelSignPathCycleRef.current = {
+          order: [0, 2, 4, 1, 3],
+          index: 0,
+          lastSlot: -1,
+        };
+        moonTravelSignLastSpawnAtRef.current = now;
+        moonTravelSignPauseUntilRef.current = 0;
+        detachAndClearSigns();
+      }
+      const geo = moonMesh.geometry;
+      if (!geo.boundingSphere) geo.computeBoundingSphere();
+      const moonRadius = (geo.boundingSphere?.radius ?? 30) * moonMesh.scale.x;
+      const tuning = orbitSignTuningRef.current;
+      const travelSpeed = THREE.MathUtils.clamp(tuning.travelSpeed, 0, 6);
+      const lightMul = THREE.MathUtils.clamp(tuning.lightIntensity, 0, 3);
+      const startScaleMul = THREE.MathUtils.clamp(tuning.startFontScale, 0, 4);
+      const endScaleMul = THREE.MathUtils.clamp(tuning.endFontScale, 0, 6);
+      const intervalMs = THREE.MathUtils.clamp(tuning.timeBetweenMessagesSec, 0, 5) * 1000;
+      const immediateMode = intervalMs <= 1;
+      if (
+        !tuning.continuousLoop &&
+        moonTravelSignPauseUntilRef.current > now
+      ) {
+        // Keep animating existing signs, but do not spawn new ones while paused.
+      } else {
+        if (moonTravelSignPauseUntilRef.current > 0 && now >= moonTravelSignPauseUntilRef.current) {
+          moonTravelSignPauseUntilRef.current = 0;
+        }
+      }
+      const canSpawnNow =
+        tuning.continuousLoop || moonTravelSignPauseUntilRef.current <= 0;
+      if (canSpawnNow && now >= moonTravelSignLastSpawnAtRef.current) {
+        let spawnedThisTick = 0;
+        const maxPerTick = immediateMode ? 1 : 4;
+        while (
+          now >= moonTravelSignLastSpawnAtRef.current &&
+          spawnedThisTick < maxPerTick
+        ) {
+          // Fire-and-forget: never block cadence on active-count saturation.
+          while (moonTravelSignsRef.current.length >= MOON_TRAVEL_SIGN_MAX_ACTIVE) {
+            const oldest = moonTravelSignsRef.current.shift();
+            if (!oldest) break;
+            const parent = oldest.object.parent;
+            if (parent) parent.remove(oldest.object);
+            oldest.material.dispose();
+          }
+          spawnSign(activeCompanyId, moonMesh, moonRadius, signMode);
+          spawnedThisTick += 1;
+          if (moonTravelSignSequenceWrappedRef.current && !tuning.continuousLoop) {
+            moonTravelSignPauseUntilRef.current =
+              now + Math.max(0, tuning.waitAfterStreamSec) * 1000;
+            moonTravelSignSequenceWrappedRef.current = false;
+            moonTravelSignLastSpawnAtRef.current = moonTravelSignPauseUntilRef.current;
+            break;
+          }
+          if (immediateMode) {
+            moonTravelSignLastSpawnAtRef.current = now;
+            break;
+          }
+          moonTravelSignLastSpawnAtRef.current += intervalMs;
+        }
+      }
+      const records = moonTravelSignsRef.current;
+      const survivors: MoonTravelSignRecord[] = [];
+      records.forEach((record) => {
+        // Travel speed must affect already-spawned signs immediately (all modes).
+        record.ageMs += dt * 1000 * travelSpeed;
+        const mat = record.material as THREE.Material & { opacity?: number };
+        const t = THREE.MathUtils.clamp(record.ageMs / Math.max(record.ttlMs, 1), 0, 1);
+        if (record.mode === "b" && record.arcStart && record.arcControl && record.arcEnd) {
+          const inv = 1 - t;
+          record.object.position
+            .copy(record.arcStart)
+            .multiplyScalar(inv * inv)
+            .addScaledVector(record.arcControl, 2 * inv * t)
+            .addScaledVector(record.arcEnd, t * t);
+          const approachScale = startScaleMul + (endScaleMul - startScaleMul) * t;
+          record.object.scale.copy(record.baseScale).multiplyScalar(approachScale);
+        } else {
+          record.object.position.addScaledVector(record.velocity, dt * 0.62 * travelSpeed);
+          const riseScaleT = THREE.MathUtils.clamp(t * 0.7, 0, 1);
+          const riseScale = startScaleMul + (endScaleMul - startScaleMul) * riseScaleT;
+          record.object.scale.copy(record.baseScale).multiplyScalar(riseScale);
+        }
+        const fadeIn = THREE.MathUtils.clamp(t / 0.15, 0, 1);
+        const fadeOut = THREE.MathUtils.clamp((1 - t) / (record.mode === "b" ? 0.1 : 0.22), 0, 1);
+        if (typeof mat.opacity === "number") {
+          mat.opacity = (0.06 + Math.min(fadeIn, fadeOut) * 0.42) * lightMul;
+        }
+        let offscreenPast = false;
+        if (camTick) {
+          activeSignNdc.copy(record.object.position).project(camTick);
+          offscreenPast =
+            activeSignNdc.z > 1.02 ||
+            Math.abs(activeSignNdc.x) > 1.35 ||
+            Math.abs(activeSignNdc.y) > 1.35;
+        }
+        if (record.ageMs >= record.ttlMs || offscreenPast) {
+          const parent = record.object.parent;
+          if (parent) parent.remove(record.object);
+          record.material.dispose();
+        } else {
+          survivors.push(record);
+        }
+      });
+      moonTravelSignsRef.current = survivors;
+    };
+    tick();
+    return () => {
+      cancelAnimationFrame(raf);
+      detachAndClearSigns();
+      const group = moonTravelSignGroupRef.current;
+      if (group) {
+        const parent = group.parent;
+        if (parent) parent.remove(group);
+      }
+      moonTravelSignGroupRef.current = null;
+    };
+  }, [buildMoonTravelSignText, moonTravelSignCatalog, orbitPhase, sceneReady]);
 
   // ── Orbital portfolio screenshot inspect clicks ───────────────────────────
   useEffect(() => {
@@ -12358,6 +13017,31 @@ export default function ResumeSpace3D({
       index,
     })),
   ];
+  const orbitingMoonNavTarget =
+    orbitPhase === "orbiting"
+      ? (() => {
+          const moon = focusedMoonRef.current;
+          if (!moon) return null;
+          const moonId = String((moon.userData as { moonId?: unknown }).moonId ?? "")
+            .toLowerCase()
+            .replace(/^moon-/, "");
+          if (moonId) return moonId;
+          const fallback = String((moon.userData as { planetName?: unknown }).planetName ?? "")
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, "-");
+          return fallback || null;
+        })()
+      : null;
+  const navCurrentTargetResolved = aboutNavHereActive
+    ? "about"
+    : projectsNavHereActive
+      ? "projects"
+      : portfolioNavHereActive
+        ? "portfolio"
+        : skillsNavHereActive
+          ? "skills"
+          : orbitingMoonNavTarget ?? currentNavigationTarget;
   const focusedProjectShowcaseHasCoverCrop =
     focusedProjectShowcasePanel?.fitMode === "cover" &&
     ((focusedProjectShowcasePanel.baseRepeat.x ?? 1) < 0.999 ||
@@ -12489,6 +13173,159 @@ export default function ResumeSpace3D({
             >
               {consoleVisible ? "Hide Console" : "Show Console"}
             </button>
+          )}
+          {!isLoading && orbitPhase === "orbiting" && (
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                position: "absolute",
+                top: 52,
+                right: 14,
+                zIndex: 10002,
+                width: 238,
+                borderRadius: 10,
+                border: "1px solid rgba(122, 201, 255, 0.45)",
+                background: "rgba(8, 18, 34, 0.86)",
+                color: "rgba(198, 236, 255, 0.95)",
+                boxShadow: "0 0 14px rgba(75, 163, 255, 0.18)",
+                padding: "8px 10px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 7,
+                fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
+              }}
+            >
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8 }}>
+                ORBIT SIGN TUNING
+              </div>
+              {[
+                {
+                  key: "timeBetweenMessagesSec",
+                  label: "Time between messages",
+                  min: 0,
+                  max: 5,
+                  step: 0.05,
+                  value: orbitSignTuning.timeBetweenMessagesSec,
+                  display: `${orbitSignTuning.timeBetweenMessagesSec.toFixed(2)}s`,
+                },
+                {
+                  key: "waitAfterStreamSec",
+                  label: "Wait after stream",
+                  min: 0,
+                  max: 20,
+                  step: 0.25,
+                  value: orbitSignTuning.waitAfterStreamSec,
+                  display: `${orbitSignTuning.waitAfterStreamSec.toFixed(2)}s`,
+                },
+                {
+                  key: "travelSpeed",
+                  label: "Travel speed",
+                  min: 0,
+                  max: 6,
+                  step: 0.05,
+                  value: orbitSignTuning.travelSpeed,
+                  display: `${orbitSignTuning.travelSpeed.toFixed(2)}x`,
+                },
+                {
+                  key: "lightIntensity",
+                  label: "Light intensity",
+                  min: 0,
+                  max: 3,
+                  step: 0.02,
+                  value: orbitSignTuning.lightIntensity,
+                  display: orbitSignTuning.lightIntensity.toFixed(2),
+                },
+                {
+                  key: "startFontScale",
+                  label: "Start font size",
+                  min: 0,
+                  max: 4,
+                  step: 0.01,
+                  value: orbitSignTuning.startFontScale,
+                  display: `${orbitSignTuning.startFontScale.toFixed(2)}x`,
+                },
+                {
+                  key: "endFontScale",
+                  label: "End font size",
+                  min: 0,
+                  max: 6,
+                  step: 0.02,
+                  value: orbitSignTuning.endFontScale,
+                  display: `${orbitSignTuning.endFontScale.toFixed(2)}x`,
+                },
+              ].map((row) => (
+                <label key={row.key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 9,
+                      letterSpacing: 0.4,
+                    }}
+                  >
+                    <span>{row.label}</span>
+                    <span>{row.display}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={row.min}
+                    max={row.max}
+                    step={row.step}
+                    value={row.value}
+                    onChange={(e) => {
+                      const next = Number(e.target.value);
+                      setOrbitSignTuning((prev) => ({
+                        ...prev,
+                        [row.key]: next,
+                      }));
+                    }}
+                    style={{ width: "100%" }}
+                  />
+                </label>
+              ))}
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  fontSize: 10,
+                  letterSpacing: 0.45,
+                }}
+              >
+                <span>Continuous loop</span>
+                <input
+                  type="checkbox"
+                  checked={orbitSignTuning.continuousLoop}
+                  onChange={(e) =>
+                    setOrbitSignTuning((prev) => ({
+                      ...prev,
+                      continuousLoop: e.target.checked,
+                    }))
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                onClick={exportOrbitSignTuning}
+                style={{
+                  marginTop: 2,
+                  borderRadius: 7,
+                  border: "1px solid rgba(132, 208, 255, 0.6)",
+                  background: "rgba(10, 30, 54, 0.84)",
+                  color: "rgba(212, 241, 255, 0.96)",
+                  fontSize: 10,
+                  letterSpacing: 0.7,
+                  fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
+                  fontWeight: 700,
+                  padding: "6px 8px",
+                  cursor: "pointer",
+                }}
+              >
+                EXPORT + LOG SETTINGS
+              </button>
+            </div>
           )}
 
           {/* Ship Explore Mode Overlay */}
@@ -12971,15 +13808,7 @@ export default function ResumeSpace3D({
           {shipUIPhase === "ship-engaged" && (
             <CockpitNavPanel
               targets={navigationTargets}
-              currentTarget={
-                aboutNavHereActive
-                  ? "about"
-                  : (projectsNavHereActive
-                      ? "projects"
-                      : (portfolioNavHereActive
-                          ? "portfolio"
-                          : (skillsNavHereActive ? "skills" : currentNavigationTarget)))
-              }
+              currentTarget={navCurrentTargetResolved}
               isNavigating={navigationDistance !== null}
               onNavigate={handleCockpitNavigate}
             />
@@ -14483,13 +15312,7 @@ export default function ResumeSpace3D({
             }}
             navigationTargets={navigationTargets}
             onNavigate={handleQuickNav}
-            currentTarget={
-              aboutNavHereActive
-                ? "about"
-                : (projectsNavHereActive
-                    ? "projects"
-                    : (skillsNavHereActive ? "skills" : currentNavigationTarget))
-            }
+            currentTarget={navCurrentTargetResolved}
             navigationDistance={navigationDistance}
             navigationETA={navigationETA}
             isTransitioning={false}

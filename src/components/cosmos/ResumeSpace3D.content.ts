@@ -64,14 +64,10 @@ export const createFinalizeFocusOnMoon = (deps: {
       }
       detailLines.push(company.location || "");
 
-      const jobNotes = (company as any).notes || [];
       const overlayDefs: Array<
         string | { type?: string; text?: string; lines?: string[] }
       > = [];
       overlayDefs.push({ type: "title", lines: detailLines });
-      if (Array.isArray(jobNotes) && jobNotes.length) {
-        jobNotes.forEach((n: string) => overlayDefs.push(n));
-      }
 
       // Prepare right-pane content
       const sections: any[] = [];
