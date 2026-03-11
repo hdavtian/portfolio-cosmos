@@ -271,6 +271,7 @@ type ShowcasePanelRecord = {
   detailScrollOffset: number;
   detailScrollMax: number;
   updateDetailTexture: () => void;
+  techBadgeRoot: THREE.Group | null;
   techBadgeFx: Array<{
     mat: THREE.MeshBasicMaterial;
     baseOpacity: number;
@@ -5601,6 +5602,10 @@ export default function ResumeSpace3D({
         } else if (panel.imageMat.opacity < 1) {
           panel.imageMat.opacity = 1;
         }
+        if (panel.techBadgeRoot) {
+          panel.techBadgeRoot.visible =
+            idx === focusIndex && panel.group.visible && panel.techBadgeFx.length > 0;
+        }
         // Subtle vertical shimmer over tech badges (top-to-bottom feel via phase offsets).
         panel.techBadgeFx.forEach((fx) => {
           const shimmer = 0.5 + 0.5 * Math.sin(now * 0.00125 - fx.phase);
@@ -8280,12 +8285,11 @@ export default function ResumeSpace3D({
         floorPulseGroup.layers.set(PROJECT_SHOWCASE_LAYER);
         showcaseRoot.add(floorPulseGroup);
         projectShowcaseFloorPulseMatsRef.current = floorPulseRecords;
-        const panelOffset = THREE.MathUtils.clamp(trenchWidth * 0.075, 3.6, 7.4);
         // Nudge the entire showcase module up slightly for better composition.
         const panelY =
           THREE.MathUtils.clamp(trenchSizeScaled.y * 0.015, 2.2, 5.4) + 0.35;
         const panelWidth = THREE.MathUtils.clamp(trenchWidth * 0.2304, 9.072, 13.536);
-        const panelHeight = panelWidth * (9 / 16);
+          const panelHeight = panelWidth * (9 / 16) * 1.25;
         const panelSpacing = THREE.MathUtils.clamp(
           runLength / Math.max(6, publishedShowcase.length + 2),
           18,
@@ -8320,7 +8324,7 @@ export default function ResumeSpace3D({
           const panelVerticalOffset = hasGalleryMedia ? -0.2 : 0;
           if (runAxis === "z") {
             panelGroup.position.set(
-              side * panelOffset,
+              0,
               panelY + panelVerticalOffset,
               runPos,
             );
@@ -8328,7 +8332,7 @@ export default function ResumeSpace3D({
             panelGroup.position.set(
               runPos,
               panelY + panelVerticalOffset,
-              side * panelOffset,
+              0,
             );
           }
           // Keep inward-facing baseline; user controls extra readable cant via slider.
@@ -8417,6 +8421,7 @@ export default function ResumeSpace3D({
             detailScrollOffset: 0,
             detailScrollMax: 0,
             updateDetailTexture: () => {},
+            techBadgeRoot: null,
             techBadgeFx: [],
           };
           const applyImageFit = (
@@ -8557,9 +8562,10 @@ export default function ResumeSpace3D({
               entry.description ||
               "";
             const detailTechs =
-              media.variantTechnologies ||
-              entry.technologies ||
-              [];
+              panelRecord.clientVariants.length > 0
+                ? panelRecord.clientVariants[panelRecord.activeVariantIndex]
+                    ?.technologies || entry.technologies || []
+                : entry.technologies || [];
             const detailYear =
               media.variantYear ?? entry.year;
             const descriptionLines = wrapTextLines(
@@ -8581,8 +8587,10 @@ export default function ResumeSpace3D({
           const techBadgeRoot = new THREE.Group();
           const imageSeamX = side < 0 ? -panelWidth * 0.5 : panelWidth * 0.5;
           const imageInward = side < 0 ? 1 : -1;
-          techBadgeRoot.position.set(imageSeamX, 0, 0.072);
+          techBadgeRoot.position.set(imageSeamX, 0, 0.16);
           techBadgeRoot.visible = false;
+          techBadgeRoot.renderOrder = 160;
+          panelRecord.techBadgeRoot = techBadgeRoot;
           const techBadgeMeshes: THREE.Mesh[] = [];
           const clearTechBadges = () => {
             panelRecord.techBadgeFx = [];
@@ -8616,9 +8624,9 @@ export default function ResumeSpace3D({
               const badgeTex = createDetailTexture([tech.toUpperCase()], {
                 width: 1024,
                 height: 224,
-                bgColor: "rgba(7, 26, 52, 0.94)",
-                lineColor: "rgba(91, 215, 255, 0.66)",
-                textColor: "rgba(228, 245, 255, 0.98)",
+                bgColor: "rgba(0, 0, 0, 0.96)",
+                lineColor: "rgba(255, 255, 255, 0.92)",
+                textColor: "rgba(255, 255, 255, 0.98)",
                 showLine: false,
                 fontSize: 92,
                 fontFamily: "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
@@ -8637,20 +8645,26 @@ export default function ResumeSpace3D({
                   opacity: 0.92,
                   side: THREE.DoubleSide,
                   toneMapped: false,
+                  depthWrite: false,
+                  depthTest: false,
                 }),
               );
               badge.position.set(badgeX, y, 0.02);
+              badge.renderOrder = 164;
               const badgeFrame = new THREE.Mesh(
                 new THREE.PlaneGeometry(badgeWidth * 1.05, badgeHeight * 1.08),
                 new THREE.MeshBasicMaterial({
-                  color: 0x59dbff,
+                  color: 0xffffff,
                   transparent: true,
-                  opacity: 0.22,
+                  opacity: 0.62,
                   side: THREE.DoubleSide,
                   toneMapped: false,
+                  depthWrite: false,
+                  depthTest: false,
                 }),
               );
               badgeFrame.position.set(badgeX, y, 0.01);
+              badgeFrame.renderOrder = 163;
               techBadgeRoot.add(badgeFrame);
               techBadgeRoot.add(badge);
               techBadgeMeshes.push(badgeFrame, badge);
@@ -8665,8 +8679,8 @@ export default function ResumeSpace3D({
 
           const tabsRoot = new THREE.Group();
           const showVariantTabs = panelRecord.clientVariants.length > 1;
-          const categoryBarHeight = panelHeight * 0.105;
-          const tabRowHeight = panelHeight * 0.135;
+          const categoryBarHeight = panelHeight * 0.09;
+          const tabRowHeight = panelHeight * 0.098;
           const tabAreaHeight = categoryBarHeight + tabRowHeight;
           const tabAreaCenterX = side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
           tabsRoot.position.set(
@@ -8674,17 +8688,22 @@ export default function ResumeSpace3D({
             panelHeight * 0.5 + tabAreaHeight * 0.5,
             0.03,
           );
+          tabsRoot.renderOrder = 120;
           tabsRoot.visible = showVariantTabs;
           const categoryGlass = new THREE.Mesh(
             new THREE.PlaneGeometry(stripWidth, categoryBarHeight),
             new THREE.MeshBasicMaterial({
-              color: 0x0b1a2f,
+              color: 0x214f7a,
               transparent: true,
-              opacity: 0.76,
-              side: THREE.DoubleSide,
+              opacity: 0.88,
+              side: THREE.FrontSide,
+              depthWrite: false,
+              depthTest: true,
+              toneMapped: false,
             }),
           );
           categoryGlass.position.y = tabRowHeight * 0.5;
+          categoryGlass.renderOrder = 120;
           tabsRoot.add(categoryGlass);
           const categoryFrame = new THREE.Mesh(
             new THREE.PlaneGeometry(stripWidth * 1.01, categoryBarHeight * 1.04),
@@ -8692,11 +8711,15 @@ export default function ResumeSpace3D({
               color: 0x39d7ff,
               transparent: true,
               opacity: 0.34,
-              side: THREE.DoubleSide,
+              side: THREE.FrontSide,
+              depthWrite: false,
+              depthTest: true,
+              toneMapped: false,
             }),
           );
           categoryFrame.position.copy(categoryGlass.position);
           categoryFrame.position.z = -0.01;
+          categoryFrame.renderOrder = 121;
           tabsRoot.add(categoryFrame);
           const categoryLabelTex = createDetailTexture(
             [
@@ -8726,76 +8749,99 @@ export default function ResumeSpace3D({
               map: categoryLabelTex,
               transparent: true,
               opacity: 0.98,
-              side: THREE.DoubleSide,
+              side: THREE.FrontSide,
+              depthWrite: false,
+              depthTest: true,
+              toneMapped: false,
             }),
           );
           categoryLabel.position.copy(categoryGlass.position);
           categoryLabel.position.z = 0.02;
+          categoryLabel.renderOrder = 122;
           tabsRoot.add(categoryLabel);
 
           const tabsGlass = new THREE.Mesh(
             new THREE.PlaneGeometry(stripWidth, tabRowHeight),
             new THREE.MeshBasicMaterial({
-              color: 0x10263e,
+              color: 0x1f3f64,
               transparent: true,
-              opacity: 0.78,
-              side: THREE.DoubleSide,
+              opacity: 0.86,
+              side: THREE.FrontSide,
+              depthWrite: false,
+              depthTest: true,
+              toneMapped: false,
             }),
           );
           tabsGlass.position.y = -categoryBarHeight * 0.5;
+          tabsGlass.renderOrder = 123;
           tabsRoot.add(tabsGlass);
 
           const tabPaddingX = stripWidth * 0.03;
           const tabGap = stripWidth * 0.007;
-          const tabCount = Math.max(1, panelRecord.clientVariants.length);
-          const tabWidth =
-            (stripWidth - tabPaddingX * 2 - tabGap * (tabCount - 1)) / tabCount;
+          const tabWidths = panelRecord.clientVariants.map((variant) =>
+            THREE.MathUtils.clamp(
+              panelWidth * 0.085 + variant.title.length * panelWidth * 0.0065,
+              panelWidth * 0.11,
+              panelWidth * 0.24,
+            ),
+          );
+          const tabStartX = -stripWidth * 0.5 + tabPaddingX;
           const tabFrameMats: THREE.MeshBasicMaterial[] = [];
           const tabFillMats: THREE.MeshBasicMaterial[] = [];
           const tabLabelMats: THREE.MeshBasicMaterial[] = [];
           const updateVariantTabVisualState = () => {
             tabFrameMats.forEach((mat, tabIndex) => {
               const active = tabIndex === panelRecord.activeVariantIndex;
-              mat.opacity = active ? 0.98 : 0.22;
-              mat.color.set(active ? 0x8beeff : 0x58a8d5);
+              mat.opacity = active ? 0.98 : 0.72;
+              mat.color.set(active ? 0xeaf7ff : 0x8fd3ff);
             });
             tabFillMats.forEach((mat, tabIndex) => {
               const active = tabIndex === panelRecord.activeVariantIndex;
-              mat.opacity = active ? 0.92 : 0.54;
-              mat.color.set(active ? 0x2a4f6f : 0x1a2f49);
+              mat.opacity = active ? 0.94 : 0.86;
+              mat.color.set(active ? 0x3f668f : 0x2c4d70);
             });
             tabLabelMats.forEach((mat, tabIndex) => {
               const active = tabIndex === panelRecord.activeVariantIndex;
-              mat.opacity = active ? 1 : 0.8;
+              mat.opacity = active ? 1 : 0.94;
             });
           };
 
           panelRecord.clientVariants.forEach((variant, variantIndex) => {
             const tabGroup = new THREE.Group();
+            const widthBefore = tabWidths
+              .slice(0, variantIndex)
+              .reduce((sum, w) => sum + w, 0);
             const x =
-              -stripWidth * 0.5 +
-              tabPaddingX +
-              tabWidth * 0.5 +
-              variantIndex * (tabWidth + tabGap);
+              tabStartX + widthBefore + variantIndex * tabGap + tabWidths[variantIndex] * 0.5;
             tabGroup.position.set(x, -categoryBarHeight * 0.5, 0.04);
             const tabFill = new THREE.Mesh(
-              new THREE.PlaneGeometry(tabWidth * 0.985, tabRowHeight * 0.78),
+              new THREE.PlaneGeometry(tabWidths[variantIndex] * 0.982, tabRowHeight * 0.72),
               new THREE.MeshBasicMaterial({
-                color: 0x1a2f49,
+                color: 0x2c4d70,
                 transparent: true,
-                opacity: 0.56,
-                side: THREE.DoubleSide,
+                opacity: 0.86,
+                side: THREE.FrontSide,
+                depthWrite: false,
+                depthTest: true,
+                toneMapped: false,
               }),
             );
+            tabFill.position.z = 0.004;
+            tabFill.renderOrder = 130 + variantIndex * 3;
             const tabFrame = new THREE.Mesh(
-              new THREE.PlaneGeometry(tabWidth, tabRowHeight * 0.82),
+              new THREE.PlaneGeometry(tabWidths[variantIndex] * 0.992, tabRowHeight * 0.76),
               new THREE.MeshBasicMaterial({
-                color: 0x69b7e6,
+                color: 0x8fd3ff,
                 transparent: true,
-                opacity: 0.24,
-                side: THREE.DoubleSide,
+                opacity: 0.72,
+                side: THREE.FrontSide,
+                depthWrite: false,
+                depthTest: true,
+                toneMapped: false,
               }),
             );
+            tabFrame.position.z = 0.01;
+            tabFrame.renderOrder = 131 + variantIndex * 3;
             tabFillMats.push(tabFill.material as THREE.MeshBasicMaterial);
             tabFrameMats.push(tabFrame.material as THREE.MeshBasicMaterial);
             const tabLabelTex = createDetailTexture([variant.title], {
@@ -8816,16 +8862,20 @@ export default function ResumeSpace3D({
               crispUI: true,
             });
             const tabLabel = new THREE.Mesh(
-              new THREE.PlaneGeometry(tabWidth * 0.94, tabRowHeight * 0.54),
+              new THREE.PlaneGeometry(tabWidths[variantIndex] * 0.93, tabRowHeight * 0.44),
               new THREE.MeshBasicMaterial({
                 map: tabLabelTex,
                 transparent: true,
                 opacity: 0.98,
-                side: THREE.DoubleSide,
+                side: THREE.FrontSide,
+                depthWrite: false,
+                depthTest: true,
+                toneMapped: false,
               }),
             );
             tabLabelMats.push(tabLabel.material as THREE.MeshBasicMaterial);
             tabLabel.position.z = 0.012;
+            tabLabel.renderOrder = 132 + variantIndex * 3;
             tabGroup.add(tabFill);
             tabGroup.add(tabFrame);
             tabGroup.add(tabLabel);
@@ -8913,8 +8963,8 @@ export default function ResumeSpace3D({
             "next",
           );
 
-          const thumbSlotsWidth = stripWidth * 0.72;
-          const thumbWidth = thumbSlotsWidth / PROJECT_SHOWCASE_THUMBS_PER_PAGE - 0.08;
+          const thumbSlotsWidthNarrow = stripWidth * 0.56;
+          const thumbWidth = thumbSlotsWidthNarrow / PROJECT_SHOWCASE_THUMBS_PER_PAGE - 0.08;
           const thumbHeight = stripHeight * 0.66;
           const thumbBaseY = 0;
           const thumbBaseZ = 0.06;
@@ -8949,34 +8999,49 @@ export default function ResumeSpace3D({
               side: THREE.DoubleSide,
             });
             const thumbImage = new THREE.Mesh(
-              new THREE.PlaneGeometry(1, 1),
+              new THREE.PlaneGeometry(thumbWidth, thumbHeight),
               thumbImageMat,
             );
             thumbImage.position.z = 0.01;
-            const applyThumbContainFit = (imageAspect?: number) => {
+            const applyThumbCoverTopLeftFit = (
+              imageAspect?: number,
+              texture?: THREE.Texture,
+            ) => {
               if (!imageAspect || !Number.isFinite(imageAspect) || imageAspect <= 0) {
-                thumbImage.scale.set(thumbWidth, thumbHeight, 1);
+                if (texture) {
+                  texture.repeat.set(1, 1);
+                  texture.offset.set(0, 0);
+                  texture.needsUpdate = true;
+                }
                 return;
               }
               const frameAspect = thumbWidth / thumbHeight;
-              let displayWidth = thumbWidth;
-              let displayHeight = thumbHeight;
+              if (!texture) return;
+              texture.wrapS = THREE.ClampToEdgeWrapping;
+              texture.wrapT = THREE.ClampToEdgeWrapping;
               if (imageAspect > frameAspect) {
-                displayWidth = thumbWidth;
-                displayHeight = thumbWidth / imageAspect;
+                const visibleX = frameAspect / imageAspect;
+                texture.repeat.set(visibleX, 1);
+                texture.offset.set(0, 0);
               } else {
-                displayHeight = thumbHeight;
-                displayWidth = thumbHeight * imageAspect;
+                const visibleY = imageAspect / frameAspect;
+                texture.repeat.set(1, visibleY);
+                texture.offset.set(0, 1 - visibleY);
               }
-              thumbImage.scale.set(displayWidth, displayHeight, 1);
+              texture.needsUpdate = true;
             };
-            applyThumbContainFit();
             textureLoader.load(
               mediaItem.textureUrl,
               (texture) => {
                 texture.colorSpace = THREE.SRGBColorSpace;
                 texture.wrapS = THREE.ClampToEdgeWrapping;
                 texture.wrapT = THREE.ClampToEdgeWrapping;
+                texture.minFilter = THREE.LinearMipmapLinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                texture.anisotropy = Math.min(
+                  8,
+                  rendererRef.current?.capabilities.getMaxAnisotropy?.() ?? 1,
+                );
                 thumbImageMat.map = texture;
                 thumbImageMat.color.set(0xffffff);
                 const img = texture.image as
@@ -8984,7 +9049,7 @@ export default function ResumeSpace3D({
                   | undefined;
                 const imgAspect =
                   img?.width && img?.height ? img.width / img.height : undefined;
-                applyThumbContainFit(imgAspect);
+                applyThumbCoverTopLeftFit(imgAspect, texture);
                 thumbImageMat.needsUpdate = true;
               },
               undefined,
@@ -9152,6 +9217,12 @@ export default function ResumeSpace3D({
                 if (loadNonce !== mediaLoadNonce) return;
                 startMainMediaFade();
                 texture.colorSpace = THREE.SRGBColorSpace;
+                texture.minFilter = THREE.LinearMipmapLinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                texture.anisotropy = Math.min(
+                  8,
+                  rendererRef.current?.capabilities.getMaxAnisotropy?.() ?? 1,
+                );
                 imageMat.map = texture;
                 imageMat.color.set(0xffffff);
                 panelRecord.texture = texture;
