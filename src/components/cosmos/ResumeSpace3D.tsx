@@ -132,6 +132,9 @@ const ORBITAL_PORTFOLIO_NAV_ID = "orbital-portfolio";
 const ORBITAL_PORTFOLIO_LAYER = 4;
 const ORBITAL_PORTFOLIO_DEBUG_LOGS = true;
 const ORBITAL_PORTFOLIO_NONFOCUS_PLATE_OPACITY = 0.16;
+const ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE = 120;
+const ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE = 70;
+const ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE = 280;
 // Card layer stays on the overlay pass to avoid bloom/tonemapping washout.
 const PROJECT_SHOWCASE_CARD_LAYER = 1;
 const SKILLS_LATTICE_LAYER = 3;
@@ -146,7 +149,7 @@ const PROJECT_SHOWCASE_TEXTURE_BASE_PATH = "/models/projects-scene/textures";
 const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
-const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(22, 7, -21);
+const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(-28, 5, 9);
 const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 900;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(16500, 220, -14800);
@@ -977,6 +980,7 @@ export default function ResumeSpace3D({
   const orbitalPortfolioCameraTargetRef = useRef(new THREE.Vector3());
   const orbitalPortfolioCameraInitializedRef = useRef(false);
   const orbitalPortfolioInspectedStationIndexRef = useRef<number | null>(null);
+  const orbitalPortfolioInspectDistanceRef = useRef<number | null>(null);
   const orbitalPortfolioDebugLastLogAtRef = useRef(0);
   const orbitalPortfolioDebugDumpedRef = useRef(false);
   const orbitalPortfolioPrevStateRef = useRef<{
@@ -2485,6 +2489,7 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioVariantIndex(0);
     setOrbitalPortfolioMediaIndex(0);
     orbitalPortfolioInspectedStationIndexRef.current = null;
+    orbitalPortfolioInspectDistanceRef.current = null;
     orbitalPortfolioCameraInitializedRef.current = false;
     orbitalPortfolioDebugDumpedRef.current = false;
     setPortfolioNavHereActive(false);
@@ -2568,6 +2573,7 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioVariantIndex(0);
     setOrbitalPortfolioMediaIndex(0);
     orbitalPortfolioInspectedStationIndexRef.current = null;
+    orbitalPortfolioInspectDistanceRef.current = null;
     setPortfolioNavHereActive(true);
     const scene = sceneRef.current.scene;
     if (scene) {
@@ -2593,6 +2599,7 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioPlaying(next);
     if (next) {
       orbitalPortfolioInspectedStationIndexRef.current = null;
+      orbitalPortfolioInspectDistanceRef.current = null;
       orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
       orbitalPortfolioManualCameraLockRef.current = false;
     } else {
@@ -2629,17 +2636,41 @@ export default function ResumeSpace3D({
       orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 12000;
       orbitalPortfolioManualCameraLockRef.current = true;
       const controls = sceneRef.current.controls;
-      if (!controls) return;
+      const camera = sceneRef.current.camera;
+      if (!controls || !camera) return;
+      const controlsAny = controls as unknown as {
+        getTarget?: (out: THREE.Vector3) => void;
+      };
+      if (orbitalPortfolioInspectDistanceRef.current === null && controlsAny.getTarget) {
+        const currentTarget = new THREE.Vector3();
+        controlsAny.getTarget(currentTarget);
+        const raw = camera.position.distanceTo(currentTarget);
+        if (
+          raw >= ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE &&
+          raw <= ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE
+        ) {
+          orbitalPortfolioInspectDistanceRef.current = raw;
+        }
+      }
       const plateWorld = new THREE.Vector3();
       station.plate.getWorldPosition(plateWorld);
       const plateQuat = new THREE.Quaternion();
       station.plate.getWorldQuaternion(plateQuat);
       const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(plateQuat).normalize();
       const up = new THREE.Vector3(0, 1, 0);
+      const savedDistance = orbitalPortfolioInspectDistanceRef.current;
+      const inspectDistance =
+        typeof savedDistance === "number" &&
+        savedDistance >= ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE &&
+        savedDistance <= ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE
+          ? savedDistance
+          : ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE;
+      orbitalPortfolioInspectDistanceRef.current = inspectDistance;
+      const upLift = THREE.MathUtils.clamp(inspectDistance * 0.066, 6, 18);
       const camPos = plateWorld
         .clone()
-        .addScaledVector(normal, 120)
-        .addScaledVector(up, 8);
+        .addScaledVector(normal, inspectDistance)
+        .addScaledVector(up, upLift);
       const lookTarget = plateWorld.clone().addScaledVector(normal, 2);
       controls.setLookAt(
         camPos.x,
@@ -6465,6 +6496,29 @@ export default function ResumeSpace3D({
     const onPointerDown = () => noteManualIntent();
     const onWheel = (event: WheelEvent) => {
       noteManualIntent();
+      if (!event.shiftKey) {
+        if (orbitalPortfolioInspectedStationIndexRef.current !== null) {
+          requestAnimationFrame(() => {
+            const controls = sceneRef.current.controls;
+            const camera = sceneRef.current.camera;
+            if (!controls || !camera) return;
+            const controlsAny = controls as unknown as {
+              getTarget?: (out: THREE.Vector3) => void;
+            };
+            if (!controlsAny.getTarget) return;
+            const target = new THREE.Vector3();
+            controlsAny.getTarget(target);
+            const raw = camera.position.distanceTo(target);
+            if (
+              raw >= ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE &&
+              raw <= ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE
+            ) {
+              orbitalPortfolioInspectDistanceRef.current = raw;
+            }
+          });
+        }
+        return;
+      }
       const inspectedIndex = orbitalPortfolioInspectedStationIndexRef.current;
       if (inspectedIndex === null) return;
       const station = orbitalPortfolioStationsRef.current[inspectedIndex];
@@ -13169,6 +13223,30 @@ export default function ResumeSpace3D({
                 </div>
               );
             })()}
+          {orbitalPortfolioActive && (
+            <div
+              style={{
+                position: "fixed",
+                left: "50%",
+                bottom: 18,
+                transform: "translateX(-50%)",
+                zIndex: 1102,
+                pointerEvents: "none",
+                padding: "7px 12px",
+                borderRadius: 999,
+                border: "1px solid rgba(145, 225, 255, 0.45)",
+                background: "rgba(6, 14, 26, 0.78)",
+                color: "rgba(226, 244, 255, 0.96)",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 12,
+                letterSpacing: 0.7,
+                textTransform: "uppercase",
+                boxShadow: "0 6px 18px rgba(2, 10, 18, 0.45)",
+              }}
+            >
+              Wheel: Zoom | Shift + Wheel: Scroll Screenshot
+            </div>
+          )}
           {projectShowcaseActive && (
             <>
               <div
