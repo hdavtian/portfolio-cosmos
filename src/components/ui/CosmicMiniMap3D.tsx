@@ -11,6 +11,7 @@ type Props = {
   skillsAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
   aboutAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
   projectsAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
+  portfolioAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
   currentNavigationTarget: string | null;
   onNavigateToTarget: (targetId: string, targetType: "section" | "moon") => void;
   onCoordinatePing?: (message: string) => void;
@@ -131,6 +132,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
   skillsAnchorRef,
   aboutAnchorRef,
   projectsAnchorRef,
+  portfolioAnchorRef,
   currentNavigationTarget,
   onNavigateToTarget,
   onCoordinatePing,
@@ -423,7 +425,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
           if (id.startsWith("moon-")) {
             ent.targetId = id.slice(5);
             ent.targetType = "moon";
-          } else if (["experience", "skills", "projects", "about", "home"].includes(id)) {
+          } else if (["experience", "skills", "projects", "portfolio", "about", "home"].includes(id)) {
             ent.targetId = id;
             ent.targetType = "section";
           }
@@ -456,6 +458,16 @@ const CosmicMiniMap3D: React.FC<Props> = ({
             kind: "anchor",
             world: projectsAnchorRef.current.clone(),
             targetId: "projects",
+            targetType: "section",
+          });
+        }
+        if (portfolioAnchorRef.current) {
+          entities.push({
+            id: "portfolio-anchor",
+            label: "Portfolio Registry",
+            kind: "anchor",
+            world: portfolioAnchorRef.current.clone(),
+            targetId: "portfolio",
             targetType: "section",
           });
         }
@@ -624,6 +636,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
     skillsAnchorRef,
     aboutAnchorRef,
     projectsAnchorRef,
+    portfolioAnchorRef,
   ]);
 
   if (!visible) return null;

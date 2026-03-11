@@ -96,6 +96,11 @@ import {
   CINE_DURATION_DIVISOR,
   orbitDebug,
 } from "./scaleConfig";
+import {
+  buildPortfolioGroups,
+  type PortfolioEntry,
+  type PortfolioGroupView,
+} from "./portfolioData";
 
 // Extend window for logging timestamps
 declare global {
@@ -123,6 +128,10 @@ type ShipLabelMark = {
 
 const PROJECT_SHOWCASE_NAV_ID = "project-showcase";
 const PROJECT_SHOWCASE_LAYER = 2;
+const ORBITAL_PORTFOLIO_NAV_ID = "orbital-portfolio";
+const ORBITAL_PORTFOLIO_LAYER = 4;
+const ORBITAL_PORTFOLIO_DEBUG_LOGS = true;
+const ORBITAL_PORTFOLIO_NONFOCUS_PLATE_OPACITY = 0.16;
 // Card layer stays on the overlay pass to avoid bloom/tonemapping washout.
 const PROJECT_SHOWCASE_CARD_LAYER = 1;
 const SKILLS_LATTICE_LAYER = 3;
@@ -137,6 +146,8 @@ const PROJECT_SHOWCASE_TEXTURE_BASE_PATH = "/models/projects-scene/textures";
 const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
+const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(22, 7, -21);
+const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 900;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(16500, 220, -14800);
 const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -18000);
@@ -278,6 +289,60 @@ type ShowcasePanelRecord = {
     phase: number;
     baseColor: THREE.Color;
   }>;
+};
+
+type OrbitalPortfolioStationRecord = {
+  index: number;
+  group: THREE.Group;
+  ring: THREE.Line;
+  plate: THREE.Mesh;
+  frame: THREE.Mesh;
+  platePositionAttr: THREE.BufferAttribute;
+  framePositionAttr: THREE.BufferAttribute;
+  plateFlatPositions: Float32Array;
+  plateCurvedPositions: Float32Array;
+  frameFlatPositions: Float32Array;
+  frameCurvedPositions: Float32Array;
+  straightenBlend: number;
+  label: THREE.Object3D;
+  halo: THREE.Sprite;
+  mediaHaloGroup: THREE.Group;
+  variantSatelliteGroup: THREE.Group;
+  pulsePhase: number;
+};
+
+const buildCurvedPanelPositions = (
+  flatPositions: Float32Array,
+  width: number,
+  arcRadians: number,
+): Float32Array => {
+  const curved = new Float32Array(flatPositions.length);
+  curved.set(flatPositions);
+  if (Math.abs(arcRadians) < 1e-4) return curved;
+  const radius = width / arcRadians;
+  for (let i = 0; i < curved.length; i += 3) {
+    const x = flatPositions[i];
+    const y = flatPositions[i + 1];
+    const theta = x / radius;
+    curved[i] = Math.sin(theta) * radius;
+    curved[i + 1] = y;
+    curved[i + 2] = radius * (1 - Math.cos(theta));
+  }
+  return curved;
+};
+
+const morphPanelGeometry = (
+  attr: THREE.BufferAttribute,
+  curved: Float32Array,
+  flat: Float32Array,
+  straightenBlend: number,
+) => {
+  const dest = attr.array as Float32Array;
+  const curvedWeight = 1 - straightenBlend;
+  for (let i = 0; i < dest.length; i += 1) {
+    dest[i] = curved[i] * curvedWeight + flat[i] * straightenBlend;
+  }
+  attr.needsUpdate = true;
 };
 
 const extractYouTubeVideoId = (input?: string): string | null => {
@@ -849,6 +914,44 @@ export default function ResumeSpace3D({
     targetType: "section" | "moon";
   } | null>(null);
   const projectShowcaseWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
+  const orbitalPortfolioWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
+  const orbitalPortfolioRootRef = useRef<THREE.Group | null>(null);
+  const orbitalPortfolioBeaconRef = useRef<THREE.Mesh | null>(null);
+  const orbitalPortfolioStationsRef = useRef<OrbitalPortfolioStationRecord[]>([]);
+  const orbitalPortfolioGroupsRef = useRef<PortfolioGroupView[]>([]);
+  const orbitalPortfolioCoreGlowRef = useRef<THREE.Mesh | null>(null);
+  const orbitalPortfolioOuterRingRef = useRef<THREE.Line | null>(null);
+  const [orbitalPortfolioReady, setOrbitalPortfolioReady] = useState(false);
+  const [orbitalPortfolioActive, setOrbitalPortfolioActive] = useState(false);
+  const orbitalPortfolioActiveRef = useRef(false);
+  const [orbitalPortfolioPlaying, setOrbitalPortfolioPlaying] = useState(true);
+  const orbitalPortfolioPlayingRef = useRef(true);
+  const [orbitalPortfolioFocusIndex, setOrbitalPortfolioFocusIndex] = useState(0);
+  const orbitalPortfolioFocusIndexRef = useRef(0);
+  const [orbitalPortfolioVariantIndex, setOrbitalPortfolioVariantIndex] = useState(0);
+  const [orbitalPortfolioMediaIndex, setOrbitalPortfolioMediaIndex] = useState(0);
+  const orbitalPortfolioAutoRef = useRef({
+    lastAdvanceAt: 0,
+    intervalMs: 3200,
+    pausedUntil: 0,
+  });
+  const orbitalPortfolioManualCameraLockRef = useRef(false);
+  const orbitalPortfolioCameraDistanceRef = useRef(1);
+  const orbitalPortfolioCameraDistanceTargetRef = useRef(1);
+  const orbitalPortfolioCameraPosRef = useRef(new THREE.Vector3());
+  const orbitalPortfolioCameraTargetRef = useRef(new THREE.Vector3());
+  const orbitalPortfolioCameraInitializedRef = useRef(false);
+  const orbitalPortfolioDebugLastLogAtRef = useRef(0);
+  const orbitalPortfolioDebugDumpedRef = useRef(false);
+  const orbitalPortfolioPrevStateRef = useRef<{
+    followingSpaceship: boolean;
+    shipVisible: boolean;
+    controlsEnabled: boolean;
+    cameraLayerMask: number;
+    controlsMinDistance?: number;
+    controlsMaxDistance?: number;
+  } | null>(null);
+  const [portfolioNavHereActive, setPortfolioNavHereActive] = useState(false);
   const skillsLatticeWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const aboutMemorySquareWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const aboutMemorySquareRootRef = useRef<THREE.Group | null>(null);
@@ -940,6 +1043,7 @@ export default function ResumeSpace3D({
   const skillsLatticeCausticLightsRef = useRef<THREE.PointLight[]>([]);
   const externalCosmosLabelsHiddenForLatticeRef = useRef(false);
   const externalCosmosLabelsHiddenForAboutRef = useRef(false);
+  const externalCosmosLabelsHiddenForPortfolioRef = useRef(false);
   const skillsLatticeRippleRef = useRef<{
     active: boolean;
     center: THREE.Vector3;
@@ -1124,6 +1228,7 @@ export default function ResumeSpace3D({
         experience: "Experience",
         skills: "Skills",
         projects: "Projects",
+        portfolio: "Portfolio",
         about: "About",
         home: "Home",
       };
@@ -1278,6 +1383,12 @@ export default function ResumeSpace3D({
       label: "Projects",
       type: "section" as const,
       icon: "🪐",
+    },
+    {
+      id: "portfolio",
+      label: "Portfolio",
+      type: "section" as const,
+      icon: "✨",
     },
     {
       id: "about",
@@ -1544,6 +1655,13 @@ export default function ResumeSpace3D({
           .clone()
           .addScaledVector(approachNormal, ABOUT_MEMORY_SQUARE_NAV_STANDOFF_DIST)
           .add(new THREE.Vector3(0, 54, 0));
+      }
+      if (targetId === "portfolio") {
+        const anchor = orbitalPortfolioWorldAnchorRef.current;
+        if (!anchor) return null;
+        return anchor
+          .clone()
+          .add(new THREE.Vector3(420, 210, 530));
       }
       return null;
     },
@@ -2290,6 +2408,170 @@ export default function ResumeSpace3D({
       setProjectShowcaseLever(0);
     }
   }, [setProjectShowcaseLever]);
+
+  const exitOrbitalPortfolio = useCallback(() => {
+    const root = orbitalPortfolioRootRef.current;
+    if (root) root.visible = false;
+    if (sceneRef.current.camera) {
+      sceneRef.current.camera.layers.disable(ORBITAL_PORTFOLIO_LAYER);
+    }
+    const prev = orbitalPortfolioPrevStateRef.current;
+    const beacon = orbitalPortfolioBeaconRef.current;
+    if (beacon) beacon.visible = true;
+    if (prev) {
+      setFollowingSpaceship(prev.followingSpaceship);
+      followingSpaceshipRef.current = prev.followingSpaceship;
+      if (spaceshipRef.current) spaceshipRef.current.visible = prev.shipVisible;
+      if (sceneRef.current.controls) {
+        sceneRef.current.controls.enabled = prev.controlsEnabled;
+        const controlsAny = sceneRef.current.controls as unknown as {
+          minDistance?: number;
+          maxDistance?: number;
+        };
+        if (typeof prev.controlsMinDistance === "number") {
+          controlsAny.minDistance = prev.controlsMinDistance;
+        }
+        if (typeof prev.controlsMaxDistance === "number") {
+          controlsAny.maxDistance = prev.controlsMaxDistance;
+        }
+      }
+      if (sceneRef.current.camera) {
+        sceneRef.current.camera.layers.mask = prev.cameraLayerMask;
+      }
+      orbitalPortfolioPrevStateRef.current = null;
+    } else if (spaceshipRef.current) {
+      spaceshipRef.current.visible = true;
+      setFollowingSpaceship(true);
+      followingSpaceshipRef.current = true;
+    }
+    orbitalPortfolioPlayingRef.current = true;
+    setOrbitalPortfolioPlaying(true);
+    setOrbitalPortfolioVariantIndex(0);
+    setOrbitalPortfolioMediaIndex(0);
+    orbitalPortfolioCameraInitializedRef.current = false;
+    orbitalPortfolioDebugDumpedRef.current = false;
+    setPortfolioNavHereActive(false);
+    const scene = sceneRef.current.scene;
+    if (scene) {
+      externalCosmosLabelsHiddenForPortfolioRef.current = false;
+      scene.traverse((obj) => {
+        const maybeCss = obj as THREE.Object3D & {
+          isCSS2DObject?: boolean;
+          userData: Record<string, unknown>;
+        };
+        if (!maybeCss.isCSS2DObject) return;
+        maybeCss.visible = true;
+      });
+    }
+    if (sceneRef.current.camera) {
+      sceneRef.current.camera.layers.enable(0);
+    }
+    orbitalPortfolioActiveRef.current = false;
+    setOrbitalPortfolioActive(false);
+  }, []);
+
+  const enterOrbitalPortfolio = useCallback(() => {
+    const camera = sceneRef.current.camera;
+    const controls = sceneRef.current.controls;
+    const root = orbitalPortfolioRootRef.current;
+    if (!camera || !controls || !root) return;
+    if (orbitalPortfolioActiveRef.current) return;
+    if (!orbitalPortfolioReady) {
+      vlog("⚠️ Orbital Portfolio is loading");
+      return;
+    }
+    orbitalPortfolioPrevStateRef.current = {
+      followingSpaceship: followingSpaceshipRef.current,
+      shipVisible: spaceshipRef.current?.visible ?? true,
+      controlsEnabled: controls.enabled,
+      cameraLayerMask: camera.layers.mask,
+      controlsMinDistance: (controls as unknown as { minDistance?: number })
+        .minDistance,
+      controlsMaxDistance: (controls as unknown as { maxDistance?: number })
+        .maxDistance,
+    };
+    setFollowingSpaceship(false);
+    followingSpaceshipRef.current = false;
+    setInsideShip(false);
+    insideShipRef.current = false;
+    setShipViewMode("exterior");
+    shipViewModeRef.current = "exterior";
+    if (spaceshipRef.current) spaceshipRef.current.visible = false;
+    const beacon = orbitalPortfolioBeaconRef.current;
+    if (beacon) beacon.visible = false;
+    controls.enabled = true;
+    const controlsAny = controls as unknown as {
+      minDistance?: number;
+      maxDistance?: number;
+    };
+    controlsAny.minDistance = 180;
+    controlsAny.maxDistance = 2800;
+    camera.layers.disableAll();
+    camera.layers.enable(ORBITAL_PORTFOLIO_LAYER);
+    root.visible = true;
+    const anchor = orbitalPortfolioWorldAnchorRef.current ?? ORBITAL_PORTFOLIO_WORLD_ANCHOR;
+    controls.setLookAt(
+      anchor.x + 620,
+      anchor.y + 280,
+      anchor.z + 820,
+      anchor.x,
+      anchor.y + 24,
+      anchor.z,
+      true,
+    );
+    orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
+    orbitalPortfolioAutoRef.current.pausedUntil = 0;
+    orbitalPortfolioCameraDistanceRef.current = 1.55;
+    orbitalPortfolioCameraDistanceTargetRef.current = 1.55;
+    orbitalPortfolioCameraInitializedRef.current = false;
+    orbitalPortfolioDebugDumpedRef.current = false;
+    orbitalPortfolioManualCameraLockRef.current = false;
+    orbitalPortfolioPlayingRef.current = true;
+    setOrbitalPortfolioPlaying(true);
+    setOrbitalPortfolioVariantIndex(0);
+    setOrbitalPortfolioMediaIndex(0);
+    setPortfolioNavHereActive(true);
+    const scene = sceneRef.current.scene;
+    if (scene) {
+      externalCosmosLabelsHiddenForPortfolioRef.current = true;
+      scene.traverse((obj) => {
+        const maybeCss = obj as THREE.Object3D & {
+          isCSS2DObject?: boolean;
+          userData: Record<string, unknown>;
+        };
+        if (!maybeCss.isCSS2DObject) return;
+        if (maybeCss.userData?.orbitalPortfolioLabel) return;
+        maybeCss.visible = false;
+      });
+    }
+    orbitalPortfolioActiveRef.current = true;
+    setOrbitalPortfolioActive(true);
+    vlog("✨ Entered Orbital Portfolio");
+  }, [orbitalPortfolioReady, vlog]);
+
+  const stepOrbitalPortfolioFocus = useCallback((direction: -1 | 1) => {
+    const groups = orbitalPortfolioGroupsRef.current;
+    if (groups.length === 0) return;
+    const next =
+      (orbitalPortfolioFocusIndexRef.current + direction + groups.length) %
+      groups.length;
+    orbitalPortfolioFocusIndexRef.current = next;
+    setOrbitalPortfolioFocusIndex(next);
+    setOrbitalPortfolioVariantIndex(0);
+    setOrbitalPortfolioMediaIndex(0);
+    orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 6000;
+  }, []);
+
+  const toggleOrbitalPortfolioPlayback = useCallback(() => {
+    const next = !orbitalPortfolioPlayingRef.current;
+    orbitalPortfolioPlayingRef.current = next;
+    setOrbitalPortfolioPlaying(next);
+    if (next) {
+      orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
+    } else {
+      orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 10000;
+    }
+  }, []);
 
   function startProjectShowcaseAngleIntroSequence() {
     if (projectShowcaseAngleIntroRef.current.raf !== null) {
@@ -3555,6 +3837,9 @@ export default function ResumeSpace3D({
       if (targetId !== "projects" && targetId !== PROJECT_SHOWCASE_NAV_ID) {
         setProjectsNavHereActive(false);
       }
+      if (targetId !== "portfolio" && targetId !== ORBITAL_PORTFOLIO_NAV_ID) {
+        setPortfolioNavHereActive(false);
+      }
       if (targetId !== "skills" && targetId !== SKILLS_LATTICE_NAV_ID) {
         setSkillsNavHereActive(false);
       }
@@ -3567,6 +3852,20 @@ export default function ResumeSpace3D({
       if (leavingSkillsLattice) {
         exitSkillsLattice({ restoreShip: true, clearSystem: true });
         // Ensure autopilot can start immediately for non-Projects targets too.
+        setFollowingSpaceship(true);
+        followingSpaceshipRef.current = true;
+        setInsideShip(false);
+        insideShipRef.current = false;
+        setShipViewMode("exterior");
+        shipViewModeRef.current = "exterior";
+        if (spaceshipRef.current) spaceshipRef.current.visible = true;
+      }
+      if (
+        orbitalPortfolioActiveRef.current &&
+        targetId !== "portfolio" &&
+        targetId !== ORBITAL_PORTFOLIO_NAV_ID
+      ) {
+        exitOrbitalPortfolio();
         setFollowingSpaceship(true);
         followingSpaceshipRef.current = true;
         setInsideShip(false);
@@ -3669,6 +3968,44 @@ export default function ResumeSpace3D({
         }
         return;
       }
+      if (targetId === "portfolio" || targetId === ORBITAL_PORTFOLIO_NAV_ID) {
+        setPortfolioNavHereActive(true);
+        if (!orbitalPortfolioReady) {
+          vlog("⚠️ Orbital Portfolio is loading");
+          return;
+        }
+        if (projectShowcaseActiveRef.current) {
+          exitProjectShowcase();
+        }
+        setFollowingSpaceship(true);
+        followingSpaceshipRef.current = true;
+        setInsideShip(false);
+        insideShipRef.current = false;
+        setShipViewMode("exterior");
+        shipViewModeRef.current = "exterior";
+        if (spaceshipRef.current) spaceshipRef.current.visible = true;
+        if (orbitalPortfolioActiveRef.current) {
+          exitOrbitalPortfolio();
+          return;
+        }
+        const portfolioAnchor = orbitalPortfolioWorldAnchorRef.current;
+        const shipPos = spaceshipRef.current?.position;
+        const nearPortfolioAnchor =
+          !!portfolioAnchor &&
+          !!shipPos &&
+          shipPos.distanceTo(portfolioAnchor) <= ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST;
+        const atPortfolio =
+          currentNavigationTarget === "portfolio" &&
+          navigationDistance === null &&
+          nearPortfolioAnchor;
+        if (atPortfolio) {
+          enterOrbitalPortfolio();
+        } else {
+          handleQuickNav("portfolio", "section");
+          vlog("✨ Routing to Portfolio — Orbital Registry will open on arrival");
+        }
+        return;
+      }
 
       if (targetType === "moon") {
         handleExperienceCompanyNavigation(targetId);
@@ -3682,6 +4019,7 @@ export default function ResumeSpace3D({
       currentNavigationTarget,
       navigationDistance,
       projectShowcaseReady,
+      orbitalPortfolioReady,
       enterSkillsLattice,
       handleExperienceCompanyNavigation,
       handleQuickNav,
@@ -3689,9 +4027,12 @@ export default function ResumeSpace3D({
       startProjectShowcaseEntrySequence,
       exitSkillsLattice,
       exitProjectShowcase,
+      enterOrbitalPortfolio,
+      exitOrbitalPortfolio,
       setExternalCosmosLabelsHiddenForAbout,
       setAboutNavHereActive,
       setProjectsNavHereActive,
+      setPortfolioNavHereActive,
       setSkillsNavHereActive,
       vlog,
     ],
@@ -3726,6 +4067,28 @@ export default function ResumeSpace3D({
     currentNavigationTarget,
     navigationDistance,
     startProjectShowcaseEntrySequence,
+  ]);
+
+  useEffect(() => {
+    if (orbitalPortfolioActiveRef.current) return;
+    if (!portfolioNavHereActive) return;
+    if (!orbitalPortfolioReady) return;
+    if (currentNavigationTarget !== "portfolio") return;
+    if (navigationDistance !== null) return;
+    const ship = spaceshipRef.current;
+    const anchor = orbitalPortfolioWorldAnchorRef.current;
+    const arrived =
+      !!ship &&
+      !!anchor &&
+      ship.position.distanceTo(anchor) <= ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST;
+    if (!arrived) return;
+    enterOrbitalPortfolio();
+  }, [
+    currentNavigationTarget,
+    navigationDistance,
+    portfolioNavHereActive,
+    orbitalPortfolioReady,
+    enterOrbitalPortfolio,
   ]);
 
   useEffect(() => {
@@ -4076,6 +4439,7 @@ export default function ResumeSpace3D({
         aboutMemorySquareActiveRef.current
         && !aboutMemorySquareEntrySequenceRef.current.active
         && !projectShowcaseActiveRef.current
+        && !orbitalPortfolioActiveRef.current
         && !skillsLatticeActiveRef.current;
       setAboutSwarmTriggerVisible((prev) => (prev === shouldShow ? prev : shouldShow));
     };
@@ -5683,6 +6047,288 @@ export default function ResumeSpace3D({
     return () => cancelAnimationFrame(raf);
   }, [projectShowcaseActive, setProjectShowcaseRunPosition]);
 
+  useEffect(() => {
+    if (!orbitalPortfolioActive) return;
+    let raf = 0;
+    let last = performance.now();
+    const camPos = new THREE.Vector3();
+    const anchor = new THREE.Vector3();
+    const lookAt = new THREE.Vector3();
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const now = performance.now();
+      const dt = Math.min((now - last) / 1000, 0.08);
+      last = now;
+      const controls = sceneRef.current.controls;
+      const camera = sceneRef.current.camera;
+      const root = orbitalPortfolioRootRef.current;
+      if (!controls || !camera || !root) return;
+      root.getWorldPosition(anchor);
+      if (ORBITAL_PORTFOLIO_DEBUG_LOGS && !orbitalPortfolioDebugDumpedRef.current) {
+        orbitalPortfolioDebugDumpedRef.current = true;
+        const planeRows: string[] = [];
+        const spriteRows: string[] = [];
+        let meshCount = 0;
+        root.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          meshCount += 1;
+          const geometryType = mesh.geometry?.type ?? "unknown";
+          if (geometryType !== "PlaneGeometry") return;
+          const mat = mesh.material as THREE.MeshBasicMaterial | undefined;
+          if (!mat) return;
+          if (planeRows.length >= 10) return;
+          const colorHex =
+            typeof mat.color?.getHexString === "function"
+              ? mat.color.getHexString()
+              : "n/a";
+          planeRows.push(
+            `${mesh.name || "(anon)"}|op=${mat.opacity.toFixed(2)}|map=${mat.map ? "y" : "n"}|col=#${colorHex}|vis=${mesh.visible ? "y" : "n"}`,
+          );
+        });
+        root.traverse((obj) => {
+          const sprite = obj as THREE.Sprite;
+          if (!sprite.isSprite) return;
+          const mat = sprite.material as THREE.SpriteMaterial | undefined;
+          if (!mat) return;
+          if (spriteRows.length >= 6) return;
+          const colorHex =
+            typeof mat.color?.getHexString === "function"
+              ? mat.color.getHexString()
+              : "n/a";
+          spriteRows.push(
+            `${sprite.name || "(anon)"}|op=${mat.opacity.toFixed(2)}|map=${mat.map ? "y" : "n"}|col=#${colorHex}|vis=${sprite.visible ? "y" : "n"}`,
+          );
+        });
+        shipLog(
+          `[PORTDBG] rootMeshes=${meshCount} planeSamples=${planeRows.length} spriteSamples=${spriteRows.length}`,
+          "info",
+        );
+        if (planeRows.length > 0) {
+          shipLog(`[PORTDBG] planes ${planeRows.join(" || ")}`, "info");
+        }
+        if (spriteRows.length > 0) {
+          shipLog(`[PORTDBG] sprites ${spriteRows.join(" || ")}`, "info");
+        }
+      }
+      const groups = orbitalPortfolioGroupsRef.current;
+      if (groups.length > 0) {
+        if (
+          orbitalPortfolioPlayingRef.current &&
+          now >= orbitalPortfolioAutoRef.current.pausedUntil &&
+          now - orbitalPortfolioAutoRef.current.lastAdvanceAt >=
+            orbitalPortfolioAutoRef.current.intervalMs
+        ) {
+          orbitalPortfolioAutoRef.current.lastAdvanceAt = now;
+          const focus = THREE.MathUtils.clamp(
+            orbitalPortfolioFocusIndexRef.current,
+            0,
+            groups.length - 1,
+          );
+          const group = groups[focus];
+          const variants = group.variants;
+          const currentVariant = THREE.MathUtils.clamp(
+            orbitalPortfolioVariantIndex,
+            0,
+            Math.max(0, variants.length - 1),
+          );
+          const mediaCount = Math.max(
+            1,
+            variants[currentVariant]?.mediaItems?.length ?? 1,
+          );
+          if (orbitalPortfolioMediaIndex + 1 < mediaCount) {
+            setOrbitalPortfolioMediaIndex((prev) => prev + 1);
+          } else if (currentVariant + 1 < variants.length) {
+            setOrbitalPortfolioVariantIndex((prev) => prev + 1);
+            setOrbitalPortfolioMediaIndex(0);
+          } else {
+            const next = (focus + 1) % groups.length;
+            orbitalPortfolioFocusIndexRef.current = next;
+            setOrbitalPortfolioFocusIndex(next);
+            setOrbitalPortfolioVariantIndex(0);
+            setOrbitalPortfolioMediaIndex(0);
+          }
+        }
+      }
+      let nonFocusedPlateVisible = 0;
+      let nonFocusedFrameVisible = 0;
+      let nonFocusedWithoutTexture = 0;
+      let haloThumbsMissingMap = 0;
+      const stationDebugRows: string[] = [];
+      orbitalPortfolioStationsRef.current.forEach((station, idx) => {
+        station.group.rotation.y += dt * 0.0;
+        station.variantSatelliteGroup.rotation.y += dt * 0.68;
+        station.mediaHaloGroup.rotation.y -= dt * 0.28;
+        station.mediaHaloGroup.rotation.x = Math.sin(now * 0.00032 + station.pulsePhase) * 0.08;
+        const isFocused = idx === orbitalPortfolioFocusIndexRef.current;
+        const straightenTarget = isFocused ? 0.06 : 0;
+        station.straightenBlend = THREE.MathUtils.damp(
+          station.straightenBlend,
+          straightenTarget,
+          4.8,
+          dt,
+        );
+        morphPanelGeometry(
+          station.platePositionAttr,
+          station.plateCurvedPositions,
+          station.plateFlatPositions,
+          station.straightenBlend,
+        );
+        morphPanelGeometry(
+          station.framePositionAttr,
+          station.frameCurvedPositions,
+          station.frameFlatPositions,
+          station.straightenBlend,
+        );
+        const frameMat = station.frame.material as THREE.MeshBasicMaterial;
+        const plateMat = station.plate.material as THREE.MeshBasicMaterial;
+        const hasTexture = Boolean(
+          (station.plate.userData as { hasLoadedTexture?: boolean }).hasLoadedTexture,
+        );
+        frameMat.opacity = THREE.MathUtils.damp(
+          frameMat.opacity,
+          isFocused ? 0.2 : 0,
+          8.5,
+          dt,
+        );
+        plateMat.opacity = THREE.MathUtils.damp(
+          plateMat.opacity,
+          isFocused ? 0.98 : hasTexture ? ORBITAL_PORTFOLIO_NONFOCUS_PLATE_OPACITY : 0.0,
+          8.5,
+          dt,
+        );
+        if (!isFocused) {
+          if (plateMat.opacity > 0.08) nonFocusedPlateVisible += 1;
+          if (frameMat.opacity > 0.04) nonFocusedFrameVisible += 1;
+          if (!hasTexture) nonFocusedWithoutTexture += 1;
+          if (stationDebugRows.length < 4) {
+            stationDebugRows.push(
+              `i${idx}: p=${plateMat.opacity.toFixed(2)} f=${frameMat.opacity.toFixed(2)} tex=${hasTexture ? "y" : "n"} map=${plateMat.map ? "y" : "n"}`,
+            );
+          }
+        }
+        const pulse = 0.6 + 0.4 * Math.sin(now * 0.0024 + station.pulsePhase);
+        const haloMat = station.halo.material as THREE.SpriteMaterial;
+        haloMat.opacity = (isFocused ? 0.34 : 0.1) * pulse;
+        station.label.visible = isFocused;
+        const ringMat = station.ring.material as THREE.LineBasicMaterial;
+        ringMat.opacity = THREE.MathUtils.damp(
+          ringMat.opacity,
+          isFocused ? 0.74 : 0.12,
+          7.2,
+          dt,
+        );
+        station.mediaHaloGroup.visible = true;
+        station.variantSatelliteGroup.visible = isFocused;
+        const targetScale = isFocused ? 2.35 : 0.52;
+        station.group.scale.setScalar(
+          THREE.MathUtils.damp(station.group.scale.x, targetScale, 7.4, dt),
+        );
+        station.group.lookAt(anchor);
+        station.mediaHaloGroup.children.forEach((child) => {
+          const mesh = child as THREE.Mesh;
+          const mat = mesh.material as THREE.MeshBasicMaterial | undefined;
+          if (!mat) return;
+          if (!mat.map && mat.opacity > 0.04) haloThumbsMissingMap += 1;
+        });
+      });
+      if (
+        ORBITAL_PORTFOLIO_DEBUG_LOGS &&
+        now - orbitalPortfolioDebugLastLogAtRef.current >= 2200
+      ) {
+        orbitalPortfolioDebugLastLogAtRef.current = now;
+        shipLog(
+          `[PORTDBG] nonFocus plate>0.08=${nonFocusedPlateVisible} frame>0.04=${nonFocusedFrameVisible} nonFocusNoTex=${nonFocusedWithoutTexture} haloMissingMap=${haloThumbsMissingMap}`,
+          "info",
+        );
+        if (stationDebugRows.length > 0) {
+          shipLog(`[PORTDBG] ${stationDebugRows.join(" | ")}`, "info");
+        }
+      }
+      if (orbitalPortfolioCoreGlowRef.current) {
+        const glowMat = orbitalPortfolioCoreGlowRef.current
+          .material as THREE.MeshBasicMaterial;
+        glowMat.opacity = 0.2 + (0.5 + 0.5 * Math.sin(now * 0.0018)) * 0.2;
+      }
+      if (orbitalPortfolioOuterRingRef.current) {
+        orbitalPortfolioOuterRingRef.current.rotation.y += dt * 0.18;
+      }
+      lookAt.copy(anchor);
+      orbitalPortfolioCameraDistanceRef.current = THREE.MathUtils.damp(
+        orbitalPortfolioCameraDistanceRef.current,
+        orbitalPortfolioCameraDistanceTargetRef.current,
+        8.5,
+        dt,
+      );
+      const desiredCam = lookAt
+        .clone()
+        .add(
+          new THREE.Vector3(380, 190, 540).multiplyScalar(
+            orbitalPortfolioCameraDistanceRef.current,
+          ),
+        );
+      const manualActive = orbitalPortfolioManualCameraLockRef.current;
+      const controlsAny = controls as unknown as {
+        getTarget?: (out: THREE.Vector3) => void;
+      };
+      if (manualActive) {
+        camera.getWorldPosition(orbitalPortfolioCameraPosRef.current);
+        if (controlsAny.getTarget) {
+          controlsAny.getTarget(orbitalPortfolioCameraTargetRef.current);
+        } else {
+          orbitalPortfolioCameraTargetRef.current.copy(lookAt);
+        }
+      } else {
+        if (!orbitalPortfolioCameraInitializedRef.current) {
+          camera.getWorldPosition(orbitalPortfolioCameraPosRef.current);
+          if (controlsAny.getTarget) {
+            controlsAny.getTarget(orbitalPortfolioCameraTargetRef.current);
+          } else {
+            orbitalPortfolioCameraTargetRef.current.copy(lookAt);
+          }
+          orbitalPortfolioCameraInitializedRef.current = true;
+        }
+        const smooth = 1 - Math.exp(-dt * 4.2);
+        orbitalPortfolioCameraPosRef.current.lerp(desiredCam, smooth);
+        const desiredTarget = anchor.clone().add(new THREE.Vector3(0, 10, 0));
+        orbitalPortfolioCameraTargetRef.current.lerp(desiredTarget, smooth);
+        controls.setLookAt(
+          orbitalPortfolioCameraPosRef.current.x,
+          orbitalPortfolioCameraPosRef.current.y,
+          orbitalPortfolioCameraPosRef.current.z,
+          orbitalPortfolioCameraTargetRef.current.x,
+          orbitalPortfolioCameraTargetRef.current.y,
+          orbitalPortfolioCameraTargetRef.current.z,
+          false,
+        );
+      }
+      if (camera) {
+        camera.getWorldPosition(camPos);
+      }
+    };
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, [
+    orbitalPortfolioActive,
+    orbitalPortfolioMediaIndex,
+    orbitalPortfolioVariantIndex,
+  ]);
+
+  useEffect(() => {
+    if (!orbitalPortfolioActive) return;
+    const noteManualIntent = () => {
+      orbitalPortfolioManualCameraLockRef.current = true;
+    };
+    const onPointerDown = () => noteManualIntent();
+    const onWheel = () => noteManualIntent();
+    window.addEventListener("pointerdown", onPointerDown, { capture: true });
+    window.addEventListener("wheel", onWheel, { passive: true, capture: true });
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, { capture: true });
+      window.removeEventListener("wheel", onWheel, { capture: true });
+    };
+  }, [orbitalPortfolioActive]);
+
   // ── Project showcase thumbnail clicks (in-trench carousel) ───────────────
   useEffect(() => {
     const mount = mountRef.current;
@@ -6049,9 +6695,11 @@ export default function ResumeSpace3D({
     const exp = planetsDataRef.current.get("experience")?.position;
     const skills = planetsDataRef.current.get("skills")?.position;
     const projects = planetsDataRef.current.get("projects")?.position;
+    const portfolio = planetsDataRef.current.get("portfolio")?.position;
     if (exp) targets.push({ pos: exp.clone(), radius: EXP_WANDER_RADIUS });
     if (skills) targets.push({ pos: skills.clone(), radius: SKILLS_WANDER_RADIUS });
     if (projects) targets.push({ pos: projects.clone(), radius: PROJ_WANDER_RADIUS });
+    if (portfolio) targets.push({ pos: portfolio.clone(), radius: PROJ_WANDER_RADIUS });
     // Sun is centered at origin; keep a tighter band so it's in view.
     targets.push({ pos: new THREE.Vector3(0, 0, 0), radius: SUN_WANDER_RADIUS });
 
@@ -6871,6 +7519,322 @@ export default function ResumeSpace3D({
     skillsLatticeBeaconMatRef.current = beaconMat;
     skillsLatticeBeaconEdgeMatRef.current = beaconEdges.material as THREE.LineBasicMaterial;
     skillsLatticeBeaconLabelRef.current = beaconLabel;
+
+    // Orbital Registry Portfolio beacon + dedicated scene root
+    const portfolioAnchor = ORBITAL_PORTFOLIO_WORLD_ANCHOR.clone();
+    orbitalPortfolioWorldAnchorRef.current = portfolioAnchor.clone();
+    const portfolioBeacon = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(190, 1),
+      new THREE.MeshPhongMaterial({
+        color: 0x61d8ff,
+        emissive: 0x112c44,
+        emissiveIntensity: 0.46,
+        shininess: 90,
+        specular: new THREE.Color(0xc8efff),
+        transparent: true,
+        opacity: 0.86,
+        side: THREE.DoubleSide,
+      }),
+    );
+    portfolioBeacon.position.copy(portfolioAnchor);
+    portfolioBeacon.userData.sectionIndex = 4;
+    portfolioBeacon.userData.planetName = "Portfolio";
+    portfolioBeacon.userData.sectionId = "portfolio";
+    const portfolioBeaconEdges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(portfolioBeacon.geometry),
+      new THREE.LineBasicMaterial({
+        color: 0xb8eeff,
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+      }),
+    );
+    portfolioBeaconEdges.scale.setScalar(1.008);
+    portfolioBeacon.add(portfolioBeaconEdges);
+    const portfolioLabel = createLabel("Portfolio", "Orbital Registry");
+    portfolioLabel.userData.orbitalPortfolioLabel = true;
+    portfolioLabel.position.set(0, 170, 0);
+    portfolioBeacon.add(portfolioLabel);
+    scene.add(portfolioBeacon);
+    clickablePlanets.push(portfolioBeacon);
+    orbitalPortfolioBeaconRef.current = portfolioBeacon;
+
+    const orbitalRoot = new THREE.Group();
+    orbitalRoot.name = "OrbitalPortfolioRoot";
+    orbitalRoot.position.copy(portfolioAnchor);
+    orbitalRoot.visible = false;
+    const orbitalGroups = buildPortfolioGroups(legacyWebsites as PortfolioEntry[]);
+    orbitalPortfolioGroupsRef.current = orbitalGroups;
+    const innerCore = new THREE.Mesh(
+      new THREE.SphereGeometry(26, 32, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0xc9f8ff,
+        transparent: true,
+        opacity: 0.86,
+        toneMapped: false,
+      }),
+    );
+    const outerCore = new THREE.Mesh(
+      new THREE.SphereGeometry(42, 24, 24),
+      new THREE.MeshBasicMaterial({
+        color: 0x69dbff,
+        transparent: true,
+        opacity: 0.24,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    orbitalRoot.add(innerCore, outerCore);
+    orbitalPortfolioCoreGlowRef.current = outerCore;
+    const createOrbitalHaloTexture = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      grad.addColorStop(0, "rgba(255,255,255,0.95)");
+      grad.addColorStop(0.25, "rgba(170,230,255,0.5)");
+      grad.addColorStop(0.58, "rgba(80,180,220,0.16)");
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 128, 128);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.needsUpdate = true;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    };
+    const orbitalHaloTexture = createOrbitalHaloTexture();
+    const maxStations = Math.max(1, orbitalGroups.length);
+    const stationRadius = 320;
+    const stationRecords: OrbitalPortfolioStationRecord[] = [];
+    orbitalGroups.forEach((group, idx) => {
+      const t = idx / maxStations;
+      const a = t * Math.PI * 2;
+      const stationGroup = new THREE.Group();
+      stationGroup.position.set(
+        Math.cos(a) * stationRadius,
+        Math.sin(a * 1.3) * 22,
+        Math.sin(a) * stationRadius,
+      );
+      const ringGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        stationGroup.position.clone(),
+      ]);
+      const ring = new THREE.Line(
+        ringGeo,
+        new THREE.LineBasicMaterial({
+          color: idx % 2 === 0 ? 0x62d8ff : 0x9f7cff,
+          transparent: true,
+          opacity: 0.08,
+          depthWrite: false,
+        }),
+      );
+      orbitalRoot.add(ring);
+      const frameGeom = new THREE.PlaneGeometry(78, 48, 24, 1);
+      const plateGeom = new THREE.PlaneGeometry(72, 42, 24, 1);
+      const frame = new THREE.Mesh(
+        frameGeom,
+        new THREE.MeshBasicMaterial({
+          color: 0xd8f3ff,
+          transparent: true,
+          opacity: 0.02,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+          depthWrite: false,
+        }),
+      );
+      const plate = new THREE.Mesh(
+        plateGeom,
+        new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.04,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+          depthWrite: false,
+        }),
+      );
+      plate.userData.hasLoadedTexture = false;
+      const framePosAttr = frameGeom.getAttribute("position") as THREE.BufferAttribute;
+      const platePosAttr = plateGeom.getAttribute("position") as THREE.BufferAttribute;
+      framePosAttr.setUsage(THREE.DynamicDrawUsage);
+      platePosAttr.setUsage(THREE.DynamicDrawUsage);
+      const frameFlatPositions = new Float32Array(framePosAttr.array as Float32Array);
+      const plateFlatPositions = new Float32Array(platePosAttr.array as Float32Array);
+      const frameArc = 78 / Math.max(stationRadius, 1);
+      const plateArc = 72 / Math.max(stationRadius, 1);
+      const frameCurvedPositions = buildCurvedPanelPositions(
+        frameFlatPositions,
+        78,
+        frameArc,
+      );
+      const plateCurvedPositions = buildCurvedPanelPositions(
+        plateFlatPositions,
+        72,
+        plateArc,
+      );
+      morphPanelGeometry(framePosAttr, frameCurvedPositions, frameFlatPositions, 0);
+      morphPanelGeometry(platePosAttr, plateCurvedPositions, plateFlatPositions, 0);
+      frame.position.z = -0.8;
+      stationGroup.add(frame, plate);
+      const media = group.variants[0]?.mediaItems?.[0];
+      if (media?.textureUrl) {
+        textureLoader.load(
+          media.textureUrl,
+          (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            (plate.material as THREE.MeshBasicMaterial).map = tex;
+            plate.userData.hasLoadedTexture = true;
+            (plate.material as THREE.MeshBasicMaterial).needsUpdate = true;
+          },
+          undefined,
+          () => undefined,
+        );
+      }
+      const label = createLabel(group.title, "Portfolio Sample");
+      label.userData.orbitalPortfolioLabel = true;
+      label.position.set(0, 62, 0);
+      stationGroup.add(label);
+      const halo = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: orbitalHaloTexture ?? undefined,
+          color: 0x66ddff,
+          transparent: true,
+          opacity: 0.12,
+          blending: THREE.AdditiveBlending,
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
+      halo.scale.setScalar(120);
+      stationGroup.add(halo);
+      const variantSatelliteGroup = new THREE.Group();
+      const variantCount = Math.min(6, group.variants.length);
+      for (let vi = 0; vi < variantCount; vi += 1) {
+        const va = (vi / Math.max(1, variantCount)) * Math.PI * 2;
+        const sat = new THREE.Mesh(
+          new THREE.SphereGeometry(4.4, 10, 10),
+          new THREE.MeshBasicMaterial({
+            color: 0x9fe9ff,
+            transparent: true,
+            opacity: 0.9,
+            toneMapped: false,
+          }),
+        );
+        sat.position.set(Math.cos(va) * 42, Math.sin(va * 1.5) * 6, Math.sin(va) * 42);
+        variantSatelliteGroup.add(sat);
+      }
+      stationGroup.add(variantSatelliteGroup);
+      const mediaHaloGroup = new THREE.Group();
+      const mediaItems = (group.variants[0]?.mediaItems ?? []).slice(0, 10);
+      mediaItems.forEach((item, mi) => {
+        const ma = (mi / Math.max(1, mediaItems.length)) * Math.PI * 2;
+        const thumbGeom = new THREE.PlaneGeometry(8, 5, 16, 1);
+        const thumbPosAttr = thumbGeom.getAttribute("position") as THREE.BufferAttribute;
+        const thumbFlatPositions = new Float32Array(
+          thumbPosAttr.array as Float32Array,
+        );
+        const thumbCurvedPositions = buildCurvedPanelPositions(
+          thumbFlatPositions,
+          8,
+          Math.PI * 0.72,
+        );
+        morphPanelGeometry(thumbPosAttr, thumbCurvedPositions, thumbFlatPositions, 0);
+        const thumb = new THREE.Mesh(
+          thumbGeom,
+          new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.92,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+            depthWrite: false,
+          }),
+        );
+        if (item?.textureUrl) {
+          textureLoader.load(
+            item.textureUrl,
+            (tex) => {
+              tex.colorSpace = THREE.SRGBColorSpace;
+              const thumbMat = thumb.material as THREE.MeshBasicMaterial;
+              thumbMat.map = tex;
+              thumbMat.needsUpdate = true;
+            },
+            undefined,
+            () => undefined,
+          );
+        }
+        thumb.position.set(Math.cos(ma) * 74, Math.sin(ma * 2.1) * 7, Math.sin(ma) * 74);
+        thumb.lookAt(new THREE.Vector3(0, 0, 0));
+        mediaHaloGroup.add(thumb);
+      });
+      stationGroup.add(mediaHaloGroup);
+      orbitalRoot.add(stationGroup);
+      stationRecords.push({
+        index: idx,
+        group: stationGroup,
+        ring,
+        plate,
+        frame,
+        platePositionAttr: platePosAttr,
+        framePositionAttr: framePosAttr,
+        plateFlatPositions,
+        plateCurvedPositions,
+        frameFlatPositions,
+        frameCurvedPositions,
+        straightenBlend: 0,
+        label,
+        halo,
+        mediaHaloGroup,
+        variantSatelliteGroup,
+        pulsePhase: Math.random() * Math.PI * 2,
+      });
+    });
+    const outerOrbit = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(
+        Array.from({ length: 128 }, (_, i) => {
+          const a = (i / 128) * Math.PI * 2;
+          return new THREE.Vector3(Math.cos(a) * stationRadius, 0, Math.sin(a) * stationRadius);
+        }),
+      ),
+      new THREE.LineBasicMaterial({
+        color: 0x62dcff,
+        transparent: true,
+        opacity: 0.4,
+        depthWrite: false,
+      }),
+    );
+    orbitalRoot.add(outerOrbit);
+    const concentricRings = [120, 185, 252, 320];
+    concentricRings.forEach((radius, idx) => {
+      const pts = Array.from({ length: 180 }, (_, i) => {
+        const a = (i / 180) * Math.PI * 2;
+        return new THREE.Vector3(
+          Math.cos(a) * radius,
+          0,
+          Math.sin(a) * (radius * 0.72),
+        );
+      });
+      const ring = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({
+          color: idx % 2 === 0 ? 0x66ddff : 0x9e8cff,
+          transparent: true,
+          opacity: idx === 0 ? 0.65 : 0.35,
+          depthWrite: false,
+        }),
+      );
+      ring.rotation.x = -Math.PI * 0.08;
+      orbitalRoot.add(ring);
+    });
+    orbitalPortfolioOuterRingRef.current = outerOrbit;
+    orbitalRoot.traverse((obj) => obj.layers.set(ORBITAL_PORTFOLIO_LAYER));
+    scene.add(orbitalRoot);
+    orbitalPortfolioRootRef.current = orbitalRoot;
+    orbitalPortfolioStationsRef.current = stationRecords;
+    setOrbitalPortfolioReady(true);
 
     const categoryPositions = categoryEntries.map((_, idx) => {
       const a = (idx / Math.max(1, categoryEntries.length)) * Math.PI * 2;
@@ -9563,12 +10527,28 @@ export default function ResumeSpace3D({
           data: (resumeData.skills as any)[category],
         })),
       };
+      const projectsAnchor =
+        projectShowcaseWorldAnchorRef.current ?? new THREE.Vector3(-9800, 420, 7800);
+      const projectsPlanetData: PlanetData = {
+        name: "Projects",
+        position: projectsAnchor.clone(),
+        data: legacyWebsites,
+      };
+      const portfolioPlanetData: PlanetData = {
+        name: "Portfolio",
+        position: ORBITAL_PORTFOLIO_WORLD_ANCHOR.clone(),
+        data: legacyWebsites,
+      };
 
       tourBuilderRef.current?.registerPlanet("experience", expPlanetData);
       tourBuilderRef.current?.registerPlanet("skills", skillsPlanetData);
+      tourBuilderRef.current?.registerPlanet("projects", projectsPlanetData);
+      tourBuilderRef.current?.registerPlanet("portfolio", portfolioPlanetData);
 
       planetsDataRef.current.set("experience", expPlanetData);
       planetsDataRef.current.set("skills", skillsPlanetData);
+      planetsDataRef.current.set("projects", projectsPlanetData);
+      planetsDataRef.current.set("portfolio", portfolioPlanetData);
     };
 
     registerPlanetData();
@@ -9694,7 +10674,7 @@ export default function ResumeSpace3D({
       if (targets.length === 0) {
         console.log("\n⚠️ No planets found. Available planet names:");
         planets.forEach((p) => console.log(`   - ${p.name}`));
-        console.log("   (Also try: 'experience', 'skills', 'projects')");
+        console.log("   (Also try: 'experience', 'skills', 'projects', 'portfolio')");
       }
       console.log("═══════════════════════════════════════");
     };
@@ -9866,17 +10846,30 @@ export default function ResumeSpace3D({
           break;
         case "experience":
         case "skills":
-        case "projects": {
+        case "projects":
+        case "portfolio": {
           if (target === "projects") {
             setProjectsNavHereActive(true);
+          }
+          if (target === "portfolio") {
+            setPortfolioNavHereActive(true);
           }
           if (target === "skills") {
             setSkillsNavHereActive(true);
           }
-          const planetLabel = target === "experience" ? "🌍 Experience" : target === "skills" ? "⚡ Skills" : "💡 Projects";
+          const planetLabel =
+            target === "experience"
+              ? "🌍 Experience"
+              : target === "skills"
+                ? "⚡ Skills"
+                : target === "portfolio"
+                  ? "✨ Portfolio"
+                  : "💡 Projects";
           vlog(
             target === "projects"
               ? `${planetLabel} — Routing to trench destination...`
+              : target === "portfolio"
+                ? `${planetLabel} — Routing to orbital registry...`
               : `${planetLabel} — Traveling to ${target} Planet...`,
           );
 
@@ -9892,6 +10885,10 @@ export default function ResumeSpace3D({
             projectShowcaseAwaitingProjectsArrivalRef.current = false;
             projectShowcaseSawProjectsTravelRef.current = false;
             startProjectShowcaseEntrySequence();
+            break;
+          }
+          if (target === "portfolio") {
+            enterOrbitalPortfolio();
             break;
           }
 
@@ -10030,23 +11027,33 @@ export default function ResumeSpace3D({
     });
 
     const onPointerMoveGlobal = (event: PointerEvent) => {
-      if (projectShowcaseActiveRef.current || skillsLatticeActiveRef.current) return;
+      if (
+        projectShowcaseActiveRef.current ||
+        orbitalPortfolioActiveRef.current ||
+        skillsLatticeActiveRef.current
+      )
+        return;
       onPointerMove(event);
     };
     const onClickGlobal = (event: MouseEvent) => {
-      if (projectShowcaseActiveRef.current || skillsLatticeActiveRef.current) return;
+      if (
+        projectShowcaseActiveRef.current ||
+        orbitalPortfolioActiveRef.current ||
+        skillsLatticeActiveRef.current
+      )
+        return;
       onClick(event);
     };
     const onPointerDownRotateGlobal = (event: PointerEvent) => {
-      if (projectShowcaseActiveRef.current) return;
+      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current) return;
       onPointerDownRotate(event);
     };
     const onPointerMoveRotateGlobal = (event: PointerEvent) => {
-      if (projectShowcaseActiveRef.current) return;
+      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current) return;
       onPointerMoveRotate(event);
     };
     const onPointerUpRotateGlobal = (event: PointerEvent) => {
-      if (projectShowcaseActiveRef.current) return;
+      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current) return;
       onPointerUpRotate(event);
     };
 
@@ -10607,6 +11614,15 @@ export default function ResumeSpace3D({
 
       projectShowcaseRootRef.current = null;
       projectShowcaseWorldAnchorRef.current = null;
+      orbitalPortfolioRootRef.current = null;
+      orbitalPortfolioBeaconRef.current = null;
+      orbitalPortfolioWorldAnchorRef.current = null;
+      orbitalPortfolioStationsRef.current = [];
+      orbitalPortfolioGroupsRef.current = [];
+      orbitalPortfolioCoreGlowRef.current = null;
+      orbitalPortfolioOuterRingRef.current = null;
+      orbitalPortfolioActiveRef.current = false;
+      orbitalPortfolioPlayingRef.current = true;
       aboutMemorySquareRootRef.current = null;
       aboutMemorySquareWorldAnchorRef.current = null;
       aboutMemorySquarePendingEntryRef.current = false;
@@ -10614,6 +11630,10 @@ export default function ResumeSpace3D({
       aboutMemorySquareNavIntentUntilRef.current = 0;
       setAboutNavHereActive(false);
       setProjectsNavHereActive(false);
+      setOrbitalPortfolioReady(false);
+      setOrbitalPortfolioActive(false);
+      setOrbitalPortfolioPlaying(true);
+      setPortfolioNavHereActive(false);
       setSkillsNavHereActive(false);
       setExternalCosmosLabelsHiddenForAbout(false);
       cancelAboutMemorySquareEntrySequence();
@@ -10683,6 +11703,7 @@ export default function ResumeSpace3D({
       skillsLatticeCausticLightsRef.current = [];
       externalCosmosLabelsHiddenForLatticeRef.current = false;
       externalCosmosLabelsHiddenForAboutRef.current = false;
+      externalCosmosLabelsHiddenForPortfolioRef.current = false;
       skillsLatticeRippleRef.current.active = false;
       skillsLatticeSelectedNodeRef.current = null;
       setSkillsLatticeSelection(null);
@@ -11319,20 +12340,21 @@ export default function ResumeSpace3D({
           <UserOnScreenMessages />
           <CosmicMiniMap3D
             visible={!isLoading && sceneReady}
-            projectModeSignal={projectShowcaseActive}
+            projectModeSignal={projectShowcaseActive || orbitalPortfolioActive}
             spaceshipRef={spaceshipRef}
             starDestroyerRef={starDestroyerRef}
             itemsRef={itemsRef}
             skillsAnchorRef={skillsLatticeWorldAnchorRef}
             aboutAnchorRef={aboutMemorySquareWorldAnchorRef}
             projectsAnchorRef={projectShowcaseWorldAnchorRef}
+            portfolioAnchorRef={orbitalPortfolioWorldAnchorRef}
             currentNavigationTarget={currentNavigationTarget}
             onNavigateToTarget={handleCockpitNavigate}
             onCoordinatePing={(message) => shipLog(message, "info")}
           />
 
           {/* Ship Control Bar — hidden while Project Showcase is active */}
-          {!projectShowcaseActive && (
+          {!projectShowcaseActive && !orbitalPortfolioActive && (
             <ShipControlBar
               phase={shipUIPhase}
               isFollowingSD={followingStarDestroyer}
@@ -11375,7 +12397,9 @@ export default function ResumeSpace3D({
                   ? "about"
                   : (projectsNavHereActive
                       ? "projects"
-                      : (skillsNavHereActive ? "skills" : currentNavigationTarget))
+                      : (portfolioNavHereActive
+                          ? "portfolio"
+                          : (skillsNavHereActive ? "skills" : currentNavigationTarget)))
               }
               isNavigating={navigationDistance !== null}
               onNavigate={handleCockpitNavigate}
@@ -11618,6 +12642,243 @@ export default function ResumeSpace3D({
             </div>
           )}
 
+          {orbitalPortfolioActive &&
+            (() => {
+              const groups = orbitalPortfolioGroupsRef.current;
+              const activeGroup =
+                groups[
+                  THREE.MathUtils.clamp(
+                    orbitalPortfolioFocusIndex,
+                    0,
+                    Math.max(0, groups.length - 1),
+                  )
+                ];
+              const variants = activeGroup?.variants ?? [];
+              const activeVariant =
+                variants[
+                  THREE.MathUtils.clamp(
+                    orbitalPortfolioVariantIndex,
+                    0,
+                    Math.max(0, variants.length - 1),
+                  )
+                ];
+              const mediaItems = activeVariant?.mediaItems ?? [];
+              const activeMedia =
+                mediaItems[
+                  THREE.MathUtils.clamp(
+                    orbitalPortfolioMediaIndex,
+                    0,
+                    Math.max(0, mediaItems.length - 1),
+                  )
+                ];
+              return (
+                <div
+                  style={{
+                    position: "fixed",
+                    right: 18,
+                    top: 78,
+                    zIndex: 1101,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    width: 430,
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: "1px solid rgba(120, 220, 255, 0.5)",
+                      background:
+                        "linear-gradient(180deg, rgba(6, 16, 30, 0.9) 0%, rgba(4, 10, 22, 0.9) 100%)",
+                      color: "#dff5ff",
+                      fontFamily: "'Rajdhani', sans-serif",
+                    }}
+                  >
+                    <div style={{ fontSize: 12, letterSpacing: 1.2, color: "#92deff" }}>
+                      PORTFOLIO
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}>
+                      Orbital Registry
+                    </div>
+                    <div style={{ marginTop: 4, fontSize: 14, color: "#eaf8ff" }}>
+                      {activeGroup?.title ?? "Loading..."}
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 8,
+                        height: 238,
+                        borderRadius: 10,
+                        overflow: "hidden",
+                        border: "1px solid rgba(155, 225, 255, 0.42)",
+                        background: "rgba(6, 10, 20, 0.95)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {activeMedia?.textureUrl ? (
+                        <img
+                          src={activeMedia.textureUrl}
+                          alt={activeMedia.title || activeGroup?.title || "Portfolio image"}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: activeMedia.fit === "cover" ? "cover" : "contain",
+                            display: "block",
+                            background: "#050a15",
+                          }}
+                        />
+                      ) : (
+                        <div style={{ color: "rgba(180,220,250,0.75)" }}>No media loaded</div>
+                      )}
+                    </div>
+
+                    {variants.length > 1 && (
+                      <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {variants.map((variant, idx) => (
+                          <button
+                            key={variant.id}
+                            onClick={() => {
+                              setOrbitalPortfolioVariantIndex(idx);
+                              setOrbitalPortfolioMediaIndex(0);
+                              orbitalPortfolioAutoRef.current.pausedUntil =
+                                performance.now() + 6000;
+                            }}
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: 999,
+                              border:
+                                idx === orbitalPortfolioVariantIndex
+                                  ? "1px solid rgba(145, 232, 255, 0.95)"
+                                  : "1px solid rgba(145, 232, 255, 0.35)",
+                              background:
+                                idx === orbitalPortfolioVariantIndex
+                                  ? "rgba(34, 74, 110, 0.86)"
+                                  : "rgba(8, 18, 34, 0.82)",
+                              color: "#e5f7ff",
+                              fontSize: 11,
+                              fontFamily: "'Rajdhani', sans-serif",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {variant.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {mediaItems.length > 1 && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          display: "flex",
+                          gap: 6,
+                          overflowX: "auto",
+                          paddingBottom: 2,
+                        }}
+                      >
+                        {mediaItems.map((media, idx) => (
+                          <button
+                            key={media.id}
+                            onClick={() => {
+                              setOrbitalPortfolioMediaIndex(idx);
+                              orbitalPortfolioAutoRef.current.pausedUntil =
+                                performance.now() + 5000;
+                            }}
+                            style={{
+                              minWidth: 74,
+                              width: 74,
+                              height: 46,
+                              borderRadius: 6,
+                              border:
+                                idx === orbitalPortfolioMediaIndex
+                                  ? "1px solid rgba(145, 232, 255, 0.95)"
+                                  : "1px solid rgba(145, 232, 255, 0.35)",
+                              overflow: "hidden",
+                              background: "rgba(8, 18, 34, 0.82)",
+                              cursor: "pointer",
+                              padding: 0,
+                            }}
+                          >
+                            <img
+                              src={media.textureUrl}
+                              alt={media.title || `thumb-${idx + 1}`}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                display: "block",
+                              }}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+                      <button
+                        onClick={() => stepOrbitalPortfolioFocus(-1)}
+                        style={{
+                          padding: "7px 10px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(170, 225, 255, 0.45)",
+                          background: "rgba(8, 18, 34, 0.82)",
+                          color: "#dff3ff",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Prev
+                      </button>
+                      <button
+                        onClick={toggleOrbitalPortfolioPlayback}
+                        style={{
+                          padding: "7px 10px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(170, 225, 255, 0.45)",
+                          background: "rgba(8, 18, 34, 0.82)",
+                          color: "#dff3ff",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {orbitalPortfolioPlaying ? "Pause" : "Play"}
+                      </button>
+                      <button
+                        onClick={() => stepOrbitalPortfolioFocus(1)}
+                        style={{
+                          padding: "7px 10px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(170, 225, 255, 0.45)",
+                          background: "rgba(8, 18, 34, 0.82)",
+                          color: "#dff3ff",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Next
+                      </button>
+                      <button
+                        onClick={exitOrbitalPortfolio}
+                        style={{
+                          padding: "7px 10px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(255, 195, 160, 0.45)",
+                          background: "rgba(28, 14, 10, 0.82)",
+                          color: "#ffe2d5",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Exit
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           {projectShowcaseActive && (
             <>
               <div
@@ -12779,6 +14040,21 @@ export default function ResumeSpace3D({
                             projectsData.position.z + 300,
                           ),
                           lookAt: projectsData.position,
+                          duration: 2,
+                        });
+                      }
+                      break;
+                    case "portfolio":
+                      const portfolioData =
+                        planetsDataRef.current.get("portfolio");
+                      if (portfolioData) {
+                        cameraDirectorRef.current.flyTo({
+                          position: new THREE.Vector3(
+                            portfolioData.position.x + 420,
+                            portfolioData.position.y + 210,
+                            portfolioData.position.z + 530,
+                          ),
+                          lookAt: portfolioData.position,
                           duration: 2,
                         });
                       }

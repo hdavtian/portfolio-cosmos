@@ -327,7 +327,8 @@ export const createPointerInteractionHandlers = (deps: {
         if (
           planetName === "Experience" ||
           planetName === "Skills" ||
-          planetName === "Projects"
+          planetName === "Projects" ||
+          planetName === "Portfolio"
         ) {
           const pname = planetName.toLowerCase();
           const target =
@@ -335,7 +336,9 @@ export const createPointerInteractionHandlers = (deps: {
               ? "experience"
               : pname === "skills"
                 ? "skills"
-                : "projects";
+                : pname === "portfolio"
+                  ? "portfolio"
+                  : "projects";
 
           vlog(`🌍 Planet clicked: ${planetName}, flying to ${target}`);
           handleNavigation(target);

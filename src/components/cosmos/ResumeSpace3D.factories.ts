@@ -428,6 +428,9 @@ export const createOrbitRing = (params: {
       case "projects":
         ringColorHex = 0x9933ff; // purple
         break;
+      case "portfolio":
+        ringColorHex = 0x2fe2ff; // electric cyan
+        break;
       default:
         ringColorHex = 0x666a80; // neutral
     }
@@ -476,6 +479,7 @@ export const createPlanetFactory = (deps: {
     experience: { x: 8, z: -4 },
     skills: { x: -12, z: 14 },
     projects: { x: 26, z: -10 },
+    portfolio: { x: -22, z: -18 },
   };
 
   const resolveMainOrbitInclination = (planetName: string) => {
@@ -487,6 +491,7 @@ export const createPlanetFactory = (deps: {
     experience: 0,
     skills: Math.PI,
     projects: Math.PI * 0.5,
+    portfolio: Math.PI * 1.42,
   };
 
   const resolveMainOrbitStartAngle = (planetName: string) => {
