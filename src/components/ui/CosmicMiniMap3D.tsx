@@ -32,6 +32,7 @@ const MINIMAP_DIR_STORAGE_KEY = "cosmic-minimap-show-direction-v1";
 const MINIMAP_VISIBLE_STORAGE_KEY = "cosmic-minimap-visible-v1";
 const MINIMAP_WIDTH_STORAGE_KEY = "cosmic-minimap-width-v1";
 const MINIMAP_HEIGHT_STORAGE_KEY = "cosmic-minimap-height-v1";
+const MINIMAP_CENTER_MODE_STORAGE_KEY = "cosmic-minimap-center-mode-v1";
 
 const MAP_SIZE_MIN = 180;
 const MAP_SIZE_MAX = 420;
@@ -141,6 +142,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
   const [showDirection, setShowDirection] = useState(true);
   const [mapVisible, setMapVisible] = useState(true);
   const [projectAutoHidden, setProjectAutoHidden] = useState(false);
+  const [centerMode, setCenterMode] = useState<"ship" | "sun">("ship");
   const [mapSize, setMapSize] = useState(MAP_DEFAULT_SIZE);
   const [mapWidth, setMapWidth] = useState(MAP_DEFAULT_SIZE);
   const [isDraggingMap, setIsDraggingMap] = useState(false);
@@ -223,6 +225,8 @@ const CosmicMiniMap3D: React.FC<Props> = ({
       const raw = window.localStorage.getItem(MINIMAP_DIR_STORAGE_KEY);
       if (raw === "0") setShowDirection(false);
       if (raw === "1") setShowDirection(true);
+      const centerRaw = window.localStorage.getItem(MINIMAP_CENTER_MODE_STORAGE_KEY);
+      if (centerRaw === "sun" || centerRaw === "ship") setCenterMode(centerRaw);
     } catch {
       // ignore
     }
@@ -260,6 +264,14 @@ const CosmicMiniMap3D: React.FC<Props> = ({
       // ignore
     }
   }, [mapVisible]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MINIMAP_CENTER_MODE_STORAGE_KEY, centerMode);
+    } catch {
+      // ignore
+    }
+  }, [centerMode]);
 
   useEffect(() => {
     const prev = projectSignalPrevRef.current;
@@ -305,7 +317,8 @@ const CosmicMiniMap3D: React.FC<Props> = ({
       try {
         const ship = spaceshipRef.current;
         const sd = starDestroyerRef.current;
-        if (ship) ship.getWorldPosition(vCenter);
+        if (centerMode === "sun") vCenter.set(0, 0, 0);
+        else if (ship) ship.getWorldPosition(vCenter);
         else vCenter.set(0, 0, 0);
 
         let shipHeading = headingYawRef.current;
@@ -629,6 +642,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
     mapWidth,
     mapSize,
     showDirection,
+    centerMode,
     currentNavigationTarget,
     spaceshipRef,
     starDestroyerRef,
@@ -745,7 +759,12 @@ const CosmicMiniMap3D: React.FC<Props> = ({
       const mapYaw = mapYawRef.current;
       const theta = Math.atan2(sy, sx) - mapYaw;
       const ship = spaceshipRef.current;
-      const center = ship ? ship.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 0, 0);
+      const center =
+        centerMode === "sun"
+          ? new THREE.Vector3(0, 0, 0)
+          : ship
+            ? ship.getWorldPosition(new THREE.Vector3())
+            : new THREE.Vector3(0, 0, 0);
       const worldX = center.x + Math.cos(theta) * worldDist;
       const worldZ = center.z + Math.sin(theta) * worldDist;
 
@@ -963,6 +982,26 @@ const CosmicMiniMap3D: React.FC<Props> = ({
           </button>
           <button
             type="button"
+            onClick={() =>
+              setCenterMode((prev) => (prev === "ship" ? "sun" : "ship"))
+            }
+            style={{
+              borderRadius: 5,
+              border: "1px solid rgba(145, 198, 230, 0.55)",
+              background: "rgba(18, 34, 51, 0.48)",
+              color: "rgba(174, 214, 236, 0.92)",
+              fontSize: 9,
+              letterSpacing: 0.8,
+              fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
+              fontWeight: 700,
+              padding: "2px 6px",
+              cursor: "pointer",
+            }}
+          >
+            CENTER {centerMode === "sun" ? "SUN" : "SHIP"}
+          </button>
+          <button
+            type="button"
             onClick={resetMapView}
             style={{
               borderRadius: 5,
@@ -1133,7 +1172,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
           textAlign: "center",
         }}
       >
-        Ship centered | wheel zoom {zoomUi.toFixed(2)}x | shift+drag pan
+        {centerMode === "sun" ? "Sun centered" : "Ship centered"} | wheel zoom {zoomUi.toFixed(2)}x | shift+drag pan
       </div>
       <div
         style={{

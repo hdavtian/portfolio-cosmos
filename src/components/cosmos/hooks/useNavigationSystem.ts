@@ -579,6 +579,9 @@ export const useNavigationSystem = (deps: {
         const skillsAnchor = resolveSpecialSectionTarget
           ? resolveSpecialSectionTarget("skills")
           : null;
+        const portfolioAnchor = resolveSpecialSectionTarget
+          ? resolveSpecialSectionTarget("portfolio")
+          : null;
         const isLeavingProjectsArea =
           !!projectsAnchor &&
           !!spaceshipRef.current &&
@@ -591,11 +594,16 @@ export const useNavigationSystem = (deps: {
           !!skillsAnchor &&
           !!spaceshipRef.current &&
           spaceshipRef.current.position.distanceTo(skillsAnchor) <= 4200;
+        const isLeavingPortfolioArea =
+          !!portfolioAnchor &&
+          !!spaceshipRef.current &&
+          spaceshipRef.current.position.distanceTo(portfolioAnchor) <= 4200;
         const isInterSystemMoonJump =
           isSystemMismatchMoonJump
           || isLeavingProjectsArea
           || isLeavingAboutArea
-          || isLeavingSkillsArea;
+          || isLeavingSkillsArea
+          || isLeavingPortfolioArea;
         const useTurbo =
           currentPos && spaceshipRef.current
             ? spaceshipRef.current.position.distanceTo(
