@@ -957,6 +957,10 @@ export default function ResumeSpace3D({
   const orbitalPortfolioBeaconRef = useRef<THREE.Mesh | null>(null);
   const orbitalPortfolioStationsRef = useRef<OrbitalPortfolioStationRecord[]>([]);
   const orbitalPortfolioGroupsRef = useRef<PortfolioGroupView[]>([]);
+  const orbitalPortfolioCoreRootRef = useRef<THREE.Group | null>(null);
+  const orbitalPortfolioCoreSliceGroupRef = useRef<THREE.Group | null>(null);
+  const orbitalPortfolioCoreSliceMatsRef = useRef<THREE.MeshBasicMaterial[]>([]);
+  const orbitalPortfolioCoreRayMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
   const orbitalPortfolioCoreGlowRef = useRef<THREE.Mesh | null>(null);
   const orbitalPortfolioOuterRingRef = useRef<THREE.Line | null>(null);
   const [orbitalPortfolioReady, setOrbitalPortfolioReady] = useState(false);
@@ -6365,6 +6369,23 @@ export default function ResumeSpace3D({
           .material as THREE.MeshBasicMaterial;
         glowMat.opacity = 0.2 + (0.5 + 0.5 * Math.sin(now * 0.0018)) * 0.2;
       }
+      if (orbitalPortfolioCoreRootRef.current) {
+        orbitalPortfolioCoreRootRef.current.rotation.y += dt * 0.18;
+        orbitalPortfolioCoreRootRef.current.rotation.x =
+          Math.sin(now * 0.00037) * 0.08;
+      }
+      if (orbitalPortfolioCoreSliceGroupRef.current) {
+        orbitalPortfolioCoreSliceGroupRef.current.rotation.y -= dt * 0.24;
+        orbitalPortfolioCoreSliceGroupRef.current.rotation.z += dt * 0.11;
+      }
+      orbitalPortfolioCoreSliceMatsRef.current.forEach((mat, idx) => {
+        const pulse = 0.5 + 0.5 * Math.sin(now * 0.0021 + idx * 0.9);
+        mat.opacity = 0.2 + pulse * 0.28;
+      });
+      orbitalPortfolioCoreRayMatsRef.current.forEach((mat, idx) => {
+        const pulse = 0.5 + 0.5 * Math.sin(now * 0.0017 + idx * 0.63);
+        mat.opacity = 0.12 + pulse * 0.2;
+      });
       if (orbitalPortfolioOuterRingRef.current) {
         orbitalPortfolioOuterRingRef.current.rotation.y += dt * 0.18;
       }
@@ -7876,28 +7897,104 @@ export default function ResumeSpace3D({
     orbitalRoot.visible = false;
     const orbitalGroups = buildPortfolioGroups(legacyWebsites as PortfolioEntry[]);
     orbitalPortfolioGroupsRef.current = orbitalGroups;
-    const innerCore = new THREE.Mesh(
-      new THREE.SphereGeometry(26, 32, 32),
+    const coreRoot = new THREE.Group();
+    coreRoot.name = "OrbitalPortfolioCoreLattice";
+    const coreNucleus = new THREE.Mesh(
+      new THREE.SphereGeometry(17, 28, 28),
       new THREE.MeshBasicMaterial({
-        color: 0xc9f8ff,
+        color: 0xd7f5ff,
         transparent: true,
-        opacity: 0.86,
+        opacity: 0.88,
         toneMapped: false,
       }),
     );
-    const outerCore = new THREE.Mesh(
-      new THREE.SphereGeometry(42, 24, 24),
+    const coreGlow = new THREE.Mesh(
+      new THREE.SphereGeometry(34, 20, 20),
       new THREE.MeshBasicMaterial({
-        color: 0x69dbff,
+        color: 0x67d8ff,
         transparent: true,
-        opacity: 0.24,
+        opacity: 0.26,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         toneMapped: false,
       }),
     );
-    orbitalRoot.add(innerCore, outerCore);
-    orbitalPortfolioCoreGlowRef.current = outerCore;
+    const latticeShellGeometry = new THREE.IcosahedronGeometry(46, 1);
+    const latticeShell = new THREE.Mesh(
+      latticeShellGeometry,
+      new THREE.MeshPhongMaterial({
+        color: 0x93dbff,
+        emissive: 0x1f5a8a,
+        shininess: 54,
+        transparent: true,
+        opacity: 0.22,
+        depthWrite: false,
+      }),
+    );
+    const latticeEdges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(latticeShellGeometry),
+      new THREE.LineBasicMaterial({
+        color: 0x76e3ff,
+        transparent: true,
+        opacity: 0.58,
+        depthWrite: false,
+      }),
+    );
+    latticeEdges.scale.setScalar(1.004);
+    const slicePalette = [0x78e6ff, 0x88a2ff, 0xa9ffcf, 0xffa6f5, 0xffd084];
+    const sliceGroup = new THREE.Group();
+    const sliceMats: THREE.MeshBasicMaterial[] = [];
+    for (let i = 0; i < slicePalette.length; i += 1) {
+      const sliceMat = new THREE.MeshBasicMaterial({
+        color: slicePalette[i],
+        transparent: true,
+        opacity: 0.38,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const slice = new THREE.Mesh(
+        new THREE.TorusGeometry(30 + i * 2.2, 0.95, 10, 72),
+        sliceMat,
+      );
+      slice.rotation.set(
+        i * 0.46 + Math.PI * 0.13,
+        i * 0.72 + Math.PI * 0.08,
+        i * 0.34,
+      );
+      sliceGroup.add(slice);
+      sliceMats.push(sliceMat);
+    }
+    const rayGroup = new THREE.Group();
+    const rayMats: THREE.LineBasicMaterial[] = [];
+    const rayCount = 16;
+    for (let i = 0; i < rayCount; i += 1) {
+      const a = (i / rayCount) * Math.PI * 2;
+      const dir = new THREE.Vector3(Math.cos(a), Math.sin(i * 0.47) * 0.24, Math.sin(a))
+        .normalize();
+      const rayMat = new THREE.LineBasicMaterial({
+        color: slicePalette[i % slicePalette.length],
+        transparent: true,
+        opacity: 0.22,
+        depthWrite: false,
+      });
+      const ray = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          dir.clone().multiplyScalar(36),
+          dir.clone().multiplyScalar(78 + (i % 3) * 8),
+        ]),
+        rayMat,
+      );
+      rayGroup.add(ray);
+      rayMats.push(rayMat);
+    }
+    coreRoot.add(coreNucleus, coreGlow, latticeShell, latticeEdges, sliceGroup, rayGroup);
+    orbitalRoot.add(coreRoot);
+    orbitalPortfolioCoreRootRef.current = coreRoot;
+    orbitalPortfolioCoreSliceGroupRef.current = sliceGroup;
+    orbitalPortfolioCoreSliceMatsRef.current = sliceMats;
+    orbitalPortfolioCoreRayMatsRef.current = rayMats;
+    orbitalPortfolioCoreGlowRef.current = coreGlow;
     const createOrbitalHaloTexture = () => {
       const canvas = document.createElement("canvas");
       canvas.width = 128;
@@ -11948,6 +12045,10 @@ export default function ResumeSpace3D({
       orbitalPortfolioWorldAnchorRef.current = null;
       orbitalPortfolioStationsRef.current = [];
       orbitalPortfolioGroupsRef.current = [];
+      orbitalPortfolioCoreRootRef.current = null;
+      orbitalPortfolioCoreSliceGroupRef.current = null;
+      orbitalPortfolioCoreSliceMatsRef.current = [];
+      orbitalPortfolioCoreRayMatsRef.current = [];
       orbitalPortfolioCoreGlowRef.current = null;
       orbitalPortfolioOuterRingRef.current = null;
       orbitalPortfolioActiveRef.current = false;
