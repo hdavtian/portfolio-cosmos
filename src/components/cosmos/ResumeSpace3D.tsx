@@ -271,6 +271,12 @@ type ShowcasePanelRecord = {
   detailScrollOffset: number;
   detailScrollMax: number;
   updateDetailTexture: () => void;
+  techBadgeFx: Array<{
+    mat: THREE.MeshBasicMaterial;
+    baseOpacity: number;
+    phase: number;
+    baseColor: THREE.Color;
+  }>;
 };
 
 const extractYouTubeVideoId = (input?: string): string | null => {
@@ -5595,15 +5601,33 @@ export default function ResumeSpace3D({
         } else if (panel.imageMat.opacity < 1) {
           panel.imageMat.opacity = 1;
         }
+        // Subtle vertical shimmer over tech badges (top-to-bottom feel via phase offsets).
+        panel.techBadgeFx.forEach((fx) => {
+          const shimmer = 0.5 + 0.5 * Math.sin(now * 0.00125 - fx.phase);
+          fx.mat.opacity = fx.baseOpacity * (0.8 + shimmer * 0.24);
+          fx.mat.color.copy(fx.baseColor).lerp(new THREE.Color(0x8fe7ff), shimmer * 0.28);
+        });
       });
       // Floor lane pulses: travel from forward to aft, looped.
       const floorPulseRecords = projectShowcaseFloorPulseMatsRef.current;
       if (floorPulseRecords.length > 0) {
-        const pulseCenter = 1 - ((now * 0.000225) % 1);
+        // Keep original travel speed, but introduce an idle gap between runs.
+        const pulseRunMs = 4445;
+        const pulseGapMs = 4200;
+        const pulseCycleMs = pulseRunMs + pulseGapMs;
+        const cycleMs = now % pulseCycleMs;
+        const pulseActive = cycleMs < pulseRunMs;
+        const pulseProgress = THREE.MathUtils.clamp(cycleMs / pulseRunMs, 0, 1);
+        const pulseCenter = 1 - pulseProgress;
         const pulseTrailCenter = (pulseCenter + 0.42) % 1;
         const pulseWidth = 0.09;
         const pulseFalloff = pulseWidth * pulseWidth;
         floorPulseRecords.forEach(({ mat, runT }) => {
+          if (!pulseActive) {
+            mat.opacity = 0.08;
+            mat.color.set(0x2ccfff);
+            return;
+          }
           const d1 = Math.min(Math.abs(runT - pulseCenter), 1 - Math.abs(runT - pulseCenter));
           const d2 = Math.min(
             Math.abs(runT - pulseTrailCenter),
@@ -8282,6 +8306,12 @@ export default function ResumeSpace3D({
                   resolveShowcaseMediaItems(entry, { variant, variantIndex }),
                 )
               : resolveShowcaseMediaItems(entry);
+          const panelHasAnyThumbStrip =
+            clientVariants.length > 0
+              ? clientVariants.some((_, variantIndex) =>
+                  mediaItems.filter((item) => item.variantIndex === variantIndex).length > 1,
+                )
+              : mediaItems.length > 1;
           const initialVariantMediaCount =
             clientVariants.length > 0
               ? mediaItems.filter((item) => item.variantIndex === 0).length
@@ -8387,6 +8417,7 @@ export default function ResumeSpace3D({
             detailScrollOffset: 0,
             detailScrollMax: 0,
             updateDetailTexture: () => {},
+            techBadgeFx: [],
           };
           const applyImageFit = (
             imageAspect?: number,
@@ -8540,12 +8571,96 @@ export default function ResumeSpace3D({
               mediaLabel,
               "",
               ...descriptionLines,
-              "",
-              ...(detailTechs.slice(0, 5).map((t) => `• ${t}`)),
               ...(detailYear ? ["", `Year: ${detailYear}`] : []),
             ].filter((line) => line !== undefined);
             panelRecord.detailScrollOffset = 0;
             updateDetailTexture();
+            updateTechBadges(detailTechs);
+          };
+
+          const techBadgeRoot = new THREE.Group();
+          const imageSeamX = side < 0 ? -panelWidth * 0.5 : panelWidth * 0.5;
+          const imageInward = side < 0 ? 1 : -1;
+          techBadgeRoot.position.set(imageSeamX, 0, 0.072);
+          techBadgeRoot.visible = false;
+          const techBadgeMeshes: THREE.Mesh[] = [];
+          const clearTechBadges = () => {
+            panelRecord.techBadgeFx = [];
+            techBadgeMeshes.forEach((mesh) => {
+              if (mesh.material) {
+                const mat = mesh.material as THREE.MeshBasicMaterial;
+                if (mat.map) mat.map.dispose();
+                mat.dispose();
+              }
+              mesh.geometry.dispose();
+              techBadgeRoot.remove(mesh);
+            });
+            techBadgeMeshes.length = 0;
+          };
+          const updateTechBadges = (techs: string[]) => {
+            clearTechBadges();
+            const list = (techs || []).filter(Boolean).slice(0, 5);
+            techBadgeRoot.visible = list.length > 0;
+            if (list.length === 0) return;
+            const badgeWidth = panelWidth * 0.085;
+            const badgeHeight = panelHeight * 0.05;
+            const badgeGap = badgeHeight * 0.32;
+            const stackHeight =
+              list.length * badgeHeight + Math.max(0, list.length - 1) * badgeGap;
+            const startY = stackHeight * 0.5 - badgeHeight * 0.5;
+            // Overlap 25% into description side; rest remains on image side.
+            const badgeX = imageInward * badgeWidth * 0.25;
+
+            list.forEach((tech, idx) => {
+              const y = startY - idx * (badgeHeight + badgeGap);
+              const badgeTex = createDetailTexture([tech.toUpperCase()], {
+                width: 1024,
+                height: 224,
+                bgColor: "rgba(7, 26, 52, 0.94)",
+                lineColor: "rgba(91, 215, 255, 0.66)",
+                textColor: "rgba(228, 245, 255, 0.98)",
+                showLine: false,
+                fontSize: 92,
+                fontFamily: "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+                fontWeight: 700,
+                lineSpacing: 102,
+                textAlign: "center" as const,
+                padding: 18,
+                centerBlock: true,
+                crispUI: true,
+              });
+              const badge = new THREE.Mesh(
+                new THREE.PlaneGeometry(badgeWidth, badgeHeight),
+                new THREE.MeshBasicMaterial({
+                  map: badgeTex,
+                  transparent: true,
+                  opacity: 0.92,
+                  side: THREE.DoubleSide,
+                  toneMapped: false,
+                }),
+              );
+              badge.position.set(badgeX, y, 0.02);
+              const badgeFrame = new THREE.Mesh(
+                new THREE.PlaneGeometry(badgeWidth * 1.05, badgeHeight * 1.08),
+                new THREE.MeshBasicMaterial({
+                  color: 0x59dbff,
+                  transparent: true,
+                  opacity: 0.22,
+                  side: THREE.DoubleSide,
+                  toneMapped: false,
+                }),
+              );
+              badgeFrame.position.set(badgeX, y, 0.01);
+              techBadgeRoot.add(badgeFrame);
+              techBadgeRoot.add(badge);
+              techBadgeMeshes.push(badgeFrame, badge);
+              panelRecord.techBadgeFx.push({
+                mat: badge.material as THREE.MeshBasicMaterial,
+                baseOpacity: 0.92,
+                phase: idx * 0.55,
+                baseColor: new THREE.Color(0xffffff),
+              });
+            });
           };
 
           const tabsRoot = new THREE.Group();
@@ -9102,6 +9217,7 @@ export default function ResumeSpace3D({
 
           panelGroup.add(frame);
           panelGroup.add(imagePlane);
+          panelGroup.add(techBadgeRoot);
           const detailMat = panelRecord.detailMat;
           const detailHeight = panelHeight;
           const detailPlane = new THREE.Mesh(
@@ -9157,10 +9273,11 @@ export default function ResumeSpace3D({
           detailFrame.position.copy(detailPlane.position);
           detailFrame.position.z -= 0.04;
           const extraTopHeight = showVariantTabs ? tabAreaHeight : 0;
+          const stripContribution = panelHasAnyThumbStrip ? stripHeight : 0;
           const moduleFrame = new THREE.Mesh(
             new THREE.PlaneGeometry(
               stripWidth * 1.015,
-              (detailHeight + stripHeight + extraTopHeight) * 1.01,
+              (detailHeight + stripContribution + extraTopHeight) * 1.01,
             ),
             new THREE.MeshBasicMaterial({
               color: 0x39d7ff,
@@ -9171,7 +9288,7 @@ export default function ResumeSpace3D({
           );
           moduleFrame.position.set(
             stripCenterX,
-            (extraTopHeight - stripHeight) * 0.5,
+            (extraTopHeight - stripContribution) * 0.5,
             -0.06,
           );
           panelGroup.add(detailPlane);
