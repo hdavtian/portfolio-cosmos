@@ -4,6 +4,9 @@ import type { OrbitItem } from "../cosmos/ResumeSpace3D.orbital";
 
 type Props = {
   visible: boolean;
+  containerStyle?: React.CSSProperties;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
+  initiallyMinified?: boolean;
   projectModeSignal?: boolean;
   spaceshipRef: React.MutableRefObject<THREE.Object3D | null>;
   starDestroyerRef: React.MutableRefObject<THREE.Object3D | null>;
@@ -126,6 +129,9 @@ const shortestAngleDelta = (from: number, to: number): number =>
 
 const CosmicMiniMap3D: React.FC<Props> = ({
   visible,
+  containerStyle,
+  containerRef,
+  initiallyMinified = false,
   projectModeSignal = false,
   spaceshipRef,
   starDestroyerRef,
@@ -140,7 +146,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [showDirection, setShowDirection] = useState(true);
-  const [mapVisible, setMapVisible] = useState(true);
+  const [mapVisible, setMapVisible] = useState(!initiallyMinified);
   const [projectAutoHidden, setProjectAutoHidden] = useState(false);
   const [centerMode, setCenterMode] = useState<"ship" | "sun">("ship");
   const [mapSize, setMapSize] = useState(MAP_DEFAULT_SIZE);
@@ -231,6 +237,12 @@ const CosmicMiniMap3D: React.FC<Props> = ({
       // ignore
     }
   }, []);
+
+  useEffect(() => {
+    if (initiallyMinified) {
+      setMapVisible(false);
+    }
+  }, [initiallyMinified]);
 
   useEffect(() => {
     try {
@@ -657,7 +669,17 @@ const CosmicMiniMap3D: React.FC<Props> = ({
 
   if (!mapVisible || projectAutoHidden) {
     return (
-      <div style={{ position: "fixed", right: 16, bottom: 18, zIndex: 1117, pointerEvents: "auto" }}>
+      <div
+        ref={containerRef}
+        style={{
+          position: "fixed",
+          right: 16,
+          bottom: 18,
+          zIndex: 1117,
+          pointerEvents: "auto",
+          ...containerStyle,
+        }}
+      >
         <button
           type="button"
           onClick={() => {
@@ -909,6 +931,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
 
   return (
     <div
+      ref={containerRef}
       style={{
         position: "fixed",
         right: 16,
@@ -924,6 +947,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
         padding: 8,
         pointerEvents: "auto",
         backdropFilter: "blur(4px)",
+        ...containerStyle,
       }}
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}

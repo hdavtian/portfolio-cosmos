@@ -17,10 +17,20 @@ import {
 
 export const INTRO_TIME_SCALE = 2 / 3;
 
+export const INTRO_CAMERA_START_POS = new THREE.Vector3(
+  15551.613,
+  1472.504,
+  -2145.511,
+);
+export const INTRO_CAMERA_START_TARGET = new THREE.Vector3(
+  14946.7,
+  244.7,
+  -1045.2,
+);
 export const INTRO_CAMERA_FINAL_POS = new THREE.Vector3(
-  14954.5,
-  246.3,
-  -1044.6,
+  15366.426,
+  300.846,
+  -1189.038,
 );
 export const INTRO_CAMERA_FINAL_TARGET = new THREE.Vector3(
   14946.7,
@@ -40,7 +50,8 @@ export const INTRO_SHIP_FINAL_QUAT = new THREE.Quaternion().setFromEuler(
   new THREE.Euler(0, -Math.PI / 2, 0),
 );
 
-const INTRO_CAMERA_DURATION_MS = Math.round(5000 * INTRO_TIME_SCALE);
+const INTRO_CAMERA_DURATION_MS = 7000;
+const INTRO_SHIP_CINEMATIC_START_MS = 4000;
 const INTRO_SHIP_APPROACH_DURATION_MS = Math.round(5000 * INTRO_TIME_SCALE);
 const INTRO_PASS_THROUGH_CHANCE = 0.45;
 const INTRO_ORBIT_CHANCE = 0.6;
@@ -89,6 +100,7 @@ export type IntroSequenceRunnerParams = {
   setHudVisible: (value: boolean) => void;
   setShipExteriorLights: (value: boolean) => void;
   sunMesh: THREE.Mesh;
+  onIntroEvent?: (event: string) => void;
 };
 
 const getRandomBetween = (min: number, max: number) =>
@@ -281,6 +293,7 @@ export const createIntroSequenceRunner = (
     followingSpaceshipRef,
     setHudVisible,
     setShipExteriorLights,
+    onIntroEvent,
   } = params;
 
   let introRafId: number | null = null;
@@ -289,48 +302,138 @@ export const createIntroSequenceRunner = (
     if (introRafId !== null) {
       cancelAnimationFrame(introRafId);
       introRafId = null;
+      onIntroEvent?.("camera-intro cancelled");
     }
   };
 
   const startIntroSequence = () => {
     cancelIntroSequence();
 
-    const startPos = camera.position.clone();
-    const startTarget = new THREE.Vector3();
-    controls.getTarget(startTarget);
+    const startPos = INTRO_CAMERA_START_POS.clone();
+    const startTarget = INTRO_CAMERA_START_TARGET.clone();
     const endPos = INTRO_CAMERA_FINAL_POS.clone();
     const endTarget = INTRO_CAMERA_FINAL_TARGET.clone();
-    const pathMid = startPos
-      .clone()
-      .lerp(endPos, 0.5)
-      .add(new THREE.Vector3(95, 38, -62));
-    const targetMid = startTarget
-      .clone()
-      .lerp(endTarget, 0.5)
-      .add(new THREE.Vector3(34, 8, -24));
 
     const startTime = performance.now();
     const previousControlsEnabled = controls.enabled;
     controls.enabled = false;
+    onIntroEvent?.("camera-intro started");
+    controls.setLookAt(
+      startPos.x,
+      startPos.y,
+      startPos.z,
+      startTarget.x,
+      startTarget.y,
+      startTarget.z,
+      false,
+    );
 
-    const easeInOut = (t: number) =>
-      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    // Smoother than cubic ease: gentle acceleration/deceleration.
+    const easeInOut = (t: number) => {
+      const clamped = THREE.MathUtils.clamp(t, 0, 1);
+      return clamped * clamped * clamped * (clamped * (clamped * 6 - 15) + 10);
+    };
+
+    let shipCinematicTriggered = false;
+
+    const startShipCinematic = (attempts: number = 0) => {
+      const ship = spaceshipRef.current;
+      const currentCamera = sceneRef.current.camera as
+        | THREE.PerspectiveCamera
+        | undefined;
+      const currentControls = sceneRef.current.controls;
+
+      if (!ship || !currentCamera || !currentControls) {
+        if (attempts < 10) {
+          window.setTimeout(() => startShipCinematic(attempts + 1), 250);
+        }
+        return;
+      }
+
+      manualFlightModeRef.current = false;
+      setFollowingSpaceship(false);
+      followingSpaceshipRef.current = false;
+      setShipExteriorLights(true);
+
+      // Deterministic hero entrance:
+      // 1) Spawn behind camera
+      // 2) Sweep into frame
+      // 3) Stop with the ship rear facing the viewer
+      const distToFinal = ship.position.distanceTo(INTRO_SHIP_FINAL_POS);
+      const camDir = new THREE.Vector3();
+      currentCamera.getWorldDirection(camDir);
+      const camUp = currentCamera.up.clone().normalize();
+      const camRight = new THREE.Vector3().crossVectors(camDir, camUp).normalize();
+      const endHeroPos = INTRO_SHIP_FINAL_POS.clone();
+      const startHeroPos = currentCamera.position
+        .clone()
+        .addScaledVector(camDir, -260)
+        .addScaledVector(camUp, 20)
+        .addScaledVector(camRight, 22);
+      const controlA = currentCamera.position
+        .clone()
+        .addScaledVector(camDir, -76)
+        .addScaledVector(camUp, 28)
+        .addScaledVector(camRight, 64);
+      const controlB = endHeroPos
+        .clone()
+        .addScaledVector(camRight, 84)
+        .addScaledVector(camUp, 24);
+      const endLookAt = endHeroPos.clone().addScaledVector(camDir, 140);
+      const startLookMat = new THREE.Matrix4().lookAt(
+        startHeroPos,
+        controlA,
+        new THREE.Vector3(0, 1, 0),
+      );
+      const endLookMat = new THREE.Matrix4().lookAt(
+        endHeroPos,
+        endLookAt,
+        new THREE.Vector3(0, 1, 0),
+      );
+      const startHeroQuat = new THREE.Quaternion().setFromRotationMatrix(startLookMat);
+      const endHeroQuat = new THREE.Quaternion().setFromRotationMatrix(endLookMat);
+      // Slight side bias so the final orientation is rear-facing but not perfectly straight.
+      const sideBias = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        -0.14,
+      );
+      endHeroQuat.premultiply(sideBias);
+      const forwardOffset = ship.userData.forwardOffset as
+        | THREE.Quaternion
+        | undefined;
+      if (forwardOffset) {
+        startHeroQuat.multiply(forwardOffset);
+        endHeroQuat.multiply(forwardOffset);
+      }
+      ship.position.copy(startHeroPos);
+      ship.quaternion.copy(startHeroQuat);
+      onIntroEvent?.("ship-cinematic started");
+      shipCinematicRef.current = {
+        active: true,
+        phase: "approach",
+        startTime: performance.now(),
+        duration: Math.round((3600 + Math.min(1200, distToFinal * 1.2)) * INTRO_TIME_SCALE),
+        startPos: startHeroPos.clone(),
+        controlPos: controlA,
+        controlPos2: controlB,
+        flybyPoint: currentCamera.position
+          .clone()
+          .addScaledVector(camDir, 22)
+          .addScaledVector(camRight, 18),
+        endPos: endHeroPos,
+        startQuat: ship.quaternion.clone(),
+        endQuat: endHeroQuat,
+        approachLookAt: endLookAt,
+        lightsTriggered: true,
+      };
+    };
 
     const animateCamera = () => {
       const elapsed = performance.now() - startTime;
       const progress = Math.min(elapsed / INTRO_CAMERA_DURATION_MS, 1);
       const eased = easeInOut(progress);
-      const oneMinus = 1 - eased;
-      const currentPos = new THREE.Vector3()
-        .copy(startPos)
-        .multiplyScalar(oneMinus * oneMinus)
-        .add(pathMid.clone().multiplyScalar(2 * oneMinus * eased))
-        .add(endPos.clone().multiplyScalar(eased * eased));
-      const currentTarget = new THREE.Vector3()
-        .copy(startTarget)
-        .multiplyScalar(oneMinus * oneMinus)
-        .add(targetMid.clone().multiplyScalar(2 * oneMinus * eased))
-        .add(endTarget.clone().multiplyScalar(eased * eased));
+      const currentPos = startPos.clone().lerp(endPos, eased);
+      const currentTarget = startTarget.clone().lerp(endTarget, eased);
 
       controls.setLookAt(
         currentPos.x, currentPos.y, currentPos.z,
@@ -338,105 +441,24 @@ export const createIntroSequenceRunner = (
         false,
       );
 
+      if (!shipCinematicTriggered && elapsed >= INTRO_SHIP_CINEMATIC_START_MS) {
+        shipCinematicTriggered = true;
+        onIntroEvent?.("ship-cinematic trigger @4s");
+        startShipCinematic();
+      }
+
       if (progress < 1) {
         introRafId = requestAnimationFrame(animateCamera);
       } else {
         introRafId = null;
         controls.enabled = previousControlsEnabled;
         setHudVisible(false);
-
-        const startShipCinematic = (attempts: number = 0) => {
-          const ship = spaceshipRef.current;
-          const currentCamera = sceneRef.current.camera as
-            | THREE.PerspectiveCamera
-            | undefined;
-          const currentControls = sceneRef.current.controls;
-
-          if (!ship || !currentCamera || !currentControls) {
-            if (attempts < 10) {
-              window.setTimeout(() => startShipCinematic(attempts + 1), 250);
-            }
-            return;
-          }
-
-          manualFlightModeRef.current = false;
-          setFollowingSpaceship(false);
-          followingSpaceshipRef.current = false;
-          setShipExteriorLights(true);
-
-          // Deterministic hero entrance:
-          // 1) Spawn behind camera
-          // 2) Sweep into frame
-          // 3) Stop with the ship rear facing the viewer
-          const distToFinal = ship.position.distanceTo(INTRO_SHIP_FINAL_POS);
-          const camDir = new THREE.Vector3();
-          currentCamera.getWorldDirection(camDir);
-          const camUp = currentCamera.up.clone().normalize();
-          const camRight = new THREE.Vector3().crossVectors(camDir, camUp).normalize();
-          const endHeroPos = INTRO_SHIP_FINAL_POS.clone();
-          const startHeroPos = currentCamera.position
-            .clone()
-            .addScaledVector(camDir, -260)
-            .addScaledVector(camUp, 20)
-            .addScaledVector(camRight, 22);
-          const controlA = currentCamera.position
-            .clone()
-            .addScaledVector(camDir, -76)
-            .addScaledVector(camUp, 28)
-            .addScaledVector(camRight, 64);
-          const controlB = endHeroPos
-            .clone()
-            .addScaledVector(camRight, 84)
-            .addScaledVector(camUp, 24);
-          const endLookAt = endHeroPos.clone().addScaledVector(camDir, 140);
-          const startLookMat = new THREE.Matrix4().lookAt(
-            startHeroPos,
-            controlA,
-            new THREE.Vector3(0, 1, 0),
-          );
-          const endLookMat = new THREE.Matrix4().lookAt(
-            endHeroPos,
-            endLookAt,
-            new THREE.Vector3(0, 1, 0),
-          );
-          const startHeroQuat = new THREE.Quaternion().setFromRotationMatrix(startLookMat);
-          const endHeroQuat = new THREE.Quaternion().setFromRotationMatrix(endLookMat);
-          // Slight side bias so the final orientation is rear-facing but not perfectly straight.
-          const sideBias = new THREE.Quaternion().setFromAxisAngle(
-            new THREE.Vector3(0, 1, 0),
-            -0.14,
-          );
-          endHeroQuat.premultiply(sideBias);
-          const forwardOffset = ship.userData.forwardOffset as
-            | THREE.Quaternion
-            | undefined;
-          if (forwardOffset) {
-            startHeroQuat.multiply(forwardOffset);
-            endHeroQuat.multiply(forwardOffset);
-          }
-          ship.position.copy(startHeroPos);
-          ship.quaternion.copy(startHeroQuat);
-          shipCinematicRef.current = {
-            active: true,
-            phase: "approach",
-            startTime: performance.now(),
-            duration: Math.round((3600 + Math.min(1200, distToFinal * 1.2)) * INTRO_TIME_SCALE),
-            startPos: startHeroPos.clone(),
-            controlPos: controlA,
-            controlPos2: controlB,
-            flybyPoint: currentCamera.position
-              .clone()
-              .addScaledVector(camDir, 22)
-              .addScaledVector(camRight, 18),
-            endPos: endHeroPos,
-            startQuat: ship.quaternion.clone(),
-            endQuat: endHeroQuat,
-            approachLookAt: endLookAt,
-            lightsTriggered: true,
-          };
-        };
-
-        startShipCinematic();
+        onIntroEvent?.("camera-intro completed");
+        if (!shipCinematicTriggered) {
+          shipCinematicTriggered = true;
+          onIntroEvent?.("ship-cinematic trigger @intro-end");
+          startShipCinematic();
+        }
       }
     };
 

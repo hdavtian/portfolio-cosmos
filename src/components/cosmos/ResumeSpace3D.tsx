@@ -1,5 +1,6 @@
 import type { MutableRefObject } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import gsap from "gsap";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
@@ -153,6 +154,8 @@ const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(1324, 180, 16869);
 const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 900;
+const ENABLE_POST_LOAD_COSMOS_MICRO_INTRO = false;
+const CAMERA_TRACE_ENABLED = true;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 // Recenter deep-space destinations so the universe extent remains sun-centered.
 const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(13600, 220, -12000);
@@ -1730,6 +1733,16 @@ export default function ResumeSpace3D({
   const [debugSnapToShip, setDebugSnapToShip] = useState(false);
   const debugSnapToShipRef = useRef(false);
   const startIntroSequenceRef = useRef<(() => void) | null>(null);
+  const introStartQueuedRef = useRef(false);
+  const introStartConsumedRef = useRef(false);
+  const cameraDriverTraceRef = useRef<string>("boot");
+  const startupUiRevealTlRef = useRef<gsap.core.Timeline | null>(null);
+  const startupDestinationsPanelRef = useRef<HTMLDivElement | null>(null);
+  const startupConsoleButtonRef = useRef<HTMLButtonElement | null>(null);
+  const startupMiniMapContainerRef = useRef<HTMLDivElement | null>(null);
+  const [startupDestinationsVisible, setStartupDestinationsVisible] = useState(false);
+  const [startupConsoleVisible, setStartupConsoleVisible] = useState(false);
+  const [startupMiniMapVisible, setStartupMiniMapVisible] = useState(false);
 
   // Debug ship label state
   const [debugShipLabelMode, setDebugShipLabelMode] = useState(false);
@@ -4629,6 +4642,165 @@ export default function ResumeSpace3D({
     }
   }, [currentNavigationTarget]);
 
+  useEffect(() => {
+    if (isLoading || !sceneReady) return;
+    if (!introStartQueuedRef.current || introStartConsumedRef.current) return;
+    const startIntro = startIntroSequenceRef.current;
+    if (!startIntro) return;
+    let fadeRaf = 0;
+    setCosmosIntroOverlayOpacity(0.42);
+    const fadeStartedAt = performance.now();
+    const fadeDurationMs = 2000;
+    const tickFade = () => {
+      const t = THREE.MathUtils.clamp(
+        (performance.now() - fadeStartedAt) / fadeDurationMs,
+        0,
+        1,
+      );
+      const ease = 1 - Math.pow(1 - t, 3);
+      setCosmosIntroOverlayOpacity(THREE.MathUtils.lerp(0.42, 0, ease));
+      if (t >= 1) {
+        setCosmosIntroOverlayOpacity(0);
+        if (CAMERA_TRACE_ENABLED) {
+          shipLog("[CAMTRACE] intro fade completed (2s)", "info");
+        }
+        return;
+      }
+      fadeRaf = requestAnimationFrame(tickFade);
+    };
+    fadeRaf = requestAnimationFrame(tickFade);
+    introStartConsumedRef.current = true;
+    if (CAMERA_TRACE_ENABLED) {
+      shipLog("[CAMTRACE] invoking camera-intro start + fade start", "info");
+    }
+    startIntro();
+    return () => {
+      if (fadeRaf) cancelAnimationFrame(fadeRaf);
+    };
+  }, [isLoading, sceneReady, shipLog]);
+
+  const clearStartupUiRevealTimeline = useCallback(() => {
+    if (startupUiRevealTlRef.current) {
+      startupUiRevealTlRef.current.kill();
+      startupUiRevealTlRef.current = null;
+    }
+  }, []);
+
+  const resetStartupUiReveal = useCallback(() => {
+    clearStartupUiRevealTimeline();
+    setStartupDestinationsVisible(false);
+    setStartupConsoleVisible(false);
+    setStartupMiniMapVisible(false);
+  }, [clearStartupUiRevealTimeline]);
+
+  const runStartupUiReveal = useCallback(() => {
+    clearStartupUiRevealTimeline();
+    setStartupDestinationsVisible(true);
+    setStartupConsoleVisible(true);
+    setStartupMiniMapVisible(true);
+
+    const rafId = window.requestAnimationFrame(() => {
+      const destinationsEl = startupDestinationsPanelRef.current;
+      const consoleEl = startupConsoleButtonRef.current;
+      const miniMapEl = startupMiniMapContainerRef.current;
+      if (!destinationsEl || !consoleEl || !miniMapEl) return;
+      gsap.set(destinationsEl, { x: -200, opacity: 0 });
+      gsap.set(consoleEl, { x: 200, opacity: 0 });
+      gsap.set(miniMapEl, { x: 200, opacity: 0 });
+      const revealEndAt = 1.2;
+      const destinationsStartAt = 0.0;
+      const consoleStartAt = 0.2;
+      const miniMapStartAt = 0.4;
+      const tl = gsap.timeline();
+      tl.to(destinationsEl, {
+        x: 0,
+        opacity: 1,
+        duration: revealEndAt - destinationsStartAt,
+        ease: "elastic.out(1, 0.75)",
+      })
+        .to(
+          consoleEl,
+          {
+            x: 0,
+            opacity: 1,
+            duration: revealEndAt - consoleStartAt,
+            ease: "elastic.out(1, 0.75)",
+          },
+          consoleStartAt,
+        )
+        .to(
+          miniMapEl,
+          {
+            x: 0,
+            opacity: 1,
+            duration: revealEndAt - miniMapStartAt,
+            ease: "elastic.out(1, 0.75)",
+          },
+          miniMapStartAt,
+        );
+      startupUiRevealTlRef.current = tl;
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [clearStartupUiRevealTimeline]);
+
+  useEffect(() => () => clearStartupUiRevealTimeline(), [clearStartupUiRevealTimeline]);
+
+  useEffect(() => {
+    if (!CAMERA_TRACE_ENABLED) return;
+    const intervalId = window.setInterval(() => {
+      const camera = sceneRef.current.camera;
+      const controls = sceneRef.current.controls;
+      if (!camera) return;
+      let driver = "free-controls";
+      const cinematic = shipCinematicRef.current;
+      if (isLoading) {
+        driver = "loader";
+      } else if (!sceneReady) {
+        driver = "scene-init";
+      } else if (projectShowcaseActiveRef.current) {
+        driver = "project-showcase-loop";
+      } else if (orbitalPortfolioActiveRef.current) {
+        driver = "orbital-portfolio-loop";
+      } else if (
+        aboutMemorySquareActiveRef.current ||
+        aboutMemorySquareEntrySequenceRef.current.active
+      ) {
+        driver = "about-memory-square";
+      } else if (
+        skillsLatticeActiveRef.current ||
+        skillsLatticeSystemActiveRef.current
+      ) {
+        driver = "skills-lattice";
+      } else if (cinematic?.active) {
+        driver = `ship-cinematic:${cinematic.phase}`;
+      } else if (isOrbiting()) {
+        driver = "moon-orbit-camera";
+      } else if (manualFlightModeRef.current) {
+        driver = "manual-flight";
+      } else if (followingSpaceshipRef.current && insideShipRef.current) {
+        driver = `ship-follow:${shipViewModeRef.current}`;
+      } else if (followingSpaceshipRef.current) {
+        driver = "ship-follow:exterior";
+      }
+      if (driver === cameraDriverTraceRef.current) return;
+      cameraDriverTraceRef.current = driver;
+      const target = new THREE.Vector3();
+      const controlsAny = controls as unknown as {
+        getTarget?: (out: THREE.Vector3) => void;
+      };
+      if (controlsAny?.getTarget) {
+        controlsAny.getTarget(target);
+      } else {
+        target.copy(camera.position);
+      }
+      shipLog(
+        `[CAMTRACE] driver=${driver} cam=[${camera.position.x.toFixed(1)},${camera.position.y.toFixed(1)},${camera.position.z.toFixed(1)}] target=[${target.x.toFixed(1)},${target.y.toFixed(1)},${target.z.toFixed(1)}] controls=${controls?.enabled ? 1 : 0}`,
+        "info",
+      );
+    }, 250);
+    return () => window.clearInterval(intervalId);
+  }, [isLoading, isOrbiting, sceneReady, shipLog]);
+
   const goToAboutSlide = useCallback((direction: -1 | 1) => {
     if (aboutSlides.length === 0) return;
     setAboutActiveSlideIndex((prev) => {
@@ -6087,6 +6259,15 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     if (isLoading || !sceneReady) return;
+    if (!ENABLE_POST_LOAD_COSMOS_MICRO_INTRO) {
+      cosmosIntroPlayedRef.current = true;
+      cosmosIntroCompletedRef.current = true;
+      setCosmosIntroOverlayOpacity(0);
+      if (CAMERA_TRACE_ENABLED) {
+        shipLog("[CAMTRACE] post-load micro-intro disabled", "info");
+      }
+      return;
+    }
     if (cosmosIntroPlayedRef.current) return;
     const ship = spaceshipRef.current;
     const controls = sceneRef.current.controls;
@@ -12812,6 +12993,15 @@ export default function ResumeSpace3D({
         setHudVisible: () => {},  // legacy — old HUD panels removed
         setShipExteriorLights,
         sunMesh,
+        onIntroEvent: (event) => {
+          if (event === "camera-intro started") {
+            resetStartupUiReveal();
+          } else if (event === "camera-intro completed") {
+            runStartupUiReveal();
+          }
+          if (!CAMERA_TRACE_ENABLED) return;
+          shipLog(`[CAMTRACE] ${event}`, "info");
+        },
       });
 
     startIntroSequenceRef.current = startIntroSequence;
@@ -12826,7 +13016,10 @@ export default function ResumeSpace3D({
       // Start the orbital position emitter for tracking moving objects
       emitterRef.current.start();
 
-      startIntroSequence();
+      introStartQueuedRef.current = true;
+      if (CAMERA_TRACE_ENABLED) {
+        shipLog("[CAMTRACE] intro queued after load", "info");
+      }
     }, 100);
 
     // --- CLEANUP ---
@@ -13385,8 +13578,9 @@ export default function ResumeSpace3D({
             }}
           />
 
-          {!isLoading && (
+          {!isLoading && startupConsoleVisible && (
             <button
+              ref={startupConsoleButtonRef}
               type="button"
               aria-label={consoleVisible ? "Hide ship terminal" : "Show ship terminal"}
               title={consoleVisible ? "Hide ship terminal" : "Show ship terminal"}
@@ -13411,6 +13605,8 @@ export default function ResumeSpace3D({
                 fontWeight: 700,
                 lineHeight: 1.1,
                 userSelect: "none",
+                opacity: 0,
+                transform: "translateX(200px)",
               }}
             >
               {consoleVisible ? "Hide Console" : "Show Console"}
@@ -14038,7 +14234,13 @@ export default function ResumeSpace3D({
           {/* Ship Control Bar — hidden while Project Showcase is active */}
           <UserOnScreenMessages hideTelemetry={orbitalPortfolioActive} />
           <CosmicMiniMap3D
-            visible={!isLoading && sceneReady}
+            visible={!isLoading && sceneReady && startupMiniMapVisible}
+            containerRef={startupMiniMapContainerRef}
+            initiallyMinified
+            containerStyle={{
+              opacity: 0,
+              transform: "translateX(200px)",
+            }}
             projectModeSignal={projectShowcaseActive || orbitalPortfolioActive}
             spaceshipRef={spaceshipRef}
             starDestroyerRef={starDestroyerRef}
@@ -14088,12 +14290,17 @@ export default function ResumeSpace3D({
           />
 
           {/* Ship destination nav panel — left side (all ship modes) */}
-          {shipUIPhase === "ship-engaged" && (
+          {startupDestinationsVisible && (
             <CockpitNavPanel
+              panelRef={startupDestinationsPanelRef}
               targets={navigationTargets}
               currentTarget={navCurrentTargetResolved}
               isNavigating={navigationDistance !== null}
               onNavigate={handleCockpitNavigate}
+              panelStyleOverride={{
+                opacity: 0,
+                transform: "translate(-200px, -50%)",
+              }}
             />
           )}
 

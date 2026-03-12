@@ -20,6 +20,8 @@ interface Props {
   currentTarget: string | null;
   isNavigating: boolean;
   onNavigate: (targetId: string, targetType: "section" | "moon") => void;
+  panelStyleOverride?: React.CSSProperties;
+  panelRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 // Group moons under their parent planet
@@ -30,6 +32,8 @@ const CockpitNavPanel: React.FC<Props> = ({
   currentTarget,
   isNavigating,
   onNavigate,
+  panelStyleOverride,
+  panelRef,
 }) => {
   const planets = targets.filter((t) => t.type === "section");
   const moons = targets.filter((t) => t.type === "moon");
@@ -151,7 +155,12 @@ const CockpitNavPanel: React.FC<Props> = ({
   };
 
   return (
-    <div style={panelStyle} onMouseDown={stopEvt} onPointerDown={stopEvt}>
+    <div
+      ref={panelRef}
+      style={{ ...panelStyle, ...panelStyleOverride }}
+      onMouseDown={stopEvt}
+      onPointerDown={stopEvt}
+    >
       <div style={sectionLabelStyle}>Destinations</div>
 
       {sortedPlanets.map((planet) => {
