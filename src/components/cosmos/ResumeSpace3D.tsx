@@ -9399,18 +9399,39 @@ export default function ResumeSpace3D({
       return tex;
     };
     const orbitalHaloTexture = createOrbitalHaloTexture();
-    const maxStations = Math.max(1, orbitalGroups.length);
     const stationRadius = 320;
+    const secondaryOrbitRadius = stationRadius * 0.9;
+    const laneCounts = [0, 0];
+    const laneSlotByIndex = new Array(orbitalGroups.length).fill(0);
+    orbitalGroups.forEach((_, idx) => {
+      const lane = idx % 2;
+      laneSlotByIndex[idx] = laneCounts[lane];
+      laneCounts[lane] += 1;
+    });
     const stationRecords: OrbitalPortfolioStationRecord[] = [];
     orbitalGroups.forEach((group, idx) => {
-      const t = idx / maxStations;
+      const lane = idx % 2;
+      const laneCount = Math.max(1, laneCounts[lane]);
+      const laneSlot = laneSlotByIndex[idx];
+      const t = laneSlot / laneCount;
       const a = t * Math.PI * 2;
       const stationGroup = new THREE.Group();
-      stationGroup.position.set(
-        Math.cos(a) * stationRadius,
-        Math.sin(a * 1.3) * 22,
-        Math.sin(a) * stationRadius,
-      );
+      if (lane === 0) {
+        // Primary lane: horizontal orbital band.
+        stationGroup.position.set(
+          Math.cos(a) * stationRadius,
+          Math.sin(a * 1.3) * 20,
+          Math.sin(a) * stationRadius,
+        );
+      } else {
+        // Secondary lane: perpendicular orbital band around the same core.
+        stationGroup.position.set(
+          Math.sin(a * 1.1) * 26,
+          Math.cos(a) * secondaryOrbitRadius,
+          Math.sin(a) * secondaryOrbitRadius,
+        );
+      }
+      stationGroup.userData.orbitalLane = lane;
       const ringGeo = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, 0, 0),
         stationGroup.position.clone(),
@@ -9687,6 +9708,25 @@ export default function ResumeSpace3D({
       }),
     );
     orbitalRoot.add(outerOrbit);
+    const outerOrbitPerpendicular = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(
+        Array.from({ length: 128 }, (_, i) => {
+          const a = (i / 128) * Math.PI * 2;
+          return new THREE.Vector3(
+            0,
+            Math.cos(a) * secondaryOrbitRadius,
+            Math.sin(a) * secondaryOrbitRadius,
+          );
+        }),
+      ),
+      new THREE.LineBasicMaterial({
+        color: 0x82dfff,
+        transparent: true,
+        opacity: 0.32,
+        depthWrite: false,
+      }),
+    );
+    orbitalRoot.add(outerOrbitPerpendicular);
     const concentricRings = [120, 185, 252, 320];
     concentricRings.forEach((radius, idx) => {
       const pts = Array.from({ length: 180 }, (_, i) => {
@@ -9707,6 +9747,27 @@ export default function ResumeSpace3D({
         }),
       );
       ring.rotation.x = -Math.PI * 0.08;
+      orbitalRoot.add(ring);
+    });
+    const perpendicularRings = [140, 220, secondaryOrbitRadius];
+    perpendicularRings.forEach((radius, idx) => {
+      const pts = Array.from({ length: 180 }, (_, i) => {
+        const a = (i / 180) * Math.PI * 2;
+        return new THREE.Vector3(
+          0,
+          Math.cos(a) * radius,
+          Math.sin(a) * radius,
+        );
+      });
+      const ring = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({
+          color: idx % 2 === 0 ? 0x73d8ff : 0x9eb0ff,
+          transparent: true,
+          opacity: idx === 0 ? 0.5 : 0.28,
+          depthWrite: false,
+        }),
+      );
       orbitalRoot.add(ring);
     });
     orbitalPortfolioOuterRingRef.current = outerOrbit;
