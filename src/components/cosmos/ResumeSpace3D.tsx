@@ -340,6 +340,7 @@ type OrbitalPortfolioStationRecord = {
   orbitDirection: 1 | -1;
   orbitRadius: number;
   orbitVerticalAmp: number;
+  orbitMotionBlend: number;
 };
 
 type OrbitalPortfolioMatterPacketRecord = {
@@ -1255,6 +1256,15 @@ export default function ResumeSpace3D({
   const [orbitalPortfolioSearchQuery, setOrbitalPortfolioSearchQuery] = useState("");
   const [orbitalPortfolioYearFilter, setOrbitalPortfolioYearFilter] = useState("all");
   const [orbitalPortfolioTechFilter, setOrbitalPortfolioTechFilter] = useState("all");
+  const orbitalPortfolioLastViewedRef = useRef<{
+    focusIndex: number | null;
+    variantIndex: number;
+    mediaIndex: number;
+  }>({
+    focusIndex: null,
+    variantIndex: 0,
+    mediaIndex: 0,
+  });
   const orbitalPortfolioAutoRef = useRef({
     lastAdvanceAt: 0,
     intervalMs: 3200,
@@ -2913,6 +2923,11 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioSearchQuery("");
     setOrbitalPortfolioYearFilter("all");
     setOrbitalPortfolioTechFilter("all");
+    orbitalPortfolioLastViewedRef.current = {
+      focusIndex: null,
+      variantIndex: 0,
+      mediaIndex: 0,
+    };
     setOrbitalPortfolioVariantIndex(0);
     setOrbitalPortfolioMediaIndex(0);
     orbitalPortfolioInspectedStationIndexRef.current = null;
@@ -3004,6 +3019,11 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioSearchQuery("");
     setOrbitalPortfolioYearFilter("all");
     setOrbitalPortfolioTechFilter("all");
+    orbitalPortfolioLastViewedRef.current = {
+      focusIndex: null,
+      variantIndex: 0,
+      mediaIndex: 0,
+    };
     setOrbitalPortfolioVariantIndex(0);
     setOrbitalPortfolioMediaIndex(0);
     orbitalPortfolioInspectedStationIndexRef.current = null;
@@ -6919,24 +6939,33 @@ export default function ResumeSpace3D({
           isInspected ||
           inInspectedLane ||
           (isFocused && orbitalPortfolioManualCameraLockRef.current);
-        if (!lockStationOrbit) {
-          if (orbitMotionEnabled) {
-            station.orbitAngle +=
-              ORBITAL_PORTFOLIO_STATION_ORBIT_SPEED * dt * station.orbitDirection;
-          }
-          if (station.orbitLane === 0) {
-            station.group.position.set(
-              Math.cos(station.orbitAngle) * station.orbitRadius,
-              Math.sin(station.orbitAngle * 1.3) * station.orbitVerticalAmp,
-              Math.sin(station.orbitAngle) * station.orbitRadius,
-            );
-          } else {
-            station.group.position.set(
-              Math.sin(station.orbitAngle * 1.1) * station.orbitVerticalAmp,
-              Math.cos(station.orbitAngle) * station.orbitRadius,
-              Math.sin(station.orbitAngle) * station.orbitRadius,
-            );
-          }
+        const targetOrbitBlend =
+          !orbitMotionEnabled || lockStationOrbit ? 0 : 1;
+        station.orbitMotionBlend = THREE.MathUtils.damp(
+          station.orbitMotionBlend,
+          targetOrbitBlend,
+          targetOrbitBlend > station.orbitMotionBlend ? 5.5 : 12,
+          dt,
+        );
+        if (station.orbitMotionBlend > 0.0001) {
+          station.orbitAngle +=
+            ORBITAL_PORTFOLIO_STATION_ORBIT_SPEED *
+            dt *
+            station.orbitDirection *
+            station.orbitMotionBlend;
+        }
+        if (station.orbitLane === 0) {
+          station.group.position.set(
+            Math.cos(station.orbitAngle) * station.orbitRadius,
+            Math.sin(station.orbitAngle * 1.3) * station.orbitVerticalAmp,
+            Math.sin(station.orbitAngle) * station.orbitRadius,
+          );
+        } else {
+          station.group.position.set(
+            Math.sin(station.orbitAngle * 1.1) * station.orbitVerticalAmp,
+            Math.cos(station.orbitAngle) * station.orbitRadius,
+            Math.sin(station.orbitAngle) * station.orbitRadius,
+          );
         }
         const ringPosAttr = station.ring.geometry.getAttribute("position") as
           | THREE.BufferAttribute
@@ -7004,11 +7033,14 @@ export default function ResumeSpace3D({
           tab.mesh.visible = isFocused && hasVariant;
           tab.frame.visible = isFocused && hasVariant;
           const isActiveTab = tab.variantIndex === orbitalPortfolioVariantIndex;
+          const hoverPulse =
+            0.985 + 0.015 * Math.sin(now * 0.004 + station.pulsePhase + tab.variantIndex * 0.9);
           mat.opacity = isFocused ? 0.95 : 0;
           mat.color.setHex(isActiveTab ? 0x1d466d : 0x102742);
           frameMat.opacity = isFocused ? (isActiveTab ? 0.96 : 0.5) : 0;
           frameMat.color.setHex(isActiveTab ? 0xb4eeff : 0x69a9d6);
-          tab.mesh.scale.setScalar(isFocused ? (isActiveTab ? 1.03 : 0.97) : 0.9);
+          const baseScale = isFocused ? (isActiveTab ? 1.03 : 0.97) : 0.9;
+          tab.mesh.scale.setScalar(baseScale * (isFocused ? hoverPulse : 1));
           tab.frame.scale.copy(tab.mesh.scale);
         });
         station.cardThumbMeshes.forEach((thumb) => {
@@ -7231,6 +7263,53 @@ export default function ResumeSpace3D({
       Math.max(0, mediaItems.length - 1),
     );
     const media = mediaItems[mediaIndex];
+    const prevViewed = orbitalPortfolioLastViewedRef.current;
+    const sameFocusedStation = prevViewed.focusIndex === focusIndex;
+    const contentChangedOnFocusedStation =
+      sameFocusedStation &&
+      (prevViewed.variantIndex !== variantIndex || prevViewed.mediaIndex !== mediaIndex);
+    orbitalPortfolioLastViewedRef.current = {
+      focusIndex,
+      variantIndex,
+      mediaIndex,
+    };
+    if (
+      contentChangedOnFocusedStation &&
+      orbitalPortfolioInspectedStationIndexRef.current === focusIndex
+    ) {
+      const controls = sceneRef.current.controls;
+      const camera = sceneRef.current.camera;
+      if (controls && camera) {
+        const plateWorld = new THREE.Vector3();
+        station.plate.getWorldPosition(plateWorld);
+        const plateQuat = new THREE.Quaternion();
+        station.plate.getWorldQuaternion(plateQuat);
+        const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(plateQuat).normalize();
+        const up = new THREE.Vector3(0, 1, 0);
+        const savedDistance = orbitalPortfolioInspectDistanceRef.current;
+        const inspectDistance =
+          typeof savedDistance === "number" &&
+          savedDistance >= ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE &&
+          savedDistance <= ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE
+            ? savedDistance
+            : ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE;
+        const upLift = THREE.MathUtils.clamp(inspectDistance * 0.066, 6, 18);
+        const camPos = plateWorld
+          .clone()
+          .addScaledVector(normal, inspectDistance)
+          .addScaledVector(up, upLift);
+        const lookTarget = plateWorld.clone().addScaledVector(normal, 2);
+        controls.setLookAt(
+          camPos.x,
+          camPos.y,
+          camPos.z,
+          lookTarget.x,
+          lookTarget.y,
+          lookTarget.z,
+          true,
+        );
+      }
+    }
 
     const assignGeneratedTextTexture = (
       mat: THREE.MeshBasicMaterial,
@@ -9755,6 +9834,7 @@ export default function ResumeSpace3D({
         orbitDirection,
         orbitRadius,
         orbitVerticalAmp,
+        orbitMotionBlend: 1,
       });
     });
     const outerOrbit = new THREE.Line(
