@@ -135,7 +135,8 @@ const ORBITAL_PORTFOLIO_DEBUG_LOGS = true;
 const ORBITAL_PORTFOLIO_NONFOCUS_PLATE_OPACITY = 0.74;
 const ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS = 5;
 const ORBITAL_PORTFOLIO_CARD_MAX_THUMBS = 6;
-const ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE = 120;
+const ORBITAL_PORTFOLIO_STATION_ORBIT_SPEED = 0.16;
+const ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE = 148;
 const ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE = 70;
 const ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE = 280;
 const MOON_TRAVEL_SIGN_MAX_ACTIVE = 28;
@@ -334,6 +335,11 @@ type OrbitalPortfolioStationRecord = {
     frame: THREE.Mesh;
     mediaIndex: number;
   }>;
+  orbitLane: 0 | 1;
+  orbitAngle: number;
+  orbitDirection: 1 | -1;
+  orbitRadius: number;
+  orbitVerticalAmp: number;
 };
 
 type OrbitalPortfolioMatterPacketRecord = {
@@ -1236,6 +1242,8 @@ export default function ResumeSpace3D({
   const orbitalPortfolioActiveRef = useRef(false);
   const [orbitalPortfolioPlaying, setOrbitalPortfolioPlaying] = useState(true);
   const orbitalPortfolioPlayingRef = useRef(true);
+  const [orbitalPortfolioOrbitsEnabled, setOrbitalPortfolioOrbitsEnabled] = useState(true);
+  const orbitalPortfolioOrbitsEnabledRef = useRef(true);
   const [orbitalPortfolioAutoplayEnabled, setOrbitalPortfolioAutoplayEnabled] =
     useState(true);
   const orbitalPortfolioAutoplayEnabledRef = useRef(true);
@@ -1274,6 +1282,9 @@ export default function ResumeSpace3D({
   useEffect(() => {
     orbitalPortfolioVariantIndexRef.current = orbitalPortfolioVariantIndex;
   }, [orbitalPortfolioVariantIndex]);
+  useEffect(() => {
+    orbitalPortfolioOrbitsEnabledRef.current = orbitalPortfolioOrbitsEnabled;
+  }, [orbitalPortfolioOrbitsEnabled]);
   useEffect(() => {
     orbitSignTuningRef.current = orbitSignTuning;
     // Apply key tuning controls immediately without waiting for next stream cycle.
@@ -2894,8 +2905,10 @@ export default function ResumeSpace3D({
       followingSpaceshipRef.current = true;
     }
     orbitalPortfolioPlayingRef.current = true;
+    orbitalPortfolioOrbitsEnabledRef.current = true;
     orbitalPortfolioAutoplayEnabledRef.current = true;
     setOrbitalPortfolioPlaying(true);
+    setOrbitalPortfolioOrbitsEnabled(true);
     setOrbitalPortfolioAutoplayEnabled(true);
     setOrbitalPortfolioSearchQuery("");
     setOrbitalPortfolioYearFilter("all");
@@ -2983,8 +2996,10 @@ export default function ResumeSpace3D({
     orbitalPortfolioDebugDumpedRef.current = false;
     orbitalPortfolioManualCameraLockRef.current = false;
     orbitalPortfolioPlayingRef.current = true;
+    orbitalPortfolioOrbitsEnabledRef.current = true;
     orbitalPortfolioAutoplayEnabledRef.current = true;
     setOrbitalPortfolioPlaying(true);
+    setOrbitalPortfolioOrbitsEnabled(true);
     setOrbitalPortfolioAutoplayEnabled(true);
     setOrbitalPortfolioSearchQuery("");
     setOrbitalPortfolioYearFilter("all");
@@ -6883,12 +6898,53 @@ export default function ResumeSpace3D({
       let nonFocusedWithoutTexture = 0;
       let haloThumbsMissingMap = 0;
       const stationDebugRows: string[] = [];
+      const orbitMotionEnabled = orbitalPortfolioOrbitsEnabledRef.current;
+      const inspectedStationIndex = orbitalPortfolioInspectedStationIndexRef.current;
+      const inspectedLane =
+        inspectedStationIndex !== null
+          ? orbitalPortfolioStationsRef.current[inspectedStationIndex]?.orbitLane
+          : undefined;
       orbitalPortfolioStationsRef.current.forEach((station, idx) => {
         station.group.rotation.y += dt * 0.0;
         station.mediaHaloGroup.rotation.y -= dt * 0.0;
         station.mediaHaloGroup.rotation.x = 0;
         const isFocused = idx === orbitalPortfolioFocusIndexRef.current;
         const isInspected = idx === orbitalPortfolioInspectedStationIndexRef.current;
+        // Keep the currently visited card stable so camera-inspect never drifts.
+        // Also freeze all peers in the same orbital lane to prevent distracting
+        // pass-through motion across the focused card while inspecting.
+        const inInspectedLane =
+          typeof inspectedLane === "number" && station.orbitLane === inspectedLane;
+        const lockStationOrbit =
+          isInspected ||
+          inInspectedLane ||
+          (isFocused && orbitalPortfolioManualCameraLockRef.current);
+        if (!lockStationOrbit) {
+          if (orbitMotionEnabled) {
+            station.orbitAngle +=
+              ORBITAL_PORTFOLIO_STATION_ORBIT_SPEED * dt * station.orbitDirection;
+          }
+          if (station.orbitLane === 0) {
+            station.group.position.set(
+              Math.cos(station.orbitAngle) * station.orbitRadius,
+              Math.sin(station.orbitAngle * 1.3) * station.orbitVerticalAmp,
+              Math.sin(station.orbitAngle) * station.orbitRadius,
+            );
+          } else {
+            station.group.position.set(
+              Math.sin(station.orbitAngle * 1.1) * station.orbitVerticalAmp,
+              Math.cos(station.orbitAngle) * station.orbitRadius,
+              Math.sin(station.orbitAngle) * station.orbitRadius,
+            );
+          }
+        }
+        const ringPosAttr = station.ring.geometry.getAttribute("position") as
+          | THREE.BufferAttribute
+          | undefined;
+        if (ringPosAttr && ringPosAttr.count >= 2) {
+          ringPosAttr.setXYZ(1, station.group.position.x, station.group.position.y, station.group.position.z);
+          ringPosAttr.needsUpdate = true;
+        }
         const straightenTarget = isInspected ? 0.96 : isFocused ? 0.06 : 0;
         const straightenDamping = isInspected ? 13.5 : 4.8;
         station.straightenBlend = THREE.MathUtils.damp(
@@ -9415,20 +9471,23 @@ export default function ResumeSpace3D({
       const laneSlot = laneSlotByIndex[idx];
       const t = laneSlot / laneCount;
       const a = t * Math.PI * 2;
+      const orbitRadius = lane === 0 ? stationRadius : secondaryOrbitRadius;
+      const orbitVerticalAmp = lane === 0 ? 20 : 26;
+      const orbitDirection: 1 | -1 = lane === 0 ? 1 : -1;
       const stationGroup = new THREE.Group();
       if (lane === 0) {
         // Primary lane: horizontal orbital band.
         stationGroup.position.set(
-          Math.cos(a) * stationRadius,
-          Math.sin(a * 1.3) * 20,
-          Math.sin(a) * stationRadius,
+          Math.cos(a) * orbitRadius,
+          Math.sin(a * 1.3) * orbitVerticalAmp,
+          Math.sin(a) * orbitRadius,
         );
       } else {
         // Secondary lane: perpendicular orbital band around the same core.
         stationGroup.position.set(
-          Math.sin(a * 1.1) * 26,
-          Math.cos(a) * secondaryOrbitRadius,
-          Math.sin(a) * secondaryOrbitRadius,
+          Math.sin(a * 1.1) * orbitVerticalAmp,
+          Math.cos(a) * orbitRadius,
+          Math.sin(a) * orbitRadius,
         );
       }
       stationGroup.userData.orbitalLane = lane;
@@ -9691,6 +9750,11 @@ export default function ResumeSpace3D({
         cardTitleMesh,
         cardVariantTabs,
         cardThumbMeshes,
+        orbitLane: lane as 0 | 1,
+        orbitAngle: a,
+        orbitDirection,
+        orbitRadius,
+        orbitVerticalAmp,
       });
     });
     const outerOrbit = new THREE.Line(
@@ -15123,6 +15187,24 @@ export default function ResumeSpace3D({
                         }}
                       >
                         Next
+                      </button>
+                      <button
+                        onClick={() => {
+                          const next = !orbitalPortfolioOrbitsEnabledRef.current;
+                          orbitalPortfolioOrbitsEnabledRef.current = next;
+                          setOrbitalPortfolioOrbitsEnabled(next);
+                        }}
+                        style={{
+                          padding: "7px 10px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(170, 225, 255, 0.45)",
+                          background: "rgba(8, 18, 34, 0.82)",
+                          color: "#dff3ff",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {orbitalPortfolioOrbitsEnabled ? "Stop Orbits" : "Start Orbits"}
                       </button>
                       <label
                         style={{
