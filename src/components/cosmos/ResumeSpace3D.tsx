@@ -155,6 +155,7 @@ const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(1324, 180, 16869);
 const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 900;
 const ENABLE_POST_LOAD_COSMOS_MICRO_INTRO = false;
+const ENABLE_STAR_DESTROYER_INTRO_FLYBY = false;
 const CAMERA_TRACE_ENABLED = true;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 // Recenter deep-space destinations so the universe extent remains sun-centered.
@@ -4208,19 +4209,8 @@ export default function ResumeSpace3D({
         shipViewModeRef.current = "exterior";
         setShipUIPhase("ship-engaged");
 
-        if (sceneRef.current.controls && spaceshipRef.current) {
-          const cc = sceneRef.current.controls;
-          const ship = spaceshipRef.current;
-          const followDist = optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
-          const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion);
-          const camPos = ship.position.clone().addScaledVector(behind, followDist);
-          camPos.y += FOLLOW_HEIGHT;
-          cc.setLookAt(
-            camPos.x, camPos.y, camPos.z,
-            ship.position.x, ship.position.y, ship.position.z,
-            true,
-          );
-        }
+        // Keep camera fixed at intro settle while Falcon performs pickup
+        // approach. Avoid auto-follow snap here; handoff happens later.
       }
     }, 500);
     return () => clearInterval(check);
@@ -6330,6 +6320,11 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     if (isLoading || !sceneReady) return;
+    if (!ENABLE_STAR_DESTROYER_INTRO_FLYBY) {
+      starDestroyerIntroFlybyPlayedRef.current = true;
+      starDestroyerIntroFlybyRef.current.active = false;
+      return;
+    }
     if (starDestroyerIntroFlybyPlayedRef.current) return;
     let raf = 0;
     const camDir = new THREE.Vector3();
@@ -9760,6 +9755,8 @@ export default function ResumeSpace3D({
 
         // Position it initially near the sun
         spaceship.position.set(FALCON_INITIAL_POS.x, FALCON_INITIAL_POS.y, FALCON_INITIAL_POS.z);
+        // Keep Falcon hidden until the intro pickup cinematic reveals it.
+        spaceship.visible = false;
 
         // Cache rear blue engine-panel materials so render loop can drive
         // emissive intensity directly from ship speed.
