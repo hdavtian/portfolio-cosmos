@@ -6795,7 +6795,12 @@ export default function ResumeSpace3D({
           matterPos.copy(matterFrom).add(packet.startOffset).lerp(matterTarget, packet.progress);
           const arc = Math.sin(packet.progress * Math.PI) * (8 + (idx % 5) * 1.4);
           matterPos.y += arc;
-          packet.mesh.position.copy(matterPos);
+          const packetParent = packet.mesh.parent;
+          if (packetParent) {
+            packetParent.worldToLocal(packet.mesh.position.copy(matterPos));
+          } else {
+            packet.mesh.position.copy(matterPos);
+          }
           packet.mesh.quaternion.copy(camera.quaternion);
           const pmat = packet.mesh.material as THREE.MeshBasicMaterial;
           pmat.opacity = 0.24 + (0.5 + 0.5 * Math.sin(now * 0.004 + packet.phase)) * 0.58;
@@ -14376,7 +14381,8 @@ export default function ResumeSpace3D({
                           style={{
                             width: "100%",
                             height: "100%",
-                            objectFit: activeMedia.fit === "cover" ? "cover" : "contain",
+                            objectFit: "cover",
+                            objectPosition: "left top",
                             display: "block",
                             background: "#050a15",
                           }}
