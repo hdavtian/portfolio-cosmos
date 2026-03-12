@@ -335,7 +335,6 @@ type MoonTravelSignRecord = {
   ageMs: number;
   ttlMs: number;
   velocity: THREE.Vector3;
-  mode: "a" | "b";
   baseScale: THREE.Vector3;
   arcStart?: THREE.Vector3;
   arcControl?: THREE.Vector3;
@@ -1352,7 +1351,7 @@ export default function ResumeSpace3D({
       if (raw === "tech" || raw === "code" || raw === "memory" || raw === "default") return raw;
       return "default";
     };
-    const catalog = new Map<string, { pool: JobMemoryEntry[]; mode: "a" | "b" }>();
+    const catalog = new Map<string, { pool: JobMemoryEntry[] }>();
     entries.forEach((entry) => {
       const id = String(entry.id ?? "").toLowerCase();
       if (!id) return;
@@ -1373,10 +1372,8 @@ export default function ResumeSpace3D({
             .filter((v): v is JobMemoryEntry => !!v)
         : [];
       const company = String(entry.company ?? "").trim();
-      const modeRaw = String(entry.travelSignMode ?? "b").trim().toLowerCase();
-      const mode: "a" | "b" = modeRaw === "a" ? "a" : "b";
-      if (sequence.length > 0) catalog.set(id, { pool: sequence, mode });
-      else if (company) catalog.set(id, { pool: [{ text: company, type: "default" }], mode });
+      if (sequence.length > 0) catalog.set(id, { pool: sequence });
+      else if (company) catalog.set(id, { pool: [{ text: company, type: "default" }] });
     });
     return catalog;
   }, []);
@@ -7066,7 +7063,6 @@ export default function ResumeSpace3D({
       companyId: string,
       moonMesh: THREE.Mesh,
       moonRadius: number,
-      mode: "a" | "b",
     ) => {
       const record = moonTravelSignCatalog.get(companyId);
       if (!record) return;
@@ -7105,10 +7101,7 @@ export default function ResumeSpace3D({
       const screenRightSign = camRightProbeNdc.x >= moonCenterNdc.x ? 1 : -1;
       const laneScreen = laneKey * screenRightSign;
       // Camera-aware spawn: keep signs on visible upper/front moon area.
-      const horizonDistance =
-        mode === "a"
-          ? moonRadius * (1.02 + Math.random() * 0.1)
-          : moonRadius * (1.01 + Math.random() * 0.06);
+      const horizonDistance = moonRadius * (1.01 + Math.random() * 0.06);
       moonTopNdc.copy(moonCenter).addScaledVector(camUp, moonRadius).project(cam);
       moonBottomNdc.copy(moonCenter).addScaledVector(camUp, -moonRadius).project(cam);
       const moonNdcRadiusY = Math.max(0.02, Math.abs(moonTopNdc.y - moonBottomNdc.y) * 0.5);
@@ -7122,8 +7115,7 @@ export default function ResumeSpace3D({
           (Math.random() - 0.5) * moonNdcRadiusX * 0.24;
         const pickY =
           moonCenterNdc.y +
-          moonNdcRadiusY * (0.18 + Math.random() * 0.7) +
-          (mode === "b" ? 0.03 : 0);
+          moonNdcRadiusY * (0.21 + Math.random() * 0.66);
         ndcPick.set(
           THREE.MathUtils.clamp(pickX, -0.86, 0.86),
           THREE.MathUtils.clamp(pickY, -0.72, 0.9),
@@ -7187,42 +7179,20 @@ export default function ResumeSpace3D({
       let arcStart: THREE.Vector3 | undefined;
       let arcControl: THREE.Vector3 | undefined;
       let arcEnd: THREE.Vector3 | undefined;
-      if (mode === "b") {
-        const mat = new THREE.SpriteMaterial({
-          map: tex,
-          transparent: true,
-          opacity: 0.58 * lightMul,
-          depthWrite: false,
-          depthTest: true,
-          blending: THREE.NormalBlending,
-          toneMapped: false,
-        });
-        const sprite = new THREE.Sprite(mat);
-        // Start tiny near horizon; it grows as it approaches viewer.
-        sprite.scale.copy(baseScale).multiplyScalar(0.2 + Math.random() * 0.08);
-        signObject = sprite;
-        signMaterial = mat;
-      } else {
-        const mat = new THREE.SpriteMaterial({
-          map: tex,
-          transparent: true,
-          opacity: 0.54 * lightMul,
-          depthWrite: false,
-          depthTest: true,
-          blending: THREE.NormalBlending,
-          toneMapped: false,
-        });
-        const sprite = new THREE.Sprite(mat);
-        sprite.scale.copy(baseScale);
-        // Keep the accidental cinematic orientation for mode A.
-        const signFace = camToMoon.clone().multiplyScalar(-1).normalize();
-        const signUp = up.clone();
-        const spriteRight = new THREE.Vector3().crossVectors(signUp, signFace).normalize();
-        const spriteMat4 = new THREE.Matrix4().makeBasis(spriteRight, signUp, signFace);
-        sprite.quaternion.setFromRotationMatrix(spriteMat4);
-        signObject = sprite;
-        signMaterial = mat;
-      }
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        opacity: 0.58 * lightMul,
+        depthWrite: false,
+        depthTest: true,
+        blending: THREE.NormalBlending,
+        toneMapped: false,
+      });
+      const sprite = new THREE.Sprite(mat);
+      // Start tiny near horizon; it grows as it approaches viewer.
+      sprite.scale.copy(baseScale).multiplyScalar(0.2 + Math.random() * 0.08);
+      signObject = sprite;
+      signMaterial = mat;
       signObject.position.set(
         worldPos.x,
         worldPos.y,
@@ -7230,38 +7200,24 @@ export default function ResumeSpace3D({
       );
       signObject.userData.orbitSign = true;
       group.add(signObject);
-      if (mode === "b") {
-        arcStart = worldPos.clone();
-        arcEnd = cam.position
-          .clone()
-          .addScaledVector(camForward, -24 - Math.random() * 12)
-          .addScaledVector(camUp, 4 + Math.random() * 8);
-        arcMid
-          .copy(arcStart)
-          .lerp(cam.position, 0.52)
-          .addScaledVector(camUp, 10 + Math.random() * 6)
-          .addScaledVector(camRight, laneScreen * (8 + Math.random() * 4.5));
-        arcControl = arcMid.clone();
-      }
-      const drift =
-        mode === "a"
-          ? camUp
-              .clone()
-              .multiplyScalar(4.6 + Math.random() * 2.4)
-              .add(
-                tangent
-                  .clone()
-                  .multiplyScalar((Math.random() < 0.5 ? -1 : 1) * (1.2 + Math.random() * 1.4)),
-              )
-              .add(camToMoon.clone().multiplyScalar(2.1 + Math.random() * 1.8))
-          : new THREE.Vector3(0, 0, 0);
+      arcStart = worldPos.clone();
+      arcEnd = cam.position
+        .clone()
+        .addScaledVector(camForward, -24 - Math.random() * 12)
+        .addScaledVector(camUp, 4 + Math.random() * 8);
+      arcMid
+        .copy(arcStart)
+        .lerp(cam.position, 0.52)
+        .addScaledVector(camUp, 10 + Math.random() * 6)
+        .addScaledVector(camRight, laneScreen * (8 + Math.random() * 4.5));
+      arcControl = arcMid.clone();
+      const drift = new THREE.Vector3(0, 0, 0);
       moonTravelSignsRef.current.push({
         object: signObject,
         material: signMaterial,
         ageMs: 0,
         ttlMs: 9000 + Math.random() * 2400,
         velocity: drift,
-        mode,
         baseScale,
         arcStart,
         arcControl,
@@ -7271,7 +7227,7 @@ export default function ResumeSpace3D({
       if (MOON_ORBIT_SIGN_DEBUG_LOGS) {
         const p = signObject.position;
         shipLog(
-          `[ORBSIGN] spawn mode=${mode} "${text.slice(0, 42)}${text.length > 42 ? "..." : ""}" @ [${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}]`,
+          `[ORBSIGN] spawn "${text.slice(0, 42)}${text.length > 42 ? "..." : ""}" @ [${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}]`,
           "info",
         );
       }
@@ -7299,15 +7255,8 @@ export default function ResumeSpace3D({
         const moonIdDbg = moonMesh
           ? String((moonMesh.userData as { moonId?: unknown }).moonId ?? "n/a")
           : "none";
-        const modeForLog = moonMesh
-          ? moonTravelSignCatalog.get(
-              String((moonMesh.userData as { moonId?: unknown }).moonId ?? "")
-                .toLowerCase()
-                .replace(/^moon-/, ""),
-            )?.mode ?? "n/a"
-          : "n/a";
         shipLog(
-          `[ORBSIGN] phase=${orbitPhase} active=${isOrbitSignageActive ? 1 : 0} moon=${moonIdDbg} mode=${modeForLog} signs=${moonTravelSignsRef.current.length} spawned=${spawnedSinceLastLog}`,
+          `[ORBSIGN] phase=${orbitPhase} active=${isOrbitSignageActive ? 1 : 0} moon=${moonIdDbg} signs=${moonTravelSignsRef.current.length} spawned=${spawnedSinceLastLog}`,
           "info",
         );
         spawnedSinceLastLog = 0;
@@ -7362,7 +7311,6 @@ export default function ResumeSpace3D({
           .replace(/\s+/g, "-");
       const activeCompanyId = moonIdRaw;
       if (!moonTravelSignCatalog.has(activeCompanyId)) return;
-      const signMode = moonTravelSignCatalog.get(activeCompanyId)?.mode ?? "b";
       if (moonTravelSignActiveCompanyRef.current !== activeCompanyId) {
         moonTravelSignActiveCompanyRef.current = activeCompanyId;
         moonTravelSignPoolRef.current =
@@ -7411,7 +7359,7 @@ export default function ResumeSpace3D({
             if (parent) parent.remove(oldest.object);
             oldest.material.dispose();
           }
-          spawnSign(activeCompanyId, moonMesh, moonRadius, signMode);
+          spawnSign(activeCompanyId, moonMesh, moonRadius);
           spawnedThisTick += 1;
           if (moonTravelSignSequenceWrappedRef.current) {
             moonTravelSignPauseUntilRef.current =
@@ -7434,7 +7382,7 @@ export default function ResumeSpace3D({
         record.ageMs += dt * 1000 * travelSpeed;
         const mat = record.material as THREE.Material & { opacity?: number };
         const t = THREE.MathUtils.clamp(record.ageMs / Math.max(record.ttlMs, 1), 0, 1);
-        if (record.mode === "b" && record.arcStart && record.arcControl && record.arcEnd) {
+        if (record.arcStart && record.arcControl && record.arcEnd) {
           const inv = 1 - t;
           record.object.position
             .copy(record.arcStart)
@@ -7450,7 +7398,7 @@ export default function ResumeSpace3D({
           record.object.scale.copy(record.baseScale).multiplyScalar(riseScale);
         }
         const fadeIn = THREE.MathUtils.clamp(t / 0.15, 0, 1);
-        const fadeOut = THREE.MathUtils.clamp((1 - t) / (record.mode === "b" ? 0.1 : 0.22), 0, 1);
+        const fadeOut = THREE.MathUtils.clamp((1 - t) / 0.1, 0, 1);
         if (typeof mat.opacity === "number") {
           mat.opacity = (0.06 + Math.min(fadeIn, fadeOut) * 0.42) * lightMul;
         }

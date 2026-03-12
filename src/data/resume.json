@@ -31,7 +31,6 @@
         { "type": "memory", "text": "Led automation platform initiative" },
         { "type": "memory", "text": "Mentored cross-functional teams" }
       ],
-      "travelSignMode": "b",
       "navLabel": "InvestCloud",
       "location": "Los Angeles, CA",
       "startDate": "04/2018",
@@ -111,7 +110,6 @@
         { "type": "memory", "text": "Migrated infra to AWS" },
         { "type": "memory", "text": "Introduced jQuery to the team" }
       ],
-      "travelSignMode": "a",
       "navLabel": "Boingo",
       "location": "Los Angeles, CA",
       "startDate": "08/2010",
