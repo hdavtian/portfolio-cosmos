@@ -136,7 +136,7 @@ const ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE = 120;
 const ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE = 70;
 const ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE = 280;
 const MOON_TRAVEL_SIGN_MAX_ACTIVE = 28;
-const MOON_ORBIT_SIGN_DEBUG_LOGS = true;
+const MOON_ORBIT_SIGN_DEBUG_LOGS = false;
 // Card layer stays on the overlay pass to avoid bloom/tonemapping washout.
 const PROJECT_SHOWCASE_CARD_LAYER = 1;
 const SKILLS_LATTICE_LAYER = 3;
@@ -4291,6 +4291,12 @@ export default function ResumeSpace3D({
             return next;
           });
         },
+      },
+      {
+        id: "capture-camera-snapshot",
+        label: "captureCameraSnapshot()",
+        hint: "Copy camera snapshot JSON",
+        onRun: () => invoke("captureCameraSnapshot"),
       },
     ];
   }, [shipLog]);
@@ -11918,11 +11924,10 @@ export default function ResumeSpace3D({
     registerPlanetData();
 
     // ── CAMERA DEBUG TOOL ──────────────────────────────────────────
-    // Exposes window.__captureViewpoint(planetName?) to log the
-    // current camera position, angle, and distance relative to a
-    // planet.  The user can then communicate exact viewpoint data.
-    // Press Shift+F8 in the browser as a shortcut.
-    (window as any).__captureViewpoint = (planetName?: string) => {
+    // Exposes window.captureCameraSnapshot(planetName?) to copy JSON with
+    // camera/controls/mode context so a view can be reconstructed exactly.
+    // Shift+F8 is a shortcut. __captureViewpoint is kept as an alias.
+    (window as any).captureCameraSnapshot = (planetName?: string) => {
       const cam = sceneRef.current.camera;
       const cc = sceneRef.current.controls;
       if (!cam) {
@@ -11932,7 +11937,103 @@ export default function ResumeSpace3D({
 
       const camPos = cam.position.clone();
       const orbitTarget = new THREE.Vector3();
-      if (cc) (cc as any).getTarget(orbitTarget);
+      if (cc) (cc as any).getTarget?.(orbitTarget);
+      const perspectiveCam =
+        cam instanceof THREE.PerspectiveCamera ? cam : null;
+      const controlsAny = cc as unknown as {
+        minDistance?: number;
+        maxDistance?: number;
+        smoothTime?: number;
+        draggingSmoothTime?: number;
+        dollySpeed?: number;
+      };
+      const round = (n: number, digits = 3) =>
+        Number.isFinite(n) ? Number(n.toFixed(digits)) : n;
+      const asVec = (v: THREE.Vector3) => ({
+        x: round(v.x),
+        y: round(v.y),
+        z: round(v.z),
+      });
+      const asQuat = (q: THREE.Quaternion) => ({
+        x: round(q.x, 5),
+        y: round(q.y, 5),
+        z: round(q.z, 5),
+        w: round(q.w, 5),
+      });
+      const snapshot = {
+        schema: "resume-space-camera-snapshot-v1",
+        capturedAtIso: new Date().toISOString(),
+        camera: {
+          position: asVec(camPos),
+          quaternion: asQuat(cam.quaternion),
+          up: asVec(cam.up),
+          near: round(cam.near),
+          far: round(cam.far),
+          layersMask: cam.layers.mask,
+          fov: perspectiveCam ? round(perspectiveCam.fov, 4) : undefined,
+          zoom: round(cam.zoom, 4),
+        },
+        controls: {
+          enabled: !!cc?.enabled,
+          target: asVec(orbitTarget),
+          minDistance:
+            typeof controlsAny?.minDistance === "number"
+              ? round(controlsAny.minDistance)
+              : undefined,
+          maxDistance:
+            typeof controlsAny?.maxDistance === "number"
+              ? round(controlsAny.maxDistance)
+              : undefined,
+          smoothTime:
+            typeof controlsAny?.smoothTime === "number"
+              ? round(controlsAny.smoothTime, 4)
+              : undefined,
+          draggingSmoothTime:
+            typeof controlsAny?.draggingSmoothTime === "number"
+              ? round(controlsAny.draggingSmoothTime, 4)
+              : undefined,
+          dollySpeed:
+            typeof controlsAny?.dollySpeed === "number"
+              ? round(controlsAny.dollySpeed, 4)
+              : undefined,
+        },
+        appState: {
+          currentNavigationTarget: currentNavigationTargetRef.current ?? null,
+          followingSpaceship: followingSpaceshipRef.current,
+          insideShip: insideShipRef.current,
+          shipViewMode: shipViewModeRef.current,
+          projectShowcaseActive: projectShowcaseActiveRef.current,
+          orbitalPortfolioActive: orbitalPortfolioActiveRef.current,
+          orbitalPortfolioPlaying: orbitalPortfolioPlayingRef.current,
+          skillsLatticeActive: skillsLatticeActiveRef.current,
+          aboutMemorySquareActive: aboutMemorySquareActiveRef.current,
+          navFlags: {
+            projectsNavHereActive,
+            portfolioNavHereActive,
+            skillsNavHereActive,
+            aboutNavHereActive,
+          },
+        },
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          devicePixelRatio: round(window.devicePixelRatio, 4),
+        },
+        renderer: {
+          toneMappingExposure: rendererRef.current
+            ? round(rendererRef.current.toneMappingExposure, 4)
+            : undefined,
+        },
+      };
+
+      const snapshotJson = JSON.stringify(snapshot, null, 2);
+      console.log("[CAMERA_SNAPSHOT]", snapshot);
+      try {
+        void navigator.clipboard?.writeText(snapshotJson);
+        shipLog("Camera snapshot copied to clipboard", "info");
+      } catch {
+        shipLog("Camera snapshot capture complete (clipboard unavailable)", "info");
+      }
 
       // Gather all planets
       const planets: Array<{
@@ -12042,12 +12143,15 @@ export default function ResumeSpace3D({
       }
       console.log("═══════════════════════════════════════");
     };
+    (window as any).__captureViewpoint = (planetName?: string) => {
+      (window as any).captureCameraSnapshot(planetName);
+    };
 
     // Keyboard shortcut: Shift+F8 to capture viewpoint
     const handleDebugKey = (e: KeyboardEvent) => {
       if (e.key === "F8" && e.shiftKey) {
         e.preventDefault();
-        (window as any).__captureViewpoint();
+        (window as any).captureCameraSnapshot();
       }
     };
     window.addEventListener("keydown", handleDebugKey);
@@ -12958,9 +13062,12 @@ export default function ResumeSpace3D({
       window.removeEventListener("pointerdown", onDebugPointerDown, true);
       window.removeEventListener("pointerup", onDebugPointerUp, true);
       window.removeEventListener("keydown", onDebugLabelKey, { capture: true });
+      window.removeEventListener("keydown", handleDebugKey);
       window.removeEventListener("keydown", handleExploreKeyDown, { capture: true });
       window.removeEventListener("keyup", handleExploreKeyUp, { capture: true });
       clearInterval(explorePollInterval);
+      delete (window as any).captureCameraSnapshot;
+      delete (window as any).__captureViewpoint;
 
       cancelIntroSequence();
 
