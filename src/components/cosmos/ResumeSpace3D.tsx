@@ -1177,10 +1177,10 @@ export default function ResumeSpace3D({
     timeBetweenMessagesSec: 1.8,
     continuousLoop: true,
     waitAfterStreamSec: 60,
-    travelSpeed: 0.2,
-    lightIntensity: 0.8,
-    startFontScale: 0.12,
-    endFontScale: 0.6,
+    travelSpeed: 0.9,
+    lightIntensity: 1.7,
+    startFontScale: 0.1,
+    endFontScale: 1.86,
   });
   const orbitSignTuningRef = useRef<OrbitSignTuning>(orbitSignTuning);
   const [showOrbitSignTuningControls, setShowOrbitSignTuningControls] = useState(false);
