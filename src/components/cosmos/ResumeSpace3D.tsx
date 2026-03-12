@@ -517,25 +517,32 @@ const createMoonTravelSignTexture = (entry: JobMemoryEntry): THREE.CanvasTexture
   ctx.lineWidth = Math.max(3, Math.floor(fontSize * 0.05));
   ctx.strokeStyle = style.strokeStyle;
   ctx.fillStyle = style.fillStyle;
+  const x = canvas.width * 0.5;
+  const lineGap = fontSize * 1.16;
+  const startY = canvas.height * 0.5 - ((lines.length - 1) * lineGap) * 0.5;
+  const widestLine = lines.reduce((max, line) => Math.max(max, ctx.measureText(line).width), 0);
   if (style.drawBackdrop) {
-    const padX = canvas.width * 0.08;
-    const padY = canvas.height * 0.2;
-    const x = padX;
-    const y = padY;
-    const w = canvas.width - padX * 2;
-    const h = canvas.height - padY * 2;
+    // For code-style memories, make the box hug text like fit-content with light padding.
+    const padX = Math.max(24, fontSize * 0.34);
+    const padY = Math.max(14, fontSize * 0.2);
+    const textTop = startY - fontSize * 0.62;
+    const textBottom = startY + (lines.length - 1) * lineGap + fontSize * 0.62;
+    const w = Math.min(canvas.width - 24, widestLine + padX * 2);
+    const h = Math.min(canvas.height - 24, textBottom - textTop + padY * 2);
+    const left = THREE.MathUtils.clamp(x - w * 0.5, 12, canvas.width - w - 12);
+    const top = THREE.MathUtils.clamp(textTop - padY, 12, canvas.height - h - 12);
     const r = Math.min(22, h * 0.2);
     ctx.shadowBlur = 0;
     ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.moveTo(left + r, top);
+    ctx.lineTo(left + w - r, top);
+    ctx.quadraticCurveTo(left + w, top, left + w, top + r);
+    ctx.lineTo(left + w, top + h - r);
+    ctx.quadraticCurveTo(left + w, top + h, left + w - r, top + h);
+    ctx.lineTo(left + r, top + h);
+    ctx.quadraticCurveTo(left, top + h, left, top + h - r);
+    ctx.lineTo(left, top + r);
+    ctx.quadraticCurveTo(left, top, left + r, top);
     ctx.closePath();
     ctx.fillStyle = style.backdropFill ?? "rgba(10, 10, 12, 0.9)";
     ctx.fill();
@@ -547,9 +554,6 @@ const createMoonTravelSignTexture = (entry: JobMemoryEntry): THREE.CanvasTexture
     ctx.strokeStyle = style.strokeStyle;
     ctx.fillStyle = style.fillStyle;
   }
-  const x = canvas.width * 0.5;
-  const lineGap = fontSize * 1.16;
-  const startY = canvas.height * 0.5 - ((lines.length - 1) * lineGap) * 0.5;
   lines.forEach((line, idx) => {
     const y = startY + idx * lineGap;
     ctx.strokeText(line, x, y);
@@ -1172,7 +1176,7 @@ export default function ResumeSpace3D({
   const [orbitSignTuning, setOrbitSignTuning] = useState<OrbitSignTuning>({
     timeBetweenMessagesSec: 1.8,
     continuousLoop: true,
-    waitAfterStreamSec: 15,
+    waitAfterStreamSec: 60,
     travelSpeed: 0.2,
     lightIntensity: 0.8,
     startFontScale: 0.12,
