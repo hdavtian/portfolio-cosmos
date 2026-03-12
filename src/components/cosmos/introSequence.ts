@@ -52,7 +52,7 @@ export const INTRO_SHIP_FINAL_QUAT = new THREE.Quaternion().setFromEuler(
 
 const INTRO_CAMERA_DURATION_MS = 7000;
 const INTRO_SHIP_APPROACH_DURATION_MS = Math.round(5000 * INTRO_TIME_SCALE);
-const INTRO_SHIP_PICKUP_DURATION_MS = 6200;
+export const INTRO_SHIP_PICKUP_DURATION_MS = 6200;
 const INTRO_PASS_THROUGH_CHANCE = 0.45;
 const INTRO_ORBIT_CHANCE = 0.6;
 const INTRO_STRAIGHT_PATH_CHANCE = 0.25;
@@ -283,7 +283,6 @@ export const createIntroSequenceRunner = (
   params: IntroSequenceRunnerParams,
 ) => {
   const {
-    camera,
     controls,
     sceneRef,
     spaceshipRef,
@@ -371,9 +370,9 @@ export const createIntroSequenceRunner = (
         .addScaledVector(camRight, 0.8);
       const startHeroPos = currentCamera.position
         .clone()
-        .addScaledVector(camDir, -24)
-        .addScaledVector(camUp, -6.5)
-        .addScaledVector(camRight, 1.2);
+        .addScaledVector(camDir, -6)
+        .addScaledVector(camUp, -3.8)
+        .addScaledVector(camRight, 0.9);
       const controlA = startHeroPos
         .clone()
         .lerp(endHeroPos, 0.35)
