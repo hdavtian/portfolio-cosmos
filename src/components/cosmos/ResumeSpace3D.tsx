@@ -132,7 +132,7 @@ const PROJECT_SHOWCASE_LAYER = 2;
 const ORBITAL_PORTFOLIO_NAV_ID = "orbital-portfolio";
 const ORBITAL_PORTFOLIO_LAYER = 4;
 const ORBITAL_PORTFOLIO_DEBUG_LOGS = true;
-const ORBITAL_PORTFOLIO_NONFOCUS_PLATE_OPACITY = 0.19;
+const ORBITAL_PORTFOLIO_NONFOCUS_PLATE_OPACITY = 0.74;
 const ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS = 5;
 const ORBITAL_PORTFOLIO_CARD_MAX_THUMBS = 6;
 const ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE = 120;
@@ -6916,7 +6916,7 @@ export default function ResumeSpace3D({
         );
         frameMat.opacity = THREE.MathUtils.damp(
           frameMat.opacity,
-          isFocused ? 0.2 : 0,
+          isFocused ? 0.22 : 0.1,
           8.5,
           dt,
         );
@@ -6978,7 +6978,7 @@ export default function ResumeSpace3D({
         );
         station.mediaHaloGroup.visible = false;
         station.variantSatelliteGroup.visible = false;
-        const targetScale = isFocused ? 2.35 : 0.52;
+        const targetScale = isFocused ? 2.35 : 1.1;
         station.group.scale.setScalar(
           THREE.MathUtils.damp(station.group.scale.x, targetScale, 7.4, dt),
         );
