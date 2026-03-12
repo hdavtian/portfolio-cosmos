@@ -1155,6 +1155,7 @@ export default function ResumeSpace3D({
   const moonTravelSignLastSpawnAtRef = useRef(0);
   const moonTravelSignPauseUntilRef = useRef(0);
   const moonTravelSignSequenceWrappedRef = useRef(false);
+  const moonTravelSignLoopHaltedRef = useRef(false);
   const moonTravelSignLaneCursorRef = useRef(0);
   const moonTravelSignPathCycleRef = useRef<{
     order: number[];
@@ -1170,15 +1171,18 @@ export default function ResumeSpace3D({
   const moonTravelSignActiveCompanyRef = useRef<string | null>(null);
   const moonTravelSignTextureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
   const [orbitSignTuning, setOrbitSignTuning] = useState<OrbitSignTuning>({
-    timeBetweenMessagesSec: 0.8,
+    timeBetweenMessagesSec: 1.8,
     continuousLoop: true,
-    waitAfterStreamSec: 1.2,
-    travelSpeed: 1,
+    waitAfterStreamSec: 15,
+    travelSpeed: 0.2,
     lightIntensity: 0.8,
-    startFontScale: 0.2,
-    endFontScale: 1.2,
+    startFontScale: 0.12,
+    endFontScale: 0.6,
   });
   const orbitSignTuningRef = useRef<OrbitSignTuning>(orbitSignTuning);
+  const [showOrbitSignTuningControls, setShowOrbitSignTuningControls] = useState(false);
+  const [viewerMemoriesEnabled, setViewerMemoriesEnabled] = useState(true);
+  const viewerMemoriesEnabledRef = useRef(true);
   const moonOrbitSignDebugLastLogAtRef = useRef(0);
   const [orbitalPortfolioReady, setOrbitalPortfolioReady] = useState(false);
   const [orbitalPortfolioActive, setOrbitalPortfolioActive] = useState(false);
@@ -1218,11 +1222,40 @@ export default function ResumeSpace3D({
     // Apply key tuning controls immediately without waiting for next stream cycle.
     const now = performance.now();
     if (orbitSignTuning.continuousLoop) {
+      moonTravelSignLoopHaltedRef.current = false;
       moonTravelSignPauseUntilRef.current = 0;
     }
     // Re-evaluate spawn timing right away so message timing changes feel live.
     moonTravelSignLastSpawnAtRef.current = Math.min(moonTravelSignLastSpawnAtRef.current, now + 90);
   }, [orbitSignTuning]);
+  useEffect(() => {
+    viewerMemoriesEnabledRef.current = viewerMemoriesEnabled;
+    const clearCurrentOrbitSigns = () => {
+      const records = moonTravelSignsRef.current;
+      records.forEach((record) => {
+        const parent = record.object.parent;
+        if (parent) parent.remove(record.object);
+        record.material.dispose();
+      });
+      moonTravelSignsRef.current = [];
+    };
+    if (viewerMemoriesEnabled) {
+      clearCurrentOrbitSigns();
+      moonTravelSignPoolCursorRef.current = 0;
+      moonTravelSignSequenceWrappedRef.current = false;
+      moonTravelSignLaneCursorRef.current = 0;
+      moonTravelSignPathCycleRef.current = {
+        order: [0, 2, 4, 1, 3],
+        index: 0,
+        lastSlot: -1,
+      };
+      moonTravelSignLoopHaltedRef.current = false;
+      moonTravelSignPauseUntilRef.current = 0;
+      moonTravelSignLastSpawnAtRef.current = performance.now();
+    } else {
+      clearCurrentOrbitSigns();
+    }
+  }, [viewerMemoriesEnabled]);
   const exportOrbitSignTuning = useCallback(() => {
     const payload = {
       timeBetweenMessagesSec: Number(orbitSignTuning.timeBetweenMessagesSec.toFixed(2)),
@@ -4243,6 +4276,21 @@ export default function ResumeSpace3D({
       },
       { id: "debug-cam", label: "debugCamera()", hint: "Enter free debug camera mode", onRun: () => invoke("debugCamera") },
       { id: "debug-cam-exit", label: "exitDebugCamera()", hint: "Exit debug camera mode", onRun: () => invoke("exitDebugCamera") },
+      {
+        id: "toggle-orbit-sign-tuning",
+        label: "toggleOrbitSignTuning()",
+        hint: "Show/hide orbit memory tuning panel",
+        onRun: () => {
+          setShowOrbitSignTuningControls((prev) => {
+            const next = !prev;
+            shipLog(
+              `Orbit sign tuning panel ${next ? "visible" : "hidden"}`,
+              "info",
+            );
+            return next;
+          });
+        },
+      },
     ];
   }, [shipLog]);
 
@@ -7234,6 +7282,7 @@ export default function ResumeSpace3D({
       const dt = Math.min((now - last) / 1000, 0.08);
       last = now;
       const camTick = sceneRef.current.camera;
+      const viewerWantsMemories = viewerMemoriesEnabledRef.current;
       const moonMesh = focusedMoonRef.current;
       const isOrbitSignageActive =
         orbitPhase === "orbiting" &&
@@ -7263,12 +7312,36 @@ export default function ResumeSpace3D({
         );
         spawnedSinceLastLog = 0;
       }
+      if (isOrbitSignageActive && !viewerWantsMemories) {
+        const records = moonTravelSignsRef.current;
+        const survivors: MoonTravelSignRecord[] = [];
+        records.forEach((record) => {
+          const mat = record.material as THREE.Material & { opacity?: number };
+          if (typeof mat.opacity === "number") {
+            mat.opacity *= 0.72;
+          }
+          record.ageMs += dt * 1000 * 2.2;
+          if (
+            (typeof mat.opacity === "number" && mat.opacity <= 0.025) ||
+            record.ageMs >= record.ttlMs
+          ) {
+            const parent = record.object.parent;
+            if (parent) parent.remove(record.object);
+            record.material.dispose();
+          } else {
+            survivors.push(record);
+          }
+        });
+        moonTravelSignsRef.current = survivors;
+        return;
+      }
       if (!isOrbitSignageActive || !moonMesh) {
         if (moonTravelSignActiveCompanyRef.current) {
           moonTravelSignActiveCompanyRef.current = null;
           moonTravelSignPoolRef.current = [];
           moonTravelSignPoolCursorRef.current = 0;
           moonTravelSignSequenceWrappedRef.current = false;
+          moonTravelSignLoopHaltedRef.current = false;
           moonTravelSignLaneCursorRef.current = 0;
           moonTravelSignPathCycleRef.current = {
             order: [0, 2, 4, 1, 3],
@@ -7296,6 +7369,7 @@ export default function ResumeSpace3D({
           moonTravelSignCatalog.get(activeCompanyId)?.pool ?? [];
         moonTravelSignPoolCursorRef.current = 0;
         moonTravelSignSequenceWrappedRef.current = false;
+        moonTravelSignLoopHaltedRef.current = false;
         moonTravelSignLaneCursorRef.current = 0;
         moonTravelSignPathCycleRef.current = {
           order: [0, 2, 4, 1, 3],
@@ -7316,18 +7390,12 @@ export default function ResumeSpace3D({
       const endScaleMul = THREE.MathUtils.clamp(tuning.endFontScale, 0, 6);
       const intervalMs = THREE.MathUtils.clamp(tuning.timeBetweenMessagesSec, 0, 5) * 1000;
       const immediateMode = intervalMs <= 1;
-      if (
-        !tuning.continuousLoop &&
-        moonTravelSignPauseUntilRef.current > now
-      ) {
-        // Keep animating existing signs, but do not spawn new ones while paused.
-      } else {
-        if (moonTravelSignPauseUntilRef.current > 0 && now >= moonTravelSignPauseUntilRef.current) {
-          moonTravelSignPauseUntilRef.current = 0;
-        }
+      if (moonTravelSignPauseUntilRef.current > 0 && now >= moonTravelSignPauseUntilRef.current) {
+        moonTravelSignPauseUntilRef.current = 0;
       }
       const canSpawnNow =
-        tuning.continuousLoop || moonTravelSignPauseUntilRef.current <= 0;
+        !moonTravelSignLoopHaltedRef.current &&
+        moonTravelSignPauseUntilRef.current <= 0;
       if (canSpawnNow && now >= moonTravelSignLastSpawnAtRef.current) {
         let spawnedThisTick = 0;
         const maxPerTick = immediateMode ? 1 : 4;
@@ -7345,7 +7413,7 @@ export default function ResumeSpace3D({
           }
           spawnSign(activeCompanyId, moonMesh, moonRadius, signMode);
           spawnedThisTick += 1;
-          if (moonTravelSignSequenceWrappedRef.current && !tuning.continuousLoop) {
+          if (moonTravelSignSequenceWrappedRef.current) {
             moonTravelSignPauseUntilRef.current =
               now + Math.max(0, tuning.waitAfterStreamSec) * 1000;
             moonTravelSignSequenceWrappedRef.current = false;
@@ -13284,7 +13352,7 @@ export default function ResumeSpace3D({
               {consoleVisible ? "Hide Console" : "Show Console"}
             </button>
           )}
-          {!isLoading && orbitPhase === "orbiting" && (
+          {!isLoading && orbitPhase === "orbiting" && showOrbitSignTuningControls && (
             <div
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
@@ -13436,6 +13504,47 @@ export default function ResumeSpace3D({
                 EXPORT + LOG SETTINGS
               </button>
             </div>
+          )}
+          {!isLoading && orbitPhase === "orbiting" && (
+            <label
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                position: "absolute",
+                left: "50%",
+                bottom: 18,
+                transform: "translateX(-50%)",
+                zIndex: 10002,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                borderRadius: 10,
+                border: "1px solid rgba(136, 210, 255, 0.52)",
+                background: "rgba(8, 20, 34, 0.88)",
+                color: "rgba(214, 242, 255, 0.98)",
+                boxShadow: "0 0 14px rgba(76, 162, 255, 0.24)",
+                padding: "9px 14px",
+                fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: 0.55,
+                userSelect: "none",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={viewerMemoriesEnabled}
+                onChange={(e) => setViewerMemoriesEnabled(e.target.checked)}
+                style={{
+                  width: 17,
+                  height: 17,
+                  cursor: "pointer",
+                  accentColor: "#7fd8ff",
+                }}
+              />
+              Show my memories
+            </label>
           )}
 
           {/* Ship Explore Mode Overlay */}
