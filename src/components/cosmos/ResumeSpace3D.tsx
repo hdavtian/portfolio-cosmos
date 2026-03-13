@@ -363,6 +363,7 @@ type MoonTravelSignRecord = {
   material: THREE.Material;
   ageMs: number;
   ttlMs: number;
+  memoryIndex: number;
   velocity: THREE.Vector3;
   baseScale: THREE.Vector3;
   arcStart?: THREE.Vector3;
@@ -1254,6 +1255,14 @@ export default function ResumeSpace3D({
   const [showOrbitSignTuningControls, setShowOrbitSignTuningControls] = useState(false);
   const [viewerMemoriesEnabled, setViewerMemoriesEnabled] = useState(true);
   const viewerMemoriesEnabledRef = useRef(true);
+  const [moonMemoryManualMode, setMoonMemoryManualMode] = useState(false);
+  const moonMemoryManualModeRef = useRef(false);
+  const [moonMemoryPlaybackPlaying, setMoonMemoryPlaybackPlaying] = useState(false);
+  const moonMemoryPlaybackPlayingRef = useRef(false);
+  const [moonMemoryScrubValue, setMoonMemoryScrubValue] = useState(0);
+  const moonMemoryScrubValueRef = useRef(0);
+  const moonMemoryLastUiSyncAtRef = useRef(0);
+  const moonMemoryScrubRequestRef = useRef<{ value: number } | null>(null);
   const moonOrbitSignDebugLastLogAtRef = useRef(0);
   const [orbitalPortfolioReady, setOrbitalPortfolioReady] = useState(false);
   const [orbitalPortfolioActive, setOrbitalPortfolioActive] = useState(false);
@@ -1354,10 +1363,33 @@ export default function ResumeSpace3D({
       moonTravelSignLoopHaltedRef.current = false;
       moonTravelSignPauseUntilRef.current = 0;
       moonTravelSignLastSpawnAtRef.current = performance.now();
+      moonMemoryManualModeRef.current = false;
+      moonMemoryPlaybackPlayingRef.current = false;
+      moonMemoryScrubRequestRef.current = null;
+      moonMemoryScrubValueRef.current = 0;
+      setMoonMemoryManualMode(false);
+      setMoonMemoryPlaybackPlaying(false);
+      setMoonMemoryScrubValue(0);
     } else {
       clearCurrentOrbitSigns();
+      moonMemoryManualModeRef.current = false;
+      moonMemoryPlaybackPlayingRef.current = false;
+      moonMemoryScrubRequestRef.current = null;
+      moonMemoryScrubValueRef.current = 0;
+      setMoonMemoryManualMode(false);
+      setMoonMemoryPlaybackPlaying(false);
+      setMoonMemoryScrubValue(0);
     }
   }, [viewerMemoriesEnabled]);
+  useEffect(() => {
+    moonMemoryManualModeRef.current = moonMemoryManualMode;
+  }, [moonMemoryManualMode]);
+  useEffect(() => {
+    moonMemoryPlaybackPlayingRef.current = moonMemoryPlaybackPlaying;
+  }, [moonMemoryPlaybackPlaying]);
+  useEffect(() => {
+    moonMemoryScrubValueRef.current = moonMemoryScrubValue;
+  }, [moonMemoryScrubValue]);
   const exportOrbitSignTuning = useCallback(() => {
     const payload = {
       timeBetweenMessagesSec: Number(orbitSignTuning.timeBetweenMessagesSec.toFixed(2)),
@@ -1499,7 +1531,11 @@ export default function ResumeSpace3D({
       if (pool.length > 0 && nextCursor === 0) {
         moonTravelSignSequenceWrappedRef.current = true;
       }
-      return item;
+      if (!item) return null;
+      return {
+        item,
+        index: cursor,
+      };
     },
     [moonTravelSignCatalog],
   );
@@ -7775,14 +7811,27 @@ export default function ResumeSpace3D({
       companyId: string,
       moonMesh: THREE.Mesh,
       moonRadius: number,
-    ) => {
+      options?: { forcedMemory?: JobMemoryEntry; forcedIndex?: number },
+    ): MoonTravelSignRecord | null => {
       const record = moonTravelSignCatalog.get(companyId);
-      if (!record) return;
-      const memory = buildMoonTravelSignText(companyId);
-      if (!memory) return;
+      if (!record) return null;
+      const memorySelection =
+        options?.forcedMemory && typeof options.forcedIndex === "number"
+          ? {
+              item: options.forcedMemory,
+              index: THREE.MathUtils.clamp(
+                Math.floor(options.forcedIndex),
+                0,
+                Math.max(0, record.pool.length - 1),
+              ),
+            }
+          : buildMoonTravelSignText(companyId);
+      if (!memorySelection) return null;
+      const memory = memorySelection.item;
+      const memoryIndex = memorySelection.index;
       const text = memory.text;
       const group = ensureSignGroup();
-      if (!group) return;
+      if (!group) return null;
       const textureKey = `${memory.type}::${text}`;
       let tex = moonTravelSignTextureCacheRef.current.get(textureKey) ?? null;
       if (!tex) {
@@ -7793,7 +7842,7 @@ export default function ResumeSpace3D({
       const baseScale = new THREE.Vector3(w, 6.2, 1);
       moonMesh.getWorldPosition(moonCenter);
       const cam = sceneRef.current.camera;
-      if (!cam) return;
+      if (!cam) return null;
       cam.getWorldDirection(camForward).normalize();
       camRight.crossVectors(camForward, up);
       if (camRight.lengthSq() < 1e-5) camRight.set(1, 0, 0);
@@ -7924,17 +7973,19 @@ export default function ResumeSpace3D({
         .addScaledVector(camRight, laneScreen * (8 + Math.random() * 4.5));
       arcControl = arcMid.clone();
       const drift = new THREE.Vector3(0, 0, 0);
-      moonTravelSignsRef.current.push({
+      const signRecord: MoonTravelSignRecord = {
         object: signObject,
         material: signMaterial,
         ageMs: 0,
         ttlMs: 9000 + Math.random() * 2400,
+        memoryIndex,
         velocity: drift,
         baseScale,
         arcStart,
         arcControl,
         arcEnd,
-      });
+      };
+      moonTravelSignsRef.current.push(signRecord);
       spawnedSinceLastLog += 1;
       if (MOON_ORBIT_SIGN_DEBUG_LOGS) {
         const p = signObject.position;
@@ -7943,6 +7994,7 @@ export default function ResumeSpace3D({
           "info",
         );
       }
+      return signRecord;
     };
     const tick = () => {
       raf = requestAnimationFrame(tick);
@@ -7951,6 +8003,8 @@ export default function ResumeSpace3D({
       last = now;
       const camTick = sceneRef.current.camera;
       const viewerWantsMemories = viewerMemoriesEnabledRef.current;
+      const memoryManualMode = moonMemoryManualModeRef.current;
+      const memoryPlaybackPlaying = moonMemoryPlaybackPlayingRef.current;
       const moonMesh = focusedMoonRef.current;
       const isOrbitSignageActive =
         orbitPhase === "orbiting" &&
@@ -8009,6 +8063,13 @@ export default function ResumeSpace3D({
             index: 0,
             lastSlot: -1,
           };
+          moonMemoryManualModeRef.current = false;
+          moonMemoryPlaybackPlayingRef.current = false;
+          moonMemoryScrubRequestRef.current = null;
+          moonMemoryScrubValueRef.current = 0;
+          setMoonMemoryManualMode(false);
+          setMoonMemoryPlaybackPlaying(false);
+          setMoonMemoryScrubValue(0);
           moonTravelSignPauseUntilRef.current = 0;
           detachAndClearSigns();
         }
@@ -8036,6 +8097,13 @@ export default function ResumeSpace3D({
           index: 0,
           lastSlot: -1,
         };
+        moonMemoryManualModeRef.current = false;
+        moonMemoryPlaybackPlayingRef.current = false;
+        moonMemoryScrubRequestRef.current = null;
+        moonMemoryScrubValueRef.current = 0;
+        setMoonMemoryManualMode(false);
+        setMoonMemoryPlaybackPlaying(false);
+        setMoonMemoryScrubValue(0);
         moonTravelSignLastSpawnAtRef.current = now;
         moonTravelSignPauseUntilRef.current = 0;
         detachAndClearSigns();
@@ -8056,7 +8124,73 @@ export default function ResumeSpace3D({
       const canSpawnNow =
         !moonTravelSignLoopHaltedRef.current &&
         moonTravelSignPauseUntilRef.current <= 0;
-      if (canSpawnNow && now >= moonTravelSignLastSpawnAtRef.current) {
+      const scrubRequest = moonMemoryScrubRequestRef.current;
+      if (memoryManualMode) {
+        const pool = moonTravelSignPoolRef.current;
+        if (pool.length > 0) {
+          const maxValue = Math.max(0, pool.length - 0.001);
+          let playhead = moonMemoryScrubValueRef.current;
+          if (scrubRequest) {
+            playhead = THREE.MathUtils.clamp(scrubRequest.value, 0, maxValue);
+          }
+          if (memoryPlaybackPlaying) {
+            playhead += dt * THREE.MathUtils.clamp(travelSpeed, 0.15, 5) * 0.72;
+          }
+          if (orbitSignTuningRef.current.continuousLoop && pool.length > 1) {
+            while (playhead < 0) playhead += pool.length;
+            while (playhead > maxValue) playhead -= pool.length;
+          } else {
+            playhead = THREE.MathUtils.clamp(playhead, 0, maxValue);
+            if (memoryPlaybackPlaying && playhead >= maxValue - 0.0001) {
+              moonMemoryPlaybackPlayingRef.current = false;
+              setMoonMemoryPlaybackPlaying(false);
+            }
+          }
+          moonMemoryScrubValueRef.current = playhead;
+          if (scrubRequest || memoryPlaybackPlaying) {
+            setMoonMemoryScrubValue(playhead);
+          }
+
+          const lifetimeUnits = 3.35;
+          const startIndex = Math.max(0, Math.floor(playhead - lifetimeUnits - 1));
+          const endIndex = Math.min(pool.length - 1, Math.ceil(playhead));
+          const existingByIndex = new Map<number, MoonTravelSignRecord>();
+          moonTravelSignsRef.current.forEach((record) => {
+            existingByIndex.set(record.memoryIndex, record);
+          });
+          const keepIndices = new Set<number>();
+          for (let idx = startIndex; idx <= endIndex; idx += 1) {
+            const ageNorm = (playhead - idx) / lifetimeUnits;
+            if (ageNorm < 0 || ageNorm > 1) continue;
+            let activeRecord = existingByIndex.get(idx) ?? null;
+            if (!activeRecord) {
+              activeRecord = spawnSign(activeCompanyId, moonMesh, moonRadius, {
+                forcedMemory: pool[idx],
+                forcedIndex: idx,
+              });
+            }
+            if (!activeRecord) continue;
+            activeRecord.ageMs = activeRecord.ttlMs * THREE.MathUtils.clamp(ageNorm, 0, 0.995);
+            keepIndices.add(activeRecord.memoryIndex);
+          }
+
+          const manualSurvivors: MoonTravelSignRecord[] = [];
+          moonTravelSignsRef.current.forEach((record) => {
+            if (keepIndices.has(record.memoryIndex)) {
+              manualSurvivors.push(record);
+              return;
+            }
+            const parent = record.object.parent;
+            if (parent) parent.remove(record.object);
+            record.material.dispose();
+          });
+          moonTravelSignsRef.current = manualSurvivors;
+          moonTravelSignLastSpawnAtRef.current = now + Math.max(260, intervalMs * 0.9);
+        }
+        moonMemoryScrubRequestRef.current = null;
+      }
+      const allowAutoPlayback = !memoryManualMode;
+      if (allowAutoPlayback && canSpawnNow && now >= moonTravelSignLastSpawnAtRef.current) {
         let spawnedThisTick = 0;
         const maxPerTick = immediateMode ? 1 : 4;
         while (
@@ -8072,6 +8206,9 @@ export default function ResumeSpace3D({
             oldest.material.dispose();
           }
           spawnSign(activeCompanyId, moonMesh, moonRadius);
+          if (!memoryManualMode) {
+            moonMemoryScrubValueRef.current = moonTravelSignPoolCursorRef.current;
+          }
           spawnedThisTick += 1;
           if (moonTravelSignSequenceWrappedRef.current) {
             moonTravelSignPauseUntilRef.current =
@@ -8091,7 +8228,9 @@ export default function ResumeSpace3D({
       const survivors: MoonTravelSignRecord[] = [];
       records.forEach((record) => {
         // Travel speed must affect already-spawned signs immediately (all modes).
-        record.ageMs += dt * 1000 * travelSpeed;
+        if (!memoryManualMode) {
+          record.ageMs += dt * 1000 * travelSpeed;
+        }
         const mat = record.material as THREE.Material & { opacity?: number };
         const t = THREE.MathUtils.clamp(record.ageMs / Math.max(record.ttlMs, 1), 0, 1);
         if (record.arcStart && record.arcControl && record.arcEnd) {
@@ -8112,7 +8251,12 @@ export default function ResumeSpace3D({
         const fadeIn = THREE.MathUtils.clamp(t / 0.15, 0, 1);
         const fadeOut = THREE.MathUtils.clamp((1 - t) / 0.1, 0, 1);
         if (typeof mat.opacity === "number") {
-          mat.opacity = (0.06 + Math.min(fadeIn, fadeOut) * 0.42) * lightMul;
+          if (memoryManualMode && !memoryPlaybackPlaying) {
+            // Keep scrub previews readable while users drag gently through the flight path.
+            mat.opacity = (0.22 + Math.max(fadeIn, 0.42) * 0.38) * lightMul;
+          } else {
+            mat.opacity = (0.06 + Math.min(fadeIn, fadeOut) * 0.42) * lightMul;
+          }
         }
         let offscreenPast = false;
         if (camTick) {
@@ -8122,7 +8266,8 @@ export default function ResumeSpace3D({
             Math.abs(activeSignNdc.x) > 1.35 ||
             Math.abs(activeSignNdc.y) > 1.35;
         }
-        if (record.ageMs >= record.ttlMs || offscreenPast) {
+        const shouldCull = !memoryManualMode;
+        if (shouldCull && (record.ageMs >= record.ttlMs || offscreenPast)) {
           const parent = record.object.parent;
           if (parent) parent.remove(record.object);
           record.material.dispose();
@@ -8131,6 +8276,19 @@ export default function ResumeSpace3D({
         }
       });
       moonTravelSignsRef.current = survivors;
+      if (viewerWantsMemories && now - moonMemoryLastUiSyncAtRef.current > 70) {
+        moonMemoryLastUiSyncAtRef.current = now;
+        if (!memoryManualMode) {
+          const latest = survivors[survivors.length - 1];
+          if (latest) {
+            const previewValue =
+              latest.memoryIndex +
+              THREE.MathUtils.clamp(latest.ageMs / Math.max(latest.ttlMs, 1), 0, 0.98);
+            moonMemoryScrubValueRef.current = previewValue;
+          }
+        }
+        setMoonMemoryScrubValue(moonMemoryScrubValueRef.current);
+      }
     };
     tick();
     return () => {
@@ -14218,6 +14376,44 @@ export default function ResumeSpace3D({
     focusedProjectShowcasePanel?.fitMode === "cover" &&
     ((focusedProjectShowcasePanel.baseRepeat.x ?? 1) < 0.999 ||
       (focusedProjectShowcasePanel.baseRepeat.y ?? 1) < 0.999);
+  const activeMoonMemoryPool =
+    orbitingMoonNavTarget && viewerMemoriesEnabled
+      ? (moonTravelSignCatalog.get(orbitingMoonNavTarget)?.pool ?? [])
+      : [];
+  const activeMoonMemoryCount = activeMoonMemoryPool.length;
+  const memoryScrubMaxValue = Math.max(0, activeMoonMemoryCount - 0.001);
+  const clampedMoonMemoryScrubValue = THREE.MathUtils.clamp(
+    moonMemoryScrubValue,
+    0,
+    memoryScrubMaxValue,
+  );
+  const queueMoonMemoryScrub = (value: number) => {
+    if (!viewerMemoriesEnabled || activeMoonMemoryCount <= 0) return;
+    const clamped = THREE.MathUtils.clamp(value, 0, memoryScrubMaxValue);
+    moonMemoryManualModeRef.current = true;
+    moonMemoryPlaybackPlayingRef.current = false;
+    moonMemoryScrubValueRef.current = clamped;
+    moonMemoryScrubRequestRef.current = { value: clamped };
+    setMoonMemoryManualMode(true);
+    setMoonMemoryPlaybackPlaying(false);
+    setMoonMemoryScrubValue(clamped);
+  };
+  const toggleMoonMemoryPlayback = () => {
+    if (!viewerMemoriesEnabled || activeMoonMemoryCount <= 0) return;
+    const currentlyPlaying = moonMemoryManualModeRef.current
+      ? moonMemoryPlaybackPlayingRef.current
+      : viewerMemoriesEnabledRef.current;
+    moonMemoryManualModeRef.current = true;
+    setMoonMemoryManualMode(true);
+    const nextPlaying = !currentlyPlaying;
+    moonMemoryPlaybackPlayingRef.current = nextPlaying;
+    setMoonMemoryPlaybackPlaying(nextPlaying);
+    if (nextPlaying) {
+      moonTravelSignLastSpawnAtRef.current = performance.now();
+    }
+  };
+  const memoryPlaybackEngaged =
+    viewerMemoriesEnabled && (!moonMemoryManualMode || moonMemoryPlaybackPlaying);
 
   return (
     <>
@@ -14503,7 +14699,7 @@ export default function ResumeSpace3D({
             </div>
           )}
           {!isLoading && orbitPhase === "orbiting" && (
-            <label
+            <div
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
               style={{
@@ -14513,35 +14709,152 @@ export default function ResumeSpace3D({
                 transform: "translateX(-50%)",
                 zIndex: 10002,
                 display: "flex",
-                alignItems: "center",
+                flexDirection: "column",
                 gap: 10,
-                borderRadius: 10,
+                minWidth: viewerMemoriesEnabled ? 470 : 0,
+                borderRadius: 12,
                 border: "1px solid rgba(136, 210, 255, 0.52)",
-                background: "rgba(8, 20, 34, 0.88)",
+                background: "rgba(8, 20, 34, 0.9)",
                 color: "rgba(214, 242, 255, 0.98)",
-                boxShadow: "0 0 14px rgba(76, 162, 255, 0.24)",
-                padding: "9px 14px",
+                boxShadow: "0 0 16px rgba(76, 162, 255, 0.24)",
+                padding: viewerMemoriesEnabled ? "10px 14px 12px" : "9px 14px",
                 fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
-                fontSize: 13,
-                fontWeight: 700,
-                letterSpacing: 0.55,
                 userSelect: "none",
-                cursor: "pointer",
               }}
             >
-              <input
-                type="checkbox"
-                checked={viewerMemoriesEnabled}
-                onChange={(e) => setViewerMemoriesEnabled(e.target.checked)}
+              <label
                 style={{
-                  width: 17,
-                  height: 17,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  letterSpacing: 0.55,
                   cursor: "pointer",
-                  accentColor: "#7fd8ff",
                 }}
-              />
-              Show my memories
-            </label>
+              >
+                <input
+                  type="checkbox"
+                  checked={viewerMemoriesEnabled}
+                  onChange={(e) => setViewerMemoriesEnabled(e.target.checked)}
+                  style={{
+                    width: 17,
+                    height: 17,
+                    cursor: "pointer",
+                    accentColor: "#7fd8ff",
+                  }}
+                />
+                Show my memories
+              </label>
+              {viewerMemoriesEnabled && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                    borderRadius: 9,
+                    border: "1px solid rgba(112, 194, 255, 0.28)",
+                    background: "rgba(6, 14, 26, 0.7)",
+                    padding: "7px 8px 8px",
+                    minWidth: 360,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {(() => {
+                      const iconBtnStyle: React.CSSProperties = {
+                        width: 34,
+                        height: 26,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 7,
+                        border: "1px solid rgba(143, 212, 255, 0.45)",
+                        background: "rgba(10, 22, 37, 0.86)",
+                        color: "rgba(226, 245, 255, 0.95)",
+                        cursor: activeMoonMemoryCount > 0 ? "pointer" : "not-allowed",
+                        opacity: activeMoonMemoryCount > 0 ? 1 : 0.45,
+                        fontSize: 13,
+                        fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
+                        fontWeight: 700,
+                        lineHeight: 1,
+                      };
+                      return (
+                        <button
+                          type="button"
+                          title={memoryPlaybackEngaged ? "Pause" : "Play"}
+                          aria-label={memoryPlaybackEngaged ? "Pause" : "Play"}
+                          onClick={toggleMoonMemoryPlayback}
+                          disabled={activeMoonMemoryCount <= 0}
+                          style={{
+                            ...iconBtnStyle,
+                            background: memoryPlaybackEngaged
+                              ? "rgba(20, 44, 70, 0.9)"
+                              : iconBtnStyle.background,
+                          }}
+                        >
+                          {memoryPlaybackEngaged ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 3,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 3,
+                                  height: 10,
+                                  borderRadius: 1,
+                                  background: "rgba(226, 245, 255, 0.95)",
+                                }}
+                              />
+                              <span
+                                style={{
+                                  width: 3,
+                                  height: 10,
+                                  borderRadius: 1,
+                                  background: "rgba(226, 245, 255, 0.95)",
+                                }}
+                              />
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                width: 0,
+                                height: 0,
+                                borderTop: "6px solid transparent",
+                                borderBottom: "6px solid transparent",
+                                borderLeft: "9px solid rgba(226, 245, 255, 0.95)",
+                                marginLeft: 2,
+                              }}
+                            />
+                          )}
+                        </button>
+                      );
+                    })()}
+                    <input
+                      type="range"
+                      min={0}
+                      max={memoryScrubMaxValue}
+                      step={0.01}
+                      value={clampedMoonMemoryScrubValue}
+                      disabled={activeMoonMemoryCount <= 0}
+                      onChange={(e) => {
+                        queueMoonMemoryScrub(Number(e.target.value));
+                      }}
+                      style={{
+                        flex: 1,
+                        minWidth: 170,
+                        marginLeft: 4,
+                        accentColor: "#7fd8ff",
+                        opacity: activeMoonMemoryCount > 0 ? 1 : 0.35,
+                        cursor: activeMoonMemoryCount > 0 ? "ew-resize" : "not-allowed",
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Ship Explore Mode Overlay */}
