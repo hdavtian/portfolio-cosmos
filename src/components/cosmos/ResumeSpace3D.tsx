@@ -139,6 +139,11 @@ const ORBITAL_PORTFOLIO_STATION_ORBIT_SPEED = 0.16;
 const ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE = 148;
 const ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE = 70;
 const ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE = 280;
+const ORBITAL_PORTFOLIO_INSPECT_EXIT_MIN_DISTANCE = 58;
+const ORBITAL_PORTFOLIO_INSPECT_EXIT_MAX_DISTANCE = 320;
+const ORBITAL_PORTFOLIO_INSPECT_EXIT_TARGET_DRIFT = 220;
+const ORBITAL_PORTFOLIO_INSPECT_EXIT_GRACE_MS = 900;
+const ORBITAL_PORTFOLIO_STATE_DEBUG_LOGS = true;
 const MOON_TRAVEL_SIGN_MAX_ACTIVE = 28;
 const MOON_ORBIT_SIGN_DEBUG_LOGS = false;
 // Card layer stays on the overlay pass to avoid bloom/tonemapping washout.
@@ -1290,7 +1295,9 @@ export default function ResumeSpace3D({
   const orbitalPortfolioCameraInitializedRef = useRef(false);
   const orbitalPortfolioInspectedStationIndexRef = useRef<number | null>(null);
   const orbitalPortfolioInspectDistanceRef = useRef<number | null>(null);
+  const orbitalPortfolioInspectStartedAtRef = useRef(0);
   const orbitalPortfolioDebugLastLogAtRef = useRef(0);
+  const orbitalPortfolioStateDebugLastLogAtRef = useRef(0);
   const orbitalPortfolioDebugDumpedRef = useRef(false);
   const orbitalPortfolioPrevStateRef = useRef<{
     followingSpaceship: boolean;
@@ -2944,6 +2951,7 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioMediaIndex(0);
     orbitalPortfolioInspectedStationIndexRef.current = null;
     orbitalPortfolioInspectDistanceRef.current = null;
+    orbitalPortfolioInspectStartedAtRef.current = 0;
     orbitalPortfolioCameraInitializedRef.current = false;
     orbitalPortfolioDebugDumpedRef.current = false;
     setPortfolioNavHereActive(false);
@@ -3066,12 +3074,46 @@ export default function ResumeSpace3D({
     if (next) {
       orbitalPortfolioInspectedStationIndexRef.current = null;
       orbitalPortfolioInspectDistanceRef.current = null;
+      orbitalPortfolioInspectStartedAtRef.current = 0;
       orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
       orbitalPortfolioManualCameraLockRef.current = false;
     } else {
       orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 10000;
     }
   }, []);
+
+  const exitOrbitalPortfolioInspectMode = useCallback(
+    (options?: { resumeOrbits?: boolean; reason?: string }) => {
+      const resumeOrbits = options?.resumeOrbits ?? true;
+      const hadInspectMode =
+        orbitalPortfolioInspectedStationIndexRef.current !== null ||
+        orbitalPortfolioManualCameraLockRef.current;
+      const prevInspected = orbitalPortfolioInspectedStationIndexRef.current;
+      orbitalPortfolioInspectedStationIndexRef.current = null;
+      orbitalPortfolioInspectDistanceRef.current = null;
+      orbitalPortfolioInspectStartedAtRef.current = 0;
+      orbitalPortfolioManualCameraLockRef.current = false;
+      if (resumeOrbits) {
+        orbitalPortfolioStationsRef.current.forEach((station) => {
+          station.orbitMotionBlend = Math.max(station.orbitMotionBlend, 0.7);
+        });
+        orbitalPortfolioPlayingRef.current = true;
+        setOrbitalPortfolioPlaying(true);
+        orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
+        orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 400;
+      }
+      if (hadInspectMode && options?.reason) {
+        shipLog(options.reason, "info");
+      }
+      if (ORBITAL_PORTFOLIO_STATE_DEBUG_LOGS) {
+        shipLog(
+          `[PORTSTATE] inspect-exit prevInspected=${prevInspected ?? "none"} resumeOrbits=${resumeOrbits ? 1 : 0} playing=${orbitalPortfolioPlayingRef.current ? 1 : 0} manualLock=${orbitalPortfolioManualCameraLockRef.current ? 1 : 0}`,
+          "info",
+        );
+      }
+    },
+    [shipLog],
+  );
 
   const focusOrbitalPortfolioStation = useCallback(
     (stationIndex: number, mediaIndex?: number) => {
@@ -3105,6 +3147,7 @@ export default function ResumeSpace3D({
         setOrbitalPortfolioMediaIndex(0);
       }
       orbitalPortfolioInspectedStationIndexRef.current = next;
+      orbitalPortfolioInspectStartedAtRef.current = performance.now();
       orbitalPortfolioPlayingRef.current = false;
       setOrbitalPortfolioPlaying(false);
       orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 12000;
@@ -3155,6 +3198,12 @@ export default function ResumeSpace3D({
         lookTarget.z,
         true,
       );
+      if (ORBITAL_PORTFOLIO_STATE_DEBUG_LOGS) {
+        shipLog(
+          `[PORTSTATE] inspect-enter station=${next} lane=${station.orbitLane} dist=${inspectDistance.toFixed(1)} playing=${orbitalPortfolioPlayingRef.current ? 1 : 0} manualLock=${orbitalPortfolioManualCameraLockRef.current ? 1 : 0}`,
+          "info",
+        );
+      }
       shipLog(`Portfolio inspect: sample ${next + 1}`, "info");
     },
     [shipLog],
@@ -6886,6 +6935,58 @@ export default function ResumeSpace3D({
         }
       }
       const groups = orbitalPortfolioGroupsRef.current;
+      const inspectedIndex = orbitalPortfolioInspectedStationIndexRef.current;
+      const hasInspectContext = inspectedIndex !== null;
+      if (!hasInspectContext && orbitalPortfolioManualCameraLockRef.current) {
+        orbitalPortfolioManualCameraLockRef.current = false;
+        if (ORBITAL_PORTFOLIO_STATE_DEBUG_LOGS) {
+          shipLog(
+            "[PORTSTATE] manual lock auto-cleared (no inspected station)",
+            "info",
+          );
+        }
+      }
+      let freezeCount = 0;
+      let inspectedFreezeCount = 0;
+      let laneFreezeCount = 0;
+      let manualFreezeCount = 0;
+      if (
+        inspectedIndex !== null &&
+        now - orbitalPortfolioInspectStartedAtRef.current >
+          ORBITAL_PORTFOLIO_INSPECT_EXIT_GRACE_MS &&
+        sceneRef.current.camera &&
+        sceneRef.current.controls
+      ) {
+        const inspectedStation = orbitalPortfolioStationsRef.current[inspectedIndex];
+        const controlsAny = sceneRef.current.controls as unknown as {
+          getTarget?: (out: THREE.Vector3) => void;
+        };
+        if (inspectedStation && controlsAny.getTarget) {
+          const controlTarget = new THREE.Vector3();
+          controlsAny.getTarget(controlTarget);
+          const cameraDistance = sceneRef.current.camera.position.distanceTo(controlTarget);
+          const inspectedPlateWorld = new THREE.Vector3();
+          inspectedStation.plate.getWorldPosition(inspectedPlateWorld);
+          const targetDrift = controlTarget.distanceTo(inspectedPlateWorld);
+          if (
+            cameraDistance < ORBITAL_PORTFOLIO_INSPECT_EXIT_MIN_DISTANCE ||
+            cameraDistance > ORBITAL_PORTFOLIO_INSPECT_EXIT_MAX_DISTANCE ||
+            targetDrift > ORBITAL_PORTFOLIO_INSPECT_EXIT_TARGET_DRIFT
+          ) {
+            if (ORBITAL_PORTFOLIO_STATE_DEBUG_LOGS) {
+              shipLog(
+                `[PORTSTATE] inspect-auto-exit station=${inspectedIndex} camDist=${cameraDistance.toFixed(1)} drift=${targetDrift.toFixed(1)} graceMs=${(now - orbitalPortfolioInspectStartedAtRef.current).toFixed(0)}`,
+                "info",
+              );
+            }
+            exitOrbitalPortfolioInspectMode({
+              resumeOrbits: true,
+              reason:
+                "Portfolio inspect exited (camera moved out of close-up) — resuming orbit motion",
+            });
+          }
+        }
+      }
       if (groups.length > 0) {
         if (
           orbitalPortfolioPlayingRef.current &&
@@ -6950,7 +7051,13 @@ export default function ResumeSpace3D({
         const lockStationOrbit =
           isInspected ||
           inInspectedLane ||
-          (isFocused && orbitalPortfolioManualCameraLockRef.current);
+          (hasInspectContext && isFocused && orbitalPortfolioManualCameraLockRef.current);
+        if (lockStationOrbit) {
+          freezeCount += 1;
+          if (isInspected) inspectedFreezeCount += 1;
+          else if (inInspectedLane) laneFreezeCount += 1;
+          else if (isFocused && orbitalPortfolioManualCameraLockRef.current) manualFreezeCount += 1;
+        }
         const targetOrbitBlend =
           !orbitMotionEnabled || lockStationOrbit ? 0 : 1;
         station.orbitMotionBlend = THREE.MathUtils.damp(
@@ -7090,6 +7197,20 @@ export default function ResumeSpace3D({
           if (!mat.map && mat.opacity > 0.04) haloThumbsMissingMap += 1;
         });
       });
+      if (
+        ORBITAL_PORTFOLIO_STATE_DEBUG_LOGS &&
+        now - orbitalPortfolioStateDebugLastLogAtRef.current >= 900
+      ) {
+        orbitalPortfolioStateDebugLastLogAtRef.current = now;
+        const inspectedLaneForLog =
+          inspectedIndex !== null
+            ? orbitalPortfolioStationsRef.current[inspectedIndex]?.orbitLane
+            : undefined;
+        shipLog(
+          `[PORTSTATE] focus=${orbitalPortfolioFocusIndexRef.current} inspected=${inspectedIndex ?? "none"} lane=${typeof inspectedLaneForLog === "number" ? inspectedLaneForLog : "none"} playing=${orbitalPortfolioPlayingRef.current ? 1 : 0} orbits=${orbitalPortfolioOrbitsEnabledRef.current ? 1 : 0} manualLock=${orbitalPortfolioManualCameraLockRef.current ? 1 : 0} frozen=${freezeCount} [inspected=${inspectedFreezeCount},lane=${laneFreezeCount},manual=${manualFreezeCount}]`,
+          "info",
+        );
+      }
       if (
         ORBITAL_PORTFOLIO_DEBUG_LOGS &&
         now - orbitalPortfolioDebugLastLogAtRef.current >= 2200
@@ -7247,6 +7368,7 @@ export default function ResumeSpace3D({
     orbitalPortfolioActive,
     orbitalPortfolioMediaIndex,
     orbitalPortfolioVariantIndex,
+    exitOrbitalPortfolioInspectMode,
   ]);
 
   useEffect(() => {
@@ -7492,6 +7614,15 @@ export default function ResumeSpace3D({
               raw <= ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE
             ) {
               orbitalPortfolioInspectDistanceRef.current = raw;
+            } else if (
+              raw < ORBITAL_PORTFOLIO_INSPECT_EXIT_MIN_DISTANCE ||
+              raw > ORBITAL_PORTFOLIO_INSPECT_EXIT_MAX_DISTANCE
+            ) {
+              exitOrbitalPortfolioInspectMode({
+                resumeOrbits: true,
+                reason:
+                  "Portfolio inspect exited (zoom limit reached) — resuming orbit motion",
+              });
             }
           });
         }
@@ -7528,7 +7659,7 @@ export default function ResumeSpace3D({
       window.removeEventListener("pointerdown", onPointerDown, { capture: true });
       window.removeEventListener("wheel", onWheel, { capture: true });
     };
-  }, [orbitalPortfolioActive]);
+  }, [orbitalPortfolioActive, exitOrbitalPortfolioInspectMode]);
 
   // Orbit horizon signage: readable glowing text that rides moon rotation.
   useEffect(() => {

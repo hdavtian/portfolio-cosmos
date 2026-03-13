@@ -292,6 +292,10 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
 
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isDocked) return;
+    const targetEl = e.target as Element | null;
+    if (targetEl?.closest("button, input, textarea, select, a, label")) {
+      return;
+    }
     dragStateRef.current = {
       active: true,
       startX: e.clientX,
@@ -470,6 +474,7 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
           <button
             onClick={handleCopy}
             onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
             style={{
               background: copyFlash ? "rgba(0, 255, 65, 0.25)" : "transparent",
               border: "1px solid rgba(0, 255, 65, 0.2)",
@@ -509,6 +514,7 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
             <button
               onClick={onClearDebug}
               onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
               style={{
                 background: "transparent",
                 border: "1px solid rgba(255, 100, 100, 0.2)",
