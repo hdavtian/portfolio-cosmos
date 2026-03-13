@@ -1263,10 +1263,12 @@ export default function ResumeSpace3D({
   const [orbitalPortfolioOrbitsEnabled, setOrbitalPortfolioOrbitsEnabled] = useState(true);
   const orbitalPortfolioOrbitsEnabledRef = useRef(true);
   const [orbitalPortfolioAutoplayEnabled, setOrbitalPortfolioAutoplayEnabled] =
-    useState(true);
-  const orbitalPortfolioAutoplayEnabledRef = useRef(true);
+    useState(false);
+  const orbitalPortfolioAutoplayEnabledRef = useRef(false);
   const [orbitalPortfolioFocusIndex, setOrbitalPortfolioFocusIndex] = useState(0);
   const orbitalPortfolioFocusIndexRef = useRef(0);
+  const [orbitalPortfolioHasActiveFocus, setOrbitalPortfolioHasActiveFocus] = useState(true);
+  const orbitalPortfolioHasActiveFocusRef = useRef(true);
   const [orbitalPortfolioVariantIndex, setOrbitalPortfolioVariantIndex] = useState(0);
   const orbitalPortfolioVariantIndexRef = useRef(0);
   const [orbitalPortfolioMediaIndex, setOrbitalPortfolioMediaIndex] = useState(0);
@@ -1311,6 +1313,9 @@ export default function ResumeSpace3D({
   useEffect(() => {
     orbitalPortfolioVariantIndexRef.current = orbitalPortfolioVariantIndex;
   }, [orbitalPortfolioVariantIndex]);
+  useEffect(() => {
+    orbitalPortfolioHasActiveFocusRef.current = orbitalPortfolioHasActiveFocus;
+  }, [orbitalPortfolioHasActiveFocus]);
   useEffect(() => {
     orbitalPortfolioOrbitsEnabledRef.current = orbitalPortfolioOrbitsEnabled;
   }, [orbitalPortfolioOrbitsEnabled]);
@@ -2935,13 +2940,15 @@ export default function ResumeSpace3D({
     }
     orbitalPortfolioPlayingRef.current = true;
     orbitalPortfolioOrbitsEnabledRef.current = true;
-    orbitalPortfolioAutoplayEnabledRef.current = true;
+    orbitalPortfolioAutoplayEnabledRef.current = false;
     setOrbitalPortfolioPlaying(true);
     setOrbitalPortfolioOrbitsEnabled(true);
-    setOrbitalPortfolioAutoplayEnabled(true);
+    setOrbitalPortfolioAutoplayEnabled(false);
     setOrbitalPortfolioSearchQuery("");
     setOrbitalPortfolioYearFilter("all");
     setOrbitalPortfolioTechFilter("all");
+    orbitalPortfolioFocusIndexRef.current = 0;
+    setOrbitalPortfolioFocusIndex(0);
     orbitalPortfolioLastViewedRef.current = {
       focusIndex: null,
       variantIndex: 0,
@@ -2949,6 +2956,7 @@ export default function ResumeSpace3D({
     };
     setOrbitalPortfolioVariantIndex(0);
     setOrbitalPortfolioMediaIndex(0);
+    setOrbitalPortfolioHasActiveFocus(false);
     orbitalPortfolioInspectedStationIndexRef.current = null;
     orbitalPortfolioInspectDistanceRef.current = null;
     orbitalPortfolioInspectStartedAtRef.current = 0;
@@ -3032,13 +3040,16 @@ export default function ResumeSpace3D({
     orbitalPortfolioManualCameraLockRef.current = false;
     orbitalPortfolioPlayingRef.current = true;
     orbitalPortfolioOrbitsEnabledRef.current = true;
-    orbitalPortfolioAutoplayEnabledRef.current = true;
+    orbitalPortfolioAutoplayEnabledRef.current = false;
     setOrbitalPortfolioPlaying(true);
     setOrbitalPortfolioOrbitsEnabled(true);
-    setOrbitalPortfolioAutoplayEnabled(true);
+    setOrbitalPortfolioAutoplayEnabled(false);
     setOrbitalPortfolioSearchQuery("");
     setOrbitalPortfolioYearFilter("all");
     setOrbitalPortfolioTechFilter("all");
+    orbitalPortfolioFocusIndexRef.current = 0;
+    setOrbitalPortfolioFocusIndex(0);
+    setOrbitalPortfolioHasActiveFocus(false);
     orbitalPortfolioLastViewedRef.current = {
       focusIndex: null,
       variantIndex: 0,
@@ -3083,8 +3094,9 @@ export default function ResumeSpace3D({
   }, []);
 
   const exitOrbitalPortfolioInspectMode = useCallback(
-    (options?: { resumeOrbits?: boolean; reason?: string }) => {
+    (options?: { resumeOrbits?: boolean; keepManualControl?: boolean; reason?: string }) => {
       const resumeOrbits = options?.resumeOrbits ?? true;
+      const keepManualControl = options?.keepManualControl ?? false;
       const hadInspectMode =
         orbitalPortfolioInspectedStationIndexRef.current !== null ||
         orbitalPortfolioManualCameraLockRef.current;
@@ -3092,7 +3104,8 @@ export default function ResumeSpace3D({
       orbitalPortfolioInspectedStationIndexRef.current = null;
       orbitalPortfolioInspectDistanceRef.current = null;
       orbitalPortfolioInspectStartedAtRef.current = 0;
-      orbitalPortfolioManualCameraLockRef.current = false;
+      orbitalPortfolioManualCameraLockRef.current = keepManualControl;
+      setOrbitalPortfolioHasActiveFocus(false);
       if (resumeOrbits) {
         orbitalPortfolioStationsRef.current.forEach((station) => {
           station.orbitMotionBlend = Math.max(station.orbitMotionBlend, 0.7);
@@ -3107,7 +3120,7 @@ export default function ResumeSpace3D({
       }
       if (ORBITAL_PORTFOLIO_STATE_DEBUG_LOGS) {
         shipLog(
-          `[PORTSTATE] inspect-exit prevInspected=${prevInspected ?? "none"} resumeOrbits=${resumeOrbits ? 1 : 0} playing=${orbitalPortfolioPlayingRef.current ? 1 : 0} manualLock=${orbitalPortfolioManualCameraLockRef.current ? 1 : 0}`,
+          `[PORTSTATE] inspect-exit prevInspected=${prevInspected ?? "none"} resumeOrbits=${resumeOrbits ? 1 : 0} keepManual=${keepManualControl ? 1 : 0} playing=${orbitalPortfolioPlayingRef.current ? 1 : 0} manualLock=${orbitalPortfolioManualCameraLockRef.current ? 1 : 0}`,
           "info",
         );
       }
@@ -3116,24 +3129,40 @@ export default function ResumeSpace3D({
   );
 
   const focusOrbitalPortfolioStation = useCallback(
-    (stationIndex: number, mediaIndex?: number) => {
+    (
+      stationIndex: number,
+      mediaIndex?: number,
+      options?: { autoplay?: boolean; variantIndex?: number },
+    ) => {
       const stations = orbitalPortfolioStationsRef.current;
       if (stations.length === 0) return;
       const next = THREE.MathUtils.clamp(stationIndex, 0, stations.length - 1);
       const station = stations[next];
       if (!station) return;
       const groups = orbitalPortfolioGroupsRef.current;
+      const autoplayFocus = options?.autoplay === true;
       const stationChanged = next !== orbitalPortfolioFocusIndexRef.current;
       orbitalPortfolioFocusIndexRef.current = next;
       setOrbitalPortfolioFocusIndex(next);
+      setOrbitalPortfolioHasActiveFocus(true);
       const variantCount = Math.max(1, groups[next]?.variants?.length ?? 1);
-      const nextVariantIndex = stationChanged
-        ? 0
-        : THREE.MathUtils.clamp(
-            orbitalPortfolioVariantIndexRef.current,
-            0,
-            variantCount - 1,
-          );
+      const forcedVariant =
+        typeof options?.variantIndex === "number" && Number.isFinite(options.variantIndex)
+          ? THREE.MathUtils.clamp(
+              Math.floor(options.variantIndex),
+              0,
+              variantCount - 1,
+            )
+          : null;
+      const nextVariantIndex =
+        forcedVariant ??
+        (stationChanged
+          ? 0
+          : THREE.MathUtils.clamp(
+              orbitalPortfolioVariantIndexRef.current,
+              0,
+              variantCount - 1,
+            ));
       setOrbitalPortfolioVariantIndex(nextVariantIndex);
       if (typeof mediaIndex === "number" && Number.isFinite(mediaIndex)) {
         const mediaCount = Math.max(
@@ -3148,9 +3177,14 @@ export default function ResumeSpace3D({
       }
       orbitalPortfolioInspectedStationIndexRef.current = next;
       orbitalPortfolioInspectStartedAtRef.current = performance.now();
-      orbitalPortfolioPlayingRef.current = false;
-      setOrbitalPortfolioPlaying(false);
-      orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 12000;
+      if (autoplayFocus) {
+        orbitalPortfolioPlayingRef.current = true;
+        setOrbitalPortfolioPlaying(true);
+      } else {
+        orbitalPortfolioPlayingRef.current = false;
+        setOrbitalPortfolioPlaying(false);
+        orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 12000;
+      }
       orbitalPortfolioManualCameraLockRef.current = true;
       const controls = sceneRef.current.controls;
       const camera = sceneRef.current.camera;
@@ -6937,15 +6971,6 @@ export default function ResumeSpace3D({
       const groups = orbitalPortfolioGroupsRef.current;
       const inspectedIndex = orbitalPortfolioInspectedStationIndexRef.current;
       const hasInspectContext = inspectedIndex !== null;
-      if (!hasInspectContext && orbitalPortfolioManualCameraLockRef.current) {
-        orbitalPortfolioManualCameraLockRef.current = false;
-        if (ORBITAL_PORTFOLIO_STATE_DEBUG_LOGS) {
-          shipLog(
-            "[PORTSTATE] manual lock auto-cleared (no inspected station)",
-            "info",
-          );
-        }
-      }
       let freezeCount = 0;
       let inspectedFreezeCount = 0;
       let laneFreezeCount = 0;
@@ -6981,6 +7006,7 @@ export default function ResumeSpace3D({
             }
             exitOrbitalPortfolioInspectMode({
               resumeOrbits: true,
+              keepManualControl: true,
               reason:
                 "Portfolio inspect exited (camera moved out of close-up) — resuming orbit motion",
             });
@@ -7012,18 +7038,23 @@ export default function ResumeSpace3D({
             1,
             variants[currentVariant]?.mediaItems?.length ?? 1,
           );
+          let nextFocus = focus;
+          let nextVariant = currentVariant;
+          let nextMedia = orbitalPortfolioMediaIndex;
           if (orbitalPortfolioMediaIndex + 1 < mediaCount) {
-            setOrbitalPortfolioMediaIndex((prev) => prev + 1);
+            nextMedia = orbitalPortfolioMediaIndex + 1;
           } else if (currentVariant + 1 < variants.length) {
-            setOrbitalPortfolioVariantIndex((prev) => prev + 1);
-            setOrbitalPortfolioMediaIndex(0);
+            nextVariant = currentVariant + 1;
+            nextMedia = 0;
           } else {
-            const next = (focus + 1) % groups.length;
-            orbitalPortfolioFocusIndexRef.current = next;
-            setOrbitalPortfolioFocusIndex(next);
-            setOrbitalPortfolioVariantIndex(0);
-            setOrbitalPortfolioMediaIndex(0);
+            nextFocus = (focus + 1) % groups.length;
+            nextVariant = 0;
+            nextMedia = 0;
           }
+          focusOrbitalPortfolioStation(nextFocus, nextMedia, {
+            autoplay: true,
+            variantIndex: nextVariant,
+          });
         }
       }
       let nonFocusedPlateVisible = 0;
@@ -7041,7 +7072,9 @@ export default function ResumeSpace3D({
         station.group.rotation.y += dt * 0.0;
         station.mediaHaloGroup.rotation.y -= dt * 0.0;
         station.mediaHaloGroup.rotation.x = 0;
-        const isFocused = idx === orbitalPortfolioFocusIndexRef.current;
+        const isFocused =
+          orbitalPortfolioHasActiveFocusRef.current &&
+          idx === orbitalPortfolioFocusIndexRef.current;
         const isInspected = idx === orbitalPortfolioInspectedStationIndexRef.current;
         // Keep the currently visited card stable so camera-inspect never drifts.
         // Also freeze all peers in the same orbital lane to prevent distracting
@@ -7369,6 +7402,7 @@ export default function ResumeSpace3D({
     orbitalPortfolioMediaIndex,
     orbitalPortfolioVariantIndex,
     exitOrbitalPortfolioInspectMode,
+    focusOrbitalPortfolioStation,
   ]);
 
   useEffect(() => {
@@ -7620,6 +7654,7 @@ export default function ResumeSpace3D({
             ) {
               exitOrbitalPortfolioInspectMode({
                 resumeOrbits: true,
+                keepManualControl: true,
                 reason:
                   "Portfolio inspect exited (zoom limit reached) — resuming orbit motion",
               });
@@ -15303,14 +15338,15 @@ export default function ResumeSpace3D({
           {orbitalPortfolioActive &&
             (() => {
               const groups = orbitalPortfolioGroupsRef.current;
-              const activeGroup =
-                groups[
-                  THREE.MathUtils.clamp(
-                    orbitalPortfolioFocusIndex,
-                    0,
-                    Math.max(0, groups.length - 1),
-                  )
-                ];
+              const activeGroup = orbitalPortfolioHasActiveFocus
+                ? groups[
+                    THREE.MathUtils.clamp(
+                      orbitalPortfolioFocusIndex,
+                      0,
+                      Math.max(0, groups.length - 1),
+                    )
+                  ]
+                : null;
               const variants = activeGroup?.variants ?? [];
               const activeVariant =
                 variants[
@@ -15360,7 +15396,7 @@ export default function ResumeSpace3D({
                       Orbital Registry
                     </div>
                     <div style={{ marginTop: 4, fontSize: 14, color: "#eaf8ff" }}>
-                      {activeGroup?.title ?? "Loading..."}
+                      {activeGroup?.title ?? "No active selection"}
                     </div>
                     <div style={{ marginTop: 2, fontSize: 12, color: "rgba(210, 235, 255, 0.84)" }}>
                       {(() => {
@@ -15514,7 +15550,18 @@ export default function ResumeSpace3D({
                             const next = event.currentTarget.checked;
                             orbitalPortfolioAutoplayEnabledRef.current = next;
                             setOrbitalPortfolioAutoplayEnabled(next);
-                            orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
+                            const now = performance.now();
+                            orbitalPortfolioAutoRef.current.lastAdvanceAt = now;
+                            if (next) {
+                              focusOrbitalPortfolioStation(
+                                orbitalPortfolioFocusIndexRef.current,
+                                orbitalPortfolioMediaIndex,
+                                {
+                                  autoplay: true,
+                                  variantIndex: orbitalPortfolioVariantIndexRef.current,
+                                },
+                              );
+                            }
                           }}
                         />
                         Auto-play
@@ -15691,7 +15738,7 @@ export default function ResumeSpace3D({
                                     {group.title}
                                   </span>
                                   <span style={{ fontSize: 11, color: isHere ? "#c0f2ff" : "rgba(180,220,245,0.72)" }}>
-                                    {isHere ? "You are here" : `${index + 1}`}
+                                    {`${index + 1}`}
                                   </span>
                                 </button>
                               );
