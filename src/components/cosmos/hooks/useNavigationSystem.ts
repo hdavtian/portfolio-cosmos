@@ -41,6 +41,8 @@ const NAV_ORBIT_EXIT_CLEAR_AWAY_BLEND = 0.4; // 40% biased away from moon surfac
 const NAV_ORBIT_EXIT_CLEAR_MIN_DIST = 180;
 const NAV_ORBIT_EXIT_CLEAR_MAX_DIST = 320;
 const NAV_ORBIT_EXIT_CLEAR_SPEED = 0.9;
+const NAV_ORBIT_EXIT_CLEAR_NEAR_MOON_MULT = 7.5;
+const NAV_CINEMATIC_HANDOFF_MS = 680;
 const NAV_MOON_ARRIVAL_DISTANCE = 36;
 const NAV_MOON_FREEZE_DISTANCE = 42;
 const NAV_PLANET_STAGING_MIN_DIST = 1680;
@@ -242,6 +244,19 @@ export const useNavigationSystem = (deps: {
   // This prevents repeated clicks on the same planet from randomly
   // picking opposite staging hemispheres.
   const sectionFallbackSideRef = useRef<Record<string, 1 | -1>>({});
+  const navCameraHandoffRef = useRef<{
+    active: boolean;
+    startTime: number;
+    durationMs: number;
+    startCamPos: THREE.Vector3;
+    startTarget: THREE.Vector3;
+  }>({
+    active: false,
+    startTime: 0,
+    durationMs: NAV_CINEMATIC_HANDOFF_MS,
+    startCamPos: new THREE.Vector3(),
+    startTarget: new THREE.Vector3(),
+  });
 
   // After a planet-approach settle, the camera should orbit around the
   // planet centre (not the ship) to keep the perpendicular view.
@@ -514,9 +529,31 @@ export const useNavigationSystem = (deps: {
       // ── Stop cinematic hover/orbit so the ship can move ────────
       // The render loop's cinematic branch blocks autopilot updates,
       // so we must deactivate it before the ship can navigate.
+      const hadActiveCinematic = !!shipCinematicRef.current?.active;
       if (shipCinematicRef.current?.active) {
         vlog("🎬 Deactivating cinematic to allow navigation");
         shipCinematicRef.current.active = false;
+      }
+      navCameraHandoffRef.current.active = false;
+      // Clean handoff from intro-hover cinematic to nav camera:
+      // preserve current framing first, then blend into standard follow.
+      if (
+        hadActiveCinematic &&
+        !insideShipRef.current &&
+        followingSpaceshipRef.current &&
+        sceneRef.current.controls &&
+        sceneRef.current.camera &&
+        spaceshipRef.current
+      ) {
+        const startTarget = sceneRef.current.controls
+          .getTarget(_navControlTarget.current)
+          .clone();
+        navCameraHandoffRef.current.active = true;
+        navCameraHandoffRef.current.startTime = performance.now();
+        navCameraHandoffRef.current.durationMs = NAV_CINEMATIC_HANDOFF_MS;
+        navCameraHandoffRef.current.startCamPos.copy(sceneRef.current.camera.position);
+        navCameraHandoffRef.current.startTarget.copy(startTarget);
+        vlog("🎥 Nav handoff: preserving intro framing, easing into follow");
       }
 
       if (!navigationSystemRef.current) {
@@ -616,7 +653,12 @@ export const useNavigationSystem = (deps: {
 
         let clearanceTarget: THREE.Vector3 | undefined;
         let clearanceDistance: number | undefined;
-        if (departureContext && currentPos?.worldPosition) {
+        if (
+          departureContext &&
+          currentPos?.worldPosition &&
+          ship.position.distanceTo(departureContext.moonCenter) <=
+            departureContext.moonRadius * NAV_ORBIT_EXIT_CLEAR_NEAR_MOON_MULT
+        ) {
           const outward = _navMoonOutward.current
             .subVectors(ship.position, departureContext.moonCenter);
           if (outward.lengthSq() < 1e-6) outward.set(0, 1, 0);
@@ -762,7 +804,16 @@ export const useNavigationSystem = (deps: {
           if (!isDirectSectionApproach) {
             const key = targetId.toLowerCase();
             const remembered = sectionFallbackSideRef.current[key];
-            const upOrDown: 1 | -1 = remembered ?? (Math.random() > 0.5 ? 1 : -1);
+            const centerToShipY = shipPos.y - planetCenter.y;
+            const preferredSide: 1 | -1 =
+              Math.abs(centerToShipY) < targetRadius * 0.25
+                ? (Math.random() > 0.5 ? 1 : -1)
+                : centerToShipY >= 0
+                  ? 1
+                  : -1;
+            // Prefer the current hemisphere to avoid sudden "dive then recover"
+            // right after intro/camera handoff. Keep remembered side if present.
+            const upOrDown: 1 | -1 = remembered ?? preferredSide;
             sectionFallbackSideRef.current[key] = upOrDown;
             const planeNormal = new THREE.Vector3(0, 1, 0);
             const stagingDistance = Math.max(
@@ -787,7 +838,11 @@ export const useNavigationSystem = (deps: {
           const distToStaging = shipPos.distanceTo(stagingPoint);
           let clearanceTarget: THREE.Vector3 | undefined;
           let clearanceDistance: number | undefined;
-          if (departureContext) {
+          if (
+            departureContext &&
+            shipPos.distanceTo(departureContext.moonCenter) <=
+              departureContext.moonRadius * NAV_ORBIT_EXIT_CLEAR_NEAR_MOON_MULT
+          ) {
             const outward = _navMoonOutward.current
               .subVectors(shipPos, departureContext.moonCenter);
             if (outward.lengthSq() < 1e-6) outward.set(0, 1, 0);
@@ -982,6 +1037,63 @@ export const useNavigationSystem = (deps: {
   const _navCamForward = useRef(new THREE.Vector3());
   const _navMoonOutward = useRef(new THREE.Vector3());
   const _navArcPoint = useRef(new THREE.Vector3());
+  const _navBlendCamPos = useRef(new THREE.Vector3());
+  const _navBlendTarget = useRef(new THREE.Vector3());
+
+  const applyFollowCameraToShip = (
+    ship: THREE.Object3D,
+    animate = true,
+  ) => {
+    if (!sceneRef.current.controls) return;
+    const camPos = _navCamPos.current;
+    camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
+    const navCameraBehind = THREE.MathUtils.clamp(
+      optionsRef.current.spaceNavCameraBehind ?? NAV_CAMERA_BEHIND,
+      6,
+      14,
+    );
+    const navCameraHeight =
+      optionsRef.current.spaceNavCameraHeight ?? NAV_CAMERA_HEIGHT;
+    camPos.multiplyScalar(navCameraBehind).add(ship.position);
+    camPos.y += navCameraHeight;
+
+    const handoff = navCameraHandoffRef.current;
+    if (handoff.active) {
+      const t = THREE.MathUtils.clamp(
+        (performance.now() - handoff.startTime) / Math.max(1, handoff.durationMs),
+        0,
+        1,
+      );
+      const eased = THREE.MathUtils.smootherstep(t, 0, 1);
+      const blendCam = _navBlendCamPos.current
+        .copy(handoff.startCamPos)
+        .lerp(camPos, eased);
+      const blendTarget = _navBlendTarget.current
+        .copy(handoff.startTarget)
+        .lerp(ship.position, eased);
+      sceneRef.current.controls.setLookAt(
+        blendCam.x,
+        blendCam.y,
+        blendCam.z,
+        blendTarget.x,
+        blendTarget.y,
+        blendTarget.z,
+        animate,
+      );
+      if (t >= 1) handoff.active = false;
+      return;
+    }
+
+    sceneRef.current.controls.setLookAt(
+      camPos.x,
+      camPos.y,
+      camPos.z,
+      ship.position.x,
+      ship.position.y,
+      ship.position.z,
+      animate,
+    );
+  };
 
   const updateAutopilotNavigation = useCallback(() => {
     const tickTarget = navigationTargetRef.current.id ?? "none";
@@ -1153,26 +1265,7 @@ export const useNavigationSystem = (deps: {
           sceneRef.current.controls &&
           !suppressShipFollowCameraForSkills
         ) {
-          const camPos = _navCamPos.current;
-          camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
-          const navCameraBehind = THREE.MathUtils.clamp(
-            optionsRef.current.spaceNavCameraBehind ?? NAV_CAMERA_BEHIND,
-            6,
-            14,
-          );
-          const navCameraHeight =
-            optionsRef.current.spaceNavCameraHeight ?? NAV_CAMERA_HEIGHT;
-          camPos.multiplyScalar(navCameraBehind).add(ship.position);
-          camPos.y += navCameraHeight;
-          sceneRef.current.controls.setLookAt(
-            camPos.x,
-            camPos.y,
-            camPos.z,
-            ship.position.x,
-            ship.position.y,
-            ship.position.z,
-            true,
-          );
+          applyFollowCameraToShip(ship, true);
         }
 
         if (clearDist <= 8) {
@@ -1221,28 +1314,7 @@ export const useNavigationSystem = (deps: {
           sceneRef.current.controls &&
           !suppressShipFollowCameraForSkills
         ) {
-          const camPos = _navCamPos.current;
-          // Camera behind ship, facing the destination
-          camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
-          const navCameraBehind = THREE.MathUtils.clamp(
-            optionsRef.current.spaceNavCameraBehind ?? NAV_CAMERA_BEHIND,
-            6,
-            14,
-          );
-          const navCameraHeight =
-            optionsRef.current.spaceNavCameraHeight ?? NAV_CAMERA_HEIGHT;
-          camPos.multiplyScalar(navCameraBehind).add(ship.position);
-          camPos.y += navCameraHeight;
-
-          sceneRef.current.controls.setLookAt(
-            camPos.x,
-            camPos.y,
-            camPos.z,
-            ship.position.x,
-            ship.position.y,
-            ship.position.z,
-            true,
-          );
+          applyFollowCameraToShip(ship, true);
         }
 
         if (t >= 1) {
@@ -1277,27 +1349,7 @@ export const useNavigationSystem = (deps: {
           followingSpaceshipRef.current &&
           sceneRef.current.controls
         ) {
-          const camPos = _navCamPos.current;
-          camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
-          const navCameraBehind = THREE.MathUtils.clamp(
-            optionsRef.current.spaceNavCameraBehind ?? NAV_CAMERA_BEHIND,
-            6,
-            14,
-          );
-          const navCameraHeight =
-            optionsRef.current.spaceNavCameraHeight ?? NAV_CAMERA_HEIGHT;
-          camPos.multiplyScalar(navCameraBehind).add(ship.position);
-          camPos.y += navCameraHeight;
-
-          sceneRef.current.controls.setLookAt(
-            camPos.x,
-            camPos.y,
-            camPos.z,
-            ship.position.x,
-            ship.position.y,
-            ship.position.z,
-            true,
-          );
+          applyFollowCameraToShip(ship, true);
         }
 
         let cameraReady = true;
@@ -1804,23 +1856,7 @@ export const useNavigationSystem = (deps: {
         sceneRef.current.controls &&
         !suppressShipFollowCameraForSkills
       ) {
-        const camPos = _navCamPos.current;
-        camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
-        const navCameraBehind = THREE.MathUtils.clamp(
-          optionsRef.current.spaceNavCameraBehind ?? NAV_CAMERA_BEHIND,
-          6,
-          14,
-        );
-        const navCameraHeight =
-          optionsRef.current.spaceNavCameraHeight ?? NAV_CAMERA_HEIGHT;
-        camPos.multiplyScalar(navCameraBehind).add(ship.position);
-        camPos.y += navCameraHeight;
-
-        sceneRef.current.controls.setLookAt(
-          camPos.x, camPos.y, camPos.z,
-          ship.position.x, ship.position.y, ship.position.z,
-          true,
-        );
+        applyFollowCameraToShip(ship, true);
       }
 
       if (distance < arrivalDistance) {
