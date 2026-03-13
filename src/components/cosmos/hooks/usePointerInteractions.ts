@@ -69,8 +69,9 @@ export const usePointerInteractions = (params: {
         onStarDestroyerClick: args.onStarDestroyerClick,
         insideShipRef: args.insideShipRef ?? insideShipRef,
         orbitActiveRef,
+        focusedMoonRef,
       }),
-    [insideShipRef, mountRef, orbitActiveRef],
+    [focusedMoonRef, insideShipRef, mountRef, orbitActiveRef],
   );
 
   return { buildRotationHandlers, buildPointerHandlers };

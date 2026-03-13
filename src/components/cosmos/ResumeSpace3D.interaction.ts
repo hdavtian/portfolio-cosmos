@@ -114,6 +114,8 @@ export const createPointerInteractionHandlers = (deps: {
   insideShipRef?: React.MutableRefObject<boolean>;
   /** When true, overlay-exit and same-moon clicks are suppressed */
   orbitActiveRef?: React.MutableRefObject<boolean>;
+  /** Currently focused moon while orbiting, if any */
+  focusedMoonRef?: React.MutableRefObject<THREE.Mesh | null>;
 }) => {
   const {
     mountRef,
@@ -130,6 +132,7 @@ export const createPointerInteractionHandlers = (deps: {
     onStarDestroyerClick,
     insideShipRef,
     orbitActiveRef,
+    focusedMoonRef,
   } = deps;
 
   let hoveredObject: THREE.Object3D | null = null;
@@ -321,6 +324,29 @@ export const createPointerInteractionHandlers = (deps: {
         (hit) => hit.object.userData.sectionIndex !== undefined,
       );
       if (hit && hit.object.userData.sectionIndex !== undefined) {
+        // While orbiting, clicking the currently focused moon should be a no-op.
+        if (orbitActiveRef?.current && focusedMoonRef?.current) {
+          const normalizeId = (value: unknown) =>
+            String(value ?? "")
+              .toLowerCase()
+              .trim()
+              .replace(/\s+/g, "-");
+          const focused = focusedMoonRef.current;
+          const focusedId = normalizeId(
+            focused.userData?.moonId ||
+              focused.userData?.systemId ||
+              focused.userData?.planetName,
+          );
+          const clickedId = normalizeId(
+            hit.object.userData?.moonId ||
+              hit.object.userData?.systemId ||
+              hit.object.userData?.planetName,
+          );
+          if (hit.object === focused || (focusedId && focusedId === clickedId)) {
+            return;
+          }
+        }
+
         const planetName = hit.object.userData.planetName;
 
         // Main planets: Fly to them using handleNavigation (same as quick nav)
