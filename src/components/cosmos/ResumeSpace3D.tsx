@@ -1019,6 +1019,9 @@ export default function ResumeSpace3D({
   const [sceneReady, setSceneReady] = useState(false);
   const [loaderVisualComplete, setLoaderVisualComplete] = useState(false);
   const [criticalAssetsReady, setCriticalAssetsReady] = useState(false);
+  const [spaceBackgroundVisible, setSpaceBackgroundVisible] = useState(true);
+  const starfieldMeshRef = useRef<THREE.Mesh | null>(null);
+  const skyfieldMeshRef = useRef<THREE.Mesh | null>(null);
 
   // Tour state
   const [tourActive, setTourActive] = useState(false);
@@ -1101,6 +1104,15 @@ export default function ResumeSpace3D({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (starfieldMeshRef.current) {
+      starfieldMeshRef.current.visible = spaceBackgroundVisible;
+    }
+    if (skyfieldMeshRef.current) {
+      skyfieldMeshRef.current.visible = spaceBackgroundVisible;
+    }
+  }, [spaceBackgroundVisible]);
 
   useEffect(() => {
     if (loaderVisualComplete && criticalAssetsReady) {
@@ -8602,6 +8614,10 @@ export default function ResumeSpace3D({
     const textureLoader = new THREE.TextureLoader();
 
     const { starfield, skyfield } = createStarfieldMeshes(textureLoader);
+    starfield.visible = spaceBackgroundVisible;
+    skyfield.visible = spaceBackgroundVisible;
+    starfieldMeshRef.current = starfield;
+    skyfieldMeshRef.current = skyfield;
     scene.add(starfield);
     scene.add(skyfield);
 
@@ -13847,6 +13863,8 @@ export default function ResumeSpace3D({
       orbitalPortfolioMatterPacketsRef.current = [];
       orbitalPortfolioCoreGlowRef.current = null;
       orbitalPortfolioOuterRingRef.current = null;
+      starfieldMeshRef.current = null;
+      skyfieldMeshRef.current = null;
       orbitalPortfolioActiveRef.current = false;
       orbitalPortfolioPlayingRef.current = true;
       aboutMemorySquareRootRef.current = null;
@@ -14855,6 +14873,64 @@ export default function ResumeSpace3D({
                 transform: "translate(-200px, -50%)",
               }}
             />
+          )}
+
+          {sceneReady && (
+            <div
+              style={{
+                position: "fixed",
+                left: 16,
+                bottom: 14,
+                zIndex: 1110,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                borderRadius: 9,
+                border: "1px solid rgba(135, 188, 246, 0.4)",
+                background: "rgba(6, 14, 26, 0.78)",
+                color: "#d8ecff",
+                padding: "7px 10px",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 12,
+              }}
+            >
+              <label
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={spaceBackgroundVisible}
+                  onChange={(event) =>
+                    setSpaceBackgroundVisible(event.currentTarget.checked)
+                  }
+                />
+                Space Background
+              </label>
+              <span
+                title="Helps reduce motion discomfort by hiding moving/parallax star imagery and using a plain black background."
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  border: "1px solid rgba(160, 215, 255, 0.65)",
+                  color: "#c7eaff",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  cursor: "help",
+                  userSelect: "none",
+                }}
+              >
+                ?
+              </span>
+            </div>
           )}
 
           {skillsLatticeActive && skillsLatticeSelection && (
