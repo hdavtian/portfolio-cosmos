@@ -116,6 +116,10 @@ export const createPointerInteractionHandlers = (deps: {
   orbitActiveRef?: React.MutableRefObject<boolean>;
   /** Currently focused moon while orbiting, if any */
   focusedMoonRef?: React.MutableRefObject<THREE.Mesh | null>;
+  /** Optional 3D hologram panels that can be clicked */
+  getHologramPanelClickables?: () => THREE.Object3D[];
+  /** Callback when a hologram panel was picked */
+  onHologramPanelPicked?: (panelIndex: number) => void;
 }) => {
   const {
     mountRef,
@@ -133,6 +137,8 @@ export const createPointerInteractionHandlers = (deps: {
     insideShipRef,
     orbitActiveRef,
     focusedMoonRef,
+    getHologramPanelClickables,
+    onHologramPanelPicked,
   } = deps;
 
   let hoveredObject: THREE.Object3D | null = null;
@@ -287,6 +293,22 @@ export const createPointerInteractionHandlers = (deps: {
     }
 
     raycaster.setFromCamera(pointer, camera);
+
+    const hologramPanelPickables = getHologramPanelClickables?.() ?? [];
+    if (hologramPanelPickables.length > 0) {
+      const hologramHits = raycaster.intersectObjects(hologramPanelPickables, false);
+      if (hologramHits.length > 0) {
+        const firstHit = hologramHits[0];
+        const panelIndex = Number(
+          (firstHit.object.userData as { hologramPanelIndex?: number })
+            .hologramPanelIndex,
+        );
+        if (Number.isFinite(panelIndex)) {
+          onHologramPanelPicked?.(panelIndex);
+          return;
+        }
+      }
+    }
 
     // First, check for overlay clicks (exit focused moon)
     // Skip during orbit — clicking the moon should not exit focus.

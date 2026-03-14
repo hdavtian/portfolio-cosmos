@@ -13566,6 +13566,11 @@ export default function ResumeSpace3D({
       starDestroyerRef,
       onStarDestroyerClick: handleStarDestroyerClick,
       insideShipRef,
+      getHologramPanelClickables: () =>
+        hologramDroneRef.current?.getInteractivePanelMeshes() ?? [],
+      onHologramPanelPicked: (panelIndex) => {
+        hologramDroneRef.current?.selectPanel(panelIndex);
+      },
     });
 
     const onPointerMoveGlobal = (event: PointerEvent) => {
@@ -14510,7 +14515,6 @@ export default function ResumeSpace3D({
               left: 0,
             }}
           />
-
           {!isLoading && startupConsoleVisible && (
             <button
               ref={startupConsoleButtonRef}

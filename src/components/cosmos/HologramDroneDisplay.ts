@@ -6,16 +6,10 @@ import {
   HOLO_REF_DISTANCE,
 } from "./scaleConfig";
 
-// ═══════════════════════════════════════════════════════════════════
-// HologramDroneDisplay — a geometric probe that projects holographic
-// text panels near a focused moon (Variant 3)
-// ═══════════════════════════════════════════════════════════════════
-
-// ── Constants ─────────────────────────────────────────────────────
 const CANVAS_W = 768;
-const BASE_PANEL_WORLD_WIDTH = HOLO_PANEL_WIDTH; // world-unit width at reference distance
-const PADDING = 28; // canvas-pixel padding inside panels
-const BORDER_MARGIN = 6; // canvas-pixel inset for border rect
+const BASE_PANEL_WORLD_WIDTH = HOLO_PANEL_WIDTH;
+const PADDING = 28;
+const BORDER_MARGIN = 6;
 
 const TEXT_COLOR = "#8ab0c8";
 const ACCENT_COLOR = "#2a9968";
@@ -23,30 +17,30 @@ const HEADER_BG = "rgba(2, 4, 8, 0.82)";
 const SECTION_BG = "rgba(4, 10, 22, 0.78)";
 
 const FLY_IN_DURATION = 1.2;
-const BORDER_DRAW_DURATION = 1.6; // seconds to trace the full border
-const CONTENT_FADE_DURATION = 0.5; // seconds for text to fade in after border
-const PANEL_STAGGER = 0.9; // seconds between each panel reveal start
+const BORDER_DRAW_DURATION = 1.6;
+const CONTENT_FADE_DURATION = 0.5;
+const PANEL_STAGGER = 0;
+const POST_DRAW_DRONE_EXIT_DURATION = 0.55;
+const PANELS_DOCK_DURATION = 0.38;
 
-const BASE_SIDE_OFFSET = HOLO_SIDE_OFFSET; // world units to the right of the moon at reference dist
-const DRONE_FORWARD_RATIO = 0.3; // drone: 30% from moon toward camera
-const REFERENCE_DISTANCE = HOLO_REF_DISTANCE; // camera distance at which base sizes are correct
-const MIN_SCALE = 0.85; // don't shrink panels below 85% even when very close
-const MAX_SCALE = 1.6; // don't grow panels beyond 160% even when very far
-const SCALE_POWER = 0.6; // sub-linear scaling — panels grow gently, not 1:1 with distance
+const BASE_SIDE_OFFSET = HOLO_SIDE_OFFSET;
+const DRONE_FORWARD_RATIO = 0.3;
+const REFERENCE_DISTANCE = HOLO_REF_DISTANCE;
+const MIN_SCALE = 0.85;
+const MAX_SCALE = 1.6;
+const SCALE_POWER = 0.6;
 
-// ── Types ─────────────────────────────────────────────────────────
-
-interface TextPanel {
+type TextPanel = {
   mesh: THREE.Mesh;
   material: THREE.MeshBasicMaterial;
   texture: THREE.CanvasTexture;
-  contentCanvas: HTMLCanvasElement; // pre-rendered text (no border/bg)
-  displayCanvas: HTMLCanvasElement; // composited output (updated per frame)
+  contentCanvas: HTMLCanvasElement;
+  displayCanvas: HTMLCanvasElement;
   displayCtx: CanvasRenderingContext2D;
   canvasW: number;
   canvasH: number;
-  panelW: number; // world units
-  panelH: number; // world units
+  panelW: number;
+  panelH: number;
   targetOpacity: number;
   revealTime: number;
   borderProgress: number;
@@ -55,35 +49,56 @@ interface TextPanel {
   isHeader: boolean;
   penX: number;
   penY: number;
-}
+  drawOffset: THREE.Vector3;
+  drawOriginWorld: THREE.Vector3;
+  dockScale: number;
+  expandedScale: number;
+};
 
-// ═══════════════════════════════════════════════════════════════════
+type LaserRig = {
+  line: THREE.Line;
+  lineMat: THREE.LineBasicMaterial;
+  edgeA: THREE.Line;
+  edgeAMat: THREE.LineBasicMaterial;
+  edgeB: THREE.Line;
+  edgeBMat: THREE.LineBasicMaterial;
+  triangle: THREE.Mesh;
+  triangleMat: THREE.MeshBasicMaterial;
+  glow: THREE.Mesh;
+};
 
 export class HologramDroneDisplay {
   private scene: THREE.Scene;
+  private rootGroup: THREE.Group;
   private droneGroup: THREE.Group;
   private panelGroup: THREE.Group;
-  private rootGroup: THREE.Group;
-  private panels: TextPanel[] = [];
-  private laserLine: THREE.Line;
-  private laserMaterial: THREE.LineBasicMaterial;
-  private laserGlow: THREE.Mesh; // small sphere at laser tip
   private scannerLight: THREE.PointLight;
 
-  // Animation state
+  private panels: TextPanel[] = [];
+  private laserRigs: LaserRig[] = [];
+
   private active = false;
+  private hiding = false;
+  private hideProgress = 0;
   private flyInProgress = 0;
   private contentStartTime = 0;
+  private idleTime = 0;
+  private isOrbitMode = false;
+
+  private drawFinished = false;
+  private droneExitingAfterDraw = false;
+  private droneExitProgress = 0;
+
+  private dockingPanels = false;
+  private panelsDocked = false;
+  private panelDockProgress = 0;
+  private activePanelIndex: number | null = null;
+
   private flyStartPos = new THREE.Vector3();
   private flyEndPos = new THREE.Vector3();
   private targetWorldPos = new THREE.Vector3();
-  private hiding = false;
-  private hideProgress = 0;
-  private idleTime = 0;
   private sideDir = new THREE.Vector3();
-  private isOrbitMode = false; // true when showing content during moon orbit
 
-  // Temps
   private _tmpV = new THREE.Vector3();
   private _tmpV2 = new THREE.Vector3();
 
@@ -98,111 +113,91 @@ export class HologramDroneDisplay {
 
     this.panelGroup = new THREE.Group();
     this.panelGroup.name = "HologramPanels";
-    this.rootGroup.add(this.panelGroup);
+    this.panelGroup.visible = false;
 
-    // Laser beam
-    this.laserMaterial = new THREE.LineBasicMaterial({
-      color: 0x4fffb0,
-      transparent: true,
-      opacity: 0,
-    });
-    const laserGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(),
-      new THREE.Vector3(),
-    ]);
-    this.laserLine = new THREE.Line(laserGeo, this.laserMaterial);
-    this.laserLine.frustumCulled = false;
-    this.rootGroup.add(this.laserLine);
-
-    // Laser tip glow sphere
-    const glowGeo = new THREE.SphereGeometry(0.18, 10, 10);
-    const glowMat = new THREE.MeshBasicMaterial({
-      color: 0x4fffb0,
-      transparent: true,
-      opacity: 0,
-    });
-    this.laserGlow = new THREE.Mesh(glowGeo, glowMat);
-    this.rootGroup.add(this.laserGlow);
-
-    // Scanner point light
     this.scannerLight = new THREE.PointLight(0x4fffb0, 0, 12);
     this.droneGroup.add(this.scannerLight);
 
-    scene.add(this.rootGroup);
+    this.scene.add(this.rootGroup);
+    this.scene.add(this.panelGroup);
   }
-
-  // ── Drone geometry ──────────────────────────────────────────────
 
   private buildDrone(): THREE.Group {
     const group = new THREE.Group();
     group.name = "HologramDrone";
 
-    const bodyGeo = new THREE.OctahedronGeometry(0.45, 0);
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x8899aa,
-      metalness: 0.8,
-      roughness: 0.25,
-      emissive: 0x112233,
-      emissiveIntensity: 0.3,
-    });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    const body = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.45, 0),
+      new THREE.MeshStandardMaterial({
+        color: 0x8899aa,
+        metalness: 0.8,
+        roughness: 0.25,
+        emissive: 0x112233,
+        emissiveIntensity: 0.3,
+      }),
+    );
     body.scale.set(1, 0.7, 1);
     group.add(body);
 
-    const ringGeo = new THREE.TorusGeometry(0.65, 0.04, 8, 32);
-    const ringMat = new THREE.MeshStandardMaterial({
-      color: 0x4fffb0,
-      emissive: 0x4fffb0,
-      emissiveIntensity: 0.5,
-      metalness: 0.9,
-      roughness: 0.1,
-      transparent: true,
-      opacity: 0.8,
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.65, 0.04, 8, 32),
+      new THREE.MeshStandardMaterial({
+        color: 0x4fffb0,
+        emissive: 0x4fffb0,
+        emissiveIntensity: 0.5,
+        metalness: 0.9,
+        roughness: 0.1,
+        transparent: true,
+        opacity: 0.8,
+      }),
+    );
     ring.rotation.x = Math.PI / 2;
     ring.name = "droneRing";
     group.add(ring);
 
-    const eyeGeo = new THREE.SphereGeometry(0.12, 12, 12);
-    const eyeMat = new THREE.MeshStandardMaterial({
-      color: 0x4fffb0,
-      emissive: 0x4fffb0,
-      emissiveIntensity: 1.0,
-    });
-    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    const eye = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12, 12, 12),
+      new THREE.MeshStandardMaterial({
+        color: 0x4fffb0,
+        emissive: 0x4fffb0,
+        emissiveIntensity: 1.0,
+      }),
+    );
     eye.position.y = -0.35;
     group.add(eye);
 
-    const antGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.35, 6);
-    const antMat = new THREE.MeshStandardMaterial({
-      color: 0xaabbcc,
-      metalness: 0.9,
-      roughness: 0.2,
-    });
-    const antenna = new THREE.Mesh(antGeo, antMat);
+    const antenna = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.015, 0.015, 0.35, 6),
+      new THREE.MeshStandardMaterial({
+        color: 0xaabbcc,
+        metalness: 0.9,
+        roughness: 0.2,
+      }),
+    );
     antenna.position.y = 0.45;
     group.add(antenna);
 
-    const tipGeo = new THREE.SphereGeometry(0.04, 8, 8);
-    const tipMat = new THREE.MeshStandardMaterial({
-      color: 0xff4444,
-      emissive: 0xff4444,
-      emissiveIntensity: 0.8,
-    });
-    const tip = new THREE.Mesh(tipGeo, tipMat);
+    const tip = new THREE.Mesh(
+      new THREE.SphereGeometry(0.04, 8, 8),
+      new THREE.MeshStandardMaterial({
+        color: 0xff4444,
+        emissive: 0xff4444,
+        emissiveIntensity: 0.8,
+      }),
+    );
     tip.position.y = 0.63;
     group.add(tip);
 
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 4; i += 1) {
       const angle = (i / 4) * Math.PI * 2;
-      const thrusterGeo = new THREE.BoxGeometry(0.08, 0.06, 0.15);
-      const thrusterMat = new THREE.MeshStandardMaterial({
-        color: 0x556677,
-        metalness: 0.7,
-        roughness: 0.3,
-      });
-      const thruster = new THREE.Mesh(thrusterGeo, thrusterMat);
+      const thruster = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.06, 0.15),
+        new THREE.MeshStandardMaterial({
+          color: 0x556677,
+          metalness: 0.7,
+          roughness: 0.3,
+        }),
+      );
       thruster.position.set(Math.cos(angle) * 0.55, 0, Math.sin(angle) * 0.55);
       thruster.rotation.y = -angle;
       group.add(thruster);
@@ -211,13 +206,153 @@ export class HologramDroneDisplay {
     return group;
   }
 
-  // ── Show / Hide ─────────────────────────────────────────────────
+  private createLaserRig(): LaserRig {
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x4fffb0,
+      transparent: true,
+      opacity: 0,
+    });
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+      lineMat,
+    );
+    line.frustumCulled = false;
+
+    const edgeAMat = new THREE.LineBasicMaterial({
+      color: 0x66ffd2,
+      transparent: true,
+      opacity: 0,
+    });
+    const edgeA = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+      edgeAMat,
+    );
+    edgeA.frustumCulled = false;
+
+    const edgeBMat = new THREE.LineBasicMaterial({
+      color: 0x66ffd2,
+      transparent: true,
+      opacity: 0,
+    });
+    const edgeB = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+      edgeBMat,
+    );
+    edgeB.frustumCulled = false;
+
+    const triGeo = new THREE.BufferGeometry();
+    triGeo.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(new Array(9).fill(0), 3),
+    );
+    const triangleMat = new THREE.MeshBasicMaterial({
+      color: 0x8cffe3,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const triangle = new THREE.Mesh(triGeo, triangleMat);
+    triangle.frustumCulled = false;
+
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 10, 10),
+      new THREE.MeshBasicMaterial({
+        color: 0x4fffb0,
+        transparent: true,
+        opacity: 0,
+      }),
+    );
+    glow.frustumCulled = false;
+
+    this.rootGroup.add(line, edgeA, edgeB, triangle, glow);
+    return { line, lineMat, edgeA, edgeAMat, edgeB, edgeBMat, triangle, triangleMat, glow };
+  }
+
+  private ensureLaserRigCount(count: number): void {
+    while (this.laserRigs.length < count) {
+      this.laserRigs.push(this.createLaserRig());
+    }
+    while (this.laserRigs.length > count) {
+      const rig = this.laserRigs.pop();
+      if (!rig) break;
+      this.rootGroup.remove(rig.line, rig.edgeA, rig.edgeB, rig.triangle, rig.glow);
+      rig.line.geometry.dispose();
+      rig.edgeA.geometry.dispose();
+      rig.edgeB.geometry.dispose();
+      rig.triangle.geometry.dispose();
+      rig.lineMat.dispose();
+      rig.edgeAMat.dispose();
+      rig.edgeBMat.dispose();
+      rig.triangleMat.dispose();
+      (rig.glow.material as THREE.Material).dispose();
+      rig.glow.geometry.dispose();
+    }
+  }
+
+  private setLaserRigOpacity(rig: LaserRig, alpha: number): void {
+    rig.lineMat.opacity = alpha;
+    rig.edgeAMat.opacity = alpha * 0.78;
+    rig.edgeBMat.opacity = alpha * 0.78;
+    rig.triangleMat.opacity = alpha * 0.22;
+    (rig.glow.material as THREE.MeshBasicMaterial).opacity = alpha * 0.8;
+  }
+
+  private updateLaserRig(
+    rig: LaserRig,
+    startLocal: THREE.Vector3,
+    endLocal: THREE.Vector3,
+    camera: THREE.Camera,
+    pulse: number,
+  ): void {
+    const linePositions = rig.line.geometry.attributes.position as THREE.BufferAttribute;
+    linePositions.setXYZ(0, startLocal.x, startLocal.y, startLocal.z);
+    linePositions.setXYZ(1, endLocal.x, endLocal.y, endLocal.z);
+    linePositions.needsUpdate = true;
+
+    const sideLocal = this._tmpV
+      .subVectors(this.rootGroup.worldToLocal(camera.position.clone()), startLocal)
+      .cross(this._tmpV2.subVectors(endLocal, startLocal))
+      .normalize();
+    if (sideLocal.lengthSq() < 1e-4) sideLocal.set(0, 1, 0);
+    const spread = Math.min(1.15, Math.max(0.2, startLocal.distanceTo(endLocal) * 0.06));
+    const endA = endLocal.clone().addScaledVector(sideLocal, spread);
+    const endB = endLocal.clone().addScaledVector(sideLocal, -spread);
+
+    const edgeAAttr = rig.edgeA.geometry.attributes.position as THREE.BufferAttribute;
+    edgeAAttr.setXYZ(0, startLocal.x, startLocal.y, startLocal.z);
+    edgeAAttr.setXYZ(1, endA.x, endA.y, endA.z);
+    edgeAAttr.needsUpdate = true;
+
+    const edgeBAttr = rig.edgeB.geometry.attributes.position as THREE.BufferAttribute;
+    edgeBAttr.setXYZ(0, startLocal.x, startLocal.y, startLocal.z);
+    edgeBAttr.setXYZ(1, endB.x, endB.y, endB.z);
+    edgeBAttr.needsUpdate = true;
+
+    const triAttr = rig.triangle.geometry.attributes.position as THREE.BufferAttribute;
+    triAttr.setXYZ(0, startLocal.x, startLocal.y, startLocal.z);
+    triAttr.setXYZ(1, endA.x, endA.y, endA.z);
+    triAttr.setXYZ(2, endB.x, endB.y, endB.z);
+    triAttr.needsUpdate = true;
+
+    this.setLaserRigOpacity(rig, pulse);
+    rig.glow.position.copy(endLocal);
+  }
+
+  private dimLaserRig(rig: LaserRig, delta: number): void {
+    rig.lineMat.opacity = Math.max(0, rig.lineMat.opacity - delta * 1.5);
+    rig.edgeAMat.opacity = Math.max(0, rig.edgeAMat.opacity - delta * 1.8);
+    rig.edgeBMat.opacity = Math.max(0, rig.edgeBMat.opacity - delta * 1.8);
+    rig.triangleMat.opacity = Math.max(0, rig.triangleMat.opacity - delta * 1.2);
+    const glowMat = rig.glow.material as THREE.MeshBasicMaterial;
+    glowMat.opacity = Math.max(0, glowMat.opacity - delta * 1.5);
+  }
 
   showContent(
     content: OverlayContent,
     moonWorldPos: THREE.Vector3,
     camera: THREE.Camera,
-    /** Optional: anchor point for orbit mode (e.g. ship position above moon) */
     orbitAnchor?: THREE.Vector3,
   ): void {
     this.clearPanels();
@@ -227,48 +362,46 @@ export class HologramDroneDisplay {
     this.flyInProgress = 0;
     this.contentStartTime = 0;
     this.idleTime = 0;
+    this.drawFinished = false;
+    this.droneExitingAfterDraw = false;
+    this.droneExitProgress = 0;
+    this.dockingPanels = false;
+    this.panelsDocked = false;
+    this.panelDockProgress = 0;
+    this.activePanelIndex = null;
+
+    this.rootGroup.visible = true;
+    this.panelGroup.visible = true;
+    this.droneGroup.visible = true;
+    this.droneGroup.position.set(0, 0, 0);
+    this.droneGroup.rotation.set(0, 0, 0);
     this.droneGroup.scale.setScalar(0);
-    this.laserMaterial.opacity = 0;
-    (this.laserGlow.material as THREE.MeshBasicMaterial).opacity = 0;
-    this.scannerLight.intensity = 0;
 
     this.targetWorldPos.copy(moonWorldPos);
     this.isOrbitMode = !!orbitAnchor;
 
-    // Compute side direction: camera-right projected to horizontal plane
     const moonToCamera = this._tmpV.subVectors(camera.position, moonWorldPos);
     const dist = moonToCamera.length();
     const forward = moonToCamera.clone().normalize();
     const worldUp = new THREE.Vector3(0, 1, 0);
     this.sideDir.crossVectors(forward, worldUp).normalize();
-    // If degenerate, pick arbitrary side
-    if (this.sideDir.lengthSq() < 0.01) {
-      this.sideDir.set(1, 0, 0);
-    }
+    if (this.sideDir.lengthSq() < 0.01) this.sideDir.set(1, 0, 0);
 
-    // Scale factor: panels grow/shrink sub-linearly with camera distance
-    // Using pow(ratio, 0.6) so doubling the distance only grows panels ~52%
     const rawRatio = dist / REFERENCE_DISTANCE;
     let distScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.pow(rawRatio, SCALE_POWER)));
 
     let endPos: THREE.Vector3;
     if (orbitAnchor) {
-      // Orbit mode: camera is close — use a moderate fixed scale
       distScale = 0.3;
-
-      // Position drone above the ship using camera's "up" direction (outward from moon).
-      // This keeps the drone visually above the ship regardless of camera roll.
       const camUp = camera.up.clone().normalize();
       const camRight = new THREE.Vector3()
         .crossVectors(camera.getWorldDirection(new THREE.Vector3()), camUp)
         .normalize();
-
       endPos = orbitAnchor
         .clone()
-        .addScaledVector(camUp, 6)     // above the ship in camera's "up"
-        .addScaledVector(camRight, 3);  // slightly to the right
+        .addScaledVector(camUp, 6)
+        .addScaledVector(camRight, 3);
     } else {
-      // Standard mode: near moon, offset to the side + slightly toward camera + above
       const sideOffset = BASE_SIDE_OFFSET * distScale;
       endPos = moonWorldPos
         .clone()
@@ -278,16 +411,12 @@ export class HologramDroneDisplay {
     }
     this.flyEndPos.copy(endPos);
 
-    // Fly-in start: behind/above camera
-    this.flyStartPos
-      .copy(camera.position)
-      .addScaledVector(forward, 15)
-      .add(new THREE.Vector3(0, 8, 0));
+    this.flyStartPos.copy(camera.position).addScaledVector(forward, 15).add(new THREE.Vector3(0, 8, 0));
 
-    // Build panels
     this.buildTextPanels(content, camera, distScale);
+    this.ensureLaserRigCount(this.panels.length);
+    this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
 
-    this.rootGroup.visible = true;
     this.rootGroup.position.copy(this.flyStartPos);
   }
 
@@ -297,50 +426,50 @@ export class HologramDroneDisplay {
     this.hideProgress = 0;
   }
 
-  // ── Per-frame update ────────────────────────────────────────────
+  getInteractivePanelMeshes(): THREE.Object3D[] {
+    if (!this.active || !this.panelsDocked) return [];
+    return this.panels.map((panel) => panel.mesh);
+  }
+
+  selectPanel(panelIndex: number): void {
+    if (!this.active || !this.panelsDocked) return;
+    if (panelIndex < 0 || panelIndex >= this.panels.length) return;
+    this.activePanelIndex = this.activePanelIndex === panelIndex ? null : panelIndex;
+  }
 
   update(delta: number, camera: THREE.Camera): void {
     if (!this.active) return;
 
-    // ── Hiding ──
     if (this.hiding) {
       this.hideProgress += delta / 0.6;
+      const s = Math.max(0, 1 - this.hideProgress);
+      for (const panel of this.panels) panel.material.opacity = panel.targetOpacity * s;
+      this.droneGroup.scale.setScalar(s);
+      this.scannerLight.intensity = 2 * s;
+      this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0.7 * s));
       if (this.hideProgress >= 1) {
         this.active = false;
         this.rootGroup.visible = false;
+        this.panelGroup.visible = false;
         this.clearPanels();
-        return;
       }
-      const s = 1 - this.hideProgress;
-      for (const panel of this.panels) {
-        panel.material.opacity = panel.targetOpacity * s;
-      }
-      this.droneGroup.scale.setScalar(s);
-      this.laserMaterial.opacity = 0.7 * s;
-      (this.laserGlow.material as THREE.MeshBasicMaterial).opacity = 0.6 * s;
-      this.scannerLight.intensity = 2 * s;
       return;
     }
 
-    // ── Fly-in ──
     if (this.flyInProgress < 1) {
-      this.flyInProgress += delta / FLY_IN_DURATION;
-      if (this.flyInProgress > 1) this.flyInProgress = 1;
+      this.flyInProgress = Math.min(1, this.flyInProgress + delta / FLY_IN_DURATION);
       const t = 1 - Math.pow(1 - this.flyInProgress, 3);
       this.rootGroup.position.lerpVectors(this.flyStartPos, this.flyEndPos, t);
       this.droneGroup.scale.setScalar(t);
       for (const panel of this.panels) panel.material.opacity = 0;
-      this.laserMaterial.opacity = 0;
-      (this.laserGlow.material as THREE.MeshBasicMaterial).opacity = 0;
       this.scannerLight.intensity = 0;
+      this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
       return;
     }
 
-    // ── Content phase ──
     this.contentStartTime += delta;
     this.idleTime += delta;
 
-    // Idle hover — much gentler in orbit mode (close camera)
     const hoverScale = this.isOrbitMode ? 0.015 : 1.0;
     const hoverY = Math.sin(this.idleTime * 1.8) * 0.15 * hoverScale;
     const hoverX = Math.sin(this.idleTime * 1.1 + 1) * 0.05 * hoverScale;
@@ -348,137 +477,186 @@ export class HologramDroneDisplay {
     this.rootGroup.position.y += hoverY;
     this.rootGroup.position.x += hoverX;
 
-    // Spin ring
     const ring = this.droneGroup.getObjectByName("droneRing");
     if (ring) ring.rotation.z += delta * 2.5;
 
-    // Drone faces camera
     const lookTarget = this._tmpV.copy(camera.position);
     lookTarget.y = this.rootGroup.position.y;
     this.droneGroup.lookAt(lookTarget);
 
-    // Billboard panels toward camera
-    for (const panel of this.panels) {
-      if (this.isOrbitMode) {
-        // During orbit the camera is rolled — copy its quaternion so panels
-        // always appear screen-aligned (upright in the camera's view).
-        panel.mesh.quaternion.copy(camera.quaternion);
-      } else {
-        panel.mesh.lookAt(camera.position);
+    if (!this.dockingPanels && !this.panelsDocked) {
+      for (const panel of this.panels) {
+        panel.mesh.position.copy(this.rootGroup.position).add(panel.drawOffset);
       }
     }
 
-    // ── Animate panels (border draw → content fade) ──
-    let laserTargetWorld: THREE.Vector3 | null = null;
+    const laserTargets: THREE.Vector3[] = [];
     let anyDrawing = false;
-
-    for (const panel of this.panels) {
-      const elapsed = this.contentStartTime - panel.revealTime;
-      if (elapsed < 0) {
-        panel.material.opacity = 0;
-        continue;
-      }
-
-      // Border drawing phase
-      if (!panel.borderComplete) {
-        anyDrawing = true;
-        panel.borderProgress = Math.min(1, elapsed / BORDER_DRAW_DURATION);
-        this.redrawPanel(panel);
-        panel.material.opacity = panel.targetOpacity;
-
-        if (panel.borderProgress >= 1) {
-          panel.borderComplete = true;
+    if (!this.drawFinished) {
+      for (const panel of this.panels) {
+        const elapsed = this.contentStartTime - panel.revealTime;
+        if (elapsed < 0) {
+          panel.material.opacity = 0;
+          continue;
         }
 
-        // Compute laser target = pen position on panel surface
-        laserTargetWorld = this.getPenWorldPos(panel);
-        continue;
+        if (!panel.borderComplete) {
+          anyDrawing = true;
+          panel.borderProgress = Math.min(1, elapsed / BORDER_DRAW_DURATION);
+          this.redrawPanel(panel);
+          panel.material.opacity = panel.targetOpacity;
+          if (panel.borderProgress >= 1) panel.borderComplete = true;
+          laserTargets.push(this.getPenWorldPos(panel));
+          continue;
+        }
+
+        const fadeElapsed = elapsed - BORDER_DRAW_DURATION;
+        if (panel.contentFade < 1) {
+          anyDrawing = true;
+          panel.contentFade = Math.min(1, fadeElapsed / CONTENT_FADE_DURATION);
+          this.redrawPanel(panel);
+          laserTargets.push(panel.mesh.position.clone());
+        }
+
+        panel.material.opacity = panel.targetOpacity;
       }
-
-      // Content fade phase
-      const fadeElapsed = elapsed - BORDER_DRAW_DURATION;
-      if (panel.contentFade < 1) {
-        anyDrawing = true;
-        panel.contentFade = Math.min(1, fadeElapsed / CONTENT_FADE_DURATION);
-        this.redrawPanel(panel);
-
-        // Laser stays at panel center during fade
-        laserTargetWorld = this._tmpV2.copy(panel.mesh.position);
-        this.panelGroup.localToWorld(laserTargetWorld);
-      }
-
-      panel.material.opacity = panel.targetOpacity;
     }
 
-    // ── Update laser ──
-    const laserPositions = this.laserLine.geometry.attributes
-      .position as THREE.BufferAttribute;
+    const allPanelsRendered =
+      this.panels.length > 0 &&
+      this.panels.every((panel) => panel.borderComplete && panel.contentFade >= 1);
+    if (allPanelsRendered && !this.drawFinished) {
+      this.drawFinished = true;
+      this.droneExitingAfterDraw = true;
+      this.droneExitProgress = 0;
+      this.dockingPanels = true;
+      this.panelDockProgress = 0;
+      for (const panel of this.panels) {
+        panel.drawOriginWorld.copy(panel.mesh.position);
+      }
+    }
 
-    if (laserTargetWorld && anyDrawing) {
-      // Drone world pos (scanner eye = bottom of drone)
-      const droneWorld = this._tmpV.copy(this.droneGroup.position);
-      this.rootGroup.localToWorld(droneWorld);
-      droneWorld.y -= 0.35;
+    const droneWorld = this._tmpV.copy(this.droneGroup.position);
+    this.rootGroup.localToWorld(droneWorld);
+    droneWorld.y -= 0.35;
+    const startLocal = this.rootGroup.worldToLocal(droneWorld.clone());
+    const pulse = 0.5 + Math.sin(this.idleTime * 4) * 0.15;
 
-      // Laser endpoints in rootGroup local space
-      const startLocal = this.rootGroup.worldToLocal(droneWorld.clone());
-      const endLocal = this.rootGroup.worldToLocal(laserTargetWorld.clone());
-
-      laserPositions.setXYZ(0, startLocal.x, startLocal.y, startLocal.z);
-      laserPositions.setXYZ(1, endLocal.x, endLocal.y, endLocal.z);
-      laserPositions.needsUpdate = true;
-
-      // Pulse laser
-      const pulse = 0.5 + Math.sin(this.idleTime * 4) * 0.15;
-      this.laserMaterial.opacity = pulse;
-      (this.laserGlow.material as THREE.MeshBasicMaterial).opacity = pulse * 0.8;
-      this.laserGlow.position.copy(endLocal);
+    this.ensureLaserRigCount(Math.max(this.panels.length, laserTargets.length));
+    if (laserTargets.length > 0 && anyDrawing) {
+      for (let i = 0; i < this.laserRigs.length; i += 1) {
+        const rig = this.laserRigs[i];
+        const target = laserTargets[i];
+        if (!target) {
+          this.dimLaserRig(rig, delta);
+          continue;
+        }
+        const endLocal = this.rootGroup.worldToLocal(target.clone());
+        this.updateLaserRig(rig, startLocal, endLocal, camera, pulse);
+      }
       this.scannerLight.intensity = 1.5 + Math.sin(this.idleTime * 4) * 0.5;
     } else {
-      // No active drawing — dim laser
-      this.laserMaterial.opacity = Math.max(0, this.laserMaterial.opacity - delta * 1.5);
-      (this.laserGlow.material as THREE.MeshBasicMaterial).opacity = Math.max(
-        0,
-        (this.laserGlow.material as THREE.MeshBasicMaterial).opacity - delta * 1.5,
-      );
+      this.laserRigs.forEach((rig) => this.dimLaserRig(rig, delta));
       this.scannerLight.intensity = Math.max(0, this.scannerLight.intensity - delta * 2);
+    }
+
+    if (this.droneExitingAfterDraw) {
+      this.droneExitProgress = Math.min(
+        1,
+        this.droneExitProgress + delta / POST_DRAW_DRONE_EXIT_DURATION,
+      );
+      const eased = 1 - Math.pow(1 - this.droneExitProgress, 3);
+      const fade = 1 - eased;
+      this.droneGroup.position.set(eased * 2.2, eased * 2.5, -eased * 3.2);
+      this.droneGroup.scale.setScalar(Math.max(0, 1 - eased * 1.2));
+      this.scannerLight.intensity *= fade;
+      this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, rig.lineMat.opacity * fade));
+      if (this.droneExitProgress >= 1) {
+        this.droneExitingAfterDraw = false;
+        this.droneGroup.visible = false;
+        this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
+      }
+    }
+
+    const dockDepth = Math.max(12, camera.position.distanceTo(this.flyEndPos) * 0.52);
+    if (this.dockingPanels) {
+      this.panelDockProgress = Math.min(1, this.panelDockProgress + delta / PANELS_DOCK_DURATION);
+      const t = 1 - Math.pow(1 - this.panelDockProgress, 3);
+      for (let i = 0; i < this.panels.length; i += 1) {
+        const panel = this.panels[i];
+        const dockTarget = this.getDockTarget(i, camera, dockDepth);
+        panel.mesh.position.lerpVectors(panel.drawOriginWorld, dockTarget, t);
+        panel.mesh.scale.setScalar(1 + (panel.dockScale - 1) * t);
+      }
+      if (this.panelDockProgress >= 1) {
+        this.dockingPanels = false;
+        this.panelsDocked = true;
+      }
+    } else if (this.panelsDocked) {
+      for (let i = 0; i < this.panels.length; i += 1) {
+        const panel = this.panels[i];
+        const isActive = this.activePanelIndex === i;
+        const targetPos = isActive
+          ? this.getFocusTarget(camera, dockDepth)
+          : this.getDockTarget(i, camera, dockDepth);
+        const targetScale = isActive ? panel.expandedScale : panel.dockScale;
+        const posLerp = 1 - Math.exp(-delta * 14);
+        const scaleLerp = 1 - Math.exp(-delta * 16);
+        panel.mesh.position.lerp(targetPos, posLerp);
+        const nextScale =
+          panel.mesh.scale.x + (targetScale - panel.mesh.scale.x) * scaleLerp;
+        panel.mesh.scale.setScalar(nextScale);
+        panel.mesh.renderOrder = isActive ? 1400 : 1000 + i;
+      }
+    }
+
+    for (const panel of this.panels) {
+      panel.mesh.quaternion.copy(camera.quaternion);
+      panel.material.opacity = panel.targetOpacity;
     }
   }
 
-  // ── Redraw panel display canvas ─────────────────────────────────
+  private ndcToWorld(
+    ndcX: number,
+    ndcY: number,
+    camera: THREE.Camera,
+    depth: number,
+  ): THREE.Vector3 {
+    const projected = new THREE.Vector3(ndcX, ndcY, 0.5).unproject(camera);
+    const dir = projected.sub(camera.position).normalize();
+    return camera.position.clone().addScaledVector(dir, depth);
+  }
+
+  private getDockTarget(index: number, camera: THREE.Camera, depth: number): THREE.Vector3 {
+    const cols = Math.min(3, Math.max(1, this.panels.length));
+    const row = Math.floor(index / cols);
+    const col = index % cols;
+    const ndcX = -0.78 + col * 0.2;
+    const ndcY = 0.58 - row * 0.18;
+    return this.ndcToWorld(ndcX, ndcY, camera, depth);
+  }
+
+  private getFocusTarget(camera: THREE.Camera, depth: number): THREE.Vector3 {
+    return this.ndcToWorld(-0.55, -0.08, camera, depth);
+  }
 
   private redrawPanel(panel: TextPanel): void {
     const { displayCtx: ctx, canvasW, canvasH, contentCanvas, isHeader } = panel;
-
-    // Clear
     ctx.clearRect(0, 0, canvasW, canvasH);
-
-    // Background
     ctx.fillStyle = isHeader ? HEADER_BG : SECTION_BG;
     ctx.fillRect(0, 0, canvasW, canvasH);
-
-    // Scan lines
     ctx.fillStyle = "rgba(79, 255, 176, 0.015)";
-    for (let y = 0; y < canvasH; y += 4) {
-      ctx.fillRect(0, y, canvasW, 2);
-    }
-
-    // Draw border up to borderProgress
+    for (let y = 0; y < canvasH; y += 4) ctx.fillRect(0, y, canvasW, 2);
     const pen = this.drawBorderTrace(ctx, panel.borderProgress, canvasW, canvasH);
     panel.penX = pen.x;
     panel.penY = pen.y;
-
-    // If border complete, composite content with fade
     if (panel.borderComplete && panel.contentFade > 0) {
       ctx.globalAlpha = panel.contentFade;
       ctx.drawImage(contentCanvas, 0, 0);
       ctx.globalAlpha = 1;
     }
-
     panel.texture.needsUpdate = true;
   }
-
-  // ── Trace border progressively ──────────────────────────────────
 
   private drawBorderTrace(
     ctx: CanvasRenderingContext2D,
@@ -501,79 +679,61 @@ export class HologramDroneDisplay {
 
     let penX = m;
     let penY = m;
-
-    // Top
     const topLen = Math.min(len, iw);
     penX = m + topLen;
     ctx.lineTo(penX, penY);
-
-    // Right
     if (len > iw) {
       const rightLen = Math.min(len - iw, ih);
       penY = m + rightLen;
       ctx.lineTo(penX, penY);
     }
-
-    // Bottom (right to left)
     if (len > iw + ih) {
       const bottomLen = Math.min(len - iw - ih, iw);
       penX = m + iw - bottomLen;
       ctx.lineTo(penX, penY);
     }
-
-    // Left (bottom to top)
     if (len > 2 * iw + ih) {
       const leftLen = Math.min(len - 2 * iw - ih, ih);
       penY = m + ih - leftLen;
       ctx.lineTo(penX, penY);
     }
-
     ctx.stroke();
     ctx.restore();
 
-    // Glow at pen tip
     const grad = ctx.createRadialGradient(penX, penY, 0, penX, penY, 16);
     grad.addColorStop(0, "rgba(42, 153, 104, 0.7)");
     grad.addColorStop(0.4, "rgba(42, 153, 104, 0.18)");
     grad.addColorStop(1, "rgba(42, 153, 104, 0)");
     ctx.fillStyle = grad;
     ctx.fillRect(penX - 16, penY - 16, 32, 32);
-
     return { x: penX, y: penY };
   }
 
-  // ── Get pen position in world space ─────────────────────────────
-
   private getPenWorldPos(panel: TextPanel): THREE.Vector3 {
-    // Map canvas coords to local mesh coords
     const lx = (panel.penX / panel.canvasW - 0.5) * panel.panelW;
     const ly = (0.5 - panel.penY / panel.canvasH) * panel.panelH;
     const local = new THREE.Vector3(lx, ly, 0);
-    // Panel mesh is in panelGroup; transform to world
     panel.mesh.localToWorld(local);
     return local;
   }
 
-  // ── Build text panels ───────────────────────────────────────────
-
-  private buildTextPanels(content: OverlayContent, camera: THREE.Camera, distScale: number = 1): void {
+  private buildTextPanels(
+    content: OverlayContent,
+    camera: THREE.Camera,
+    distScale: number = 1,
+  ): void {
     const panelDataList: { title: string; lines: string[]; isHeader: boolean }[] = [];
-
-    const panelWorldWidth = BASE_PANEL_WORLD_WIDTH * distScale;
-
-    // Header
     panelDataList.push({
       title: content.title,
       lines: [content.subtitle || "", content.description || ""].filter(Boolean),
       isHeader: true,
     });
 
-    // Sections
     for (const section of content.sections) {
       const sectionLines = Array.isArray(section.content)
         ? section.content
         : section.content.split("\n\n• ").filter(Boolean);
-      const cleanLines = sectionLines.map((l) => l.replace(/^• /, ""));
+      const cleanLines = sectionLines.map((line) => line.replace(/^• /, ""));
       const dateStr = section.data?.startDate
         ? `${section.data.startDate} – ${section.data.endDate || "Present"}`
         : "";
@@ -584,15 +744,10 @@ export class HologramDroneDisplay {
       });
     }
 
-    // Direction from drone toward camera for forward push
-    const droneToCamera = this._tmpV
-      .subVectors(camera.position, this.flyEndPos)
-      .normalize();
-
-    // Wider gap in orbit mode to prevent heavy overlap at close range
+    const panelWorldWidth = BASE_PANEL_WORLD_WIDTH * distScale;
+    const droneToCamera = this._tmpV.subVectors(camera.position, this.flyEndPos).normalize();
     const panelGap = this.isOrbitMode ? 1.2 * distScale : 0.8 * distScale;
 
-    // ── First pass: measure all panel heights ──────────────────────
     const panelHeights: number[] = [];
     const canvasHeights: number[] = [];
     for (const data of panelDataList) {
@@ -601,32 +756,29 @@ export class HologramDroneDisplay {
       panelHeights.push(panelWorldWidth * (canvasH / CANVAS_W));
     }
 
-    // Total stack height — used to vertically position the stack (non-orbit).
-    const totalHeight = panelHeights.reduce((sum, h) => sum + h, 0) + panelGap * (panelHeights.length - 1);
+    const totalHeight =
+      panelHeights.reduce((sum, h) => sum + h, 0) + panelGap * (panelHeights.length - 1);
+    const totalWidth =
+      panelHeights.reduce((sum) => sum + panelWorldWidth, 0) +
+      panelGap * (panelHeights.length - 1);
 
-    // In orbit mode: lay panels side-by-side left → right using camera's right vector.
-    // In normal mode: stack top → bottom using world-Y.
-    const panelWidths = panelHeights.map(() => panelWorldWidth); // all same width
-    const totalWidth = panelWidths.reduce((s, w) => s + w, 0) + panelGap * (panelWidths.length - 1);
-
-    // Camera basis vectors for orbit layout
-    const camUp = this.isOrbitMode ? camera.up.clone().normalize() : new THREE.Vector3(0, 1, 0);
+    const camUp = this.isOrbitMode
+      ? camera.up.clone().normalize()
+      : new THREE.Vector3(0, 1, 0);
     const camRight = this.isOrbitMode
-      ? new THREE.Vector3().crossVectors(
-          camera.getWorldDirection(new THREE.Vector3()),
-          camUp,
-        ).normalize()
-      : new THREE.Vector3(); // unused in normal mode
+      ? new THREE.Vector3()
+          .crossVectors(camera.getWorldDirection(new THREE.Vector3()), camUp)
+          .normalize()
+      : new THREE.Vector3();
 
-    let yAccum = totalHeight * 0.2; // vertical accumulator (normal mode)
-    let xAccum = -totalWidth / 2 - totalWidth * 0.15; // shift 15% left of center
+    let yAccum = totalHeight * 0.2;
+    let xAccum = -totalWidth / 2 - totalWidth * 0.15;
 
-    for (let i = 0; i < panelDataList.length; i++) {
+    for (let i = 0; i < panelDataList.length; i += 1) {
       const data = panelDataList[i];
       const canvasH = canvasHeights[i];
       const panelH = panelHeights[i];
 
-      // Create content canvas (text only, no bg/border)
       const contentCanvas = this.createContentCanvas(
         data.title,
         data.lines,
@@ -634,8 +786,6 @@ export class HologramDroneDisplay {
         CANVAS_W,
         canvasH,
       );
-
-      // Display canvas (composited, updated per frame)
       const displayCanvas = document.createElement("canvas");
       displayCanvas.width = CANVAS_W;
       displayCanvas.height = canvasH;
@@ -645,36 +795,35 @@ export class HologramDroneDisplay {
       texture.minFilter = THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
 
-      const geo = new THREE.PlaneGeometry(panelWorldWidth, panelH);
-      const mat = new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-        opacity: 0,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
-
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(panelWorldWidth, panelH),
+        new THREE.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          opacity: 0,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      mesh.userData.hologramPanelIndex = i;
+      const material = mesh.material as THREE.MeshBasicMaterial;
       const forwardPush = droneToCamera.clone().multiplyScalar(3 * distScale);
-
+      const drawOffset = new THREE.Vector3();
       if (this.isOrbitMode) {
-        // Side-by-side: offset along camera-right, vertically centered
         const xCenter = xAccum + panelWorldWidth / 2;
         xAccum += panelWorldWidth + panelGap;
-        const pos = forwardPush.clone()
-          .addScaledVector(camRight, xCenter);  // left → right
-        mesh.position.copy(pos);
+        drawOffset.copy(forwardPush).addScaledVector(camRight, xCenter);
       } else {
-        // Normal vertical stack
         const yOff = yAccum - panelH / 2;
         yAccum -= panelH + panelGap;
-        mesh.position.set(forwardPush.x, yOff, forwardPush.z);
+        drawOffset.set(forwardPush.x, yOff, forwardPush.z);
       }
 
+      mesh.position.copy(this.flyEndPos).add(drawOffset);
       this.panelGroup.add(mesh);
       this.panels.push({
         mesh,
-        material: mat,
+        material,
         texture,
         contentCanvas,
         displayCanvas,
@@ -691,11 +840,13 @@ export class HologramDroneDisplay {
         isHeader: data.isHeader,
         penX: BORDER_MARGIN,
         penY: BORDER_MARGIN,
+        drawOffset,
+        drawOriginWorld: mesh.position.clone(),
+        dockScale: 0.28,
+        expandedScale: 0.78,
       });
     }
   }
-
-  // ── Measure content height ──────────────────────────────────────
 
   private measureContentHeight(
     title: string,
@@ -712,7 +863,7 @@ export class HologramDroneDisplay {
     let y = PADDING;
     const titleLines = this.wrapText(ctx, title, CANVAS_W - 2 * PADDING);
     y += titleLines.length * (titleSize + 6);
-    y += 24; // divider gap
+    y += 24;
 
     ctx.font = "22px Rajdhani, sans-serif";
     for (const line of lines) {
@@ -721,10 +872,8 @@ export class HologramDroneDisplay {
     }
 
     y += PADDING;
-    return Math.max(y, 80); // minimum height
+    return Math.max(y, 80);
   }
-
-  // ── Create content canvas (text only) ───────────────────────────
 
   private createContentCanvas(
     title: string,
@@ -738,7 +887,6 @@ export class HologramDroneDisplay {
     canvas.height = h;
     const ctx = canvas.getContext("2d")!;
 
-    // Title
     const titleSize = isHeader ? 38 : 30;
     ctx.font = `bold ${titleSize}px Rajdhani, sans-serif`;
     ctx.fillStyle = isHeader ? "#6aa8c0" : ACCENT_COLOR;
@@ -751,7 +899,6 @@ export class HologramDroneDisplay {
       y += titleSize + 6;
     }
 
-    // Divider
     y += 8;
     ctx.fillStyle = ACCENT_COLOR;
     ctx.globalAlpha = 0.35;
@@ -759,7 +906,6 @@ export class HologramDroneDisplay {
     ctx.globalAlpha = 1;
     y += 16;
 
-    // Body
     ctx.font = "22px Rajdhani, sans-serif";
     ctx.fillStyle = TEXT_COLOR;
     for (const line of lines) {
@@ -780,8 +926,6 @@ export class HologramDroneDisplay {
     return canvas;
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────
-
   private wrapText(
     ctx: CanvasRenderingContext2D,
     text: string,
@@ -791,7 +935,7 @@ export class HologramDroneDisplay {
     const lines: string[] = [];
     let current = "";
     for (const word of words) {
-      const test = current ? current + " " + word : word;
+      const test = current ? `${current} ${word}` : word;
       if (ctx.measureText(test).width > maxWidth && current) {
         lines.push(current);
         current = word;
@@ -800,7 +944,7 @@ export class HologramDroneDisplay {
       }
     }
     if (current) lines.push(current);
-    return lines.length ? lines : [""];
+    return lines.length > 0 ? lines : [""];
   }
 
   private clearPanels(): void {
@@ -811,11 +955,16 @@ export class HologramDroneDisplay {
       this.panelGroup.remove(panel.mesh);
     }
     this.panels = [];
+    this.activePanelIndex = null;
+    this.panelsDocked = false;
+    this.dockingPanels = false;
   }
 
   dispose(): void {
     this.clearPanels();
+    this.ensureLaserRigCount(0);
     this.scene.remove(this.rootGroup);
+    this.scene.remove(this.panelGroup);
     this.droneGroup.traverse((obj) => {
       if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();
       if ((obj as THREE.Mesh).material) {
@@ -824,10 +973,6 @@ export class HologramDroneDisplay {
         else mat.dispose();
       }
     });
-    this.laserLine.geometry.dispose();
-    this.laserMaterial.dispose();
-    this.laserGlow.geometry.dispose();
-    (this.laserGlow.material as THREE.Material).dispose();
   }
 
   isActive(): boolean {

@@ -53,6 +53,8 @@ export const usePointerInteractions = (params: {
       starDestroyerRef?: MutableRefObject<THREE.Group | null>;
       onStarDestroyerClick?: () => void;
       insideShipRef?: MutableRefObject<boolean>;
+      getHologramPanelClickables?: () => THREE.Object3D[];
+      onHologramPanelPicked?: (panelIndex: number) => void;
     }) =>
       createPointerInteractionHandlers({
         mountRef,
@@ -70,6 +72,8 @@ export const usePointerInteractions = (params: {
         insideShipRef: args.insideShipRef ?? insideShipRef,
         orbitActiveRef,
         focusedMoonRef,
+        getHologramPanelClickables: args.getHologramPanelClickables,
+        onHologramPanelPicked: args.onHologramPanelPicked,
       }),
     [focusedMoonRef, insideShipRef, mountRef, orbitActiveRef],
   );
