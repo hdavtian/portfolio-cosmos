@@ -22,6 +22,7 @@ const CONTENT_FADE_DURATION = 0.5;
 const PANEL_STAGGER = 0;
 const POST_DRAW_DRONE_EXIT_DURATION = 0.55;
 const PANELS_DOCK_DURATION = 0.38;
+const CARD_CONTAINER_SHIFT_NDC_X = 0.08; // approx ~75px on 1920px wide view
 
 const BASE_SIDE_OFFSET = HOLO_SIDE_OFFSET;
 const DRONE_FORWARD_RATIO = 0.3;
@@ -628,16 +629,14 @@ export class HologramDroneDisplay {
   }
 
   private getDockTarget(index: number, camera: THREE.Camera, depth: number): THREE.Vector3 {
-    const cols = Math.min(3, Math.max(1, this.panels.length));
-    const row = Math.floor(index / cols);
-    const col = index % cols;
-    const ndcX = -0.78 + col * 0.2;
-    const ndcY = 0.58 - row * 0.18;
+    // Card-deck cascade: top-left anchor, each next card shifts down-right.
+    const ndcX = -0.8 + index * 0.065 + CARD_CONTAINER_SHIFT_NDC_X;
+    const ndcY = 0.62 - index * 0.08;
     return this.ndcToWorld(ndcX, ndcY, camera, depth);
   }
 
   private getFocusTarget(camera: THREE.Camera, depth: number): THREE.Vector3 {
-    return this.ndcToWorld(-0.55, -0.08, camera, depth);
+    return this.ndcToWorld(-0.55 + CARD_CONTAINER_SHIFT_NDC_X, -0.08, camera, depth);
   }
 
   private redrawPanel(panel: TextPanel): void {
