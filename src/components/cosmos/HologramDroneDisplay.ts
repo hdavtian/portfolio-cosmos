@@ -19,8 +19,8 @@ const SECTION_BG = "rgba(4, 10, 22, 0.78)";
 const FLY_IN_DURATION = 1.2;
 const BORDER_DRAW_DURATION = 1.6;
 const CONTENT_FADE_DURATION = 0.5;
-const PANEL_STAGGER = 0;
-const LASER_STAGGER = 0.08;
+const PANEL_STAGGER = 0.18;
+const LASER_STAGGER = 0.2;
 const POST_DRAW_DRONE_EXIT_DURATION = 0.55;
 const PANELS_DOCK_DURATION = 0.38;
 const CARD_CONTAINER_SHIFT_NDC_X = 0.08; // approx ~75px on 1920px wide view
@@ -118,7 +118,7 @@ export class HologramDroneDisplay {
     this.panelGroup.name = "HologramPanels";
     this.panelGroup.visible = false;
 
-    this.scannerLight = new THREE.PointLight(0x4fffb0, 0, 12);
+    this.scannerLight = new THREE.PointLight(0xff4d4d, 0, 12);
     this.droneGroup.add(this.scannerLight);
 
     this.scene.add(this.rootGroup);
@@ -211,7 +211,7 @@ export class HologramDroneDisplay {
 
   private createLaserRig(): LaserRig {
     const lineMat = new THREE.LineBasicMaterial({
-      color: 0x4fffb0,
+      color: 0xff4040,
       transparent: true,
       opacity: 0,
     });
@@ -222,7 +222,7 @@ export class HologramDroneDisplay {
     line.frustumCulled = false;
 
     const edgeAMat = new THREE.LineBasicMaterial({
-      color: 0x66ffd2,
+      color: 0xff7a7a,
       transparent: true,
       opacity: 0,
     });
@@ -233,7 +233,7 @@ export class HologramDroneDisplay {
     edgeA.frustumCulled = false;
 
     const edgeBMat = new THREE.LineBasicMaterial({
-      color: 0x66ffd2,
+      color: 0xff7a7a,
       transparent: true,
       opacity: 0,
     });
@@ -249,7 +249,7 @@ export class HologramDroneDisplay {
       new THREE.Float32BufferAttribute(new Array(9).fill(0), 3),
     );
     const triangleMat = new THREE.MeshBasicMaterial({
-      color: 0x8cffe3,
+      color: 0xff6666,
       transparent: true,
       opacity: 0,
       side: THREE.DoubleSide,
@@ -262,7 +262,7 @@ export class HologramDroneDisplay {
     const glow = new THREE.Mesh(
       new THREE.SphereGeometry(0.18, 10, 10),
       new THREE.MeshBasicMaterial({
-        color: 0x4fffb0,
+        color: 0xff4d4d,
         transparent: true,
         opacity: 0,
       }),
@@ -319,7 +319,7 @@ export class HologramDroneDisplay {
       .cross(this._tmpV2.subVectors(endLocal, startLocal))
       .normalize();
     if (sideLocal.lengthSq() < 1e-4) sideLocal.set(0, 1, 0);
-    const spread = Math.min(1.15, Math.max(0.2, startLocal.distanceTo(endLocal) * 0.06));
+    const spread = Math.min(1.6, Math.max(0.32, startLocal.distanceTo(endLocal) * 0.09));
     const endA = endLocal.clone().addScaledVector(sideLocal, spread);
     const endB = endLocal.clone().addScaledVector(sideLocal, -spread);
 
