@@ -23,12 +23,20 @@ const CONTENT_FADE_DURATION = 0.5;
 const PANEL_STAGGER = 0.18;
 const LASER_STAGGER = 0.2;
 const PRE_DRAW_WAIT_DURATION = 1.0;
-const PRE_DRAW_GLANCE_DURATION = 0.45;
-const PRE_DRAW_GLANCE_HOLD = 0.5;
-const PRE_DRAW_SECOND_GLANCE_DURATION = 0.45;
-const PRE_DRAW_SECOND_GLANCE_HOLD = 0.5;
-const PRE_DRAW_GLANCE_ANGLE = Math.PI * 0.34;
-const POST_DRAW_HOLD_DURATION = 1.0;
+const PRE_DRAW_SCAN_STEPS = 3;
+const PRE_DRAW_SCAN_TURN_DURATION = 0.45;
+const PRE_DRAW_SCAN_HOLD_DURATION = 0.5;
+const SCAN_MAX_YAW = Math.PI * 0.36;
+const SCAN_MAX_PITCH = Math.PI * 0.2;
+const SCAN_MAX_ROLL = Math.PI * 0.22;
+const POST_DRAW_HOLD_DURATION = 2.2;
+const POST_DRAW_SCAN_TURN_MIN = 0.32;
+const POST_DRAW_SCAN_TURN_MAX = 0.64;
+const POST_DRAW_SCAN_HOLD_MIN = 0.28;
+const POST_DRAW_SCAN_HOLD_MAX = 0.62;
+// Keep this toggle centralized so disabling auto-exit is a one-line change
+// when the drone should stay to draw additional items.
+const AUTO_EXIT_AFTER_DRAW = true;
 const POST_DRAW_DRONE_EXIT_DURATION = 0.55;
 const PANELS_DOCK_DURATION = 0.38;
 const CARD_CONTAINER_SHIFT_NDC_X = 0.08; // approx ~75px on 1920px wide view
@@ -84,6 +92,12 @@ type LaserRig = {
   glow: THREE.Mesh;
 };
 
+type ScanAngles = {
+  pitch: number;
+  yaw: number;
+  roll: number;
+};
+
 export class HologramDroneDisplay {
   private scene: THREE.Scene;
   private rootGroup: THREE.Group;
@@ -110,9 +124,19 @@ export class HologramDroneDisplay {
   private drawEnabled = false;
   private inspectionMode = false;
   private waitingPostDrawHold = false;
+  private postDrawLingerActive = false;
   private postDrawHoldElapsed = 0;
   private droneExitingAfterDraw = false;
   private droneExitProgress = 0;
+  private preDrawScanTargets: ScanAngles[] = [];
+  private postScanCurrent: ScanAngles = { pitch: 0, yaw: 0, roll: 0 };
+  private postScanFrom: ScanAngles = { pitch: 0, yaw: 0, roll: 0 };
+  private postScanTarget: ScanAngles = { pitch: 0, yaw: 0, roll: 0 };
+  private postScanTurning = false;
+  private postScanTurnElapsed = 0;
+  private postScanTurnDuration = POST_DRAW_SCAN_TURN_MIN;
+  private postScanHoldElapsed = 0;
+  private postScanHoldDuration = POST_DRAW_SCAN_HOLD_MIN;
 
   private dockingPanels = false;
   private panelsDocked = false;
@@ -349,26 +373,106 @@ export class HologramDroneDisplay {
     });
   }
 
-  private getPreDrawYawOffset(): number {
-    const t = this.drawSequenceElapsed;
-    const p1 = PRE_DRAW_WAIT_DURATION;
-    const p2 = p1 + PRE_DRAW_GLANCE_DURATION;
-    const p3 = p2 + PRE_DRAW_GLANCE_HOLD;
-    const p4 = p3 + PRE_DRAW_SECOND_GLANCE_DURATION;
-    const p5 = p4 + PRE_DRAW_SECOND_GLANCE_HOLD;
+  private randomScanAngles(scale: number = 1): ScanAngles {
+    return {
+      pitch: (Math.random() * 2 - 1) * SCAN_MAX_PITCH * scale,
+      yaw: (Math.random() * 2 - 1) * SCAN_MAX_YAW * scale,
+      roll: (Math.random() * 2 - 1) * SCAN_MAX_ROLL * scale,
+    };
+  }
 
-    if (t < p1) return 0;
-    if (t < p2) {
-      const u = (t - p1) / PRE_DRAW_GLANCE_DURATION;
-      return PRE_DRAW_GLANCE_ANGLE * u;
+  private resetInquisitiveScanState(): void {
+    this.preDrawScanTargets = Array.from(
+      { length: PRE_DRAW_SCAN_STEPS },
+      () => this.randomScanAngles(1),
+    );
+    this.postScanCurrent = { pitch: 0, yaw: 0, roll: 0 };
+    this.postScanFrom = { pitch: 0, yaw: 0, roll: 0 };
+    this.postScanTarget = this.randomScanAngles(1.05);
+    this.postScanTurning = false;
+    this.postScanTurnElapsed = 0;
+    this.postScanTurnDuration = POST_DRAW_SCAN_TURN_MIN;
+    this.postScanHoldElapsed = 0;
+    this.postScanHoldDuration = POST_DRAW_SCAN_HOLD_MIN;
+  }
+
+  private preDrawScanTotalDuration(): number {
+    return (
+      PRE_DRAW_WAIT_DURATION +
+      PRE_DRAW_SCAN_STEPS * (PRE_DRAW_SCAN_TURN_DURATION + PRE_DRAW_SCAN_HOLD_DURATION)
+    );
+  }
+
+  private getPreDrawScanAngles(elapsed: number): ScanAngles {
+    if (elapsed < PRE_DRAW_WAIT_DURATION) {
+      return { pitch: 0, yaw: 0, roll: 0 };
     }
-    if (t < p3) return PRE_DRAW_GLANCE_ANGLE;
-    if (t < p4) {
-      const u = (t - p3) / PRE_DRAW_SECOND_GLANCE_DURATION;
-      return THREE.MathUtils.lerp(PRE_DRAW_GLANCE_ANGLE, -PRE_DRAW_GLANCE_ANGLE, u);
+    const t = elapsed - PRE_DRAW_WAIT_DURATION;
+    const seg = PRE_DRAW_SCAN_TURN_DURATION + PRE_DRAW_SCAN_HOLD_DURATION;
+    const step = Math.floor(t / seg);
+    if (step >= PRE_DRAW_SCAN_STEPS) {
+      return this.preDrawScanTargets[PRE_DRAW_SCAN_STEPS - 1] ?? {
+        pitch: 0,
+        yaw: 0,
+        roll: 0,
+      };
     }
-    if (t < p5) return -PRE_DRAW_GLANCE_ANGLE;
-    return 0;
+
+    const localT = t - step * seg;
+    const from =
+      step === 0
+        ? { pitch: 0, yaw: 0, roll: 0 }
+        : this.preDrawScanTargets[step - 1] ?? { pitch: 0, yaw: 0, roll: 0 };
+    const to = this.preDrawScanTargets[step] ?? from;
+    if (localT <= PRE_DRAW_SCAN_TURN_DURATION) {
+      const u = THREE.MathUtils.clamp(localT / PRE_DRAW_SCAN_TURN_DURATION, 0, 1);
+      return {
+        pitch: THREE.MathUtils.lerp(from.pitch, to.pitch, u),
+        yaw: THREE.MathUtils.lerp(from.yaw, to.yaw, u),
+        roll: THREE.MathUtils.lerp(from.roll, to.roll, u),
+      };
+    }
+    return to;
+  }
+
+  private updatePostDrawScan(delta: number): ScanAngles {
+    if (this.postScanTurning) {
+      this.postScanTurnElapsed += delta;
+      const u = THREE.MathUtils.clamp(
+        this.postScanTurnElapsed / Math.max(this.postScanTurnDuration, 0.0001),
+        0,
+        1,
+      );
+      this.postScanCurrent = {
+        pitch: THREE.MathUtils.lerp(this.postScanFrom.pitch, this.postScanTarget.pitch, u),
+        yaw: THREE.MathUtils.lerp(this.postScanFrom.yaw, this.postScanTarget.yaw, u),
+        roll: THREE.MathUtils.lerp(this.postScanFrom.roll, this.postScanTarget.roll, u),
+      };
+      if (u >= 1) {
+        this.postScanTurning = false;
+        this.postScanHoldElapsed = 0;
+        this.postScanHoldDuration = THREE.MathUtils.lerp(
+          POST_DRAW_SCAN_HOLD_MIN,
+          POST_DRAW_SCAN_HOLD_MAX,
+          Math.random(),
+        );
+      }
+      return this.postScanCurrent;
+    }
+
+    this.postScanHoldElapsed += delta;
+    if (this.postScanHoldElapsed >= this.postScanHoldDuration) {
+      this.postScanFrom = { ...this.postScanCurrent };
+      this.postScanTarget = this.randomScanAngles(1.15);
+      this.postScanTurnElapsed = 0;
+      this.postScanTurnDuration = THREE.MathUtils.lerp(
+        POST_DRAW_SCAN_TURN_MIN,
+        POST_DRAW_SCAN_TURN_MAX,
+        Math.random(),
+      );
+      this.postScanTurning = true;
+    }
+    return this.postScanCurrent;
   }
 
   private createLaserRig(): LaserRig {
@@ -579,6 +683,7 @@ export class HologramDroneDisplay {
     this.idleTime = 0;
     this.drawFinished = false;
     this.waitingPostDrawHold = false;
+    this.postDrawLingerActive = false;
     this.postDrawHoldElapsed = 0;
     this.droneExitingAfterDraw = false;
     this.droneExitProgress = 0;
@@ -594,6 +699,7 @@ export class HologramDroneDisplay {
     this.droneGroup.position.set(0, 0, 0);
     this.droneGroup.rotation.set(0, 0, 0);
     this.droneGroup.scale.setScalar(0);
+    this.resetInquisitiveScanState();
 
     const distScale = this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
 
@@ -622,6 +728,7 @@ export class HologramDroneDisplay {
     this.idleTime = 0;
     this.drawFinished = false;
     this.waitingPostDrawHold = false;
+    this.postDrawLingerActive = false;
     this.postDrawHoldElapsed = 0;
     this.droneExitingAfterDraw = false;
     this.droneExitProgress = 0;
@@ -637,6 +744,7 @@ export class HologramDroneDisplay {
     this.droneGroup.position.set(0, 0, 0);
     this.droneGroup.rotation.set(0, 0, 0);
     this.droneGroup.scale.setScalar(0);
+    this.resetInquisitiveScanState();
 
     this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
     this.rootGroup.position.copy(this.flyStartPos);
@@ -656,6 +764,7 @@ export class HologramDroneDisplay {
     this.droneExitingAfterDraw = false;
     this.droneExitProgress = 0;
     this.waitingPostDrawHold = false;
+    this.postDrawLingerActive = false;
     this.postDrawHoldElapsed = 0;
     this.inspectionMode = false;
     this.dockingPanels = false;
@@ -715,13 +824,7 @@ export class HologramDroneDisplay {
 
     this.idleTime += delta;
     this.drawSequenceElapsed += delta;
-    const drawStartAt =
-      PRE_DRAW_WAIT_DURATION +
-      PRE_DRAW_GLANCE_DURATION +
-      PRE_DRAW_GLANCE_HOLD +
-      PRE_DRAW_SECOND_GLANCE_DURATION +
-      PRE_DRAW_SECOND_GLANCE_HOLD;
-    this.drawEnabled = this.drawSequenceElapsed >= drawStartAt;
+    this.drawEnabled = this.drawSequenceElapsed >= this.preDrawScanTotalDuration();
     if (this.drawEnabled && !this.droneExitingAfterDraw) {
       this.contentStartTime += delta;
     }
@@ -739,11 +842,19 @@ export class HologramDroneDisplay {
     const lookTarget = this._tmpV.copy(camera.position);
     lookTarget.y = this.rootGroup.position.y;
     this.droneGroup.lookAt(lookTarget);
-    const inquisitiveYaw = this.getPreDrawYawOffset();
-    if (Math.abs(inquisitiveYaw) > 0.0001) {
-      this._tmpQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), inquisitiveYaw);
-      this.droneGroup.quaternion.multiply(this._tmpQ);
+
+    let scanAngles: ScanAngles = { pitch: 0, yaw: 0, roll: 0 };
+    if (this.inspectionMode || this.postDrawLingerActive) {
+      scanAngles = this.updatePostDrawScan(delta);
+    } else if (!this.drawEnabled) {
+      scanAngles = this.getPreDrawScanAngles(this.drawSequenceElapsed);
+    } else if (this.preDrawScanTargets.length > 0) {
+      scanAngles = this.preDrawScanTargets[this.preDrawScanTargets.length - 1];
     }
+    this._tmpQ.setFromEuler(
+      new THREE.Euler(scanAngles.pitch, scanAngles.yaw, scanAngles.roll, "YXZ"),
+    );
+    this.droneGroup.quaternion.multiply(this._tmpQ);
 
     if (this.inspectionMode) {
       this.scannerLight.intensity = 0.9 + Math.sin(this.idleTime * 2.6) * 0.2;
@@ -804,6 +915,7 @@ export class HologramDroneDisplay {
       // One final redraw without pen glow so no residual circular stamp remains.
       for (const panel of this.panels) this.redrawPanel(panel, false);
       this.drawFinished = true;
+      this.postDrawLingerActive = true;
       this.waitingPostDrawHold = true;
       this.postDrawHoldElapsed = 0;
       if (this.shouldDockPanels) {
@@ -844,8 +956,10 @@ export class HologramDroneDisplay {
       this.postDrawHoldElapsed += delta;
       if (this.postDrawHoldElapsed >= POST_DRAW_HOLD_DURATION) {
         this.waitingPostDrawHold = false;
-        this.droneExitingAfterDraw = true;
-        this.droneExitProgress = 0;
+        if (AUTO_EXIT_AFTER_DRAW) {
+          this.droneExitingAfterDraw = true;
+          this.droneExitProgress = 0;
+        }
       }
     }
 
@@ -862,6 +976,7 @@ export class HologramDroneDisplay {
       this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, rig.lineMat.opacity * fade));
       if (this.droneExitProgress >= 1) {
         this.droneExitingAfterDraw = false;
+        this.postDrawLingerActive = false;
         this.droneGroup.visible = false;
         this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
       }
