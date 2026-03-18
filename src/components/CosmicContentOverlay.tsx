@@ -6,6 +6,8 @@ export interface OverlayContent {
   subtitle?: string;
   description: string;
   sections: OverlaySection[];
+  projects?: unknown[];
+  enableDroneCardDock?: boolean;
   media?: MediaContent;
   actions?: OverlayAction[];
 }

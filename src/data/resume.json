@@ -38,6 +38,18 @@
       "location": "Los Angeles, CA",
       "startDate": "04/2018",
       "endDate": "06/2025",
+      "Projects": [
+        {
+          "id": "investcloud-automation-platform",
+          "title": "Automation Platform",
+          "summary": "Angular + C# Playwright platform for scalable enterprise test orchestration."
+        },
+        {
+          "id": "investcloud-selenium-framework",
+          "title": "Selenium/TestNG Framework",
+          "summary": "Java/Spring Boot automation framework with CI/CD and cloud deployment."
+        }
+      ],
       "positions": [
         {
           "title": "Lead Full Stack Engineer",
@@ -86,6 +98,18 @@
       "location": "Santa Monica, CA",
       "startDate": "10/2014",
       "endDate": "07/2017",
+      "Projects": [
+        {
+          "id": "rpa-racing-with-honda",
+          "title": "Racing with Honda Portal",
+          "summary": "React/Redux/Next.js experiential portal backed by Spring Boot APIs."
+        },
+        {
+          "id": "rpa-farmers-marketing-platform",
+          "title": "Farmers Campaign Portals",
+          "summary": "Responsive React and Next.js campaign sites with animated storytelling UX."
+        }
+      ],
       "positions": [
         {
           "title": "Senior Web Developer",
@@ -223,6 +247,18 @@
       "location": "Glendale, CA",
       "startDate": "01/2000",
       "endDate": "01/2010",
+      "Projects": [
+        {
+          "id": "stormscape-smith-brothers-platform",
+          "title": "Restaurant Platform Suite",
+          "summary": "Custom websites and admin dashboards with OpenTable integrations."
+        },
+        {
+          "id": "stormscape-community-web-platforms",
+          "title": "Community and Campaign Sites",
+          "summary": "CMS-powered sites for local campaigns, nonprofits, and associations."
+        }
+      ],
       "positions": [
         {
           "title": "Principal Web Developer",

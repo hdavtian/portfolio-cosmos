@@ -91,6 +91,9 @@ export const createFinalizeFocusOnMoon = (deps: {
           company.positions?.[0]?.responsibilities?.[0] ||
           `Professional experience at ${company.company}.`,
         sections,
+        projects: Array.isArray(company.Projects) ? company.Projects : [],
+        enableDroneCardDock:
+          Array.isArray(company.Projects) && company.Projects.length > 0,
       };
 
       // Show right-pane content (simulate load)

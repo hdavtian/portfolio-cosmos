@@ -996,7 +996,8 @@ export default function ResumeSpace3D({
       debugLog("drone", "useEffect: no drone ref");
       return;
     }
-    if (overlayContent) {
+    const shouldShowDrone = !!overlayContent && orbitPhase === "orbiting";
+    if (shouldShowDrone) {
       const moon = focusedMoonRef.current;
       const cam = sceneRef.current.camera;
       if (moon && cam) {
@@ -1013,7 +1014,9 @@ export default function ResumeSpace3D({
         debugLog("drone", `useEffect: missing moon=${!!moon} cam=${!!cam}`);
       }
     } else {
-      drone.hideContent();
+      // On orbit exit / destination switch, remove drone + panels immediately
+      // to avoid any visible trailing frame during departure.
+      drone.hideContentImmediate();
     }
   }, [overlayContent, orbitPhase]);
 

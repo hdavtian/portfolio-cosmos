@@ -20,6 +20,7 @@ const FLY_IN_DURATION = 1.2;
 const BORDER_DRAW_DURATION = 1.6;
 const CONTENT_FADE_DURATION = 0.5;
 const PANEL_STAGGER = 0;
+const LASER_STAGGER = 0.08;
 const POST_DRAW_DRONE_EXIT_DURATION = 0.55;
 const PANELS_DOCK_DURATION = 0.38;
 const CARD_CONTAINER_SHIFT_NDC_X = 0.08; // approx ~75px on 1920px wide view
@@ -94,6 +95,7 @@ export class HologramDroneDisplay {
   private panelsDocked = false;
   private panelDockProgress = 0;
   private activePanelIndex: number | null = null;
+  private shouldDockPanels = true;
 
   private flyStartPos = new THREE.Vector3();
   private flyEndPos = new THREE.Vector3();
@@ -370,6 +372,7 @@ export class HologramDroneDisplay {
     this.panelsDocked = false;
     this.panelDockProgress = 0;
     this.activePanelIndex = null;
+    this.shouldDockPanels = content.enableDroneCardDock === true;
 
     this.rootGroup.visible = true;
     this.panelGroup.visible = true;
@@ -425,6 +428,27 @@ export class HologramDroneDisplay {
     if (!this.active) return;
     this.hiding = true;
     this.hideProgress = 0;
+  }
+
+  hideContentImmediate(): void {
+    if (!this.active) return;
+    this.active = false;
+    this.hiding = false;
+    this.hideProgress = 0;
+    this.droneExitingAfterDraw = false;
+    this.droneExitProgress = 0;
+    this.dockingPanels = false;
+    this.panelsDocked = false;
+    this.panelDockProgress = 0;
+    this.activePanelIndex = null;
+    this.rootGroup.visible = false;
+    this.panelGroup.visible = false;
+    this.droneGroup.visible = false;
+    this.scannerLight.intensity = 0;
+    for (const rig of this.laserRigs) {
+      this.setLaserRigOpacity(rig, 0);
+    }
+    this.clearPanels();
   }
 
   getInteractivePanelMeshes(): THREE.Object3D[] {
@@ -491,10 +515,11 @@ export class HologramDroneDisplay {
       }
     }
 
-    const laserTargets: THREE.Vector3[] = [];
+    const laserTargets: Array<{ panelIndex: number; target: THREE.Vector3 }> = [];
     let anyDrawing = false;
     if (!this.drawFinished) {
-      for (const panel of this.panels) {
+      for (let i = 0; i < this.panels.length; i += 1) {
+        const panel = this.panels[i];
         const elapsed = this.contentStartTime - panel.revealTime;
         if (elapsed < 0) {
           panel.material.opacity = 0;
@@ -507,7 +532,9 @@ export class HologramDroneDisplay {
           this.redrawPanel(panel);
           panel.material.opacity = panel.targetOpacity;
           if (panel.borderProgress >= 1) panel.borderComplete = true;
-          laserTargets.push(this.getPenWorldPos(panel));
+          if (this.contentStartTime >= LASER_STAGGER * i) {
+            laserTargets.push({ panelIndex: i, target: this.getPenWorldPos(panel) });
+          }
           continue;
         }
 
@@ -516,7 +543,9 @@ export class HologramDroneDisplay {
           anyDrawing = true;
           panel.contentFade = Math.min(1, fadeElapsed / CONTENT_FADE_DURATION);
           this.redrawPanel(panel);
-          laserTargets.push(panel.mesh.position.clone());
+          if (this.contentStartTime >= LASER_STAGGER * i) {
+            laserTargets.push({ panelIndex: i, target: panel.mesh.position.clone() });
+          }
         }
 
         panel.material.opacity = panel.targetOpacity;
@@ -530,10 +559,12 @@ export class HologramDroneDisplay {
       this.drawFinished = true;
       this.droneExitingAfterDraw = true;
       this.droneExitProgress = 0;
-      this.dockingPanels = true;
-      this.panelDockProgress = 0;
-      for (const panel of this.panels) {
-        panel.drawOriginWorld.copy(panel.mesh.position);
+      if (this.shouldDockPanels) {
+        this.dockingPanels = true;
+        this.panelDockProgress = 0;
+        for (const panel of this.panels) {
+          panel.drawOriginWorld.copy(panel.mesh.position);
+        }
       }
     }
 
@@ -543,16 +574,16 @@ export class HologramDroneDisplay {
     const startLocal = this.rootGroup.worldToLocal(droneWorld.clone());
     const pulse = 0.5 + Math.sin(this.idleTime * 4) * 0.15;
 
-    this.ensureLaserRigCount(Math.max(this.panels.length, laserTargets.length));
+    this.ensureLaserRigCount(this.panels.length);
     if (laserTargets.length > 0 && anyDrawing) {
       for (let i = 0; i < this.laserRigs.length; i += 1) {
         const rig = this.laserRigs[i];
-        const target = laserTargets[i];
-        if (!target) {
+        const entry = laserTargets.find((item) => item.panelIndex === i);
+        if (!entry) {
           this.dimLaserRig(rig, delta);
           continue;
         }
-        const endLocal = this.rootGroup.worldToLocal(target.clone());
+        const endLocal = this.rootGroup.worldToLocal(entry.target.clone());
         this.updateLaserRig(rig, startLocal, endLocal, camera, pulse);
       }
       this.scannerLight.intensity = 1.5 + Math.sin(this.idleTime * 4) * 0.5;
@@ -580,7 +611,7 @@ export class HologramDroneDisplay {
     }
 
     const dockDepth = Math.max(12, camera.position.distanceTo(this.flyEndPos) * 0.52);
-    if (this.dockingPanels) {
+    if (this.shouldDockPanels && this.dockingPanels) {
       this.panelDockProgress = Math.min(1, this.panelDockProgress + delta / PANELS_DOCK_DURATION);
       const t = 1 - Math.pow(1 - this.panelDockProgress, 3);
       for (let i = 0; i < this.panels.length; i += 1) {
@@ -593,7 +624,7 @@ export class HologramDroneDisplay {
         this.dockingPanels = false;
         this.panelsDocked = true;
       }
-    } else if (this.panelsDocked) {
+    } else if (this.shouldDockPanels && this.panelsDocked) {
       for (let i = 0; i < this.panels.length; i += 1) {
         const panel = this.panels[i];
         const isActive = this.activePanelIndex === i;
