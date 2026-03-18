@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { OverlayContent } from "../CosmicContentOverlay";
 import {
   HOLO_PANEL_WIDTH,
@@ -21,6 +22,13 @@ const BORDER_DRAW_DURATION = 1.6;
 const CONTENT_FADE_DURATION = 0.5;
 const PANEL_STAGGER = 0.18;
 const LASER_STAGGER = 0.2;
+const PRE_DRAW_WAIT_DURATION = 1.0;
+const PRE_DRAW_GLANCE_DURATION = 0.45;
+const PRE_DRAW_GLANCE_HOLD = 0.5;
+const PRE_DRAW_SECOND_GLANCE_DURATION = 0.45;
+const PRE_DRAW_SECOND_GLANCE_HOLD = 0.5;
+const PRE_DRAW_GLANCE_ANGLE = Math.PI * 0.34;
+const POST_DRAW_HOLD_DURATION = 1.0;
 const POST_DRAW_DRONE_EXIT_DURATION = 0.55;
 const PANELS_DOCK_DURATION = 0.38;
 const CARD_CONTAINER_SHIFT_NDC_X = 0.08; // approx ~75px on 1920px wide view
@@ -31,6 +39,13 @@ const REFERENCE_DISTANCE = HOLO_REF_DISTANCE;
 const MIN_SCALE = 0.85;
 const MAX_SCALE = 1.6;
 const SCALE_POWER = 0.6;
+const OBLIVION_DRONE_MODEL_PATH = "/models/oblivion-drone/oblivion_drone.glb";
+
+export type DroneVisualVariant = "classic" | "oblivion";
+type HologramDroneDisplayOptions = {
+  droneVariant?: DroneVisualVariant;
+  oblivionDroneTemplate?: THREE.Object3D | null;
+};
 
 type TextPanel = {
   mesh: THREE.Mesh;
@@ -75,6 +90,9 @@ export class HologramDroneDisplay {
   private droneGroup: THREE.Group;
   private panelGroup: THREE.Group;
   private scannerLight: THREE.PointLight;
+  private droneVariant: DroneVisualVariant;
+  private oblivionDroneTemplate: THREE.Object3D | null;
+  private requestedOblivionModel = false;
 
   private panels: TextPanel[] = [];
   private laserRigs: LaserRig[] = [];
@@ -88,6 +106,10 @@ export class HologramDroneDisplay {
   private isOrbitMode = false;
 
   private drawFinished = false;
+  private drawSequenceElapsed = 0;
+  private drawEnabled = false;
+  private waitingPostDrawHold = false;
+  private postDrawHoldElapsed = 0;
   private droneExitingAfterDraw = false;
   private droneExitProgress = 0;
 
@@ -104,14 +126,18 @@ export class HologramDroneDisplay {
 
   private _tmpV = new THREE.Vector3();
   private _tmpV2 = new THREE.Vector3();
+  private _tmpQ = new THREE.Quaternion();
+  private disposed = false;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, options?: HologramDroneDisplayOptions) {
     this.scene = scene;
+    this.droneVariant = options?.droneVariant ?? "classic";
+    this.oblivionDroneTemplate = options?.oblivionDroneTemplate ?? null;
     this.rootGroup = new THREE.Group();
     this.rootGroup.name = "HologramDroneRoot";
     this.rootGroup.visible = false;
 
-    this.droneGroup = this.buildDrone();
+    this.droneGroup = this.buildDroneForVariant();
     this.rootGroup.add(this.droneGroup);
 
     this.panelGroup = new THREE.Group();
@@ -123,9 +149,33 @@ export class HologramDroneDisplay {
 
     this.scene.add(this.rootGroup);
     this.scene.add(this.panelGroup);
+
+    if (this.droneVariant === "oblivion" && !this.oblivionDroneTemplate) {
+      this.requestOblivionDroneModel();
+    }
   }
 
-  private buildDrone(): THREE.Group {
+  setDroneVariant(
+    droneVariant: DroneVisualVariant,
+    oblivionDroneTemplate?: THREE.Object3D | null,
+  ): void {
+    this.droneVariant = droneVariant;
+    if (oblivionDroneTemplate) this.oblivionDroneTemplate = oblivionDroneTemplate;
+    if (this.droneVariant === "oblivion" && !this.oblivionDroneTemplate) {
+      this.requestOblivionDroneModel();
+    }
+    this.rebuildDroneGroup();
+  }
+
+  private buildDroneForVariant(): THREE.Group {
+    if (this.droneVariant === "oblivion") {
+      const oblivion = this.buildOblivionDrone();
+      if (oblivion) return oblivion;
+    }
+    return this.buildClassicDrone();
+  }
+
+  private buildClassicDrone(): THREE.Group {
     const group = new THREE.Group();
     group.name = "HologramDrone";
 
@@ -206,7 +256,113 @@ export class HologramDroneDisplay {
       group.add(thruster);
     }
 
+    this.configureDroneVisualLayer(group);
     return group;
+  }
+
+  private buildOblivionDrone(): THREE.Group | null {
+    if (!this.oblivionDroneTemplate) return null;
+    const group = new THREE.Group();
+    group.name = "HologramDrone";
+
+    const model = this.oblivionDroneTemplate.clone(true);
+    model.name = "OblivionDroneModel";
+
+    // Normalize imported drone size so flight behavior matches existing offsets.
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    if (Number.isFinite(maxDim) && maxDim > 0.0001) {
+      const scale = 1.5 / maxDim;
+      model.scale.setScalar(scale);
+      box.setFromObject(model);
+    }
+
+    const center = box.getCenter(new THREE.Vector3());
+    if (center.lengthSq() > 0) model.position.sub(center);
+    model.position.y += 0.1;
+    group.add(model);
+
+    this.configureDroneVisualLayer(group);
+    return group;
+  }
+
+  private rebuildDroneGroup(): void {
+    if (this.disposed) return;
+    const nextGroup = this.buildDroneForVariant();
+    this.droneGroup.remove(this.scannerLight);
+    this.rootGroup.remove(this.droneGroup);
+    this.disposeObject3D(this.droneGroup);
+    this.droneGroup = nextGroup;
+    this.droneGroup.add(this.scannerLight);
+    this.rootGroup.add(this.droneGroup);
+  }
+
+  private requestOblivionDroneModel(): void {
+    if (this.requestedOblivionModel || this.oblivionDroneTemplate || this.disposed) return;
+    this.requestedOblivionModel = true;
+    const loader = new GLTFLoader();
+    loader.load(
+      OBLIVION_DRONE_MODEL_PATH,
+      (gltf) => {
+        if (this.disposed) return;
+        this.oblivionDroneTemplate = gltf.scene;
+        if (this.droneVariant === "oblivion") this.rebuildDroneGroup();
+      },
+      undefined,
+      () => {
+        // Keep classic drone as fallback when model load fails.
+      },
+    );
+  }
+
+  private disposeObject3D(root: THREE.Object3D): void {
+    root.traverse((obj) => {
+      const maybeMesh = obj as THREE.Mesh;
+      if (maybeMesh.geometry) maybeMesh.geometry.dispose();
+      if (maybeMesh.material) {
+        const mat = maybeMesh.material;
+        if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+        else mat.dispose();
+      }
+    });
+  }
+
+  private configureDroneVisualLayer(root: THREE.Object3D): void {
+    root.traverse((obj) => {
+      obj.renderOrder = 1300;
+      const maybeMesh = obj as THREE.Mesh;
+      if (!maybeMesh.material) return;
+      const mats = Array.isArray(maybeMesh.material)
+        ? maybeMesh.material
+        : [maybeMesh.material];
+      mats.forEach((mat) => {
+        mat.depthTest = false;
+        mat.depthWrite = false;
+      });
+    });
+  }
+
+  private getPreDrawYawOffset(): number {
+    const t = this.drawSequenceElapsed;
+    const p1 = PRE_DRAW_WAIT_DURATION;
+    const p2 = p1 + PRE_DRAW_GLANCE_DURATION;
+    const p3 = p2 + PRE_DRAW_GLANCE_HOLD;
+    const p4 = p3 + PRE_DRAW_SECOND_GLANCE_DURATION;
+    const p5 = p4 + PRE_DRAW_SECOND_GLANCE_HOLD;
+
+    if (t < p1) return 0;
+    if (t < p2) {
+      const u = (t - p1) / PRE_DRAW_GLANCE_DURATION;
+      return PRE_DRAW_GLANCE_ANGLE * u;
+    }
+    if (t < p3) return PRE_DRAW_GLANCE_ANGLE;
+    if (t < p4) {
+      const u = (t - p3) / PRE_DRAW_SECOND_GLANCE_DURATION;
+      return THREE.MathUtils.lerp(PRE_DRAW_GLANCE_ANGLE, -PRE_DRAW_GLANCE_ANGLE, u);
+    }
+    if (t < p5) return -PRE_DRAW_GLANCE_ANGLE;
+    return 0;
   }
 
   private createLaserRig(): LaserRig {
@@ -220,6 +376,7 @@ export class HologramDroneDisplay {
       lineMat,
     );
     line.frustumCulled = false;
+    line.renderOrder = 1120;
 
     const edgeAMat = new THREE.LineBasicMaterial({
       color: 0xff7a7a,
@@ -231,6 +388,7 @@ export class HologramDroneDisplay {
       edgeAMat,
     );
     edgeA.frustumCulled = false;
+    edgeA.renderOrder = 1110;
 
     const edgeBMat = new THREE.LineBasicMaterial({
       color: 0xff7a7a,
@@ -242,6 +400,7 @@ export class HologramDroneDisplay {
       edgeBMat,
     );
     edgeB.frustumCulled = false;
+    edgeB.renderOrder = 1110;
 
     const triGeo = new THREE.BufferGeometry();
     triGeo.setAttribute(
@@ -258,6 +417,7 @@ export class HologramDroneDisplay {
     });
     const triangle = new THREE.Mesh(triGeo, triangleMat);
     triangle.frustumCulled = false;
+    triangle.renderOrder = 1100;
 
     const glow = new THREE.Mesh(
       new THREE.SphereGeometry(0.18, 10, 10),
@@ -268,6 +428,7 @@ export class HologramDroneDisplay {
       }),
     );
     glow.frustumCulled = false;
+    glow.renderOrder = 1130;
 
     this.rootGroup.add(line, edgeA, edgeB, triangle, glow);
     return { line, lineMat, edgeA, edgeAMat, edgeB, edgeBMat, triangle, triangleMat, glow };
@@ -364,8 +525,12 @@ export class HologramDroneDisplay {
     this.hideProgress = 0;
     this.flyInProgress = 0;
     this.contentStartTime = 0;
+    this.drawSequenceElapsed = 0;
+    this.drawEnabled = false;
     this.idleTime = 0;
     this.drawFinished = false;
+    this.waitingPostDrawHold = false;
+    this.postDrawHoldElapsed = 0;
     this.droneExitingAfterDraw = false;
     this.droneExitProgress = 0;
     this.dockingPanels = false;
@@ -437,6 +602,8 @@ export class HologramDroneDisplay {
     this.hideProgress = 0;
     this.droneExitingAfterDraw = false;
     this.droneExitProgress = 0;
+    this.waitingPostDrawHold = false;
+    this.postDrawHoldElapsed = 0;
     this.dockingPanels = false;
     this.panelsDocked = false;
     this.panelDockProgress = 0;
@@ -492,8 +659,18 @@ export class HologramDroneDisplay {
       return;
     }
 
-    this.contentStartTime += delta;
     this.idleTime += delta;
+    this.drawSequenceElapsed += delta;
+    const drawStartAt =
+      PRE_DRAW_WAIT_DURATION +
+      PRE_DRAW_GLANCE_DURATION +
+      PRE_DRAW_GLANCE_HOLD +
+      PRE_DRAW_SECOND_GLANCE_DURATION +
+      PRE_DRAW_SECOND_GLANCE_HOLD;
+    this.drawEnabled = this.drawSequenceElapsed >= drawStartAt;
+    if (this.drawEnabled && !this.droneExitingAfterDraw) {
+      this.contentStartTime += delta;
+    }
 
     const hoverScale = this.isOrbitMode ? 0.015 : 1.0;
     const hoverY = Math.sin(this.idleTime * 1.8) * 0.15 * hoverScale;
@@ -508,6 +685,11 @@ export class HologramDroneDisplay {
     const lookTarget = this._tmpV.copy(camera.position);
     lookTarget.y = this.rootGroup.position.y;
     this.droneGroup.lookAt(lookTarget);
+    const inquisitiveYaw = this.getPreDrawYawOffset();
+    if (Math.abs(inquisitiveYaw) > 0.0001) {
+      this._tmpQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), inquisitiveYaw);
+      this.droneGroup.quaternion.multiply(this._tmpQ);
+    }
 
     if (!this.dockingPanels && !this.panelsDocked) {
       for (const panel of this.panels) {
@@ -517,7 +699,7 @@ export class HologramDroneDisplay {
 
     const laserTargets: Array<{ panelIndex: number; target: THREE.Vector3 }> = [];
     let anyDrawing = false;
-    if (!this.drawFinished) {
+    if (this.drawEnabled && !this.drawFinished) {
       for (let i = 0; i < this.panels.length; i += 1) {
         const panel = this.panels[i];
         const elapsed = this.contentStartTime - panel.revealTime;
@@ -551,17 +733,20 @@ export class HologramDroneDisplay {
 
         panel.material.opacity = panel.targetOpacity;
       }
+    } else if (!this.drawEnabled) {
+      for (const panel of this.panels) panel.material.opacity = 0;
     }
 
     const allPanelsRendered =
+      this.drawEnabled &&
       this.panels.length > 0 &&
       this.panels.every((panel) => panel.borderComplete && panel.contentFade >= 1);
     if (allPanelsRendered && !this.drawFinished) {
       // One final redraw without pen glow so no residual circular stamp remains.
       for (const panel of this.panels) this.redrawPanel(panel, false);
       this.drawFinished = true;
-      this.droneExitingAfterDraw = true;
-      this.droneExitProgress = 0;
+      this.waitingPostDrawHold = true;
+      this.postDrawHoldElapsed = 0;
       if (this.shouldDockPanels) {
         this.dockingPanels = true;
         this.panelDockProgress = 0;
@@ -594,6 +779,15 @@ export class HologramDroneDisplay {
     } else {
       this.laserRigs.forEach((rig) => this.dimLaserRig(rig, delta));
       this.scannerLight.intensity = Math.max(0, this.scannerLight.intensity - delta * 2);
+    }
+
+    if (this.waitingPostDrawHold && !this.droneExitingAfterDraw) {
+      this.postDrawHoldElapsed += delta;
+      if (this.postDrawHoldElapsed >= POST_DRAW_HOLD_DURATION) {
+        this.waitingPostDrawHold = false;
+        this.droneExitingAfterDraw = true;
+        this.droneExitProgress = 0;
+      }
     }
 
     if (this.droneExitingAfterDraw) {
@@ -849,6 +1043,7 @@ export class HologramDroneDisplay {
         }),
       );
       mesh.userData.hologramPanelIndex = i;
+      mesh.renderOrder = 1000 + i;
       const material = mesh.material as THREE.MeshBasicMaterial;
       const forwardPush = droneToCamera.clone().multiplyScalar(3 * distScale);
       const drawOffset = new THREE.Vector3();
@@ -1004,18 +1199,12 @@ export class HologramDroneDisplay {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.clearPanels();
     this.ensureLaserRigCount(0);
     this.scene.remove(this.rootGroup);
     this.scene.remove(this.panelGroup);
-    this.droneGroup.traverse((obj) => {
-      if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();
-      if ((obj as THREE.Mesh).material) {
-        const mat = (obj as THREE.Mesh).material;
-        if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
-        else mat.dispose();
-      }
-    });
+    this.disposeObject3D(this.droneGroup);
   }
 
   isActive(): boolean {

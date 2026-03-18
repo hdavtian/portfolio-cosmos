@@ -52,7 +52,10 @@ import {
   onScreenMessage,
   setOnScreenTelemetry,
 } from "../ui/onScreenMessaging";
-import { HologramDroneDisplay } from "./HologramDroneDisplay";
+import {
+  HologramDroneDisplay,
+  type DroneVisualVariant,
+} from "./HologramDroneDisplay";
 // CockpitHologramPanels kept for potential future use
 import { getOrbitalPositionEmitter } from "../OrbitalPositionEmitter";
 import { StarDestroyerCruiser } from "../StarDestroyerCruiser";
@@ -138,6 +141,8 @@ const ORBITAL_PORTFOLIO_CARD_MAX_THUMBS = 6;
 const ORBITAL_PORTFOLIO_STATION_ORBIT_SPEED = 0.16;
 const ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE = 148;
 const ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE = 70;
+// Quick flip between drone visuals for moon visits.
+const MOON_VISIT_DRONE_VARIANT: DroneVisualVariant = "oblivion";
 const ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE = 280;
 const ORBITAL_PORTFOLIO_INSPECT_EXIT_MIN_DISTANCE = 58;
 const ORBITAL_PORTFOLIO_INSPECT_EXIT_MAX_DISTANCE = 320;
@@ -983,6 +988,7 @@ export default function ResumeSpace3D({
 
   // Track orbit phase as React state for UI (Leave Orbit button, etc.)
   const [orbitPhase, setOrbitPhase] = useState<OrbitPhase>("idle");
+  const [droneSummonNonce, setDroneSummonNonce] = useState(0);
 
   // Keep orbitActiveRef in sync for pointer handlers
   useEffect(() => {
@@ -1018,7 +1024,7 @@ export default function ResumeSpace3D({
       // to avoid any visible trailing frame during departure.
       drone.hideContentImmediate();
     }
-  }, [overlayContent, orbitPhase]);
+  }, [overlayContent, orbitPhase, droneSummonNonce]);
 
   const [shipMovementDebug, setShipMovementDebug] = useState(false);
   const [systemStatusLogs, setSystemStatusLogs] = useState<string[]>([]);
@@ -1055,10 +1061,11 @@ export default function ResumeSpace3D({
 
     const preloadCriticalAssets = async () => {
       try {
-        const [trenchGltf] = await Promise.all([
+        const [trenchGltf, , , oblivionDroneGltf] = await Promise.all([
           gltfPreloader.loadAsync(PROJECT_SHOWCASE_MODEL_PATH),
           gltfPreloader.loadAsync("/models/spaceship/scene.gltf"),
           gltfPreloader.loadAsync("/models/star-destroyer/scene.gltf"),
+          gltfPreloader.loadAsync("/models/oblivion-drone/oblivion_drone.glb"),
         ]);
 
         const trenchTextureKeys = new Set<string>();
@@ -1102,6 +1109,7 @@ export default function ResumeSpace3D({
         await Promise.all([...trenchTextureJobs, ...showcaseImageJobs]);
         if (!cancelled) {
           projectShowcasePreloadedGltfRef.current = trenchGltf as { scene: THREE.Group };
+          oblivionDronePreloadedRef.current = (oblivionDroneGltf as { scene: THREE.Object3D }).scene;
         }
       } finally {
         if (!cancelled) setCriticalAssetsReady(true);
@@ -1178,6 +1186,7 @@ export default function ResumeSpace3D({
   const projectShowcaseLastTickRef = useRef<number | null>(null);
   const projectShowcasePanelsRef = useRef<ShowcasePanelRecord[]>([]);
   const projectShowcasePreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
+  const oblivionDronePreloadedRef = useRef<THREE.Object3D | null>(null);
   const projectShowcaseTrackRef = useRef<{
     axis: "x" | "z";
     minRun: number;
@@ -4538,8 +4547,25 @@ export default function ResumeSpace3D({
         hint: "Copy camera snapshot JSON",
         onRun: () => invoke("captureCameraSnapshot"),
       },
+      {
+        id: "summon-moon-drone",
+        label: "summonMoonDrone()",
+        hint: "Re-summon drone during moon visit",
+        onRun: () => {
+          if (orbitPhase !== "orbiting" || !focusedMoonRef.current) {
+            shipLog("summonMoonDrone() only works during moon visits", "error");
+            return;
+          }
+          if (!overlayContent) {
+            shipLog("No moon visit content loaded yet for drone summon", "error");
+            return;
+          }
+          setDroneSummonNonce((prev) => prev + 1);
+          shipLog("Moon drone summoned", "orbit");
+        },
+      },
     ];
-  }, [shipLog]);
+  }, [orbitPhase, overlayContent, shipLog]);
 
   // ── Cockpit destination navigation ─────────────────
   const handleCockpitNavigate = useCallback(
@@ -8964,7 +8990,10 @@ export default function ResumeSpace3D({
     sceneRef.current.sunMaterial = sunMaterial;
 
     // Hologram Drone display
-    hologramDroneRef.current = new HologramDroneDisplay(scene);
+    hologramDroneRef.current = new HologramDroneDisplay(scene, {
+      droneVariant: MOON_VISIT_DRONE_VARIANT,
+      oblivionDroneTemplate: oblivionDronePreloadedRef.current,
+    });
 
     // --- OBJECTS ---
     const items: OrbitItem[] = [];
