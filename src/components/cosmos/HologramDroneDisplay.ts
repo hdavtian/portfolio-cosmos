@@ -541,8 +541,9 @@ export class HologramDroneDisplay {
         const fadeElapsed = elapsed - BORDER_DRAW_DURATION;
         if (panel.contentFade < 1) {
           anyDrawing = true;
-          panel.contentFade = Math.min(1, fadeElapsed / CONTENT_FADE_DURATION);
-          this.redrawPanel(panel);
+          const nextFade = Math.min(1, fadeElapsed / CONTENT_FADE_DURATION);
+          panel.contentFade = nextFade;
+          this.redrawPanel(panel, nextFade < 1);
           if (this.contentStartTime >= LASER_STAGGER * i) {
             laserTargets.push({ panelIndex: i, target: panel.mesh.position.clone() });
           }
@@ -556,6 +557,8 @@ export class HologramDroneDisplay {
       this.panels.length > 0 &&
       this.panels.every((panel) => panel.borderComplete && panel.contentFade >= 1);
     if (allPanelsRendered && !this.drawFinished) {
+      // One final redraw without pen glow so no residual circular stamp remains.
+      for (const panel of this.panels) this.redrawPanel(panel, false);
       this.drawFinished = true;
       this.droneExitingAfterDraw = true;
       this.droneExitProgress = 0;
@@ -580,7 +583,8 @@ export class HologramDroneDisplay {
         const rig = this.laserRigs[i];
         const entry = laserTargets.find((item) => item.panelIndex === i);
         if (!entry) {
-          this.dimLaserRig(rig, delta);
+          // Turn a panel's laser off immediately once that panel is done writing.
+          this.setLaserRigOpacity(rig, 0);
           continue;
         }
         const endLocal = this.rootGroup.worldToLocal(entry.target.clone());
@@ -670,14 +674,20 @@ export class HologramDroneDisplay {
     return this.ndcToWorld(-0.55 + CARD_CONTAINER_SHIFT_NDC_X, -0.08, camera, depth);
   }
 
-  private redrawPanel(panel: TextPanel): void {
+  private redrawPanel(panel: TextPanel, showPenGlow: boolean = true): void {
     const { displayCtx: ctx, canvasW, canvasH, contentCanvas, isHeader } = panel;
     ctx.clearRect(0, 0, canvasW, canvasH);
     ctx.fillStyle = isHeader ? HEADER_BG : SECTION_BG;
     ctx.fillRect(0, 0, canvasW, canvasH);
     ctx.fillStyle = "rgba(79, 255, 176, 0.015)";
     for (let y = 0; y < canvasH; y += 4) ctx.fillRect(0, y, canvasW, 2);
-    const pen = this.drawBorderTrace(ctx, panel.borderProgress, canvasW, canvasH);
+    const pen = this.drawBorderTrace(
+      ctx,
+      panel.borderProgress,
+      canvasW,
+      canvasH,
+      showPenGlow,
+    );
     panel.penX = pen.x;
     panel.penY = pen.y;
     if (panel.borderComplete && panel.contentFade > 0) {
@@ -693,6 +703,7 @@ export class HologramDroneDisplay {
     progress: number,
     w: number,
     h: number,
+    showPenGlow: boolean,
   ): { x: number; y: number } {
     const m = BORDER_MARGIN;
     const iw = w - 2 * m;
@@ -730,12 +741,14 @@ export class HologramDroneDisplay {
     ctx.stroke();
     ctx.restore();
 
-    const grad = ctx.createRadialGradient(penX, penY, 0, penX, penY, 16);
-    grad.addColorStop(0, "rgba(42, 153, 104, 0.7)");
-    grad.addColorStop(0.4, "rgba(42, 153, 104, 0.18)");
-    grad.addColorStop(1, "rgba(42, 153, 104, 0)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(penX - 16, penY - 16, 32, 32);
+    if (showPenGlow) {
+      const grad = ctx.createRadialGradient(penX, penY, 0, penX, penY, 16);
+      grad.addColorStop(0, "rgba(42, 153, 104, 0.7)");
+      grad.addColorStop(0.4, "rgba(42, 153, 104, 0.18)");
+      grad.addColorStop(1, "rgba(42, 153, 104, 0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(penX - 16, penY - 16, 32, 32);
+    }
     return { x: penX, y: penY };
   }
 
