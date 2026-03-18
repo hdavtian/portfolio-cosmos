@@ -29,6 +29,7 @@ const PRE_DRAW_SCAN_HOLD_DURATION = 0.5;
 const SCAN_MAX_YAW = Math.PI * 0.36;
 const SCAN_MAX_PITCH = Math.PI * 0.2;
 const SCAN_MAX_ROLL = Math.PI * 0.22;
+const DRONE_FACE_TRACK_YAW_OFFSET = Math.PI;
 const POST_DRAW_HOLD_DURATION = 2.2;
 const POST_DRAW_SCAN_TURN_MIN = 0.32;
 const POST_DRAW_SCAN_TURN_MAX = 0.64;
@@ -50,9 +51,17 @@ const SCALE_POWER = 0.6;
 const OBLIVION_DRONE_MODEL_PATH = "/models/oblivion-drone/oblivion_drone.glb";
 
 export type DroneVisualVariant = "classic" | "oblivion";
+export type DroneAudioBuffers = {
+  activation?: AudioBuffer | null;
+  transmission?: AudioBuffer | null;
+  movement?: AudioBuffer[];
+};
 type HologramDroneDisplayOptions = {
   droneVariant?: DroneVisualVariant;
   oblivionDroneTemplate?: THREE.Object3D | null;
+  droneAudioBuffers?: DroneAudioBuffers;
+  soundEnabled?: boolean;
+  onAudioDebug?: (message: string) => void;
 };
 
 type TextPanel = {
@@ -98,6 +107,8 @@ type ScanAngles = {
   roll: number;
 };
 
+type ScanTurnPhase = "idle" | "turning" | "holding";
+
 export class HologramDroneDisplay {
   private scene: THREE.Scene;
   private rootGroup: THREE.Group;
@@ -137,6 +148,23 @@ export class HologramDroneDisplay {
   private postScanTurnDuration = POST_DRAW_SCAN_TURN_MIN;
   private postScanHoldElapsed = 0;
   private postScanHoldDuration = POST_DRAW_SCAN_HOLD_MIN;
+  private preDrawLastStepIndex = -1;
+  private preDrawScanPhase: ScanTurnPhase = "idle";
+  private thrusterGlowMats: THREE.MeshBasicMaterial[] = [];
+  private previousDroneQuat: THREE.Quaternion | null = null;
+  private smoothedTurnSpeed = 0;
+  private scanCueListener: THREE.AudioListener | null = null;
+  private activationAudio: THREE.PositionalAudio | null = null;
+  private transmissionAudio: THREE.PositionalAudio | null = null;
+  private movementAudio: THREE.PositionalAudio | null = null;
+  private droneAudioBuffers: DroneAudioBuffers | null = null;
+  private soundEnabled = true;
+  private onAudioDebug?: (message: string) => void;
+  private attachedAudioCamera: THREE.Camera | null = null;
+  private lastMovementCueTime = 0;
+  private lastTransmissionCueTime = 0;
+  private activationPlayedThisRun = false;
+  private lastActivationAttemptTime = 0;
 
   private dockingPanels = false;
   private panelsDocked = false;
@@ -152,12 +180,17 @@ export class HologramDroneDisplay {
   private _tmpV = new THREE.Vector3();
   private _tmpV2 = new THREE.Vector3();
   private _tmpQ = new THREE.Quaternion();
+  private _tmpQ2 = new THREE.Quaternion();
+  private _tmpM = new THREE.Matrix4();
   private disposed = false;
 
   constructor(scene: THREE.Scene, options?: HologramDroneDisplayOptions) {
     this.scene = scene;
     this.droneVariant = options?.droneVariant ?? "classic";
     this.oblivionDroneTemplate = options?.oblivionDroneTemplate ?? null;
+    this.droneAudioBuffers = options?.droneAudioBuffers ?? null;
+    this.soundEnabled = options?.soundEnabled ?? true;
+    this.onAudioDebug = options?.onAudioDebug;
     this.rootGroup = new THREE.Group();
     this.rootGroup.name = "HologramDroneRoot";
     this.rootGroup.visible = false;
@@ -174,6 +207,10 @@ export class HologramDroneDisplay {
 
     this.scene.add(this.rootGroup);
     this.scene.add(this.panelGroup);
+    this.cacheThrusterGlows();
+    this.audioDebug(
+      `init soundEnabled=${this.soundEnabled} activation=${!!this.droneAudioBuffers?.activation} transmission=${!!this.droneAudioBuffers?.transmission} movement=${this.droneAudioBuffers?.movement?.length ?? 0}`,
+    );
 
     if (this.droneVariant === "oblivion" && !this.oblivionDroneTemplate) {
       this.requestOblivionDroneModel();
@@ -190,6 +227,45 @@ export class HologramDroneDisplay {
       this.requestOblivionDroneModel();
     }
     this.rebuildDroneGroup();
+  }
+
+  setSoundEnabled(enabled: boolean): void {
+    this.soundEnabled = enabled;
+    this.audioDebug(`setSoundEnabled(${enabled})`);
+    if (enabled) void this.resumeAudioContext();
+    if (!enabled) {
+      this.activationAudio?.stop();
+      this.transmissionAudio?.stop();
+      this.movementAudio?.stop();
+    }
+  }
+
+  setDroneAudioBuffers(buffers: DroneAudioBuffers | null): void {
+    this.droneAudioBuffers = buffers;
+    this.audioDebug(
+      `setDroneAudioBuffers activation=${!!buffers?.activation} transmission=${!!buffers?.transmission} movement=${buffers?.movement?.length ?? 0}`,
+    );
+  }
+
+  async resumeAudioContext(): Promise<void> {
+    if (!this.scanCueListener) {
+      this.scanCueListener = new THREE.AudioListener();
+      this.audioDebug("created AudioListener in resumeAudioContext()");
+    }
+    const ctx = this.scanCueListener.context;
+    this.audioDebug(`resumeAudioContext state(before)=${ctx.state}`);
+    if (ctx.state !== "running") {
+      try {
+        await ctx.resume();
+      } catch {
+        // Browser may still block until an explicit user gesture.
+      }
+    }
+    this.audioDebug(`resumeAudioContext state(after)=${ctx.state}`);
+  }
+
+  private audioDebug(message: string): void {
+    this.onAudioDebug?.(message);
   }
 
   private buildDroneForVariant(): THREE.Group {
@@ -279,6 +355,19 @@ export class HologramDroneDisplay {
       thruster.position.set(Math.cos(angle) * 0.55, 0, Math.sin(angle) * 0.55);
       thruster.rotation.y = -angle;
       group.add(thruster);
+
+      const glow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.08, 10, 10),
+        new THREE.MeshBasicMaterial({
+          color: 0xff5f4d,
+          transparent: true,
+          opacity: 0.18,
+          depthWrite: false,
+        }),
+      );
+      glow.userData.isDroneThrusterGlow = true;
+      glow.position.copy(thruster.position).multiplyScalar(1.04);
+      group.add(glow);
     }
 
     this.configureDroneVisualLayer(group);
@@ -308,6 +397,22 @@ export class HologramDroneDisplay {
     model.position.y += 0.1;
     group.add(model);
 
+    for (let i = 0; i < 3; i += 1) {
+      const angle = (i / 3) * Math.PI * 2;
+      const glow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.11, 10, 10),
+        new THREE.MeshBasicMaterial({
+          color: 0xff6a56,
+          transparent: true,
+          opacity: 0.16,
+          depthWrite: false,
+        }),
+      );
+      glow.userData.isDroneThrusterGlow = true;
+      glow.position.set(Math.cos(angle) * 0.5, -0.18, Math.sin(angle) * 0.5);
+      group.add(glow);
+    }
+
     this.configureDroneVisualLayer(group);
     return group;
   }
@@ -320,7 +425,12 @@ export class HologramDroneDisplay {
     this.disposeObject3D(this.droneGroup);
     this.droneGroup = nextGroup;
     this.droneGroup.add(this.scannerLight);
+    if (this.activationAudio) this.droneGroup.add(this.activationAudio);
+    if (this.transmissionAudio) this.droneGroup.add(this.transmissionAudio);
+    if (this.movementAudio) this.droneGroup.add(this.movementAudio);
     this.rootGroup.add(this.droneGroup);
+    this.cacheThrusterGlows();
+    this.previousDroneQuat = null;
   }
 
   private requestOblivionDroneModel(): void {
@@ -373,6 +483,158 @@ export class HologramDroneDisplay {
     });
   }
 
+  private cacheThrusterGlows(): void {
+    this.thrusterGlowMats = [];
+    this.droneGroup.traverse((obj) => {
+      if (!obj.userData?.isDroneThrusterGlow) return;
+      const mesh = obj as THREE.Mesh;
+      const mat = mesh.material as THREE.MeshBasicMaterial | undefined;
+      if (mat) this.thrusterGlowMats.push(mat);
+    });
+  }
+
+  private updateThrusterGlow(delta: number): void {
+    const worldQ = this.droneGroup.getWorldQuaternion(this._tmpQ2);
+    if (!this.previousDroneQuat) this.previousDroneQuat = worldQ.clone();
+    const angleDelta = this.previousDroneQuat.angleTo(worldQ);
+    const turnSpeed = angleDelta / Math.max(delta, 1 / 240);
+    this.previousDroneQuat.copy(worldQ);
+    this.smoothedTurnSpeed += (turnSpeed - this.smoothedTurnSpeed) * 0.16;
+
+    const pulse = 0.55 + 0.45 * Math.sin(this.idleTime * 6.8);
+    const intensityBoost = this.droneExitingAfterDraw ? 0.28 : 0;
+    const glowAlpha = THREE.MathUtils.clamp(
+      0.16 + this.smoothedTurnSpeed * 0.24 + intensityBoost,
+      0.1,
+      0.95,
+    );
+    for (const mat of this.thrusterGlowMats) {
+      mat.opacity = glowAlpha * pulse;
+    }
+  }
+
+  private ensureDroneAudio(camera: THREE.Camera): void {
+    if (!this.scanCueListener) {
+      this.scanCueListener = new THREE.AudioListener();
+    }
+    if (this.attachedAudioCamera !== camera) {
+      this.attachedAudioCamera?.remove(this.scanCueListener);
+      camera.add(this.scanCueListener);
+      this.attachedAudioCamera = camera;
+      this.audioDebug("attached AudioListener to camera");
+    }
+    if (!this.scanCueListener) return;
+    const createAudio = (volume: number) => {
+      const audio = new THREE.PositionalAudio(this.scanCueListener!);
+      audio.setRefDistance(26);
+      audio.setRolloffFactor(0.72);
+      audio.setDistanceModel("inverse");
+      audio.setMaxDistance(360);
+      audio.setVolume(volume);
+      return audio;
+    };
+    if (!this.activationAudio) {
+      this.activationAudio = createAudio(0.45);
+      this.droneGroup.add(this.activationAudio);
+      this.audioDebug("created activation positional audio");
+    }
+    if (!this.transmissionAudio) {
+      this.transmissionAudio = createAudio(0.36);
+      this.droneGroup.add(this.transmissionAudio);
+      this.audioDebug("created transmission positional audio");
+    }
+    if (!this.movementAudio) {
+      this.movementAudio = createAudio(0.32);
+      this.droneGroup.add(this.movementAudio);
+      this.audioDebug("created movement positional audio");
+    }
+  }
+
+  private playActivationSound(): boolean {
+    if (!this.soundEnabled || !this.activationAudio) {
+      this.audioDebug(
+        `playActivationSound skipped soundEnabled=${this.soundEnabled} hasAudio=${!!this.activationAudio}`,
+      );
+      return false;
+    }
+    const buffer = this.droneAudioBuffers?.activation;
+    if (!buffer) {
+      this.audioDebug("playActivationSound skipped: no activation buffer");
+      return false;
+    }
+    const ctxState = this.scanCueListener?.context.state ?? "none";
+    if (ctxState !== "running") {
+      void this.resumeAudioContext();
+      this.audioDebug(`playActivationSound deferred ctx=${ctxState}`);
+      return false;
+    }
+    try {
+      if (this.activationAudio.isPlaying) this.activationAudio.stop();
+      this.activationAudio.setBuffer(buffer);
+      this.activationAudio.play();
+      this.audioDebug(
+        `playActivationSound ok ctx=${this.scanCueListener?.context.state ?? "none"}`,
+      );
+      return true;
+    } catch {
+      this.audioDebug(
+        `playActivationSound failed ctx=${this.scanCueListener?.context.state ?? "none"}`,
+      );
+      return false;
+    }
+  }
+
+  private playTransmissionSound(): void {
+    if (!this.soundEnabled || !this.transmissionAudio) return;
+    const buffer = this.droneAudioBuffers?.transmission;
+    if (!buffer) {
+      this.audioDebug("playTransmissionSound skipped: no transmission buffer");
+      return;
+    }
+    const now = performance.now();
+    if (now - this.lastTransmissionCueTime < 520) return;
+    this.lastTransmissionCueTime = now;
+    try {
+      if (this.transmissionAudio.isPlaying) this.transmissionAudio.stop();
+      this.transmissionAudio.setBuffer(buffer);
+      this.transmissionAudio.play();
+      this.audioDebug(
+        `playTransmissionSound ok ctx=${this.scanCueListener?.context.state ?? "none"}`,
+      );
+    } catch {
+      this.audioDebug(
+        `playTransmissionSound failed ctx=${this.scanCueListener?.context.state ?? "none"}`,
+      );
+    }
+  }
+
+  private playMovementSound(): void {
+    if (!this.soundEnabled || !this.movementAudio) return;
+    const pool = this.droneAudioBuffers?.movement ?? [];
+    if (pool.length === 0) {
+      this.audioDebug("playMovementSound skipped: movement pool empty");
+      return;
+    }
+    const now = performance.now();
+    if (now - this.lastMovementCueTime < 140) return;
+    this.lastMovementCueTime = now;
+    const idx = Math.floor(Math.random() * pool.length);
+    const buffer = pool[idx];
+    if (!buffer) return;
+    try {
+      if (this.movementAudio.isPlaying) this.movementAudio.stop();
+      this.movementAudio.setBuffer(buffer);
+      this.movementAudio.play();
+      this.audioDebug(
+        `playMovementSound ok idx=${idx} ctx=${this.scanCueListener?.context.state ?? "none"}`,
+      );
+    } catch {
+      this.audioDebug(
+        `playMovementSound failed idx=${idx} ctx=${this.scanCueListener?.context.state ?? "none"}`,
+      );
+    }
+  }
+
   private randomScanAngles(scale: number = 1): ScanAngles {
     return {
       pitch: (Math.random() * 2 - 1) * SCAN_MAX_PITCH * scale,
@@ -394,6 +656,8 @@ export class HologramDroneDisplay {
     this.postScanTurnDuration = POST_DRAW_SCAN_TURN_MIN;
     this.postScanHoldElapsed = 0;
     this.postScanHoldDuration = POST_DRAW_SCAN_HOLD_MIN;
+    this.preDrawLastStepIndex = -1;
+    this.preDrawScanPhase = "idle";
   }
 
   private preDrawScanTotalDuration(): number {
@@ -401,6 +665,13 @@ export class HologramDroneDisplay {
       PRE_DRAW_WAIT_DURATION +
       PRE_DRAW_SCAN_STEPS * (PRE_DRAW_SCAN_TURN_DURATION + PRE_DRAW_SCAN_HOLD_DURATION)
     );
+  }
+
+  private getPreDrawScanStepIndex(elapsed: number): number {
+    if (elapsed < PRE_DRAW_WAIT_DURATION) return -1;
+    const seg = PRE_DRAW_SCAN_TURN_DURATION + PRE_DRAW_SCAN_HOLD_DURATION;
+    const step = Math.floor((elapsed - PRE_DRAW_WAIT_DURATION) / seg);
+    return THREE.MathUtils.clamp(step, 0, PRE_DRAW_SCAN_STEPS - 1);
   }
 
   private getPreDrawScanAngles(elapsed: number): ScanAngles {
@@ -411,6 +682,7 @@ export class HologramDroneDisplay {
     const seg = PRE_DRAW_SCAN_TURN_DURATION + PRE_DRAW_SCAN_HOLD_DURATION;
     const step = Math.floor(t / seg);
     if (step >= PRE_DRAW_SCAN_STEPS) {
+      this.preDrawScanPhase = "holding";
       return this.preDrawScanTargets[PRE_DRAW_SCAN_STEPS - 1] ?? {
         pitch: 0,
         yaw: 0,
@@ -425,6 +697,7 @@ export class HologramDroneDisplay {
         : this.preDrawScanTargets[step - 1] ?? { pitch: 0, yaw: 0, roll: 0 };
     const to = this.preDrawScanTargets[step] ?? from;
     if (localT <= PRE_DRAW_SCAN_TURN_DURATION) {
+      this.preDrawScanPhase = "turning";
       const u = THREE.MathUtils.clamp(localT / PRE_DRAW_SCAN_TURN_DURATION, 0, 1);
       return {
         pitch: THREE.MathUtils.lerp(from.pitch, to.pitch, u),
@@ -432,6 +705,7 @@ export class HologramDroneDisplay {
         roll: THREE.MathUtils.lerp(from.roll, to.roll, u),
       };
     }
+    this.preDrawScanPhase = "holding";
     return to;
   }
 
@@ -471,6 +745,7 @@ export class HologramDroneDisplay {
         Math.random(),
       );
       this.postScanTurning = true;
+      this.playMovementSound();
     }
     return this.postScanCurrent;
   }
@@ -687,6 +962,7 @@ export class HologramDroneDisplay {
     this.postDrawHoldElapsed = 0;
     this.droneExitingAfterDraw = false;
     this.droneExitProgress = 0;
+    this.activationPlayedThisRun = false;
     this.dockingPanels = false;
     this.panelsDocked = false;
     this.panelDockProgress = 0;
@@ -699,6 +975,8 @@ export class HologramDroneDisplay {
     this.droneGroup.position.set(0, 0, 0);
     this.droneGroup.rotation.set(0, 0, 0);
     this.droneGroup.scale.setScalar(0);
+    this.previousDroneQuat = null;
+    this.smoothedTurnSpeed = 0;
     this.resetInquisitiveScanState();
 
     const distScale = this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
@@ -732,6 +1010,7 @@ export class HologramDroneDisplay {
     this.postDrawHoldElapsed = 0;
     this.droneExitingAfterDraw = false;
     this.droneExitProgress = 0;
+    this.activationPlayedThisRun = false;
     this.dockingPanels = false;
     this.panelsDocked = false;
     this.panelDockProgress = 0;
@@ -744,6 +1023,8 @@ export class HologramDroneDisplay {
     this.droneGroup.position.set(0, 0, 0);
     this.droneGroup.rotation.set(0, 0, 0);
     this.droneGroup.scale.setScalar(0);
+    this.previousDroneQuat = null;
+    this.smoothedTurnSpeed = 0;
     this.resetInquisitiveScanState();
 
     this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
@@ -775,10 +1056,16 @@ export class HologramDroneDisplay {
     this.panelGroup.visible = false;
     this.droneGroup.visible = false;
     this.scannerLight.intensity = 0;
+    if (this.activationAudio?.isPlaying) this.activationAudio.stop();
+    if (this.transmissionAudio?.isPlaying) this.transmissionAudio.stop();
+    if (this.movementAudio?.isPlaying) this.movementAudio.stop();
     for (const rig of this.laserRigs) {
       this.setLaserRigOpacity(rig, 0);
     }
     this.clearPanels();
+    this.previousDroneQuat = null;
+    this.smoothedTurnSpeed = 0;
+    this.activationPlayedThisRun = false;
   }
 
   getInteractivePanelMeshes(): THREE.Object3D[] {
@@ -794,6 +1081,7 @@ export class HologramDroneDisplay {
 
   update(delta: number, camera: THREE.Camera): void {
     if (!this.active) return;
+    this.ensureDroneAudio(camera);
 
     if (this.hiding) {
       this.hideProgress += delta / 0.6;
@@ -819,6 +1107,13 @@ export class HologramDroneDisplay {
       for (const panel of this.panels) panel.material.opacity = 0;
       this.scannerLight.intensity = 0;
       this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
+      if (this.flyInProgress >= 1 && !this.activationPlayedThisRun) {
+        const now = performance.now();
+        if (now - this.lastActivationAttemptTime > 280) {
+          this.lastActivationAttemptTime = now;
+          this.activationPlayedThisRun = this.playActivationSound();
+        }
+      }
       return;
     }
 
@@ -848,6 +1143,15 @@ export class HologramDroneDisplay {
       scanAngles = this.updatePostDrawScan(delta);
     } else if (!this.drawEnabled) {
       scanAngles = this.getPreDrawScanAngles(this.drawSequenceElapsed);
+      const stepIndex = this.getPreDrawScanStepIndex(this.drawSequenceElapsed);
+      if (
+        this.preDrawScanPhase === "turning" &&
+        stepIndex >= 0 &&
+        stepIndex !== this.preDrawLastStepIndex
+      ) {
+        this.preDrawLastStepIndex = stepIndex;
+        this.playMovementSound();
+      }
     } else if (this.preDrawScanTargets.length > 0) {
       scanAngles = this.preDrawScanTargets[this.preDrawScanTargets.length - 1];
     }
@@ -858,6 +1162,7 @@ export class HologramDroneDisplay {
 
     if (this.inspectionMode) {
       this.scannerLight.intensity = 0.9 + Math.sin(this.idleTime * 2.6) * 0.2;
+      this.updateThrusterGlow(delta);
       return;
     }
 
@@ -927,6 +1232,24 @@ export class HologramDroneDisplay {
       }
     }
 
+    if (laserTargets.length > 0) {
+      const targetWorld = laserTargets[0].target;
+      const droneWorldForTrack = this._tmpV2.copy(this.droneGroup.position);
+      this.rootGroup.localToWorld(droneWorldForTrack);
+      this._tmpM.lookAt(droneWorldForTrack, targetWorld, new THREE.Vector3(0, 1, 0));
+      const desiredWorldQ = this._tmpQ2.setFromRotationMatrix(this._tmpM);
+      // Model-forward correction: during engraving, rotate so the drone "face"
+      // (X/light/001 side) points at the writing target instead of its back.
+      this._tmpQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), DRONE_FACE_TRACK_YAW_OFFSET);
+      desiredWorldQ.multiply(this._tmpQ);
+      // Use a stronger world-space slerp so the face reliably points to text.
+      const currentWorldQ = this.droneGroup.getWorldQuaternion(this._tmpQ);
+      currentWorldQ.slerp(desiredWorldQ, 0.24);
+      const parentWorldQ = this.rootGroup.getWorldQuaternion(this._tmpQ2);
+      const localQ = parentWorldQ.invert().multiply(currentWorldQ);
+      this.droneGroup.quaternion.copy(localQ);
+    }
+
     const droneWorld = this._tmpV.copy(this.droneGroup.position);
     this.rootGroup.localToWorld(droneWorld);
     droneWorld.y -= 0.35;
@@ -935,6 +1258,7 @@ export class HologramDroneDisplay {
 
     this.ensureLaserRigCount(this.panels.length);
     if (laserTargets.length > 0 && anyDrawing) {
+      this.playTransmissionSound();
       for (let i = 0; i < this.laserRigs.length; i += 1) {
         const rig = this.laserRigs[i];
         const entry = laserTargets.find((item) => item.panelIndex === i);
@@ -948,6 +1272,7 @@ export class HologramDroneDisplay {
       }
       this.scannerLight.intensity = 1.5 + Math.sin(this.idleTime * 4) * 0.5;
     } else {
+      if (this.transmissionAudio?.isPlaying) this.transmissionAudio.stop();
       this.laserRigs.forEach((rig) => this.dimLaserRig(rig, delta));
       this.scannerLight.intensity = Math.max(0, this.scannerLight.intensity - delta * 2);
     }
@@ -981,6 +1306,8 @@ export class HologramDroneDisplay {
         this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
       }
     }
+
+    this.updateThrusterGlow(delta);
 
     const dockDepth = Math.max(12, camera.position.distanceTo(this.flyEndPos) * 0.52);
     if (this.shouldDockPanels && this.dockingPanels) {
@@ -1375,6 +1702,22 @@ export class HologramDroneDisplay {
 
   dispose(): void {
     this.disposed = true;
+    const cleanupAudio = (audio: THREE.PositionalAudio | null) => {
+      if (!audio) return;
+      if (audio.isPlaying) audio.stop();
+      this.droneGroup.remove(audio);
+      audio.disconnect();
+    };
+    cleanupAudio(this.activationAudio);
+    cleanupAudio(this.transmissionAudio);
+    cleanupAudio(this.movementAudio);
+    this.activationAudio = null;
+    this.transmissionAudio = null;
+    this.movementAudio = null;
+    if (this.scanCueListener && this.attachedAudioCamera) {
+      this.attachedAudioCamera.remove(this.scanCueListener);
+      this.attachedAudioCamera = null;
+    }
     this.clearPanels();
     this.ensureLaserRigCount(0);
     this.scene.remove(this.rootGroup);

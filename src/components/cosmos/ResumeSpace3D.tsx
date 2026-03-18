@@ -54,6 +54,7 @@ import {
 } from "../ui/onScreenMessaging";
 import {
   HologramDroneDisplay,
+  type DroneAudioBuffers,
   type DroneVisualVariant,
 } from "./HologramDroneDisplay";
 // CockpitHologramPanels kept for potential future use
@@ -162,6 +163,17 @@ const PROJECT_SHOWCASE_NAV_STOP_BACK_OFFSET = 15;
 const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
 const PROJECT_SHOWCASE_MODEL_PATH = "/models/projects-scene/spaceship_corridor.glb";
 const PROJECT_SHOWCASE_TEXTURE_BASE_PATH = "/models/projects-scene/textures";
+const OBLIVION_DRONE_MODEL_PATH = "/models/oblivion-drone/oblivion_drone.glb";
+const OBLIVION_DRONE_AUDIO_PATHS = {
+  activation: "/models/oblivion-drone/199938__drzhnn__01-activation.wav",
+  transmission: "/models/oblivion-drone/199939__drzhnn__08-data-transmission.wav",
+  movement: [
+    "/models/oblivion-drone/199941__drzhnn__06-blip.wav",
+    "/models/oblivion-drone/199942__drzhnn__05-klaxon.wav",
+    "/models/oblivion-drone/199940__drzhnn__07-confirmation.wav",
+    "/models/oblivion-drone/199935__drzhnn__04-blip.wav",
+  ],
+} as const;
 const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
@@ -990,6 +1002,7 @@ export default function ResumeSpace3D({
   const [orbitPhase, setOrbitPhase] = useState<OrbitPhase>("idle");
   const [droneSummonNonce, setDroneSummonNonce] = useState(0);
   const [droneInspectMode, setDroneInspectMode] = useState(false);
+  const [droneSoundEnabled, setDroneSoundEnabled] = useState(true);
 
   // Keep orbitActiveRef in sync for pointer handlers
   useEffect(() => {
@@ -1052,9 +1065,36 @@ export default function ResumeSpace3D({
   const [navTelemetryPulse, setNavTelemetryPulse] = useState(0);
 
   useEffect(() => {
+    hologramDroneRef.current?.setSoundEnabled(droneSoundEnabled);
+  }, [droneSoundEnabled]);
+
+  useEffect(() => {
+    if (!oblivionDroneAudioBuffersRef.current) return;
+    hologramDroneRef.current?.setDroneAudioBuffers(
+      oblivionDroneAudioBuffersRef.current,
+    );
+  }, [criticalAssetsReady]);
+
+  useEffect(() => {
+    if (!sceneReady) return;
+    const unlockAudio = () => {
+      void hologramDroneRef.current?.resumeAudioContext();
+    };
+    window.addEventListener("pointerdown", unlockAudio, { passive: true });
+    window.addEventListener("keydown", unlockAudio);
+    window.addEventListener("touchstart", unlockAudio, { passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+    };
+  }, [sceneReady]);
+
+  useEffect(() => {
     let cancelled = false;
     const gltfPreloader = new GLTFLoader();
     const texturePreloader = new THREE.TextureLoader();
+    const audioPreloader = new THREE.AudioLoader();
 
     const loadTextureSafe = async (url: string) => {
       try {
@@ -1066,13 +1106,27 @@ export default function ResumeSpace3D({
       }
     };
 
+    const loadAudioSafe = async (url: string) => {
+      try {
+        const buffer = await audioPreloader.loadAsync(url);
+        debugLog("drone", `[audio] preloaded ${url}`);
+        return buffer;
+      } catch {
+        debugLog("drone", `[audio] FAILED preload ${url}`);
+        return null;
+      }
+    };
+
     const preloadCriticalAssets = async () => {
       try {
-        const [trenchGltf, , , oblivionDroneGltf] = await Promise.all([
+        const [trenchGltf, , , oblivionDroneGltf, activationBuffer, transmissionBuffer, ...movementBuffers] = await Promise.all([
           gltfPreloader.loadAsync(PROJECT_SHOWCASE_MODEL_PATH),
           gltfPreloader.loadAsync("/models/spaceship/scene.gltf"),
           gltfPreloader.loadAsync("/models/star-destroyer/scene.gltf"),
-          gltfPreloader.loadAsync("/models/oblivion-drone/oblivion_drone.glb"),
+          gltfPreloader.loadAsync(OBLIVION_DRONE_MODEL_PATH),
+          loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.activation),
+          loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.transmission),
+          ...OBLIVION_DRONE_AUDIO_PATHS.movement.map((url) => loadAudioSafe(url)),
         ]);
 
         const trenchTextureKeys = new Set<string>();
@@ -1117,6 +1171,20 @@ export default function ResumeSpace3D({
         if (!cancelled) {
           projectShowcasePreloadedGltfRef.current = trenchGltf as { scene: THREE.Group };
           oblivionDronePreloadedRef.current = (oblivionDroneGltf as { scene: THREE.Object3D }).scene;
+          oblivionDroneAudioBuffersRef.current = {
+            activation: activationBuffer,
+            transmission: transmissionBuffer,
+            movement: movementBuffers.filter(
+              (buf): buf is AudioBuffer => !!buf,
+            ),
+          };
+          hologramDroneRef.current?.setDroneAudioBuffers(
+            oblivionDroneAudioBuffersRef.current,
+          );
+          debugLog(
+            "drone",
+            `[audio] buffers ready activation=${!!activationBuffer} transmission=${!!transmissionBuffer} movement=${oblivionDroneAudioBuffersRef.current.movement?.length ?? 0}`,
+          );
         }
       } finally {
         if (!cancelled) setCriticalAssetsReady(true);
@@ -1194,6 +1262,7 @@ export default function ResumeSpace3D({
   const projectShowcasePanelsRef = useRef<ShowcasePanelRecord[]>([]);
   const projectShowcasePreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
   const oblivionDronePreloadedRef = useRef<THREE.Object3D | null>(null);
+  const oblivionDroneAudioBuffersRef = useRef<DroneAudioBuffers | null>(null);
   const projectShowcaseTrackRef = useRef<{
     axis: "x" | "z";
     minRun: number;
@@ -9015,6 +9084,18 @@ export default function ResumeSpace3D({
     hologramDroneRef.current = new HologramDroneDisplay(scene, {
       droneVariant: MOON_VISIT_DRONE_VARIANT,
       oblivionDroneTemplate: oblivionDronePreloadedRef.current,
+      droneAudioBuffers: oblivionDroneAudioBuffersRef.current ?? undefined,
+      soundEnabled: droneSoundEnabled,
+      onAudioDebug: (msg) => {
+        debugLog("drone", `[audio] ${msg}`);
+        if (
+          /buffers ready|failed|skipped|deferred|resumeAudioContext|setSoundEnabled/i.test(
+            msg,
+          )
+        ) {
+          shipLog(`[audio] ${msg}`, "info");
+        }
+      },
     });
 
     // --- OBJECTS ---
@@ -15447,6 +15528,24 @@ export default function ResumeSpace3D({
                   }
                 />
                 Space Background
+              </label>
+              <label
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  cursor: "pointer",
+                }}
+                title="Toggle Oblivion drone sound effects."
+              >
+                <input
+                  type="checkbox"
+                  checked={droneSoundEnabled}
+                  onChange={(event) =>
+                    setDroneSoundEnabled(event.currentTarget.checked)
+                  }
+                />
+                Drone Sounds
               </label>
               <span
                 title="Helps reduce motion discomfort by hiding moving/parallax star imagery and using a plain black background."
