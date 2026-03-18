@@ -419,8 +419,10 @@ export const useMoonOrbit = (
 
         throttledLog("orbiting", `drift=[${driftX.toFixed(1)},${driftZ.toFixed(1)},${driftY.toFixed(1)}] ramp=${driftRamp.toFixed(2)} ship=[${shipObj.position.x.toFixed(0)},${shipObj.position.y.toFixed(0)},${shipObj.position.z.toFixed(0)}]`);
 
+        // Keep camera anchored to the hover station while the ship drifts,
+        // so moon visits retain ship motion without introducing camera bob.
         const camInstr = computeHoverCamera(
-          shipObj.position, moonCenterRef.current, outward, moonR, driftTime, throttledLog,
+          hoverPosRef.current, moonCenterRef.current, outward, moonR, driftTime, throttledLog,
         );
         camInstr.userCameraFree = true;
         return camInstr;
