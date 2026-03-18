@@ -165,6 +165,7 @@ export class HologramDroneDisplay {
   private lastTransmissionCueTime = 0;
   private activationPlayedThisRun = false;
   private lastActivationAttemptTime = 0;
+  private activationRetryUntilTime = 0;
 
   private dockingPanels = false;
   private panelsDocked = false;
@@ -266,6 +267,25 @@ export class HologramDroneDisplay {
 
   private audioDebug(message: string): void {
     this.onAudioDebug?.(message);
+  }
+
+  private isAudioPlaybackAllowed(): boolean {
+    return this.active && this.rootGroup.visible && this.droneGroup.visible;
+  }
+
+  private stopAllDroneAudio(): void {
+    if (this.activationAudio?.isPlaying) this.activationAudio.stop();
+    if (this.transmissionAudio?.isPlaying) this.transmissionAudio.stop();
+    if (this.movementAudio?.isPlaying) this.movementAudio.stop();
+  }
+
+  private tryPlayActivationWithRetry(): void {
+    if (this.activationPlayedThisRun) return;
+    const now = performance.now();
+    if (now > this.activationRetryUntilTime) return;
+    if (now - this.lastActivationAttemptTime <= 280) return;
+    this.lastActivationAttemptTime = now;
+    this.activationPlayedThisRun = this.playActivationSound();
   }
 
   private buildDroneForVariant(): THREE.Group {
@@ -551,6 +571,10 @@ export class HologramDroneDisplay {
   }
 
   private playActivationSound(): boolean {
+    if (!this.isAudioPlaybackAllowed()) {
+      this.audioDebug("playActivationSound skipped: drone not in audible visible state");
+      return false;
+    }
     if (!this.soundEnabled || !this.activationAudio) {
       this.audioDebug(
         `playActivationSound skipped soundEnabled=${this.soundEnabled} hasAudio=${!!this.activationAudio}`,
@@ -585,6 +609,10 @@ export class HologramDroneDisplay {
   }
 
   private playTransmissionSound(): void {
+    if (!this.isAudioPlaybackAllowed()) {
+      this.audioDebug("playTransmissionSound skipped: drone not in audible visible state");
+      return;
+    }
     if (!this.soundEnabled || !this.transmissionAudio) return;
     const buffer = this.droneAudioBuffers?.transmission;
     if (!buffer) {
@@ -609,6 +637,10 @@ export class HologramDroneDisplay {
   }
 
   private playMovementSound(): void {
+    if (!this.isAudioPlaybackAllowed()) {
+      this.audioDebug("playMovementSound skipped: drone not in audible visible state");
+      return;
+    }
     if (!this.soundEnabled || !this.movementAudio) return;
     const pool = this.droneAudioBuffers?.movement ?? [];
     if (pool.length === 0) {
@@ -963,6 +995,7 @@ export class HologramDroneDisplay {
     this.droneExitingAfterDraw = false;
     this.droneExitProgress = 0;
     this.activationPlayedThisRun = false;
+    this.activationRetryUntilTime = performance.now() + 8000;
     this.dockingPanels = false;
     this.panelsDocked = false;
     this.panelDockProgress = 0;
@@ -1011,6 +1044,7 @@ export class HologramDroneDisplay {
     this.droneExitingAfterDraw = false;
     this.droneExitProgress = 0;
     this.activationPlayedThisRun = false;
+    this.activationRetryUntilTime = performance.now() + 8000;
     this.dockingPanels = false;
     this.panelsDocked = false;
     this.panelDockProgress = 0;
@@ -1035,6 +1069,7 @@ export class HologramDroneDisplay {
     if (!this.active) return;
     this.hiding = true;
     this.hideProgress = 0;
+    this.stopAllDroneAudio();
   }
 
   hideContentImmediate(): void {
@@ -1056,9 +1091,7 @@ export class HologramDroneDisplay {
     this.panelGroup.visible = false;
     this.droneGroup.visible = false;
     this.scannerLight.intensity = 0;
-    if (this.activationAudio?.isPlaying) this.activationAudio.stop();
-    if (this.transmissionAudio?.isPlaying) this.transmissionAudio.stop();
-    if (this.movementAudio?.isPlaying) this.movementAudio.stop();
+    this.stopAllDroneAudio();
     for (const rig of this.laserRigs) {
       this.setLaserRigOpacity(rig, 0);
     }
@@ -1066,6 +1099,7 @@ export class HologramDroneDisplay {
     this.previousDroneQuat = null;
     this.smoothedTurnSpeed = 0;
     this.activationPlayedThisRun = false;
+    this.activationRetryUntilTime = 0;
   }
 
   getInteractivePanelMeshes(): THREE.Object3D[] {
@@ -1082,6 +1116,7 @@ export class HologramDroneDisplay {
   update(delta: number, camera: THREE.Camera): void {
     if (!this.active) return;
     this.ensureDroneAudio(camera);
+    if (!this.droneGroup.visible) this.stopAllDroneAudio();
 
     if (this.hiding) {
       this.hideProgress += delta / 0.6;
@@ -1089,6 +1124,7 @@ export class HologramDroneDisplay {
       for (const panel of this.panels) panel.material.opacity = panel.targetOpacity * s;
       this.droneGroup.scale.setScalar(s);
       this.scannerLight.intensity = 2 * s;
+      this.stopAllDroneAudio();
       this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0.7 * s));
       if (this.hideProgress >= 1) {
         this.active = false;
@@ -1107,15 +1143,11 @@ export class HologramDroneDisplay {
       for (const panel of this.panels) panel.material.opacity = 0;
       this.scannerLight.intensity = 0;
       this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
-      if (this.flyInProgress >= 1 && !this.activationPlayedThisRun) {
-        const now = performance.now();
-        if (now - this.lastActivationAttemptTime > 280) {
-          this.lastActivationAttemptTime = now;
-          this.activationPlayedThisRun = this.playActivationSound();
-        }
-      }
+      if (this.flyInProgress >= 1) this.tryPlayActivationWithRetry();
       return;
     }
+
+    this.tryPlayActivationWithRetry();
 
     this.idleTime += delta;
     this.drawSequenceElapsed += delta;
