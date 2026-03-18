@@ -108,6 +108,7 @@ export class HologramDroneDisplay {
   private drawFinished = false;
   private drawSequenceElapsed = 0;
   private drawEnabled = false;
+  private inspectionMode = false;
   private waitingPostDrawHold = false;
   private postDrawHoldElapsed = 0;
   private droneExitingAfterDraw = false;
@@ -337,8 +338,13 @@ export class HologramDroneDisplay {
         ? maybeMesh.material
         : [maybeMesh.material];
       mats.forEach((mat) => {
-        mat.depthTest = false;
-        mat.depthWrite = false;
+        mat.depthTest = true;
+        mat.depthWrite = true;
+        if (this.droneVariant === "oblivion") {
+          mat.transparent = false;
+          mat.opacity = 1;
+          mat.alphaTest = 0;
+        }
       });
     });
   }
@@ -513,39 +519,11 @@ export class HologramDroneDisplay {
     glowMat.opacity = Math.max(0, glowMat.opacity - delta * 1.5);
   }
 
-  showContent(
-    content: OverlayContent,
+  private prepareDronePlacement(
     moonWorldPos: THREE.Vector3,
     camera: THREE.Camera,
     orbitAnchor?: THREE.Vector3,
-  ): void {
-    this.clearPanels();
-    this.active = true;
-    this.hiding = false;
-    this.hideProgress = 0;
-    this.flyInProgress = 0;
-    this.contentStartTime = 0;
-    this.drawSequenceElapsed = 0;
-    this.drawEnabled = false;
-    this.idleTime = 0;
-    this.drawFinished = false;
-    this.waitingPostDrawHold = false;
-    this.postDrawHoldElapsed = 0;
-    this.droneExitingAfterDraw = false;
-    this.droneExitProgress = 0;
-    this.dockingPanels = false;
-    this.panelsDocked = false;
-    this.panelDockProgress = 0;
-    this.activePanelIndex = null;
-    this.shouldDockPanels = content.enableDroneCardDock === true;
-
-    this.rootGroup.visible = true;
-    this.panelGroup.visible = true;
-    this.droneGroup.visible = true;
-    this.droneGroup.position.set(0, 0, 0);
-    this.droneGroup.rotation.set(0, 0, 0);
-    this.droneGroup.scale.setScalar(0);
-
+  ): number {
     this.targetWorldPos.copy(moonWorldPos);
     this.isOrbitMode = !!orbitAnchor;
 
@@ -579,13 +557,88 @@ export class HologramDroneDisplay {
         .add(new THREE.Vector3(0, 5 * distScale, 0));
     }
     this.flyEndPos.copy(endPos);
-
     this.flyStartPos.copy(camera.position).addScaledVector(forward, 15).add(new THREE.Vector3(0, 8, 0));
+    return distScale;
+  }
+
+  showContent(
+    content: OverlayContent,
+    moonWorldPos: THREE.Vector3,
+    camera: THREE.Camera,
+    orbitAnchor?: THREE.Vector3,
+  ): void {
+    this.clearPanels();
+    this.active = true;
+    this.hiding = false;
+    this.hideProgress = 0;
+    this.flyInProgress = 0;
+    this.contentStartTime = 0;
+    this.drawSequenceElapsed = 0;
+    this.drawEnabled = false;
+    this.inspectionMode = false;
+    this.idleTime = 0;
+    this.drawFinished = false;
+    this.waitingPostDrawHold = false;
+    this.postDrawHoldElapsed = 0;
+    this.droneExitingAfterDraw = false;
+    this.droneExitProgress = 0;
+    this.dockingPanels = false;
+    this.panelsDocked = false;
+    this.panelDockProgress = 0;
+    this.activePanelIndex = null;
+    this.shouldDockPanels = content.enableDroneCardDock === true;
+
+    this.rootGroup.visible = true;
+    this.panelGroup.visible = true;
+    this.droneGroup.visible = true;
+    this.droneGroup.position.set(0, 0, 0);
+    this.droneGroup.rotation.set(0, 0, 0);
+    this.droneGroup.scale.setScalar(0);
+
+    const distScale = this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
 
     this.buildTextPanels(content, camera, distScale);
     this.ensureLaserRigCount(this.panels.length);
     this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
 
+    this.rootGroup.position.copy(this.flyStartPos);
+  }
+
+  showInspectMode(
+    moonWorldPos: THREE.Vector3,
+    camera: THREE.Camera,
+    orbitAnchor?: THREE.Vector3,
+  ): void {
+    this.clearPanels();
+    this.ensureLaserRigCount(0);
+    this.active = true;
+    this.inspectionMode = true;
+    this.hiding = false;
+    this.hideProgress = 0;
+    this.flyInProgress = 0;
+    this.contentStartTime = 0;
+    this.drawSequenceElapsed = 0;
+    this.drawEnabled = false;
+    this.idleTime = 0;
+    this.drawFinished = false;
+    this.waitingPostDrawHold = false;
+    this.postDrawHoldElapsed = 0;
+    this.droneExitingAfterDraw = false;
+    this.droneExitProgress = 0;
+    this.dockingPanels = false;
+    this.panelsDocked = false;
+    this.panelDockProgress = 0;
+    this.activePanelIndex = null;
+    this.shouldDockPanels = false;
+
+    this.rootGroup.visible = true;
+    this.panelGroup.visible = false;
+    this.droneGroup.visible = true;
+    this.droneGroup.position.set(0, 0, 0);
+    this.droneGroup.rotation.set(0, 0, 0);
+    this.droneGroup.scale.setScalar(0);
+
+    this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
     this.rootGroup.position.copy(this.flyStartPos);
   }
 
@@ -604,6 +657,7 @@ export class HologramDroneDisplay {
     this.droneExitProgress = 0;
     this.waitingPostDrawHold = false;
     this.postDrawHoldElapsed = 0;
+    this.inspectionMode = false;
     this.dockingPanels = false;
     this.panelsDocked = false;
     this.panelDockProgress = 0;
@@ -689,6 +743,11 @@ export class HologramDroneDisplay {
     if (Math.abs(inquisitiveYaw) > 0.0001) {
       this._tmpQ.setFromAxisAngle(new THREE.Vector3(0, 1, 0), inquisitiveYaw);
       this.droneGroup.quaternion.multiply(this._tmpQ);
+    }
+
+    if (this.inspectionMode) {
+      this.scannerLight.intensity = 0.9 + Math.sin(this.idleTime * 2.6) * 0.2;
+      return;
     }
 
     if (!this.dockingPanels && !this.panelsDocked) {
@@ -1045,7 +1104,8 @@ export class HologramDroneDisplay {
       mesh.userData.hologramPanelIndex = i;
       mesh.renderOrder = 1000 + i;
       const material = mesh.material as THREE.MeshBasicMaterial;
-      const forwardPush = droneToCamera.clone().multiplyScalar(3 * distScale);
+      // Keep panels behind the drone so the drone remains visually in front.
+      const forwardPush = droneToCamera.clone().multiplyScalar(-2.6 * distScale);
       const drawOffset = new THREE.Vector3();
       if (this.isOrbitMode) {
         const xCenter = xAccum + panelWorldWidth / 2;

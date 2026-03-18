@@ -989,6 +989,7 @@ export default function ResumeSpace3D({
   // Track orbit phase as React state for UI (Leave Orbit button, etc.)
   const [orbitPhase, setOrbitPhase] = useState<OrbitPhase>("idle");
   const [droneSummonNonce, setDroneSummonNonce] = useState(0);
+  const [droneInspectMode, setDroneInspectMode] = useState(false);
 
   // Keep orbitActiveRef in sync for pointer handlers
   useEffect(() => {
@@ -1002,7 +1003,7 @@ export default function ResumeSpace3D({
       debugLog("drone", "useEffect: no drone ref");
       return;
     }
-    const shouldShowDrone = !!overlayContent && orbitPhase === "orbiting";
+    const shouldShowDrone = orbitPhase === "orbiting" && (!!overlayContent || droneInspectMode);
     if (shouldShowDrone) {
       const moon = focusedMoonRef.current;
       const cam = sceneRef.current.camera;
@@ -1014,8 +1015,13 @@ export default function ResumeSpace3D({
         const anchor = (orbitPhase === "orbiting" && ship)
           ? ship.position.clone()
           : undefined;
-        debugLog("drone", `showContent called — orbitPhase=${orbitPhase}, anchor=${anchor ? `[${anchor.x.toFixed(0)},${anchor.y.toFixed(0)},${anchor.z.toFixed(0)}]` : "none"}, moonPos=[${moonWorldPos.x.toFixed(0)},${moonWorldPos.y.toFixed(0)},${moonWorldPos.z.toFixed(0)}]`);
-        drone.showContent(overlayContent, moonWorldPos, cam, anchor);
+        if (droneInspectMode) {
+          debugLog("drone", `showInspectMode called — orbitPhase=${orbitPhase}, anchor=${anchor ? `[${anchor.x.toFixed(0)},${anchor.y.toFixed(0)},${anchor.z.toFixed(0)}]` : "none"}, moonPos=[${moonWorldPos.x.toFixed(0)},${moonWorldPos.y.toFixed(0)},${moonWorldPos.z.toFixed(0)}]`);
+          drone.showInspectMode(moonWorldPos, cam, anchor);
+        } else if (overlayContent) {
+          debugLog("drone", `showContent called — orbitPhase=${orbitPhase}, anchor=${anchor ? `[${anchor.x.toFixed(0)},${anchor.y.toFixed(0)},${anchor.z.toFixed(0)}]` : "none"}, moonPos=[${moonWorldPos.x.toFixed(0)},${moonWorldPos.y.toFixed(0)},${moonWorldPos.z.toFixed(0)}]`);
+          drone.showContent(overlayContent, moonWorldPos, cam, anchor);
+        }
       } else {
         debugLog("drone", `useEffect: missing moon=${!!moon} cam=${!!cam}`);
       }
@@ -1023,8 +1029,9 @@ export default function ResumeSpace3D({
       // On orbit exit / destination switch, remove drone + panels immediately
       // to avoid any visible trailing frame during departure.
       drone.hideContentImmediate();
+      if (droneInspectMode) setDroneInspectMode(false);
     }
-  }, [overlayContent, orbitPhase, droneSummonNonce]);
+  }, [overlayContent, orbitPhase, droneSummonNonce, droneInspectMode]);
 
   const [shipMovementDebug, setShipMovementDebug] = useState(false);
   const [systemStatusLogs, setSystemStatusLogs] = useState<string[]>([]);
@@ -4560,8 +4567,23 @@ export default function ResumeSpace3D({
             shipLog("No moon visit content loaded yet for drone summon", "error");
             return;
           }
+          setDroneInspectMode(false);
           setDroneSummonNonce((prev) => prev + 1);
           shipLog("Moon drone summoned", "orbit");
+        },
+      },
+      {
+        id: "summon-moon-drone-inspect",
+        label: "inspectMoonDrone()",
+        hint: "Summon drone and keep it on screen",
+        onRun: () => {
+          if (orbitPhase !== "orbiting" || !focusedMoonRef.current) {
+            shipLog("inspectMoonDrone() only works during moon visits", "error");
+            return;
+          }
+          setDroneInspectMode(true);
+          setDroneSummonNonce((prev) => prev + 1);
+          shipLog("Moon drone inspect mode active", "orbit");
         },
       },
     ];
