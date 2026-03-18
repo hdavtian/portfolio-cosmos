@@ -1354,6 +1354,10 @@ export class HologramDroneDisplay {
       if (this.panelDockProgress >= 1) {
         this.dockingPanels = false;
         this.panelsDocked = true;
+        // Auto-focus the first docked card so it behaves like an initial click.
+        if (this.activePanelIndex === null && this.panels.length > 0) {
+          this.activePanelIndex = 0;
+        }
       }
     } else if (this.shouldDockPanels && this.panelsDocked) {
       for (let i = 0; i < this.panels.length; i += 1) {

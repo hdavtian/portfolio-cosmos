@@ -1003,6 +1003,8 @@ export default function ResumeSpace3D({
   const [droneSummonNonce, setDroneSummonNonce] = useState(0);
   const [droneInspectMode, setDroneInspectMode] = useState(false);
   const [droneSoundEnabled, setDroneSoundEnabled] = useState(true);
+  const [showSoundSettingsModal, setShowSoundSettingsModal] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"sound">("sound");
 
   // Keep orbitActiveRef in sync for pointer handlers
   useEffect(() => {
@@ -14848,15 +14850,15 @@ export default function ResumeSpace3D({
                 transform: "translateX(-50%)",
                 zIndex: 10002,
                 display: "flex",
-                flexDirection: "column",
-                gap: 10,
-                minWidth: viewerMemoriesEnabled ? 470 : 0,
-                borderRadius: 12,
+                alignItems: "center",
+                gap: 8,
+                minWidth: viewerMemoriesEnabled ? 420 : 0,
+                borderRadius: 10,
                 border: "1px solid rgba(136, 210, 255, 0.52)",
                 background: "rgba(8, 20, 34, 0.9)",
                 color: "rgba(214, 242, 255, 0.98)",
                 boxShadow: "0 0 16px rgba(76, 162, 255, 0.24)",
-                padding: viewerMemoriesEnabled ? "10px 14px 12px" : "9px 14px",
+                padding: viewerMemoriesEnabled ? "7px 10px" : "6px 10px",
                 fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
                 userSelect: "none",
               }}
@@ -14865,11 +14867,12 @@ export default function ResumeSpace3D({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 10,
-                  fontSize: 13,
+                  gap: 7,
+                  fontSize: 11,
                   fontWeight: 700,
-                  letterSpacing: 0.55,
+                  letterSpacing: 0.4,
                   cursor: "pointer",
+                  whiteSpace: "nowrap",
                 }}
               >
                 <input
@@ -14877,8 +14880,8 @@ export default function ResumeSpace3D({
                   checked={viewerMemoriesEnabled}
                   onChange={(e) => setViewerMemoriesEnabled(e.target.checked)}
                   style={{
-                    width: 17,
-                    height: 17,
+                    width: 14,
+                    height: 14,
                     cursor: "pointer",
                     accentColor: "#7fd8ff",
                   }}
@@ -14886,112 +14889,55 @@ export default function ResumeSpace3D({
                 Show my memories
               </label>
               {viewerMemoriesEnabled && (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 6,
-                    borderRadius: 9,
-                    border: "1px solid rgba(112, 194, 255, 0.28)",
-                    background: "rgba(6, 14, 26, 0.7)",
-                    padding: "7px 8px 8px",
-                    minWidth: 360,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {(() => {
-                      const iconBtnStyle: React.CSSProperties = {
-                        width: 34,
-                        height: 26,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderRadius: 7,
-                        border: "1px solid rgba(143, 212, 255, 0.45)",
-                        background: "rgba(10, 22, 37, 0.86)",
-                        color: "rgba(226, 245, 255, 0.95)",
-                        cursor: activeMoonMemoryCount > 0 ? "pointer" : "not-allowed",
-                        opacity: activeMoonMemoryCount > 0 ? 1 : 0.45,
-                        fontSize: 13,
-                        fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
-                        fontWeight: 700,
-                        lineHeight: 1,
-                      };
-                      return (
-                        <button
-                          type="button"
-                          title={memoryPlaybackEngaged ? "Pause" : "Play"}
-                          aria-label={memoryPlaybackEngaged ? "Pause" : "Play"}
-                          onClick={toggleMoonMemoryPlayback}
-                          disabled={activeMoonMemoryCount <= 0}
-                          style={{
-                            ...iconBtnStyle,
-                            background: memoryPlaybackEngaged
-                              ? "rgba(20, 44, 70, 0.9)"
-                              : iconBtnStyle.background,
-                          }}
-                        >
-                          {memoryPlaybackEngaged ? (
-                            <span
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 3,
-                              }}
-                            >
-                              <span
-                                style={{
-                                  width: 3,
-                                  height: 10,
-                                  borderRadius: 1,
-                                  background: "rgba(226, 245, 255, 0.95)",
-                                }}
-                              />
-                              <span
-                                style={{
-                                  width: 3,
-                                  height: 10,
-                                  borderRadius: 1,
-                                  background: "rgba(226, 245, 255, 0.95)",
-                                }}
-                              />
-                            </span>
-                          ) : (
-                            <span
-                              style={{
-                                width: 0,
-                                height: 0,
-                                borderTop: "6px solid transparent",
-                                borderBottom: "6px solid transparent",
-                                borderLeft: "9px solid rgba(226, 245, 255, 0.95)",
-                                marginLeft: 2,
-                              }}
-                            />
-                          )}
-                        </button>
-                      );
-                    })()}
-                    <input
-                      type="range"
-                      min={0}
-                      max={memoryScrubMaxValue}
-                      step={0.01}
-                      value={clampedMoonMemoryScrubValue}
-                      disabled={activeMoonMemoryCount <= 0}
-                      onChange={(e) => {
-                        queueMoonMemoryScrub(Number(e.target.value));
-                      }}
-                      style={{
-                        flex: 1,
-                        minWidth: 170,
-                        marginLeft: 4,
-                        accentColor: "#7fd8ff",
-                        opacity: activeMoonMemoryCount > 0 ? 1 : 0.35,
-                        cursor: activeMoonMemoryCount > 0 ? "ew-resize" : "not-allowed",
-                      }}
-                    />
-                  </div>
-                </div>
+                <>
+                  <button
+                    type="button"
+                    title={memoryPlaybackEngaged ? "Pause" : "Play"}
+                    aria-label={memoryPlaybackEngaged ? "Pause" : "Play"}
+                    onClick={toggleMoonMemoryPlayback}
+                    disabled={activeMoonMemoryCount <= 0}
+                    style={{
+                      width: 26,
+                      height: 20,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 5,
+                      border: "1px solid rgba(143, 212, 255, 0.45)",
+                      background: memoryPlaybackEngaged
+                        ? "rgba(20, 44, 70, 0.9)"
+                        : "rgba(10, 22, 37, 0.86)",
+                      color: "rgba(226, 245, 255, 0.95)",
+                      cursor: activeMoonMemoryCount > 0 ? "pointer" : "not-allowed",
+                      opacity: activeMoonMemoryCount > 0 ? 1 : 0.45,
+                      fontSize: 12,
+                      fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      padding: 0,
+                    }}
+                  >
+                    {memoryPlaybackEngaged ? "||" : ">"}
+                  </button>
+                  <input
+                    type="range"
+                    min={0}
+                    max={memoryScrubMaxValue}
+                    step={0.01}
+                    value={clampedMoonMemoryScrubValue}
+                    disabled={activeMoonMemoryCount <= 0}
+                    onChange={(e) => {
+                      queueMoonMemoryScrub(Number(e.target.value));
+                    }}
+                    style={{
+                      width: 220,
+                      minWidth: 160,
+                      accentColor: "#7fd8ff",
+                      opacity: activeMoonMemoryCount > 0 ? 1 : 0.35,
+                      cursor: activeMoonMemoryCount > 0 ? "ew-resize" : "not-allowed",
+                    }}
+                  />
+                </>
               )}
             </div>
           )}
@@ -15494,10 +15440,42 @@ export default function ResumeSpace3D({
           )}
 
           {sceneReady && (
-            <div
+            <button
+              type="button"
+              title="General settings"
+              onClick={() => {
+                setSettingsTab("sound");
+                setShowSoundSettingsModal(true);
+              }}
               style={{
                 position: "fixed",
                 left: 16,
+                bottom: 14,
+                zIndex: 1111,
+                width: 24,
+                height: 24,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "50%",
+                border: "none",
+                background: "transparent",
+                color: "#d8ecff",
+                cursor: "pointer",
+                fontSize: 17,
+                lineHeight: 1,
+                padding: 0,
+              }}
+            >
+              ⚙
+            </button>
+          )}
+
+          {sceneReady && (
+            <div
+              style={{
+                position: "fixed",
+                left: 48,
                 bottom: 14,
                 zIndex: 1110,
                 display: "flex",
@@ -15529,24 +15507,6 @@ export default function ResumeSpace3D({
                 />
                 Space Background
               </label>
-              <label
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  cursor: "pointer",
-                }}
-                title="Toggle Oblivion drone sound effects."
-              >
-                <input
-                  type="checkbox"
-                  checked={droneSoundEnabled}
-                  onChange={(event) =>
-                    setDroneSoundEnabled(event.currentTarget.checked)
-                  }
-                />
-                Drone Sounds
-              </label>
               <span
                 title="Helps reduce motion discomfort by hiding moving/parallax star imagery and using a plain black background."
                 style={{
@@ -15566,6 +15526,112 @@ export default function ResumeSpace3D({
               >
                 ?
               </span>
+            </div>
+          )}
+
+          {sceneReady && showSoundSettingsModal && (
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 1125,
+                background: "rgba(3, 8, 14, 0.52)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "'Rajdhani', sans-serif",
+              }}
+            >
+              <div
+                style={{
+                  width: 320,
+                  borderRadius: 12,
+                  border: "1px solid rgba(110, 210, 255, 0.42)",
+                  background: "rgba(6, 14, 26, 0.94)",
+                  color: "#d8eeff",
+                  padding: "12px 14px",
+                  boxShadow: "0 0 18px rgba(56, 160, 255, 0.24)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 10,
+                  }}
+                >
+                  <span style={{ fontSize: 14, letterSpacing: 0.6, fontWeight: 700 }}>
+                    General Settings
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowSoundSettingsModal(false)}
+                    style={{
+                      border: "1px solid rgba(148, 210, 255, 0.46)",
+                      background: "rgba(10, 22, 37, 0.86)",
+                      color: "#d8eeff",
+                      borderRadius: 6,
+                      padding: "2px 8px",
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    marginBottom: 10,
+                    borderBottom: "1px solid rgba(110, 210, 255, 0.24)",
+                    paddingBottom: 8,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSettingsTab("sound")}
+                    style={{
+                      borderRadius: 6,
+                      border: "1px solid rgba(148, 210, 255, 0.42)",
+                      background:
+                        settingsTab === "sound"
+                          ? "rgba(22, 56, 88, 0.92)"
+                          : "rgba(10, 22, 37, 0.82)",
+                      color: "#d8eeff",
+                      padding: "3px 9px",
+                      fontSize: 12,
+                      letterSpacing: 0.35,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Sound
+                  </button>
+                </div>
+                {settingsTab === "sound" && (
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={droneSoundEnabled}
+                      onChange={(event) =>
+                        setDroneSoundEnabled(event.currentTarget.checked)
+                      }
+                    />
+                    Drone Sounds
+                  </label>
+                )}
+              </div>
             </div>
           )}
 
