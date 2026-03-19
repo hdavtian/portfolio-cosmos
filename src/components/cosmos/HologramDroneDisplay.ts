@@ -61,6 +61,7 @@ type HologramDroneDisplayOptions = {
   oblivionDroneTemplate?: THREE.Object3D | null;
   droneAudioBuffers?: DroneAudioBuffers;
   soundEnabled?: boolean;
+  soundVolume?: number;
   onAudioDebug?: (message: string) => void;
 };
 
@@ -159,6 +160,7 @@ export class HologramDroneDisplay {
   private movementAudio: THREE.PositionalAudio | null = null;
   private droneAudioBuffers: DroneAudioBuffers | null = null;
   private soundEnabled = true;
+  private droneSoundVolume = 1;
   private onAudioDebug?: (message: string) => void;
   private attachedAudioCamera: THREE.Camera | null = null;
   private lastMovementCueTime = 0;
@@ -191,6 +193,7 @@ export class HologramDroneDisplay {
     this.oblivionDroneTemplate = options?.oblivionDroneTemplate ?? null;
     this.droneAudioBuffers = options?.droneAudioBuffers ?? null;
     this.soundEnabled = options?.soundEnabled ?? true;
+    this.droneSoundVolume = THREE.MathUtils.clamp(options?.soundVolume ?? 1, 0, 1);
     this.onAudioDebug = options?.onAudioDebug;
     this.rootGroup = new THREE.Group();
     this.rootGroup.name = "HologramDroneRoot";
@@ -239,6 +242,14 @@ export class HologramDroneDisplay {
       this.transmissionAudio?.stop();
       this.movementAudio?.stop();
     }
+  }
+
+  setSoundVolume(volume: number): void {
+    this.droneSoundVolume = THREE.MathUtils.clamp(volume, 0, 1);
+    this.activationAudio?.setVolume(0.45 * this.droneSoundVolume);
+    this.transmissionAudio?.setVolume(0.36 * this.droneSoundVolume);
+    this.movementAudio?.setVolume(0.32 * this.droneSoundVolume);
+    this.audioDebug(`setSoundVolume(${this.droneSoundVolume.toFixed(2)})`);
   }
 
   setDroneAudioBuffers(buffers: DroneAudioBuffers | null): void {
@@ -550,7 +561,7 @@ export class HologramDroneDisplay {
       audio.setRolloffFactor(0.72);
       audio.setDistanceModel("inverse");
       audio.setMaxDistance(360);
-      audio.setVolume(volume);
+      audio.setVolume(volume * this.droneSoundVolume);
       return audio;
     };
     if (!this.activationAudio) {

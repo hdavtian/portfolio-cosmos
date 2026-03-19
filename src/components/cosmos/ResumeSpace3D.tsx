@@ -147,6 +147,7 @@ const ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE = 70;
 const MOON_VISIT_DRONE_VARIANT: DroneVisualVariant = "oblivion";
 // Temporary diagnostic switch: disable drone entry calls to isolate orbit pauses.
 const DISABLE_MOON_DRONE_ENTRY_FOR_TEST = false;
+const SOUND_SLIDER_TICKS_ID = "sound-slider-ticks";
 const ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE = 280;
 const ORBITAL_PORTFOLIO_INSPECT_EXIT_MIN_DISTANCE = 58;
 const ORBITAL_PORTFOLIO_INSPECT_EXIT_MAX_DISTANCE = 320;
@@ -222,6 +223,15 @@ const PROJECT_SHOWCASE_FILTER_OPTIONS = [
 const PROJECT_SHOWCASE_MAX_MEDIA_ITEMS = 12;
 const PROJECT_SHOWCASE_THUMBS_PER_PAGE = 4;
 const DEFAULT_BACKGROUND_MUSIC_TRACK = Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
+const EXPERIENCE_MOON_TEXTURE_BY_JOB_ID: Record<string, string> = {
+  investcloud: "/textures/custom-planet-textures/investcloud.jpg",
+  rpa: "/textures/custom-planet-textures/texture4-rpa.jpg",
+  boingo: "/textures/custom-planet-textures/boingo.jpg",
+  "capital-group": "/textures/custom-planet-textures/capitalgroup.jpg",
+  murad: "/textures/custom-planet-textures/murad.jpg",
+  unitedlayer: "/textures/custom-planet-textures/unitedlayer.jpg",
+  stormscape: "/textures/custom-planet-textures/stormscape.jpg",
+};
 
 type ShowcaseMediaEntry = {
   id: string;
@@ -1007,11 +1017,13 @@ export default function ResumeSpace3D({
   const [droneSummonNonce, setDroneSummonNonce] = useState(0);
   const [droneInspectMode, setDroneInspectMode] = useState(false);
   const [droneSoundEnabled, setDroneSoundEnabled] = useState(true);
+  const [droneSoundVolume, setDroneSoundVolume] = useState(0.35);
   const [musicEnabled, setMusicEnabled] = useState(false);
   const [musicTrack, setMusicTrack] = useState<string>(
     DEFAULT_BACKGROUND_MUSIC_TRACK,
   );
-  const [musicVolume, setMusicVolume] = useState(0.3);
+  const [overallVolume, setOverallVolume] = useState(0.3);
+  const [backgroundMusicVolume, setBackgroundMusicVolume] = useState(1);
   const [showSoundSettingsModal, setShowSoundSettingsModal] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"sound">("sound");
   const availableMusicTracks = useMemo(
@@ -1087,12 +1099,17 @@ export default function ResumeSpace3D({
   }, [droneSoundEnabled]);
 
   useEffect(() => {
+    hologramDroneRef.current?.setSoundVolume(droneSoundVolume);
+  }, [droneSoundVolume]);
+
+  useEffect(() => {
+    const effectiveMusicVolume = overallVolume * backgroundMusicVolume;
     window.dispatchEvent(
       new CustomEvent("cosmicVolumeChange", {
-        detail: { volume: musicVolume },
+        detail: { volume: effectiveMusicVolume },
       }),
     );
-  }, [musicVolume]);
+  }, [overallVolume, backgroundMusicVolume]);
 
   useEffect(() => {
     window.dispatchEvent(
@@ -1329,6 +1346,9 @@ export default function ResumeSpace3D({
                 : resolveShowcaseMediaItems(entry);
             return items.map((item) => loadTextureSafe(item.textureUrl));
           });
+        const moonTextureWarmupJobs = Array.from(
+          new Set(Object.values(EXPERIENCE_MOON_TEXTURE_BY_JOB_ID)),
+        ).map((textureUrl) => loadTextureSafe(textureUrl));
 
         const musicTrackWarmupJobs = Object.values(COSMIC_AUDIO_TRACKS)
           .filter((url) => typeof url === "string" && url.trim().length > 0)
@@ -1365,6 +1385,7 @@ export default function ResumeSpace3D({
         await Promise.all([
           ...trenchTextureJobs,
           ...showcaseImageJobs,
+          ...moonTextureWarmupJobs,
           ...musicTrackWarmupJobs,
         ]);
         if (!cancelled) {
@@ -9271,6 +9292,7 @@ export default function ResumeSpace3D({
       oblivionDroneTemplate: oblivionDronePreloadedRef.current,
       droneAudioBuffers: oblivionDroneAudioBuffersRef.current ?? undefined,
       soundEnabled: droneSoundEnabled,
+      soundVolume: droneSoundVolume,
       onAudioDebug: (msg) => {
         debugLog("drone", `[audio] ${msg}`);
         if (
@@ -9761,15 +9783,7 @@ export default function ResumeSpace3D({
     const experienceStartOffset = Math.PI * 0.15;
 
     experienceJobs.forEach((job, i) => {
-      // Determine texture based on job ID
-      let textureUrl: string | undefined;
-      if (job.id === "investcloud") {
-        textureUrl = "/textures/custom-planet-textures/texture1.jpg";
-      } else if (job.id === "boingo") {
-        textureUrl = "/textures/custom-planet-textures/texture3.jpg";
-      } else if (job.id === "rpa") {
-        textureUrl = "/textures/custom-planet-textures/texture4-rpa.jpg";
-      }
+      const textureUrl = EXPERIENCE_MOON_TEXTURE_BY_JOB_ID[job.id];
 
       // Job moons should be clickable with section index 2+i
       // (section 0 = hero+summary, section 1 = skills, sections 2+ = jobs)
@@ -14119,7 +14133,7 @@ export default function ResumeSpace3D({
       );
       window.dispatchEvent(
         new CustomEvent("cosmicVolumeChange", {
-          detail: { volume: musicVolume },
+          detail: { volume: overallVolume * backgroundMusicVolume },
         }),
       );
       window.dispatchEvent(
@@ -15815,46 +15829,118 @@ export default function ResumeSpace3D({
                   >
                     <label
                       style={{
-                        display: "inline-flex",
+                        display: "flex",
                         alignItems: "center",
+                        justifyContent: "space-between",
                         gap: 8,
-                        cursor: "pointer",
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={droneSoundEnabled}
-                        onChange={(event) =>
-                          setDroneSoundEnabled(event.currentTarget.checked)
-                        }
-                      />
-                      Drone Sounds
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={droneSoundEnabled}
+                          onChange={(event) =>
+                            setDroneSoundEnabled(event.currentTarget.checked)
+                          }
+                        />
+                        Drone Sounds
+                      </span>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          width: 162,
+                        }}
+                      >
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          list={SOUND_SLIDER_TICKS_ID}
+                          value={Math.round(droneSoundVolume * 100)}
+                          onChange={(event) =>
+                            setDroneSoundVolume(
+                              Number(event.currentTarget.value) / 100,
+                            )
+                          }
+                          style={{ flex: 1 }}
+                        />
+                        <span style={{ minWidth: 40, textAlign: "right" }}>
+                          {Math.round(droneSoundVolume * 100)}%
+                        </span>
+                      </span>
                     </label>
 
                     <label
                       style={{
-                        display: "inline-flex",
+                        display: "flex",
                         alignItems: "center",
+                        justifyContent: "space-between",
                         gap: 8,
-                        cursor: "pointer",
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={musicEnabled}
-                        onChange={(event) => {
-                          const enabled = event.currentTarget.checked;
-                          setMusicEnabled(enabled);
-                          if (
-                            enabled &&
-                            !musicTrack &&
-                            availableMusicTracks.length > 0
-                          ) {
-                            setMusicTrack(availableMusicTracks[0]);
-                          }
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          cursor: "pointer",
                         }}
-                      />
-                      Background Music
+                      >
+                        <input
+                          type="checkbox"
+                          checked={musicEnabled}
+                          onChange={(event) => {
+                            const enabled = event.currentTarget.checked;
+                            setMusicEnabled(enabled);
+                            if (
+                              enabled &&
+                              !musicTrack &&
+                              availableMusicTracks.length > 0
+                            ) {
+                              setMusicTrack(availableMusicTracks[0]);
+                            }
+                          }}
+                        />
+                        Background Music
+                      </span>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          width: 162,
+                          opacity: musicEnabled ? 1 : 0.55,
+                        }}
+                      >
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          list={SOUND_SLIDER_TICKS_ID}
+                          value={Math.round(backgroundMusicVolume * 100)}
+                          onChange={(event) =>
+                            setBackgroundMusicVolume(
+                              Number(event.currentTarget.value) / 100,
+                            )
+                          }
+                          disabled={!musicEnabled}
+                          style={{ flex: 1 }}
+                        />
+                        <span style={{ minWidth: 40, textAlign: "right" }}>
+                          {Math.round(backgroundMusicVolume * 100)}%
+                        </span>
+                      </span>
                     </label>
 
                     <label
@@ -15918,20 +16004,28 @@ export default function ResumeSpace3D({
                           color: "rgba(176, 220, 255, 0.92)",
                         }}
                       >
-                        <span>Music Volume</span>
-                        <span>{Math.round(musicVolume * 100)}%</span>
+                        <span>Overall Volume</span>
+                        <span>{Math.round(overallVolume * 100)}%</span>
                       </span>
                       <input
                         type="range"
                         min={0}
-                        max={1}
-                        step={0.01}
-                        value={musicVolume}
+                        max={100}
+                        step={1}
+                        list={SOUND_SLIDER_TICKS_ID}
+                        value={Math.round(overallVolume * 100)}
                         onChange={(event) =>
-                          setMusicVolume(Number(event.currentTarget.value))
+                          setOverallVolume(Number(event.currentTarget.value) / 100)
                         }
                       />
                     </label>
+                    <datalist id={SOUND_SLIDER_TICKS_ID}>
+                      <option value="0" />
+                      <option value="25" />
+                      <option value="50" />
+                      <option value="75" />
+                      <option value="100" />
+                    </datalist>
                   </div>
                 )}
               </div>
