@@ -85,6 +85,11 @@ export const useNavigationSystem = (deps: {
   setFollowingStarDestroyer: (v: boolean) => void;
   /** Optional non-planet section anchors (e.g., Projects trench) */
   resolveSpecialSectionTarget?: (targetId: string) => THREE.Vector3 | null;
+  /** Optional callback fired when moon travel starts after turn/pause */
+  onMoonTravelNavigationStarted?: (payload: {
+    targetMoonId: string;
+    isInterSystemJump: boolean;
+  }) => void;
 }) => {
   const {
     resumeData,
@@ -109,6 +114,7 @@ export const useNavigationSystem = (deps: {
     followingStarDestroyerRef,
     setFollowingStarDestroyer,
     resolveSpecialSectionTarget,
+    onMoonTravelNavigationStarted,
   } = deps;
 
   const navTraceLastAtRef = useRef<Record<string, number>>({});
@@ -1421,6 +1427,10 @@ export const useNavigationSystem = (deps: {
               target.pendingMoonTurbo ?? true,
             );
             if (success) {
+              onMoonTravelNavigationStarted?.({
+                targetMoonId: target.pendingMoonId,
+                isInterSystemJump: !!target.pendingMoonInterSystem,
+              });
               vlog(`▶️ Pause done — moon navigation started: ${target.pendingMoonId}`);
               activeMoonLightspeedRef.current = target.pendingMoonInterSystem
                 ? target.pendingMoonId
@@ -2013,6 +2023,7 @@ export const useNavigationSystem = (deps: {
     spaceshipPathRef,
     spaceshipRef,
     optionsRef,
+    onMoonTravelNavigationStarted,
     vlog,
   ]);
 

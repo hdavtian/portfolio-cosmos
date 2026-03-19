@@ -73,6 +73,11 @@ import { useNavigationSystem } from "./hooks/useNavigationSystem";
 import { useRenderLoop } from "./hooks/useRenderLoop";
 import { createIntroSequenceRunner } from "./introSequence";
 import {
+  attachAudioListenerToCamera,
+  createPositionalAudio,
+  playPositionalOneShot,
+} from "./audio/threeAudioUtils";
+import {
   SUN_GLOW_SPRITE_SIZE,
   SUN_LABEL_Y,
   EXPERIENCE_ORBIT,
@@ -178,6 +183,8 @@ const OBLIVION_DRONE_AUDIO_PATHS = {
     "/models/oblivion-drone/199935__drzhnn__04-blip.wav",
   ],
 } as const;
+const FALCON_MOON_TRAVEL_SFX_PATH =
+  "/audio/falcon/falcon-moon-travel.wav";
 const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
@@ -1235,6 +1242,17 @@ export default function ResumeSpace3D({
     if (!sceneReady) return;
     const unlockAudio = () => {
       void hologramDroneRef.current?.resumeAudioContext();
+      const camera = sceneRef.current.camera;
+      if (camera) {
+        if (!falconTravelAudioListenerRef.current) {
+          falconTravelAudioListenerRef.current = new THREE.AudioListener();
+        }
+        attachAudioListenerToCamera(camera, falconTravelAudioListenerRef.current);
+      }
+      const ctx = falconTravelAudioListenerRef.current?.context;
+      if (ctx && ctx.state !== "running") {
+        void ctx.resume().catch(() => {});
+      }
     };
     window.addEventListener("pointerdown", unlockAudio, { passive: true });
     window.addEventListener("keydown", unlockAudio);
@@ -1245,6 +1263,23 @@ export default function ResumeSpace3D({
       window.removeEventListener("touchstart", unlockAudio);
     };
   }, [sceneReady]);
+
+  useEffect(() => {
+    return () => {
+      const falconAudio = falconTravelAudioRef.current;
+      if (falconAudio) {
+        if (falconAudio.isPlaying) falconAudio.stop();
+        if (falconAudio.parent) falconAudio.parent.remove(falconAudio);
+      }
+      falconTravelAudioRef.current = null;
+      const listener = falconTravelAudioListenerRef.current;
+      if (listener?.parent) {
+        listener.parent.remove(listener);
+      }
+      falconTravelAudioListenerRef.current = null;
+      falconMoonTravelBufferRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1275,13 +1310,14 @@ export default function ResumeSpace3D({
 
     const preloadCriticalAssets = async () => {
       try {
-        const [trenchGltf, , , oblivionDroneGltf, activationBuffer, transmissionBuffer, ...movementBuffers] = await Promise.all([
+        const [trenchGltf, , , oblivionDroneGltf, activationBuffer, transmissionBuffer, falconMoonTravelBuffer, ...movementBuffers] = await Promise.all([
           gltfPreloader.loadAsync(PROJECT_SHOWCASE_MODEL_PATH),
           gltfPreloader.loadAsync("/models/spaceship/scene.gltf"),
           gltfPreloader.loadAsync("/models/star-destroyer/scene.gltf"),
           gltfPreloader.loadAsync(OBLIVION_DRONE_MODEL_PATH),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.activation),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.transmission),
+          loadAudioSafe(FALCON_MOON_TRAVEL_SFX_PATH),
           ...OBLIVION_DRONE_AUDIO_PATHS.movement.map((url) => loadAudioSafe(url)),
         ]);
 
@@ -1303,9 +1339,14 @@ export default function ResumeSpace3D({
           hologramDroneRef.current?.setDroneAudioBuffers(
             oblivionDroneAudioBuffersRef.current,
           );
+          falconMoonTravelBufferRef.current = falconMoonTravelBuffer;
           debugLog(
             "drone",
             `[audio] buffers ready activation=${!!activationBuffer} transmission=${!!transmissionBuffer} movement=${oblivionDroneAudioBuffersRef.current.movement?.length ?? 0}`,
+          );
+          debugLog(
+            "audio",
+            `[falcon] moon-travel preload ready=${!!falconMoonTravelBuffer}`,
           );
         }
 
@@ -1468,6 +1509,9 @@ export default function ResumeSpace3D({
   const projectShowcasePreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
   const oblivionDronePreloadedRef = useRef<THREE.Object3D | null>(null);
   const oblivionDroneAudioBuffersRef = useRef<DroneAudioBuffers | null>(null);
+  const falconMoonTravelBufferRef = useRef<AudioBuffer | null>(null);
+  const falconTravelAudioListenerRef = useRef<THREE.AudioListener | null>(null);
+  const falconTravelAudioRef = useRef<THREE.PositionalAudio | null>(null);
   const droneGpuWarmupDoneRef = useRef(false);
   const projectShowcaseTrackRef = useRef<{
     axis: "x" | "z";
@@ -2367,6 +2411,70 @@ export default function ResumeSpace3D({
     return { moonCenter, moonRadius };
   }, []);
 
+  const ensureFalconTravelAudioNode = useCallback(() => {
+    const ship = spaceshipRef.current;
+    const camera = sceneRef.current.camera;
+    if (!ship || !camera) return null;
+
+    if (!falconTravelAudioListenerRef.current) {
+      falconTravelAudioListenerRef.current = new THREE.AudioListener();
+    }
+    const listener = falconTravelAudioListenerRef.current;
+    if (!attachAudioListenerToCamera(camera, listener)) return null;
+
+    if (!falconTravelAudioRef.current) {
+      falconTravelAudioRef.current = createPositionalAudio(listener, {
+        refDistance: 22,
+        rolloffFactor: 1.1,
+        maxDistance: 2200,
+      });
+      falconTravelAudioRef.current.name = "FalconMoonTravelSfx";
+    }
+    const positionalAudio = falconTravelAudioRef.current;
+    if (positionalAudio.parent !== ship) {
+      if (positionalAudio.parent) positionalAudio.parent.remove(positionalAudio);
+      ship.add(positionalAudio);
+    }
+    return positionalAudio;
+  }, []);
+
+  const resumeFalconTravelAudioContext = useCallback(async () => {
+    const listener = falconTravelAudioListenerRef.current;
+    if (!listener) return;
+    const ctx = listener.context;
+    if (ctx.state !== "running") {
+      try {
+        await ctx.resume();
+      } catch {
+        // Browser policies may still block until a user gesture.
+      }
+    }
+  }, []);
+
+  const playFalconMoonTravelSfx = useCallback(async () => {
+    const buffer = falconMoonTravelBufferRef.current;
+    if (!buffer) return;
+    const positionalAudio = ensureFalconTravelAudioNode();
+    if (!positionalAudio) return;
+    await resumeFalconTravelAudioContext();
+    try {
+      // Non-looping one-shot cue each time moon travel starts.
+      playPositionalOneShot(
+        positionalAudio,
+        buffer,
+        THREE.MathUtils.clamp(overallVolume * 0.7, 0, 1),
+      );
+      debugLog("audio", "[falcon] moon-travel cue played");
+    } catch {
+      debugLog("audio", "[falcon] moon-travel cue blocked");
+    }
+  }, [
+    debugLog,
+    ensureFalconTravelAudioNode,
+    overallVolume,
+    resumeFalconTravelAudioContext,
+  ]);
+
   const { buildRotationHandlers, buildPointerHandlers } =
     usePointerInteractions({
       mountRef,
@@ -2417,6 +2525,10 @@ export default function ResumeSpace3D({
     optionsRef,
     followingStarDestroyerRef,
     setFollowingStarDestroyer,
+    onMoonTravelNavigationStarted: ({ targetMoonId }) => {
+      debugLog("nav", `Moon travel started: ${targetMoonId}`);
+      void playFalconMoonTravelSfx();
+    },
     resolveSpecialSectionTarget: (targetId) => {
       if (targetId === "projects") {
         const rootAnchor = projectShowcaseWorldAnchorRef.current;
