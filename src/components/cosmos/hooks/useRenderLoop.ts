@@ -119,7 +119,6 @@ export const useRenderLoop = () => {
       scene: THREE.Scene;
       sunMesh: THREE.Object3D;
       vlog: (message: string) => void;
-      debugLog: (source: string, message: string) => void;
       [key: string]: unknown;
     }) => {
       const {

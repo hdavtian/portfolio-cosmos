@@ -32,6 +32,7 @@ import type { ResumeSpace3DProps, SceneRef } from "./ResumeSpace3D.types";
 // Import our new cosmic systems
 import {
   CosmosCameraDirector,
+  COSMIC_AUDIO_TRACKS,
   CosmicTourGuide,
   NavigationInterface,
   type NavigationWaypoint,
@@ -144,6 +145,8 @@ const ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE = 148;
 const ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE = 70;
 // Quick flip between drone visuals for moon visits.
 const MOON_VISIT_DRONE_VARIANT: DroneVisualVariant = "oblivion";
+// Temporary diagnostic switch: disable drone entry calls to isolate orbit pauses.
+const DISABLE_MOON_DRONE_ENTRY_FOR_TEST = false;
 const ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE = 280;
 const ORBITAL_PORTFOLIO_INSPECT_EXIT_MIN_DISTANCE = 58;
 const ORBITAL_PORTFOLIO_INSPECT_EXIT_MAX_DISTANCE = 320;
@@ -218,6 +221,7 @@ const PROJECT_SHOWCASE_FILTER_OPTIONS = [
 ] as const;
 const PROJECT_SHOWCASE_MAX_MEDIA_ITEMS = 12;
 const PROJECT_SHOWCASE_THUMBS_PER_PAGE = 4;
+const DEFAULT_BACKGROUND_MUSIC_TRACK = Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
 
 type ShowcaseMediaEntry = {
   id: string;
@@ -1003,8 +1007,17 @@ export default function ResumeSpace3D({
   const [droneSummonNonce, setDroneSummonNonce] = useState(0);
   const [droneInspectMode, setDroneInspectMode] = useState(false);
   const [droneSoundEnabled, setDroneSoundEnabled] = useState(true);
+  const [musicEnabled, setMusicEnabled] = useState(false);
+  const [musicTrack, setMusicTrack] = useState<string>(
+    DEFAULT_BACKGROUND_MUSIC_TRACK,
+  );
+  const [musicVolume, setMusicVolume] = useState(0.3);
   const [showSoundSettingsModal, setShowSoundSettingsModal] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"sound">("sound");
+  const availableMusicTracks = useMemo(
+    () => Object.keys(COSMIC_AUDIO_TRACKS),
+    [],
+  );
 
   // Keep orbitActiveRef in sync for pointer handlers
   useEffect(() => {
@@ -1018,7 +1031,10 @@ export default function ResumeSpace3D({
       debugLog("drone", "useEffect: no drone ref");
       return;
     }
-    const shouldShowDrone = orbitPhase === "orbiting" && (!!overlayContent || droneInspectMode);
+    const shouldShowDrone =
+      !DISABLE_MOON_DRONE_ENTRY_FOR_TEST &&
+      orbitPhase === "orbiting" &&
+      (!!overlayContent || droneInspectMode);
     if (shouldShowDrone) {
       const moon = focusedMoonRef.current;
       const cam = sceneRef.current.camera;
@@ -1071,11 +1087,132 @@ export default function ResumeSpace3D({
   }, [droneSoundEnabled]);
 
   useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("cosmicVolumeChange", {
+        detail: { volume: musicVolume },
+      }),
+    );
+  }, [musicVolume]);
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("cosmicAudioChange", {
+        detail: { track: musicEnabled ? musicTrack : "" },
+      }),
+    );
+  }, [musicEnabled, musicTrack]);
+
+  useEffect(() => {
     if (!oblivionDroneAudioBuffersRef.current) return;
     hologramDroneRef.current?.setDroneAudioBuffers(
       oblivionDroneAudioBuffersRef.current,
     );
   }, [criticalAssetsReady]);
+
+  useEffect(() => {
+    if (!oblivionDronePreloadedRef.current) return;
+    hologramDroneRef.current?.setDroneVariant(
+      MOON_VISIT_DRONE_VARIANT,
+      oblivionDronePreloadedRef.current,
+    );
+  }, [criticalAssetsReady]);
+
+  useEffect(() => {
+    if (!sceneReady || !criticalAssetsReady) return;
+    if (droneGpuWarmupDoneRef.current) return;
+    const renderer = rendererRef.current;
+    const template = oblivionDronePreloadedRef.current;
+    const liveScene = sceneRef.current.scene as THREE.Scene | undefined;
+    const liveCamera = sceneRef.current.camera as THREE.Camera | undefined;
+    if (!renderer || !template || !liveScene || !liveCamera) return;
+    droneGpuWarmupDoneRef.current = true;
+
+    const compileRenderer = renderer as THREE.WebGLRenderer & {
+      compileAsync?: (scene: THREE.Scene, camera: THREE.Camera) => Promise<void>;
+    };
+
+    const warmupContent: OverlayContent = {
+      title: "Warmup",
+      description: "Compile drone paths",
+      enableDroneCardDock: true,
+      sections: [
+        {
+          id: "warmup-overview",
+          title: "Overview",
+          type: "text",
+          content:
+            "Synthetic overlay content used only to compile drone panel materials before the first moon visit.",
+        },
+        {
+          id: "warmup-details",
+          title: "Details",
+          type: "text",
+          content:
+            "This includes multiline body text to exercise body-panel, border trace, and canvas texture paths under orbit mode.",
+        },
+        {
+          id: "warmup-tech",
+          title: "Tech",
+          type: "skills",
+          content: ["Three.js", "CanvasTexture", "Orbit"],
+        },
+      ],
+    };
+
+    const warmup = async () => {
+      let warmupDrone: HologramDroneDisplay | null = null;
+      try {
+        const warmupStart = performance.now();
+        debugLog("drone", "[warmup] priming live drone render path");
+        warmupDrone = new HologramDroneDisplay(liveScene, {
+          droneVariant: MOON_VISIT_DRONE_VARIANT,
+          oblivionDroneTemplate: template,
+          soundEnabled: false,
+        });
+        const camForward = liveCamera.getWorldDirection(new THREE.Vector3()).normalize();
+        const warmMoonPos = liveCamera.position
+          .clone()
+          .addScaledVector(camForward, 28);
+        const warmAnchor = liveCamera.position
+          .clone()
+          .addScaledVector(camForward, 24)
+          .add(new THREE.Vector3(0, -1, 0));
+        warmupDrone.showContent(
+          warmupContent,
+          warmMoonPos,
+          liveCamera,
+          warmAnchor,
+        );
+        // Advance through fly-in + pre-draw so compile includes active drone UI materials.
+        for (let i = 0; i < 360; i += 1) {
+          warmupDrone.update(1 / 60, liveCamera);
+        }
+        const compileStart = performance.now();
+        if (typeof compileRenderer.compileAsync === "function") {
+          await compileRenderer.compileAsync(liveScene, liveCamera);
+        } else {
+          compileRenderer.compile(liveScene, liveCamera);
+        }
+        const compileMs = performance.now() - compileStart;
+        // Force one base render while warmup drone content is present so first
+        // user-facing drone activation does not pay texture/program upload cost.
+        const renderStart = performance.now();
+        renderer.render(liveScene, liveCamera);
+        const renderMs = performance.now() - renderStart;
+        debugLog(
+          "drone",
+          `[warmup] live render prime complete compile=${compileMs.toFixed(1)}ms render=${renderMs.toFixed(1)}ms total=${(performance.now() - warmupStart).toFixed(1)}ms`,
+        );
+      } catch {
+        debugLog("drone", "[warmup] live render prime skipped");
+      } finally {
+        warmupDrone?.hideContentImmediate();
+        warmupDrone?.dispose();
+      }
+    };
+
+    void warmup();
+  }, [sceneReady, criticalAssetsReady, debugLog]);
 
   useEffect(() => {
     if (!sceneReady) return;
@@ -1131,6 +1268,30 @@ export default function ResumeSpace3D({
           ...OBLIVION_DRONE_AUDIO_PATHS.movement.map((url) => loadAudioSafe(url)),
         ]);
 
+        if (!cancelled) {
+          // Inject drone model/audio as soon as they resolve; do not block on
+          // unrelated texture/music warmups.
+          oblivionDronePreloadedRef.current = (oblivionDroneGltf as { scene: THREE.Object3D }).scene;
+          hologramDroneRef.current?.setDroneVariant(
+            MOON_VISIT_DRONE_VARIANT,
+            oblivionDronePreloadedRef.current,
+          );
+          oblivionDroneAudioBuffersRef.current = {
+            activation: activationBuffer,
+            transmission: transmissionBuffer,
+            movement: movementBuffers.filter(
+              (buf): buf is AudioBuffer => !!buf,
+            ),
+          };
+          hologramDroneRef.current?.setDroneAudioBuffers(
+            oblivionDroneAudioBuffersRef.current,
+          );
+          debugLog(
+            "drone",
+            `[audio] buffers ready activation=${!!activationBuffer} transmission=${!!transmissionBuffer} movement=${oblivionDroneAudioBuffersRef.current.movement?.length ?? 0}`,
+          );
+        }
+
         const trenchTextureKeys = new Set<string>();
         trenchGltf.scene.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
@@ -1169,24 +1330,45 @@ export default function ResumeSpace3D({
             return items.map((item) => loadTextureSafe(item.textureUrl));
           });
 
-        await Promise.all([...trenchTextureJobs, ...showcaseImageJobs]);
+        const musicTrackWarmupJobs = Object.values(COSMIC_AUDIO_TRACKS)
+          .filter((url) => typeof url === "string" && url.trim().length > 0)
+          .map(async (url) => {
+            try {
+              const probe = new Audio();
+              probe.preload = "auto";
+              probe.src = url;
+              await new Promise<void>((resolve) => {
+                const onReady = () => {
+                  cleanup();
+                  resolve();
+                };
+                const onError = () => {
+                  cleanup();
+                  resolve();
+                };
+                const cleanup = () => {
+                  probe.removeEventListener("canplaythrough", onReady);
+                  probe.removeEventListener("loadeddata", onReady);
+                  probe.removeEventListener("error", onError);
+                };
+                probe.addEventListener("canplaythrough", onReady, { once: true });
+                probe.addEventListener("loadeddata", onReady, { once: true });
+                probe.addEventListener("error", onError, { once: true });
+                probe.load();
+              });
+              return true;
+            } catch {
+              return false;
+            }
+          });
+
+        await Promise.all([
+          ...trenchTextureJobs,
+          ...showcaseImageJobs,
+          ...musicTrackWarmupJobs,
+        ]);
         if (!cancelled) {
           projectShowcasePreloadedGltfRef.current = trenchGltf as { scene: THREE.Group };
-          oblivionDronePreloadedRef.current = (oblivionDroneGltf as { scene: THREE.Object3D }).scene;
-          oblivionDroneAudioBuffersRef.current = {
-            activation: activationBuffer,
-            transmission: transmissionBuffer,
-            movement: movementBuffers.filter(
-              (buf): buf is AudioBuffer => !!buf,
-            ),
-          };
-          hologramDroneRef.current?.setDroneAudioBuffers(
-            oblivionDroneAudioBuffersRef.current,
-          );
-          debugLog(
-            "drone",
-            `[audio] buffers ready activation=${!!activationBuffer} transmission=${!!transmissionBuffer} movement=${oblivionDroneAudioBuffersRef.current.movement?.length ?? 0}`,
-          );
         }
       } finally {
         if (!cancelled) setCriticalAssetsReady(true);
@@ -1265,6 +1447,7 @@ export default function ResumeSpace3D({
   const projectShowcasePreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
   const oblivionDronePreloadedRef = useRef<THREE.Object3D | null>(null);
   const oblivionDroneAudioBuffersRef = useRef<DroneAudioBuffers | null>(null);
+  const droneGpuWarmupDoneRef = useRef(false);
   const projectShowcaseTrackRef = useRef<{
     axis: "x" | "z";
     minRun: number;
@@ -1343,8 +1526,8 @@ export default function ResumeSpace3D({
   });
   const orbitSignTuningRef = useRef<OrbitSignTuning>(orbitSignTuning);
   const [showOrbitSignTuningControls, setShowOrbitSignTuningControls] = useState(false);
-  const [viewerMemoriesEnabled, setViewerMemoriesEnabled] = useState(true);
-  const viewerMemoriesEnabledRef = useRef(true);
+  const [viewerMemoriesEnabled, setViewerMemoriesEnabled] = useState(false);
+  const viewerMemoriesEnabledRef = useRef(false);
   const [moonMemoryManualMode, setMoonMemoryManualMode] = useState(false);
   const moonMemoryManualModeRef = useRef(false);
   const [moonMemoryPlaybackPlaying, setMoonMemoryPlaybackPlaying] = useState(false);
@@ -13934,6 +14117,16 @@ export default function ResumeSpace3D({
         container,
         handleNavigation,
       );
+      window.dispatchEvent(
+        new CustomEvent("cosmicVolumeChange", {
+          detail: { volume: musicVolume },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("cosmicAudioChange", {
+          detail: { track: musicEnabled ? musicTrack : "" },
+        }),
+      );
       // Tour guide functionality removed for simplification
       // Populate experience submenu dynamically with all jobs
       try {
@@ -15612,24 +15805,134 @@ export default function ResumeSpace3D({
                   </button>
                 </div>
                 {settingsTab === "sound" && (
-                  <label
+                  <div
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 8,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
                       fontSize: 13,
-                      cursor: "pointer",
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={droneSoundEnabled}
-                      onChange={(event) =>
-                        setDroneSoundEnabled(event.currentTarget.checked)
-                      }
-                    />
-                    Drone Sounds
-                  </label>
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={droneSoundEnabled}
+                        onChange={(event) =>
+                          setDroneSoundEnabled(event.currentTarget.checked)
+                        }
+                      />
+                      Drone Sounds
+                    </label>
+
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={musicEnabled}
+                        onChange={(event) => {
+                          const enabled = event.currentTarget.checked;
+                          setMusicEnabled(enabled);
+                          if (
+                            enabled &&
+                            !musicTrack &&
+                            availableMusicTracks.length > 0
+                          ) {
+                            setMusicTrack(availableMusicTracks[0]);
+                          }
+                        }}
+                      />
+                      Background Music
+                    </label>
+
+                    <label
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 11,
+                          letterSpacing: 0.55,
+                          textTransform: "uppercase",
+                          color: "rgba(176, 220, 255, 0.92)",
+                        }}
+                      >
+                        Track
+                      </span>
+                      <select
+                        value={musicTrack}
+                        onChange={(event) => setMusicTrack(event.currentTarget.value)}
+                        disabled={availableMusicTracks.length === 0}
+                        style={{
+                          borderRadius: 6,
+                          border: "1px solid rgba(148, 210, 255, 0.42)",
+                          background: "rgba(10, 22, 37, 0.92)",
+                          color: "#d8eeff",
+                          padding: "6px 8px",
+                          fontSize: 12,
+                          fontFamily: "'Rajdhani', sans-serif",
+                        }}
+                      >
+                        {availableMusicTracks.length === 0 ? (
+                          <option value="">No tracks configured</option>
+                        ) : (
+                          availableMusicTracks.map((track) => (
+                            <option key={track} value={track}>
+                              {track}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </label>
+
+                    <label
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          fontSize: 11,
+                          letterSpacing: 0.55,
+                          textTransform: "uppercase",
+                          color: "rgba(176, 220, 255, 0.92)",
+                        }}
+                      >
+                        <span>Music Volume</span>
+                        <span>{Math.round(musicVolume * 100)}%</span>
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={musicVolume}
+                        onChange={(event) =>
+                          setMusicVolume(Number(event.currentTarget.value))
+                        }
+                      />
+                    </label>
+                  </div>
                 )}
               </div>
             </div>

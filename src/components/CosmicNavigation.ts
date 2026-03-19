@@ -360,17 +360,19 @@ export class CosmicTourGuide {
   }
 }
 
+export const COSMIC_AUDIO_TRACKS: Record<string, string> = {
+  "deep space": "/audio/742892__viramiller__deep-space.mp3",
+  "Time is water": "/audio/727386__newlocknew__time-is-water.mp3",
+  // "deep-space": "/audio/deep-space.mp3",
+  // "galactic-ambience": "/audio/galactic-ambience.mp3",
+};
+
 // Audio System Controller
 export class CosmicAudioSystem {
   private audioElement: HTMLAudioElement | null = null;
   private currentTrack: string = "";
   private volume: number = 0.3;
-  private audioTracks: Record<string, string> = {
-    "cosmic-journey": "/audio/cosmic-journey.mp3",
-    "stellar-winds": "/audio/stellar-winds.mp3",
-    "deep-space": "/audio/deep-space.mp3",
-    "galactic-ambience": "/audio/galactic-ambience.mp3",
-  };
+  private audioTracks: Record<string, string> = COSMIC_AUDIO_TRACKS;
 
   constructor() {
     this.setupEventListeners();

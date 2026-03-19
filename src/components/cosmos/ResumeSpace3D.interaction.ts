@@ -120,6 +120,8 @@ export const createPointerInteractionHandlers = (deps: {
   getHologramPanelClickables?: () => THREE.Object3D[];
   /** Callback when a hologram panel was picked */
   onHologramPanelPicked?: (panelIndex: number) => void;
+  /** Callback when hovering hologram controls */
+  onHologramPanelHover?: (panelIndex: number | null) => void;
 }) => {
   const {
     mountRef,
@@ -139,6 +141,7 @@ export const createPointerInteractionHandlers = (deps: {
     focusedMoonRef,
     getHologramPanelClickables,
     onHologramPanelPicked,
+    onHologramPanelHover,
   } = deps;
 
   let hoveredObject: THREE.Object3D | null = null;
@@ -156,6 +159,7 @@ export const createPointerInteractionHandlers = (deps: {
 
     // Check for hover
     raycaster.setFromCamera(pointer, camera);
+    onHologramPanelHover?.(null);
     const intersects = raycaster.intersectObjects(clickablePlanets, false);
 
     // Determine the object under pointer (if any)
@@ -266,6 +270,20 @@ export const createPointerInteractionHandlers = (deps: {
           true,
         );
         if (sdHits.length > 0) {
+          document.body.style.cursor = "pointer";
+          return;
+        }
+      }
+
+      const hologramPanelPickables = getHologramPanelClickables?.() ?? [];
+      if (hologramPanelPickables.length > 0) {
+        const hologramHits = raycaster.intersectObjects(hologramPanelPickables, false);
+        if (hologramHits.length > 0) {
+          const code = Number(
+            (hologramHits[0].object.userData as { hologramPanelIndex?: number })
+              .hologramPanelIndex,
+          );
+          onHologramPanelHover?.(Number.isFinite(code) ? code : null);
           document.body.style.cursor = "pointer";
           return;
         }

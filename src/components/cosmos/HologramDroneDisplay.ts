@@ -949,12 +949,16 @@ export class HologramDroneDisplay {
     let distScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.pow(rawRatio, SCALE_POWER)));
 
     let endPos: THREE.Vector3;
+    let orbitCamUp: THREE.Vector3 | null = null;
+    let orbitCamRight: THREE.Vector3 | null = null;
     if (orbitAnchor) {
       distScale = 0.3;
       const camUp = camera.up.clone().normalize();
       const camRight = new THREE.Vector3()
         .crossVectors(camera.getWorldDirection(new THREE.Vector3()), camUp)
         .normalize();
+      orbitCamUp = camUp;
+      orbitCamRight = camRight;
       endPos = orbitAnchor
         .clone()
         .addScaledVector(camUp, 6)
@@ -968,7 +972,24 @@ export class HologramDroneDisplay {
         .add(new THREE.Vector3(0, 5 * distScale, 0));
     }
     this.flyEndPos.copy(endPos);
-    this.flyStartPos.copy(camera.position).addScaledVector(forward, 15).add(new THREE.Vector3(0, 8, 0));
+    if (orbitAnchor) {
+      // In orbit mode, start from an on-screen offset near the destination so
+      // the entry animation is visible immediately (not from behind camera).
+      const camForward = camera.getWorldDirection(new THREE.Vector3()).normalize();
+      const camUp = orbitCamUp ?? camera.up.clone().normalize();
+      const camRight = orbitCamRight
+        ?? new THREE.Vector3().crossVectors(camForward, camUp).normalize();
+      this.flyStartPos
+        .copy(endPos)
+        .addScaledVector(camRight, -2.8)
+        .addScaledVector(camUp, 2.2)
+        .addScaledVector(camForward, -4.5);
+    } else {
+      this.flyStartPos
+        .copy(camera.position)
+        .addScaledVector(forward, 15)
+        .add(new THREE.Vector3(0, 8, 0));
+    }
     return distScale;
   }
 
@@ -1011,13 +1032,10 @@ export class HologramDroneDisplay {
     this.previousDroneQuat = null;
     this.smoothedTurnSpeed = 0;
     this.resetInquisitiveScanState();
-
     const distScale = this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
-
     this.buildTextPanels(content, camera, distScale);
     this.ensureLaserRigCount(this.panels.length);
     this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
-
     this.rootGroup.position.copy(this.flyStartPos);
   }
 
@@ -1115,11 +1133,14 @@ export class HologramDroneDisplay {
 
   update(delta: number, camera: THREE.Camera): void {
     if (!this.active) return;
+    // Large first-frame delta after a main-thread hitch can skip animation phases.
+    // Clamp simulation step so fly-in/scan timing remains visible and stable.
+    const dt = Math.min(delta, 0.05);
     this.ensureDroneAudio(camera);
     if (!this.droneGroup.visible) this.stopAllDroneAudio();
 
     if (this.hiding) {
-      this.hideProgress += delta / 0.6;
+      this.hideProgress += dt / 0.6;
       const s = Math.max(0, 1 - this.hideProgress);
       for (const panel of this.panels) panel.material.opacity = panel.targetOpacity * s;
       this.droneGroup.scale.setScalar(s);
@@ -1136,7 +1157,7 @@ export class HologramDroneDisplay {
     }
 
     if (this.flyInProgress < 1) {
-      this.flyInProgress = Math.min(1, this.flyInProgress + delta / FLY_IN_DURATION);
+      this.flyInProgress = Math.min(1, this.flyInProgress + dt / FLY_IN_DURATION);
       const t = 1 - Math.pow(1 - this.flyInProgress, 3);
       this.rootGroup.position.lerpVectors(this.flyStartPos, this.flyEndPos, t);
       this.droneGroup.scale.setScalar(t);
@@ -1149,11 +1170,11 @@ export class HologramDroneDisplay {
 
     this.tryPlayActivationWithRetry();
 
-    this.idleTime += delta;
-    this.drawSequenceElapsed += delta;
+    this.idleTime += dt;
+    this.drawSequenceElapsed += dt;
     this.drawEnabled = this.drawSequenceElapsed >= this.preDrawScanTotalDuration();
     if (this.drawEnabled && !this.droneExitingAfterDraw) {
-      this.contentStartTime += delta;
+      this.contentStartTime += dt;
     }
 
     const hoverScale = this.isOrbitMode ? 0.015 : 1.0;
@@ -1164,7 +1185,7 @@ export class HologramDroneDisplay {
     this.rootGroup.position.x += hoverX;
 
     const ring = this.droneGroup.getObjectByName("droneRing");
-    if (ring) ring.rotation.z += delta * 2.5;
+    if (ring) ring.rotation.z += dt * 2.5;
 
     const lookTarget = this._tmpV.copy(camera.position);
     lookTarget.y = this.rootGroup.position.y;
@@ -1172,7 +1193,7 @@ export class HologramDroneDisplay {
 
     let scanAngles: ScanAngles = { pitch: 0, yaw: 0, roll: 0 };
     if (this.inspectionMode || this.postDrawLingerActive) {
-      scanAngles = this.updatePostDrawScan(delta);
+      scanAngles = this.updatePostDrawScan(dt);
     } else if (!this.drawEnabled) {
       scanAngles = this.getPreDrawScanAngles(this.drawSequenceElapsed);
       const stepIndex = this.getPreDrawScanStepIndex(this.drawSequenceElapsed);
@@ -1194,7 +1215,7 @@ export class HologramDroneDisplay {
 
     if (this.inspectionMode) {
       this.scannerLight.intensity = 0.9 + Math.sin(this.idleTime * 2.6) * 0.2;
-      this.updateThrusterGlow(delta);
+      this.updateThrusterGlow(dt);
       return;
     }
 
@@ -1305,12 +1326,12 @@ export class HologramDroneDisplay {
       this.scannerLight.intensity = 1.5 + Math.sin(this.idleTime * 4) * 0.5;
     } else {
       if (this.transmissionAudio?.isPlaying) this.transmissionAudio.stop();
-      this.laserRigs.forEach((rig) => this.dimLaserRig(rig, delta));
-      this.scannerLight.intensity = Math.max(0, this.scannerLight.intensity - delta * 2);
+      this.laserRigs.forEach((rig) => this.dimLaserRig(rig, dt));
+      this.scannerLight.intensity = Math.max(0, this.scannerLight.intensity - dt * 2);
     }
 
     if (this.waitingPostDrawHold && !this.droneExitingAfterDraw) {
-      this.postDrawHoldElapsed += delta;
+      this.postDrawHoldElapsed += dt;
       if (this.postDrawHoldElapsed >= POST_DRAW_HOLD_DURATION) {
         this.waitingPostDrawHold = false;
         if (AUTO_EXIT_AFTER_DRAW) {
@@ -1323,7 +1344,7 @@ export class HologramDroneDisplay {
     if (this.droneExitingAfterDraw) {
       this.droneExitProgress = Math.min(
         1,
-        this.droneExitProgress + delta / POST_DRAW_DRONE_EXIT_DURATION,
+        this.droneExitProgress + dt / POST_DRAW_DRONE_EXIT_DURATION,
       );
       const eased = 1 - Math.pow(1 - this.droneExitProgress, 3);
       const fade = 1 - eased;
@@ -1339,11 +1360,11 @@ export class HologramDroneDisplay {
       }
     }
 
-    this.updateThrusterGlow(delta);
+    this.updateThrusterGlow(dt);
 
     const dockDepth = Math.max(12, camera.position.distanceTo(this.flyEndPos) * 0.52);
     if (this.shouldDockPanels && this.dockingPanels) {
-      this.panelDockProgress = Math.min(1, this.panelDockProgress + delta / PANELS_DOCK_DURATION);
+      this.panelDockProgress = Math.min(1, this.panelDockProgress + dt / PANELS_DOCK_DURATION);
       const t = 1 - Math.pow(1 - this.panelDockProgress, 3);
       for (let i = 0; i < this.panels.length; i += 1) {
         const panel = this.panels[i];
@@ -1367,8 +1388,8 @@ export class HologramDroneDisplay {
           ? this.getFocusTarget(camera, dockDepth)
           : this.getDockTarget(i, camera, dockDepth);
         const targetScale = isActive ? panel.expandedScale : panel.dockScale;
-        const posLerp = 1 - Math.exp(-delta * 14);
-        const scaleLerp = 1 - Math.exp(-delta * 16);
+        const posLerp = 1 - Math.exp(-dt * 14);
+        const scaleLerp = 1 - Math.exp(-dt * 16);
         panel.mesh.position.lerp(targetPos, posLerp);
         const nextScale =
           panel.mesh.scale.x + (targetScale - panel.mesh.scale.x) * scaleLerp;

@@ -55,6 +55,7 @@ export const usePointerInteractions = (params: {
       insideShipRef?: MutableRefObject<boolean>;
       getHologramPanelClickables?: () => THREE.Object3D[];
       onHologramPanelPicked?: (panelIndex: number) => void;
+      onHologramPanelHover?: (panelIndex: number | null) => void;
     }) =>
       createPointerInteractionHandlers({
         mountRef,
@@ -74,6 +75,7 @@ export const usePointerInteractions = (params: {
         focusedMoonRef,
         getHologramPanelClickables: args.getHologramPanelClickables,
         onHologramPanelPicked: args.onHologramPanelPicked,
+        onHologramPanelHover: args.onHologramPanelHover,
       }),
     [focusedMoonRef, insideShipRef, mountRef, orbitActiveRef],
   );

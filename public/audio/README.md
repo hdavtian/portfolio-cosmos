@@ -1,11 +1,9 @@
 # Cosmic Audio Files
 
-Place your cosmic background music MP3 files in this directory with the following names:
+Place your cosmic background music MP3 files in this directory:
+- `public\audio`
 
-- `cosmic-journey.mp3` - Epic space exploration theme
-- `stellar-winds.mp3` - Ambient stellar atmosphere sounds
-- `deep-space.mp3` - Dark, mysterious deep space ambience
-- `galactic-ambience.mp3` - Light, uplifting galactic sounds
+Update `CosmicNavigation.ts audioTracks : Record`
 
 ## Recommended Audio Specifications
 
