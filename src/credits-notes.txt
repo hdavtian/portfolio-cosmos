@@ -1,0 +1,34 @@
+list of credits
+
+I got one of the framing ideas from here:
+https://dev.to/soumyadeepdey/explore-the-universe-my-3d-solar-system-with-threejs-vite-4ldj
+https://3d-solar-system-three-js.vercel.app/
+
+Models:
+
+Millennium Falcon
+https://sketchfab.com/3d-models/millennium-falcon-1640e90339484bfe9d6c5f1902d26839
+(Follow SketchFab Link below for drafting credit statement based on that document)
+
+Star Destroyer
+https://sketchfab.com/3d-models/star-destroyer-aaa18e14129a461c839877389bd28504
+(Follow SketchFab Link below for drafting credit statement based on that document)
+
+Oblivion Drone
+https://sketchfab.com/3d-models/oblivion-drone-9d72cc8adf6446b9a5b7ee996e5a9d08
+(Follow SketchFab Link below for drafting credit statement based on that document)
+
+SketchFab License Link
+https://creativecommons.org/licenses/by/4.0/#ref-appropriate-credit
+
+
+Sound
+
+Drone Sounds
+https://freesound.org/people/drzhnn/packs/12752/
+
+05-klaxon.wav by drzhnn -- https://freesound.org/s/199942/ -- License: Creative Commons 0
+06-blip.wav by drzhnn -- https://freesound.org/s/199941/ -- License: Creative Commons 0
+08-data-transmission.wav by drzhnn -- https://freesound.org/s/199939/ -- License: Creative Commons 0
+01-activation.wav by drzhnn -- https://freesound.org/s/199938/ -- License: Creative Commons 0
+07-confirmation.wav by drzhnn -- https://freesound.org/s/199940/ -- License: Creative Commons 0
