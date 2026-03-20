@@ -376,6 +376,11 @@ type OrbitalPortfolioStationRecord = {
   impactSprite: THREE.Sprite;
   impactStartedAt: number;
   impactDurationMs: number;
+  impactLocalPoint: THREE.Vector2;
+  rippleAmplitude: number;
+  rippleWavelength: number;
+  rippleSpeed: number;
+  rippleTravelMax: number;
   pulsePhase: number;
   textureScrollNorm: number;
   textureMaxOffsetY: number;
@@ -405,6 +410,8 @@ type OrbitalPortfolioMatterPacketRecord = {
   sourceCoreIndex: number;
   targetStation: number;
   targetOffset: THREE.Vector2;
+  willImpact: boolean;
+  missOffset: THREE.Vector3;
   phase: number;
   startOffset: THREE.Vector3;
 };
@@ -7752,6 +7759,54 @@ export default function ResumeSpace3D({
           station.plateFlatPositions,
           station.straightenBlend,
         );
+        if (station.impactStartedAt > 0) {
+          const elapsed = now - station.impactStartedAt;
+          const tImpact = THREE.MathUtils.clamp(
+            elapsed / Math.max(100, station.impactDurationMs),
+            0,
+            1,
+          );
+          const dentPulse = Math.sin(tImpact * Math.PI) * (1 - tImpact);
+          const dentDepth = dentPulse * 6.8;
+          const dentRadius = 22;
+          const pinchStrength = dentPulse * 0.16;
+          const rippleEnvelope = (1 - tImpact) * (1 - tImpact);
+          const rippleFront = Math.min(
+            station.rippleTravelMax,
+            (elapsed / 1000) * station.rippleSpeed,
+          );
+          const attr = station.platePositionAttr;
+          for (let v = 0; v < attr.count; v += 1) {
+            const vx = attr.getX(v);
+            const vy = attr.getY(v);
+            const dx = vx - station.impactLocalPoint.x;
+            const dy = vy - station.impactLocalPoint.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist >= dentRadius) continue;
+            const falloff = 1 - dist / dentRadius;
+            const pinch = pinchStrength * falloff;
+            attr.setX(v, vx - dx * pinch);
+            attr.setY(v, vy - dy * pinch);
+            const dz = -dentDepth * falloff * falloff;
+            let rippleDz = 0;
+            if (dist <= rippleFront + station.rippleWavelength * 1.2) {
+              const wavePhase =
+                ((dist - rippleFront) / Math.max(1, station.rippleWavelength)) * Math.PI * 2;
+              const waveFalloff = THREE.MathUtils.clamp(
+                1 - Math.abs(dist - rippleFront) / (station.rippleWavelength * 1.25),
+                0,
+                1,
+              );
+              rippleDz =
+                Math.sin(wavePhase) *
+                station.rippleAmplitude *
+                waveFalloff *
+                rippleEnvelope;
+            }
+            attr.setZ(v, attr.getZ(v) + dz + rippleDz);
+          }
+          attr.needsUpdate = true;
+        }
         morphPanelGeometry(
           station.framePositionAttr,
           station.frameCurvedPositions,
@@ -7953,11 +8008,18 @@ export default function ResumeSpace3D({
         };
         const randomTargetOffset = () =>
           new THREE.Vector2((Math.random() - 0.5) * 52, (Math.random() - 0.5) * 28);
+        const randomMissOffset = () =>
+          new THREE.Vector3(
+            (Math.random() - 0.5) * 520,
+            (Math.random() - 0.5) * 220 + 80,
+            (Math.random() - 0.5) * 520,
+          );
+        const randomWillImpact = () => Math.random() >= 0.32;
         packets.forEach((packet, idx) => {
           packet.progress += dt * packet.speed;
           if (packet.progress >= 1) {
             const impactStation = orbitalPortfolioStationsRef.current[packet.targetStation];
-            if (impactStation) {
+            if (packet.willImpact && impactStation) {
               impactStation.impactStartedAt = now;
               const impactMat = impactStation.impactSprite.material as THREE.SpriteMaterial;
               const packetMat = packet.mesh.material as THREE.SpriteMaterial;
@@ -7965,9 +8027,14 @@ export default function ResumeSpace3D({
               matterTo.set(packet.targetOffset.x, packet.targetOffset.y, 0.2);
               impactStation.plate.localToWorld(matterTo);
               impactStation.group.worldToLocal(matterTo);
+              impactStation.impactLocalPoint.set(matterTo.x, matterTo.y);
               impactStation.impactSprite.position.set(matterTo.x, matterTo.y, 1.38);
               impactStation.impactSprite.scale.setScalar(8 + Math.random() * 4);
               impactStation.impactDurationMs = 2200 + Math.random() * 1200;
+              impactStation.rippleAmplitude = 0.45 + Math.random() * 1.15;
+              impactStation.rippleWavelength = 6.5 + Math.random() * 6;
+              impactStation.rippleSpeed = 26 + Math.random() * 44;
+              impactStation.rippleTravelMax = 12 + Math.random() * 18;
             }
             packet.progress = 0;
             packet.speed = 0.24 + Math.random() * 0.32;
@@ -7976,6 +8043,8 @@ export default function ResumeSpace3D({
             );
             packet.targetStation = pickRandomStationIndexForCore(packet.sourceCoreIndex);
             packet.targetOffset.copy(randomTargetOffset());
+            packet.willImpact = randomWillImpact();
+            packet.missOffset.copy(randomMissOffset());
             packet.phase = Math.random() * Math.PI * 2;
             packet.startOffset.set(
               (Math.random() - 0.5) * 10,
@@ -7993,11 +8062,15 @@ export default function ResumeSpace3D({
             ];
           if (!sourceCore) return;
           sourceCore.root.getWorldPosition(matterFrom);
-          const targetStation = orbitalPortfolioStationsRef.current[packet.targetStation];
-          if (!targetStation) return;
-          matterTo.set(packet.targetOffset.x, packet.targetOffset.y, 0.2);
-          targetStation.plate.localToWorld(matterTo);
-          matterTarget.copy(matterTo);
+          if (packet.willImpact) {
+            const targetStation = orbitalPortfolioStationsRef.current[packet.targetStation];
+            if (!targetStation) return;
+            matterTo.set(packet.targetOffset.x, packet.targetOffset.y, 0.2);
+            targetStation.plate.localToWorld(matterTo);
+            matterTarget.copy(matterTo);
+          } else {
+            matterTarget.copy(matterFrom).add(packet.missOffset);
+          }
           matterPos.copy(matterFrom).add(packet.startOffset).lerp(matterTarget, packet.progress);
           const arc = Math.sin(packet.progress * Math.PI) * (8 + (idx % 5) * 1.4);
           matterPos.y += arc;
@@ -10985,6 +11058,11 @@ export default function ResumeSpace3D({
         impactSprite,
         impactStartedAt: -1,
         impactDurationMs: 2600,
+        impactLocalPoint: new THREE.Vector2(0, 0),
+        rippleAmplitude: 0,
+        rippleWavelength: 8,
+        rippleSpeed: 38,
+        rippleTravelMax: 18,
         mediaHaloGroup,
         variantSatelliteGroup,
         pulsePhase: Math.random() * Math.PI * 2,
@@ -11049,6 +11127,13 @@ export default function ResumeSpace3D({
     const packetCount = Math.max(16, coreRecords.length * 14);
     const randomTargetOffset = () =>
       new THREE.Vector2((Math.random() - 0.5) * 52, (Math.random() - 0.5) * 28);
+    const randomMissOffset = () =>
+      new THREE.Vector3(
+        (Math.random() - 0.5) * 520,
+        (Math.random() - 0.5) * 220 + 80,
+        (Math.random() - 0.5) * 520,
+      );
+    const randomWillImpact = () => Math.random() >= 0.32;
     for (let i = 0; i < packetCount; i += 1) {
       const mat = new THREE.SpriteMaterial({
         color: matterPalette[i % matterPalette.length],
@@ -11074,6 +11159,8 @@ export default function ResumeSpace3D({
         sourceCoreIndex,
         targetStation: pickRandomStationIndexForCore(sourceCoreIndex),
         targetOffset: randomTargetOffset(),
+        willImpact: randomWillImpact(),
+        missOffset: randomMissOffset(),
         phase: Math.random() * Math.PI * 2,
         startOffset: new THREE.Vector3(
           (Math.random() - 0.5) * 11,
