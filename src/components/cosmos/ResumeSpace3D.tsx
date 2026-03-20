@@ -16891,7 +16891,7 @@ export default function ResumeSpace3D({
                               No matches for current filters.
                             </div>
                           ) : (
-                            filteredGroups.map((group, index) => {
+                            filteredGroups.map((group) => {
                               const isHere = group.id === activeGroup?.id;
                               const groupIndex = groups.findIndex((item) => item.id === group.id);
                               return (
@@ -16923,9 +16923,18 @@ export default function ResumeSpace3D({
                                   <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                     {group.title}
                                   </span>
-                                  <span style={{ fontSize: 11, color: isHere ? "#c0f2ff" : "rgba(180,220,245,0.72)" }}>
-                                    {`${index + 1}`}
-                                  </span>
+                                  {group.clientVariantCount > 0 ? (
+                                    <span
+                                      title={`${group.clientVariantCount} client variant${group.clientVariantCount === 1 ? "" : "s"} (from legacy data)`}
+                                      style={{
+                                        fontSize: 11,
+                                        color: isHere ? "#c0f2ff" : "rgba(180,220,245,0.72)",
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {group.clientVariantCount}
+                                    </span>
+                                  ) : null}
                                 </button>
                               );
                             })

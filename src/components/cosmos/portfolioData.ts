@@ -68,6 +68,8 @@ export type PortfolioGroupView = {
   year: number | null;
   image: string;
   fit: "contain" | "cover";
+  /** Count of titled `clientVariants` on the source entry (matches registry totals). */
+  clientVariantCount: number;
   variants: PortfolioVariantView[];
 };
 
@@ -211,6 +213,7 @@ export const buildPortfolioGroups = (
       const variants = (entry.clientVariants ?? []).filter((variant) =>
         Boolean(variant?.title),
       );
+      const clientVariantCount = variants.length;
       const fallbackVariant: PortfolioVariantView = {
         id: `${entry.id}-default`,
         title: entry.title,
@@ -227,6 +230,7 @@ export const buildPortfolioGroups = (
         year: entry.year ?? null,
         image: entry.image,
         fit: entry.fit ?? "cover",
+        clientVariantCount,
         variants:
           variants.length > 0
             ? variants.map((variant, variantIndex) => ({
