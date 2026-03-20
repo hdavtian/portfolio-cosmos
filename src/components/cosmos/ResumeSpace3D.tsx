@@ -404,9 +404,9 @@ type OrbitalPortfolioMatterPacketRecord = {
   speed: number;
   sourceCoreIndex: number;
   targetStation: number;
+  targetOffset: THREE.Vector2;
   phase: number;
   startOffset: THREE.Vector3;
-  endJitter: THREE.Vector3;
 };
 
 type OrbitalPortfolioCoreRecord = {
@@ -7951,6 +7951,8 @@ export default function ResumeSpace3D({
           if (candidates.length === 0) return Math.floor(Math.random() * stations.length);
           return candidates[Math.floor(Math.random() * candidates.length)] ?? 0;
         };
+        const randomTargetOffset = () =>
+          new THREE.Vector2((Math.random() - 0.5) * 52, (Math.random() - 0.5) * 28);
         packets.forEach((packet, idx) => {
           packet.progress += dt * packet.speed;
           if (packet.progress >= 1) {
@@ -7960,11 +7962,10 @@ export default function ResumeSpace3D({
               const impactMat = impactStation.impactSprite.material as THREE.SpriteMaterial;
               const packetMat = packet.mesh.material as THREE.SpriteMaterial;
               impactMat.color.copy(packetMat.color);
-              impactStation.impactSprite.position.set(
-                (Math.random() - 0.5) * 22,
-                (Math.random() - 0.5) * 12,
-                1.38,
-              );
+              matterTo.set(packet.targetOffset.x, packet.targetOffset.y, 0.2);
+              impactStation.plate.localToWorld(matterTo);
+              impactStation.group.worldToLocal(matterTo);
+              impactStation.impactSprite.position.set(matterTo.x, matterTo.y, 1.38);
               impactStation.impactSprite.scale.setScalar(8 + Math.random() * 4);
               impactStation.impactDurationMs = 2200 + Math.random() * 1200;
             }
@@ -7974,16 +7975,12 @@ export default function ResumeSpace3D({
               Math.random() * Math.max(1, orbitalPortfolioCoresRef.current.length),
             );
             packet.targetStation = pickRandomStationIndexForCore(packet.sourceCoreIndex);
+            packet.targetOffset.copy(randomTargetOffset());
             packet.phase = Math.random() * Math.PI * 2;
             packet.startOffset.set(
               (Math.random() - 0.5) * 10,
               (Math.random() - 0.5) * 10,
               (Math.random() - 0.5) * 10,
-            );
-            packet.endJitter.set(
-              (Math.random() - 0.5) * 18,
-              (Math.random() - 0.5) * 11,
-              (Math.random() - 0.5) * 18,
             );
           }
           const sourceCore =
@@ -7998,8 +7995,9 @@ export default function ResumeSpace3D({
           sourceCore.root.getWorldPosition(matterFrom);
           const targetStation = orbitalPortfolioStationsRef.current[packet.targetStation];
           if (!targetStation) return;
-          targetStation.group.getWorldPosition(matterTo);
-          matterTarget.copy(matterTo).add(packet.endJitter);
+          matterTo.set(packet.targetOffset.x, packet.targetOffset.y, 0.2);
+          targetStation.plate.localToWorld(matterTo);
+          matterTarget.copy(matterTo);
           matterPos.copy(matterFrom).add(packet.startOffset).lerp(matterTarget, packet.progress);
           const arc = Math.sin(packet.progress * Math.PI) * (8 + (idx % 5) * 1.4);
           matterPos.y += arc;
@@ -11049,6 +11047,8 @@ export default function ResumeSpace3D({
     const matterPackets: OrbitalPortfolioMatterPacketRecord[] = [];
     const matterPalette = [0x9beaff, 0xa7b6ff, 0xb8ffd9, 0xffb8ef, 0xffe2b3];
     const packetCount = Math.max(16, coreRecords.length * 14);
+    const randomTargetOffset = () =>
+      new THREE.Vector2((Math.random() - 0.5) * 52, (Math.random() - 0.5) * 28);
     for (let i = 0; i < packetCount; i += 1) {
       const mat = new THREE.SpriteMaterial({
         color: matterPalette[i % matterPalette.length],
@@ -11073,16 +11073,12 @@ export default function ResumeSpace3D({
         speed: 0.26 + Math.random() * 0.3,
         sourceCoreIndex,
         targetStation: pickRandomStationIndexForCore(sourceCoreIndex),
+        targetOffset: randomTargetOffset(),
         phase: Math.random() * Math.PI * 2,
         startOffset: new THREE.Vector3(
           (Math.random() - 0.5) * 11,
           (Math.random() - 0.5) * 11,
           (Math.random() - 0.5) * 11,
-        ),
-        endJitter: new THREE.Vector3(
-          (Math.random() - 0.5) * 16,
-          (Math.random() - 0.5) * 10,
-          (Math.random() - 0.5) * 16,
         ),
       });
     }
