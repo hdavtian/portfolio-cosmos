@@ -296,8 +296,6 @@
         "angle": 0,
         "items": [
           { "orbitColor": "#545353", "items": [] },
-          { "orbitColor": "#545353", "items": [] },
-          { "orbitColor": "#545353", "items": [] },
           {
             "orbitColor": "#FAB41E",
             "items": [
@@ -312,58 +310,14 @@
                 "galleryMedia": [
                   { "id": "tcc-2", "type": "image", "image": "/images/investcloud/tcc/tcc-2.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
                   { "id": "tcc-3", "type": "image", "image": "/images/investcloud/tcc/tcc-3.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
-                  { "id": "tcc-10", "type": "image", "image": "/images/investcloud/tcc/tcc-10.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "cover" },
-                  { "id": "tcc-11", "type": "image", "image": "/images/investcloud/tcc/tcc-11.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "cover" },
+                  { "id": "tcc-10", "type": "image", "image": "/images/investcloud/tcc/tcc-10.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
+                  { "id": "tcc-11", "type": "image", "image": "/images/investcloud/tcc/tcc-11.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
                   { "id": "tcc-12", "type": "image", "image": "/images/investcloud/tcc/tcc-12.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
                   { "id": "tcc-13", "type": "image", "image": "/images/investcloud/tcc/tcc-13.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
                   { "id": "tcc-14", "type": "image", "image": "/images/investcloud/tcc/tcc-14.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" }
                 ]
-              },
-              {
-                "id": "restaurant-websites",
-                "title": "Restaurant Websites",
-                "image": "/images/legacy-web/arroyo-chop-house-1.jpg",
-                "description": "Restaurant and hospitality websites grouped by client brand.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
-                "fit": "cover"
-              },
-              {
-                "id": "attorney-websites",
-                "title": "Attorney Websites",
-                "image": "/images/legacy-web/ourfalian-law-a-1.jpg",
-                "description": "Attorney website projects grouped by practice presentation.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
-                "fit": "cover"
-              },
-              {
-                "id": "stormscape-studios",
-                "title": "StormScape Studios",
-                "image": "/images/legacy-web/stormscape - demo sites.png",
-                "description": "Placeholder description for StormScape Studios.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
-                "fit": "cover"
-              },
-              {
-                "id": "commerce-escrow-company",
-                "title": "Commerce Escrow Company",
-                "image": "/images/legacy-web/commerce-escrow-company-1.jpg",
-                "description": "Placeholder description for Commerce Escrow Company.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
-                "fit": "cover"
-              },
-              {
-                "id": "race-with-honda",
-                "title": "Race with Honda",
-                "image": "/images/legacy-web/racewithhonda.com 1.png",
-                "description": "Placeholder description for Race with Honda.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
-                "fit": "cover"
               }
+              
             ]
           }
         ]

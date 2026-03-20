@@ -329,9 +329,11 @@ type ShowcasePanelRecord = {
   mediaFadeStartMs: number;
   mediaFadeDurationMs: number;
   setThumbnailPageStart: (pageStart: number) => void;
+  triggerThumbnailNavPress: (direction: "prev" | "next") => void;
   thumbnailPageStart: number;
   thumbnailHitTargets: ShowcaseThumbnailHitTarget[];
   thumbnailFrameMats: THREE.MeshBasicMaterial[];
+  thumbnailImageMats: Array<THREE.MeshBasicMaterial | undefined>;
   detailMat: THREE.MeshBasicMaterial;
   detailTexture: THREE.Texture | null;
   detailMesh: THREE.Mesh | null;
@@ -395,6 +397,11 @@ type OrbitalPortfolioStationRecord = {
     mesh: THREE.Mesh;
     frame: THREE.Mesh;
     mediaIndex: number;
+  }>;
+  cardThumbNavMeshes: Array<{
+    mesh: THREE.Mesh;
+    frame: THREE.Mesh;
+    direction: "prev" | "next";
   }>;
   orbitLane: 0 | 1;
   orbitAngle: number;
@@ -1699,6 +1706,10 @@ export default function ResumeSpace3D({
   const [orbitalPortfolioVariantIndex, setOrbitalPortfolioVariantIndex] = useState(0);
   const orbitalPortfolioVariantIndexRef = useRef(0);
   const [orbitalPortfolioMediaIndex, setOrbitalPortfolioMediaIndex] = useState(0);
+  const [orbitalPortfolioThumbPageStart, setOrbitalPortfolioThumbPageStart] = useState(0);
+  const orbitalPortfolioThumbPageStartRef = useRef(0);
+  const orbitalPortfolioPrevThumbPageStartRef = useRef(0);
+  const orbitalPortfolioThumbSlideDirectionRef = useRef<"prev" | "next" | null>(null);
   const [orbitalPortfolioSearchQuery, setOrbitalPortfolioSearchQuery] = useState("");
   const [orbitalPortfolioYearFilter, setOrbitalPortfolioYearFilter] = useState("all");
   const [orbitalPortfolioTechFilter, setOrbitalPortfolioTechFilter] = useState("all");
@@ -1746,6 +1757,9 @@ export default function ResumeSpace3D({
   useEffect(() => {
     orbitalPortfolioVariantIndexRef.current = orbitalPortfolioVariantIndex;
   }, [orbitalPortfolioVariantIndex]);
+  useEffect(() => {
+    orbitalPortfolioThumbPageStartRef.current = orbitalPortfolioThumbPageStart;
+  }, [orbitalPortfolioThumbPageStart]);
   useEffect(() => {
     orbitalPortfolioHasActiveFocusRef.current = orbitalPortfolioHasActiveFocus;
   }, [orbitalPortfolioHasActiveFocus]);
@@ -3545,6 +3559,9 @@ export default function ResumeSpace3D({
     };
     setOrbitalPortfolioVariantIndex(0);
     setOrbitalPortfolioMediaIndex(0);
+    setOrbitalPortfolioThumbPageStart(0);
+    orbitalPortfolioPrevThumbPageStartRef.current = 0;
+    orbitalPortfolioThumbSlideDirectionRef.current = null;
     setOrbitalPortfolioHasActiveFocus(false);
     orbitalPortfolioInspectedStationIndexRef.current = null;
     orbitalPortfolioInspectDistanceRef.current = null;
@@ -3653,6 +3670,9 @@ export default function ResumeSpace3D({
     };
     setOrbitalPortfolioVariantIndex(0);
     setOrbitalPortfolioMediaIndex(0);
+    setOrbitalPortfolioThumbPageStart(0);
+    orbitalPortfolioPrevThumbPageStartRef.current = 0;
+    orbitalPortfolioThumbSlideDirectionRef.current = null;
     orbitalPortfolioInspectedStationIndexRef.current = null;
     orbitalPortfolioInspectDistanceRef.current = null;
     setPortfolioNavHereActive(true);
@@ -3788,11 +3808,21 @@ export default function ResumeSpace3D({
           1,
           groups[next]?.variants?.[nextVariantIndex]?.mediaItems?.length ?? 1,
         );
-        setOrbitalPortfolioMediaIndex(
-          THREE.MathUtils.clamp(Math.floor(mediaIndex), 0, mediaCount - 1),
+        const clampedMediaIndex = THREE.MathUtils.clamp(
+          Math.floor(mediaIndex),
+          0,
+          mediaCount - 1,
         );
+        setOrbitalPortfolioMediaIndex(clampedMediaIndex);
+        setOrbitalPortfolioThumbPageStart(
+          Math.floor(clampedMediaIndex / ORBITAL_PORTFOLIO_CARD_MAX_THUMBS) *
+            ORBITAL_PORTFOLIO_CARD_MAX_THUMBS,
+        );
+        orbitalPortfolioThumbSlideDirectionRef.current = null;
       } else {
         setOrbitalPortfolioMediaIndex(0);
+        setOrbitalPortfolioThumbPageStart(0);
+        orbitalPortfolioThumbSlideDirectionRef.current = null;
       }
       orbitalPortfolioInspectedStationIndexRef.current = next;
       orbitalPortfolioInspectStartedAtRef.current = performance.now();
@@ -7891,13 +7921,67 @@ export default function ResumeSpace3D({
           const hasMedia = thumb.mesh.userData.hasMedia !== false;
           thumb.mesh.visible = isFocused && hasMedia;
           thumb.frame.visible = isFocused && hasMedia;
-          const isActiveMedia = thumb.mediaIndex === orbitalPortfolioMediaIndex;
+          const mappedMediaIndex = Number(thumb.mesh.userData.orbitalMediaIndex ?? thumb.mediaIndex);
+          const isActiveMedia = mappedMediaIndex === orbitalPortfolioMediaIndex;
           mat.opacity = isFocused ? (isActiveMedia ? 1 : 0.93) : 0;
           mat.color.setHex(0xffffff);
           frameMat.opacity = isFocused ? (isActiveMedia ? 0.96 : 0.6) : 0;
           frameMat.color.setHex(isActiveMedia ? 0xd3f2ff : 0x79b5df);
           thumb.mesh.scale.setScalar(isFocused ? (isActiveMedia ? 1.05 : 0.96) : 0.9);
           thumb.frame.scale.copy(thumb.mesh.scale);
+          const baseX = Number(thumb.mesh.userData.orbitalBaseX ?? thumb.mesh.position.x);
+          const baseY = Number(thumb.mesh.userData.orbitalBaseY ?? thumb.mesh.position.y);
+          const meshSlideStartAt = Number(thumb.mesh.userData.orbitalThumbSlideStartAt ?? 0);
+          const meshSlideDuration = Math.max(
+            1,
+            Number(thumb.mesh.userData.orbitalThumbSlideDurationMs ?? 1),
+          );
+          const meshSlideFromX = Number(thumb.mesh.userData.orbitalThumbSlideFromX ?? 0);
+          let meshSlideOffsetX = 0;
+          if (meshSlideStartAt > 0 && meshSlideFromX !== 0) {
+            const t = THREE.MathUtils.clamp((now - meshSlideStartAt) / meshSlideDuration, 0, 1);
+            const eased = 1 - (1 - t) * (1 - t) * (1 - t);
+            meshSlideOffsetX = meshSlideFromX * (1 - eased);
+            if (t >= 1) {
+              thumb.mesh.userData.orbitalThumbSlideStartAt = 0;
+              thumb.mesh.userData.orbitalThumbSlideFromX = 0;
+            }
+          }
+          thumb.mesh.position.set(baseX + meshSlideOffsetX, baseY, thumb.mesh.position.z);
+          const frameBaseX = Number(thumb.frame.userData.orbitalBaseX ?? thumb.frame.position.x);
+          const frameBaseY = Number(thumb.frame.userData.orbitalBaseY ?? thumb.frame.position.y);
+          const frameSlideStartAt = Number(thumb.frame.userData.orbitalThumbSlideStartAt ?? 0);
+          const frameSlideDuration = Math.max(
+            1,
+            Number(thumb.frame.userData.orbitalThumbSlideDurationMs ?? 1),
+          );
+          const frameSlideFromX = Number(thumb.frame.userData.orbitalThumbSlideFromX ?? 0);
+          let frameSlideOffsetX = 0;
+          if (frameSlideStartAt > 0 && frameSlideFromX !== 0) {
+            const t = THREE.MathUtils.clamp((now - frameSlideStartAt) / frameSlideDuration, 0, 1);
+            const eased = 1 - (1 - t) * (1 - t) * (1 - t);
+            frameSlideOffsetX = frameSlideFromX * (1 - eased);
+            if (t >= 1) {
+              thumb.frame.userData.orbitalThumbSlideStartAt = 0;
+              thumb.frame.userData.orbitalThumbSlideFromX = 0;
+            }
+          }
+          thumb.frame.position.set(frameBaseX + frameSlideOffsetX, frameBaseY, thumb.frame.position.z);
+        });
+        station.cardThumbNavMeshes.forEach((nav) => {
+          const navMat = nav.mesh.material as THREE.MeshBasicMaterial;
+          const navFrameMat = nav.frame.material as THREE.MeshBasicMaterial;
+          const canMove = nav.mesh.userData.orbitalNavCanMove === true;
+          const showNav = nav.mesh.userData.orbitalShowNav === true;
+          const pressedUntil = Number(nav.mesh.userData.orbitalPressedUntil ?? 0);
+          const isPressed = pressedUntil > now;
+          nav.mesh.visible = isFocused && showNav;
+          nav.frame.visible = isFocused && showNav;
+          navMat.opacity = isFocused ? (canMove ? (isPressed ? 1 : 0.94) : 0.34) : 0;
+          navFrameMat.opacity = isFocused ? (canMove ? (isPressed ? 0.96 : 0.84) : 0.24) : 0;
+          const targetScale = isFocused ? (isPressed ? 0.9 : 1) : 0.88;
+          nav.mesh.scale.setScalar(targetScale);
+          nav.frame.scale.setScalar(targetScale);
         });
         station.mediaHaloGroup.visible = false;
         station.variantSatelliteGroup.visible = false;
@@ -8200,12 +8284,55 @@ export default function ResumeSpace3D({
       0,
       Math.max(0, mediaItems.length - 1),
     );
+    const maxThumbPageStart = Math.max(
+      0,
+      mediaItems.length - ORBITAL_PORTFOLIO_CARD_MAX_THUMBS,
+    );
+    let thumbPageStart = THREE.MathUtils.clamp(
+      orbitalPortfolioThumbPageStartRef.current,
+      0,
+      maxThumbPageStart,
+    );
     const media = mediaItems[mediaIndex];
     const prevViewed = orbitalPortfolioLastViewedRef.current;
     const sameFocusedStation = prevViewed.focusIndex === focusIndex;
     const contentChangedOnFocusedStation =
       sameFocusedStation &&
       (prevViewed.variantIndex !== variantIndex || prevViewed.mediaIndex !== mediaIndex);
+    const shouldAutoAlignThumbPage = !sameFocusedStation || contentChangedOnFocusedStation;
+    if (
+      shouldAutoAlignThumbPage &&
+      mediaItems.length > ORBITAL_PORTFOLIO_CARD_MAX_THUMBS &&
+      (mediaIndex < thumbPageStart ||
+        mediaIndex >= thumbPageStart + ORBITAL_PORTFOLIO_CARD_MAX_THUMBS)
+    ) {
+      thumbPageStart =
+        Math.floor(mediaIndex / ORBITAL_PORTFOLIO_CARD_MAX_THUMBS) *
+        ORBITAL_PORTFOLIO_CARD_MAX_THUMBS;
+      thumbPageStart = THREE.MathUtils.clamp(thumbPageStart, 0, maxThumbPageStart);
+    }
+    if (thumbPageStart !== orbitalPortfolioThumbPageStartRef.current) {
+      setOrbitalPortfolioThumbPageStart(thumbPageStart);
+    }
+    const thumbPageChanged = thumbPageStart !== orbitalPortfolioPrevThumbPageStartRef.current;
+    const thumbSlideDirection = orbitalPortfolioThumbSlideDirectionRef.current;
+    if (thumbPageChanged && thumbSlideDirection) {
+      const slideFromX = thumbSlideDirection === "next" ? 7.6 : -7.6;
+      const slideDurationMs = 230;
+      const slideStartAt = performance.now();
+      station.cardThumbMeshes.forEach((thumb) => {
+        thumb.mesh.userData.orbitalThumbSlideFromX = slideFromX;
+        thumb.frame.userData.orbitalThumbSlideFromX = slideFromX;
+        thumb.mesh.userData.orbitalThumbSlideStartAt = slideStartAt;
+        thumb.frame.userData.orbitalThumbSlideStartAt = slideStartAt;
+        thumb.mesh.userData.orbitalThumbSlideDurationMs = slideDurationMs;
+        thumb.frame.userData.orbitalThumbSlideDurationMs = slideDurationMs;
+      });
+    }
+    if (thumbPageChanged) {
+      orbitalPortfolioPrevThumbPageStartRef.current = thumbPageStart;
+      orbitalPortfolioThumbSlideDirectionRef.current = null;
+    }
     orbitalPortfolioLastViewedRef.current = {
       focusIndex,
       variantIndex,
@@ -8321,11 +8448,12 @@ export default function ResumeSpace3D({
     const thumbLoader = new THREE.TextureLoader();
     station.cardThumbMeshes.forEach((thumb) => {
       const thumbMat = thumb.mesh.material as THREE.MeshBasicMaterial;
-      const mediaAtThumb = mediaItems[thumb.mediaIndex];
+      const mappedMediaIndex = thumbPageStart + thumb.mediaIndex;
+      const mediaAtThumb = mediaItems[mappedMediaIndex];
       thumb.mesh.userData.hasMedia = Boolean(mediaAtThumb);
       thumb.mesh.userData.orbitalStationIndex = focusIndex;
       thumb.mesh.userData.orbitalPickKind = "thumb";
-      thumb.mesh.userData.orbitalMediaIndex = thumb.mediaIndex;
+      thumb.mesh.userData.orbitalMediaIndex = mappedMediaIndex;
       if (!mediaAtThumb?.textureUrl) {
         thumb.mesh.visible = false;
         thumb.frame.visible = false;
@@ -8352,6 +8480,26 @@ export default function ResumeSpace3D({
         undefined,
         () => undefined,
       );
+    });
+    const showThumbNav = mediaItems.length > ORBITAL_PORTFOLIO_CARD_MAX_THUMBS;
+    station.cardThumbNavMeshes.forEach((nav) => {
+      const navMat = nav.mesh.material as THREE.MeshBasicMaterial;
+      const navFrameMat = nav.frame.material as THREE.MeshBasicMaterial;
+      const canMove =
+        nav.direction === "prev"
+          ? thumbPageStart > 0
+          : thumbPageStart + ORBITAL_PORTFOLIO_CARD_MAX_THUMBS < mediaItems.length;
+      nav.mesh.visible = showThumbNav;
+      nav.frame.visible = showThumbNav;
+      nav.mesh.userData.orbitalStationIndex = focusIndex;
+      nav.mesh.userData.orbitalPickKind = "thumb-nav";
+      nav.mesh.userData.orbitalThumbNavDirection = nav.direction;
+      nav.mesh.userData.orbitalShowNav = showThumbNav;
+      nav.mesh.userData.orbitalNavCanMove = canMove;
+      navMat.opacity = canMove ? 0.94 : 0.34;
+      navMat.color.setHex(canMove ? 0xe8f7ff : 0x80a4c3);
+      navFrameMat.opacity = canMove ? 0.84 : 0.24;
+      navFrameMat.color.setHex(canMove ? 0xa8deff : 0x587a96);
     });
 
     if (!media?.textureUrl) return;
@@ -8386,6 +8534,7 @@ export default function ResumeSpace3D({
     orbitalPortfolioActive,
     orbitalPortfolioFocusIndex,
     orbitalPortfolioMediaIndex,
+    orbitalPortfolioThumbPageStart,
     orbitalPortfolioVariantIndex,
   ]);
 
@@ -9054,7 +9203,8 @@ export default function ResumeSpace3D({
           coreId?: string;
           mediaIndex?: number;
           variantIndex?: number;
-          kind: "plate" | "thumb" | "variant" | "core";
+          thumbNavDirection?: "prev" | "next";
+          kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav";
         }
       | null = null;
 
@@ -9067,7 +9217,8 @@ export default function ResumeSpace3D({
           coreId?: string;
           mediaIndex?: number;
           variantIndex?: number;
-          kind: "plate" | "thumb" | "variant" | "core";
+          thumbNavDirection?: "prev" | "next";
+          kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav";
         }
       | null => {
       if (!orbitalPortfolioActiveRef.current) return null;
@@ -9098,8 +9249,16 @@ export default function ResumeSpace3D({
         station.cardThumbMeshes.forEach((thumb) => {
           thumb.mesh.userData.orbitalStationIndex = stationIndex;
           thumb.mesh.userData.orbitalPickKind = "thumb";
-          thumb.mesh.userData.orbitalMediaIndex = thumb.mediaIndex;
+          if (!Number.isFinite(Number(thumb.mesh.userData.orbitalMediaIndex))) {
+            thumb.mesh.userData.orbitalMediaIndex = thumb.mediaIndex;
+          }
           if (thumb.mesh.visible) pickables.push(thumb.mesh);
+        });
+        station.cardThumbNavMeshes.forEach((nav) => {
+          nav.mesh.userData.orbitalStationIndex = stationIndex;
+          nav.mesh.userData.orbitalPickKind = "thumb-nav";
+          nav.mesh.userData.orbitalThumbNavDirection = nav.direction;
+          if (nav.mesh.visible) pickables.push(nav.mesh);
         });
       });
       const hits = raycaster.intersectObjects(pickables, false);
@@ -9108,7 +9267,13 @@ export default function ResumeSpace3D({
       if (!hit) return null;
       const stationIndex = Number(hit.userData?.orbitalStationIndex);
       const kind =
-        (hit.userData?.orbitalPickKind as "plate" | "thumb" | "variant" | "core" | undefined) ??
+        (hit.userData?.orbitalPickKind as
+          | "plate"
+          | "thumb"
+          | "variant"
+          | "core"
+          | "thumb-nav"
+          | undefined) ??
         "plate";
       if (kind === "core") {
         const coreId = String(hit.userData?.orbitalCoreId ?? "");
@@ -9125,6 +9290,11 @@ export default function ResumeSpace3D({
         const mediaIndex = Number(hit.userData?.orbitalMediaIndex);
         if (!Number.isFinite(mediaIndex)) return { stationIndex, kind: "plate" };
         return { stationIndex, mediaIndex, kind: "thumb" };
+      }
+      if (kind === "thumb-nav") {
+        const thumbNavDirection =
+          hit.userData?.orbitalThumbNavDirection === "next" ? "next" : "prev";
+        return { stationIndex, thumbNavDirection, kind: "thumb-nav" };
       }
       return { stationIndex, kind: "plate" };
     };
@@ -9175,6 +9345,46 @@ export default function ResumeSpace3D({
             ),
           );
           setOrbitalPortfolioMediaIndex(0);
+          setOrbitalPortfolioThumbPageStart(0);
+        } else if (
+          pending.kind === "thumb-nav" &&
+          typeof pending.stationIndex === "number"
+        ) {
+          const groups = orbitalPortfolioGroupsRef.current;
+          const focusStation = THREE.MathUtils.clamp(
+            pending.stationIndex,
+            0,
+            Math.max(0, groups.length - 1),
+          );
+          const variantIndex = THREE.MathUtils.clamp(
+            orbitalPortfolioVariantIndexRef.current,
+            0,
+            Math.max(0, (groups[focusStation]?.variants?.length ?? 1) - 1),
+          );
+          const mediaCount =
+            groups[focusStation]?.variants?.[variantIndex]?.mediaItems?.length ?? 0;
+          const maxPageStart = Math.max(
+            0,
+            mediaCount - ORBITAL_PORTFOLIO_CARD_MAX_THUMBS,
+          );
+          const delta =
+            pending.thumbNavDirection === "next"
+              ? ORBITAL_PORTFOLIO_CARD_MAX_THUMBS
+              : -ORBITAL_PORTFOLIO_CARD_MAX_THUMBS;
+          const nextPageStart = THREE.MathUtils.clamp(
+            orbitalPortfolioThumbPageStartRef.current + delta,
+            0,
+            maxPageStart,
+          );
+          orbitalPortfolioThumbSlideDirectionRef.current = pending.thumbNavDirection ?? null;
+          setOrbitalPortfolioThumbPageStart(nextPageStart);
+          const activeDirection = pending.thumbNavDirection;
+          const station = orbitalPortfolioStationsRef.current[focusStation];
+          station?.cardThumbNavMeshes.forEach((nav) => {
+            if (nav.direction === activeDirection) {
+              nav.mesh.userData.orbitalPressedUntil = performance.now() + 140;
+            }
+          });
         } else if (typeof pending.stationIndex === "number") {
           focusOrbitalPortfolioStation(pending.stationIndex, pending.mediaIndex);
         }
@@ -9247,10 +9457,12 @@ export default function ResumeSpace3D({
       ) {
         panel.setActiveVariant(hitTarget.variantIndex);
       } else if (hitTarget.type === "prev") {
+        panel.triggerThumbnailNavPress("prev");
         panel.setThumbnailPageStart(
           panel.thumbnailPageStart - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
         );
       } else if (hitTarget.type === "next") {
+        panel.triggerThumbnailNavPress("next");
         panel.setThumbnailPageStart(
           panel.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE,
         );
@@ -10956,9 +11168,64 @@ export default function ResumeSpace3D({
         );
         thumbFrame.position.set(thumbStartX + mediaIndex * thumbGap, -23.8, 1.16);
         thumbMesh.position.set(thumbStartX + mediaIndex * thumbGap, -23.8, 1.2);
+        thumbFrame.userData.orbitalBaseX = thumbFrame.position.x;
+        thumbFrame.userData.orbitalBaseY = thumbFrame.position.y;
+        thumbMesh.userData.orbitalBaseX = thumbMesh.position.x;
+        thumbMesh.userData.orbitalBaseY = thumbMesh.position.y;
         stationGroup.add(thumbFrame, thumbMesh);
         cardThumbMeshes.push({ mesh: thumbMesh, frame: thumbFrame, mediaIndex });
       }
+      const createThumbNav = (
+        direction: "prev" | "next",
+        x: number,
+      ): { mesh: THREE.Mesh; frame: THREE.Mesh; direction: "prev" | "next" } => {
+        const navFrame = new THREE.Mesh(
+          new THREE.PlaneGeometry(5.4, 5.8),
+          new THREE.MeshBasicMaterial({
+            color: 0x9adfff,
+            transparent: true,
+            opacity: 0.84,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+            depthWrite: false,
+          }),
+        );
+        const navMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(4.8, 5.2),
+          new THREE.MeshBasicMaterial({
+            color: 0xe8f7ff,
+            transparent: true,
+            opacity: 0.94,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+            depthWrite: false,
+          }),
+        );
+        const arrowTexture = createDetailTexture([direction === "prev" ? "‹" : "›"], {
+          width: 256,
+          height: 256,
+          bgColor: "rgba(0,0,0,0)",
+          showLine: false,
+          textColor: "rgba(229,243,255,0.98)",
+          fontSize: 162,
+          lineSpacing: 168,
+          textAlign: "center",
+          padding: 128,
+          centerBlock: true,
+          fontFamily: "Rajdhani, sans-serif",
+          fontWeight: 700,
+          crispUI: true,
+        });
+        navMesh.material.map = arrowTexture;
+        navFrame.position.set(x, -23.8, 1.16);
+        navMesh.position.set(x, -23.8, 1.2);
+        stationGroup.add(navFrame, navMesh);
+        return { mesh: navMesh, frame: navFrame, direction };
+      };
+      const cardThumbNavMeshes = [
+        createThumbNav("prev", -31.2),
+        createThumbNav("next", 31.2),
+      ];
       const media = group.variants[0]?.mediaItems?.[0];
       if (media?.textureUrl) {
         textureLoader.load(
@@ -11103,6 +11370,7 @@ export default function ResumeSpace3D({
         cardTitleMesh,
         cardVariantTabs,
         cardThumbMeshes,
+        cardThumbNavMeshes,
         orbitLane: lane as 0 | 1,
         orbitAngle: a,
         orbitDirection,
@@ -11129,6 +11397,10 @@ export default function ResumeSpace3D({
       station.cardThumbMeshes.forEach((thumb) => {
         thumb.frame.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
         thumb.mesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+      });
+      station.cardThumbNavMeshes.forEach((nav) => {
+        nav.frame.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+        nav.mesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
       });
       station.mediaHaloGroup.traverse((obj) => obj.layers.set(PROJECT_SHOWCASE_CARD_LAYER));
     });
@@ -12737,9 +13009,11 @@ export default function ResumeSpace3D({
             mediaFadeStartMs: -Infinity,
             mediaFadeDurationMs: 240,
             setThumbnailPageStart: () => {},
+            triggerThumbnailNavPress: () => {},
             thumbnailPageStart: 0,
             thumbnailHitTargets: [],
             thumbnailFrameMats: [],
+            thumbnailImageMats: [],
             detailMat: new THREE.MeshBasicMaterial({
               color: 0xffffff,
               transparent: true,
@@ -13300,12 +13574,19 @@ export default function ResumeSpace3D({
           const thumbSlotsWidthNarrow = stripWidth * 0.56;
           const thumbWidth = thumbSlotsWidthNarrow / PROJECT_SHOWCASE_THUMBS_PER_PAGE - 0.08;
           const thumbHeight = stripHeight * 0.66;
+          const thumbGap = 0.08;
+          const thumbStep = thumbWidth + thumbGap;
+          const thumbSlideDuration = 0.34;
           const thumbBaseY = 0;
           const thumbBaseZ = 0.06;
           const thumbOffsetStart =
-            -((PROJECT_SHOWCASE_THUMBS_PER_PAGE - 1) * (thumbWidth + 0.08)) / 2;
+            -((PROJECT_SHOWCASE_THUMBS_PER_PAGE - 1) * thumbStep) / 2;
           const thumbGroups: THREE.Group[] = [];
           const thumbIndexByGroup = new Map<THREE.Group, number>();
+          const thumbFrameByMediaIndex = new Map<number, THREE.MeshBasicMaterial>();
+          const thumbImageByMediaIndex = new Map<number, THREE.MeshBasicMaterial>();
+          const activeArrowColor = new THREE.Color(0xdff4ff);
+          const disabledArrowColor = new THREE.Color(0x8caec9);
           const getVariantMediaIndices = () => {
             if (panelRecord.clientVariants.length === 0) {
               return panelRecord.mediaItems.map((_, idx) => idx);
@@ -13330,6 +13611,8 @@ export default function ResumeSpace3D({
             );
             const thumbImageMat = new THREE.MeshBasicMaterial({
               color: 0x95acc8,
+              transparent: true,
+              opacity: 0.88,
               side: THREE.DoubleSide,
             });
             const thumbImage = new THREE.Mesh(
@@ -13399,6 +13682,9 @@ export default function ResumeSpace3D({
             panelRecord.thumbnailFrameMats.push(
               thumbFrame.material as THREE.MeshBasicMaterial,
             );
+            panelRecord.thumbnailImageMats[mediaIndex] = thumbImageMat;
+            thumbFrameByMediaIndex.set(mediaIndex, thumbFrame.material as THREE.MeshBasicMaterial);
+            thumbImageByMediaIndex.set(mediaIndex, thumbImageMat);
             panelRecord.thumbnailHitTargets.push({
               mesh: thumbImage,
               type: "media",
@@ -13406,12 +13692,22 @@ export default function ResumeSpace3D({
             });
           });
 
-          const updateThumbnailLayout = () => {
+          const updateThumbnailLayout = ({
+            animate = false,
+            previousPageStart,
+          }: {
+            animate?: boolean;
+            previousPageStart?: number;
+          } = {}) => {
             const variantMediaIndices = getVariantMediaIndices();
             const maxPageStart = Math.max(
               0,
               variantMediaIndices.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
             );
+            const beforePageStart =
+              typeof previousPageStart === "number"
+                ? THREE.MathUtils.clamp(previousPageStart, 0, maxPageStart)
+                : panelRecord.thumbnailPageStart;
             panelRecord.thumbnailPageStart = THREE.MathUtils.clamp(
               panelRecord.thumbnailPageStart,
               0,
@@ -13422,32 +13718,73 @@ export default function ResumeSpace3D({
             thumbGroups.forEach((group) => {
               const mediaIndex = thumbIndexByGroup.get(group) ?? -1;
               const filteredPosition = variantMediaIndices.indexOf(mediaIndex);
-              const visible =
-                filteredPosition >= panelRecord.thumbnailPageStart &&
-                filteredPosition < pageEnd;
-              group.visible = visible;
-              if (!visible) return;
-              const slot = filteredPosition - panelRecord.thumbnailPageStart;
-              group.position.set(
-                thumbOffsetStart + slot * (thumbWidth + 0.08),
-                thumbBaseY,
-                thumbBaseZ,
-              );
+              const wasVisible =
+                filteredPosition >= beforePageStart &&
+                filteredPosition < beforePageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE;
+              const willBeVisible =
+                filteredPosition >= panelRecord.thumbnailPageStart && filteredPosition < pageEnd;
+              const shouldAnimate = animate && beforePageStart !== panelRecord.thumbnailPageStart;
+              const currentSlot = filteredPosition - beforePageStart;
+              const nextSlot = filteredPosition - panelRecord.thumbnailPageStart;
+              const fromX = thumbOffsetStart + currentSlot * thumbStep;
+              const toX = thumbOffsetStart + nextSlot * thumbStep;
+              const frameMat = thumbFrameByMediaIndex.get(mediaIndex);
+              const imageMat = thumbImageByMediaIndex.get(mediaIndex);
+              if (filteredPosition < 0 || (!wasVisible && !willBeVisible)) {
+                group.visible = false;
+                return;
+              }
+              group.visible = true;
+              if (!shouldAnimate) {
+                group.position.set(toX, thumbBaseY, thumbBaseZ);
+                group.scale.set(1, 1, 1);
+                return;
+              }
+              gsap.killTweensOf(group.position);
+              gsap.killTweensOf(group.scale);
+              if (frameMat) gsap.killTweensOf(frameMat);
+              if (imageMat) gsap.killTweensOf(imageMat);
+              group.position.set(fromX, thumbBaseY, thumbBaseZ);
+              gsap.to(group.position, {
+                x: toX,
+                duration: thumbSlideDuration,
+                ease: "power3.out",
+              });
+              if (!wasVisible && willBeVisible) {
+                group.scale.set(0.92, 0.92, 1);
+                gsap.to(group.scale, {
+                  x: 1,
+                  y: 1,
+                  duration: thumbSlideDuration,
+                  ease: "power2.out",
+                });
+              } else if (wasVisible && !willBeVisible) {
+                gsap.to(group.scale, {
+                  x: 0.92,
+                  y: 0.92,
+                  duration: thumbSlideDuration,
+                  ease: "power2.out",
+                  onComplete: () => {
+                    if (!willBeVisible) group.visible = false;
+                    group.scale.set(1, 1, 1);
+                  },
+                });
+              }
             });
             const showNav =
               variantMediaIndices.length > PROJECT_SHOWCASE_THUMBS_PER_PAGE;
             prevArrowMesh.visible = showNav;
             nextArrowMesh.visible = showNav;
-            (
-              prevArrowMesh.material as THREE.MeshBasicMaterial
-            ).opacity = panelRecord.thumbnailPageStart > 0 ? 0.95 : 0.35;
-            (
-              nextArrowMesh.material as THREE.MeshBasicMaterial
-            ).opacity =
+            const prevEnabled = panelRecord.thumbnailPageStart > 0;
+            const nextEnabled =
               panelRecord.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE <
-              variantMediaIndices.length
-                ? 0.95
-                : 0.35;
+              variantMediaIndices.length;
+            const prevMat = prevArrowMesh.material as THREE.MeshBasicMaterial;
+            const nextMat = nextArrowMesh.material as THREE.MeshBasicMaterial;
+            prevMat.opacity = prevEnabled ? 0.96 : 0.36;
+            nextMat.opacity = nextEnabled ? 0.96 : 0.36;
+            prevMat.color.copy(prevEnabled ? activeArrowColor : disabledArrowColor);
+            nextMat.color.copy(nextEnabled ? activeArrowColor : disabledArrowColor);
           };
 
           const updateThumbnailVisualState = () => {
@@ -13455,6 +13792,10 @@ export default function ResumeSpace3D({
               const active = mediaIndex === panelRecord.activeMediaIndex;
               mat.opacity = active ? 0.9 : 0.26;
               mat.color.set(active ? 0xeaf7ff : 0x88cfff);
+              const imageMat = panelRecord.thumbnailImageMats[mediaIndex];
+              if (imageMat) {
+                imageMat.opacity = active ? 1 : 0.88;
+              }
             });
           };
 
@@ -13608,14 +13949,54 @@ export default function ResumeSpace3D({
               0,
               variantMediaIndices.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
             );
+            const previousPageStart = panelRecord.thumbnailPageStart;
             panelRecord.thumbnailPageStart = THREE.MathUtils.clamp(
               pageStart,
               0,
               maxPageStart,
             );
-            updateThumbnailLayout();
+            updateThumbnailLayout({ animate: true, previousPageStart });
             updateThumbnailVisualState();
             bumpProjectShowcaseViewportTick();
+          };
+          panelRecord.triggerThumbnailNavPress = (direction: "prev" | "next") => {
+            const variantMediaIndices = getVariantMediaIndices();
+            const maxPageStart = Math.max(
+              0,
+              variantMediaIndices.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
+            );
+            const canPrev = panelRecord.thumbnailPageStart > 0;
+            const canNext = panelRecord.thumbnailPageStart < maxPageStart;
+            const isPrev = direction === "prev";
+            const mesh = isPrev ? prevArrowMesh : nextArrowMesh;
+            const mat = mesh.material as THREE.MeshBasicMaterial;
+            const canMove = isPrev ? canPrev : canNext;
+            gsap.killTweensOf(mesh.scale);
+            gsap.killTweensOf(mat);
+            gsap.fromTo(
+              mesh.scale,
+              { x: 1, y: 1, z: 1 },
+              {
+                x: canMove ? 0.9 : 0.96,
+                y: canMove ? 0.9 : 0.96,
+                z: 1,
+                duration: 0.11,
+                ease: "power2.out",
+                yoyo: true,
+                repeat: 1,
+              },
+            );
+            gsap.fromTo(
+              mat,
+              { opacity: canMove ? 1 : 0.42 },
+              {
+                opacity: canMove ? 0.86 : 0.30,
+                duration: 0.11,
+                ease: "power2.out",
+                yoyo: true,
+                repeat: 1,
+              },
+            );
           };
           updateThumbnailLayout();
           updateThumbnailVisualState();
