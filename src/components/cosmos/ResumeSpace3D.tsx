@@ -10636,7 +10636,7 @@ export default function ResumeSpace3D({
               .applyQuaternion(plainQuat)
               .add(centerLocal);
           });
-          const ringLine = new THREE.Line(
+          const ringLine = new THREE.LineLoop(
             new THREE.BufferGeometry().setFromPoints(pts),
             new THREE.LineBasicMaterial({
               color: new THREE.Color(ringView.orbitColor),
