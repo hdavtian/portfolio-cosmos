@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
 import legacyWebsites from "../../data/legacyWebsites.json";
+import portfolioCores from "../../data/portfolioCores.json";
 import aboutDeck from "../../data/aboutDeck.json";
 import CosmosLoader from "../CosmosLoader";
 import {
@@ -108,8 +109,9 @@ import {
   orbitDebug,
 } from "./scaleConfig";
 import {
-  buildPortfolioGroups,
+  buildPortfolioCoreViews,
   type PortfolioEntry,
+  type PortfolioCoreView,
   type PortfolioGroupView,
 } from "./portfolioData";
 
@@ -351,6 +353,12 @@ type ShowcasePanelRecord = {
 
 type OrbitalPortfolioStationRecord = {
   index: number;
+  coreId: string;
+  plainIndex: number;
+  ringIndex: number;
+  plainAngle: number;
+  coreAnchorLocal: THREE.Vector3;
+  plainNormalLocal: THREE.Vector3;
   group: THREE.Group;
   ring: THREE.Line;
   plate: THREE.Mesh;
@@ -389,13 +397,30 @@ type OrbitalPortfolioStationRecord = {
 };
 
 type OrbitalPortfolioMatterPacketRecord = {
-  mesh: THREE.Mesh;
+  mesh: THREE.Sprite;
   progress: number;
   speed: number;
+  sourceCoreIndex: number;
   targetStation: number;
   phase: number;
   startOffset: THREE.Vector3;
   endJitter: THREE.Vector3;
+};
+
+type OrbitalPortfolioCoreRecord = {
+  id: string;
+  title: string;
+  centerLocal: THREE.Vector3;
+  root: THREE.Group;
+  nucleus: THREE.Mesh;
+  glow: THREE.Mesh;
+  sliceGroup: THREE.Group;
+  sliceMats: THREE.MeshBasicMaterial[];
+  rayMats: THREE.LineBasicMaterial[];
+  panelMat: THREE.MeshPhongMaterial | null;
+  panelColorAttr: THREE.BufferAttribute | null;
+  panelBaseColors: Float32Array | null;
+  outerOrbit: THREE.Line;
 };
 
 type MoonTravelSignRecord = {
@@ -1580,17 +1605,16 @@ export default function ResumeSpace3D({
   const orbitalPortfolioBeaconRef = useRef<THREE.Mesh | null>(null);
   const orbitalPortfolioStationsRef = useRef<OrbitalPortfolioStationRecord[]>([]);
   const orbitalPortfolioGroupsRef = useRef<PortfolioGroupView[]>([]);
-  const orbitalPortfolioCoreRootRef = useRef<THREE.Group | null>(null);
-  const orbitalPortfolioCoreSliceGroupRef = useRef<THREE.Group | null>(null);
-  const orbitalPortfolioCorePanelMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
-  const orbitalPortfolioCorePanelColorAttrRef = useRef<THREE.BufferAttribute | null>(null);
-  const orbitalPortfolioCorePanelBaseColorsRef = useRef<Float32Array | null>(null);
-  const orbitalPortfolioCoreSliceMatsRef = useRef<THREE.MeshBasicMaterial[]>([]);
-  const orbitalPortfolioCoreRayMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
+  const orbitalPortfolioCoresRef = useRef<OrbitalPortfolioCoreRecord[]>([]);
+  const orbitalPortfolioCoresByIdRef = useRef<Map<string, OrbitalPortfolioCoreRecord>>(
+    new Map(),
+  );
+  const orbitalPortfolioCoreViewsRef = useRef<PortfolioCoreView[]>([]);
+  const orbitalPortfolioConnectorLinesRef = useRef<THREE.Line[]>([]);
   const orbitalPortfolioMatterGroupRef = useRef<THREE.Group | null>(null);
   const orbitalPortfolioMatterPacketsRef = useRef<OrbitalPortfolioMatterPacketRecord[]>([]);
-  const orbitalPortfolioCoreGlowRef = useRef<THREE.Mesh | null>(null);
-  const orbitalPortfolioOuterRingRef = useRef<THREE.Line | null>(null);
+  const orbitalPortfolioCorePickMeshesRef = useRef<THREE.Mesh[]>([]);
+  const orbitalPortfolioOuterRingsRef = useRef<THREE.Line[]>([]);
   const moonTravelSignGroupRef = useRef<THREE.Group | null>(null);
   const moonTravelSignsRef = useRef<MoonTravelSignRecord[]>([]);
   const moonTravelSignLastSpawnAtRef = useRef(0);
@@ -1653,6 +1677,12 @@ export default function ResumeSpace3D({
   const [orbitalPortfolioSearchQuery, setOrbitalPortfolioSearchQuery] = useState("");
   const [orbitalPortfolioYearFilter, setOrbitalPortfolioYearFilter] = useState("all");
   const [orbitalPortfolioTechFilter, setOrbitalPortfolioTechFilter] = useState("all");
+  const [orbitalPortfolioFocusedCoreId, setOrbitalPortfolioFocusedCoreId] = useState("");
+  const orbitalPortfolioFocusedCoreIdRef = useRef("");
+  const [orbitalRegistryExpandedCoreIds, setOrbitalRegistryExpandedCoreIds] = useState<
+    Record<string, boolean>
+  >({});
+  const [orbitalRegistryPanelVisible, setOrbitalRegistryPanelVisible] = useState(true);
   const orbitalPortfolioLastViewedRef = useRef<{
     focusIndex: number | null;
     variantIndex: number;
@@ -1697,6 +1727,9 @@ export default function ResumeSpace3D({
   useEffect(() => {
     orbitalPortfolioOrbitsEnabledRef.current = orbitalPortfolioOrbitsEnabled;
   }, [orbitalPortfolioOrbitsEnabled]);
+  useEffect(() => {
+    orbitalPortfolioFocusedCoreIdRef.current = orbitalPortfolioFocusedCoreId;
+  }, [orbitalPortfolioFocusedCoreId]);
   useEffect(() => {
     orbitSignTuningRef.current = orbitSignTuning;
     // Apply key tuning controls immediately without waiting for next stream cycle.
@@ -3475,6 +3508,9 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioSearchQuery("");
     setOrbitalPortfolioYearFilter("all");
     setOrbitalPortfolioTechFilter("all");
+    setOrbitalPortfolioFocusedCoreId("");
+    setOrbitalRegistryExpandedCoreIds({});
+    setOrbitalRegistryPanelVisible(true);
     orbitalPortfolioFocusIndexRef.current = 0;
     setOrbitalPortfolioFocusIndex(0);
     orbitalPortfolioLastViewedRef.current = {
@@ -3656,6 +3692,25 @@ export default function ResumeSpace3D({
     [shipLog],
   );
 
+  const focusOrbitalPortfolioCore = useCallback(
+    (coreId: string) => {
+      const core = orbitalPortfolioCoresByIdRef.current.get(coreId);
+      if (!core) return;
+      setOrbitalPortfolioFocusedCoreId(coreId);
+      orbitalPortfolioManualCameraLockRef.current = false;
+      orbitalPortfolioInspectedStationIndexRef.current = null;
+      orbitalPortfolioInspectDistanceRef.current = null;
+      orbitalPortfolioInspectStartedAtRef.current = 0;
+      setOrbitalPortfolioHasActiveFocus(false);
+      orbitalPortfolioPlayingRef.current = true;
+      setOrbitalPortfolioPlaying(true);
+      orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
+      orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 800;
+      shipLog(`Core focus: ${core.title}`, "info");
+    },
+    [shipLog],
+  );
+
   const focusOrbitalPortfolioStation = useCallback(
     (
       stationIndex: number,
@@ -3670,6 +3725,10 @@ export default function ResumeSpace3D({
       const groups = orbitalPortfolioGroupsRef.current;
       const autoplayFocus = options?.autoplay === true;
       const stationChanged = next !== orbitalPortfolioFocusIndexRef.current;
+      const nextGroup = groups[next];
+      if (nextGroup?.coreId) {
+        setOrbitalPortfolioFocusedCoreId(nextGroup.coreId);
+      }
       orbitalPortfolioFocusIndexRef.current = next;
       setOrbitalPortfolioFocusIndex(next);
       setOrbitalPortfolioHasActiveFocus(true);
@@ -7624,9 +7683,13 @@ export default function ResumeSpace3D({
       const stationDebugRows: string[] = [];
       const orbitMotionEnabled = orbitalPortfolioOrbitsEnabledRef.current;
       const inspectedStationIndex = orbitalPortfolioInspectedStationIndexRef.current;
-      const inspectedLane =
+      const inspectedOrbitKey =
         inspectedStationIndex !== null
-          ? orbitalPortfolioStationsRef.current[inspectedStationIndex]?.orbitLane
+          ? (() => {
+              const inspected = orbitalPortfolioStationsRef.current[inspectedStationIndex];
+              if (!inspected) return undefined;
+              return `${inspected.coreId}|${inspected.plainIndex}|${inspected.ringIndex}`;
+            })()
           : undefined;
       orbitalPortfolioStationsRef.current.forEach((station, idx) => {
         station.group.rotation.y += dt * 0.0;
@@ -7637,18 +7700,19 @@ export default function ResumeSpace3D({
           idx === orbitalPortfolioFocusIndexRef.current;
         const isInspected = idx === orbitalPortfolioInspectedStationIndexRef.current;
         // Keep the currently visited card stable so camera-inspect never drifts.
-        // Also freeze all peers in the same orbital lane to prevent distracting
+        // Also freeze peers in the same orbit ring to prevent distracting
         // pass-through motion across the focused card while inspecting.
-        const inInspectedLane =
-          typeof inspectedLane === "number" && station.orbitLane === inspectedLane;
+        const inInspectedOrbit =
+          !!inspectedOrbitKey &&
+          `${station.coreId}|${station.plainIndex}|${station.ringIndex}` === inspectedOrbitKey;
         const lockStationOrbit =
           isInspected ||
-          inInspectedLane ||
+          inInspectedOrbit ||
           (hasInspectContext && isFocused && orbitalPortfolioManualCameraLockRef.current);
         if (lockStationOrbit) {
           freezeCount += 1;
           if (isInspected) inspectedFreezeCount += 1;
-          else if (inInspectedLane) laneFreezeCount += 1;
+          else if (inInspectedOrbit) laneFreezeCount += 1;
           else if (isFocused && orbitalPortfolioManualCameraLockRef.current) manualFreezeCount += 1;
         }
         const targetOrbitBlend =
@@ -7666,26 +7730,16 @@ export default function ResumeSpace3D({
             station.orbitDirection *
             station.orbitMotionBlend;
         }
-        if (station.orbitLane === 0) {
-          station.group.position.set(
-            Math.cos(station.orbitAngle) * station.orbitRadius,
-            Math.sin(station.orbitAngle * 1.3) * station.orbitVerticalAmp,
-            Math.sin(station.orbitAngle) * station.orbitRadius,
-          );
-        } else {
-          station.group.position.set(
-            Math.sin(station.orbitAngle * 1.1) * station.orbitVerticalAmp,
-            Math.cos(station.orbitAngle) * station.orbitRadius,
-            Math.sin(station.orbitAngle) * station.orbitRadius,
-          );
-        }
-        const ringPosAttr = station.ring.geometry.getAttribute("position") as
-          | THREE.BufferAttribute
-          | undefined;
-        if (ringPosAttr && ringPosAttr.count >= 2) {
-          ringPosAttr.setXYZ(1, station.group.position.x, station.group.position.y, station.group.position.z);
-          ringPosAttr.needsUpdate = true;
-        }
+        const plainQuat = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(0, 0, 1),
+          THREE.MathUtils.degToRad(station.plainAngle),
+        );
+        const localOrbit = new THREE.Vector3(
+          Math.cos(station.orbitAngle) * station.orbitRadius,
+          0,
+          Math.sin(station.orbitAngle) * station.orbitRadius,
+        ).applyQuaternion(plainQuat);
+        station.group.position.copy(station.coreAnchorLocal).add(localOrbit);
         const straightenTarget = isInspected ? 0.96 : isFocused ? 0.06 : 0;
         const straightenDamping = isInspected ? 13.5 : 4.8;
         station.straightenBlend = THREE.MathUtils.damp(
@@ -7769,20 +7823,22 @@ export default function ResumeSpace3D({
           thumb.mesh.scale.setScalar(isFocused ? (isActiveMedia ? 1.05 : 0.96) : 0.9);
           thumb.frame.scale.copy(thumb.mesh.scale);
         });
-        const ringMat = station.ring.material as THREE.LineBasicMaterial;
-        ringMat.opacity = THREE.MathUtils.damp(
-          ringMat.opacity,
-          isFocused ? 0.74 : 0.12,
-          7.2,
-          dt,
-        );
         station.mediaHaloGroup.visible = false;
         station.variantSatelliteGroup.visible = false;
         const targetScale = isFocused ? 2.35 : 1.1;
         station.group.scale.setScalar(
           THREE.MathUtils.damp(station.group.scale.x, targetScale, 7.4, dt),
         );
-        station.group.lookAt(anchor);
+        const radialToCore = station.coreAnchorLocal.clone().sub(station.group.position).normalize();
+        const tangent = new THREE.Vector3().crossVectors(station.plainNormalLocal, radialToCore);
+        if (tangent.lengthSq() < 1e-8) {
+          station.group.lookAt(station.coreAnchorLocal);
+        } else {
+          tangent.normalize();
+          const upright = new THREE.Vector3().crossVectors(radialToCore, tangent).normalize();
+          const basis = new THREE.Matrix4().makeBasis(tangent, upright, radialToCore);
+          station.group.quaternion.setFromRotationMatrix(basis);
+        }
         station.mediaHaloGroup.children.forEach((child) => {
           const mesh = child as THREE.Mesh;
           const mat = mesh.material as THREE.MeshBasicMaterial | undefined;
@@ -7817,58 +7873,68 @@ export default function ResumeSpace3D({
           shipLog(`[PORTDBG] ${stationDebugRows.join(" | ")}`, "info");
         }
       }
-      if (orbitalPortfolioCoreGlowRef.current) {
-        const glowMat = orbitalPortfolioCoreGlowRef.current
-          .material as THREE.MeshBasicMaterial;
-        glowMat.opacity = 0.2 + (0.5 + 0.5 * Math.sin(now * 0.0018)) * 0.2;
-      }
-      if (orbitalPortfolioCoreRootRef.current) {
-        orbitalPortfolioCoreRootRef.current.rotation.y += dt * 0.03;
-        orbitalPortfolioCoreRootRef.current.rotation.x =
-          Math.sin(now * 0.00037) * 0.08;
-      }
-      if (orbitalPortfolioCoreSliceGroupRef.current) {
-        orbitalPortfolioCoreSliceGroupRef.current.rotation.y -= dt * 0.24;
-        orbitalPortfolioCoreSliceGroupRef.current.rotation.z += dt * 0.11;
-      }
-      orbitalPortfolioCoreSliceMatsRef.current.forEach((mat, idx) => {
-        const pulse = 0.5 + 0.5 * Math.sin(now * 0.0021 + idx * 0.9);
-        mat.opacity = 0.2 + pulse * 0.28;
-      });
-      orbitalPortfolioCoreRayMatsRef.current.forEach((mat, idx) => {
-        const pulse = 0.5 + 0.5 * Math.sin(now * 0.0017 + idx * 0.63);
-        mat.opacity = 0.12 + pulse * 0.2;
-      });
-      const panelMat = orbitalPortfolioCorePanelMatRef.current;
-      const panelColorAttr = orbitalPortfolioCorePanelColorAttrRef.current;
-      const panelBaseColors = orbitalPortfolioCorePanelBaseColorsRef.current;
-      if (panelMat) {
-        panelMat.opacity = 0.12 + (0.5 + 0.5 * Math.sin(now * 0.0016)) * 0.02;
-      }
-      if (panelColorAttr && panelBaseColors) {
-        const arr = panelColorAttr.array as Float32Array;
-        const lum = 0.86 + (0.5 + 0.5 * Math.sin(now * 0.0012)) * 0.06;
-        for (let i = 0; i < arr.length; i += 3) {
-          const pulse = 0.98 + 0.02 * Math.sin(now * 0.0019 + i * 0.0013);
-          arr[i] = panelBaseColors[i] * lum * pulse;
-          arr[i + 1] = panelBaseColors[i + 1] * lum * pulse;
-          arr[i + 2] = panelBaseColors[i + 2] * lum * pulse;
+      orbitalPortfolioCoresRef.current.forEach((core, coreIndex) => {
+        const glowMat = core.glow.material as THREE.MeshBasicMaterial;
+        glowMat.opacity = 0.2 + (0.5 + 0.5 * Math.sin(now * 0.0018 + coreIndex)) * 0.2;
+        core.root.rotation.y += dt * 0.03;
+        core.root.rotation.x = Math.sin(now * 0.00037 + coreIndex * 0.4) * 0.08;
+        core.sliceGroup.rotation.y -= dt * 0.24;
+        core.sliceGroup.rotation.z += dt * 0.11;
+        core.sliceMats.forEach((mat, idx) => {
+          const pulse = 0.5 + 0.5 * Math.sin(now * 0.0021 + idx * 0.9 + coreIndex);
+          mat.opacity = 0.2 + pulse * 0.28;
+        });
+        core.rayMats.forEach((mat, idx) => {
+          const pulse = 0.5 + 0.5 * Math.sin(now * 0.0017 + idx * 0.63 + coreIndex);
+          mat.opacity = 0.12 + pulse * 0.2;
+        });
+        if (core.panelMat) {
+          core.panelMat.opacity = 0.12 + (0.5 + 0.5 * Math.sin(now * 0.0016)) * 0.02;
         }
-        panelColorAttr.needsUpdate = true;
-      }
+        if (core.panelColorAttr && core.panelBaseColors) {
+          const arr = core.panelColorAttr.array as Float32Array;
+          const lum = 0.86 + (0.5 + 0.5 * Math.sin(now * 0.0012 + coreIndex)) * 0.06;
+          for (let i = 0; i < arr.length; i += 3) {
+            const pulse = 0.98 + 0.02 * Math.sin(now * 0.0019 + i * 0.0013 + coreIndex);
+            arr[i] = core.panelBaseColors[i] * lum * pulse;
+            arr[i + 1] = core.panelBaseColors[i + 1] * lum * pulse;
+            arr[i + 2] = core.panelBaseColors[i + 2] * lum * pulse;
+          }
+          core.panelColorAttr.needsUpdate = true;
+        }
+      });
       if (orbitalPortfolioMatterGroupRef.current) {
-        orbitalPortfolioMatterGroupRef.current.rotation.y += dt * 0.14;
+        orbitalPortfolioMatterGroupRef.current.rotation.y += dt * 0.02;
       }
       const packets = orbitalPortfolioMatterPacketsRef.current;
-      if (packets.length > 0 && orbitalPortfolioCoreRootRef.current) {
-        orbitalPortfolioCoreRootRef.current.getWorldPosition(matterFrom);
-        const stationCount = Math.max(1, orbitalPortfolioStationsRef.current.length);
+      if (packets.length > 0 && orbitalPortfolioCoresRef.current.length > 0) {
+        const pickRandomStationIndexForCore = (coreIndex: number): number => {
+          const cores = orbitalPortfolioCoresRef.current;
+          const stations = orbitalPortfolioStationsRef.current;
+          if (stations.length === 0) return 0;
+          const safeCoreIndex = THREE.MathUtils.clamp(
+            coreIndex,
+            0,
+            Math.max(0, cores.length - 1),
+          );
+          const coreId = cores[safeCoreIndex]?.id;
+          if (!coreId) return Math.floor(Math.random() * stations.length);
+          const candidates: number[] = [];
+          stations.forEach((station, stationIndex) => {
+            if (station.coreId === coreId) candidates.push(stationIndex);
+          });
+          if (candidates.length === 0) return Math.floor(Math.random() * stations.length);
+          return candidates[Math.floor(Math.random() * candidates.length)] ?? 0;
+        };
         packets.forEach((packet, idx) => {
           packet.progress += dt * packet.speed;
           if (packet.progress >= 1) {
             packet.progress = 0;
             packet.speed = 0.24 + Math.random() * 0.32;
-            packet.targetStation = Math.floor(Math.random() * stationCount);
+            packet.sourceCoreIndex = Math.floor(
+              Math.random() * Math.max(1, orbitalPortfolioCoresRef.current.length),
+            );
+            packet.targetStation = pickRandomStationIndexForCore(packet.sourceCoreIndex);
             packet.phase = Math.random() * Math.PI * 2;
             packet.startOffset.set(
               (Math.random() - 0.5) * 10,
@@ -7881,6 +7947,16 @@ export default function ResumeSpace3D({
               (Math.random() - 0.5) * 18,
             );
           }
+          const sourceCore =
+            orbitalPortfolioCoresRef.current[
+              THREE.MathUtils.clamp(
+                packet.sourceCoreIndex,
+                0,
+                Math.max(0, orbitalPortfolioCoresRef.current.length - 1),
+              )
+            ];
+          if (!sourceCore) return;
+          sourceCore.root.getWorldPosition(matterFrom);
           const targetStation = orbitalPortfolioStationsRef.current[packet.targetStation];
           if (!targetStation) return;
           targetStation.group.getWorldPosition(matterTo);
@@ -7894,15 +7970,16 @@ export default function ResumeSpace3D({
           } else {
             packet.mesh.position.copy(matterPos);
           }
-          packet.mesh.quaternion.copy(camera.quaternion);
-          const pmat = packet.mesh.material as THREE.MeshBasicMaterial;
-          pmat.opacity = 0.24 + (0.5 + 0.5 * Math.sin(now * 0.004 + packet.phase)) * 0.58;
+          const pmat = packet.mesh.material as THREE.SpriteMaterial;
+          pmat.opacity = 0.2 + (0.5 + 0.5 * Math.sin(now * 0.004 + packet.phase)) * 0.2;
         });
       }
-      if (orbitalPortfolioOuterRingRef.current) {
-        orbitalPortfolioOuterRingRef.current.rotation.y += dt * 0.18;
-      }
-      lookAt.copy(anchor);
+      const focusCore =
+        orbitalPortfolioCoresByIdRef.current.get(orbitalPortfolioFocusedCoreIdRef.current) ??
+        orbitalPortfolioCoresRef.current[0];
+      const activeAnchor =
+        focusCore?.centerLocal.clone().add(anchor) ?? anchor.clone();
+      lookAt.copy(activeAnchor);
       orbitalPortfolioCameraDistanceRef.current = THREE.MathUtils.damp(
         orbitalPortfolioCameraDistanceRef.current,
         orbitalPortfolioCameraDistanceTargetRef.current,
@@ -7939,7 +8016,7 @@ export default function ResumeSpace3D({
         }
         const smooth = 1 - Math.exp(-dt * 4.2);
         orbitalPortfolioCameraPosRef.current.lerp(desiredCam, smooth);
-        const desiredTarget = anchor.clone().add(new THREE.Vector3(0, 10, 0));
+        const desiredTarget = activeAnchor.clone().add(new THREE.Vector3(0, 10, 0));
         orbitalPortfolioCameraTargetRef.current.lerp(desiredTarget, smooth);
         controls.setLookAt(
           orbitalPortfolioCameraPosRef.current.x,
@@ -8832,13 +8909,20 @@ export default function ResumeSpace3D({
     const mount = mountRef.current;
     if (!mount) return;
     const raycaster = new THREE.Raycaster();
-    raycaster.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+    raycaster.layers.enable(PROJECT_SHOWCASE_CARD_LAYER);
+    raycaster.layers.enable(ORBITAL_PORTFOLIO_LAYER);
     const pointer = new THREE.Vector2();
     let downX = 0;
     let downY = 0;
     let downAt = 0;
     let pending:
-      | { stationIndex: number; mediaIndex?: number; variantIndex?: number; kind: "plate" | "thumb" | "variant" }
+      | {
+          stationIndex?: number;
+          coreId?: string;
+          mediaIndex?: number;
+          variantIndex?: number;
+          kind: "plate" | "thumb" | "variant" | "core";
+        }
       | null = null;
 
     const pickPortfolioTarget = (
@@ -8846,10 +8930,11 @@ export default function ResumeSpace3D({
       clientY: number,
     ):
       | {
-          stationIndex: number;
+          stationIndex?: number;
+          coreId?: string;
           mediaIndex?: number;
           variantIndex?: number;
-          kind: "plate" | "thumb" | "variant";
+          kind: "plate" | "thumb" | "variant" | "core";
         }
       | null => {
       if (!orbitalPortfolioActiveRef.current) return null;
@@ -8863,6 +8948,10 @@ export default function ResumeSpace3D({
       );
       raycaster.setFromCamera(pointer, cam);
       const pickables: THREE.Object3D[] = [];
+      orbitalPortfolioCorePickMeshesRef.current.forEach((coreMesh) => {
+        coreMesh.userData.orbitalPickKind = "core";
+        if (coreMesh.visible) pickables.push(coreMesh);
+      });
       orbitalPortfolioStationsRef.current.forEach((station, stationIndex) => {
         station.plate.userData.orbitalStationIndex = stationIndex;
         station.plate.userData.orbitalPickKind = "plate";
@@ -8885,10 +8974,15 @@ export default function ResumeSpace3D({
       const hit = hits[0]?.object;
       if (!hit) return null;
       const stationIndex = Number(hit.userData?.orbitalStationIndex);
-      if (!Number.isFinite(stationIndex)) return null;
       const kind =
-        (hit.userData?.orbitalPickKind as "plate" | "thumb" | "variant" | undefined) ??
+        (hit.userData?.orbitalPickKind as "plate" | "thumb" | "variant" | "core" | undefined) ??
         "plate";
+      if (kind === "core") {
+        const coreId = String(hit.userData?.orbitalCoreId ?? "");
+        if (!coreId) return null;
+        return { coreId, kind: "core" };
+      }
+      if (!Number.isFinite(stationIndex)) return null;
       if (kind === "variant") {
         const variantIndex = Number(hit.userData?.orbitalVariantIndex);
         if (!Number.isFinite(variantIndex)) return { stationIndex, kind: "plate" };
@@ -8921,12 +9015,19 @@ export default function ResumeSpace3D({
       const hit = pickPortfolioTarget(e.clientX, e.clientY);
       const same =
         !!hit &&
-        hit.stationIndex === pending.stationIndex &&
+        (hit.stationIndex ?? -1) === (pending.stationIndex ?? -1) &&
+        (hit.coreId ?? "") === (pending.coreId ?? "") &&
         (hit.mediaIndex ?? -1) === (pending.mediaIndex ?? -1) &&
         (hit.variantIndex ?? -1) === (pending.variantIndex ?? -1) &&
         hit.kind === pending.kind;
       if (elapsed <= 420 && moved <= 7 && same) {
-        if (pending.kind === "variant" && typeof pending.variantIndex === "number") {
+        if (pending.kind === "core" && pending.coreId) {
+          focusOrbitalPortfolioCore(pending.coreId);
+        } else if (
+          pending.kind === "variant" &&
+          typeof pending.variantIndex === "number" &&
+          typeof pending.stationIndex === "number"
+        ) {
           const groups = orbitalPortfolioGroupsRef.current;
           const maxVariantIndex = Math.max(
             0,
@@ -8941,7 +9042,7 @@ export default function ResumeSpace3D({
             ),
           );
           setOrbitalPortfolioMediaIndex(0);
-        } else {
+        } else if (typeof pending.stationIndex === "number") {
           focusOrbitalPortfolioStation(pending.stationIndex, pending.mediaIndex);
         }
         e.stopPropagation();
@@ -8955,7 +9056,7 @@ export default function ResumeSpace3D({
       mount.removeEventListener("pointerdown", onPointerDown, { capture: true });
       window.removeEventListener("pointerup", onPointerUp, { capture: true });
     };
-  }, [focusOrbitalPortfolioStation]);
+  }, [focusOrbitalPortfolioCore, focusOrbitalPortfolioStation]);
 
   // ── Project showcase thumbnail clicks (in-trench carousel) ───────────────
   useEffect(() => {
@@ -10203,190 +10304,39 @@ export default function ResumeSpace3D({
     orbitalRoot.name = "OrbitalPortfolioRoot";
     orbitalRoot.position.copy(portfolioAnchor);
     orbitalRoot.visible = false;
-    const orbitalGroups = buildPortfolioGroups(legacyWebsites as PortfolioEntry[]);
+    const orbitalBuild = buildPortfolioCoreViews(
+      legacyWebsites as PortfolioEntry[],
+      portfolioCores as Array<{
+        core: string;
+        plains: Array<{
+          angle: number;
+          items: Array<{
+            orbitColor?: string;
+            items?: Array<{ sourceId: string }>;
+          }>;
+        }>;
+      }>,
+    );
+    const orbitalGroups = orbitalBuild.groups;
+    const orbitalCoreViews = orbitalBuild.cores;
     orbitalPortfolioGroupsRef.current = orbitalGroups;
-    const coreRoot = new THREE.Group();
-    coreRoot.name = "OrbitalPortfolioCoreLattice";
-    const coreNucleus = new THREE.Mesh(
-      new THREE.SphereGeometry(17, 28, 28),
-      new THREE.MeshBasicMaterial({
-        color: 0xd7f5ff,
-        transparent: true,
-        opacity: 0.88,
-        toneMapped: false,
-      }),
-    );
-    const coreGlow = new THREE.Mesh(
-      new THREE.SphereGeometry(34, 20, 20),
-      new THREE.MeshBasicMaterial({
-        color: 0x67d8ff,
-        transparent: true,
-        opacity: 0.26,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        toneMapped: false,
-      }),
-    );
-    // Depth-only proxy for overlay card pass: keeps card readability (separate layer)
-    // while allowing core occlusion when cards pass behind the nucleus.
-    const coreCardOccluder = new THREE.Mesh(
-      new THREE.SphereGeometry(48, 16, 16),
-      new THREE.MeshBasicMaterial({
-        color: 0x000000,
-        colorWrite: false,
-        depthWrite: true,
-        depthTest: true,
-        toneMapped: false,
-      }),
-    );
-    coreCardOccluder.renderOrder = -10;
-    coreCardOccluder.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
-    coreRoot.add(coreCardOccluder);
-    const latticeShellGeometry = new THREE.IcosahedronGeometry(46, 1).toNonIndexed();
-    const shellPalette = [0x2f6fff, 0x27dcff, 0x6f47ff, 0xdb43ff, 0x28e0b7, 0xffb13a];
-    const shellPosAttr = latticeShellGeometry.getAttribute("position") as THREE.BufferAttribute;
-    const shellColorAttr = new THREE.BufferAttribute(
-      new Float32Array(shellPosAttr.count * 3),
-      3,
-    );
-    const shellBaseColors = new Float32Array(shellPosAttr.count * 3);
-    const shellColor = new THREE.Color();
-    for (let i = 0; i < shellPosAttr.count; i += 3) {
-      const bucket = Math.floor((i / 3) / 4) % shellPalette.length;
-      shellColor.setHex(shellPalette[bucket]);
-      const tint = 0.82 + (((i / 3) % 5) * 0.03);
-      shellColor.multiplyScalar(tint);
-      for (let v = 0; v < 3; v += 1) {
-        const bi = (i + v) * 3;
-        shellBaseColors[bi] = shellColor.r;
-        shellBaseColors[bi + 1] = shellColor.g;
-        shellBaseColors[bi + 2] = shellColor.b;
-        shellColorAttr.array[bi] = shellColor.r;
-        shellColorAttr.array[bi + 1] = shellColor.g;
-        shellColorAttr.array[bi + 2] = shellColor.b;
-      }
-    }
-    latticeShellGeometry.setAttribute("color", shellColorAttr);
-    const latticeShell = new THREE.Mesh(
-      latticeShellGeometry,
-      new THREE.MeshPhongMaterial({
-        color: 0xffffff,
-        flatShading: true,
-        shininess: 90,
-        specular: new THREE.Color(0xc9e8ff),
-        emissive: 0x101828,
-        emissiveIntensity: 0.08,
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.16,
-        side: THREE.FrontSide,
-        depthWrite: false,
-      }),
-    );
-    orbitalPortfolioCorePanelMatRef.current = latticeShell.material as THREE.MeshPhongMaterial;
-    orbitalPortfolioCorePanelColorAttrRef.current = shellColorAttr;
-    orbitalPortfolioCorePanelBaseColorsRef.current = shellBaseColors;
-    const latticeEdges = new THREE.LineSegments(
-      new THREE.EdgesGeometry(latticeShellGeometry),
-      new THREE.LineBasicMaterial({
-        color: 0xaed9ff,
-        transparent: true,
-        opacity: 0.22,
-        depthWrite: false,
-      }),
-    );
-    latticeEdges.scale.setScalar(1.004);
-    const slicePalette = [0x78e6ff, 0x88a2ff, 0xa9ffcf, 0xffa6f5, 0xffd084];
-    const sliceGroup = new THREE.Group();
-    const sliceMats: THREE.MeshBasicMaterial[] = [];
-    for (let i = 0; i < slicePalette.length; i += 1) {
-      const sliceMat = new THREE.MeshBasicMaterial({
-        color: slicePalette[i],
-        transparent: true,
-        opacity: 0.38,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        toneMapped: false,
-      });
-      const slice = new THREE.Mesh(
-        new THREE.TorusGeometry(30 + i * 2.2, 0.95, 10, 72),
-        sliceMat,
-      );
-      slice.rotation.set(
-        i * 0.46 + Math.PI * 0.13,
-        i * 0.72 + Math.PI * 0.08,
-        i * 0.34,
-      );
-      sliceGroup.add(slice);
-      sliceMats.push(sliceMat);
-    }
-    const rayGroup = new THREE.Group();
-    const rayMats: THREE.LineBasicMaterial[] = [];
-    const rayCount = 16;
-    for (let i = 0; i < rayCount; i += 1) {
-      const a = (i / rayCount) * Math.PI * 2;
-      const dir = new THREE.Vector3(Math.cos(a), Math.sin(i * 0.47) * 0.24, Math.sin(a))
-        .normalize();
-      const rayMat = new THREE.LineBasicMaterial({
-        color: slicePalette[i % slicePalette.length],
-        transparent: true,
-        opacity: 0.22,
-        depthWrite: false,
-      });
-      const ray = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([
-          dir.clone().multiplyScalar(36),
-          dir.clone().multiplyScalar(78 + (i % 3) * 8),
-        ]),
-        rayMat,
-      );
-      rayGroup.add(ray);
-      rayMats.push(rayMat);
-    }
+    orbitalPortfolioCoreViewsRef.current = orbitalCoreViews;
+    const expandedState: Record<string, boolean> = {};
+    orbitalCoreViews.forEach((core) => {
+      expandedState[core.id] = true;
+    });
+    setOrbitalRegistryExpandedCoreIds(expandedState);
+    setOrbitalPortfolioFocusedCoreId(orbitalCoreViews[0]?.id ?? "");
+    const coreSpacing = 1260;
+    const coreColumns = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, orbitalCoreViews.length))));
+    const coreRecords: OrbitalPortfolioCoreRecord[] = [];
+    const corePickMeshes: THREE.Mesh[] = [];
+    const coreCardOccluders: THREE.Mesh[] = [];
+    const outerRings: THREE.Line[] = [];
+    const connectorLines: THREE.Line[] = [];
     const matterGroup = new THREE.Group();
-    const matterPackets: OrbitalPortfolioMatterPacketRecord[] = [];
-    const matterPalette = [0x9beaff, 0xa7b6ff, 0xb8ffd9, 0xffb8ef, 0xffe2b3];
-    for (let i = 0; i < 24; i += 1) {
-      const mat = new THREE.MeshBasicMaterial({
-        color: matterPalette[i % matterPalette.length],
-        transparent: true,
-        opacity: 0.72,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        toneMapped: false,
-        side: THREE.DoubleSide,
-      });
-      const packetMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7), mat);
-      packetMesh.position.set(0, 0, 0);
-      matterGroup.add(packetMesh);
-      matterPackets.push({
-        mesh: packetMesh,
-        progress: Math.random(),
-        speed: 0.26 + Math.random() * 0.3,
-        targetStation: Math.floor(Math.random() * Math.max(1, orbitalGroups.length)),
-        phase: Math.random() * Math.PI * 2,
-        startOffset: new THREE.Vector3(
-          (Math.random() - 0.5) * 11,
-          (Math.random() - 0.5) * 11,
-          (Math.random() - 0.5) * 11,
-        ),
-        endJitter: new THREE.Vector3(
-          (Math.random() - 0.5) * 16,
-          (Math.random() - 0.5) * 10,
-          (Math.random() - 0.5) * 16,
-        ),
-      });
-    }
-    coreRoot.add(coreNucleus, coreGlow, latticeShell, latticeEdges, sliceGroup, rayGroup);
     orbitalRoot.add(matterGroup);
-    orbitalRoot.add(coreRoot);
-    orbitalPortfolioCoreRootRef.current = coreRoot;
-    orbitalPortfolioCoreSliceGroupRef.current = sliceGroup;
-    orbitalPortfolioCoreSliceMatsRef.current = sliceMats;
-    orbitalPortfolioCoreRayMatsRef.current = rayMats;
     orbitalPortfolioMatterGroupRef.current = matterGroup;
-    orbitalPortfolioMatterPacketsRef.current = matterPackets;
-    orbitalPortfolioCoreGlowRef.current = coreGlow;
     const createOrbitalHaloTexture = () => {
       const canvas = document.createElement("canvas");
       canvas.width = 128;
@@ -10406,56 +10356,278 @@ export default function ResumeSpace3D({
       return tex;
     };
     const orbitalHaloTexture = createOrbitalHaloTexture();
-    const stationRadius = 320;
-    const secondaryOrbitRadius = stationRadius * 0.9;
-    const laneCounts = [0, 0];
-    const laneSlotByIndex = new Array(orbitalGroups.length).fill(0);
-    orbitalGroups.forEach((_, idx) => {
-      const lane = idx % 2;
-      laneSlotByIndex[idx] = laneCounts[lane];
-      laneCounts[lane] += 1;
+
+    orbitalCoreViews.forEach((coreView, coreIndex) => {
+      const coreRow = Math.floor(coreIndex / coreColumns);
+      const coreCol = coreIndex % coreColumns;
+      const centerLocal = new THREE.Vector3(
+        (coreCol - (coreColumns - 1) * 0.5) * coreSpacing,
+        0,
+        (coreRow - (Math.ceil(orbitalCoreViews.length / coreColumns) - 1) * 0.5) * coreSpacing,
+      );
+
+      const coreRoot = new THREE.Group();
+      coreRoot.name = `OrbitalPortfolioCoreLattice-${coreView.id}`;
+      coreRoot.position.copy(centerLocal);
+      const coreNucleus = new THREE.Mesh(
+        new THREE.SphereGeometry(17, 28, 28),
+        new THREE.MeshBasicMaterial({
+          color: 0xd7f5ff,
+          transparent: true,
+          opacity: 0.88,
+          toneMapped: false,
+        }),
+      );
+      coreNucleus.userData.orbitalPickKind = "core";
+      coreNucleus.userData.orbitalCoreId = coreView.id;
+      corePickMeshes.push(coreNucleus);
+      const coreGlow = new THREE.Mesh(
+        new THREE.SphereGeometry(34, 20, 20),
+        new THREE.MeshBasicMaterial({
+          color: 0x67d8ff,
+          transparent: true,
+          opacity: 0.26,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          toneMapped: false,
+        }),
+      );
+      const coreCardOccluder = new THREE.Mesh(
+        new THREE.SphereGeometry(48, 16, 16),
+        new THREE.MeshBasicMaterial({
+          color: 0x000000,
+          colorWrite: false,
+          depthWrite: true,
+          depthTest: true,
+          toneMapped: false,
+        }),
+      );
+      coreCardOccluder.renderOrder = -10;
+      coreCardOccluder.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+      coreCardOccluders.push(coreCardOccluder);
+      coreRoot.add(coreCardOccluder);
+      const latticeShellGeometry = new THREE.IcosahedronGeometry(46, 1).toNonIndexed();
+      const shellPalette = [0x2f6fff, 0x27dcff, 0x6f47ff, 0xdb43ff, 0x28e0b7, 0xffb13a];
+      const shellPosAttr = latticeShellGeometry.getAttribute("position") as THREE.BufferAttribute;
+      const shellColorAttr = new THREE.BufferAttribute(
+        new Float32Array(shellPosAttr.count * 3),
+        3,
+      );
+      const shellBaseColors = new Float32Array(shellPosAttr.count * 3);
+      const shellColor = new THREE.Color();
+      for (let i = 0; i < shellPosAttr.count; i += 3) {
+        const bucket = Math.floor((i / 3) / 4) % shellPalette.length;
+        shellColor.setHex(shellPalette[bucket]);
+        const tint = 0.82 + (((i / 3) % 5) * 0.03);
+        shellColor.multiplyScalar(tint);
+        for (let v = 0; v < 3; v += 1) {
+          const bi = (i + v) * 3;
+          shellBaseColors[bi] = shellColor.r;
+          shellBaseColors[bi + 1] = shellColor.g;
+          shellBaseColors[bi + 2] = shellColor.b;
+          shellColorAttr.array[bi] = shellColor.r;
+          shellColorAttr.array[bi + 1] = shellColor.g;
+          shellColorAttr.array[bi + 2] = shellColor.b;
+        }
+      }
+      latticeShellGeometry.setAttribute("color", shellColorAttr);
+      const latticeShell = new THREE.Mesh(
+        latticeShellGeometry,
+        new THREE.MeshPhongMaterial({
+          color: 0xffffff,
+          flatShading: true,
+          shininess: 90,
+          specular: new THREE.Color(0xc9e8ff),
+          emissive: 0x101828,
+          emissiveIntensity: 0.08,
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.16,
+          side: THREE.FrontSide,
+          depthWrite: false,
+        }),
+      );
+      const latticeEdges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(latticeShellGeometry),
+        new THREE.LineBasicMaterial({
+          color: 0xaed9ff,
+          transparent: true,
+          opacity: 0.22,
+          depthWrite: false,
+        }),
+      );
+      latticeEdges.scale.setScalar(1.004);
+      const slicePalette = [0x78e6ff, 0x88a2ff, 0xa9ffcf, 0xffa6f5, 0xffd084];
+      const sliceGroup = new THREE.Group();
+      const sliceMats: THREE.MeshBasicMaterial[] = [];
+      for (let i = 0; i < slicePalette.length; i += 1) {
+        const sliceMat = new THREE.MeshBasicMaterial({
+          color: slicePalette[i],
+          transparent: true,
+          opacity: 0.38,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          toneMapped: false,
+        });
+        const slice = new THREE.Mesh(
+          new THREE.TorusGeometry(30 + i * 2.2, 0.95, 10, 72),
+          sliceMat,
+        );
+        slice.rotation.set(
+          i * 0.46 + Math.PI * 0.13,
+          i * 0.72 + Math.PI * 0.08,
+          i * 0.34,
+        );
+        sliceGroup.add(slice);
+        sliceMats.push(sliceMat);
+      }
+      const rayGroup = new THREE.Group();
+      const rayMats: THREE.LineBasicMaterial[] = [];
+      const rayCount = 16;
+      for (let i = 0; i < rayCount; i += 1) {
+        const a = (i / rayCount) * Math.PI * 2;
+        const dir = new THREE.Vector3(Math.cos(a), Math.sin(i * 0.47) * 0.24, Math.sin(a))
+          .normalize();
+        const rayMat = new THREE.LineBasicMaterial({
+          color: slicePalette[i % slicePalette.length],
+          transparent: true,
+          opacity: 0.22,
+          depthWrite: false,
+        });
+        const ray = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([
+            dir.clone().multiplyScalar(36),
+            dir.clone().multiplyScalar(78 + (i % 3) * 8),
+          ]),
+          rayMat,
+        );
+        rayGroup.add(ray);
+        rayMats.push(rayMat);
+      }
+      coreRoot.add(coreNucleus, coreGlow, latticeShell, latticeEdges, sliceGroup, rayGroup);
+      const coreLabel = createLabel(coreView.title, "Orbital Core");
+      coreLabel.userData.orbitalPortfolioLabel = true;
+      coreLabel.position.set(0, 72, 0);
+      coreRoot.add(coreLabel);
+      orbitalRoot.add(coreRoot);
+      const coreRecord: OrbitalPortfolioCoreRecord = {
+        id: coreView.id,
+        title: coreView.title,
+        centerLocal: centerLocal.clone(),
+        root: coreRoot,
+        nucleus: coreNucleus,
+        glow: coreGlow,
+        sliceGroup,
+        sliceMats,
+        rayMats,
+        panelMat: latticeShell.material as THREE.MeshPhongMaterial,
+        panelColorAttr: shellColorAttr,
+        panelBaseColors: shellBaseColors,
+        outerOrbit: new THREE.Line(),
+      };
+      coreRecords.push(coreRecord);
+
+      coreView.plains.forEach((plainView) => {
+        const plainQuat = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(0, 0, 1),
+          THREE.MathUtils.degToRad(plainView.angle),
+        );
+        plainView.rings.forEach((ringView, ringIndex) => {
+          const radius = 130 + ringIndex * 62;
+          const pts = Array.from({ length: 180 }, (_, i) => {
+            const a = (i / 180) * Math.PI * 2;
+            return new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius)
+              .applyQuaternion(plainQuat)
+              .add(centerLocal);
+          });
+          const ringLine = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(pts),
+            new THREE.LineBasicMaterial({
+              color: new THREE.Color(ringView.orbitColor),
+              transparent: true,
+              opacity: ringIndex === 0 ? 0.65 : 0.35,
+              depthWrite: false,
+            }),
+          );
+          orbitalRoot.add(ringLine);
+          if (ringIndex === plainView.rings.length - 1) {
+            coreRecord.outerOrbit = ringLine;
+            outerRings.push(ringLine);
+          }
+        });
+      });
     });
+
+    for (let i = 0; i < coreRecords.length - 1; i += 1) {
+      const from = coreRecords[i]?.centerLocal;
+      const to = coreRecords[i + 1]?.centerLocal;
+      if (!from || !to) continue;
+      const connector = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([from.clone(), to.clone()]),
+        new THREE.LineBasicMaterial({
+          color: 0x88d7ff,
+          transparent: true,
+          opacity: 0.2,
+          depthWrite: false,
+        }),
+      );
+      orbitalRoot.add(connector);
+      connectorLines.push(connector);
+    }
+
+    const ringCountByKey = new Map<string, number>();
+    const ringDirectionByKey = new Map<string, 1 | -1>();
+    orbitalGroups.forEach((group) => {
+      const key = `${group.coreId ?? "default"}|${group.plainIndex ?? 0}|${group.ringIndex ?? 0}`;
+      ringCountByKey.set(key, (ringCountByKey.get(key) ?? 0) + 1);
+    });
+    const ringSlotCursor = new Map<string, number>();
+    const coreById = new Map(coreRecords.map((core) => [core.id, core] as const));
     const stationRecords: OrbitalPortfolioStationRecord[] = [];
     orbitalGroups.forEach((group, idx) => {
-      const lane = idx % 2;
-      const laneCount = Math.max(1, laneCounts[lane]);
-      const laneSlot = laneSlotByIndex[idx];
+      const coreId = group.coreId ?? coreRecords[0]?.id ?? "core-default";
+      const coreRecord = coreById.get(coreId);
+      if (!coreRecord) return;
+      const plainIndex = group.plainIndex ?? 0;
+      const ringIndex = group.ringIndex ?? 0;
+      const plainAngle = group.plainAngle ?? 0;
+      const ringKey = `${coreId}|${plainIndex}|${ringIndex}`;
+      const laneCount = Math.max(1, ringCountByKey.get(ringKey) ?? 1);
+      const laneSlot = ringSlotCursor.get(ringKey) ?? 0;
+      ringSlotCursor.set(ringKey, laneSlot + 1);
       const t = laneSlot / laneCount;
       const a = t * Math.PI * 2;
-      const orbitRadius = lane === 0 ? stationRadius : secondaryOrbitRadius;
-      const orbitVerticalAmp = lane === 0 ? 20 : 26;
-      const orbitDirection: 1 | -1 = lane === 0 ? 1 : -1;
-      const stationGroup = new THREE.Group();
-      if (lane === 0) {
-        // Primary lane: horizontal orbital band.
-        stationGroup.position.set(
-          Math.cos(a) * orbitRadius,
-          Math.sin(a * 1.3) * orbitVerticalAmp,
-          Math.sin(a) * orbitRadius,
-        );
-      } else {
-        // Secondary lane: perpendicular orbital band around the same core.
-        stationGroup.position.set(
-          Math.sin(a * 1.1) * orbitVerticalAmp,
-          Math.cos(a) * orbitRadius,
-          Math.sin(a) * orbitRadius,
-        );
+      const orbitRadius = 130 + ringIndex * 62;
+      const orbitVerticalAmp = 20;
+      if (!ringDirectionByKey.has(ringKey)) {
+        ringDirectionByKey.set(ringKey, ringIndex % 2 === 0 ? 1 : -1);
       }
+      const orbitDirection = ringDirectionByKey.get(ringKey) ?? 1;
+      const plainQuat = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 0, 1),
+        THREE.MathUtils.degToRad(plainAngle),
+      );
+      const stationGroup = new THREE.Group();
+      const startLocalPos = new THREE.Vector3(Math.cos(a) * orbitRadius, 0, Math.sin(a) * orbitRadius)
+        .applyQuaternion(plainQuat)
+        .add(coreRecord.centerLocal);
+      stationGroup.position.copy(startLocalPos);
+      const lane = (idx % 2) as 0 | 1;
       stationGroup.userData.orbitalLane = lane;
       const ringGeo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, 0),
+        coreRecord.centerLocal.clone(),
         stationGroup.position.clone(),
       ]);
       const ring = new THREE.Line(
         ringGeo,
         new THREE.LineBasicMaterial({
-          color: idx % 2 === 0 ? 0x62d8ff : 0x9f7cff,
+          color: new THREE.Color(group.orbitColor ?? "#62D8FF"),
           transparent: true,
-          opacity: 0.08,
+          opacity: 0,
           depthWrite: false,
         }),
       );
-      orbitalRoot.add(ring);
+      ring.visible = false;
       const frameGeom = new THREE.PlaneGeometry(78, 48, 24, 1);
       const plateGeom = new THREE.PlaneGeometry(72, 42, 24, 1);
       const frame = new THREE.Mesh(
@@ -10489,8 +10661,9 @@ export default function ResumeSpace3D({
       platePosAttr.setUsage(THREE.DynamicDrawUsage);
       const frameFlatPositions = new Float32Array(framePosAttr.array as Float32Array);
       const plateFlatPositions = new Float32Array(platePosAttr.array as Float32Array);
-      const frameArc = 78 / Math.max(stationRadius, 1);
-      const plateArc = 72 / Math.max(stationRadius, 1);
+      // Keep the original subtle curvature profile from the single-core version.
+      const frameArc = 78 / 320;
+      const plateArc = 72 / 320;
       const frameCurvedPositions = buildCurvedPanelPositions(
         frameFlatPositions,
         78,
@@ -10680,6 +10853,12 @@ export default function ResumeSpace3D({
       orbitalRoot.add(stationGroup);
       stationRecords.push({
         index: idx,
+        coreId,
+        plainIndex,
+        ringIndex,
+        plainAngle,
+        coreAnchorLocal: coreRecord.centerLocal.clone(),
+        plainNormalLocal: new THREE.Vector3(0, 1, 0).applyQuaternion(plainQuat).normalize(),
         group: stationGroup,
         ring,
         plate,
@@ -10709,87 +10888,11 @@ export default function ResumeSpace3D({
         orbitMotionBlend: 1,
       });
     });
-    const outerOrbit = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(
-        Array.from({ length: 128 }, (_, i) => {
-          const a = (i / 128) * Math.PI * 2;
-          return new THREE.Vector3(Math.cos(a) * stationRadius, 0, Math.sin(a) * stationRadius);
-        }),
-      ),
-      new THREE.LineBasicMaterial({
-        color: 0x62dcff,
-        transparent: true,
-        opacity: 0.4,
-        depthWrite: false,
-      }),
-    );
-    orbitalRoot.add(outerOrbit);
-    const outerOrbitPerpendicular = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(
-        Array.from({ length: 128 }, (_, i) => {
-          const a = (i / 128) * Math.PI * 2;
-          return new THREE.Vector3(
-            0,
-            Math.cos(a) * secondaryOrbitRadius,
-            Math.sin(a) * secondaryOrbitRadius,
-          );
-        }),
-      ),
-      new THREE.LineBasicMaterial({
-        color: 0x82dfff,
-        transparent: true,
-        opacity: 0.32,
-        depthWrite: false,
-      }),
-    );
-    orbitalRoot.add(outerOrbitPerpendicular);
-    const concentricRings = [120, 185, 252, 320];
-    concentricRings.forEach((radius, idx) => {
-      const pts = Array.from({ length: 180 }, (_, i) => {
-        const a = (i / 180) * Math.PI * 2;
-        return new THREE.Vector3(
-          Math.cos(a) * radius,
-          0,
-          Math.sin(a) * (radius * 0.72),
-        );
-      });
-      const ring = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(pts),
-        new THREE.LineBasicMaterial({
-          color: idx % 2 === 0 ? 0x66ddff : 0x9e8cff,
-          transparent: true,
-          opacity: idx === 0 ? 0.65 : 0.35,
-          depthWrite: false,
-        }),
-      );
-      ring.rotation.x = -Math.PI * 0.08;
-      orbitalRoot.add(ring);
-    });
-    const perpendicularRings = [140, 220, secondaryOrbitRadius];
-    perpendicularRings.forEach((radius, idx) => {
-      const pts = Array.from({ length: 180 }, (_, i) => {
-        const a = (i / 180) * Math.PI * 2;
-        return new THREE.Vector3(
-          0,
-          Math.cos(a) * radius,
-          Math.sin(a) * radius,
-        );
-      });
-      const ring = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(pts),
-        new THREE.LineBasicMaterial({
-          color: idx % 2 === 0 ? 0x73d8ff : 0x9eb0ff,
-          transparent: true,
-          opacity: idx === 0 ? 0.5 : 0.28,
-          depthWrite: false,
-        }),
-      );
-      orbitalRoot.add(ring);
-    });
-    orbitalPortfolioOuterRingRef.current = outerOrbit;
     orbitalRoot.traverse((obj) => obj.layers.set(ORBITAL_PORTFOLIO_LAYER));
-    // Keep the depth-only occluder out of the main portfolio render pass.
-    coreCardOccluder.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+    // Keep depth-only occluders on the overlay/card layer.
+    coreCardOccluders.forEach((occluder) => {
+      occluder.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+    });
     // Render screenshot cards on the overlay layer so bright whites do not bloom-wash.
     stationRecords.forEach((station) => {
       station.plate.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
@@ -10808,6 +10911,66 @@ export default function ResumeSpace3D({
     scene.add(orbitalRoot);
     orbitalPortfolioRootRef.current = orbitalRoot;
     orbitalPortfolioStationsRef.current = stationRecords;
+    orbitalPortfolioCoresRef.current = coreRecords;
+    orbitalPortfolioCoresByIdRef.current = coreById;
+    orbitalPortfolioCorePickMeshesRef.current = corePickMeshes;
+    orbitalPortfolioConnectorLinesRef.current = connectorLines;
+    orbitalPortfolioOuterRingsRef.current = outerRings;
+    const pickRandomStationIndexForCore = (coreIndex: number): number => {
+      const cores = coreRecords;
+      const stations = stationRecords;
+      if (stations.length === 0) return 0;
+      const safeCoreIndex = THREE.MathUtils.clamp(coreIndex, 0, Math.max(0, cores.length - 1));
+      const coreId = cores[safeCoreIndex]?.id;
+      if (!coreId) return Math.floor(Math.random() * stations.length);
+      const candidates: number[] = [];
+      stations.forEach((station, stationIndex) => {
+        if (station.coreId === coreId) candidates.push(stationIndex);
+      });
+      if (candidates.length === 0) return Math.floor(Math.random() * stations.length);
+      return candidates[Math.floor(Math.random() * candidates.length)] ?? 0;
+    };
+    const matterPackets: OrbitalPortfolioMatterPacketRecord[] = [];
+    const matterPalette = [0x9beaff, 0xa7b6ff, 0xb8ffd9, 0xffb8ef, 0xffe2b3];
+    const packetCount = Math.max(16, coreRecords.length * 14);
+    for (let i = 0; i < packetCount; i += 1) {
+      const mat = new THREE.SpriteMaterial({
+        color: matterPalette[i % matterPalette.length],
+        transparent: true,
+        opacity: 0.52,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        depthTest: false,
+        toneMapped: false,
+      });
+      const packetMesh = new THREE.Sprite(mat);
+      packetMesh.scale.setScalar(5.2);
+      packetMesh.renderOrder = 9;
+      packetMesh.frustumCulled = false;
+      packetMesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+      packetMesh.position.set(0, 0, 0);
+      matterGroup.add(packetMesh);
+      const sourceCoreIndex = Math.floor(Math.random() * Math.max(1, coreRecords.length));
+      matterPackets.push({
+        mesh: packetMesh,
+        progress: Math.random(),
+        speed: 0.26 + Math.random() * 0.3,
+        sourceCoreIndex,
+        targetStation: pickRandomStationIndexForCore(sourceCoreIndex),
+        phase: Math.random() * Math.PI * 2,
+        startOffset: new THREE.Vector3(
+          (Math.random() - 0.5) * 11,
+          (Math.random() - 0.5) * 11,
+          (Math.random() - 0.5) * 11,
+        ),
+        endJitter: new THREE.Vector3(
+          (Math.random() - 0.5) * 16,
+          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 16,
+        ),
+      });
+    }
+    orbitalPortfolioMatterPacketsRef.current = matterPackets;
     setOrbitalPortfolioReady(true);
 
     const categoryPositions = categoryEntries.map((_, idx) => {
@@ -14723,17 +14886,14 @@ export default function ResumeSpace3D({
       orbitalPortfolioWorldAnchorRef.current = null;
       orbitalPortfolioStationsRef.current = [];
       orbitalPortfolioGroupsRef.current = [];
-      orbitalPortfolioCoreRootRef.current = null;
-      orbitalPortfolioCoreSliceGroupRef.current = null;
-      orbitalPortfolioCorePanelMatRef.current = null;
-      orbitalPortfolioCorePanelColorAttrRef.current = null;
-      orbitalPortfolioCorePanelBaseColorsRef.current = null;
-      orbitalPortfolioCoreSliceMatsRef.current = [];
-      orbitalPortfolioCoreRayMatsRef.current = [];
+      orbitalPortfolioCoresRef.current = [];
+      orbitalPortfolioCoresByIdRef.current = new Map();
+      orbitalPortfolioCoreViewsRef.current = [];
+      orbitalPortfolioConnectorLinesRef.current = [];
       orbitalPortfolioMatterGroupRef.current = null;
       orbitalPortfolioMatterPacketsRef.current = [];
-      orbitalPortfolioCoreGlowRef.current = null;
-      orbitalPortfolioOuterRingRef.current = null;
+      orbitalPortfolioCorePickMeshesRef.current = [];
+      orbitalPortfolioOuterRingsRef.current = [];
       starfieldMeshRef.current = null;
       skyfieldMeshRef.current = null;
       orbitalPortfolioActiveRef.current = false;
@@ -16524,6 +16684,7 @@ export default function ResumeSpace3D({
           {orbitalPortfolioActive &&
             (() => {
               const groups = orbitalPortfolioGroupsRef.current;
+              const coreViews = orbitalPortfolioCoreViewsRef.current;
               const activeGroup = orbitalPortfolioHasActiveFocus
                 ? groups[
                     THREE.MathUtils.clamp(
@@ -16551,6 +16712,27 @@ export default function ResumeSpace3D({
                     Math.max(0, mediaItems.length - 1),
                   )
                 ];
+              const query = orbitalPortfolioSearchQuery.trim().toLowerCase();
+              const filteredGroups = groups.filter((group) => {
+                if (
+                  orbitalPortfolioYearFilter !== "all" &&
+                  String(group.year ?? "unknown") !== orbitalPortfolioYearFilter
+                ) {
+                  return false;
+                }
+                if (
+                  orbitalPortfolioTechFilter !== "all" &&
+                  !group.technologies.some(
+                    (tech) => tech.toLowerCase() === orbitalPortfolioTechFilter.toLowerCase(),
+                  )
+                ) {
+                  return false;
+                }
+                if (!query) return true;
+                const haystack =
+                  `${group.title} ${group.description ?? ""} ${group.technologies.join(" ")}`.toLowerCase();
+                return haystack.includes(query);
+              });
               return (
                 <div
                   style={{
@@ -16562,6 +16744,10 @@ export default function ResumeSpace3D({
                     flexDirection: "column",
                     gap: 8,
                     width: 430,
+                    transform: orbitalRegistryPanelVisible
+                      ? "translateX(0)"
+                      : "translateX(430px)",
+                    transition: "transform 240ms ease",
                   }}
                 >
                   <div
@@ -16583,6 +16769,9 @@ export default function ResumeSpace3D({
                     </div>
                     <div style={{ marginTop: 4, fontSize: 14, color: "#eaf8ff" }}>
                       {activeGroup?.title ?? "No active selection"}
+                    </div>
+                    <div style={{ marginTop: 2, fontSize: 12, color: "rgba(170, 228, 255, 0.96)" }}>
+                      Core: {(activeGroup?.coreTitle ?? orbitalPortfolioFocusedCoreId) || "N/A"}
                     </div>
                     <div style={{ marginTop: 2, fontSize: 12, color: "rgba(210, 235, 255, 0.84)" }}>
                       {(() => {
@@ -16847,101 +17036,126 @@ export default function ResumeSpace3D({
                       </select>
                     </div>
 
-                    {(() => {
-                      const query = orbitalPortfolioSearchQuery.trim().toLowerCase();
-                      const filteredGroups = groups.filter((group) => {
-                        if (
-                          orbitalPortfolioYearFilter !== "all" &&
-                          String(group.year ?? "unknown") !== orbitalPortfolioYearFilter
-                        ) {
-                          return false;
-                        }
-                        if (
-                          orbitalPortfolioTechFilter !== "all" &&
-                          !group.technologies.some(
-                            (tech) => tech.toLowerCase() === orbitalPortfolioTechFilter.toLowerCase(),
-                          )
-                        ) {
-                          return false;
-                        }
-                        if (!query) return true;
-                        const haystack = `${group.title} ${group.description ?? ""} ${group.technologies.join(" ")}`.toLowerCase();
-                        return haystack.includes(query);
-                      });
-                      return (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        height: 206,
+                        borderRadius: 10,
+                        overflowY: "auto",
+                        border: "1px solid rgba(155, 225, 255, 0.28)",
+                        background: "rgba(6, 10, 20, 0.84)",
+                        padding: "6px 6px 4px",
+                      }}
+                    >
+                      {filteredGroups.length === 0 ? (
                         <div
                           style={{
-                            marginTop: 8,
-                            height: 206,
-                            borderRadius: 10,
-                            overflowY: "auto",
-                            border: "1px solid rgba(155, 225, 255, 0.28)",
-                            background: "rgba(6, 10, 20, 0.84)",
-                            padding: "6px 6px 4px",
+                            color: "rgba(182, 214, 236, 0.8)",
+                            fontSize: 12,
+                            padding: "8px 8px 10px",
                           }}
                         >
-                          {filteredGroups.length === 0 ? (
-                            <div
-                              style={{
-                                color: "rgba(182, 214, 236, 0.8)",
-                                fontSize: 12,
-                                padding: "8px 8px 10px",
-                              }}
-                            >
-                              No matches for current filters.
-                            </div>
-                          ) : (
-                            filteredGroups.map((group) => {
-                              const isHere = group.id === activeGroup?.id;
-                              const groupIndex = groups.findIndex((item) => item.id === group.id);
-                              return (
-                                <button
-                                  key={group.id}
-                                  onClick={() => {
-                                    if (groupIndex >= 0) focusOrbitalPortfolioStation(groupIndex, 0);
-                                  }}
-                                  style={{
-                                    width: "100%",
-                                    textAlign: "left",
-                                    borderRadius: 8,
-                                    border: isHere
-                                      ? "1px solid rgba(145, 232, 255, 0.92)"
-                                      : "1px solid rgba(145, 232, 255, 0.24)",
-                                    background: isHere
-                                      ? "rgba(20, 58, 92, 0.84)"
-                                      : "rgba(8, 18, 34, 0.68)",
-                                    color: "#e8f7ff",
-                                    cursor: "pointer",
-                                    padding: "7px 8px",
-                                    marginBottom: 6,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    gap: 8,
-                                  }}
-                                >
-                                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {group.title}
-                                  </span>
-                                  {group.clientVariantCount > 0 ? (
-                                    <span
-                                      title={`${group.clientVariantCount} client variant${group.clientVariantCount === 1 ? "" : "s"} (from legacy data)`}
+                          No matches for current filters.
+                        </div>
+                      ) : (
+                        coreViews.map((core) => {
+                          const groupsForCore = filteredGroups.filter(
+                            (group) => group.coreId === core.id,
+                          );
+                          if (groupsForCore.length === 0) return null;
+                          const isExpanded =
+                            orbitalRegistryExpandedCoreIds[core.id] ?? true;
+                          return (
+                            <div key={core.id} style={{ marginBottom: 6 }}>
+                              <button
+                                onClick={() => {
+                                  setOrbitalRegistryExpandedCoreIds((prev) => ({
+                                    ...prev,
+                                    [core.id]: !(prev[core.id] ?? true),
+                                  }));
+                                  focusOrbitalPortfolioCore(core.id);
+                                }}
+                                style={{
+                                  width: "100%",
+                                  textAlign: "left",
+                                  borderRadius: 8,
+                                  border: "1px solid rgba(145, 232, 255, 0.34)",
+                                  background: "rgba(10, 28, 44, 0.78)",
+                                  color: "#e8f7ff",
+                                  cursor: "pointer",
+                                  padding: "7px 8px",
+                                  marginBottom: 4,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  gap: 8,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <span>{core.title}</span>
+                                <span>{isExpanded ? "v" : ">"}</span>
+                              </button>
+                              {isExpanded &&
+                                groupsForCore.map((group) => {
+                                  const isHere = group.id === activeGroup?.id;
+                                  const groupIndex = groups.findIndex((item) => item.id === group.id);
+                                  return (
+                                    <button
+                                      key={group.id}
+                                      onClick={() => {
+                                        if (groupIndex >= 0)
+                                          focusOrbitalPortfolioStation(groupIndex, 0);
+                                      }}
                                       style={{
-                                        fontSize: 11,
-                                        color: isHere ? "#c0f2ff" : "rgba(180,220,245,0.72)",
-                                        flexShrink: 0,
+                                        width: "100%",
+                                        textAlign: "left",
+                                        borderRadius: 8,
+                                        border: isHere
+                                          ? "1px solid rgba(145, 232, 255, 0.92)"
+                                          : "1px solid rgba(145, 232, 255, 0.24)",
+                                        background: isHere
+                                          ? "rgba(20, 58, 92, 0.84)"
+                                          : "rgba(8, 18, 34, 0.68)",
+                                        color: "#e8f7ff",
+                                        cursor: "pointer",
+                                        padding: "7px 8px",
+                                        marginBottom: 6,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        gap: 8,
                                       }}
                                     >
-                                      {group.clientVariantCount}
-                                    </span>
-                                  ) : null}
-                                </button>
-                              );
-                            })
-                          )}
-                        </div>
-                      );
-                    })()}
+                                      <span
+                                        style={{
+                                          minWidth: 0,
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                        }}
+                                      >
+                                        {group.title}
+                                      </span>
+                                      {group.clientVariantCount > 0 ? (
+                                        <span
+                                          title={`${group.clientVariantCount} client variant${group.clientVariantCount === 1 ? "" : "s"} (from legacy data)`}
+                                          style={{
+                                            fontSize: 11,
+                                            color: isHere ? "#c0f2ff" : "rgba(180,220,245,0.72)",
+                                            flexShrink: 0,
+                                          }}
+                                        >
+                                          {group.clientVariantCount}
+                                        </span>
+                                      ) : null}
+                                    </button>
+                                  );
+                                })}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
 
                     <div
                       style={{
@@ -16966,6 +17180,30 @@ export default function ResumeSpace3D({
                 </div>
               );
             })()}
+          {orbitalPortfolioActive && (
+            <button
+              onClick={() => setOrbitalRegistryPanelVisible((prev) => !prev)}
+              style={{
+                position: "fixed",
+                right: orbitalRegistryPanelVisible ? 448 : 8,
+                top: 120,
+                zIndex: 1102,
+                width: 28,
+                height: 56,
+                borderRadius: "10px 0 0 10px",
+                border: "1px solid rgba(120, 220, 255, 0.5)",
+                background:
+                  "linear-gradient(180deg, rgba(6, 16, 30, 0.9) 0%, rgba(4, 10, 22, 0.9) 100%)",
+                color: "#dff5ff",
+                fontSize: 16,
+                cursor: "pointer",
+                transition: "right 240ms ease",
+              }}
+              title={orbitalRegistryPanelVisible ? "Hide Orbital Registry" : "Show Orbital Registry"}
+            >
+              {orbitalRegistryPanelVisible ? ">" : "<"}
+            </button>
+          )}
           {orbitalPortfolioActive && (
             <div
               style={{

@@ -1,0 +1,88 @@
+[
+  {
+    "core": "StormScape",
+    "plains": [
+      {
+        "angle": 0,
+        "items": [
+          { "orbitColor": "#7C3AED", "items": [] },
+          { "orbitColor": "#14B8A6", "items": [] },
+          { "orbitColor": "#2563EB", "items": [] },
+          {
+            "orbitColor": "#F97316",
+            "items": [
+              { "sourceId": "equipment-resellers" },
+              { "sourceId": "cultural-organizations" },
+              { "sourceId": "political-websites" },
+              { "sourceId": "restaurant-websites" },
+              { "sourceId": "attorney-websites" },
+              { "sourceId": "health" }
+            ]
+          }
+        ]
+      },
+      {
+        "angle": 90,
+        "items": [
+          { "orbitColor": "#E11D48", "items": [] },
+          { "orbitColor": "#22C55E", "items": [] },
+          { "orbitColor": "#06B6D4", "items": [] },
+          {
+            "orbitColor": "#F59E0B",
+            "items": [
+              { "sourceId": "bwvideo-productions" },
+              { "sourceId": "commerce-escrow-company" },
+              { "sourceId": "haigmats-com" },
+              { "sourceId": "race-with-honda" },
+              { "sourceId": "unitedlayer-inc" },
+              { "sourceId": "stormscape-studios" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "core": "InvestCloud",
+    "plains": [
+      {
+        "angle": 0,
+        "items": [
+          { "orbitColor": "#0EA5E9", "items": [] },
+          { "orbitColor": "#8B5CF6", "items": [] },
+          { "orbitColor": "#10B981", "items": [] },
+          {
+            "orbitColor": "#F43F5E",
+            "items": [
+              { "sourceId": "equipment-resellers" },
+              { "sourceId": "restaurant-websites" },
+              { "sourceId": "attorney-websites" },
+              { "sourceId": "stormscape-studios" },
+              { "sourceId": "commerce-escrow-company" },
+              { "sourceId": "race-with-honda" }
+            ]
+          }
+        ]
+      },
+      {
+        "angle": 90,
+        "items": [
+          { "orbitColor": "#3B82F6", "items": [] },
+          { "orbitColor": "#A855F7", "items": [] },
+          { "orbitColor": "#34D399", "items": [] },
+          {
+            "orbitColor": "#FB923C",
+            "items": [
+              { "sourceId": "political-websites" },
+              { "sourceId": "cultural-organizations" },
+              { "sourceId": "health" },
+              { "sourceId": "bwvideo-productions" },
+              { "sourceId": "haigmats-com" },
+              { "sourceId": "unitedlayer-inc" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

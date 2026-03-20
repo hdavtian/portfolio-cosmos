@@ -71,6 +71,55 @@ export type PortfolioGroupView = {
   /** Count of titled `clientVariants` on the source entry (matches registry totals). */
   clientVariantCount: number;
   variants: PortfolioVariantView[];
+  coreId?: string;
+  coreTitle?: string;
+  plainIndex?: number;
+  plainAngle?: number;
+  ringIndex?: number;
+  orbitColor?: string;
+};
+
+export type PortfolioCoreItemSeed = {
+  sourceId: string;
+};
+
+export type PortfolioCoreRingSeed = {
+  orbitColor?: string;
+  // Temporary typo compatibility while data evolves.
+  oribitColor?: string;
+  items?: PortfolioCoreItemSeed[];
+};
+
+export type PortfolioCorePlainSeed = {
+  angle: number;
+  items: PortfolioCoreRingSeed[];
+};
+
+export type PortfolioCoreSeed = {
+  core: string;
+  plains: PortfolioCorePlainSeed[];
+};
+
+export type PortfolioCoreRingView = {
+  orbitColor: string;
+  groupIds: string[];
+};
+
+export type PortfolioCorePlainView = {
+  angle: number;
+  rings: PortfolioCoreRingView[];
+};
+
+export type PortfolioCoreView = {
+  id: string;
+  title: string;
+  groupIds: string[];
+  plains: PortfolioCorePlainView[];
+};
+
+export type PortfolioCoreBuildResult = {
+  groups: PortfolioGroupView[];
+  cores: PortfolioCoreView[];
 };
 
 const extractYouTubeVideoId = (input?: string): string | null => {
@@ -248,3 +297,120 @@ export const buildPortfolioGroups = (
             : [fallbackVariant],
       };
     });
+
+const slugify = (input: string): string =>
+  input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "core";
+
+const ensureHexColor = (raw: string | undefined, fallbackHex: number): string => {
+  const trimmed = String(raw ?? "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed.toUpperCase();
+  return `#${fallbackHex.toString(16).padStart(6, "0").toUpperCase()}`;
+};
+
+const cloneEntryForInstance = (
+  entry: PortfolioEntry,
+  uniqueId: string,
+  uniqueTitle: string,
+): PortfolioEntry => ({
+  ...entry,
+  id: uniqueId,
+  title: uniqueTitle,
+  galleryMedia: (entry.galleryMedia ?? []).map((media, mediaIndex) => ({
+    ...media,
+    id: `${uniqueId}-gallery-${mediaIndex + 1}`,
+  })),
+  clientVariants: (entry.clientVariants ?? []).map((variant, variantIndex) => ({
+    ...variant,
+    id: `${uniqueId}-variant-${variantIndex + 1}`,
+    title: `${variant.title} • ${uniqueTitle}`,
+    galleryMedia: (variant.galleryMedia ?? []).map((media, mediaIndex) => ({
+      ...media,
+      id: `${uniqueId}-variant-${variantIndex + 1}-media-${mediaIndex + 1}`,
+    })),
+  })),
+});
+
+export const buildPortfolioCoreViews = (
+  entries: PortfolioEntry[],
+  coreSeeds: PortfolioCoreSeed[],
+  maxMediaItems = 12,
+): PortfolioCoreBuildResult => {
+  const sourceEntries = entries.filter(
+    (entry) => (entry as { published?: boolean }).published !== false,
+  );
+  const sourceById = new Map(sourceEntries.map((entry) => [entry.id, entry] as const));
+  const colorFallbacks = [
+    0x7c3aed,
+    0x14b8a6,
+    0x2563eb,
+    0xf97316,
+    0xe11d48,
+    0x22c55e,
+    0x06b6d4,
+    0xf59e0b,
+  ];
+
+  const groups: PortfolioGroupView[] = [];
+  const cores: PortfolioCoreView[] = [];
+
+  coreSeeds.forEach((coreSeed, coreIndex) => {
+    const coreId = `core-${slugify(coreSeed.core)}-${coreIndex + 1}`;
+    const coreTitle = coreSeed.core || `Core ${coreIndex + 1}`;
+    const coreGroupIds: string[] = [];
+    const plainViews: PortfolioCorePlainView[] = [];
+
+    (coreSeed.plains ?? []).forEach((plain, plainIndex) => {
+      const ringViews: PortfolioCoreRingView[] = [];
+      (plain.items ?? []).forEach((ring, ringIndex) => {
+        const ringItems = ring.items ?? [];
+        const orbitColor = ensureHexColor(
+          ring.orbitColor ?? ring.oribitColor,
+          colorFallbacks[(coreIndex + plainIndex + ringIndex) % colorFallbacks.length],
+        );
+        const ringGroupIds: string[] = [];
+
+        ringItems.forEach((item, itemIndex) => {
+          const source = sourceById.get(item.sourceId);
+          if (!source) return;
+          const suffix = `c${coreIndex + 1}p${plainIndex + 1}r${ringIndex + 1}i${itemIndex + 1}`;
+          const instanceId = `${source.id}-${suffix}`;
+          const instanceTitle = `${source.title} • ${coreTitle} ${plainIndex + 1}.${ringIndex + 1}.${itemIndex + 1}`;
+          const clonedEntry = cloneEntryForInstance(source, instanceId, instanceTitle);
+          const group = buildPortfolioGroups([clonedEntry], maxMediaItems)[0];
+          if (!group) return;
+          group.coreId = coreId;
+          group.coreTitle = coreTitle;
+          group.plainIndex = plainIndex;
+          group.plainAngle = plain.angle;
+          group.ringIndex = ringIndex;
+          group.orbitColor = orbitColor;
+          groups.push(group);
+          coreGroupIds.push(group.id);
+          ringGroupIds.push(group.id);
+        });
+
+        ringViews.push({
+          orbitColor,
+          groupIds: ringGroupIds,
+        });
+      });
+
+      plainViews.push({
+        angle: plain.angle,
+        rings: ringViews,
+      });
+    });
+
+    cores.push({
+      id: coreId,
+      title: coreTitle,
+      groupIds: coreGroupIds,
+      plains: plainViews,
+    });
+  });
+
+  return { groups, cores };
+};
