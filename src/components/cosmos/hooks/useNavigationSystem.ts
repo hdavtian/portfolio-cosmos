@@ -90,6 +90,13 @@ export const useNavigationSystem = (deps: {
     targetMoonId: string;
     isInterSystemJump: boolean;
   }) => void;
+  onMoonTravelIntent?: (payload: {
+    targetMoonId: string;
+    isInterSystemJump: boolean;
+  }) => void;
+  onMoonTravelArrived?: (payload: {
+    targetMoonId: string;
+  }) => void;
 }) => {
   const {
     resumeData,
@@ -115,6 +122,8 @@ export const useNavigationSystem = (deps: {
     setFollowingStarDestroyer,
     resolveSpecialSectionTarget,
     onMoonTravelNavigationStarted,
+    onMoonTravelIntent,
+    onMoonTravelArrived,
   } = deps;
 
   const navTraceLastAtRef = useRef<Record<string, number>>({});
@@ -415,6 +424,9 @@ export const useNavigationSystem = (deps: {
       });
 
       navigationSystemRef.current.setOnArrival((targetId: string) => {
+        if (targetId.startsWith("moon-")) {
+          onMoonTravelArrived?.({ targetMoonId: targetId.replace(/^moon-/, "") });
+        }
         vlog(`✅ ARRIVED at ${targetId}`);
         shipLog("Destination reached", "nav");
         debugLog("nav", `setOnArrival fired for targetId="${targetId}"`);
@@ -487,6 +499,7 @@ export const useNavigationSystem = (deps: {
       emitterRef,
       enterMoonViewRef,
       missionLog,
+      onMoonTravelArrived,
       optionsRef,
       resumeData,
       shipLog,
@@ -647,6 +660,12 @@ export const useNavigationSystem = (deps: {
           || isLeavingAboutArea
           || isLeavingSkillsArea
           || isLeavingPortfolioArea;
+        if (!isInterSystemMoonJump) {
+          onMoonTravelIntent?.({
+            targetMoonId: targetId,
+            isInterSystemJump: false,
+          });
+        }
         const useTurbo =
           currentPos && spaceshipRef.current
             ? spaceshipRef.current.position.distanceTo(
@@ -2023,6 +2042,7 @@ export const useNavigationSystem = (deps: {
     spaceshipPathRef,
     spaceshipRef,
     optionsRef,
+    onMoonTravelIntent,
     onMoonTravelNavigationStarted,
     vlog,
   ]);

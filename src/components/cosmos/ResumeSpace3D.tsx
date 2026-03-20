@@ -184,7 +184,9 @@ const OBLIVION_DRONE_AUDIO_PATHS = {
   ],
 } as const;
 const FALCON_MOON_TRAVEL_SFX_PATH =
-  "/audio/falcon/falcon-moon-travel.wav";
+  "/audio/falcon/falcon-moon-travel.mp4";
+const FALCON_MOON_TRAVEL_DEFAULT_VOLUME = 0.68;
+const FALCON_MOON_TRAVEL_FADE_OUT_MS = 520;
 const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
@@ -1025,6 +1027,10 @@ export default function ResumeSpace3D({
   const [droneInspectMode, setDroneInspectMode] = useState(false);
   const [droneSoundEnabled, setDroneSoundEnabled] = useState(true);
   const [droneSoundVolume, setDroneSoundVolume] = useState(0.35);
+  const [falconSoundEnabled, setFalconSoundEnabled] = useState(true);
+  const [falconSoundVolume, setFalconSoundVolume] = useState(
+    FALCON_MOON_TRAVEL_DEFAULT_VOLUME,
+  );
   const [musicEnabled, setMusicEnabled] = useState(false);
   const [musicTrack, setMusicTrack] = useState<string>(
     DEFAULT_BACKGROUND_MUSIC_TRACK,
@@ -1108,6 +1114,26 @@ export default function ResumeSpace3D({
   useEffect(() => {
     hologramDroneRef.current?.setSoundVolume(droneSoundVolume);
   }, [droneSoundVolume]);
+
+  useEffect(() => {
+    if (falconSoundEnabled) return;
+    if (falconTravelFadeTimeoutRef.current !== null) {
+      window.clearTimeout(falconTravelFadeTimeoutRef.current);
+      falconTravelFadeTimeoutRef.current = null;
+    }
+    const falconAudio = falconTravelAudioRef.current;
+    if (falconAudio?.isPlaying) {
+      falconAudio.stop();
+    }
+  }, [falconSoundEnabled]);
+
+  useEffect(() => {
+    const falconAudio = falconTravelAudioRef.current;
+    if (!falconAudio?.isPlaying) return;
+    falconAudio.setVolume(
+      THREE.MathUtils.clamp(overallVolume * falconSoundVolume, 0, 1),
+    );
+  }, [falconSoundVolume, overallVolume]);
 
   useEffect(() => {
     const effectiveMusicVolume = overallVolume * backgroundMusicVolume;
@@ -1266,6 +1292,10 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     return () => {
+      if (falconTravelFadeTimeoutRef.current !== null) {
+        window.clearTimeout(falconTravelFadeTimeoutRef.current);
+        falconTravelFadeTimeoutRef.current = null;
+      }
       const falconAudio = falconTravelAudioRef.current;
       if (falconAudio) {
         if (falconAudio.isPlaying) falconAudio.stop();
@@ -1512,6 +1542,7 @@ export default function ResumeSpace3D({
   const falconMoonTravelBufferRef = useRef<AudioBuffer | null>(null);
   const falconTravelAudioListenerRef = useRef<THREE.AudioListener | null>(null);
   const falconTravelAudioRef = useRef<THREE.PositionalAudio | null>(null);
+  const falconTravelFadeTimeoutRef = useRef<number | null>(null);
   const droneGpuWarmupDoneRef = useRef(false);
   const projectShowcaseTrackRef = useRef<{
     axis: "x" | "z";
@@ -2451,18 +2482,63 @@ export default function ResumeSpace3D({
     }
   }, []);
 
-  const playFalconMoonTravelSfx = useCallback(async () => {
+  const fadeOutFalconMoonTravelSfx = useCallback((durationMs = FALCON_MOON_TRAVEL_FADE_OUT_MS) => {
+    const positionalAudio = falconTravelAudioRef.current;
+    if (!positionalAudio?.isPlaying) return;
+    const gainNode = positionalAudio.gain?.gain;
+    const listener = falconTravelAudioListenerRef.current;
+    if (!gainNode || !listener) {
+      positionalAudio.stop();
+      return;
+    }
+
+    if (falconTravelFadeTimeoutRef.current !== null) {
+      window.clearTimeout(falconTravelFadeTimeoutRef.current);
+      falconTravelFadeTimeoutRef.current = null;
+    }
+    const now = listener.context.currentTime;
+    const fadeSeconds = Math.max(0.05, durationMs / 1000);
+    gainNode.cancelScheduledValues(now);
+    gainNode.setValueAtTime(gainNode.value, now);
+    gainNode.linearRampToValueAtTime(0.0001, now + fadeSeconds);
+    falconTravelFadeTimeoutRef.current = window.setTimeout(() => {
+      const activeAudio = falconTravelAudioRef.current;
+      if (!activeAudio) return;
+      if (activeAudio.isPlaying) activeAudio.stop();
+      activeAudio.setVolume(
+        THREE.MathUtils.clamp(
+          overallVolume * falconSoundVolume,
+          0,
+          1,
+        ),
+      );
+      falconTravelFadeTimeoutRef.current = null;
+      debugLog("audio", "[falcon] moon-travel cue faded out");
+    }, Math.ceil(durationMs + 40));
+  }, [debugLog, falconSoundVolume, overallVolume]);
+
+  const playFalconMoonTravelSfx = useCallback(async (forceRestart = false) => {
+    if (!falconSoundEnabled) return;
     const buffer = falconMoonTravelBufferRef.current;
     if (!buffer) return;
     const positionalAudio = ensureFalconTravelAudioNode();
     if (!positionalAudio) return;
+    if (!forceRestart && positionalAudio.isPlaying) return;
+    if (falconTravelFadeTimeoutRef.current !== null) {
+      window.clearTimeout(falconTravelFadeTimeoutRef.current);
+      falconTravelFadeTimeoutRef.current = null;
+    }
     await resumeFalconTravelAudioContext();
     try {
-      // Non-looping one-shot cue each time moon travel starts.
+      // Non-looping one-shot cue for moon travel.
       playPositionalOneShot(
         positionalAudio,
         buffer,
-        THREE.MathUtils.clamp(overallVolume * 0.7, 0, 1),
+        THREE.MathUtils.clamp(
+          overallVolume * falconSoundVolume,
+          0,
+          1,
+        ),
       );
       debugLog("audio", "[falcon] moon-travel cue played");
     } catch {
@@ -2471,6 +2547,8 @@ export default function ResumeSpace3D({
   }, [
     debugLog,
     ensureFalconTravelAudioNode,
+    falconSoundEnabled,
+    falconSoundVolume,
     overallVolume,
     resumeFalconTravelAudioContext,
   ]);
@@ -2525,9 +2603,17 @@ export default function ResumeSpace3D({
     optionsRef,
     followingStarDestroyerRef,
     setFollowingStarDestroyer,
+    onMoonTravelIntent: ({ targetMoonId }) => {
+      debugLog("nav", `Moon travel intent: ${targetMoonId}`);
+      void playFalconMoonTravelSfx(false);
+    },
     onMoonTravelNavigationStarted: ({ targetMoonId }) => {
       debugLog("nav", `Moon travel started: ${targetMoonId}`);
-      void playFalconMoonTravelSfx();
+      void playFalconMoonTravelSfx(false);
+    },
+    onMoonTravelArrived: ({ targetMoonId }) => {
+      debugLog("nav", `Moon travel arrived: ${targetMoonId}`);
+      fadeOutFalconMoonTravelSfx();
     },
     resolveSpecialSectionTarget: (targetId) => {
       if (targetId === "projects") {
@@ -15988,6 +16074,61 @@ export default function ResumeSpace3D({
                         />
                         <span style={{ minWidth: 40, textAlign: "right" }}>
                           {Math.round(droneSoundVolume * 100)}%
+                        </span>
+                      </span>
+                    </label>
+
+                    <label
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={falconSoundEnabled}
+                          onChange={(event) =>
+                            setFalconSoundEnabled(event.currentTarget.checked)
+                          }
+                        />
+                        Falcon Sounds
+                      </span>
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          width: 162,
+                          opacity: falconSoundEnabled ? 1 : 0.55,
+                        }}
+                      >
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={1}
+                          list={SOUND_SLIDER_TICKS_ID}
+                          value={Math.round(falconSoundVolume * 100)}
+                          onChange={(event) =>
+                            setFalconSoundVolume(
+                              Number(event.currentTarget.value) / 100,
+                            )
+                          }
+                          disabled={!falconSoundEnabled}
+                          style={{ flex: 1 }}
+                        />
+                        <span style={{ minWidth: 40, textAlign: "right" }}>
+                          {Math.round(falconSoundVolume * 100)}%
                         </span>
                       </span>
                     </label>
