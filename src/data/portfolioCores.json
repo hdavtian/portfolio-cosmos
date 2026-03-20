@@ -6,9 +6,18 @@
       {
         "angle": 0,
         "items": [
-          { "orbitColor": "#545353", "items": [] },
-          { "orbitColor": "#545353", "items": [] },
-          { "orbitColor": "#545353", "items": [] },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
           {
             "orbitColor": "#1EA2FA",
             "items": [
@@ -17,7 +26,13 @@
                 "title": "Equipment Resellers",
                 "image": "/images/legacy-web/acecount.com 1.png",
                 "description": "Equipment reseller websites grouped by client.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "clientVariants": [
@@ -26,13 +41,40 @@
                     "title": "acecount.com",
                     "image": "/images/legacy-web/acecount.com 1.png",
                     "description": "Equipment reseller storefront and product catalog presentation.",
-                    "technologies": ["php", "mysql", "html", "css", "javascript"],
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
                     "year": null,
                     "fit": "cover",
                     "galleryMedia": [
-                      { "id": "equipment-acecount-02", "type": "image", "image": "/images/legacy-web/acecount.com 2.png", "title": "acecount.com - View 2", "description": "Placeholder description.", "fit": "cover" },
-                      { "id": "equipment-acecount-03", "type": "image", "image": "/images/legacy-web/acecount.com 3.png", "title": "acecount.com - View 3", "description": "Placeholder description.", "fit": "cover" },
-                      { "id": "equipment-acecount-04", "type": "image", "image": "/images/legacy-web/acecount.com 4.png", "title": "acecount.com - View 4", "description": "Placeholder description.", "fit": "cover" }
+                      {
+                        "id": "equipment-acecount-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/acecount.com 2.png",
+                        "title": "acecount.com - View 2",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "equipment-acecount-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/acecount.com 3.png",
+                        "title": "acecount.com - View 3",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "equipment-acecount-04",
+                        "type": "image",
+                        "image": "/images/legacy-web/acecount.com 4.png",
+                        "title": "acecount.com - View 4",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      }
                     ]
                   },
                   {
@@ -40,11 +82,24 @@
                     "title": "ABM JAX",
                     "image": "/images/legacy-web/abm-jax-1.jpg",
                     "description": "Placeholder description for ABM JAX.",
-                    "technologies": ["php", "mysql", "html", "css", "javascript"],
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
                     "year": null,
                     "fit": "cover",
                     "galleryMedia": [
-                      { "id": "equipment-abm-jax-02", "type": "image", "image": "/images/legacy-web/abm-jax-2.jpg", "title": "ABM JAX - View 2", "description": "Placeholder description.", "fit": "cover" }
+                      {
+                        "id": "equipment-abm-jax-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/abm-jax-2.jpg",
+                        "title": "ABM JAX - View 2",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      }
                     ]
                   },
                   {
@@ -52,12 +107,32 @@
                     "title": "Financial Equipment",
                     "image": "/images/legacy-web/financial-equipment-1.jpg",
                     "description": "Placeholder description for Financial Equipment.",
-                    "technologies": ["php", "mysql", "html", "css", "javascript"],
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
                     "year": null,
                     "fit": "cover",
                     "galleryMedia": [
-                      { "id": "equipment-financial-equipment-02", "type": "image", "image": "/images/legacy-web/financial-equipment-2.jpg", "title": "Financial Equipment - View 2", "description": "Placeholder description.", "fit": "cover" },
-                      { "id": "equipment-financial-equipment-03", "type": "image", "image": "/images/legacy-web/financial-equipment-3.jpg", "title": "Financial Equipment - View 3", "description": "Placeholder description.", "fit": "cover" }
+                      {
+                        "id": "equipment-financial-equipment-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/financial-equipment-2.jpg",
+                        "title": "Financial Equipment - View 2",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "equipment-financial-equipment-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/financial-equipment-3.jpg",
+                        "title": "Financial Equipment - View 3",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      }
                     ]
                   }
                 ]
@@ -67,7 +142,13 @@
                 "title": "Cultural Organizations",
                 "image": "/images/legacy-web/agbuypla-1.jpg",
                 "description": "Cultural organization websites grouped by chapter/location.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "clientVariants": [
@@ -76,7 +157,13 @@
                     "title": "AGBU YPLA",
                     "image": "/images/legacy-web/agbuypla-1.jpg",
                     "description": "Placeholder description for AGBU YPLA.",
-                    "technologies": ["php", "mysql", "html", "css", "javascript"],
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
                     "year": null,
                     "fit": "cover"
                   },
@@ -85,11 +172,24 @@
                     "title": "AGBU YPNY",
                     "image": "/images/legacy-web/agbuypny-1.jpg",
                     "description": "Placeholder description for AGBU YPNY.",
-                    "technologies": ["php", "mysql", "html", "css", "javascript"],
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
                     "year": null,
                     "fit": "cover",
                     "galleryMedia": [
-                      { "id": "cultural-agbuypny-02", "type": "image", "image": "/images/legacy-web/agbuypny-2.jpg", "title": "AGBU YPNY - View 2", "description": "Placeholder description.", "fit": "cover" }
+                      {
+                        "id": "cultural-agbuypny-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/agbuypny-2.jpg",
+                        "title": "AGBU YPNY - View 2",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      }
                     ]
                   }
                 ]
@@ -99,7 +199,13 @@
                 "title": "Political Websites",
                 "image": "/images/legacy-web/ardy-for-clerk-1.jpg",
                 "description": "Political campaign websites grouped by candidate.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "clientVariants": [
@@ -108,13 +214,40 @@
                     "title": "Ardy for Clerk",
                     "image": "/images/legacy-web/ardy-for-clerk-1.jpg",
                     "description": "Placeholder description for Ardy for Clerk.",
-                    "technologies": ["php", "mysql", "html", "css", "javascript"],
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
                     "year": null,
                     "fit": "cover",
                     "galleryMedia": [
-                      { "id": "political-ardy-for-clerk-02", "type": "image", "image": "/images/legacy-web/ardy-for-clerk-2.jpg", "title": "Ardy for Clerk - View 2", "description": "Placeholder description.", "fit": "cover" },
-                      { "id": "political-ardy-for-clerk-03", "type": "image", "image": "/images/legacy-web/ardy-for-clerk-3.jpg", "title": "Ardy for Clerk - View 3", "description": "Placeholder description.", "fit": "cover" },
-                      { "id": "political-ardy-for-clerk-04", "type": "image", "image": "/images/legacy-web/ardy-for-clerk-4.jpg", "title": "Ardy for Clerk - View 4", "description": "Placeholder description.", "fit": "cover" }
+                      {
+                        "id": "political-ardy-for-clerk-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/ardy-for-clerk-2.jpg",
+                        "title": "Ardy for Clerk - View 2",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "political-ardy-for-clerk-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/ardy-for-clerk-3.jpg",
+                        "title": "Ardy for Clerk - View 3",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "political-ardy-for-clerk-04",
+                        "type": "image",
+                        "image": "/images/legacy-web/ardy-for-clerk-4.jpg",
+                        "title": "Ardy for Clerk - View 4",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      }
                     ]
                   },
                   {
@@ -122,7 +255,13 @@
                     "title": "Simmons for Governor",
                     "image": "/images/legacy-web/simmonsforgovernor.com.png",
                     "description": "Placeholder description for Simmons for Governor.",
-                    "technologies": ["php", "mysql", "html", "css", "javascript"],
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
                     "year": null,
                     "fit": "cover"
                   },
@@ -131,12 +270,32 @@
                     "title": "Paul Krekorian for Congress",
                     "image": "/images/legacy-web/paul-krekorian-1.jpg",
                     "description": "Placeholder description for Paul Krekorian campaign site.",
-                    "technologies": ["php", "mysql", "html", "css", "javascript"],
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
                     "year": null,
                     "fit": "cover",
                     "galleryMedia": [
-                      { "id": "political-paul-krekorian-02", "type": "image", "image": "/images/legacy-web/paul-krekorian-2.jpg", "title": "Paul Krekorian - View 2", "description": "Placeholder description.", "fit": "cover" },
-                      { "id": "political-paul-krekorian-03", "type": "image", "image": "/images/legacy-web/paul-krekorian-3.jpg", "title": "Paul Krekorian - View 3", "description": "Placeholder description.", "fit": "cover" }
+                      {
+                        "id": "political-paul-krekorian-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/paul-krekorian-2.jpg",
+                        "title": "Paul Krekorian - View 2",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "political-paul-krekorian-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/paul-krekorian-3.jpg",
+                        "title": "Paul Krekorian - View 3",
+                        "description": "Placeholder description.",
+                        "fit": "cover"
+                      }
                     ]
                   },
                   {
@@ -144,7 +303,13 @@
                     "title": "Judy for Mayor",
                     "image": "/images/legacy-web/judy-for-mayor-1.jpg",
                     "description": "Placeholder description for Judy for Mayor.",
-                    "technologies": ["php", "mysql", "html", "css", "javascript"],
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
                     "year": null,
                     "fit": "cover"
                   }
@@ -155,17 +320,121 @@
                 "title": "Restaurant Websites",
                 "image": "/images/legacy-web/arroyo-chop-house-1.jpg",
                 "description": "Restaurant and hospitality websites grouped by client brand.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "clientVariants": [
-                  { "id": "restaurant-arroyo-chop-house", "title": "Arroyo Chop House", "image": "/images/legacy-web/arroyo-chop-house-1.jpg", "description": "Placeholder description for Arroyo Chop House.", "technologies": ["php", "mysql", "html", "css", "javascript"], "year": null, "fit": "cover" },
-                  { "id": "restaurant-parkway-grill", "title": "Parkway Grill", "image": "/images/legacy-web/parkway-grill-1.jpg", "description": "Placeholder description for Parkway Grill.", "technologies": ["php", "mysql", "html", "css", "javascript"], "year": null, "fit": "cover" },
-                  { "id": "restaurant-smittys-grill", "title": "Smitty's Grill", "image": "/images/legacy-web/smittys-grill-1.jpg", "description": "Placeholder description for Smitty's Grill.", "technologies": ["php", "mysql", "html", "css", "javascript"], "year": null, "fit": "cover" },
-                  { "id": "restaurant-smith-brothers-corp", "title": "Smith Brothers Restaurants Corp", "image": "/images/legacy-web/smith-brothers-restaurants-corp-1jpg.jpg", "description": "Placeholder description for Smith Brothers Restaurants Corp.", "technologies": ["php", "mysql", "html", "css", "javascript"], "year": null, "fit": "cover" },
-                  { "id": "restaurant-vibrato-grill-jazz", "title": "Vibrato Grill Jazz", "image": "/images/legacy-web/vibrato-grill-jazz-1.jpg", "description": "Placeholder description for Vibrato Grill Jazz.", "technologies": ["php", "mysql", "html", "css", "javascript"], "year": null, "fit": "cover" },
-                  { "id": "restaurant-brandview-collection", "title": "Brandview Collection", "image": "/images/legacy-web/brandview-collection-1.jpg", "description": "Placeholder description for Brandview Collection.", "technologies": ["php", "mysql", "html", "css", "javascript"], "year": null, "fit": "cover" },
-                  { "id": "restaurant-caspers-hot-dogs", "title": "Caspers Hot Dogs", "image": "/images/legacy-web/caspers-hot-dogs-1.jpg", "description": "Placeholder description for Caspers Hot Dogs.", "technologies": ["php", "mysql", "html", "css", "javascript"], "year": null, "fit": "cover" }
+                  {
+                    "id": "restaurant-arroyo-chop-house",
+                    "title": "Arroyo Chop House",
+                    "image": "/images/legacy-web/arroyo-chop-house-1.jpg",
+                    "description": "Placeholder description for Arroyo Chop House.",
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
+                    "year": null,
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "restaurant-parkway-grill",
+                    "title": "Parkway Grill",
+                    "image": "/images/legacy-web/parkway-grill-1.jpg",
+                    "description": "Placeholder description for Parkway Grill.",
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
+                    "year": null,
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "restaurant-smittys-grill",
+                    "title": "Smitty's Grill",
+                    "image": "/images/legacy-web/smittys-grill-1.jpg",
+                    "description": "Placeholder description for Smitty's Grill.",
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
+                    "year": null,
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "restaurant-smith-brothers-corp",
+                    "title": "Smith Brothers Restaurants Corp",
+                    "image": "/images/legacy-web/smith-brothers-restaurants-corp-1jpg.jpg",
+                    "description": "Placeholder description for Smith Brothers Restaurants Corp.",
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
+                    "year": null,
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "restaurant-vibrato-grill-jazz",
+                    "title": "Vibrato Grill Jazz",
+                    "image": "/images/legacy-web/vibrato-grill-jazz-1.jpg",
+                    "description": "Placeholder description for Vibrato Grill Jazz.",
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
+                    "year": null,
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "restaurant-brandview-collection",
+                    "title": "Brandview Collection",
+                    "image": "/images/legacy-web/brandview-collection-1.jpg",
+                    "description": "Placeholder description for Brandview Collection.",
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
+                    "year": null,
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "restaurant-caspers-hot-dogs",
+                    "title": "Caspers Hot Dogs",
+                    "image": "/images/legacy-web/caspers-hot-dogs-1.jpg",
+                    "description": "Placeholder description for Caspers Hot Dogs.",
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
+                    "year": null,
+                    "fit": "cover"
+                  }
                 ]
               },
               {
@@ -173,12 +442,46 @@
                 "title": "Attorney Websites",
                 "image": "/images/legacy-web/ourfalian-law-a-1.jpg",
                 "description": "Attorney website projects grouped by practice presentation.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "clientVariants": [
-                  { "id": "attorney-ourfalian-law-a", "title": "Ourfalian Law (A)", "image": "/images/legacy-web/ourfalian-law-a-1.jpg", "description": "Placeholder description for Ourfalian Law A.", "technologies": ["php", "mysql", "html", "css", "javascript"], "year": null, "fit": "cover" },
-                  { "id": "attorney-ourfalian-law-b", "title": "Ourfalian Law (B)", "image": "/images/legacy-web/ourfalian-law-b-1.jpg", "description": "Placeholder description for Ourfalian Law B.", "technologies": ["php", "mysql", "html", "css", "javascript"], "year": null, "fit": "cover" }
+                  {
+                    "id": "attorney-ourfalian-law-a",
+                    "title": "Ourfalian Law (A)",
+                    "image": "/images/legacy-web/ourfalian-law-a-1.jpg",
+                    "description": "Placeholder description for Ourfalian Law A.",
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
+                    "year": null,
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "attorney-ourfalian-law-b",
+                    "title": "Ourfalian Law (B)",
+                    "image": "/images/legacy-web/ourfalian-law-b-1.jpg",
+                    "description": "Placeholder description for Ourfalian Law B.",
+                    "technologies": [
+                      "php",
+                      "mysql",
+                      "html",
+                      "css",
+                      "javascript"
+                    ],
+                    "year": null,
+                    "fit": "cover"
+                  }
                 ]
               },
               {
@@ -186,12 +489,32 @@
                 "title": "Health",
                 "image": "/images/legacy-web/ucla-researchcore-1.jpg",
                 "description": "Health and research-related website project examples.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "galleryMedia": [
-                  { "id": "health-ucla-researchcore-02", "type": "image", "image": "/images/legacy-web/ucla-researchcore-2.jpg", "title": "UCLA Research Core - View 2", "description": "Placeholder description.", "fit": "cover" },
-                  { "id": "health-ucla-researchcore-03", "type": "image", "image": "/images/legacy-web/ucla-researchcore-3.jpg", "title": "UCLA Research Core - View 3", "description": "Placeholder description.", "fit": "cover" }
+                  {
+                    "id": "health-ucla-researchcore-02",
+                    "type": "image",
+                    "image": "/images/legacy-web/ucla-researchcore-2.jpg",
+                    "title": "UCLA Research Core - View 2",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "health-ucla-researchcore-03",
+                    "type": "image",
+                    "image": "/images/legacy-web/ucla-researchcore-3.jpg",
+                    "title": "UCLA Research Core - View 3",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  }
                 ]
               }
             ]
@@ -199,11 +522,20 @@
         ]
       },
       {
-        "angle": 45,
+        "angle": 90,
         "items": [
-          { "orbitColor": "#545353", "items": [] },
-          { "orbitColor": "#545353", "items": [] },
-          { "orbitColor": "#545353", "items": [] },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
           {
             "orbitColor": "#59FA1E",
             "items": [
@@ -212,7 +544,13 @@
                 "title": "BWVideo Productions",
                 "image": "/images/legacy-web/bwvideoproductions.com 1.png",
                 "description": "Placeholder description for BWVideo Productions.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -221,12 +559,32 @@
                 "title": "Commerce Escrow Company",
                 "image": "/images/legacy-web/commerce-escrow-company-1.jpg",
                 "description": "Placeholder description for Commerce Escrow Company.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "galleryMedia": [
-                  { "id": "commerce-escrow-company-02", "type": "image", "image": "/images/legacy-web/commerce-escrow-company-2.jpg", "title": "Commerce Escrow Company - View 2", "description": "Placeholder description.", "fit": "cover" },
-                  { "id": "commerce-escrow-company-03", "type": "image", "image": "/images/legacy-web/commerce-escrow-company-3.jpg", "title": "Commerce Escrow Company - View 3", "description": "Placeholder description.", "fit": "cover" }
+                  {
+                    "id": "commerce-escrow-company-02",
+                    "type": "image",
+                    "image": "/images/legacy-web/commerce-escrow-company-2.jpg",
+                    "title": "Commerce Escrow Company - View 2",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "commerce-escrow-company-03",
+                    "type": "image",
+                    "image": "/images/legacy-web/commerce-escrow-company-3.jpg",
+                    "title": "Commerce Escrow Company - View 3",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  }
                 ]
               },
               {
@@ -234,12 +592,32 @@
                 "title": "Haigmats.com",
                 "image": "/images/legacy-web/haigmats-1-1999.jpg",
                 "description": "Placeholder description for Haigmats.com.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": 1999,
                 "fit": "cover",
                 "galleryMedia": [
-                  { "id": "haigmats-com-02", "type": "image", "image": "/images/legacy-web/haigmats-2-1999.jpg", "title": "Haigmats.com - View 2", "description": "Placeholder description.", "fit": "cover" },
-                  { "id": "haigmats-com-03", "type": "image", "image": "/images/legacy-web/haigmats-3-1999.jpg", "title": "Haigmats.com - View 3", "description": "Placeholder description.", "fit": "cover" }
+                  {
+                    "id": "haigmats-com-02",
+                    "type": "image",
+                    "image": "/images/legacy-web/haigmats-2-1999.jpg",
+                    "title": "Haigmats.com - View 2",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "haigmats-com-03",
+                    "type": "image",
+                    "image": "/images/legacy-web/haigmats-3-1999.jpg",
+                    "title": "Haigmats.com - View 3",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  }
                 ]
               },
               {
@@ -247,14 +625,48 @@
                 "title": "Race with Honda",
                 "image": "/images/legacy-web/racewithhonda.com 1.png",
                 "description": "Placeholder description for Race with Honda.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "galleryMedia": [
-                  { "id": "race-with-honda-02", "type": "image", "image": "/images/legacy-web/racewithhonda.com 2.png", "title": "Race with Honda - View 2", "description": "Placeholder description.", "fit": "cover" },
-                  { "id": "race-with-honda-03", "type": "image", "image": "/images/legacy-web/racewithhonda.com 3.png", "title": "Race with Honda - View 3", "description": "Placeholder description.", "fit": "cover" },
-                  { "id": "race-with-honda-04", "type": "image", "image": "/images/legacy-web/racewithhonda.com 4.png", "title": "Race with Honda - View 4", "description": "Placeholder description.", "fit": "cover" },
-                  { "id": "race-with-honda-05", "type": "image", "image": "/images/legacy-web/racewithhonda.com 5.png", "title": "Race with Honda - View 5", "description": "Placeholder description.", "fit": "cover" }
+                  {
+                    "id": "race-with-honda-02",
+                    "type": "image",
+                    "image": "/images/legacy-web/racewithhonda.com 2.png",
+                    "title": "Race with Honda - View 2",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "race-with-honda-03",
+                    "type": "image",
+                    "image": "/images/legacy-web/racewithhonda.com 3.png",
+                    "title": "Race with Honda - View 3",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "race-with-honda-04",
+                    "type": "image",
+                    "image": "/images/legacy-web/racewithhonda.com 4.png",
+                    "title": "Race with Honda - View 4",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "race-with-honda-05",
+                    "type": "image",
+                    "image": "/images/legacy-web/racewithhonda.com 5.png",
+                    "title": "Race with Honda - View 5",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  }
                 ]
               },
               {
@@ -262,11 +674,24 @@
                 "title": "UnitedLayer Inc.",
                 "image": "/images/legacy-web/unitedlayer.com 1.png",
                 "description": "Placeholder description for UnitedLayer Inc.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "galleryMedia": [
-                  { "id": "unitedlayer-inc-02", "type": "image", "image": "/images/legacy-web/unitedlayer.com 2.png", "title": "UnitedLayer Inc. - View 2", "description": "Placeholder description.", "fit": "cover" }
+                  {
+                    "id": "unitedlayer-inc-02",
+                    "type": "image",
+                    "image": "/images/legacy-web/unitedlayer.com 2.png",
+                    "title": "UnitedLayer Inc. - View 2",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  }
                 ]
               },
               {
@@ -274,12 +699,32 @@
                 "title": "StormScape Studios",
                 "image": "/images/legacy-web/stormscape - demo sites.png",
                 "description": "Placeholder description for StormScape Studios.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "galleryMedia": [
-                  { "id": "stormscape-studios-02", "type": "image", "image": "/images/legacy-web/stormscape - live sites.png", "title": "StormScape Studios - Live Sites", "description": "Placeholder description.", "fit": "cover" },
-                  { "id": "stormscape-studios-03", "type": "image", "image": "/images/legacy-web/stormscape - under construction sites.png", "title": "StormScape Studios - Under Construction", "description": "Placeholder description.", "fit": "cover" }
+                  {
+                    "id": "stormscape-studios-02",
+                    "type": "image",
+                    "image": "/images/legacy-web/stormscape - live sites.png",
+                    "title": "StormScape Studios - Live Sites",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "stormscape-studios-03",
+                    "type": "image",
+                    "image": "/images/legacy-web/stormscape - under construction sites.png",
+                    "title": "StormScape Studios - Under Construction",
+                    "description": "Placeholder description.",
+                    "fit": "cover"
+                  }
                 ]
               }
             ]
@@ -295,7 +740,10 @@
       {
         "angle": 0,
         "items": [
-          { "orbitColor": "#545353", "items": [] },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
           {
             "orbitColor": "#FAB41E",
             "items": [
@@ -304,86 +752,261 @@
                 "title": "Test Control Center",
                 "image": "/images/investcloud/tcc/tcc-1.jpg",
                 "description": "An winform application running selenium test cases.",
-                "technologies": [".NET", "WinForms", "C#", "Selenium/Java", "TestNG"],
+                "technologies": [
+                  ".NET",
+                  "WinForms",
+                  "C#",
+                  "Selenium/Java",
+                  "TestNG"
+                ],
                 "year": 2018,
                 "fit": "contain",
                 "galleryMedia": [
-                  { "id": "tcc-2", "type": "image", "image": "/images/investcloud/tcc/tcc-2.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
-                  { "id": "tcc-3", "type": "image", "image": "/images/investcloud/tcc/tcc-3.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
-                  { "id": "tcc-10", "type": "image", "image": "/images/investcloud/tcc/tcc-10.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
-                  { "id": "tcc-11", "type": "image", "image": "/images/investcloud/tcc/tcc-11.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
-                  { "id": "tcc-12", "type": "image", "image": "/images/investcloud/tcc/tcc-12.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
-                  { "id": "tcc-13", "type": "image", "image": "/images/investcloud/tcc/tcc-13.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
-                  { "id": "tcc-14", "type": "image", "image": "/images/investcloud/tcc/tcc-14.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" }
+                  {
+                    "id": "tcc-2",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-2.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-3",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-3.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-10",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-10.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-11",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-11.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-12",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-12.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-13",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-13.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-14",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-14.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  }
                 ]
-              }
-              
-            ]
-          }
-        ]
-      },
-      {
-        "angle": 90,
-        "items": [
-          { "orbitColor": "#545353", "items": [] },
-          { "orbitColor": "#545353", "items": [] },
-          { "orbitColor": "#545353", "items": [] },
-          {
-            "orbitColor": "#EB1EFA",
-            "items": [
-              {
-                "id": "political-websites",
-                "title": "Political Websites",
-                "image": "/images/legacy-web/ardy-for-clerk-1.jpg",
-                "description": "Political campaign websites grouped by candidate.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
-                "fit": "cover"
               },
               {
-                "id": "cultural-organizations",
-                "title": "Cultural Organizations",
-                "image": "/images/legacy-web/agbuypla-1.jpg",
-                "description": "Cultural organization websites grouped by chapter/location.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
-                "fit": "cover"
+                "id": "v4-analyzer",
+                "title": "V4 Analyzer",
+                "image": "/images/investcloud/v4-analyzer/v4a-1.jpg",
+                "description": "A JavaScript/TypeScript application to help analyze InvestCloud Portals",
+                "technologies": [
+                  "JavaScript",
+                  "TypeScript",
+                  "HTML",
+                  "CSS"
+                ],
+                "year": 2019,
+                "fit": "contain",
+                "galleryMedia": [
+                  {
+                    "id": "v4a-2",
+                    "type": "image",
+                    "image": "/images/investcloud/v4-analyzer/v4a-2.jpg",
+                    "title": "V4 Analyzer",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "v4a-3",
+                    "type": "image",
+                    "image": "/images/investcloud/v4-analyzer/v4a-3.jpg",
+                    "title": "V4 Analyzer",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "v4a-4",
+                    "type": "image",
+                    "image": "/images/investcloud/v4-analyzer/v4a-4.jpg",
+                    "title": "V4 Analyzer",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "v4a-5",
+                    "type": "image",
+                    "image": "/images/investcloud/v4-analyzer/v4a-5.jpg",
+                    "title": "V4 Analyzer",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "v4a-6",
+                    "type": "image",
+                    "image": "/images/investcloud/v4-analyzer/v4a-6.jpg",
+                    "title": "V4 Analyzer",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  }
+                ]
               },
               {
-                "id": "health",
-                "title": "Health",
-                "image": "/images/legacy-web/ucla-researchcore-1.jpg",
-                "description": "Health and research-related website project examples.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
-                "fit": "cover"
-              },
-              {
-                "id": "bwvideo-productions",
-                "title": "BWVideo Productions",
-                "image": "/images/legacy-web/bwvideoproductions.com 1.png",
-                "description": "Placeholder description for BWVideo Productions.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
-                "fit": "cover"
-              },
-              {
-                "id": "haigmats-com",
-                "title": "Haigmats.com",
-                "image": "/images/legacy-web/haigmats-1-1999.jpg",
-                "description": "Placeholder description for Haigmats.com.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": 1999,
-                "fit": "cover"
-              },
-              {
-                "id": "unitedlayer-inc",
-                "title": "UnitedLayer Inc.",
-                "image": "/images/legacy-web/unitedlayer.com 1.png",
-                "description": "Placeholder description for UnitedLayer Inc.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
-                "fit": "cover"
+                "id": "taffie",
+                "title": "Test Automation Framework for InvestCloud Efficiency",
+                "image": "/images/investcloud/taffie/taffie-1.jpg",
+                "description": "A C# Playwright framework to help automate the testing of InvestCloud Portals",
+                "technologies": [
+                  ".NET/C#",
+                  ".NET Web API",
+                  "Angular",
+                  "Playwright",
+                  "JavaScript",
+                  "TypeScript",
+                  "HTML",
+                  "CSS"
+                ],
+                "year": 2024,
+                "fit": "contain",
+                "galleryMedia": [
+                  {
+                    "id": "taffie-2",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-2.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-3",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-3.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-4",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-4.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-5",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-5.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-6",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-6.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-7",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-7.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-8",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-8.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-9",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-9.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-10",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-10.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-11",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-11.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-12",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-12.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-13",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-13.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-14",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-14.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-50",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-50.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  }
+                ]
               }
             ]
           }
