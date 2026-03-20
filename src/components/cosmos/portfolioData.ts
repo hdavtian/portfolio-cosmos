@@ -80,8 +80,8 @@ export type PortfolioGroupView = {
 };
 
 export type PortfolioCoreItemSeed = {
-  sourceId: string;
-};
+  sourceId?: string;
+} & Partial<PortfolioEntry>;
 
 export type PortfolioCoreRingSeed = {
   orbitColor?: string;
@@ -334,14 +334,9 @@ const cloneEntryForInstance = (
 });
 
 export const buildPortfolioCoreViews = (
-  entries: PortfolioEntry[],
   coreSeeds: PortfolioCoreSeed[],
   maxMediaItems = 12,
 ): PortfolioCoreBuildResult => {
-  const sourceEntries = entries.filter(
-    (entry) => (entry as { published?: boolean }).published !== false,
-  );
-  const sourceById = new Map(sourceEntries.map((entry) => [entry.id, entry] as const));
   const colorFallbacks = [
     0x7c3aed,
     0x14b8a6,
@@ -355,6 +350,40 @@ export const buildPortfolioCoreViews = (
 
   const groups: PortfolioGroupView[] = [];
   const cores: PortfolioCoreView[] = [];
+  const scoreEntryRichness = (entry: PortfolioEntry): number =>
+    (entry.galleryMedia?.length ?? 0) + (entry.clientVariants?.length ?? 0) * 4;
+  const toEntry = (item: PortfolioCoreItemSeed): PortfolioEntry | null =>
+    typeof item.id === "string" &&
+    typeof item.title === "string" &&
+    typeof item.image === "string"
+      ? {
+          id: item.id,
+          title: item.title,
+          image: item.image,
+          description: item.description,
+          technologies: item.technologies,
+          year: item.year,
+          fit: item.fit,
+          galleryMedia: item.galleryMedia,
+          clientVariants: item.clientVariants,
+          published: item.published,
+        }
+      : null;
+  const catalogById = new Map<string, PortfolioEntry>();
+  coreSeeds.forEach((coreSeed) => {
+    (coreSeed.plains ?? []).forEach((plain) => {
+      (plain.items ?? []).forEach((ring) => {
+        (ring.items ?? []).forEach((item) => {
+          const parsed = toEntry(item);
+          if (!parsed) return;
+          const prev = catalogById.get(parsed.id);
+          if (!prev || scoreEntryRichness(parsed) >= scoreEntryRichness(prev)) {
+            catalogById.set(parsed.id, parsed);
+          }
+        });
+      });
+    });
+  });
 
   coreSeeds.forEach((coreSeed, coreIndex) => {
     const coreId = `core-${slugify(coreSeed.core)}-${coreIndex + 1}`;
@@ -373,7 +402,9 @@ export const buildPortfolioCoreViews = (
         const ringGroupIds: string[] = [];
 
         ringItems.forEach((item, itemIndex) => {
-          const source = sourceById.get(item.sourceId);
+          const source =
+            toEntry(item) ??
+            (typeof item.id === "string" ? (catalogById.get(item.id) ?? null) : null);
           if (!source) return;
           const suffix = `c${coreIndex + 1}p${plainIndex + 1}r${ringIndex + 1}i${itemIndex + 1}`;
           const instanceId = `${source.id}-${suffix}`;

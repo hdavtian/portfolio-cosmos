@@ -110,7 +110,6 @@ import {
 } from "./scaleConfig";
 import {
   buildPortfolioCoreViews,
-  type PortfolioEntry,
   type PortfolioCoreView,
   type PortfolioGroupView,
 } from "./portfolioData";
@@ -10340,14 +10339,53 @@ export default function ResumeSpace3D({
     orbitalRoot.position.copy(portfolioAnchor);
     orbitalRoot.visible = false;
     const orbitalBuild = buildPortfolioCoreViews(
-      legacyWebsites as PortfolioEntry[],
       portfolioCores as Array<{
         core: string;
         plains: Array<{
           angle: number;
           items: Array<{
             orbitColor?: string;
-            items?: Array<{ sourceId: string }>;
+            items?: Array<{
+              id: string;
+              title: string;
+              image: string;
+              description?: string;
+              technologies?: string[];
+              year?: number | null;
+              fit?: "contain" | "cover";
+              galleryMedia?: Array<{
+                id: string;
+                type?: "image" | "video" | "youtube";
+                image?: string;
+                videoUrl?: string;
+                thumbnail?: string;
+                youtubeUrl?: string;
+                title?: string;
+                description?: string;
+                fit?: "contain" | "cover";
+              }>;
+              clientVariants?: Array<{
+                id: string;
+                title: string;
+                image?: string;
+                description?: string;
+                technologies?: string[];
+                year?: number | null;
+                fit?: "contain" | "cover";
+                galleryMedia?: Array<{
+                  id: string;
+                  type?: "image" | "video" | "youtube";
+                  image?: string;
+                  videoUrl?: string;
+                  thumbnail?: string;
+                  youtubeUrl?: string;
+                  title?: string;
+                  description?: string;
+                  fit?: "contain" | "cover";
+                }>;
+              }>;
+              published?: boolean;
+            }>;
           }>;
         }>;
       }>,
@@ -13750,7 +13788,7 @@ export default function ResumeSpace3D({
       const portfolioPlanetData: PlanetData = {
         name: "Portfolio",
         position: ORBITAL_PORTFOLIO_WORLD_ANCHOR.clone(),
-        data: legacyWebsites,
+        data: portfolioCores,
       };
 
       tourBuilderRef.current?.registerPlanet("experience", expPlanetData);
