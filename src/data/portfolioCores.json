@@ -22,7 +22,7 @@
         ]
       },
       {
-        "angle": 90,
+        "angle": 45,
         "items": [
           { "orbitColor": "#E11D48", "items": [] },
           { "orbitColor": "#22C55E", "items": [] },

@@ -374,6 +374,9 @@ type OrbitalPortfolioStationRecord = {
   halo: THREE.Sprite;
   mediaHaloGroup: THREE.Group;
   variantSatelliteGroup: THREE.Group;
+  impactSprite: THREE.Sprite;
+  impactStartedAt: number;
+  impactDurationMs: number;
   pulsePhase: number;
   textureScrollNorm: number;
   textureMaxOffsetY: number;
@@ -3795,7 +3798,6 @@ export default function ResumeSpace3D({
       const plateQuat = new THREE.Quaternion();
       station.plate.getWorldQuaternion(plateQuat);
       const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(plateQuat).normalize();
-      const up = new THREE.Vector3(0, 1, 0);
       const savedDistance = orbitalPortfolioInspectDistanceRef.current;
       const inspectDistance =
         typeof savedDistance === "number" &&
@@ -3804,12 +3806,9 @@ export default function ResumeSpace3D({
           ? savedDistance
           : ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE;
       orbitalPortfolioInspectDistanceRef.current = inspectDistance;
-      const upLift = THREE.MathUtils.clamp(inspectDistance * 0.066, 6, 18);
-      const camPos = plateWorld
-        .clone()
-        .addScaledVector(normal, inspectDistance)
-        .addScaledVector(up, upLift);
-      const lookTarget = plateWorld.clone().addScaledVector(normal, 2);
+      // Keep inspect framing straight-on to the slide face.
+      const camPos = plateWorld.clone().addScaledVector(normal, inspectDistance);
+      const lookTarget = plateWorld.clone();
       controls.setLookAt(
         camPos.x,
         camPos.y,
@@ -7829,14 +7828,41 @@ export default function ResumeSpace3D({
         station.group.scale.setScalar(
           THREE.MathUtils.damp(station.group.scale.x, targetScale, 7.4, dt),
         );
+        if (station.impactStartedAt > 0) {
+          const elapsed = now - station.impactStartedAt;
+          const tImpact = THREE.MathUtils.clamp(
+            elapsed / Math.max(100, station.impactDurationMs),
+            0,
+            1,
+          );
+          const impactMat = station.impactSprite.material as THREE.SpriteMaterial;
+          station.impactSprite.visible = tImpact < 1;
+          impactMat.opacity = (1 - tImpact) * (1 - tImpact) * 0.52;
+          const impactScale = 8 + tImpact * 24;
+          station.impactSprite.scale.setScalar(impactScale);
+          if (tImpact >= 1) {
+            station.impactStartedAt = -1;
+            station.impactSprite.visible = false;
+            impactMat.opacity = 0;
+          }
+        }
         const radialToCore = station.coreAnchorLocal.clone().sub(station.group.position).normalize();
-        const tangent = new THREE.Vector3().crossVectors(station.plainNormalLocal, radialToCore);
-        if (tangent.lengthSq() < 1e-8) {
+        const worldUp = new THREE.Vector3(0, 1, 0);
+        // Keep slide "top" aligned with world up so inspect view stays landscape.
+        const projectedUp = worldUp
+          .clone()
+          .sub(radialToCore.clone().multiplyScalar(worldUp.dot(radialToCore)));
+        const upright =
+          projectedUp.lengthSq() > 1e-6
+            ? projectedUp.normalize()
+            : station.plainNormalLocal.clone().normalize();
+        const right = new THREE.Vector3().crossVectors(upright, radialToCore);
+        if (right.lengthSq() < 1e-8) {
           station.group.lookAt(station.coreAnchorLocal);
         } else {
-          tangent.normalize();
-          const upright = new THREE.Vector3().crossVectors(radialToCore, tangent).normalize();
-          const basis = new THREE.Matrix4().makeBasis(tangent, upright, radialToCore);
+          right.normalize();
+          const correctedUp = new THREE.Vector3().crossVectors(radialToCore, right).normalize();
+          const basis = new THREE.Matrix4().makeBasis(right, correctedUp, radialToCore);
           station.group.quaternion.setFromRotationMatrix(basis);
         }
         station.mediaHaloGroup.children.forEach((child) => {
@@ -7929,6 +7955,20 @@ export default function ResumeSpace3D({
         packets.forEach((packet, idx) => {
           packet.progress += dt * packet.speed;
           if (packet.progress >= 1) {
+            const impactStation = orbitalPortfolioStationsRef.current[packet.targetStation];
+            if (impactStation) {
+              impactStation.impactStartedAt = now;
+              const impactMat = impactStation.impactSprite.material as THREE.SpriteMaterial;
+              const packetMat = packet.mesh.material as THREE.SpriteMaterial;
+              impactMat.color.copy(packetMat.color);
+              impactStation.impactSprite.position.set(
+                (Math.random() - 0.5) * 22,
+                (Math.random() - 0.5) * 12,
+                1.38,
+              );
+              impactStation.impactSprite.scale.setScalar(8 + Math.random() * 4);
+              impactStation.impactDurationMs = 2200 + Math.random() * 1200;
+            }
             packet.progress = 0;
             packet.speed = 0.24 + Math.random() * 0.32;
             packet.sourceCoreIndex = Math.floor(
@@ -8090,7 +8130,6 @@ export default function ResumeSpace3D({
         const plateQuat = new THREE.Quaternion();
         station.plate.getWorldQuaternion(plateQuat);
         const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(plateQuat).normalize();
-        const up = new THREE.Vector3(0, 1, 0);
         const savedDistance = orbitalPortfolioInspectDistanceRef.current;
         const inspectDistance =
           typeof savedDistance === "number" &&
@@ -8098,12 +8137,8 @@ export default function ResumeSpace3D({
           savedDistance <= ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE
             ? savedDistance
             : ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE;
-        const upLift = THREE.MathUtils.clamp(inspectDistance * 0.066, 6, 18);
-        const camPos = plateWorld
-          .clone()
-          .addScaledVector(normal, inspectDistance)
-          .addScaledVector(up, upLift);
-        const lookTarget = plateWorld.clone().addScaledVector(normal, 2);
+        const camPos = plateWorld.clone().addScaledVector(normal, inspectDistance);
+        const lookTarget = plateWorld.clone();
         controls.setLookAt(
           camPos.x,
           camPos.y,
@@ -10356,6 +10391,25 @@ export default function ResumeSpace3D({
       return tex;
     };
     const orbitalHaloTexture = createOrbitalHaloTexture();
+    const createImpactTexture = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      grad.addColorStop(0, "rgba(255,255,255,0.96)");
+      grad.addColorStop(0.32, "rgba(255,255,255,0.62)");
+      grad.addColorStop(0.7, "rgba(255,255,255,0.12)");
+      grad.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 128, 128);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.needsUpdate = true;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    };
+    const impactTexture = createImpactTexture();
 
     orbitalCoreViews.forEach((coreView, coreIndex) => {
       const coreRow = Math.floor(coreIndex / coreColumns);
@@ -10802,6 +10856,22 @@ export default function ResumeSpace3D({
       );
       halo.scale.setScalar(120);
       stationGroup.add(halo);
+      const impactSprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: impactTexture ?? undefined,
+          color: new THREE.Color(group.orbitColor ?? "#66DDFF"),
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          depthTest: false,
+          toneMapped: false,
+        }),
+      );
+      impactSprite.visible = false;
+      impactSprite.position.set(0, 0, 1.38);
+      impactSprite.scale.set(8, 8, 1);
+      stationGroup.add(impactSprite);
       const variantSatelliteGroup = new THREE.Group();
       // Intentionally left empty: orbiting globes around focused slides removed.
       stationGroup.add(variantSatelliteGroup);
@@ -10872,6 +10942,9 @@ export default function ResumeSpace3D({
         straightenBlend: 0,
         label,
         halo,
+        impactSprite,
+        impactStartedAt: -1,
+        impactDurationMs: 2600,
         mediaHaloGroup,
         variantSatelliteGroup,
         pulsePhase: Math.random() * Math.PI * 2,
@@ -10898,6 +10971,7 @@ export default function ResumeSpace3D({
       station.plate.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
       station.frame.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
       station.cardTitleMesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+      station.impactSprite.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
       station.cardVariantTabs.forEach((tab) => {
         tab.frame.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
         tab.mesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
