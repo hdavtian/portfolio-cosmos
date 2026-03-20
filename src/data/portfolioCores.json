@@ -302,13 +302,22 @@
             "orbitColor": "#FAB41E",
             "items": [
               {
-                "id": "equipment-resellers",
-                "title": "Equipment Resellers",
-                "image": "/images/legacy-web/acecount.com 1.png",
-                "description": "Equipment reseller websites grouped by client.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
-                "fit": "cover"
+                "id": "tcc",
+                "title": "Test Control Center",
+                "image": "/images/investcloud/tcc/tcc-1.jpg",
+                "description": "An winform application running selenium test cases.",
+                "technologies": [".NET", "WinForms", "C#", "Selenium/Java", "TestNG"],
+                "year": 2018,
+                "fit": "contain",
+                "galleryMedia": [
+                  { "id": "tcc-2", "type": "image", "image": "/images/investcloud/tcc/tcc-2.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
+                  { "id": "tcc-3", "type": "image", "image": "/images/investcloud/tcc/tcc-3.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
+                  { "id": "tcc-10", "type": "image", "image": "/images/investcloud/tcc/tcc-10.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "cover" },
+                  { "id": "tcc-11", "type": "image", "image": "/images/investcloud/tcc/tcc-11.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "cover" },
+                  { "id": "tcc-12", "type": "image", "image": "/images/investcloud/tcc/tcc-12.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
+                  { "id": "tcc-13", "type": "image", "image": "/images/investcloud/tcc/tcc-13.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" },
+                  { "id": "tcc-14", "type": "image", "image": "/images/investcloud/tcc/tcc-14.jpg", "title": "TCC", "description": "Placeholder description.", "fit": "contain" }
+                ]
               },
               {
                 "id": "restaurant-websites",

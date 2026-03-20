@@ -384,6 +384,7 @@ type OrbitalPortfolioStationRecord = {
   pulsePhase: number;
   textureScrollNorm: number;
   textureMaxOffsetY: number;
+  textureFitMode: "contain" | "cover";
   cardTitleMesh: THREE.Mesh;
   cardVariantTabs: Array<{
     mesh: THREE.Mesh;
@@ -544,15 +545,30 @@ const applyTextureContainCentered = (
   let offsetX = 0;
   let offsetY = 0;
   if (imageAspect > panelAspect) {
-    repeatY = panelAspect / imageAspect;
+    // Contain (letterbox): preserve full width, pad top/bottom.
+    repeatY = imageAspect / panelAspect;
     offsetY = (1 - repeatY) * 0.5;
   } else if (imageAspect < panelAspect) {
-    repeatX = imageAspect / panelAspect;
+    // Contain (pillarbox): preserve full height, pad left/right.
+    repeatX = panelAspect / imageAspect;
     offsetX = (1 - repeatX) * 0.5;
   }
   texture.repeat.set(repeatX, repeatY);
   texture.offset.set(offsetX, offsetY);
   texture.needsUpdate = true;
+};
+
+const applyTextureForFitMode = (
+  texture: THREE.Texture,
+  panelAspect: number,
+  fitMode: "contain" | "cover" | undefined,
+  scrollNorm = 0,
+): number => {
+  if (fitMode === "contain") {
+    applyTextureContainCentered(texture, panelAspect);
+    return 0;
+  }
+  return applyTextureCoverTop(texture, panelAspect, scrollNorm);
 };
 
 const createMoonTravelSignTexture = (entry: JobMemoryEntry): THREE.CanvasTexture => {
@@ -8330,7 +8346,7 @@ export default function ResumeSpace3D({
           tex.magFilter = THREE.LinearFilter;
           tex.anisotropy = 8;
           thumbMat.map = tex;
-          applyTextureContainCentered(tex, 7.7 / 4.7);
+          applyTextureForFitMode(tex, 7.7 / 4.7, mediaAtThumb.fit);
           thumbMat.needsUpdate = true;
         },
         undefined,
@@ -8341,8 +8357,10 @@ export default function ResumeSpace3D({
     if (!media?.textureUrl) return;
     station.textureScrollNorm = 0;
     station.textureMaxOffsetY = 0;
+    station.textureFitMode = media.fit ?? "cover";
     station.plate.userData.textureScrollNorm = 0;
     station.plate.userData.textureMaxOffsetY = 0;
+    station.plate.userData.textureFitMode = station.textureFitMode;
     let cancelled = false;
     const loader = new THREE.TextureLoader();
     loader.load(
@@ -8352,7 +8370,7 @@ export default function ResumeSpace3D({
         tex.colorSpace = THREE.SRGBColorSpace;
         const plateMat = station.plate.material as THREE.MeshBasicMaterial;
         plateMat.map = tex;
-        const maxOffsetY = applyTextureCoverTop(tex, 72 / 42, 0);
+        const maxOffsetY = applyTextureForFitMode(tex, 72 / 42, station.textureFitMode, 0);
         station.textureMaxOffsetY = maxOffsetY;
         station.plate.userData.textureMaxOffsetY = maxOffsetY;
         station.plate.userData.hasLoadedTexture = true;
@@ -8433,7 +8451,10 @@ export default function ResumeSpace3D({
       if (Math.abs(nextNorm - prevNorm) < 1e-4) return;
       station.textureScrollNorm = nextNorm;
       station.plate.userData.textureScrollNorm = nextNorm;
-      applyTextureCoverTop(texture, 72 / 42, nextNorm);
+      const activeFitMode =
+        (station.plate.userData.textureFitMode as "contain" | "cover" | undefined) ??
+        station.textureFitMode;
+      applyTextureForFitMode(texture, 72 / 42, activeFitMode, nextNorm);
       event.preventDefault();
       event.stopPropagation();
     };
@@ -10946,12 +10967,15 @@ export default function ResumeSpace3D({
             tex.colorSpace = THREE.SRGBColorSpace;
             const mat = plate.material as THREE.MeshBasicMaterial;
             mat.map = tex;
-            const maxOffsetY = applyTextureCoverTop(
+            const activeFitMode = media.fit ?? "cover";
+            const maxOffsetY = applyTextureForFitMode(
               tex,
               72 / 42,
+              activeFitMode,
               Number(plate.userData.textureScrollNorm) || 0,
             );
             plate.userData.textureMaxOffsetY = maxOffsetY;
+            plate.userData.textureFitMode = activeFitMode;
             plate.userData.hasLoadedTexture = true;
             mat.needsUpdate = true;
           },
@@ -11028,7 +11052,7 @@ export default function ResumeSpace3D({
               tex.colorSpace = THREE.SRGBColorSpace;
               const thumbMat = thumb.material as THREE.MeshBasicMaterial;
               thumbMat.map = tex;
-              applyTextureCoverTop(tex, 8 / 5, 0);
+              applyTextureForFitMode(tex, 8 / 5, item.fit);
               thumbMat.needsUpdate = true;
             },
             undefined,
@@ -11075,6 +11099,7 @@ export default function ResumeSpace3D({
         pulsePhase: Math.random() * Math.PI * 2,
         textureScrollNorm: 0,
         textureMaxOffsetY: 0,
+        textureFitMode: media?.fit ?? "cover",
         cardTitleMesh,
         cardVariantTabs,
         cardThumbMeshes,
