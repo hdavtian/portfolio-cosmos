@@ -10341,6 +10341,7 @@ export default function ResumeSpace3D({
     const orbitalBuild = buildPortfolioCoreViews(
       portfolioCores as Array<{
         core: string;
+        coreColor?: string;
         plains: Array<{
           angle: number;
           items: Array<{
@@ -10450,6 +10451,9 @@ export default function ResumeSpace3D({
     const impactTexture = createImpactTexture();
 
     orbitalCoreViews.forEach((coreView, coreIndex) => {
+      const coreColor = new THREE.Color(coreView.coreColor);
+      const nucleusColor = coreColor.clone().lerp(new THREE.Color(0xffffff), 0.42);
+      const glowColor = coreColor.clone().lerp(new THREE.Color(0xffffff), 0.18);
       const coreRow = Math.floor(coreIndex / coreColumns);
       const coreCol = coreIndex % coreColumns;
       const centerLocal = new THREE.Vector3(
@@ -10464,7 +10468,7 @@ export default function ResumeSpace3D({
       const coreNucleus = new THREE.Mesh(
         new THREE.SphereGeometry(17, 28, 28),
         new THREE.MeshBasicMaterial({
-          color: 0xd7f5ff,
+          color: nucleusColor,
           transparent: true,
           opacity: 0.88,
           toneMapped: false,
@@ -10476,7 +10480,7 @@ export default function ResumeSpace3D({
       const coreGlow = new THREE.Mesh(
         new THREE.SphereGeometry(34, 20, 20),
         new THREE.MeshBasicMaterial({
-          color: 0x67d8ff,
+          color: glowColor,
           transparent: true,
           opacity: 0.26,
           blending: THREE.AdditiveBlending,

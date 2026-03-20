@@ -1,6 +1,7 @@
 [
   {
     "core": "StormScape",
+    "coreColor": "#5ED9FF",
     "plains": [
       {
         "angle": 0,
@@ -289,6 +290,7 @@
   },
   {
     "core": "InvestCloud",
+    "coreColor": "#FFD65C",
     "plains": [
       {
         "angle": 0,

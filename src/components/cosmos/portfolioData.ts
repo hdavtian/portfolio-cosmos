@@ -97,6 +97,7 @@ export type PortfolioCorePlainSeed = {
 
 export type PortfolioCoreSeed = {
   core: string;
+  coreColor?: string;
   plains: PortfolioCorePlainSeed[];
 };
 
@@ -113,6 +114,7 @@ export type PortfolioCorePlainView = {
 export type PortfolioCoreView = {
   id: string;
   title: string;
+  coreColor: string;
   groupIds: string[];
   plains: PortfolioCorePlainView[];
 };
@@ -438,6 +440,7 @@ export const buildPortfolioCoreViews = (
     cores.push({
       id: coreId,
       title: coreTitle,
+      coreColor: ensureHexColor(coreSeed.coreColor, 0x67d8ff),
       groupIds: coreGroupIds,
       plains: plainViews,
     });
