@@ -3620,6 +3620,13 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioSearchQuery("");
     setOrbitalPortfolioYearFilter("all");
     setOrbitalPortfolioTechFilter("all");
+    {
+      const collapsedState: Record<string, boolean> = {};
+      orbitalPortfolioCoreViewsRef.current.forEach((core) => {
+        collapsedState[core.id] = false;
+      });
+      setOrbitalRegistryExpandedCoreIds(collapsedState);
+    }
     orbitalPortfolioFocusIndexRef.current = 0;
     setOrbitalPortfolioFocusIndex(0);
     setOrbitalPortfolioHasActiveFocus(false);
@@ -10468,7 +10475,7 @@ export default function ResumeSpace3D({
     orbitalPortfolioCoreViewsRef.current = orbitalCoreViews;
     const expandedState: Record<string, boolean> = {};
     orbitalCoreViews.forEach((core) => {
-      expandedState[core.id] = true;
+      expandedState[core.id] = false;
     });
     setOrbitalRegistryExpandedCoreIds(expandedState);
     setOrbitalPortfolioFocusedCoreId(orbitalCoreViews[0]?.id ?? "");
@@ -17264,6 +17271,7 @@ export default function ResumeSpace3D({
                           if (groupsForCore.length === 0) return null;
                           const isExpanded =
                             orbitalRegistryExpandedCoreIds[core.id] ?? true;
+                          const submenuMaxHeight = Math.max(56, groupsForCore.length * 42 + 10);
                           return (
                             <div key={core.id} style={{ marginBottom: 6 }}>
                               <button
@@ -17292,10 +17300,29 @@ export default function ResumeSpace3D({
                                 }}
                               >
                                 <span>{core.title}</span>
-                                <span>{isExpanded ? "v" : ">"}</span>
+                                <span
+                                  style={{
+                                    display: "inline-block",
+                                    transition: "transform 180ms ease",
+                                    transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                                  }}
+                                >
+                                  {">"}
+                                </span>
                               </button>
-                              {isExpanded &&
-                                groupsForCore.map((group) => {
+                              <div
+                                style={{
+                                  overflow: "hidden",
+                                  maxHeight: isExpanded ? submenuMaxHeight : 0,
+                                  opacity: isExpanded ? 1 : 0,
+                                  transition:
+                                    "max-height 220ms ease, opacity 180ms ease, padding 220ms ease",
+                                  paddingLeft: isExpanded ? 12 : 0,
+                                  borderLeft: "1px solid rgba(145, 232, 255, 0.2)",
+                                  marginLeft: 6,
+                                }}
+                              >
+                                {groupsForCore.map((group) => {
                                   const isHere = group.id === activeGroup?.id;
                                   const groupIndex = groups.findIndex((item) => item.id === group.id);
                                   return (
@@ -17317,7 +17344,7 @@ export default function ResumeSpace3D({
                                           : "rgba(8, 18, 34, 0.68)",
                                         color: "#e8f7ff",
                                         cursor: "pointer",
-                                        padding: "7px 8px",
+                                        padding: "7px 8px 7px 12px",
                                         marginBottom: 6,
                                         display: "flex",
                                         alignItems: "center",
@@ -17350,6 +17377,7 @@ export default function ResumeSpace3D({
                                     </button>
                                   );
                                 })}
+                              </div>
                             </div>
                           );
                         })

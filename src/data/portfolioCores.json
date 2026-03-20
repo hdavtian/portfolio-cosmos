@@ -6,11 +6,11 @@
       {
         "angle": 0,
         "items": [
-          { "orbitColor": "#7C3AED", "items": [] },
-          { "orbitColor": "#14B8A6", "items": [] },
-          { "orbitColor": "#2563EB", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
           {
-            "orbitColor": "#F97316",
+            "orbitColor": "#1EA2FA",
             "items": [
               {
                 "id": "equipment-resellers",
@@ -201,11 +201,11 @@
       {
         "angle": 45,
         "items": [
-          { "orbitColor": "#E11D48", "items": [] },
-          { "orbitColor": "#22C55E", "items": [] },
-          { "orbitColor": "#06B6D4", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
           {
-            "orbitColor": "#F59E0B",
+            "orbitColor": "#59FA1E",
             "items": [
               {
                 "id": "bwvideo-productions",
@@ -295,11 +295,11 @@
       {
         "angle": 0,
         "items": [
-          { "orbitColor": "#0EA5E9", "items": [] },
-          { "orbitColor": "#8B5CF6", "items": [] },
-          { "orbitColor": "#10B981", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
           {
-            "orbitColor": "#F43F5E",
+            "orbitColor": "#FAB41E",
             "items": [
               {
                 "id": "equipment-resellers",
@@ -362,11 +362,11 @@
       {
         "angle": 90,
         "items": [
-          { "orbitColor": "#3B82F6", "items": [] },
-          { "orbitColor": "#A855F7", "items": [] },
-          { "orbitColor": "#34D399", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
+          { "orbitColor": "#545353", "items": [] },
           {
-            "orbitColor": "#FB923C",
+            "orbitColor": "#EB1EFA",
             "items": [
               {
                 "id": "political-websites",
