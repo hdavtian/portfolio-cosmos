@@ -1013,5 +1013,315 @@
         ]
       }
     ]
+  },
+  {
+    "core": "Disney Demo",
+    "coreColor": "#9cc2ff",
+    "plains": [
+      {
+        "angle": 25,
+        "items": [
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#1EA2FA",
+            "items": [
+              {
+                "id": "disney-demo-1",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-1.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],
+                "year": null,
+                "fit": "contain"
+              },
+              {
+                "id": "disney-demo-2",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-2.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],
+                "year": null,
+                "fit": "contain"
+              },
+              {
+                "id": "disney-demo-3",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-3.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],
+                "year": null,
+                "fit": "contain"
+              },
+              {
+                "id": "disney-demo-4",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-4.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],
+                "year": null,
+                "fit": "contain"
+              },
+              {
+                "id": "disney-demo-5",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-5.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-6",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-6.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-7",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-7.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-8",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-8.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-9",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-9.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-10",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-10.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-11",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-11.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "core": "Murad",
+    "coreColor": "#ff9cfc",
+    "plains": [
+      {
+        "angle": -25,
+        "items": [
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#ff9cfc",
+            "items": [
+              {
+                "id": "murad-1",
+                "title": "Murad",
+                "image": "/images/murad/murad-1.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, {
+                "id": "murad-2",
+                "title": "Murad",
+                "image": "/images/murad/murad-2.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-3",
+                "title": "Murad",
+                "image": "/images/murad/murad-3.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-4",
+                "title": "Murad",
+                "image": "/images/murad/murad-4.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-5",
+                "title": "Murad",
+                "image": "/images/murad/murad-5.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-6",
+                "title": "Murad",
+                "image": "/images/murad/murad-6.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-7",
+                "title": "Murad",
+                "image": "/images/murad/murad-7.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-8",
+                "title": "Murad",
+                "image": "/images/murad/murad-8.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-9",
+                "title": "Murad",
+                "image": "/images/murad/murad-9.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-10",
+                "title": "Murad",
+                "image": "/images/murad/murad-10.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-11",
+                "title": "Murad",
+                "image": "/images/murad/murad-11.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-12",
+                "title": "Murad",
+                "image": "/images/murad/murad-12.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 ]
