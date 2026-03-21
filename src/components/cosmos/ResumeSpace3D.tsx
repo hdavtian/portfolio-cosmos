@@ -9258,6 +9258,7 @@ export default function ResumeSpace3D({
       const sprite = new THREE.Sprite(mat);
       // Start tiny near horizon; it grows as it approaches viewer.
       sprite.scale.copy(baseScale).multiplyScalar(0.2 + Math.random() * 0.08);
+      sprite.renderOrder = 900;
       signObject = sprite;
       signMaterial = mat;
       signObject.position.set(
@@ -9538,7 +9539,14 @@ export default function ResumeSpace3D({
           record.ageMs += dt * 1000 * travelSpeed;
         }
         const mat = record.material as THREE.Material & { opacity?: number };
+        const spriteMat = record.material as THREE.SpriteMaterial;
         const t = THREE.MathUtils.clamp(record.ageMs / Math.max(record.ttlMs, 1), 0, 1);
+        // Force a deterministic behind->front crossover while still in view.
+        // Stage A (early): behind drone text. Stage B (mid/late): pass through.
+        const frontPass = t >= 0.28;
+        record.object.renderOrder = frontPass ? 1700 : 900;
+        spriteMat.depthTest = !frontPass;
+        spriteMat.depthWrite = false;
         if (record.arcStart && record.arcControl && record.arcEnd) {
           const inv = 1 - t;
           record.object.position
