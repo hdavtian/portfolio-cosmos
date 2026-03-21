@@ -8,7 +8,7 @@ type ShipLogFn = (
   category?: ShipLogEntry["category"],
 ) => void;
 
-/** Debug log entry — verbose internal tracing for the Debug tab */
+/** Debug log entry — verbose internal tracing */
 export interface DebugLogEntry {
   id: number;
   text: string;
@@ -34,7 +34,7 @@ type UseCosmosLogsResult = {
   shipLogs: ShipLogEntry[];
   shipLogsRef: MutableRefObject<ShipLogEntry[]>;
   setShipLogs: Dispatch<SetStateAction<ShipLogEntry[]>>;
-  /** Verbose debug log — shown in the Debug tab of the terminal */
+  /** Verbose debug log — mirrored into main ship log stream */
   debugLog: DebugLogFn;
   debugLogs: DebugLogEntry[];
   debugLogsRef: MutableRefObject<DebugLogEntry[]>;
@@ -130,6 +130,20 @@ export const useCosmosLogs = (): UseCosmosLogsResult => {
     debugLogsRef.current = trimmed;
     setDebugLogs(trimmed);
     setDebugLogTotal(_debugLogId);
+
+    // Unify terminal visibility: mirror debug traces into the main ship log
+    // stream so exported/captured logs always include full diagnostics.
+    const shipEntry: ShipLogEntry = {
+      id: ++_shipLogId,
+      text: `[DBG:${source}] ${message}`,
+      category: "info",
+      timestamp,
+    };
+    const shipNext = [...shipLogsRef.current, shipEntry];
+    const shipTrimmed =
+      shipNext.length > MAX_SHIP_LOGS ? shipNext.slice(-MAX_SHIP_LOGS) : shipNext;
+    shipLogsRef.current = shipTrimmed;
+    setShipLogs(shipTrimmed);
   }, []);
 
   return {

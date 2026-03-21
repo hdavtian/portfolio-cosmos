@@ -292,6 +292,8 @@ export const useNavigationSystem = (deps: {
     clearanceTarget?: THREE.Vector3;
     clearanceDistance?: number;
     phaseApproachDistance?: number;
+    isDirectSectionApproach?: boolean;
+    lightspeedLockedOut?: boolean;
     // Pending moon navigation — delayed until turn completes
     pendingMoonId?: string;
     pendingMoonTurbo?: boolean;
@@ -1012,11 +1014,14 @@ export const useNavigationSystem = (deps: {
             return;
           }
 
-          // First turn aligns nose directly toward planet center.
+          // First turn aligns nose toward the actual approach point for
+          // direct anchors (e.g. portfolio/skills/projects/about), otherwise
+          // toward planet center for staged planetary approaches.
           const turnTargetQuat = new THREE.Quaternion();
           const tmpObj = new THREE.Object3D();
           tmpObj.position.copy(spaceshipRef.current.position);
-          tmpObj.lookAt(planetCenter);
+          const initialLookTarget = isDirectSectionApproach ? stagingPoint : planetCenter;
+          tmpObj.lookAt(initialLookTarget);
           turnTargetQuat.copy(tmpObj.quaternion);
           applyRollOffset(turnTargetQuat);
 
@@ -1034,6 +1039,8 @@ export const useNavigationSystem = (deps: {
               NAV_SECTION_APPROACH_MIN_DISTANCE,
               NAV_SECTION_APPROACH_MAX_DISTANCE,
             ),
+            isDirectSectionApproach,
+            lightspeedLockedOut: false,
             turnPhase: clearanceTarget ? "clearing" : "turning",
             turnStartTime: performance.now(),
             turnStartQuat: spaceshipRef.current.quaternion.clone(),
@@ -1722,7 +1729,9 @@ export const useNavigationSystem = (deps: {
       // point (orbital approach) or directly to a body.
       const planetRadius = target.targetRadius || NAV_FALLBACK_PLANET_R;
       const arrivalDistance = target.planetCenter
-        ? 30 // Get close to the staging point before settling
+        ? target.isDirectSectionApproach
+          ? Math.max(120, planetRadius * 1.6)
+          : 30 // Get close to the staging point before settling
         : target.type === "moon"
           // Moon arrivals must finish near the hover station; arriving far out
           // creates the visible "bounce" handoff before orbit settles.
@@ -1934,12 +1943,16 @@ export const useNavigationSystem = (deps: {
       const decelDist = distance > NAV_LIGHTSPEED_ENGAGE_DIST
         ? NAV_LIGHTSPEED_DECEL_DIST   // lightspeed needs longer to slow down
         : arrivalDistance + NAV_DECEL_EXTRA;
+      if (!target.lightspeedLockedOut && distance <= decelDist) {
+        target.lightspeedLockedOut = true;
+      }
 
       if (distance > decelDist) {
         if (
-          target.forceLightspeed ||
+          (target.forceLightspeed || 
           ((target.useTurbo && distance > NAV_LIGHTSPEED_ENGAGE_DIST) &&
-            !sectionAvoidWaypoint.current)
+            !sectionAvoidWaypoint.current)) &&
+            !target.lightspeedLockedOut
         ) {
           // ── LIGHTSPEED: inter-planet travel ──
           targetSpeed = NAV_LIGHTSPEED;
@@ -2081,6 +2094,7 @@ export const useNavigationSystem = (deps: {
         if (
           target.type === "section"
           && target.planetCenter
+          && !target.isDirectSectionApproach
           && target.id !== "skills"
           && target.id !== "about"
           && target.id !== "projects"

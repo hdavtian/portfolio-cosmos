@@ -3,9 +3,10 @@ import type { DebugLogEntry } from "../cosmos/hooks/useCosmosLogs";
 
 // ─── Ship Terminal ───────────────────────────────────────────────
 // Retro CRT-style terminal in the top-right corner.
-// Two tabs:
-//   LOG   — User-facing ship events with typewriter reveal
-//   DEBUG — Verbose internal trace logs for development
+// Primary tab:
+//   LOG   — unified ship + debug stream with typewriter reveal
+// Secondary tab:
+//   TOOLS — quick terminal actions
 // Includes a command input row and a Copy button per tab.
 // ─────────────────────────────────────────────────────────────────
 
@@ -16,7 +17,7 @@ export interface ShipLogEntry {
   timestamp: string;
 }
 
-type TabId = "log" | "debug" | "tools";
+type TabId = "log" | "tools";
 export type ShipTerminalToolAction = {
   id: string;
   label: string;
@@ -58,14 +59,6 @@ const CATEGORY_COLOR: Record<ShipLogEntry["category"], string> = {
   error: "#ff6060",
 };
 
-const SOURCE_COLOR: Record<string, string> = {
-  orbit: "#41ffb0",
-  nav: "#00ff41",
-  render: "#8888ff",
-  drone: "#ff88ff",
-  scene: "#ffaa44",
-};
-
 const TYPE_SPEED = 18;
 const MAX_TYPE_CHARS = 200;
 const TERMINAL_LAYOUT_STORAGE_KEY = "ship-terminal-layout-v1";
@@ -74,12 +67,10 @@ const TERMINAL_MIN_HEIGHT = 240;
 
 const ShipTerminal: React.FC<ShipTerminalProps> = ({
   logs,
-  debugLogs = [],
   debugLogTotal = 0,
   toolActions = [],
   onCommand,
   onClearLog,
-  onClearDebug,
   emitFalconLocation = false,
   emitSDLocation = false,
   onEmitFalconLocationChange,
@@ -88,7 +79,6 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
   visible = true,
 }) => {
   const logScrollRef = useRef<HTMLDivElement>(null);
-  const debugScrollRef = useRef<HTMLDivElement>(null);
   const [inputValue, setInputValue] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("log");
   const [copyFlash, setCopyFlash] = useState(false);
@@ -188,13 +178,6 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
     }
   }, [logs, typeProgress, activeTab]);
 
-  // Auto-scroll Debug tab
-  useEffect(() => {
-    if (activeTab === "debug" && debugScrollRef.current) {
-      debugScrollRef.current.scrollTop = debugScrollRef.current.scrollHeight;
-    }
-  }, [debugLogs, activeTab]);
-
   // Typewriter effect for the newest log entry
   useEffect(() => {
     if (logs.length === 0) return;
@@ -246,10 +229,6 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
       text = logs
         .map((e) => `${e.timestamp} ${CATEGORY_PREFIX[e.category]}> ${e.text}`)
         .join("\n");
-    } else if (activeTab === "debug") {
-      text = debugLogs
-        .map((e) => `${e.timestamp} [${e.source}] ${e.text}`)
-        .join("\n");
     } else {
       text = toolActions
         .map((tool) => `${tool.label}${tool.hint ? ` — ${tool.hint}` : ""}`)
@@ -259,7 +238,7 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
       setCopyFlash(true);
       setTimeout(() => setCopyFlash(false), 1200);
     });
-  }, [activeTab, logs, debugLogs, toolActions]);
+  }, [activeTab, logs, toolActions]);
 
   if (!visible) return null;
 
@@ -282,13 +261,8 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
     transition: "all 0.15s",
   });
 
-  const currentLogs =
-    activeTab === "log"
-      ? logs
-      : activeTab === "debug"
-        ? debugLogs
-        : toolActions;
-  const scrollRef = activeTab === "log" ? logScrollRef : debugScrollRef;
+  const currentLogs = activeTab === "log" ? logs : toolActions;
+  const scrollRef = logScrollRef;
 
   const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isDocked) return;
@@ -510,26 +484,6 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
               CLEAR
             </button>
           )}
-          {activeTab === "debug" && onClearDebug && (
-            <button
-              onClick={onClearDebug}
-              onMouseDown={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-              style={{
-                background: "transparent",
-                border: "1px solid rgba(255, 100, 100, 0.2)",
-                borderRadius: 3,
-                color: "rgba(255, 100, 100, 0.5)",
-                fontSize: 9,
-                fontFamily: "'Courier New', monospace",
-                padding: "1px 6px",
-                cursor: "pointer",
-                letterSpacing: 0.5,
-              }}
-            >
-              CLEAR
-            </button>
-          )}
           <button
             onClick={onClose}
             onMouseDown={(e) => e.stopPropagation()}
@@ -555,12 +509,9 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
         {/* Tab bar */}
         <div style={{ display: "flex", borderBottom: "1px solid rgba(0, 255, 65, 0.1)" }}>
           <button style={tabStyle("log")} onClick={() => setActiveTab("log")}>
-            Log
-          </button>
-          <button style={tabStyle("debug")} onClick={() => setActiveTab("debug")}>
-            Debug {debugLogTotal > 0 && (
+            Log {debugLogTotal > 0 && (
               <span style={{ opacity: 0.5, fontSize: 8, marginLeft: 3 }}>
-                ({debugLogTotal})
+                (dbg:{debugLogTotal})
               </span>
             )}
           </button>
@@ -652,32 +603,6 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
               );
             })}
 
-          {activeTab === "debug" &&
-            debugLogs.map((entry) => {
-              const color = SOURCE_COLOR[entry.source] || "#88aa88";
-              return (
-                <div key={entry.id} style={{ marginBottom: 1, fontSize: 10, lineHeight: 1.4 }}>
-                  <span style={{ color: "rgba(0, 255, 65, 0.3)", fontSize: 8 }}>
-                    {entry.timestamp}
-                  </span>{" "}
-                  <span
-                    style={{
-                      color,
-                      opacity: 0.6,
-                      fontWeight: 700,
-                      fontSize: 9,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    [{entry.source}]
-                  </span>{" "}
-                  <span style={{ color: "rgba(0, 255, 65, 0.7)" }}>
-                    {entry.text}
-                  </span>
-                </div>
-              );
-            })}
-
           {activeTab === "tools" &&
             toolActions.map((tool) => (
               <div key={tool.id} style={{ marginBottom: 7 }}>
@@ -710,11 +635,7 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
 
           {currentLogs.length === 0 && (
             <div style={{ color: "rgba(0, 255, 65, 0.3)", fontStyle: "italic" }}>
-              {activeTab === "log"
-                ? "Awaiting signal..."
-                : activeTab === "debug"
-                  ? "No debug logs yet."
-                  : "No tools available."}
+              {activeTab === "log" ? "Awaiting signal..." : "No tools available."}
             </div>
           )}
         </div>
