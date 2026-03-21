@@ -5756,6 +5756,26 @@ export default function ResumeSpace3D({
   ]);
 
   useEffect(() => {
+    if (orbitalPortfolioActive) return;
+    orbitalPortfolioStationsRef.current.forEach((station) => {
+      station.label.visible = false;
+      station.cardTitleMesh.visible = false;
+      station.cardVariantTabs.forEach((tab) => {
+        tab.mesh.visible = false;
+        tab.frame.visible = false;
+      });
+      station.cardThumbMeshes.forEach((thumb) => {
+        thumb.mesh.visible = false;
+        thumb.frame.visible = false;
+      });
+      station.cardThumbNavMeshes.forEach((nav) => {
+        nav.mesh.visible = false;
+        nav.frame.visible = false;
+      });
+    });
+  }, [orbitalPortfolioActive]);
+
+  useEffect(() => {
     if (!skillsLatticePendingEntryRef.current || skillsLatticeActiveRef.current) {
       return;
     }
@@ -11348,6 +11368,7 @@ export default function ResumeSpace3D({
         cardTitleMat,
       );
       cardTitleMesh.position.set(0, 28.5, 1.2);
+      cardTitleMesh.visible = false;
       stationGroup.add(cardTitleMesh);
 
       const cardVariantTabs: Array<{ mesh: THREE.Mesh; frame: THREE.Mesh; variantIndex: number }> = [];
@@ -11386,6 +11407,8 @@ export default function ResumeSpace3D({
           23.2,
           1.2,
         );
+        tabFrame.visible = false;
+        tabMesh.visible = false;
         stationGroup.add(tabFrame, tabMesh);
         cardVariantTabs.push({ mesh: tabMesh, frame: tabFrame, variantIndex });
       }
@@ -11418,6 +11441,8 @@ export default function ResumeSpace3D({
         );
         thumbFrame.position.set(thumbStartX + mediaIndex * thumbGap, -23.8, 1.16);
         thumbMesh.position.set(thumbStartX + mediaIndex * thumbGap, -23.8, 1.2);
+        thumbFrame.visible = false;
+        thumbMesh.visible = false;
         thumbFrame.userData.orbitalBaseX = thumbFrame.position.x;
         thumbFrame.userData.orbitalBaseY = thumbFrame.position.y;
         thumbMesh.userData.orbitalBaseX = thumbMesh.position.x;
@@ -11469,6 +11494,8 @@ export default function ResumeSpace3D({
         navMesh.material.map = arrowTexture;
         navFrame.position.set(x, -23.8, 1.16);
         navMesh.position.set(x, -23.8, 1.2);
+        navFrame.visible = false;
+        navMesh.visible = false;
         stationGroup.add(navFrame, navMesh);
         return { mesh: navMesh, frame: navFrame, direction };
       };
@@ -11503,6 +11530,7 @@ export default function ResumeSpace3D({
       const label = createLabel(group.title, "Portfolio Sample");
       label.userData.orbitalPortfolioLabel = true;
       label.position.set(0, 62, 0);
+      label.visible = false;
       stationGroup.add(label);
       const halo = new THREE.Sprite(
         new THREE.SpriteMaterial({
