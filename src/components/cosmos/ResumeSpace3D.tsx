@@ -1686,7 +1686,10 @@ export default function ResumeSpace3D({
   const orbitSignTuningRef = useRef<OrbitSignTuning>(orbitSignTuning);
   const [showOrbitSignTuningControls, setShowOrbitSignTuningControls] = useState(false);
   const [viewerMemoriesEnabled, setViewerMemoriesEnabled] = useState(false);
+  const [moonMemoryControlsVisible, setMoonMemoryControlsVisible] = useState(false);
   const viewerMemoriesEnabledRef = useRef(false);
+  const moonMemoryUiWaitingForDroneExitRef = useRef(false);
+  const moonMemoryUiSawDroneRef = useRef(false);
   const [moonMemoryManualMode, setMoonMemoryManualMode] = useState(false);
   const moonMemoryManualModeRef = useRef(false);
   const [moonMemoryPlaybackPlaying, setMoonMemoryPlaybackPlaying] = useState(false);
@@ -1866,6 +1869,45 @@ export default function ResumeSpace3D({
   useEffect(() => {
     moonMemoryScrubValueRef.current = moonMemoryScrubValue;
   }, [moonMemoryScrubValue]);
+  useEffect(() => {
+    if (orbitPhase !== "orbiting") {
+      moonMemoryUiWaitingForDroneExitRef.current = false;
+      moonMemoryUiSawDroneRef.current = false;
+      setMoonMemoryControlsVisible(false);
+      return;
+    }
+    // Moon orbit entry behavior:
+    // - Hide memory controls immediately.
+    // - Keep memories off until drone draw sequence fully exits.
+    setMoonMemoryControlsVisible(false);
+    setViewerMemoriesEnabled(false);
+    moonMemoryUiWaitingForDroneExitRef.current = true;
+    moonMemoryUiSawDroneRef.current = false;
+  }, [orbitPhase]);
+  useEffect(() => {
+    if (orbitPhase !== "orbiting") return;
+    if (!moonMemoryUiWaitingForDroneExitRef.current) return;
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (!moonMemoryUiWaitingForDroneExitRef.current) return;
+      const drone = hologramDroneRef.current as
+        | { isDroneVisible?: () => boolean }
+        | null;
+      const droneVisible = !!drone?.isDroneVisible?.();
+      if (droneVisible) {
+        moonMemoryUiSawDroneRef.current = true;
+        return;
+      }
+      if (!moonMemoryUiSawDroneRef.current) return;
+      moonMemoryUiWaitingForDroneExitRef.current = false;
+      setMoonMemoryControlsVisible(true);
+      setViewerMemoriesEnabled(true);
+      shipLog("Moon memories unlocked — drone departed", "orbit");
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [orbitPhase, shipLog]);
   const exportOrbitSignTuning = useCallback(() => {
     const payload = {
       timeBetweenMessagesSec: Number(orbitSignTuning.timeBetweenMessagesSec.toFixed(2)),
@@ -6858,6 +6900,53 @@ export default function ResumeSpace3D({
   useEffect(() => {
     if (!sceneReady) return;
     let raf = 0;
+    const labelWorld = new THREE.Vector3();
+    const toLabel = new THREE.Vector3();
+    const raycaster = new THREE.Raycaster();
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (orbitalPortfolioActiveRef.current) return;
+      const camera = sceneRef.current.camera;
+      const scene = sceneRef.current.scene;
+      if (!camera || !scene) return;
+      const occluders = itemsRef.current
+        .map((item) => item.mesh)
+        .filter((mesh) => mesh.visible && mesh.parent !== null);
+      if (occluders.length === 0) return;
+      scene.traverse((obj) => {
+        const maybeCss = obj as THREE.Object3D & {
+          isCSS2DObject?: boolean;
+          userData: Record<string, unknown>;
+        };
+        if (!maybeCss.isCSS2DObject) return;
+        if (!maybeCss.userData?.orbitalPortfolioLabel) return;
+        if (maybeCss.userData?.orbitalPortfolioStationLabel) {
+          maybeCss.visible = false;
+          return;
+        }
+        maybeCss.getWorldPosition(labelWorld);
+        toLabel.subVectors(labelWorld, camera.position);
+        const labelDist = toLabel.length();
+        if (labelDist < 0.001) {
+          maybeCss.visible = true;
+          return;
+        }
+        toLabel.multiplyScalar(1 / labelDist);
+        raycaster.set(camera.position, toLabel);
+        raycaster.near = 0.05;
+        raycaster.far = Math.max(0.05, labelDist - 0.15);
+        const hits = raycaster.intersectObjects(occluders, false);
+        const blocked = hits.some((h) => h.distance < labelDist - 0.25);
+        maybeCss.visible = !blocked;
+      });
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [sceneReady]);
+
+  useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
     let lastTickMs = performance.now();
     const worldNodePos = new THREE.Vector3();
     const flowPos = new THREE.Vector3();
@@ -11529,6 +11618,7 @@ export default function ResumeSpace3D({
       }
       const label = createLabel(group.title, "Portfolio Sample");
       label.userData.orbitalPortfolioLabel = true;
+      label.userData.orbitalPortfolioStationLabel = true;
       label.position.set(0, 62, 0);
       label.visible = false;
       stationGroup.add(label);
@@ -16338,7 +16428,7 @@ export default function ResumeSpace3D({
               </button>
             </div>
           )}
-          {!isLoading && orbitPhase === "orbiting" && (
+          {!isLoading && orbitPhase === "orbiting" && moonMemoryControlsVisible && (
             <div
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}

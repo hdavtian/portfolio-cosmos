@@ -1032,7 +1032,9 @@ export class HologramDroneDisplay {
     this.panelsDocked = false;
     this.panelDockProgress = 0;
     this.activePanelIndex = null;
-    this.shouldDockPanels = content.enableDroneCardDock === true;
+    // Keep moon drone text panels where they are initially drawn.
+    // Do not run post-draw dock/focus repositioning.
+    this.shouldDockPanels = false;
 
     this.rootGroup.visible = true;
     this.panelGroup.visible = true;
@@ -1795,5 +1797,9 @@ export class HologramDroneDisplay {
 
   isActive(): boolean {
     return this.active;
+  }
+
+  isDroneVisible(): boolean {
+    return this.active && this.rootGroup.visible && this.droneGroup.visible;
   }
 }
