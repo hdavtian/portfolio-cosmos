@@ -198,6 +198,7 @@ const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(1158.5, 157.5, 14760.37
 const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 620;
 const ORBITAL_PORTFOLIO_NAV_STANDOFF_DIST = 560;
 const ORBITAL_PORTFOLIO_NAV_VERTICAL_OFFSET = 90;
+const ORBITAL_PORTFOLIO_CORE_LABEL_MAX_DISTANCE = 7600;
 const ENABLE_POST_LOAD_COSMOS_MICRO_INTRO = false;
 const CAMERA_TRACE_ENABLED = true;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
@@ -6927,6 +6928,13 @@ export default function ResumeSpace3D({
         maybeCss.getWorldPosition(labelWorld);
         toLabel.subVectors(labelWorld, camera.position);
         const labelDist = toLabel.length();
+        if (
+          maybeCss.userData?.orbitalPortfolioCoreLabel &&
+          labelDist > ORBITAL_PORTFOLIO_CORE_LABEL_MAX_DISTANCE
+        ) {
+          maybeCss.visible = false;
+          return;
+        }
         if (labelDist < 0.001) {
           maybeCss.visible = true;
           return;
@@ -8279,8 +8287,9 @@ export default function ResumeSpace3D({
           const mat = thumb.mesh.material as THREE.MeshBasicMaterial;
           const frameMat = thumb.frame.material as THREE.MeshBasicMaterial;
           const hasMedia = thumb.mesh.userData.hasMedia !== false;
-          thumb.mesh.visible = isFocused && hasMedia;
-          thumb.frame.visible = isFocused && hasMedia;
+          const showThumb = thumb.mesh.userData.orbitalShowThumb !== false;
+          thumb.mesh.visible = isFocused && showThumb && hasMedia;
+          thumb.frame.visible = isFocused && showThumb && hasMedia;
           const mappedMediaIndex = Number(thumb.mesh.userData.orbitalMediaIndex ?? thumb.mediaIndex);
           const isActiveMedia = mappedMediaIndex === orbitalPortfolioMediaIndex;
           mat.opacity = isFocused ? (isActiveMedia ? 1 : 0.93) : 0;
@@ -8866,10 +8875,13 @@ export default function ResumeSpace3D({
     });
 
     const thumbLoader = new THREE.TextureLoader();
+    const hideSingleThumbNoVariant =
+      (group?.clientVariantCount ?? 0) === 0 && mediaItems.length <= 1;
     station.cardThumbMeshes.forEach((thumb) => {
       const thumbMat = thumb.mesh.material as THREE.MeshBasicMaterial;
       const mappedMediaIndex = thumbPageStart + thumb.mediaIndex;
       const mediaAtThumb = mediaItems[mappedMediaIndex];
+      thumb.mesh.userData.orbitalShowThumb = !hideSingleThumbNoVariant;
       thumb.mesh.userData.hasMedia = Boolean(mediaAtThumb);
       thumb.mesh.userData.orbitalStationIndex = focusIndex;
       thumb.mesh.userData.orbitalPickKind = "thumb";
@@ -8881,8 +8893,8 @@ export default function ResumeSpace3D({
         thumbMat.needsUpdate = true;
         return;
       }
-      thumb.mesh.visible = true;
-      thumb.frame.visible = true;
+      thumb.mesh.visible = !hideSingleThumbNoVariant;
+      thumb.frame.visible = !hideSingleThumbNoVariant;
       const prevUrl = thumb.mesh.userData.orbitalThumbTextureUrl as string | undefined;
       if (prevUrl === mediaAtThumb.textureUrl && thumbMat.map) return;
       thumb.mesh.userData.orbitalThumbTextureUrl = mediaAtThumb.textureUrl;
@@ -8901,7 +8913,9 @@ export default function ResumeSpace3D({
         () => undefined,
       );
     });
-    const showThumbNav = mediaItems.length > ORBITAL_PORTFOLIO_CARD_MAX_THUMBS;
+    const showThumbNav =
+      !hideSingleThumbNoVariant &&
+      mediaItems.length > ORBITAL_PORTFOLIO_CARD_MAX_THUMBS;
     station.cardThumbNavMeshes.forEach((nav) => {
       const navMat = nav.mesh.material as THREE.MeshBasicMaterial;
       const navFrameMat = nav.frame.material as THREE.MeshBasicMaterial;
@@ -11281,6 +11295,7 @@ export default function ResumeSpace3D({
       coreRoot.add(coreNucleus, coreGlow, sliceGroup, rayGroup);
       const coreLabel = createLabel(coreView.title, "Orbital Core");
       coreLabel.userData.orbitalPortfolioLabel = true;
+      coreLabel.userData.orbitalPortfolioCoreLabel = true;
       coreLabel.position.set(0, 72, 0);
       coreRoot.add(coreLabel);
       orbitalRoot.add(coreRoot);
@@ -13333,6 +13348,8 @@ export default function ResumeSpace3D({
                   resolveShowcaseMediaItems(entry, { variant, variantIndex }),
                 )
               : resolveShowcaseMediaItems(entry);
+          const hasSingleMediaNoVariants =
+            clientVariants.length === 0 && mediaItems.length <= 1;
           const panelHasAnyThumbStrip =
             clientVariants.length > 0
               ? clientVariants.some((_, variantIndex) =>
@@ -13343,7 +13360,8 @@ export default function ResumeSpace3D({
             clientVariants.length > 0
               ? mediaItems.filter((item) => item.variantIndex === 0).length
               : mediaItems.length;
-          const hasGalleryMedia = initialVariantMediaCount > 1;
+          const hasGalleryMedia =
+            !hasSingleMediaNoVariants && initialVariantMediaCount > 1;
           const panelVerticalOffset = hasGalleryMedia ? -0.2 : 0;
           if (runAxis === "z") {
             panelGroup.position.set(
