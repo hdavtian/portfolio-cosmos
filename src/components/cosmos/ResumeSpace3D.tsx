@@ -17345,6 +17345,7 @@ export default function ResumeSpace3D({
                   `${group.title} ${group.description ?? ""} ${group.technologies.join(" ")}`.toLowerCase();
                 return haystack.includes(query);
               });
+              const orbitalRegistryPanelWidth = 430;
               return (
                 <div
                   style={{
@@ -17355,11 +17356,13 @@ export default function ResumeSpace3D({
                     display: "flex",
                     flexDirection: "column",
                     gap: 8,
-                    width: 430,
+                    width: orbitalRegistryPanelWidth,
                     transform: orbitalRegistryPanelVisible
                       ? "translateX(0)"
-                      : "translateX(430px)",
-                    transition: "transform 240ms ease",
+                      : `translateX(${orbitalRegistryPanelWidth + 24}px)`,
+                    opacity: orbitalRegistryPanelVisible ? 1 : 0,
+                    pointerEvents: orbitalRegistryPanelVisible ? "auto" : "none",
+                    transition: "transform 240ms ease, opacity 180ms ease",
                   }}
                 >
                   <div
@@ -17814,11 +17817,44 @@ export default function ResumeSpace3D({
               );
             })()}
           {orbitalPortfolioActive && (
+            !orbitalRegistryPanelVisible && (
+              <div
+                style={{
+                  position: "fixed",
+                  right: -5,
+                  top: 184,
+                  zIndex: 1101,
+                  pointerEvents: "none",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 0,
+                  padding: "8px 5px 9px",
+                  borderRadius: 0,
+                  border: "none",
+                  background: "#000000",
+                  color: "#dff5ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  writingMode: "vertical-rl",
+                  transform: "rotate(180deg)",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                }}
+              >
+                <span style={{ fontSize: 10, color: "#9fdfff", opacity: 0.9, lineHeight: "100%" }}>Portfolio</span>
+                <span style={{ fontSize: 10, fontWeight: 700, lineHeight: "auto" }}>
+                  Orbital Registry
+                </span>
+              </div>
+            )
+          )}
+          {orbitalPortfolioActive && (
             <button
               onClick={() => setOrbitalRegistryPanelVisible((prev) => !prev)}
               style={{
                 position: "fixed",
-                right: orbitalRegistryPanelVisible ? 448 : 8,
+                // Keep the toggle flush with the registry panel edge in both states.
+                right: orbitalRegistryPanelVisible ? 448 : 0,
                 top: 120,
                 zIndex: 1102,
                 width: 28,
