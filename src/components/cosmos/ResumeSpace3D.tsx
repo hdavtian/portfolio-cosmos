@@ -72,7 +72,7 @@ import { createMoonFocusController } from "./ResumeSpace3D.focusController";
 import { useMoonOrbit, type OrbitPhase } from "./hooks/useMoonOrbit";
 import {
   useNavigationSystem,
-  type MoonTravelPhase,
+  type NavigationTravelPhase,
 } from "./hooks/useNavigationSystem";
 import { useRenderLoop } from "./hooks/useRenderLoop";
 import { createIntroSequenceRunner } from "./introSequence";
@@ -2142,14 +2142,14 @@ export default function ResumeSpace3D({
     travelStartedAt: number;
     announcedLightspeed: boolean;
     lastDistance: number | null;
-    lastMoonPhase: MoonTravelPhase;
+    lastTravelPhase: NavigationTravelPhase;
   }>({
     activeTarget: null,
     targetLabel: null,
     travelStartedAt: 0,
     announcedLightspeed: false,
     lastDistance: null,
-    lastMoonPhase: "idle",
+    lastTravelPhase: "idle",
   });
   const measuredTravelSpeedRef = useRef(0);
   const measuredSpeedSampleRef = useRef<{
@@ -2638,7 +2638,7 @@ export default function ResumeSpace3D({
     currentNavigationTarget,
     navigationDistance,
     navigationETA,
-    moonTravelPhase,
+    navigationTravelPhase,
     markMoonOrbitDepartureHandoff,
     navTurnActiveRef,
     settledViewTargetRef,
@@ -2830,17 +2830,15 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     const navState = navMessageStateRef.current;
-    const isMoonTarget = (target: string | null) =>
-      !!target && resumeData.experience.some((exp: any) => exp.id === target);
 
     // Orbit-exit handoff happens before a new currentNavigationTarget is set.
     // Emit this phase directly so there is no silent gap in user-facing phases.
     if (
-      moonTravelPhase === "orbit_departure_handoff" &&
-      navState.lastMoonPhase !== "orbit_departure_handoff"
+      navigationTravelPhase === "orbit_departure_handoff" &&
+      navState.lastTravelPhase !== "orbit_departure_handoff"
     ) {
       onScreenMessage("Departing current orbit");
-      navState.lastMoonPhase = "orbit_departure_handoff";
+      navState.lastTravelPhase = "orbit_departure_handoff";
     }
 
     if (
@@ -2853,7 +2851,7 @@ export default function ResumeSpace3D({
       navState.travelStartedAt = Date.now();
       navState.announcedLightspeed = false;
       navState.lastDistance = navigationDistance ?? null;
-      navState.lastMoonPhase = "idle";
+      navState.lastTravelPhase = "idle";
       navDistanceSampleRef.current = null;
       navDistanceDerivedSpeedRef.current = 0;
 
@@ -2863,15 +2861,11 @@ export default function ResumeSpace3D({
           `Destination acquired, distance ${navigationDistance.toFixed(0)}u`,
         );
       }
-      if (!isMoonTarget(currentNavigationTarget)) {
-        onScreenMessage("Adjusting Falcon trajectory");
-      }
     }
 
     if (navState.activeTarget) {
-      const activeMoonTarget = isMoonTarget(navState.activeTarget);
-      if (activeMoonTarget && moonTravelPhase !== navState.lastMoonPhase) {
-        switch (moonTravelPhase) {
+      if (navigationTravelPhase !== navState.lastTravelPhase) {
+        switch (navigationTravelPhase) {
           case "orbit_departure_handoff":
             onScreenMessage("Departing current orbit");
             break;
@@ -2884,10 +2878,14 @@ export default function ResumeSpace3D({
           case "transit_cruise":
             onScreenMessage("Cruising toward destination");
             break;
+          case "lightspeed_engaged":
+            onScreenMessage("Engaging light speed");
+            navState.announcedLightspeed = true;
+            break;
           case "arrival_approach":
             onScreenMessage("Arriving at destination");
             break;
-          case "arrived_orbit": {
+          case "arrived": {
             const label =
               navState.targetLabel ?? formatNavTargetLabel(navState.activeTarget);
             onScreenMessage(`Arrived at ${label}`);
@@ -2901,13 +2899,13 @@ export default function ResumeSpace3D({
             navState.travelStartedAt = 0;
             navState.announcedLightspeed = false;
             navState.lastDistance = null;
-            navState.lastMoonPhase = "idle";
+            navState.lastTravelPhase = "idle";
             return;
           }
           default:
             break;
         }
-        navState.lastMoonPhase = moonTravelPhase;
+        navState.lastTravelPhase = navigationTravelPhase;
       }
       // Navigation has finished; dismiss KPI strip immediately.
       if (!currentNavigationTarget && navigationDistance === null) {
@@ -2923,7 +2921,7 @@ export default function ResumeSpace3D({
         navState.travelStartedAt = 0;
         navState.announcedLightspeed = false;
         navState.lastDistance = null;
-        navState.lastMoonPhase = "idle";
+        navState.lastTravelPhase = "idle";
         return;
       }
 
@@ -3004,7 +3002,11 @@ export default function ResumeSpace3D({
         speed,
       });
 
-      if (!navState.announcedLightspeed && manualFlightRef.current.isLightspeedActive) {
+      if (
+        !navState.announcedLightspeed &&
+        (manualFlightRef.current.isLightspeedActive ||
+          navigationTravelPhase === "lightspeed_engaged")
+      ) {
         onScreenMessage("Engaging light speed");
         navState.announcedLightspeed = true;
       }
@@ -3023,7 +3025,7 @@ export default function ResumeSpace3D({
   }, [
     currentNavigationTarget,
     navigationDistance,
-    moonTravelPhase,
+    navigationTravelPhase,
     formatNavTargetLabel,
     navTelemetryPulse,
   ]);
@@ -4916,9 +4918,7 @@ export default function ResumeSpace3D({
       }
       // Exit orbit if currently orbiting
       if (isOrbiting()) {
-        if (targetType === "moon") {
-          markMoonOrbitDepartureHandoff(targetId);
-        }
+        markMoonOrbitDepartureHandoff(targetId, targetType);
         pendingOrbitExitNavigationRef.current = {
           targetId,
           targetType,

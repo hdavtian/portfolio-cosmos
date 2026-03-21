@@ -48,17 +48,21 @@ const NAV_MOON_FREEZE_DISTANCE = 42;
 const NAV_MOON_APPROACH_MIN_DISTANCE = 65;
 const NAV_MOON_APPROACH_MAX_DISTANCE = 220;
 const NAV_MOON_APPROACH_RATIO = 0.25;
+const NAV_SECTION_APPROACH_MIN_DISTANCE = 120;
+const NAV_SECTION_APPROACH_MAX_DISTANCE = 1400;
+const NAV_SECTION_APPROACH_RATIO = 0.18;
 const NAV_PLANET_STAGING_MIN_DIST = 1680;
 const NAV_PLANET_STAGING_RADIUS_MULT = 15.2;
 
-export type MoonTravelPhase =
+export type NavigationTravelPhase =
   | "idle"
   | "orbit_departure_handoff"
   | "departure_clearance"
   | "trajectory_alignment"
   | "transit_cruise"
+  | "lightspeed_engaged"
   | "arrival_approach"
-  | "arrived_orbit";
+  | "arrived";
 
 export const useNavigationSystem = (deps: {
   resumeData: any;
@@ -191,49 +195,66 @@ export const useNavigationSystem = (deps: {
     null,
   );
   const [navigationETA, setNavigationETA] = useState<number | null>(null);
-  const [moonTravelPhase, setMoonTravelPhase] =
-    useState<MoonTravelPhase>("idle");
-  const moonTravelPhaseStateRef = useRef<{
-    phase: MoonTravelPhase;
+  const [navigationTravelPhase, setNavigationTravelPhase] =
+    useState<NavigationTravelPhase>("idle");
+  const navigationTravelPhaseStateRef = useRef<{
+    phase: NavigationTravelPhase;
+    routeKind: "moon" | "section" | null;
     targetId: string | null;
     cruiseStartDistance: number | null;
     approachDistance: number | null;
+    lightspeedAnnounced: boolean;
   }>({
     phase: "idle",
+    routeKind: null,
     targetId: null,
     cruiseStartDistance: null,
     approachDistance: null,
+    lightspeedAnnounced: false,
   });
 
-  const setMoonPhase = useCallback(
-    (phase: MoonTravelPhase, detail: string) => {
-      if (moonTravelPhaseStateRef.current.phase === phase) return;
-      moonTravelPhaseStateRef.current.phase = phase;
-      setMoonTravelPhase(phase);
-      debugLog("nav", `Moon phase -> ${phase} (${detail})`);
-      shipLog(`Moon phase: ${phase.replace(/_/g, " ")}`, "nav");
+  const setNavigationPhase = useCallback(
+    (phase: NavigationTravelPhase, detail: string) => {
+      const state = navigationTravelPhaseStateRef.current;
+      if (state.phase === phase) return;
+      state.phase = phase;
+      setNavigationTravelPhase(phase);
+      const target = state.targetId ?? "none";
+      const kind = state.routeKind ?? "none";
+      debugLog("nav", `Travel phase -> ${phase} (${kind}:${target} | ${detail})`);
+      shipLog(
+        `Travel phase: ${phase.replace(/_/g, " ")} [${kind}:${target}] ${detail}`,
+        "nav",
+      );
     },
     [debugLog, shipLog],
   );
 
-  const resetMoonPhase = useCallback(
+  const resetNavigationPhase = useCallback(
     (detail: string) => {
-      moonTravelPhaseStateRef.current.targetId = null;
-      moonTravelPhaseStateRef.current.cruiseStartDistance = null;
-      moonTravelPhaseStateRef.current.approachDistance = null;
-      setMoonPhase("idle", detail);
+      navigationTravelPhaseStateRef.current.routeKind = null;
+      navigationTravelPhaseStateRef.current.targetId = null;
+      navigationTravelPhaseStateRef.current.cruiseStartDistance = null;
+      navigationTravelPhaseStateRef.current.approachDistance = null;
+      navigationTravelPhaseStateRef.current.lightspeedAnnounced = false;
+      setNavigationPhase("idle", detail);
     },
-    [setMoonPhase],
+    [setNavigationPhase],
   );
 
   const markMoonOrbitDepartureHandoff = useCallback(
-    (targetMoonId: string) => {
-      moonTravelPhaseStateRef.current.targetId = targetMoonId;
-      moonTravelPhaseStateRef.current.cruiseStartDistance = null;
-      moonTravelPhaseStateRef.current.approachDistance = null;
-      setMoonPhase("orbit_departure_handoff", `pending-orbit-exit:${targetMoonId}`);
+    (targetId: string, targetType: "moon" | "section" = "moon") => {
+      navigationTravelPhaseStateRef.current.routeKind = targetType;
+      navigationTravelPhaseStateRef.current.targetId = targetId;
+      navigationTravelPhaseStateRef.current.cruiseStartDistance = null;
+      navigationTravelPhaseStateRef.current.approachDistance = null;
+      navigationTravelPhaseStateRef.current.lightspeedAnnounced = false;
+      setNavigationPhase(
+        "orbit_departure_handoff",
+        `pending-orbit-exit:${targetType}:${targetId}`,
+      );
     },
-    [setMoonPhase],
+    [setNavigationPhase],
   );
 
   type MoonDepartureContext = {
@@ -270,6 +291,7 @@ export const useNavigationSystem = (deps: {
     turnTargetQuat?: THREE.Quaternion;
     clearanceTarget?: THREE.Vector3;
     clearanceDistance?: number;
+    phaseApproachDistance?: number;
     // Pending moon navigation — delayed until turn completes
     pendingMoonId?: string;
     pendingMoonTurbo?: boolean;
@@ -481,10 +503,10 @@ export const useNavigationSystem = (deps: {
 
       navigationSystemRef.current.setOnArrival((targetId: string) => {
         if (targetId.startsWith("moon-")) {
-          setMoonPhase("arrived_orbit", `moon-arrival:${targetId}`);
+          setNavigationPhase("arrived", `moon-arrival:${targetId}`);
           onMoonTravelArrived?.({ targetMoonId: targetId.replace(/^moon-/, "") });
         } else {
-          resetMoonPhase(`non-moon-arrival:${targetId}`);
+          resetNavigationPhase(`non-moon-arrival:${targetId}`);
         }
         vlog(`✅ ARRIVED at ${targetId}`);
         shipLog("Destination reached", "nav");
@@ -516,7 +538,7 @@ export const useNavigationSystem = (deps: {
 
         if (!company) {
           vlog(`⚠️ Could not find company for moon: ${targetId}`);
-          resetMoonPhase(`moon-company-missing:${targetId}`);
+          resetNavigationPhase(`moon-company-missing:${targetId}`);
           return;
         }
 
@@ -531,7 +553,7 @@ export const useNavigationSystem = (deps: {
 
         if (!moonMesh) {
           vlog(`⚠️ Could not find moon mesh: ${targetId}`);
-          resetMoonPhase(`moon-mesh-missing:${targetId}`);
+          resetNavigationPhase(`moon-mesh-missing:${targetId}`);
           return;
         }
 
@@ -562,9 +584,9 @@ export const useNavigationSystem = (deps: {
       missionLog,
       onMoonTravelArrived,
       optionsRef,
-      resetMoonPhase,
+      resetNavigationPhase,
       resumeData,
-      setMoonPhase,
+      setNavigationPhase,
       shipLog,
       vlog,
     ],
@@ -802,10 +824,12 @@ export const useNavigationSystem = (deps: {
           clearanceDistance,
           forceLightspeed: isInterSystemMoonJump,
         };
-        moonTravelPhaseStateRef.current.targetId = targetId;
-        moonTravelPhaseStateRef.current.cruiseStartDistance = null;
-        moonTravelPhaseStateRef.current.approachDistance = null;
-        setMoonPhase(
+        navigationTravelPhaseStateRef.current.routeKind = "moon";
+        navigationTravelPhaseStateRef.current.targetId = targetId;
+        navigationTravelPhaseStateRef.current.cruiseStartDistance = null;
+        navigationTravelPhaseStateRef.current.approachDistance = null;
+        navigationTravelPhaseStateRef.current.lightspeedAnnounced = false;
+        setNavigationPhase(
           clearanceTarget ? "departure_clearance" : "trajectory_alignment",
           clearanceTarget ? "moon-nav-start:clearance" : "moon-nav-start:turning",
         );
@@ -820,7 +844,12 @@ export const useNavigationSystem = (deps: {
           `🎯 NAVIGATION INITIATED: Target - ${targetId} | Distance: ${currentPos ? spaceshipRef.current!.position.distanceTo(currentPos.worldPosition).toFixed(0) : "unknown"}u`,
         );
       } else if (targetType === "section") {
-        resetMoonPhase(`section-nav-start:${targetId}`);
+        navigationTravelPhaseStateRef.current.routeKind = "section";
+        navigationTravelPhaseStateRef.current.targetId = targetId;
+        navigationTravelPhaseStateRef.current.cruiseStartDistance = null;
+        navigationTravelPhaseStateRef.current.approachDistance = null;
+        navigationTravelPhaseStateRef.current.lightspeedAnnounced = false;
+        setNavigationPhase("trajectory_alignment", `section-nav-start:${targetId}`);
         navigationSystemRef.current.updateConfig({
           arrivalDistance: NAV_ARRIVAL_DIST,
           freezeDistance: NAV_FREEZE_DIST,
@@ -1000,12 +1029,12 @@ export const useNavigationSystem = (deps: {
             useTurbo: true,
             forceLightspeed: true,
             targetRadius,
-            turnPhase:
-              targetId === "about" || targetId === "projects"
-                ? "traveling"
-                : clearanceTarget
-                  ? "clearing"
-                  : "turning",
+            phaseApproachDistance: THREE.MathUtils.clamp(
+              distToStaging * NAV_SECTION_APPROACH_RATIO,
+              NAV_SECTION_APPROACH_MIN_DISTANCE,
+              NAV_SECTION_APPROACH_MAX_DISTANCE,
+            ),
+            turnPhase: clearanceTarget ? "clearing" : "turning",
             turnStartTime: performance.now(),
             turnStartQuat: spaceshipRef.current.quaternion.clone(),
             turnTargetQuat,
@@ -1257,38 +1286,47 @@ export const useNavigationSystem = (deps: {
         // so on-screen distance telemetry always decrements during travel.
         setNavigationDistance(statusAfterUpdate.distance);
         setNavigationETA(statusAfterUpdate.eta);
-        const moonTargetId = moonTravelPhaseStateRef.current.targetId;
+        const moonTargetId = navigationTravelPhaseStateRef.current.targetId;
         const navTargetId = statusAfterUpdate.targetId?.replace(/^moon-/, "") ?? null;
-        if (moonTargetId && navTargetId === moonTargetId) {
+        if (
+          navigationTravelPhaseStateRef.current.routeKind === "moon" &&
+          moonTargetId &&
+          navTargetId === moonTargetId
+        ) {
           if (
-            moonTravelPhaseStateRef.current.cruiseStartDistance === null &&
+            navigationTravelPhaseStateRef.current.cruiseStartDistance === null &&
             statusAfterUpdate.distance !== null
           ) {
-            moonTravelPhaseStateRef.current.cruiseStartDistance = statusAfterUpdate.distance;
+            navigationTravelPhaseStateRef.current.cruiseStartDistance =
+              statusAfterUpdate.distance;
           }
           if (
-            moonTravelPhaseStateRef.current.approachDistance === null &&
-            moonTravelPhaseStateRef.current.cruiseStartDistance !== null
+            navigationTravelPhaseStateRef.current.approachDistance === null &&
+            navigationTravelPhaseStateRef.current.cruiseStartDistance !== null
           ) {
-            moonTravelPhaseStateRef.current.approachDistance = THREE.MathUtils.clamp(
-              moonTravelPhaseStateRef.current.cruiseStartDistance * NAV_MOON_APPROACH_RATIO,
+            navigationTravelPhaseStateRef.current.approachDistance = THREE.MathUtils.clamp(
+              navigationTravelPhaseStateRef.current.cruiseStartDistance *
+                NAV_MOON_APPROACH_RATIO,
               NAV_MOON_APPROACH_MIN_DISTANCE,
               NAV_MOON_APPROACH_MAX_DISTANCE,
             );
           }
           const approachDistance =
-            moonTravelPhaseStateRef.current.approachDistance ??
+            navigationTravelPhaseStateRef.current.approachDistance ??
             NAV_MOON_APPROACH_MIN_DISTANCE;
-          if (
+          const lightspeedOn = manualFlightRef.current.isLightspeedActive;
+          if (lightspeedOn) {
+            setNavigationPhase("lightspeed_engaged", "moon-system-lightspeed-active");
+          } else if (
             statusAfterUpdate.distance !== null &&
             statusAfterUpdate.distance <= approachDistance
           ) {
-            setMoonPhase(
+            setNavigationPhase(
               "arrival_approach",
               `distance=${statusAfterUpdate.distance.toFixed(1)}<=${approachDistance.toFixed(1)}`,
             );
           } else {
-            setMoonPhase("transit_cruise", "distance-above-approach-window");
+            setNavigationPhase("transit_cruise", "distance-above-approach-window");
           }
         }
       }
@@ -1366,6 +1404,7 @@ export const useNavigationSystem = (deps: {
       // ── CLEARING PHASE: move away from current moon before turn/punch ──
       if (target.turnPhase === "clearing" && target.clearanceTarget) {
         navTrace("updateAutopilotNavigation()", "phase:clearing", 700);
+        setNavigationPhase("departure_clearance", "turn-phase:clearing");
         navTurnActiveRef.current = true;
         pathData.speed = 0;
         manualFlightRef.current.currentSpeed = 0;
@@ -1413,7 +1452,7 @@ export const useNavigationSystem = (deps: {
           target.turnTargetQuat = turnTargetQuat;
           target.clearanceTarget = undefined;
           target.startPosition = ship.position.clone();
-          setMoonPhase("trajectory_alignment", "clearance-complete");
+          setNavigationPhase("trajectory_alignment", "clearance-complete");
           vlog("🧹 Orbit clearance complete — starting destination turn");
         }
         return;
@@ -1422,6 +1461,7 @@ export const useNavigationSystem = (deps: {
       // ── TURN PHASE: smoothly rotate ship toward target before moving ──
       if (target.turnPhase === "turning") {
         navTrace("updateAutopilotNavigation()", "phase:turning", 700);
+        setNavigationPhase("trajectory_alignment", "turn-phase:turning");
         navTurnActiveRef.current = true;
         pathData.speed = 0;
         manualFlightRef.current.currentSpeed = 0;
@@ -1464,6 +1504,7 @@ export const useNavigationSystem = (deps: {
       // ── PAUSE PHASE: short beat after turn, before travel ──
       if (target.turnPhase === "pausing") {
         navTrace("updateAutopilotNavigation()", "phase:pausing", 700);
+        setNavigationPhase("trajectory_alignment", "turn-phase:pausing");
         pathData.speed = 0;
         manualFlightRef.current.currentSpeed = 0;
         const MIN_PAUSE_DURATION = 500; // ms
@@ -1561,9 +1602,9 @@ export const useNavigationSystem = (deps: {
                 ? target.pendingMoonId
                 : null;
               const status = navigationSystemRef.current.getStatus();
-              moonTravelPhaseStateRef.current.cruiseStartDistance =
+              navigationTravelPhaseStateRef.current.cruiseStartDistance =
                 status.distance ?? null;
-              moonTravelPhaseStateRef.current.approachDistance =
+              navigationTravelPhaseStateRef.current.approachDistance =
                 status.distance !== null
                   ? THREE.MathUtils.clamp(
                       status.distance * NAV_MOON_APPROACH_RATIO,
@@ -1571,7 +1612,7 @@ export const useNavigationSystem = (deps: {
                       NAV_MOON_APPROACH_MAX_DISTANCE,
                     )
                   : null;
-              setMoonPhase("transit_cruise", "moon-navigation-started");
+              setNavigationPhase("transit_cruise", "moon-navigation-started");
             }
             // Clear the section-type navigation state entirely since
             // moon system now owns navigation and status updates.
@@ -1588,6 +1629,7 @@ export const useNavigationSystem = (deps: {
             target.turnPhase = "traveling";
             pathData.speed = 0; // start from zero speed
             navTurnActiveRef.current = false;
+            setNavigationPhase("transit_cruise", "section-travel-started");
             vlog("▶️ Pause done — beginning travel");
           }
         }
@@ -1643,6 +1685,7 @@ export const useNavigationSystem = (deps: {
 
         if (t >= 1) {
           vlog("🛸 Settle complete — ship now facing planet system");
+          setNavigationPhase("arrived", "section-settle-complete");
 
           // ── Directly run arrival cleanup here instead of falling
           // through to the travel code, which would override the
@@ -1834,6 +1877,7 @@ export const useNavigationSystem = (deps: {
           useTurbo: false,
           lastUpdateFrame: undefined,
         };
+        resetNavigationPhase("abort-invalid-steer-target");
         return;
       }
       const direction = _navDir.current
@@ -1863,6 +1907,7 @@ export const useNavigationSystem = (deps: {
           useTurbo: false,
           lastUpdateFrame: undefined,
         };
+        resetNavigationPhase("abort-invalid-direction");
         return;
       }
 
@@ -1951,6 +1996,25 @@ export const useNavigationSystem = (deps: {
           vlog(`🛑 DECELERATION: Starting at distance ${distance.toFixed(1)}`);
           target.decelerationLogged = true;
         }
+      }
+
+      const sectionApproachDistance =
+        target.phaseApproachDistance ??
+        THREE.MathUtils.clamp(
+          (target.startPosition?.distanceTo(targetPos) ?? distance) *
+            NAV_SECTION_APPROACH_RATIO,
+          NAV_SECTION_APPROACH_MIN_DISTANCE,
+          NAV_SECTION_APPROACH_MAX_DISTANCE,
+        );
+      if (manualFlightRef.current.isLightspeedActive) {
+        setNavigationPhase("lightspeed_engaged", "section-lightspeed-active");
+      } else if (distance <= sectionApproachDistance) {
+        setNavigationPhase(
+          "arrival_approach",
+          `section-distance=${distance.toFixed(1)}<=${sectionApproachDistance.toFixed(1)}`,
+        );
+      } else {
+        setNavigationPhase("transit_cruise", "section-traveling");
       }
 
       pathData.speed += (targetSpeed - pathData.speed) * lerpAlpha;
@@ -2067,6 +2131,7 @@ export const useNavigationSystem = (deps: {
         }
 
         vlog(`✅ ARRIVED at ${target.id}`);
+        setNavigationPhase("arrived", "section-arrival-threshold-met");
         shipLog("Arriving at destination", "nav");
         vlog(`   Final distance: ${distance.toFixed(2)} units`);
         vlog(
@@ -2162,25 +2227,25 @@ export const useNavigationSystem = (deps: {
     optionsRef,
     onMoonTravelIntent,
     onMoonTravelNavigationStarted,
-    setMoonPhase,
-    resetMoonPhase,
+    setNavigationPhase,
+    resetNavigationPhase,
     vlog,
   ]);
 
   const disposeNavigationSystem = useCallback(() => {
     navTrace("disposeNavigationSystem()", "called");
-    resetMoonPhase("dispose-navigation-system");
+    resetNavigationPhase("dispose-navigation-system");
     if (navigationSystemRef.current) {
       navigationSystemRef.current.dispose();
       navigationSystemRef.current = null;
     }
-  }, [resetMoonPhase]);
+  }, [resetNavigationPhase]);
 
   return {
     currentNavigationTarget,
     navigationDistance,
     navigationETA,
-    moonTravelPhase,
+    navigationTravelPhase,
     markMoonOrbitDepartureHandoff,
     navTurnActiveRef,
     settledViewTargetRef,
