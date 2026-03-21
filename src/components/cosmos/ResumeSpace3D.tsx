@@ -194,7 +194,6 @@ const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(1324, 180, 16869);
 const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 900;
 const ENABLE_POST_LOAD_COSMOS_MICRO_INTRO = false;
-const ENABLE_STAR_DESTROYER_INTRO_FLYBY = false;
 const CAMERA_TRACE_ENABLED = true;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 // Recenter deep-space destinations so the universe extent remains sun-centered.
@@ -2131,7 +2130,6 @@ export default function ResumeSpace3D({
   // --- STAR DESTROYER refs ---
   const starDestroyerRef = useRef<THREE.Group | null>(null);
   const starDestroyerCruiserRef = useRef<StarDestroyerCruiser | null>(null);
-  const starDestroyerIntroFlybyPlayedRef = useRef(false);
   const starDestroyerDebugLastLogMsRef = useRef(0);
   const starDestroyerSkillsSnapPendingRef = useRef(false);
   const shipTelemetryLastLogMsRef = useRef(0);
@@ -2160,25 +2158,14 @@ export default function ResumeSpace3D({
   } | null>(null);
   const telemetryLastNonZeroSpeedRef = useRef(0);
   const telemetryLastNonZeroAtRef = useRef(0);
-  const starDestroyerIntroFlybyRef = useRef<{
-    active: boolean;
-    startAt: number;
-    durationMs: number;
-    holdMs: number;
-    holdEndAt: number;
-    startPos: THREE.Vector3;
-    endPos: THREE.Vector3;
-  }>({
-    active: false,
-    startAt: 0,
-    durationMs: 15000,
-    holdMs: 1000,
-    holdEndAt: 0,
-    startPos: new THREE.Vector3(),
-    endPos: new THREE.Vector3(),
-  });
   const [followingStarDestroyer, setFollowingStarDestroyer] = useState(false);
   const followingStarDestroyerRef = useRef(false);
+  const shadowSDModeRef = useRef(false);
+  const shadowSDLastTargetRef = useRef<THREE.Vector3 | null>(null);
+  const shadowSDPrevControlLimitsRef = useRef<{
+    minDistance: number;
+    maxDistance: number;
+  } | null>(null);
 
   const formatNavTargetLabel = useCallback(
     (targetId: string): string => {
@@ -5073,6 +5060,105 @@ export default function ResumeSpace3D({
     vlog("🔺 Disengaged from Star Destroyer escort");
   }, [vlog]);
 
+  const engageShadowSD = useCallback(
+    (source: "console" | "tool" | "system" = "system") => {
+      const sd = starDestroyerRef.current;
+      const controls = sceneRef.current.controls;
+      const camera = sceneRef.current.camera;
+      if (!sd || !controls || !camera) {
+        shipLog("shadowSD() unavailable — SD or camera not ready", "error");
+        return false;
+      }
+
+      const sdPos = new THREE.Vector3();
+      sd.getWorldPosition(sdPos);
+      if (!shadowSDModeRef.current) {
+        if (!shadowSDPrevControlLimitsRef.current) {
+          shadowSDPrevControlLimitsRef.current = {
+            minDistance: controls.minDistance,
+            maxDistance: controls.maxDistance,
+          };
+        }
+        // Cancel cinematic camera tweens so shadowSD has full control immediately.
+        cameraDirectorRef.current?.stop();
+
+        // Start fairly close to SD for a dramatic lock-on.
+        const sdBack = new THREE.Vector3(0, 0, -1)
+          .applyQuaternion(sd.quaternion)
+          .normalize();
+        const sdUp = new THREE.Vector3(0, 1, 0)
+          .applyQuaternion(sd.quaternion)
+          .normalize();
+        const sdRight = new THREE.Vector3(1, 0, 0)
+          .applyQuaternion(sd.quaternion)
+          .normalize();
+        camera.position
+          .copy(sdPos)
+          .addScaledVector(sdBack, 36)
+          .addScaledVector(sdUp, 10)
+          .addScaledVector(sdRight, 8);
+      }
+
+      shadowSDModeRef.current = true;
+      shadowSDLastTargetRef.current = sdPos.clone();
+      followingSpaceshipRef.current = false;
+      setFollowingSpaceship(false);
+      insideShipRef.current = false;
+      setInsideShip(false);
+      setShipViewMode("exterior");
+      shipViewModeRef.current = "exterior";
+
+      controls.enabled = true;
+      controls.minDistance = 5;
+      controls.maxDistance = 2200;
+      controls.setLookAt(
+        camera.position.x,
+        camera.position.y,
+        camera.position.z,
+        sdPos.x,
+        sdPos.y,
+        sdPos.z,
+        false,
+      );
+
+      shipLog("shadowSD engaged — camera locked to Star Destroyer", "info");
+      if (source === "console") {
+        console.log("🔺 shadowSD engaged — camera now follows Star Destroyer");
+        console.log("   Orbit drag to change angle, scroll to zoom");
+      }
+      return true;
+    },
+    [setFollowingSpaceship, setInsideShip, shipLog],
+  );
+
+  const disengageShadowSD = useCallback(
+    (source: "console" | "tool" | "system" = "system") => {
+      if (!shadowSDModeRef.current) {
+        if (source === "console") {
+          console.log("⚠️ unShadowSD() ignored — shadowSD not active");
+        }
+        return false;
+      }
+
+      shadowSDModeRef.current = false;
+      shadowSDLastTargetRef.current = null;
+      const controls = sceneRef.current.controls;
+      const prev = shadowSDPrevControlLimitsRef.current;
+      if (controls && prev) {
+        controls.minDistance = prev.minDistance;
+        controls.maxDistance = prev.maxDistance;
+      }
+      shadowSDPrevControlLimitsRef.current = null;
+
+      shipLog("shadowSD disengaged", "info");
+      if (source === "console") {
+        console.log("🔺 unShadowSD complete — SD camera lock released");
+      }
+      return true;
+    },
+    [shipLog],
+  );
+
   const handleStarDestroyerClick = useCallback(() => {
     // Only allow when aboard the Falcon
     if (!followingSpaceshipRef.current && !insideShipRef.current) {
@@ -5108,6 +5194,8 @@ export default function ResumeSpace3D({
     return [
       { id: "locate-falcon", label: "locateFalcon()", hint: "Beacon to Millennium Falcon", onRun: () => invoke("locateFalcon") },
       { id: "locate-sd", label: "locateSD()", hint: "Beacon to Star Destroyer", onRun: () => invoke("locateSD") },
+      { id: "shadow-sd", label: "shadowSD()", hint: "Lock camera to Star Destroyer", onRun: () => invoke("shadowSD") },
+      { id: "unshadow-sd", label: "unShadowSD()", hint: "Release SD camera lock", onRun: () => invoke("unShadowSD") },
       { id: "sd-status", label: "sdStatus()", hint: "Print SD status to console", onRun: () => invoke("sdStatus") },
       { id: "sd-on", label: "sdAutonomyOn()", hint: "Enable SD autonomy", onRun: () => invoke("sdAutonomyOn") },
       { id: "sd-off", label: "sdAutonomyOff()", hint: "Disable SD autonomy", onRun: () => invoke("sdAutonomyOff") },
@@ -6960,6 +7048,78 @@ export default function ResumeSpace3D({
   }, [navigationDistance, sceneReady, shipLog, vlog]);
 
   useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
+    let last = performance.now();
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const cruiser = starDestroyerCruiserRef.current;
+      if (!cruiser) return;
+
+      const now = performance.now();
+      const dt = Math.min((now - last) / 1000, 0.08);
+      last = now;
+
+      // While Skills mode is actively pinning the SD to its scripted patrol,
+      // skip cruiser autonomy updates to avoid two systems fighting over pose.
+      if (skillsSDLockActiveRef.current) return;
+
+      cruiser.update(dt);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [sceneReady]);
+
+  useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
+    const sdPos = new THREE.Vector3();
+    const prevSdPos = new THREE.Vector3();
+    const delta = new THREE.Vector3();
+
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (!shadowSDModeRef.current) return;
+
+      const sd = starDestroyerRef.current;
+      const camera = sceneRef.current.camera;
+      const controls = sceneRef.current.controls;
+      if (!sd || !camera || !controls) return;
+
+      sd.getWorldPosition(sdPos);
+      const last = shadowSDLastTargetRef.current;
+      if (last) {
+        prevSdPos.copy(last);
+        delta.copy(sdPos).sub(prevSdPos);
+        if (delta.lengthSq() > 1e-9) {
+          camera.position.add(delta);
+        }
+      }
+
+      controls.minDistance = 5;
+      controls.maxDistance = 2200;
+      controls.setLookAt(
+        camera.position.x,
+        camera.position.y,
+        camera.position.z,
+        sdPos.x,
+        sdPos.y,
+        sdPos.z,
+        false,
+      );
+
+      if (!shadowSDLastTargetRef.current) {
+        shadowSDLastTargetRef.current = sdPos.clone();
+      } else {
+        shadowSDLastTargetRef.current.copy(sdPos);
+      }
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [sceneReady]);
+
+  useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
     const pickNodeAtPointer = (clientX: number, clientY: number) => {
@@ -7192,134 +7352,6 @@ export default function ResumeSpace3D({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [isLoading, sceneReady]);
-
-  useEffect(() => {
-    if (isLoading || !sceneReady) return;
-    if (!ENABLE_STAR_DESTROYER_INTRO_FLYBY) {
-      starDestroyerIntroFlybyPlayedRef.current = true;
-      starDestroyerIntroFlybyRef.current.active = false;
-      return;
-    }
-    if (starDestroyerIntroFlybyPlayedRef.current) return;
-    let raf = 0;
-    const camDir = new THREE.Vector3();
-    const camUp = new THREE.Vector3();
-    const camRight = new THREE.Vector3();
-    const p = new THREE.Vector3();
-    const lookTarget = new THREE.Vector3();
-    const lookMat = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const tick = () => {
-      const sd = starDestroyerRef.current;
-      const camera = sceneRef.current.camera;
-      if (sd && camera) {
-        if (!cosmosIntroCompletedRef.current) {
-          raf = requestAnimationFrame(tick);
-          return;
-        }
-        const flyby = starDestroyerIntroFlybyRef.current;
-        if (!flyby.active) {
-          camera.getWorldDirection(camDir);
-          camUp.copy(camera.up).normalize();
-          camRight.crossVectors(camDir, camUp).normalize();
-          flyby.startPos
-            .copy(camera.position)
-            .addScaledVector(camDir, 900)
-            .addScaledVector(camUp, 40)
-            .addScaledVector(camRight, 210);
-          flyby.endPos
-            .copy(camera.position)
-            .addScaledVector(camDir, -320)
-            .addScaledVector(camUp, -24)
-            .addScaledVector(camRight, -170);
-          sd.position.copy(flyby.startPos);
-          sd.visible = true;
-          const readabilityKey = sd.userData.readabilityKey as THREE.PointLight | undefined;
-          const readabilityRim = sd.userData.readabilityRim as THREE.PointLight | undefined;
-          if (readabilityKey) readabilityKey.intensity = 1.8;
-          if (readabilityRim) readabilityRim.intensity = 1.35;
-          flyby.startAt = performance.now();
-          flyby.durationMs = 14000;
-          flyby.holdEndAt = 0;
-          flyby.active = true;
-          starDestroyerIntroFlybyPlayedRef.current = true;
-          vlog("🔺 SD intro flyby started");
-          shipLog("SD flyby started", "info");
-        }
-        if (flyby.active) {
-          const nowMs = performance.now();
-          const tLinear = THREE.MathUtils.clamp(
-            (nowMs - flyby.startAt) / Math.max(1, flyby.durationMs),
-            0,
-            1,
-          );
-          // Dynamically seek the camera forward axis so the flyby stays centered
-          // even if camera framing changes while the intro is running.
-          camera.getWorldDirection(camDir);
-          camUp.copy(camera.up).normalize();
-          camRight.crossVectors(camDir, camUp).normalize();
-          const passPoint = camera.position
-            .clone()
-            .addScaledVector(camDir, -36)
-            .addScaledVector(camUp, -2)
-            .addScaledVector(camRight, 0);
-          const exitPoint = passPoint
-            .clone()
-            .addScaledVector(camDir, -360)
-            .addScaledVector(camUp, -20)
-            .addScaledVector(camRight, -90);
-          if (tLinear < 0.82) {
-            const tApproach = tLinear / 0.82;
-            p.lerpVectors(flyby.startPos, passPoint, tApproach);
-          } else {
-            const tExit = (tLinear - 0.82) / 0.18;
-            p.lerpVectors(passPoint, exitPoint, tExit);
-          }
-          lookTarget
-            .copy(p)
-            .add(
-              (tLinear < 0.82 ? passPoint : exitPoint)
-                .clone()
-                .sub(p)
-                .normalize()
-                .multiplyScalar(1400),
-            );
-          lookMat.lookAt(p, lookTarget, new THREE.Vector3(0, 1, 0));
-          q.setFromRotationMatrix(lookMat);
-          const forwardOffset = sd.userData?.forwardOffset as THREE.Quaternion | undefined;
-          if (forwardOffset) q.multiply(forwardOffset);
-          sd.position.copy(p);
-          sd.quaternion.copy(q);
-          if (tLinear >= 1) {
-            if (flyby.holdEndAt === 0) {
-              flyby.holdEndAt = nowMs + flyby.holdMs;
-            }
-            if (nowMs < flyby.holdEndAt) {
-              raf = requestAnimationFrame(tick);
-              return;
-            }
-            flyby.active = false;
-            // Hide SD after intro pass; it will be re-shown by Skills lock.
-            const readabilityKey = sd.userData.readabilityKey as THREE.PointLight | undefined;
-            const readabilityRim = sd.userData.readabilityRim as THREE.PointLight | undefined;
-            if (readabilityKey) readabilityKey.intensity = 0.1;
-            if (readabilityRim) readabilityRim.intensity = 0.08;
-            sd.visible = false;
-            vlog("🔺 SD intro flyby complete");
-            shipLog("SD flyby complete", "info");
-          }
-        }
-      }
-      if (!starDestroyerIntroFlybyPlayedRef.current || starDestroyerIntroFlybyRef.current.active) {
-        raf = requestAnimationFrame(tick);
-      }
-    };
-    raf = requestAnimationFrame(tick);
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-      starDestroyerIntroFlybyRef.current.active = false;
-    };
-  }, [isLoading, sceneReady, shipLog, vlog]);
 
   useEffect(() => {
     if (!projectShowcaseActive) return;
@@ -12056,7 +12088,7 @@ export default function ResumeSpace3D({
         starDestroyer.add(forwardLight);
 
         // Readability light rig: keeps hull details visible when SD is
-        // away from strong scene lights (especially during intro flyby).
+        // away from strong scene lights.
         const readabilityKey = new THREE.PointLight(0xe6efff, 0.22, 2200);
         readabilityKey.position.set(0, 120, -260);
         starDestroyer.add(readabilityKey);
@@ -12072,9 +12104,9 @@ export default function ResumeSpace3D({
         // Initialize the cruiser AI
         const cruiser = new StarDestroyerCruiser(starDestroyer);
         starDestroyerCruiserRef.current = cruiser;
-        // We keep SD under scene-script control (skills lock + intro flyby),
-        // so disable autonomous cruising by default.
-        cruiser.setEnabled(false);
+        // SD autonomy is enabled by default on universe startup.
+        // Scripted systems (e.g. Skills lock) temporarily override pose.
+        cruiser.setEnabled(true);
         if (starDestroyerSkillsSnapPendingRef.current) {
           placeStarDestroyerNearSkills();
         }
@@ -12179,10 +12211,12 @@ export default function ResumeSpace3D({
         (window as any).sdAutonomyOn = () => {
           cruiser.setEnabled(true);
           console.log("🔺 SD autonomy: ON");
+          shipLog("SD autonomy enabled", "system");
         };
         (window as any).sdAutonomyOff = () => {
           cruiser.setEnabled(false);
           console.log("🔺 SD autonomy: OFF");
+          shipLog("SD autonomy disabled", "system");
         };
 
         // ── Visual locate beacons ─────────────────────────────────
@@ -12299,6 +12333,12 @@ export default function ResumeSpace3D({
           if (!sd) { console.log("❌ Star Destroyer not loaded yet"); return; }
           createLocateBeacon(sd, 0xff4422, "Star Destroyer");
         };
+        (window as any).shadowSD = () => {
+          engageShadowSD("console");
+        };
+        (window as any).unShadowSD = () => {
+          disengageShadowSD("console");
+        };
 
         // ── Debug Camera Mode ────────────────────────────────────────
         // Console: debugCamera()  — enter free-flight debug mode
@@ -12392,6 +12432,10 @@ export default function ResumeSpace3D({
             return;
           }
           debugCamActive = true;
+
+          if (shadowSDModeRef.current) {
+            disengageShadowSD("system");
+          }
 
           // Disengage ship following
           followingSpaceshipRef.current = false;
@@ -14633,6 +14677,9 @@ export default function ResumeSpace3D({
         setFollowingStarDestroyer(false);
         followingStarDestroyerRef.current = false;
         vlog("🔺 Star Destroyer escort disengaged — navigating elsewhere");
+      }
+      if (shadowSDModeRef.current) {
+        disengageShadowSD("system");
       }
 
       switch (target) {
