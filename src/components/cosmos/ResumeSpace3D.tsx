@@ -18290,7 +18290,7 @@ export default function ResumeSpace3D({
               style={{
                 position: "fixed",
                 // Keep the toggle flush with the registry panel edge in both states.
-                right: orbitalRegistryPanelVisible ? 448 : 0,
+                right: orbitalRegistryPanelVisible ? 447 : -1,
                 top: 120,
                 zIndex: 1102,
                 width: 28,
