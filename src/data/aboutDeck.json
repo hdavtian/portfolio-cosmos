@@ -2,45 +2,45 @@
   "aboutDeck": {
     "slides": [
       {
-        "id": "foundation",
-        "holdMs": 9000,
+        "id": "who-i-am",
+        "holdMs": 9800,
         "explodeAfter": false,
         "reveal": {
           "pattern": "scanline",
-          "blockStaggerMs": 380,
-          "cellRevealMs": 1700
+          "blockStaggerMs": 340,
+          "cellRevealMs": 1600
         },
         "blocks": [
           {
             "type": "text",
             "title": "Who I Am",
-            "body": "Lead full stack engineer focused on clean architecture and dependable delivery."
+            "body": "Full stack engineer with a systems mindset. I help teams turn complex product ideas into software people rely on."
           },
           {
             "type": "image",
-            "title": "Build Mindset",
+            "title": "How I Work",
             "src": "/images/about/img1.jpg"
           },
           {
             "type": "text",
-            "title": "How I Work",
-            "body": "I turn ambiguity into execution plans teams can ship with confidence."
+            "title": "Execution Style",
+            "body": "I bring structure to ambiguity, align architecture with delivery, and keep communication clear from planning through release."
           },
           {
             "type": "image",
-            "title": "Team Focus",
+            "title": "Team Energy",
             "src": "/images/about/img2.jpg"
           }
         ]
       },
       {
-        "id": "impact",
-        "holdMs": 10000,
+        "id": "impact-and-proof",
+        "holdMs": 10400,
         "explodeAfter": true,
         "reveal": {
           "pattern": "center-out",
-          "blockStaggerMs": 420,
-          "cellRevealMs": 1900
+          "blockStaggerMs": 380,
+          "cellRevealMs": 1800
         },
         "blocks": [
           {
@@ -50,8 +50,8 @@
           },
           {
             "type": "text",
-            "title": "Execution",
-            "body": "From APIs to interfaces, I optimize for maintainability, speed, and outcomes."
+            "title": "End-to-End Delivery",
+            "body": "Across frontend, backend, and cloud, I focus on maintainability, observability, and stable releases under real production pressure."
           },
           {
             "type": "image",
@@ -60,25 +60,25 @@
           },
           {
             "type": "text",
-            "title": "Leadership",
-            "body": "I mentor engineers through architecture, debugging, and long-term ownership."
+            "title": "Team Multiplication",
+            "body": "I mentor engineers through architecture and debugging so teams move faster together, not just individually."
           }
         ]
       },
       {
-        "id": "vision",
-        "holdMs": 9000,
+        "id": "next-mission",
+        "holdMs": 12000,
         "explodeAfter": false,
         "reveal": {
           "pattern": "spiral",
-          "blockStaggerMs": 360,
-          "cellRevealMs": 1800
+          "blockStaggerMs": 320,
+          "cellRevealMs": 1700
         },
         "blocks": [
           {
             "type": "text",
-            "title": "North Star",
-            "body": "Build software people trust, and teams are proud to maintain."
+            "title": "What I Am Looking For",
+            "body": "I am looking for senior to lead-level full stack opportunities where I can own architecture, ship meaningful products, and grow strong engineering culture."
           },
           {
             "type": "image",
@@ -88,12 +88,12 @@
           {
             "type": "text",
             "title": "Principles",
-            "body": "Clarity before cleverness. Observability from day one. Users at the center."
+            "body": "Clarity before cleverness. Reliability from day one. Product outcomes over buzzwords."
           },
           {
-            "type": "image",
-            "title": "Craft",
-            "src": "/images/about/img2.jpg"
+            "type": "text",
+            "title": "Let us Connect",
+            "body": "If your team needs someone who can bridge product, architecture, and execution, I would love to talk."
           }
         ]
       }

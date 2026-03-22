@@ -7,6 +7,7 @@ import resumeData from "../../data/resume.json";
 import legacyWebsites from "../../data/legacyWebsites.json";
 import portfolioCores from "../../data/portfolioCores.json";
 import aboutDeck from "../../data/aboutDeck.json";
+import aboutHallwaySlides from "../../data/aboutHallwaySlides.json";
 import CosmosLoader from "../CosmosLoader";
 import {
   DEFAULT_CONTROL_SENSITIVITY,
@@ -320,14 +321,15 @@ const SKILLS_LATTICE_ENTRY_TRIGGER_DIST = 1800;
 const SKILLS_SD_PATROL_RADIUS = 150;
 const SKILLS_SD_PATROL_SPEED = 0.03;
 const PROJECT_SHOWCASE_FILTER_OPTIONS = [
-  "Angular",
-  "C#",
-  "Java",
-  "JavaScript",
-  "TypeScript",
+  "Story",
+  "Architecture",
+  "Delivery",
   "React",
-  "Node",
+  "TypeScript",
+  "C#",
+  "Cloud",
 ] as const;
+const PROJECT_SHOWCASE_CTA_ENTRY_ID = "story-next-mission";
 const PROJECT_SHOWCASE_MAX_MEDIA_ITEMS = 12;
 const PROJECT_SHOWCASE_THUMBS_PER_PAGE = 4;
 const DEFAULT_BACKGROUND_MUSIC_TRACK = Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
@@ -1116,6 +1118,16 @@ export default function ResumeSpace3D({
 }: ResumeSpace3DProps) {
   const aboutDeckData = aboutDeck as AboutDeckData;
   const aboutSlides = aboutDeckData.aboutDeck.slides;
+  const projectShowcaseEntries = useMemo(() => {
+    const storyEntries = (aboutHallwaySlides as ShowcaseEntry[]).filter(
+      (entry) => (entry as { published?: boolean }).published !== false,
+    );
+    if (storyEntries.length > 0) return storyEntries;
+    const legacyPublished = (legacyWebsites as ShowcaseEntry[]).filter(
+      (entry) => (entry as { published?: boolean }).published !== false,
+    );
+    return legacyPublished.slice(0, 4);
+  }, []);
   // EXPORT SURFACE
   // Props: options, onOptionsChange
   // Emits: onOptionsChange (options sync)
@@ -1631,9 +1643,7 @@ export default function ResumeSpace3D({
           });
         }
 
-        const showcaseImageJobs = (legacyWebsites as ShowcaseEntry[])
-          .filter((entry) => (entry as { published?: boolean }).published !== false)
-          .flatMap((entry) => {
+        const showcaseImageJobs = projectShowcaseEntries.flatMap((entry) => {
             const variants =
               (entry.clientVariants ?? []).filter((variant) => !!variant?.title) ?? [];
             const items =
@@ -1644,6 +1654,34 @@ export default function ResumeSpace3D({
                 : resolveShowcaseMediaItems(entry);
             return items.map((item) => loadTextureSafe(item.textureUrl));
           });
+        const portfolioCoreImageJobs = (() => {
+          const urls = new Set<string>();
+          const visit = (value: unknown) => {
+            if (!value) return;
+            if (Array.isArray(value)) {
+              value.forEach(visit);
+              return;
+            }
+            if (typeof value !== "object") return;
+            Object.entries(value as Record<string, unknown>).forEach(([key, nested]) => {
+              if (
+                (key === "image" || key === "thumbnail") &&
+                typeof nested === "string" &&
+                nested.trim().length > 0
+              ) {
+                urls.add(nested.trim());
+                return;
+              }
+              visit(nested);
+            });
+          };
+          visit(portfolioCores);
+          debugLog(
+            "project-showcase",
+            `[textures] portfolio core preload urls=${urls.size}`,
+          );
+          return Array.from(urls).map((textureUrl) => loadTextureSafe(textureUrl));
+        })();
         const moonTextureWarmupJobs = Array.from(
           new Set(Object.values(EXPERIENCE_MOON_TEXTURE_BY_JOB_ID)),
         ).map((textureUrl) => loadTextureSafe(textureUrl));
@@ -1683,6 +1721,7 @@ export default function ResumeSpace3D({
         await Promise.all([
           ...trenchTextureJobs,
           ...showcaseImageJobs,
+          ...portfolioCoreImageJobs,
           ...moonTextureWarmupJobs,
           ...musicTrackWarmupJobs,
         ]);
@@ -3330,9 +3369,15 @@ export default function ResumeSpace3D({
     projectShowcaseFocusIndexRef.current = safeIndex;
     if (previousIndex !== safeIndex) {
       panels[safeIndex]?.setActiveVariant(0);
+      if (projectShowcaseActiveRef.current) {
+        const title = panels[safeIndex]?.entry?.title;
+        if (title) {
+          onScreenMessage(`Hallway marker: ${title}`, { durationMs: 1600 });
+        }
+      }
     }
     setProjectShowcaseFocusIndex(safeIndex);
-  }, []);
+  }, [onScreenMessage]);
 
   const setProjectShowcaseRunPosition = useCallback((runPos: number) => {
     projectShowcaseRunPosRef.current = runPos;
@@ -8163,6 +8208,12 @@ export default function ResumeSpace3D({
             Math.sign(lever) * Math.pow(Math.abs(lever), 1.35);
           targetVelocity = shapedLever * maxManualSpeed;
         }
+        const focusedPanel =
+          projectShowcasePanelsRef.current[projectShowcaseFocusIndexRef.current];
+        const focusedIsCta = focusedPanel?.entry?.id === PROJECT_SHOWCASE_CTA_ENTRY_ID;
+        if (focusedIsCta && !projectShowcaseLeverDraggingRef.current) {
+          targetVelocity *= projectShowcasePlayingRef.current ? 0.45 : 0.28;
+        }
         const wheelRecent =
           performance.now() - projectShowcaseWheelLastInputAtRef.current < 620;
         const velocitySmooth = projectShowcaseLeverDraggingRef.current
@@ -8222,6 +8273,7 @@ export default function ResumeSpace3D({
       );
       projectShowcasePanelsRef.current.forEach((panel, idx) => {
         const target = idx === focusIndex ? 1 : 0;
+        const focusedCta = idx === focusIndex && panel.entry.id === PROJECT_SHOWCASE_CTA_ENTRY_ID;
         panel.focusBlend = THREE.MathUtils.damp(panel.focusBlend, target, 8, dt);
         const toFrontDelta = Math.atan2(
           Math.sin(panel.frontFacingRotationY - panel.inwardRotationY),
@@ -8231,7 +8283,10 @@ export default function ResumeSpace3D({
           panel.inwardRotationY +
           toFrontDelta * angleT;
         panel.group.scale.setScalar(1);
-        panel.frameMat.opacity = 0.22 + panel.focusBlend * 0.26;
+        panel.frameMat.opacity = 0.22 + panel.focusBlend * (focusedCta ? 0.4 : 0.26);
+        panel.frameMat.color.setHex(
+          focusedCta ? 0xbef4ff : idx === focusIndex ? 0x91ddff : 0x72c6ff,
+        );
         const fadeElapsedMs = now - panel.mediaFadeStartMs;
         if (fadeElapsedMs < panel.mediaFadeDurationMs) {
           panel.imageMat.opacity = THREE.MathUtils.clamp(
@@ -13722,9 +13777,7 @@ export default function ResumeSpace3D({
           showcaseRoot.add(showcaseAmbient, showcaseKey, showcaseRim);
         }
 
-        const publishedShowcase = (legacyWebsites as ShowcaseEntry[]).filter(
-          (entry) => (entry as { published?: boolean }).published !== false,
-        );
+        const publishedShowcase = projectShowcaseEntries;
 
         const runAxis: "x" | "z" =
           trenchSizeScaled.z >= trenchSizeScaled.x ? "z" : "x";
@@ -13923,7 +13976,7 @@ export default function ResumeSpace3D({
               : mediaItems.length;
           const hasGalleryMedia =
             !hasSingleMediaNoVariants && initialVariantMediaCount > 1;
-          const panelVerticalOffset = hasGalleryMedia ? -0.2 : 0;
+          const panelVerticalOffset = hasGalleryMedia ? 0.32 : 0.48;
           if (runAxis === "z") {
             panelGroup.position.set(
               0,
@@ -14089,8 +14142,14 @@ export default function ResumeSpace3D({
             imagePlane.scale.set(displayWidth, displayHeight, 1);
           };
           applyImageFit();
-          const detailWidth = panelWidth * 0.44;
-          const stripWidth = panelWidth + detailWidth;
+          const detailWidth = panelWidth * 0.94;
+          const stripWidth = detailWidth;
+          const detailHeight = panelHeight * 0.56;
+          const stackGap = panelHeight * 0.08;
+          const imageLiftY = detailHeight * 0.58 + stackGap;
+          const detailCenterY = -panelHeight * 0.5 - stackGap - detailHeight * 0.5;
+          frame.position.y = imageLiftY;
+          imagePlane.position.y = imageLiftY;
           const detailTextureOpts = {
             // Match the narrower detail panel aspect to avoid stretched typography.
             width: 800,
@@ -14191,7 +14250,7 @@ export default function ResumeSpace3D({
           const techBadgeRoot = new THREE.Group();
           const imageSeamX = side < 0 ? -panelWidth * 0.5 : panelWidth * 0.5;
           const imageInward = side < 0 ? 1 : -1;
-          techBadgeRoot.position.set(imageSeamX, 0, 0.16);
+          techBadgeRoot.position.set(imageSeamX, imageLiftY, 0.16);
           techBadgeRoot.visible = false;
           techBadgeRoot.renderOrder = 160;
           panelRecord.techBadgeRoot = techBadgeRoot;
@@ -14286,10 +14345,10 @@ export default function ResumeSpace3D({
           const categoryBarHeight = panelHeight * 0.09;
           const tabRowHeight = panelHeight * 0.098;
           const tabAreaHeight = categoryBarHeight + tabRowHeight;
-          const tabAreaCenterX = side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
+          const tabAreaCenterX = 0;
           tabsRoot.position.set(
             tabAreaCenterX,
-            panelHeight * 0.5 + tabAreaHeight * 0.5,
+            detailCenterY + detailHeight * 0.5 + tabAreaHeight * 0.5 + panelHeight * 0.06,
             0.03,
           );
           tabsRoot.renderOrder = 120;
@@ -14494,10 +14553,10 @@ export default function ResumeSpace3D({
 
           const thumbnailRoot = new THREE.Group();
           const stripHeight = panelHeight * 0.28;
-          const stripCenterX = side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
+          const stripCenterX = 0;
           thumbnailRoot.position.set(
             stripCenterX,
-            -(panelHeight * 0.5 + stripHeight * 0.5),
+            detailCenterY - detailHeight * 0.5 - stripHeight * 0.5 - panelHeight * 0.07,
             0.02,
           );
           const stripGlass = new THREE.Mesh(
@@ -15001,17 +15060,14 @@ export default function ResumeSpace3D({
           panelGroup.add(imagePlane);
           panelGroup.add(techBadgeRoot);
           const detailMat = panelRecord.detailMat;
-          const detailHeight = panelHeight;
           const detailPlane = new THREE.Mesh(
             new THREE.PlaneGeometry(detailWidth, detailHeight),
             detailMat,
           );
           panelRecord.detailMesh = detailPlane;
           detailPlane.position.set(
-            side < 0
-              ? -(panelWidth * 0.5 + detailWidth * 0.5)
-              : panelWidth * 0.5 + detailWidth * 0.5,
             0,
+            detailCenterY,
             -0.02,
           );
           const detailScrollTrack = new THREE.Mesh(
@@ -15024,8 +15080,8 @@ export default function ResumeSpace3D({
             }),
           );
           detailScrollTrack.position.set(
-            detailPlane.position.x + (side < 0 ? -1 : 1) * (detailWidth * 0.46),
-            0,
+            detailPlane.position.x + detailWidth * 0.476,
+            detailCenterY,
             detailPlane.position.z + 0.012,
           );
           const detailScrollThumb = new THREE.Mesh(
@@ -15054,12 +15110,18 @@ export default function ResumeSpace3D({
           );
           detailFrame.position.copy(detailPlane.position);
           detailFrame.position.z -= 0.04;
-          const extraTopHeight = showVariantTabs ? tabAreaHeight : 0;
-          const stripContribution = panelHasAnyThumbStrip ? stripHeight : 0;
+          const detailTop = detailCenterY + detailHeight * 0.5;
+          const detailBottom = detailCenterY - detailHeight * 0.5;
+          const tabsTop = tabsRoot.position.y + tabAreaHeight * 0.5;
+          const stripBottom = thumbnailRoot.position.y - stripHeight * 0.5;
+          const moduleTop = showVariantTabs ? tabsTop : detailTop;
+          const moduleBottom = panelHasAnyThumbStrip ? stripBottom : detailBottom;
+          const moduleHeight = (moduleTop - moduleBottom) * 1.01;
+          const moduleCenterY = (moduleTop + moduleBottom) * 0.5;
           const moduleFrame = new THREE.Mesh(
             new THREE.PlaneGeometry(
               stripWidth * 1.015,
-              (detailHeight + stripContribution + extraTopHeight) * 1.01,
+              moduleHeight,
             ),
             new THREE.MeshBasicMaterial({
               color: 0x39d7ff,
@@ -15070,7 +15132,7 @@ export default function ResumeSpace3D({
           );
           moduleFrame.position.set(
             stripCenterX,
-            (extraTopHeight - stripContribution) * 0.5,
+            moduleCenterY,
             -0.06,
           );
           panelGroup.add(detailPlane);
@@ -15282,7 +15344,7 @@ export default function ResumeSpace3D({
       const projectsPlanetData: PlanetData = {
         name: "Projects",
         position: projectsAnchor.clone(),
-        data: legacyWebsites,
+        data: projectShowcaseEntries,
       };
       const portfolioPlanetData: PlanetData = {
         name: "Portfolio",

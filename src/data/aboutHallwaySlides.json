@@ -1,0 +1,42 @@
+[
+  {
+    "id": "story-who-i-am",
+    "title": "Who I Am",
+    "image": "/images/about/img1.jpg",
+    "description": "I am a full stack engineer with a systems mindset. I enjoy turning ambiguous ideas into clear plans, then shipping dependable software with teams that care about quality.",
+    "technologies": ["Architecture", "Delivery", "Mentorship"],
+    "year": 2026,
+    "fit": "cover",
+    "published": true
+  },
+  {
+    "id": "story-how-i-work",
+    "title": "How I Work",
+    "image": "/images/about/img3.jpg",
+    "description": "I focus on practical architecture, observable systems, and clear communication. My goal is to make delivery predictable without slowing teams down.",
+    "technologies": ["System Design", "Reliability", "Product Thinking"],
+    "year": 2026,
+    "fit": "cover",
+    "published": true
+  },
+  {
+    "id": "story-selected-work",
+    "title": "Selected Work Snapshot",
+    "image": "/images/investcloud/taffie/taffie-1.jpg",
+    "description": "Recent work includes enterprise automation platforms, modern React/Angular interfaces, scalable APIs, and cloud deployment pipelines used by cross-functional teams.",
+    "technologies": ["React", "Angular", "TypeScript", "C#", "Java", "Azure"],
+    "year": 2025,
+    "fit": "contain",
+    "published": true
+  },
+  {
+    "id": "story-next-mission",
+    "title": "Open To New Mission",
+    "image": "/images/about/img5.jpg",
+    "description": "I am open to senior and lead full stack roles where I can own architecture, help teams execute, and deliver products people trust. Reach out if that matches your team.",
+    "technologies": ["Full Stack", "Architecture", "Team Enablement"],
+    "year": 2026,
+    "fit": "cover",
+    "published": true
+  }
+]

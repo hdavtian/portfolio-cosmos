@@ -1,38 +1,38 @@
 {
   "aboutContent": {
-    "headline": "I build systems people trust.",
-    "subline": "Lead full stack engineer focused on resilient platforms, clear product outcomes, and teams that move fast without breaking quality.",
-    "bioShort": "I work across frontend, backend, and platform architecture to turn complex business goals into stable, maintainable software. I enjoy owning ambiguous problems, shaping practical technical direction, and helping teams execute with confidence.",
-    "locationLine": "Based in Los Angeles, collaborating globally.",
+    "headline": "I build software that earns trust in production.",
+    "subline": "Full stack engineer focused on architecture, delivery, and pragmatic leadership across product, platform, and teams.",
+    "bioShort": "I work across frontend, backend, and cloud systems to turn ambiguous goals into software that ships, scales, and stays maintainable. I care about clear communication, practical design decisions, and helping teams deliver with confidence.",
+    "locationLine": "Based in Los Angeles, open to on-site, hybrid, and remote collaboration.",
     "principles": [
       "Design for clarity before cleverness",
       "Favor observability and reliability from day one",
-      "Keep users and teammates in the loop"
+      "Keep users, stakeholders, and teammates aligned"
     ],
     "cards": [
       {
         "id": "architect",
-        "title": "Systems Architect",
-        "body": "From APIs to UI state boundaries, I design systems that scale cleanly and stay understandable months later.",
+        "title": "Systems Design",
+        "body": "From API boundaries to UI state, I design systems that stay understandable and resilient as products evolve.",
         "image": "/images/about/architect.jpg",
         "revealPattern": "center-out",
-        "durationMs": 9000
+        "durationMs": 9200
       },
       {
         "id": "builder",
-        "title": "Product Builder",
-        "body": "I turn vague requirements into shipped features with measurable impact, balancing speed, quality, and maintainability.",
+        "title": "Product Delivery",
+        "body": "I turn vague requirements into shipped features while balancing speed, quality, and long-term maintainability.",
         "image": "/images/about/builder.jpg",
         "revealPattern": "scanline",
-        "durationMs": 8500
+        "durationMs": 8800
       },
       {
         "id": "mentor",
-        "title": "Technical Leader",
-        "body": "I mentor engineers through architecture, debugging, and delivery practices that raise the baseline for the whole team.",
+        "title": "Team Leadership",
+        "body": "I mentor engineers through architecture and debugging practices that raise delivery confidence across the whole team.",
         "image": "/images/about/mentor.jpg",
         "revealPattern": "spiral",
-        "durationMs": 10000
+        "durationMs": 9800
       },
       {
         "id": "optimizer",
@@ -40,8 +40,15 @@
         "body": "I care deeply about production behavior: instrumentation, bottleneck removal, and systems that stay calm under load.",
         "image": "/images/about/reliability.jpg",
         "revealPattern": "noise-cluster",
-        "durationMs": 9000
+        "durationMs": 9400
       }
-    ]
+    ],
+    "proofPoints": [
+      "Built and led end-to-end web platforms spanning UI, APIs, cloud services, and CI/CD.",
+      "Delivered automation and product systems used by global teams in enterprise environments.",
+      "Improved team velocity through architecture guidance, code standards, and mentoring.",
+      "Comfortable owning both technical direction and hands-on delivery."
+    ],
+    "callToAction": "Open to senior and lead full stack roles where architecture quality and product impact both matter."
   }
 }

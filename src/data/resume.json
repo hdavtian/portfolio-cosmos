@@ -1,12 +1,12 @@
 {
   "personal": {
     "name": "Harma Davtian",
-    "title": "Lead Full Stack Engineer",
+    "title": "Full Stack Engineer",
     "email": "harma.davtian@gmail.com",
     "phone": "818.632.1804",
     "location": "Glendale, CA 91208"
   },
-  "summary": "Lead Full Stack Engineer with experience designing and delivering end-to-end web platforms using Angular, React, and TypeScript, supported by backend services in C#, Java, and Node.js, in the cloud. Known for integrating across frontend, APIs, databases, messaging, CI/CD, and infrastructure to build cohesive systems. Product-minded leader and mentor with strong focus on architecture, scalability, and delivery.",
+  "summary": "Full stack engineer with deep experience designing and delivering end-to-end web platforms using Angular, React, and TypeScript, supported by backend services in C#, Java, and Node.js across cloud environments. Known for connecting frontend, APIs, data, messaging, CI/CD, and infrastructure into cohesive systems that are maintainable and reliable. Product-minded collaborator focused on architecture quality, team execution, and delivery outcomes.",
   "skills": {
     "Frontend": ["Angular", "React", "TypeScript", "JavaScript"],
     "Backend": ["C#", "Java", "Node.js", "REST APIs"],
