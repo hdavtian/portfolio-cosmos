@@ -152,6 +152,7 @@ const ORBITAL_PORTFOLIO_CARD_MAX_THUMBS = 6;
 const ORBITAL_PORTFOLIO_STATION_ORBIT_SPEED = 0.16;
 const ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE = 148;
 const ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE = 70;
+const ORBITAL_PORTFOLIO_INSPECT_ZOOM_OUT_MULTIPLIER = 1.05;
 // Quick flip between drone visuals for moon visits.
 const MOON_VISIT_DRONE_VARIANT: DroneVisualVariant = "oblivion";
 // Temporary diagnostic switch: disable drone entry calls to isolate orbit pauses.
@@ -404,6 +405,11 @@ type OrbitalPortfolioStationRecord = {
     mediaIndex: number;
   }>;
   cardThumbNavMeshes: Array<{
+    mesh: THREE.Mesh;
+    frame: THREE.Mesh;
+    direction: "prev" | "next";
+  }>;
+  cardSlideNavMeshes: Array<{
     mesh: THREE.Mesh;
     frame: THREE.Mesh;
     direction: "prev" | "next";
@@ -1703,7 +1709,6 @@ export default function ResumeSpace3D({
   const [orbitalPortfolioReady, setOrbitalPortfolioReady] = useState(false);
   const [orbitalPortfolioActive, setOrbitalPortfolioActive] = useState(false);
   const orbitalPortfolioActiveRef = useRef(false);
-  const [orbitalPortfolioPlaying, setOrbitalPortfolioPlaying] = useState(true);
   const orbitalPortfolioPlayingRef = useRef(true);
   const [orbitalPortfolioOrbitsEnabled, setOrbitalPortfolioOrbitsEnabled] = useState(true);
   const orbitalPortfolioOrbitsEnabledRef = useRef(true);
@@ -1726,9 +1731,7 @@ export default function ResumeSpace3D({
   const [orbitalPortfolioTechFilter, setOrbitalPortfolioTechFilter] = useState("all");
   const [orbitalPortfolioFocusedCoreId, setOrbitalPortfolioFocusedCoreId] = useState("");
   const orbitalPortfolioFocusedCoreIdRef = useRef("");
-  const [orbitalRegistryExpandedCoreIds, setOrbitalRegistryExpandedCoreIds] = useState<
-    Record<string, boolean>
-  >({});
+  const [orbitalRegistrySelectedCoreId, setOrbitalRegistrySelectedCoreId] = useState("");
   const [orbitalRegistryPanelVisible, setOrbitalRegistryPanelVisible] = useState(true);
   const orbitalPortfolioLastViewedRef = useRef<{
     focusIndex: number | null;
@@ -1764,7 +1767,11 @@ export default function ResumeSpace3D({
   const orbitalPortfolioPendingInspectRequestRef = useRef<{
     stationIndex: number;
     mediaIndex?: number;
-    options?: { autoplay?: boolean; variantIndex?: number };
+    options?: {
+      autoplay?: boolean;
+      variantIndex?: number;
+      enforceCanonicalInspectDistance?: boolean;
+    };
   } | null>(null);
   const orbitalPortfolioIgnoreManualUntilRef = useRef(0);
   const orbitalPortfolioInspectedStationIndexRef = useRef<number | null>(null);
@@ -3689,14 +3696,13 @@ export default function ResumeSpace3D({
     orbitalPortfolioPlayingRef.current = true;
     orbitalPortfolioOrbitsEnabledRef.current = true;
     orbitalPortfolioAutoplayEnabledRef.current = false;
-    setOrbitalPortfolioPlaying(true);
     setOrbitalPortfolioOrbitsEnabled(true);
     setOrbitalPortfolioAutoplayEnabled(false);
     setOrbitalPortfolioSearchQuery("");
     setOrbitalPortfolioYearFilter("all");
     setOrbitalPortfolioTechFilter("all");
     setOrbitalPortfolioFocusedCoreId("");
-    setOrbitalRegistryExpandedCoreIds({});
+    setOrbitalRegistrySelectedCoreId("");
     setOrbitalRegistryPanelVisible(true);
     orbitalPortfolioFocusIndexRef.current = 0;
     setOrbitalPortfolioFocusIndex(0);
@@ -3832,19 +3838,12 @@ export default function ResumeSpace3D({
     orbitalPortfolioPlayingRef.current = true;
     orbitalPortfolioOrbitsEnabledRef.current = true;
     orbitalPortfolioAutoplayEnabledRef.current = false;
-    setOrbitalPortfolioPlaying(true);
     setOrbitalPortfolioOrbitsEnabled(true);
     setOrbitalPortfolioAutoplayEnabled(false);
     setOrbitalPortfolioSearchQuery("");
     setOrbitalPortfolioYearFilter("all");
     setOrbitalPortfolioTechFilter("all");
-    {
-      const collapsedState: Record<string, boolean> = {};
-      orbitalPortfolioCoreViewsRef.current.forEach((core) => {
-        collapsedState[core.id] = false;
-      });
-      setOrbitalRegistryExpandedCoreIds(collapsedState);
-    }
+    setOrbitalRegistrySelectedCoreId(orbitalPortfolioCoreViewsRef.current[0]?.id ?? "");
     orbitalPortfolioFocusIndexRef.current = 0;
     setOrbitalPortfolioFocusIndex(0);
     setOrbitalPortfolioHasActiveFocus(false);
@@ -3879,21 +3878,6 @@ export default function ResumeSpace3D({
     vlog("✨ Entered Orbital Portfolio");
   }, [orbitalPortfolioReady, setOrbitalPortfolioManualLock, shipLog, vlog]);
 
-  const toggleOrbitalPortfolioPlayback = useCallback(() => {
-    const next = !orbitalPortfolioPlayingRef.current;
-    orbitalPortfolioPlayingRef.current = next;
-    setOrbitalPortfolioPlaying(next);
-    if (next) {
-      orbitalPortfolioInspectedStationIndexRef.current = null;
-      orbitalPortfolioInspectDistanceRef.current = null;
-      orbitalPortfolioInspectStartedAtRef.current = 0;
-      orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
-      setOrbitalPortfolioManualLock(false, "toggle-playback-resume");
-    } else {
-      orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 10000;
-    }
-  }, [setOrbitalPortfolioManualLock]);
-
   const exitOrbitalPortfolioInspectMode = useCallback(
     (options?: { resumeOrbits?: boolean; keepManualControl?: boolean; reason?: string }) => {
       const resumeOrbits = options?.resumeOrbits ?? true;
@@ -3912,7 +3896,6 @@ export default function ResumeSpace3D({
           station.orbitMotionBlend = Math.max(station.orbitMotionBlend, 0.7);
         });
         orbitalPortfolioPlayingRef.current = true;
-        setOrbitalPortfolioPlaying(true);
         orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
         orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 400;
       }
@@ -3934,13 +3917,13 @@ export default function ResumeSpace3D({
       const core = orbitalPortfolioCoresByIdRef.current.get(coreId);
       if (!core) return;
       setOrbitalPortfolioFocusedCoreId(coreId);
+      setOrbitalRegistrySelectedCoreId(coreId);
       setOrbitalPortfolioManualLock(false, "focus-core");
       orbitalPortfolioInspectedStationIndexRef.current = null;
       orbitalPortfolioInspectDistanceRef.current = null;
       orbitalPortfolioInspectStartedAtRef.current = 0;
       setOrbitalPortfolioHasActiveFocus(false);
       orbitalPortfolioPlayingRef.current = true;
-      setOrbitalPortfolioPlaying(true);
       orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
       orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 800;
       shipLog(`Core focus: ${core.title}`, "info");
@@ -3952,7 +3935,11 @@ export default function ResumeSpace3D({
     (
       stationIndex: number,
       mediaIndex?: number,
-      options?: { autoplay?: boolean; variantIndex?: number },
+      options?: {
+        autoplay?: boolean;
+        variantIndex?: number;
+        enforceCanonicalInspectDistance?: boolean;
+      },
     ) => {
       const stations = orbitalPortfolioStationsRef.current;
       if (stations.length === 0) return;
@@ -3965,6 +3952,7 @@ export default function ResumeSpace3D({
       const nextGroup = groups[next];
       if (nextGroup?.coreId) {
         setOrbitalPortfolioFocusedCoreId(nextGroup.coreId);
+        setOrbitalRegistrySelectedCoreId(nextGroup.coreId);
       }
       orbitalPortfolioFocusIndexRef.current = next;
       setOrbitalPortfolioFocusIndex(next);
@@ -4015,7 +4003,6 @@ export default function ResumeSpace3D({
         orbitalPortfolioInspectStartedAtRef.current = 0;
         setOrbitalPortfolioHasActiveFocus(false);
         orbitalPortfolioPlayingRef.current = true;
-        setOrbitalPortfolioPlaying(true);
         setOrbitalPortfolioManualLock(false, "focus-station-autoplay");
         return;
       }
@@ -4033,7 +4020,6 @@ export default function ResumeSpace3D({
       orbitalPortfolioInspectedStationIndexRef.current = next;
       orbitalPortfolioInspectStartedAtRef.current = performance.now();
       orbitalPortfolioPlayingRef.current = false;
-      setOrbitalPortfolioPlaying(false);
       orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 12000;
       setOrbitalPortfolioManualLock(true, "focus-station-inspect");
       const controls = sceneRef.current.controls;
@@ -4042,7 +4028,13 @@ export default function ResumeSpace3D({
       const controlsAny = controls as unknown as {
         getTarget?: (out: THREE.Vector3) => void;
       };
-      if (orbitalPortfolioInspectDistanceRef.current === null && controlsAny.getTarget) {
+      const useCanonicalInspectDistance = options?.enforceCanonicalInspectDistance === true;
+      let inferredDistanceFromCurrentTarget: number | null = null;
+      if (
+        !useCanonicalInspectDistance &&
+        orbitalPortfolioInspectDistanceRef.current === null &&
+        controlsAny.getTarget
+      ) {
         const currentTarget = new THREE.Vector3();
         controlsAny.getTarget(currentTarget);
         const raw = camera.position.distanceTo(currentTarget);
@@ -4050,7 +4042,7 @@ export default function ResumeSpace3D({
           raw >= ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE &&
           raw <= ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE
         ) {
-          orbitalPortfolioInspectDistanceRef.current = raw;
+          inferredDistanceFromCurrentTarget = raw;
         }
       }
       const plateWorld = new THREE.Vector3();
@@ -4059,12 +4051,33 @@ export default function ResumeSpace3D({
       station.plate.getWorldQuaternion(plateQuat);
       const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(plateQuat).normalize();
       const savedDistance = orbitalPortfolioInspectDistanceRef.current;
-      const inspectDistance =
+      const canonicalInspectDistance = THREE.MathUtils.clamp(
+        ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE *
+          ORBITAL_PORTFOLIO_INSPECT_ZOOM_OUT_MULTIPLIER,
+        ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE,
+        ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE,
+      );
+      const hasValidSavedDistance =
         typeof savedDistance === "number" &&
         savedDistance >= ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE &&
-        savedDistance <= ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE
-          ? savedDistance
-          : ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE;
+        savedDistance <= ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE;
+      let inspectDistance = canonicalInspectDistance;
+      if (useCanonicalInspectDistance) {
+        inspectDistance = canonicalInspectDistance;
+      } else if (hasValidSavedDistance) {
+        // Preserve the latest user framing without compounding zoom-out each click.
+        inspectDistance = THREE.MathUtils.clamp(
+          savedDistance,
+          ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE,
+          ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE,
+        );
+      } else if (typeof inferredDistanceFromCurrentTarget === "number") {
+        inspectDistance = THREE.MathUtils.clamp(
+          inferredDistanceFromCurrentTarget * ORBITAL_PORTFOLIO_INSPECT_ZOOM_OUT_MULTIPLIER,
+          ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE,
+          ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE,
+        );
+      }
       orbitalPortfolioInspectDistanceRef.current = inspectDistance;
       // Keep inspect framing straight-on to the slide face.
       const camPos = plateWorld.clone().addScaledVector(normal, inspectDistance);
@@ -4087,6 +4100,86 @@ export default function ResumeSpace3D({
       shipLog(`Portfolio inspect: sample ${next + 1}`, "info");
     },
     [setOrbitalPortfolioManualLock, shipLog],
+  );
+
+  const getFilteredOrbitalGroups = useCallback(() => {
+    const groups = orbitalPortfolioGroupsRef.current;
+    const query = orbitalPortfolioSearchQuery.trim().toLowerCase();
+    return groups.filter((group) => {
+      if (
+        orbitalPortfolioYearFilter !== "all" &&
+        String(group.year ?? "unknown") !== orbitalPortfolioYearFilter
+      ) {
+        return false;
+      }
+      if (
+        orbitalPortfolioTechFilter !== "all" &&
+        !group.technologies.some(
+          (tech) => tech.toLowerCase() === orbitalPortfolioTechFilter.toLowerCase(),
+        )
+      ) {
+        return false;
+      }
+      if (!query) return true;
+      const haystack =
+        `${group.title} ${group.description ?? ""} ${group.technologies.join(" ")}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [orbitalPortfolioSearchQuery, orbitalPortfolioTechFilter, orbitalPortfolioYearFilter]);
+
+  const stepOrbitalPortfolioSequence = useCallback(
+    (direction: -1 | 1) => {
+      const groups = orbitalPortfolioGroupsRef.current;
+      if (groups.length === 0) return;
+      const filtered = getFilteredOrbitalGroups();
+      if (filtered.length === 0) return;
+      const activeGroupId = groups[
+        THREE.MathUtils.clamp(
+          orbitalPortfolioFocusIndexRef.current,
+          0,
+          Math.max(0, groups.length - 1),
+        )
+      ]?.id;
+      const flattened: Array<{
+        groupId: string;
+        variantIndex: number;
+        mediaIndex: number;
+      }> = [];
+      filtered.forEach((group) => {
+        const variants = group.variants.length > 0 ? group.variants : [{ mediaItems: [] }];
+        variants.forEach((variant, variantIndex) => {
+          const mediaCount = Math.max(1, variant.mediaItems?.length ?? 0);
+          for (let mediaIndex = 0; mediaIndex < mediaCount; mediaIndex += 1) {
+            flattened.push({ groupId: group.id, variantIndex, mediaIndex });
+          }
+        });
+      });
+      if (flattened.length === 0) return;
+      const currentIndex = flattened.findIndex(
+        (item) =>
+          item.groupId === activeGroupId &&
+          item.variantIndex === orbitalPortfolioVariantIndexRef.current &&
+          item.mediaIndex === orbitalPortfolioMediaIndex,
+      );
+      const startIndex =
+        currentIndex >= 0
+          ? currentIndex
+          : Math.max(
+              0,
+              flattened.findIndex((item) => item.groupId === activeGroupId),
+            );
+      const nextIndex =
+        ((startIndex + direction) % flattened.length + flattened.length) % flattened.length;
+      const target = flattened[nextIndex];
+      if (!target) return;
+      const stationIndex = groups.findIndex((group) => group.id === target.groupId);
+      if (stationIndex < 0) return;
+      focusOrbitalPortfolioStation(stationIndex, target.mediaIndex, {
+        variantIndex: target.variantIndex,
+        enforceCanonicalInspectDistance: true,
+      });
+    },
+    [focusOrbitalPortfolioStation, getFilteredOrbitalGroups, orbitalPortfolioMediaIndex],
   );
 
   function startProjectShowcaseAngleIntroSequence() {
@@ -8352,6 +8445,20 @@ export default function ResumeSpace3D({
           nav.mesh.scale.setScalar(targetScale);
           nav.frame.scale.setScalar(targetScale);
         });
+        station.cardSlideNavMeshes.forEach((nav) => {
+          const navMat = nav.mesh.material as THREE.MeshBasicMaterial;
+          const navFrameMat = nav.frame.material as THREE.MeshBasicMaterial;
+          const canMove = nav.mesh.userData.orbitalSlideCanMove === true;
+          const pressedUntil = Number(nav.mesh.userData.orbitalPressedUntil ?? 0);
+          const isPressed = pressedUntil > now;
+          nav.mesh.visible = isFocused && canMove;
+          nav.frame.visible = isFocused && canMove;
+          navMat.opacity = isFocused ? (canMove ? (isPressed ? 1 : 0.94) : 0.3) : 0;
+          navFrameMat.opacity = isFocused ? (canMove ? (isPressed ? 0.96 : 0.84) : 0.24) : 0;
+          const targetScale = isFocused ? (isPressed ? 0.9 : 1) : 0.88;
+          nav.mesh.scale.setScalar(targetScale);
+          nav.frame.scale.setScalar(targetScale);
+        });
         station.mediaHaloGroup.visible = false;
         station.variantSatelliteGroup.visible = false;
         const targetScale = isFocused ? 2.35 : 1.1;
@@ -8934,6 +9041,15 @@ export default function ResumeSpace3D({
       navMat.color.setHex(canMove ? 0xe8f7ff : 0x80a4c3);
       navFrameMat.opacity = canMove ? 0.84 : 0.24;
       navFrameMat.color.setHex(canMove ? 0xa8deff : 0x587a96);
+    });
+    const showSlideNav = false;
+    station.cardSlideNavMeshes.forEach((nav) => {
+      nav.mesh.visible = showSlideNav;
+      nav.frame.visible = showSlideNav;
+      nav.mesh.userData.orbitalStationIndex = focusIndex;
+      nav.mesh.userData.orbitalPickKind = "slide-nav";
+      nav.mesh.userData.orbitalSlideNavDirection = nav.direction;
+      nav.mesh.userData.orbitalSlideCanMove = showSlideNav;
     });
 
     if (!media?.textureUrl) return;
@@ -9649,7 +9765,8 @@ export default function ResumeSpace3D({
           mediaIndex?: number;
           variantIndex?: number;
           thumbNavDirection?: "prev" | "next";
-          kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav";
+          slideNavDirection?: "prev" | "next";
+          kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav" | "slide-nav";
         }
       | null = null;
 
@@ -9663,7 +9780,8 @@ export default function ResumeSpace3D({
           mediaIndex?: number;
           variantIndex?: number;
           thumbNavDirection?: "prev" | "next";
-          kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav";
+          slideNavDirection?: "prev" | "next";
+          kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav" | "slide-nav";
         }
       | null => {
       if (!orbitalPortfolioActiveRef.current) return null;
@@ -9705,6 +9823,12 @@ export default function ResumeSpace3D({
           nav.mesh.userData.orbitalThumbNavDirection = nav.direction;
           if (nav.mesh.visible) pickables.push(nav.mesh);
         });
+        station.cardSlideNavMeshes.forEach((nav) => {
+          nav.mesh.userData.orbitalStationIndex = stationIndex;
+          nav.mesh.userData.orbitalPickKind = "slide-nav";
+          nav.mesh.userData.orbitalSlideNavDirection = nav.direction;
+          if (nav.mesh.visible) pickables.push(nav.mesh);
+        });
       });
       const hits = raycaster.intersectObjects(pickables, false);
       if (hits.length === 0) return null;
@@ -9718,6 +9842,7 @@ export default function ResumeSpace3D({
           | "variant"
           | "core"
           | "thumb-nav"
+          | "slide-nav"
           | undefined) ??
         "plate";
       if (kind === "core") {
@@ -9740,6 +9865,11 @@ export default function ResumeSpace3D({
         const thumbNavDirection =
           hit.userData?.orbitalThumbNavDirection === "next" ? "next" : "prev";
         return { stationIndex, thumbNavDirection, kind: "thumb-nav" };
+      }
+      if (kind === "slide-nav") {
+        const slideNavDirection =
+          hit.userData?.orbitalSlideNavDirection === "next" ? "next" : "prev";
+        return { stationIndex, slideNavDirection, kind: "slide-nav" };
       }
       return { stationIndex, kind: "plate" };
     };
@@ -9830,6 +9960,19 @@ export default function ResumeSpace3D({
               nav.mesh.userData.orbitalPressedUntil = performance.now() + 140;
             }
           });
+        } else if (
+          pending.kind === "slide-nav" &&
+          typeof pending.stationIndex === "number"
+        ) {
+          const direction = pending.slideNavDirection === "next" ? 1 : -1;
+          stepOrbitalPortfolioSequence(direction);
+          const station = orbitalPortfolioStationsRef.current[pending.stationIndex];
+          const activeDirection = pending.slideNavDirection;
+          station?.cardSlideNavMeshes.forEach((nav) => {
+            if (nav.direction === activeDirection) {
+              nav.mesh.userData.orbitalPressedUntil = performance.now() + 140;
+            }
+          });
         } else if (typeof pending.stationIndex === "number") {
           focusOrbitalPortfolioStation(pending.stationIndex, pending.mediaIndex);
         }
@@ -9844,7 +9987,7 @@ export default function ResumeSpace3D({
       mount.removeEventListener("pointerdown", onPointerDown, { capture: true });
       window.removeEventListener("pointerup", onPointerUp, { capture: true });
     };
-  }, [focusOrbitalPortfolioCore, focusOrbitalPortfolioStation]);
+  }, [focusOrbitalPortfolioCore, focusOrbitalPortfolioStation, stepOrbitalPortfolioSequence]);
 
   // ── Project showcase thumbnail clicks (in-trench carousel) ───────────────
   useEffect(() => {
@@ -11136,11 +11279,7 @@ export default function ResumeSpace3D({
     const orbitalCoreViews = orbitalBuild.cores;
     orbitalPortfolioGroupsRef.current = orbitalGroups;
     orbitalPortfolioCoreViewsRef.current = orbitalCoreViews;
-    const expandedState: Record<string, boolean> = {};
-    orbitalCoreViews.forEach((core) => {
-      expandedState[core.id] = false;
-    });
-    setOrbitalRegistryExpandedCoreIds(expandedState);
+    setOrbitalRegistrySelectedCoreId(orbitalCoreViews[0]?.id ?? "");
     setOrbitalPortfolioFocusedCoreId(orbitalCoreViews[0]?.id ?? "");
     const coreSpacing = 1260;
     const coreColumns = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, orbitalCoreViews.length))));
@@ -11567,9 +11706,9 @@ export default function ResumeSpace3D({
         x: number,
       ): { mesh: THREE.Mesh; frame: THREE.Mesh; direction: "prev" | "next" } => {
         const navFrame = new THREE.Mesh(
-          new THREE.PlaneGeometry(5.4, 5.8),
+          new THREE.PlaneGeometry(2.7, 2.9),
           new THREE.MeshBasicMaterial({
-            color: 0x9adfff,
+            color: 0x0b0f18,
             transparent: true,
             opacity: 0.84,
             side: THREE.DoubleSide,
@@ -11578,9 +11717,9 @@ export default function ResumeSpace3D({
           }),
         );
         const navMesh = new THREE.Mesh(
-          new THREE.PlaneGeometry(4.8, 5.2),
+          new THREE.PlaneGeometry(2.4, 2.6),
           new THREE.MeshBasicMaterial({
-            color: 0xe8f7ff,
+            color: 0xffffff,
             transparent: true,
             opacity: 0.94,
             side: THREE.DoubleSide,
@@ -11614,6 +11753,59 @@ export default function ResumeSpace3D({
       const cardThumbNavMeshes = [
         createThumbNav("prev", -31.2),
         createThumbNav("next", 31.2),
+      ];
+      const createSlideNav = (
+        direction: "prev" | "next",
+        x: number,
+      ): { mesh: THREE.Mesh; frame: THREE.Mesh; direction: "prev" | "next" } => {
+        const navFrame = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.7, 2.9),
+          new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            transparent: true,
+            opacity: 0.84,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+            depthWrite: false,
+          }),
+        );
+        const navMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.4, 2.6),
+          new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.95,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+            depthWrite: false,
+          }),
+        );
+        const arrowTexture = createDetailTexture([direction === "prev" ? "‹" : "›"], {
+          width: 256,
+          height: 256,
+          bgColor: "rgba(0,0,0,0)",
+          showLine: false,
+          textColor: "rgba(255,255,255,0.98)",
+          fontSize: 170,
+          lineSpacing: 168,
+          textAlign: "center",
+          padding: 128,
+          centerBlock: true,
+          fontFamily: "Rajdhani, sans-serif",
+          fontWeight: 700,
+          crispUI: true,
+        });
+        navMesh.material.map = arrowTexture;
+        navFrame.position.set(x, 0, 1.16);
+        navMesh.position.set(x, 0, 1.2);
+        navFrame.visible = false;
+        navMesh.visible = false;
+        stationGroup.add(navFrame, navMesh);
+        return { mesh: navMesh, frame: navFrame, direction };
+      };
+      const cardSlideNavMeshes = [
+        createSlideNav("prev", -38.6),
+        createSlideNav("next", 38.6),
       ];
       const media = group.variants[0]?.mediaItems?.[0];
       if (media?.textureUrl) {
@@ -11762,6 +11954,7 @@ export default function ResumeSpace3D({
         cardVariantTabs,
         cardThumbMeshes,
         cardThumbNavMeshes,
+        cardSlideNavMeshes,
         orbitLane: lane as 0 | 1,
         orbitAngle: a,
         orbitDirection,
@@ -11811,6 +12004,14 @@ export default function ResumeSpace3D({
         thumb.mesh.layers.enable(ORBITAL_PORTFOLIO_LAYER);
       });
       station.cardThumbNavMeshes.forEach((nav) => {
+        nav.frame.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+        nav.frame.layers.enable(0);
+        nav.frame.layers.enable(ORBITAL_PORTFOLIO_LAYER);
+        nav.mesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+        nav.mesh.layers.enable(0);
+        nav.mesh.layers.enable(ORBITAL_PORTFOLIO_LAYER);
+      });
+      station.cardSlideNavMeshes.forEach((nav) => {
         nav.frame.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
         nav.frame.layers.enable(0);
         nav.frame.layers.enable(ORBITAL_PORTFOLIO_LAYER);
@@ -15957,7 +16158,6 @@ export default function ResumeSpace3D({
       setProjectsNavHereActive(false);
       setOrbitalPortfolioReady(false);
       setOrbitalPortfolioActive(false);
-      setOrbitalPortfolioPlaying(true);
       setPortfolioNavHereActive(false);
       setSkillsNavHereActive(false);
       setExternalCosmosLabelsHiddenForAbout(false);
@@ -17760,27 +17960,18 @@ export default function ResumeSpace3D({
                     Math.max(0, mediaItems.length - 1),
                   )
                 ];
-              const query = orbitalPortfolioSearchQuery.trim().toLowerCase();
-              const filteredGroups = groups.filter((group) => {
-                if (
-                  orbitalPortfolioYearFilter !== "all" &&
-                  String(group.year ?? "unknown") !== orbitalPortfolioYearFilter
-                ) {
-                  return false;
-                }
-                if (
-                  orbitalPortfolioTechFilter !== "all" &&
-                  !group.technologies.some(
-                    (tech) => tech.toLowerCase() === orbitalPortfolioTechFilter.toLowerCase(),
-                  )
-                ) {
-                  return false;
-                }
-                if (!query) return true;
-                const haystack =
-                  `${group.title} ${group.description ?? ""} ${group.technologies.join(" ")}`.toLowerCase();
-                return haystack.includes(query);
-              });
+              const filteredGroups = getFilteredOrbitalGroups();
+              const visibleCoreViews = coreViews.filter((core) =>
+                filteredGroups.some((group) => group.coreId === core.id),
+              );
+              const selectedCoreId =
+                (orbitalRegistrySelectedCoreId &&
+                visibleCoreViews.some((core) => core.id === orbitalRegistrySelectedCoreId)
+                  ? orbitalRegistrySelectedCoreId
+                  : visibleCoreViews[0]?.id) ?? "";
+              const groupsForSelectedCore = filteredGroups.filter(
+                (group) => group.coreId === selectedCoreId,
+              );
               const orbitalRegistryPanelWidth = 430;
               return (
                 <div
@@ -17788,7 +17979,7 @@ export default function ResumeSpace3D({
                     position: "fixed",
                     right: 18,
                     top: 78,
-                    zIndex: 1101,
+                    zIndex: 1110,
                     display: "flex",
                     flexDirection: "column",
                     gap: 8,
@@ -17818,120 +18009,39 @@ export default function ResumeSpace3D({
                     <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}>
                       Orbital Registry
                     </div>
-                    <div style={{ marginTop: 4, fontSize: 14, color: "#eaf8ff" }}>
-                      {activeGroup?.title ?? "No active selection"}
-                    </div>
-                    <div style={{ marginTop: 2, fontSize: 12, color: "rgba(170, 228, 255, 0.96)" }}>
-                      Core: {(activeGroup?.coreTitle ?? orbitalPortfolioFocusedCoreId) || "N/A"}
-                    </div>
-                    <div style={{ marginTop: 2, fontSize: 12, color: "rgba(210, 235, 255, 0.84)" }}>
-                      {(() => {
-                        const category =
-                          activeVariant?.technologies?.[0] ||
-                          activeGroup?.technologies?.[0] ||
-                          "Portfolio Sample";
-                        return `Category: ${category}`;
-                      })()}
-                    </div>
-
-                    <div style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center" }}>
+                    <div
+                      style={{
+                        marginTop: 6,
+                        height: 1,
+                        background: "rgba(140, 220, 255, 0.28)",
+                      }}
+                    />
+                    <div style={{ marginTop: 7, display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
                       <button
-                        onClick={() => {
-                          const groups = orbitalPortfolioGroupsRef.current;
-                          if (groups.length === 0) return;
-                          const query = orbitalPortfolioSearchQuery.trim().toLowerCase();
-                          const filtered = groups.filter((group) => {
-                            if (
-                              orbitalPortfolioYearFilter !== "all" &&
-                              String(group.year ?? "unknown") !== orbitalPortfolioYearFilter
-                            ) {
-                              return false;
-                            }
-                            if (
-                              orbitalPortfolioTechFilter !== "all" &&
-                              !group.technologies.some(
-                                (tech) => tech.toLowerCase() === orbitalPortfolioTechFilter.toLowerCase(),
-                              )
-                            ) {
-                              return false;
-                            }
-                            if (!query) return true;
-                            const haystack = `${group.title} ${group.description ?? ""} ${group.technologies.join(" ")}`.toLowerCase();
-                            return haystack.includes(query);
-                          });
-                          const activeId = groups[orbitalPortfolioFocusIndexRef.current]?.id;
-                          const inFilteredIdx = filtered.findIndex((group) => group.id === activeId);
-                          const base = inFilteredIdx >= 0 ? inFilteredIdx : 0;
-                          const target = filtered[(base - 1 + filtered.length) % filtered.length];
-                          if (!target) return;
-                          const next = groups.findIndex((group) => group.id === target.id);
-                          if (next >= 0) focusOrbitalPortfolioStation(next, 0);
-                        }}
+                        onClick={() => stepOrbitalPortfolioSequence(-1)}
                         style={{
-                          padding: "7px 10px",
+                          padding: "4px 6px",
                           borderRadius: 8,
                           border: "1px solid rgba(170, 225, 255, 0.45)",
                           background: "rgba(8, 18, 34, 0.82)",
                           color: "#dff3ff",
                           fontFamily: "'Rajdhani', sans-serif",
+                          fontSize: 11,
                           cursor: "pointer",
                         }}
                       >
                         Prev
                       </button>
                       <button
-                        onClick={toggleOrbitalPortfolioPlayback}
+                        onClick={() => stepOrbitalPortfolioSequence(1)}
                         style={{
-                          padding: "7px 10px",
+                          padding: "4px 6px",
                           borderRadius: 8,
                           border: "1px solid rgba(170, 225, 255, 0.45)",
                           background: "rgba(8, 18, 34, 0.82)",
                           color: "#dff3ff",
                           fontFamily: "'Rajdhani', sans-serif",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {orbitalPortfolioPlaying ? "Pause" : "Play"}
-                      </button>
-                      <button
-                        onClick={() => {
-                          const groups = orbitalPortfolioGroupsRef.current;
-                          if (groups.length === 0) return;
-                          const query = orbitalPortfolioSearchQuery.trim().toLowerCase();
-                          const filtered = groups.filter((group) => {
-                            if (
-                              orbitalPortfolioYearFilter !== "all" &&
-                              String(group.year ?? "unknown") !== orbitalPortfolioYearFilter
-                            ) {
-                              return false;
-                            }
-                            if (
-                              orbitalPortfolioTechFilter !== "all" &&
-                              !group.technologies.some(
-                                (tech) => tech.toLowerCase() === orbitalPortfolioTechFilter.toLowerCase(),
-                              )
-                            ) {
-                              return false;
-                            }
-                            if (!query) return true;
-                            const haystack = `${group.title} ${group.description ?? ""} ${group.technologies.join(" ")}`.toLowerCase();
-                            return haystack.includes(query);
-                          });
-                          const activeId = groups[orbitalPortfolioFocusIndexRef.current]?.id;
-                          const inFilteredIdx = filtered.findIndex((group) => group.id === activeId);
-                          const base = inFilteredIdx >= 0 ? inFilteredIdx : -1;
-                          const target = filtered[(base + 1 + filtered.length) % filtered.length];
-                          if (!target) return;
-                          const next = groups.findIndex((group) => group.id === target.id);
-                          if (next >= 0) focusOrbitalPortfolioStation(next, 0);
-                        }}
-                        style={{
-                          padding: "7px 10px",
-                          borderRadius: 8,
-                          border: "1px solid rgba(170, 225, 255, 0.45)",
-                          background: "rgba(8, 18, 34, 0.82)",
-                          color: "#dff3ff",
-                          fontFamily: "'Rajdhani', sans-serif",
+                          fontSize: 11,
                           cursor: "pointer",
                         }}
                       >
@@ -17944,69 +18054,84 @@ export default function ResumeSpace3D({
                           setOrbitalPortfolioOrbitsEnabled(next);
                         }}
                         style={{
-                          padding: "7px 10px",
+                          padding: "4px 6px",
                           borderRadius: 8,
                           border: "1px solid rgba(170, 225, 255, 0.45)",
                           background: "rgba(8, 18, 34, 0.82)",
                           color: "#dff3ff",
                           fontFamily: "'Rajdhani', sans-serif",
+                          fontSize: 11,
                           cursor: "pointer",
                         }}
                       >
                         {orbitalPortfolioOrbitsEnabled ? "Stop Orbits" : "Start Orbits"}
                       </button>
-                      <label
+                      <button
+                        onClick={() => {
+                          const next = !orbitalPortfolioAutoplayEnabledRef.current;
+                          orbitalPortfolioAutoplayEnabledRef.current = next;
+                          setOrbitalPortfolioAutoplayEnabled(next);
+                          const now = performance.now();
+                          orbitalPortfolioAutoRef.current.lastAdvanceAt = now;
+                          if (next) {
+                            focusOrbitalPortfolioStation(
+                              orbitalPortfolioFocusIndexRef.current,
+                              orbitalPortfolioMediaIndex,
+                              {
+                                autoplay: true,
+                                variantIndex: orbitalPortfolioVariantIndexRef.current,
+                              },
+                            );
+                          }
+                        }}
                         style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                          padding: "6px 8px",
+                          padding: "4px 6px",
                           borderRadius: 8,
-                          border: "1px solid rgba(170, 225, 255, 0.35)",
+                          border: orbitalPortfolioAutoplayEnabled
+                            ? "1px solid rgba(145, 232, 255, 0.88)"
+                            : "1px solid rgba(170, 225, 255, 0.45)",
                           background: "rgba(8, 18, 34, 0.76)",
                           color: "#dff3ff",
+                          fontFamily: "'Rajdhani', sans-serif",
                           fontSize: 11,
                           cursor: "pointer",
                         }}
                       >
-                        <input
-                          type="checkbox"
-                          checked={orbitalPortfolioAutoplayEnabled}
-                          onChange={(event) => {
-                            const next = event.currentTarget.checked;
-                            orbitalPortfolioAutoplayEnabledRef.current = next;
-                            setOrbitalPortfolioAutoplayEnabled(next);
-                            const now = performance.now();
-                            orbitalPortfolioAutoRef.current.lastAdvanceAt = now;
-                            if (next) {
-                              focusOrbitalPortfolioStation(
-                                orbitalPortfolioFocusIndexRef.current,
-                                orbitalPortfolioMediaIndex,
-                                {
-                                  autoplay: true,
-                                  variantIndex: orbitalPortfolioVariantIndexRef.current,
-                                },
-                              );
-                            }
-                          }}
-                        />
-                        Auto-play
-                      </label>
+                        {orbitalPortfolioAutoplayEnabled ? "Auto-play On" : "Auto-play Off"}
+                      </button>
                       <button
                         onClick={exitOrbitalPortfolio}
                         style={{
-                          padding: "7px 10px",
+                          padding: "4px 6px",
                           borderRadius: 8,
                           border: "1px solid rgba(255, 195, 160, 0.45)",
                           background: "rgba(28, 14, 10, 0.82)",
                           color: "#ffe2d5",
                           fontFamily: "'Rajdhani', sans-serif",
+                          fontSize: 11,
                           cursor: "pointer",
                           marginLeft: "auto",
                         }}
                       >
                         Exit
                       </button>
+                    </div>
+                    <div style={{ marginTop: 7, fontSize: 12, color: "#d8f0ff", lineHeight: 1.35 }}>
+                      <div style={{ fontSize: 13, color: "#eaf8ff" }}>
+                        {activeGroup?.title ?? "No active selection"}
+                      </div>
+                      <div style={{ marginTop: 1, color: "rgba(170, 228, 255, 0.96)" }}>
+                        Core: {(activeGroup?.coreTitle ?? orbitalPortfolioFocusedCoreId) || "N/A"}
+                      </div>
+                      <div style={{ marginTop: 1, color: "rgba(210, 235, 255, 0.84)" }}>
+                        {(() => {
+                          const category =
+                            activeVariant?.technologies?.[0] ||
+                            activeGroup?.technologies?.[0] ||
+                            "Portfolio Sample";
+                          return `Category: ${category}`;
+                        })()}
+                      </div>
                     </div>
 
                     <div
@@ -18092,10 +18217,12 @@ export default function ResumeSpace3D({
                         marginTop: 8,
                         height: 206,
                         borderRadius: 10,
-                        overflowY: "auto",
                         border: "1px solid rgba(155, 225, 255, 0.28)",
                         background: "rgba(6, 10, 20, 0.84)",
-                        padding: "6px 6px 4px",
+                        padding: "6px",
+                        display: "grid",
+                        gridTemplateColumns: "0.42fr 0.58fr",
+                        gap: 6,
                       }}
                     >
                       {filteredGroups.length === 0 ? (
@@ -18104,128 +18231,131 @@ export default function ResumeSpace3D({
                             color: "rgba(182, 214, 236, 0.8)",
                             fontSize: 12,
                             padding: "8px 8px 10px",
+                            gridColumn: "1 / span 2",
                           }}
                         >
                           No matches for current filters.
                         </div>
                       ) : (
-                        coreViews.map((core) => {
-                          const groupsForCore = filteredGroups.filter(
-                            (group) => group.coreId === core.id,
-                          );
-                          if (groupsForCore.length === 0) return null;
-                          const isExpanded =
-                            orbitalRegistryExpandedCoreIds[core.id] ?? true;
-                          const submenuMaxHeight = Math.max(56, groupsForCore.length * 42 + 10);
-                          return (
-                            <div key={core.id} style={{ marginBottom: 6 }}>
-                              <button
-                                onClick={() => {
-                                  setOrbitalRegistryExpandedCoreIds((prev) => ({
-                                    ...prev,
-                                    [core.id]: !(prev[core.id] ?? true),
-                                  }));
-                                  focusOrbitalPortfolioCore(core.id);
-                                }}
-                                style={{
-                                  width: "100%",
-                                  textAlign: "left",
-                                  borderRadius: 8,
-                                  border: "1px solid rgba(145, 232, 255, 0.34)",
-                                  background: "rgba(10, 28, 44, 0.78)",
-                                  color: "#e8f7ff",
-                                  cursor: "pointer",
-                                  padding: "7px 8px",
-                                  marginBottom: 4,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  gap: 8,
-                                  fontWeight: 700,
-                                }}
-                              >
-                                <span>{core.title}</span>
-                                <span
+                        <>
+                          <div
+                            style={{
+                              borderRadius: 8,
+                              border: "1px solid rgba(145, 232, 255, 0.24)",
+                              background: "rgba(8, 18, 34, 0.58)",
+                              overflowY: "auto",
+                              padding: 4,
+                            }}
+                          >
+                            {visibleCoreViews.map((core) => {
+                              const isSelected = core.id === selectedCoreId;
+                              return (
+                                <button
+                                  key={core.id}
+                                  onClick={() => {
+                                    setOrbitalRegistrySelectedCoreId(core.id);
+                                    focusOrbitalPortfolioCore(core.id);
+                                  }}
                                   style={{
-                                    display: "inline-block",
-                                    transition: "transform 180ms ease",
-                                    transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                                    width: "100%",
+                                    textAlign: "left",
+                                    borderRadius: 7,
+                                    border: isSelected
+                                      ? "1px solid rgba(145, 232, 255, 0.92)"
+                                      : "1px solid rgba(145, 232, 255, 0.24)",
+                                    background: isSelected
+                                      ? "rgba(20, 58, 92, 0.84)"
+                                      : "rgba(8, 18, 34, 0.68)",
+                                    color: "#e8f7ff",
+                                    cursor: "pointer",
+                                    padding: "6px 7px",
+                                    marginBottom: 5,
+                                    fontSize: 11,
+                                    fontWeight: 700,
                                   }}
                                 >
-                                  {">"}
-                                </span>
-                              </button>
+                                  {core.title}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div
+                            style={{
+                              borderRadius: 8,
+                              border: "1px solid rgba(145, 232, 255, 0.24)",
+                              background: "rgba(8, 18, 34, 0.58)",
+                              overflowY: "auto",
+                              padding: 4,
+                            }}
+                          >
+                            {groupsForSelectedCore.length === 0 ? (
                               <div
                                 style={{
-                                  overflow: "hidden",
-                                  maxHeight: isExpanded ? submenuMaxHeight : 0,
-                                  opacity: isExpanded ? 1 : 0,
-                                  transition:
-                                    "max-height 220ms ease, opacity 180ms ease, padding 220ms ease",
-                                  paddingLeft: isExpanded ? 12 : 0,
-                                  borderLeft: "1px solid rgba(145, 232, 255, 0.2)",
-                                  marginLeft: 6,
+                                  color: "rgba(182, 214, 236, 0.8)",
+                                  fontSize: 11,
+                                  padding: "6px 7px",
                                 }}
                               >
-                                {groupsForCore.map((group) => {
-                                  const isHere = group.id === activeGroup?.id;
-                                  const groupIndex = groups.findIndex((item) => item.id === group.id);
-                                  return (
-                                    <button
-                                      key={group.id}
-                                      onClick={() => {
-                                        if (groupIndex >= 0)
-                                          focusOrbitalPortfolioStation(groupIndex, 0);
-                                      }}
+                                No entries in this core.
+                              </div>
+                            ) : (
+                              groupsForSelectedCore.map((group) => {
+                                const isHere = group.id === activeGroup?.id;
+                                const groupIndex = groups.findIndex((item) => item.id === group.id);
+                                return (
+                                  <button
+                                    key={group.id}
+                                    onClick={() => {
+                                      if (groupIndex >= 0) focusOrbitalPortfolioStation(groupIndex, 0);
+                                    }}
+                                    style={{
+                                      width: "100%",
+                                      textAlign: "left",
+                                      borderRadius: 7,
+                                      border: isHere
+                                        ? "1px solid rgba(145, 232, 255, 0.92)"
+                                        : "1px solid rgba(145, 232, 255, 0.24)",
+                                      background: isHere
+                                        ? "rgba(20, 58, 92, 0.84)"
+                                        : "rgba(8, 18, 34, 0.68)",
+                                      color: "#e8f7ff",
+                                      cursor: "pointer",
+                                      padding: "6px 7px",
+                                      marginBottom: 5,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                      gap: 6,
+                                      fontSize: 11,
+                                    }}
+                                  >
+                                    <span
                                       style={{
-                                        width: "100%",
-                                        textAlign: "left",
-                                        borderRadius: 8,
-                                        border: isHere
-                                          ? "1px solid rgba(145, 232, 255, 0.92)"
-                                          : "1px solid rgba(145, 232, 255, 0.24)",
-                                        background: isHere
-                                          ? "rgba(20, 58, 92, 0.84)"
-                                          : "rgba(8, 18, 34, 0.68)",
-                                        color: "#e8f7ff",
-                                        cursor: "pointer",
-                                        padding: "7px 8px 7px 12px",
-                                        marginBottom: 6,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "space-between",
-                                        gap: 8,
+                                        minWidth: 0,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
                                       }}
                                     >
+                                      {group.title}
+                                    </span>
+                                    {group.clientVariantCount > 0 ? (
                                       <span
                                         style={{
-                                          minWidth: 0,
-                                          overflow: "hidden",
-                                          textOverflow: "ellipsis",
-                                          whiteSpace: "nowrap",
+                                          fontSize: 10,
+                                          color: isHere ? "#c0f2ff" : "rgba(180,220,245,0.72)",
+                                          flexShrink: 0,
                                         }}
                                       >
-                                        {group.title}
+                                        {group.clientVariantCount}
                                       </span>
-                                      {group.clientVariantCount > 0 ? (
-                                        <span
-                                          title={`${group.clientVariantCount} client variant${group.clientVariantCount === 1 ? "" : "s"} (from legacy data)`}
-                                          style={{
-                                            fontSize: 11,
-                                            color: isHere ? "#c0f2ff" : "rgba(180,220,245,0.72)",
-                                            flexShrink: 0,
-                                          }}
-                                        >
-                                          {group.clientVariantCount}
-                                        </span>
-                                      ) : null}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })
+                                    ) : null}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
 
@@ -18308,6 +18438,61 @@ export default function ResumeSpace3D({
             >
               {orbitalRegistryPanelVisible ? ">" : "<"}
             </button>
+          )}
+          {orbitalPortfolioActive &&
+            orbitalPortfolioInspectedStationIndexRef.current !== null && (
+            <div
+              style={{
+                position: "fixed",
+                left: "calc(100% - 285px)",
+                top: "50%",
+                transform: "translateY(-50%)",
+                zIndex: 1102,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                pointerEvents: "auto",
+              }}
+            >
+              <button
+                onClick={() => stepOrbitalPortfolioSequence(1)}
+                style={{
+                  width: 28,
+                  height: 30,
+                  borderRadius: 8,
+                  border: "1px solid rgba(180, 220, 255, 0.5)",
+                  background: "rgba(0, 0, 0, 0.9)",
+                  color: "#ffffff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+                }}
+                title="Next portfolio slide"
+              >
+                ›
+              </button>
+              <button
+                onClick={() => stepOrbitalPortfolioSequence(-1)}
+                style={{
+                  width: 28,
+                  height: 30,
+                  borderRadius: 8,
+                  border: "1px solid rgba(180, 220, 255, 0.5)",
+                  background: "rgba(0, 0, 0, 0.9)",
+                  color: "#ffffff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+                }}
+                title="Previous portfolio slide"
+              >
+                ‹
+              </button>
+            </div>
           )}
           {orbitalPortfolioActive && (
             <div
