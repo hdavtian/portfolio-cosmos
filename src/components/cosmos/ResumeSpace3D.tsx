@@ -2233,6 +2233,7 @@ export default function ResumeSpace3D({
     announcedLightspeed: boolean;
     lastDistance: number | null;
     lastTravelPhase: NavigationTravelPhase;
+    arrivalAnnounced: boolean;
   }>({
     activeTarget: null,
     targetLabel: null,
@@ -2240,6 +2241,7 @@ export default function ResumeSpace3D({
     announcedLightspeed: false,
     lastDistance: null,
     lastTravelPhase: "idle",
+    arrivalAnnounced: false,
   });
   const measuredTravelSpeedRef = useRef(0);
   const measuredSpeedSampleRef = useRef<{
@@ -2960,6 +2962,7 @@ export default function ResumeSpace3D({
       navState.announcedLightspeed = false;
       navState.lastDistance = navigationDistance ?? null;
       navState.lastTravelPhase = "idle";
+      navState.arrivalAnnounced = false;
       navDistanceSampleRef.current = null;
       navDistanceDerivedSpeedRef.current = 0;
 
@@ -3001,9 +3004,12 @@ export default function ResumeSpace3D({
               navState.targetLabel ?? formatNavTargetLabel(navState.activeTarget);
             const isPortfolioArrival =
               (navState.activeTarget ?? "").toLowerCase() === "portfolio";
-            onScreenMessage(`Arrived at ${label}`, {
-              durationMs: isPortfolioArrival ? 2600 : 5000,
-            });
+            if (!navState.arrivalAnnounced) {
+              onScreenMessage(`Arrived at ${label}`, {
+                durationMs: isPortfolioArrival ? 2600 : 5000,
+              });
+              navState.arrivalAnnounced = true;
+            }
             clearOnScreenTelemetry();
             navDistanceSampleRef.current = null;
             navDistanceDerivedSpeedRef.current = 0;
@@ -3027,9 +3033,12 @@ export default function ResumeSpace3D({
         const label = navState.targetLabel ?? formatNavTargetLabel(navState.activeTarget);
         const isPortfolioArrival =
           (navState.activeTarget ?? "").toLowerCase() === "portfolio";
-        onScreenMessage(`Arrived at ${label}`, {
-          durationMs: isPortfolioArrival ? 2600 : 5000,
-        });
+        if (!navState.arrivalAnnounced) {
+          onScreenMessage(`Arrived at ${label}`, {
+            durationMs: isPortfolioArrival ? 2600 : 5000,
+          });
+          navState.arrivalAnnounced = true;
+        }
         clearOnScreenTelemetry();
         navDistanceSampleRef.current = null;
         navDistanceDerivedSpeedRef.current = 0;

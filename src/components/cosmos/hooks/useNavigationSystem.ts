@@ -1713,7 +1713,9 @@ export const useNavigationSystem = (deps: {
           // ── Directly run arrival cleanup here instead of falling
           // through to the travel code, which would override the
           // ship's settled orientation and camera position. ──
-          setCurrentNavigationTarget(target.id);
+          // Clear active target at settle completion so arrival HUD messaging
+          // can auto-expire and does not re-trigger every render.
+          setCurrentNavigationTarget(null);
           setNavigationDistance(null);
           setNavigationETA(null);
           navTurnActiveRef.current = false;
