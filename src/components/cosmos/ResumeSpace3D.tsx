@@ -2104,6 +2104,13 @@ export default function ResumeSpace3D({
   const skillsLatticePendingEntryRef = useRef(false);
   const skillsLatticeActiveRef = useRef(false);
   const [skillsLatticeActive, setSkillsLatticeActive] = useState(false);
+  const skillsLatticeEntrySequenceRef = useRef<{
+    active: boolean;
+    raf: number | null;
+  }>({
+    active: false,
+    raf: null,
+  });
   const skillsLatticePrevStateRef = useRef<{
     followingSpaceship: boolean;
     shipVisible: boolean;
@@ -2722,6 +2729,7 @@ export default function ResumeSpace3D({
     navigationDistance,
     navigationETA,
     navigationTravelPhase,
+    markTravelOverride,
     markMoonOrbitDepartureHandoff,
     navTurnActiveRef,
     settledViewTargetRef,
@@ -2966,6 +2974,9 @@ export default function ResumeSpace3D({
     if (navState.activeTarget) {
       if (navigationTravelPhase !== navState.lastTravelPhase) {
         switch (navigationTravelPhase) {
+          case "travel_override":
+            onScreenMessage("Navigation override");
+            break;
           case "orbit_departure_handoff":
             onScreenMessage("Departing current orbit");
             break;
@@ -4666,6 +4677,12 @@ export default function ResumeSpace3D({
     const latticeBeacon = skillsLatticeBeaconRef.current;
     const camera = sceneRef.current.camera;
     const controls = sceneRef.current.controls;
+    const entrySeq = skillsLatticeEntrySequenceRef.current;
+    if (entrySeq.raf !== null) {
+      cancelAnimationFrame(entrySeq.raf);
+      entrySeq.raf = null;
+    }
+    entrySeq.active = false;
     if (latticeRoot) latticeRoot.visible = false;
     skillsLatticeNodeLabelsRef.current.forEach((label) => {
       label.visible = false;
@@ -4840,8 +4857,15 @@ export default function ResumeSpace3D({
     const cam = new THREE.Vector3();
     const target = new THREE.Vector3();
     const smooth = (u: number) => u * u * (3 - 2 * u);
+    const entrySeq = skillsLatticeEntrySequenceRef.current;
+    if (entrySeq.raf !== null) {
+      cancelAnimationFrame(entrySeq.raf);
+      entrySeq.raf = null;
+    }
+    entrySeq.active = true;
 
     const tick = () => {
+      if (!skillsLatticeEntrySequenceRef.current.active) return;
       const t = THREE.MathUtils.clamp(
         (performance.now() - startedAt) / durationMs,
         0,
@@ -4860,6 +4884,8 @@ export default function ResumeSpace3D({
       }
       controls.setLookAt(cam.x, cam.y, cam.z, target.x, target.y, target.z, false);
       if (t >= 1) {
+        skillsLatticeEntrySequenceRef.current.active = false;
+        skillsLatticeEntrySequenceRef.current.raf = null;
         controls.enabled = true;
         skillsLatticeActiveRef.current = true;
         setSkillsLatticeActive(true);
@@ -4868,9 +4894,9 @@ export default function ResumeSpace3D({
         vlog("🧠 Skills lattice entered");
         return;
       }
-      requestAnimationFrame(tick);
+      skillsLatticeEntrySequenceRef.current.raf = requestAnimationFrame(tick);
     };
-    requestAnimationFrame(tick);
+    skillsLatticeEntrySequenceRef.current.raf = requestAnimationFrame(tick);
   }, [placeStarDestroyerNearSkills, setExternalCosmosLabelsHiddenForLattice, setSkillsNavHereActive, vlog]);
 
   const resumeSkillsLatticeInPlace = useCallback(() => {
@@ -5058,23 +5084,8 @@ export default function ResumeSpace3D({
     async (companyId: string) => {
       if (!companyId) return;
 
-      // When launched from About context, force a clean handoff back to normal
-      // flight mode before routing to moon destinations.
-      aboutMemorySquarePendingEntryRef.current = false;
-      aboutMemorySquareActiveRef.current = false;
-      aboutMemorySquareNavIntentUntilRef.current = 0;
-      setAboutNavHereActive(false);
-      setProjectsNavHereActive(false);
-      setExternalCosmosLabelsHiddenForAbout(false);
-      cancelAboutMemorySquareEntrySequence();
-      setFollowingSpaceship(true);
-      followingSpaceshipRef.current = true;
-      setInsideShip(false);
-      insideShipRef.current = false;
-      setShipViewMode("exterior");
-      shipViewModeRef.current = "exterior";
-      if (spaceshipRef.current) spaceshipRef.current.visible = true;
-      setSkillsNavHereActive(false);
+      // Universal handoff: cancel/exit any in-flight cinematic before moon travel.
+      interruptTransientTravelFlows(companyId, "moon");
 
       if (startProjectShowcaseExitSequence(companyId, "moon")) {
         return;
@@ -5119,6 +5130,7 @@ export default function ResumeSpace3D({
     },
     [
       vlog,
+      interruptTransientTravelFlows,
       handleAutopilotNavigation,
       isOrbiting,
       exitOrbit,
@@ -5126,16 +5138,13 @@ export default function ResumeSpace3D({
       debugLog,
       captureMoonDepartureContext,
       startProjectShowcaseExitSequence,
-      setExternalCosmosLabelsHiddenForAbout,
-      cancelAboutMemorySquareEntrySequence,
-      setAboutNavHereActive,
-      setSkillsNavHereActive,
       markMoonOrbitDepartureHandoff,
     ],
   );
 
   const handleQuickNav = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
+      interruptTransientTravelFlows(targetId, targetType);
       if (targetType === "section" && targetId === "about") {
         aboutMemorySquarePendingEntryRef.current = true;
         aboutMemorySquareActiveRef.current = false;
@@ -5193,6 +5202,7 @@ export default function ResumeSpace3D({
     },
     [
       handleAutopilotNavigation,
+      interruptTransientTravelFlows,
       isOrbiting,
       exitOrbit,
       shipLog,
@@ -5578,61 +5588,86 @@ export default function ResumeSpace3D({
     ];
   }, [orbitPhase, overlayContent, shipLog]);
 
+  function interruptTransientTravelFlows(
+    nextTargetId: string,
+    nextTargetType: "section" | "moon",
+  ): void {
+    let restoredShip = false;
+    let interrupted = false;
+    if (nextTargetId !== "about") {
+      if (
+        aboutMemorySquarePendingEntryRef.current ||
+        aboutMemorySquareEntrySequenceRef.current.active ||
+        aboutMemorySquareActiveRef.current
+      ) {
+        interrupted = true;
+      }
+      aboutMemorySquarePendingEntryRef.current = false;
+      aboutMemorySquareActiveRef.current = false;
+      aboutMemorySquareNavIntentUntilRef.current = 0;
+      setAboutNavHereActive(false);
+      setExternalCosmosLabelsHiddenForAbout(false);
+      cancelAboutMemorySquareEntrySequence();
+    }
+    if (nextTargetId !== "skills" && nextTargetId !== SKILLS_LATTICE_NAV_ID) {
+      setSkillsNavHereActive(false);
+      skillsLatticePendingEntryRef.current = false;
+      if (
+        skillsLatticeEntrySequenceRef.current.active ||
+        skillsLatticeActiveRef.current ||
+        skillsLatticeSystemActiveRef.current
+      ) {
+        interrupted = true;
+        exitSkillsLattice({ restoreShip: true, clearSystem: true });
+        restoredShip = true;
+      }
+    }
+    if (nextTargetId !== "projects" && nextTargetId !== PROJECT_SHOWCASE_NAV_ID) {
+      setProjectsNavHereActive(false);
+      pendingProjectShowcaseEntryRef.current = false;
+      projectShowcaseAwaitingProjectsArrivalRef.current = false;
+      projectShowcaseSawProjectsTravelRef.current = false;
+      if (
+        projectShowcaseEntrySequenceRef.current.active ||
+        projectShowcaseActiveRef.current
+      ) {
+        interrupted = true;
+        exitProjectShowcase();
+        restoredShip = true;
+      }
+    }
+    if (nextTargetId !== "portfolio" && nextTargetId !== ORBITAL_PORTFOLIO_NAV_ID) {
+      setPortfolioNavHereActive(false);
+      pendingOrbitalPortfolioEntryRef.current = false;
+      orbitalPortfolioAwaitingArrivalRef.current = false;
+      orbitalPortfolioSawTravelRef.current = false;
+      if (orbitalPortfolioEntrySequenceRef.current.active) interrupted = true;
+      orbitalPortfolioEntrySequenceRef.current.active = false;
+      if (orbitalPortfolioActiveRef.current) {
+        interrupted = true;
+        exitOrbitalPortfolio();
+        restoredShip = true;
+      }
+    }
+    if (restoredShip) {
+      setFollowingSpaceship(true);
+      followingSpaceshipRef.current = true;
+      setInsideShip(false);
+      insideShipRef.current = false;
+      setShipViewMode("exterior");
+      shipViewModeRef.current = "exterior";
+      if (spaceshipRef.current) spaceshipRef.current.visible = true;
+    }
+    if (interrupted) {
+      markTravelOverride(nextTargetId, nextTargetType);
+    }
+  }
+
   // ── Cockpit destination navigation ─────────────────
   const handleCockpitNavigate = useCallback(
     (targetId: string, targetType: "section" | "moon") => {
       vlog(`🎯 Cockpit nav → ${targetType}: ${targetId}`);
-      if (targetId !== "about") {
-        aboutMemorySquarePendingEntryRef.current = false;
-        aboutMemorySquareActiveRef.current = false;
-        aboutMemorySquareNavIntentUntilRef.current = 0;
-        setAboutNavHereActive(false);
-        setExternalCosmosLabelsHiddenForAbout(false);
-        cancelAboutMemorySquareEntrySequence();
-      }
-      if (targetId !== "projects" && targetId !== PROJECT_SHOWCASE_NAV_ID) {
-        setProjectsNavHereActive(false);
-      }
-      if (targetId !== "portfolio" && targetId !== ORBITAL_PORTFOLIO_NAV_ID) {
-        setPortfolioNavHereActive(false);
-        pendingOrbitalPortfolioEntryRef.current = false;
-        orbitalPortfolioAwaitingArrivalRef.current = false;
-        orbitalPortfolioSawTravelRef.current = false;
-      }
-      if (targetId !== "skills" && targetId !== SKILLS_LATTICE_NAV_ID) {
-        setSkillsNavHereActive(false);
-      }
-      if (targetId !== "skills" && targetId !== SKILLS_LATTICE_NAV_ID) {
-        skillsLatticePendingEntryRef.current = false;
-      }
-      const leavingSkillsLattice =
-        (skillsLatticeActiveRef.current || skillsLatticeSystemActiveRef.current) &&
-        targetId !== "skills";
-      if (leavingSkillsLattice) {
-        exitSkillsLattice({ restoreShip: true, clearSystem: true });
-        // Ensure autopilot can start immediately for non-Projects targets too.
-        setFollowingSpaceship(true);
-        followingSpaceshipRef.current = true;
-        setInsideShip(false);
-        insideShipRef.current = false;
-        setShipViewMode("exterior");
-        shipViewModeRef.current = "exterior";
-        if (spaceshipRef.current) spaceshipRef.current.visible = true;
-      }
-      if (
-        orbitalPortfolioActiveRef.current &&
-        targetId !== "portfolio" &&
-        targetId !== ORBITAL_PORTFOLIO_NAV_ID
-      ) {
-        exitOrbitalPortfolio();
-        setFollowingSpaceship(true);
-        followingSpaceshipRef.current = true;
-        setInsideShip(false);
-        insideShipRef.current = false;
-        setShipViewMode("exterior");
-        shipViewModeRef.current = "exterior";
-        if (spaceshipRef.current) spaceshipRef.current.visible = true;
-      }
+      interruptTransientTravelFlows(targetId, targetType);
       if (targetId === "skills" || targetId === SKILLS_LATTICE_NAV_ID) {
         setSkillsNavHereActive(true);
         if (skillsLatticeActiveRef.current) {
@@ -5790,15 +5825,8 @@ export default function ResumeSpace3D({
       handleQuickNav,
       placeStarDestroyerNearSkills,
       startProjectShowcaseEntrySequence,
-      exitSkillsLattice,
-      exitProjectShowcase,
       enterOrbitalPortfolio,
-      exitOrbitalPortfolio,
-      setExternalCosmosLabelsHiddenForAbout,
-      setAboutNavHereActive,
-      setProjectsNavHereActive,
-      setPortfolioNavHereActive,
-      setSkillsNavHereActive,
+      interruptTransientTravelFlows,
       vlog,
     ],
   );

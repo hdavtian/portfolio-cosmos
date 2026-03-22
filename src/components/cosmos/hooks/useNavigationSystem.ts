@@ -56,6 +56,7 @@ const NAV_PLANET_STAGING_RADIUS_MULT = 15.2;
 
 export type NavigationTravelPhase =
   | "idle"
+  | "travel_override"
   | "orbit_departure_handoff"
   | "departure_clearance"
   | "trajectory_alignment"
@@ -252,6 +253,21 @@ export const useNavigationSystem = (deps: {
       setNavigationPhase(
         "orbit_departure_handoff",
         `pending-orbit-exit:${targetType}:${targetId}`,
+      );
+    },
+    [setNavigationPhase],
+  );
+
+  const markTravelOverride = useCallback(
+    (targetId: string, targetType: "moon" | "section") => {
+      navigationTravelPhaseStateRef.current.routeKind = targetType;
+      navigationTravelPhaseStateRef.current.targetId = targetId;
+      navigationTravelPhaseStateRef.current.cruiseStartDistance = null;
+      navigationTravelPhaseStateRef.current.approachDistance = null;
+      navigationTravelPhaseStateRef.current.lightspeedAnnounced = false;
+      setNavigationPhase(
+        "travel_override",
+        `override-retarget:${targetType}:${targetId}`,
       );
     },
     [setNavigationPhase],
@@ -2260,6 +2276,7 @@ export const useNavigationSystem = (deps: {
     navigationDistance,
     navigationETA,
     navigationTravelPhase,
+    markTravelOverride,
     markMoonOrbitDepartureHandoff,
     navTurnActiveRef,
     settledViewTargetRef,
