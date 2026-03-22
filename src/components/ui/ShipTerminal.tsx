@@ -37,6 +37,20 @@ interface ShipTerminalProps {
   emitSDLocation?: boolean;
   onEmitFalconLocationChange?: (enabled: boolean) => void;
   onEmitSDLocationChange?: (enabled: boolean) => void;
+  logCamTraceEnabled?: boolean;
+  logAboutDebugEnabled?: boolean;
+  logNavTraceEnabled?: boolean;
+  logNavDiagEnabled?: boolean;
+  logAudioChannelEnabled?: boolean;
+  logDroneDebugEnabled?: boolean;
+  logNavDebugEnabled?: boolean;
+  onLogCamTraceChange?: (enabled: boolean) => void;
+  onLogAboutDebugChange?: (enabled: boolean) => void;
+  onLogNavTraceChange?: (enabled: boolean) => void;
+  onLogNavDiagChange?: (enabled: boolean) => void;
+  onLogAudioChannelChange?: (enabled: boolean) => void;
+  onLogDroneDebugChange?: (enabled: boolean) => void;
+  onLogNavDebugChange?: (enabled: boolean) => void;
   onClose?: () => void;
   visible?: boolean;
 }
@@ -75,6 +89,20 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
   emitSDLocation = false,
   onEmitFalconLocationChange,
   onEmitSDLocationChange,
+  logCamTraceEnabled = false,
+  logAboutDebugEnabled = false,
+  logNavTraceEnabled = false,
+  logNavDiagEnabled = false,
+  logAudioChannelEnabled = false,
+  logDroneDebugEnabled = false,
+  logNavDebugEnabled = false,
+  onLogCamTraceChange,
+  onLogAboutDebugChange,
+  onLogNavTraceChange,
+  onLogNavDiagChange,
+  onLogAudioChannelChange,
+  onLogDroneDebugChange,
+  onLogNavDebugChange,
   onClose,
   visible = true,
 }) => {
@@ -525,7 +553,9 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 12,
+            flexWrap: "wrap",
+            rowGap: 5,
+            columnGap: 10,
             padding: "4px 10px",
             borderBottom: "1px solid rgba(0, 255, 65, 0.08)",
             color: "rgba(0, 255, 65, 0.65)",
@@ -549,6 +579,69 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
               style={{ accentColor: "#00ff41", width: 12, height: 12 }}
             />
             SD location
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={logCamTraceEnabled}
+              onChange={(e) => onLogCamTraceChange?.(e.target.checked)}
+              style={{ accentColor: "#00ff41", width: 12, height: 12 }}
+            />
+            CAMTRACE
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={logAboutDebugEnabled}
+              onChange={(e) => onLogAboutDebugChange?.(e.target.checked)}
+              style={{ accentColor: "#00ff41", width: 12, height: 12 }}
+            />
+            ABOUTDBG
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={logNavTraceEnabled}
+              onChange={(e) => onLogNavTraceChange?.(e.target.checked)}
+              style={{ accentColor: "#00ff41", width: 12, height: 12 }}
+            />
+            Nav trace
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={logNavDiagEnabled}
+              onChange={(e) => onLogNavDiagChange?.(e.target.checked)}
+              style={{ accentColor: "#00ff41", width: 12, height: 12 }}
+            />
+            Nav diag
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={logAudioChannelEnabled}
+              onChange={(e) => onLogAudioChannelChange?.(e.target.checked)}
+              style={{ accentColor: "#00ff41", width: 12, height: 12 }}
+            />
+            Audio
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={logDroneDebugEnabled}
+              onChange={(e) => onLogDroneDebugChange?.(e.target.checked)}
+              style={{ accentColor: "#00ff41", width: 12, height: 12 }}
+            />
+            DBG drone
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={logNavDebugEnabled}
+              onChange={(e) => onLogNavDebugChange?.(e.target.checked)}
+              style={{ accentColor: "#00ff41", width: 12, height: 12 }}
+            />
+            DBG nav
           </label>
         </div>
 

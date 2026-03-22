@@ -53,6 +53,7 @@ const NAV_SECTION_APPROACH_MAX_DISTANCE = 1400;
 const NAV_SECTION_APPROACH_RATIO = 0.18;
 const NAV_PLANET_STAGING_MIN_DIST = 1680;
 const NAV_PLANET_STAGING_RADIUS_MULT = 15.2;
+const NAV_PROJECTS_CURVED_APPROACH = false;
 
 export type NavigationTravelPhase =
   | "idle"
@@ -114,6 +115,8 @@ export const useNavigationSystem = (deps: {
   onMoonTravelArrived?: (payload: {
     targetMoonId: string;
   }) => void;
+  enableTraceLogs?: boolean;
+  enableDiagnosticLogs?: boolean;
 }) => {
   const {
     resumeData,
@@ -141,14 +144,20 @@ export const useNavigationSystem = (deps: {
     onMoonTravelNavigationStarted,
     onMoonTravelIntent,
     onMoonTravelArrived,
+    enableTraceLogs = true,
+    enableDiagnosticLogs = true,
   } = deps;
 
   const navTraceLastAtRef = useRef<Record<string, number>>({});
   const navTickSignatureRef = useRef("");
   const navIdleTickLastAtRef = useRef(0);
   const navDiagLastAtRef = useRef<Record<string, number>>({});
+  const enableTraceLogsRef = useRef(enableTraceLogs);
+  const enableDiagnosticLogsRef = useRef(enableDiagnosticLogs);
+  enableTraceLogsRef.current = enableTraceLogs;
+  enableDiagnosticLogsRef.current = enableDiagnosticLogs;
   const navTrace = (method: string, detail?: string, throttleMs = 0) => {
-    if (!NAV_DOUBLE_CLICK_TRACE_LOGS) return;
+    if (!NAV_DOUBLE_CLICK_TRACE_LOGS || !enableTraceLogsRef.current) return;
     const now = Date.now();
     const key = `${method}:${detail || ""}`;
     const lastAt = navTraceLastAtRef.current[key] || 0;
@@ -161,7 +170,7 @@ export const useNavigationSystem = (deps: {
     }
   };
   const navDiag = (channel: string, detail: string, throttleMs = NAV_DIAGNOSTIC_INTERVAL_MS) => {
-    if (!NAV_DIAGNOSTIC_LOGS) return;
+    if (!NAV_DIAGNOSTIC_LOGS || !enableDiagnosticLogsRef.current) return;
     const now = Date.now();
     const key = `diag:${channel}`;
     const lastAt = navDiagLastAtRef.current[key] || 0;
@@ -1102,7 +1111,11 @@ export const useNavigationSystem = (deps: {
                 `🌀 About curved staging path armed (offset ${arcOffset.toFixed(0)}u, lift ${arcLift.toFixed(0)}u)`,
               );
             }
-          } else if (targetId === "projects" && isDirectSectionApproach) {
+          } else if (
+            targetId === "projects" &&
+            isDirectSectionApproach &&
+            NAV_PROJECTS_CURVED_APPROACH
+          ) {
             const toStage = stagingPoint.clone().sub(shipPos);
             const travelDist = toStage.length();
             if (travelDist > 1e-3) {
@@ -1139,7 +1152,10 @@ export const useNavigationSystem = (deps: {
               );
             }
           }
-          if (targetId === "about" || targetId === "projects") {
+          if (
+            targetId === "about" ||
+            (targetId === "projects" && NAV_PROJECTS_CURVED_APPROACH)
+          ) {
             navTurnActiveRef.current = false;
             vlog(`🌀 ${targetId === "projects" ? "Projects" : "About"} special-case: skipping turn phase, curving directly`);
           }
@@ -1842,7 +1858,10 @@ export const useNavigationSystem = (deps: {
         steerTarget = targetPos;
         if (
           target.type === "section"
-          && (target.id === "about" || target.id === "projects")
+          && (
+            target.id === "about" ||
+            (target.id === "projects" && NAV_PROJECTS_CURVED_APPROACH)
+          )
           && target.arcMidPoint
           && target.startPosition
           && target.arcFinalApproachPoint
@@ -1945,7 +1964,10 @@ export const useNavigationSystem = (deps: {
       // Lightspeed for long inter-planet hops; turbo for medium; normal for close.
       if (
         target.type === "section"
-        && (target.id === "about" || target.id === "projects")
+        && (
+          target.id === "about" ||
+          (target.id === "projects" && NAV_PROJECTS_CURVED_APPROACH)
+        )
         && target.startTime > 0
         && now - target.startTime > 45000
       ) {
@@ -2079,7 +2101,10 @@ export const useNavigationSystem = (deps: {
       const _tmpLookObj = new THREE.Object3D();
       const skipAboutHeading =
         target.type === "section"
-        && (target.id === "about" || target.id === "projects")
+        && (
+          (target.id === "about" || target.id === "projects") &&
+          !!target.arcMidPoint
+        )
         && !target.arcPassedMidPoint;
       if (!skipAboutHeading) {
         _tmpLookObj.position.copy(ship.position);

@@ -174,9 +174,101 @@ const PROJECT_SHOWCASE_MAX_ANGLE_PERCENT = 100;
 const PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT = 25;
 const PROJECT_SHOWCASE_SHOW_IMAGE_MANIPULATION_CONTROLS = false;
 const PROJECT_SHOWCASE_NAV_STOP_BACK_OFFSET = 15;
+const PROJECT_SHOWCASE_WORLD_ANCHOR = new THREE.Vector3(-5200, 380, 4200);
+const PROJECT_SHOWCASE_NAV_APPROACH_LOOKAHEAD_MULT = 2.1;
+const PROJECT_SHOWCASE_USE_LONG_ENTRY_APPROACH = false;
+const PROJECT_SHOWCASE_ENTRY_DURATION_MS = 2300;
+const PROJECT_SHOWCASE_USE_SHIP_ENTRY_SEQUENCE = false;
+const PROJECT_SHOWCASE_FREE_LOOK_ENABLED = true;
+const PROJECT_SHOWCASE_FREE_LOOK_MIN_DISTANCE = 18;
+const PROJECT_SHOWCASE_FREE_LOOK_MAX_DISTANCE = 160;
+const PROJECT_SHOWCASE_ENTRY_FORWARD_LOCK_MS = 1200;
+const PROJECT_SHOWCASE_FORWARD_LOOK_SIGN = 1;
+const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = true;
 const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
-const PROJECT_SHOWCASE_MODEL_PATH = "/models/projects-scene/spaceship_corridor.glb";
-const PROJECT_SHOWCASE_TEXTURE_BASE_PATH = "/models/projects-scene/textures";
+type ProjectShowcaseModelKey = "legacy" | "spaceHallway";
+type ProjectShowcaseModelProfile = {
+  modelPath: string;
+  textureBasePath: string;
+  enableFloorPulses: boolean;
+  injectNamedDiffuseMaps: boolean;
+  applyLegacyMeshFilters: boolean;
+  applyLegacyMaterialNormalization: boolean;
+  disableEmbeddedModelLights: boolean;
+  enableSupplementalLighting: boolean;
+  ambientLightIntensity: number;
+  keyLightIntensity: number;
+  rimLightIntensity: number;
+  sunLightIntensity: number;
+  sunBeamIntensity: number;
+};
+const PROJECT_SHOWCASE_MODEL_PROFILES: Record<
+  ProjectShowcaseModelKey,
+  ProjectShowcaseModelProfile
+> = {
+  legacy: {
+    modelPath: "/models/projects-scene/spaceship_corridor.glb",
+    textureBasePath: "/models/projects-scene/textures",
+    enableFloorPulses: true,
+    injectNamedDiffuseMaps: true,
+    applyLegacyMeshFilters: true,
+    applyLegacyMaterialNormalization: true,
+    disableEmbeddedModelLights: true,
+    enableSupplementalLighting: true,
+    ambientLightIntensity: 0.38,
+    keyLightIntensity: 1.0,
+    rimLightIntensity: 0.32,
+    sunLightIntensity: 1.85,
+    sunBeamIntensity: 2.35,
+  },
+  spaceHallway: {
+    modelPath: "/models/space-hallway/space_corridor.glb",
+    textureBasePath: "/models/space-hallway/textures",
+    // Flip to false if hallway floor lanes do not align with this mesh.
+    enableFloorPulses: false,
+    // Preserve this asset's authored look from DCC/Sketchfab export.
+    injectNamedDiffuseMaps: false,
+    applyLegacyMeshFilters: false,
+    applyLegacyMaterialNormalization: false,
+    disableEmbeddedModelLights: false,
+    enableSupplementalLighting: false,
+    // Keep window transparency but reduce washout on wall/floor details.
+    ambientLightIntensity: 0.2,
+    keyLightIntensity: 0.46,
+    rimLightIntensity: 0.14,
+    sunLightIntensity: 0.62,
+    sunBeamIntensity: 0.78,
+  },
+};
+// A/B switch for project hallway model comparisons ("legacy" or "spaceHallway").
+const ACTIVE_PROJECT_SHOWCASE_MODEL: ProjectShowcaseModelKey = "spaceHallway";
+const PROJECT_SHOWCASE_ACTIVE_PROFILE =
+  PROJECT_SHOWCASE_MODEL_PROFILES[ACTIVE_PROJECT_SHOWCASE_MODEL];
+const PROJECT_SHOWCASE_MODEL_PATH = PROJECT_SHOWCASE_ACTIVE_PROFILE.modelPath;
+const PROJECT_SHOWCASE_TEXTURE_BASE_PATH =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.textureBasePath;
+const PROJECT_SHOWCASE_ENABLE_FLOOR_PULSES =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.enableFloorPulses;
+const PROJECT_SHOWCASE_INJECT_NAMED_DIFFUSE_MAPS =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.injectNamedDiffuseMaps;
+const PROJECT_SHOWCASE_APPLY_LEGACY_MESH_FILTERS =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.applyLegacyMeshFilters;
+const PROJECT_SHOWCASE_APPLY_LEGACY_MATERIAL_NORMALIZATION =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.applyLegacyMaterialNormalization;
+const PROJECT_SHOWCASE_DISABLE_EMBEDDED_MODEL_LIGHTS =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.disableEmbeddedModelLights;
+const PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.enableSupplementalLighting;
+const PROJECT_SHOWCASE_AMBIENT_LIGHT_INTENSITY =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.ambientLightIntensity;
+const PROJECT_SHOWCASE_KEY_LIGHT_INTENSITY =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.keyLightIntensity;
+const PROJECT_SHOWCASE_RIM_LIGHT_INTENSITY =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.rimLightIntensity;
+const PROJECT_SHOWCASE_SUN_LIGHT_INTENSITY =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.sunLightIntensity;
+const PROJECT_SHOWCASE_SUN_BEAM_INTENSITY =
+  PROJECT_SHOWCASE_ACTIVE_PROFILE.sunBeamIntensity;
 const OBLIVION_DRONE_MODEL_PATH = "/models/oblivion-drone/oblivion_drone.glb";
 const OBLIVION_DRONE_AUDIO_PATHS = {
   activation: "/models/oblivion-drone/199938__drzhnn__01-activation.wav",
@@ -1059,11 +1151,11 @@ export default function ResumeSpace3D({
     setMissionControlLogs,
     vlog,
     missionLog,
-    shipLog,
+    shipLog: rawShipLog,
     shipLogs,
     shipLogsRef,
     setShipLogs,
-    debugLog,
+    debugLog: rawDebugLog,
     debugLogs,
     debugLogsRef,
     setDebugLogs,
@@ -1071,6 +1163,13 @@ export default function ResumeSpace3D({
   } = useCosmosLogs();
   const [emitFalconLocationLogs, setEmitFalconLocationLogs] = useState(false);
   const [emitSDLocationLogs, setEmitSDLocationLogs] = useState(false);
+  const [logCamTraceEnabled, setLogCamTraceEnabled] = useState(false);
+  const [logAboutDebugEnabled, setLogAboutDebugEnabled] = useState(false);
+  const [logNavTraceEnabled, setLogNavTraceEnabled] = useState(false);
+  const [logNavDiagEnabled, setLogNavDiagEnabled] = useState(false);
+  const [logAudioChannelEnabled, setLogAudioChannelEnabled] = useState(false);
+  const [logDroneDebugEnabled, setLogDroneDebugEnabled] = useState(false);
+  const [logNavDebugEnabled, setLogNavDebugEnabled] = useState(false);
   const emitFalconLocationLogsRef = useRef(false);
   const emitSDLocationLogsRef = useRef(false);
   useEffect(() => {
@@ -1079,6 +1178,60 @@ export default function ResumeSpace3D({
   useEffect(() => {
     emitSDLocationLogsRef.current = emitSDLocationLogs;
   }, [emitSDLocationLogs]);
+  const shipLog = useCallback(
+    (
+      message: string,
+      category: "nav" | "orbit" | "system" | "info" | "cmd" | "error" = "info",
+    ) => {
+      const isCamTrace = message.includes("[CAMTRACE]");
+      const isAboutDebug = message.includes("ABOUTDBG");
+      const isNavTrace = message.includes("🧭 TRACE");
+      const isNavDiag = message.includes("🧪 NAVDIAG");
+      const isAudioChannel = message.startsWith("[audio]");
+      if (isCamTrace && !logCamTraceEnabled) return;
+      if (isAboutDebug && !logAboutDebugEnabled) return;
+      if (isNavTrace && !logNavTraceEnabled) return;
+      if (isNavDiag && !logNavDiagEnabled) return;
+      if (isAudioChannel && !logAudioChannelEnabled) return;
+      rawShipLog(message, category);
+    },
+    [
+      rawShipLog,
+      logCamTraceEnabled,
+      logAboutDebugEnabled,
+      logNavTraceEnabled,
+      logNavDiagEnabled,
+      logAudioChannelEnabled,
+    ],
+  );
+  const debugLog = useCallback(
+    (source: string, message: string) => {
+      if (source === "drone" && !logDroneDebugEnabled) return;
+      if (source === "nav" && !logNavDebugEnabled) return;
+      if (source === "audio" && !logAudioChannelEnabled) return;
+      rawDebugLog(source, message);
+    },
+    [
+      rawDebugLog,
+      logDroneDebugEnabled,
+      logNavDebugEnabled,
+      logAudioChannelEnabled,
+    ],
+  );
+  const toggleLogChannel = useCallback(
+    (
+      label: string,
+      next: boolean,
+      setter: (next: boolean) => void,
+    ) => {
+      setter(next);
+      shipLog(`[LOGCFG] ${label} ${next ? "enabled" : "disabled"}`, "info");
+      if (next) {
+        shipLog(`[LOGCFG] ${label} is live`, "info");
+      }
+    },
+    [shipLog],
+  );
 
   const {
     enterOrbit,
@@ -1106,7 +1259,7 @@ export default function ResumeSpace3D({
   const [overallVolume, setOverallVolume] = useState(0.3);
   const [backgroundMusicVolume, setBackgroundMusicVolume] = useState(1);
   const [showSoundSettingsModal, setShowSoundSettingsModal] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"sound">("sound");
+  const [settingsTab, setSettingsTab] = useState<"sound" | "logs">("sound");
   const availableMusicTracks = useMemo(
     () => Object.keys(COSMIC_AUDIO_TRACKS),
     [],
@@ -1460,17 +1613,23 @@ export default function ResumeSpace3D({
         });
 
         const trenchTextureJobs: Promise<THREE.Texture | null>[] = [];
-        trenchTextureKeys.forEach((key) => {
-          const basePath = `${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}/${key}_diffuse`;
-          trenchTextureJobs.push((async () => {
-            const exts = ["jpeg", "jpg", "png"];
-            for (const ext of exts) {
-              const tex = await loadTextureSafe(`${basePath}.${ext}`);
-              if (tex) return tex;
-            }
-            return null;
-          })());
-        });
+        if (PROJECT_SHOWCASE_INJECT_NAMED_DIFFUSE_MAPS) {
+          trenchTextureKeys.forEach((key) => {
+            const basePath = `${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}/${key}_diffuse`;
+            trenchTextureJobs.push((async () => {
+              const exts = ["jpeg", "jpg", "png"];
+              for (const ext of exts) {
+                const tex = await loadTextureSafe(`${basePath}.${ext}`);
+                if (tex) return tex;
+              }
+              debugLog(
+                "project-showcase",
+                `[textures] missing optional diffuse for material "${key}" under ${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}`,
+              );
+              return null;
+            })());
+          });
+        }
 
         const showcaseImageJobs = (legacyWebsites as ShowcaseEntry[])
           .filter((entry) => (entry as { published?: boolean }).published !== false)
@@ -1625,6 +1784,8 @@ export default function ResumeSpace3D({
   const projectShowcaseFloorPulseMatsRef = useRef<
     Array<{ mat: THREE.MeshBasicMaterial; runT: number }>
   >([]);
+  const projectShowcaseLookVectorRef = useRef<THREE.Vector3 | null>(null);
+  const projectShowcaseForwardLockUntilRef = useRef(0);
   const projectShowcaseRunPosRef = useRef(0);
   const projectShowcasePrevControlsEnabledRef = useRef(true);
   const pendingProjectShowcaseEntryRef = useRef(false);
@@ -2755,6 +2916,8 @@ export default function ResumeSpace3D({
     vlog,
     shipLog,
     debugLog,
+    enableTraceLogs: logNavTraceEnabled,
+    enableDiagnosticLogs: logNavDiagEnabled,
     manualFlightRef,
     spaceshipPathRef,
     enterMoonViewRef,
@@ -2799,7 +2962,8 @@ export default function ResumeSpace3D({
                 rootAnchor.y + track.cameraHeight,
                 rootAnchor.z + track.centerCross + sway,
               );
-        const finalApproachDist = track.lookAhead * 6.4;
+        const finalApproachDist =
+          track.lookAhead * PROJECT_SHOWCASE_NAV_APPROACH_LOOKAHEAD_MULT;
         return trenchCam
           .clone()
           .addScaledVector(travelAxis, -finalApproachDist)
@@ -3540,13 +3704,20 @@ export default function ResumeSpace3D({
     setProjectShowcaseEntryOverlayOpacity(0);
     const showcaseRoot = projectShowcaseRootRef.current;
     if (showcaseRoot) {
-      showcaseRoot.visible = false;
+      showcaseRoot.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
     }
+    projectShowcasePanelsRef.current.forEach((panel) => {
+      panel.group.visible = false;
+    });
     if (sunLabelRef.current) {
       sunLabelRef.current.visible = true;
     }
     if (sceneRef.current.camera) {
-      sceneRef.current.camera.layers.disable(PROJECT_SHOWCASE_LAYER);
+      if (PROJECT_SHOWCASE_VISIBLE_IN_SPACE) {
+        sceneRef.current.camera.layers.enable(PROJECT_SHOWCASE_LAYER);
+      } else {
+        sceneRef.current.camera.layers.disable(PROJECT_SHOWCASE_LAYER);
+      }
     }
     if (sceneRef.current.controls) {
       sceneRef.current.controls.enabled =
@@ -3577,6 +3748,7 @@ export default function ResumeSpace3D({
     projectShowcaseLeverFlickRef.current = 0;
     projectShowcaseLeverLastSampleRef.current = null;
     setProjectShowcaseLever(0);
+    projectShowcaseLookVectorRef.current = null;
     projectShowcaseLastTickRef.current = null;
     pendingProjectShowcaseEntryRef.current = false;
     projectShowcaseAwaitingProjectsArrivalRef.current = false;
@@ -3629,7 +3801,7 @@ export default function ResumeSpace3D({
     }
 
     projectShowcasePrevControlsEnabledRef.current = controls.enabled;
-    controls.enabled = false;
+    controls.enabled = true;
     camera.layers.enable(PROJECT_SHOWCASE_LAYER);
 
     const track = projectShowcaseTrackRef.current;
@@ -3637,6 +3809,47 @@ export default function ResumeSpace3D({
       const startRun = track.minRun + 10;
       setProjectShowcaseRunPosition(startRun);
       projectShowcaseLastTickRef.current = performance.now();
+      const rootPos = new THREE.Vector3();
+      showcaseRoot.getWorldPosition(rootPos);
+      const sway = Math.sin(startRun * 0.025) * 1.2;
+      const baseCam =
+        track.axis === "z"
+          ? new THREE.Vector3(
+              rootPos.x + track.centerCross + sway,
+              rootPos.y + track.cameraHeight,
+              rootPos.z + startRun,
+            )
+          : new THREE.Vector3(
+              rootPos.x + startRun,
+              rootPos.y + track.cameraHeight,
+              rootPos.z + track.centerCross + sway,
+            );
+      const baseTarget =
+        track.axis === "z"
+          ? new THREE.Vector3(
+              rootPos.x + track.centerCross + sway,
+              rootPos.y + track.cameraHeight - 0.3,
+              rootPos.z + startRun + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
+            )
+          : new THREE.Vector3(
+              rootPos.x + startRun + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
+              rootPos.y + track.cameraHeight - 0.3,
+              rootPos.z + track.centerCross + sway,
+            );
+      projectShowcaseLookVectorRef.current = baseTarget.sub(baseCam);
+      projectShowcaseForwardLockUntilRef.current =
+        performance.now() + PROJECT_SHOWCASE_ENTRY_FORWARD_LOCK_MS;
+      controls.setLookAt(
+        baseCam.x,
+        baseCam.y,
+        baseCam.z,
+        baseTarget.x,
+        baseTarget.y,
+        baseTarget.z,
+        false,
+      );
+    } else {
+      projectShowcaseLookVectorRef.current = null;
     }
     projectShowcasePlayingRef.current = false;
     setProjectShowcasePlaying(false);
@@ -3651,6 +3864,9 @@ export default function ResumeSpace3D({
     projectShowcaseActiveRef.current = true;
     setProjectShowcaseActive(true);
     setProjectsNavHereActive(true);
+    projectShowcasePanelsRef.current.forEach((panel) => {
+      panel.group.visible = true;
+    });
     setProjectShowcaseRunPosition(projectShowcaseRunPosRef.current);
     pendingProjectShowcaseEntryRef.current = false;
     projectShowcaseAwaitingProjectsArrivalRef.current = false;
@@ -4245,6 +4461,32 @@ export default function ResumeSpace3D({
       return;
     }
 
+    if (!PROJECT_SHOWCASE_USE_SHIP_ENTRY_SEQUENCE) {
+      pendingProjectShowcaseEntryRef.current = false;
+      projectShowcaseAwaitingProjectsArrivalRef.current = false;
+      projectShowcaseSawProjectsTravelRef.current = false;
+      setProjectShowcaseEntryOverlayOpacity(1);
+      enterProjectShowcase();
+      projectShowcaseEntrySequenceRef.current.active = true;
+      const fadeStart = performance.now();
+      const fadeMs = 700;
+      const fadeTick = () => {
+        if (!projectShowcaseEntrySequenceRef.current.active) return;
+        const t = THREE.MathUtils.clamp((performance.now() - fadeStart) / fadeMs, 0, 1);
+        const eased = t * t * (3 - 2 * t);
+        setProjectShowcaseEntryOverlayOpacity(1 - eased);
+        if (t >= 1) {
+          setProjectShowcaseEntryOverlayOpacity(0);
+          projectShowcaseEntrySequenceRef.current.active = false;
+          projectShowcaseEntrySequenceRef.current.raf = null;
+          return;
+        }
+        projectShowcaseEntrySequenceRef.current.raf = requestAnimationFrame(fadeTick);
+      };
+      projectShowcaseEntrySequenceRef.current.raf = requestAnimationFrame(fadeTick);
+      return;
+    }
+
     pendingProjectShowcaseEntryRef.current = false;
     projectShowcaseAwaitingProjectsArrivalRef.current = false;
     projectShowcaseSawProjectsTravelRef.current = false;
@@ -4313,7 +4555,9 @@ export default function ResumeSpace3D({
     }
 
     // Road-to-horizon style final: long, mostly level approach from behind.
-    const finalApproachDist = track.lookAhead * 5.8;
+    const finalApproachDist = PROJECT_SHOWCASE_USE_LONG_ENTRY_APPROACH
+      ? track.lookAhead * 5.8
+      : track.lookAhead * 1.2;
     const approachCam = trenchCam
       .clone()
       .addScaledVector(travelAxis, -finalApproachDist)
@@ -4334,8 +4578,8 @@ export default function ResumeSpace3D({
 
     const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
     const smoothstep = (t: number) => t * t * (3 - 2 * t);
-    const durationMs = 4400;
-    const phaseSplit = 0.84;
+    const durationMs = PROJECT_SHOWCASE_ENTRY_DURATION_MS;
+    const phaseSplit = PROJECT_SHOWCASE_USE_LONG_ENTRY_APPROACH ? 0.84 : 0.54;
     const startedAt = performance.now();
     const tempCam = new THREE.Vector3();
     const tempTarget = new THREE.Vector3();
@@ -7683,7 +7927,11 @@ export default function ResumeSpace3D({
         !projectShowcaseEntrySequenceRef.current.active
       ) {
         applyProjectShowcaseNebulaFade(0);
-        camera.layers.disable(PROJECT_SHOWCASE_LAYER);
+        if (PROJECT_SHOWCASE_VISIBLE_IN_SPACE) {
+          camera.layers.enable(PROJECT_SHOWCASE_LAYER);
+        } else {
+          camera.layers.disable(PROJECT_SHOWCASE_LAYER);
+        }
       }
 
       const nowMs = performance.now();
@@ -8042,33 +8290,75 @@ export default function ResumeSpace3D({
       const sway = Math.sin(run * 0.025) * 1.2;
       const rootPos = new THREE.Vector3();
       showcaseRoot.getWorldPosition(rootPos);
-      if (track.axis === "z") {
-        const camX = rootPos.x + track.centerCross + sway;
-        const camY = rootPos.y + track.cameraHeight;
-        const camZ = rootPos.z + run;
-        controls.setLookAt(
-          camX,
-          camY,
-          camZ,
-          rootPos.x + track.centerCross,
-          rootPos.y + track.cameraHeight - 0.3,
-          rootPos.z + run + track.lookAhead,
-          false,
+      const camPos =
+        track.axis === "z"
+          ? new THREE.Vector3(
+              rootPos.x + track.centerCross + sway,
+              rootPos.y + track.cameraHeight,
+              rootPos.z + run,
+            )
+          : new THREE.Vector3(
+              rootPos.x + run,
+              rootPos.y + track.cameraHeight,
+              rootPos.z + track.centerCross + sway,
+            );
+      const defaultTarget =
+        track.axis === "z"
+          ? new THREE.Vector3(
+              rootPos.x + track.centerCross + sway,
+              rootPos.y + track.cameraHeight - 0.3,
+              rootPos.z + run + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
+            )
+          : new THREE.Vector3(
+              rootPos.x + run + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
+              rootPos.y + track.cameraHeight - 0.3,
+              rootPos.z + track.centerCross + sway,
+            );
+      let targetPos = defaultTarget;
+      if (PROJECT_SHOWCASE_FREE_LOOK_ENABLED) {
+        const lockForward = performance.now() < projectShowcaseForwardLockUntilRef.current;
+        if (lockForward) {
+          targetPos = defaultTarget;
+          projectShowcaseLookVectorRef.current = targetPos.clone().sub(camPos);
+        } else {
+        const controlsAny = controls as unknown as {
+          getTarget?: (out: THREE.Vector3) => void;
+        };
+        const liveTarget = new THREE.Vector3();
+        if (controlsAny.getTarget) {
+          controlsAny.getTarget(liveTarget);
+        } else {
+          liveTarget.copy(defaultTarget);
+        }
+        let lookVec = liveTarget.sub(camera.position);
+        if (lookVec.lengthSq() < 1e-6) {
+          lookVec =
+            projectShowcaseLookVectorRef.current?.clone() ??
+            defaultTarget.clone().sub(camPos);
+        }
+        const lookDist = THREE.MathUtils.clamp(
+          lookVec.length(),
+          PROJECT_SHOWCASE_FREE_LOOK_MIN_DISTANCE,
+          PROJECT_SHOWCASE_FREE_LOOK_MAX_DISTANCE,
         );
+        const lookDir = lookVec.normalize();
+        lookDir.y = THREE.MathUtils.clamp(lookDir.y, -0.72, 0.72);
+        lookDir.normalize();
+        targetPos = camPos.clone().addScaledVector(lookDir, lookDist);
+        projectShowcaseLookVectorRef.current = targetPos.clone().sub(camPos);
+        }
       } else {
-        const camX = rootPos.x + run;
-        const camY = rootPos.y + track.cameraHeight;
-        const camZ = rootPos.z + track.centerCross + sway;
-        controls.setLookAt(
-          camX,
-          camY,
-          camZ,
-          rootPos.x + run + track.lookAhead,
-          rootPos.y + track.cameraHeight - 0.3,
-          rootPos.z + track.centerCross,
-          false,
-        );
+        projectShowcaseLookVectorRef.current = defaultTarget.clone().sub(camPos);
       }
+      controls.setLookAt(
+        camPos.x,
+        camPos.y,
+        camPos.z,
+        targetPos.x,
+        targetPos.y,
+        targetPos.z,
+        false,
+      );
     };
 
     tick();
@@ -10518,6 +10808,9 @@ export default function ResumeSpace3D({
       handleContextLost,
       handleContextRestored,
     } = sceneSetup;
+    if (PROJECT_SHOWCASE_VISIBLE_IN_SPACE) {
+      camera.layers.enable(PROJECT_SHOWCASE_LAYER);
+    }
 
     // clickable overlay registry (planes that should be raycast-targeted)
     const overlayClickables: THREE.Object3D[] = [];
@@ -13242,8 +13535,8 @@ export default function ResumeSpace3D({
     const onProjectShowcaseLoaded = (gltf: { scene: THREE.Group }) => {
         const showcaseRoot = new THREE.Group();
         showcaseRoot.name = "ProjectShowcaseRoot";
-        showcaseRoot.visible = false;
-        const trenchWorldAnchor = new THREE.Vector3(-9800, 420, 7800);
+        showcaseRoot.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
+        const trenchWorldAnchor = PROJECT_SHOWCASE_WORLD_ANCHOR.clone();
         showcaseRoot.position.copy(trenchWorldAnchor).add(new THREE.Vector3(0, -36, 0));
 
         const trench = gltf.scene;
@@ -13253,6 +13546,7 @@ export default function ResumeSpace3D({
           THREE.MeshStandardMaterial[]
         >();
         const ensureTrenchDiffuseMap = (mat: THREE.MeshStandardMaterial) => {
+          if (!PROJECT_SHOWCASE_INJECT_NAMED_DIFFUSE_MAPS) return;
           if (mat.map || !mat.name) return;
           const key = mat.name;
           const cached = trenchDiffuseCache.get(key);
@@ -13272,6 +13566,10 @@ export default function ResumeSpace3D({
           const exts = ["jpeg", "jpg", "png"];
           const tryLoad = (idx: number) => {
             if (idx >= exts.length) {
+              debugLog(
+                "project-showcase",
+                `[textures] failed to resolve optional diffuse for material "${key}" under ${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}`,
+              );
               trenchDiffusePending.delete(key);
               return;
             }
@@ -13304,30 +13602,33 @@ export default function ResumeSpace3D({
           };
           const name = (o.name || "").toLowerCase();
 
-          // Disable embedded source lights and cinematic FX props.
+          // Legacy trench hides embedded cinematic lights; hallway can keep authored lights.
           if (o.isLight) {
-            o.visible = false;
+            if (PROJECT_SHOWCASE_DISABLE_EMBEDDED_MODEL_LIGHTS) o.visible = false;
             return;
           }
 
           if (!o.isMesh) return;
           if (
-            name.includes("xwing") ||
-            name.includes("tie") ||
-            name.includes("fighter") ||
-            name.includes("turret") ||
-            name.includes("laser") ||
-            name.includes("blaster") ||
-            name.includes("bolt") ||
-            name.includes("beam") ||
-            name.includes("explosion") ||
-            name.includes("sun")
+            PROJECT_SHOWCASE_APPLY_LEGACY_MESH_FILTERS &&
+            (
+              name.includes("xwing") ||
+              name.includes("tie") ||
+              name.includes("fighter") ||
+              name.includes("turret") ||
+              name.includes("laser") ||
+              name.includes("blaster") ||
+              name.includes("bolt") ||
+              name.includes("beam") ||
+              name.includes("explosion") ||
+              name.includes("sun")
+            )
           ) {
             o.visible = false;
             return;
           }
 
-          // Keep original PBR materials and do minimal normalization only.
+          // Legacy trench gets stronger normalization; hallway keeps authored material values.
           const mats = Array.isArray(o.material) ? o.material : [o.material];
           mats.forEach((mat) => {
             const src = mat as THREE.MeshStandardMaterial & {
@@ -13343,19 +13644,21 @@ export default function ResumeSpace3D({
             };
             if (src.map) src.map.colorSpace = THREE.SRGBColorSpace;
             if (src.emissiveMap) src.emissiveMap.colorSpace = THREE.SRGBColorSpace;
-            if (typeof src.metalness === "number") {
-              src.metalness = Math.min(src.metalness, 0.22);
+            if (PROJECT_SHOWCASE_APPLY_LEGACY_MATERIAL_NORMALIZATION) {
+              if (typeof src.metalness === "number") {
+                src.metalness = Math.min(src.metalness, 0.22);
+              }
+              if (typeof src.roughness === "number") {
+                src.roughness = Math.max(src.roughness, 0.62);
+              }
+              if (typeof src.emissiveIntensity === "number") {
+                src.emissiveIntensity = Math.min(src.emissiveIntensity, 0.35);
+              }
+              // Legacy asset carries vertex colors that tint surfaces cyan in our pipeline.
+              src.vertexColors = false;
+              if (src.color) src.color.set(0xffffff);
+              src.side = THREE.DoubleSide;
             }
-            if (typeof src.roughness === "number") {
-              src.roughness = Math.max(src.roughness, 0.62);
-            }
-            if (typeof src.emissiveIntensity === "number") {
-              src.emissiveIntensity = Math.min(src.emissiveIntensity, 0.35);
-            }
-            // This asset carries vertex colors that tint surfaces cyan in our pipeline.
-            src.vertexColors = false;
-            if (src.color) src.color.set(0xffffff);
-            src.side = THREE.DoubleSide;
             ensureTrenchDiffuseMap(src);
             src.needsUpdate = true;
           });
@@ -13398,15 +13701,26 @@ export default function ResumeSpace3D({
         });
         showcaseRoot.add(trenchCardOccluder);
 
-        const showcaseAmbient = new THREE.AmbientLight(0xffffff, 0.38);
-        const showcaseKey = new THREE.DirectionalLight(0xdde8ff, 1.0);
-        showcaseKey.position.set(70, 110, 50);
-        const showcaseRim = new THREE.DirectionalLight(0x8db8ff, 0.32);
-        showcaseRim.position.set(-80, 30, -40);
-        showcaseAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseKey.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseRim.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseRoot.add(showcaseAmbient, showcaseKey, showcaseRim);
+        if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
+          const showcaseAmbient = new THREE.AmbientLight(
+            0xffffff,
+            PROJECT_SHOWCASE_AMBIENT_LIGHT_INTENSITY,
+          );
+          const showcaseKey = new THREE.DirectionalLight(
+            0xdde8ff,
+            PROJECT_SHOWCASE_KEY_LIGHT_INTENSITY,
+          );
+          showcaseKey.position.set(70, 110, 50);
+          const showcaseRim = new THREE.DirectionalLight(
+            0x8db8ff,
+            PROJECT_SHOWCASE_RIM_LIGHT_INTENSITY,
+          );
+          showcaseRim.position.set(-80, 30, -40);
+          showcaseAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
+          showcaseKey.layers.set(PROJECT_SHOWCASE_LAYER);
+          showcaseRim.layers.set(PROJECT_SHOWCASE_LAYER);
+          showcaseRoot.add(showcaseAmbient, showcaseKey, showcaseRim);
+        }
 
         const publishedShowcase = (legacyWebsites as ShowcaseEntry[]).filter(
           (entry) => (entry as { published?: boolean }).published !== false,
@@ -13418,50 +13732,55 @@ export default function ResumeSpace3D({
           runAxis === "z" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
         const trenchLateral =
           runAxis === "z" ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, -1);
-        // Trench-realm sun source: a strong angled key + beam into trench.
-        const showcaseSun = new THREE.DirectionalLight(0xffe6c1, 1.85);
-        showcaseSun.position.copy(
-          trenchForward
-            .clone()
-            .multiplyScalar(-340)
-            .add(trenchLateral.clone().multiplyScalar(150))
-            .add(new THREE.Vector3(0, 220, 0)),
-        );
-        const showcaseSunTarget = new THREE.Object3D();
-        showcaseSunTarget.position.copy(
-          trenchForward.clone().multiplyScalar(280).add(new THREE.Vector3(0, 22, 0)),
-        );
-        const showcaseSunBeam = new THREE.SpotLight(
-          0xfff1d8,
-          2.35,
-          2800,
-          Math.PI / 7.2,
-          0.58,
-          1.2,
-        );
-        showcaseSunBeam.position.copy(
-          trenchForward
-            .clone()
-            .multiplyScalar(-460)
-            .add(trenchLateral.clone().multiplyScalar(160))
-            .add(new THREE.Vector3(0, 250, 0)),
-        );
-        const showcaseSunBeamTarget = new THREE.Object3D();
-        showcaseSunBeamTarget.position.copy(
-          trenchForward.clone().multiplyScalar(220).add(new THREE.Vector3(0, 4, 0)),
-        );
-        showcaseSun.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseSunTarget.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseSunBeam.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseSunBeamTarget.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseSun.target = showcaseSunTarget;
-        showcaseSunBeam.target = showcaseSunBeamTarget;
-        showcaseRoot.add(
-          showcaseSunTarget,
-          showcaseSun,
-          showcaseSunBeamTarget,
-          showcaseSunBeam,
-        );
+        if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
+          // Trench-realm sun source: a strong angled key + beam into trench.
+          const showcaseSun = new THREE.DirectionalLight(
+            0xffe6c1,
+            PROJECT_SHOWCASE_SUN_LIGHT_INTENSITY,
+          );
+          showcaseSun.position.copy(
+            trenchForward
+              .clone()
+              .multiplyScalar(-340)
+              .add(trenchLateral.clone().multiplyScalar(150))
+              .add(new THREE.Vector3(0, 220, 0)),
+          );
+          const showcaseSunTarget = new THREE.Object3D();
+          showcaseSunTarget.position.copy(
+            trenchForward.clone().multiplyScalar(280).add(new THREE.Vector3(0, 22, 0)),
+          );
+          const showcaseSunBeam = new THREE.SpotLight(
+            0xfff1d8,
+            PROJECT_SHOWCASE_SUN_BEAM_INTENSITY,
+            2800,
+            Math.PI / 7.2,
+            0.58,
+            1.2,
+          );
+          showcaseSunBeam.position.copy(
+            trenchForward
+              .clone()
+              .multiplyScalar(-460)
+              .add(trenchLateral.clone().multiplyScalar(160))
+              .add(new THREE.Vector3(0, 250, 0)),
+          );
+          const showcaseSunBeamTarget = new THREE.Object3D();
+          showcaseSunBeamTarget.position.copy(
+            trenchForward.clone().multiplyScalar(220).add(new THREE.Vector3(0, 4, 0)),
+          );
+          showcaseSun.layers.set(PROJECT_SHOWCASE_LAYER);
+          showcaseSunTarget.layers.set(PROJECT_SHOWCASE_LAYER);
+          showcaseSunBeam.layers.set(PROJECT_SHOWCASE_LAYER);
+          showcaseSunBeamTarget.layers.set(PROJECT_SHOWCASE_LAYER);
+          showcaseSun.target = showcaseSunTarget;
+          showcaseSunBeam.target = showcaseSunBeamTarget;
+          showcaseRoot.add(
+            showcaseSunTarget,
+            showcaseSun,
+            showcaseSunBeamTarget,
+            showcaseSunBeam,
+          );
+        }
         // Keep trench well away from Projects planet so entry can be a true long final.
         showcaseRoot.position
           .copy(trenchWorldAnchor)
@@ -13520,47 +13839,51 @@ export default function ResumeSpace3D({
           runAxis === "z" ? trenchSizeScaled.z : trenchSizeScaled.x;
         const trenchWidth =
           runAxis === "z" ? trenchSizeScaled.x : trenchSizeScaled.z;
-        const floorPulseRecords: Array<{ mat: THREE.MeshBasicMaterial; runT: number }> = [];
-        const floorPulseGroup = new THREE.Group();
-        const floorPulseSegments = 24;
-        const floorPulseStep = runLength / floorPulseSegments;
-        const floorPulseLength = floorPulseStep * 0.82;
-        const floorPulseWidth = THREE.MathUtils.clamp(trenchWidth * 0.038, 0.95, 1.75);
-        // Lift above floor so pulses are visible and not buried by geometry.
-        const floorPulseYOffset = -trenchSizeScaled.y * 0.438;
-        const floorPulseLateral = trenchWidth * 0.286;
-        for (let lane = -1; lane <= 1; lane += 2) {
-          for (let i = 0; i < floorPulseSegments; i += 1) {
-            const seg = new THREE.Mesh(
-              new THREE.PlaneGeometry(floorPulseLength, floorPulseWidth),
-              new THREE.MeshBasicMaterial({
-                color: 0x22cfff,
-                transparent: true,
-                opacity: 0.18,
-                side: THREE.DoubleSide,
-                depthWrite: false,
-                toneMapped: false,
-                blending: THREE.AdditiveBlending,
-              }),
-            );
-            seg.rotation.x = -Math.PI * 0.5;
-            seg.renderOrder = 42;
-            const runPos = -runLength * 0.5 + floorPulseStep * (i + 0.5);
-            if (runAxis === "z") {
-              seg.position.set(lane * floorPulseLateral, floorPulseYOffset, runPos);
-            } else {
-              seg.position.set(runPos, floorPulseYOffset, lane * floorPulseLateral);
+        if (PROJECT_SHOWCASE_ENABLE_FLOOR_PULSES) {
+          const floorPulseRecords: Array<{ mat: THREE.MeshBasicMaterial; runT: number }> = [];
+          const floorPulseGroup = new THREE.Group();
+          const floorPulseSegments = 24;
+          const floorPulseStep = runLength / floorPulseSegments;
+          const floorPulseLength = floorPulseStep * 0.82;
+          const floorPulseWidth = THREE.MathUtils.clamp(trenchWidth * 0.038, 0.95, 1.75);
+          // Lift above floor so pulses are visible and not buried by geometry.
+          const floorPulseYOffset = -trenchSizeScaled.y * 0.438;
+          const floorPulseLateral = trenchWidth * 0.286;
+          for (let lane = -1; lane <= 1; lane += 2) {
+            for (let i = 0; i < floorPulseSegments; i += 1) {
+              const seg = new THREE.Mesh(
+                new THREE.PlaneGeometry(floorPulseLength, floorPulseWidth),
+                new THREE.MeshBasicMaterial({
+                  color: 0x22cfff,
+                  transparent: true,
+                  opacity: 0.18,
+                  side: THREE.DoubleSide,
+                  depthWrite: false,
+                  toneMapped: false,
+                  blending: THREE.AdditiveBlending,
+                }),
+              );
+              seg.rotation.x = -Math.PI * 0.5;
+              seg.renderOrder = 42;
+              const runPos = -runLength * 0.5 + floorPulseStep * (i + 0.5);
+              if (runAxis === "z") {
+                seg.position.set(lane * floorPulseLateral, floorPulseYOffset, runPos);
+              } else {
+                seg.position.set(runPos, floorPulseYOffset, lane * floorPulseLateral);
+              }
+              floorPulseGroup.add(seg);
+              floorPulseRecords.push({
+                mat: seg.material as THREE.MeshBasicMaterial,
+                runT: (i + 0.5) / floorPulseSegments,
+              });
             }
-            floorPulseGroup.add(seg);
-            floorPulseRecords.push({
-              mat: seg.material as THREE.MeshBasicMaterial,
-              runT: (i + 0.5) / floorPulseSegments,
-            });
           }
+          floorPulseGroup.layers.set(PROJECT_SHOWCASE_LAYER);
+          showcaseRoot.add(floorPulseGroup);
+          projectShowcaseFloorPulseMatsRef.current = floorPulseRecords;
+        } else {
+          projectShowcaseFloorPulseMatsRef.current = [];
         }
-        floorPulseGroup.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseRoot.add(floorPulseGroup);
-        projectShowcaseFloorPulseMatsRef.current = floorPulseRecords;
         // Nudge the entire showcase module up slightly for better composition.
         const panelY =
           THREE.MathUtils.clamp(trenchSizeScaled.y * 0.015, 2.2, 5.4) + 0.35;
@@ -14771,6 +15094,9 @@ export default function ResumeSpace3D({
         });
 
         projectShowcasePanelsRef.current = panelRecords;
+        panelRecords.forEach((panel) => {
+          panel.group.visible = false;
+        });
         const edgeRunPadding = Math.max(14, panelSpacing * 0.9);
         const minRun = runStart - edgeRunPadding;
         const maxRun =
@@ -14952,7 +15278,7 @@ export default function ResumeSpace3D({
         })),
       };
       const projectsAnchor =
-        projectShowcaseWorldAnchorRef.current ?? new THREE.Vector3(-9800, 420, 7800);
+        projectShowcaseWorldAnchorRef.current ?? PROJECT_SHOWCASE_WORLD_ANCHOR.clone();
       const projectsPlanetData: PlanetData = {
         name: "Projects",
         position: projectsAnchor.clone(),
@@ -17261,6 +17587,27 @@ export default function ResumeSpace3D({
             emitSDLocation={emitSDLocationLogs}
             onEmitFalconLocationChange={setEmitFalconLocationLogs}
             onEmitSDLocationChange={setEmitSDLocationLogs}
+            logCamTraceEnabled={logCamTraceEnabled}
+            logAboutDebugEnabled={logAboutDebugEnabled}
+            logNavTraceEnabled={logNavTraceEnabled}
+            logNavDiagEnabled={logNavDiagEnabled}
+            logAudioChannelEnabled={logAudioChannelEnabled}
+            logDroneDebugEnabled={logDroneDebugEnabled}
+            logNavDebugEnabled={logNavDebugEnabled}
+            onLogCamTraceChange={(next) =>
+              toggleLogChannel("CAMTRACE", next, setLogCamTraceEnabled)}
+            onLogAboutDebugChange={(next) =>
+              toggleLogChannel("ABOUTDBG", next, setLogAboutDebugEnabled)}
+            onLogNavTraceChange={(next) =>
+              toggleLogChannel("Nav trace", next, setLogNavTraceEnabled)}
+            onLogNavDiagChange={(next) =>
+              toggleLogChannel("Nav diagnostics", next, setLogNavDiagEnabled)}
+            onLogAudioChannelChange={(next) =>
+              toggleLogChannel("Audio", next, setLogAudioChannelEnabled)}
+            onLogDroneDebugChange={(next) =>
+              toggleLogChannel("DBG drone", next, setLogDroneDebugEnabled)}
+            onLogNavDebugChange={(next) =>
+              toggleLogChannel("DBG nav", next, setLogNavDebugEnabled)}
             onClearLog={() => {
               shipLogsRef.current = [];
               setShipLogs([]);
@@ -17459,6 +17806,25 @@ export default function ResumeSpace3D({
                     }}
                   >
                     Sound
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsTab("logs")}
+                    style={{
+                      borderRadius: 6,
+                      border: "1px solid rgba(148, 210, 255, 0.42)",
+                      background:
+                        settingsTab === "logs"
+                          ? "rgba(22, 56, 88, 0.92)"
+                          : "rgba(10, 22, 37, 0.82)",
+                      color: "#d8eeff",
+                      padding: "3px 9px",
+                      fontSize: 12,
+                      letterSpacing: 0.35,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Logs
                   </button>
                 </div>
                 {settingsTab === "sound" && (
@@ -17724,6 +18090,74 @@ export default function ResumeSpace3D({
                       <option value="75" />
                       <option value="100" />
                     </datalist>
+                  </div>
+                )}
+                {settingsTab === "logs" && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      fontSize: 13,
+                    }}
+                  >
+                    <div style={{ fontSize: 12, color: "rgba(176, 220, 255, 0.92)" }}>
+                      Enable noisy channels on demand.
+                    </div>
+                    {[
+                      {
+                        label: "Camera Trace ([CAMTRACE])",
+                        checked: logCamTraceEnabled,
+                        onChange: setLogCamTraceEnabled,
+                      },
+                      {
+                        label: "About Debug (ABOUTDBG)",
+                        checked: logAboutDebugEnabled,
+                        onChange: setLogAboutDebugEnabled,
+                      },
+                      {
+                        label: "Nav Trace (🧭 TRACE)",
+                        checked: logNavTraceEnabled,
+                        onChange: setLogNavTraceEnabled,
+                      },
+                      {
+                        label: "Nav Diagnostics (🧪 NAVDIAG)",
+                        checked: logNavDiagEnabled,
+                        onChange: setLogNavDiagEnabled,
+                      },
+                      {
+                        label: "Audio Channel ([audio])",
+                        checked: logAudioChannelEnabled,
+                        onChange: setLogAudioChannelEnabled,
+                      },
+                      {
+                        label: "Drone Debug ([DBG:drone])",
+                        checked: logDroneDebugEnabled,
+                        onChange: setLogDroneDebugEnabled,
+                      },
+                      {
+                        label: "Nav Debug ([DBG:nav])",
+                        checked: logNavDebugEnabled,
+                        onChange: setLogNavDebugEnabled,
+                      },
+                    ].map((item) => (
+                      <label
+                        key={item.label}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          onChange={(event) => item.onChange(event.currentTarget.checked)}
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
                   </div>
                 )}
               </div>
