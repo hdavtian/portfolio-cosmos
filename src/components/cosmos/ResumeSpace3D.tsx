@@ -7,7 +7,6 @@ import resumeData from "../../data/resume.json";
 import legacyWebsites from "../../data/legacyWebsites.json";
 import portfolioCores from "../../data/portfolioCores.json";
 import aboutDeck from "../../data/aboutDeck.json";
-import aboutHallwaySlides from "../../data/aboutHallwaySlides.json";
 import CosmosLoader from "../CosmosLoader";
 import {
   DEFAULT_CONTROL_SENSITIVITY,
@@ -1137,10 +1136,6 @@ export default function ResumeSpace3D({
   const aboutDeckData = aboutDeck as AboutDeckData;
   const aboutSlides = aboutDeckData.aboutDeck.slides;
   const projectShowcaseEntries = useMemo(() => {
-    const storyEntries = (aboutHallwaySlides as ShowcaseEntry[]).filter(
-      (entry) => (entry as { published?: boolean }).published !== false,
-    );
-    if (storyEntries.length > 0) return storyEntries;
     const legacyPublished = (legacyWebsites as ShowcaseEntry[]).filter(
       (entry) => (entry as { published?: boolean }).published !== false,
     );
@@ -14160,12 +14155,11 @@ export default function ResumeSpace3D({
             imagePlane.scale.set(displayWidth, displayHeight, 1);
           };
           applyImageFit();
-          const detailWidth = panelWidth * 0.94;
-          const stripWidth = detailWidth;
-          const detailHeight = panelHeight * 0.56;
-          const stackGap = panelHeight * 0.08;
-          const imageLiftY = detailHeight * 0.58 + stackGap;
-          const detailCenterY = -panelHeight * 0.5 - stackGap - detailHeight * 0.5;
+          const detailWidth = panelWidth * 0.44;
+          const stripWidth = panelWidth + detailWidth;
+          const detailHeight = panelHeight;
+          const imageLiftY = 0;
+          const detailCenterY = 0;
           frame.position.y = imageLiftY;
           imagePlane.position.y = imageLiftY;
           const detailTextureOpts = {
@@ -14363,7 +14357,7 @@ export default function ResumeSpace3D({
           const categoryBarHeight = panelHeight * 0.09;
           const tabRowHeight = panelHeight * 0.098;
           const tabAreaHeight = categoryBarHeight + tabRowHeight;
-          const tabAreaCenterX = 0;
+          const tabAreaCenterX = side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
           tabsRoot.position.set(
             tabAreaCenterX,
             detailCenterY + detailHeight * 0.5 + tabAreaHeight * 0.5 + panelHeight * 0.06,
@@ -14571,7 +14565,7 @@ export default function ResumeSpace3D({
 
           const thumbnailRoot = new THREE.Group();
           const stripHeight = panelHeight * 0.28;
-          const stripCenterX = 0;
+          const stripCenterX = side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
           thumbnailRoot.position.set(
             stripCenterX,
             detailCenterY - detailHeight * 0.5 - stripHeight * 0.5 - panelHeight * 0.07,
