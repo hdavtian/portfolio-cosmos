@@ -198,6 +198,7 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
   const [typeProgress, setTypeProgress] = useState(0);
   const typeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastLogIdRef = useRef(-1);
+  const typewriterRunIdRef = useRef(0);
 
   // Auto-scroll Log tab
   useEffect(() => {
@@ -212,6 +213,8 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
     const newest = logs[logs.length - 1];
     if (newest.id === lastLogIdRef.current) return;
     lastLogIdRef.current = newest.id;
+    typewriterRunIdRef.current += 1;
+    const runId = typewriterRunIdRef.current;
 
     setRevealedIds((prev) => {
       const next = new Set(prev);
@@ -225,15 +228,22 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
     if (typeTimerRef.current) clearInterval(typeTimerRef.current);
 
     const fullLen = Math.min(newest.text.length, MAX_TYPE_CHARS);
-    let progress = 0;
+    if (fullLen <= 0) {
+      setRevealedIds((prev) => new Set(prev).add(newest.id));
+      return;
+    }
+
     typeTimerRef.current = setInterval(() => {
-      progress += 1;
-      setTypeProgress(progress);
-      if (progress >= fullLen) {
-        if (typeTimerRef.current) clearInterval(typeTimerRef.current);
-        typeTimerRef.current = null;
-        setRevealedIds((prev) => new Set(prev).add(newest.id));
-      }
+      if (runId !== typewriterRunIdRef.current) return;
+      setTypeProgress((prev) => {
+        const next = Math.min(prev + 1, fullLen);
+        if (next >= fullLen) {
+          if (typeTimerRef.current) clearInterval(typeTimerRef.current);
+          typeTimerRef.current = null;
+          setRevealedIds((ids) => new Set(ids).add(newest.id));
+        }
+        return next;
+      });
     }, TYPE_SPEED);
 
     return () => {

@@ -147,6 +147,14 @@ export const useNavigationSystem = (deps: {
     enableTraceLogs = true,
     enableDiagnosticLogs = true,
   } = deps;
+  const resolveSpecialSectionTargetRef = useRef(resolveSpecialSectionTarget);
+  const onMoonTravelNavigationStartedRef = useRef(onMoonTravelNavigationStarted);
+  const onMoonTravelIntentRef = useRef(onMoonTravelIntent);
+  const onMoonTravelArrivedRef = useRef(onMoonTravelArrived);
+  resolveSpecialSectionTargetRef.current = resolveSpecialSectionTarget;
+  onMoonTravelNavigationStartedRef.current = onMoonTravelNavigationStarted;
+  onMoonTravelIntentRef.current = onMoonTravelIntent;
+  onMoonTravelArrivedRef.current = onMoonTravelArrived;
 
   const navTraceLastAtRef = useRef<Record<string, number>>({});
   const navTickSignatureRef = useRef("");
@@ -531,7 +539,9 @@ export const useNavigationSystem = (deps: {
       navigationSystemRef.current.setOnArrival((targetId: string) => {
         if (targetId.startsWith("moon-")) {
           setNavigationPhase("arrived", `moon-arrival:${targetId}`);
-          onMoonTravelArrived?.({ targetMoonId: targetId.replace(/^moon-/, "") });
+          onMoonTravelArrivedRef.current?.({
+            targetMoonId: targetId.replace(/^moon-/, ""),
+          });
         } else {
           resetNavigationPhase(`non-moon-arrival:${targetId}`);
         }
@@ -609,7 +619,6 @@ export const useNavigationSystem = (deps: {
       emitterRef,
       enterMoonViewRef,
       missionLog,
-      onMoonTravelArrived,
       optionsRef,
       resetNavigationPhase,
       resumeData,
@@ -738,17 +747,17 @@ export const useNavigationSystem = (deps: {
           !!destinationSystemId &&
           !!currentSystemId &&
           destinationSystemId !== currentSystemId;
-        const projectsAnchor = resolveSpecialSectionTarget
-          ? resolveSpecialSectionTarget("projects")
+        const projectsAnchor = resolveSpecialSectionTargetRef.current
+          ? resolveSpecialSectionTargetRef.current("projects")
           : null;
-        const aboutAnchor = resolveSpecialSectionTarget
-          ? resolveSpecialSectionTarget("about")
+        const aboutAnchor = resolveSpecialSectionTargetRef.current
+          ? resolveSpecialSectionTargetRef.current("about")
           : null;
-        const skillsAnchor = resolveSpecialSectionTarget
-          ? resolveSpecialSectionTarget("skills")
+        const skillsAnchor = resolveSpecialSectionTargetRef.current
+          ? resolveSpecialSectionTargetRef.current("skills")
           : null;
-        const portfolioAnchor = resolveSpecialSectionTarget
-          ? resolveSpecialSectionTarget("portfolio")
+        const portfolioAnchor = resolveSpecialSectionTargetRef.current
+          ? resolveSpecialSectionTargetRef.current("portfolio")
           : null;
         const isLeavingProjectsArea =
           !!projectsAnchor &&
@@ -773,7 +782,7 @@ export const useNavigationSystem = (deps: {
           || isLeavingSkillsArea
           || isLeavingPortfolioArea;
         if (!isInterSystemMoonJump) {
-          onMoonTravelIntent?.({
+          onMoonTravelIntentRef.current?.({
             targetMoonId: targetId,
             isInterSystemJump: false,
           });
@@ -898,8 +907,8 @@ export const useNavigationSystem = (deps: {
         let targetPosition: THREE.Vector3 | null = null;
         let targetName = targetId;
         let targetRadius = 60; // default (sun)
-        const specialSectionTarget = resolveSpecialSectionTarget
-          ? resolveSpecialSectionTarget(targetId)
+        const specialSectionTarget = resolveSpecialSectionTargetRef.current
+          ? resolveSpecialSectionTargetRef.current(targetId)
           : null;
         const isDirectSectionApproach = !!specialSectionTarget;
 
@@ -1187,7 +1196,6 @@ export const useNavigationSystem = (deps: {
       optionsRef,
       resolveMoonSystemId,
       resolveCurrentSystemId,
-      resolveSpecialSectionTarget,
       vlog,
     ],
   );
@@ -1632,7 +1640,7 @@ export const useNavigationSystem = (deps: {
               target.pendingMoonTurbo ?? true,
             );
             if (success) {
-              onMoonTravelNavigationStarted?.({
+              onMoonTravelNavigationStartedRef.current?.({
                 targetMoonId: target.pendingMoonId,
                 isInterSystemJump: !!target.pendingMoonInterSystem,
               });
@@ -2282,8 +2290,6 @@ export const useNavigationSystem = (deps: {
     spaceshipPathRef,
     spaceshipRef,
     optionsRef,
-    onMoonTravelIntent,
-    onMoonTravelNavigationStarted,
     setNavigationPhase,
     resetNavigationPhase,
     vlog,
