@@ -77,6 +77,8 @@ export type PortfolioGroupView = {
   plainAngle?: number;
   ringIndex?: number;
   orbitColor?: string;
+  /** Cloned source entry used to build this group instance. */
+  sourceEntry?: PortfolioEntry;
 };
 
 export type PortfolioCoreItemSeed = {
@@ -122,6 +124,11 @@ export type PortfolioCoreView = {
 export type PortfolioCoreBuildResult = {
   groups: PortfolioGroupView[];
   cores: PortfolioCoreView[];
+};
+
+export type PortfolioRegistryModel = PortfolioCoreBuildResult & {
+  hallwayEntries: PortfolioEntry[];
+  hallwayIndexById: Map<string, number>;
 };
 
 const extractYouTubeVideoId = (input?: string): string | null => {
@@ -282,6 +289,7 @@ export const buildPortfolioGroups = (
         image: entry.image,
         fit: entry.fit ?? "cover",
         clientVariantCount,
+        sourceEntry: entry,
         variants:
           variants.length > 0
             ? variants.map((variant, variantIndex) => ({
@@ -447,4 +455,28 @@ export const buildPortfolioCoreViews = (
   });
 
   return { groups, cores };
+};
+
+export const buildPortfolioRegistryModel = (
+  coreSeeds: PortfolioCoreSeed[],
+  maxMediaItems = 12,
+): PortfolioRegistryModel => {
+  const { groups, cores } = buildPortfolioCoreViews(coreSeeds, maxMediaItems);
+  const hallwayEntries = groups
+    .map((group) => group.sourceEntry)
+    .filter(
+      (entry): entry is PortfolioEntry =>
+        !!entry && (entry as { published?: boolean }).published !== false,
+    )
+    .map((entry) => ({ ...entry }));
+  const hallwayIndexById = new Map<string, number>();
+  hallwayEntries.forEach((entry, index) => {
+    hallwayIndexById.set(entry.id, index);
+  });
+  return {
+    groups,
+    cores,
+    hallwayEntries,
+    hallwayIndexById,
+  };
 };

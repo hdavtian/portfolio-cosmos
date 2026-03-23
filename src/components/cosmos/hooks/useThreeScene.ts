@@ -155,8 +155,6 @@ export const useThreeScene = (params: {
       focus: 54,
       aperture: 0.0001,
       maxblur: 0.0045,
-      width: container.clientWidth,
-      height: container.clientHeight,
     });
     bokehPass.enabled = false;
     composer.addPass(bokehPass);

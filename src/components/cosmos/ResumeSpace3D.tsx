@@ -4,7 +4,6 @@ import gsap from "gsap";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
-import legacyWebsites from "../../data/legacyWebsites.json";
 import portfolioCores from "../../data/portfolioCores.json";
 import aboutDeck from "../../data/aboutDeck.json";
 import CosmosLoader from "../CosmosLoader";
@@ -112,7 +111,8 @@ import {
   orbitDebug,
 } from "./scaleConfig";
 import {
-  buildPortfolioCoreViews,
+  buildPortfolioRegistryModel,
+  type PortfolioCoreSeed,
   type PortfolioCoreView,
   type PortfolioGroupView,
 } from "./portfolioData";
@@ -346,6 +346,31 @@ const PROJECT_SHOWCASE_FILTER_OPTIONS = [
   "C#",
   "Cloud",
 ] as const;
+type RegistryPanelMode = "portfolio" | "projects";
+type RegistryPanelCapabilities = {
+  showStopOrbits: boolean;
+  showExit: boolean;
+  showAutoPlay: boolean;
+  showPlayPause: boolean;
+  alwaysShowArrows: boolean;
+};
+const REGISTRY_PANEL_CAPABILITIES: Record<RegistryPanelMode, RegistryPanelCapabilities> = {
+  portfolio: {
+    showStopOrbits: true,
+    showExit: true,
+    showAutoPlay: true,
+    showPlayPause: false,
+    alwaysShowArrows: false,
+  },
+  projects: {
+    showStopOrbits: false,
+    showExit: false,
+    showAutoPlay: false,
+    showPlayPause: true,
+    alwaysShowArrows: true,
+  },
+};
+const PROJECT_SHOWCASE_USE_LEGACY_GUI = false;
 const PROJECT_SHOWCASE_CTA_ENTRY_ID = "story-next-mission";
 const PROJECT_SHOWCASE_MAX_MEDIA_ITEMS = 12;
 const PROJECT_SHOWCASE_THUMBS_PER_PAGE = 4;
@@ -1135,12 +1160,18 @@ export default function ResumeSpace3D({
 }: ResumeSpace3DProps) {
   const aboutDeckData = aboutDeck as AboutDeckData;
   const aboutSlides = aboutDeckData.aboutDeck.slides;
-  const projectShowcaseEntries = useMemo(() => {
-    const legacyPublished = (legacyWebsites as ShowcaseEntry[]).filter(
-      (entry) => (entry as { published?: boolean }).published !== false,
-    );
-    return legacyPublished.slice(0, 4);
-  }, []);
+  const portfolioCoreBuild = useMemo(
+    () =>
+      buildPortfolioRegistryModel(
+        portfolioCores as PortfolioCoreSeed[],
+        PROJECT_SHOWCASE_MAX_MEDIA_ITEMS,
+      ),
+    [],
+  );
+  const projectShowcaseEntries = useMemo<ShowcaseEntry[]>(
+    () => portfolioCoreBuild.hallwayEntries.map((entry) => ({ ...entry })),
+    [portfolioCoreBuild.hallwayEntries],
+  );
   // EXPORT SURFACE
   // Props: options, onOptionsChange
   // Emits: onOptionsChange (options sync)
@@ -5356,18 +5387,23 @@ export default function ResumeSpace3D({
     (direction: -1 | 1) => {
       const panels = projectShowcasePanelsRef.current;
       if (panels.length === 0) return;
-      projectShowcaseJumpTargetRef.current = null;
       const current = projectShowcaseFocusIndexRef.current;
       const next =
         (current + direction + panels.length) % panels.length;
+      projectShowcasePlayingRef.current = false;
+      setProjectShowcasePlaying(false);
+      projectShowcaseVelocityRef.current = 0;
+      projectShowcaseJumpTargetRef.current = null;
+      setProjectShowcaseLever(0);
       projectShowcaseForcedFocusIndexRef.current = next;
       setProjectShowcaseFocus(next);
-      setProjectShowcaseRunPosition(getProjectShowcaseStopRunForIndex(next));
+      projectShowcaseJumpTargetRef.current =
+        getProjectShowcaseStopRunForIndex(next);
     },
     [
       getProjectShowcaseStopRunForIndex,
+      setProjectShowcaseLever,
       setProjectShowcaseFocus,
-      setProjectShowcaseRunPosition,
     ],
   );
 
@@ -11620,59 +11656,7 @@ export default function ResumeSpace3D({
     orbitalRoot.name = "OrbitalPortfolioRoot";
     orbitalRoot.position.copy(portfolioAnchor);
     orbitalRoot.visible = true;
-    const orbitalBuild = buildPortfolioCoreViews(
-      portfolioCores as Array<{
-        core: string;
-        coreColor?: string;
-        plains: Array<{
-          angle: number;
-          items: Array<{
-            orbitColor?: string;
-            items?: Array<{
-              id: string;
-              title: string;
-              image: string;
-              description?: string;
-              technologies?: string[];
-              year?: number | null;
-              fit?: "contain" | "cover";
-              galleryMedia?: Array<{
-                id: string;
-                type?: "image" | "video" | "youtube";
-                image?: string;
-                videoUrl?: string;
-                thumbnail?: string;
-                youtubeUrl?: string;
-                title?: string;
-                description?: string;
-                fit?: "contain" | "cover";
-              }>;
-              clientVariants?: Array<{
-                id: string;
-                title: string;
-                image?: string;
-                description?: string;
-                technologies?: string[];
-                year?: number | null;
-                fit?: "contain" | "cover";
-                galleryMedia?: Array<{
-                  id: string;
-                  type?: "image" | "video" | "youtube";
-                  image?: string;
-                  videoUrl?: string;
-                  thumbnail?: string;
-                  youtubeUrl?: string;
-                  title?: string;
-                  description?: string;
-                  fit?: "contain" | "cover";
-                }>;
-              }>;
-              published?: boolean;
-            }>;
-          }>;
-        }>;
-      }>,
-    );
+    const orbitalBuild = portfolioCoreBuild;
     const orbitalGroups = orbitalBuild.groups;
     const orbitalCoreViews = orbitalBuild.cores;
     orbitalPortfolioGroupsRef.current = orbitalGroups;
@@ -13743,15 +13727,58 @@ export default function ResumeSpace3D({
         const trenchSizeScaled = trenchBounds.getSize(new THREE.Vector3());
         const trenchCenter = trenchBounds.getCenter(new THREE.Vector3());
         trench.position.sub(trenchCenter);
-        showcaseRoot.add(trench);
+        const publishedShowcase = projectShowcaseEntries;
+        const runAxis: "x" | "z" =
+          trenchSizeScaled.z >= trenchSizeScaled.x ? "z" : "x";
+        const trenchForward =
+          runAxis === "z" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+        const trenchLateral =
+          runAxis === "z" ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, -1);
+        const baseRunLength =
+          runAxis === "z" ? trenchSizeScaled.z : trenchSizeScaled.x;
+        const trenchWidth =
+          runAxis === "z" ? trenchSizeScaled.x : trenchSizeScaled.z;
+        const spacingSeed = THREE.MathUtils.clamp(
+          baseRunLength / Math.max(6, publishedShowcase.length + 2),
+          24,
+          50,
+        );
+        const spacingPaddingSeed = Math.max(14, spacingSeed * 0.9);
+        const requiredRunLength =
+          Math.max(0, publishedShowcase.length - 1) * spacingSeed +
+          spacingPaddingSeed * 2 +
+          spacingSeed;
+        const segmentOverlap = Math.min(baseRunLength * 0.06, 8);
+        const effectiveSegmentLength = Math.max(1, baseRunLength - segmentOverlap);
+        const hallwaySegmentCount = Math.max(
+          1,
+          Math.ceil(requiredRunLength / effectiveSegmentLength),
+        );
+        const runLength =
+          baseRunLength + Math.max(0, hallwaySegmentCount - 1) * effectiveSegmentLength;
+        const trenchSegmentsRoot = new THREE.Group();
+        trenchSegmentsRoot.name = "ProjectShowcaseHallwaySegments";
+        const segmentStartRun = -((hallwaySegmentCount - 1) * effectiveSegmentLength) / 2;
+        for (let segmentIndex = 0; segmentIndex < hallwaySegmentCount; segmentIndex += 1) {
+          const segment =
+            segmentIndex === 0 ? trench : (trench.clone(true) as THREE.Object3D);
+          const runOffset = segmentStartRun + segmentIndex * effectiveSegmentLength;
+          if (runAxis === "z") {
+            segment.position.set(segment.position.x, segment.position.y, runOffset);
+          } else {
+            segment.position.set(runOffset, segment.position.y, segment.position.z);
+          }
+          trenchSegmentsRoot.add(segment);
+        }
+        showcaseRoot.add(trenchSegmentsRoot);
 
         // Isolate trench rendering/lighting from the main cosmos sun.
-        showcaseRoot.traverse((obj) => {
+        trenchSegmentsRoot.traverse((obj) => {
           obj.layers.set(PROJECT_SHOWCASE_LAYER);
         });
 
-        // Add a depth-only copy of trench geometry on the card layer so
-        // showcase cards are naturally occluded by tunnel walls from outside.
+        // Add depth-only copies on the card layer so showcase cards are
+        // naturally occluded by tunnel walls from outside.
         const trenchCardOccluder = trench.clone(true);
         const trenchCardOccluderMat = new THREE.MeshBasicMaterial({
           color: 0x000000,
@@ -13767,7 +13794,22 @@ export default function ResumeSpace3D({
           mesh.renderOrder = -250;
           mesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
         });
-        showcaseRoot.add(trenchCardOccluder);
+        const trenchOccluderRoot = new THREE.Group();
+        trenchOccluderRoot.name = "ProjectShowcaseHallwayOccluders";
+        for (let segmentIndex = 0; segmentIndex < hallwaySegmentCount; segmentIndex += 1) {
+          const segment =
+            segmentIndex === 0
+              ? trenchCardOccluder
+              : (trenchCardOccluder.clone(true) as THREE.Object3D);
+          const runOffset = segmentStartRun + segmentIndex * effectiveSegmentLength;
+          if (runAxis === "z") {
+            segment.position.set(segment.position.x, segment.position.y, runOffset);
+          } else {
+            segment.position.set(runOffset, segment.position.y, segment.position.z);
+          }
+          trenchOccluderRoot.add(segment);
+        }
+        showcaseRoot.add(trenchOccluderRoot);
 
         if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
           const showcaseAmbient = new THREE.AmbientLight(
@@ -13790,14 +13832,6 @@ export default function ResumeSpace3D({
           showcaseRoot.add(showcaseAmbient, showcaseKey, showcaseRim);
         }
 
-        const publishedShowcase = projectShowcaseEntries;
-
-        const runAxis: "x" | "z" =
-          trenchSizeScaled.z >= trenchSizeScaled.x ? "z" : "x";
-        const trenchForward =
-          runAxis === "z" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
-        const trenchLateral =
-          runAxis === "z" ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, -1);
         if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
           // Trench-realm sun source: a strong angled key + beam into trench.
           const showcaseSun = new THREE.DirectionalLight(
@@ -13901,10 +13935,6 @@ export default function ResumeSpace3D({
             },
           );
         }
-        const runLength =
-          runAxis === "z" ? trenchSizeScaled.z : trenchSizeScaled.x;
-        const trenchWidth =
-          runAxis === "z" ? trenchSizeScaled.x : trenchSizeScaled.z;
         if (PROJECT_SHOWCASE_ENABLE_FLOOR_PULSES) {
           const floorPulseRecords: Array<{ mat: THREE.MeshBasicMaterial; runT: number }> = [];
           const floorPulseGroup = new THREE.Group();
@@ -13957,8 +13987,8 @@ export default function ResumeSpace3D({
           const panelHeight = panelWidth * (9 / 16) * 1.25;
         const panelSpacing = THREE.MathUtils.clamp(
           runLength / Math.max(6, publishedShowcase.length + 2),
-          18,
-          36,
+          24,
+          50,
         );
         const runStart = -((publishedShowcase.length - 1) * panelSpacing) / 2;
         const panelRecords: ShowcasePanelRecord[] = [];
@@ -16809,6 +16839,832 @@ export default function ResumeSpace3D({
   };
   const memoryPlaybackEngaged =
     viewerMemoriesEnabled && (!moonMemoryManualMode || moonMemoryPlaybackPlaying);
+  const activeRegistryMode: RegistryPanelMode | null = projectShowcaseActive
+    ? "projects"
+    : orbitalPortfolioActive
+      ? "portfolio"
+      : null;
+  const registryCapabilities = activeRegistryMode
+    ? REGISTRY_PANEL_CAPABILITIES[activeRegistryMode]
+    : null;
+  const renderUnifiedRegistryPanel = () => {
+    if (!activeRegistryMode || !registryCapabilities) return null;
+    const isPortfolioMode = activeRegistryMode === "portfolio";
+    const isProjectsMode = !isPortfolioMode;
+    const groupsBase = isPortfolioMode
+      ? orbitalPortfolioGroupsRef.current
+      : portfolioCoreBuild.groups;
+    const projectIndexById = portfolioCoreBuild.hallwayIndexById;
+    const groups = isPortfolioMode
+      ? groupsBase
+      : groupsBase.filter((group) => projectIndexById.has(group.id));
+    const coreViewsBase = isPortfolioMode
+      ? orbitalPortfolioCoreViewsRef.current
+      : portfolioCoreBuild.cores;
+    const activeGroup = (() => {
+      if (isPortfolioMode) {
+        if (!orbitalPortfolioHasActiveFocus || groups.length === 0) return null;
+        return groups[
+          THREE.MathUtils.clamp(
+            orbitalPortfolioFocusIndex,
+            0,
+            Math.max(0, groups.length - 1),
+          )
+        ];
+      }
+      if (groups.length === 0 || projectShowcaseEntries.length === 0) return null;
+      const focusedEntry =
+        projectShowcaseEntries[
+          THREE.MathUtils.clamp(
+            projectShowcaseFocusIndex,
+            0,
+            Math.max(0, projectShowcaseEntries.length - 1),
+          )
+        ];
+      if (!focusedEntry) return null;
+      return groups.find((group) => group.id === focusedEntry.id) ?? null;
+    })();
+    const variants = activeGroup?.variants ?? [];
+    const activeVariant = isPortfolioMode
+      ? variants[
+          THREE.MathUtils.clamp(
+            orbitalPortfolioVariantIndex,
+            0,
+            Math.max(0, variants.length - 1),
+          )
+        ]
+      : variants[0];
+    const mediaItems = activeVariant?.mediaItems ?? [];
+    const activeMedia = isPortfolioMode
+      ? mediaItems[
+          THREE.MathUtils.clamp(
+            orbitalPortfolioMediaIndex,
+            0,
+            Math.max(0, mediaItems.length - 1),
+          )
+        ]
+      : mediaItems[0];
+    const query = orbitalPortfolioSearchQuery.trim().toLowerCase();
+    const filteredGroups = groups.filter((group) => {
+      if (
+        orbitalPortfolioYearFilter !== "all" &&
+        String(group.year ?? "unknown") !== orbitalPortfolioYearFilter
+      ) {
+        return false;
+      }
+      if (
+        orbitalPortfolioTechFilter !== "all" &&
+        !group.technologies.some(
+          (tech) => tech.toLowerCase() === orbitalPortfolioTechFilter.toLowerCase(),
+        )
+      ) {
+        return false;
+      }
+      if (!query) return true;
+      const haystack = `${group.title} ${group.description ?? ""} ${group.technologies.join(" ")}`.toLowerCase();
+      return haystack.includes(query);
+    });
+    const visibleCoreViews = coreViewsBase.filter((core) =>
+      filteredGroups.some((group) => group.coreId === core.id),
+    );
+    const selectedCoreId =
+      (orbitalRegistrySelectedCoreId &&
+      visibleCoreViews.some((core) => core.id === orbitalRegistrySelectedCoreId)
+        ? orbitalRegistrySelectedCoreId
+        : visibleCoreViews[0]?.id) ?? "";
+    const groupsForSelectedCore = filteredGroups.filter(
+      (group) => group.coreId === selectedCoreId,
+    );
+    const orbitalRegistryPanelWidth = 430;
+    const arrowsVisible = isPortfolioMode
+      ? orbitalPortfolioInspectedStationIndexRef.current !== null
+      : registryCapabilities.alwaysShowArrows;
+    const titleTop = isPortfolioMode ? "PORTFOLIO" : "PROJECTS";
+    const titleMain = isPortfolioMode ? "Orbital Registry" : "Hallway Registry";
+    const prevActionLabel = isPortfolioMode ? "Prev" : "Reverse";
+    const nextActionLabel = isPortfolioMode ? "Next" : "Forward";
+    const nextChevron = isPortfolioMode ? "›" : "▲";
+    const prevChevron = isPortfolioMode ? "‹" : "▼";
+    const onPrev = () => {
+      if (isPortfolioMode) {
+        stepOrbitalPortfolioSequence(-1);
+      } else {
+        stepProjectShowcaseFocus(-1);
+      }
+    };
+    const onNext = () => {
+      if (isPortfolioMode) {
+        stepOrbitalPortfolioSequence(1);
+      } else {
+        stepProjectShowcaseFocus(1);
+      }
+    };
+
+    return (
+      <>
+        <div
+          style={{
+            position: "fixed",
+            right: 18,
+            top: 78,
+            zIndex: 1110,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            width: orbitalRegistryPanelWidth,
+            transform: orbitalRegistryPanelVisible
+              ? "translateX(0)"
+              : `translateX(${orbitalRegistryPanelWidth + 24}px)`,
+            opacity: orbitalRegistryPanelVisible ? 1 : 0,
+            pointerEvents: orbitalRegistryPanelVisible ? "auto" : "none",
+            transition: "transform 240ms ease, opacity 180ms ease",
+          }}
+        >
+          <div
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(120, 220, 255, 0.5)",
+              background:
+                "linear-gradient(180deg, rgba(6, 16, 30, 0.9) 0%, rgba(4, 10, 22, 0.9) 100%)",
+              color: "#dff5ff",
+              fontFamily: "'Rajdhani', sans-serif",
+            }}
+          >
+            <div style={{ fontSize: 12, letterSpacing: 1.2, color: "#92deff" }}>
+              {titleTop}
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}>
+              {titleMain}
+            </div>
+            <div
+              style={{
+                marginTop: 6,
+                height: 1,
+                background: "rgba(140, 220, 255, 0.28)",
+              }}
+            />
+            <div style={{ marginTop: 7, display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                onClick={onPrev}
+                style={{
+                  padding: "4px 6px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(170, 225, 255, 0.45)",
+                  background: "rgba(8, 18, 34, 0.82)",
+                  color: "#dff3ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                {prevActionLabel}
+              </button>
+              <button
+                onClick={onNext}
+                style={{
+                  padding: "4px 6px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(170, 225, 255, 0.45)",
+                  background: "rgba(8, 18, 34, 0.82)",
+                  color: "#dff3ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                {nextActionLabel}
+              </button>
+              {registryCapabilities.showPlayPause && (
+                <button
+                  onClick={toggleProjectShowcasePlayback}
+                  style={{
+                    padding: "4px 6px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(170, 225, 255, 0.45)",
+                    background: "rgba(8, 18, 34, 0.82)",
+                    color: "#dff3ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  {projectShowcasePlaying ? "Pause" : "Play"}
+                </button>
+              )}
+              {registryCapabilities.showStopOrbits && (
+                <button
+                  onClick={() => {
+                    const next = !orbitalPortfolioOrbitsEnabledRef.current;
+                    orbitalPortfolioOrbitsEnabledRef.current = next;
+                    setOrbitalPortfolioOrbitsEnabled(next);
+                  }}
+                  style={{
+                    padding: "4px 6px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(170, 225, 255, 0.45)",
+                    background: "rgba(8, 18, 34, 0.82)",
+                    color: "#dff3ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  {orbitalPortfolioOrbitsEnabled ? "Stop Orbits" : "Start Orbits"}
+                </button>
+              )}
+              {registryCapabilities.showAutoPlay && (
+                <button
+                  onClick={() => {
+                    const next = !orbitalPortfolioAutoplayEnabledRef.current;
+                    orbitalPortfolioAutoplayEnabledRef.current = next;
+                    setOrbitalPortfolioAutoplayEnabled(next);
+                    const now = performance.now();
+                    orbitalPortfolioAutoRef.current.lastAdvanceAt = now;
+                    if (next) {
+                      focusOrbitalPortfolioStation(
+                        orbitalPortfolioFocusIndexRef.current,
+                        orbitalPortfolioMediaIndex,
+                        {
+                          autoplay: true,
+                          variantIndex: orbitalPortfolioVariantIndexRef.current,
+                        },
+                      );
+                    }
+                  }}
+                  style={{
+                    padding: "4px 6px",
+                    borderRadius: 8,
+                    border: orbitalPortfolioAutoplayEnabled
+                      ? "1px solid rgba(145, 232, 255, 0.88)"
+                      : "1px solid rgba(170, 225, 255, 0.45)",
+                    background: "rgba(8, 18, 34, 0.76)",
+                    color: "#dff3ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  {orbitalPortfolioAutoplayEnabled ? "Auto-play On" : "Auto-play Off"}
+                </button>
+              )}
+              {registryCapabilities.showExit && (
+                <button
+                  onClick={exitOrbitalPortfolio}
+                  style={{
+                    padding: "4px 6px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255, 195, 160, 0.45)",
+                    background: "rgba(28, 14, 10, 0.82)",
+                    color: "#ffe2d5",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    marginLeft: "auto",
+                  }}
+                >
+                  Exit
+                </button>
+              )}
+            </div>
+            <div style={{ marginTop: 7, fontSize: 12, color: "#d8f0ff", lineHeight: 1.35 }}>
+              <div style={{ fontSize: 13, color: "#eaf8ff" }}>
+                {activeGroup?.title ?? "No active selection"}
+              </div>
+              <div style={{ marginTop: 1, color: "rgba(170, 228, 255, 0.96)" }}>
+                Core: {(activeGroup?.coreTitle ?? orbitalPortfolioFocusedCoreId) || "N/A"}
+              </div>
+              <div style={{ marginTop: 1, color: "rgba(210, 235, 255, 0.84)" }}>
+                {(() => {
+                  const category =
+                    activeVariant?.technologies?.[0] ||
+                    activeGroup?.technologies?.[0] ||
+                    "Portfolio Sample";
+                  return `Category: ${category}`;
+                })()}
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: 8,
+                display: "flex",
+                gap: 6,
+                alignItems: "center",
+              }}
+            >
+              <input
+                value={orbitalPortfolioSearchQuery}
+                onChange={(event) => setOrbitalPortfolioSearchQuery(event.currentTarget.value)}
+                placeholder="Search title, description, technology..."
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  padding: "7px 9px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(150, 220, 255, 0.42)",
+                  background: "rgba(8, 18, 34, 0.78)",
+                  color: "#e3f6ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 12,
+                }}
+              />
+              <select
+                value={orbitalPortfolioYearFilter}
+                onChange={(event) => setOrbitalPortfolioYearFilter(event.currentTarget.value)}
+                style={{
+                  width: 94,
+                  padding: "7px 6px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(150, 220, 255, 0.42)",
+                  background: "rgba(8, 18, 34, 0.78)",
+                  color: "#e3f6ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 12,
+                }}
+              >
+                <option value="all">All Years</option>
+                {Array.from(
+                  new Set(groups.map((group) => String(group.year ?? "unknown"))),
+                )
+                  .sort((a, b) =>
+                    a === "unknown" ? 1 : b === "unknown" ? -1 : b.localeCompare(a),
+                  )
+                  .map((year) => (
+                    <option key={year} value={year}>
+                      {year === "unknown" ? "Unknown" : year}
+                    </option>
+                  ))}
+              </select>
+              <select
+                value={orbitalPortfolioTechFilter}
+                onChange={(event) => setOrbitalPortfolioTechFilter(event.currentTarget.value)}
+                style={{
+                  width: 112,
+                  padding: "7px 6px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(150, 220, 255, 0.42)",
+                  background: "rgba(8, 18, 34, 0.78)",
+                  color: "#e3f6ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 12,
+                }}
+              >
+                <option value="all">All Tech</option>
+                {Array.from(new Set(groups.flatMap((group) => group.technologies)))
+                  .sort((a, b) => a.localeCompare(b))
+                  .map((tech) => (
+                    <option key={tech} value={tech}>
+                      {tech}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div
+              style={{
+                marginTop: 8,
+                height: 206,
+                borderRadius: 10,
+                border: "1px solid rgba(155, 225, 255, 0.28)",
+                background: "rgba(6, 10, 20, 0.84)",
+                padding: "6px",
+                display: "grid",
+                gridTemplateColumns: "0.42fr 0.58fr",
+                gap: 6,
+              }}
+            >
+              {filteredGroups.length === 0 ? (
+                <div
+                  style={{
+                    color: "rgba(182, 214, 236, 0.8)",
+                    fontSize: 12,
+                    padding: "8px 8px 10px",
+                    gridColumn: "1 / span 2",
+                  }}
+                >
+                  No matches for current filters.
+                </div>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      borderRadius: 8,
+                      border: "1px solid rgba(145, 232, 255, 0.24)",
+                      background: "rgba(8, 18, 34, 0.58)",
+                      overflowY: "auto",
+                      padding: 4,
+                    }}
+                  >
+                    {visibleCoreViews.map((core) => {
+                      const isSelected = core.id === selectedCoreId;
+                      return (
+                        <button
+                          key={core.id}
+                          onClick={() => {
+                            setOrbitalRegistrySelectedCoreId(core.id);
+                            if (isPortfolioMode) {
+                              focusOrbitalPortfolioCore(core.id);
+                            } else {
+                              const firstGroup = filteredGroups.find(
+                                (group) => group.coreId === core.id,
+                              );
+                              if (!firstGroup) return;
+                              const projectIndex = projectIndexById.get(firstGroup.id);
+                              if (typeof projectIndex === "number") {
+                                jumpProjectShowcaseToIndex(projectIndex);
+                              }
+                            }
+                          }}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            borderRadius: 7,
+                            border: isSelected
+                              ? "1px solid rgba(145, 232, 255, 0.92)"
+                              : "1px solid rgba(145, 232, 255, 0.24)",
+                            background: isSelected
+                              ? "rgba(20, 58, 92, 0.84)"
+                              : "rgba(8, 18, 34, 0.68)",
+                            color: "#e8f7ff",
+                            cursor: "pointer",
+                            padding: "6px 7px",
+                            marginBottom: 5,
+                            fontSize: 11,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {core.title}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div
+                    style={{
+                      borderRadius: 8,
+                      border: "1px solid rgba(145, 232, 255, 0.24)",
+                      background: "rgba(8, 18, 34, 0.58)",
+                      overflowY: "auto",
+                      padding: 4,
+                    }}
+                  >
+                    {groupsForSelectedCore.length === 0 ? (
+                      <div
+                        style={{
+                          color: "rgba(182, 214, 236, 0.8)",
+                          fontSize: 11,
+                          padding: "6px 7px",
+                        }}
+                      >
+                        No entries in this core.
+                      </div>
+                    ) : (
+                      groupsForSelectedCore.map((group) => {
+                        const isHere = group.id === activeGroup?.id;
+                        return (
+                          <button
+                            key={group.id}
+                            onClick={() => {
+                              if (isPortfolioMode) {
+                                const groupIndex = groups.findIndex(
+                                  (item) => item.id === group.id,
+                                );
+                                if (groupIndex >= 0) focusOrbitalPortfolioStation(groupIndex, 0);
+                                return;
+                              }
+                              const projectIndex = projectIndexById.get(group.id);
+                              if (typeof projectIndex === "number") {
+                                jumpProjectShowcaseToIndex(projectIndex);
+                              }
+                            }}
+                            style={{
+                              width: "100%",
+                              textAlign: "left",
+                              borderRadius: 7,
+                              border: isHere
+                                ? "1px solid rgba(145, 232, 255, 0.92)"
+                                : "1px solid rgba(145, 232, 255, 0.24)",
+                              background: isHere
+                                ? "rgba(20, 58, 92, 0.84)"
+                                : "rgba(8, 18, 34, 0.68)",
+                              color: "#e8f7ff",
+                              cursor: "pointer",
+                              padding: "6px 7px",
+                              marginBottom: 5,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 6,
+                              fontSize: 11,
+                            }}
+                          >
+                            <span
+                              style={{
+                                minWidth: 0,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {group.title}
+                            </span>
+                            {group.clientVariantCount > 0 ? (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  color: isHere ? "#c0f2ff" : "rgba(180,220,245,0.72)",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {group.clientVariantCount}
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div
+              style={{
+                marginTop: 8,
+                height: 118,
+                borderRadius: 10,
+                overflowY: "auto",
+                border: "1px solid rgba(155, 225, 255, 0.28)",
+                background: "rgba(6, 10, 20, 0.84)",
+                padding: "8px 9px",
+                fontSize: 12,
+                lineHeight: 1.45,
+                color: "#d7ebfa",
+              }}
+            >
+              {activeMedia?.description ||
+                activeVariant?.description ||
+                activeGroup?.description ||
+                "No description available for this portfolio item yet."}
+            </div>
+          </div>
+        </div>
+
+        {!orbitalRegistryPanelVisible && (
+          <div
+            style={{
+              position: "fixed",
+              right: -5,
+              top: 184,
+              zIndex: 1101,
+              pointerEvents: "none",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 0,
+              padding: "8px 5px 9px",
+              borderRadius: 0,
+              border: "none",
+              background: "#000000",
+              color: "#dff5ff",
+              fontFamily: "'Rajdhani', sans-serif",
+              writingMode: "vertical-rl",
+              transform: "rotate(180deg)",
+              textTransform: "uppercase",
+              letterSpacing: 0.6,
+            }}
+          >
+            <span style={{ fontSize: 10, color: "#9fdfff", opacity: 0.9, lineHeight: "100%" }}>
+              {isPortfolioMode ? "Portfolio" : "Projects"}
+            </span>
+            <span style={{ fontSize: 10, fontWeight: 700, lineHeight: "auto" }}>
+              {titleMain}
+            </span>
+          </div>
+        )}
+
+        <button
+          onClick={() => setOrbitalRegistryPanelVisible((prev) => !prev)}
+          style={{
+            position: "fixed",
+            right: orbitalRegistryPanelVisible ? 447 : -1,
+            top: 120,
+            zIndex: 1102,
+            width: 28,
+            height: 56,
+            borderRadius: "10px 0 0 10px",
+            border: "1px solid rgba(120, 220, 255, 0.5)",
+            background:
+              "linear-gradient(180deg, rgba(6, 16, 30, 0.9) 0%, rgba(4, 10, 22, 0.9) 100%)",
+            color: "#dff5ff",
+            fontSize: 16,
+            cursor: "pointer",
+            transition: "right 240ms ease",
+          }}
+          title={orbitalRegistryPanelVisible ? `Hide ${titleMain}` : `Show ${titleMain}`}
+        >
+          {orbitalRegistryPanelVisible ? ">" : "<"}
+        </button>
+
+        {arrowsVisible && (
+          <div
+            style={{
+              position: "fixed",
+              left: "calc(100% - 285px)",
+              top: "50%",
+              transform: "translateY(-50%)",
+              zIndex: 1102,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              pointerEvents: "auto",
+            }}
+          >
+            <button
+              onClick={onNext}
+              style={{
+                width: 28,
+                height: 30,
+                borderRadius: 8,
+                border: "1px solid rgba(180, 220, 255, 0.5)",
+                background: "rgba(0, 0, 0, 0.9)",
+                color: "#ffffff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 18,
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              }}
+              title={isPortfolioMode ? "Next portfolio slide" : "Forward in projects hallway"}
+            >
+              {nextChevron}
+            </button>
+            <button
+              onClick={onPrev}
+              style={{
+                width: 28,
+                height: 30,
+                borderRadius: 8,
+                border: "1px solid rgba(180, 220, 255, 0.5)",
+                background: "rgba(0, 0, 0, 0.9)",
+                color: "#ffffff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 18,
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              }}
+              title={isPortfolioMode ? "Previous portfolio slide" : "Reverse in projects hallway"}
+            >
+              {prevChevron}
+            </button>
+          </div>
+        )}
+
+        {isProjectsMode && (
+          <div
+            style={{
+              position: "fixed",
+              left: "50%",
+              bottom: 18,
+              transform: "translateX(-50%)",
+              zIndex: 1102,
+              pointerEvents: "auto",
+              display: "flex",
+              alignItems: "flex-end",
+              gap: 10,
+              padding: "8px 10px 10px",
+              borderRadius: 10,
+              border: "1px solid rgba(145, 225, 255, 0.4)",
+              background: "rgba(6, 14, 26, 0.84)",
+              color: "#d7ebfa",
+              fontFamily: "'Rajdhani', sans-serif",
+              boxShadow: "0 6px 18px rgba(2, 10, 18, 0.45)",
+            }}
+          >
+            <div
+              style={{
+                width: 24,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <span style={{ fontSize: 9, letterSpacing: 0.6, color: "rgba(171, 214, 255, 0.88)" }}>
+                THR
+              </span>
+              <div
+                onPointerDown={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  projectShowcaseLeverRectRef.current = rect;
+                  startProjectShowcaseLeverDrag(e.clientY, rect);
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                style={{
+                  position: "relative",
+                  width: 16,
+                  height: 104,
+                  borderRadius: 12,
+                  border: "1px solid rgba(160, 205, 255, 0.42)",
+                  background:
+                    "linear-gradient(180deg, rgba(22,40,58,0.95) 0%, rgba(10,18,28,0.9) 100%)",
+                  cursor: "ns-resize",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 2,
+                    right: 2,
+                    top: "50%",
+                    height: 1,
+                    background: "rgba(160, 200, 255, 0.45)",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    left: -3,
+                    right: -3,
+                    width: 22,
+                    height: 22,
+                    borderRadius: "50%",
+                    border: "1px solid rgba(220, 235, 255, 0.65)",
+                    background:
+                      "radial-gradient(circle at 30% 30%, rgba(180,220,255,0.95) 0%, rgba(96,154,210,0.95) 35%, rgba(30,64,94,0.98) 100%)",
+                    boxShadow: "0 2px 8px rgba(5, 10, 16, 0.5)",
+                    top: `${50 - projectShowcaseLeverValue * 40}%`,
+                    transform: "translateY(-50%)",
+                    pointerEvents: "none",
+                  }}
+                />
+              </div>
+            </div>
+            <div
+              style={{
+                minWidth: 156,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 10,
+                  letterSpacing: 0.5,
+                }}
+              >
+                <span>SLIDE ANGLE</span>
+                <span>{projectShowcaseAnglePercent.toFixed(0)}%</span>
+              </div>
+              <input
+                type="range"
+                min={PROJECT_SHOWCASE_MIN_ANGLE_PERCENT}
+                max={PROJECT_SHOWCASE_MAX_ANGLE_PERCENT}
+                step={1}
+                value={projectShowcaseAnglePercent}
+                onChange={(e) =>
+                  setProjectShowcaseAnglePercent(Number(e.target.value))
+                }
+              />
+              <div style={{ fontSize: 9, color: "rgba(171, 214, 255, 0.88)", letterSpacing: 0.5 }}>
+                FWD/REV throttle + panel cant
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isPortfolioMode && (
+          <div
+            style={{
+              position: "fixed",
+              left: "50%",
+              bottom: 18,
+              transform: "translateX(-50%)",
+              zIndex: 1102,
+              pointerEvents: "none",
+              padding: "7px 12px",
+              borderRadius: 999,
+              border: "1px solid rgba(145, 225, 255, 0.45)",
+              background: "rgba(6, 14, 26, 0.78)",
+              color: "rgba(226, 244, 255, 0.96)",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 12,
+              letterSpacing: 0.7,
+              textTransform: "uppercase",
+              boxShadow: "0 6px 18px rgba(2, 10, 18, 0.45)",
+            }}
+          >
+            Wheel: Zoom | Shift + Wheel: Scroll Screenshot
+          </div>
+        )}
+      </>
+    );
+  };
 
   return (
     <>
@@ -18475,7 +19331,9 @@ export default function ResumeSpace3D({
             </div>
           )}
 
-          {orbitalPortfolioActive &&
+          {renderUnifiedRegistryPanel()}
+
+          {false && orbitalPortfolioActive &&
             (() => {
               const groups = orbitalPortfolioGroupsRef.current;
               const coreViews = orbitalPortfolioCoreViewsRef.current;
@@ -18928,7 +19786,7 @@ export default function ResumeSpace3D({
                 </div>
               );
             })()}
-          {orbitalPortfolioActive && (
+          {false && orbitalPortfolioActive && (
             !orbitalRegistryPanelVisible && (
               <div
                 style={{
@@ -18960,7 +19818,7 @@ export default function ResumeSpace3D({
               </div>
             )
           )}
-          {orbitalPortfolioActive && (
+          {false && orbitalPortfolioActive && (
             <button
               onClick={() => setOrbitalRegistryPanelVisible((prev) => !prev)}
               style={{
@@ -18985,7 +19843,7 @@ export default function ResumeSpace3D({
               {orbitalRegistryPanelVisible ? ">" : "<"}
             </button>
           )}
-          {orbitalPortfolioActive &&
+          {false && orbitalPortfolioActive &&
             orbitalPortfolioInspectedStationIndexRef.current !== null && (
             <div
               style={{
@@ -19040,7 +19898,7 @@ export default function ResumeSpace3D({
               </button>
             </div>
           )}
-          {orbitalPortfolioActive && (
+          {false && orbitalPortfolioActive && (
             <div
               style={{
                 position: "fixed",
@@ -19064,7 +19922,7 @@ export default function ResumeSpace3D({
               Wheel: Zoom | Shift + Wheel: Scroll Screenshot
             </div>
           )}
-          {projectShowcaseActive && (
+          {projectShowcaseActive && PROJECT_SHOWCASE_USE_LEGACY_GUI && (
             <>
               <div
               style={{
