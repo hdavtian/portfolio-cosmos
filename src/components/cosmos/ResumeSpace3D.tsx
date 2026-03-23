@@ -82,7 +82,6 @@ import {
 } from "./audio/threeAudioUtils";
 import {
   SUN_GLOW_SPRITE_SIZE,
-  SUN_LABEL_Y,
   EXPERIENCE_ORBIT,
   EXPERIENCE_RADIUS,
   EXP_MOON_ORBIT_BASE,
@@ -10933,14 +10932,8 @@ export default function ResumeSpace3D({
     sunMesh.add(sprite);
     sceneRef.current.sunGlowMaterial = spriteMaterial;
 
-    // Sun Labels (Restored)
-    const sunLabel = createLabel(
-      resumeData.personal.name,
-      resumeData.personal.title,
-    );
-    sunLabel.position.set(0, SUN_LABEL_Y, 0);
-    sunMesh.add(sunLabel);
-    sunLabelRef.current = sunLabel;
+    // Keep the sun label-free; identity is already shown in the main HUD/nav.
+    sunLabelRef.current = null;
 
     // 2. HELPER: Create Planet
     const createPlanet = createPlanetFactory({
