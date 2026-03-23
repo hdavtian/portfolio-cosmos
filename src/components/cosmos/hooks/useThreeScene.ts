@@ -17,6 +17,7 @@ CameraControls.install({ THREE });
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
 import type { MutableRefObject, RefObject } from "react";
 import type { SceneRef } from "../ResumeSpace3D.types";
 
@@ -148,8 +149,18 @@ export const useThreeScene = (params: {
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
 
-    // Bokeh / depth-of-field pass removed — it caused a visible hitch
-    // when entering moon view and is no longer needed with the orbit experience.
+    // Subtle depth-of-field pass for the hallway sequence.
+    // Keep disabled by default; render loop enables it only in showcase mode.
+    const bokehPass = new BokehPass(scene, camera, {
+      focus: 54,
+      aperture: 0.0001,
+      maxblur: 0.0045,
+      width: container.clientWidth,
+      height: container.clientHeight,
+    });
+    bokehPass.enabled = false;
+    composer.addPass(bokehPass);
+    sceneRef.current.bokehPass = bokehPass;
 
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(container.clientWidth, container.clientHeight),

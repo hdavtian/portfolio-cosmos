@@ -187,7 +187,7 @@ const PROJECT_SHOWCASE_ENTRY_FORWARD_LOCK_MS = 1200;
 const PROJECT_SHOWCASE_FORWARD_LOOK_SIGN = 1;
 const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = true;
 const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
-type ProjectShowcaseModelKey = "legacy" | "spaceHallway";
+type ProjectShowcaseModelKey = "legacy" | "spaceHallway" | "spaceHallwayBright";
 type ProjectShowcaseModelProfile = {
   modelPath: string;
   textureBasePath: string;
@@ -240,9 +240,27 @@ const PROJECT_SHOWCASE_MODEL_PROFILES: Record<
     sunLightIntensity: 0.62,
     sunBeamIntensity: 0.78,
   },
+  spaceHallwayBright: {
+    modelPath: "/models/space-hallway/space_corridor.glb",
+    textureBasePath: "/models/space-hallway/textures",
+    // Keep hallway floor effect disabled for this corridor mesh.
+    enableFloorPulses: false,
+    // Preserve imported material maps/values and push scene lights brighter.
+    injectNamedDiffuseMaps: false,
+    applyLegacyMeshFilters: false,
+    applyLegacyMaterialNormalization: false,
+    disableEmbeddedModelLights: false,
+    enableSupplementalLighting: true,
+    // Brighter white-forward pass to better match the Sketchfab presentation.
+    ambientLightIntensity: 0.5,
+    keyLightIntensity: 1.18,
+    rimLightIntensity: 0.38,
+    sunLightIntensity: 1.45,
+    sunBeamIntensity: 1.85,
+  },
 };
-// A/B switch for project hallway model comparisons ("legacy" or "spaceHallway").
-const ACTIVE_PROJECT_SHOWCASE_MODEL: ProjectShowcaseModelKey = "spaceHallway";
+// A/B switch for project hallway model comparisons.
+const ACTIVE_PROJECT_SHOWCASE_MODEL: ProjectShowcaseModelKey = "spaceHallwayBright";
 const PROJECT_SHOWCASE_ACTIVE_PROFILE =
   PROJECT_SHOWCASE_MODEL_PROFILES[ACTIVE_PROJECT_SHOWCASE_MODEL];
 const PROJECT_SHOWCASE_MODEL_PATH = PROJECT_SHOWCASE_ACTIVE_PROFILE.modelPath;
@@ -16235,6 +16253,7 @@ export default function ResumeSpace3D({
       shipExploreCoordsRef,
       shipRollOffsetRef,
       navTurnActiveRef,
+      projectShowcaseActiveRef,
       settledViewTargetRef,
       optionsRef,
       hologramDroneRef,

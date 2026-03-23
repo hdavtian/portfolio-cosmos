@@ -82,6 +82,7 @@ export const useRenderLoop = () => {
         world: [number, number, number];
       }>;
       navTurnActiveRef: React.MutableRefObject<boolean>;
+      projectShowcaseActiveRef: React.MutableRefObject<boolean>;
       settledViewTargetRef: React.MutableRefObject<THREE.Vector3 | null>;
       optionsRef: React.MutableRefObject<{
         spaceFollowDistance?: number;
@@ -148,6 +149,7 @@ export const useRenderLoop = () => {
         optionsRef,
         hologramDroneRef,
         navTurnActiveRef,
+        projectShowcaseActiveRef,
         updateMoonOrbit,
         isMoonOrbiting,
         updateAutopilotNavigation,
@@ -1493,21 +1495,27 @@ export const useRenderLoop = () => {
             }
           | undefined;
         const droneActive = hologramDroneRef.current?.isActive();
-        if (insideShipRef.current || droneActive) {
+        const showcaseDofActive = projectShowcaseActiveRef.current;
+        if (insideShipRef.current || droneActive || !showcaseDofActive) {
           if (bokehPass?.enabled) {
             bokehPass.enabled = false;
           }
-        } else if (bokehPass?.enabled) {
-          const focusedMoon = focusedMoonRef.current;
-          if (focusedMoon) {
-            const moonWorld = new THREE.Vector3();
-            focusedMoon.getWorldPosition(moonWorld);
-            const focusDistance = camera.position.distanceTo(moonWorld);
-            if (bokehPass.materialBokeh?.uniforms?.focus) {
-              bokehPass.materialBokeh.uniforms.focus.value = focusDistance;
-            }
-          } else {
-            bokehPass.enabled = false;
+        } else if (bokehPass) {
+          if (!bokehPass.enabled) bokehPass.enabled = true;
+          const focusTarget = new THREE.Vector3();
+          const fallbackFocusDistance = 52;
+          let focusDistance = fallbackFocusDistance;
+          try {
+            (controls as unknown as { getTarget: (out: THREE.Vector3) => THREE.Vector3 })
+              .getTarget(focusTarget);
+            const camToTarget = camera.position.distanceTo(focusTarget);
+            // Keep near geometry in focus and let distant tunnel drift softly out.
+            focusDistance = THREE.MathUtils.clamp(camToTarget * 0.55, 36, 82);
+          } catch {
+            focusDistance = fallbackFocusDistance;
+          }
+          if (bokehPass.materialBokeh?.uniforms?.focus) {
+            bokehPass.materialBokeh.uniforms.focus.value = focusDistance;
           }
         }
 
