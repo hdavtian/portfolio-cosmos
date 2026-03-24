@@ -184,8 +184,10 @@ const PROJECT_SHOWCASE_FREE_LOOK_MIN_DISTANCE = 18;
 const PROJECT_SHOWCASE_FREE_LOOK_MAX_DISTANCE = 160;
 const PROJECT_SHOWCASE_ENTRY_FORWARD_LOCK_MS = 1200;
 const PROJECT_SHOWCASE_FORWARD_LOOK_SIGN = 1;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_APPROACH_MS = 860;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_MS = 280;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_MS = 1500;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_HOLD_MS = 540;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS = 1180;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS = 320;
 const PROJECT_SHOWCASE_ELEVATOR_PEEKERS_ENABLED = true;
 const PROJECT_SHOWCASE_ELEVATOR_PEEKER_FLOOR_MULT = 2.2;
 const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = true;
@@ -2260,6 +2262,7 @@ export default function ResumeSpace3D({
   const projectShowcaseLookVectorRef = useRef<THREE.Vector3 | null>(null);
   const projectShowcaseForwardLockUntilRef = useRef(0);
   const projectShowcaseAboutEntryTimeoutRef = useRef<number | null>(null);
+  const projectShowcaseAboutEntryRafRef = useRef<number | null>(null);
   const projectShowcaseRunPosRef = useRef(0);
   const projectShowcasePrevControlsEnabledRef = useRef(true);
   const pendingProjectShowcaseEntryRef = useRef(false);
@@ -3412,6 +3415,36 @@ export default function ResumeSpace3D({
       fadeOutFalconMoonTravelSfx();
     },
     resolveSpecialSectionTarget: (targetId) => {
+      if (targetId === "about") {
+        const exterior = projectShowcaseExteriorRootRef.current;
+        if (exterior) {
+          const bounds = new THREE.Box3().setFromObject(exterior);
+          const center = bounds.getCenter(new THREE.Vector3());
+          const size = bounds.getSize(new THREE.Vector3());
+          const shipPos = spaceshipRef.current?.position;
+          const outward = new THREE.Vector3(0, 0, 1);
+          if (shipPos) {
+            outward.copy(shipPos).sub(center);
+            // Keep a mostly horizontal standoff so we don't route below the TARDIS.
+            outward.y *= 0.18;
+            if (outward.lengthSq() < 1e-5) {
+              outward.set(0.35, 0.05, 0.94);
+            } else {
+              outward.normalize();
+            }
+          }
+          const standoff = THREE.MathUtils.clamp(
+            Math.max(size.x, size.z) * 2.1,
+            120,
+            260,
+          );
+          const navPoint = center
+            .clone()
+            .addScaledVector(outward, standoff)
+            .add(new THREE.Vector3(0, size.y * 0.06, 0));
+          return navPoint;
+        }
+      }
       if (targetId === "projects" || targetId === "about") {
         const rootAnchor = projectShowcaseWorldAnchorRef.current;
         const track = projectShowcaseTrackRef.current;
@@ -4149,6 +4182,10 @@ export default function ResumeSpace3D({
       window.clearTimeout(projectShowcaseAboutEntryTimeoutRef.current);
       projectShowcaseAboutEntryTimeoutRef.current = null;
     }
+    if (projectShowcaseAboutEntryRafRef.current !== null) {
+      cancelAnimationFrame(projectShowcaseAboutEntryRafRef.current);
+      projectShowcaseAboutEntryRafRef.current = null;
+    }
     setProjectShowcaseEntryOverlayOpacity(0);
     const showcaseRoot = projectShowcaseRootRef.current;
     if (showcaseRoot) {
@@ -4360,22 +4397,80 @@ export default function ResumeSpace3D({
       exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
       const tardisWorld = new THREE.Vector3();
       exterior.getWorldPosition(tardisWorld);
-      const approachCam = tardisWorld
-        .clone()
-        .add(new THREE.Vector3(8.5, 9.5, 20.5));
-      const approachTarget = tardisWorld.clone().add(new THREE.Vector3(0, 6, 0));
-      controls.setLookAt(
-        approachCam.x,
-        approachCam.y,
-        approachCam.z,
-        approachTarget.x,
-        approachTarget.y,
-        approachTarget.z,
-        true,
+      const startCam = camera.position.clone();
+      const startTarget = new THREE.Vector3();
+      const controlsAny = controls as unknown as {
+        getTarget?: (out: THREE.Vector3) => void;
+      };
+      if (controlsAny.getTarget) {
+        controlsAny.getTarget(startTarget);
+      } else {
+        startTarget.copy(startCam).add(new THREE.Vector3(0, 0, -24));
+      }
+      const fullViewCam = tardisWorld.clone().add(new THREE.Vector3(18, 15, 46));
+      const fullViewTarget = tardisWorld.clone().add(new THREE.Vector3(0, 8, 0));
+      const closeCam = tardisWorld.clone().add(new THREE.Vector3(8.8, 10.2, 23.8));
+      const closeTarget = tardisWorld.clone().add(new THREE.Vector3(0, 6.3, 0));
+      const runDirectStage = (
+        fromCam: THREE.Vector3,
+        fromTarget: THREE.Vector3,
+        toCam: THREE.Vector3,
+        toTarget: THREE.Vector3,
+        durationMs: number,
+        onDone: () => void,
+      ) => {
+        const stageStart = performance.now();
+        const tick = () => {
+          const t = THREE.MathUtils.clamp(
+            (performance.now() - stageStart) / Math.max(1, durationMs),
+            0,
+            1,
+          );
+          const eased = t * t * (3 - 2 * t);
+          const camPos = fromCam.clone().lerp(toCam, eased);
+          const targetPos = fromTarget.clone().lerp(toTarget, eased);
+          controls.setLookAt(
+            camPos.x,
+            camPos.y,
+            camPos.z,
+            targetPos.x,
+            targetPos.y,
+            targetPos.z,
+            false,
+          );
+          if (t >= 1) {
+            projectShowcaseAboutEntryRafRef.current = null;
+            onDone();
+            return;
+          }
+          projectShowcaseAboutEntryRafRef.current = requestAnimationFrame(tick);
+        };
+        projectShowcaseAboutEntryRafRef.current = requestAnimationFrame(tick);
+      };
+
+      runDirectStage(
+        startCam,
+        startTarget,
+        fullViewCam,
+        fullViewTarget,
+        PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_MS,
+        () => {
+          projectShowcaseAboutEntryTimeoutRef.current = window.setTimeout(() => {
+            runDirectStage(
+              fullViewCam,
+              fullViewTarget,
+              closeCam,
+              closeTarget,
+              PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS,
+              () => {
+                projectShowcaseAboutEntryTimeoutRef.current = window.setTimeout(() => {
+                  finalizeInteriorEntry();
+                }, PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS);
+              },
+            );
+          }, PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_HOLD_MS);
+        },
       );
-      projectShowcaseAboutEntryTimeoutRef.current = window.setTimeout(() => {
-        finalizeInteriorEntry();
-      }, PROJECT_SHOWCASE_ABOUT_EXTERIOR_APPROACH_MS + PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_MS);
       return;
     }
 
@@ -16355,7 +16450,7 @@ export default function ResumeSpace3D({
               const tardisRoot = (tardisGltf as { scene: THREE.Group }).scene.clone(true);
               const bounds = new THREE.Box3().setFromObject(tardisRoot);
               const size = bounds.getSize(new THREE.Vector3());
-              const desiredHeight = 38;
+              const desiredHeight = 58;
               const maxDim = Math.max(size.x, size.y, size.z, 1);
               const scale = desiredHeight / maxDim;
               tardisRoot.scale.setScalar(scale);
@@ -16365,8 +16460,57 @@ export default function ResumeSpace3D({
               tardisRoot.position.y += 4;
               tardisRoot.traverse((obj) => {
                 obj.layers.set(PROJECT_SHOWCASE_LAYER);
+                if (!(obj instanceof THREE.Mesh)) return;
+                const materials = Array.isArray(obj.material)
+                  ? obj.material
+                  : [obj.material];
+                materials.forEach((mat) => {
+                  if (!mat) return;
+                  if (
+                    mat instanceof THREE.MeshStandardMaterial ||
+                    mat instanceof THREE.MeshPhysicalMaterial
+                  ) {
+                    mat.envMapIntensity = Math.max(mat.envMapIntensity ?? 0, 1.35);
+                    mat.emissiveIntensity = Math.max(mat.emissiveIntensity ?? 0, 1.05);
+                    mat.needsUpdate = true;
+                  }
+                });
               });
               aboutExteriorRoot.add(tardisRoot);
+
+              const tardisKey = new THREE.SpotLight(
+                0xe8f4ff,
+                8.2,
+                460,
+                Math.PI / 4.8,
+                0.62,
+                1.05,
+              );
+              tardisKey.position.set(30, 36, 26);
+              const tardisFill = new THREE.PointLight(0xa8d4ff, 3.55, 320, 1.2);
+              tardisFill.position.set(-20, 16, -18);
+              const tardisRim = new THREE.PointLight(0x72aaff, 2.45, 240, 1.05);
+              tardisRim.position.set(0, 24, 30);
+              const tardisTopBloom = new THREE.PointLight(0xbfdcff, 2.8, 190, 1.3);
+              tardisTopBloom.position.set(0, 43, 0);
+              const tardisAmbient = new THREE.HemisphereLight(0xdbe9ff, 0x25395a, 1.85);
+              const tardisLightTarget = new THREE.Object3D();
+              tardisLightTarget.position.set(0, 6, 0);
+              tardisKey.target = tardisLightTarget;
+              tardisKey.layers.set(PROJECT_SHOWCASE_LAYER);
+              tardisFill.layers.set(PROJECT_SHOWCASE_LAYER);
+              tardisRim.layers.set(PROJECT_SHOWCASE_LAYER);
+              tardisTopBloom.layers.set(PROJECT_SHOWCASE_LAYER);
+              tardisAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
+              tardisLightTarget.layers.set(PROJECT_SHOWCASE_LAYER);
+              aboutExteriorRoot.add(
+                tardisLightTarget,
+                tardisKey,
+                tardisFill,
+                tardisRim,
+                tardisTopBloom,
+                tardisAmbient,
+              );
             },
             undefined,
             () => {
@@ -17789,6 +17933,10 @@ export default function ResumeSpace3D({
       if (projectShowcaseAboutEntryTimeoutRef.current !== null) {
         window.clearTimeout(projectShowcaseAboutEntryTimeoutRef.current);
         projectShowcaseAboutEntryTimeoutRef.current = null;
+      }
+      if (projectShowcaseAboutEntryRafRef.current !== null) {
+        cancelAnimationFrame(projectShowcaseAboutEntryRafRef.current);
+        projectShowcaseAboutEntryRafRef.current = null;
       }
 
       projectShowcaseRootRef.current = null;

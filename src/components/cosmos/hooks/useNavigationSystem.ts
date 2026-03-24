@@ -1066,12 +1066,14 @@ export const useNavigationSystem = (deps: {
             startPosition: shipPos.clone(),
             startTime: Date.now(),
             useTurbo: true,
-            forceLightspeed: true,
+            forceLightspeed: targetId !== "about",
             targetRadius,
             phaseApproachDistance: THREE.MathUtils.clamp(
-              distToStaging * NAV_SECTION_APPROACH_RATIO,
+              distToStaging * (targetId === "about" ? 0.28 : NAV_SECTION_APPROACH_RATIO),
               NAV_SECTION_APPROACH_MIN_DISTANCE,
-              NAV_SECTION_APPROACH_MAX_DISTANCE,
+              targetId === "about"
+                ? NAV_SECTION_APPROACH_MAX_DISTANCE * 1.45
+                : NAV_SECTION_APPROACH_MAX_DISTANCE,
             ),
             isDirectSectionApproach,
             lightspeedLockedOut: false,
@@ -1083,44 +1085,7 @@ export const useNavigationSystem = (deps: {
             clearanceTarget,
             clearanceDistance,
           };
-          if (targetId === "about" && isDirectSectionApproach) {
-            const toStage = stagingPoint.clone().sub(shipPos);
-            const travelDist = toStage.length();
-            if (travelDist > 1e-3) {
-              const approachDir = stagingPoint.clone().sub(planetCenter);
-              if (approachDir.lengthSq() < 1e-6) {
-                approachDir.set(0, 0, 1);
-              } else {
-                approachDir.normalize();
-              }
-              const approachDist = THREE.MathUtils.clamp(travelDist * 0.38, 2600, 9000);
-              const approachPoint = stagingPoint
-                .clone()
-                .addScaledVector(approachDir, approachDist);
-              const toApproach = approachPoint.clone().sub(shipPos);
-              toApproach.normalize();
-              const up = new THREE.Vector3(0, 1, 0);
-              const lateral = new THREE.Vector3().crossVectors(toApproach, up);
-              if (lateral.lengthSq() < 1e-6) lateral.set(1, 0, 0);
-              lateral.normalize();
-              const centerToShip = shipPos.clone().sub(planetCenter);
-              const lateralSign = centerToShip.dot(lateral) >= 0 ? 1 : -1;
-              const arcOffset = THREE.MathUtils.clamp(travelDist * 0.18, 1400, 6200);
-              const arcLift = THREE.MathUtils.clamp(travelDist * 0.04, 240, 1200);
-              const arcMid = shipPos
-                .clone()
-                .lerp(approachPoint, 0.5)
-                .addScaledVector(lateral, arcOffset * lateralSign)
-                .add(new THREE.Vector3(0, arcLift, 0));
-              navigationTargetRef.current.arcMidPoint = arcMid;
-              navigationTargetRef.current.arcFinalApproachPoint = approachPoint;
-              navigationTargetRef.current.arcInitialDistance = shipPos.distanceTo(approachPoint);
-              navigationTargetRef.current.arcPassedMidPoint = false;
-              vlog(
-                `🌀 About curved staging path armed (offset ${arcOffset.toFixed(0)}u, lift ${arcLift.toFixed(0)}u)`,
-              );
-            }
-          } else if (
+          if (
             targetId === "projects" &&
             isDirectSectionApproach &&
             NAV_PROJECTS_CURVED_APPROACH
@@ -1161,12 +1126,9 @@ export const useNavigationSystem = (deps: {
               );
             }
           }
-          if (
-            targetId === "about" ||
-            (targetId === "projects" && NAV_PROJECTS_CURVED_APPROACH)
-          ) {
+          if (targetId === "projects" && NAV_PROJECTS_CURVED_APPROACH) {
             navTurnActiveRef.current = false;
-            vlog(`🌀 ${targetId === "projects" ? "Projects" : "About"} special-case: skipping turn phase, curving directly`);
+            vlog("🌀 Projects special-case: skipping turn phase, curving directly");
           }
           setCurrentNavigationTarget(targetId);
 
@@ -1867,8 +1829,7 @@ export const useNavigationSystem = (deps: {
         if (
           target.type === "section"
           && (
-            target.id === "about" ||
-            (target.id === "projects" && NAV_PROJECTS_CURVED_APPROACH)
+            target.id === "projects" && NAV_PROJECTS_CURVED_APPROACH
           )
           && target.arcMidPoint
           && target.startPosition
@@ -1892,7 +1853,7 @@ export const useNavigationSystem = (deps: {
               );
               // Continuous curve from start to the pre-approach rail point.
               const lookAheadT = THREE.MathUtils.clamp(
-                progress + (target.id === "projects" ? 0.18 : 0.16),
+                progress + 0.18,
                 0.03,
                 0.992,
               );
@@ -1973,8 +1934,7 @@ export const useNavigationSystem = (deps: {
       if (
         target.type === "section"
         && (
-          target.id === "about" ||
-          (target.id === "projects" && NAV_PROJECTS_CURVED_APPROACH)
+          target.id === "projects" && NAV_PROJECTS_CURVED_APPROACH
         )
         && target.startTime > 0
         && now - target.startTime > 45000
@@ -1985,7 +1945,7 @@ export const useNavigationSystem = (deps: {
         target.arcFinalApproachPoint = undefined;
         if (!target.aboutFailSafeLogged) {
           target.aboutFailSafeLogged = true;
-          vlog(`🛑 ${target.id === "projects" ? "Projects" : "About"} failsafe: forcing final straight-in approach`);
+          vlog("🛑 Projects failsafe: forcing final straight-in approach");
         }
       }
       const decelDist = distance > NAV_LIGHTSPEED_ENGAGE_DIST
@@ -2107,14 +2067,14 @@ export const useNavigationSystem = (deps: {
 
       // Smooth heading update instead of hard lookAt snap each frame.
       const _tmpLookObj = new THREE.Object3D();
-      const skipAboutHeading =
+      const skipCurvedProjectsHeading =
         target.type === "section"
         && (
-          (target.id === "about" || target.id === "projects") &&
+          target.id === "projects" &&
           !!target.arcMidPoint
         )
         && !target.arcPassedMidPoint;
-      if (!skipAboutHeading) {
+      if (!skipCurvedProjectsHeading) {
         _tmpLookObj.position.copy(ship.position);
         _tmpLookObj.lookAt(steerTarget);
         const targetQuat = _tmpLookObj.quaternion.clone();
