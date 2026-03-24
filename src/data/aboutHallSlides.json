@@ -1,0 +1,464 @@
+{
+  "slides": [
+    {
+      "id": "slide-1",
+      "visibleTitle": "Opening",
+      "width": 12.2,
+      "height": 7.6,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "",
+      "type": "type1",
+      "configuration": {
+        "contents": [
+          {
+            "id": "slide-1-main",
+            "type": "column1",
+            "backgroundColor": "rgba(5, 12, 28, 0.92)",
+            "fontColor": "rgba(243, 250, 255, 0.98)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "54px",
+            "fontShadow": "0px 0px 18px rgba(120, 210, 255, 0.42)",
+            "WaitBeforeTextRender": 80,
+            "textIntroFX": { "effect": "fadeIn", "durationMs": 720 },
+            "WaitAfterTextRender": 220,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "Building software has never just been about code.<br><br>It's about bringing ideas to life."
+          }
+        ]
+      }
+    },
+    {
+      "id": "slide-2",
+      "visibleTitle": "Started Early",
+      "width": 12.2,
+      "height": 7.6,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(132, 198, 255, 0.65)",
+      "type": "type1",
+      "configuration": {
+        "contents": [
+          {
+            "id": "slide-2-main",
+            "type": "column1",
+            "backgroundColor": "rgba(8, 16, 36, 0.93)",
+            "fontColor": "rgba(234, 246, 255, 0.97)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "50px",
+            "fontShadow": "0px 0px 14px rgba(121, 198, 255, 0.36)",
+            "WaitBeforeTextRender": 120,
+            "textIntroFX": { "effect": "slideRight", "durationMs": 680 },
+            "WaitAfterTextRender": 180,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "left",
+            "verticalAlign": "middle",
+            "textContent": "For me... it started early.<br><br>Curiosity.<br>Experimenting.<br>Figuring things out."
+          }
+        ]
+      }
+    },
+    {
+      "id": "slide-3",
+      "visibleTitle": "Curiosity To Craft",
+      "width": 20,
+      "height": 15,
+      "horizontalAlign": "right",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(126, 219, 255, 0.72)",
+      "type": "type1",
+      "configuration": {
+        "contents": [
+          {
+            "id": "slide-4-col-1",
+            "type": "column1",
+            "backgroundColor": "rgba(9, 18, 40, 0.94)",
+            "fontColor": "rgba(243, 249, 255, 0.98)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "56px",
+            "fontShadow": "0px 0px 16px rgba(98, 197, 255, 0.45)",
+            "WaitBeforeTextRender": 90,
+            "textIntroFX": { "effect": "slideUp", "durationMs": 680 },
+            "WaitAfterTextRender": 120,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "Overt time... that curiosity became a craft"
+          },
+          {
+            "id": "slide-4-col-2",
+            "type": "column2",
+            "backgroundColor": "rgba(6, 14, 34, 0.95)",
+            "fontColor": "rgba(223, 241, 255, 0.96)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "42px",
+            "fontShadow": "0px 0px 14px rgba(124, 197, 255, 0.34)",
+            "WaitBeforeTextRender": 430,
+            "textIntroFX": { "effect": "fadeIn", "durationMs": 620 },
+            "WaitAfterTextRender": 160,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "From simple interfaces<br>to full systems<br>to ideas brought to life."
+          }
+        ]
+      }
+    },
+    {
+      "id": "slide-4",
+      "visibleTitle": "Connected System",
+      "width": 12.4,
+      "height": 7.4,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(134, 212, 255, 0.72)",
+      "type": "type2",
+      "configuration": {
+        "contents": [
+          {
+            "id": "slide-4-col-1",
+            "type": "column1",
+            "backgroundColor": "rgba(9, 18, 40, 0.94)",
+            "fontColor": "rgba(243, 249, 255, 0.98)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "56px",
+            "fontShadow": "0px 0px 16px rgba(98, 197, 255, 0.45)",
+            "WaitBeforeTextRender": 90,
+            "textIntroFX": { "effect": "slideUp", "durationMs": 680 },
+            "WaitAfterTextRender": 120,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "Frontend.<br>Backend.<br>Architecture."
+          },
+          {
+            "id": "slide-4-col-2",
+            "type": "column2",
+            "backgroundColor": "rgba(6, 14, 34, 0.95)",
+            "fontColor": "rgba(223, 241, 255, 0.96)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "42px",
+            "fontShadow": "0px 0px 14px rgba(124, 197, 255, 0.34)",
+            "WaitBeforeTextRender": 430,
+            "textIntroFX": { "effect": "fadeIn", "durationMs": 620 },
+            "WaitAfterTextRender": 160,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "Not separate pieces —<br>but one connected system."
+          }
+        ]
+      }
+    },
+    {
+      "id": "slide-5",
+      "visibleTitle": "Build Systems",
+      "width": 12,
+      "height": 7.2,
+      "horizontalAlign": "left",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(117, 223, 255, 0.74)",
+      "type": "type1",
+      "configuration": {
+        "contents": [
+          {
+            "id": "slide-5-main",
+            "type": "column1",
+            "backgroundColor": "rgba(4, 12, 30, 0.95)",
+            "fontColor": "rgba(241, 248, 255, 0.99)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "52px",
+            "fontShadow": "0px 0px 18px rgba(110, 223, 255, 0.4)",
+            "WaitBeforeTextRender": 100,
+            "textIntroFX": { "effect": "slideRight", "durationMs": 660 },
+            "WaitAfterTextRender": 180,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "I don't just build features.<br><br>I build systems<br>that are meant to last."
+          }
+        ]
+      }
+    },
+    {
+      "id": "slide-6",
+      "visibleTitle": "Built With Intent",
+      "width": 12.2,
+      "height": 7.4,
+      "horizontalAlign": "right",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(128, 221, 255, 0.66)",
+      "type": "type3",
+      "configuration": {
+        "contents": [
+          {
+            "id": "slide-6-row-1",
+            "type": "row1",
+            "backgroundColor": "rgba(10, 19, 42, 0.95)",
+            "fontColor": "rgba(245, 250, 255, 0.98)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "50px",
+            "fontShadow": "0px 0px 18px rgba(112, 199, 255, 0.42)",
+            "WaitBeforeTextRender": 80,
+            "textIntroFX": { "effect": "slideDown", "durationMs": 660 },
+            "WaitAfterTextRender": 140,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "Clean. Scalable. Thoughtful."
+          },
+          {
+            "id": "slide-6-row-2",
+            "type": "row2",
+            "backgroundColor": "rgba(5, 13, 32, 0.95)",
+            "fontColor": "rgba(223, 242, 255, 0.97)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "38px",
+            "fontShadow": "0px 0px 12px rgba(121, 197, 255, 0.34)",
+            "WaitBeforeTextRender": 360,
+            "textIntroFX": { "effect": "fadeIn", "durationMs": 560 },
+            "WaitAfterTextRender": 180,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "Not over-engineered.<br>Not rushed.<br>Built with intent."
+          }
+        ]
+      }
+    },
+    {
+      "id": "slide-7",
+      "visibleTitle": "Still Building",
+      "width": 11.8,
+      "height": 7.2,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(121, 206, 255, 0.72)",
+      "type": "type1",
+      "configuration": {
+        "contents": [
+          {
+            "id": "slide-7-main",
+            "type": "column1",
+            "backgroundColor": "rgba(8, 15, 34, 0.95)",
+            "fontColor": "rgba(239, 248, 255, 0.99)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "48px",
+            "fontShadow": "0px 0px 13px rgba(101, 194, 255, 0.42)",
+            "WaitBeforeTextRender": 120,
+            "textIntroFX": { "effect": "slideUp", "durationMs": 600 },
+            "WaitAfterTextRender": 180,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "Today, I'm still building.<br><br>Refining.<br>Learning.<br>Pushing ideas further."
+          }
+        ]
+      }
+    },
+    {
+      "id": "slide-8",
+      "visibleTitle": "Most Important Time",
+      "width": 12.4,
+      "height": 7.6,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(255, 179, 140, 0.78)",
+      "type": "type1",
+      "configuration": {
+        "contents": [
+          {
+            "id": "slide-8-main",
+            "type": "column1",
+            "backgroundColor": "rgba(32, 16, 20, 0.95)",
+            "fontColor": "rgba(255, 240, 233, 0.99)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "50px",
+            "fontShadow": "0px 0px 16px rgba(255, 180, 130, 0.46)",
+            "WaitBeforeTextRender": 140,
+            "textIntroFX": { "effect": "fadeIn", "durationMs": 820 },
+            "WaitAfterTextRender": 260,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "And doing it during one of the most important times of my life...<br><br>Raising a young family."
+          }
+        ]
+      }
+    },
+    {
+      "id": "slide-9",
+      "visibleTitle": "That Changes Things",
+      "width": 12.2,
+      "height": 7.4,
+      "horizontalAlign": "left",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(146, 215, 255, 0.68)",
+      "type": "type3",
+      "configuration": {
+        "contents": [
+          {
+            "id": "slide-9-row-1",
+            "type": "row1",
+            "backgroundColor": "rgba(7, 16, 38, 0.95)",
+            "fontColor": "rgba(245, 251, 255, 0.99)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "54px",
+            "fontShadow": "0px 0px 16px rgba(104, 198, 255, 0.4)",
+            "WaitBeforeTextRender": 100,
+            "textIntroFX": { "effect": "slideRight", "durationMs": 600 },
+            "WaitAfterTextRender": 120,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "That changes things."
+          },
+          {
+            "id": "slide-9-row-2",
+            "type": "row2",
+            "backgroundColor": "rgba(4, 11, 28, 0.96)",
+            "fontColor": "rgba(220, 239, 255, 0.97)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "38px",
+            "fontShadow": "0px 0px 10px rgba(112, 202, 255, 0.34)",
+            "WaitBeforeTextRender": 340,
+            "textIntroFX": { "effect": "fadeIn", "durationMs": 580 },
+            "WaitAfterTextRender": 180,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "You value time more.<br>Focus more.<br>Build what actually matters."
+          }
+        ]
+      }
+    },
+    {
+      "id": "slide-10",
+      "visibleTitle": "Closing",
+      "width": 12,
+      "height": 7.2,
+      "horizontalAlign": "right",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(152, 218, 255, 0.68)",
+      "type": "type1",
+      "configuration": {
+        "contents": [
+          {
+            "id": "slide-10-main",
+            "type": "column1",
+            "backgroundColor": "rgba(6, 14, 32, 0.95)",
+            "fontColor": "rgba(241, 249, 255, 0.99)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "50px",
+            "fontShadow": "0px 0px 14px rgba(110, 208, 255, 0.4)",
+            "WaitBeforeTextRender": 110,
+            "textIntroFX": { "effect": "slideLeft", "durationMs": 640 },
+            "WaitAfterTextRender": 200,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "Because in the end...<br><br>Great software isn't just functional.<br><br>It's thoughtful."
+          }
+        ]
+      }
+    },
+    {
+      "id": "slide-final",
+      "visibleTitle": "Let's Build",
+      "width": 12.6,
+      "height": 7.8,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(153, 236, 255, 0.78)",
+      "type": "type4",
+      "configuration": {
+        "contents": [
+          {
+            "id": "slide-final-r1c1",
+            "type": "r1c1",
+            "backgroundColor": "rgba(6, 12, 30, 0.96)",
+            "fontColor": "rgba(196, 231, 255, 0.98)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "30px",
+            "fontShadow": "0px 0px 9px rgba(108, 200, 255, 0.28)",
+            "WaitBeforeTextRender": 90,
+            "textIntroFX": { "effect": "fadeIn", "durationMs": 420 },
+            "WaitAfterTextRender": 40,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "Harma Davtian"
+          },
+          {
+            "id": "slide-final-r1c2",
+            "type": "r1c2",
+            "backgroundColor": "rgba(8, 18, 41, 0.96)",
+            "fontColor": "rgba(226, 244, 255, 0.98)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "30px",
+            "fontShadow": "0px 0px 9px rgba(108, 200, 255, 0.28)",
+            "WaitBeforeTextRender": 240,
+            "textIntroFX": { "effect": "fadeIn", "durationMs": 420 },
+            "WaitAfterTextRender": 40,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "Full Stack Engineer"
+          },
+          {
+            "id": "slide-final-r2c1",
+            "type": "r2c1",
+            "backgroundColor": "rgba(5, 14, 35, 0.96)",
+            "fontColor": "rgba(208, 236, 255, 0.98)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "31px",
+            "fontShadow": "0px 0px 10px rgba(108, 200, 255, 0.3)",
+            "WaitBeforeTextRender": 420,
+            "textIntroFX": { "effect": "fadeIn", "durationMs": 420 },
+            "WaitAfterTextRender": 40,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "Let's build something"
+          },
+          {
+            "id": "slide-final-r2c2",
+            "type": "r2c2",
+            "backgroundColor": "rgba(14, 28, 58, 0.97)",
+            "fontColor": "rgba(241, 251, 255, 0.99)",
+            "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+            "fontSize": "35px",
+            "fontShadow": "0px 0px 14px rgba(134, 221, 255, 0.44)",
+            "WaitBeforeTextRender": 620,
+            "textIntroFX": { "effect": "slideUp", "durationMs": 520 },
+            "WaitAfterTextRender": 260,
+            "backgroundImage": "",
+            "placement": "cover",
+            "horizontalAlign": "center",
+            "verticalAlign": "middle",
+            "textContent": "meaningful."
+          }
+        ]
+      }
+    }
+  ]
+}

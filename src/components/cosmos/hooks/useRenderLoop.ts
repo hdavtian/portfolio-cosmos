@@ -83,6 +83,9 @@ export const useRenderLoop = () => {
       }>;
       navTurnActiveRef: React.MutableRefObject<boolean>;
       projectShowcaseActiveRef: React.MutableRefObject<boolean>;
+      projectShowcaseTrackRef?: React.MutableRefObject<{
+        axis: "x" | "z" | "y";
+      } | null>;
       settledViewTargetRef: React.MutableRefObject<THREE.Vector3 | null>;
       optionsRef: React.MutableRefObject<{
         spaceFollowDistance?: number;
@@ -150,6 +153,7 @@ export const useRenderLoop = () => {
         hologramDroneRef,
         navTurnActiveRef,
         projectShowcaseActiveRef,
+        projectShowcaseTrackRef,
         updateMoonOrbit,
         isMoonOrbiting,
         updateAutopilotNavigation,
@@ -1490,12 +1494,18 @@ export const useRenderLoop = () => {
           | {
               enabled: boolean;
               materialBokeh?: {
-                uniforms?: { focus?: { value: number } };
+                uniforms?: {
+                  focus?: { value: number };
+                  aperture?: { value: number };
+                  maxblur?: { value: number };
+                };
               };
             }
           | undefined;
         const droneActive = hologramDroneRef.current?.isActive();
         const showcaseDofActive = projectShowcaseActiveRef.current;
+        const showcaseAxis = projectShowcaseTrackRef?.current?.axis;
+        const elevatorShaftMode = showcaseAxis === "y";
         if (insideShipRef.current || droneActive || !showcaseDofActive) {
           if (bokehPass?.enabled) {
             bokehPass.enabled = false;
@@ -1509,13 +1519,26 @@ export const useRenderLoop = () => {
             (controls as unknown as { getTarget: (out: THREE.Vector3) => THREE.Vector3 })
               .getTarget(focusTarget);
             const camToTarget = camera.position.distanceTo(focusTarget);
-            // Keep near geometry in focus and let distant tunnel drift softly out.
-            focusDistance = THREE.MathUtils.clamp(camToTarget * 0.55, 36, 82);
+            if (elevatorShaftMode) {
+              // In elevator mode we want opposite-window content crisp while
+              // retaining subtle blur elsewhere in the shaft.
+              focusDistance = THREE.MathUtils.clamp(camToTarget * 0.96, 28, 92);
+            } else {
+              // Keep near geometry in focus and let distant tunnel drift softly out.
+              focusDistance = THREE.MathUtils.clamp(camToTarget * 0.55, 36, 82);
+            }
           } catch {
             focusDistance = fallbackFocusDistance;
           }
-          if (bokehPass.materialBokeh?.uniforms?.focus) {
-            bokehPass.materialBokeh.uniforms.focus.value = focusDistance;
+          const uniforms = bokehPass.materialBokeh?.uniforms;
+          if (uniforms?.focus) {
+            uniforms.focus.value = focusDistance;
+          }
+          if (uniforms?.aperture) {
+            uniforms.aperture.value = elevatorShaftMode ? 0.00006 : 0.0001;
+          }
+          if (uniforms?.maxblur) {
+            uniforms.maxblur.value = elevatorShaftMode ? 0.0022 : 0.0045;
           }
         }
 
