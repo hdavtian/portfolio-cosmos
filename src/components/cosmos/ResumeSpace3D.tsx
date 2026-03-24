@@ -188,6 +188,8 @@ const PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_MS = 1500;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_HOLD_MS = 540;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS = 1180;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS = 320;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS = 0.2;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_RAD_PER_SEC = 0.55;
 const PROJECT_SHOWCASE_ELEVATOR_PEEKERS_ENABLED = true;
 const PROJECT_SHOWCASE_ELEVATOR_PEEKER_FLOOR_MULT = 2.2;
 const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = true;
@@ -317,7 +319,11 @@ const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(1158.5, 157.5, 14760.375);
-const PROJECT_SHOWCASE_ELEVATOR_BELOW_PORTFOLIO_Y_OFFSET = 7200;
+const PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR = new THREE.Vector3(
+  -ORBITAL_PORTFOLIO_WORLD_ANCHOR.x * 0.6,
+  ORBITAL_PORTFOLIO_WORLD_ANCHOR.y,
+  -ORBITAL_PORTFOLIO_WORLD_ANCHOR.z * 0.6,
+);
 const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 620;
 const ORBITAL_PORTFOLIO_NAV_STANDOFF_DIST = 560;
 const ORBITAL_PORTFOLIO_NAV_VERTICAL_OFFSET = 90;
@@ -351,9 +357,7 @@ const SKILLS_SD_PATROL_RADIUS = 150;
 const SKILLS_SD_PATROL_SPEED = 0.03;
 const getProjectShowcaseWorldAnchor = (mode: "about" | "projects") =>
   mode === "about"
-    ? ORBITAL_PORTFOLIO_WORLD_ANCHOR.clone().add(
-        new THREE.Vector3(0, -PROJECT_SHOWCASE_ELEVATOR_BELOW_PORTFOLIO_Y_OFFSET, 0),
-      )
+    ? PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR.clone()
     : PROJECT_SHOWCASE_WORLD_ANCHOR.clone();
 type RegistryPanelMode = "portfolio" | "projects" | "about";
 type RegistryPanelCapabilities = {
@@ -1656,14 +1660,18 @@ export default function ResumeSpace3D({
   useEffect(() => {
     const interior = projectShowcaseInteriorRootRef.current;
     const exterior = projectShowcaseExteriorRootRef.current;
+    const aboutLabel = aboutMemorySquareLabelRef.current;
     const aboutMode = hallwayContentMode === "about";
     const active = projectShowcaseActiveRef.current;
     if (aboutMode) {
       if (interior) interior.visible = active;
       if (exterior) exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE && !active;
+      // Prevent CSS title overlay leaking through hallway walls.
+      if (aboutLabel) aboutLabel.visible = !active;
     } else {
       if (interior) interior.visible = true;
       if (exterior) exterior.visible = false;
+      if (aboutLabel) aboutLabel.visible = true;
     }
   }, [hallwayContentMode]);
 
@@ -1825,9 +1833,8 @@ export default function ResumeSpace3D({
     if (droneGpuWarmupDoneRef.current) return;
     const renderer = rendererRef.current;
     const template = oblivionDronePreloadedRef.current;
-    const liveScene = sceneRef.current.scene as THREE.Scene | undefined;
     const liveCamera = sceneRef.current.camera as THREE.Camera | undefined;
-    if (!renderer || !template || !liveScene || !liveCamera) return;
+    if (!renderer || !template || !liveCamera) return;
     droneGpuWarmupDoneRef.current = true;
 
     const compileRenderer = renderer as THREE.WebGLRenderer & {
@@ -1864,53 +1871,75 @@ export default function ResumeSpace3D({
 
     const warmup = async () => {
       let warmupDrone: HologramDroneDisplay | null = null;
+      let warmupRenderTarget: THREE.WebGLRenderTarget | null = null;
       try {
         const warmupStart = performance.now();
         debugLog("drone", "[warmup] priming live drone render path");
-        warmupDrone = new HologramDroneDisplay(liveScene, {
+        const warmupScene = new THREE.Scene();
+        warmupScene.background = null;
+        const warmupCamera = liveCamera.clone() as THREE.Camera;
+        warmupCamera.position.copy(liveCamera.position);
+        warmupCamera.quaternion.copy(liveCamera.quaternion);
+        warmupCamera.updateMatrixWorld(true);
+        warmupDrone = new HologramDroneDisplay(warmupScene, {
           droneVariant: MOON_VISIT_DRONE_VARIANT,
           oblivionDroneTemplate: template,
           soundEnabled: false,
         });
-        const camForward = liveCamera.getWorldDirection(new THREE.Vector3()).normalize();
-        const warmMoonPos = liveCamera.position
+        const camForward = warmupCamera.getWorldDirection(new THREE.Vector3()).normalize();
+        const warmMoonPos = warmupCamera.position
           .clone()
           .addScaledVector(camForward, 28);
-        const warmAnchor = liveCamera.position
+        const warmAnchor = warmupCamera.position
           .clone()
           .addScaledVector(camForward, 24)
           .add(new THREE.Vector3(0, -1, 0));
         warmupDrone.showContent(
           warmupContent,
           warmMoonPos,
-          liveCamera,
+          warmupCamera,
           warmAnchor,
         );
         // Advance through fly-in + pre-draw so compile includes active drone UI materials.
         for (let i = 0; i < 360; i += 1) {
-          warmupDrone.update(1 / 60, liveCamera);
+          warmupDrone.update(1 / 60, warmupCamera);
         }
         const compileStart = performance.now();
         if (typeof compileRenderer.compileAsync === "function") {
-          await compileRenderer.compileAsync(liveScene, liveCamera);
+          await compileRenderer.compileAsync(warmupScene, warmupCamera);
         } else {
-          compileRenderer.compile(liveScene, liveCamera);
+          compileRenderer.compile(warmupScene, warmupCamera);
         }
         const compileMs = performance.now() - compileStart;
-        // Force one base render while warmup drone content is present so first
-        // user-facing drone activation does not pay texture/program upload cost.
+        // Render once to an offscreen target so program/texture upload happens
+        // without flashing warmup content in the visible universe scene.
+        const rtSize = new THREE.Vector2();
+        renderer.getSize(rtSize);
+        warmupRenderTarget = new THREE.WebGLRenderTarget(
+          Math.max(2, Math.floor(rtSize.x * 0.4)),
+          Math.max(2, Math.floor(rtSize.y * 0.4)),
+          {
+            depthBuffer: true,
+            stencilBuffer: false,
+          },
+        );
         const renderStart = performance.now();
-        renderer.render(liveScene, liveCamera);
+        const prevTarget = renderer.getRenderTarget();
+        renderer.setRenderTarget(warmupRenderTarget);
+        renderer.clear();
+        renderer.render(warmupScene, warmupCamera);
+        renderer.setRenderTarget(prevTarget);
         const renderMs = performance.now() - renderStart;
         debugLog(
           "drone",
-          `[warmup] live render prime complete compile=${compileMs.toFixed(1)}ms render=${renderMs.toFixed(1)}ms total=${(performance.now() - warmupStart).toFixed(1)}ms`,
+          `[warmup] offscreen prime complete compile=${compileMs.toFixed(1)}ms render=${renderMs.toFixed(1)}ms total=${(performance.now() - warmupStart).toFixed(1)}ms`,
         );
       } catch {
         debugLog("drone", "[warmup] live render prime skipped");
       } finally {
         warmupDrone?.hideContentImmediate();
         warmupDrone?.dispose();
+        warmupRenderTarget?.dispose();
       }
     };
 
@@ -1966,6 +1995,7 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     let cancelled = false;
+    THREE.Cache.enabled = true;
     const gltfPreloader = new GLTFLoader();
     const texturePreloader = new THREE.TextureLoader();
     const audioPreloader = new THREE.AudioLoader();
@@ -1993,6 +2023,10 @@ export default function ResumeSpace3D({
 
     const preloadCriticalAssets = async () => {
       try {
+        debugLog(
+          "loader",
+          `[models] preload start hallway=${PROJECT_SHOWCASE_MODEL_PATH} tardis=${PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH} falcon=/models/spaceship/scene.gltf sd=/models/star-destroyer/scene.gltf drone=${OBLIVION_DRONE_MODEL_PATH}`,
+        );
         if (hallwayContentModeRef.current === "about" && !hallwayFontsReadyRef.current) {
           try {
             if (typeof document !== "undefined" && "fonts" in document) {
@@ -2004,10 +2038,21 @@ export default function ResumeSpace3D({
             // Keep loading resilient if browser blocks font status APIs.
           }
         }
-        const [trenchGltf, , , oblivionDroneGltf, activationBuffer, transmissionBuffer, falconMoonTravelBuffer, ...movementBuffers] = await Promise.all([
+        const [
+          trenchGltf,
+          spaceshipGltf,
+          starDestroyerGltf,
+          aboutExteriorGltf,
+          oblivionDroneGltf,
+          activationBuffer,
+          transmissionBuffer,
+          falconMoonTravelBuffer,
+          ...movementBuffers
+        ] = await Promise.all([
           gltfPreloader.loadAsync(PROJECT_SHOWCASE_MODEL_PATH),
           gltfPreloader.loadAsync("/models/spaceship/scene.gltf"),
           gltfPreloader.loadAsync("/models/star-destroyer/scene.gltf"),
+          gltfPreloader.loadAsync(PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH),
           gltfPreloader.loadAsync(OBLIVION_DRONE_MODEL_PATH),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.activation),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.transmission),
@@ -2042,6 +2087,14 @@ export default function ResumeSpace3D({
             "audio",
             `[falcon] moon-travel preload ready=${!!falconMoonTravelBuffer}`,
           );
+          spaceshipPreloadedGltfRef.current = spaceshipGltf as { scene: THREE.Group };
+          starDestroyerPreloadedGltfRef.current = starDestroyerGltf as {
+            scene: THREE.Group;
+          };
+          projectShowcaseAboutExteriorPreloadedGltfRef.current = aboutExteriorGltf as {
+            scene: THREE.Group;
+          };
+          debugLog("loader", "[models] preloaded Falcon, Star Destroyer, Hallway, TARDIS, Drone");
         }
 
         const trenchTextureKeys = new Set<string>();
@@ -2237,7 +2290,11 @@ export default function ResumeSpace3D({
   const projectShowcasePanelsRef = useRef<ShowcasePanelRecord[]>([]);
   const projectShowcaseInteriorRootRef = useRef<THREE.Group | null>(null);
   const projectShowcaseExteriorRootRef = useRef<THREE.Group | null>(null);
+  const projectShowcaseAboutExteriorModelRef = useRef<THREE.Object3D | null>(null);
   const projectShowcasePreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
+  const projectShowcaseAboutExteriorPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
+  const spaceshipPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
+  const starDestroyerPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
   const oblivionDronePreloadedRef = useRef<THREE.Object3D | null>(null);
   const oblivionDroneAudioBuffersRef = useRef<DroneAudioBuffers | null>(null);
   const falconMoonTravelBufferRef = useRef<AudioBuffer | null>(null);
@@ -2576,6 +2633,7 @@ export default function ResumeSpace3D({
   const skillsLatticeWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const aboutMemorySquareWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const aboutMemorySquareRootRef = useRef<THREE.Group | null>(null);
+  const aboutMemorySquareLabelRef = useRef<THREE.Object3D | null>(null);
   const aboutMemorySquarePendingEntryRef = useRef(false);
   const aboutMemorySquareActiveRef = useRef(false);
   const aboutMemorySquareNavIntentUntilRef = useRef(0);
@@ -4241,12 +4299,15 @@ export default function ResumeSpace3D({
     const aboutMode = hallwayContentModeRef.current === "about";
     const interior = projectShowcaseInteriorRootRef.current;
     const exterior = projectShowcaseExteriorRootRef.current;
+    const aboutLabel = aboutMemorySquareLabelRef.current;
     if (aboutMode) {
       if (interior) interior.visible = false;
       if (exterior) exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
+      if (aboutLabel) aboutLabel.visible = true;
     } else {
       if (interior) interior.visible = true;
       if (exterior) exterior.visible = false;
+      if (aboutLabel) aboutLabel.visible = true;
     }
     vlog("🛰️ Project Showcase exited");
   }, [setProjectShowcaseLever, setProjectsNavHereActive, vlog]);
@@ -4384,6 +4445,9 @@ export default function ResumeSpace3D({
       });
       if (interior) interior.visible = true;
       if (exterior) exterior.visible = false;
+      if (aboutMode && aboutMemorySquareLabelRef.current) {
+        aboutMemorySquareLabelRef.current.visible = false;
+      }
       setProjectShowcaseRunPosition(projectShowcaseRunPosRef.current);
       pendingProjectShowcaseEntryRef.current = false;
       projectShowcaseAwaitingProjectsArrivalRef.current = false;
@@ -4395,31 +4459,44 @@ export default function ResumeSpace3D({
     if (aboutMode && exterior) {
       if (interior) interior.visible = false;
       exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
-      const tardisWorld = new THREE.Vector3();
-      exterior.getWorldPosition(tardisWorld);
+      const exteriorModel = projectShowcaseAboutExteriorModelRef.current;
+      const tardisBounds = exteriorModel
+        ? new THREE.Box3().setFromObject(exteriorModel)
+        : new THREE.Box3().setFromObject(exterior);
+      const tardisWorld = tardisBounds.getCenter(new THREE.Vector3());
+      const tardisSize = tardisBounds.getSize(new THREE.Vector3());
       const startCam = camera.position.clone();
-      const startTarget = new THREE.Vector3();
-      const controlsAny = controls as unknown as {
-        getTarget?: (out: THREE.Vector3) => void;
-      };
-      if (controlsAny.getTarget) {
-        controlsAny.getTarget(startTarget);
+      const approachTarget = tardisWorld
+        .clone()
+        .add(new THREE.Vector3(0, Math.max(3.6, tardisSize.y * 0.08), 0));
+      const approachDir = startCam.clone().sub(approachTarget);
+      if (approachDir.lengthSq() < 1e-5) {
+        approachDir.set(0, 0.04, 1);
       } else {
-        startTarget.copy(startCam).add(new THREE.Vector3(0, 0, -24));
+        approachDir.normalize();
       }
-      const fullViewCam = tardisWorld.clone().add(new THREE.Vector3(18, 15, 46));
-      const fullViewTarget = tardisWorld.clone().add(new THREE.Vector3(0, 8, 0));
-      const closeCam = tardisWorld.clone().add(new THREE.Vector3(8.8, 10.2, 23.8));
-      const closeTarget = tardisWorld.clone().add(new THREE.Vector3(0, 6.3, 0));
+      // Keep this mostly on the current approach lane so we don't side-swing.
+      approachDir.y *= 0.42;
+      if (approachDir.lengthSq() < 1e-5) {
+        approachDir.set(0, 0.04, 1);
+      } else {
+        approachDir.normalize();
+      }
+      const showcaseDist = THREE.MathUtils.clamp(
+        Math.max(tardisSize.x, tardisSize.y, tardisSize.z) * 1.95,
+        34,
+        72,
+      );
+      const showcaseCam = approachTarget.clone().addScaledVector(approachDir, showcaseDist);
       const runDirectStage = (
         fromCam: THREE.Vector3,
-        fromTarget: THREE.Vector3,
         toCam: THREE.Vector3,
-        toTarget: THREE.Vector3,
         durationMs: number,
         onDone: () => void,
       ) => {
         const stageStart = performance.now();
+        const spinRoot = projectShowcaseAboutExteriorModelRef.current;
+        const spinStartY = spinRoot?.rotation.y ?? 0;
         const tick = () => {
           const t = THREE.MathUtils.clamp(
             (performance.now() - stageStart) / Math.max(1, durationMs),
@@ -4428,14 +4505,53 @@ export default function ResumeSpace3D({
           );
           const eased = t * t * (3 - 2 * t);
           const camPos = fromCam.clone().lerp(toCam, eased);
-          const targetPos = fromTarget.clone().lerp(toTarget, eased);
+          if (spinRoot) {
+            const spinT = THREE.MathUtils.clamp((eased - 0.08) / 0.84, 0, 1);
+            spinRoot.rotation.y =
+              spinStartY +
+              PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS * Math.PI * 2 * spinT;
+          }
           controls.setLookAt(
             camPos.x,
             camPos.y,
             camPos.z,
-            targetPos.x,
-            targetPos.y,
-            targetPos.z,
+            approachTarget.x,
+            approachTarget.y,
+            approachTarget.z,
+            false,
+          );
+          if (t >= 1) {
+            projectShowcaseAboutEntryRafRef.current = null;
+            onDone();
+            return;
+          }
+          projectShowcaseAboutEntryRafRef.current = requestAnimationFrame(tick);
+        };
+        projectShowcaseAboutEntryRafRef.current = requestAnimationFrame(tick);
+      };
+      const runHoldStage = (
+        camPos: THREE.Vector3,
+        durationMs: number,
+        onDone: () => void,
+      ) => {
+        const stageStart = performance.now();
+        const spinRoot = projectShowcaseAboutExteriorModelRef.current;
+        const spinStartY = spinRoot?.rotation.y ?? 0;
+        const tick = () => {
+          const elapsed = performance.now() - stageStart;
+          const t = THREE.MathUtils.clamp(elapsed / Math.max(1, durationMs), 0, 1);
+          if (spinRoot) {
+            spinRoot.rotation.y =
+              spinStartY +
+              (elapsed / 1000) * PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_RAD_PER_SEC;
+          }
+          controls.setLookAt(
+            camPos.x,
+            camPos.y,
+            camPos.z,
+            approachTarget.x,
+            approachTarget.y,
+            approachTarget.z,
             false,
           );
           if (t >= 1) {
@@ -4448,27 +4564,25 @@ export default function ResumeSpace3D({
         projectShowcaseAboutEntryRafRef.current = requestAnimationFrame(tick);
       };
 
+      const totalApproachMs =
+        PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_MS +
+        PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS;
+      const entryHoldMs =
+        Math.max(
+          1000,
+          PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_HOLD_MS +
+            PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS,
+        );
       runDirectStage(
         startCam,
-        startTarget,
-        fullViewCam,
-        fullViewTarget,
-        PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_MS,
+        showcaseCam,
+        totalApproachMs,
         () => {
-          projectShowcaseAboutEntryTimeoutRef.current = window.setTimeout(() => {
-            runDirectStage(
-              fullViewCam,
-              fullViewTarget,
-              closeCam,
-              closeTarget,
-              PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS,
-              () => {
-                projectShowcaseAboutEntryTimeoutRef.current = window.setTimeout(() => {
-                  finalizeInteriorEntry();
-                }, PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS);
-              },
-            );
-          }, PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_HOLD_MS);
+          runHoldStage(showcaseCam, entryHoldMs, () => {
+            projectShowcaseAboutEntryTimeoutRef.current = window.setTimeout(() => {
+              finalizeInteriorEntry();
+            }, 80);
+          });
         },
       );
       return;
@@ -11892,13 +12006,12 @@ export default function ResumeSpace3D({
           opacity: 0,
           toneMapped: false,
           depthWrite: false,
-          depthTest: false,
+          depthTest: true,
           blending: THREE.NormalBlending,
           side: THREE.DoubleSide,
         }),
       );
       contentPlane.position.set(0, 0, zf + aboutCellDepth * 1.2);
-      contentPlane.renderOrder = 120;
       contentPlane.frustumCulled = false;
       tile.add(contentPlane);
       aboutTileContentMatsRef.current[tileIndex] =
@@ -12097,7 +12210,7 @@ export default function ResumeSpace3D({
       `,
       transparent: true,
       depthWrite: false,
-      depthTest: false,
+      depthTest: true,
       blending: THREE.NormalBlending,
       toneMapped: false,
       side: THREE.DoubleSide,
@@ -12111,7 +12224,6 @@ export default function ResumeSpace3D({
     aboutCells.name = "AboutMemorySquareCells";
     aboutCells.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     aboutCells.frustumCulled = false;
-    aboutCells.renderOrder = 130;
     const baseColor = new THREE.Color(0x132a44);
     aboutFrontSlotIndicesRef.current = [];
     aboutCellBaseColorsRef.current = aboutSlots.map(() => baseColor.clone());
@@ -12166,6 +12278,7 @@ export default function ResumeSpace3D({
     aboutLabel.userData.aboutMemorySquareLabel = true;
     aboutLabel.position.set(0, aboutSquareSize * 1.66, aboutSquareDepth * 0.5 + 10);
     aboutSquareRoot.add(aboutLabel);
+    aboutMemorySquareLabelRef.current = aboutLabel;
     scene.add(aboutSquareRoot);
     aboutMemorySquareRootRef.current = aboutSquareRoot;
 
@@ -14304,6 +14417,12 @@ export default function ResumeSpace3D({
       projectShowcaseRootRef.current = null;
       projectShowcaseInteriorRootRef.current = null;
       projectShowcaseExteriorRootRef.current = null;
+      projectShowcaseAboutExteriorModelRef.current = null;
+      projectShowcasePreloadedGltfRef.current = null;
+      projectShowcaseAboutExteriorPreloadedGltfRef.current = null;
+      spaceshipPreloadedGltfRef.current = null;
+      starDestroyerPreloadedGltfRef.current = null;
+      oblivionDronePreloadedRef.current = null;
       projectShowcaseWorldAnchorRef.current = null;
       if (projectShowcaseNebulaRootRef.current) {
         scene.remove(projectShowcaseNebulaRootRef.current);
@@ -14330,6 +14449,7 @@ export default function ResumeSpace3D({
         showcaseRoot.add(showcaseInteriorRoot);
         projectShowcaseInteriorRootRef.current = showcaseInteriorRoot;
         projectShowcaseExteriorRootRef.current = null;
+        projectShowcaseAboutExteriorModelRef.current = null;
         const trenchWorldAnchor = getProjectShowcaseWorldAnchor(
           hallwayContentModeRef.current,
         );
@@ -16444,10 +16564,8 @@ export default function ResumeSpace3D({
           showcaseRoot.add(aboutExteriorRoot);
           projectShowcaseExteriorRootRef.current = aboutExteriorRoot;
 
-          loader.load(
-            PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH,
-            (tardisGltf) => {
-              const tardisRoot = (tardisGltf as { scene: THREE.Group }).scene.clone(true);
+          const handleAboutExteriorLoaded = (tardisGltf: { scene: THREE.Group }) => {
+              const tardisRoot = tardisGltf.scene.clone(true);
               const bounds = new THREE.Box3().setFromObject(tardisRoot);
               const size = bounds.getSize(new THREE.Vector3());
               const desiredHeight = 58;
@@ -16477,6 +16595,7 @@ export default function ResumeSpace3D({
                 });
               });
               aboutExteriorRoot.add(tardisRoot);
+              projectShowcaseAboutExteriorModelRef.current = tardisRoot;
 
               const tardisKey = new THREE.SpotLight(
                 0xe8f4ff,
@@ -16511,14 +16630,23 @@ export default function ResumeSpace3D({
                 tardisTopBloom,
                 tardisAmbient,
               );
-            },
-            undefined,
-            () => {
-              if (projectShowcaseInteriorRootRef.current) {
-                projectShowcaseInteriorRootRef.current.visible = true;
-              }
-            },
-          );
+            };
+          const preloadedAboutExterior = projectShowcaseAboutExteriorPreloadedGltfRef.current;
+          if (preloadedAboutExterior) {
+            handleAboutExteriorLoaded(preloadedAboutExterior);
+            projectShowcaseAboutExteriorPreloadedGltfRef.current = null;
+          } else {
+            loader.load(
+              PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH,
+              (gltf) => handleAboutExteriorLoaded(gltf as { scene: THREE.Group }),
+              undefined,
+              () => {
+                if (projectShowcaseInteriorRootRef.current) {
+                  projectShowcaseInteriorRootRef.current.visible = true;
+                }
+              },
+            );
+          }
         }
 
         const aboutMode = hallwayContentModeRef.current === "about";
@@ -17942,6 +18070,7 @@ export default function ResumeSpace3D({
       projectShowcaseRootRef.current = null;
       projectShowcaseInteriorRootRef.current = null;
       projectShowcaseExteriorRootRef.current = null;
+      projectShowcaseAboutExteriorModelRef.current = null;
       projectShowcaseWorldAnchorRef.current = null;
       orbitalPortfolioRootRef.current = null;
       orbitalPortfolioBeaconRef.current = null;
@@ -17961,6 +18090,7 @@ export default function ResumeSpace3D({
       orbitalPortfolioActiveRef.current = false;
       orbitalPortfolioPlayingRef.current = true;
       aboutMemorySquareRootRef.current = null;
+      aboutMemorySquareLabelRef.current = null;
       aboutMemorySquareWorldAnchorRef.current = null;
       aboutMemorySquarePendingEntryRef.current = false;
       aboutMemorySquareActiveRef.current = false;
