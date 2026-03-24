@@ -184,6 +184,8 @@ const PROJECT_SHOWCASE_FREE_LOOK_MIN_DISTANCE = 18;
 const PROJECT_SHOWCASE_FREE_LOOK_MAX_DISTANCE = 160;
 const PROJECT_SHOWCASE_ENTRY_FORWARD_LOCK_MS = 1200;
 const PROJECT_SHOWCASE_FORWARD_LOOK_SIGN = 1;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_APPROACH_MS = 860;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_MS = 280;
 const PROJECT_SHOWCASE_ELEVATOR_PEEKERS_ENABLED = true;
 const PROJECT_SHOWCASE_ELEVATOR_PEEKER_FLOOR_MULT = 2.2;
 const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = true;
@@ -269,6 +271,7 @@ const ACTIVE_PROJECT_SHOWCASE_MODEL: ProjectShowcaseModelKey = "spaceHallwayBrig
 const PROJECT_SHOWCASE_ACTIVE_PROFILE =
   PROJECT_SHOWCASE_MODEL_PROFILES[ACTIVE_PROJECT_SHOWCASE_MODEL];
 const PROJECT_SHOWCASE_MODEL_PATH = PROJECT_SHOWCASE_ACTIVE_PROFILE.modelPath;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH = "/models/tardis/tardis.glb";
 const PROJECT_SHOWCASE_TEXTURE_BASE_PATH =
   PROJECT_SHOWCASE_ACTIVE_PROFILE.textureBasePath;
 const PROJECT_SHOWCASE_ENABLE_FLOOR_PULSES =
@@ -1649,6 +1652,20 @@ export default function ResumeSpace3D({
   }, [hallwayContentMode]);
 
   useEffect(() => {
+    const interior = projectShowcaseInteriorRootRef.current;
+    const exterior = projectShowcaseExteriorRootRef.current;
+    const aboutMode = hallwayContentMode === "about";
+    const active = projectShowcaseActiveRef.current;
+    if (aboutMode) {
+      if (interior) interior.visible = active;
+      if (exterior) exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE && !active;
+    } else {
+      if (interior) interior.visible = true;
+      if (exterior) exterior.visible = false;
+    }
+  }, [hallwayContentMode]);
+
+  useEffect(() => {
     hallwayFontsReadyRef.current = hallwayFontsReady;
   }, [hallwayFontsReady]);
 
@@ -2216,6 +2233,8 @@ export default function ResumeSpace3D({
   const projectShowcaseFocusIndexRef = useRef(0);
   const projectShowcaseLastTickRef = useRef<number | null>(null);
   const projectShowcasePanelsRef = useRef<ShowcasePanelRecord[]>([]);
+  const projectShowcaseInteriorRootRef = useRef<THREE.Group | null>(null);
+  const projectShowcaseExteriorRootRef = useRef<THREE.Group | null>(null);
   const projectShowcasePreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
   const oblivionDronePreloadedRef = useRef<THREE.Object3D | null>(null);
   const oblivionDroneAudioBuffersRef = useRef<DroneAudioBuffers | null>(null);
@@ -2240,6 +2259,7 @@ export default function ResumeSpace3D({
   const projectShowcaseElevatorPeekersRef = useRef<ElevatorWindowPeekerRecord[]>([]);
   const projectShowcaseLookVectorRef = useRef<THREE.Vector3 | null>(null);
   const projectShowcaseForwardLockUntilRef = useRef(0);
+  const projectShowcaseAboutEntryTimeoutRef = useRef<number | null>(null);
   const projectShowcaseRunPosRef = useRef(0);
   const projectShowcasePrevControlsEnabledRef = useRef(true);
   const pendingProjectShowcaseEntryRef = useRef(false);
@@ -4125,6 +4145,10 @@ export default function ResumeSpace3D({
       projectShowcaseEntrySequenceRef.current.raf = null;
     }
     projectShowcaseEntrySequenceRef.current.active = false;
+    if (projectShowcaseAboutEntryTimeoutRef.current !== null) {
+      window.clearTimeout(projectShowcaseAboutEntryTimeoutRef.current);
+      projectShowcaseAboutEntryTimeoutRef.current = null;
+    }
     setProjectShowcaseEntryOverlayOpacity(0);
     const showcaseRoot = projectShowcaseRootRef.current;
     if (showcaseRoot) {
@@ -4177,6 +4201,16 @@ export default function ResumeSpace3D({
     pendingProjectShowcaseEntryRef.current = false;
     projectShowcaseAwaitingProjectsArrivalRef.current = false;
     projectShowcaseSawProjectsTravelRef.current = false;
+    const aboutMode = hallwayContentModeRef.current === "about";
+    const interior = projectShowcaseInteriorRootRef.current;
+    const exterior = projectShowcaseExteriorRootRef.current;
+    if (aboutMode) {
+      if (interior) interior.visible = false;
+      if (exterior) exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
+    } else {
+      if (interior) interior.visible = true;
+      if (exterior) exterior.visible = false;
+    }
     vlog("🛰️ Project Showcase exited");
   }, [setProjectShowcaseLever, setProjectsNavHereActive, vlog]);
 
@@ -4196,6 +4230,10 @@ export default function ResumeSpace3D({
       projectShowcaseEntrySequenceRef.current.raf = null;
     }
     projectShowcaseEntrySequenceRef.current.active = false;
+    if (projectShowcaseAboutEntryTimeoutRef.current !== null) {
+      window.clearTimeout(projectShowcaseAboutEntryTimeoutRef.current);
+      projectShowcaseAboutEntryTimeoutRef.current = null;
+    }
     const showcaseRoot = projectShowcaseRootRef.current;
     const controls = sceneRef.current.controls;
     const camera = sceneRef.current.camera;
@@ -4227,88 +4265,121 @@ export default function ResumeSpace3D({
     projectShowcasePrevControlsEnabledRef.current = controls.enabled;
     controls.enabled = true;
     camera.layers.enable(PROJECT_SHOWCASE_LAYER);
+    const aboutMode = hallwayContentModeRef.current === "about";
+    const interior = projectShowcaseInteriorRootRef.current;
+    const exterior = projectShowcaseExteriorRootRef.current;
+    const finalizeInteriorEntry = () => {
+      projectShowcaseAboutEntryTimeoutRef.current = null;
+      const track = projectShowcaseTrackRef.current;
+      if (track) {
+        const startRun = track.minRun + 10;
+        setProjectShowcaseRunPosition(startRun);
+        projectShowcaseLastTickRef.current = performance.now();
+        const rootPos = new THREE.Vector3();
+        showcaseRoot.getWorldPosition(rootPos);
+        const sway = Math.sin(startRun * 0.025) * (track.axis === "y" ? 0.6 : 1.2);
+        const baseCam =
+          track.axis === "y"
+            ? new THREE.Vector3(
+                rootPos.x + track.centerCross + sway,
+                rootPos.y + startRun,
+                rootPos.z + track.cameraHeight,
+              )
+            : track.axis === "z"
+              ? new THREE.Vector3(
+                  rootPos.x + track.centerCross + sway,
+                  rootPos.y + track.cameraHeight,
+                  rootPos.z + startRun,
+                )
+              : new THREE.Vector3(
+                  rootPos.x + startRun,
+                  rootPos.y + track.cameraHeight,
+                  rootPos.z + track.centerCross + sway,
+                );
+        const baseTarget =
+          track.axis === "y"
+            ? new THREE.Vector3(
+                rootPos.x - track.centerCross * 0.9,
+                rootPos.y + startRun,
+                rootPos.z + track.cameraHeight + 0.2,
+              )
+            : track.axis === "z"
+              ? new THREE.Vector3(
+                  rootPos.x + track.centerCross + sway,
+                  rootPos.y + track.cameraHeight - 0.3,
+                  rootPos.z + startRun + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
+                )
+              : new THREE.Vector3(
+                  rootPos.x + startRun + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
+                  rootPos.y + track.cameraHeight - 0.3,
+                  rootPos.z + track.centerCross + sway,
+                );
+        projectShowcaseLookVectorRef.current = baseTarget.sub(baseCam);
+        projectShowcaseForwardLockUntilRef.current =
+          performance.now() + PROJECT_SHOWCASE_ENTRY_FORWARD_LOCK_MS;
+        controls.setLookAt(
+          baseCam.x,
+          baseCam.y,
+          baseCam.z,
+          baseTarget.x,
+          baseTarget.y,
+          baseTarget.z,
+          false,
+        );
+      } else {
+        projectShowcaseLookVectorRef.current = null;
+      }
+      projectShowcasePlayingRef.current = false;
+      setProjectShowcasePlaying(false);
+      projectShowcaseVelocityRef.current = 0;
+      projectShowcaseJumpTargetRef.current = null;
+      projectShowcaseForcedFocusIndexRef.current = null;
+      projectShowcaseLeverDraggingRef.current = false;
+      projectShowcaseLeverFlickRef.current = 0;
+      projectShowcaseLeverLastSampleRef.current = null;
+      setProjectShowcaseLever(0);
 
-    const track = projectShowcaseTrackRef.current;
-    if (track) {
-      const startRun = track.minRun + 10;
-      setProjectShowcaseRunPosition(startRun);
-      projectShowcaseLastTickRef.current = performance.now();
-      const rootPos = new THREE.Vector3();
-      showcaseRoot.getWorldPosition(rootPos);
-      const sway = Math.sin(startRun * 0.025) * (track.axis === "y" ? 0.6 : 1.2);
-      const baseCam =
-        track.axis === "y"
-          ? new THREE.Vector3(
-              rootPos.x + track.centerCross + sway,
-              rootPos.y + startRun,
-              rootPos.z + track.cameraHeight,
-            )
-          : track.axis === "z"
-            ? new THREE.Vector3(
-                rootPos.x + track.centerCross + sway,
-                rootPos.y + track.cameraHeight,
-                rootPos.z + startRun,
-              )
-            : new THREE.Vector3(
-                rootPos.x + startRun,
-                rootPos.y + track.cameraHeight,
-                rootPos.z + track.centerCross + sway,
-              );
-      const baseTarget =
-        track.axis === "y"
-          ? new THREE.Vector3(
-              rootPos.x - track.centerCross * 0.9,
-              rootPos.y + startRun,
-              rootPos.z + track.cameraHeight + 0.2,
-            )
-          : track.axis === "z"
-            ? new THREE.Vector3(
-                rootPos.x + track.centerCross + sway,
-                rootPos.y + track.cameraHeight - 0.3,
-                rootPos.z + startRun + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
-              )
-            : new THREE.Vector3(
-                rootPos.x + startRun + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
-                rootPos.y + track.cameraHeight - 0.3,
-                rootPos.z + track.centerCross + sway,
-              );
-      projectShowcaseLookVectorRef.current = baseTarget.sub(baseCam);
-      projectShowcaseForwardLockUntilRef.current =
-        performance.now() + PROJECT_SHOWCASE_ENTRY_FORWARD_LOCK_MS;
+      projectShowcaseActiveRef.current = true;
+      setProjectShowcaseActive(true);
+      setProjectsNavHereActive(true);
+      projectShowcasePanelsRef.current.forEach((panel) => {
+        panel.group.visible = true;
+      });
+      if (interior) interior.visible = true;
+      if (exterior) exterior.visible = false;
+      setProjectShowcaseRunPosition(projectShowcaseRunPosRef.current);
+      pendingProjectShowcaseEntryRef.current = false;
+      projectShowcaseAwaitingProjectsArrivalRef.current = false;
+      projectShowcaseSawProjectsTravelRef.current = false;
+      startProjectShowcaseAngleIntroSequence();
+      vlog("🛰️ Entered Project Showcase");
+    };
+
+    if (aboutMode && exterior) {
+      if (interior) interior.visible = false;
+      exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
+      const tardisWorld = new THREE.Vector3();
+      exterior.getWorldPosition(tardisWorld);
+      const approachCam = tardisWorld
+        .clone()
+        .add(new THREE.Vector3(8.5, 9.5, 20.5));
+      const approachTarget = tardisWorld.clone().add(new THREE.Vector3(0, 6, 0));
       controls.setLookAt(
-        baseCam.x,
-        baseCam.y,
-        baseCam.z,
-        baseTarget.x,
-        baseTarget.y,
-        baseTarget.z,
-        false,
+        approachCam.x,
+        approachCam.y,
+        approachCam.z,
+        approachTarget.x,
+        approachTarget.y,
+        approachTarget.z,
+        true,
       );
-    } else {
-      projectShowcaseLookVectorRef.current = null;
+      projectShowcaseAboutEntryTimeoutRef.current = window.setTimeout(() => {
+        finalizeInteriorEntry();
+      }, PROJECT_SHOWCASE_ABOUT_EXTERIOR_APPROACH_MS + PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_MS);
+      return;
     }
-    projectShowcasePlayingRef.current = false;
-    setProjectShowcasePlaying(false);
-    projectShowcaseVelocityRef.current = 0;
-    projectShowcaseJumpTargetRef.current = null;
-    projectShowcaseForcedFocusIndexRef.current = null;
-    projectShowcaseLeverDraggingRef.current = false;
-    projectShowcaseLeverFlickRef.current = 0;
-    projectShowcaseLeverLastSampleRef.current = null;
-    setProjectShowcaseLever(0);
 
-    projectShowcaseActiveRef.current = true;
-    setProjectShowcaseActive(true);
-    setProjectsNavHereActive(true);
-    projectShowcasePanelsRef.current.forEach((panel) => {
-      panel.group.visible = true;
-    });
-    setProjectShowcaseRunPosition(projectShowcaseRunPosRef.current);
-    pendingProjectShowcaseEntryRef.current = false;
-    projectShowcaseAwaitingProjectsArrivalRef.current = false;
-    projectShowcaseSawProjectsTravelRef.current = false;
-    startProjectShowcaseAngleIntroSequence();
-    vlog("🛰️ Entered Project Showcase");
+    finalizeInteriorEntry();
   }, [
     setProjectShowcaseLever,
     setProjectShowcaseRunPosition,
@@ -14136,6 +14207,8 @@ export default function ResumeSpace3D({
     // --- PROJECT SHOWCASE (Trench Run) ---
     const onProjectShowcaseLoadError = () => {
       projectShowcaseRootRef.current = null;
+      projectShowcaseInteriorRootRef.current = null;
+      projectShowcaseExteriorRootRef.current = null;
       projectShowcaseWorldAnchorRef.current = null;
       if (projectShowcaseNebulaRootRef.current) {
         scene.remove(projectShowcaseNebulaRootRef.current);
@@ -14157,6 +14230,11 @@ export default function ResumeSpace3D({
         const showcaseRoot = new THREE.Group();
         showcaseRoot.name = "ProjectShowcaseRoot";
         showcaseRoot.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
+        const showcaseInteriorRoot = new THREE.Group();
+        showcaseInteriorRoot.name = "ProjectShowcaseInteriorRoot";
+        showcaseRoot.add(showcaseInteriorRoot);
+        projectShowcaseInteriorRootRef.current = showcaseInteriorRoot;
+        projectShowcaseExteriorRootRef.current = null;
         const trenchWorldAnchor = getProjectShowcaseWorldAnchor(
           hallwayContentModeRef.current,
         );
@@ -14368,7 +14446,7 @@ export default function ResumeSpace3D({
           }
           trenchSegmentsRoot.add(segment);
         }
-        showcaseRoot.add(trenchSegmentsRoot);
+        showcaseInteriorRoot.add(trenchSegmentsRoot);
 
         // Isolate trench rendering/lighting from the main cosmos sun.
         trenchSegmentsRoot.traverse((obj) => {
@@ -14409,7 +14487,7 @@ export default function ResumeSpace3D({
           }
           trenchOccluderRoot.add(segment);
         }
-        showcaseRoot.add(trenchOccluderRoot);
+        showcaseInteriorRoot.add(trenchOccluderRoot);
 
         if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
           const showcaseAmbient = new THREE.AmbientLight(
@@ -14429,7 +14507,7 @@ export default function ResumeSpace3D({
           showcaseAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
           showcaseKey.layers.set(PROJECT_SHOWCASE_LAYER);
           showcaseRim.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseRoot.add(showcaseAmbient, showcaseKey, showcaseRim);
+          showcaseInteriorRoot.add(showcaseAmbient, showcaseKey, showcaseRim);
         }
 
         if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
@@ -14482,7 +14560,7 @@ export default function ResumeSpace3D({
           showcaseSunBeamTarget.layers.set(PROJECT_SHOWCASE_LAYER);
           showcaseSun.target = showcaseSunTarget;
           showcaseSunBeam.target = showcaseSunBeamTarget;
-          showcaseRoot.add(
+          showcaseInteriorRoot.add(
             showcaseSunTarget,
             showcaseSun,
             showcaseSunBeamTarget,
@@ -14592,7 +14670,7 @@ export default function ResumeSpace3D({
             }
           }
           floorPulseGroup.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseRoot.add(floorPulseGroup);
+          showcaseInteriorRoot.add(floorPulseGroup);
           projectShowcaseFloorPulseMatsRef.current = floorPulseRecords;
         } else {
           projectShowcaseFloorPulseMatsRef.current = [];
@@ -14902,7 +14980,7 @@ export default function ResumeSpace3D({
             panelGroup.traverse((child) => {
               child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
             });
-            showcaseRoot.add(panelGroup);
+            showcaseInteriorRoot.add(panelGroup);
             panelRecords.push(panelRecord);
           });
         } else {
@@ -16117,7 +16195,7 @@ export default function ResumeSpace3D({
           panelGroup.traverse((child) => {
             child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
           });
-          showcaseRoot.add(panelGroup);
+          showcaseInteriorRoot.add(panelGroup);
           panelRecords.push(panelRecord);
           });
         }
@@ -16207,7 +16285,7 @@ export default function ResumeSpace3D({
             root.add(source);
             root.visible = false;
             root.traverse((child) => child.layers.set(PROJECT_SHOWCASE_LAYER));
-            showcaseRoot.add(root);
+            showcaseInteriorRoot.add(root);
             return {
               root,
               actor,
@@ -16262,6 +16340,52 @@ export default function ResumeSpace3D({
         projectShowcaseRunPosRef.current = initialRun;
         setProjectShowcaseRunPosition(initialRun);
         setProjectShowcaseFocus(0);
+
+        if (hallwayContentModeRef.current === "about") {
+          const aboutExteriorRoot = new THREE.Group();
+          aboutExteriorRoot.name = "ProjectShowcaseAboutExteriorRoot";
+          aboutExteriorRoot.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
+          aboutExteriorRoot.layers.set(PROJECT_SHOWCASE_LAYER);
+          showcaseRoot.add(aboutExteriorRoot);
+          projectShowcaseExteriorRootRef.current = aboutExteriorRoot;
+
+          loader.load(
+            PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH,
+            (tardisGltf) => {
+              const tardisRoot = (tardisGltf as { scene: THREE.Group }).scene.clone(true);
+              const bounds = new THREE.Box3().setFromObject(tardisRoot);
+              const size = bounds.getSize(new THREE.Vector3());
+              const desiredHeight = 38;
+              const maxDim = Math.max(size.x, size.y, size.z, 1);
+              const scale = desiredHeight / maxDim;
+              tardisRoot.scale.setScalar(scale);
+              const scaledBounds = new THREE.Box3().setFromObject(tardisRoot);
+              const center = scaledBounds.getCenter(new THREE.Vector3());
+              tardisRoot.position.sub(center);
+              tardisRoot.position.y += 4;
+              tardisRoot.traverse((obj) => {
+                obj.layers.set(PROJECT_SHOWCASE_LAYER);
+              });
+              aboutExteriorRoot.add(tardisRoot);
+            },
+            undefined,
+            () => {
+              if (projectShowcaseInteriorRootRef.current) {
+                projectShowcaseInteriorRootRef.current.visible = true;
+              }
+            },
+          );
+        }
+
+        const aboutMode = hallwayContentModeRef.current === "about";
+        if (aboutMode) {
+          showcaseInteriorRoot.visible = false;
+          if (projectShowcaseExteriorRootRef.current) {
+            projectShowcaseExteriorRootRef.current.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
+          }
+        } else {
+          showcaseInteriorRoot.visible = true;
+        }
 
         scene.add(showcaseRoot);
         projectShowcaseRootRef.current = showcaseRoot;
@@ -17662,8 +17786,14 @@ export default function ResumeSpace3D({
         hologramDroneRef.current.dispose();
         hologramDroneRef.current = null;
       }
+      if (projectShowcaseAboutEntryTimeoutRef.current !== null) {
+        window.clearTimeout(projectShowcaseAboutEntryTimeoutRef.current);
+        projectShowcaseAboutEntryTimeoutRef.current = null;
+      }
 
       projectShowcaseRootRef.current = null;
+      projectShowcaseInteriorRootRef.current = null;
+      projectShowcaseExteriorRootRef.current = null;
       projectShowcaseWorldAnchorRef.current = null;
       orbitalPortfolioRootRef.current = null;
       orbitalPortfolioBeaconRef.current = null;
