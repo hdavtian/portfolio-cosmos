@@ -190,6 +190,12 @@ const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS = 1180;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS = 320;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS = 0.2;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_RAD_PER_SEC = 0.55;
+const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MIN_INTERVAL_MS = 17000;
+const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MAX_INTERVAL_MS = 32000;
+const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_OUT_MS = 1150;
+const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_DARK_HOLD_MS = 50000;
+const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_IN_MS = 1300;
+const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_TEXT_SWAP_POWER = 0.4;
 const PROJECT_SHOWCASE_ELEVATOR_PEEKERS_ENABLED = true;
 const PROJECT_SHOWCASE_ELEVATOR_PEEKER_FLOOR_MULT = 2.2;
 const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = true;
@@ -453,6 +459,8 @@ type AboutHallSlidesFile = {
 type AboutSlideCellRuntime = {
   mesh: THREE.Mesh;
   material: THREE.MeshBasicMaterial;
+  normalTexture: THREE.Texture;
+  emergencyTexture: THREE.Texture;
   fx: AboutHallTextIntroFX;
   waitBeforeMs: number;
   waitAfterMs: number;
@@ -1207,9 +1215,10 @@ const drawAboutSlideText = (
   content: AboutHallSlideContent,
   width: number,
   height: number,
-  opts?: { creditsStyle?: boolean },
+  opts?: { creditsStyle?: boolean; emergencyMood?: boolean },
 ) => {
   const creditsStyle = opts?.creditsStyle ?? false;
+  const emergencyMood = opts?.emergencyMood ?? false;
   const fontSize = parsePixelSize(content.fontSize, 42);
   const fontFamily =
     content.fontFamily?.length > 0
@@ -1254,8 +1263,10 @@ const drawAboutSlideText = (
   ctx.textAlign = textAlign;
   ctx.textBaseline = "middle";
   if (creditsStyle) {
-    ctx.fillStyle = "rgba(10, 10, 12, 0.98)";
-    ctx.shadowColor = "rgba(248, 252, 255, 0.95)";
+    ctx.fillStyle = emergencyMood ? "rgba(248, 252, 255, 0.98)" : "rgba(10, 10, 12, 0.98)";
+    ctx.shadowColor = emergencyMood
+      ? "rgba(96, 255, 172, 0.82)"
+      : "rgba(248, 252, 255, 0.95)";
     ctx.shadowBlur = Math.max(14, fontSize * 0.34);
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
@@ -1282,7 +1293,7 @@ const createAboutCellTexture = (
   content: AboutHallSlideContent,
   canvasWidth: number,
   canvasHeight: number,
-  opts?: { transparentBackground?: boolean; creditsStyle?: boolean },
+  opts?: { transparentBackground?: boolean; creditsStyle?: boolean; emergencyMood?: boolean },
 ): THREE.CanvasTexture => {
   const canvas = document.createElement("canvas");
   canvas.width = canvasWidth;
@@ -1304,6 +1315,7 @@ const createAboutCellTexture = (
   }
   drawAboutSlideText(ctx, content, canvasWidth, canvasHeight, {
     creditsStyle: opts?.creditsStyle,
+    emergencyMood: opts?.emergencyMood,
   });
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -2320,6 +2332,30 @@ export default function ResumeSpace3D({
   const projectShowcaseForwardLockUntilRef = useRef(0);
   const projectShowcaseAboutEntryTimeoutRef = useRef<number | null>(null);
   const projectShowcaseAboutEntryRafRef = useRef<number | null>(null);
+  const projectShowcaseInteriorLightBasesRef = useRef<
+    Array<{ light: THREE.Light; baseIntensity: number }>
+  >([]);
+  const projectShowcaseElevatorEmergencyLightsRef = useRef<{
+    ambient: THREE.AmbientLight;
+    point: THREE.PointLight;
+  } | null>(null);
+  const projectShowcaseElevatorPowerRef = useRef<{
+    phase: "normal" | "flickerOut" | "outage" | "flickerIn";
+    phaseStartedAt: number;
+    phaseEndsAt: number;
+    nextOutageAt: number;
+    powerLevel: number;
+    emergencyTextActive: boolean;
+    resumeAutoplayAfterEmergency: boolean;
+  }>({
+    phase: "normal",
+    phaseStartedAt: 0,
+    phaseEndsAt: 0,
+    nextOutageAt: 0,
+    powerLevel: 1,
+    emergencyTextActive: false,
+    resumeAutoplayAfterEmergency: false,
+  });
   const projectShowcaseRunPosRef = useRef(0);
   const projectShowcasePrevControlsEnabledRef = useRef(true);
   const pendingProjectShowcaseEntryRef = useRef(false);
@@ -4296,6 +4332,31 @@ export default function ResumeSpace3D({
     pendingProjectShowcaseEntryRef.current = false;
     projectShowcaseAwaitingProjectsArrivalRef.current = false;
     projectShowcaseSawProjectsTravelRef.current = false;
+    const outageRuntime = projectShowcaseElevatorPowerRef.current;
+    outageRuntime.phase = "normal";
+    outageRuntime.phaseStartedAt = 0;
+    outageRuntime.phaseEndsAt = 0;
+    outageRuntime.nextOutageAt = 0;
+    outageRuntime.powerLevel = 1;
+    outageRuntime.emergencyTextActive = false;
+    outageRuntime.resumeAutoplayAfterEmergency = false;
+    projectShowcaseInteriorLightBasesRef.current.forEach(({ light, baseIntensity }) => {
+      light.intensity = baseIntensity;
+    });
+    const emergencyLights = projectShowcaseElevatorEmergencyLightsRef.current;
+    if (emergencyLights) {
+      emergencyLights.ambient.intensity = 0;
+      emergencyLights.point.intensity = 0;
+    }
+    projectShowcasePanelsRef.current.forEach((panel) => {
+      if (panel.aboutRuntime?.mode !== "about") return;
+      panel.aboutRuntime.cells.forEach((cell) => {
+        if (cell.material.map !== cell.normalTexture) {
+          cell.material.map = cell.normalTexture;
+          cell.material.needsUpdate = true;
+        }
+      });
+    });
     const aboutMode = hallwayContentModeRef.current === "about";
     const interior = projectShowcaseInteriorRootRef.current;
     const exterior = projectShowcaseExteriorRootRef.current;
@@ -4440,6 +4501,20 @@ export default function ResumeSpace3D({
       projectShowcaseActiveRef.current = true;
       setProjectShowcaseActive(true);
       setProjectsNavHereActive(true);
+      const powerStartNow = performance.now();
+      const outageRuntime = projectShowcaseElevatorPowerRef.current;
+      outageRuntime.phase = "normal";
+      outageRuntime.phaseStartedAt = powerStartNow;
+      outageRuntime.phaseEndsAt = 0;
+      outageRuntime.nextOutageAt =
+        powerStartNow +
+        THREE.MathUtils.randInt(
+          PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MIN_INTERVAL_MS,
+          PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MAX_INTERVAL_MS,
+        );
+      outageRuntime.powerLevel = 1;
+      outageRuntime.emergencyTextActive = false;
+      outageRuntime.resumeAutoplayAfterEmergency = false;
       projectShowcasePanelsRef.current.forEach((panel) => {
         panel.group.visible = true;
       });
@@ -8902,6 +8977,95 @@ export default function ResumeSpace3D({
       const loopLen = Math.max(1, maxRun - minRun);
       const currentRun = projectShowcaseRunPosRef.current;
       const jumpTarget = projectShowcaseJumpTargetRef.current;
+      const outageRuntime = projectShowcaseElevatorPowerRef.current;
+      const isAboutElevatorMode =
+        hallwayContentModeRef.current === "about" && track.axis === "y";
+      if (isAboutElevatorMode) {
+        if (outageRuntime.phase === "normal" && now >= outageRuntime.nextOutageAt) {
+          outageRuntime.phase = "flickerOut";
+          outageRuntime.phaseStartedAt = now;
+          outageRuntime.phaseEndsAt = now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_OUT_MS;
+          outageRuntime.resumeAutoplayAfterEmergency = projectShowcasePlayingRef.current;
+          if (projectShowcasePlayingRef.current) {
+            projectShowcasePlayingRef.current = false;
+            setProjectShowcasePlaying(false);
+            setProjectShowcaseLever(0);
+          }
+        } else if (
+          outageRuntime.phase !== "normal" &&
+          outageRuntime.phaseEndsAt > 0 &&
+          now >= outageRuntime.phaseEndsAt
+        ) {
+          if (outageRuntime.phase === "flickerOut") {
+            outageRuntime.phase = "outage";
+            outageRuntime.phaseStartedAt = now;
+            outageRuntime.phaseEndsAt = now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_DARK_HOLD_MS;
+            if (
+              outageRuntime.resumeAutoplayAfterEmergency &&
+              !projectShowcasePlayingRef.current
+            ) {
+              projectShowcasePlayingRef.current = true;
+              setProjectShowcasePlaying(true);
+            }
+          } else if (outageRuntime.phase === "outage") {
+            outageRuntime.phase = "flickerIn";
+            outageRuntime.phaseStartedAt = now;
+            outageRuntime.phaseEndsAt = now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_IN_MS;
+          } else {
+            outageRuntime.phase = "normal";
+            outageRuntime.phaseStartedAt = now;
+            outageRuntime.phaseEndsAt = 0;
+            outageRuntime.nextOutageAt =
+              now +
+              THREE.MathUtils.randInt(
+                PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MIN_INTERVAL_MS,
+                PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MAX_INTERVAL_MS,
+              );
+            outageRuntime.resumeAutoplayAfterEmergency = false;
+          }
+        }
+        let targetPower = 1;
+        if (outageRuntime.phase === "flickerOut") {
+          const tf = Math.max(0, now - outageRuntime.phaseStartedAt);
+          const phaseT = THREE.MathUtils.clamp(
+            tf / Math.max(1, PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_OUT_MS),
+            0,
+            1,
+          );
+          targetPower = THREE.MathUtils.lerp(1, 0.12, phaseT);
+        } else if (outageRuntime.phase === "outage") {
+          targetPower = 0.11 + (Math.sin(now * 0.005) * 0.5 + 0.5) * 0.02;
+        } else if (outageRuntime.phase === "flickerIn") {
+          const tf = Math.max(0, now - outageRuntime.phaseStartedAt);
+          const phaseT = THREE.MathUtils.clamp(
+            tf / Math.max(1, PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_IN_MS),
+            0,
+            1,
+          );
+          targetPower = THREE.MathUtils.lerp(0.16, 1, phaseT);
+        }
+        outageRuntime.powerLevel = THREE.MathUtils.damp(
+          outageRuntime.powerLevel,
+          targetPower,
+          10.5,
+          dt,
+        );
+      } else {
+        outageRuntime.phase = "normal";
+        outageRuntime.phaseStartedAt = now;
+        outageRuntime.phaseEndsAt = 0;
+        outageRuntime.nextOutageAt = now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MIN_INTERVAL_MS;
+        outageRuntime.powerLevel = THREE.MathUtils.damp(outageRuntime.powerLevel, 1, 12, dt);
+        outageRuntime.resumeAutoplayAfterEmergency = false;
+      }
+      const emergencyAutoplayScale =
+        outageRuntime.phase === "flickerOut"
+          ? 0
+          : outageRuntime.phase === "outage"
+            ? 1
+            : outageRuntime.phase === "flickerIn"
+              ? 1
+              : 1;
 
       if (jumpTarget !== null) {
         const normalizedCurrent = THREE.MathUtils.euclideanModulo(
@@ -8966,7 +9130,7 @@ export default function ResumeSpace3D({
         const maxManualSpeed = track.speed * 11.4;
         let targetVelocity = 0;
         if (projectShowcasePlayingRef.current) {
-          targetVelocity = track.speed * 0.75;
+          targetVelocity = track.speed * 0.62 * emergencyAutoplayScale;
         } else if (projectShowcaseLeverDraggingRef.current) {
           const lever = projectShowcaseLeverValueRef.current;
           // Non-linear response: fine near center, stronger at extremes.
@@ -9023,6 +9187,82 @@ export default function ResumeSpace3D({
             setProjectShowcaseLever(derivedLever);
           }
         }
+      }
+
+      if (
+        isAboutElevatorMode &&
+        outageRuntime.phase === "flickerOut" &&
+        jumpTarget === null
+      ) {
+        const glitchOffset =
+          (Math.sin(now * 0.082) + Math.sin(now * 0.167 + 1.7)) *
+          track.speed *
+          dt *
+          2.1;
+        let glitchedRun = projectShowcaseRunPosRef.current + glitchOffset;
+        if (glitchedRun > maxRun) glitchedRun = minRun;
+        if (glitchedRun < minRun) glitchedRun = maxRun;
+        setProjectShowcaseRunPosition(glitchedRun);
+      }
+      projectShowcaseInteriorLightBasesRef.current.forEach(({ light, baseIntensity }) => {
+        const p = outageRuntime.powerLevel;
+        light.intensity = baseIntensity * (0.05 + p * 0.95);
+      });
+      const emergencyLights = projectShowcaseElevatorEmergencyLightsRef.current;
+      if (emergencyLights) {
+        const emergencyLevel = 1 - outageRuntime.powerLevel;
+        const pulse = 0.94 + Math.sin(now * 0.0024) * 0.06;
+        const redMix =
+          outageRuntime.phase === "outage"
+            ? 0.22 + (Math.sin(now * 0.0018) * 0.5 + 0.5) * 0.18
+            : outageRuntime.phase === "flickerOut"
+              ? 0.14
+              : outageRuntime.phase === "flickerIn"
+                ? 0.16
+                : 0;
+        const greenColor = new THREE.Color(0x6dffb0);
+        const redColor = new THREE.Color(0xff4f5b);
+        const blendColor = greenColor.lerp(redColor, redMix);
+        emergencyLights.ambient.color.copy(blendColor);
+        emergencyLights.point.color.copy(blendColor);
+        emergencyLights.ambient.intensity = emergencyLevel * 1.08 * pulse;
+        emergencyLights.point.intensity = emergencyLevel * 2.25 * pulse;
+      }
+      const emergencyTextActive =
+        isAboutElevatorMode &&
+        outageRuntime.powerLevel <= PROJECT_SHOWCASE_ELEVATOR_OUTAGE_TEXT_SWAP_POWER;
+      if (outageRuntime.emergencyTextActive !== emergencyTextActive) {
+        outageRuntime.emergencyTextActive = emergencyTextActive;
+        projectShowcasePanelsRef.current.forEach((panel) => {
+          if (panel.aboutRuntime?.mode !== "about") return;
+          panel.aboutRuntime.cells.forEach((cell) => {
+            const targetMap = emergencyTextActive ? cell.emergencyTexture : cell.normalTexture;
+            if (cell.material.map !== targetMap) {
+              cell.material.map = targetMap;
+              cell.material.needsUpdate = true;
+            }
+          });
+        });
+      }
+      if (isAboutElevatorMode && emergencyTextActive) {
+        projectShowcasePanelsRef.current.forEach((panel, panelIdx) => {
+          if (panel.aboutRuntime?.mode !== "about") return;
+          panel.aboutRuntime.cells.forEach((cell, cellIdx) => {
+            const hue = THREE.MathUtils.euclideanModulo(
+              now * 0.00013 + panel.runPos * 0.00038 + panelIdx * 0.09 + cellIdx * 0.021,
+              1,
+            );
+            const light = 0.68 + Math.sin(now * 0.002 + cellIdx * 0.7) * 0.08;
+            cell.material.color.setHSL(hue, 0.9, THREE.MathUtils.clamp(light, 0.52, 0.82));
+          });
+        });
+      } else if (isAboutElevatorMode) {
+        projectShowcasePanelsRef.current.forEach((panel) => {
+          if (panel.aboutRuntime?.mode !== "about") return;
+          panel.aboutRuntime.cells.forEach((cell) => {
+            cell.material.color.set(0xffffff);
+          });
+        });
       }
 
       const focusIndex = THREE.MathUtils.clamp(
@@ -9179,48 +9419,33 @@ export default function ResumeSpace3D({
           const nearest = Math.round(cycle - peeker.floorPhase);
           const anchorRun = minRun + (nearest + peeker.floorPhase) * peeker.floorStride;
           const dist = run - anchorRun;
-          const activeRange = peeker.floorStride * (peeker.actor === "falcon" ? 0.78 : 0.52);
-          const passT = THREE.MathUtils.clamp((dist + activeRange) / (activeRange * 2), 0, 1);
-          const enterT = smoothstep(0.08, 0.34, passT);
-          const exitT = 1 - smoothstep(0.66, 0.93, passT);
-          const peekT = Math.min(enterT, exitT);
-          if (peekT <= 0.001) {
+          const activeRange = Math.max(peeker.floorStride * 1.35, 12);
+          const norm = Math.abs(dist) / Math.max(activeRange, 1e-4);
+          const visibleT = 1 - THREE.MathUtils.clamp(norm, 0, 1);
+          if (visibleT <= 0.001) {
             peeker.root.visible = false;
             return;
           }
+          const hoverT = 1 - smoothstep(0.82, 1, norm);
+          const departT = smoothstep(0.9, 1, norm);
           const lifePulse = Math.sin(now * 0.0025 + peeker.bobPhase);
           const secondaryPulse = Math.sin(now * 0.0032 + peeker.bobPhase * 1.61);
           const inwardSign = peeker.wallX < 0 ? 1 : -1;
-          const outsideOffset = -inwardSign * 0.9;
-          const peekInsideOffset = inwardSign * 0.18;
-          const lateralOffset = THREE.MathUtils.lerp(outsideOffset, peekInsideOffset, peekT);
-          const actorIsFalcon = peeker.actor === "falcon";
-          const hover =
-            actorIsFalcon
-              ? 0
-              : (lifePulse * 0.045 + secondaryPulse * 0.025) * peekT;
-          const bob =
-            actorIsFalcon
-              ? 0
-              : lifePulse * peeker.bobAmp * 0.42 * peekT;
+          const outsideOffset = -inwardSign * 0.08;
+          const lateralOffset = outsideOffset + (-inwardSign * 1.35) * departT;
+          const hover = lifePulse * peeker.bobAmp * 0.45 * hoverT;
+          const bob = lifePulse * peeker.bobAmp * 0.18 * hoverT;
           peeker.root.visible = true;
           peeker.root.position.set(
             peeker.wallX + lateralOffset,
-            anchorRun + hover,
+            anchorRun + hover + departT * 2.2,
             peeker.baseZ + bob,
           );
-          if (actorIsFalcon) {
-            peeker.root.rotation.x = 0;
-            peeker.root.rotation.y =
-              peeker.yawBase + inwardSign * 0.06 * peekT + secondaryPulse * 0.02 * peekT;
-            peeker.root.rotation.z = lifePulse * 0.018 * peekT;
-          } else {
-            peeker.root.rotation.x = secondaryPulse * 0.018 * peekT;
-            peeker.root.rotation.y =
-              peeker.yawBase + lifePulse * 0.13 * peekT + inwardSign * 0.015 * peekT;
-            peeker.root.rotation.z = lifePulse * 0.014 * peekT;
-          }
-          const pulseScale = THREE.MathUtils.lerp(0.96, actorIsFalcon ? 1.03 : 1.06, peekT);
+          peeker.root.rotation.x = secondaryPulse * 0.01 * hoverT;
+          peeker.root.rotation.y =
+            peeker.yawBase + inwardSign * 0.05 * hoverT + secondaryPulse * 0.024 * hoverT;
+          peeker.root.rotation.z = lifePulse * 0.012 * hoverT;
+          const pulseScale = THREE.MathUtils.lerp(1.24, 1.44, hoverT);
           peeker.root.scale.setScalar(pulseScale);
         });
       }
@@ -14418,6 +14643,12 @@ export default function ResumeSpace3D({
       projectShowcaseInteriorRootRef.current = null;
       projectShowcaseExteriorRootRef.current = null;
       projectShowcaseAboutExteriorModelRef.current = null;
+      projectShowcaseInteriorLightBasesRef.current = [];
+      projectShowcaseElevatorEmergencyLightsRef.current = null;
+      projectShowcaseElevatorPowerRef.current.phase = "normal";
+      projectShowcaseElevatorPowerRef.current.powerLevel = 1;
+      projectShowcaseElevatorPowerRef.current.emergencyTextActive = false;
+      projectShowcaseElevatorPowerRef.current.resumeAutoplayAfterEmergency = false;
       projectShowcasePreloadedGltfRef.current = null;
       projectShowcaseAboutExteriorPreloadedGltfRef.current = null;
       spaceshipPreloadedGltfRef.current = null;
@@ -14782,6 +15013,26 @@ export default function ResumeSpace3D({
             showcaseSunBeam,
           );
         }
+        const interiorLightBases: Array<{ light: THREE.Light; baseIntensity: number }> = [];
+        showcaseInteriorRoot.traverse((obj) => {
+          const light = obj as THREE.Light;
+          if (!(light as any).isLight) return;
+          interiorLightBases.push({ light, baseIntensity: light.intensity });
+        });
+        projectShowcaseInteriorLightBasesRef.current = interiorLightBases;
+        projectShowcaseElevatorEmergencyLightsRef.current = null;
+        if (runAxis === "y" && hallwayContentModeRef.current === "about") {
+          const emergencyAmbient = new THREE.AmbientLight(0x6dffb0, 0);
+          const emergencyPoint = new THREE.PointLight(0x59fca7, 0, 560, 1.7);
+          emergencyPoint.position.set(0, 24, -1.8);
+          emergencyAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
+          emergencyPoint.layers.set(PROJECT_SHOWCASE_LAYER);
+          showcaseInteriorRoot.add(emergencyAmbient, emergencyPoint);
+          projectShowcaseElevatorEmergencyLightsRef.current = {
+            ambient: emergencyAmbient,
+            point: emergencyPoint,
+          };
+        }
         // Keep trench well away from Projects planet so entry can be a true long final.
         const showcaseForwardOffset = runAxis === "y" ? 320 : 860;
         const showcaseWorldOffset =
@@ -15138,6 +15389,22 @@ export default function ResumeSpace3D({
                   creditsStyle: elevatorCreditsMode,
                 },
               );
+              const emergencyTex = elevatorCreditsMode
+                ? createAboutCellTexture(
+                    content,
+                    elevatorCreditsMode
+                      ? Math.max(980, Math.floor(1780 * (panelWidth / 12)))
+                      : Math.max(512, Math.floor(1400 * rect.w)),
+                    elevatorCreditsMode
+                      ? Math.max(460, Math.floor(1080 * (panelHeight / 7)))
+                      : Math.max(360, Math.floor(920 * rect.h)),
+                    {
+                      transparentBackground: elevatorCreditsMode,
+                      creditsStyle: elevatorCreditsMode,
+                      emergencyMood: true,
+                    },
+                  )
+                : tex;
               const material = new THREE.MeshBasicMaterial({
                 map: tex,
                 color: 0xffffff,
@@ -15161,6 +15428,8 @@ export default function ResumeSpace3D({
               panelRecord.aboutRuntime?.cells.push({
                 mesh,
                 material,
+                normalTexture: tex,
+                emergencyTexture: emergencyTex,
                 fx: elevatorCreditsMode ? { effect: "fadeIn", durationMs: 520 } : introFx,
                 waitBeforeMs: elevatorCreditsMode
                   ? 40
@@ -16439,11 +16708,11 @@ export default function ResumeSpace3D({
             obj.updateMatrixWorld(true);
           };
           const oppositeWallX = -Math.max(
-            trenchWidth * 0.5 + 1.65,
-            trenchWidth * 0.62,
+            trenchWidth * 0.5 + 0.16,
+            trenchWidth * 0.505,
           );
           const peekerFloorStride = panelSpacing * PROJECT_SHOWCASE_ELEVATOR_PEEKER_FLOOR_MULT;
-          const peekerWallZ = -0.22;
+          const peekerWallZ = 0.22;
           const simplifyPeekerMaterials = (
             obj: THREE.Object3D,
             colorTint: number,
@@ -16506,7 +16775,7 @@ export default function ResumeSpace3D({
               actor,
               wallX: oppositeWallX,
               baseZ: peekerWallZ + zOffset,
-              floorStride: actor === "falcon" ? peekerFloorStride * 0.86 : peekerFloorStride * 1.38,
+              floorStride: actor === "falcon" ? peekerFloorStride * 1.4 : peekerFloorStride * 1.38,
               floorPhase,
               bobPhase: Math.random() * Math.PI * 2,
               bobAmp: actor === "falcon" ? 0.2 : 0.14,
@@ -16514,27 +16783,26 @@ export default function ResumeSpace3D({
             };
           };
 
-          const falconPeeker = makePeeker(
+          const falconPeekerMain = makePeeker(
             "falcon",
-            spaceshipRef.current,
-            8.4,
-            0.15,
-            -0.08,
+            spaceshipRef.current ?? spaceshipPreloadedGltfRef.current?.scene ?? null,
+            32,
+            0.18,
+            0.08,
             Math.PI * 0.32,
           );
-          if (falconPeeker) falconPeeker.bobAmp = 0.08;
-          if (falconPeeker) projectShowcaseElevatorPeekersRef.current.push(falconPeeker);
-
-          const dronePeeker = makePeeker(
-            "drone",
-            oblivionDronePreloadedRef.current,
-            3.8,
+          const falconPeekerAlt = makePeeker(
+            "falcon",
+            spaceshipRef.current ?? spaceshipPreloadedGltfRef.current?.scene ?? null,
+            30,
             0.68,
-            0.14,
-            Math.PI * 0.2,
+            -0.24,
+            Math.PI * 0.3,
           );
-          if (dronePeeker) dronePeeker.bobAmp = 0.16;
-          if (dronePeeker) projectShowcaseElevatorPeekersRef.current.push(dronePeeker);
+          if (falconPeekerMain) falconPeekerMain.bobAmp = 0.03;
+          if (falconPeekerAlt) falconPeekerAlt.bobAmp = 0.028;
+          if (falconPeekerMain) projectShowcaseElevatorPeekersRef.current.push(falconPeekerMain);
+          if (falconPeekerAlt) projectShowcaseElevatorPeekersRef.current.push(falconPeekerAlt);
         }
         const elevatorCameraWallOffset = Math.min(
           trenchWidth * 0.36,
@@ -18071,6 +18339,12 @@ export default function ResumeSpace3D({
       projectShowcaseInteriorRootRef.current = null;
       projectShowcaseExteriorRootRef.current = null;
       projectShowcaseAboutExteriorModelRef.current = null;
+      projectShowcaseInteriorLightBasesRef.current = [];
+      projectShowcaseElevatorEmergencyLightsRef.current = null;
+      projectShowcaseElevatorPowerRef.current.phase = "normal";
+      projectShowcaseElevatorPowerRef.current.powerLevel = 1;
+      projectShowcaseElevatorPowerRef.current.emergencyTextActive = false;
+      projectShowcaseElevatorPowerRef.current.resumeAutoplayAfterEmergency = false;
       projectShowcaseWorldAnchorRef.current = null;
       orbitalPortfolioRootRef.current = null;
       orbitalPortfolioBeaconRef.current = null;
