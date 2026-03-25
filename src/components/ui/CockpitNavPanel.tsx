@@ -176,7 +176,9 @@ const CockpitNavPanel: React.FC<Props> = ({
           <React.Fragment key={planet.id}>
             <button
               style={getButtonStyle(planet, isCurrent, isNav)}
-              onClick={() => onNavigate(planet.id, "section")}
+              onClick={() => {
+                onNavigate(planet.id, "section");
+              }}
               onMouseDown={stopEvt}
             >
               <span style={iconStyle}>{planet.icon}</span>
@@ -190,7 +192,9 @@ const CockpitNavPanel: React.FC<Props> = ({
                 <button
                   key={moon.id}
                   style={getButtonStyle(moon, moonCurrent, moonNav)}
-                  onClick={() => onNavigate(moon.id, "moon")}
+                  onClick={() => {
+                    onNavigate(moon.id, "moon");
+                  }}
                   onMouseDown={stopEvt}
                 >
                   <span style={{ ...iconStyle, fontSize: 10 }}>●</span>

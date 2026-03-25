@@ -593,7 +593,9 @@ const SpaceshipHUD: React.FC<Props> = ({
                 <button
                   key={target.id}
                   className={`nav-drawer__item ${currentTarget === target.id ? "active" : ""} ${target.type === "moon" ? "nav-drawer__item--moon" : ""}`}
-                  onClick={() => onNavigate?.(target.id, target.type)}
+                  onClick={() => {
+                    onNavigate?.(target.id, target.type);
+                  }}
                   title={`Navigate to ${target.label}`}
                 >
                   {target.icon && (

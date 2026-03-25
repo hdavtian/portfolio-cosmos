@@ -81,6 +81,26 @@ import {
   createPositionalAudio,
   playPositionalOneShot,
 } from "./audio/threeAudioUtils";
+import { createKeyboardStudioEngine } from "./audio/keyboardStudioEngine";
+import {
+  COSMOS_SOUND_EVENT_IDS,
+  type KeyboardRecordedNoteEvent,
+  type KeyboardStudioEventBinding,
+  type KeyboardStudioPanelLayout,
+  type KeyboardStudioPreset,
+  type KeyboardStudioSoundDesign,
+  KEYBOARD_STUDIO_ENABLED_KEY,
+  DEFAULT_KEYBOARD_STUDIO_SOUND_DESIGN,
+  saveBooleanStorage,
+  loadPanelLayout,
+  savePanelLayout,
+  loadPresets,
+  savePresets,
+  loadBindings,
+  saveBindings,
+  normalizeSoundDesign,
+  onCosmosSoundEvent,
+} from "./audio/keyboardStudioBindings";
 import {
   SUN_GLOW_SPRITE_SIZE,
   EXPERIENCE_ORBIT,
@@ -317,10 +337,17 @@ const OBLIVION_DRONE_AUDIO_PATHS = {
     "/models/oblivion-drone/199935__drzhnn__04-blip.wav",
   ],
 } as const;
-const FALCON_MOON_TRAVEL_SFX_PATH =
-  "/audio/falcon/falcon-moon-travel.mp4";
+const FALCON_NAV_SFX_PATHS = {
+  moonTravel: [
+    "/audio/falcon/moon-travel-1.m4a",
+    "/audio/falcon/moon-travel-2.m4a",
+  ],
+  speedOfLight: "/audio/falcon/speed-of-light.m4a",
+  changeOfDirection: "/audio/falcon/change-of-direction.m4a",
+  override: "/audio/falcon/override.m4a",
+} as const;
+type FalconNavCueKind = keyof typeof FALCON_NAV_SFX_PATHS;
 const FALCON_MOON_TRAVEL_DEFAULT_VOLUME = 0.68;
-const FALCON_MOON_TRAVEL_FADE_OUT_MS = 520;
 const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
@@ -357,6 +384,437 @@ const ABOUT_REFORM_DAMPING = 0.86;
 const ABOUT_SPIN_MAX = 0.9;
 const ABOUT_SWARM_DISTANCE_GATE = 28000;
 const SKILLS_LATTICE_ARRIVAL_DIST = 900;
+const SKILLS_LATTICE_TONE_MOTIFS_HZ: number[][] = [
+  [392.0, 440.0, 349.23, 349.23, 261.63],
+  [261.63, 329.63, 392.0, 349.23, 293.66],
+  [293.66, 349.23, 392.0, 329.63, 261.63],
+];
+const SKILLS_LATTICE_TONE_NOTE_DURATION_MS = 430;
+const SKILLS_LATTICE_TONE_NOTE_STEP_MS = 610;
+const SKILLS_LATTICE_TONE_PHRASE_PAUSE_MS = 2100;
+const SKILLS_LATTICE_TONE_MASTER_GAIN = 0.09;
+const SKILLS_LATTICE_TONE_PHRASE_PAUSE_MAX_MS = 60000;
+type SkillsLatticeTonePreset = {
+  id: string;
+  label: string;
+  description: string;
+  mainType: OscillatorType;
+  layerType: OscillatorType;
+  layerRatio: number;
+  layerDetune: number;
+  mainGain: number;
+  layerGain: number;
+  filterType: BiquadFilterType;
+  filterMul: number;
+  filterMin: number;
+  filterMax: number;
+  filterQ: number;
+  attackSec: number;
+  decaySec: number;
+  sustain: number;
+  releaseSec: number;
+  outputTrim: number;
+  accentColor: number;
+};
+const SKILLS_LATTICE_TONE_PRESETS: SkillsLatticeTonePreset[] = [
+  {
+    id: "celestial-pad",
+    label: "Celestial Pad",
+    description: "Warm cinematic pad with airy tail.",
+    mainType: "triangle",
+    layerType: "sine",
+    layerRatio: 0.5,
+    layerDetune: 4,
+    mainGain: 0.82,
+    layerGain: 0.46,
+    filterType: "lowpass",
+    filterMul: 5.4,
+    filterMin: 900,
+    filterMax: 3200,
+    filterQ: 0.85,
+    attackSec: 0.026,
+    decaySec: 0.11,
+    sustain: 0.62,
+    releaseSec: 0.22,
+    outputTrim: 0.95,
+    accentColor: 0xc18bff,
+  },
+  {
+    id: "glass-bell",
+    label: "Glass Bell",
+    description: "Bright crystalline bell, spacey shimmer.",
+    mainType: "sine",
+    layerType: "triangle",
+    layerRatio: 2,
+    layerDetune: 7,
+    mainGain: 0.72,
+    layerGain: 0.38,
+    filterType: "bandpass",
+    filterMul: 4.6,
+    filterMin: 760,
+    filterMax: 3600,
+    filterQ: 1.35,
+    attackSec: 0.01,
+    decaySec: 0.09,
+    sustain: 0.42,
+    releaseSec: 0.32,
+    outputTrim: 0.88,
+    accentColor: 0x8fe3ff,
+  },
+  {
+    id: "analog-choir",
+    label: "Analog Choir",
+    description: "Vintage synth-choir, gentle and emotive.",
+    mainType: "sawtooth",
+    layerType: "triangle",
+    layerRatio: 1.005,
+    layerDetune: -6,
+    mainGain: 0.54,
+    layerGain: 0.46,
+    filterType: "lowpass",
+    filterMul: 3.8,
+    filterMin: 700,
+    filterMax: 2500,
+    filterQ: 0.9,
+    attackSec: 0.03,
+    decaySec: 0.13,
+    sustain: 0.58,
+    releaseSec: 0.24,
+    outputTrim: 0.8,
+    accentColor: 0x9dffd5,
+  },
+  {
+    id: "hollow-reed",
+    label: "Hollow Reed",
+    description: "Mystic reed-like tone with darker body.",
+    mainType: "triangle",
+    layerType: "sawtooth",
+    layerRatio: 1.5,
+    layerDetune: 2,
+    mainGain: 0.75,
+    layerGain: 0.28,
+    filterType: "lowpass",
+    filterMul: 3.1,
+    filterMin: 620,
+    filterMax: 2200,
+    filterQ: 0.72,
+    attackSec: 0.02,
+    decaySec: 0.12,
+    sustain: 0.56,
+    releaseSec: 0.26,
+    outputTrim: 0.82,
+    accentColor: 0xffcc8f,
+  },
+  {
+    id: "cosmic-chime",
+    label: "Cosmic Chime",
+    description: "Soft digital chime with glassy upper shimmer.",
+    mainType: "sine",
+    layerType: "square",
+    layerRatio: 2.01,
+    layerDetune: -3,
+    mainGain: 0.84,
+    layerGain: 0.18,
+    filterType: "highpass",
+    filterMul: 2.8,
+    filterMin: 520,
+    filterMax: 2400,
+    filterQ: 0.95,
+    attackSec: 0.008,
+    decaySec: 0.085,
+    sustain: 0.34,
+    releaseSec: 0.36,
+    outputTrim: 0.8,
+    accentColor: 0xa5f7ff,
+  },
+  {
+    id: "deep-drone-flute",
+    label: "Deep Drone Flute",
+    description: "Breathy low flute tone with sci-fi body.",
+    mainType: "triangle",
+    layerType: "sine",
+    layerRatio: 0.25,
+    layerDetune: 2,
+    mainGain: 0.74,
+    layerGain: 0.48,
+    filterType: "lowpass",
+    filterMul: 2.4,
+    filterMin: 500,
+    filterMax: 1700,
+    filterQ: 0.7,
+    attackSec: 0.03,
+    decaySec: 0.14,
+    sustain: 0.66,
+    releaseSec: 0.42,
+    outputTrim: 0.78,
+    accentColor: 0x90b3ff,
+  },
+  {
+    id: "starlight-pluck",
+    label: "Starlight Pluck",
+    description: "Short plucky synth with quick sparkle.",
+    mainType: "square",
+    layerType: "triangle",
+    layerRatio: 1.5,
+    layerDetune: 5,
+    mainGain: 0.62,
+    layerGain: 0.34,
+    filterType: "bandpass",
+    filterMul: 5.2,
+    filterMin: 900,
+    filterMax: 3600,
+    filterQ: 1.1,
+    attackSec: 0.006,
+    decaySec: 0.07,
+    sustain: 0.24,
+    releaseSec: 0.22,
+    outputTrim: 0.74,
+    accentColor: 0xff9fdd,
+  },
+];
+const resolveSkillsLatticeTonePreset = (id: string): SkillsLatticeTonePreset =>
+  SKILLS_LATTICE_TONE_PRESETS.find((preset) => preset.id === id)
+  ?? SKILLS_LATTICE_TONE_PRESETS[0];
+const IS_DEBUG_QUERY_ENABLED = (() => {
+  if (typeof window === "undefined") return false;
+  try {
+    return new URLSearchParams(window.location.search).get("debug") === "true";
+  } catch {
+    return false;
+  }
+})();
+type KeyboardPianoKey = {
+  note: string;
+  midi: number;
+  isBlack: boolean;
+  leftUnit: number;
+};
+const ONSCREEN_KEYBOARD_ROOT_MIDI = 48; // C3
+const ONSCREEN_KEYBOARD_KEY_COUNT = 36; // C3..B5
+const ONSCREEN_KEYBOARD_MIN_DURATION_MS = 30;
+const ONSCREEN_KEYBOARD_DEFAULT_VELOCITY = 0.82;
+const ONSCREEN_KEYBOARD_WHITE_KEY_COUNT = 21;
+const KEYBOARD_STUDIO_COMPUTER_KEY_CODES = [
+  "KeyZ",
+  "KeyS",
+  "KeyX",
+  "KeyD",
+  "KeyC",
+  "KeyV",
+  "KeyG",
+  "KeyB",
+  "KeyH",
+  "KeyN",
+  "KeyJ",
+  "KeyM",
+  "KeyQ",
+  "Digit2",
+  "KeyW",
+  "Digit3",
+  "KeyE",
+  "KeyR",
+  "Digit5",
+  "KeyT",
+  "Digit6",
+  "KeyY",
+  "Digit7",
+  "KeyU",
+  "KeyI",
+  "Digit9",
+  "KeyO",
+  "Digit0",
+  "KeyP",
+  "BracketLeft",
+  "Equal",
+  "BracketRight",
+  "Backslash",
+  "Semicolon",
+  "Quote",
+  "Slash",
+] as const;
+const KEYBOARD_STUDIO_DEFAULT_LAYOUT: KeyboardStudioPanelLayout = {
+  x: 18,
+  y: 0,
+  collapsed: false,
+  lastOpen: Date.now(),
+};
+const KEYBOARD_STUDIO_SETTINGS_SLOTS_KEY = "keyboardStudio.settingsSlots";
+const KEYBOARD_STUDIO_DEFAULT_DEMO_EVENTS: KeyboardRecordedNoteEvent[] = [
+  { note: "C4", startMs: 0, durationMs: 460, velocity: 0.82 },
+  { note: "E4", startMs: 340, durationMs: 480, velocity: 0.82 },
+  { note: "G4", startMs: 700, durationMs: 520, velocity: 0.84 },
+  { note: "B4", startMs: 1060, durationMs: 600, velocity: 0.78 },
+  { note: "C5", startMs: 1640, durationMs: 710, velocity: 0.86 },
+  { note: "A4", startMs: 2430, durationMs: 460, velocity: 0.78 },
+  { note: "G4", startMs: 2820, durationMs: 460, velocity: 0.76 },
+  { note: "D4", startMs: 3200, durationMs: 580, velocity: 0.8 },
+];
+const makeKeyboardStudioFactoryPreset = (
+  id: string,
+  name: string,
+  soundDesign: Partial<KeyboardStudioSoundDesign>,
+  events: KeyboardRecordedNoteEvent[] = KEYBOARD_STUDIO_DEFAULT_DEMO_EVENTS,
+): KeyboardStudioPreset => {
+  const now = new Date().toISOString();
+  return {
+    id,
+    name,
+    source: id,
+    createdAt: now,
+    updatedAt: now,
+    events,
+    soundDesign: normalizeSoundDesign(soundDesign),
+  };
+};
+const KEYBOARD_STUDIO_FACTORY_PRESETS: KeyboardStudioPreset[] = [
+  makeKeyboardStudioFactoryPreset("factory-nebula-keys", "Nebula Keys", {
+    attack: 0.012, decay: 0.18, sustain: 0.45, release: 0.6, filterCutoff: 2200, drive: 0.1, chorusDepth: 0.38, delayFeedback: 0.32, reverbMix: 0.26, outputGainDb: -10, velocityCurve: 0.95, oscillatorType: "triangle8", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-cinematic-bell", "Cinematic Bell", {
+    attack: 0.004, decay: 0.38, sustain: 0.28, release: 1.25, filterCutoff: 5200, drive: 0.05, chorusDepth: 0.14, delayFeedback: 0.24, reverbDecay: 4.3, reverbMix: 0.35, stereoWidth: 0.62, outputGainDb: -12, oscillatorType: "sine4", filterType: "bandpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-synth-pluck", "Synth Pluck", {
+    attack: 0.002, decay: 0.09, sustain: 0.14, release: 0.3, filterCutoff: 3000, filterQ: 1.6, drive: 0.22, chorusDepth: 0.16, delayTime: 0.12, delayFeedback: 0.18, reverbMix: 0.12, outputGainDb: -11.5, velocityCurve: 1.2, oscillatorType: "square6", filterType: "bandpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-solar-winds", "Solar Winds", {
+    attack: 0.08, decay: 0.32, sustain: 0.72, release: 2.2, filterCutoff: 1400, filterQ: 0.7, drive: 0.04, chorusDepth: 0.55, chorusRate: 0.34, delayTime: 0.28, delayFeedback: 0.44, reverbDecay: 6.8, reverbMix: 0.54, stereoWidth: 0.86, outputGainDb: -13.5, velocityCurve: 0.88, oscillatorType: "sine8", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-aurora-pad", "Aurora Pad", {
+    attack: 0.045, decay: 0.24, sustain: 0.64, release: 1.6, filterCutoff: 1900, chorusDepth: 0.42, delayFeedback: 0.28, reverbMix: 0.32, stereoWidth: 0.74, outputGainDb: -11.8, oscillatorType: "triangle4", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-ion-spark", "Ion Spark", {
+    attack: 0.002, decay: 0.06, sustain: 0.1, release: 0.22, filterCutoff: 6100, filterQ: 1.9, drive: 0.26, chorusDepth: 0.11, delayTime: 0.08, delayFeedback: 0.14, reverbMix: 0.08, outputGainDb: -12.4, velocityCurve: 1.38, oscillatorType: "sawtooth8", filterType: "highpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-cosmic-choir", "Cosmic Choir", {
+    attack: 0.03, decay: 0.29, sustain: 0.58, release: 1.45, filterCutoff: 2400, drive: 0.08, chorusDepth: 0.36, delayTime: 0.22, delayFeedback: 0.29, reverbDecay: 5.2, reverbMix: 0.42, stereoWidth: 0.7, outputGainDb: -12, oscillatorType: "sine8", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-deep-pulse", "Deep Pulse", {
+    attack: 0.004, decay: 0.12, sustain: 0.22, release: 0.38, filterCutoff: 980, filterQ: 1.3, drive: 0.33, chorusDepth: 0.09, delayFeedback: 0.11, reverbMix: 0.08, outputGainDb: -10.5, velocityCurve: 1.25, oscillatorType: "square8", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-glass-orbit", "Glass Orbit", {
+    attack: 0.006, decay: 0.2, sustain: 0.24, release: 1.4, filterCutoff: 7000, filterQ: 1.1, drive: 0.02, chorusDepth: 0.26, delayTime: 0.31, delayFeedback: 0.36, reverbDecay: 4.8, reverbMix: 0.46, stereoWidth: 0.82, outputGainDb: -13, oscillatorType: "sine2", filterType: "bandpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-neutron-pluck", "Neutron Pluck", {
+    attack: 0.001, decay: 0.05, sustain: 0.08, release: 0.18, filterCutoff: 4200, filterQ: 2.2, drive: 0.37, chorusDepth: 0.08, delayTime: 0.09, delayFeedback: 0.1, reverbMix: 0.06, outputGainDb: -12.5, velocityCurve: 1.48, oscillatorType: "square4", filterType: "highpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-dream-keys", "Dream Keys", {
+    attack: 0.02, decay: 0.16, sustain: 0.43, release: 0.74, filterCutoff: 2800, drive: 0.09, chorusDepth: 0.28, delayTime: 0.17, delayFeedback: 0.24, reverbMix: 0.24, stereoWidth: 0.56, outputGainDb: -11.2, oscillatorType: "triangle16", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-sunrise-lead", "Sunrise Lead", {
+    attack: 0.007, decay: 0.12, sustain: 0.31, release: 0.42, filterCutoff: 3600, filterQ: 1.4, drive: 0.24, chorusDepth: 0.18, chorusRate: 1.2, delayTime: 0.14, delayFeedback: 0.21, reverbMix: 0.15, outputGainDb: -10.8, oscillatorType: "sawtooth12", filterType: "bandpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-voyager-ambient", "Voyager Ambient", {
+    attack: 0.09, decay: 0.4, sustain: 0.76, release: 2.8, filterCutoff: 1200, drive: 0.03, chorusDepth: 0.52, chorusRate: 0.26, delayTime: 0.34, delayFeedback: 0.5, reverbDecay: 8.2, reverbMix: 0.62, stereoWidth: 0.92, outputGainDb: -14, oscillatorType: "sine16", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-grand-piano", "Grand Piano", {
+    attack: 0.002, decay: 0.24, sustain: 0.35, release: 0.56, filterCutoff: 4600, drive: 0.06, chorusDepth: 0.05, reverbMix: 0.16, outputGainDb: -10.8, oscillatorType: "triangle2", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-electric-piano", "Electric Piano", {
+    attack: 0.006, decay: 0.16, sustain: 0.44, release: 0.68, filterCutoff: 3800, drive: 0.12, chorusDepth: 0.22, delayFeedback: 0.16, reverbMix: 0.2, outputGainDb: -10.6, oscillatorType: "sine2", filterType: "bandpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-organ", "Organ", {
+    attack: 0.005, decay: 0.1, sustain: 0.82, release: 0.42, filterCutoff: 2800, drive: 0.14, chorusDepth: 0.18, reverbMix: 0.18, outputGainDb: -11.4, oscillatorType: "square2", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-violin", "Violin", {
+    attack: 0.045, decay: 0.22, sustain: 0.61, release: 0.88, filterCutoff: 3400, chorusDepth: 0.25, reverbMix: 0.27, outputGainDb: -12.2, oscillatorType: "sawtooth3", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-flute", "Flute", {
+    attack: 0.02, decay: 0.18, sustain: 0.57, release: 0.7, filterCutoff: 5200, drive: 0.03, chorusDepth: 0.14, reverbMix: 0.24, outputGainDb: -12.8, oscillatorType: "sine1", filterType: "bandpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-guitar", "Guitar", {
+    attack: 0.003, decay: 0.14, sustain: 0.29, release: 0.38, filterCutoff: 4200, drive: 0.19, chorusDepth: 0.1, reverbMix: 0.12, outputGainDb: -11.2, oscillatorType: "triangle4", filterType: "bandpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-sitar", "Sitar (Exotic)", {
+    attack: 0.002, decay: 0.22, sustain: 0.2, release: 0.46, filterCutoff: 5600, filterQ: 2.4, drive: 0.18, chorusDepth: 0.08, reverbMix: 0.18, outputGainDb: -12.4, oscillatorType: "sawtooth4", filterType: "highpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-kalimba", "Kalimba (Exotic)", {
+    attack: 0.001, decay: 0.19, sustain: 0.15, release: 0.8, filterCutoff: 6500, drive: 0.04, chorusDepth: 0.09, delayFeedback: 0.26, reverbMix: 0.3, outputGainDb: -13.1, oscillatorType: "triangle2", filterType: "highpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-drum-kit", "Drum Kit", {
+    attack: 0.001, decay: 0.05, sustain: 0.05, release: 0.12, filterCutoff: 2900, filterQ: 1.9, drive: 0.42, chorusDepth: 0.04, reverbMix: 0.08, outputGainDb: -9.8, velocityCurve: 1.4, oscillatorType: "square16", filterType: "highpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-808-kick", "808 Kick", {
+    attack: 0.001, decay: 0.11, sustain: 0.02, release: 0.2, filterCutoff: 700, filterQ: 1.1, drive: 0.5, chorusDepth: 0, reverbMix: 0.03, outputGainDb: -8.6, velocityCurve: 1.45, oscillatorType: "sine32", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-cinematic-chords", "Cinematic Chords", {
+    attack: 0.04, decay: 0.28, sustain: 0.66, release: 1.4, filterCutoff: 2100, drive: 0.08, chorusDepth: 0.31, delayFeedback: 0.24, reverbMix: 0.38, stereoWidth: 0.78, outputGainDb: -12.5, oscillatorType: "triangle8", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-laser-zap", "Laser Zap (SFX)", {
+    attack: 0.001, decay: 0.04, sustain: 0.02, release: 0.09, filterCutoff: 7600, filterQ: 2.8, drive: 0.36, chorusDepth: 0.05, delayFeedback: 0.06, reverbMix: 0.05, outputGainDb: -10.4, velocityCurve: 1.55, oscillatorType: "sawtooth16", filterType: "highpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-impact-boom", "Impact Boom (SFX)", {
+    attack: 0.001, decay: 0.2, sustain: 0.08, release: 0.4, filterCutoff: 900, drive: 0.44, chorusDepth: 0, reverbMix: 0.12, outputGainDb: -9.7, velocityCurve: 1.35, oscillatorType: "square32", filterType: "lowpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-spaceship-console", "Spaceship Console", {
+    attack: 0.002, decay: 0.07, sustain: 0.12, release: 0.24, filterCutoff: 4800, filterQ: 2.2, drive: 0.22, chorusDepth: 0.18, delayFeedback: 0.2, reverbMix: 0.14, outputGainDb: -11.7, oscillatorType: "square8", filterType: "bandpass",
+  }),
+  makeKeyboardStudioFactoryPreset("factory-hyperdrive-whine", "Hyperdrive Whine", {
+    attack: 0.035, decay: 0.24, sustain: 0.54, release: 1.1, filterCutoff: 3100, filterQ: 1.5, drive: 0.17, chorusDepth: 0.41, delayFeedback: 0.36, reverbMix: 0.45, stereoWidth: 0.88, outputGainDb: -13.4, oscillatorType: "sawtooth20", filterType: "bandpass",
+  }),
+];
+const KEYBOARD_STUDIO_BEAT_PATTERNS = {
+  pulse: [
+    { note: "C3", startMs: 0, durationMs: 160, velocity: 0.95 },
+    { note: "G3", startMs: 260, durationMs: 130, velocity: 0.66 },
+    { note: "C3", startMs: 520, durationMs: 160, velocity: 0.92 },
+    { note: "G3", startMs: 780, durationMs: 130, velocity: 0.66 },
+    { note: "C3", startMs: 1040, durationMs: 170, velocity: 0.97 },
+    { note: "A#3", startMs: 1320, durationMs: 140, velocity: 0.62 },
+  ],
+  orbit: [
+    { note: "C3", startMs: 0, durationMs: 130, velocity: 0.88 },
+    { note: "D#3", startMs: 180, durationMs: 110, velocity: 0.72 },
+    { note: "G3", startMs: 380, durationMs: 120, velocity: 0.76 },
+    { note: "D#3", startMs: 560, durationMs: 110, velocity: 0.7 },
+    { note: "C3", startMs: 760, durationMs: 130, velocity: 0.9 },
+    { note: "A#3", startMs: 930, durationMs: 110, velocity: 0.66 },
+    { note: "G3", startMs: 1140, durationMs: 130, velocity: 0.72 },
+    { note: "F3", startMs: 1330, durationMs: 110, velocity: 0.64 },
+  ],
+  cinematic: [
+    { note: "C3", startMs: 0, durationMs: 210, velocity: 0.94 },
+    { note: "C4", startMs: 220, durationMs: 120, velocity: 0.58 },
+    { note: "G3", startMs: 420, durationMs: 150, velocity: 0.7 },
+    { note: "D#4", startMs: 620, durationMs: 110, velocity: 0.52 },
+    { note: "C3", startMs: 860, durationMs: 220, velocity: 0.96 },
+    { note: "A#3", startMs: 1120, durationMs: 150, velocity: 0.74 },
+    { note: "G3", startMs: 1360, durationMs: 160, velocity: 0.72 },
+  ],
+} as const;
+const ONSCREEN_KEYBOARD_SEMITONE_NAMES = [
+  "C",
+  "C#",
+  "D",
+  "D#",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "G#",
+  "A",
+  "A#",
+  "B",
+] as const;
+const buildOnscreenKeyboardKeys = (): KeyboardPianoKey[] => {
+  const keys: KeyboardPianoKey[] = [];
+  let whiteCursor = 0;
+  for (let i = 0; i < ONSCREEN_KEYBOARD_KEY_COUNT; i += 1) {
+    const midi = ONSCREEN_KEYBOARD_ROOT_MIDI + i;
+    const semitone = midi % 12;
+    const name = ONSCREEN_KEYBOARD_SEMITONE_NAMES[semitone] ?? "C";
+    const octave = Math.floor(midi / 12) - 1;
+    const isBlack = name.includes("#");
+    const leftUnit = isBlack ? Math.max(whiteCursor - 0.34, 0) : whiteCursor;
+    keys.push({
+      note: `${name}${octave}`,
+      midi,
+      isBlack,
+      leftUnit,
+    });
+    if (!isBlack) whiteCursor += 1;
+  }
+  return keys;
+};
 const SKILLS_LATTICE_NAV_STANDOFF_DIST = 1200;
 const SKILLS_LATTICE_ENTRY_TRIGGER_DIST = 1800;
 const SKILLS_SD_PATROL_RADIUS = 150;
@@ -1561,15 +2019,15 @@ export default function ResumeSpace3D({
     setDebugLogs,
     debugLogTotal,
   } = useCosmosLogs();
-  const [emitFalconLocationLogs, setEmitFalconLocationLogs] = useState(false);
-  const [emitSDLocationLogs, setEmitSDLocationLogs] = useState(false);
-  const [logCamTraceEnabled, setLogCamTraceEnabled] = useState(false);
-  const [logAboutDebugEnabled, setLogAboutDebugEnabled] = useState(false);
-  const [logNavTraceEnabled, setLogNavTraceEnabled] = useState(false);
-  const [logNavDiagEnabled, setLogNavDiagEnabled] = useState(false);
-  const [logAudioChannelEnabled, setLogAudioChannelEnabled] = useState(false);
-  const [logDroneDebugEnabled, setLogDroneDebugEnabled] = useState(false);
-  const [logNavDebugEnabled, setLogNavDebugEnabled] = useState(false);
+  const [emitFalconLocationLogs, setEmitFalconLocationLogs] = useState(IS_DEBUG_QUERY_ENABLED);
+  const [emitSDLocationLogs, setEmitSDLocationLogs] = useState(IS_DEBUG_QUERY_ENABLED);
+  const [logCamTraceEnabled, setLogCamTraceEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
+  const [logAboutDebugEnabled, setLogAboutDebugEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
+  const [logNavTraceEnabled, setLogNavTraceEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
+  const [logNavDiagEnabled, setLogNavDiagEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
+  const [logAudioChannelEnabled, setLogAudioChannelEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
+  const [logDroneDebugEnabled, setLogDroneDebugEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
+  const [logNavDebugEnabled, setLogNavDebugEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
   const emitFalconLocationLogsRef = useRef(false);
   const emitSDLocationLogsRef = useRef(false);
   useEffect(() => {
@@ -1818,6 +2276,16 @@ export default function ResumeSpace3D({
   }, [overallVolume, backgroundMusicVolume]);
 
   useEffect(() => {
+    const toneMaster = orbitalPortfolioToneRuntimeRef.current.masterGain;
+    if (!toneMaster) return;
+    toneMaster.gain.value = THREE.MathUtils.clamp(
+      overallVolume * SKILLS_LATTICE_TONE_MASTER_GAIN,
+      0,
+      0.09,
+    );
+  }, [overallVolume]);
+
+  useEffect(() => {
     window.dispatchEvent(
       new CustomEvent("cosmicAudioChange", {
         detail: { track: musicEnabled ? musicTrack : "" },
@@ -1973,6 +2441,28 @@ export default function ResumeSpace3D({
       if (ctx && ctx.state !== "running") {
         void ctx.resume().catch(() => {});
       }
+      const toneRuntime = orbitalPortfolioToneRuntimeRef.current;
+      if (!toneRuntime.context && falconTravelAudioListenerRef.current) {
+        toneRuntime.context = falconTravelAudioListenerRef.current.context as AudioContext;
+      }
+      if (toneRuntime.context && !toneRuntime.masterGain) {
+        toneRuntime.masterGain = toneRuntime.context.createGain();
+        toneRuntime.masterGain.gain.value = THREE.MathUtils.clamp(
+          overallVolume * SKILLS_LATTICE_TONE_MASTER_GAIN,
+          0,
+          0.09,
+        );
+        toneRuntime.masterGain.connect(toneRuntime.context.destination);
+      } else if (toneRuntime.masterGain) {
+        toneRuntime.masterGain.gain.value = THREE.MathUtils.clamp(
+          overallVolume * SKILLS_LATTICE_TONE_MASTER_GAIN,
+          0,
+          0.09,
+        );
+      }
+      if (toneRuntime.context && toneRuntime.context.state !== "running") {
+        void toneRuntime.context.resume().catch(() => {});
+      }
     };
     window.addEventListener("pointerdown", unlockAudio, { passive: true });
     window.addEventListener("keydown", unlockAudio);
@@ -1982,7 +2472,7 @@ export default function ResumeSpace3D({
       window.removeEventListener("keydown", unlockAudio);
       window.removeEventListener("touchstart", unlockAudio);
     };
-  }, [sceneReady]);
+  }, [overallVolume, sceneReady]);
 
   useEffect(() => {
     return () => {
@@ -2001,7 +2491,12 @@ export default function ResumeSpace3D({
         listener.parent.remove(listener);
       }
       falconTravelAudioListenerRef.current = null;
-      falconMoonTravelBufferRef.current = null;
+      falconNavCueBuffersRef.current = {
+        moonTravel: [],
+        speedOfLight: null,
+        changeOfDirection: null,
+        override: null,
+      };
     };
   }, []);
 
@@ -2058,7 +2553,11 @@ export default function ResumeSpace3D({
           oblivionDroneGltf,
           activationBuffer,
           transmissionBuffer,
-          falconMoonTravelBuffer,
+          falconMoonTravelBuffer1,
+          falconMoonTravelBuffer2,
+          falconSpeedOfLightBuffer,
+          falconChangeOfDirectionBuffer,
+          falconOverrideBuffer,
           ...movementBuffers
         ] = await Promise.all([
           gltfPreloader.loadAsync(PROJECT_SHOWCASE_MODEL_PATH),
@@ -2068,7 +2567,11 @@ export default function ResumeSpace3D({
           gltfPreloader.loadAsync(OBLIVION_DRONE_MODEL_PATH),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.activation),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.transmission),
-          loadAudioSafe(FALCON_MOON_TRAVEL_SFX_PATH),
+          loadAudioSafe(FALCON_NAV_SFX_PATHS.moonTravel[0]),
+          loadAudioSafe(FALCON_NAV_SFX_PATHS.moonTravel[1]),
+          loadAudioSafe(FALCON_NAV_SFX_PATHS.speedOfLight),
+          loadAudioSafe(FALCON_NAV_SFX_PATHS.changeOfDirection),
+          loadAudioSafe(FALCON_NAV_SFX_PATHS.override),
           ...OBLIVION_DRONE_AUDIO_PATHS.movement.map((url) => loadAudioSafe(url)),
         ]);
 
@@ -2090,14 +2593,21 @@ export default function ResumeSpace3D({
           hologramDroneRef.current?.setDroneAudioBuffers(
             oblivionDroneAudioBuffersRef.current,
           );
-          falconMoonTravelBufferRef.current = falconMoonTravelBuffer;
+          falconNavCueBuffersRef.current = {
+            moonTravel: [falconMoonTravelBuffer1, falconMoonTravelBuffer2].filter(
+              (buffer): buffer is AudioBuffer => !!buffer,
+            ),
+            speedOfLight: falconSpeedOfLightBuffer,
+            changeOfDirection: falconChangeOfDirectionBuffer,
+            override: falconOverrideBuffer,
+          };
           debugLog(
             "drone",
             `[audio] buffers ready activation=${!!activationBuffer} transmission=${!!transmissionBuffer} movement=${oblivionDroneAudioBuffersRef.current.movement?.length ?? 0}`,
           );
           debugLog(
             "audio",
-            `[falcon] moon-travel preload ready=${!!falconMoonTravelBuffer}`,
+            `[falcon] preload moon=${falconNavCueBuffersRef.current.moonTravel.length} speedOfLight=${!!falconSpeedOfLightBuffer} changeOfDirection=${!!falconChangeOfDirectionBuffer} override=${!!falconOverrideBuffer}`,
           );
           spaceshipPreloadedGltfRef.current = spaceshipGltf as { scene: THREE.Group };
           starDestroyerPreloadedGltfRef.current = starDestroyerGltf as {
@@ -2309,10 +2819,22 @@ export default function ResumeSpace3D({
   const starDestroyerPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
   const oblivionDronePreloadedRef = useRef<THREE.Object3D | null>(null);
   const oblivionDroneAudioBuffersRef = useRef<DroneAudioBuffers | null>(null);
-  const falconMoonTravelBufferRef = useRef<AudioBuffer | null>(null);
+  const falconNavCueBuffersRef = useRef<{
+    moonTravel: AudioBuffer[];
+    speedOfLight: AudioBuffer | null;
+    changeOfDirection: AudioBuffer | null;
+    override: AudioBuffer | null;
+  }>({
+    moonTravel: [],
+    speedOfLight: null,
+    changeOfDirection: null,
+    override: null,
+  });
   const falconTravelAudioListenerRef = useRef<THREE.AudioListener | null>(null);
   const falconTravelAudioRef = useRef<THREE.PositionalAudio | null>(null);
   const falconTravelFadeTimeoutRef = useRef<number | null>(null);
+  const falconActiveCueKindRef = useRef<FalconNavCueKind | null>(null);
+  const falconPendingCueKindRef = useRef<FalconNavCueKind | null>(null);
   const droneGpuWarmupDoneRef = useRef(false);
   const projectShowcaseTrackRef = useRef<{
     axis: "x" | "z" | "y";
@@ -2520,6 +3042,229 @@ export default function ResumeSpace3D({
     controlsMinDistance?: number;
     controlsMaxDistance?: number;
   } | null>(null);
+  const orbitalPortfolioToneRuntimeRef = useRef<{
+    enabled: boolean;
+    context: AudioContext | null;
+    masterGain: GainNode | null;
+    activeVoices: Array<{
+      oscMain: OscillatorNode;
+      oscLayer: OscillatorNode;
+      mainGain: GainNode;
+      layerGain: GainNode;
+      filter: BiquadFilterNode;
+      voiceGain: GainNode;
+    }>;
+    nextEventAtMs: number;
+    motifIndex: number;
+    noteIndex: number;
+    accentCoreIndex: number;
+    accentNodeLabel: string;
+    accentColorHex: number;
+    accentUntilAtMs: number;
+    debugNoteCounter: number;
+  }>({
+    enabled: false,
+    context: null,
+    masterGain: null,
+    activeVoices: [],
+    nextEventAtMs: 0,
+    motifIndex: 0,
+    noteIndex: 0,
+    accentCoreIndex: -1,
+    accentNodeLabel: "",
+    accentColorHex: 0xc18bff,
+    accentUntilAtMs: 0,
+    debugNoteCounter: 0,
+  });
+  const skillsLatticeTonePresetState = useState(
+    SKILLS_LATTICE_TONE_PRESETS[0]?.id ?? "celestial-pad",
+  );
+  const skillsLatticeTonePresetId = skillsLatticeTonePresetState[0];
+  const skillsLatticeTonePresetIdRef = useRef(skillsLatticeTonePresetId);
+  useEffect(() => {
+    skillsLatticeTonePresetIdRef.current = skillsLatticeTonePresetId;
+  }, [skillsLatticeTonePresetId]);
+  const activeSkillsLatticeTonePreset = useMemo(
+    () => resolveSkillsLatticeTonePreset(skillsLatticeTonePresetId),
+    [skillsLatticeTonePresetId],
+  );
+  const skillsLatticeTonePhrasePauseState = useState(SKILLS_LATTICE_TONE_PHRASE_PAUSE_MS);
+  const skillsLatticeTonePhrasePauseMs = skillsLatticeTonePhrasePauseState[0];
+  const skillsLatticeTonePhrasePauseMsRef = useRef(skillsLatticeTonePhrasePauseMs);
+  useEffect(() => {
+    skillsLatticeTonePhrasePauseMsRef.current = skillsLatticeTonePhrasePauseMs;
+  }, [skillsLatticeTonePhrasePauseMs]);
+  const [skillsLatticeToneReleaseSec, setSkillsLatticeToneReleaseSec] = useState(
+    activeSkillsLatticeTonePreset.releaseSec,
+  );
+  const skillsLatticeToneReleaseSecRef = useRef(skillsLatticeToneReleaseSec);
+  useEffect(() => {
+    skillsLatticeToneReleaseSecRef.current = skillsLatticeToneReleaseSec;
+  }, [skillsLatticeToneReleaseSec]);
+  useEffect(() => {
+    setSkillsLatticeToneReleaseSec(activeSkillsLatticeTonePreset.releaseSec);
+  }, [activeSkillsLatticeTonePreset.releaseSec]);
+  const onscreenKeyboardKeys = useMemo(() => buildOnscreenKeyboardKeys(), []);
+  const [keyboardStudioEnabled] = useState(false);
+  const [onscreenKeyboardPanelLayout, setOnscreenKeyboardPanelLayout] = useState(() =>
+    loadPanelLayout(KEYBOARD_STUDIO_DEFAULT_LAYOUT)
+  );
+  const [onscreenKeyboardPanelVisible, setOnscreenKeyboardPanelVisible] = useState(false);
+  const [onscreenKeyboardPanelCollapsed, setOnscreenKeyboardPanelCollapsed] = useState(
+    loadPanelLayout(KEYBOARD_STUDIO_DEFAULT_LAYOUT).collapsed,
+  );
+  const [onscreenKeyboardRecording, setOnscreenKeyboardRecording] = useState(false);
+  const [onscreenKeyboardPlaying, setOnscreenKeyboardPlaying] = useState(false);
+  const [onscreenKeyboardGhostAutoplay, setOnscreenKeyboardGhostAutoplay] = useState(true);
+  const [onscreenKeyboardPressedNotes, setOnscreenKeyboardPressedNotes] = useState<string[]>([]);
+  const [onscreenKeyboardGhostPressedNotes, setOnscreenKeyboardGhostPressedNotes] = useState<
+    string[]
+  >([]);
+  const [onscreenKeyboardRecordedEvents, setOnscreenKeyboardRecordedEvents] = useState<
+    KeyboardRecordedNoteEvent[]
+  >([]);
+  const [keyboardStudioPresets, setKeyboardStudioPresets] = useState<KeyboardStudioPreset[]>(
+    () => loadPresets(),
+  );
+  const [keyboardStudioBindings, setKeyboardStudioBindings] = useState<KeyboardStudioEventBinding[]>(
+    () => loadBindings(),
+  );
+  const [keyboardStudioPresetName, setKeyboardStudioPresetName] = useState("");
+  const [keyboardStudioSelectedPresetId, setKeyboardStudioSelectedPresetId] = useState<string>("factory-nebula-keys");
+  const [keyboardStudioSelectedSource, setKeyboardStudioSelectedSource] = useState<string>("factory-nebula-keys");
+  const [keyboardStudioBeatPatternId, setKeyboardStudioBeatPatternId] = useState<
+    keyof typeof KEYBOARD_STUDIO_BEAT_PATTERNS
+  >("pulse");
+  const [keyboardStudioBeatTempoBpm, setKeyboardStudioBeatTempoBpm] = useState(96);
+  const [keyboardStudioBeatLoopEnabled, setKeyboardStudioBeatLoopEnabled] = useState(false);
+  const [keyboardStudioKnownEventIds, setKeyboardStudioKnownEventIds] = useState<string[]>(
+    () => [...COSMOS_SOUND_EVENT_IDS],
+  );
+  const [keyboardStudioSoundDesign, setKeyboardStudioSoundDesign] = useState<KeyboardStudioSoundDesign>(
+    DEFAULT_KEYBOARD_STUDIO_SOUND_DESIGN,
+  );
+  const [keyboardStudioSavedSettings, setKeyboardStudioSavedSettings] = useState<
+    Array<{
+      id: string;
+      name: string;
+      createdAt: string;
+      soundDesign: KeyboardStudioSoundDesign;
+    }>
+  >(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(KEYBOARD_STUDIO_SETTINGS_SLOTS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as Array<{
+        id?: string;
+        name?: string;
+        createdAt?: string;
+        soundDesign?: Partial<KeyboardStudioSoundDesign>;
+      }>;
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .slice(0, 10)
+        .filter((slot) => !!slot.id && !!slot.name)
+        .map((slot) => ({
+          id: String(slot.id),
+          name: String(slot.name),
+          createdAt: String(slot.createdAt || new Date().toISOString()),
+          soundDesign: normalizeSoundDesign(slot.soundDesign),
+        }));
+    } catch {
+      return [];
+    }
+  });
+  const [keyboardStudioSelectedSettingsId, setKeyboardStudioSelectedSettingsId] = useState("");
+  const [keyboardStudioMainColumnWidth, setKeyboardStudioMainColumnWidth] = useState(510);
+  const onscreenKeyboardPressedNotesRef = useRef<string[]>([]);
+  const onscreenKeyboardRecordedEventsRef = useRef<KeyboardRecordedNoteEvent[]>([]);
+  const onscreenKeyboardRecordingRef = useRef(false);
+  const onscreenKeyboardGhostAutoplayRef = useRef(true);
+  const onscreenKeyboardRecordStartRef = useRef(0);
+  const onscreenKeyboardActiveNotesRef = useRef(new Map<string, { startMs: number; velocity: number }>());
+  const keyboardStudioEngineRef = useRef<ReturnType<typeof createKeyboardStudioEngine> | null>(null);
+  const keyboardStudioBeatLoopTimerRef = useRef<number | null>(null);
+  const keyboardStudioControlFeedbackLastAtRef = useRef(0);
+  const onscreenKeyboardPanelDragRef = useRef<{
+    active: boolean;
+    pointerId: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
+  const keyboardStudioMainColumnResizeRef = useRef<{
+    active: boolean;
+    pointerId: number;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+  const keyboardStudioPointerNoteRef = useRef<Map<number, string>>(new Map());
+  const keyboardStudioNotePointerCountRef = useRef<Map<string, number>>(new Map());
+  const keyboardStudioPressedCodesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    onscreenKeyboardPressedNotesRef.current = onscreenKeyboardPressedNotes;
+  }, [onscreenKeyboardPressedNotes]);
+  useEffect(() => {
+    onscreenKeyboardRecordedEventsRef.current = onscreenKeyboardRecordedEvents;
+  }, [onscreenKeyboardRecordedEvents]);
+  useEffect(() => {
+    onscreenKeyboardRecordingRef.current = onscreenKeyboardRecording;
+  }, [onscreenKeyboardRecording]);
+  useEffect(() => {
+    onscreenKeyboardGhostAutoplayRef.current = onscreenKeyboardGhostAutoplay;
+  }, [onscreenKeyboardGhostAutoplay]);
+  useEffect(() => {
+    saveBooleanStorage(KEYBOARD_STUDIO_ENABLED_KEY, keyboardStudioEnabled);
+  }, [keyboardStudioEnabled]);
+  useEffect(() => {
+    savePanelLayout({
+      ...onscreenKeyboardPanelLayout,
+      collapsed: onscreenKeyboardPanelCollapsed,
+    });
+  }, [onscreenKeyboardPanelCollapsed, onscreenKeyboardPanelLayout]);
+  useEffect(() => {
+    savePresets(keyboardStudioPresets);
+  }, [keyboardStudioPresets]);
+  useEffect(() => {
+    saveBindings(keyboardStudioBindings);
+  }, [keyboardStudioBindings]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        KEYBOARD_STUDIO_SETTINGS_SLOTS_KEY,
+        JSON.stringify(keyboardStudioSavedSettings.slice(0, 10)),
+      );
+    } catch {
+      // ignore storage failures
+    }
+  }, [keyboardStudioSavedSettings]);
+  const allKeyboardStudioPresetOptions = useMemo<KeyboardStudioPreset[]>(
+    () => [...KEYBOARD_STUDIO_FACTORY_PRESETS, ...keyboardStudioPresets],
+    [keyboardStudioPresets],
+  );
+  const selectedKeyboardStudioPreset = useMemo(
+    () =>
+      allKeyboardStudioPresetOptions.find((preset) => preset.id === keyboardStudioSelectedSource)
+      ?? KEYBOARD_STUDIO_FACTORY_PRESETS[0],
+    [allKeyboardStudioPresetOptions, keyboardStudioSelectedSource],
+  );
+  const onscreenKeyboardActiveNoteSet = useMemo(
+    () => new Set([...onscreenKeyboardPressedNotes, ...onscreenKeyboardGhostPressedNotes]),
+    [onscreenKeyboardGhostPressedNotes, onscreenKeyboardPressedNotes],
+  );
+  const onscreenKeyboardGhostNoteSet = useMemo(
+    () => new Set(onscreenKeyboardGhostPressedNotes),
+    [onscreenKeyboardGhostPressedNotes],
+  );
+  const keyboardStudioKeyCodeToNoteMap = useMemo(() => {
+    const mapping = new Map<string, string>();
+    KEYBOARD_STUDIO_COMPUTER_KEY_CODES.forEach((code, index) => {
+      const key = onscreenKeyboardKeys[index];
+      if (key) mapping.set(code, key.note);
+    });
+    return mapping;
+  }, [onscreenKeyboardKeys]);
   const [portfolioNavHereActive, setPortfolioNavHereActive] = useState(false);
   const setOrbitalPortfolioManualLock = useCallback(
     (next: boolean, source: string) => {
@@ -3331,9 +4076,8 @@ export default function ResumeSpace3D({
   }, []);
 
   const ensureFalconTravelAudioNode = useCallback(() => {
-    const ship = spaceshipRef.current;
     const camera = sceneRef.current.camera;
-    if (!ship || !camera) return null;
+    if (!camera) return null;
 
     if (!falconTravelAudioListenerRef.current) {
       falconTravelAudioListenerRef.current = new THREE.AudioListener();
@@ -3343,16 +4087,18 @@ export default function ResumeSpace3D({
 
     if (!falconTravelAudioRef.current) {
       falconTravelAudioRef.current = createPositionalAudio(listener, {
-        refDistance: 22,
-        rolloffFactor: 1.1,
-        maxDistance: 2200,
+        // Keep Falcon cues anchored to listener/camera for readability,
+        // even when the Falcon ship is visually far away.
+        refDistance: 1,
+        rolloffFactor: 0,
+        maxDistance: 1,
       });
-      falconTravelAudioRef.current.name = "FalconMoonTravelSfx";
+      falconTravelAudioRef.current.name = "FalconNavSfxCameraAnchored";
     }
     const positionalAudio = falconTravelAudioRef.current;
-    if (positionalAudio.parent !== ship) {
+    if (positionalAudio.parent !== camera) {
       if (positionalAudio.parent) positionalAudio.parent.remove(positionalAudio);
-      ship.add(positionalAudio);
+      camera.add(positionalAudio);
     }
     return positionalAudio;
   }, []);
@@ -3370,52 +4116,770 @@ export default function ResumeSpace3D({
     }
   }, []);
 
-  const fadeOutFalconMoonTravelSfx = useCallback((durationMs = FALCON_MOON_TRAVEL_FADE_OUT_MS) => {
-    const positionalAudio = falconTravelAudioRef.current;
-    if (!positionalAudio?.isPlaying) return;
-    const gainNode = positionalAudio.gain?.gain;
+  const ensureOrbitalPortfolioToneAudioNode = useCallback(() => {
+    const camera = sceneRef.current.camera;
+    if (!falconTravelAudioListenerRef.current) {
+      falconTravelAudioListenerRef.current = new THREE.AudioListener();
+    }
     const listener = falconTravelAudioListenerRef.current;
-    if (!gainNode || !listener) {
-      positionalAudio.stop();
+    if (camera) {
+      attachAudioListenerToCamera(camera, listener);
+    }
+    const runtime = orbitalPortfolioToneRuntimeRef.current;
+    runtime.context = listener.context as AudioContext;
+    if (runtime.context && !runtime.masterGain) {
+      runtime.masterGain = runtime.context.createGain();
+      runtime.masterGain.gain.value = THREE.MathUtils.clamp(
+        overallVolume * SKILLS_LATTICE_TONE_MASTER_GAIN,
+        0,
+        0.09,
+      );
+      runtime.masterGain.connect(runtime.context.destination);
+      if (ORBITAL_PORTFOLIO_DEBUG_LOGS) {
+        shipLog(
+          `[LATTICE-TONE] audio node created ctx=${runtime.context.state} gain=${runtime.masterGain.gain.value.toFixed(3)} volume=${overallVolume.toFixed(2)}`,
+          "info",
+        );
+      }
+    } else if (runtime.masterGain) {
+      runtime.masterGain.gain.value = THREE.MathUtils.clamp(
+        overallVolume * SKILLS_LATTICE_TONE_MASTER_GAIN,
+        0,
+        0.09,
+      );
+    }
+    return runtime.context;
+  }, [overallVolume, shipLog]);
+
+  const resumeOrbitalPortfolioToneAudioContext = useCallback(async () => {
+    const ctx = ensureOrbitalPortfolioToneAudioNode();
+    if (!ctx) return;
+    if (ctx.state !== "running") {
+      try {
+        await ctx.resume();
+      } catch {
+        // Browser policies may still block until a user gesture.
+      }
+    }
+  }, [ensureOrbitalPortfolioToneAudioNode]);
+
+  const playOrbitalPortfolioTone = useCallback((_freqHz: number) => {
+    // Online keyboard/lattice synth audio removed by request.
+  }, []);
+
+  const getKeyboardStudioEngine = useCallback(() => {
+    if (!keyboardStudioEngineRef.current) {
+      keyboardStudioEngineRef.current = createKeyboardStudioEngine();
+      keyboardStudioEngineRef.current.setMasterVolume(overallVolume);
+    }
+    return keyboardStudioEngineRef.current;
+  }, [overallVolume]);
+  const ensureOnscreenKeyboardAudioReady = useCallback(async () => {
+    const engine = getKeyboardStudioEngine();
+    await engine.ensureReady();
+    engine.setMasterVolume(overallVolume);
+    await engine.setSoundDesign(keyboardStudioSoundDesign);
+    return engine;
+  }, [getKeyboardStudioEngine, keyboardStudioSoundDesign, overallVolume]);
+  const appendOnscreenKeyboardRecordedEvent = useCallback((event: KeyboardRecordedNoteEvent) => {
+    const normalized: KeyboardRecordedNoteEvent = {
+      note: event.note,
+      startMs: Math.max(0, Number(event.startMs) || 0),
+      durationMs: Math.max(ONSCREEN_KEYBOARD_MIN_DURATION_MS, Number(event.durationMs) || 0),
+      velocity: THREE.MathUtils.clamp(
+        Number.isFinite(event.velocity) ? event.velocity : ONSCREEN_KEYBOARD_DEFAULT_VELOCITY,
+        0.05,
+        1,
+      ),
+    };
+    const next = [...onscreenKeyboardRecordedEventsRef.current, normalized]
+      .sort((a, b) => a.startMs - b.startMs);
+    onscreenKeyboardRecordedEventsRef.current = next;
+    setOnscreenKeyboardRecordedEvents(next);
+  }, []);
+  const trimKeyboardStudioEvents = useCallback((events: KeyboardRecordedNoteEvent[]) => {
+    if (events.length === 0) return [] as KeyboardRecordedNoteEvent[];
+    const sorted = [...events]
+      .map((event) => ({
+        ...event,
+        startMs: Math.max(0, Number(event.startMs) || 0),
+        durationMs: Math.max(ONSCREEN_KEYBOARD_MIN_DURATION_MS, Number(event.durationMs) || 0),
+      }))
+      .sort((a, b) => a.startMs - b.startMs);
+    const firstStart = sorted[0]?.startMs ?? 0;
+    return sorted.map((event) => ({
+      ...event,
+      startMs: Math.max(0, event.startMs - firstStart),
+    }));
+  }, []);
+  const previewKeyboardStudioControlFeedback = useCallback(
+    (note = "C5") => {
+      const now = performance.now();
+      if (now - keyboardStudioControlFeedbackLastAtRef.current < 70) return;
+      keyboardStudioControlFeedbackLastAtRef.current = now;
+      const engine = keyboardStudioEngineRef.current;
+      if (!engine) return;
+      engine.noteOn(note, 0.64);
+      window.setTimeout(() => {
+        keyboardStudioEngineRef.current?.noteOff(note);
+      }, 120);
+    },
+    [],
+  );
+  const stopOnscreenKeyboardPlayback = useCallback((resetTransport = true) => {
+    if (resetTransport) {
+      getKeyboardStudioEngine().stopPlayback();
+    }
+    setOnscreenKeyboardGhostPressedNotes([]);
+    setOnscreenKeyboardPlaying(false);
+  }, [getKeyboardStudioEngine]);
+  const finishOnscreenKeyboardRecordedNote = useCallback((note: string, releaseAtMs: number) => {
+    const active = onscreenKeyboardActiveNotesRef.current.get(note);
+    if (!active) return;
+    onscreenKeyboardActiveNotesRef.current.delete(note);
+    const startMs = Math.max(0, active.startMs - onscreenKeyboardRecordStartRef.current);
+    const durationMs = Math.max(ONSCREEN_KEYBOARD_MIN_DURATION_MS, releaseAtMs - active.startMs);
+    appendOnscreenKeyboardRecordedEvent({
+      note,
+      startMs,
+      durationMs,
+      velocity: active.velocity,
+    });
+  }, [appendOnscreenKeyboardRecordedEvent]);
+  const startOnscreenKeyboardRecording = useCallback(async () => {
+    await ensureOnscreenKeyboardAudioReady();
+    stopOnscreenKeyboardPlayback();
+    onscreenKeyboardRecordStartRef.current = performance.now();
+    onscreenKeyboardActiveNotesRef.current.clear();
+    onscreenKeyboardRecordedEventsRef.current = [];
+    setOnscreenKeyboardRecordedEvents([]);
+    onscreenKeyboardRecordingRef.current = true;
+    setOnscreenKeyboardRecording(true);
+  }, [ensureOnscreenKeyboardAudioReady, stopOnscreenKeyboardPlayback]);
+  const stopOnscreenKeyboardRecording = useCallback(() => {
+    if (!onscreenKeyboardRecordingRef.current) return;
+    const releaseAtMs = performance.now();
+    const activeNotes = Array.from(onscreenKeyboardActiveNotesRef.current.keys());
+    activeNotes.forEach((note) => finishOnscreenKeyboardRecordedNote(note, releaseAtMs));
+    onscreenKeyboardActiveNotesRef.current.clear();
+    onscreenKeyboardRecordingRef.current = false;
+    setOnscreenKeyboardRecording(false);
+  }, [finishOnscreenKeyboardRecordedNote]);
+  const playOnscreenKeyboardSequence = useCallback(async (events: KeyboardRecordedNoteEvent[]) => {
+    const cleaned = events
+      .map((event) => ({
+        note: event.note,
+        startMs: Math.max(0, Number(event.startMs) || 0),
+        durationMs: Math.max(ONSCREEN_KEYBOARD_MIN_DURATION_MS, Number(event.durationMs) || 0),
+        velocity: THREE.MathUtils.clamp(
+          Number.isFinite(event.velocity) ? event.velocity : ONSCREEN_KEYBOARD_DEFAULT_VELOCITY,
+          0.05,
+          1,
+        ),
+      }))
+      .filter((event) => Number.isFinite(event.startMs) && Number.isFinite(event.durationMs))
+      .sort((a, b) => a.startMs - b.startMs);
+    if (cleaned.length === 0) return;
+    const engine = await ensureOnscreenKeyboardAudioReady();
+    stopOnscreenKeyboardRecording();
+    stopOnscreenKeyboardPlayback();
+    setOnscreenKeyboardPlaying(true);
+    setOnscreenKeyboardGhostPressedNotes([]);
+    await engine.playSequence(cleaned, {
+      gain: 1,
+      ghostPlayback: onscreenKeyboardGhostAutoplayRef.current,
+      onStateChange: (playing) => setOnscreenKeyboardPlaying(playing),
+      onNoteOn: (note) =>
+        setOnscreenKeyboardGhostPressedNotes((prev) => (prev.includes(note) ? prev : [...prev, note])),
+      onNoteOff: (note) =>
+        setOnscreenKeyboardGhostPressedNotes((prev) => prev.filter((activeNote) => activeNote !== note)),
+    });
+  }, [
+    ensureOnscreenKeyboardAudioReady,
+    stopOnscreenKeyboardPlayback,
+    stopOnscreenKeyboardRecording,
+  ]);
+  const playOnscreenKeyboardRecording = useCallback(() => {
+    void playOnscreenKeyboardSequence(onscreenKeyboardRecordedEventsRef.current);
+  }, [playOnscreenKeyboardSequence]);
+  const playOnscreenKeyboardAutoplay = useCallback(() => {
+    const fallbackAutoplay: KeyboardRecordedNoteEvent[] = [
+      { note: "C4", startMs: 0, durationMs: 460, velocity: 0.8 },
+      { note: "E4", startMs: 360, durationMs: 460, velocity: 0.8 },
+      { note: "G4", startMs: 720, durationMs: 460, velocity: 0.82 },
+      { note: "C5", startMs: 1080, durationMs: 660, velocity: 0.85 },
+      { note: "A4", startMs: 1840, durationMs: 420, velocity: 0.76 },
+      { note: "G4", startMs: 2200, durationMs: 420, velocity: 0.76 },
+      { note: "E4", startMs: 2560, durationMs: 420, velocity: 0.78 },
+      { note: "D4", startMs: 2920, durationMs: 460, velocity: 0.8 },
+      { note: "F4", startMs: 3360, durationMs: 420, velocity: 0.76 },
+      { note: "A4", startMs: 3720, durationMs: 420, velocity: 0.8 },
+      { note: "C5", startMs: 4080, durationMs: 560, velocity: 0.83 },
+      { note: "B4", startMs: 4700, durationMs: 480, velocity: 0.8 },
+      { note: "G4", startMs: 5220, durationMs: 540, velocity: 0.8 },
+    ];
+    const hasRecordedEvents = onscreenKeyboardRecordedEventsRef.current.length > 0;
+    void playOnscreenKeyboardSequence(
+      hasRecordedEvents ? onscreenKeyboardRecordedEventsRef.current : fallbackAutoplay,
+    );
+  }, [playOnscreenKeyboardSequence]);
+  const buildKeyboardStudioBeatEvents = useCallback(() => {
+    const base = KEYBOARD_STUDIO_BEAT_PATTERNS[keyboardStudioBeatPatternId]
+      ?? KEYBOARD_STUDIO_BEAT_PATTERNS.pulse;
+    const tempoScale = 96 / THREE.MathUtils.clamp(keyboardStudioBeatTempoBpm, 56, 180);
+    return base.map((event) => ({
+      ...event,
+      startMs: Math.round(event.startMs * tempoScale),
+      durationMs: Math.max(40, Math.round(event.durationMs * tempoScale)),
+    }));
+  }, [keyboardStudioBeatPatternId, keyboardStudioBeatTempoBpm]);
+  const playKeyboardStudioBeatOneShot = useCallback(() => {
+    const beatEvents = buildKeyboardStudioBeatEvents();
+    void playOnscreenKeyboardSequence(beatEvents);
+  }, [buildKeyboardStudioBeatEvents, playOnscreenKeyboardSequence]);
+  const pressOnscreenKeyboardNote = useCallback(async (note: string) => {
+    const engine = await ensureOnscreenKeyboardAudioReady();
+    if (!engine) return;
+    if (onscreenKeyboardPressedNotesRef.current.includes(note)) {
+      // Repeated strike: cancel prior held voice before re-attacking.
+      engine.noteOff(note);
+      if (onscreenKeyboardRecordingRef.current && onscreenKeyboardActiveNotesRef.current.has(note)) {
+        finishOnscreenKeyboardRecordedNote(note, performance.now());
+      }
+    }
+    setOnscreenKeyboardPressedNotes((prev) => (prev.includes(note) ? prev : [...prev, note]));
+    engine.noteOn(note, ONSCREEN_KEYBOARD_DEFAULT_VELOCITY);
+    if (onscreenKeyboardRecordingRef.current) {
+      onscreenKeyboardActiveNotesRef.current.set(note, {
+        startMs: performance.now(),
+        velocity: ONSCREEN_KEYBOARD_DEFAULT_VELOCITY,
+      });
+    }
+  }, [ensureOnscreenKeyboardAudioReady, finishOnscreenKeyboardRecordedNote]);
+  const releaseOnscreenKeyboardNote = useCallback((note: string) => {
+    const engine = keyboardStudioEngineRef.current;
+    setOnscreenKeyboardPressedNotes((prev) => prev.filter((activeNote) => activeNote !== note));
+    if (engine) engine.noteOff(note);
+    if (onscreenKeyboardRecordingRef.current) {
+      finishOnscreenKeyboardRecordedNote(note, performance.now());
+    } else {
+      onscreenKeyboardActiveNotesRef.current.delete(note);
+    }
+  }, [finishOnscreenKeyboardRecordedNote]);
+  const releaseAllOnscreenKeyboardNotes = useCallback(() => {
+    keyboardStudioPointerNoteRef.current.clear();
+    keyboardStudioNotePointerCountRef.current.clear();
+    keyboardStudioPressedCodesRef.current.clear();
+    const activeNotes = [...onscreenKeyboardPressedNotesRef.current];
+    activeNotes.forEach((note) => releaseOnscreenKeyboardNote(note));
+    keyboardStudioEngineRef.current?.stopAll();
+    setOnscreenKeyboardPressedNotes([]);
+  }, [releaseOnscreenKeyboardNote]);
+  const clearOnscreenKeyboardRecording = useCallback(() => {
+    stopOnscreenKeyboardPlayback();
+    stopOnscreenKeyboardRecording();
+    releaseAllOnscreenKeyboardNotes();
+    onscreenKeyboardActiveNotesRef.current.clear();
+    onscreenKeyboardRecordedEventsRef.current = [];
+    setOnscreenKeyboardRecordedEvents([]);
+  }, [
+    releaseAllOnscreenKeyboardNotes,
+    stopOnscreenKeyboardPlayback,
+    stopOnscreenKeyboardRecording,
+  ]);
+  const handleKeyboardKeyPointerDown = useCallback(
+    (
+      note: string,
+      event: {
+        preventDefault: () => void;
+        pointerId: number;
+        currentTarget: {
+          setPointerCapture?: (pointerId: number) => void;
+        };
+      },
+    ) => {
+      event.preventDefault();
+      try {
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+      } catch {
+        // no-op
+      }
+      const pointerMap = keyboardStudioPointerNoteRef.current;
+      const countMap = keyboardStudioNotePointerCountRef.current;
+      const prevNote = pointerMap.get(event.pointerId);
+      if (prevNote && prevNote !== note) {
+        const prevCount = countMap.get(prevNote) ?? 0;
+        const nextPrevCount = Math.max(0, prevCount - 1);
+        if (nextPrevCount <= 0) {
+          countMap.delete(prevNote);
+          releaseOnscreenKeyboardNote(prevNote);
+        } else {
+          countMap.set(prevNote, nextPrevCount);
+        }
+      }
+      pointerMap.set(event.pointerId, note);
+      countMap.set(note, (countMap.get(note) ?? 0) + 1);
+      void pressOnscreenKeyboardNote(note);
+    },
+    [pressOnscreenKeyboardNote, releaseOnscreenKeyboardNote],
+  );
+  const handleKeyboardKeyPointerUp = useCallback(
+    (
+      note: string,
+      event: {
+        preventDefault: () => void;
+        pointerId: number;
+        currentTarget: {
+          releasePointerCapture?: (pointerId: number) => void;
+        };
+      },
+    ) => {
+      event.preventDefault();
+      try {
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+      } catch {
+        // no-op
+      }
+      const pointerMap = keyboardStudioPointerNoteRef.current;
+      const countMap = keyboardStudioNotePointerCountRef.current;
+      const trackedNote = pointerMap.get(event.pointerId) ?? note;
+      pointerMap.delete(event.pointerId);
+      const count = countMap.get(trackedNote) ?? 0;
+      const nextCount = Math.max(0, count - 1);
+      if (nextCount <= 0) {
+        countMap.delete(trackedNote);
+        releaseOnscreenKeyboardNote(trackedNote);
+      } else {
+        countMap.set(trackedNote, nextCount);
+      }
+    },
+    [releaseOnscreenKeyboardNote],
+  );
+  useEffect(() => {
+    if (keyboardStudioBeatLoopTimerRef.current !== null) {
+      window.clearInterval(keyboardStudioBeatLoopTimerRef.current);
+      keyboardStudioBeatLoopTimerRef.current = null;
+    }
+    if (
+      !keyboardStudioEnabled
+      || !onscreenKeyboardPanelVisible
+      || !keyboardStudioBeatLoopEnabled
+    ) {
+      return () => {};
+    }
+    const beatEvents = buildKeyboardStudioBeatEvents();
+    if (beatEvents.length === 0) return () => {};
+    const totalMs = beatEvents.reduce(
+      (maxMs, event) => Math.max(maxMs, event.startMs + event.durationMs),
+      0,
+    );
+    const intervalMs = Math.max(320, totalMs + 120);
+    void playOnscreenKeyboardSequence(beatEvents);
+    keyboardStudioBeatLoopTimerRef.current = window.setInterval(() => {
+      void playOnscreenKeyboardSequence(beatEvents);
+    }, intervalMs);
+    return () => {
+      if (keyboardStudioBeatLoopTimerRef.current !== null) {
+        window.clearInterval(keyboardStudioBeatLoopTimerRef.current);
+        keyboardStudioBeatLoopTimerRef.current = null;
+      }
+    };
+  }, [
+    buildKeyboardStudioBeatEvents,
+    keyboardStudioBeatLoopEnabled,
+    keyboardStudioEnabled,
+    onscreenKeyboardPanelVisible,
+    playOnscreenKeyboardSequence,
+  ]);
+  const downloadOnscreenKeyboardBlob = useCallback((filename: string, blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 3000);
+  }, []);
+  const exportOnscreenKeyboardJson = useCallback(() => {
+    const events = [...onscreenKeyboardRecordedEventsRef.current]
+      .sort((a, b) => a.startMs - b.startMs);
+    const payload = {
+      createdAt: new Date().toISOString(),
+      root: "C3",
+      keyCount: ONSCREEN_KEYBOARD_KEY_COUNT,
+      events,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json;charset=utf-8",
+    });
+    downloadOnscreenKeyboardBlob("keyboard-recording.json", blob);
+  }, [downloadOnscreenKeyboardBlob]);
+  const exportOnscreenKeyboardMidi = useCallback(() => {
+    const events = [...onscreenKeyboardRecordedEventsRef.current]
+      .filter((event) => event.durationMs > 0)
+      .sort((a, b) => a.startMs - b.startMs);
+    if (events.length === 0) return;
+    const blob = getKeyboardStudioEngine().exportMidiBlob(events);
+    downloadOnscreenKeyboardBlob("keyboard-recording.mid", blob);
+  }, [downloadOnscreenKeyboardBlob, getKeyboardStudioEngine]);
+  const saveKeyboardStudioPreset = useCallback(() => {
+    const trimmedName = keyboardStudioPresetName.trim();
+    if (!trimmedName) return;
+    const now = new Date().toISOString();
+    const preset: KeyboardStudioPreset = {
+      id: crypto.randomUUID(),
+      name: trimmedName,
+      source: "custom",
+      createdAt: now,
+      updatedAt: now,
+      events: trimKeyboardStudioEvents([...onscreenKeyboardRecordedEventsRef.current]),
+      soundDesign: normalizeSoundDesign(keyboardStudioSoundDesign),
+    };
+    setKeyboardStudioPresets((prev) => [...prev, preset]);
+    setKeyboardStudioSelectedPresetId(preset.id);
+    setKeyboardStudioSelectedSource(preset.id);
+    setKeyboardStudioPresetName("");
+  }, [keyboardStudioPresetName, keyboardStudioSoundDesign, trimKeyboardStudioEvents]);
+  const deleteKeyboardStudioPreset = useCallback((presetId: string) => {
+    setKeyboardStudioPresets((prev) => prev.filter((preset) => preset.id !== presetId));
+    setKeyboardStudioBindings((prev) => prev.filter((binding) => binding.presetId !== presetId));
+    if (keyboardStudioSelectedPresetId === presetId) {
+      setKeyboardStudioSelectedPresetId("");
+    }
+  }, [keyboardStudioSelectedPresetId]);
+  const importKeyboardStudioPresetJson = useCallback((raw: string) => {
+    try {
+      const parsed = JSON.parse(raw) as {
+        name?: string;
+        events?: KeyboardRecordedNoteEvent[];
+        soundDesign?: Partial<KeyboardStudioSoundDesign>;
+      };
+      if (!Array.isArray(parsed.events)) return;
+      const now = new Date().toISOString();
+      const preset: KeyboardStudioPreset = {
+        id: crypto.randomUUID(),
+        name: parsed.name?.trim() || `Imported ${new Date().toLocaleTimeString()}`,
+        source: "custom",
+        createdAt: now,
+        updatedAt: now,
+        events: trimKeyboardStudioEvents(parsed.events),
+        soundDesign: normalizeSoundDesign(parsed.soundDesign),
+      };
+      setKeyboardStudioPresets((prev) => [...prev, preset]);
+      setKeyboardStudioSelectedSource(preset.id);
+      setOnscreenKeyboardRecordedEvents([...preset.events]);
+      onscreenKeyboardRecordedEventsRef.current = [...preset.events];
+      setKeyboardStudioSoundDesign(preset.soundDesign);
+    } catch {
+      // no-op invalid json
+    }
+  }, [trimKeyboardStudioEvents]);
+  const setKeyboardStudioBindingPreset = useCallback(
+    (eventId: KeyboardStudioEventBinding["eventId"], presetId: string) => {
+      setKeyboardStudioBindings((prev) => {
+        const existing = prev.find((binding) => binding.eventId === eventId);
+        if (existing) {
+          return prev.map((binding) =>
+            binding.eventId === eventId ? { ...binding, presetId } : binding
+          );
+        }
+        return [...prev, { eventId, presetId, enabled: true, gain: 1 }];
+      });
+    },
+    [],
+  );
+  const saveKeyboardStudioCurrentSettingsSlot = useCallback(() => {
+    const name = window.prompt("Name this settings snapshot");
+    if (!name || !name.trim()) return;
+    const slot = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      createdAt: new Date().toISOString(),
+      soundDesign: normalizeSoundDesign(keyboardStudioSoundDesign),
+    };
+    setKeyboardStudioSavedSettings((prev) => {
+      const merged = [slot, ...prev].slice(0, 10);
+      return merged;
+    });
+    setKeyboardStudioSelectedSettingsId(slot.id);
+  }, [keyboardStudioSoundDesign]);
+  const loadKeyboardStudioSettingsSlot = useCallback((slotId: string) => {
+    const slot = keyboardStudioSavedSettings.find((item) => item.id === slotId);
+    if (!slot) return;
+    setKeyboardStudioSoundDesign(normalizeSoundDesign(slot.soundDesign));
+    previewKeyboardStudioControlFeedback("A5");
+  }, [keyboardStudioSavedSettings, previewKeyboardStudioControlFeedback]);
+  const deleteKeyboardStudioSettingsSlot = useCallback((slotId: string) => {
+    setKeyboardStudioSavedSettings((prev) => prev.filter((slot) => slot.id !== slotId));
+    if (keyboardStudioSelectedSettingsId === slotId) setKeyboardStudioSelectedSettingsId("");
+  }, [keyboardStudioSelectedSettingsId]);
+  useEffect(() => {
+    const preset = allKeyboardStudioPresetOptions.find((item) => item.id === keyboardStudioSelectedSource);
+    if (!preset) return;
+    setKeyboardStudioSoundDesign(normalizeSoundDesign(preset.soundDesign));
+    setOnscreenKeyboardRecordedEvents([...preset.events]);
+    onscreenKeyboardRecordedEventsRef.current = [...preset.events];
+    if (preset.source === "custom") {
+      setKeyboardStudioPresetName(preset.name);
+      setKeyboardStudioSelectedPresetId(preset.id);
+    } else {
+      setKeyboardStudioSelectedPresetId("");
+    }
+  }, [allKeyboardStudioPresetOptions, keyboardStudioSelectedSource]);
+  useEffect(() => {
+    const engine = keyboardStudioEngineRef.current;
+    if (!engine) return;
+    engine.setMasterVolume(overallVolume);
+  }, [overallVolume]);
+  useEffect(() => {
+    const engine = keyboardStudioEngineRef.current;
+    if (!engine) return;
+    void engine.setSoundDesign(keyboardStudioSoundDesign);
+  }, [keyboardStudioSoundDesign]);
+  useEffect(() => {
+    if (!keyboardStudioEnabled) return () => {};
+    return onCosmosSoundEvent((event) => {
+      setKeyboardStudioKnownEventIds((prev) =>
+        prev.includes(event.id) ? prev : [...prev, event.id].sort((a, b) => a.localeCompare(b))
+      );
+      const binding = keyboardStudioBindings.find(
+        (candidate) => candidate.eventId === event.id && candidate.enabled,
+      );
+      if (!binding) return;
+      const preset = allKeyboardStudioPresetOptions.find((item) => item.id === binding.presetId);
+      if (!preset || preset.events.length === 0) return;
+      const trimmedEvents = trimKeyboardStudioEvents(preset.events);
+      if (trimmedEvents.length === 0) return;
+      void ensureOnscreenKeyboardAudioReady().then(async (engine) => {
+        await engine.setSoundDesign(preset.soundDesign);
+        await engine.playSequence(trimmedEvents, {
+          gain: binding.gain,
+          ghostPlayback: false,
+        });
+      });
+    });
+  }, [
+    allKeyboardStudioPresetOptions,
+    ensureOnscreenKeyboardAudioReady,
+    keyboardStudioBindings,
+    keyboardStudioEnabled,
+    trimKeyboardStudioEvents,
+  ]);
+  useEffect(() => {
+    const handlePointerRelease = () => {
+      releaseAllOnscreenKeyboardNotes();
+    };
+    window.addEventListener("pointerup", handlePointerRelease);
+    window.addEventListener("blur", handlePointerRelease);
+    return () => {
+      window.removeEventListener("pointerup", handlePointerRelease);
+      window.removeEventListener("blur", handlePointerRelease);
+    };
+  }, [releaseAllOnscreenKeyboardNotes]);
+  useEffect(() => {
+    const keyboardActive = keyboardStudioEnabled && onscreenKeyboardPanelVisible;
+    if (!keyboardActive) {
+      keyboardStudioPressedCodesRef.current.clear();
+      releaseAllOnscreenKeyboardNotes();
+      return () => {};
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      const note = keyboardStudioKeyCodeToNoteMap.get(event.code);
+      if (!note) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (keyboardStudioPressedCodesRef.current.has(event.code)) return;
+      keyboardStudioPressedCodesRef.current.add(event.code);
+      void pressOnscreenKeyboardNote(note);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      const note = keyboardStudioKeyCodeToNoteMap.get(event.code);
+      if (!note) return;
+      event.preventDefault();
+      event.stopPropagation();
+      keyboardStudioPressedCodesRef.current.delete(event.code);
+      releaseOnscreenKeyboardNote(note);
+    };
+    const clearKeys = () => {
+      keyboardStudioPressedCodesRef.current.clear();
+      releaseAllOnscreenKeyboardNotes();
+    };
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener("keyup", onKeyUp, { capture: true });
+    window.addEventListener("blur", clearKeys);
+    document.addEventListener("visibilitychange", clearKeys);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
+      window.removeEventListener("keyup", onKeyUp, { capture: true });
+      window.removeEventListener("blur", clearKeys);
+      document.removeEventListener("visibilitychange", clearKeys);
+      clearKeys();
+    };
+  }, [
+    keyboardStudioEnabled,
+    keyboardStudioKeyCodeToNoteMap,
+    onscreenKeyboardPanelVisible,
+    pressOnscreenKeyboardNote,
+    releaseAllOnscreenKeyboardNotes,
+    releaseOnscreenKeyboardNote,
+  ]);
+  useEffect(() => () => {
+    stopOnscreenKeyboardPlayback();
+    releaseAllOnscreenKeyboardNotes();
+    keyboardStudioEngineRef.current?.dispose();
+    keyboardStudioEngineRef.current = null;
+  }, [releaseAllOnscreenKeyboardNotes, stopOnscreenKeyboardPlayback]);
+  const beginOnscreenKeyboardDrag = useCallback((event: {
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    button?: number;
+    target?: EventTarget | null;
+  }) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    const targetElement = event.target instanceof HTMLElement ? event.target : null;
+    if (
+      targetElement
+      && ["BUTTON", "INPUT", "SELECT", "TEXTAREA", "OPTION", "LABEL"].includes(targetElement.tagName)
+    ) {
       return;
     }
+    onscreenKeyboardPanelDragRef.current = {
+      active: true,
+      pointerId: event.pointerId,
+      offsetX: event.clientX - onscreenKeyboardPanelLayout.x,
+      offsetY: event.clientY - onscreenKeyboardPanelLayout.y,
+    };
+  }, [onscreenKeyboardPanelLayout.x, onscreenKeyboardPanelLayout.y]);
+  const beginKeyboardStudioMainColumnResize = useCallback((event: {
+    button: number;
+    pointerId: number;
+    clientX: number;
+    preventDefault: () => void;
+    stopPropagation: () => void;
+    currentTarget: { setPointerCapture: (pointerId: number) => void };
+  }) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    keyboardStudioMainColumnResizeRef.current = {
+      active: true,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: keyboardStudioMainColumnWidth,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [keyboardStudioMainColumnWidth]);
+  useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      const drag = onscreenKeyboardPanelDragRef.current;
+      if (!drag?.active) return;
+      if (event.buttons === 0) {
+        onscreenKeyboardPanelDragRef.current = null;
+        return;
+      }
+      const panelWidth = 980;
+      const maxX = Math.max(8, window.innerWidth - panelWidth - 12);
+      const maxY = Math.max(8, window.innerHeight - 160);
+      const x = THREE.MathUtils.clamp(event.clientX - drag.offsetX, 8, maxX);
+      const y = THREE.MathUtils.clamp(event.clientY - drag.offsetY, 8, maxY);
+      setOnscreenKeyboardPanelLayout((prev) => ({
+        ...prev,
+        x,
+        y,
+      }));
+    };
+    const onResizeMove = (event: PointerEvent) => {
+      const resize = keyboardStudioMainColumnResizeRef.current;
+      if (!resize?.active) return;
+      const nextWidth = resize.startWidth + (event.clientX - resize.startX);
+      setKeyboardStudioMainColumnWidth(THREE.MathUtils.clamp(nextWidth, 420, 700));
+    };
+    const stopDrag = () => {
+      onscreenKeyboardPanelDragRef.current = null;
+    };
+    const stopResize = () => {
+      keyboardStudioMainColumnResizeRef.current = null;
+    };
+    const onPointerUp = () => {
+      if (!onscreenKeyboardPanelDragRef.current) return;
+      stopDrag();
+    };
+    const onPointerCancel = () => {
+      if (!onscreenKeyboardPanelDragRef.current) return;
+      stopDrag();
+    };
+    const onWindowBlur = () => stopDrag();
+    const onWindowBlurResize = () => stopResize();
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointermove", onResizeMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("blur", onWindowBlur);
+    window.addEventListener("pointerup", stopResize);
+    window.addEventListener("pointercancel", stopResize);
+    window.addEventListener("blur", onWindowBlurResize);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointermove", onResizeMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("blur", onWindowBlur);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+      window.removeEventListener("blur", onWindowBlurResize);
+      stopDrag();
+      stopResize();
+    };
+  }, []);
 
+  const stopFalconNavSfxImmediate = useCallback(() => {
     if (falconTravelFadeTimeoutRef.current !== null) {
       window.clearTimeout(falconTravelFadeTimeoutRef.current);
       falconTravelFadeTimeoutRef.current = null;
     }
-    const now = listener.context.currentTime;
-    const fadeSeconds = Math.max(0.05, durationMs / 1000);
-    gainNode.cancelScheduledValues(now);
-    gainNode.setValueAtTime(gainNode.value, now);
-    gainNode.linearRampToValueAtTime(0.0001, now + fadeSeconds);
-    falconTravelFadeTimeoutRef.current = window.setTimeout(() => {
-      const activeAudio = falconTravelAudioRef.current;
-      if (!activeAudio) return;
-      if (activeAudio.isPlaying) activeAudio.stop();
-      activeAudio.setVolume(
-        THREE.MathUtils.clamp(
-          overallVolume * falconSoundVolume,
-          0,
-          1,
-        ),
-      );
-      falconTravelFadeTimeoutRef.current = null;
-      debugLog("audio", "[falcon] moon-travel cue faded out");
-    }, Math.ceil(durationMs + 40));
+    const positionalAudio = falconTravelAudioRef.current;
+    if (!positionalAudio) return;
+    if (positionalAudio.isPlaying) positionalAudio.stop();
+    falconActiveCueKindRef.current = null;
+    positionalAudio.setVolume(
+      THREE.MathUtils.clamp(
+        overallVolume * falconSoundVolume,
+        0,
+        1,
+      ),
+    );
+    debugLog("audio", "[falcon] cue stopped immediately");
   }, [debugLog, falconSoundVolume, overallVolume]);
 
-  const playFalconMoonTravelSfx = useCallback(async (forceRestart = false) => {
+  const playFalconNavSfx = useCallback(async (kind: FalconNavCueKind, forceRestart = false) => {
     if (!falconSoundEnabled) return;
-    const buffer = falconMoonTravelBufferRef.current;
+    if (falconPendingCueKindRef.current === kind) return;
+    const cueBuffers = falconNavCueBuffersRef.current;
+    const buffer = kind === "moonTravel"
+      ? (() => {
+          const moonBuffers = cueBuffers.moonTravel;
+          if (moonBuffers.length === 0) return null;
+          const index = Math.floor(Math.random() * moonBuffers.length);
+          return moonBuffers[index] ?? null;
+        })()
+      : cueBuffers[kind];
     if (!buffer) return;
     const positionalAudio = ensureFalconTravelAudioNode();
     if (!positionalAudio) return;
-    if (!forceRestart && positionalAudio.isPlaying) return;
+    if (positionalAudio.isPlaying) {
+      const sameCueAsCurrent = falconActiveCueKindRef.current === kind;
+      if (sameCueAsCurrent) {
+        // Keep the original one-shot running across adjacent phases using same cue.
+        return;
+      }
+      if (!forceRestart) return;
+      positionalAudio.stop();
+    }
     if (falconTravelFadeTimeoutRef.current !== null) {
       window.clearTimeout(falconTravelFadeTimeoutRef.current);
       falconTravelFadeTimeoutRef.current = null;
     }
+    falconPendingCueKindRef.current = kind;
     await resumeFalconTravelAudioContext();
     try {
       // Non-looping one-shot cue for moon travel.
@@ -3428,9 +4892,14 @@ export default function ResumeSpace3D({
           1,
         ),
       );
-      debugLog("audio", "[falcon] moon-travel cue played");
+      falconActiveCueKindRef.current = kind;
+      debugLog("audio", `[falcon] ${kind} cue played`);
     } catch {
-      debugLog("audio", "[falcon] moon-travel cue blocked");
+      debugLog("audio", `[falcon] ${kind} cue blocked`);
+    } finally {
+      if (falconPendingCueKindRef.current === kind) {
+        falconPendingCueKindRef.current = null;
+      }
     }
   }, [
     debugLog,
@@ -3498,15 +4967,15 @@ export default function ResumeSpace3D({
     setFollowingStarDestroyer,
     onMoonTravelIntent: ({ targetMoonId }) => {
       debugLog("nav", `Moon travel intent: ${targetMoonId}`);
-      void playFalconMoonTravelSfx(false);
+      void playFalconNavSfx("moonTravel", true);
     },
     onMoonTravelNavigationStarted: ({ targetMoonId }) => {
       debugLog("nav", `Moon travel started: ${targetMoonId}`);
-      void playFalconMoonTravelSfx(false);
+      void playFalconNavSfx("moonTravel", true);
     },
     onMoonTravelArrived: ({ targetMoonId }) => {
       debugLog("nav", `Moon travel arrived: ${targetMoonId}`);
-      fadeOutFalconMoonTravelSfx();
+      stopFalconNavSfxImmediate();
     },
     resolveSpecialSectionTarget: (targetId) => {
       if (targetId === "about") {
@@ -3729,6 +5198,7 @@ export default function ResumeSpace3D({
       navState.lastTravelPhase !== "orbit_departure_handoff"
     ) {
       onScreenMessage("Departing current orbit");
+      void playFalconNavSfx("changeOfDirection", true);
       navState.lastTravelPhase = "orbit_departure_handoff";
     }
 
@@ -3742,7 +5212,10 @@ export default function ResumeSpace3D({
       navState.travelStartedAt = Date.now();
       navState.announcedLightspeed = false;
       navState.lastDistance = navigationDistance ?? null;
-      navState.lastTravelPhase = "idle";
+      navState.lastTravelPhase =
+        navigationTravelPhase === "orbit_departure_handoff"
+          ? "orbit_departure_handoff"
+          : "idle";
       navState.arrivalAnnounced = false;
       navDistanceSampleRef.current = null;
       navDistanceDerivedSpeedRef.current = 0;
@@ -3760,15 +5233,19 @@ export default function ResumeSpace3D({
         switch (navigationTravelPhase) {
           case "travel_override":
             onScreenMessage("Navigation override");
+            void playFalconNavSfx("override", true);
             break;
           case "orbit_departure_handoff":
             onScreenMessage("Departing current orbit");
+            void playFalconNavSfx("changeOfDirection", true);
             break;
           case "departure_clearance":
             onScreenMessage("Breaking from local orbit");
+            void playFalconNavSfx("changeOfDirection", true);
             break;
           case "trajectory_alignment":
             onScreenMessage("Adjusting Falcon trajectory");
+            void playFalconNavSfx("changeOfDirection", true);
             break;
           case "transit_cruise":
             onScreenMessage("Cruising toward destination");
@@ -3776,6 +5253,7 @@ export default function ResumeSpace3D({
           case "lightspeed_engaged":
             onScreenMessage("Engaging light speed");
             navState.announcedLightspeed = true;
+            void playFalconNavSfx("speedOfLight", true);
             break;
           case "arrival_approach":
             onScreenMessage("Arriving at destination");
@@ -4683,6 +6161,50 @@ export default function ResumeSpace3D({
     }
   }, [setProjectShowcaseLever]);
 
+  const stopOrbitalPortfolioToneSequence = useCallback(() => {
+    const runtime = orbitalPortfolioToneRuntimeRef.current;
+    if (ORBITAL_PORTFOLIO_DEBUG_LOGS) {
+      shipLog(
+        `[LATTICE-TONE] stop sequence notesPlayed=${runtime.debugNoteCounter}`,
+        "info",
+      );
+    }
+    runtime.enabled = false;
+    runtime.nextEventAtMs = 0;
+    runtime.noteIndex = 0;
+    runtime.accentCoreIndex = -1;
+    runtime.accentNodeLabel = "";
+    runtime.accentColorHex = 0xc18bff;
+    runtime.accentUntilAtMs = 0;
+    runtime.debugNoteCounter = 0;
+    runtime.activeVoices.forEach((voice) => {
+      try {
+        voice.oscMain.stop();
+      } catch {
+        // oscillator may already be stopped
+      }
+      try {
+        voice.oscLayer.stop();
+      } catch {
+        // oscillator may already be stopped
+      }
+      try {
+        voice.oscMain.disconnect();
+        voice.oscLayer.disconnect();
+        voice.mainGain.disconnect();
+        voice.layerGain.disconnect();
+        voice.filter.disconnect();
+        voice.voiceGain.disconnect();
+      } catch {
+        // no-op disconnect guard
+      }
+    });
+    runtime.activeVoices = [];
+  }, [shipLog]);
+  useEffect(() => () => {
+    stopOrbitalPortfolioToneSequence();
+  }, [stopOrbitalPortfolioToneSequence]);
+
   const exitOrbitalPortfolio = useCallback(() => {
     const root = orbitalPortfolioRootRef.current;
     // Keep Portfolio world visible from outside; exiting only leaves
@@ -4691,6 +6213,7 @@ export default function ResumeSpace3D({
     if (sceneRef.current.camera) {
       sceneRef.current.camera.layers.disable(ORBITAL_PORTFOLIO_LAYER);
     }
+    stopOrbitalPortfolioToneSequence();
     const prev = orbitalPortfolioPrevStateRef.current;
     const beacon = orbitalPortfolioBeaconRef.current;
     if (beacon) beacon.visible = true;
@@ -4772,7 +6295,7 @@ export default function ResumeSpace3D({
     }
     orbitalPortfolioActiveRef.current = false;
     setOrbitalPortfolioActive(false);
-  }, []);
+  }, [stopOrbitalPortfolioToneSequence]);
 
   const enterOrbitalPortfolio = useCallback(() => {
     const camera = sceneRef.current.camera;
@@ -4900,10 +6423,36 @@ export default function ResumeSpace3D({
         maybeCss.visible = false;
       });
     }
+    ensureOrbitalPortfolioToneAudioNode();
+    void resumeOrbitalPortfolioToneAudioContext();
+    const toneRuntime = orbitalPortfolioToneRuntimeRef.current;
+    toneRuntime.enabled = true;
+    toneRuntime.noteIndex = 0;
+    toneRuntime.motifIndex =
+      Math.floor(Math.random() * SKILLS_LATTICE_TONE_MOTIFS_HZ.length) %
+      Math.max(1, SKILLS_LATTICE_TONE_MOTIFS_HZ.length);
+    toneRuntime.nextEventAtMs = performance.now() + seq.durationMs + 220;
+    toneRuntime.accentCoreIndex = -1;
+    toneRuntime.accentUntilAtMs = 0;
+    toneRuntime.debugNoteCounter = 0;
+    if (ORBITAL_PORTFOLIO_DEBUG_LOGS) {
+      shipLog(
+        `[LATTICE-TONE] start sequence in ${Math.max(0, toneRuntime.nextEventAtMs - performance.now()).toFixed(0)}ms motif=${toneRuntime.motifIndex} ctx=${toneRuntime.context?.state ?? "null"} vol=${overallVolume.toFixed(2)}`,
+        "info",
+      );
+    }
     orbitalPortfolioActiveRef.current = true;
     setOrbitalPortfolioActive(true);
     vlog("✨ Entered Orbital Portfolio");
-  }, [orbitalPortfolioReady, setOrbitalPortfolioManualLock, shipLog, vlog]);
+  }, [
+    ensureOrbitalPortfolioToneAudioNode,
+    overallVolume,
+    orbitalPortfolioReady,
+    resumeOrbitalPortfolioToneAudioContext,
+    setOrbitalPortfolioManualLock,
+    shipLog,
+    vlog,
+  ]);
 
   const exitOrbitalPortfolioInspectMode = useCallback(
     (options?: { resumeOrbits?: boolean; keepManualControl?: boolean; reason?: string }) => {
@@ -5763,6 +7312,7 @@ export default function ResumeSpace3D({
       cancelAnimationFrame(entrySeq.raf);
       entrySeq.raf = null;
     }
+    stopOrbitalPortfolioToneSequence();
     entrySeq.active = false;
     if (latticeRoot) latticeRoot.visible = false;
     skillsLatticeNodeLabelsRef.current.forEach((label) => {
@@ -5811,7 +7361,12 @@ export default function ResumeSpace3D({
     setSkillsLatticeSelection(null);
     skillsLatticeEnvelopeInsideRef.current = null;
     vlog("🧠 Skills lattice exited");
-  }, [setExternalCosmosLabelsHiddenForLattice, setSkillsNavHereActive, vlog]);
+  }, [
+    setExternalCosmosLabelsHiddenForLattice,
+    setSkillsNavHereActive,
+    stopOrbitalPortfolioToneSequence,
+    vlog,
+  ]);
 
   const enterSkillsLattice = useCallback(() => {
     if (skillsLatticeActiveRef.current) return;
@@ -5970,6 +7525,26 @@ export default function ResumeSpace3D({
         controls.enabled = true;
         skillsLatticeActiveRef.current = true;
         setSkillsLatticeActive(true);
+        const toneRuntime = orbitalPortfolioToneRuntimeRef.current;
+        toneRuntime.enabled = true;
+        toneRuntime.noteIndex = 0;
+        toneRuntime.motifIndex =
+          Math.floor(Math.random() * SKILLS_LATTICE_TONE_MOTIFS_HZ.length) %
+          Math.max(1, SKILLS_LATTICE_TONE_MOTIFS_HZ.length);
+        toneRuntime.nextEventAtMs = performance.now() + 160;
+        toneRuntime.accentCoreIndex = -1;
+        toneRuntime.accentNodeLabel = "";
+        toneRuntime.accentColorHex = activeSkillsLatticeTonePreset.accentColor;
+        toneRuntime.accentUntilAtMs = 0;
+        toneRuntime.debugNoteCounter = 0;
+        ensureOrbitalPortfolioToneAudioNode();
+        void resumeOrbitalPortfolioToneAudioContext();
+        if (ORBITAL_PORTFOLIO_DEBUG_LOGS) {
+          shipLog(
+            `[LATTICE-TONE] skills-entry armed nextIn=${Math.max(0, toneRuntime.nextEventAtMs - performance.now()).toFixed(0)}ms motif=${toneRuntime.motifIndex} ctx=${toneRuntime.context?.state ?? "null"}`,
+            "info",
+          );
+        }
         skillsLatticeSelectedNodeRef.current = null;
         setSkillsLatticeSelection(null);
         vlog("🧠 Skills lattice entered");
@@ -5978,7 +7553,16 @@ export default function ResumeSpace3D({
       skillsLatticeEntrySequenceRef.current.raf = requestAnimationFrame(tick);
     };
     skillsLatticeEntrySequenceRef.current.raf = requestAnimationFrame(tick);
-  }, [placeStarDestroyerNearSkills, setExternalCosmosLabelsHiddenForLattice, setSkillsNavHereActive, vlog]);
+  }, [
+    activeSkillsLatticeTonePreset,
+    ensureOrbitalPortfolioToneAudioNode,
+    placeStarDestroyerNearSkills,
+    resumeOrbitalPortfolioToneAudioContext,
+    setExternalCosmosLabelsHiddenForLattice,
+    setSkillsNavHereActive,
+    shipLog,
+    vlog,
+  ]);
 
   const resumeSkillsLatticeInPlace = useCallback(() => {
     if (!skillsLatticeSystemActiveRef.current || skillsLatticeActiveRef.current) return;
@@ -8233,14 +9817,68 @@ export default function ResumeSpace3D({
     const shellRight = new THREE.Vector3();
     const shellUp = new THREE.Vector3();
     const sunDir = new THREE.Vector3();
+    const toneAccentColor = new THREE.Color();
     const tick = () => {
       if (skillsLatticeActiveRef.current) {
         const nowMs = performance.now();
         const dt = Math.min((nowMs - lastTickMs) / 1000, 0.05);
         lastTickMs = nowMs;
         const t = nowMs * 0.001;
+        const toneRuntime = orbitalPortfolioToneRuntimeRef.current;
         const selected = skillsLatticeSelectedNodeRef.current;
         const plasmaActive = !!selected;
+        const categoryNodes = skillsLatticeNodesRef.current.filter((n) => n.nodeType === "category");
+        if (toneRuntime.enabled && categoryNodes.length > 0) {
+          if (toneRuntime.nextEventAtMs <= 0) {
+            toneRuntime.nextEventAtMs = nowMs + 300;
+          }
+          if (nowMs >= toneRuntime.nextEventAtMs) {
+            const motifs = SKILLS_LATTICE_TONE_MOTIFS_HZ;
+            const motif =
+              motifs[
+                THREE.MathUtils.clamp(
+                  toneRuntime.motifIndex,
+                  0,
+                  Math.max(0, motifs.length - 1),
+                )
+              ] ?? motifs[0] ?? [];
+            if (toneRuntime.noteIndex >= motif.length) {
+              toneRuntime.noteIndex = 0;
+              toneRuntime.motifIndex = (toneRuntime.motifIndex + 1) % Math.max(1, motifs.length);
+              toneRuntime.nextEventAtMs =
+                nowMs +
+                THREE.MathUtils.clamp(
+                  skillsLatticeTonePhrasePauseMsRef.current,
+                  0,
+                  SKILLS_LATTICE_TONE_PHRASE_PAUSE_MAX_MS,
+                );
+              toneRuntime.accentCoreIndex = -1;
+              toneRuntime.accentNodeLabel = "";
+            } else {
+              const freq = motif[toneRuntime.noteIndex] ?? 329.63;
+              let accentIdx = Math.floor(Math.random() * Math.max(1, categoryNodes.length));
+              if (categoryNodes.length > 1 && accentIdx === toneRuntime.accentCoreIndex) {
+                accentIdx = (accentIdx + 1 + Math.floor(Math.random() * (categoryNodes.length - 1)))
+                  % categoryNodes.length;
+              }
+              const accentNode = categoryNodes[accentIdx];
+              const preset = resolveSkillsLatticeTonePreset(skillsLatticeTonePresetIdRef.current);
+              toneRuntime.accentCoreIndex = accentIdx;
+              toneRuntime.accentNodeLabel = accentNode?.label ?? "";
+              toneRuntime.accentColorHex = preset.accentColor;
+              toneRuntime.accentUntilAtMs = nowMs + SKILLS_LATTICE_TONE_NOTE_DURATION_MS;
+              if (ORBITAL_PORTFOLIO_DEBUG_LOGS) {
+                shipLog(
+                  `[LATTICE-TONE] skills-queue motif=${toneRuntime.motifIndex} note=${toneRuntime.noteIndex} node=${toneRuntime.accentNodeLabel || accentIdx} freq=${freq.toFixed(2)} preset=${preset.id} ctx=${toneRuntime.context?.state ?? "null"}`,
+                  "info",
+                );
+              }
+              playOrbitalPortfolioTone(freq);
+              toneRuntime.noteIndex += 1;
+              toneRuntime.nextEventAtMs = nowMs + SKILLS_LATTICE_TONE_NOTE_STEP_MS;
+            }
+          }
+        }
         const ripple = skillsLatticeRippleRef.current;
         const camera = sceneRef.current.camera;
         const shellMat = skillsLatticeEnvelopeMatRef.current;
@@ -8340,6 +9978,20 @@ export default function ResumeSpace3D({
           if (rt >= 1) ripple.active = false;
         }
         skillsLatticeNodesRef.current.forEach((node) => {
+          const toneAccentActive =
+            toneRuntime.enabled &&
+            node.nodeType === "category" &&
+            node.label === toneRuntime.accentNodeLabel &&
+            nowMs < toneRuntime.accentUntilAtMs;
+          const toneAccentT = toneAccentActive
+            ? 1 -
+              THREE.MathUtils.clamp(
+                (nowMs - (toneRuntime.accentUntilAtMs - SKILLS_LATTICE_TONE_NOTE_DURATION_MS)) /
+                  Math.max(1, SKILLS_LATTICE_TONE_NOTE_DURATION_MS),
+                0,
+                1,
+              )
+            : 0;
           const pulse = 1 + Math.sin(t * 1.7 + node.phase) * 0.08;
           const isSelected = selected?.mesh === node.mesh;
           const isRelated = !selected
@@ -8347,10 +9999,16 @@ export default function ResumeSpace3D({
               ? node.category === selected.category
               : node.category === selected.category || node.label === selected.label);
           const selectedBoost = isSelected ? 1.28 : isRelated ? 1.03 : 0.96;
+          const toneBoost = node.nodeType === "category" ? toneAccentT * 0.4 : 0;
           node.mesh.scale.setScalar(node.baseScale * pulse * selectedBoost);
+          if (toneBoost > 0) {
+            node.mesh.scale.multiplyScalar(1 + toneBoost);
+          }
           const bodyMat = node.mesh.material as THREE.MeshBasicMaterial;
           const baseNodeOpacity = node.nodeType === "category" ? 0.9 : 0.82;
-          bodyMat.opacity = latticeInternalsVisible ? (isRelated ? baseNodeOpacity : 0.2) : 0;
+          bodyMat.opacity = latticeInternalsVisible
+            ? (isRelated ? baseNodeOpacity + toneAccentT * 0.26 : 0.2)
+            : 0;
           if (plasmaActive) {
             const baseColor =
               node.nodeType === "category"
@@ -8369,6 +10027,10 @@ export default function ResumeSpace3D({
           } else {
             bodyMat.color.set(node.nodeType === "category" ? 0x8fd3ff : 0xdaf1ff);
           }
+          if (toneAccentT > 0) {
+            toneAccentColor.setHex(toneRuntime.accentColorHex);
+            bodyMat.color.lerp(toneAccentColor, THREE.MathUtils.clamp(0.25 + toneAccentT * 0.55, 0, 1));
+          }
           if (node.halo?.material) {
             const hMat = node.halo.material as THREE.SpriteMaterial;
             const focusAlpha = isSelected ? 0.62 : isRelated ? 0.24 : 0.08;
@@ -8379,7 +10041,7 @@ export default function ResumeSpace3D({
               rippleBoost = Math.max(0, 1 - Math.abs(d - rippleRadius) / 14) * 0.42;
             }
             hMat.opacity = THREE.MathUtils.clamp(
-              focusAlpha + Math.sin(t * 2.2 + node.phase) * 0.06 + rippleBoost,
+              focusAlpha + Math.sin(t * 2.2 + node.phase) * 0.06 + rippleBoost + toneAccentT * 0.28,
               0.04,
               0.9,
             );
@@ -10038,20 +11700,75 @@ export default function ResumeSpace3D({
           shipLog(`[PORTDBG] ${stationDebugRows.join(" | ")}`, "info");
         }
       }
+      const toneRuntime = orbitalPortfolioToneRuntimeRef.current;
+      if (
+        toneRuntime.enabled &&
+        orbitalPortfolioActiveRef.current &&
+        orbitalPortfolioCoresRef.current.length > 0
+      ) {
+        if (toneRuntime.nextEventAtMs <= 0) {
+          toneRuntime.nextEventAtMs = now + 900;
+        }
+        if (now >= toneRuntime.nextEventAtMs) {
+          const motifs = SKILLS_LATTICE_TONE_MOTIFS_HZ;
+          const motif =
+            motifs[
+              THREE.MathUtils.clamp(
+                toneRuntime.motifIndex,
+                0,
+                Math.max(0, motifs.length - 1),
+              )
+            ] ?? motifs[0] ?? [];
+          if (toneRuntime.noteIndex >= motif.length) {
+            toneRuntime.noteIndex = 0;
+            toneRuntime.motifIndex = (toneRuntime.motifIndex + 1) % Math.max(1, motifs.length);
+            toneRuntime.nextEventAtMs = now + SKILLS_LATTICE_TONE_PHRASE_PAUSE_MS;
+          } else {
+            const freq = motif[toneRuntime.noteIndex] ?? 329.63;
+            const maxCoreSlots = Math.max(1, Math.min(5, orbitalPortfolioCoresRef.current.length));
+            toneRuntime.accentCoreIndex = toneRuntime.noteIndex % maxCoreSlots;
+            toneRuntime.accentUntilAtMs = now + SKILLS_LATTICE_TONE_NOTE_DURATION_MS;
+            if (ORBITAL_PORTFOLIO_DEBUG_LOGS) {
+              shipLog(
+                `[LATTICE-TONE] queue motif=${toneRuntime.motifIndex} note=${toneRuntime.noteIndex} core=${toneRuntime.accentCoreIndex} freq=${freq.toFixed(2)} ctx=${toneRuntime.context?.state ?? "null"}`,
+                "info",
+              );
+            }
+            playOrbitalPortfolioTone(freq);
+            toneRuntime.noteIndex += 1;
+            toneRuntime.nextEventAtMs = now + SKILLS_LATTICE_TONE_NOTE_STEP_MS;
+          }
+        }
+      }
       orbitalPortfolioCoresRef.current.forEach((core, coreIndex) => {
+        const accentT =
+          toneRuntime.enabled &&
+          coreIndex === toneRuntime.accentCoreIndex &&
+          now < toneRuntime.accentUntilAtMs
+            ? 1 -
+              THREE.MathUtils.clamp(
+                (now - (toneRuntime.accentUntilAtMs - SKILLS_LATTICE_TONE_NOTE_DURATION_MS)) /
+                  Math.max(1, SKILLS_LATTICE_TONE_NOTE_DURATION_MS),
+                0,
+                1,
+              )
+            : 0;
         const glowMat = core.glow.material as THREE.MeshBasicMaterial;
-        glowMat.opacity = 0.2 + (0.5 + 0.5 * Math.sin(now * 0.0018 + coreIndex)) * 0.2;
+        glowMat.opacity =
+          0.2 + (0.5 + 0.5 * Math.sin(now * 0.0018 + coreIndex)) * 0.2 + accentT * 0.28;
+        core.glow.scale.setScalar(1 + accentT * 0.32);
+        core.nucleus.scale.setScalar(1 + accentT * 0.1);
         core.root.rotation.y += dt * 0.03;
         core.root.rotation.x = Math.sin(now * 0.00037 + coreIndex * 0.4) * 0.08;
         core.sliceGroup.rotation.y -= dt * 0.24;
         core.sliceGroup.rotation.z += dt * 0.11;
         core.sliceMats.forEach((mat, idx) => {
           const pulse = 0.5 + 0.5 * Math.sin(now * 0.0021 + idx * 0.9 + coreIndex);
-          mat.opacity = 0.2 + pulse * 0.28;
+          mat.opacity = 0.2 + pulse * 0.28 + accentT * 0.2;
         });
         core.rayMats.forEach((mat, idx) => {
           const pulse = 0.5 + 0.5 * Math.sin(now * 0.0017 + idx * 0.63 + coreIndex);
-          mat.opacity = 0.12 + pulse * 0.2;
+          mat.opacity = 0.12 + pulse * 0.2 + accentT * 0.16;
         });
         if (core.panelMat) {
           core.panelMat.opacity = 0.12 + (0.5 + 0.5 * Math.sin(now * 0.0016)) * 0.02;
@@ -10232,6 +11949,18 @@ export default function ResumeSpace3D({
         if (t >= 1) {
           entrySeq.active = false;
           shipLog("[PORTENTRY] entrySequence:end", "info");
+          if (ORBITAL_PORTFOLIO_DEBUG_LOGS) {
+            const toneRuntime = orbitalPortfolioToneRuntimeRef.current;
+            const toneGain =
+              toneRuntime.masterGain &&
+              Number.isFinite(toneRuntime.masterGain.gain.value)
+                ? toneRuntime.masterGain.gain.value.toFixed(3)
+                : "n/a";
+            shipLog(
+              `[LATTICE-TONE] post-entry enabled=${toneRuntime.enabled ? 1 : 0} nextIn=${Math.max(0, toneRuntime.nextEventAtMs - now).toFixed(0)}ms ctx=${toneRuntime.context?.state ?? "null"} gain=${toneGain}`,
+              "info",
+            );
+          }
           // Suppress touchpad wheel/pointer residue right after arrival.
           orbitalPortfolioIgnoreManualUntilRef.current = now + 900;
           const pendingInspect = orbitalPortfolioPendingInspectRequestRef.current;
@@ -10289,6 +12018,9 @@ export default function ResumeSpace3D({
     tick();
     return () => cancelAnimationFrame(raf);
   }, [
+    ensureOrbitalPortfolioToneAudioNode,
+    playOrbitalPortfolioTone,
+    resumeOrbitalPortfolioToneAudioContext,
     orbitalPortfolioActive,
     orbitalPortfolioMediaIndex,
     orbitalPortfolioVariantIndex,
@@ -20549,7 +22281,7 @@ export default function ResumeSpace3D({
               style={{
                 position: "fixed",
                 inset: 0,
-                zIndex: 1125,
+                zIndex: 2147483000,
                 background: "rgba(3, 8, 14, 0.52)",
                 display: "flex",
                 alignItems: "center",
@@ -21047,6 +22779,7 @@ export default function ResumeSpace3D({
               </div>
             </div>
           )}
+          
           {skillsLatticeActive && (
             <div
               style={{
@@ -21068,6 +22801,1138 @@ export default function ResumeSpace3D({
               }}
             >
               Hint: Shift click to pan, mouse wheel zoom in/out, click nodes to inspect
+            </div>
+          )}
+          {keyboardStudioEnabled && !onscreenKeyboardPanelVisible && (
+            <button
+              type="button"
+              onClick={() => {
+                setOnscreenKeyboardPanelVisible(true);
+                setOnscreenKeyboardPanelLayout((prev) => ({
+                  ...prev,
+                  lastOpen: Date.now(),
+                }));
+              }}
+              style={{
+                position: "fixed",
+                left: onscreenKeyboardPanelLayout.x,
+                top: onscreenKeyboardPanelLayout.y,
+                zIndex: 1130,
+                borderRadius: 10,
+                border: "1px solid rgba(120, 210, 255, 0.48)",
+                background: "rgba(6, 16, 32, 0.9)",
+                color: "#d6efff",
+                padding: "9px 12px",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: 0.8,
+                textTransform: "uppercase",
+                cursor: "pointer",
+                backdropFilter: "blur(6px)",
+              }}
+            >
+              Open Keyboard
+            </button>
+          )}
+          {keyboardStudioEnabled && onscreenKeyboardPanelVisible && (
+            <div
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              style={{
+                position: "fixed",
+                left: onscreenKeyboardPanelLayout.x,
+                top: onscreenKeyboardPanelLayout.y,
+                width: 980,
+                maxWidth: "calc(100vw - 36px)",
+                zIndex: 1130,
+                borderRadius: 12,
+                border: "1px solid rgba(110, 210, 255, 0.44)",
+                background: "rgba(6, 14, 26, 0.87)",
+                color: "#d8eeff",
+                padding: "10px 10px 8px",
+                fontFamily: "'Rajdhani', sans-serif",
+                backdropFilter: "blur(8px)",
+                boxShadow: "0 14px 32px rgba(0, 0, 0, 0.35)",
+              }}
+            >
+              <div
+                onPointerDown={(event) => {
+                  beginOnscreenKeyboardDrag(event);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  marginBottom: 6,
+                  cursor: "move",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      letterSpacing: 1.4,
+                      color: "#8fcfff",
+                    }}
+                  >
+                    KEYBOARD RECORDER LAB
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "rgba(194, 228, 252, 0.92)",
+                      marginTop: 1,
+                    }}
+                  >
+                    3 Octaves (C3-B5) · {onscreenKeyboardRecordedEvents.length} captured notes
+                    {selectedKeyboardStudioPreset ? ` · ${selectedKeyboardStudioPreset.name}` : ""}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOnscreenKeyboardPanelCollapsed((prev) => {
+                        const next = !prev;
+                        setOnscreenKeyboardPanelLayout((layout) => ({
+                          ...layout,
+                          collapsed: next,
+                        }));
+                        return next;
+                      })}
+                    style={{
+                      borderRadius: 8,
+                      border: "1px solid rgba(130, 190, 236, 0.5)",
+                      background: "rgba(13, 30, 52, 0.88)",
+                      color: "#d4ecff",
+                      padding: "5px 8px",
+                      fontFamily: "'Rajdhani', sans-serif",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {onscreenKeyboardPanelCollapsed ? "Expand" : "Collapse"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOnscreenKeyboardPanelVisible(false);
+                      setOnscreenKeyboardPanelLayout((prev) => ({
+                        ...prev,
+                        lastOpen: Date.now(),
+                      }));
+                    }}
+                    style={{
+                      borderRadius: 8,
+                      border: "1px solid rgba(200, 120, 120, 0.54)",
+                      background: "rgba(46, 18, 24, 0.84)",
+                      color: "#ffd8dc",
+                      padding: "5px 8px",
+                      fontFamily: "'Rajdhani', sans-serif",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              {!onscreenKeyboardPanelCollapsed && (
+                <>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1.5fr 1fr 0.9fr 0.9fr",
+                      gap: 7,
+                      marginBottom: 6,
+                    }}
+                  >
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          letterSpacing: 0.55,
+                          textTransform: "uppercase",
+                          color: "rgba(176, 220, 255, 0.9)",
+                        }}
+                      >
+                        Sound Type / Instrument
+                      </span>
+                    <select
+                      value={keyboardStudioSelectedSource}
+                      onChange={(event) => {
+                        setKeyboardStudioSelectedSource(event.currentTarget.value);
+                        previewKeyboardStudioControlFeedback("E5");
+                      }}
+                      style={{
+                        borderRadius: 8,
+                        border: "1px solid rgba(145, 215, 255, 0.5)",
+                        background: "rgba(10, 24, 38, 0.9)",
+                        color: "#d8eeff",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 12,
+                        padding: "6px 8px",
+                      }}
+                    >
+                      <optgroup label="Keys & Pianos">
+                        {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
+                          ["factory-nebula-keys", "factory-grand-piano", "factory-electric-piano", "factory-dream-keys", "factory-cinematic-bell"].includes(preset.id)
+                        ).map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Synth / Pads">
+                        {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
+                          ["factory-synth-pluck", "factory-aurora-pad", "factory-sunrise-lead", "factory-voyager-ambient", "factory-cosmic-choir", "factory-solar-winds", "factory-hyperdrive-whine"].includes(preset.id)
+                        ).map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Instruments">
+                        {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
+                          ["factory-organ", "factory-violin", "factory-flute", "factory-guitar", "factory-sitar", "factory-kalimba"].includes(preset.id)
+                        ).map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Drums / Beats">
+                        {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
+                          ["factory-drum-kit", "factory-808-kick", "factory-deep-pulse", "factory-neutron-pluck"].includes(preset.id)
+                        ).map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="FX / Space">
+                        {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
+                          ["factory-laser-zap", "factory-impact-boom", "factory-spaceship-console", "factory-glass-orbit", "factory-ion-spark", "factory-cinematic-chords"].includes(preset.id)
+                        ).map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      {keyboardStudioPresets.length > 0 && (
+                        <option disabled value="__custom-sep__">
+                          -- Saved Presets --
+                        </option>
+                      )}
+                      {keyboardStudioPresets.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.name}
+                        </option>
+                      ))}
+                    </select>
+                    </div>
+                    <input
+                      value={keyboardStudioPresetName}
+                      onChange={(event) => setKeyboardStudioPresetName(event.currentTarget.value)}
+                      placeholder="Name your sound (e.g. InvestCloud Click)"
+                      style={{
+                        borderRadius: 8,
+                        border: "1px solid rgba(130, 190, 236, 0.5)",
+                        background: "rgba(10, 24, 38, 0.84)",
+                        color: "#d8eeff",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 12,
+                        padding: "6px 8px",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={saveKeyboardStudioPreset}
+                      disabled={keyboardStudioPresetName.trim().length === 0 || onscreenKeyboardRecordedEvents.length === 0}
+                      style={{
+                        borderRadius: 8,
+                        border: "1px solid rgba(150, 255, 210, 0.5)",
+                        background: "rgba(14, 54, 34, 0.92)",
+                        color: "#dcffea",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: 0.5,
+                        cursor:
+                          keyboardStudioPresetName.trim().length === 0
+                          || onscreenKeyboardRecordedEvents.length === 0
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity:
+                          keyboardStudioPresetName.trim().length === 0
+                          || onscreenKeyboardRecordedEvents.length === 0
+                            ? 0.56
+                            : 1,
+                      }}
+                    >
+                      Save Named Sound
+                    </button>
+                  </div>
+                  <div
+                    style={{
+                      marginBottom: 6,
+                      fontSize: 11,
+                      color: "rgba(184, 223, 252, 0.92)",
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    1) Record a phrase, 2) Enter a name, 3) Click <strong>Save Named Sound</strong>.
+                    Saved sounds appear in the dropdown and can be bound to universe events.
+                  </div>
+                  <div
+                    style={{
+                      marginBottom: 6,
+                      display: "grid",
+                      gridTemplateColumns: "1.4fr auto auto auto",
+                      gap: 6,
+                      alignItems: "center",
+                    }}
+                  >
+                    <select
+                      value={keyboardStudioSelectedSettingsId}
+                      onChange={(event) => setKeyboardStudioSelectedSettingsId(event.currentTarget.value)}
+                      style={{
+                        borderRadius: 8,
+                        border: "1px solid rgba(130, 190, 236, 0.5)",
+                        background: "rgba(10, 24, 38, 0.9)",
+                        color: "#d8eeff",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 12,
+                        padding: "6px 8px",
+                      }}
+                    >
+                      <option value="">Saved Mixer Settings (up to 10)</option>
+                      {keyboardStudioSavedSettings.map((slot) => (
+                        <option key={slot.id} value={slot.id}>
+                          {slot.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={saveKeyboardStudioCurrentSettingsSlot}
+                      style={{
+                        borderRadius: 8,
+                        border: "1px solid rgba(150, 255, 210, 0.5)",
+                        background: "rgba(14, 54, 34, 0.9)",
+                        color: "#dcffea",
+                        padding: "6px 9px",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Save Settings
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!keyboardStudioSelectedSettingsId) return;
+                        loadKeyboardStudioSettingsSlot(keyboardStudioSelectedSettingsId);
+                      }}
+                      disabled={!keyboardStudioSelectedSettingsId}
+                      style={{
+                        borderRadius: 8,
+                        border: "1px solid rgba(145, 215, 255, 0.5)",
+                        background: "rgba(18, 42, 68, 0.9)",
+                        color: "#e8f6ff",
+                        padding: "6px 9px",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: keyboardStudioSelectedSettingsId ? "pointer" : "not-allowed",
+                        opacity: keyboardStudioSelectedSettingsId ? 1 : 0.55,
+                      }}
+                    >
+                      Load Settings
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!keyboardStudioSelectedSettingsId) return;
+                        deleteKeyboardStudioSettingsSlot(keyboardStudioSelectedSettingsId);
+                      }}
+                      disabled={!keyboardStudioSelectedSettingsId}
+                      style={{
+                        borderRadius: 8,
+                        border: "1px solid rgba(220, 130, 130, 0.5)",
+                        background: "rgba(56, 20, 24, 0.9)",
+                        color: "#ffd8dc",
+                        padding: "6px 9px",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: keyboardStudioSelectedSettingsId ? "pointer" : "not-allowed",
+                        opacity: keyboardStudioSelectedSettingsId ? 1 : 0.55,
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: `${keyboardStudioMainColumnWidth}px 10px minmax(250px, 1fr)`,
+                      gap: 0,
+                      alignItems: "start",
+                      marginBottom: 6,
+                    }}
+                  >
+                    <div style={{ paddingRight: 8 }}>
+                      <div
+                        style={{
+                          marginBottom: 6,
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 6,
+                        }}
+                      >
+                        {[
+                          {
+                            label: "Soft Pad",
+                            sound: { reverbMix: 0.42, delayFeedback: 0.18, drive: 0.04, filterCutoff: 1800 },
+                          },
+                          {
+                            label: "Bright Bell",
+                            sound: { reverbMix: 0.32, delayFeedback: 0.24, drive: 0.08, filterCutoff: 6200 },
+                          },
+                          {
+                            label: "Deep Bass",
+                            sound: { reverbMix: 0.06, delayFeedback: 0.1, drive: 0.34, filterCutoff: 900, sustain: 0.22 },
+                          },
+                          {
+                            label: "Solar Winds",
+                            sound: { reverbMix: 0.54, delayFeedback: 0.44, drive: 0.04, filterCutoff: 1400, release: 2.2 },
+                          },
+                        ].map((macro) => (
+                          <button
+                            key={macro.label}
+                            type="button"
+                            onClick={() => {
+                              setKeyboardStudioSoundDesign((prev) =>
+                                normalizeSoundDesign({ ...prev, ...macro.sound }));
+                              previewKeyboardStudioControlFeedback("G5");
+                            }}
+                            style={{
+                              borderRadius: 999,
+                              border: "1px solid rgba(130, 190, 236, 0.5)",
+                              background: "rgba(10, 24, 38, 0.88)",
+                              color: "#d8eeff",
+                              padding: "5px 10px",
+                              fontFamily: "'Rajdhani', sans-serif",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {macro.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 7,
+                          marginBottom: 6,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => void startOnscreenKeyboardRecording()}
+                          disabled={onscreenKeyboardRecording || onscreenKeyboardPlaying}
+                          style={{
+                            borderRadius: 8,
+                            border: "1px solid rgba(160, 255, 195, 0.5)",
+                            background: onscreenKeyboardRecording
+                              ? "rgba(20, 66, 42, 0.95)"
+                              : "rgba(12, 40, 26, 0.9)",
+                            color: "#dcffea",
+                            padding: "6px 10px",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            cursor: onscreenKeyboardRecording || onscreenKeyboardPlaying
+                              ? "not-allowed"
+                              : "pointer",
+                            opacity: onscreenKeyboardRecording || onscreenKeyboardPlaying ? 0.6 : 1,
+                          }}
+                        >
+                          Record
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            stopOnscreenKeyboardRecording();
+                            stopOnscreenKeyboardPlayback();
+                          }}
+                          style={{
+                            borderRadius: 8,
+                            border: "1px solid rgba(255, 180, 138, 0.52)",
+                            background: "rgba(54, 26, 10, 0.9)",
+                            color: "#ffe1cc",
+                            padding: "6px 10px",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Stop
+                        </button>
+                        <button
+                          type="button"
+                          onClick={playOnscreenKeyboardRecording}
+                          disabled={onscreenKeyboardRecordedEvents.length === 0}
+                          style={{
+                            borderRadius: 8,
+                            border: "1px solid rgba(145, 215, 255, 0.55)",
+                            background: "rgba(18, 42, 68, 0.9)",
+                            color: "#e8f6ff",
+                            padding: "6px 10px",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            cursor: onscreenKeyboardRecordedEvents.length === 0 ? "not-allowed" : "pointer",
+                            opacity: onscreenKeyboardRecordedEvents.length === 0 ? 0.55 : 1,
+                          }}
+                        >
+                          Play
+                        </button>
+                        <button
+                          type="button"
+                          onClick={playOnscreenKeyboardAutoplay}
+                          style={{
+                            borderRadius: 8,
+                            border: "1px solid rgba(178, 166, 255, 0.56)",
+                            background: "rgba(34, 26, 66, 0.9)",
+                            color: "#ebe5ff",
+                            padding: "6px 10px",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Autoplay
+                        </button>
+                        <button
+                          type="button"
+                          onClick={exportOnscreenKeyboardJson}
+                          disabled={onscreenKeyboardRecordedEvents.length === 0}
+                          style={{
+                            borderRadius: 8,
+                            border: "1px solid rgba(138, 228, 255, 0.5)",
+                            background: "rgba(14, 48, 62, 0.9)",
+                            color: "#daf7ff",
+                            padding: "6px 10px",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            cursor: onscreenKeyboardRecordedEvents.length === 0 ? "not-allowed" : "pointer",
+                            opacity: onscreenKeyboardRecordedEvents.length === 0 ? 0.55 : 1,
+                          }}
+                        >
+                          Export JSON
+                        </button>
+                        <button
+                          type="button"
+                          onClick={exportOnscreenKeyboardMidi}
+                          disabled={onscreenKeyboardRecordedEvents.length === 0}
+                          style={{
+                            borderRadius: 8,
+                            border: "1px solid rgba(130, 220, 172, 0.5)",
+                            background: "rgba(14, 52, 36, 0.9)",
+                            color: "#d8ffe8",
+                            padding: "6px 10px",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            cursor: onscreenKeyboardRecordedEvents.length === 0 ? "not-allowed" : "pointer",
+                            opacity: onscreenKeyboardRecordedEvents.length === 0 ? 0.55 : 1,
+                          }}
+                        >
+                          Export MIDI
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearOnscreenKeyboardRecording}
+                          style={{
+                            borderRadius: 8,
+                            border: "1px solid rgba(220, 150, 150, 0.52)",
+                            background: "rgba(62, 26, 30, 0.9)",
+                            color: "#ffe0e0",
+                            padding: "6px 10px",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Clear
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const raw = window.prompt("Paste preset JSON");
+                            if (!raw) return;
+                            importKeyboardStudioPresetJson(raw);
+                          }}
+                          style={{
+                            borderRadius: 8,
+                            border: "1px solid rgba(150, 210, 255, 0.5)",
+                            background: "rgba(12, 38, 58, 0.9)",
+                            color: "#d8f1ff",
+                            padding: "6px 10px",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Import JSON
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!keyboardStudioSelectedPresetId) return;
+                            deleteKeyboardStudioPreset(keyboardStudioSelectedPresetId);
+                          }}
+                          disabled={!keyboardStudioSelectedPresetId}
+                          style={{
+                            borderRadius: 8,
+                            border: "1px solid rgba(220, 130, 130, 0.52)",
+                            background: "rgba(60, 22, 26, 0.9)",
+                            color: "#ffd9dc",
+                            padding: "6px 10px",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            letterSpacing: 0.5,
+                            cursor: keyboardStudioSelectedPresetId ? "pointer" : "not-allowed",
+                            opacity: keyboardStudioSelectedPresetId ? 1 : 0.55,
+                          }}
+                        >
+                          Delete Preset
+                        </button>
+                      </div>
+                      <label
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 7,
+                          marginBottom: 6,
+                          fontSize: 12,
+                          color: "rgba(194, 228, 252, 0.9)",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={onscreenKeyboardGhostAutoplay}
+                          onChange={(event) => {
+                            setOnscreenKeyboardGhostAutoplay(event.currentTarget.checked);
+                            previewKeyboardStudioControlFeedback("E5");
+                          }}
+                        />
+                        Ghost key animation during playback
+                      </label>
+                      <div
+                        style={{
+                          marginBottom: 6,
+                          display: "grid",
+                          gridTemplateColumns: "1.2fr 0.8fr 0.8fr auto",
+                          gap: 7,
+                          alignItems: "center",
+                        }}
+                      >
+                    <select
+                      value={keyboardStudioBeatPatternId}
+                      onChange={(event) => {
+                        setKeyboardStudioBeatPatternId(
+                          event.currentTarget.value as keyof typeof KEYBOARD_STUDIO_BEAT_PATTERNS
+                        );
+                        previewKeyboardStudioControlFeedback("A4");
+                      }}
+                      style={{
+                        borderRadius: 7,
+                        border: "1px solid rgba(130, 190, 236, 0.5)",
+                        background: "rgba(10, 22, 38, 0.9)",
+                        color: "#d8eeff",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 12,
+                        padding: "5px 8px",
+                      }}
+                    >
+                      <option value="pulse">Beat: Pulse Drive</option>
+                      <option value="orbit">Beat: Orbit Groove</option>
+                      <option value="cinematic">Beat: Cinematic Build</option>
+                    </select>
+                    <label
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                        fontSize: 11,
+                        color: "rgba(194, 228, 252, 0.9)",
+                      }}
+                    >
+                      <span>Tempo {keyboardStudioBeatTempoBpm} BPM</span>
+                      <input
+                        type="range"
+                        min={56}
+                        max={180}
+                        step={1}
+                        value={keyboardStudioBeatTempoBpm}
+                        onChange={(event) => {
+                          setKeyboardStudioBeatTempoBpm(Number(event.currentTarget.value));
+                          previewKeyboardStudioControlFeedback("F5");
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={playKeyboardStudioBeatOneShot}
+                      style={{
+                        borderRadius: 7,
+                        border: "1px solid rgba(145, 215, 255, 0.55)",
+                        background: "rgba(18, 42, 68, 0.9)",
+                        color: "#e8f6ff",
+                        padding: "6px 9px",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Play Beat
+                    </button>
+                    <label
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        fontSize: 11,
+                        color: "rgba(194, 228, 252, 0.9)",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={keyboardStudioBeatLoopEnabled}
+                        onChange={(event) => {
+                          setKeyboardStudioBeatLoopEnabled(event.currentTarget.checked);
+                          previewKeyboardStudioControlFeedback("B4");
+                        }}
+                      />
+                      Beat Loop
+                    </label>
+                      </div>
+                    </div>
+                    <div
+                      onPointerDown={beginKeyboardStudioMainColumnResize}
+                      style={{
+                        alignSelf: "stretch",
+                        cursor: "col-resize",
+                        borderRadius: 8,
+                        border: "1px solid rgba(125, 182, 229, 0.3)",
+                        background: "rgba(22, 44, 66, 0.45)",
+                        width: 8,
+                        marginTop: 2,
+                      }}
+                    />
+                    <div
+                      style={{
+                        marginLeft: 8,
+                        border: "1px solid rgba(105, 170, 220, 0.35)",
+                        borderRadius: 8,
+                        padding: "6px 7px",
+                        background: "rgba(8, 20, 35, 0.6)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          letterSpacing: 0.6,
+                          color: "#8fcfff",
+                          marginBottom: 4,
+                        }}
+                      >
+                        SETTINGS
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          color: "rgba(184, 223, 252, 0.9)",
+                          marginBottom: 6,
+                        }}
+                      >
+                        Space=room, Echo=repeats, Warmth=tone, Punch=attack, Motion=stereo, Tail=fade.
+                      </div>
+                      <div
+                        style={{
+                          marginBottom: 6,
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 7,
+                          fontSize: 11,
+                        }}
+                      >
+                        {[
+                          {
+                            label: "Space",
+                            hint: "Room size and ambience.",
+                            value: keyboardStudioSoundDesign.reverbMix,
+                            min: 0,
+                            max: 1,
+                            step: 0.01,
+                            update: (value: number) =>
+                              setKeyboardStudioSoundDesign((prev) =>
+                                normalizeSoundDesign({
+                                  ...prev,
+                                  reverbMix: value,
+                                  reverbDecay: 1.6 + value * 7.2,
+                                })
+                              ),
+                          },
+                          {
+                            label: "Echo",
+                            hint: "Repeats and feedback depth.",
+                            value: keyboardStudioSoundDesign.delayFeedback,
+                            min: 0,
+                            max: 0.92,
+                            step: 0.01,
+                            update: (value: number) =>
+                              setKeyboardStudioSoundDesign((prev) =>
+                                normalizeSoundDesign({
+                                  ...prev,
+                                  delayFeedback: value,
+                                  delayTime: 0.06 + value * 0.42,
+                                })
+                              ),
+                          },
+                          {
+                            label: "Warmth",
+                            hint: "Dark/soft tonal color.",
+                            value: 1 - (keyboardStudioSoundDesign.filterCutoff - 100) / 11900,
+                            min: 0,
+                            max: 1,
+                            step: 0.01,
+                            update: (value: number) =>
+                              setKeyboardStudioSoundDesign((prev) =>
+                                normalizeSoundDesign({
+                                  ...prev,
+                                  filterCutoff: 12000 - value * 11200,
+                                  sustain: 0.25 + value * 0.55,
+                                })
+                              ),
+                          },
+                          {
+                            label: "Punch",
+                            hint: "Attack bite and drive.",
+                            value: keyboardStudioSoundDesign.drive,
+                            min: 0,
+                            max: 1,
+                            step: 0.01,
+                            update: (value: number) =>
+                              setKeyboardStudioSoundDesign((prev) =>
+                                normalizeSoundDesign({
+                                  ...prev,
+                                  drive: value,
+                                  attack: Math.max(0.001, 0.03 - value * 0.02),
+                                })
+                              ),
+                          },
+                          {
+                            label: "Motion",
+                            hint: "Stereo movement and swirl.",
+                            value: keyboardStudioSoundDesign.chorusDepth,
+                            min: 0,
+                            max: 1,
+                            step: 0.01,
+                            update: (value: number) =>
+                              setKeyboardStudioSoundDesign((prev) =>
+                                normalizeSoundDesign({
+                                  ...prev,
+                                  chorusDepth: value,
+                                  chorusRate: 0.2 + value * 2.4,
+                                  stereoWidth: 0.25 + value * 0.7,
+                                })
+                              ),
+                          },
+                          {
+                            label: "Tail",
+                            hint: "How long notes fade out.",
+                            value: keyboardStudioSoundDesign.release,
+                            min: 0.05,
+                            max: 6,
+                            step: 0.01,
+                            update: (value: number) =>
+                              setKeyboardStudioSoundDesign((prev) =>
+                                normalizeSoundDesign({
+                                  ...prev,
+                                  release: value,
+                                })
+                              ),
+                          },
+                        ].map((slider) => (
+                          <label
+                            key={slider.label}
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 2,
+                              color: "rgba(194, 228, 252, 0.9)",
+                            }}
+                          >
+                            <span>
+                              {slider.label}: {slider.value.toFixed(2)}
+                            </span>
+                            <input
+                              type="range"
+                              min={slider.min}
+                              max={slider.max}
+                              step={slider.step}
+                              value={slider.value}
+                              onChange={(event) => {
+                                slider.update(Number(event.currentTarget.value));
+                                previewKeyboardStudioControlFeedback("D5");
+                              }}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <div
+                        style={{
+                          border: "1px solid rgba(105, 170, 220, 0.35)",
+                          borderRadius: 8,
+                          padding: "6px 7px",
+                          maxHeight: 190,
+                          overflowY: "auto",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 11,
+                            letterSpacing: 0.6,
+                            color: "#8fcfff",
+                            marginBottom: 6,
+                          }}
+                        >
+                          EVENT BINDINGS
+                        </div>
+                        {keyboardStudioKnownEventIds.map((eventId) => {
+                          const binding = keyboardStudioBindings.find((item) => item.eventId === eventId);
+                          return (
+                            <div
+                              key={eventId}
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1.5fr 1fr auto",
+                                gap: 6,
+                                alignItems: "center",
+                                marginBottom: 5,
+                                fontSize: 11,
+                                color: "#d6ecff",
+                              }}
+                            >
+                              <span>{eventId}</span>
+                              <select
+                                value={binding?.presetId ?? ""}
+                                onChange={(event) => setKeyboardStudioBindingPreset(eventId, event.currentTarget.value)}
+                                style={{
+                                  borderRadius: 6,
+                                  border: "1px solid rgba(130, 190, 236, 0.5)",
+                                  background: "rgba(10, 22, 38, 0.85)",
+                                  color: "#d6ecff",
+                                  fontSize: 11,
+                                  fontFamily: "'Rajdhani', sans-serif",
+                                  padding: "3px 6px",
+                                }}
+                              >
+                                <option value="">(none)</option>
+                                {allKeyboardStudioPresetOptions.map((preset) => (
+                                  <option key={preset.id} value={preset.id}>
+                                    {preset.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                <input
+                                  type="checkbox"
+                                  checked={binding?.enabled ?? false}
+                                  onChange={(event) =>
+                                    setKeyboardStudioBindings((prev) =>
+                                      prev.some((item) => item.eventId === eventId)
+                                        ? prev.map((item) =>
+                                          item.eventId === eventId
+                                            ? { ...item, enabled: event.currentTarget.checked }
+                                            : item
+                                        )
+                                        : event.currentTarget.checked
+                                          ? [
+                                            ...prev,
+                                            {
+                                              eventId,
+                                              presetId: "",
+                                              enabled: true,
+                                              gain: 1,
+                                            },
+                                          ]
+                                          : prev
+                                    )}
+                                />
+                                On
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      height: 152,
+                      borderRadius: 8,
+                      border: "1px solid rgba(116, 174, 226, 0.4)",
+                      background:
+                        "linear-gradient(180deg, rgba(10, 22, 38, 0.96) 0%, rgba(8, 18, 32, 0.95) 100%)",
+                      overflow: "hidden",
+                      userSelect: "none",
+                    }}
+                    onPointerLeave={(event) => {
+                      if (event.buttons > 0) releaseAllOnscreenKeyboardNotes();
+                    }}
+                  >
+                    {onscreenKeyboardKeys.filter((key) => !key.isBlack).map((key) => {
+                      const isPressed = onscreenKeyboardActiveNoteSet.has(key.note);
+                      const isGhost = onscreenKeyboardGhostNoteSet.has(key.note);
+                      return (
+                        <button
+                          key={key.note}
+                          type="button"
+                          onPointerDown={(event) => handleKeyboardKeyPointerDown(key.note, event)}
+                          onPointerUp={(event) => handleKeyboardKeyPointerUp(key.note, event)}
+                          onPointerCancel={(event) => handleKeyboardKeyPointerUp(key.note, event)}
+                          onLostPointerCapture={(event) => handleKeyboardKeyPointerUp(key.note, event)}
+                          onPointerLeave={(event) => {
+                            if (event.buttons === 0) handleKeyboardKeyPointerUp(key.note, event);
+                          }}
+                          style={{
+                            position: "absolute",
+                            left: `${(key.leftUnit / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT) * 100}%`,
+                            width: `${100 / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT}%`,
+                            top: 0,
+                            bottom: 0,
+                            borderRadius: "0 0 6px 6px",
+                            border: "1px solid rgba(36, 62, 92, 0.7)",
+                            borderTop: "1px solid rgba(134, 179, 226, 0.55)",
+                            background: isPressed
+                              ? isGhost
+                                ? "linear-gradient(180deg, #98b5ff 0%, #6384ff 100%)"
+                                : "linear-gradient(180deg, #f3fbff 0%, #a7deff 100%)"
+                              : "linear-gradient(180deg, #f7fcff 0%, #dceaf8 100%)",
+                            color: isPressed ? "#0b1f34" : "#56789b",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            letterSpacing: 0.3,
+                            display: "flex",
+                            alignItems: "flex-end",
+                            justifyContent: "center",
+                            paddingBottom: 7,
+                            cursor: "pointer",
+                            transform: isPressed ? "translateY(2px)" : "translateY(0px)",
+                            transition: "transform 90ms ease, background 120ms ease",
+                          }}
+                        >
+                          {key.note}
+                        </button>
+                      );
+                    })}
+                    {onscreenKeyboardKeys.filter((key) => key.isBlack).map((key) => {
+                      const isPressed = onscreenKeyboardActiveNoteSet.has(key.note);
+                      const isGhost = onscreenKeyboardGhostNoteSet.has(key.note);
+                      return (
+                        <button
+                          key={key.note}
+                          type="button"
+                          onPointerDown={(event) => handleKeyboardKeyPointerDown(key.note, event)}
+                          onPointerUp={(event) => handleKeyboardKeyPointerUp(key.note, event)}
+                          onPointerCancel={(event) => handleKeyboardKeyPointerUp(key.note, event)}
+                          onLostPointerCapture={(event) => handleKeyboardKeyPointerUp(key.note, event)}
+                          onPointerLeave={(event) => {
+                            if (event.buttons === 0) handleKeyboardKeyPointerUp(key.note, event);
+                          }}
+                          style={{
+                            position: "absolute",
+                            left: `${(key.leftUnit / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT) * 100}%`,
+                            width: `${100 / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT * 0.64}%`,
+                            top: 0,
+                            height: "62%",
+                            borderRadius: "0 0 5px 5px",
+                            border: "1px solid rgba(5, 10, 20, 0.92)",
+                            background: isPressed
+                              ? isGhost
+                                ? "linear-gradient(180deg, #8d90ff 0%, #4248d8 100%)"
+                                : "linear-gradient(180deg, #66dcff 0%, #1684b8 100%)"
+                              : "linear-gradient(180deg, #1f2c45 0%, #0b1524 100%)",
+                            color: "rgba(212, 236, 255, 0.9)",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 9,
+                            fontWeight: 700,
+                            letterSpacing: 0.2,
+                            display: "flex",
+                            alignItems: "flex-end",
+                            justifyContent: "center",
+                            paddingBottom: 5,
+                            cursor: "pointer",
+                            transform: isPressed ? "translateY(2px)" : "translateY(0px)",
+                            transition: "transform 90ms ease, background 120ms ease",
+                            zIndex: 2,
+                          }}
+                        >
+                          {key.note}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 11,
+                      color: "rgba(171, 212, 243, 0.82)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 10,
+                    }}
+                  >
+                    <span>Status: {onscreenKeyboardRecording ? "Recording" : onscreenKeyboardPlaying ? "Playing" : "Idle"}</span>
+                    <span>
+                      Press keys directly to perform. Autoplay uses recording if available, otherwise
+                      demo melody.
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
