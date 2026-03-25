@@ -2117,16 +2117,7 @@ export const useRenderLoop = () => {
           }
         }
 
-        const reducedMotion = window.matchMedia(
-          "(prefers-reduced-motion: reduce)",
-        ).matches;
-        const cometSuppressed =
-          reducedMotion ||
-          insideShipRef.current ||
-          shipExploreModeRef.current ||
-          projectShowcaseActiveRef.current ||
-          navTurnActiveRef.current ||
-          !!manualFlightRef.current?.isLightspeedActive;
+        const cometSuppressed = true;
         if (cometSuppressed) {
           if (cometActive) {
             cometActive = false;
