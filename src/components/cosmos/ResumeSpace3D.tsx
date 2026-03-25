@@ -2373,11 +2373,19 @@ export default function ResumeSpace3D({
         // Save original visibility and temporarily force every object
         // visible + non-culled so the warmup covers hidden objects
         // (e.g. the drone, which is invisible until moon orbit).
+        // IMPORTANT: skip lights — changing the number of visible lights
+        // alters NUM_POINT_LIGHTS / NUM_DIR_LIGHTS #defines, which forces
+        // Three.js to recompile every MeshStandardMaterial program when
+        // visibility is restored.  Lights that are hidden at warmup time
+        // don't contribute to the shader defines used in normal rendering,
+        // so they must stay hidden to keep the defines stable.
         const savedState: Array<{ obj: THREE.Object3D; visible: boolean; culled: boolean }> = [];
         let meshCount = 0;
         mainScene.traverse((obj) => {
           savedState.push({ obj, visible: obj.visible, culled: obj.frustumCulled });
-          obj.visible = true;
+          if (!(obj as any).isLight) {
+            obj.visible = true;
+          }
           obj.frustumCulled = false;
           if ((obj as THREE.Mesh).isMesh) meshCount++;
         });

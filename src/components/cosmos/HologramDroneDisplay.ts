@@ -207,7 +207,11 @@ export class HologramDroneDisplay {
     this.panelGroup.visible = false;
 
     this.scannerLight = new THREE.PointLight(0xff4d4d, 0, 12);
-    this.droneGroup.add(this.scannerLight);
+    // Add the light directly to the scene (not inside rootGroup) so it is
+    // always counted by traverseVisible regardless of the drone's visibility.
+    // Toggling rootGroup.visible would otherwise change NUM_POINT_LIGHTS,
+    // forcing Three.js to recompile every MeshStandardMaterial shader.
+    this.scene.add(this.scannerLight);
 
     this.scene.add(this.rootGroup);
     this.scene.add(this.panelGroup);
@@ -472,11 +476,9 @@ export class HologramDroneDisplay {
     if (this.disposed) return;
     const _rbStart = performance.now();
     const nextGroup = this.buildDroneForVariant();
-    this.droneGroup.remove(this.scannerLight);
     this.rootGroup.remove(this.droneGroup);
     this.disposeObject3D(this.droneGroup);
     this.droneGroup = nextGroup;
-    this.droneGroup.add(this.scannerLight);
     if (this.activationAudio) this.droneGroup.add(this.activationAudio);
     if (this.transmissionAudio) this.droneGroup.add(this.transmissionAudio);
     if (this.movementAudio) this.droneGroup.add(this.movementAudio);
@@ -1077,6 +1079,7 @@ export class HologramDroneDisplay {
     this.ensureLaserRigCount(this.panels.length);
     this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
     this.rootGroup.position.copy(this.flyStartPos);
+    this.scannerLight.position.copy(this.rootGroup.position);
     console.warn(
       `[PERF:drone] showContent total=${(performance.now() - _scStart).toFixed(1)}ms` +
       ` clear+setup=${(_scPlaceStart - _scStart).toFixed(1)}ms` +
@@ -1128,6 +1131,7 @@ export class HologramDroneDisplay {
 
     this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
     this.rootGroup.position.copy(this.flyStartPos);
+    this.scannerLight.position.copy(this.rootGroup.position);
   }
 
   hideContent(): void {
@@ -1211,6 +1215,7 @@ export class HologramDroneDisplay {
         this.panelGroup.visible = false;
         this.clearPanels();
       }
+      this.scannerLight.position.copy(this.rootGroup.position);
       return;
     }
 
@@ -1223,6 +1228,7 @@ export class HologramDroneDisplay {
       this.scannerLight.intensity = 0;
       this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
       if (this.flyInProgress >= 1) this.tryPlayActivationWithRetry();
+      this.scannerLight.position.copy(this.rootGroup.position);
       return;
     }
 
@@ -1241,6 +1247,7 @@ export class HologramDroneDisplay {
     this.rootGroup.position.copy(this.flyEndPos);
     this.rootGroup.position.y += hoverY;
     this.rootGroup.position.x += hoverX;
+    this.scannerLight.position.copy(this.rootGroup.position);
 
     const ring = this.droneGroup.getObjectByName("droneRing");
     if (ring) ring.rotation.z += dt * 2.5;
@@ -1842,6 +1849,7 @@ export class HologramDroneDisplay {
     this.ensureLaserRigCount(0);
     this.scene.remove(this.rootGroup);
     this.scene.remove(this.panelGroup);
+    this.scene.remove(this.scannerLight);
     this.disposeObject3D(this.droneGroup);
   }
 
