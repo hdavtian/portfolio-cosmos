@@ -1,5 +1,5 @@
 import type React from "react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   SpaceshipNavigationSystem,
@@ -209,10 +209,29 @@ export const useNavigationSystem = (deps: {
   const [currentNavigationTarget, setCurrentNavigationTarget] = useState<
     string | null
   >(null);
-  const [navigationDistance, setNavigationDistance] = useState<number | null>(
-    null,
-  );
-  const [navigationETA, setNavigationETA] = useState<number | null>(null);
+  const [navigationDistance, setNavigationDistanceState] = useState<number | null>(null);
+  const [navigationETA, setNavigationETAState] = useState<number | null>(null);
+  const navigationDistanceRef = useRef<number | null>(null);
+  const navigationETARef = useRef<number | null>(null);
+  const navDisplayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const setNavigationDistance = useCallback((v: number | null) => {
+    navigationDistanceRef.current = v;
+  }, []);
+  const setNavigationETA = useCallback((v: number | null) => {
+    navigationETARef.current = v;
+  }, []);
+
+  useEffect(() => {
+    navDisplayTimerRef.current = setInterval(() => {
+      setNavigationDistanceState(navigationDistanceRef.current);
+      setNavigationETAState(navigationETARef.current);
+    }, 300);
+    return () => {
+      if (navDisplayTimerRef.current) clearInterval(navDisplayTimerRef.current);
+    };
+  }, []);
+
   const [navigationTravelPhase, setNavigationTravelPhase] =
     useState<NavigationTravelPhase>("idle");
   const navigationTravelPhaseStateRef = useRef<{
@@ -893,7 +912,7 @@ export const useNavigationSystem = (deps: {
         });
         if (
           currentNavigationTarget === targetId &&
-          navigationDistance === null &&
+          navigationDistanceRef.current === null &&
           !navigationSystemRef.current?.getStatus().isNavigating
         ) {
           navTrace(
@@ -1144,7 +1163,6 @@ export const useNavigationSystem = (deps: {
     },
     [
       currentNavigationTarget,
-      navigationDistance,
       emitterRef,
       exitFocusRequestRef,
       focusedMoonRef,

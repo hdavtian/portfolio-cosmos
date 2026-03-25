@@ -216,21 +216,22 @@ export class HologramDroneDisplay {
       `init soundEnabled=${this.soundEnabled} activation=${!!this.droneAudioBuffers?.activation} transmission=${!!this.droneAudioBuffers?.transmission} movement=${this.droneAudioBuffers?.movement?.length ?? 0}`,
     );
 
-    if (this.droneVariant === "oblivion" && !this.oblivionDroneTemplate) {
-      this.requestOblivionDroneModel();
-    }
   }
 
   setDroneVariant(
     droneVariant: DroneVisualVariant,
     oblivionDroneTemplate?: THREE.Object3D | null,
   ): void {
+    const variantChanged = this.droneVariant !== droneVariant;
+    const templateChanged = oblivionDroneTemplate && this.oblivionDroneTemplate !== oblivionDroneTemplate;
     this.droneVariant = droneVariant;
     if (oblivionDroneTemplate) this.oblivionDroneTemplate = oblivionDroneTemplate;
     if (this.droneVariant === "oblivion" && !this.oblivionDroneTemplate) {
       this.requestOblivionDroneModel();
     }
-    this.rebuildDroneGroup();
+    if (variantChanged || templateChanged) {
+      this.rebuildDroneGroup();
+    }
   }
 
   setSoundEnabled(enabled: boolean): void {
@@ -406,12 +407,30 @@ export class HologramDroneDisplay {
   }
 
   private buildOblivionDrone(): THREE.Group | null {
+    const _bStart = performance.now();
     if (!this.oblivionDroneTemplate) return null;
     const group = new THREE.Group();
     group.name = "HologramDrone";
 
     const model = this.oblivionDroneTemplate.clone(true);
     model.name = "OblivionDroneModel";
+
+    // Deep-clone geometry and materials so this instance is fully
+    // independent from the template. Without this, clone(true)
+    // shares geometry/material references — and disposeObject3D
+    // on a previous clone would release GPU buffers that the
+    // template (and future clones) still depend on.
+    model.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh.isMesh) {
+        if (mesh.geometry) mesh.geometry = mesh.geometry.clone();
+        if (mesh.material) {
+          mesh.material = Array.isArray(mesh.material)
+            ? mesh.material.map((m) => m.clone())
+            : mesh.material.clone();
+        }
+      }
+    });
 
     // Normalize imported drone size so flight behavior matches existing offsets.
     const box = new THREE.Box3().setFromObject(model);
@@ -445,11 +464,13 @@ export class HologramDroneDisplay {
     }
 
     this.configureDroneVisualLayer(group);
+    console.warn(`[PERF:drone] buildOblivionDrone took ${(performance.now() - _bStart).toFixed(1)}ms`);
     return group;
   }
 
   private rebuildDroneGroup(): void {
     if (this.disposed) return;
+    const _rbStart = performance.now();
     const nextGroup = this.buildDroneForVariant();
     this.droneGroup.remove(this.scannerLight);
     this.rootGroup.remove(this.droneGroup);
@@ -462,6 +483,7 @@ export class HologramDroneDisplay {
     this.rootGroup.add(this.droneGroup);
     this.cacheThrusterGlows();
     this.previousDroneQuat = null;
+    console.warn(`[PERF:drone] rebuildDroneGroup took ${(performance.now() - _rbStart).toFixed(1)}ms`);
   }
 
   private requestOblivionDroneModel(): void {
@@ -472,6 +494,7 @@ export class HologramDroneDisplay {
       OBLIVION_DRONE_MODEL_PATH,
       (gltf) => {
         if (this.disposed) return;
+        if (this.oblivionDroneTemplate) return;
         this.oblivionDroneTemplate = gltf.scene;
         if (this.droneVariant === "oblivion") this.rebuildDroneGroup();
       },
@@ -1010,6 +1033,7 @@ export class HologramDroneDisplay {
     camera: THREE.Camera,
     orbitAnchor?: THREE.Vector3,
   ): void {
+    const _scStart = performance.now();
     this.clearPanels();
     this.active = true;
     this.hiding = false;
@@ -1045,11 +1069,21 @@ export class HologramDroneDisplay {
     this.previousDroneQuat = null;
     this.smoothedTurnSpeed = 0;
     this.resetInquisitiveScanState();
+    const _scPlaceStart = performance.now();
     const distScale = this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
+    const _scBuildStart = performance.now();
     this.buildTextPanels(content, camera, distScale);
+    const _scLaserStart = performance.now();
     this.ensureLaserRigCount(this.panels.length);
     this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
     this.rootGroup.position.copy(this.flyStartPos);
+    console.warn(
+      `[PERF:drone] showContent total=${(performance.now() - _scStart).toFixed(1)}ms` +
+      ` clear+setup=${(_scPlaceStart - _scStart).toFixed(1)}ms` +
+      ` placement=${(_scBuildStart - _scPlaceStart).toFixed(1)}ms` +
+      ` buildTextPanels=${(_scLaserStart - _scBuildStart).toFixed(1)}ms` +
+      ` lasers=${(performance.now() - _scLaserStart).toFixed(1)}ms`
+    );
   }
 
   showInspectMode(
@@ -1138,14 +1172,25 @@ export class HologramDroneDisplay {
     return this.panels.map((panel) => panel.mesh);
   }
 
+  getPanelTextures(): THREE.CanvasTexture[] {
+    return this.panels.map((panel) => panel.texture);
+  }
+
+  getPanelGroup(): THREE.Group {
+    return this.panelGroup;
+  }
+
   selectPanel(panelIndex: number): void {
     if (!this.active || !this.panelsDocked) return;
     if (panelIndex < 0 || panelIndex >= this.panels.length) return;
     this.activePanelIndex = this.activePanelIndex === panelIndex ? null : panelIndex;
   }
 
+  private _droneUpdateCount = 0;
   update(delta: number, camera: THREE.Camera): void {
     if (!this.active) return;
+    const _uStart = performance.now();
+    this._droneUpdateCount++;
     // Large first-frame delta after a main-thread hitch can skip animation phases.
     // Clamp simulation step so fly-in/scan timing remains visible and stable.
     const dt = Math.min(delta, 0.05);
@@ -1414,6 +1459,11 @@ export class HologramDroneDisplay {
     for (const panel of this.panels) {
       panel.mesh.quaternion.copy(camera.quaternion);
       panel.material.opacity = panel.targetOpacity;
+    }
+
+    const _uMs = performance.now() - _uStart;
+    if (_uMs > 10) {
+      console.warn(`[PERF:drone] update #${this._droneUpdateCount} took ${_uMs.toFixed(1)}ms`);
     }
   }
 

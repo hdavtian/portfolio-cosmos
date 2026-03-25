@@ -59,6 +59,7 @@ import {
   type DroneAudioBuffers,
   type DroneVisualVariant,
 } from "./HologramDroneDisplay";
+import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 // CockpitHologramPanels kept for potential future use
 import { getOrbitalPositionEmitter } from "../OrbitalPositionEmitter";
 import { StarDestroyerCruiser } from "../StarDestroyerCruiser";
@@ -1981,6 +1982,7 @@ export default function ResumeSpace3D({
   // Emits: onOptionsChange (options sync)
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const composerRef = useRef<EffectComposer | null>(null);
   const sceneRef = useRef<SceneRef>({});
 
   // State for new cosmic systems
@@ -2211,6 +2213,22 @@ export default function ResumeSpace3D({
           debugLog("drone", `showContent called — orbitPhase=${orbitPhase}, anchor=${anchor ? `[${anchor.x.toFixed(0)},${anchor.y.toFixed(0)},${anchor.z.toFixed(0)}]` : "none"}, moonPos=[${moonWorldPos.x.toFixed(0)},${moonWorldPos.y.toFixed(0)},${moonWorldPos.z.toFixed(0)}]`);
           drone.showContent(overlayContent, moonWorldPos, cam, anchor);
         }
+        // Pre-upload new drone panel textures and compile any new
+        // shader variants so the next frame doesn't stall.
+        const droneRenderer = rendererRef.current;
+        const droneCamera = sceneRef.current.camera;
+        if (droneRenderer && droneCamera) {
+          const _fs = performance.now();
+          const panelTextures = drone.getPanelTextures();
+          for (const tex of panelTextures) {
+            droneRenderer.initTexture(tex);
+          }
+          const panelScene = drone.getPanelGroup();
+          if (panelScene) {
+            droneRenderer.compile(panelScene, droneCamera as THREE.Camera);
+          }
+          console.warn(`[PERF:drone] initTexture+compile ${panelTextures.length} panel textures in ${(performance.now() - _fs).toFixed(1)}ms`);
+        }
       } else {
         debugLog("drone", `useEffect: missing moon=${!!moon} cam=${!!cam}`);
       }
@@ -2230,6 +2248,18 @@ export default function ResumeSpace3D({
   const [sceneReady, setSceneReady] = useState(false);
   const [loaderVisualComplete, setLoaderVisualComplete] = useState(false);
   const [criticalAssetsReady, setCriticalAssetsReady] = useState(false);
+  const [droneGpuWarmupReady, setDroneGpuWarmupReady] = useState(false);
+  const gpuWarmupInProgressRef = useRef(false);
+  const sceneModelsLoadedRef = useRef(0);
+  const [allSceneModelsLoaded, setAllSceneModelsLoaded] = useState(false);
+  const SCENE_MODEL_COUNT = 4; // spaceship, star-destroyer, showcase, about-exterior
+  const markSceneModelLoaded = useCallback(() => {
+    sceneModelsLoadedRef.current += 1;
+    if (sceneModelsLoadedRef.current >= SCENE_MODEL_COUNT) {
+      console.warn(`[PERF:load] all ${SCENE_MODEL_COUNT} scene models added to scene`);
+      setAllSceneModelsLoaded(true);
+    }
+  }, []);
   const [spaceBackgroundVisible, setSpaceBackgroundVisible] = useState(true);
   const starfieldMeshRef = useRef<THREE.Mesh | null>(null);
   const skyfieldMeshRef = useRef<THREE.Mesh | null>(null);
@@ -2238,7 +2268,6 @@ export default function ResumeSpace3D({
   const [tourActive, setTourActive] = useState(false);
   const [tourWaypoint, setTourWaypoint] = useState<string>("");
   const [tourProgress, setTourProgress] = useState({ current: 0, total: 0 });
-  const [navTelemetryPulse, setNavTelemetryPulse] = useState(0);
 
   useEffect(() => {
     hologramDroneRef.current?.setSoundEnabled(droneSoundEnabled);
@@ -2310,123 +2339,108 @@ export default function ResumeSpace3D({
     );
   }, [criticalAssetsReady]);
 
+  // ── GPU Warmup ─────────────────────────────────────────────────────────────
+  // Follows the Three.js recommended pre-render sequence:
+  //   1. Wait until ALL models are loaded and added to the scene
+  //   2. renderer.initTexture()  — upload every texture to GPU
+  //   3. renderer.compileAsync() — compile all shader programs
+  //   4. composer.render()       — upload geometry buffers (first draw call)
+  //   5. Restore visibility, dismiss loading screen
+  //
+  // The render loop is paused during this process (gpuWarmupInProgressRef)
+  // to prevent interference from concurrent compositor renders.
   useEffect(() => {
-    if (!sceneReady || !criticalAssetsReady) return;
+    if (!sceneReady || !criticalAssetsReady || !allSceneModelsLoaded) return;
     if (droneGpuWarmupDoneRef.current) return;
     const renderer = rendererRef.current;
-    const template = oblivionDronePreloadedRef.current;
+    const mainScene = sceneRef.current.scene;
     const liveCamera = sceneRef.current.camera as THREE.Camera | undefined;
-    if (!renderer || !template || !liveCamera) return;
+    if (!renderer || !mainScene || !liveCamera) return;
+    setDroneGpuWarmupReady(false);
     droneGpuWarmupDoneRef.current = true;
 
-    const compileRenderer = renderer as THREE.WebGLRenderer & {
-      compileAsync?: (scene: THREE.Scene, camera: THREE.Camera) => Promise<void>;
-    };
-
-    const warmupContent: OverlayContent = {
-      title: "Warmup",
-      description: "Compile drone paths",
-      enableDroneCardDock: true,
-      sections: [
-        {
-          id: "warmup-overview",
-          title: "Overview",
-          type: "text",
-          content:
-            "Synthetic overlay content used only to compile drone panel materials before the first moon visit.",
-        },
-        {
-          id: "warmup-details",
-          title: "Details",
-          type: "text",
-          content:
-            "This includes multiline body text to exercise body-panel, border trace, and canvas texture paths under orbit mode.",
-        },
-        {
-          id: "warmup-tech",
-          title: "Tech",
-          type: "skills",
-          content: ["Three.js", "CanvasTexture", "Orbit"],
-        },
-      ],
-    };
-
     const warmup = async () => {
-      let warmupDrone: HologramDroneDisplay | null = null;
-      let warmupRenderTarget: THREE.WebGLRenderTarget | null = null;
       try {
+        gpuWarmupInProgressRef.current = true;
         const warmupStart = performance.now();
-        debugLog("drone", "[warmup] priming live drone render path");
-        const warmupScene = new THREE.Scene();
-        warmupScene.background = null;
-        const warmupCamera = liveCamera.clone() as THREE.Camera;
-        warmupCamera.position.copy(liveCamera.position);
-        warmupCamera.quaternion.copy(liveCamera.quaternion);
-        warmupCamera.updateMatrixWorld(true);
-        warmupDrone = new HologramDroneDisplay(warmupScene, {
-          droneVariant: MOON_VISIT_DRONE_VARIANT,
-          oblivionDroneTemplate: template,
-          soundEnabled: false,
+
+        // Save camera layer mask and enable all layers so compileAsync
+        // and the warmup render cover objects on every layer (e.g. the
+        // orbital portfolio on layer 4, skills lattice on layer 3).
+        const savedCameraLayerMask = liveCamera.layers.mask;
+        liveCamera.layers.enableAll();
+
+        // Save original visibility and temporarily force every object
+        // visible + non-culled so the warmup covers hidden objects
+        // (e.g. the drone, which is invisible until moon orbit).
+        const savedState: Array<{ obj: THREE.Object3D; visible: boolean; culled: boolean }> = [];
+        let meshCount = 0;
+        mainScene.traverse((obj) => {
+          savedState.push({ obj, visible: obj.visible, culled: obj.frustumCulled });
+          obj.visible = true;
+          obj.frustumCulled = false;
+          if ((obj as THREE.Mesh).isMesh) meshCount++;
         });
-        const camForward = warmupCamera.getWorldDirection(new THREE.Vector3()).normalize();
-        const warmMoonPos = warmupCamera.position
-          .clone()
-          .addScaledVector(camForward, 28);
-        const warmAnchor = warmupCamera.position
-          .clone()
-          .addScaledVector(camForward, 24)
-          .add(new THREE.Vector3(0, -1, 0));
-        warmupDrone.showContent(
-          warmupContent,
-          warmMoonPos,
-          warmupCamera,
-          warmAnchor,
-        );
-        // Advance through fly-in + pre-draw so compile includes active drone UI materials.
-        for (let i = 0; i < 360; i += 1) {
-          warmupDrone.update(1 / 60, warmupCamera);
-        }
+        console.warn(`[PERF:warmup] GPU warmup STARTING — ${meshCount} meshes, ${savedState.length} objects`);
+
+        // Step 1 — Upload every texture to the GPU
+        let textureCount = 0;
+        mainScene.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          const materials = Array.isArray(mesh.material)
+            ? mesh.material
+            : [mesh.material];
+          for (const mat of materials) {
+            if (!mat) continue;
+            const m = mat as unknown as Record<string, unknown>;
+            for (const key of Object.keys(m)) {
+              const val = m[key];
+              if (val && (val as THREE.Texture).isTexture) {
+                renderer.initTexture(val as THREE.Texture);
+                textureCount++;
+              }
+            }
+          }
+        });
+        const initTextureMs = performance.now() - warmupStart;
+        console.warn(`[PERF:warmup] initTexture: ${textureCount} textures in ${initTextureMs.toFixed(1)}ms`);
+
+        // Step 2 — Compile all shader programs asynchronously
         const compileStart = performance.now();
-        if (typeof compileRenderer.compileAsync === "function") {
-          await compileRenderer.compileAsync(warmupScene, warmupCamera);
-        } else {
-          compileRenderer.compile(warmupScene, warmupCamera);
-        }
+        await renderer.compileAsync(mainScene, liveCamera);
         const compileMs = performance.now() - compileStart;
-        // Render once to an offscreen target so program/texture upload happens
-        // without flashing warmup content in the visible universe scene.
-        const rtSize = new THREE.Vector2();
-        renderer.getSize(rtSize);
-        warmupRenderTarget = new THREE.WebGLRenderTarget(
-          Math.max(2, Math.floor(rtSize.x * 0.4)),
-          Math.max(2, Math.floor(rtSize.y * 0.4)),
-          {
-            depthBuffer: true,
-            stencilBuffer: false,
-          },
-        );
+
+        // Step 3 — Force geometry buffer uploads via a single render pass.
+        // This is the only way to transfer vertex/index buffers to the GPU.
         const renderStart = performance.now();
-        const prevTarget = renderer.getRenderTarget();
-        renderer.setRenderTarget(warmupRenderTarget);
-        renderer.clear();
-        renderer.render(warmupScene, warmupCamera);
-        renderer.setRenderTarget(prevTarget);
+        const composer = composerRef.current;
+        if (composer) {
+          composer.render();
+        }
         const renderMs = performance.now() - renderStart;
-        debugLog(
-          "drone",
-          `[warmup] offscreen prime complete compile=${compileMs.toFixed(1)}ms render=${renderMs.toFixed(1)}ms total=${(performance.now() - warmupStart).toFixed(1)}ms`,
+
+        // Restore camera layers and original visible / frustumCulled state.
+        liveCamera.layers.mask = savedCameraLayerMask;
+        for (const entry of savedState) {
+          entry.obj.visible = entry.visible;
+          entry.obj.frustumCulled = entry.culled;
+        }
+
+        const totalMs = performance.now() - warmupStart;
+        console.warn(
+          `[PERF:warmup] GPU warmup COMPLETE — initTexture=${initTextureMs.toFixed(1)}ms compileAsync=${compileMs.toFixed(1)}ms render=${renderMs.toFixed(1)}ms total=${totalMs.toFixed(1)}ms`
         );
-      } catch {
-        debugLog("drone", "[warmup] live render prime skipped");
+      } catch (e) {
+        console.warn("[PERF:warmup] GPU warmup error:", e);
       } finally {
-        warmupDrone?.hideContentImmediate();
-        warmupDrone?.dispose();
-        warmupRenderTarget?.dispose();
+        gpuWarmupInProgressRef.current = false;
+        setDroneGpuWarmupReady(true);
       }
     };
 
     void warmup();
-  }, [sceneReady, criticalAssetsReady, debugLog]);
+  }, [sceneReady, criticalAssetsReady, allSceneModelsLoaded]);
 
   useEffect(() => {
     if (!sceneReady) return;
@@ -2530,11 +2544,13 @@ export default function ResumeSpace3D({
       }
     };
 
+    const _preloadStart = performance.now();
     const preloadCriticalAssets = async () => {
       try {
+        console.warn("[PERF:load] preloadCriticalAssets START");
         debugLog(
           "loader",
-          `[models] preload start hallway=${PROJECT_SHOWCASE_MODEL_PATH} tardis=${PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH} falcon=/models/spaceship/scene.gltf sd=/models/star-destroyer/scene.gltf drone=${OBLIVION_DRONE_MODEL_PATH}`,
+          `[models] preload start hallway=${PROJECT_SHOWCASE_MODEL_PATH} tardis=${PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH} falcon=/models/spaceship/scene.gltf sd=/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb drone=${OBLIVION_DRONE_MODEL_PATH}`,
         );
         if (hallwayContentModeRef.current === "about" && !hallwayFontsReadyRef.current) {
           try {
@@ -2564,7 +2580,7 @@ export default function ResumeSpace3D({
         ] = await Promise.all([
           gltfPreloader.loadAsync(PROJECT_SHOWCASE_MODEL_PATH),
           gltfPreloader.loadAsync("/models/spaceship/scene.gltf"),
-          gltfPreloader.loadAsync("/models/star-destroyer/scene.gltf"),
+          gltfPreloader.loadAsync("/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb"),
           gltfPreloader.loadAsync(PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH),
           gltfPreloader.loadAsync(OBLIVION_DRONE_MODEL_PATH),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.activation),
@@ -2739,7 +2755,10 @@ export default function ResumeSpace3D({
           projectShowcasePreloadedGltfRef.current = trenchGltf as { scene: THREE.Group };
         }
       } finally {
-        if (!cancelled) setCriticalAssetsReady(true);
+        if (!cancelled) {
+          console.warn(`[PERF:load] setCriticalAssetsReady(true) after ${(performance.now() - _preloadStart).toFixed(0)}ms`);
+          setCriticalAssetsReady(true);
+        }
       }
     };
 
@@ -2759,10 +2778,11 @@ export default function ResumeSpace3D({
   }, [spaceBackgroundVisible]);
 
   useEffect(() => {
-    if (loaderVisualComplete && criticalAssetsReady) {
+    if (loaderVisualComplete && criticalAssetsReady && droneGpuWarmupReady) {
+      console.warn(`[PERF:load] isLoading→false (loaderVisualComplete=${loaderVisualComplete} criticalAssetsReady=${criticalAssetsReady} droneGpuWarmupReady=${droneGpuWarmupReady})`);
       setIsLoading(false);
     }
-  }, [loaderVisualComplete, criticalAssetsReady]);
+  }, [loaderVisualComplete, criticalAssetsReady, droneGpuWarmupReady]);
 
   // Spaceship state
   const [followingSpaceship, setFollowingSpaceship] = useState(false);
@@ -5156,20 +5176,8 @@ export default function ResumeSpace3D({
     experienceEndViewPendingRef.current = false;
   }, [currentNavigationTarget, navigationDistance, settledViewTargetRef]);
 
-  // Keep speed telemetry responsive during active navigation, even when
-  // navigationDistance/state updates are sparse for a short phase window.
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (
-        !navMessageStateRef.current.activeTarget &&
-        !currentNavigationTargetRef.current
-      ) {
-        return;
-      }
-      setNavTelemetryPulse((prev) => (prev + 1) % 1000000);
-    }, 120);
-    return () => window.clearInterval(timer);
-  }, []);
+  // Telemetry updates are driven by navigationDistance throttle (250ms)
+  // so no separate pulse timer is needed.
 
   // Track actual ship movement speed from world-position deltas.
   // This catches every travel mode (autopilot/manual/cinematics/special sections)
@@ -5451,7 +5459,6 @@ export default function ResumeSpace3D({
     navigationDistance,
     navigationTravelPhase,
     formatNavTargetLabel,
-    navTelemetryPulse,
   ]);
 
   const setProjectShowcaseFocus = useCallback((index: number) => {
@@ -8786,6 +8793,7 @@ export default function ResumeSpace3D({
     };
     fadeRaf = requestAnimationFrame(tickFade);
     introStartConsumedRef.current = true;
+    console.warn("[PERF:intro] intro sequence STARTING (isLoading=false, sceneReady=true)");
     if (CAMERA_TRACE_ENABLED) {
       shipLog("[CAMTRACE] invoking camera-intro start + fade start", "info");
     }
@@ -13755,6 +13763,7 @@ export default function ResumeSpace3D({
     if (PROJECT_SHOWCASE_VISIBLE_IN_SPACE) {
       camera.layers.enable(PROJECT_SHOWCASE_LAYER);
     }
+    composerRef.current = composer;
 
     // clickable overlay registry (planes that should be raycast-targeted)
     const overlayClickables: THREE.Object3D[] = [];
@@ -13767,9 +13776,30 @@ export default function ResumeSpace3D({
       vlog,
     });
     // --- TEXTURES ---
-    const textureLoader = new THREE.TextureLoader();
+    const rawTextureLoader = new THREE.TextureLoader();
+    // Wrap TextureLoader.load so every texture is pre-uploaded to the GPU
+    // via renderer.initTexture() as soon as it arrives. Without this,
+    // Three.js defers the GPU upload until the texture is first rendered
+    // in-frustum, causing frame stalls (see Three.js docs & forums).
+    const textureLoader = {
+      load: (
+        url: string,
+        onLoad?: (tex: THREE.Texture) => void,
+        onProgress?: (event: ProgressEvent) => void,
+        onError?: (event: unknown) => void,
+      ) =>
+        rawTextureLoader.load(
+          url,
+          (tex) => {
+            renderer.initTexture(tex);
+            onLoad?.(tex);
+          },
+          onProgress,
+          onError,
+        ),
+    };
 
-    const { starfield, skyfield } = createStarfieldMeshes(textureLoader);
+    const { starfield, skyfield } = createStarfieldMeshes(rawTextureLoader);
     starfield.visible = spaceBackgroundVisible;
     skyfield.visible = spaceBackgroundVisible;
     starfieldMeshRef.current = starfield;
@@ -13788,7 +13818,7 @@ export default function ResumeSpace3D({
     sceneRef.current.sunLight = sunLight;
     sceneRef.current.fillLight = fillLight;
 
-    const { sunMesh, sunMaterial } = createSunMesh(textureLoader);
+    const { sunMesh, sunMaterial } = createSunMesh(rawTextureLoader);
     scene.add(sunMesh);
     sceneRef.current.sunMaterial = sunMaterial;
 
@@ -13882,7 +13912,7 @@ export default function ResumeSpace3D({
     // 2. HELPER: Create Planet
     const createPlanet = createPlanetFactory({
       scene,
-      textureLoader,
+      textureLoader: rawTextureLoader,
       items,
       orbitAnchors,
       clickablePlanets,
@@ -15849,6 +15879,7 @@ export default function ResumeSpace3D({
         scene.add(spaceship);
         spaceshipRef.current = spaceship;
         vlog("🚀 Spaceship loaded - ready for navigation");
+        markSceneModelLoaded();
 
         // --- COCKPIT POSITION ---
         // Reference points from the ship-labeling system:
@@ -15873,12 +15904,13 @@ export default function ResumeSpace3D({
       undefined,
       () => {
         vlog("❌ Failed to load spaceship model");
+        markSceneModelLoaded();
       },
     );
 
     // --- STAR DESTROYER LOADING ---
     loader.load(
-      "/models/star-destroyer/scene.gltf",
+      "/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb",
       (gltf) => {
         const model = gltf.scene;
 
@@ -15944,6 +15976,7 @@ export default function ResumeSpace3D({
 
         scene.add(starDestroyer);
         starDestroyerRef.current = starDestroyer;
+        markSceneModelLoaded();
 
         // Initialize the cruiser AI
         const cruiser = new StarDestroyerCruiser(starDestroyer);
@@ -16353,6 +16386,7 @@ export default function ResumeSpace3D({
       undefined,
       () => {
         vlog("❌ Failed to load Star Destroyer model");
+        markSceneModelLoaded();
       },
     );
 
@@ -16470,6 +16504,8 @@ export default function ResumeSpace3D({
       }
       setProjectShowcaseReady(false);
       vlog("⚠️ Failed to load Project Showcase trench model");
+      markSceneModelLoaded(); // showcase slot
+      markSceneModelLoaded(); // about-exterior slot (load never started)
     };
     const onProjectShowcaseLoaded = async (gltf: { scene: THREE.Group }) => {
         if (hallwayContentModeRef.current === "about" && !hallwayFontsReadyRef.current) {
@@ -18707,6 +18743,7 @@ export default function ResumeSpace3D({
                 tardisTopBloom,
                 tardisAmbient,
               );
+              markSceneModelLoaded();
             };
           const preloadedAboutExterior = projectShowcaseAboutExteriorPreloadedGltfRef.current;
           if (preloadedAboutExterior) {
@@ -18718,12 +18755,15 @@ export default function ResumeSpace3D({
               (gltf) => handleAboutExteriorLoaded(gltf as { scene: THREE.Group }),
               undefined,
               () => {
+                markSceneModelLoaded();
                 if (projectShowcaseInteriorRootRef.current) {
                   projectShowcaseInteriorRootRef.current.visible = true;
                 }
               },
             );
           }
+        } else {
+          markSceneModelLoaded();
         }
 
         const aboutMode = hallwayContentModeRef.current === "about";
@@ -18739,6 +18779,8 @@ export default function ResumeSpace3D({
         scene.add(showcaseRoot);
         projectShowcaseRootRef.current = showcaseRoot;
         projectShowcaseWorldAnchorRef.current = showcaseRoot.position.clone();
+        markSceneModelLoaded();
+
         setProjectShowcaseReady(true);
         vlog("🛰️ Project Showcase trench loaded");
     };
@@ -19788,6 +19830,7 @@ export default function ResumeSpace3D({
     }
 
     // --- ANIMATION LOOP ---
+    console.warn("[PERF:scene] startRenderLoop called — render loop begins while loading screen is still visible");
     startRenderLoop({
       exitFocusRequestRef,
       exitMoonView,
@@ -19822,6 +19865,7 @@ export default function ResumeSpace3D({
       starDestroyerCruiserRef,
       starDestroyerRef,
       followingStarDestroyerRef,
+      gpuWarmupInProgressRef,
       updateAutopilotNavigation,
       updateMoonOrbit: updateOrbit,
       isMoonOrbiting: isOrbiting,
@@ -19867,6 +19911,7 @@ export default function ResumeSpace3D({
     startIntroSequenceRef.current = startIntroSequence;
 
     setTimeout(() => {
+      console.warn("[PERF:scene] setSceneReady(true) — scene init complete");
       setSceneReady(true);
 
       // Boot message in ship terminal
@@ -20288,6 +20333,7 @@ export default function ResumeSpace3D({
       // Clean up Three.js resources
       renderer.dispose();
       rendererRef.current = null;
+      composerRef.current = null;
       labelRenderer.domElement.remove();
 
       // Traverse and dispose scene objects to free memory

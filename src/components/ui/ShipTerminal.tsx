@@ -208,9 +208,13 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
   }, [logs, typeProgress, activeTab]);
 
   // Typewriter effect for the newest log entry
+  const logsRef = useRef(logs);
+  logsRef.current = logs;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (logs.length === 0) return;
-    const newest = logs[logs.length - 1];
+    const currentLogs = logsRef.current;
+    if (currentLogs.length === 0) return;
+    const newest = currentLogs[currentLogs.length - 1];
     if (newest.id === lastLogIdRef.current) return;
     lastLogIdRef.current = newest.id;
     typewriterRunIdRef.current += 1;
@@ -218,7 +222,7 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
 
     setRevealedIds((prev) => {
       const next = new Set(prev);
-      logs.forEach((l) => {
+      currentLogs.forEach((l) => {
         if (l.id !== newest.id) next.add(l.id);
       });
       return next;
@@ -249,7 +253,7 @@ const ShipTerminal: React.FC<ShipTerminalProps> = ({
     return () => {
       if (typeTimerRef.current) clearInterval(typeTimerRef.current);
     };
-  }, [logs]);
+  }, [logs.length]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {

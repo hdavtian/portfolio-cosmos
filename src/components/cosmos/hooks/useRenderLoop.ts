@@ -131,6 +131,7 @@ export const useRenderLoop = () => {
       scene: THREE.Scene;
       sunMesh: THREE.Object3D;
       vlog: (message: string) => void;
+      gpuWarmupInProgressRef?: React.MutableRefObject<boolean>;
       [key: string]: unknown;
     }) => {
       const {
@@ -162,6 +163,7 @@ export const useRenderLoop = () => {
         navTurnActiveRef,
         projectShowcaseActiveRef,
         projectShowcaseTrackRef,
+        gpuWarmupInProgressRef,
         updateMoonOrbit,
         isMoonOrbiting,
         updateAutopilotNavigation,
@@ -828,10 +830,21 @@ export const useRenderLoop = () => {
         cometTailGeometry.getAttribute("position").needsUpdate = true;
       };
 
+      let _perfFrameCount = 0;
+      let _perfSlowFrames = 0;
+
       const animate = () => {
         animationFrameRef.current = requestAnimationFrame(animate);
 
-        const frameNow = performance.now();
+        if (gpuWarmupInProgressRef?.current) {
+          lastFrameTime = performance.now();
+          return;
+        }
+
+        const _p0 = performance.now();
+        _perfFrameCount++;
+
+        const frameNow = _p0;
         const deltaSeconds = Math.min(
           Math.max((frameNow - lastFrameTime) / 1000, 0),
           0.1,
@@ -846,6 +859,8 @@ export const useRenderLoop = () => {
           } catch (e) {}
           exitFocusRequestRef.current = false;
         }
+
+        const _p1 = performance.now();
 
         // Lightspeed camera-rig "seat push" inertia (camera-only):
         // - engage: upward pitch kick
@@ -959,7 +974,13 @@ export const useRenderLoop = () => {
 
           // Render scene
           sunMesh.rotation.y += 0.002;
+          const _pExploreRenderStart = performance.now();
           composer.render();
+          const _pExploreTotal = performance.now() - _p0;
+          if (_pExploreTotal > 50) {
+            const renderMs = performance.now() - _pExploreRenderStart;
+            console.warn(`[PERF] EXPLORE frame #${_perfFrameCount} total=${_pExploreTotal.toFixed(1)}ms composer.render=${renderMs.toFixed(1)}ms`);
+          }
           return; // Skip all other camera/render logic
         }
         // ─── END EXPLORE MODE ───────────────────────────────────
@@ -967,6 +988,7 @@ export const useRenderLoop = () => {
         let shipIsIdleHover = false;
         let moonOrbitActive = false;
         let orbitUserCamFree = false;
+        let _p2 = _p1;
         if (spaceshipRef.current) {
           const ship = spaceshipRef.current;
           const cinematic = shipCinematicRef.current;
@@ -1539,6 +1561,8 @@ export const useRenderLoop = () => {
               }
             }
 
+            _p2 = performance.now();
+
             if (followingSpaceshipRef.current) {
               if (insideShipRef.current) {
                 ship.getWorldPosition(shipWorldPos);
@@ -1976,6 +2000,8 @@ export const useRenderLoop = () => {
           }
         }
 
+        const _p3 = performance.now();
+
         updateOrbitSystem({
           items,
           orbitAnchors,
@@ -1989,9 +2015,13 @@ export const useRenderLoop = () => {
           controls.update(deltaSeconds);
         }
 
+        const _p4 = performance.now();
+
         if (hologramDroneRef.current) {
           hologramDroneRef.current.update(deltaSeconds, camera);
         }
+
+        const _p5 = performance.now();
 
         // Third-person lightspeed streaks (Star Wars-style star lines).
         // Only active in exterior follow mode while lightspeed is engaged.
@@ -2140,7 +2170,9 @@ export const useRenderLoop = () => {
           }
         }
 
+        const _p6 = performance.now();
         composer.render();
+        const _p7 = performance.now();
 
         // Skip the extra render passes when inside the ship — the
         // layer-1 overlay meshes and CSS2D labels aren't visible from
@@ -2155,6 +2187,29 @@ export const useRenderLoop = () => {
           renderer.autoClear = prevAutoClear;
           camera.layers.mask = prevMask;
           labelRenderer.render(scene, camera);
+        }
+
+        const _pEnd = performance.now();
+        const _pTotal = _pEnd - _p0;
+        if (_pTotal > 50) {
+          _perfSlowFrames++;
+          const mode = shipExploreModeRef.current ? "explore"
+            : shipStagingModeRef.current ? "staging"
+            : shipCinematicRef.current?.active ? `cinematic:${shipCinematicRef.current.phase}`
+            : manualFlightModeRef.current ? "manual"
+            : isMoonOrbiting() ? "moonOrbit"
+            : "autopilot";
+          console.warn(
+            `[PERF] SLOW FRAME #${_perfFrameCount} (slow#${_perfSlowFrames}) total=${_pTotal.toFixed(1)}ms mode=${mode}\n` +
+            `  exitFocus=${(_p1 - _p0).toFixed(1)}ms` +
+            ` | shipLogic=${((_p2 ?? _p1) - _p1).toFixed(1)}ms` +
+            ` | camFollow+bokeh=${(_p3 - (_p2 ?? _p1)).toFixed(1)}ms` +
+            ` | orbitSys+ctrl=${(_p4 - _p3).toFixed(1)}ms` +
+            ` | droneUpdate=${(_p5 - _p4).toFixed(1)}ms` +
+            ` | lightspeed+comets=${(_p6 - _p5).toFixed(1)}ms` +
+            ` | composer.render=${(_p7 - _p6).toFixed(1)}ms` +
+            ` | layer1+labels=${(_pEnd - _p7).toFixed(1)}ms`
+          );
         }
       };
 

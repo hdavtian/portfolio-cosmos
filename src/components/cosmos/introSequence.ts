@@ -424,8 +424,11 @@ export const createIntroSequenceRunner = (
       };
     };
 
+    let _introFrameCount = 0;
     const animateCamera = () => {
-      const elapsed = performance.now() - startTime;
+      const _iStart = performance.now();
+      _introFrameCount++;
+      const elapsed = _iStart - startTime;
       const progress = Math.min(elapsed / INTRO_CAMERA_DURATION_MS, 1);
       const eased = easeInOut(progress);
       const currentPos = startPos.clone().lerp(endPos, eased);
@@ -437,12 +440,18 @@ export const createIntroSequenceRunner = (
         false,
       );
 
+      const _iMs = performance.now() - _iStart;
+      if (_iMs > 5) {
+        console.warn(`[PERF:intro] camera frame #${_introFrameCount} progress=${(progress * 100).toFixed(0)}% took ${_iMs.toFixed(1)}ms`);
+      }
+
       if (progress < 1) {
         introRafId = requestAnimationFrame(animateCamera);
       } else {
         introRafId = null;
         controls.enabled = previousControlsEnabled;
         setHudVisible(false);
+        console.warn(`[PERF:intro] camera intro COMPLETED after ${_introFrameCount} frames, elapsed=${elapsed.toFixed(0)}ms`);
         onIntroEvent?.("camera-intro completed");
         onIntroEvent?.("ship-cinematic trigger @intro-end");
         startShipCinematic();
