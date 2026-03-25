@@ -25,7 +25,7 @@ interface Props {
 }
 
 // Group moons under their parent planet
-const PLANET_ORDER = ["experience", "skills", "projects", "portfolio", "about", "home"];
+const PLANET_ORDER = ["experience", "skills", "projects", "portfolio", "about"];
 
 const CockpitNavPanel: React.FC<Props> = ({
   targets,

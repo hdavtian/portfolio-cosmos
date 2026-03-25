@@ -3932,7 +3932,6 @@ export default function ResumeSpace3D({
       type: "section" as const,
       icon: "👨‍🚀",
     },
-    { id: "home", label: "Home", type: "section" as const, icon: "☀️" },
     ...resumeData.experience.map((exp) => ({
       id: exp.id,
       label: exp.navLabel || exp.company,
