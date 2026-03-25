@@ -339,7 +339,7 @@ export const createSunMesh = (
   return { sunMesh, sunMaterial };
 };
 
-export const createLighting = (options: { spaceSunIntensity?: number }) => {
+export const createLighting = (_options: { spaceSunIntensity?: number }) => {
   // Match original site: very dim ambient + strong point light with decay + fill light
   const ambientLight = new THREE.AmbientLight(
     new THREE.Color(0.13, 0.13, 0.13),
@@ -348,7 +348,7 @@ export const createLighting = (options: { spaceSunIntensity?: number }) => {
 
   const sunLight = new THREE.PointLight(
     new THREE.Color(1.0, 1.0, 1.0),
-    (options.spaceSunIntensity || 12.5) * 4, // Default 50 — bright universe
+    10, // Fixed universe lighting; visual glow is controlled separately on the sun mesh
     SUN_LIGHT_DISTANCE, // Distance (extended to reach far planets)
     0.5, // Gentler decay — light carries further across the expanded universe
   );

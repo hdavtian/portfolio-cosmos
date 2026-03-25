@@ -22,6 +22,14 @@ import {
 export const useRenderLoop = () => {
   const animationFrameRef = useRef<number | null>(null);
   const travelAnchorRef = useRef<PhysicsTravelAnchor | null>(null);
+  const COMET_MIN_INTERVAL_MS = 8000;
+  const COMET_MAX_INTERVAL_MS = 14000;
+  const COMET_DURATION_MIN_MS = 1800;
+  const COMET_DURATION_MAX_MS = 2600;
+  const COMET_TRAIL_LENGTH_MIN = 38;
+  const COMET_TRAIL_LENGTH_MAX = 64;
+  const COMET_DURATION_FAR_MAX_MS = 4500;
+  const COMET_TAIL_POINT_COUNT = 96;
 
   const startRenderLoop = useCallback(
     (params: {
@@ -231,6 +239,39 @@ export const useRenderLoop = () => {
       let lightspeedRigPitchRad = 0; // camera-rig pitch bias (camera-only)
       let lightspeedPitchKickAt = 0;
       let lightspeedPitchPendingDir: -1 | 0 | 1 = 0;
+      let cometGroup: THREE.Group | null = null;
+      let cometHeadSprite: THREE.Sprite | null = null;
+      let cometCoreSprite: THREE.Sprite | null = null;
+      let cometHeadMaterial: THREE.SpriteMaterial | null = null;
+      let cometCoreMaterial: THREE.SpriteMaterial | null = null;
+      let cometTailGeometry: THREE.BufferGeometry | null = null;
+      let cometTailCore: THREE.Points | null = null;
+      let cometTailGlow: THREE.Points | null = null;
+      let cometTailCoreMaterial: THREE.PointsMaterial | null = null;
+      let cometTailGlowMaterial: THREE.PointsMaterial | null = null;
+      let cometTailMeta: Float32Array | null = null; // lag, side, depth, phase, speed, drift
+      let cometActive = false;
+      let cometStartAt = 0;
+      let cometDurationMs = 0;
+      let cometTrailLength = 0;
+      let cometTravelDistance = 0;
+      let cometScale = 1;
+      let cometAlphaScale = 1;
+      let cometTailSpread = 1;
+      let cometFadeOutStart = 0.72;
+      const cometStart = new THREE.Vector3();
+      const cometEnd = new THREE.Vector3();
+      const cometHead = new THREE.Vector3();
+      const cometTailPoint = new THREE.Vector3();
+      const cometDirection = new THREE.Vector3();
+      const cometSide = new THREE.Vector3();
+      const cometDepth = new THREE.Vector3();
+      let nextCometAt =
+        performance.now() +
+        THREE.MathUtils.randFloat(
+          COMET_MIN_INTERVAL_MS * 0.45,
+          COMET_MAX_INTERVAL_MS * 0.65,
+        );
       const baseCameraFov =
         camera instanceof THREE.PerspectiveCamera ? camera.fov : null;
 
@@ -392,6 +433,399 @@ export const useRenderLoop = () => {
         lightspeedThickGroup.visible = false;
         lightspeedThickGroup.renderOrder = 1000;
         scene.add(lightspeedThickGroup);
+      };
+
+      const createCometHeadTexture = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 192;
+        canvas.height = 128;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          // Main elongated head glow (brighter near the front tip).
+          ctx.save();
+          ctx.translate(114, 64);
+          ctx.scale(1.9, 1.0);
+          const head = ctx.createRadialGradient(0, 0, 2, 0, 0, 34);
+          head.addColorStop(0, "rgba(255,255,255,1)");
+          head.addColorStop(0.25, "rgba(225,245,255,0.98)");
+          head.addColorStop(0.6, "rgba(140,210,255,0.48)");
+          head.addColorStop(1, "rgba(120,190,255,0)");
+          ctx.fillStyle = head;
+          ctx.beginPath();
+          ctx.arc(0, 0, 34, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          // Subtle back-shear so the head reads like a fast streak, not a sphere.
+          ctx.save();
+          ctx.translate(80, 64);
+          ctx.scale(2.2, 0.75);
+          const shear = ctx.createRadialGradient(0, 0, 0, 0, 0, 42);
+          shear.addColorStop(0, "rgba(180,225,255,0.42)");
+          shear.addColorStop(1, "rgba(120,190,255,0)");
+          ctx.fillStyle = shear;
+          ctx.beginPath();
+          ctx.arc(0, 0, 42, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.needsUpdate = true;
+        return tex;
+      };
+
+      const createCometTrailTexture = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 96;
+        canvas.height = 96;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          const g = ctx.createRadialGradient(48, 48, 1, 48, 48, 47);
+          g.addColorStop(0, "rgba(255,255,255,1)");
+          g.addColorStop(0.3, "rgba(205,236,255,0.88)");
+          g.addColorStop(0.68, "rgba(124,198,255,0.24)");
+          g.addColorStop(1, "rgba(100,180,255,0)");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.needsUpdate = true;
+        return tex;
+      };
+
+      const ensureCometVisuals = () => {
+        if (cometGroup) return;
+        const headTexture = createCometHeadTexture();
+        const tailParticleTexture = createCometTrailTexture();
+
+        cometGroup = new THREE.Group();
+        cometGroup.visible = false;
+
+        cometHeadMaterial = new THREE.SpriteMaterial({
+          map: headTexture,
+          color: 0xe7f6ff,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthTest: false,
+          depthWrite: false,
+          toneMapped: false,
+        });
+        cometHeadSprite = new THREE.Sprite(cometHeadMaterial);
+        cometHeadSprite.scale.set(8.8, 8.8, 1);
+        cometHeadSprite.renderOrder = 998;
+        cometGroup.add(cometHeadSprite);
+
+        cometCoreMaterial = new THREE.SpriteMaterial({
+          map: headTexture,
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthTest: false,
+          depthWrite: false,
+          toneMapped: false,
+        });
+        cometCoreSprite = new THREE.Sprite(cometCoreMaterial);
+        cometCoreSprite.scale.set(3.8, 3.8, 1);
+        cometCoreSprite.renderOrder = 999;
+        cometGroup.add(cometCoreSprite);
+
+        cometTailGeometry = new THREE.BufferGeometry();
+        cometTailGeometry.setAttribute(
+          "position",
+          new THREE.Float32BufferAttribute(
+            new Float32Array(COMET_TAIL_POINT_COUNT * 3),
+            3,
+          ),
+        );
+        cometTailGlowMaterial = new THREE.PointsMaterial({
+          map: tailParticleTexture,
+          color: 0x9fd6ff,
+          size: 4.8,
+          sizeAttenuation: false,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthTest: false,
+          depthWrite: false,
+          toneMapped: false,
+          alphaTest: 0.01,
+        });
+        cometTailGlow = new THREE.Points(cometTailGeometry, cometTailGlowMaterial);
+        cometTailGlow.renderOrder = 995;
+        cometGroup.add(cometTailGlow);
+
+        cometTailCoreMaterial = new THREE.PointsMaterial({
+          map: tailParticleTexture,
+          color: 0xe9f7ff,
+          size: 2.4,
+          sizeAttenuation: false,
+          transparent: true,
+          opacity: 0,
+          blending: THREE.AdditiveBlending,
+          depthTest: false,
+          depthWrite: false,
+          toneMapped: false,
+          alphaTest: 0.01,
+        });
+        cometTailCore = new THREE.Points(cometTailGeometry, cometTailCoreMaterial);
+        cometTailCore.renderOrder = 996;
+        cometGroup.add(cometTailCore);
+        cometTailMeta = new Float32Array(COMET_TAIL_POINT_COUNT * 6);
+
+        scene.add(cometGroup);
+      };
+
+      const getNextCometIntervalMs = () =>
+        THREE.MathUtils.randFloat(COMET_MIN_INTERVAL_MS, COMET_MAX_INTERVAL_MS);
+
+      const startComet = (now: number) => {
+        ensureCometVisuals();
+        if (
+          !cometGroup ||
+          !cometHeadSprite ||
+          !cometCoreSprite ||
+          !cometTailMeta
+        ) {
+          return;
+        }
+        cometActive = true;
+        cometStartAt = now;
+        cometDurationMs = THREE.MathUtils.randFloat(
+          COMET_DURATION_MIN_MS,
+          COMET_DURATION_MAX_MS,
+        );
+        cometTrailLength = THREE.MathUtils.randFloat(
+          COMET_TRAIL_LENGTH_MIN,
+          COMET_TRAIL_LENGTH_MAX,
+        );
+        cometTravelDistance = 0;
+        cometScale = 1;
+        cometAlphaScale = 1;
+        cometTailSpread = 1;
+        cometFadeOutStart = 0.72;
+
+        // Mix near/mid/far shooting stars so not every comet is close.
+        const profileRoll = Math.random();
+        let startXAbs = 58;
+        let startYMin = -26;
+        let startYMax = 18;
+        let travelXMin = 76;
+        let travelXMax = 118;
+        let startZMin = -165;
+        let startZMax = -104;
+        let travelZMin = -14;
+        let travelZMax = 10;
+
+        if (profileRoll > 0.72) {
+          // Far profile: smaller/dimmer, longer travel and later fade.
+          cometScale = 0.62;
+          cometAlphaScale = 0.64;
+          cometTailSpread = 0.65;
+          cometFadeOutStart = 0.9;
+          cometDurationMs = THREE.MathUtils.randFloat(
+            3000,
+            COMET_DURATION_FAR_MAX_MS,
+          );
+          startXAbs = 120;
+          startYMin = -72;
+          startYMax = 54;
+          travelXMin = 180;
+          travelXMax = 320;
+          startZMin = -520;
+          startZMax = -320;
+          travelZMin = -160;
+          travelZMax = 140;
+          cometTrailLength *= 1.34;
+        } else if (profileRoll > 0.36) {
+          // Mid profile.
+          cometScale = 0.84;
+          cometAlphaScale = 0.82;
+          cometTailSpread = 0.82;
+          cometFadeOutStart = 0.82;
+          cometDurationMs = THREE.MathUtils.randFloat(2300, 3300);
+          startXAbs = 92;
+          startYMin = -58;
+          startYMax = 42;
+          travelXMin = 130;
+          travelXMax = 240;
+          startZMin = -340;
+          startZMax = -190;
+          travelZMin = -110;
+          travelZMax = 90;
+          cometTrailLength *= 1.16;
+        }
+
+        const dir = new THREE.Vector3(
+          (Math.random() - 0.5) * 2,
+          (Math.random() - 0.5) * 1.8,
+          (Math.random() - 0.5) * 2,
+        );
+        if (Math.abs(dir.x) + Math.abs(dir.y) < 0.55) {
+          dir.x += Math.random() < 0.5 ? -0.5 : 0.5;
+        }
+        dir.normalize();
+        cometDirection.copy(dir);
+        const upCandidate = new THREE.Vector3(
+          (Math.random() - 0.5) * 0.6,
+          0.7 + Math.random() * 0.6,
+          (Math.random() - 0.5) * 0.6,
+        ).normalize();
+        cometSide.crossVectors(cometDirection, upCandidate);
+        if (cometSide.lengthSq() < 1e-4) {
+          cometSide.crossVectors(cometDirection, new THREE.Vector3(0, 1, 0));
+        }
+        cometSide.normalize();
+        cometDepth.crossVectors(cometDirection, cometSide).normalize();
+
+        const axisSideRange = THREE.MathUtils.randFloat(startXAbs * 0.35, startXAbs);
+        const axisDepthRange = THREE.MathUtils.randFloat(
+          Math.abs(startZMin) * 0.28,
+          Math.abs(startZMax),
+        );
+        const offsetYRange = THREE.MathUtils.randFloat(
+          Math.abs(startYMin) * 0.5,
+          Math.abs(startYMax),
+        );
+        cometTravelDistance = THREE.MathUtils.randFloat(
+          Math.max(travelXMin, Math.abs(travelZMin)),
+          Math.max(travelXMax, Math.abs(travelZMax), 80),
+        );
+        const startOffsetSide = (Math.random() - 0.5) * axisSideRange;
+        const startOffsetDepth = (Math.random() - 0.5) * axisDepthRange;
+        const startOffsetY = (Math.random() - 0.5) * offsetYRange;
+        const center = new THREE.Vector3()
+          .addScaledVector(cometSide, startOffsetSide)
+          .addScaledVector(cometDepth, startOffsetDepth)
+          .addScaledVector(new THREE.Vector3(0, 1, 0), startOffsetY);
+
+        cometStart
+          .copy(center)
+          .addScaledVector(cometDirection, -cometTravelDistance * 0.5);
+        cometEnd
+          .copy(center)
+          .addScaledVector(cometDirection, cometTravelDistance * 0.5);
+
+        for (let i = 0; i < COMET_TAIL_POINT_COUNT; i += 1) {
+          const t = i / Math.max(COMET_TAIL_POINT_COUNT - 1, 1);
+          const idx = i * 6;
+          const lag = t * 0.86 + Math.random() * 0.06;
+          cometTailMeta[idx] = lag;
+          cometTailMeta[idx + 1] = (Math.random() - 0.5) * 2.8 * cometTailSpread;
+          cometTailMeta[idx + 2] = (Math.random() - 0.5) * 1.8 * cometTailSpread;
+          cometTailMeta[idx + 3] = Math.random() * Math.PI * 2;
+          cometTailMeta[idx + 4] = 0.7 + Math.random() * 1.8;
+          cometTailMeta[idx + 5] = 0.4 + Math.random() * 0.9;
+        }
+
+        cometGroup.visible = true;
+        cometHeadSprite.position.copy(cometStart);
+        cometCoreSprite.position.copy(cometStart);
+      };
+
+      const updateComet = (now: number, cameraRef: THREE.Camera) => {
+        if (
+          !cometGroup ||
+          !cometHeadSprite ||
+          !cometCoreSprite ||
+          !cometHeadMaterial ||
+          !cometCoreMaterial ||
+          !cometTailGeometry ||
+          !cometTailCoreMaterial ||
+          !cometTailGlowMaterial ||
+          !cometTailMeta
+        ) {
+          return;
+        }
+        const progress = THREE.MathUtils.clamp(
+          (now - cometStartAt) / Math.max(cometDurationMs, 1),
+          0,
+          1,
+        );
+        if (progress >= 1) {
+          cometActive = false;
+          cometGroup.visible = false;
+          cometHeadMaterial.opacity = 0;
+          cometCoreMaterial.opacity = 0;
+          cometTailCoreMaterial.opacity = 0;
+          cometTailGlowMaterial.opacity = 0;
+          nextCometAt = now + getNextCometIntervalMs();
+          return;
+        }
+
+        cometGroup.position.copy(cameraRef.position);
+        cometGroup.quaternion.copy(cameraRef.quaternion);
+
+        const eased = THREE.MathUtils.smootherstep(progress, 0, 1);
+        cometHead.lerpVectors(cometStart, cometEnd, eased);
+        cometDirection.copy(cometEnd).sub(cometStart).normalize();
+        cometSide.set(-cometDirection.y, cometDirection.x, 0);
+        if (cometSide.lengthSq() < 1e-4) {
+          cometSide.set(0, 1, 0);
+        }
+        cometSide.normalize();
+        cometDepth.crossVectors(cometDirection, cometSide).normalize();
+        const cometAngle = Math.atan2(cometDirection.y, cometDirection.x);
+
+        const fadeIn = THREE.MathUtils.smoothstep(progress, 0, 0.15);
+        const fadeOut = 1 - THREE.MathUtils.smoothstep(progress, cometFadeOutStart, 1);
+        const alpha = fadeIn * fadeOut * cometAlphaScale;
+        const flicker = 0.92 + Math.sin(now * 0.025) * 0.08;
+        cometTailCoreMaterial.opacity = 0.82 * alpha * flicker;
+        cometTailGlowMaterial.opacity = 0.34 * alpha;
+        cometHeadMaterial.opacity = 0.98 * alpha;
+        cometCoreMaterial.opacity = 1.0 * alpha;
+
+        cometHeadSprite.position.copy(cometHead);
+        cometCoreSprite.position.copy(cometHead);
+
+        cometHeadMaterial.rotation = cometAngle;
+        cometCoreMaterial.rotation = cometAngle;
+        cometHeadSprite.scale.set(
+          (10.4 + alpha * 2.1) * cometScale,
+          (6.1 + alpha * 1.1) * cometScale,
+          1,
+        );
+        cometCoreSprite.scale.set(
+          (4.1 + alpha * 0.9) * cometScale,
+          (2.5 + alpha * 0.55) * cometScale,
+          1,
+        );
+
+        const tailPositions = (cometTailGeometry.getAttribute(
+          "position",
+        ) as THREE.BufferAttribute).array as Float32Array;
+        for (let i = 0; i < COMET_TAIL_POINT_COUNT; i += 1) {
+          const metaIndex = i * 6;
+          const lag = cometTailMeta[metaIndex];
+          const sideAmp = cometTailMeta[metaIndex + 1];
+          const depthAmp = cometTailMeta[metaIndex + 2];
+          const phase = cometTailMeta[metaIndex + 3];
+          const speed = cometTailMeta[metaIndex + 4];
+          const drift = cometTailMeta[metaIndex + 5];
+          const p = THREE.MathUtils.clamp(eased - lag, 0, 1);
+          cometTailPoint.lerpVectors(cometStart, cometEnd, p);
+          const stretch = lag * cometTrailLength * (0.75 + drift * 0.25);
+          cometTailPoint.addScaledVector(cometDirection, -stretch);
+          const organic = Math.sin(now * 0.006 * speed + phase) * (0.2 + lag * 0.7);
+          cometTailPoint.addScaledVector(cometSide, sideAmp + organic);
+          cometTailPoint.addScaledVector(
+            cometDepth,
+            depthAmp + Math.cos(now * 0.004 * speed + phase) * 0.25,
+          );
+          const idx = i * 3;
+          tailPositions[idx] = cometTailPoint.x;
+          tailPositions[idx + 1] = cometTailPoint.y;
+          tailPositions[idx + 2] = cometTailPoint.z;
+        }
+        cometTailGeometry.getAttribute("position").needsUpdate = true;
       };
 
       const animate = () => {
@@ -1680,6 +2114,38 @@ export const useRenderLoop = () => {
               writeThickStreakCopies(i, x, y, z, z - len);
             }
             thickPosAttr.needsUpdate = true;
+          }
+        }
+
+        const reducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        const cometSuppressed =
+          reducedMotion ||
+          insideShipRef.current ||
+          shipExploreModeRef.current ||
+          projectShowcaseActiveRef.current ||
+          navTurnActiveRef.current ||
+          !!manualFlightRef.current?.isLightspeedActive;
+        if (cometSuppressed) {
+          if (cometActive) {
+            cometActive = false;
+          }
+          if (cometGroup) {
+            cometGroup.visible = false;
+          }
+          if (cometHeadMaterial) cometHeadMaterial.opacity = 0;
+          if (cometCoreMaterial) cometCoreMaterial.opacity = 0;
+          if (cometTailCoreMaterial) cometTailCoreMaterial.opacity = 0;
+          if (cometTailGlowMaterial) cometTailGlowMaterial.opacity = 0;
+          nextCometAt = Math.max(nextCometAt, performance.now() + 5500);
+        } else {
+          const now = performance.now();
+          if (!cometActive && now >= nextCometAt) {
+            startComet(now);
+          }
+          if (cometActive) {
+            updateComet(now, camera);
           }
         }
 

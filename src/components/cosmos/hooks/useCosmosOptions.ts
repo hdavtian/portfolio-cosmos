@@ -32,21 +32,17 @@ export const useCosmosOptions = (params: {
       sceneRef.current.bloomPass.strength = bloomStrength;
     }
 
-    if (sceneRef.current.sunLight && options.spaceSunIntensity !== undefined) {
-      sceneRef.current.sunLight.intensity = options.spaceSunIntensity * 4;
-      if (options.spaceSunColor) {
-        sceneRef.current.sunLight.color = new THREE.Color(
-          options.spaceSunColor,
-        );
-      }
-      if (sceneRef.current.sunGlowMaterial) {
-        const glowColor = new THREE.Color(options.spaceSunColor || 0xffaa00);
-        sceneRef.current.sunGlowMaterial.color.copy(glowColor);
-        sceneRef.current.sunGlowMaterial.opacity = Math.min(
-          0.4 + (options.spaceSunIntensity || 2.5) * 0.1,
-          0.9,
-        );
-      }
+    if (sceneRef.current.sunGlowMaterial) {
+      const glowColor = new THREE.Color(options.spaceSunColor || 0xffaa00).lerp(
+        new THREE.Color(0xffffff),
+        0.28,
+      );
+      sceneRef.current.sunGlowMaterial.color.copy(glowColor);
+      // Intentionally amplified visual-only glow (~5x perceived boost).
+      sceneRef.current.sunGlowMaterial.opacity = Math.min(
+        (0.62 + (options.spaceSunIntensity || 2.5) * 0.12) * 5,
+        1,
+      );
     }
 
     if (sceneRef.current.sunMaterial) {

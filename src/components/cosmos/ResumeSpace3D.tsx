@@ -13828,12 +13828,52 @@ export default function ResumeSpace3D({
       map: glowTexture,
       color: 0xffaa00,
       transparent: true,
-      opacity: 0.7,
+      opacity: 1,
       blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
     });
     const sprite = new THREE.Sprite(spriteMaterial);
-    sprite.scale.set(SUN_GLOW_SPRITE_SIZE, SUN_GLOW_SPRITE_SIZE, 1);
+    sprite.scale.set(
+      SUN_GLOW_SPRITE_SIZE * 2.2,
+      SUN_GLOW_SPRITE_SIZE * 2.2,
+      1,
+    );
     sunMesh.add(sprite);
+
+    const haloMaterial = new THREE.SpriteMaterial({
+      map: glowTexture,
+      color: 0xffc27a,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const haloSprite = new THREE.Sprite(haloMaterial);
+    haloSprite.scale.set(
+      SUN_GLOW_SPRITE_SIZE * 4.2,
+      SUN_GLOW_SPRITE_SIZE * 4.2,
+      1,
+    );
+    sunMesh.add(haloSprite);
+
+    const outerHaloMaterial = new THREE.SpriteMaterial({
+      map: glowTexture,
+      color: 0xffd6a8,
+      transparent: true,
+      opacity: 0.52,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const outerHaloSprite = new THREE.Sprite(outerHaloMaterial);
+    outerHaloSprite.scale.set(
+      SUN_GLOW_SPRITE_SIZE * 7.4,
+      SUN_GLOW_SPRITE_SIZE * 7.4,
+      1,
+    );
+    sunMesh.add(outerHaloSprite);
     sceneRef.current.sunGlowMaterial = spriteMaterial;
 
     // Keep the sun label-free; identity is already shown in the main HUD/nav.
