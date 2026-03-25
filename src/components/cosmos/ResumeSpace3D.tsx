@@ -220,6 +220,8 @@ const PROJECT_SHOWCASE_ELEVATOR_PEEKERS_ENABLED = true;
 const PROJECT_SHOWCASE_ELEVATOR_PEEKER_FLOOR_MULT = 2.2;
 const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = true;
 const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
+const EXPERIENCE_END_CAMERA_POSITION = new THREE.Vector3(11281.3, -534.0, 1301.6);
+const EXPERIENCE_END_CAMERA_TARGET = new THREE.Vector3(11970.8, -828.9, -116.5);
 const HALLWAY_DEFAULT_CONTENT_MODE = "about";
 const HALLWAY_OSWALD_FONT_STACK =
   "'Oswald', 'Montserrat', 'Segoe UI', Arial, sans-serif";
@@ -3720,6 +3722,8 @@ export default function ResumeSpace3D({
     lastTravelPhase: "idle",
     arrivalAnnounced: false,
   });
+  const experienceEndViewPendingRef = useRef(false);
+  const previousNavigationTargetRef = useRef<string | null>(null);
   const measuredTravelSpeedRef = useRef(0);
   const measuredSpeedSampleRef = useRef<{
     t: number;
@@ -5118,6 +5122,40 @@ export default function ResumeSpace3D({
   useEffect(() => {
     currentNavigationTargetRef.current = currentNavigationTarget;
   }, [currentNavigationTarget]);
+
+  useEffect(() => {
+    const prevTarget = previousNavigationTargetRef.current;
+    if (currentNavigationTarget === "experience") {
+      experienceEndViewPendingRef.current = true;
+    } else if (
+      prevTarget === "experience" &&
+      currentNavigationTarget !== "experience"
+    ) {
+      // Keep pending true after arrival so we can apply the final camera pose.
+      experienceEndViewPendingRef.current = true;
+    }
+    previousNavigationTargetRef.current = currentNavigationTarget;
+  }, [currentNavigationTarget]);
+
+  useEffect(() => {
+    if (!experienceEndViewPendingRef.current) return;
+    if (currentNavigationTarget !== null) return;
+    if (navigationDistance !== null) return;
+    const controls = sceneRef.current.controls;
+    if (!controls) return;
+
+    settledViewTargetRef.current = EXPERIENCE_END_CAMERA_TARGET.clone();
+    controls.setLookAt(
+      EXPERIENCE_END_CAMERA_POSITION.x,
+      EXPERIENCE_END_CAMERA_POSITION.y,
+      EXPERIENCE_END_CAMERA_POSITION.z,
+      EXPERIENCE_END_CAMERA_TARGET.x,
+      EXPERIENCE_END_CAMERA_TARGET.y,
+      EXPERIENCE_END_CAMERA_TARGET.z,
+      true,
+    );
+    experienceEndViewPendingRef.current = false;
+  }, [currentNavigationTarget, navigationDistance, settledViewTargetRef]);
 
   // Keep speed telemetry responsive during active navigation, even when
   // navigationDistance/state updates are sparse for a short phase window.
