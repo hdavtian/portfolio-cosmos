@@ -10286,9 +10286,9 @@ export default function ResumeSpace3D({
           const nowShell = performance.now();
           const shellDt = Math.min((nowShell - lastShellMs) / 1000, 0.05);
           lastShellMs = nowShell;
-          shell.rotation.x += shellDt * 0.009;
-          shell.rotation.y += shellDt * 0.014;
-          shell.rotation.z += shellDt * 0.007;
+          shell.rotation.x += shellDt * 0.014;
+          shell.rotation.y += shellDt * 0.022;
+          shell.rotation.z += shellDt * 0.011;
 
           if (basicMat && shellEdgeMat) {
             const t = nowShell * 0.001;

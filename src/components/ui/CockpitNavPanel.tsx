@@ -211,14 +211,14 @@ const CockpitNavPanel: React.FC<Props> = ({
     userSelect: "none",
   };
 
-  const bracketColor = "rgba(50, 200, 140, 0.22)";
+  const bracketColor = "rgba(255, 255, 255, 0.62)";
 
   const dateStyle: React.CSSProperties = {
     fontFamily: "'Rajdhani', 'Consolas', monospace",
     fontSize: 8.5,
     fontWeight: 600,
     letterSpacing: 1,
-    color: "rgba(50, 200, 140, 0.45)",
+    color: "rgba(255, 255, 255, 0.82)",
     userSelect: "none",
     whiteSpace: "nowrap",
     width: 26,
@@ -299,12 +299,12 @@ const CockpitNavPanel: React.FC<Props> = ({
                             style={{
                               width: 7,
                               alignSelf: "stretch",
-                              borderRight: `1px solid ${bracketColor}`,
+                              borderRight: `2px solid ${bracketColor}`,
                               borderTop: isFirst
-                                ? `1px solid ${bracketColor}`
+                                ? `2px solid ${bracketColor}`
                                 : undefined,
                               borderBottom: isLast
-                                ? `1px solid ${bracketColor}`
+                                ? `2px solid ${bracketColor}`
                                 : undefined,
                               marginLeft: 3,
                               marginRight: 5,
