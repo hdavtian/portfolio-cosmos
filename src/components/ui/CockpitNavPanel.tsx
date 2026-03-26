@@ -153,6 +153,7 @@ const CockpitNavPanel: React.FC<Props> = ({
   panelStyleOverride,
   panelRef,
 }) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const planets = targets.filter((t) => t.type === "section");
   const moons = targets.filter((t) => t.type === "moon");
 
@@ -184,20 +185,53 @@ const CockpitNavPanel: React.FC<Props> = ({
     e.preventDefault();
   };
 
-  const panelStyle: React.CSSProperties = {
+  const panelWidth = 238;
+
+  const shellStyle: React.CSSProperties = {
     position: "fixed",
     top: "50%",
-    left: 16,
+    left: 10,
     transform: "translateY(-50%)",
+    zIndex: 1000,
+    pointerEvents: "auto",
+  };
+
+  const panelStyle: React.CSSProperties = {
     display: "flex",
     flexDirection: "column",
     gap: 3,
-    zIndex: 1000,
-    pointerEvents: "auto",
     maxHeight: "72vh",
+    width: panelWidth,
     overflowY: "auto",
     overflowX: "visible",
     scrollbarWidth: "none",
+    transition: "transform 280ms ease, opacity 220ms ease",
+    transform: isCollapsed ? `translateX(-${panelWidth + 18}px)` : "translateX(0)",
+    opacity: isCollapsed ? 0 : 1,
+    pointerEvents: isCollapsed ? "none" : "auto",
+  };
+
+  const collapsedTabStyle: React.CSSProperties = {
+    position: "absolute",
+    left: 0,
+    top: 8,
+    width: 30,
+    minHeight: 176,
+    border: "1px solid rgba(200, 210, 230, 0.32)",
+    borderRadius: 8,
+    background: "rgba(10, 12, 20, 0.82)",
+    color: "rgba(220, 230, 245, 0.88)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    cursor: "pointer",
+    transition: "opacity 220ms ease, transform 280ms ease",
+    opacity: isCollapsed ? 1 : 0,
+    transform: isCollapsed ? "translateX(0)" : "translateX(-12px)",
+    pointerEvents: isCollapsed ? "auto" : "none",
+    backdropFilter: "blur(10px)",
   };
 
   const sectionLabelStyle: React.CSSProperties = {
@@ -209,6 +243,40 @@ const CockpitNavPanel: React.FC<Props> = ({
     textTransform: "uppercase",
     padding: "6px 10px 3px",
     userSelect: "none",
+  };
+
+  const sectionHeaderStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    paddingLeft: 8,
+  };
+
+  const sectionHeaderToggleStyle: React.CSSProperties = {
+    width: 16,
+    height: 16,
+    border: "1px solid rgba(200, 210, 230, 0.3)",
+    borderRadius: 4,
+    background: "rgba(10, 12, 20, 0.78)",
+    color: "rgba(220, 230, 245, 0.86)",
+    fontSize: 11,
+    lineHeight: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    backdropFilter: "blur(8px)",
+    padding: 0,
+    flexShrink: 0,
+  };
+
+  const collapsedLabelStyle: React.CSSProperties = {
+    ...sectionLabelStyle,
+    padding: 0,
+    writingMode: "vertical-rl",
+    textOrientation: "mixed",
+    transform: "rotate(180deg)",
+    whiteSpace: "nowrap",
   };
 
   const bracketColor = "rgba(255, 255, 255, 0.62)";
@@ -229,110 +297,134 @@ const CockpitNavPanel: React.FC<Props> = ({
   return (
     <div
       ref={panelRef}
-      style={{ ...panelStyle, ...panelStyleOverride }}
+      style={{ ...shellStyle, ...panelStyleOverride }}
       onMouseDown={stopEvt}
       onPointerDown={stopEvt}
     >
-      <div style={sectionLabelStyle}>Destinations</div>
+      <button
+        type="button"
+        style={collapsedTabStyle}
+        onClick={() => setIsCollapsed(false)}
+        onMouseDown={stopEvt}
+        aria-label="Show NaviComputer"
+      >
+        <span style={{ fontSize: 14, lineHeight: 1 }}>→</span>
+        <span style={collapsedLabelStyle}>NaviComputer</span>
+      </button>
 
-      {sortedPlanets.map((planet) => {
-        const isCurrent = currentTarget === planet.id;
-        const isNav = isNavigating && isCurrent;
-        const childMoons = moons.filter((moon) =>
-          moon.parentId ? moon.parentId === planet.id : planet.id === "experience",
-        );
-        const hasMoons = childMoons.length > 0;
-        const showTimeline = hasMoons && !!careerSpan;
+      <div style={panelStyle}>
+        <div style={sectionHeaderStyle}>
+          <button
+            type="button"
+            style={sectionHeaderToggleStyle}
+            onClick={() => setIsCollapsed(true)}
+            onMouseDown={stopEvt}
+            aria-label="Minimize NaviComputer"
+          >
+            ←
+          </button>
+          <div style={sectionLabelStyle}>NaviComputer</div>
+        </div>
 
-        return (
-          <React.Fragment key={planet.id}>
-            <NavBtn
-              target={planet}
-              isCurrent={isCurrent}
-              isNavigatingTo={isNav}
-              onClick={() => onNavigate(planet.id, "section")}
-              stopEvt={stopEvt}
-            />
+        {sortedPlanets.map((planet) => {
+          const isCurrent = currentTarget === planet.id;
+          const isNav = isNavigating && isCurrent;
+          const childMoons = moons.filter((moon) =>
+            moon.parentId ? moon.parentId === planet.id : planet.id === "experience",
+          );
+          const hasMoons = childMoons.length > 0;
+          const showTimeline = hasMoons && !!careerSpan;
 
-            {hasMoons && (
-              <div
-                style={{
-                  marginLeft: showTimeline ? 0 : 18,
-                  display: "flex",
-                  flexDirection: "column",
-                }}
-              >
-                {childMoons.map((moon, moonIdx) => {
-                  const moonCurrent = currentTarget === moon.id;
-                  const moonNav = isNavigating && moonCurrent;
-                  const isFirst = moonIdx === 0;
-                  const isLast = moonIdx === childMoons.length - 1;
+          return (
+            <React.Fragment key={planet.id}>
+              <NavBtn
+                target={planet}
+                isCurrent={isCurrent}
+                isNavigatingTo={isNav}
+                onClick={() => onNavigate(planet.id, "section")}
+                stopEvt={stopEvt}
+              />
 
-                  return (
-                    <div
-                      key={moon.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "stretch",
-                      }}
-                    >
-                      {/* Date + bracket column */}
-                      {showTimeline && (
-                        <>
-                          {/* Date label: visible only on first and last rows */}
-                          <span
-                            style={{
-                              ...dateStyle,
-                              alignSelf: "center",
-                              opacity: isFirst || isLast ? 1 : 0,
-                            }}
-                          >
-                            {isFirst
-                              ? careerSpan!.end
-                              : isLast
-                                ? careerSpan!.start
-                                : ""}
-                          </span>
+              {hasMoons && (
+                <div
+                  style={{
+                    marginLeft: showTimeline ? 0 : 18,
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  {childMoons.map((moon, moonIdx) => {
+                    const moonCurrent = currentTarget === moon.id;
+                    const moonNav = isNavigating && moonCurrent;
+                    const isFirst = moonIdx === 0;
+                    const isLast = moonIdx === childMoons.length - 1;
 
-                          {/* Bracket segment: top corner, vertical bar, or bottom corner */}
-                          <div
-                            style={{
-                              width: 7,
-                              alignSelf: "stretch",
-                              borderRight: `2px solid ${bracketColor}`,
-                              borderTop: isFirst
-                                ? `2px solid ${bracketColor}`
-                                : undefined,
-                              borderBottom: isLast
-                                ? `2px solid ${bracketColor}`
-                                : undefined,
-                              marginLeft: 3,
-                              marginRight: 5,
-                              flexShrink: 0,
-                            }}
+                    return (
+                      <div
+                        key={moon.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "stretch",
+                        }}
+                      >
+                        {/* Date + bracket column */}
+                        {showTimeline && (
+                          <>
+                            {/* Date label: visible only on first and last rows */}
+                            <span
+                              style={{
+                                ...dateStyle,
+                                alignSelf: "center",
+                                opacity: isFirst || isLast ? 1 : 0,
+                              }}
+                            >
+                              {isFirst
+                                ? careerSpan!.end
+                                : isLast
+                                  ? careerSpan!.start
+                                  : ""}
+                            </span>
+
+                            {/* Bracket segment: top corner, vertical bar, or bottom corner */}
+                            <div
+                              style={{
+                                width: 7,
+                                alignSelf: "stretch",
+                                borderRight: `2px solid ${bracketColor}`,
+                                borderTop: isFirst
+                                  ? `2px solid ${bracketColor}`
+                                  : undefined,
+                                borderBottom: isLast
+                                  ? `2px solid ${bracketColor}`
+                                  : undefined,
+                                marginLeft: 3,
+                                marginRight: 5,
+                                flexShrink: 0,
+                              }}
+                            />
+                          </>
+                        )}
+
+                        {/* Button wrapper — padding creates visual gap without
+                            breaking the continuous bracket border */}
+                        <div style={{ flex: 1, padding: "1px 0" }}>
+                          <NavBtn
+                            target={moon}
+                            isCurrent={moonCurrent}
+                            isNavigatingTo={moonNav}
+                            onClick={() => onNavigate(moon.id, "moon")}
+                            stopEvt={stopEvt}
                           />
-                        </>
-                      )}
-
-                      {/* Button wrapper — padding creates visual gap without
-                          breaking the continuous bracket border */}
-                      <div style={{ flex: 1, padding: "1px 0" }}>
-                        <NavBtn
-                          target={moon}
-                          isCurrent={moonCurrent}
-                          isNavigatingTo={moonNav}
-                          onClick={() => onNavigate(moon.id, "moon")}
-                          stopEvt={stopEvt}
-                        />
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </React.Fragment>
-        );
-      })}
+                    );
+                  })}
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
     </div>
   );
 };
