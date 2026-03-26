@@ -53,6 +53,7 @@ export const INTRO_SHIP_FINAL_QUAT = new THREE.Quaternion().setFromEuler(
 const INTRO_CAMERA_DURATION_MS = 7000;
 const INTRO_SHIP_APPROACH_DURATION_MS = Math.round(5000 * INTRO_TIME_SCALE);
 export const INTRO_SHIP_PICKUP_DURATION_MS = 6200;
+const INTRO_CAMERA_RETREAT_START_PROGRESS = 0.64;
 const INTRO_PASS_THROUGH_CHANCE = 0.45;
 const INTRO_ORBIT_CHANCE = 0.6;
 const INTRO_STRAIGHT_PATH_CHANCE = 0.25;
@@ -413,7 +414,7 @@ export const createIntroSequenceRunner = (
       ship.position.copy(startHeroPos);
       ship.quaternion.copy(startHeroQuat);
       onIntroEvent?.("ship-cinematic started");
-      const retreatStartProgress = 0.72;
+      const retreatStartProgress = INTRO_CAMERA_RETREAT_START_PROGRESS;
       const retreatStartTarget = currentControls
         .getTarget(new THREE.Vector3())
         .clone();

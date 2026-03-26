@@ -1228,7 +1228,7 @@ export const useRenderLoop = () => {
                 sceneRef.current.controls
               ) {
                 const retreatStart = THREE.MathUtils.clamp(
-                  cinematic.cameraRetreatStartProgress ?? 0.72,
+                  cinematic.cameraRetreatStartProgress ?? 0.64,
                   0,
                   0.96,
                 );
