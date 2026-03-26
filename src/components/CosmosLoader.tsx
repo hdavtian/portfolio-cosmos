@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import "./CosmosLoader.scss";
 
 interface CosmosLoaderProps {
@@ -9,6 +9,15 @@ export default function CosmosLoader({ onLoadingComplete }: CosmosLoaderProps) {
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState("Initializing...");
   const timeoutsRef = useRef<number[]>([]);
+  const signalClass =
+    progress < 40
+      ? "cosmos-loader--signal-pilot"
+      : progress < 80
+        ? "cosmos-loader--signal-header"
+        : "cosmos-loader--signal-data";
+  const revealStyle = {
+    ["--reveal" as any]: `${progress}%`,
+  } as CSSProperties;
 
   const queueTimeout = (fn: () => void, delay: number) => {
     const id = window.setTimeout(fn, delay);
@@ -56,18 +65,18 @@ export default function CosmosLoader({ onLoadingComplete }: CosmosLoaderProps) {
   }, [onLoadingComplete]);
 
   return (
-    <div className="cosmos-loader">
+    <div className={`cosmos-loader ${signalClass}`}>
+      <div className="cosmos-loader__signal" aria-hidden="true"></div>
       <div className="cosmos-loader__content">
-        <div className="cosmos-loader__spectrum-shell">
-          <div className="cosmos-loader__spectrum-logo">
-            <span className="cosmos-loader__stripe cosmos-loader__stripe--1"></span>
-            <span className="cosmos-loader__stripe cosmos-loader__stripe--2"></span>
-            <span className="cosmos-loader__stripe cosmos-loader__stripe--3"></span>
-            <span className="cosmos-loader__stripe cosmos-loader__stripe--4"></span>
-            <span className="cosmos-loader__stripe cosmos-loader__stripe--5"></span>
-            <span className="cosmos-loader__stripe cosmos-loader__stripe--6"></span>
+        <div className="cosmos-loader__tv">
+          <div className="cosmos-loader__tv-header">Program: Portfolio</div>
+          <div className="cosmos-loader__tv-screen" style={revealStyle}>
+            <div className="cosmos-loader__tv-base"></div>
+            <div className="cosmos-loader__tv-image">
+              <div className="cosmos-loader__tv-wordmark">HARMA DAVTIAN</div>
+            </div>
+            <div className="cosmos-loader__tv-scan"></div>
           </div>
-          <div className="cosmos-loader__bootline">SPECTRUM MODE</div>
         </div>
 
         <div className="cosmos-loader__text">
