@@ -1,3 +1,11 @@
+@font-face {
+    font-family: "ZX Spectrum";
+    src: url("../assets/fonts/zx-spectrum.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: block;
+}
+
 .cosmos-loader {
     position: fixed;
     top: 0;
@@ -32,7 +40,7 @@
     // ── TV box ────────────────────────────────────────────────
 
     &__tv {
-        width: min(92vw, 860px);
+        width: 70vw;
         display: flex;
         flex-direction: column;
         gap: 6px;
@@ -40,8 +48,8 @@
 
     &__tv-header {
         color: rgba(230, 230, 230, 0.92);
-        font-family: "Courier New", Courier, monospace;
-        font-size: 12px;
+        font-family: "ZX Spectrum", "Courier New", Courier, monospace;
+        font-size: 16px;
         letter-spacing: 0.8px;
         padding-left: 6px;
         text-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
@@ -50,7 +58,7 @@
     &__tv-screen {
         position: relative;
         width: 100%;
-        aspect-ratio: 16 / 9;
+        height: 70vh;
         overflow: hidden;
         border: 2px solid rgba(248, 248, 248, 0.86);
         box-shadow:
@@ -114,7 +122,7 @@
     // ── Info panel below TV ───────────────────────────────────
 
     &__info {
-        width: min(92vw, 860px);
+        width: 70vw;
         display: flex;
         flex-direction: column;
         align-items: center;
