@@ -3598,6 +3598,7 @@ export default function ResumeSpace3D({
   const skillsLatticeFlowMetaRef = useRef<SkillsLatticeFlowMeta[]>([]);
   const skillsLatticeEnvelopeRef = useRef<THREE.Mesh | null>(null);
   const skillsLatticeEnvelopeMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
+  const skillsLatticeEnvelopeBasicMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
   const skillsLatticeEnvelopeEdgeMatRef = useRef<THREE.LineBasicMaterial | null>(null);
   const skillsLatticeEnvelopeRadiusRef = useRef(0);
   const skillsLatticeEnvelopeInsideRef = useRef<boolean | null>(null);
@@ -3953,33 +3954,35 @@ export default function ResumeSpace3D({
       id: "experience",
       label: "Experience",
       type: "section" as const,
-      icon: "🚀",
+      icon: "◆",
     },
-    { id: "skills", label: "Skills", type: "section" as const, icon: "🧠" },
+    { id: "skills", label: "Skills", type: "section" as const, icon: "◇" },
     {
       id: "about",
       label: "About",
       type: "section" as const,
-      icon: "🪐",
+      icon: "◎",
     },
     {
       id: "portfolio",
       label: "Portfolio",
       type: "section" as const,
-      icon: "✨",
+      icon: "✦",
     },
     {
       id: ABOUT_MEMORY_SQUARE_NAV_ID,
       label: "About2",
       type: "section" as const,
-      icon: "👨‍🚀",
+      icon: "⊙",
     },
     ...resumeData.experience.map((exp) => ({
       id: exp.id,
       label: exp.navLabel || exp.company,
       type: "moon" as const,
-      icon: "🌕",
+      icon: "◦",
       parentId: "experience",
+      startDate: exp.startDate,
+      endDate: exp.endDate,
     })),
   ];
 
@@ -7380,7 +7383,6 @@ export default function ResumeSpace3D({
     }
     stopOrbitalPortfolioToneSequence();
     entrySeq.active = false;
-    if (latticeRoot) latticeRoot.visible = false;
     skillsLatticeNodeLabelsRef.current.forEach((label) => {
       label.visible = false;
     });
@@ -9953,6 +9955,10 @@ export default function ResumeSpace3D({
         const shell = skillsLatticeEnvelopeRef.current;
         let latticeInternalsVisible = true;
         if (camera && shellMat && shellEdgeMat && shell) {
+          if (shell.material !== shellMat) {
+            shell.material = shellMat;
+            shellMat.needsUpdate = true;
+          }
           shell.rotation.x += dt * shellSpin.x;
           shell.rotation.y += dt * shellSpin.y;
           shell.rotation.z += dt * shellSpin.z;
@@ -10257,11 +10263,59 @@ export default function ResumeSpace3D({
     let raf = 0;
     let lastMs = performance.now();
     let lastAnimStepMs = 0;
+    let lastShellMs = lastMs;
     let nextPulseAt = lastMs + 1800 + Math.random() * 2400;
     let pulseEndAt = 0;
     let pulseStartAt = 0;
     const tick = () => {
       raf = requestAnimationFrame(tick);
+
+      // Ambient envelope spin + shimmer — keeps the lattice alive from afar.
+      // Uses MeshBasicMaterial so vertex colors are visible without scene lights.
+      if (!skillsLatticeActiveRef.current) {
+        const shell = skillsLatticeEnvelopeRef.current;
+        const basicMat = skillsLatticeEnvelopeBasicMatRef.current;
+        const shellEdgeMat = skillsLatticeEnvelopeEdgeMatRef.current;
+        if (shell) {
+          if (basicMat && shell.material !== basicMat) {
+            shell.material = basicMat;
+            basicMat.side = THREE.FrontSide;
+            basicMat.transparent = false;
+            basicMat.depthWrite = true;
+          }
+          const nowShell = performance.now();
+          const shellDt = Math.min((nowShell - lastShellMs) / 1000, 0.05);
+          lastShellMs = nowShell;
+          shell.rotation.x += shellDt * 0.009;
+          shell.rotation.y += shellDt * 0.014;
+          shell.rotation.z += shellDt * 0.007;
+
+          if (basicMat && shellEdgeMat) {
+            const t = nowShell * 0.001;
+            if (nowShell >= nextPulseAt) {
+              pulseStartAt = nowShell;
+              pulseEndAt = nowShell + 720 + Math.random() * 520;
+              nextPulseAt = pulseEndAt + 2800 + Math.random() * 4200;
+            }
+            const pulseDur = Math.max(1, pulseEndAt - pulseStartAt);
+            const pulseP = pulseEndAt > nowShell
+              ? (nowShell - pulseStartAt) / pulseDur : 0;
+            const periodic = 0.5 + 0.5 * Math.sin(t * 0.75);
+            const pulse = pulseEndAt > nowShell
+              ? Math.sin(pulseP * Math.PI) : 0;
+            const boost = periodic * 0.22 + pulse * 0.95;
+            shellEdgeMat.opacity = THREE.MathUtils.clamp(
+              0.17 + boost * 0.24, 0.12, 0.5,
+            );
+            shellEdgeMat.color.setHSL(
+              (0.57 + 0.03 * periodic + pulse * 0.04) % 1, 0.82, 0.7,
+            );
+          }
+        }
+      } else {
+        lastShellMs = performance.now();
+      }
+
       const beacon = skillsLatticeBeaconRef.current;
       const beaconMat = skillsLatticeBeaconMatRef.current;
       const edgeMat = skillsLatticeBeaconEdgeMatRef.current;
@@ -10295,8 +10349,8 @@ export default function ResumeSpace3D({
       const shimmerHue = 0.58 + 0.025 * Math.sin(t * 3.1) + pulse * 0.03;
       beaconMat.emissive.setHSL(shimmerHue % 1, 0.28, 0.22);
       beaconMat.emissiveIntensity = THREE.MathUtils.clamp(0.06 + boost * 0.22, 0.05, 0.34);
-      edgeMat.opacity = THREE.MathUtils.clamp(0.17 + boost * 0.24, 0.12, 0.5);
-      edgeMat.color.setHSL((0.57 + 0.03 * periodic + pulse * 0.04) % 1, 0.82, 0.7);
+      // Beacon remains clickable but visually hidden; outer shell carries visuals.
+      edgeMat.opacity = 0;
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -14476,7 +14530,7 @@ export default function ResumeSpace3D({
     const skillsLatticeRoot = new THREE.Group();
     skillsLatticeRoot.name = "SkillsConstellationLattice";
     skillsLatticeRoot.position.copy(skillsAnchor).add(new THREE.Vector3(0, 8, 0));
-    skillsLatticeRoot.visible = false;
+    skillsLatticeRoot.visible = true;
     const categoryEntries = Object.entries(resumeData.skills) as Array<
       [string, string[]]
     >;
@@ -14556,6 +14610,17 @@ export default function ResumeSpace3D({
     skillsLatticeRoot.add(latticeEnvelope);
     skillsLatticeEnvelopeRef.current = latticeEnvelope;
     skillsLatticeEnvelopeMatRef.current = latticeEnvelope.material as THREE.MeshPhongMaterial;
+    const envelopeBasicMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      vertexColors: true,
+      transparent: false,
+      opacity: 1,
+      side: THREE.FrontSide,
+      depthWrite: true,
+      toneMapped: false,
+    });
+    latticeEnvelope.material = envelopeBasicMat;
+    skillsLatticeEnvelopeBasicMatRef.current = envelopeBasicMat;
     skillsLatticeEnvelopeEdgeMatRef.current =
       latticeEnvelopeEdges.material as THREE.LineBasicMaterial;
     skillsLatticeEnvelopeRadiusRef.current = latticeEnvelopeRadius;
@@ -14581,10 +14646,10 @@ export default function ResumeSpace3D({
       specular: new THREE.Color(0xd9efff),
       emissive: 0x121a2a,
       emissiveIntensity: 0.1,
-      transparent: false,
-      opacity: 1,
+      transparent: true,
+      opacity: 0,
       side: THREE.FrontSide,
-      depthWrite: true,
+      depthWrite: false,
     });
     beaconMat.toneMapped = false;
     const skillsBeacon = new THREE.Mesh(beaconGeom, beaconMat);
@@ -14599,7 +14664,7 @@ export default function ResumeSpace3D({
       new THREE.LineBasicMaterial({
         color: 0x8fcbff,
         transparent: true,
-        opacity: 0.23,
+        opacity: 0,
         depthWrite: false,
       }),
     );
@@ -15741,6 +15806,10 @@ export default function ResumeSpace3D({
     skillsLatticeRoot.traverse((obj) => {
       obj.layers.set(SKILLS_LATTICE_LAYER);
     });
+    // Keep outer shell visible from normal universe camera (layer 0) while
+    // internals remain gated behind SKILLS_LATTICE_LAYER.
+    latticeEnvelope.layers.enable(0);
+    latticeEnvelopeEdges.layers.enable(0);
     // Data packets flowing along lattice links.
     if (latticeLinkSegments.length > 0) {
       const flowCount = Math.min(320, latticeLinkSegments.length * 3);
