@@ -10,11 +10,11 @@ type Phase = "idle" | "colorCycle" | "teaser" | "frenzy" | "flash" | "done";
 
 const TEASER_COLORS = ["#007A87", "#720000"];
 const DATA_COLORS = ["#665B00", "#001459"];
-const COLOR_CYCLE = ["#720000", "#007A87", "#C8B800"];
 const DEFAULT_REVEAL_LINES = 36;
 const REVEAL_LINE_MIN_RATIO = 0.2; // 1/5th of max line thickness
 const FRENZY_BASE_DURATION_MS = 333 * DEFAULT_REVEAL_LINES;
 const PROGRAM_TEXT = "Program: Portfolio";
+const OPTIONAL_CODE_SESSION_KEY = "cosmosOptionalCode";
 
 const buildRevealLineFractions = (): number[] => {
   const max = 1 / DEFAULT_REVEAL_LINES;
@@ -43,6 +43,9 @@ export default function CosmosLoader({
   onLoadingComplete,
   isSceneReady = false,
 }: CosmosLoaderProps) {
+  const debugEnabled =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("debug") === "true";
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
   const phaseRef = useRef<Phase>("idle");
@@ -55,6 +58,13 @@ export default function CosmosLoader({
   const [stageText, setStageText] = useState("");
   const [showStatusUI, setShowStatusUI] = useState(false);
   const [showEndMessage, setShowEndMessage] = useState(false);
+  const [entryGateVisible, setEntryGateVisible] = useState(false);
+  const [hasEntered, setHasEntered] = useState(false);
+  const [endMessageFlashVariant, setEndMessageFlashVariant] = useState<"a" | "b">("a");
+  const [optionalCode, setOptionalCode] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.sessionStorage.getItem(OPTIONAL_CODE_SESSION_KEY) ?? "";
+  });
   const [progress, setProgress] = useState(0);
   const [revealedSet, setRevealedSet] = useState<Set<number>>(new Set());
   const [revealLineFractions, setRevealLineFractions] = useState<number[]>(
@@ -65,6 +75,8 @@ export default function CosmosLoader({
       ),
   );
   const [animationDone, setAnimationDone] = useState(false);
+  const [debugCurrentMode, setDebugCurrentMode] = useState("boot");
+  const [debugModeHistory, setDebugModeHistory] = useState<string[]>([]);
 
   const shuffledOrderRef = useRef<number[]>([]);
   const revealCountRef = useRef(0);
@@ -84,6 +96,38 @@ export default function CosmosLoader({
     clearInterval(id);
     intervalsRef.current = intervalsRef.current.filter((i) => i !== id);
   }, []);
+
+  const markDebugMode = useCallback(
+    (mode: string) => {
+      if (!debugEnabled) return;
+      setDebugCurrentMode(mode);
+      setDebugModeHistory((prev) =>
+        prev[prev.length - 1] === mode ? prev : [...prev.slice(-9), mode],
+      );
+      console.log(`[LOADER:mode] ${mode}`);
+    },
+    [debugEnabled],
+  );
+
+  const setLoaderPhase = useCallback(
+    (phase: Phase, modeLabel?: string) => {
+      phaseRef.current = phase;
+      markDebugMode(modeLabel ?? `phase:${phase}`);
+    },
+    [markDebugMode],
+  );
+
+  const saveOptionalCodeToSession = useCallback((value: string) => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(OPTIONAL_CODE_SESSION_KEY, value);
+  }, []);
+
+  const handleEnterLoader = useCallback(() => {
+    if (hasEntered) return;
+    saveOptionalCodeToSession(optionalCode);
+    setHasEntered(true);
+    markDebugMode("user-entered");
+  }, [hasEntered, markDebugMode, optionalCode, saveOptionalCodeToSession]);
 
   // ── Canvas renderers ─────────────────────────────────────────
 
@@ -150,14 +194,14 @@ export default function CosmosLoader({
   const startPhase = useCallback(
     (phase: Phase) => {
       stopLoop();
-      phaseRef.current = phase;
+      setLoaderPhase(phase);
       stripeStartPosRef.current = 0;
       if (phase === "teaser")
         rafRef.current = requestAnimationFrame(showTeaserSignal);
       else if (phase === "frenzy")
         rafRef.current = requestAnimationFrame(showFrenzySignal);
     },
-    [stopLoop, showTeaserSignal, showFrenzySignal],
+    [stopLoop, showTeaserSignal, showFrenzySignal, setLoaderPhase],
   );
 
   // ── Orchestration ────────────────────────────────────────────
@@ -173,6 +217,13 @@ export default function CosmosLoader({
     window.addEventListener("resize", resize);
 
     fillSolid("#000");
+    setLoaderPhase("idle", "idle");
+    setTypedText(PROGRAM_TEXT);
+    setShowStatusUI(true);
+    setStageText("Initializing...");
+    setProgress(0);
+    setRevealedSet(new Set());
+    markDebugMode("status-ui-visible");
 
     // Build random reveal strips and shuffled reveal order
     const revealLines = buildRevealLineFractions();
@@ -193,7 +244,7 @@ export default function CosmosLoader({
 
     const stopTeaser = () => {
       stopLoop();
-      phaseRef.current = "idle";
+      setLoaderPhase("idle", "teaser-end");
       fillSolid(lastColorRef.current);
     };
 
@@ -241,22 +292,31 @@ export default function CosmosLoader({
 
     const runEndPhase = () => {
       stopLoop();
-      phaseRef.current = "idle";
+      setLoaderPhase("idle", "end-prep");
       fillSolid("#000");
       setProgress(100);
       setStageText("Ready for exploration");
       setShowEndMessage(true);
+      setEntryGateVisible(true);
+      setEndMessageFlashVariant("a");
+      markDebugMode("ready-message");
 
       queueTimeout(() => {
+        setLoaderPhase("flash", "flash");
+        markDebugMode("flash");
         let flashCount = 0;
         const flashId = queueInterval(() => {
+          setEndMessageFlashVariant((prev) => (prev === "a" ? "b" : "a"));
           fillSolid(flashCount % 2 === 0 ? "#fff" : "#000");
           flashCount++;
           if (flashCount >= 6) {
             clearQueuedInterval(flashId);
             queueTimeout(() => {
               fillSolid("#000");
+              setLoaderPhase("done", "done");
               setAnimationDone(true);
+              setEndMessageFlashVariant("a");
+              markDebugMode("done");
             }, 200);
           }
         }, 200);
@@ -265,38 +325,21 @@ export default function CosmosLoader({
 
     // ── Chained sequence ──
 
-    // 1. Color cycle
-    queueTimeout(() => fillSolid(COLOR_CYCLE[0]), 1000);
-    queueTimeout(() => fillSolid(COLOR_CYCLE[1]), 2000);
-    queueTimeout(() => fillSolid(COLOR_CYCLE[2]), 3000);
-
-    // 2. Teaser 1 → on end: show title
+    // Start directly at status-ui-visible, then preserve teaser -> frenzy flow.
     queueTimeout(() => {
+      markDebugMode("teaser");
       runTeaser(TEASER_DURATION, () => {
-        setTypedText(PROGRAM_TEXT);
-
-        // 3. Teaser 2 → on end: show bottom panel
         queueTimeout(() => {
-          runTeaser(TEASER_DURATION, () => {
-            setShowStatusUI(true);
-            setStageText("Initializing...");
-
-            // 4. Teaser 3 → on end: start frenzy
+          markDebugMode("frenzy");
+          runFrenzy(() => {
             queueTimeout(() => {
-              runTeaser(TEASER_DURATION, () => {
-
-                // 5. Frenzy → on all revealed: end phase
-                queueTimeout(() => {
-                  runFrenzy(() => {
-                    queueTimeout(() => runEndPhase(), 500);
-                  });
-                }, 300);
-              });
+              markDebugMode("end-phase");
+              runEndPhase();
             }, 500);
           });
-        }, 500);
+        }, 300);
       });
-    }, 4000);
+    }, 180);
 
     return () => {
       window.removeEventListener("resize", resize);
@@ -306,20 +349,53 @@ export default function CosmosLoader({
       intervalsRef.current.forEach((id) => clearInterval(id));
       intervalsRef.current = [];
     };
-  }, []);
+  }, [
+    fillSolid,
+    markDebugMode,
+    queueInterval,
+    queueTimeout,
+    clearQueuedInterval,
+    startPhase,
+    stopLoop,
+    setLoaderPhase,
+  ]);
 
-  // Dismiss only when both animation AND actual loading are complete
   useEffect(() => {
-    if (animationDone && isSceneReady) {
+    if (animationDone) markDebugMode("animation-done");
+  }, [animationDone, markDebugMode]);
+
+  useEffect(() => {
+    if (isSceneReady) markDebugMode("scene-ready");
+  }, [isSceneReady, markDebugMode]);
+
+  // Dismiss only when animation, scene readiness, and user entry are complete.
+  useEffect(() => {
+    if (animationDone && isSceneReady && hasEntered) {
+      markDebugMode("loader-complete");
       onLoadingComplete();
     }
-  }, [animationDone, isSceneReady, onLoadingComplete]);
+  }, [animationDone, isSceneReady, hasEntered, onLoadingComplete, markDebugMode]);
 
   return (
     <div className="cosmos-loader">
       <canvas ref={canvasRef} className="cosmos-loader__canvas" />
 
       <div className="cosmos-loader__overlay">
+        {debugEnabled && (
+          <div className="cosmos-loader__debug">
+            <div className="cosmos-loader__debug-title">Loader Debug</div>
+            <div className="cosmos-loader__debug-current">
+              mode: {debugCurrentMode}
+            </div>
+            {debugModeHistory.length > 0 && (
+              <div className="cosmos-loader__debug-history">
+                {debugModeHistory.map((mode, idx) => (
+                  <span key={`${mode}-${idx}`}>{mode}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="cosmos-loader__tv">
           {typedText && (
             <div className="cosmos-loader__tv-header">{typedText}</div>
@@ -346,7 +422,11 @@ export default function CosmosLoader({
               ))}
             </div>
             {showEndMessage && (
-              <div className="cosmos-loader__end-message">Loading Complete</div>
+              <div
+                className={`cosmos-loader__end-message cosmos-loader__end-message--flash-${endMessageFlashVariant}`}
+              >
+                App Load Completed
+              </div>
             )}
           </div>
         </div>
@@ -372,6 +452,36 @@ export default function CosmosLoader({
             </div>
 
             <div className="cosmos-loader__percentage">{progress}%</div>
+
+            {entryGateVisible && (
+              <form
+                className="cosmos-loader__entry-gate"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleEnterLoader();
+                }}
+              >
+                <label className="cosmos-loader__entry-label" htmlFor="optional-code">
+                  Optional code
+                </label>
+                <input
+                  id="optional-code"
+                  className="cosmos-loader__entry-input"
+                  type="text"
+                  value={optionalCode}
+                  onChange={(e) => setOptionalCode(e.target.value)}
+                  placeholder="Enter optional code"
+                  autoComplete="off"
+                />
+                <button
+                  type="submit"
+                  className="cosmos-loader__enter-button"
+                  disabled={hasEntered}
+                >
+                  {hasEntered ? "Entering..." : "Enter"}
+                </button>
+              </form>
+            )}
           </div>
         )}
       </div>

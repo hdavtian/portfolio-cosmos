@@ -32,3 +32,9 @@ https://freesound.org/people/drzhnn/packs/12752/
 08-data-transmission.wav by drzhnn -- https://freesound.org/s/199939/ -- License: Creative Commons 0
 01-activation.wav by drzhnn -- https://freesound.org/s/199938/ -- License: Creative Commons 0
 07-confirmation.wav by drzhnn -- https://freesound.org/s/199940/ -- License: Creative Commons 0
+
+fonts
+https://www.dafont.com/zx-spectrum.font
+
+8bit image converter
+https://8bitphoto.co.uk/
