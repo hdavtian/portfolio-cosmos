@@ -12096,6 +12096,79 @@ export default function ResumeSpace3D({
     shipLog,
   ]);
 
+  // Ambient animation loop: runs when portfolio is built but NOT actively
+  // entered, so cores pulse and stations revolve visibly from a distance.
+  useEffect(() => {
+    if (orbitalPortfolioActive || !orbitalPortfolioReady) return;
+    let raf = 0;
+    let last = performance.now();
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const now = performance.now();
+      const dt = Math.min((now - last) / 1000, 0.08);
+      last = now;
+      orbitalPortfolioCoresRef.current.forEach((core, coreIndex) => {
+        const glowMat = core.glow.material as THREE.MeshBasicMaterial;
+        glowMat.opacity =
+          0.2 + (0.5 + 0.5 * Math.sin(now * 0.0018 + coreIndex)) * 0.2;
+        core.nucleus.scale.setScalar(1);
+        core.root.rotation.y += dt * 0.03;
+        core.root.rotation.x = Math.sin(now * 0.00037 + coreIndex * 0.4) * 0.08;
+        core.sliceGroup.rotation.y -= dt * 0.24;
+        core.sliceGroup.rotation.z += dt * 0.11;
+        core.sliceMats.forEach((mat, idx) => {
+          const pulse = 0.5 + 0.5 * Math.sin(now * 0.0021 + idx * 0.9 + coreIndex);
+          mat.opacity = 0.2 + pulse * 0.28;
+        });
+        core.rayMats.forEach((mat, idx) => {
+          const pulse = 0.5 + 0.5 * Math.sin(now * 0.0017 + idx * 0.63 + coreIndex);
+          mat.opacity = 0.12 + pulse * 0.2;
+        });
+        if (core.panelMat) {
+          core.panelMat.opacity = 0.12 + (0.5 + 0.5 * Math.sin(now * 0.0016)) * 0.02;
+        }
+        if (core.panelColorAttr && core.panelBaseColors) {
+          const arr = core.panelColorAttr.array as Float32Array;
+          const lum = 0.86 + (0.5 + 0.5 * Math.sin(now * 0.0012 + coreIndex)) * 0.06;
+          for (let i = 0; i < arr.length; i += 3) {
+            const pulse = 0.98 + 0.02 * Math.sin(now * 0.0019 + i * 0.0013 + coreIndex);
+            arr[i] = core.panelBaseColors[i] * lum * pulse;
+            arr[i + 1] = core.panelBaseColors[i + 1] * lum * pulse;
+            arr[i + 2] = core.panelBaseColors[i + 2] * lum * pulse;
+          }
+          core.panelColorAttr.needsUpdate = true;
+        }
+      });
+      orbitalPortfolioStationsRef.current.forEach((station) => {
+        if (station.orbitMotionBlend < 1) {
+          station.orbitMotionBlend = THREE.MathUtils.damp(
+            station.orbitMotionBlend, 1, 5.5, dt,
+          );
+        }
+        station.orbitAngle +=
+          ORBITAL_PORTFOLIO_STATION_ORBIT_SPEED *
+          dt *
+          station.orbitDirection *
+          station.orbitMotionBlend;
+        const plainQuat = new THREE.Quaternion().setFromAxisAngle(
+          new THREE.Vector3(0, 0, 1),
+          THREE.MathUtils.degToRad(station.plainAngle),
+        );
+        const localOrbit = new THREE.Vector3(
+          Math.cos(station.orbitAngle) * station.orbitRadius,
+          0,
+          Math.sin(station.orbitAngle) * station.orbitRadius,
+        ).applyQuaternion(plainQuat);
+        station.group.position.copy(station.coreAnchorLocal).add(localOrbit);
+      });
+      if (orbitalPortfolioMatterGroupRef.current) {
+        orbitalPortfolioMatterGroupRef.current.rotation.y += dt * 0.02;
+      }
+    };
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, [orbitalPortfolioActive, orbitalPortfolioReady]);
+
   useEffect(() => {
     if (!orbitalPortfolioActive) return;
     const stations = orbitalPortfolioStationsRef.current;
