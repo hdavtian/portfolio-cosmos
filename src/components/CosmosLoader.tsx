@@ -287,8 +287,11 @@ export default function CosmosLoader({
           )}
           <div className="cosmos-loader__tv-screen">
             <div className="cosmos-loader__tv-content">
-              <div className="cosmos-loader__tv-wordmark">HARMA DAVTIAN</div>
-              <div className="cosmos-loader__tv-sub">PORTFOLIO</div>
+              <div className="cosmos-loader__tv-backdrop" aria-hidden="true" />
+              <div className="cosmos-loader__tv-text">
+                <div className="cosmos-loader__tv-wordmark">HARMA DAVTIAN</div>
+                <div className="cosmos-loader__tv-sub">PORTFOLIO</div>
+              </div>
             </div>
             <div className="cosmos-loader__tv-mask">
               {Array.from({ length: TOTAL_REVEAL_LINES }).map((_, i) => (
