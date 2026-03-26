@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./CosmosLoader.scss";
 
 interface CosmosLoaderProps {
@@ -8,6 +8,12 @@ interface CosmosLoaderProps {
 export default function CosmosLoader({ onLoadingComplete }: CosmosLoaderProps) {
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState("Initializing...");
+  const timeoutsRef = useRef<number[]>([]);
+
+  const queueTimeout = (fn: () => void, delay: number) => {
+    const id = window.setTimeout(fn, delay);
+    timeoutsRef.current.push(id);
+  };
 
   useEffect(() => {
     const stages = [
@@ -27,57 +33,63 @@ export default function CosmosLoader({ onLoadingComplete }: CosmosLoaderProps) {
         setStage(text);
         currentStage++;
 
-        setTimeout(() => {
+        queueTimeout(() => {
           if (currentStage < stages.length) {
             advanceStage();
           } else {
             // Final stage complete
-            setTimeout(onLoadingComplete, 300);
+            queueTimeout(onLoadingComplete, 300);
           }
         }, delay);
       }
     };
 
     // Start loading sequence
-    setTimeout(advanceStage, 100);
+    queueTimeout(advanceStage, 100);
+
+    return () => {
+      timeoutsRef.current.forEach((id) => {
+        window.clearTimeout(id);
+      });
+      timeoutsRef.current = [];
+    };
   }, [onLoadingComplete]);
 
   return (
     <div className="cosmos-loader">
       <div className="cosmos-loader__content">
-        <div className="cosmos-loader__orbit">
-          <div className="cosmos-loader__planet"></div>
-          <div className="cosmos-loader__moon"></div>
+        <div className="cosmos-loader__spectrum-shell">
+          <div className="cosmos-loader__spectrum-logo">
+            <span className="cosmos-loader__stripe cosmos-loader__stripe--1"></span>
+            <span className="cosmos-loader__stripe cosmos-loader__stripe--2"></span>
+            <span className="cosmos-loader__stripe cosmos-loader__stripe--3"></span>
+            <span className="cosmos-loader__stripe cosmos-loader__stripe--4"></span>
+            <span className="cosmos-loader__stripe cosmos-loader__stripe--5"></span>
+            <span className="cosmos-loader__stripe cosmos-loader__stripe--6"></span>
+          </div>
+          <div className="cosmos-loader__bootline">SPECTRUM MODE</div>
         </div>
 
         <div className="cosmos-loader__text">
-          <h2 className="cosmos-loader__title">HARMA DAVTIAN JOURNEY</h2>
+          <h2 className="cosmos-loader__title">HARMA DAVTIAN PORTFOLIO</h2>
           <p className="cosmos-loader__stage">{stage}</p>
 
-          <div className="cosmos-loader__progress-bar">
-            <div
-              className="cosmos-loader__progress-fill"
-              style={{ width: `${progress}%` }}
-            ></div>
+          <div className="cosmos-loader__progress-grid" aria-hidden="true">
+            {Array.from({ length: 24 }).map((_, i) => {
+              const threshold = ((i + 1) / 24) * 100;
+              return (
+                <span
+                  key={i}
+                  className={`cosmos-loader__progress-cell ${
+                    progress >= threshold ? "cosmos-loader__progress-cell--active" : ""
+                  }`}
+                />
+              );
+            })}
           </div>
 
           <div className="cosmos-loader__percentage">{progress}%</div>
         </div>
-      </div>
-
-      <div className="cosmos-loader__stars">
-        {Array.from({ length: 50 }).map((_, i) => (
-          <div
-            key={i}
-            className="cosmos-loader__star"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`,
-              animationDuration: `${2 + Math.random() * 2}s`,
-            }}
-          ></div>
-        ))}
       </div>
     </div>
   );

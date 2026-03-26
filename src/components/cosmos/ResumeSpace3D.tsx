@@ -2363,6 +2363,10 @@ export default function ResumeSpace3D({
       try {
         gpuWarmupInProgressRef.current = true;
         const warmupStart = performance.now();
+        const yieldToMainThread = () =>
+          new Promise<void>((resolve) => {
+            window.requestAnimationFrame(() => resolve());
+          });
 
         // Save camera layer mask and enable all layers so compileAsync
         // and the warmup render cover objects on every layer (e.g. the
@@ -2391,11 +2395,17 @@ export default function ResumeSpace3D({
         });
         console.warn(`[PERF:warmup] GPU warmup STARTING — ${meshCount} meshes, ${savedState.length} objects`);
 
-        // Step 1 — Upload every texture to the GPU
+        // Step 1 — Upload every texture to the GPU in chunks so
+        // the browser can keep painting loader animations smoothly.
         let textureCount = 0;
+        const meshList: THREE.Mesh[] = [];
         mainScene.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
-          if (!mesh.isMesh) return;
+          if (mesh.isMesh) meshList.push(mesh);
+        });
+        const WARMUP_CHUNK_SIZE = 24;
+        for (let i = 0; i < meshList.length; i += 1) {
+          const mesh = meshList[i];
           const materials = Array.isArray(mesh.material)
             ? mesh.material
             : [mesh.material];
@@ -2410,12 +2420,16 @@ export default function ResumeSpace3D({
               }
             }
           }
-        });
+          if ((i + 1) % WARMUP_CHUNK_SIZE === 0) {
+            await yieldToMainThread();
+          }
+        }
         const initTextureMs = performance.now() - warmupStart;
         console.warn(`[PERF:warmup] initTexture: ${textureCount} textures in ${initTextureMs.toFixed(1)}ms`);
 
         // Step 2 — Compile all shader programs asynchronously
         const compileStart = performance.now();
+        await yieldToMainThread();
         await renderer.compileAsync(mainScene, liveCamera);
         const compileMs = performance.now() - compileStart;
 
