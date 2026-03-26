@@ -185,7 +185,8 @@ const CockpitNavPanel: React.FC<Props> = ({
     e.preventDefault();
   };
 
-  const panelWidth = 238;
+  // Tighten overall nav footprint (~40% narrower than previous 238px).
+  const panelWidth = 142;
 
   const shellStyle: React.CSSProperties = {
     position: "fixed",
@@ -351,6 +352,8 @@ const CockpitNavPanel: React.FC<Props> = ({
                     marginLeft: showTimeline ? 0 : 18,
                     display: "flex",
                     flexDirection: "column",
+                    width: "100%",
+                    boxSizing: "border-box",
                   }}
                 >
                   {childMoons.map((moon, moonIdx) => {
@@ -365,6 +368,7 @@ const CockpitNavPanel: React.FC<Props> = ({
                         style={{
                           display: "flex",
                           alignItems: "stretch",
+                          width: "100%",
                         }}
                       >
                         {/* Date + bracket column */}
