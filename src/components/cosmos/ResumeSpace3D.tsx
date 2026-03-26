@@ -7386,7 +7386,6 @@ export default function ResumeSpace3D({
   }) => {
     const restoreShip = options?.restoreShip ?? true;
     const clearSystem = options?.clearSystem ?? true;
-    const latticeRoot = skillsLatticeRootRef.current;
     const latticeBeacon = skillsLatticeBeaconRef.current;
     const camera = sceneRef.current.camera;
     const controls = sceneRef.current.controls;
@@ -14744,7 +14743,7 @@ export default function ResumeSpace3D({
       "color",
       new THREE.BufferAttribute(envelopeColors, 3),
     );
-    const latticeEnvelope = new THREE.Mesh(
+    const latticeEnvelope: THREE.Mesh<THREE.BufferGeometry, THREE.Material> = new THREE.Mesh(
       latticeEnvelopeGeometry,
       new THREE.MeshPhongMaterial({
         color: 0xffffff,
