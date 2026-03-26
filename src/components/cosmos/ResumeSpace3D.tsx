@@ -3658,6 +3658,7 @@ export default function ResumeSpace3D({
   );
   const cosmosIntroPlayedRef = useRef(false);
   const cosmosIntroCompletedRef = useRef(false);
+  const introCameraPrealignedRef = useRef(false);
 
 
   const shipStagingModeRef = useRef(false);
@@ -3704,6 +3705,9 @@ export default function ResumeSpace3D({
     spinTurns?: number;
     settleTargetPos?: THREE.Vector3;
     settleDuration?: number;
+    cameraRetreatStartProgress?: number;
+    cameraRetreatStartPos?: THREE.Vector3;
+    cameraRetreatStartTarget?: THREE.Vector3;
   } | null>(null);
   // Ship UI phase (controls which buttons are visible)
   const [shipUIPhase, setShipUIPhase] = useState<ShipUIPhase>("hidden");
@@ -5004,6 +5008,7 @@ export default function ResumeSpace3D({
     spaceshipRef,
     sceneRef,
     followingSpaceshipRef,
+    introCameraPrealignedRef,
     manualFlightModeRef,
     focusedMoonRef,
     exitFocusRequestRef,
@@ -20174,6 +20179,7 @@ export default function ResumeSpace3D({
       shipStagingModeRef,
       shipStagingKeysRef,
       manualFlightModeRef,
+      introCameraPrealignedRef,
       manualFlightRef,
       currentNavigationTargetRef,
       keyboardStateRef,
@@ -20229,6 +20235,7 @@ export default function ResumeSpace3D({
         manualFlightModeRef,
         setFollowingSpaceship,
         followingSpaceshipRef,
+        introCameraPrealignedRef,
         setHudVisible: () => {},  // legacy — old HUD panels removed
         setShipExteriorLights,
         sunMesh,

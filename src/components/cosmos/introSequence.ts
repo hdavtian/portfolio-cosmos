@@ -86,6 +86,9 @@ export type ShipCinematicState = {
   spinTurns?: number;
   settleTargetPos?: THREE.Vector3;
   settleDuration?: number;
+  cameraRetreatStartProgress?: number;
+  cameraRetreatStartPos?: THREE.Vector3;
+  cameraRetreatStartTarget?: THREE.Vector3;
 };
 
 export type IntroSequenceRunnerParams = {
@@ -97,6 +100,7 @@ export type IntroSequenceRunnerParams = {
   manualFlightModeRef: MutableRefObject<boolean>;
   setFollowingSpaceship: (value: boolean) => void;
   followingSpaceshipRef: MutableRefObject<boolean>;
+  introCameraPrealignedRef: MutableRefObject<boolean>;
   setHudVisible: (value: boolean) => void;
   setShipExteriorLights: (value: boolean) => void;
   sunMesh: THREE.Mesh;
@@ -290,6 +294,7 @@ export const createIntroSequenceRunner = (
     manualFlightModeRef,
     setFollowingSpaceship,
     followingSpaceshipRef,
+    introCameraPrealignedRef,
     setHudVisible,
     setShipExteriorLights,
     onIntroEvent,
@@ -307,6 +312,7 @@ export const createIntroSequenceRunner = (
 
   const startIntroSequence = () => {
     cancelIntroSequence();
+    introCameraPrealignedRef.current = false;
     const introShip = spaceshipRef.current;
     if (introShip) {
       // Prevent distant "spec" sightings during the 7s camera intro.
@@ -407,6 +413,10 @@ export const createIntroSequenceRunner = (
       ship.position.copy(startHeroPos);
       ship.quaternion.copy(startHeroQuat);
       onIntroEvent?.("ship-cinematic started");
+      const retreatStartProgress = 0.72;
+      const retreatStartTarget = currentControls
+        .getTarget(new THREE.Vector3())
+        .clone();
       shipCinematicRef.current = {
         active: true,
         phase: "approach",
@@ -421,6 +431,9 @@ export const createIntroSequenceRunner = (
         endQuat: endHeroQuat,
         approachLookAt: endLookAt,
         lightsTriggered: true,
+        cameraRetreatStartProgress: retreatStartProgress,
+        cameraRetreatStartPos: currentCamera.position.clone(),
+        cameraRetreatStartTarget: retreatStartTarget,
       };
     };
 

@@ -18,6 +18,7 @@ import {
   INTERIOR_MIN_DIST,
   INTERIOR_MAX_DIST,
 } from "../scaleConfig";
+import { computeFalconFollowCameraPose } from "../falconFollowCameraPose";
 
 export const useRenderLoop = () => {
   const animationFrameRef = useRef<number | null>(null);
@@ -64,10 +65,14 @@ export const useRenderLoop = () => {
         hoverStartQuat?: THREE.Quaternion;
         settleTargetPos?: THREE.Vector3;
         settleDuration?: number;
+        cameraRetreatStartProgress?: number;
+        cameraRetreatStartPos?: THREE.Vector3;
+        cameraRetreatStartTarget?: THREE.Vector3;
       } | null>;
       shipStagingModeRef: React.MutableRefObject<boolean>;
       shipStagingKeysRef: React.MutableRefObject<Record<string, boolean>>;
       manualFlightModeRef: React.MutableRefObject<boolean>;
+      introCameraPrealignedRef: React.MutableRefObject<boolean>;
       manualFlightRef: React.MutableRefObject<any>;
       currentNavigationTargetRef?: React.MutableRefObject<string | null>;
       keyboardStateRef: React.MutableRefObject<Record<string, boolean>>;
@@ -99,6 +104,8 @@ export const useRenderLoop = () => {
         spaceFollowDistance?: number;
         spaceFollowHeight?: number;
         spaceCameraSmoothTime?: number;
+        spaceNavCameraBehind?: number;
+        spaceNavCameraHeight?: number;
       }>;
       hologramDroneRef: React.MutableRefObject<{
         update: (delta: number, camera: THREE.Camera) => void;
@@ -142,6 +149,7 @@ export const useRenderLoop = () => {
         shipStagingModeRef,
         shipStagingKeysRef,
         manualFlightModeRef,
+        introCameraPrealignedRef,
         manualFlightRef,
         currentNavigationTargetRef,
         keyboardStateRef,
@@ -1214,8 +1222,51 @@ export const useRenderLoop = () => {
 
               ship.position.copy(currentPos);
               ship.quaternion.copy(currentQuat);
+              if (
+                cinematic.cameraRetreatStartPos &&
+                cinematic.cameraRetreatStartTarget &&
+                sceneRef.current.controls
+              ) {
+                const retreatStart = THREE.MathUtils.clamp(
+                  cinematic.cameraRetreatStartProgress ?? 0.72,
+                  0,
+                  0.96,
+                );
+                if (progress >= retreatStart) {
+                  const retreatT = THREE.MathUtils.smootherstep(
+                    (progress - retreatStart) / Math.max(0.0001, 1 - retreatStart),
+                    0,
+                    1,
+                  );
+                  const followPose = computeFalconFollowCameraPose(
+                    ship,
+                    {
+                      navCameraBehind: optionsRef.current.spaceNavCameraBehind,
+                      navCameraHeight: optionsRef.current.spaceNavCameraHeight,
+                    },
+                    _tmpDesired,
+                    _tmpControlTarget,
+                  );
+                  const retreatCam = _tmpOffset
+                    .copy(cinematic.cameraRetreatStartPos)
+                    .lerp(followPose.cameraPos, retreatT);
+                  const retreatTarget = _tmpScaled
+                    .copy(cinematic.cameraRetreatStartTarget)
+                    .lerp(followPose.targetPos, retreatT);
+                  sceneRef.current.controls.setLookAt(
+                    retreatCam.x,
+                    retreatCam.y,
+                    retreatCam.z,
+                    retreatTarget.x,
+                    retreatTarget.y,
+                    retreatTarget.z,
+                    false,
+                  );
+                }
+              }
 
               if (progress >= 1) {
+                introCameraPrealignedRef.current = true;
                 cinematic.phase = "hover";
                 cinematic.hoverStartTime = now;
                 cinematic.hoverBasePos = currentPos.clone();

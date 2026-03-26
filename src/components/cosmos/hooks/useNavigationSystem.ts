@@ -30,6 +30,7 @@ import {
   NAV_LIGHTSPEED_DECEL_DIST,
   NAV_LIGHTSPEED_LERP,
 } from "../scaleConfig";
+import { computeFalconFollowCameraPose } from "../falconFollowCameraPose";
 
 const NAV_REPEAT_SECTION_EPSILON = 1.5;
 const NAV_MOVEMENT_HEARTBEAT_LOGS = false;
@@ -76,6 +77,7 @@ export const useNavigationSystem = (deps: {
   spaceshipRef: React.MutableRefObject<THREE.Object3D | null>;
   sceneRef: React.MutableRefObject<SceneRef>;
   followingSpaceshipRef: React.MutableRefObject<boolean>;
+  introCameraPrealignedRef: React.MutableRefObject<boolean>;
   manualFlightModeRef: React.MutableRefObject<boolean>;
   focusedMoonRef: React.MutableRefObject<THREE.Mesh | null>;
   exitFocusRequestRef: React.MutableRefObject<boolean>;
@@ -124,6 +126,7 @@ export const useNavigationSystem = (deps: {
     spaceshipRef,
     sceneRef,
     followingSpaceshipRef,
+    introCameraPrealignedRef,
     manualFlightModeRef,
     focusedMoonRef,
     exitFocusRequestRef,
@@ -689,15 +692,21 @@ export const useNavigationSystem = (deps: {
       // The render loop's cinematic branch blocks autopilot updates,
       // so we must deactivate it before the ship can navigate.
       const hadActiveCinematic = !!shipCinematicRef.current?.active;
+      const skipFirstNavHandoff = introCameraPrealignedRef.current;
       if (shipCinematicRef.current?.active) {
         vlog("🎬 Deactivating cinematic to allow navigation");
         shipCinematicRef.current.active = false;
+      }
+      if (skipFirstNavHandoff) {
+        introCameraPrealignedRef.current = false;
+        vlog("🎥 Intro prealigned camera active — skipping first nav handoff");
       }
       navCameraHandoffRef.current.active = false;
       // Clean handoff from intro-hover cinematic to nav camera:
       // preserve current framing first, then blend into standard follow.
       if (
         hadActiveCinematic &&
+        !skipFirstNavHandoff &&
         !insideShipRef.current &&
         followingSpaceshipRef.current &&
         sceneRef.current.controls &&
@@ -1167,6 +1176,7 @@ export const useNavigationSystem = (deps: {
       exitFocusRequestRef,
       focusedMoonRef,
       followingSpaceshipRef,
+      introCameraPrealignedRef,
       manualFlightModeRef,
       shipCinematicRef,
       missionLog,
@@ -1197,17 +1207,15 @@ export const useNavigationSystem = (deps: {
     animate = true,
   ) => {
     if (!sceneRef.current.controls) return;
-    const camPos = _navCamPos.current;
-    camPos.set(0, 0, -1).applyQuaternion(ship.quaternion);
-    const navCameraBehind = THREE.MathUtils.clamp(
-      optionsRef.current.spaceNavCameraBehind ?? NAV_CAMERA_BEHIND,
-      6,
-      14,
+    const { cameraPos: camPos } = computeFalconFollowCameraPose(
+      ship,
+      {
+        navCameraBehind: optionsRef.current.spaceNavCameraBehind ?? NAV_CAMERA_BEHIND,
+        navCameraHeight: optionsRef.current.spaceNavCameraHeight ?? NAV_CAMERA_HEIGHT,
+      },
+      _navCamPos.current,
+      _navControlTarget.current,
     );
-    const navCameraHeight =
-      optionsRef.current.spaceNavCameraHeight ?? NAV_CAMERA_HEIGHT;
-    camPos.multiplyScalar(navCameraBehind).add(ship.position);
-    camPos.y += navCameraHeight;
 
     const handoff = navCameraHandoffRef.current;
     if (handoff.active) {
