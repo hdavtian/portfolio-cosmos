@@ -3,29 +3,37 @@ import "./CosmosLoader.scss";
 
 interface CosmosLoaderProps {
   onLoadingComplete: () => void;
+  isSceneReady?: boolean;
 }
 
-type Phase = "boot" | "pilot" | "header" | "data" | "done";
+type Phase = "idle" | "colorCycle" | "teaser" | "frenzy" | "flash" | "done";
 
-const PILOT_COLORS = ["#007A87", "#720000"];
+const TEASER_COLORS = ["#007A87", "#720000"];
 const DATA_COLORS = ["#665B00", "#001459"];
+const COLOR_CYCLE = ["#720000", "#007A87", "#C8B800"];
 const TOTAL_REVEAL_LINES = 36;
+const PROGRAM_TEXT = "Program: Portfolio";
 
-export default function CosmosLoader({ onLoadingComplete }: CosmosLoaderProps) {
+export default function CosmosLoader({
+  onLoadingComplete,
+  isSceneReady = false,
+}: CosmosLoaderProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
-  const phaseRef = useRef<Phase>("boot");
+  const phaseRef = useRef<Phase>("idle");
   const stripeStartPosRef = useRef(0);
-  const pilotColorIndexRef = useRef(0);
-  const pilotTimerRef = useRef<number | null>(null);
-  const revealTimerRef = useRef<number | null>(null);
   const timeoutsRef = useRef<number[]>([]);
+  const intervalsRef = useRef<number[]>([]);
+  const lastColorRef = useRef("#000");
 
+  const [typedText, setTypedText] = useState("");
+  const [stageText, setStageText] = useState("");
+  const [showStatusUI, setShowStatusUI] = useState(false);
+  const [showEndMessage, setShowEndMessage] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState("Initializing...");
-  const [headerText, setHeaderText] = useState("");
-  const [showReady, setShowReady] = useState(false);
   const [revealedSet, setRevealedSet] = useState<Set<number>>(new Set());
+  const [animationDone, setAnimationDone] = useState(false);
+
   const shuffledOrderRef = useRef<number[]>([]);
   const revealCountRef = useRef(0);
 
@@ -34,39 +42,55 @@ export default function CosmosLoader({ onLoadingComplete }: CosmosLoaderProps) {
     timeoutsRef.current.push(id);
   }, []);
 
-  // ── Canvas signal renderers ───────────────────────────────────
-
-  const showPilotSignal = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.fillStyle = PILOT_COLORS[pilotColorIndexRef.current];
-    pilotColorIndexRef.current = 1 - pilotColorIndexRef.current;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    pilotTimerRef.current = window.setTimeout(showPilotSignal, 2000);
+  const queueInterval = useCallback((fn: () => void, interval: number) => {
+    const id = window.setInterval(fn, interval);
+    intervalsRef.current.push(id);
+    return id;
   }, []);
 
-  const showHeaderSignal = useCallback(() => {
-    if (phaseRef.current !== "header") return;
+  const clearQueuedInterval = useCallback((id: number) => {
+    clearInterval(id);
+    intervalsRef.current = intervalsRef.current.filter((i) => i !== id);
+  }, []);
+
+  // ── Canvas renderers ─────────────────────────────────────────
+
+  const fillSolid = useCallback((color: string) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.fillStyle = PILOT_COLORS[0];
+    ctx.fillStyle = color;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = PILOT_COLORS[1];
+    lastColorRef.current = color;
+  }, []);
+
+  const showTeaserSignal = useCallback(() => {
+    if (phaseRef.current !== "teaser") return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = TEASER_COLORS[0];
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = TEASER_COLORS[1];
     const thickness = canvas.height / 27;
     for (let i = -1; i < 28; i += 2) {
-      ctx.fillRect(0, i * thickness + stripeStartPosRef.current, canvas.width, thickness);
+      ctx.fillRect(
+        0,
+        i * thickness + stripeStartPosRef.current,
+        canvas.width,
+        thickness,
+      );
     }
-    stripeStartPosRef.current++;
-    if (stripeStartPosRef.current > thickness * 2) stripeStartPosRef.current = 0;
-    rafRef.current = requestAnimationFrame(showHeaderSignal);
+    stripeStartPosRef.current += 2;
+    if (stripeStartPosRef.current > thickness * 2)
+      stripeStartPosRef.current = 0;
+    rafRef.current = requestAnimationFrame(showTeaserSignal);
   }, []);
 
-  const showDataSignal = useCallback(() => {
-    if (phaseRef.current !== "data") return;
+  const showFrenzySignal = useCallback(() => {
+    if (phaseRef.current !== "frenzy") return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -81,50 +105,30 @@ export default function CosmosLoader({ onLoadingComplete }: CosmosLoaderProps) {
       ctx.fillRect(0, pos, canvas.width, t);
       pos += t;
     }
-    rafRef.current = requestAnimationFrame(showDataSignal);
+    rafRef.current = requestAnimationFrame(showFrenzySignal);
   }, []);
 
-  const stopAnimationLoop = useCallback(() => {
+  const stopLoop = useCallback(() => {
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
-    }
-    if (pilotTimerRef.current !== null) {
-      clearTimeout(pilotTimerRef.current);
-      pilotTimerRef.current = null;
-    }
-  }, []);
-
-  const stopRevealTimer = useCallback(() => {
-    if (revealTimerRef.current !== null) {
-      clearInterval(revealTimerRef.current);
-      revealTimerRef.current = null;
     }
   }, []);
 
   const startPhase = useCallback(
     (phase: Phase) => {
-      stopAnimationLoop();
+      stopLoop();
       phaseRef.current = phase;
       stripeStartPosRef.current = 0;
-      if (phase === "pilot") showPilotSignal();
-      else if (phase === "header") rafRef.current = requestAnimationFrame(showHeaderSignal);
-      else if (phase === "data") rafRef.current = requestAnimationFrame(showDataSignal);
-      else if (phase === "done") {
-        const canvas = canvasRef.current;
-        if (canvas) {
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.fillStyle = "#000";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-          }
-        }
-      }
+      if (phase === "teaser")
+        rafRef.current = requestAnimationFrame(showTeaserSignal);
+      else if (phase === "frenzy")
+        rafRef.current = requestAnimationFrame(showFrenzySignal);
     },
-    [stopAnimationLoop, showPilotSignal, showHeaderSignal, showDataSignal],
+    [stopLoop, showTeaserSignal, showFrenzySignal],
   );
 
-  // ── Orchestration (~30s) ──────────────────────────────────────
+  // ── Orchestration ────────────────────────────────────────────
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -136,13 +140,9 @@ export default function CosmosLoader({ onLoadingComplete }: CosmosLoaderProps) {
     resize();
     window.addEventListener("resize", resize);
 
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    fillSolid("#000");
 
-    // Build shuffled reveal order once
+    // Build shuffled reveal order
     const order = Array.from({ length: TOTAL_REVEAL_LINES }, (_, i) => i);
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -150,95 +150,131 @@ export default function CosmosLoader({ onLoadingComplete }: CosmosLoaderProps) {
     }
     shuffledOrderRef.current = order;
 
-    const DRAWING_START = 14000;
-    const DRAWING_DURATION = 14000;
-    const LINE_INTERVAL = Math.floor(DRAWING_DURATION / TOTAL_REVEAL_LINES);
+    const TEASER_DURATION = 4000;
+    const FRENZY_LINE_INTERVAL = 333;
 
-    const sequence: Array<{ at: number; fn: () => void }> = [
-      // ── Boot ──
-      { at: 600, fn: () => setStage("Loading stellar textures...") },
+    const stopTeaser = () => {
+      stopLoop();
+      phaseRef.current = "idle";
+      fillSolid(lastColorRef.current);
+    };
 
-      // ── Pilot 1 ──
-      { at: 1800, fn: () => startPhase("pilot") },
-      { at: 2200, fn: () => setProgress(5) },
+    const runTeaser = (duration: number, onEnd: () => void) => {
+      startPhase("teaser");
+      queueTimeout(() => {
+        stopTeaser();
+        onEnd();
+      }, duration);
+    };
 
-      // ── Header 1 ──
-      { at: 4000, fn: () => startPhase("header") },
-      { at: 4500, fn: () => { setProgress(10); setHeaderText("Program: Portfolio"); } },
-      { at: 5500, fn: () => { setProgress(15); setStage("Generating orbital paths..."); } },
+    const runFrenzy = (onAllRevealed: () => void) => {
+      startPhase("frenzy");
+      setStageText("Loading content...");
+      setProgress(0);
+      revealCountRef.current = 0;
 
-      // ── Data 1 (short burst) ──
-      { at: 7000, fn: () => startPhase("data") },
-      { at: 7300, fn: () => { setProgress(20); startPhase("pilot"); } },
+      const revealId = queueInterval(() => {
+        const idx = revealCountRef.current;
+        if (idx >= TOTAL_REVEAL_LINES) {
+          clearQueuedInterval(revealId);
+          onAllRevealed();
+          return;
+        }
+        const lineIndex = shuffledOrderRef.current[idx];
+        revealCountRef.current++;
+        setRevealedSet((prev) => new Set(prev).add(lineIndex));
 
-      // ── Header 2 ──
-      { at: 8500, fn: () => { startPhase("header"); setStage("Rendering planetary systems..."); } },
-      { at: 9500, fn: () => setProgress(25) },
+        const count = revealCountRef.current;
+        const pct = Math.round((count / TOTAL_REVEAL_LINES) * 95);
+        setProgress(Math.min(pct, 95));
 
-      // ── Data 2 (short burst) ──
-      { at: 11000, fn: () => startPhase("data") },
-      { at: 11300, fn: () => { setProgress(30); startPhase("pilot"); } },
+        if (count === Math.floor(TOTAL_REVEAL_LINES * 0.25)) {
+          setStageText("Rendering planetary systems...");
+        } else if (count === Math.floor(TOTAL_REVEAL_LINES * 0.5)) {
+          setStageText("Compiling shaders...");
+        } else if (count === Math.floor(TOTAL_REVEAL_LINES * 0.75)) {
+          setStageText("Calibrating navigation...");
+        } else if (count === Math.floor(TOTAL_REVEAL_LINES * 0.9)) {
+          setStageText("Almost ready...");
+        }
+      }, FRENZY_LINE_INTERVAL);
+    };
 
-      // ── Header 3 ──
-      { at: 12500, fn: () => { startPhase("header"); setStage("Calibrating navigation..."); } },
-      { at: 13500, fn: () => setProgress(35) },
+    const runEndPhase = () => {
+      stopLoop();
+      phaseRef.current = "idle";
+      fillSolid("#000");
+      setProgress(100);
+      setStageText("Ready for exploration");
+      setShowEndMessage(true);
 
-      // ── Drawing phase: data signal + random line reveal ──
-      {
-        at: DRAWING_START,
-        fn: () => {
-          startPhase("data");
-          setStage("Loading content...");
-          revealCountRef.current = 0;
-          revealTimerRef.current = window.setInterval(() => {
-            const idx = revealCountRef.current;
-            if (idx >= TOTAL_REVEAL_LINES) {
-              stopRevealTimer();
-              return;
-            }
-            const lineIndex = shuffledOrderRef.current[idx];
-            revealCountRef.current++;
-            setRevealedSet((prev) => new Set(prev).add(lineIndex));
+      queueTimeout(() => {
+        let flashCount = 0;
+        const flashId = queueInterval(() => {
+          fillSolid(flashCount % 2 === 0 ? "#fff" : "#000");
+          flashCount++;
+          if (flashCount >= 6) {
+            clearQueuedInterval(flashId);
+            queueTimeout(() => {
+              fillSolid("#000");
+              setAnimationDone(true);
+            }, 200);
+          }
+        }, 200);
+      }, 1000);
+    };
 
-            const count = revealCountRef.current;
-            const pct = 35 + Math.round((count / TOTAL_REVEAL_LINES) * 60);
-            setProgress(Math.min(pct, 95));
+    // ── Chained sequence ──
 
-            if (count === Math.floor(TOTAL_REVEAL_LINES * 0.3)) {
-              setStage("Initializing spaceship systems...");
-            } else if (count === Math.floor(TOTAL_REVEAL_LINES * 0.6)) {
-              setStage("Compiling shaders...");
-            } else if (count === Math.floor(TOTAL_REVEAL_LINES * 0.85)) {
-              setStage("Almost ready...");
-            }
-          }, LINE_INTERVAL);
-        },
-      },
+    // 1. Color cycle
+    queueTimeout(() => fillSolid(COLOR_CYCLE[0]), 1000);
+    queueTimeout(() => fillSolid(COLOR_CYCLE[1]), 2000);
+    queueTimeout(() => fillSolid(COLOR_CYCLE[2]), 3000);
 
-      // ── Done ──
-      { at: DRAWING_START + DRAWING_DURATION + 500, fn: () => {
-        setProgress(100);
-        setStage("Ready for exploration");
-      }},
-      { at: DRAWING_START + DRAWING_DURATION + 1000, fn: () => {
-        startPhase("done");
-        setShowReady(true);
-      }},
-      { at: DRAWING_START + DRAWING_DURATION + 3500, fn: () => onLoadingComplete() },
-    ];
+    // 2. Teaser 1 → on end: show title
+    queueTimeout(() => {
+      runTeaser(TEASER_DURATION, () => {
+        setTypedText(PROGRAM_TEXT);
 
-    for (const step of sequence) {
-      queueTimeout(step.fn, step.at);
-    }
+        // 3. Teaser 2 → on end: show bottom panel
+        queueTimeout(() => {
+          runTeaser(TEASER_DURATION, () => {
+            setShowStatusUI(true);
+            setStageText("Initializing...");
+
+            // 4. Teaser 3 → on end: start frenzy
+            queueTimeout(() => {
+              runTeaser(TEASER_DURATION, () => {
+
+                // 5. Frenzy → on all revealed: end phase
+                queueTimeout(() => {
+                  runFrenzy(() => {
+                    queueTimeout(() => runEndPhase(), 500);
+                  });
+                }, 300);
+              });
+            }, 500);
+          });
+        }, 500);
+      });
+    }, 4000);
 
     return () => {
       window.removeEventListener("resize", resize);
-      stopAnimationLoop();
-      stopRevealTimer();
+      stopLoop();
       timeoutsRef.current.forEach((id) => clearTimeout(id));
       timeoutsRef.current = [];
+      intervalsRef.current.forEach((id) => clearInterval(id));
+      intervalsRef.current = [];
     };
   }, []);
+
+  // Dismiss only when both animation AND actual loading are complete
+  useEffect(() => {
+    if (animationDone && isSceneReady) {
+      onLoadingComplete();
+    }
+  }, [animationDone, isSceneReady, onLoadingComplete]);
 
   return (
     <div className="cosmos-loader">
@@ -246,8 +282,8 @@ export default function CosmosLoader({ onLoadingComplete }: CosmosLoaderProps) {
 
       <div className="cosmos-loader__overlay">
         <div className="cosmos-loader__tv">
-          {headerText && (
-            <div className="cosmos-loader__tv-header">{headerText}</div>
+          {typedText && (
+            <div className="cosmos-loader__tv-header">{typedText}</div>
           )}
           <div className="cosmos-loader__tv-screen">
             <div className="cosmos-loader__tv-content">
@@ -259,35 +295,42 @@ export default function CosmosLoader({ onLoadingComplete }: CosmosLoaderProps) {
                 <div
                   key={i}
                   className={`cosmos-loader__tv-strip${
-                    revealedSet.has(i) ? " cosmos-loader__tv-strip--peeled" : ""
+                    revealedSet.has(i)
+                      ? " cosmos-loader__tv-strip--peeled"
+                      : ""
                   }`}
                 />
               ))}
             </div>
+            {showEndMessage && (
+              <div className="cosmos-loader__end-message">Loading Complete</div>
+            )}
           </div>
         </div>
 
-        <div className="cosmos-loader__info">
-          <p className="cosmos-loader__stage">{stage}</p>
+        {showStatusUI && (
+          <div className="cosmos-loader__info">
+            <p className="cosmos-loader__stage">{stageText}</p>
 
-          <div className="cosmos-loader__progress-grid" aria-hidden="true">
-            {Array.from({ length: 24 }).map((_, i) => {
-              const threshold = ((i + 1) / 24) * 100;
-              return (
-                <span
-                  key={i}
-                  className={`cosmos-loader__progress-cell${
-                    progress >= threshold ? " cosmos-loader__progress-cell--active" : ""
-                  }`}
-                />
-              );
-            })}
+            <div className="cosmos-loader__progress-grid" aria-hidden="true">
+              {Array.from({ length: 24 }).map((_, i) => {
+                const threshold = ((i + 1) / 24) * 100;
+                return (
+                  <span
+                    key={i}
+                    className={`cosmos-loader__progress-cell${
+                      progress >= threshold
+                        ? " cosmos-loader__progress-cell--active"
+                        : ""
+                    }`}
+                  />
+                );
+              })}
+            </div>
+
+            <div className="cosmos-loader__percentage">{progress}%</div>
           </div>
-
-          <div className="cosmos-loader__percentage">{progress}%</div>
-
-          {showReady && <div className="cosmos-loader__ready">READY</div>}
-        </div>
+        )}
       </div>
     </div>
   );

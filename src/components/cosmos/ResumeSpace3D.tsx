@@ -21447,6 +21447,7 @@ export default function ResumeSpace3D({
       {/* Show loader while scene is setting up */}
       {isLoading && (
         <CosmosLoader
+          isSceneReady={criticalAssetsReady && droneGpuWarmupReady}
           onLoadingComplete={() => {
             setLoaderVisualComplete(true);
           }}
