@@ -3787,6 +3787,15 @@ export default function ResumeSpace3D({
     minDistance: number;
     maxDistance: number;
   } | null>(null);
+  const inspectFalconModeRef = useRef(false);
+  const inspectFalconLastTargetRef = useRef<THREE.Vector3 | null>(null);
+  const inspectFalconPrevStateRef = useRef<{
+    followingSpaceship: boolean;
+    insideShip: boolean;
+    shipViewMode: "exterior" | "interior" | "cockpit";
+    controlsMinDistance: number;
+    controlsMaxDistance: number;
+  } | null>(null);
 
   const formatNavTargetLabel = useCallback(
     (targetId: string): string => {
@@ -8221,6 +8230,107 @@ export default function ResumeSpace3D({
     [shipLog],
   );
 
+  const engageInspectFalcon = useCallback(
+    (source: "console" | "tool" | "system" = "tool") => {
+      if (inspectFalconModeRef.current) {
+        if (source === "console") {
+          console.log("⚠️ inspectFalcon() ignored — Falcon inspect already active");
+        }
+        return false;
+      }
+      const falcon = spaceshipRef.current;
+      const camera = sceneRef.current.camera;
+      const controls = sceneRef.current.controls;
+      if (!falcon || !camera || !controls) {
+        if (source === "console") {
+          console.log("❌ inspectFalcon() unavailable — Falcon/camera/controls not ready");
+        }
+        return false;
+      }
+
+      if (shadowSDModeRef.current) {
+        disengageShadowSD("system");
+      }
+
+      inspectFalconPrevStateRef.current = {
+        followingSpaceship: followingSpaceshipRef.current,
+        insideShip: insideShipRef.current,
+        shipViewMode: shipViewModeRef.current,
+        controlsMinDistance: controls.minDistance,
+        controlsMaxDistance: controls.maxDistance,
+      };
+
+      const falconPos = new THREE.Vector3();
+      falcon.getWorldPosition(falconPos);
+
+      inspectFalconModeRef.current = true;
+      inspectFalconLastTargetRef.current = falconPos.clone();
+      followingSpaceshipRef.current = false;
+      setFollowingSpaceship(false);
+      insideShipRef.current = false;
+      setInsideShip(false);
+      setShipViewMode("exterior");
+      shipViewModeRef.current = "exterior";
+
+      controls.enabled = true;
+      controls.minDistance = 1;
+      controls.maxDistance = 6000;
+      controls.setLookAt(
+        camera.position.x,
+        camera.position.y,
+        camera.position.z,
+        falconPos.x,
+        falconPos.y,
+        falconPos.z,
+        false,
+      );
+
+      shipLog("inspectFalcon engaged — orbit camera locked to Falcon", "info");
+      if (source === "console") {
+        console.log("🛰️ inspectFalcon engaged — camera centered on Millennium Falcon");
+        console.log("   Orbit drag to inspect sides, scroll to zoom");
+      }
+      return true;
+    },
+    [disengageShadowSD, setFollowingSpaceship, setInsideShip, shipLog],
+  );
+
+  const disengageInspectFalcon = useCallback(
+    (source: "console" | "tool" | "system" = "system") => {
+      if (!inspectFalconModeRef.current) {
+        if (source === "console") {
+          console.log("⚠️ exitInspectFalcon() ignored — inspect mode not active");
+        }
+        return false;
+      }
+
+      inspectFalconModeRef.current = false;
+      inspectFalconLastTargetRef.current = null;
+      const controls = sceneRef.current.controls;
+      const prev = inspectFalconPrevStateRef.current;
+      if (controls && prev) {
+        controls.minDistance = prev.controlsMinDistance;
+        controls.maxDistance = prev.controlsMaxDistance;
+      }
+      if (prev) {
+        followingSpaceshipRef.current = prev.followingSpaceship;
+        setFollowingSpaceship(prev.followingSpaceship);
+        insideShipRef.current = prev.insideShip;
+        setInsideShip(prev.insideShip);
+        shipViewModeRef.current = prev.shipViewMode;
+        setShipViewMode(prev.shipViewMode);
+      }
+      inspectFalconPrevStateRef.current = null;
+
+      shipLog("inspectFalcon disengaged", "info");
+      if (source === "console") {
+        console.log("🛰️ exitInspectFalcon complete — Falcon inspect released");
+      }
+      return true;
+    },
+    [setFollowingSpaceship, setInsideShip, shipLog],
+  );
+
   const handleStarDestroyerClick = useCallback(() => {
     // Only allow when aboard the Falcon
     if (!followingSpaceshipRef.current && !insideShipRef.current) {
@@ -8255,6 +8365,8 @@ export default function ResumeSpace3D({
     };
     return [
       { id: "locate-falcon", label: "locateFalcon()", hint: "Beacon to Millennium Falcon", onRun: () => invoke("locateFalcon") },
+      { id: "inspect-falcon", label: "inspectFalcon()", hint: "Orbit/zoom inspect camera around Falcon", onRun: () => invoke("inspectFalcon") },
+      { id: "inspect-falcon-exit", label: "exitInspectFalcon()", hint: "Exit Falcon inspect mode", onRun: () => invoke("exitInspectFalcon") },
       { id: "locate-sd", label: "locateSD()", hint: "Beacon to Star Destroyer", onRun: () => invoke("locateSD") },
       { id: "shadow-sd", label: "shadowSD()", hint: "Lock camera to Star Destroyer", onRun: () => invoke("shadowSD") },
       { id: "unshadow-sd", label: "unShadowSD()", hint: "Release SD camera lock", onRun: () => invoke("unShadowSD") },
@@ -9247,6 +9359,55 @@ export default function ResumeSpace3D({
       cancelAnimationFrame(raf);
       setAboutSwarmTriggerVisible(false);
     };
+  }, [sceneReady]);
+
+  useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
+    const falconPos = new THREE.Vector3();
+    const prevFalconPos = new THREE.Vector3();
+    const delta = new THREE.Vector3();
+
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (!inspectFalconModeRef.current) return;
+
+      const falcon = spaceshipRef.current;
+      const camera = sceneRef.current.camera;
+      const controls = sceneRef.current.controls;
+      if (!falcon || !camera || !controls) return;
+
+      falcon.getWorldPosition(falconPos);
+      const last = inspectFalconLastTargetRef.current;
+      if (last) {
+        prevFalconPos.copy(last);
+        delta.copy(falconPos).sub(prevFalconPos);
+        if (delta.lengthSq() > 1e-9) {
+          camera.position.add(delta);
+        }
+      }
+
+      controls.minDistance = 1;
+      controls.maxDistance = 6000;
+      controls.setLookAt(
+        camera.position.x,
+        camera.position.y,
+        camera.position.z,
+        falconPos.x,
+        falconPos.y,
+        falconPos.z,
+        false,
+      );
+
+      if (!inspectFalconLastTargetRef.current) {
+        inspectFalconLastTargetRef.current = falconPos.clone();
+      } else {
+        inspectFalconLastTargetRef.current.copy(falconPos);
+      }
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [sceneReady]);
 
   useEffect(() => {
@@ -16368,6 +16529,12 @@ export default function ResumeSpace3D({
           if (!falcon) { console.log("❌ Falcon not loaded yet"); return; }
           createLocateBeacon(falcon, 0x4499ff, "Millennium Falcon");
         };
+        (window as any).inspectFalcon = () => {
+          engageInspectFalcon("console");
+        };
+        (window as any).exitInspectFalcon = () => {
+          disengageInspectFalcon("console");
+        };
 
         (window as any).locateSD = () => {
           const sd = starDestroyerRef.current;
@@ -16473,6 +16640,10 @@ export default function ResumeSpace3D({
             return;
           }
           debugCamActive = true;
+
+          if (inspectFalconModeRef.current) {
+            disengageInspectFalcon("system");
+          }
 
           if (shadowSDModeRef.current) {
             disengageShadowSD("system");

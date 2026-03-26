@@ -11,8 +11,33 @@ type Phase = "idle" | "colorCycle" | "teaser" | "frenzy" | "flash" | "done";
 const TEASER_COLORS = ["#007A87", "#720000"];
 const DATA_COLORS = ["#665B00", "#001459"];
 const COLOR_CYCLE = ["#720000", "#007A87", "#C8B800"];
-const TOTAL_REVEAL_LINES = 36;
+const DEFAULT_REVEAL_LINES = 36;
+const REVEAL_LINE_MIN_RATIO = 0.2; // 1/5th of max line thickness
+const FRENZY_BASE_DURATION_MS = 333 * DEFAULT_REVEAL_LINES;
 const PROGRAM_TEXT = "Program: Portfolio";
+
+const buildRevealLineFractions = (): number[] => {
+  const max = 1 / DEFAULT_REVEAL_LINES;
+  const min = max * REVEAL_LINE_MIN_RATIO;
+  // Keep reveal duration reasonable while allowing mixed strip heights.
+  const lineCount =
+    52 + Math.floor(Math.random() * 25); // 52..76 randomized strips
+  let remaining = 1;
+  const lines: number[] = [];
+  for (let i = 0; i < lineCount; i += 1) {
+    const slotsLeft = lineCount - i - 1;
+    const minAllowed = Math.max(min, remaining - slotsLeft * max);
+    const maxAllowed = Math.min(max, remaining - slotsLeft * min);
+    const value =
+      i === lineCount - 1
+        ? remaining
+        : minAllowed +
+          Math.random() * Math.max(0, maxAllowed - minAllowed);
+    lines.push(value);
+    remaining -= value;
+  }
+  return lines;
+};
 
 export default function CosmosLoader({
   onLoadingComplete,
@@ -32,6 +57,13 @@ export default function CosmosLoader({
   const [showEndMessage, setShowEndMessage] = useState(false);
   const [progress, setProgress] = useState(0);
   const [revealedSet, setRevealedSet] = useState<Set<number>>(new Set());
+  const [revealLineFractions, setRevealLineFractions] = useState<number[]>(
+    () =>
+      Array.from(
+        { length: DEFAULT_REVEAL_LINES },
+        () => 1 / DEFAULT_REVEAL_LINES,
+      ),
+  );
   const [animationDone, setAnimationDone] = useState(false);
 
   const shuffledOrderRef = useRef<number[]>([]);
@@ -142,8 +174,11 @@ export default function CosmosLoader({
 
     fillSolid("#000");
 
-    // Build shuffled reveal order
-    const order = Array.from({ length: TOTAL_REVEAL_LINES }, (_, i) => i);
+    // Build random reveal strips and shuffled reveal order
+    const revealLines = buildRevealLineFractions();
+    setRevealLineFractions(revealLines);
+    const revealLineCount = revealLines.length;
+    const order = Array.from({ length: revealLineCount }, (_, i) => i);
     for (let i = order.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [order[i], order[j]] = [order[j], order[i]];
@@ -151,7 +186,10 @@ export default function CosmosLoader({
     shuffledOrderRef.current = order;
 
     const TEASER_DURATION = 4000;
-    const FRENZY_LINE_INTERVAL = 333;
+    const FRENZY_LINE_INTERVAL = Math.max(
+      90,
+      Math.round(FRENZY_BASE_DURATION_MS / Math.max(1, revealLineCount)),
+    );
 
     const stopTeaser = () => {
       stopLoop();
@@ -171,11 +209,12 @@ export default function CosmosLoader({
       startPhase("frenzy");
       setStageText("Loading content...");
       setProgress(0);
+      setRevealedSet(new Set());
       revealCountRef.current = 0;
 
       const revealId = queueInterval(() => {
         const idx = revealCountRef.current;
-        if (idx >= TOTAL_REVEAL_LINES) {
+        if (idx >= revealLineCount) {
           clearQueuedInterval(revealId);
           onAllRevealed();
           return;
@@ -185,16 +224,16 @@ export default function CosmosLoader({
         setRevealedSet((prev) => new Set(prev).add(lineIndex));
 
         const count = revealCountRef.current;
-        const pct = Math.round((count / TOTAL_REVEAL_LINES) * 95);
+        const pct = Math.round((count / revealLineCount) * 95);
         setProgress(Math.min(pct, 95));
 
-        if (count === Math.floor(TOTAL_REVEAL_LINES * 0.25)) {
+        if (count === Math.floor(revealLineCount * 0.25)) {
           setStageText("Rendering planetary systems...");
-        } else if (count === Math.floor(TOTAL_REVEAL_LINES * 0.5)) {
+        } else if (count === Math.floor(revealLineCount * 0.5)) {
           setStageText("Compiling shaders...");
-        } else if (count === Math.floor(TOTAL_REVEAL_LINES * 0.75)) {
+        } else if (count === Math.floor(revealLineCount * 0.75)) {
           setStageText("Calibrating navigation...");
-        } else if (count === Math.floor(TOTAL_REVEAL_LINES * 0.9)) {
+        } else if (count === Math.floor(revealLineCount * 0.9)) {
           setStageText("Almost ready...");
         }
       }, FRENZY_LINE_INTERVAL);
@@ -294,7 +333,7 @@ export default function CosmosLoader({
               </div>
             </div>
             <div className="cosmos-loader__tv-mask">
-              {Array.from({ length: TOTAL_REVEAL_LINES }).map((_, i) => (
+              {revealLineFractions.map((fraction, i) => (
                 <div
                   key={i}
                   className={`cosmos-loader__tv-strip${
@@ -302,6 +341,7 @@ export default function CosmosLoader({
                       ? " cosmos-loader__tv-strip--peeled"
                       : ""
                   }`}
+                  style={{ height: `${fraction * 100}%`, flex: "0 0 auto" }}
                 />
               ))}
             </div>
