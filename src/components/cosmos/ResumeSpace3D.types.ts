@@ -7,6 +7,10 @@ export interface ResumeSpace3DProps {
   onNavigate: (section: number) => void;
   options: DiagramStyleOptions;
   onOptionsChange?: (options: DiagramStyleOptions) => void;
+  aboutHallDatasetOverride?: "legacy" | "experimental";
+  aboutHallColumnAngleMultiplier?: number;
+  onHallwayContentModeChange?: (mode: "projects" | "about") => void;
+  onProjectShowcaseActiveChange?: (active: boolean) => void;
 }
 
 export interface SceneRef {

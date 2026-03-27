@@ -7,6 +7,7 @@ import resumeData from "../../data/resume.json";
 import portfolioCores from "../../data/portfolioCores.json";
 import aboutDeck from "../../data/aboutDeck.json";
 import aboutHallSlides from "../../data/aboutHallSlides.json";
+import aboutHallSlidesExperimental from "../../data/aboutHallSlides.experimental.json";
 import CosmosLoader from "../CosmosLoader";
 import {
   DEFAULT_CONTROL_SENSITIVITY,
@@ -224,6 +225,9 @@ const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
 const EXPERIENCE_END_CAMERA_POSITION = new THREE.Vector3(11281.3, -534.0, 1301.6);
 const EXPERIENCE_END_CAMERA_TARGET = new THREE.Vector3(11970.8, -828.9, -116.5);
 const HALLWAY_DEFAULT_CONTENT_MODE = "about";
+const ABOUT_HALL_EXPERIMENTAL_DATASET =
+  String(import.meta.env.VITE_ABOUT_HALL_DATASET || "experimental").toLowerCase() !==
+  "legacy";
 const HALLWAY_OSWALD_FONT_STACK =
   "'Oswald', 'Montserrat', 'Segoe UI', Arial, sans-serif";
 const HALLWAY_TEXT_DEFAULT_SHADOW = "0px 0px 10px rgba(0, 0, 0, 0.4)";
@@ -864,15 +868,21 @@ type HallwayContentMode = "projects" | "about";
 type HallwayVerticalAlign = "top" | "middle" | "bottom";
 type HallwayHorizontalAlign = "left" | "center" | "right";
 type AboutHallSlideType = "type1" | "type2" | "type3" | "type4";
+type AboutHallColumnId = "left" | "center" | "right";
 type AboutHallContentType =
   | "column1"
   | "column2"
+  | "left"
+  | "center"
+  | "right"
   | "row1"
   | "row2"
   | "r1c1"
   | "r1c2"
   | "r2c1"
   | "r2c2";
+type AboutHallContentKind = "text" | "image" | "code" | "technology";
+type AboutHallFlowDirection = "topToBottom" | "bottomToTop" | "static";
 type AboutHallTextIntroEffect =
   | "none"
   | "fadeIn"
@@ -887,6 +897,7 @@ type AboutHallTextIntroFX = {
 type AboutHallSlideContent = {
   id: string;
   type: AboutHallContentType;
+  contentKind?: AboutHallContentKind;
   backgroundColor: string;
   fontColor: string;
   fontFamily: string[];
@@ -900,6 +911,22 @@ type AboutHallSlideContent = {
   horizontalAlign?: HallwayHorizontalAlign;
   verticalAlign?: HallwayVerticalAlign;
   textContent: string;
+  imageUrl?: string;
+  caption?: string;
+  technologyNames?: string[];
+  codeLanguage?: string;
+  flowDirection?: AboutHallFlowDirection;
+  flowUnitsPerSec?: number;
+  flowOffsetUnits?: number;
+  widthRatio?: number;
+  heightRatio?: number;
+  columnAngleDeg?: number;
+  offsetX?: number;
+  offsetY?: number;
+};
+type AboutHallColumnConfig = {
+  angleDeg?: number;
+  messages: AboutHallSlideContent[];
 };
 type AboutHallSlide = {
   id: string;
@@ -912,6 +939,7 @@ type AboutHallSlide = {
   type: AboutHallSlideType;
   configuration: {
     contents: AboutHallSlideContent[];
+    columns?: Partial<Record<AboutHallColumnId, AboutHallColumnConfig>>;
   };
 };
 type AboutHallSlidesFile = {
@@ -928,6 +956,12 @@ type AboutSlideCellRuntime = {
   state: "idle" | "waiting" | "animating" | "done";
   startedAt: number;
   basePosition: THREE.Vector3;
+  flowDirection: AboutHallFlowDirection;
+  flowUnitsPerSec: number;
+  flowOffsetUnits: number;
+  flowRange: number;
+  baseYawRad: number;
+  immersiveColumn?: AboutHallColumnId;
 };
 type AboutSlideRuntime = {
   mode: "about";
@@ -937,6 +971,24 @@ type AboutSlideRuntime = {
   activated: boolean;
   activatedAt: number;
 };
+
+export type ImmersiveColumnRigValues = {
+  width: number;
+  height: number;
+  posX: number;
+  posY: number;
+  depth: number;
+  angleDeg: number;
+  angleMultiplier: number;
+};
+export type ImmersiveColumnRig = {
+  left: ImmersiveColumnRigValues;
+  center: ImmersiveColumnRigValues;
+  right: ImmersiveColumnRigValues;
+  activeColumn: AboutHallColumnId;
+};
+export const immersiveColumnRigRef: { current: ImmersiveColumnRig | null } = { current: null };
+
 const DEFAULT_BACKGROUND_MUSIC_TRACK = Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
 const EXPERIENCE_MOON_TEXTURE_BY_JOB_ID: Record<string, string> = {
   investcloud: "/textures/custom-planet-textures/investcloud.jpg",
@@ -1641,6 +1693,64 @@ const parseBorderStyle = (
   };
 };
 
+const normalizeAboutFlowDirection = (
+  raw?: string,
+): AboutHallFlowDirection => {
+  if (raw === "bottomToTop" || raw === "topToBottom" || raw === "static") {
+    return raw;
+  }
+  return "static";
+};
+
+const resolveAboutContentKind = (
+  content: AboutHallSlideContent,
+): AboutHallContentKind => {
+  if (content.contentKind) return content.contentKind;
+  if (content.imageUrl || content.backgroundImage) return "image";
+  if ((content.technologyNames ?? []).length > 0) return "technology";
+  return "text";
+};
+
+const resolveAboutContentText = (content: AboutHallSlideContent): string => {
+  if ((content.technologyNames ?? []).length > 0) {
+    return content.technologyNames?.join("  •  ") ?? "";
+  }
+  return content.textContent || "";
+};
+
+const getAboutColumnMessages = (
+  slide: AboutHallSlide,
+): Record<AboutHallColumnId, AboutHallSlideContent[]> => {
+  const columns = slide.configuration.columns;
+  if (columns) {
+    return {
+      left: columns.left?.messages ?? [],
+      center: columns.center?.messages ?? [],
+      right: columns.right?.messages ?? [],
+    };
+  }
+  const legacy = slide.configuration.contents ?? [];
+  return {
+    left: legacy.filter((item) => item.type === "left"),
+    center: legacy.filter(
+      (item) =>
+        item.type === "center" ||
+        item.type === "column1" ||
+        item.type === "row1" ||
+        item.type === "r1c1",
+    ),
+    right: legacy.filter((item) => item.type === "right" || item.type === "column2"),
+  };
+};
+
+const hasThreeColumnChoreography = (slide: AboutHallSlide): boolean => {
+  if (slide.configuration.columns) return true;
+  return slide.configuration.contents.some(
+    (item) =>
+      item.type === "left" || item.type === "center" || item.type === "right",
+  );
+};
+
 const getAboutSlideCellRect = (
   slideType: AboutHallSlideType,
   contentType: AboutHallContentType,
@@ -1661,6 +1771,9 @@ const getAboutSlideCellRect = (
   const map: Record<AboutHallContentType, { x: number; y: number; w: number; h: number }> = {
     column1: { x: 0, y: 0, w: 0.5, h: 0.5 },
     column2: { x: 0.5, y: 0, w: 0.5, h: 0.5 },
+    left: { x: 0, y: 0, w: 0.333, h: 1 },
+    center: { x: 0.333, y: 0, w: 0.334, h: 1 },
+    right: { x: 0.667, y: 0, w: 0.333, h: 1 },
     row1: { x: 0, y: 0, w: 0.5, h: 0.5 },
     row2: { x: 0, y: 0.5, w: 0.5, h: 0.5 },
     r1c1: { x: 0, y: 0, w: 0.5, h: 0.5 },
@@ -1680,20 +1793,25 @@ const drawAboutSlideText = (
 ) => {
   const creditsStyle = opts?.creditsStyle ?? false;
   const emergencyMood = opts?.emergencyMood ?? false;
+  const contentKind = resolveAboutContentKind(content);
+  const contentText = resolveAboutContentText(content);
   const fontSize = parsePixelSize(content.fontSize, 42);
-  const fontFamily =
-    content.fontFamily?.length > 0
+  const fontFamily = contentKind === "code"
+    ? "'JetBrains Mono', 'Fira Code', 'Consolas', monospace"
+    : content.fontFamily?.length > 0
       ? content.fontFamily.map((font) => `'${font}'`).join(", ")
       : HALLWAY_OSWALD_FONT_STACK;
   const textAlign = resolveCanvasAlign(content.horizontalAlign);
   const verticalAnchor = resolveCanvasBaselineAnchor(content.verticalAlign);
-  const lineHeight = Math.round(fontSize * (creditsStyle ? 1.15 : 1.24));
+  const lineHeight = Math.round(
+    fontSize * (creditsStyle ? 1.15 : contentKind === "code" ? 1.35 : 1.24),
+  );
   const padX = Math.max(24, width * (creditsStyle ? 0.045 : 0.09));
   const padY = Math.max(20, height * (creditsStyle ? 0.08 : 0.11));
   const maxLineWidth = Math.max(120, width - padX * 2);
 
   ctx.font = `600 ${fontSize}px ${fontFamily}`;
-  const sourceLines = splitHtmlBreakLines(content.textContent);
+  const sourceLines = splitHtmlBreakLines(contentText);
   const lines: string[] = [];
   sourceLines.forEach((line) => {
     const words = line.split(/\s+/).filter(Boolean);
@@ -1732,9 +1850,11 @@ const drawAboutSlideText = (
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
   } else {
-    ctx.fillStyle = content.fontColor || "rgba(240, 248, 255, 0.98)";
+    ctx.fillStyle = contentKind === "technology"
+      ? "rgba(216, 248, 255, 0.98)"
+      : content.fontColor || "rgba(240, 248, 255, 0.98)";
     ctx.shadowColor = content.fontShadow || HALLWAY_TEXT_DEFAULT_SHADOW;
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = contentKind === "technology" ? 10 : 8;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
   }
@@ -1768,11 +1888,22 @@ const createAboutCellTexture = (
   }
 
   const transparentBackground = opts?.transparentBackground ?? false;
+  const contentKind = resolveAboutContentKind(content);
   if (!transparentBackground) {
-    ctx.fillStyle = content.backgroundColor || "rgba(8, 16, 32, 0.9)";
+    const baseBackground = contentKind === "code"
+      ? "rgba(7, 12, 24, 0.96)"
+      : contentKind === "technology"
+        ? "rgba(9, 20, 36, 0.92)"
+        : content.backgroundColor || "rgba(8, 16, 32, 0.9)";
+    ctx.fillStyle = baseBackground;
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   } else {
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+  }
+  if (contentKind === "code") {
+    ctx.strokeStyle = "rgba(98, 214, 255, 0.4)";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(6, 6, canvasWidth - 12, canvasHeight - 12);
   }
   drawAboutSlideText(ctx, content, canvasWidth, canvasHeight, {
     creditsStyle: opts?.creditsStyle,
@@ -1930,10 +2061,19 @@ type AboutCellAnimationRuntime = {
 export default function ResumeSpace3D({
   options,
   onOptionsChange,
+  aboutHallDatasetOverride,
+  aboutHallColumnAngleMultiplier = 1,
+  onHallwayContentModeChange,
+  onProjectShowcaseActiveChange,
 }: ResumeSpace3DProps) {
   const aboutDeckData = aboutDeck as AboutDeckData;
   const aboutSlides = aboutDeckData.aboutDeck.slides;
-  const aboutHallData = aboutHallSlides as AboutHallSlidesFile;
+  const useExperimentalAboutDataset =
+    aboutHallDatasetOverride === "experimental" ||
+    (aboutHallDatasetOverride !== "legacy" && ABOUT_HALL_EXPERIMENTAL_DATASET);
+  const aboutHallData = (
+    useExperimentalAboutDataset ? aboutHallSlidesExperimental : aboutHallSlides
+  ) as AboutHallSlidesFile;
   const aboutHallwaySlides = useMemo<AboutHallSlide[]>(
     () => (aboutHallData.slides || []).map((slide) => ({ ...slide })),
     [aboutHallData.slides],
@@ -1960,18 +2100,26 @@ export default function ResumeSpace3D({
   const hallwayFontsReadyRef = useRef(false);
   const aboutShowcaseEntries = useMemo<ShowcaseEntry[]>(
     () =>
-      aboutHallwaySlides.map((slide) => ({
-        id: slide.id,
-        title: slide.visibleTitle,
-        image:
-          "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
-        description: slide.configuration.contents.map((cell) => cell.textContent).join(" "),
-        technologies: [],
-        year: 2026,
-        fit: "contain",
-        galleryMedia: [],
-        clientVariants: [],
-      })),
+      aboutHallwaySlides.map((slide) => {
+        const byColumn = getAboutColumnMessages(slide);
+        const derived = [...byColumn.left, ...byColumn.center, ...byColumn.right];
+        const fallbackContents =
+          derived.length > 0 ? derived : (slide.configuration.contents ?? []);
+        return {
+          id: slide.id,
+          title: slide.visibleTitle,
+          image:
+            "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+          description: fallbackContents
+            .map((cell) => resolveAboutContentText(cell))
+            .join(" "),
+          technologies: [],
+          year: 2026,
+          fit: "contain",
+          galleryMedia: [],
+          clientVariants: [],
+        };
+      }),
     [aboutHallwaySlides],
   );
   const projectShowcaseEntries = hallwayContentMode === "about"
@@ -2129,7 +2277,8 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     hallwayContentModeRef.current = hallwayContentMode;
-  }, [hallwayContentMode]);
+    onHallwayContentModeChange?.(hallwayContentMode);
+  }, [hallwayContentMode, onHallwayContentModeChange]);
 
   useEffect(() => {
     const interior = projectShowcaseInteriorRootRef.current;
@@ -2835,6 +2984,19 @@ export default function ResumeSpace3D({
   const [projectShowcaseFocusIndex, setProjectShowcaseFocusIndex] = useState(0);
   const [, setProjectShowcaseViewportTick] = useState(0);
   const projectShowcaseActiveRef = useRef(false);
+  const aboutHallAngleMultiplierRef = useRef(
+    THREE.MathUtils.clamp(aboutHallColumnAngleMultiplier, 0, 20),
+  );
+  useEffect(() => {
+    aboutHallAngleMultiplierRef.current = THREE.MathUtils.clamp(
+      aboutHallColumnAngleMultiplier,
+      0,
+      20,
+    );
+  }, [aboutHallColumnAngleMultiplier]);
+  useEffect(() => {
+    onProjectShowcaseActiveChange?.(projectShowcaseActive);
+  }, [projectShowcaseActive, onProjectShowcaseActiveChange]);
   const projectShowcasePlayingRef = useRef(false);
   const projectShowcaseLeverValueRef = useRef(0);
   const projectShowcaseAnglePercentRef = useRef(
@@ -7022,6 +7184,8 @@ export default function ResumeSpace3D({
     }
 
     const ship = spaceshipRef.current;
+    const isAboutElevatorSequence =
+      track.axis === "y" && hallwayContentModeRef.current === "about";
     if (ship) ship.visible = true;
 
     const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -7061,6 +7225,13 @@ export default function ResumeSpace3D({
           .clone()
           .addScaledVector(shipForward, 8.4)
           .add(new THREE.Vector3(0, -1.8, 0));
+        if (isAboutElevatorSequence) {
+          const outsideSign = tempCam.x >= rootPos.x ? 1 : -1;
+          shipPos.x =
+            rootPos.x + outsideSign * (Math.abs(track.centerCross) + 10.8);
+          shipPos.z = rootPos.z + track.cameraHeight + 1.1;
+          shipPos.y -= 0.6;
+        }
         const glideNoseDown = THREE.MathUtils.lerp(-0.28, -0.06, t);
         const shipAim = shipPos
           .clone()
@@ -7183,6 +7354,8 @@ export default function ResumeSpace3D({
         .addScaledVector(flightDir, track.lookAhead * 2.5)
         .add(new THREE.Vector3(0, 1, 0));
       const ship = spaceshipRef.current;
+      const isAboutElevatorSequence =
+        track.axis === "y" && hallwayContentModeRef.current === "about";
       if (ship) ship.visible = true;
       applyProjectShowcaseNebulaFade(1);
 
@@ -7222,6 +7395,13 @@ export default function ResumeSpace3D({
             .clone()
             .addScaledVector(shipForward, 8.8)
             .add(new THREE.Vector3(0, -2.0, 0));
+          if (isAboutElevatorSequence) {
+            const outsideSign = tempCam.x >= rootPos.x ? 1 : -1;
+            shipPos.x =
+              rootPos.x + outsideSign * (Math.abs(track.centerCross) + 11.2);
+            shipPos.z = rootPos.z + track.cameraHeight + 1.25;
+            shipPos.y -= 0.75;
+          }
           const climbNoseUp = THREE.MathUtils.lerp(1.4, 5.2, t);
           const shipAim = shipPos
             .clone()
@@ -11255,6 +11435,23 @@ export default function ResumeSpace3D({
           }
           panel.aboutRuntime.cells.forEach((cell) => {
             if (!panel.aboutRuntime?.activated) return;
+            if (cell.immersiveColumn && immersiveColumnRigRef.current) {
+              const rig = immersiveColumnRigRef.current[cell.immersiveColumn];
+              const geo = cell.mesh.geometry as THREE.PlaneGeometry;
+              if (Math.abs(geo.parameters.width - rig.width) > 0.01 || Math.abs(geo.parameters.height - rig.height) > 0.01) {
+                cell.mesh.geometry.dispose();
+                cell.mesh.geometry = new THREE.PlaneGeometry(rig.width, rig.height);
+              }
+              const parent = cell.mesh.parent;
+              if (parent) {
+                parent.position.x = rig.posX;
+                parent.position.y = rig.posY;
+                parent.position.z = rig.depth;
+              }
+              cell.mesh.rotation.y = THREE.MathUtils.degToRad(rig.angleDeg) * rig.angleMultiplier;
+            } else {
+              cell.mesh.rotation.y = cell.baseYawRad * aboutHallAngleMultiplierRef.current;
+            }
             if (cell.state === "waiting") {
               if (now - panel.aboutRuntime.activatedAt >= cell.waitBeforeMs) {
                 cell.state = "animating";
@@ -11294,6 +11491,26 @@ export default function ResumeSpace3D({
                 cell.mesh.position.copy(cell.basePosition);
                 cell.material.opacity = 1;
               }
+              return;
+            }
+            if (cell.state === "done") {
+              if (cell.flowDirection === "static" || cell.flowUnitsPerSec <= 0) return;
+              const dir = cell.flowDirection === "bottomToTop" ? 1 : -1;
+              const flowT =
+                ((now - panel.aboutRuntime.activatedAt) / 1000) *
+                  cell.flowUnitsPerSec *
+                  dir +
+                cell.flowOffsetUnits;
+              const travel =
+                THREE.MathUtils.euclideanModulo(
+                  flowT + cell.flowRange,
+                  cell.flowRange * 2,
+                ) - cell.flowRange;
+              cell.mesh.position.set(
+                cell.basePosition.x,
+                cell.basePosition.y + travel,
+                cell.basePosition.z,
+              );
             }
           });
           panel.frameMat.opacity = 0.28 + panel.focusBlend * 0.34;
@@ -11379,8 +11596,8 @@ export default function ResumeSpace3D({
           const lifePulse = Math.sin(now * 0.0025 + peeker.bobPhase);
           const secondaryPulse = Math.sin(now * 0.0032 + peeker.bobPhase * 1.61);
           const inwardSign = peeker.wallX < 0 ? 1 : -1;
-          const outsideOffset = -inwardSign * 0.08;
-          const lateralOffset = outsideOffset + (-inwardSign * 1.35) * departT;
+          const outsideOffset = -inwardSign * 1.3;
+          const lateralOffset = outsideOffset + (-inwardSign * 2.1) * departT;
           const hover = lifePulse * peeker.bobAmp * 0.45 * hoverT;
           const bob = lifePulse * peeker.bobAmp * 0.18 * hoverT;
           peeker.root.visible = true;
@@ -17356,6 +17573,9 @@ export default function ResumeSpace3D({
             const runPos = runStart + index * panelSpacing;
             const horizontal = slide.horizontalAlign;
             const vertical = slide.verticalAlign;
+            const slideHasColumnChoreo = hasThreeColumnChoreography(slide);
+            const useElevatorCreditsCard = elevatorCreditsMode && !slideHasColumnChoreo;
+            const useImmersiveColumnGrouping = slideHasColumnChoreo && runAxis === "y";
             const side =
               horizontal === "left" ? -1 : horizontal === "right" ? 1 : 0;
             const lateralOffset = side === 0 ? 0 : side * wallOffset;
@@ -17366,11 +17586,15 @@ export default function ResumeSpace3D({
             const sideNudge =
               horizontal === "left" ? -0.5 : horizontal === "right" ? 0.5 : 0;
             if (runAxis === "y") {
-              panelGroup.position.set(
-                (elevatorCreditsMode ? elevatorCreditsWall : elevatorOppositeWall) + sideNudge * 0.4,
-                runPos,
-                depthOffset,
-              );
+              if (useImmersiveColumnGrouping) {
+                panelGroup.position.set(elevatorCreditsWall, runPos, 0);
+              } else {
+                panelGroup.position.set(
+                  (elevatorCreditsMode ? elevatorCreditsWall : elevatorOppositeWall) + sideNudge * 0.4,
+                  runPos,
+                  depthOffset,
+                );
+              }
             } else if (runAxis === "z") {
               panelGroup.position.set(
                 lateralOffset,
@@ -17452,14 +17676,14 @@ export default function ResumeSpace3D({
               new THREE.MeshBasicMaterial({
                 color: borderColor,
                 transparent: true,
-                opacity: elevatorCreditsMode ? 0 : 0.28,
+                opacity: useElevatorCreditsCard ? 0 : 0.28,
                 side: THREE.DoubleSide,
                 toneMapped: false,
               }),
             );
             const frameMat = frame.material as THREE.MeshBasicMaterial;
             frame.position.z = -0.04;
-            if (!elevatorCreditsMode) panelGroup.add(frame);
+            if (!useElevatorCreditsCard && !useImmersiveColumnGrouping) panelGroup.add(frame);
 
             const panelRecord: ShowcasePanelRecord = {
               group: panelGroup,
@@ -17535,6 +17759,7 @@ export default function ResumeSpace3D({
             };
 
             const contents = slide.configuration?.contents ?? [];
+            const columnMessages = getAboutColumnMessages(slide);
             const creditContent: AboutHallSlideContent = {
               id: `${slide.id}-credit`,
               type: "column1",
@@ -17553,38 +17778,45 @@ export default function ResumeSpace3D({
                 .filter((text) => text.length > 0)
                 .join("\n\n"),
             };
-            const renderContents = elevatorCreditsMode ? [creditContent] : contents;
-            renderContents.forEach((content) => {
-              const rect = getAboutSlideCellRect(slide.type, content.type);
-              const cellWidth = elevatorCreditsMode ? panelWidth : panelWidth * rect.w;
-              const cellHeight = elevatorCreditsMode ? panelHeight : panelHeight * rect.h;
-              const cellX = elevatorCreditsMode ? 0 : (rect.x + rect.w * 0.5 - 0.5) * panelWidth;
-              const cellY = elevatorCreditsMode ? 0 : (0.5 - (rect.y + rect.h * 0.5)) * panelHeight;
+            const createAboutRuntimeCell = (
+              content: AboutHallSlideContent,
+              cellWidth: number,
+              cellHeight: number,
+              cellX: number,
+              cellY: number,
+              opts?: {
+                transparentBackground?: boolean;
+                creditsStyle?: boolean;
+                columnDepth?: number;
+                parentGroup?: THREE.Group;
+              },
+            ) => {
+              const safeWidth = Math.max(256, Math.floor(1300 * (cellWidth / Math.max(panelWidth, 1))));
+              const safeHeight = Math.max(220, Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))));
+              const contentKind = resolveAboutContentKind(content);
               const tex = createAboutCellTexture(
-                content,
-                elevatorCreditsMode
-                  ? Math.max(980, Math.floor(1780 * (panelWidth / 12)))
-                  : Math.max(512, Math.floor(1400 * rect.w)),
-                elevatorCreditsMode
-                  ? Math.max(460, Math.floor(1080 * (panelHeight / 7)))
-                  : Math.max(360, Math.floor(920 * rect.h)),
                 {
-                  transparentBackground: elevatorCreditsMode,
-                  creditsStyle: elevatorCreditsMode,
+                  ...content,
+                  textContent: resolveAboutContentText(content),
+                },
+                safeWidth,
+                safeHeight,
+                {
+                  transparentBackground: opts?.transparentBackground ?? false,
+                  creditsStyle: opts?.creditsStyle ?? false,
                 },
               );
-              const emergencyTex = elevatorCreditsMode
+              const emergencyTex = opts?.creditsStyle
                 ? createAboutCellTexture(
-                    content,
-                    elevatorCreditsMode
-                      ? Math.max(980, Math.floor(1780 * (panelWidth / 12)))
-                      : Math.max(512, Math.floor(1400 * rect.w)),
-                    elevatorCreditsMode
-                      ? Math.max(460, Math.floor(1080 * (panelHeight / 7)))
-                      : Math.max(360, Math.floor(920 * rect.h)),
                     {
-                      transparentBackground: elevatorCreditsMode,
-                      creditsStyle: elevatorCreditsMode,
+                      ...content,
+                      textContent: resolveAboutContentText(content),
+                    },
+                    safeWidth,
+                    safeHeight,
+                    {
+                      transparentBackground: opts?.transparentBackground ?? false,
+                      creditsStyle: true,
                       emergencyMood: true,
                     },
                   )
@@ -17602,9 +17834,26 @@ export default function ResumeSpace3D({
                 new THREE.PlaneGeometry(cellWidth, cellHeight),
                 material,
               );
-              mesh.position.set(cellX, cellY, 0.02);
-              panelGroup.add(mesh);
-
+              if (contentKind === "image") {
+                const imageUrl = content.imageUrl || content.backgroundImage;
+                if (imageUrl) {
+                  textureLoader.load(
+                    imageUrl,
+                    (loadedTexture) => {
+                      loadedTexture.colorSpace = THREE.SRGBColorSpace;
+                      loadedTexture.minFilter = THREE.LinearFilter;
+                      loadedTexture.magFilter = THREE.LinearFilter;
+                      loadedTexture.generateMipmaps = false;
+                      material.map = loadedTexture;
+                      material.needsUpdate = true;
+                    },
+                    undefined,
+                    () => {},
+                  );
+                }
+              }
+              mesh.position.set(cellX, cellY, opts?.columnDepth ?? 0.02);
+              (opts?.parentGroup ?? panelGroup).add(mesh);
               const introFx = content.textIntroFX ?? {
                 effect: "fadeIn",
                 durationMs: 620,
@@ -17614,16 +17863,201 @@ export default function ResumeSpace3D({
                 material,
                 normalTexture: tex,
                 emergencyTexture: emergencyTex,
-                fx: elevatorCreditsMode ? { effect: "fadeIn", durationMs: 520 } : introFx,
-                waitBeforeMs: elevatorCreditsMode
+                fx: opts?.creditsStyle ? { effect: "fadeIn", durationMs: 520 } : introFx,
+                waitBeforeMs: opts?.creditsStyle
                   ? 40
                   : Math.max(0, content.WaitBeforeTextRender || 0),
                 waitAfterMs: Math.max(0, content.WaitAfterTextRender || 0),
                 state: "idle",
                 startedAt: 0,
                 basePosition: mesh.position.clone(),
+                flowDirection: normalizeAboutFlowDirection(content.flowDirection),
+                flowUnitsPerSec: Math.max(0, content.flowUnitsPerSec ?? 0),
+                flowOffsetUnits: content.flowOffsetUnits ?? 0,
+                flowRange: Math.max(cellHeight * 0.55, 0.45),
+                baseYawRad: mesh.rotation.y,
               });
-            });
+              if (contentKind === "image") {
+                const captionText = String(content.caption ?? content.textContent ?? "").trim();
+                if (captionText.length > 0) {
+                  const captionContent: AboutHallSlideContent = {
+                    ...content,
+                    contentKind: "text",
+                    backgroundColor: "rgba(8, 14, 24, 0.82)",
+                    textContent: captionText,
+                    fontSize: content.fontSize || "22px",
+                    horizontalAlign: "center",
+                    verticalAlign: "middle",
+                  };
+                  const captionTex = createAboutCellTexture(
+                    captionContent,
+                    Math.max(360, safeWidth),
+                    Math.max(140, Math.floor(safeHeight * 0.22)),
+                    {
+                      transparentBackground: false,
+                      creditsStyle: false,
+                    },
+                  );
+                  const captionMat = new THREE.MeshBasicMaterial({
+                    map: captionTex,
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0,
+                    side: THREE.DoubleSide,
+                    toneMapped: false,
+                    depthWrite: false,
+                  });
+                  const captionMesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(cellWidth * 0.92, cellHeight * 0.24),
+                    captionMat,
+                  );
+                  captionMesh.position.set(
+                    cellX,
+                    cellY - cellHeight * 0.34,
+                    (opts?.columnDepth ?? 0.02) + 0.01,
+                  );
+                  (opts?.parentGroup ?? panelGroup).add(captionMesh);
+                  panelRecord.aboutRuntime?.cells.push({
+                    mesh: captionMesh,
+                    material: captionMat,
+                    normalTexture: captionTex,
+                    emergencyTexture: captionTex,
+                    fx: introFx,
+                    waitBeforeMs: Math.max(0, content.WaitBeforeTextRender || 0),
+                    waitAfterMs: 0,
+                    state: "idle",
+                    startedAt: 0,
+                    basePosition: captionMesh.position.clone(),
+                    flowDirection: "static",
+                    flowUnitsPerSec: 0,
+                    flowOffsetUnits: 0,
+                    flowRange: Math.max(cellHeight * 0.12, 0.4),
+                    baseYawRad: captionMesh.rotation.y,
+                  });
+                }
+              }
+            };
+            const useColumnChoreo = slideHasColumnChoreo;
+            if (useElevatorCreditsCard) {
+              createAboutRuntimeCell(creditContent, panelWidth, panelHeight, 0, 0, {
+                transparentBackground: true,
+                creditsStyle: true,
+              });
+            } else if (useColumnChoreo) {
+              const columnX: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
+                ? { left: -9.56, center: 1.05, right: 10.65 }
+                : { left: -panelWidth * 0.34, center: 0, right: panelWidth * 0.34 };
+              const columnZ: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
+                ? { left: 3.35, center: 0, right: 6 }
+                : { left: 0, center: 0, right: 0 };
+              const columnDefaults: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
+                ? { left: 34, center: 0, right: -34 }
+                : { left: 16, center: 0, right: -16 };
+              const columnAngleMultipliers: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
+                ? { left: 1.9, center: 1, right: 2 }
+                : { left: 1, center: 1, right: 1 };
+              const columnOrder: AboutHallColumnId[] = ["left", "center", "right"];
+              columnOrder.forEach((columnId) => {
+                const msgs = columnMessages[columnId];
+                if (msgs.length === 0) return;
+                const columnConfig = slide.configuration.columns?.[columnId];
+                const baseAngleDeg = columnConfig?.angleDeg ?? columnDefaults[columnId];
+                const columnAnchor = new THREE.Group();
+                const columnY = useImmersiveColumnGrouping ? 0 : 0;
+                columnAnchor.position.set(columnX[columnId], columnY, columnZ[columnId]);
+                panelGroup.add(columnAnchor);
+                const verticalRange = useImmersiveColumnGrouping
+                  ? panelHeight * 0.22
+                  : panelHeight * 0.78;
+                const slotCount = Math.max(1, msgs.length);
+                const slotStep = slotCount > 1 ? verticalRange / (slotCount - 1) : 0;
+                msgs.forEach((rawMessage, msgIndex) => {
+                  const message = {
+                    ...rawMessage,
+                    horizontalAlign: rawMessage.horizontalAlign ?? "center",
+                    verticalAlign: rawMessage.verticalAlign ?? "middle",
+                    textContent: resolveAboutContentText(rawMessage),
+                  };
+                  const widthRatio = THREE.MathUtils.clamp(message.widthRatio ?? 1, 0.35, 2.6);
+                  const heightRatio = THREE.MathUtils.clamp(message.heightRatio ?? 1, 0.2, 2.4);
+                  const immersiveWidths: Record<AboutHallColumnId, number> = { left: 12.1, center: 14.3, right: 12.1 };
+                  const immersiveHeights: Record<AboutHallColumnId, number> = { left: 10.6, center: 10.1, right: 10.3 };
+                  const cellWidth = useImmersiveColumnGrouping
+                    ? immersiveWidths[columnId] * widthRatio
+                    : panelWidth * 0.26 * widthRatio;
+                  const cellHeight = useImmersiveColumnGrouping
+                    ? immersiveHeights[columnId] * heightRatio
+                    : panelHeight * 0.24 * heightRatio;
+                  const autoY = slotCount <= 1
+                    ? 0
+                    : verticalRange * 0.5 - slotStep * msgIndex;
+                  const baseY =
+                    autoY +
+                    (useImmersiveColumnGrouping ? 0 : 0) +
+                    (message.offsetY ?? 0);
+                  const baseX = (message.offsetX ?? 0);
+                  const cellCountBefore = panelRecord.aboutRuntime?.cells.length ?? 0;
+                  createAboutRuntimeCell(message, cellWidth, cellHeight, baseX, baseY, {
+                    columnDepth: 0.03 + msgIndex * 0.002,
+                    parentGroup: columnAnchor,
+                    transparentBackground: false,
+                  });
+                  const runtimeCells = panelRecord.aboutRuntime?.cells;
+                  if (!runtimeCells) return;
+                  const newCells = runtimeCells.slice(cellCountBefore);
+                  const angleDeg = message.columnAngleDeg ?? baseAngleDeg;
+                  newCells.forEach((cell) => {
+                    cell.mesh.rotation.y = THREE.MathUtils.degToRad(angleDeg);
+                    cell.baseYawRad = cell.mesh.rotation.y;
+                    if (useImmersiveColumnGrouping) {
+                      cell.immersiveColumn = columnId;
+                      cell.flowDirection = "static";
+                      cell.flowUnitsPerSec = 0;
+                      cell.flowRange = 0;
+                    }
+                    if (!useImmersiveColumnGrouping && cell.flowDirection !== "static" && cell.flowUnitsPerSec <= 0) {
+                      cell.flowUnitsPerSec = 0.25;
+                    }
+                  });
+                });
+              });
+              if (useImmersiveColumnGrouping && !immersiveColumnRigRef.current) {
+                const firstCell = (col: AboutHallColumnId) => {
+                  const cells = panelRecord.aboutRuntime?.cells ?? [];
+                  return cells.find((c) => c.immersiveColumn === col);
+                };
+                const makeVals = (col: AboutHallColumnId): ImmersiveColumnRigValues => {
+                  const cell = firstCell(col);
+                  if (!cell) return { width: 3, height: 3, posX: columnX[col], posY: 0, depth: columnZ[col], angleDeg: columnDefaults[col], angleMultiplier: columnAngleMultipliers[col] };
+                  const geo = cell.mesh.geometry as THREE.PlaneGeometry;
+                  const params = geo.parameters;
+                  return {
+                    width: params.width,
+                    height: params.height,
+                    posX: columnX[col],
+                    posY: 0,
+                    depth: columnZ[col],
+                    angleDeg: THREE.MathUtils.radToDeg(cell.baseYawRad),
+                    angleMultiplier: columnAngleMultipliers[col],
+                  };
+                };
+                immersiveColumnRigRef.current = {
+                  left: makeVals("left"),
+                  center: makeVals("center"),
+                  right: makeVals("right"),
+                  activeColumn: "center",
+                };
+              }
+            } else {
+              contents.forEach((content) => {
+                const rect = getAboutSlideCellRect(slide.type, content.type);
+                const cellWidth = panelWidth * rect.w;
+                const cellHeight = panelHeight * rect.h;
+                const cellX = (rect.x + rect.w * 0.5 - 0.5) * panelWidth;
+                const cellY = (0.5 - (rect.y + rect.h * 0.5)) * panelHeight;
+                createAboutRuntimeCell(content, cellWidth, cellHeight, cellX, cellY);
+              });
+            }
 
             const framePulse = new THREE.Mesh(
               new THREE.PlaneGeometry(
@@ -17639,7 +18073,7 @@ export default function ResumeSpace3D({
               }),
             );
             framePulse.position.z = -0.07;
-            if (!elevatorCreditsMode) panelGroup.add(framePulse);
+            if (!useElevatorCreditsCard && !useImmersiveColumnGrouping) panelGroup.add(framePulse);
 
             panelRecord.imageMesh = panelRecord.aboutRuntime?.cells[0]?.mesh ?? panelRecord.imageMesh;
             panelRecord.imageMat =
@@ -18892,8 +19326,8 @@ export default function ResumeSpace3D({
             obj.updateMatrixWorld(true);
           };
           const oppositeWallX = -Math.max(
-            trenchWidth * 0.5 + 0.16,
-            trenchWidth * 0.505,
+            trenchWidth * 0.5 + 4.2,
+            trenchWidth * 0.545,
           );
           const peekerFloorStride = panelSpacing * PROJECT_SHOWCASE_ELEVATOR_PEEKER_FLOOR_MULT;
           const peekerWallZ = 0.22;
@@ -18970,7 +19404,7 @@ export default function ResumeSpace3D({
           const falconPeekerMain = makePeeker(
             "falcon",
             spaceshipRef.current ?? spaceshipPreloadedGltfRef.current?.scene ?? null,
-            32,
+            22,
             0.18,
             0.08,
             Math.PI * 0.32,
@@ -18978,7 +19412,7 @@ export default function ResumeSpace3D({
           const falconPeekerAlt = makePeeker(
             "falcon",
             spaceshipRef.current ?? spaceshipPreloadedGltfRef.current?.scene ?? null,
-            30,
+            20,
             0.68,
             -0.24,
             Math.PI * 0.3,
@@ -20927,6 +21361,60 @@ export default function ResumeSpace3D({
               </div>
             </div>
           </div>
+          {!orbitalRegistryPanelVisible && (
+            <div
+              style={{
+                position: "fixed",
+                right: -5,
+                top: 184,
+                zIndex: 1101,
+                pointerEvents: "none",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 0,
+                padding: "8px 5px 9px",
+                borderRadius: 0,
+                border: "none",
+                background: "#000000",
+                color: "#dff5ff",
+                fontFamily: "'Rajdhani', sans-serif",
+                writingMode: "vertical-rl",
+                transform: "rotate(180deg)",
+                textTransform: "uppercase",
+                letterSpacing: 0.6,
+              }}
+            >
+              <span style={{ fontSize: 10, color: "#9fdfff", opacity: 0.9, lineHeight: "100%" }}>
+                About
+              </span>
+              <span style={{ fontSize: 10, fontWeight: 700, lineHeight: "auto" }}>
+                Hallway Registry
+              </span>
+            </div>
+          )}
+          <button
+            onClick={() => setOrbitalRegistryPanelVisible((prev) => !prev)}
+            style={{
+              position: "fixed",
+              right: orbitalRegistryPanelVisible ? 447 : -1,
+              top: 120,
+              zIndex: 1102,
+              width: 28,
+              height: 56,
+              borderRadius: "10px 0 0 10px",
+              border: "1px solid rgba(120, 220, 255, 0.5)",
+              background:
+                "linear-gradient(180deg, rgba(6, 16, 30, 0.9) 0%, rgba(4, 10, 22, 0.9) 100%)",
+              color: "#dff5ff",
+              fontSize: 16,
+              cursor: "pointer",
+              transition: "right 240ms ease",
+            }}
+            title={orbitalRegistryPanelVisible ? "Hide Hallway Registry" : "Show Hallway Registry"}
+          >
+            {orbitalRegistryPanelVisible ? ">" : "<"}
+          </button>
         </>
       );
     }

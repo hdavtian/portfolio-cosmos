@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import * as d3 from "d3";
 import resumeData from "../data/resume.json";
 import { type DiagramStyle, type DiagramStyleOptions } from "./DiagramSettings";
 import ResumeSpace3D from "./cosmos/ResumeSpace3D";
+import { immersiveColumnRigRef, type ImmersiveColumnRig, type ImmersiveColumnRigValues } from "./cosmos/ResumeSpace3D";
 
 interface ResumeStructureDiagramProps {
   onNavigate: (section: number) => void;
@@ -16,6 +17,154 @@ const savedNodePositions: {
   [key: string]: { x: number; y: number; fx: number | null; fy: number | null };
 } = {};
 
+type ColumnId = "left" | "center" | "right";
+
+function ImmersiveColumnRigPanel() {
+  const [selected, setSelected] = useState<ColumnId>("center");
+  const [tick, setTick] = useState(0);
+  const bump = useCallback(() => setTick((t) => t + 1), []);
+
+  const rig = immersiveColumnRigRef.current;
+  if (rig) rig.activeColumn = selected;
+  const vals: ImmersiveColumnRigValues = rig
+    ? rig[selected]
+    : { width: 3, height: 3, posX: 0, posY: 0, angleDeg: 0 };
+
+  const update = (field: keyof ImmersiveColumnRigValues, value: number) => {
+    if (!rig) return;
+    rig[selected][field] = value;
+    bump();
+  };
+
+  const exportToConsole = () => {
+    if (!rig) {
+      console.log("[Rig] No immersive column rig data available yet.");
+      return;
+    }
+    const fmt = (v: ImmersiveColumnRigValues) => ({
+      width: +v.width.toFixed(3),
+      height: +v.height.toFixed(3),
+      posX: +v.posX.toFixed(3),
+      posY: +v.posY.toFixed(3),
+      depth: +v.depth.toFixed(3),
+      angleDeg: +v.angleDeg.toFixed(1),
+      angleMultiplier: +v.angleMultiplier.toFixed(2),
+    });
+    const output = {
+      left: fmt(rig.left),
+      center: fmt(rig.center),
+      right: fmt(rig.right),
+    };
+    console.log("=== IMMERSIVE COLUMN RIG EXPORT ===");
+    console.log(JSON.stringify(output, null, 2));
+    console.log("===================================");
+  };
+
+  const sliderRow = (
+    label: string,
+    field: keyof ImmersiveColumnRigValues,
+    min: number,
+    max: number,
+    step: number,
+  ) => (
+    <div style={{ marginTop: 4 }}>
+      <div style={{ fontSize: 11, color: "#b8e8ff", display: "flex", justifyContent: "space-between" }}>
+        <span>{label}</span>
+        <span style={{ color: "#7ad4ff" }}>{vals[field].toFixed(2)}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={vals[field]}
+        onChange={(e) => update(field, Number.parseFloat(e.target.value))}
+        style={{ width: "100%" }}
+      />
+    </div>
+  );
+
+  void tick;
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        right: 16,
+        bottom: 56,
+        zIndex: 1300,
+        padding: "10px 12px",
+        borderRadius: 10,
+        border: "1px solid rgba(145, 232, 255, 0.45)",
+        background: "rgba(8, 18, 34, 0.92)",
+        color: "#def5ff",
+        fontFamily: "'Rajdhani', sans-serif",
+        minWidth: 240,
+        maxHeight: "70vh",
+        overflowY: "auto",
+      }}
+    >
+      <div style={{ fontSize: 11, letterSpacing: 0.8, color: "#9fe3ff" }}>
+        COLUMN RIG
+      </div>
+      <div style={{ marginTop: 6, display: "flex", gap: 4 }}>
+        {(["left", "center", "right"] as ColumnId[]).map((col) => (
+          <button
+            key={col}
+            onClick={() => setSelected(col)}
+            style={{
+              flex: 1,
+              padding: "4px 0",
+              borderRadius: 6,
+              border: selected === col
+                ? "1px solid rgba(145, 232, 255, 0.9)"
+                : "1px solid rgba(145, 232, 255, 0.3)",
+              background: selected === col
+                ? "rgba(20, 58, 92, 0.84)"
+                : "rgba(8, 18, 34, 0.68)",
+              color: "#e8f7ff",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              textTransform: "capitalize",
+            }}
+          >
+            {col}
+          </button>
+        ))}
+      </div>
+
+      {sliderRow("Width", "width", 0.5, 16, 0.1)}
+      {sliderRow("Height", "height", 0.5, 12, 0.1)}
+      {sliderRow("Pos X (lateral)", "posX", -12, 12, 0.05)}
+      {sliderRow("Pos Y (vertical)", "posY", -8, 8, 0.05)}
+      {sliderRow("Depth (toward cam)", "depth", -6, 6, 0.05)}
+      {sliderRow("Angle (deg)", "angleDeg", -60, 60, 0.5)}
+      {sliderRow("Angle Multiplier", "angleMultiplier", 0, 20, 0.1)}
+
+      <button
+        onClick={exportToConsole}
+        style={{
+          marginTop: 8,
+          width: "100%",
+          padding: "6px 0",
+          borderRadius: 7,
+          border: "1px solid rgba(255, 210, 120, 0.6)",
+          background: "rgba(40, 28, 10, 0.84)",
+          color: "#ffe8c4",
+          fontFamily: "'Rajdhani', sans-serif",
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+      >
+        Export to Console
+      </button>
+    </div>
+  );
+}
+
 function ResumeStructureDiagram({
   onNavigate,
   style,
@@ -23,6 +172,11 @@ function ResumeStructureDiagram({
   onOptionsChange,
 }: ResumeStructureDiagramProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const [spaceReloadKey, setSpaceReloadKey] = useState(0);
+  const [hallwayContentMode, setHallwayContentMode] = useState<
+    "projects" | "about" | null
+  >(null);
+  const [projectShowcaseActive, setProjectShowcaseActive] = useState(false);
 
   useEffect(() => {
     // If style is "space", skip D3 rendering (handled by conditional return below)
@@ -59,11 +213,41 @@ function ResumeStructureDiagram({
   // If style is "space", return 3D component
   if (style === "space") {
     return (
-      <ResumeSpace3D
-        onNavigate={onNavigate}
-        options={options}
-        onOptionsChange={onOptionsChange}
-      />
+      <div style={{ position: "relative", width: "100%", height: "100%" }}>
+        {hallwayContentMode === "about" && projectShowcaseActive && (
+          <ImmersiveColumnRigPanel />
+        )}
+        <button
+          onClick={() => setSpaceReloadKey((prev) => prev + 1)}
+          style={{
+            position: "absolute",
+            right: 16,
+            bottom: 16,
+            zIndex: 1300,
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: "1px solid rgba(145, 232, 255, 0.5)",
+            background: "rgba(8, 18, 34, 0.86)",
+            color: "#def5ff",
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Reload Universe
+        </button>
+        <ResumeSpace3D
+          key={`space-reload-${spaceReloadKey}`}
+          onNavigate={onNavigate}
+          options={options}
+          onOptionsChange={onOptionsChange}
+          aboutHallDatasetOverride="experimental"
+          aboutHallColumnAngleMultiplier={1}
+          onHallwayContentModeChange={setHallwayContentMode}
+          onProjectShowcaseActiveChange={setProjectShowcaseActive}
+        />
+      </div>
     );
   }
 

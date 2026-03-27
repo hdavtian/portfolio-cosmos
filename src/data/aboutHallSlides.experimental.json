@@ -1,0 +1,305 @@
+{
+  "slides": [
+    {
+      "id": "exp-slide-1",
+      "visibleTitle": "Cosmic Elevator Intro",
+      "width": 12.6,
+      "height": 7.6,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(122, 219, 255, 0.72)",
+      "type": "type1",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "exp-1-center-text",
+                "type": "center",
+                "contentKind": "text",
+                "backgroundColor": "rgba(11, 28, 58, 0.92)",
+                "fontColor": "rgba(242, 251, 255, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "52px",
+                "fontShadow": "0px 0px 18px rgba(112, 205, 255, 0.4)",
+                "WaitBeforeTextRender": 80,
+                "textIntroFX": { "effect": "slideDown", "durationMs": 660 },
+                "WaitAfterTextRender": 120,
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Center monitor: core story stream.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerSec": 0.16,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          },
+          "left": {
+            "angleDeg": 34,
+            "messages": [
+              {
+                "id": "exp-1-left-text",
+                "type": "left",
+                "contentKind": "text",
+                "backgroundColor": "rgba(54, 27, 12, 0.92)",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "34px",
+                "fontShadow": "0px 0px 12px rgba(255, 172, 120, 0.34)",
+                "WaitBeforeTextRender": 120,
+                "textIntroFX": { "effect": "slideDown", "durationMs": 640 },
+                "WaitAfterTextRender": 0,
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Left monitor: context lane.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerSec": 0.1,
+                "heightRatio": 0.9
+              }
+            ]
+          },
+          "right": {
+            "angleDeg": -34,
+            "messages": [
+              {
+                "id": "exp-1-right-tech",
+                "type": "right",
+                "contentKind": "technology",
+                "backgroundColor": "rgba(15, 48, 28, 0.92)",
+                "fontColor": "rgba(224, 255, 236, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "30px",
+                "fontShadow": "0px 0px 10px rgba(145, 255, 196, 0.32)",
+                "WaitBeforeTextRender": 220,
+                "textIntroFX": { "effect": "slideDown", "durationMs": 640 },
+                "WaitAfterTextRender": 0,
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "",
+                "technologyNames": ["React", "TypeScript", "Three.js"],
+                "flowDirection": "topToBottom",
+                "flowUnitsPerSec": 0.08,
+                "heightRatio": 0.84
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "exp-slide-2",
+      "visibleTitle": "Crossflow Story",
+      "width": 13,
+      "height": 7.6,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(137, 228, 255, 0.7)",
+      "type": "type1",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "left": {
+            "angleDeg": 34,
+            "messages": [
+              {
+                "id": "exp-2-left-quote",
+                "type": "left",
+                "contentKind": "text",
+                "backgroundColor": "rgba(6, 14, 30, 0.93)",
+                "fontColor": "rgba(229, 245, 255, 0.98)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "34px",
+                "fontShadow": "0px 0px 11px rgba(101, 202, 255, 0.36)",
+                "WaitBeforeTextRender": 420,
+                "textIntroFX": { "effect": "slideUp", "durationMs": 640 },
+                "WaitAfterTextRender": 0,
+                "horizontalAlign": "left",
+                "verticalAlign": "middle",
+                "textContent": "\"From curiosity to craft.\"",
+                "flowDirection": "bottomToTop",
+                "flowUnitsPerSec": 0.2
+              }
+            ]
+          },
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "exp-2-center-main",
+                "type": "center",
+                "contentKind": "text",
+                "backgroundColor": "rgba(5, 11, 24, 0.95)",
+                "fontColor": "rgba(244, 251, 255, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "45px",
+                "fontShadow": "0px 0px 14px rgba(115, 214, 255, 0.4)",
+                "WaitBeforeTextRender": 80,
+                "textIntroFX": { "effect": "fadeIn", "durationMs": 620 },
+                "WaitAfterTextRender": 0,
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Center lane tells the core narrative.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerSec": 0.13
+              }
+            ]
+          },
+          "right": {
+            "angleDeg": -34,
+            "messages": [
+              {
+                "id": "exp-2-right-tech",
+                "type": "right",
+                "contentKind": "technology",
+                "backgroundColor": "rgba(10, 22, 40, 0.93)",
+                "fontColor": "rgba(221, 250, 255, 0.98)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "29px",
+                "fontShadow": "0px 0px 10px rgba(124, 217, 255, 0.34)",
+                "WaitBeforeTextRender": 220,
+                "textIntroFX": { "effect": "slideLeft", "durationMs": 540 },
+                "WaitAfterTextRender": 0,
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "",
+                "technologyNames": ["React", "TypeScript", "Three.js", "Node.js", "AWS"],
+                "flowDirection": "topToBottom",
+                "flowUnitsPerSec": 0.08
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "exp-slide-3",
+      "visibleTitle": "Code + Visual",
+      "width": 13.2,
+      "height": 7.8,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(150, 228, 255, 0.72)",
+      "type": "type1",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "left": {
+            "angleDeg": 34,
+            "messages": [
+              {
+                "id": "exp-3-left-image",
+                "type": "left",
+                "contentKind": "image",
+                "backgroundColor": "rgba(8, 16, 30, 0.92)",
+                "fontColor": "rgba(240, 249, 255, 0.98)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "24px",
+                "fontShadow": "0px 0px 8px rgba(114, 212, 255, 0.28)",
+                "WaitBeforeTextRender": 120,
+                "textIntroFX": { "effect": "fadeIn", "durationMs": 520 },
+                "WaitAfterTextRender": 0,
+                "horizontalAlign": "center",
+                "verticalAlign": "bottom",
+                "textContent": "",
+                "imageUrl": "/images/investcloud/v4-analyzer/v4a-5.jpg",
+                "flowDirection": "static",
+                "heightRatio": 1.2,
+                "widthRatio": 1.08
+              }
+            ]
+          },
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "exp-3-center-code",
+                "type": "center",
+                "contentKind": "code",
+                "backgroundColor": "rgba(6, 12, 24, 0.96)",
+                "fontColor": "rgba(205, 247, 255, 0.99)",
+                "fontFamily": ["JetBrains Mono", "Consolas", "monospace"],
+                "fontSize": "24px",
+                "fontShadow": "0px 0px 7px rgba(97, 217, 255, 0.36)",
+                "WaitBeforeTextRender": 160,
+                "textIntroFX": { "effect": "slideRight", "durationMs": 600 },
+                "WaitAfterTextRender": 0,
+                "horizontalAlign": "left",
+                "verticalAlign": "middle",
+                "textContent": "const mission = compose(story, systems, clarity);",
+                "codeLanguage": "typescript",
+                "flowDirection": "bottomToTop",
+                "flowUnitsPerSec": 0.14,
+                "heightRatio": 0.9
+              }
+            ]
+          },
+          "right": {
+            "angleDeg": -34,
+            "messages": [
+              {
+                "id": "exp-3-right-quote",
+                "type": "right",
+                "contentKind": "text",
+                "backgroundColor": "rgba(8, 17, 36, 0.93)",
+                "fontColor": "rgba(236, 248, 255, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "30px",
+                "fontShadow": "0px 0px 9px rgba(114, 201, 255, 0.35)",
+                "WaitBeforeTextRender": 340,
+                "textIntroFX": { "effect": "slideLeft", "durationMs": 680 },
+                "WaitAfterTextRender": 0,
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Design for story first, then scale the machinery.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerSec": 0.09
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "exp-slide-4",
+      "visibleTitle": "Single Column Minimal",
+      "width": 12.4,
+      "height": 7.4,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(144, 219, 255, 0.68)",
+      "type": "type1",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "left": { "angleDeg": 0, "messages": [] },
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "exp-4-center",
+                "type": "center",
+                "contentKind": "text",
+                "backgroundColor": "rgba(6, 13, 30, 0.95)",
+                "fontColor": "rgba(241, 252, 255, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "48px",
+                "fontShadow": "0px 0px 14px rgba(110, 213, 255, 0.38)",
+                "WaitBeforeTextRender": 90,
+                "textIntroFX": { "effect": "slideDown", "durationMs": 600 },
+                "WaitAfterTextRender": 0,
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Minimal mode still works: center column only.",
+                "flowDirection": "static"
+              }
+            ]
+          },
+          "right": { "angleDeg": 0, "messages": [] }
+        }
+      }
+    }
+  ]
+}
