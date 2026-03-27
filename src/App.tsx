@@ -431,7 +431,12 @@ function App() {
   const totalSections = 2 + resumeData.experience.length + 1; // hero+summary, skills, jobs, footer
 
   // Diagram settings state
-  const [diagramStyle, setDiagramStyle] = useState<DiagramStyle>("circles");
+  const fastTrackParam = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("fastTrack")
+    : null;
+  const [diagramStyle, setDiagramStyle] = useState<DiagramStyle>(
+    fastTrackParam ? "space" : "circles",
+  );
   const [diagramOptions, setDiagramOptions] = useState<DiagramStyleOptions>({
     nodeSpacing: 100,
     glowIntensity: 5,

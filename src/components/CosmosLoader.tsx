@@ -46,6 +46,9 @@ export default function CosmosLoader({
   const debugEnabled =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("debug") === "true";
+  const fastTrackEnabled =
+    typeof window !== "undefined" &&
+    !!new URLSearchParams(window.location.search).get("fastTrack");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
   const phaseRef = useRef<Phase>("idle");
@@ -59,7 +62,7 @@ export default function CosmosLoader({
   const [showStatusUI, setShowStatusUI] = useState(false);
   const [showEndMessage, setShowEndMessage] = useState(false);
   const [entryGateVisible, setEntryGateVisible] = useState(false);
-  const [hasEntered, setHasEntered] = useState(false);
+  const [hasEntered, setHasEntered] = useState(fastTrackEnabled);
   const [endMessageFlashVariant, setEndMessageFlashVariant] = useState<"a" | "b">("a");
   const [optionalCode, setOptionalCode] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -74,7 +77,7 @@ export default function CosmosLoader({
         () => 1 / DEFAULT_REVEAL_LINES,
       ),
   );
-  const [animationDone, setAnimationDone] = useState(false);
+  const [animationDone, setAnimationDone] = useState(fastTrackEnabled);
   const [debugCurrentMode, setDebugCurrentMode] = useState("boot");
   const [debugModeHistory, setDebugModeHistory] = useState<string[]>([]);
 
@@ -217,6 +220,15 @@ export default function CosmosLoader({
     window.addEventListener("resize", resize);
 
     fillSolid("#000");
+
+    if (fastTrackEnabled) {
+      markDebugMode("fast-track-bypass");
+      return () => {
+        window.removeEventListener("resize", resize);
+        stopLoop();
+      };
+    }
+
     setLoaderPhase("idle", "idle");
     setTypedText(PROGRAM_TEXT);
     setShowStatusUI(true);

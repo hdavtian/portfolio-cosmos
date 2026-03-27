@@ -77,7 +77,11 @@ import {
   type NavigationTravelPhase,
 } from "./hooks/useNavigationSystem";
 import { useRenderLoop } from "./hooks/useRenderLoop";
-import { createIntroSequenceRunner } from "./introSequence";
+import {
+  createIntroSequenceRunner,
+  INTRO_CAMERA_FINAL_POS,
+  INTRO_CAMERA_FINAL_TARGET,
+} from "./introSequence";
 import {
   attachAudioListenerToCamera,
   createPositionalAudio,
@@ -590,6 +594,14 @@ const IS_DEBUG_QUERY_ENABLED = (() => {
     return false;
   }
 })();
+const FAST_TRACK_TARGET: string | null = (() => {
+  if (typeof window === "undefined") return null;
+  try {
+    return new URLSearchParams(window.location.search).get("fastTrack");
+  } catch {
+    return null;
+  }
+})();
 type KeyboardPianoKey = {
   note: string;
   midi: number;
@@ -867,7 +879,6 @@ const PROJECT_SHOWCASE_THUMBS_PER_PAGE = 4;
 type HallwayContentMode = "projects" | "about";
 type HallwayVerticalAlign = "top" | "middle" | "bottom";
 type HallwayHorizontalAlign = "left" | "center" | "right";
-type AboutHallSlideType = "type1" | "type2" | "type3" | "type4";
 type AboutHallColumnId = "left" | "center" | "right";
 type AboutHallContentType =
   | "column1"
@@ -881,42 +892,20 @@ type AboutHallContentType =
   | "r1c2"
   | "r2c1"
   | "r2c2";
-type AboutHallContentKind = "text" | "image" | "code" | "technology";
-type AboutHallFlowDirection = "topToBottom" | "bottomToTop" | "static";
-type AboutHallTextIntroEffect =
-  | "none"
-  | "fadeIn"
-  | "slideLeft"
-  | "slideRight"
-  | "slideUp"
-  | "slideDown";
-type AboutHallTextIntroFX = {
-  effect: AboutHallTextIntroEffect;
-  durationMs: number;
-};
+type AboutHallFlowDirection = "topToBottom" | "bottomToTop";
 type AboutHallSlideContent = {
   id: string;
   type: AboutHallContentType;
-  contentKind?: AboutHallContentKind;
   backgroundColor: string;
   fontColor: string;
   fontFamily: string[];
   fontSize: string;
   fontShadow?: string;
-  WaitBeforeTextRender: number;
-  textIntroFX?: AboutHallTextIntroFX;
-  WaitAfterTextRender: number;
-  backgroundImage?: string;
-  placement?: "cover" | "contain";
   horizontalAlign?: HallwayHorizontalAlign;
   verticalAlign?: HallwayVerticalAlign;
   textContent: string;
-  imageUrl?: string;
-  caption?: string;
-  technologyNames?: string[];
-  codeLanguage?: string;
   flowDirection?: AboutHallFlowDirection;
-  flowUnitsPerSec?: number;
+  flowUnitsPerDistance?: number;
   flowOffsetUnits?: number;
   widthRatio?: number;
   heightRatio?: number;
@@ -930,16 +919,16 @@ type AboutHallColumnConfig = {
 };
 type AboutHallSlide = {
   id: string;
-  visibleTitle: string;
+  registryBtnTitle: string;
   width: number;
   height: number;
   horizontalAlign: HallwayHorizontalAlign;
   verticalAlign: HallwayVerticalAlign;
   border?: string;
-  type: AboutHallSlideType;
+  flowFadeOutDistanceViewportHeights?: number;
   configuration: {
     contents: AboutHallSlideContent[];
-    columns?: Partial<Record<AboutHallColumnId, AboutHallColumnConfig>>;
+    columns: Partial<Record<AboutHallColumnId, AboutHallColumnConfig>>;
   };
 };
 type AboutHallSlidesFile = {
@@ -950,17 +939,15 @@ type AboutSlideCellRuntime = {
   material: THREE.MeshBasicMaterial;
   normalTexture: THREE.Texture;
   emergencyTexture: THREE.Texture;
-  fx: AboutHallTextIntroFX;
-  waitBeforeMs: number;
-  waitAfterMs: number;
-  state: "idle" | "waiting" | "animating" | "done";
-  startedAt: number;
+  state: "idle" | "done";
   basePosition: THREE.Vector3;
   flowDirection: AboutHallFlowDirection;
-  flowUnitsPerSec: number;
+  flowUnitsPerDistance: number;
   flowOffsetUnits: number;
-  flowRange: number;
   baseYawRad: number;
+  flowEnteredViewportAtRun: number | null;
+  flowSpawnOffset: number;
+  flowFadedOut: boolean;
   immersiveColumn?: AboutHallColumnId;
 };
 type AboutSlideRuntime = {
@@ -970,6 +957,8 @@ type AboutSlideRuntime = {
   triggerDistance: number;
   activated: boolean;
   activatedAt: number;
+  activatedAtRun: number;
+  flowFadeOutDistanceViewportHeights: number;
 };
 
 export type ImmersiveColumnRigValues = {
@@ -988,6 +977,22 @@ export type ImmersiveColumnRig = {
   activeColumn: AboutHallColumnId;
 };
 export const immersiveColumnRigRef: { current: ImmersiveColumnRig | null } = { current: null };
+type AboutFlowOverlayColumnSnapshot = {
+  column: AboutHallColumnId;
+  direction: AboutHallFlowDirection;
+  speed: number;
+  y: number;
+  inViewport: boolean;
+  opacity: number;
+};
+type AboutFlowOverlaySnapshot = {
+  slideId: string;
+  run: number;
+  cameraY: number;
+  visibleHeight: number;
+  fadeThreshold: number;
+  cells: AboutFlowOverlayColumnSnapshot[];
+};
 
 const DEFAULT_BACKGROUND_MUSIC_TRACK = Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
 const EXPERIENCE_MOON_TEXTURE_BY_JOB_ID: Record<string, string> = {
@@ -1696,92 +1701,56 @@ const parseBorderStyle = (
 const normalizeAboutFlowDirection = (
   raw?: string,
 ): AboutHallFlowDirection => {
-  if (raw === "bottomToTop" || raw === "topToBottom" || raw === "static") {
+  if (raw === "bottomToTop" || raw === "topToBottom") {
     return raw;
   }
-  return "static";
-};
-
-const resolveAboutContentKind = (
-  content: AboutHallSlideContent,
-): AboutHallContentKind => {
-  if (content.contentKind) return content.contentKind;
-  if (content.imageUrl || content.backgroundImage) return "image";
-  if ((content.technologyNames ?? []).length > 0) return "technology";
-  return "text";
+  return "topToBottom";
 };
 
 const resolveAboutContentText = (content: AboutHallSlideContent): string => {
-  if ((content.technologyNames ?? []).length > 0) {
-    return content.technologyNames?.join("  •  ") ?? "";
-  }
   return content.textContent || "";
 };
 
 const getAboutColumnMessages = (
   slide: AboutHallSlide,
 ): Record<AboutHallColumnId, AboutHallSlideContent[]> => {
-  const columns = slide.configuration.columns;
-  if (columns) {
-    return {
-      left: columns.left?.messages ?? [],
-      center: columns.center?.messages ?? [],
-      right: columns.right?.messages ?? [],
-    };
-  }
-  const legacy = slide.configuration.contents ?? [];
   return {
-    left: legacy.filter((item) => item.type === "left"),
-    center: legacy.filter(
-      (item) =>
-        item.type === "center" ||
-        item.type === "column1" ||
-        item.type === "row1" ||
-        item.type === "r1c1",
-    ),
-    right: legacy.filter((item) => item.type === "right" || item.type === "column2"),
+    left: slide.configuration.columns.left?.messages ?? [],
+    center: slide.configuration.columns.center?.messages ?? [],
+    right: slide.configuration.columns.right?.messages ?? [],
   };
 };
 
-const hasThreeColumnChoreography = (slide: AboutHallSlide): boolean => {
-  if (slide.configuration.columns) return true;
-  return slide.configuration.contents.some(
-    (item) =>
-      item.type === "left" || item.type === "center" || item.type === "right",
-  );
-};
-
-const getAboutSlideCellRect = (
-  slideType: AboutHallSlideType,
-  contentType: AboutHallContentType,
-): { x: number; y: number; w: number; h: number } => {
-  if (slideType === "type1") {
-    return { x: 0, y: 0, w: 1, h: 1 };
-  }
-  if (slideType === "type2") {
-    return contentType === "column2"
-      ? { x: 0.5, y: 0, w: 0.5, h: 1 }
-      : { x: 0, y: 0, w: 0.5, h: 1 };
-  }
-  if (slideType === "type3") {
-    return contentType === "row2"
-      ? { x: 0, y: 0.5, w: 1, h: 0.5 }
-      : { x: 0, y: 0, w: 1, h: 0.5 };
-  }
-  const map: Record<AboutHallContentType, { x: number; y: number; w: number; h: number }> = {
-    column1: { x: 0, y: 0, w: 0.5, h: 0.5 },
-    column2: { x: 0.5, y: 0, w: 0.5, h: 0.5 },
-    left: { x: 0, y: 0, w: 0.333, h: 1 },
-    center: { x: 0.333, y: 0, w: 0.334, h: 1 },
-    right: { x: 0.667, y: 0, w: 0.333, h: 1 },
-    row1: { x: 0, y: 0, w: 0.5, h: 0.5 },
-    row2: { x: 0, y: 0.5, w: 0.5, h: 0.5 },
-    r1c1: { x: 0, y: 0, w: 0.5, h: 0.5 },
-    r1c2: { x: 0.5, y: 0, w: 0.5, h: 0.5 },
-    r2c1: { x: 0, y: 0.5, w: 0.5, h: 0.5 },
-    r2c2: { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
+const normalizeAboutSlideColumns = (slide: AboutHallSlide): AboutHallSlide => {
+  if (slide.configuration.columns) return slide;
+  const source = slide.configuration.contents ?? [];
+  const left: AboutHallSlideContent[] = [];
+  const center: AboutHallSlideContent[] = [];
+  const right: AboutHallSlideContent[] = [];
+  source.forEach((content) => {
+    const type = content.type;
+    if (type === "left") {
+      left.push(content);
+      return;
+    }
+    if (type === "right" || type === "column2" || type === "r1c2" || type === "r2c2") {
+      right.push(content);
+      return;
+    }
+    center.push(content);
+  });
+  return {
+    ...slide,
+    configuration: {
+      ...slide.configuration,
+      contents: [],
+      columns: {
+        left: { messages: left },
+        center: { messages: center },
+        right: { messages: right },
+      },
+    },
   };
-  return map[contentType] ?? { x: 0, y: 0, w: 1, h: 1 };
 };
 
 const drawAboutSlideText = (
@@ -1793,18 +1762,15 @@ const drawAboutSlideText = (
 ) => {
   const creditsStyle = opts?.creditsStyle ?? false;
   const emergencyMood = opts?.emergencyMood ?? false;
-  const contentKind = resolveAboutContentKind(content);
   const contentText = resolveAboutContentText(content);
   const fontSize = parsePixelSize(content.fontSize, 42);
-  const fontFamily = contentKind === "code"
-    ? "'JetBrains Mono', 'Fira Code', 'Consolas', monospace"
-    : content.fontFamily?.length > 0
-      ? content.fontFamily.map((font) => `'${font}'`).join(", ")
-      : HALLWAY_OSWALD_FONT_STACK;
+  const fontFamily = content.fontFamily?.length > 0
+    ? content.fontFamily.map((font) => `'${font}'`).join(", ")
+    : HALLWAY_OSWALD_FONT_STACK;
   const textAlign = resolveCanvasAlign(content.horizontalAlign);
   const verticalAnchor = resolveCanvasBaselineAnchor(content.verticalAlign);
   const lineHeight = Math.round(
-    fontSize * (creditsStyle ? 1.15 : contentKind === "code" ? 1.35 : 1.24),
+    fontSize * (creditsStyle ? 1.15 : 1.24),
   );
   const padX = Math.max(24, width * (creditsStyle ? 0.045 : 0.09));
   const padY = Math.max(20, height * (creditsStyle ? 0.08 : 0.11));
@@ -1850,11 +1816,9 @@ const drawAboutSlideText = (
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
   } else {
-    ctx.fillStyle = contentKind === "technology"
-      ? "rgba(216, 248, 255, 0.98)"
-      : content.fontColor || "rgba(240, 248, 255, 0.98)";
+    ctx.fillStyle = content.fontColor || "rgba(240, 248, 255, 0.98)";
     ctx.shadowColor = content.fontShadow || HALLWAY_TEXT_DEFAULT_SHADOW;
-    ctx.shadowBlur = contentKind === "technology" ? 10 : 8;
+    ctx.shadowBlur = 8;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
   }
@@ -1888,22 +1852,11 @@ const createAboutCellTexture = (
   }
 
   const transparentBackground = opts?.transparentBackground ?? false;
-  const contentKind = resolveAboutContentKind(content);
   if (!transparentBackground) {
-    const baseBackground = contentKind === "code"
-      ? "rgba(7, 12, 24, 0.96)"
-      : contentKind === "technology"
-        ? "rgba(9, 20, 36, 0.92)"
-        : content.backgroundColor || "rgba(8, 16, 32, 0.9)";
-    ctx.fillStyle = baseBackground;
+    ctx.fillStyle = content.backgroundColor || "rgba(8, 16, 32, 0.9)";
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   } else {
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-  }
-  if (contentKind === "code") {
-    ctx.strokeStyle = "rgba(98, 214, 255, 0.4)";
-    ctx.lineWidth = 4;
-    ctx.strokeRect(6, 6, canvasWidth - 12, canvasHeight - 12);
   }
   drawAboutSlideText(ctx, content, canvasWidth, canvasHeight, {
     creditsStyle: opts?.creditsStyle,
@@ -2075,7 +2028,10 @@ export default function ResumeSpace3D({
     useExperimentalAboutDataset ? aboutHallSlidesExperimental : aboutHallSlides
   ) as AboutHallSlidesFile;
   const aboutHallwaySlides = useMemo<AboutHallSlide[]>(
-    () => (aboutHallData.slides || []).map((slide) => ({ ...slide })),
+    () =>
+      (aboutHallData.slides || []).map((slide) =>
+        normalizeAboutSlideColumns({ ...slide }),
+      ),
     [aboutHallData.slides],
   );
   const portfolioCoreBuild = useMemo(
@@ -2102,15 +2058,13 @@ export default function ResumeSpace3D({
     () =>
       aboutHallwaySlides.map((slide) => {
         const byColumn = getAboutColumnMessages(slide);
-        const derived = [...byColumn.left, ...byColumn.center, ...byColumn.right];
-        const fallbackContents =
-          derived.length > 0 ? derived : (slide.configuration.contents ?? []);
+        const messages = [...byColumn.left, ...byColumn.center, ...byColumn.right];
         return {
           id: slide.id,
-          title: slide.visibleTitle,
+          title: slide.registryBtnTitle,
           image:
             "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
-          description: fallbackContents
+          description: messages
             .map((cell) => resolveAboutContentText(cell))
             .join(" "),
           technologies: [],
@@ -2180,8 +2134,16 @@ export default function ResumeSpace3D({
   const [logAudioChannelEnabled, setLogAudioChannelEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
   const [logDroneDebugEnabled, setLogDroneDebugEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
   const [logNavDebugEnabled, setLogNavDebugEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
+  const [aboutFlowOverlayEnabled, setAboutFlowOverlayEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
+  const aboutFlowOverlayEnabledRef = useRef(IS_DEBUG_QUERY_ENABLED);
+  const [aboutFlowOverlaySnapshot, setAboutFlowOverlaySnapshot] =
+    useState<AboutFlowOverlaySnapshot | null>(null);
+  const aboutFlowOverlayLastUpdateRef = useRef(0);
   const emitFalconLocationLogsRef = useRef(false);
   const emitSDLocationLogsRef = useRef(false);
+  useEffect(() => {
+    aboutFlowOverlayEnabledRef.current = aboutFlowOverlayEnabled;
+  }, [aboutFlowOverlayEnabled]);
   useEffect(() => {
     emitFalconLocationLogsRef.current = emitFalconLocationLogs;
   }, [emitFalconLocationLogs]);
@@ -4091,6 +4053,7 @@ export default function ResumeSpace3D({
   const startIntroSequenceRef = useRef<(() => void) | null>(null);
   const introStartQueuedRef = useRef(false);
   const introStartConsumedRef = useRef(false);
+  const fastTrackConsumedRef = useRef(false);
   const cameraDriverTraceRef = useRef<string>("boot");
   const startupUiRevealTlRef = useRef<gsap.core.Timeline | null>(null);
   const startupDestinationsPanelRef = useRef<HTMLDivElement | null>(null);
@@ -8533,6 +8496,61 @@ export default function ResumeSpace3D({
     vlog("🔺 Engaging Star Destroyer escort — matching course and speed");
   }, [vlog]);
 
+  const isAboutElevatorFlowContextActive = useCallback(() => {
+    return (
+      projectShowcaseActiveRef.current &&
+      hallwayContentModeRef.current === "about" &&
+      projectShowcaseTrackRef.current?.axis === "y"
+    );
+  }, []);
+
+  const setAboutFlowOverlayVisibility = useCallback(
+    (next: boolean) => {
+      if (!IS_DEBUG_QUERY_ENABLED) {
+        shipLog("About flow overlay requires ?debug=true.", "error");
+        return false;
+      }
+      if (!isAboutElevatorFlowContextActive()) {
+        shipLog("About flow overlay is available only in About elevator mode.", "error");
+        return false;
+      }
+      aboutFlowOverlayEnabledRef.current = next;
+      setAboutFlowOverlayEnabled(next);
+      shipLog(`About flow overlay ${next ? "shown" : "hidden"}`, "info");
+      return true;
+    },
+    [isAboutElevatorFlowContextActive, shipLog],
+  );
+
+  const runShipTerminalCommand = useCallback(
+    (rawCommand: string): boolean => {
+      const cmd = rawCommand.trim().toLowerCase();
+      if (!cmd) return false;
+      if (cmd === "aboutflow overlay on" || cmd === "aboutflowdbg on") {
+        setAboutFlowOverlayVisibility(true);
+        return true;
+      }
+      if (cmd === "aboutflow overlay off" || cmd === "aboutflowdbg off") {
+        setAboutFlowOverlayVisibility(false);
+        return true;
+      }
+      if (cmd === "aboutflow overlay toggle" || cmd === "aboutflowdbg toggle") {
+        const next = !aboutFlowOverlayEnabledRef.current;
+        setAboutFlowOverlayVisibility(next);
+        return true;
+      }
+      if (cmd === "help aboutflow") {
+        shipLog(
+          "Commands: aboutflow overlay on | off | toggle (alias: aboutflowdbg on|off|toggle)",
+          "info",
+        );
+        return true;
+      }
+      return false;
+    },
+    [setAboutFlowOverlayVisibility, shipLog],
+  );
+
   const terminalToolActions = useMemo<ShipTerminalToolAction[]>(() => {
     const invoke = (name: string, ...args: unknown[]) => {
       const registry = window as unknown as Record<string, unknown>;
@@ -8591,6 +8609,18 @@ export default function ResumeSpace3D({
         onRun: () => invoke("captureCameraSnapshot"),
       },
       {
+        id: "about-flow-overlay-on",
+        label: "aboutflow overlay on",
+        hint: "Show About flow debug overlay (About elevator only)",
+        onRun: () => runShipTerminalCommand("aboutflow overlay on"),
+      },
+      {
+        id: "about-flow-overlay-off",
+        label: "aboutflow overlay off",
+        hint: "Hide About flow debug overlay",
+        onRun: () => runShipTerminalCommand("aboutflow overlay off"),
+      },
+      {
         id: "summon-moon-drone",
         label: "summonMoonDrone()",
         hint: "Re-summon drone during moon visit",
@@ -8623,7 +8653,7 @@ export default function ResumeSpace3D({
         },
       },
     ];
-  }, [orbitPhase, overlayContent, shipLog]);
+  }, [orbitPhase, overlayContent, runShipTerminalCommand, shipLog]);
 
   function interruptTransientTravelFlows(
     nextTargetId: string,
@@ -9088,6 +9118,38 @@ export default function ResumeSpace3D({
   useEffect(() => {
     if (isLoading || !sceneReady) return;
     if (!introStartQueuedRef.current || introStartConsumedRef.current) return;
+
+    if (FAST_TRACK_TARGET) {
+      introStartConsumedRef.current = true;
+      setCosmosIntroOverlayOpacity(0);
+      const camera = sceneRef.current.camera;
+      const controls = sceneRef.current.controls;
+      if (camera) {
+        camera.position.copy(INTRO_CAMERA_FINAL_POS);
+      }
+      if (controls) {
+        const controlsAny = controls as unknown as {
+          target?: THREE.Vector3;
+          setTarget?: (x: number, y: number, z: number) => void;
+        };
+        if (controlsAny.setTarget) {
+          controlsAny.setTarget(
+            INTRO_CAMERA_FINAL_TARGET.x,
+            INTRO_CAMERA_FINAL_TARGET.y,
+            INTRO_CAMERA_FINAL_TARGET.z,
+          );
+        } else if (controlsAny.target) {
+          controlsAny.target.copy(INTRO_CAMERA_FINAL_TARGET);
+        }
+        controls.update?.();
+      }
+      console.warn("[FAST_TRACK] Skipping intro sequence, positioning camera at home");
+      setStartupDestinationsVisible(true);
+      setStartupConsoleVisible(true);
+      setStartupMiniMapVisible(true);
+      return;
+    }
+
     const startIntro = startIntroSequenceRef.current;
     if (!startIntro) return;
     let fadeRaf = 0;
@@ -9122,6 +9184,30 @@ export default function ResumeSpace3D({
       if (fadeRaf) cancelAnimationFrame(fadeRaf);
     };
   }, [isLoading, sceneReady, shipLog]);
+
+  useEffect(() => {
+    if (!FAST_TRACK_TARGET || fastTrackConsumedRef.current) return;
+    if (isLoading || !sceneReady) return;
+    const target = FAST_TRACK_TARGET;
+    const isShowcaseTarget = target === "about" || target === "projects";
+    if (isShowcaseTarget && !projectShowcaseReady) return;
+    fastTrackConsumedRef.current = true;
+    console.warn(`[FAST_TRACK] Navigating directly to: ${target}`);
+    if (isShowcaseTarget) {
+      setHallwayContentMode(target === "about" ? "about" : "projects");
+      pendingProjectShowcaseEntryRef.current = true;
+      enterProjectShowcase();
+    } else {
+      handleCockpitNavigate(target, "section");
+    }
+  }, [
+    isLoading,
+    sceneReady,
+    projectShowcaseReady,
+    enterProjectShowcase,
+    handleCockpitNavigate,
+    setHallwayContentMode,
+  ]);
 
   const clearStartupUiRevealTimeline = useCallback(() => {
     if (startupUiRevealTlRef.current) {
@@ -11422,14 +11508,96 @@ export default function ResumeSpace3D({
           focusedCta ? 0xbef4ff : idx === focusIndex ? 0x91ddff : 0x72c6ff,
         );
         if (panel.aboutRuntime?.mode === "about") {
+          const runNow = projectShowcaseRunPosRef.current;
+          const activeCamera = sceneRef.current.camera;
+          const cameraY = activeCamera?.position.y ?? 0;
+          const fovRad =
+            activeCamera instanceof THREE.PerspectiveCamera
+              ? THREE.MathUtils.degToRad(activeCamera.fov || 45)
+              : THREE.MathUtils.degToRad(45);
+          const tempCellWorldPos = new THREE.Vector3();
+          const tempCellWorldScale = new THREE.Vector3();
+          const tempParentWorldPos = new THREE.Vector3();
+          const getVisibleHeightAtCell = (cell: AboutSlideCellRuntime): number => {
+            if (!(activeCamera instanceof THREE.PerspectiveCamera)) return 12;
+            cell.mesh.getWorldPosition(tempCellWorldPos);
+            const wallDistance = Math.max(
+              0.1,
+              Math.abs(activeCamera.position.x - tempCellWorldPos.x),
+            );
+            return 2 * wallDistance * Math.tan(fovRad * 0.5);
+          };
+          const getCellWorldHeight = (cell: AboutSlideCellRuntime): number => {
+            const meshGeo = cell.mesh.geometry as THREE.BufferGeometry & {
+              parameters?: { height?: number };
+            };
+            let localHeight = meshGeo.parameters?.height;
+            if (!Number.isFinite(localHeight)) {
+              meshGeo.computeBoundingBox();
+              if (meshGeo.boundingBox) {
+                localHeight = Math.max(
+                  0.01,
+                  meshGeo.boundingBox.max.y - meshGeo.boundingBox.min.y,
+                );
+              } else {
+                localHeight = 1;
+              }
+            }
+            cell.mesh.getWorldScale(tempCellWorldScale);
+            return Math.max(0.01, Math.abs(tempCellWorldScale.y) * (localHeight ?? 1));
+          };
           const distanceToTram = Math.abs(panel.runPos - projectShowcaseRunPosRef.current);
           if (!panel.aboutRuntime.activated && distanceToTram <= panel.aboutRuntime.triggerDistance) {
             panel.aboutRuntime.activated = true;
             panel.aboutRuntime.activatedAt = now;
+            panel.aboutRuntime.activatedAtRun = runNow;
             panel.aboutRuntime.cells.forEach((cell) => {
-              cell.state = "waiting";
-              cell.startedAt = now;
-              cell.mesh.position.copy(cell.basePosition);
+              cell.state = "done";
+              cell.flowEnteredViewportAtRun = null;
+              cell.flowFadedOut = false;
+              if (cell.flowUnitsPerDistance > 0) {
+                const visibleHeight = getVisibleHeightAtCell(cell);
+                const halfVisible = visibleHeight * 0.5;
+                const cellWorldHeight = getCellWorldHeight(cell);
+                const halfCell = cellWorldHeight * 0.5;
+                const edgeGap = Math.max(0.01, visibleHeight * 0.01);
+                const spawnCenterWorldY =
+                  cell.flowDirection === "topToBottom"
+                    ? cameraY + halfVisible + halfCell + edgeGap
+                    : cameraY - halfVisible - halfCell - edgeGap;
+                const parentWorldY = cell.mesh.parent
+                  ? cell.mesh.parent.getWorldPosition(tempParentWorldPos).y
+                  : 0;
+                const spawnCenterLocalY = spawnCenterWorldY - parentWorldY;
+                const baseLocalYWithOffset = cell.basePosition.y + cell.flowOffsetUnits;
+                cell.flowSpawnOffset = spawnCenterLocalY - baseLocalYWithOffset;
+              } else {
+                cell.flowSpawnOffset = 0;
+              }
+              cell.mesh.visible = true;
+              cell.mesh.position.set(
+                cell.basePosition.x,
+                cell.basePosition.y + cell.flowSpawnOffset + cell.flowOffsetUnits,
+                cell.basePosition.z,
+              );
+              cell.material.opacity = 0;
+            });
+          }
+          if (panel.aboutRuntime.activated && distanceToTram > panel.aboutRuntime.triggerDistance) {
+            panel.aboutRuntime.activated = false;
+            panel.aboutRuntime.activatedAt = 0;
+            panel.aboutRuntime.activatedAtRun = 0;
+            panel.aboutRuntime.cells.forEach((cell) => {
+              cell.state = "idle";
+              cell.flowEnteredViewportAtRun = null;
+              cell.flowSpawnOffset = 0;
+              cell.flowFadedOut = false;
+              cell.mesh.visible = false;
+              cell.mesh.position.set(
+                cell.basePosition.x,
+                cell.basePosition.y + cell.flowOffsetUnits,
+                cell.basePosition.z,
+              );
               cell.material.opacity = 0;
             });
           }
@@ -11452,67 +11620,90 @@ export default function ResumeSpace3D({
             } else {
               cell.mesh.rotation.y = cell.baseYawRad * aboutHallAngleMultiplierRef.current;
             }
-            if (cell.state === "waiting") {
-              if (now - panel.aboutRuntime.activatedAt >= cell.waitBeforeMs) {
-                cell.state = "animating";
-                cell.startedAt = now;
-              }
-              return;
-            }
-            if (cell.state === "animating") {
-              const duration = Math.max(1, cell.fx.durationMs || 1);
-              const t = THREE.MathUtils.clamp((now - cell.startedAt) / duration, 0, 1);
-              const eased = 1 - Math.pow(1 - t, 3);
-              const slideDist = 0.65;
-              const pos = cell.basePosition.clone();
-              switch (cell.fx.effect) {
-                case "slideLeft":
-                  pos.x += (1 - eased) * slideDist;
-                  break;
-                case "slideRight":
-                  pos.x -= (1 - eased) * slideDist;
-                  break;
-                case "slideUp":
-                  pos.y -= (1 - eased) * slideDist;
-                  break;
-                case "slideDown":
-                  pos.y += (1 - eased) * slideDist;
-                  break;
-                case "none":
-                  break;
-                case "fadeIn":
-                default:
-                  break;
-              }
-              cell.mesh.position.copy(pos);
-              cell.material.opacity = cell.fx.effect === "none" ? 1 : eased;
-              if (t >= 1) {
-                cell.state = cell.waitAfterMs > 0 ? "done" : "done";
-                cell.mesh.position.copy(cell.basePosition);
-                cell.material.opacity = 1;
-              }
-              return;
-            }
             if (cell.state === "done") {
-              if (cell.flowDirection === "static" || cell.flowUnitsPerSec <= 0) return;
+              if (cell.flowUnitsPerDistance <= 0 || cell.flowFadedOut) return;
               const dir = cell.flowDirection === "bottomToTop" ? 1 : -1;
-              const flowT =
-                ((now - panel.aboutRuntime.activatedAt) / 1000) *
-                  cell.flowUnitsPerSec *
-                  dir +
-                cell.flowOffsetUnits;
-              const travel =
-                THREE.MathUtils.euclideanModulo(
-                  flowT + cell.flowRange,
-                  cell.flowRange * 2,
-                ) - cell.flowRange;
+              const runDelta = runNow - panel.aboutRuntime.activatedAtRun;
+              const travel = runDelta + runDelta * cell.flowUnitsPerDistance * dir;
               cell.mesh.position.set(
                 cell.basePosition.x,
-                cell.basePosition.y + travel,
+                cell.basePosition.y + cell.flowSpawnOffset + cell.flowOffsetUnits + travel,
                 cell.basePosition.z,
               );
+              const visibleHeight = getVisibleHeightAtCell(cell);
+              const halfVisible = visibleHeight * 0.5;
+              cell.mesh.getWorldPosition(tempCellWorldPos);
+              const inViewport =
+                tempCellWorldPos.y > cameraY - halfVisible &&
+                tempCellWorldPos.y < cameraY + halfVisible;
+              if (inViewport && cell.flowEnteredViewportAtRun === null) {
+                cell.flowEnteredViewportAtRun = runNow;
+              }
+              if (cell.flowEnteredViewportAtRun === null) {
+                cell.material.opacity = 0;
+                return;
+              }
+              cell.material.opacity = 1;
+              const scrollSinceEntry = Math.abs(runNow - cell.flowEnteredViewportAtRun);
+              const fadeThreshold =
+                visibleHeight * panel.aboutRuntime.flowFadeOutDistanceViewportHeights;
+              const fadeSpan = Math.max(visibleHeight * 0.2, 0.01);
+              const fadeOutT = THREE.MathUtils.clamp(
+                (scrollSinceEntry - fadeThreshold) / fadeSpan,
+                0,
+                1,
+              );
+              if (fadeOutT > 0) {
+                cell.material.opacity = THREE.MathUtils.clamp(1 - fadeOutT, 0, 1);
+              }
+              if (fadeOutT >= 1) {
+                cell.flowFadedOut = true;
+                cell.mesh.visible = false;
+                cell.material.opacity = 0;
+              }
             }
           });
+          if (
+            aboutFlowOverlayEnabledRef.current &&
+            idx === focusIndex &&
+            isAboutElevatorMode
+          ) {
+            const nowMs = performance.now();
+            if (nowMs - aboutFlowOverlayLastUpdateRef.current > 120) {
+              const sampleCells = panel.aboutRuntime.cells
+                .filter((cell) => !!cell.immersiveColumn)
+                .slice(0, 3)
+                .map((cell) => {
+                  cell.mesh.getWorldPosition(tempCellWorldPos);
+                  const vh = getVisibleHeightAtCell(cell);
+                  const halfVisible = vh * 0.5;
+                  return {
+                    column: cell.immersiveColumn as AboutHallColumnId,
+                    direction: cell.flowDirection,
+                    speed: cell.flowUnitsPerDistance,
+                    y: tempCellWorldPos.y,
+                    inViewport:
+                      tempCellWorldPos.y > cameraY - halfVisible &&
+                      tempCellWorldPos.y < cameraY + halfVisible,
+                    opacity: cell.material.opacity,
+                  };
+                });
+              const firstCell = panel.aboutRuntime.cells.find(
+                (cell) => !!cell.immersiveColumn,
+              );
+              const visibleHeight = firstCell ? getVisibleHeightAtCell(firstCell) : 0;
+              setAboutFlowOverlaySnapshot({
+                slideId: panel.aboutRuntime.slideId,
+                run: runNow,
+                cameraY,
+                visibleHeight,
+                fadeThreshold:
+                  visibleHeight * panel.aboutRuntime.flowFadeOutDistanceViewportHeights,
+                cells: sampleCells,
+              });
+              aboutFlowOverlayLastUpdateRef.current = nowMs;
+            }
+          }
           panel.frameMat.opacity = 0.28 + panel.focusBlend * 0.34;
           panel.frameMat.color.setHex(idx === focusIndex ? 0xbbefff : 0x74d2ff);
           return;
@@ -16641,6 +16832,15 @@ export default function ResumeSpace3D({
           console.log("🔺 SD autonomy: OFF");
           shipLog("SD autonomy disabled", "system");
         };
+        (window as any).aboutFlowOverlayOn = () => {
+          setAboutFlowOverlayVisibility(true);
+        };
+        (window as any).aboutFlowOverlayOff = () => {
+          setAboutFlowOverlayVisibility(false);
+        };
+        (window as any).aboutFlowOverlayToggle = () => {
+          setAboutFlowOverlayVisibility(!aboutFlowOverlayEnabledRef.current);
+        };
 
         // ── Visual locate beacons ─────────────────────────────────
         // Console: locateFalcon()  or  locateSD()
@@ -17564,16 +17764,16 @@ export default function ResumeSpace3D({
               aboutShowcaseEntries[index] ??
               ({
                 id: slide.id,
-                title: slide.visibleTitle,
+                title: slide.registryBtnTitle,
                 image:
                   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
                 fit: "contain",
               } as ShowcaseEntry);
             const panelGroup = new THREE.Group();
-            const runPos = runStart + index * panelSpacing;
+            const runPos = runStart + panelSpacing + index * panelSpacing;
             const horizontal = slide.horizontalAlign;
             const vertical = slide.verticalAlign;
-            const slideHasColumnChoreo = hasThreeColumnChoreography(slide);
+            const slideHasColumnChoreo = true;
             const useElevatorCreditsCard = elevatorCreditsMode && !slideHasColumnChoreo;
             const useImmersiveColumnGrouping = slideHasColumnChoreo && runAxis === "y";
             const side =
@@ -17689,7 +17889,7 @@ export default function ResumeSpace3D({
               group: panelGroup,
               runPos,
               entry,
-              displayTitle: slide.visibleTitle,
+              displayTitle: slide.registryBtnTitle,
               fitMode: "contain",
               inwardRotationY,
               frontFacingRotationY,
@@ -17755,11 +17955,21 @@ export default function ResumeSpace3D({
                 triggerDistance: panelSpacing * 1.25,
                 activated: false,
                 activatedAt: 0,
+                activatedAtRun: 0,
+                flowFadeOutDistanceViewportHeights: THREE.MathUtils.clamp(
+                  slide.flowFadeOutDistanceViewportHeights ?? 1.5,
+                  0.1,
+                  10,
+                ),
               },
             };
 
-            const contents = slide.configuration?.contents ?? [];
             const columnMessages = getAboutColumnMessages(slide);
+            const allMessages = [
+              ...columnMessages.left,
+              ...columnMessages.center,
+              ...columnMessages.right,
+            ];
             const creditContent: AboutHallSlideContent = {
               id: `${slide.id}-credit`,
               type: "column1",
@@ -17768,12 +17978,9 @@ export default function ResumeSpace3D({
               fontFamily: ["Oswald", "Montserrat"],
               fontSize: "150px",
               fontShadow: "0px 0px 14px rgba(0, 0, 0, 0.62)",
-              WaitBeforeTextRender: 50,
-              textIntroFX: { effect: "fadeIn", durationMs: 520 },
-              WaitAfterTextRender: 0,
               horizontalAlign: "center",
               verticalAlign: "middle",
-              textContent: contents
+              textContent: allMessages
                 .map((content) => splitHtmlBreakLines(content.textContent).join("\n"))
                 .filter((text) => text.length > 0)
                 .join("\n\n"),
@@ -17793,7 +18000,6 @@ export default function ResumeSpace3D({
             ) => {
               const safeWidth = Math.max(256, Math.floor(1300 * (cellWidth / Math.max(panelWidth, 1))));
               const safeHeight = Math.max(220, Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))));
-              const contentKind = resolveAboutContentKind(content);
               const tex = createAboutCellTexture(
                 {
                   ...content,
@@ -17834,116 +18040,30 @@ export default function ResumeSpace3D({
                 new THREE.PlaneGeometry(cellWidth, cellHeight),
                 material,
               );
-              if (contentKind === "image") {
-                const imageUrl = content.imageUrl || content.backgroundImage;
-                if (imageUrl) {
-                  textureLoader.load(
-                    imageUrl,
-                    (loadedTexture) => {
-                      loadedTexture.colorSpace = THREE.SRGBColorSpace;
-                      loadedTexture.minFilter = THREE.LinearFilter;
-                      loadedTexture.magFilter = THREE.LinearFilter;
-                      loadedTexture.generateMipmaps = false;
-                      material.map = loadedTexture;
-                      material.needsUpdate = true;
-                    },
-                    undefined,
-                    () => {},
-                  );
-                }
-              }
               mesh.position.set(cellX, cellY, opts?.columnDepth ?? 0.02);
               (opts?.parentGroup ?? panelGroup).add(mesh);
-              const introFx = content.textIntroFX ?? {
-                effect: "fadeIn",
-                durationMs: 620,
-              };
               panelRecord.aboutRuntime?.cells.push({
                 mesh,
                 material,
                 normalTexture: tex,
                 emergencyTexture: emergencyTex,
-                fx: opts?.creditsStyle ? { effect: "fadeIn", durationMs: 520 } : introFx,
-                waitBeforeMs: opts?.creditsStyle
-                  ? 40
-                  : Math.max(0, content.WaitBeforeTextRender || 0),
-                waitAfterMs: Math.max(0, content.WaitAfterTextRender || 0),
                 state: "idle",
-                startedAt: 0,
                 basePosition: mesh.position.clone(),
                 flowDirection: normalizeAboutFlowDirection(content.flowDirection),
-                flowUnitsPerSec: Math.max(0, content.flowUnitsPerSec ?? 0),
+                flowUnitsPerDistance: Math.max(0, content.flowUnitsPerDistance ?? 0),
                 flowOffsetUnits: content.flowOffsetUnits ?? 0,
-                flowRange: Math.max(cellHeight * 0.55, 0.45),
                 baseYawRad: mesh.rotation.y,
+                flowEnteredViewportAtRun: null,
+                flowSpawnOffset: 0,
+                flowFadedOut: false,
               });
-              if (contentKind === "image") {
-                const captionText = String(content.caption ?? content.textContent ?? "").trim();
-                if (captionText.length > 0) {
-                  const captionContent: AboutHallSlideContent = {
-                    ...content,
-                    contentKind: "text",
-                    backgroundColor: "rgba(8, 14, 24, 0.82)",
-                    textContent: captionText,
-                    fontSize: content.fontSize || "22px",
-                    horizontalAlign: "center",
-                    verticalAlign: "middle",
-                  };
-                  const captionTex = createAboutCellTexture(
-                    captionContent,
-                    Math.max(360, safeWidth),
-                    Math.max(140, Math.floor(safeHeight * 0.22)),
-                    {
-                      transparentBackground: false,
-                      creditsStyle: false,
-                    },
-                  );
-                  const captionMat = new THREE.MeshBasicMaterial({
-                    map: captionTex,
-                    color: 0xffffff,
-                    transparent: true,
-                    opacity: 0,
-                    side: THREE.DoubleSide,
-                    toneMapped: false,
-                    depthWrite: false,
-                  });
-                  const captionMesh = new THREE.Mesh(
-                    new THREE.PlaneGeometry(cellWidth * 0.92, cellHeight * 0.24),
-                    captionMat,
-                  );
-                  captionMesh.position.set(
-                    cellX,
-                    cellY - cellHeight * 0.34,
-                    (opts?.columnDepth ?? 0.02) + 0.01,
-                  );
-                  (opts?.parentGroup ?? panelGroup).add(captionMesh);
-                  panelRecord.aboutRuntime?.cells.push({
-                    mesh: captionMesh,
-                    material: captionMat,
-                    normalTexture: captionTex,
-                    emergencyTexture: captionTex,
-                    fx: introFx,
-                    waitBeforeMs: Math.max(0, content.WaitBeforeTextRender || 0),
-                    waitAfterMs: 0,
-                    state: "idle",
-                    startedAt: 0,
-                    basePosition: captionMesh.position.clone(),
-                    flowDirection: "static",
-                    flowUnitsPerSec: 0,
-                    flowOffsetUnits: 0,
-                    flowRange: Math.max(cellHeight * 0.12, 0.4),
-                    baseYawRad: captionMesh.rotation.y,
-                  });
-                }
-              }
             };
-            const useColumnChoreo = slideHasColumnChoreo;
             if (useElevatorCreditsCard) {
               createAboutRuntimeCell(creditContent, panelWidth, panelHeight, 0, 0, {
                 transparentBackground: true,
                 creditsStyle: true,
               });
-            } else if (useColumnChoreo) {
+            } else {
               const columnX: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
                 ? { left: -9.56, center: 1.05, right: 10.65 }
                 : { left: -panelWidth * 0.34, center: 0, right: panelWidth * 0.34 };
@@ -18011,12 +18131,9 @@ export default function ResumeSpace3D({
                     cell.baseYawRad = cell.mesh.rotation.y;
                     if (useImmersiveColumnGrouping) {
                       cell.immersiveColumn = columnId;
-                      cell.flowDirection = "static";
-                      cell.flowUnitsPerSec = 0;
-                      cell.flowRange = 0;
                     }
-                    if (!useImmersiveColumnGrouping && cell.flowDirection !== "static" && cell.flowUnitsPerSec <= 0) {
-                      cell.flowUnitsPerSec = 0.25;
+                    if (cell.flowUnitsPerDistance <= 0) {
+                      cell.flowUnitsPerDistance = 0.25;
                     }
                   });
                 });
@@ -18048,15 +18165,6 @@ export default function ResumeSpace3D({
                   activeColumn: "center",
                 };
               }
-            } else {
-              contents.forEach((content) => {
-                const rect = getAboutSlideCellRect(slide.type, content.type);
-                const cellWidth = panelWidth * rect.w;
-                const cellHeight = panelHeight * rect.h;
-                const cellX = (rect.x + rect.w * 0.5 - 0.5) * panelWidth;
-                const cellY = (0.5 - (rect.y + rect.h * 0.5)) * panelHeight;
-                createAboutRuntimeCell(content, cellWidth, cellHeight, cellX, cellY);
-              });
             }
 
             const framePulse = new THREE.Mesh(
@@ -21317,7 +21425,7 @@ export default function ResumeSpace3D({
                 </button>
               </div>
               <div style={{ marginTop: 8, fontSize: 13, color: "#e8f8ff" }}>
-                {activeSlide?.visibleTitle ?? "About Slide"}
+                {activeSlide?.registryBtnTitle ?? "About Slide"}
               </div>
               <div
                 style={{
@@ -21354,7 +21462,7 @@ export default function ResumeSpace3D({
                         fontWeight: 700,
                       }}
                     >
-                      {slide.visibleTitle}
+                      {slide.registryBtnTitle}
                     </button>
                   );
                 })}
@@ -23118,9 +23226,66 @@ export default function ResumeSpace3D({
             onClose={() => setConsoleVisible(false)}
             onCommand={(cmd) => {
               shipLog(`$ ${cmd}`, "cmd");
-              // Command execution will be wired later
+              if (runShipTerminalCommand(cmd)) return;
+              shipLog(
+                "Unknown command. Try: help aboutflow",
+                "error",
+              );
             }}
           />
+
+          {IS_DEBUG_QUERY_ENABLED &&
+            aboutFlowOverlayEnabled &&
+            projectShowcaseActive &&
+            hallwayContentMode === "about" &&
+            projectShowcaseTrackRef.current?.axis === "y" && (
+              <div
+                style={{
+                  position: "fixed",
+                  left: 16,
+                  top: 72,
+                  zIndex: 1400,
+                  width: 340,
+                  borderRadius: 8,
+                  border: "1px solid rgba(130, 220, 255, 0.45)",
+                  background: "rgba(4, 12, 24, 0.86)",
+                  color: "#d7efff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 12,
+                  padding: "8px 10px",
+                  pointerEvents: "none",
+                }}
+              >
+                <div style={{ fontWeight: 700, letterSpacing: 0.8, color: "#9fdfff" }}>
+                  ABOUT FLOW DEBUG
+                </div>
+                {aboutFlowOverlaySnapshot ? (
+                  <>
+                    <div style={{ marginTop: 4 }}>
+                      slide=`{aboutFlowOverlaySnapshot.slideId}` run=
+                      {aboutFlowOverlaySnapshot.run.toFixed(2)}
+                    </div>
+                    <div>
+                      camY={aboutFlowOverlaySnapshot.cameraY.toFixed(2)} visibleH=
+                      {aboutFlowOverlaySnapshot.visibleHeight.toFixed(2)} fadeAt=
+                      {aboutFlowOverlaySnapshot.fadeThreshold.toFixed(2)}
+                    </div>
+                    <div style={{ marginTop: 5, borderTop: "1px solid rgba(130,220,255,0.25)", paddingTop: 4 }}>
+                      {aboutFlowOverlaySnapshot.cells.map((c) => (
+                        <div key={c.column}>
+                          {c.column}: {c.direction} speed={c.speed.toFixed(2)} y={c.y.toFixed(2)}{" "}
+                          {c.inViewport ? "IN" : "OUT"} alpha={c.opacity.toFixed(2)}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ marginTop: 4, opacity: 0.85 }}>
+                    Waiting for about-elevator flow snapshot...
+                  </div>
+                )}
+              </div>
+            )}
 
           {/* Ship destination nav panel — left side (all ship modes) */}
           {startupDestinationsVisible && (

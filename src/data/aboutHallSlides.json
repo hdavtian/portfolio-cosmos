@@ -2,13 +2,12 @@
   "slides": [
     {
       "id": "slide-1",
-      "visibleTitle": "Opening",
+      "registryBtnTitle": "Opening",
       "width": 12.2,
       "height": 7.6,
       "horizontalAlign": "center",
       "verticalAlign": "middle",
       "border": "",
-      "type": "type1",
       "configuration": {
         "contents": [
           {
@@ -19,9 +18,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "54px",
             "fontShadow": "0px 0px 18px rgba(120, 210, 255, 0.42)",
-            "WaitBeforeTextRender": 80,
-            "textIntroFX": { "effect": "fadeIn", "durationMs": 720 },
-            "WaitAfterTextRender": 220,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -33,13 +29,12 @@
     },
     {
       "id": "slide-2",
-      "visibleTitle": "Started Early",
+      "registryBtnTitle": "Started Early",
       "width": 12.2,
       "height": 7.6,
       "horizontalAlign": "center",
       "verticalAlign": "middle",
       "border": "2px solid rgba(132, 198, 255, 0.65)",
-      "type": "type1",
       "configuration": {
         "contents": [
           {
@@ -50,9 +45,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "50px",
             "fontShadow": "0px 0px 14px rgba(121, 198, 255, 0.36)",
-            "WaitBeforeTextRender": 120,
-            "textIntroFX": { "effect": "slideRight", "durationMs": 680 },
-            "WaitAfterTextRender": 180,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "left",
@@ -64,13 +56,12 @@
     },
     {
       "id": "slide-3",
-      "visibleTitle": "Curiosity To Craft",
+      "registryBtnTitle": "Curiosity To Craft",
       "width": 20,
       "height": 15,
       "horizontalAlign": "right",
       "verticalAlign": "middle",
       "border": "2px solid rgba(126, 219, 255, 0.72)",
-      "type": "type1",
       "configuration": {
         "contents": [
           {
@@ -81,9 +72,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "56px",
             "fontShadow": "0px 0px 16px rgba(98, 197, 255, 0.45)",
-            "WaitBeforeTextRender": 90,
-            "textIntroFX": { "effect": "slideUp", "durationMs": 680 },
-            "WaitAfterTextRender": 120,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -98,9 +86,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "42px",
             "fontShadow": "0px 0px 14px rgba(124, 197, 255, 0.34)",
-            "WaitBeforeTextRender": 430,
-            "textIntroFX": { "effect": "fadeIn", "durationMs": 620 },
-            "WaitAfterTextRender": 160,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -112,13 +97,12 @@
     },
     {
       "id": "slide-4",
-      "visibleTitle": "Connected System",
+      "registryBtnTitle": "Connected System",
       "width": 12.4,
       "height": 7.4,
       "horizontalAlign": "center",
       "verticalAlign": "middle",
       "border": "2px solid rgba(134, 212, 255, 0.72)",
-      "type": "type2",
       "configuration": {
         "contents": [
           {
@@ -129,9 +113,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "56px",
             "fontShadow": "0px 0px 16px rgba(98, 197, 255, 0.45)",
-            "WaitBeforeTextRender": 90,
-            "textIntroFX": { "effect": "slideUp", "durationMs": 680 },
-            "WaitAfterTextRender": 120,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -146,9 +127,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "42px",
             "fontShadow": "0px 0px 14px rgba(124, 197, 255, 0.34)",
-            "WaitBeforeTextRender": 430,
-            "textIntroFX": { "effect": "fadeIn", "durationMs": 620 },
-            "WaitAfterTextRender": 160,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -160,13 +138,12 @@
     },
     {
       "id": "slide-5",
-      "visibleTitle": "Build Systems",
+      "registryBtnTitle": "Build Systems",
       "width": 12,
       "height": 7.2,
       "horizontalAlign": "left",
       "verticalAlign": "middle",
       "border": "2px solid rgba(117, 223, 255, 0.74)",
-      "type": "type1",
       "configuration": {
         "contents": [
           {
@@ -177,9 +154,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "52px",
             "fontShadow": "0px 0px 18px rgba(110, 223, 255, 0.4)",
-            "WaitBeforeTextRender": 100,
-            "textIntroFX": { "effect": "slideRight", "durationMs": 660 },
-            "WaitAfterTextRender": 180,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -191,13 +165,12 @@
     },
     {
       "id": "slide-6",
-      "visibleTitle": "Built With Intent",
+      "registryBtnTitle": "Built With Intent",
       "width": 12.2,
       "height": 7.4,
       "horizontalAlign": "right",
       "verticalAlign": "middle",
       "border": "2px solid rgba(128, 221, 255, 0.66)",
-      "type": "type3",
       "configuration": {
         "contents": [
           {
@@ -208,9 +181,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "50px",
             "fontShadow": "0px 0px 18px rgba(112, 199, 255, 0.42)",
-            "WaitBeforeTextRender": 80,
-            "textIntroFX": { "effect": "slideDown", "durationMs": 660 },
-            "WaitAfterTextRender": 140,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -225,9 +195,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "38px",
             "fontShadow": "0px 0px 12px rgba(121, 197, 255, 0.34)",
-            "WaitBeforeTextRender": 360,
-            "textIntroFX": { "effect": "fadeIn", "durationMs": 560 },
-            "WaitAfterTextRender": 180,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -239,13 +206,12 @@
     },
     {
       "id": "slide-7",
-      "visibleTitle": "Still Building",
+      "registryBtnTitle": "Still Building",
       "width": 11.8,
       "height": 7.2,
       "horizontalAlign": "center",
       "verticalAlign": "middle",
       "border": "2px solid rgba(121, 206, 255, 0.72)",
-      "type": "type1",
       "configuration": {
         "contents": [
           {
@@ -256,9 +222,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "48px",
             "fontShadow": "0px 0px 13px rgba(101, 194, 255, 0.42)",
-            "WaitBeforeTextRender": 120,
-            "textIntroFX": { "effect": "slideUp", "durationMs": 600 },
-            "WaitAfterTextRender": 180,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -270,13 +233,12 @@
     },
     {
       "id": "slide-8",
-      "visibleTitle": "Most Important Time",
+      "registryBtnTitle": "Most Important Time",
       "width": 12.4,
       "height": 7.6,
       "horizontalAlign": "center",
       "verticalAlign": "middle",
       "border": "2px solid rgba(255, 179, 140, 0.78)",
-      "type": "type1",
       "configuration": {
         "contents": [
           {
@@ -287,9 +249,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "50px",
             "fontShadow": "0px 0px 16px rgba(255, 180, 130, 0.46)",
-            "WaitBeforeTextRender": 140,
-            "textIntroFX": { "effect": "fadeIn", "durationMs": 820 },
-            "WaitAfterTextRender": 260,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -301,13 +260,12 @@
     },
     {
       "id": "slide-9",
-      "visibleTitle": "That Changes Things",
+      "registryBtnTitle": "That Changes Things",
       "width": 12.2,
       "height": 7.4,
       "horizontalAlign": "left",
       "verticalAlign": "middle",
       "border": "2px solid rgba(146, 215, 255, 0.68)",
-      "type": "type3",
       "configuration": {
         "contents": [
           {
@@ -318,9 +276,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "54px",
             "fontShadow": "0px 0px 16px rgba(104, 198, 255, 0.4)",
-            "WaitBeforeTextRender": 100,
-            "textIntroFX": { "effect": "slideRight", "durationMs": 600 },
-            "WaitAfterTextRender": 120,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -335,9 +290,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "38px",
             "fontShadow": "0px 0px 10px rgba(112, 202, 255, 0.34)",
-            "WaitBeforeTextRender": 340,
-            "textIntroFX": { "effect": "fadeIn", "durationMs": 580 },
-            "WaitAfterTextRender": 180,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -349,13 +301,12 @@
     },
     {
       "id": "slide-10",
-      "visibleTitle": "Closing",
+      "registryBtnTitle": "Closing",
       "width": 12,
       "height": 7.2,
       "horizontalAlign": "right",
       "verticalAlign": "middle",
       "border": "2px solid rgba(152, 218, 255, 0.68)",
-      "type": "type1",
       "configuration": {
         "contents": [
           {
@@ -366,9 +317,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "50px",
             "fontShadow": "0px 0px 14px rgba(110, 208, 255, 0.4)",
-            "WaitBeforeTextRender": 110,
-            "textIntroFX": { "effect": "slideLeft", "durationMs": 640 },
-            "WaitAfterTextRender": 200,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -380,13 +328,12 @@
     },
     {
       "id": "slide-final",
-      "visibleTitle": "Let's Build",
+      "registryBtnTitle": "Let's Build",
       "width": 12.6,
       "height": 7.8,
       "horizontalAlign": "center",
       "verticalAlign": "middle",
       "border": "2px solid rgba(153, 236, 255, 0.78)",
-      "type": "type4",
       "configuration": {
         "contents": [
           {
@@ -397,9 +344,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "30px",
             "fontShadow": "0px 0px 9px rgba(108, 200, 255, 0.28)",
-            "WaitBeforeTextRender": 90,
-            "textIntroFX": { "effect": "fadeIn", "durationMs": 420 },
-            "WaitAfterTextRender": 40,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -414,9 +358,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "30px",
             "fontShadow": "0px 0px 9px rgba(108, 200, 255, 0.28)",
-            "WaitBeforeTextRender": 240,
-            "textIntroFX": { "effect": "fadeIn", "durationMs": 420 },
-            "WaitAfterTextRender": 40,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -431,9 +372,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "31px",
             "fontShadow": "0px 0px 10px rgba(108, 200, 255, 0.3)",
-            "WaitBeforeTextRender": 420,
-            "textIntroFX": { "effect": "fadeIn", "durationMs": 420 },
-            "WaitAfterTextRender": 40,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
@@ -448,9 +386,6 @@
             "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
             "fontSize": "35px",
             "fontShadow": "0px 0px 14px rgba(134, 221, 255, 0.44)",
-            "WaitBeforeTextRender": 620,
-            "textIntroFX": { "effect": "slideUp", "durationMs": 520 },
-            "WaitAfterTextRender": 260,
             "backgroundImage": "",
             "placement": "cover",
             "horizontalAlign": "center",
