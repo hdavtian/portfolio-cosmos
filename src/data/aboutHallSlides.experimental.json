@@ -12,27 +12,6 @@
       "configuration": {
         "contents": [],
         "columns": {
-          "center": {
-            "angleDeg": 0,
-            "messages": [
-              {
-                "id": "exp-1-center-text",
-                "type": "center",
-                "backgroundColor": "rgba(11, 28, 58, 0.92)",
-                "fontColor": "rgba(242, 251, 255, 0.99)",
-                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
-                "fontSize": "52px",
-                "fontShadow": "0px 0px 18px rgba(112, 205, 255, 0.4)",
-                "horizontalAlign": "center",
-                "verticalAlign": "middle",
-                "textContent": "Center monitor: core story stream.",
-                "flowDirection": "topToBottom",
-                "flowUnitsPerDistance": 0.55,
-                "heightRatio": 1.08,
-                "widthRatio": 0.95
-              }
-            ]
-          },
           "left": {
             "angleDeg": 34,
             "messages": [
@@ -48,8 +27,29 @@
                 "verticalAlign": "middle",
                 "textContent": "Left monitor: context lane.",
                 "flowDirection": "bottomToTop",
-                "flowUnitsPerDistance": 0.45,
+                "flowUnitsPerDistance": 1.5,
                 "heightRatio": 0.9
+              }
+            ]
+          },
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "exp-1-center-text",
+                "type": "center",
+                "backgroundColor": "rgba(11, 28, 58, 0.92)",
+                "fontColor": "rgba(242, 251, 255, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "52px",
+                "fontShadow": "0px 0px 18px rgba(112, 205, 255, 0.4)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Center monitor: core story stream.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1.5,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
               }
             ]
           },
@@ -68,7 +68,7 @@
                 "verticalAlign": "middle",
                 "textContent": "React  •  TypeScript  •  Three.js",
                 "flowDirection": "topToBottom",
-                "flowUnitsPerDistance": 0.4,
+                "flowUnitsPerDistance": 0.25,
                 "heightRatio": 0.84
               }
             ]
