@@ -926,6 +926,7 @@ type AboutHallSlide = {
   verticalAlign: HallwayVerticalAlign;
   border?: string;
   flowFadeOutDistanceViewportHeights?: number;
+  autoSpeed?: number;
   configuration: {
     contents: AboutHallSlideContent[];
     columns: Partial<Record<AboutHallColumnId, AboutHallColumnConfig>>;
@@ -933,6 +934,7 @@ type AboutHallSlide = {
 };
 type AboutHallSlidesFile = {
   slides: AboutHallSlide[];
+  autoSpeed?: number;
 };
 type AboutSlideCellRuntime = {
   mesh: THREE.Mesh;
@@ -959,6 +961,7 @@ type AboutSlideRuntime = {
   activatedAt: number;
   activatedAtRun: number;
   flowFadeOutDistanceViewportHeights: number;
+  autoSpeed: number;
 };
 
 export type ImmersiveColumnRigValues = {
@@ -2034,6 +2037,10 @@ export default function ResumeSpace3D({
       ),
     [aboutHallData.slides],
   );
+  const aboutHallDefaultAutoSpeedRef = useRef(aboutHallData.autoSpeed ?? 0.62);
+  useEffect(() => {
+    aboutHallDefaultAutoSpeedRef.current = aboutHallData.autoSpeed ?? 0.62;
+  }, [aboutHallData.autoSpeed]);
   const portfolioCoreBuild = useMemo(
     () =>
       buildPortfolioRegistryModel(
@@ -2937,6 +2944,7 @@ export default function ResumeSpace3D({
   const [projectShowcaseReady, setProjectShowcaseReady] = useState(false);
   const [projectShowcaseActive, setProjectShowcaseActive] = useState(false);
   const [projectShowcasePlaying, setProjectShowcasePlaying] = useState(false);
+  const [aboutElevatorReachedEnd, setAboutElevatorReachedEnd] = useState(false);
   const [cosmosIntroOverlayOpacity, setCosmosIntroOverlayOpacity] = useState(0);
   const [projectShowcaseEntryOverlayOpacity, setProjectShowcaseEntryOverlayOpacity] =
     useState(0);
@@ -6368,6 +6376,21 @@ export default function ResumeSpace3D({
       setProjectShowcaseLever(0);
     }
   }, [setProjectShowcaseLever]);
+
+  const replayAboutElevator = useCallback(() => {
+    const track = projectShowcaseTrackRef.current;
+    if (!track) return;
+    const endPad = 10;
+    const startRun = track.minRun + endPad;
+    setAboutElevatorReachedEnd(false);
+    projectShowcaseVelocityRef.current = 0;
+    projectShowcaseJumpTargetRef.current = null;
+    projectShowcaseForcedFocusIndexRef.current = null;
+    setProjectShowcaseRunPosition(startRun);
+    projectShowcasePlayingRef.current = true;
+    setProjectShowcasePlaying(true);
+    setProjectShowcaseLever(0);
+  }, [setProjectShowcaseRunPosition, setProjectShowcaseLever]);
 
   const stopOrbitalPortfolioToneSequence = useCallback(() => {
     const runtime = orbitalPortfolioToneRuntimeRef.current;
@@ -11194,7 +11217,7 @@ export default function ResumeSpace3D({
       const outageRuntime = projectShowcaseElevatorPowerRef.current;
       const isAboutElevatorMode =
         hallwayContentModeRef.current === "about" && track.axis === "y";
-      if (isAboutElevatorMode) {
+      if (!isAboutElevatorMode) {
         if (outageRuntime.phase === "normal" && now >= outageRuntime.nextOutageAt) {
           outageRuntime.phase = "flickerOut";
           outageRuntime.phaseStartedAt = now;
@@ -11316,8 +11339,12 @@ export default function ResumeSpace3D({
         }
         const step = Math.min(remaining, dynamicSpeed * dt);
         let nextRun = normalizedCurrent + (goForward ? step : -step);
-        if (nextRun > maxRun) nextRun -= loopLen;
-        if (nextRun < minRun) nextRun += loopLen;
+        if (isAboutElevatorMode) {
+          nextRun = THREE.MathUtils.clamp(nextRun, minRun, maxRun);
+        } else {
+          if (nextRun > maxRun) nextRun -= loopLen;
+          if (nextRun < minRun) nextRun += loopLen;
+        }
         setProjectShowcaseRunPosition(nextRun);
         if (remaining < 0.18) {
           const direction = goForward ? 1 : -1;
@@ -11342,9 +11369,15 @@ export default function ResumeSpace3D({
         }
       } else {
         const maxManualSpeed = track.speed * 11.4;
+        const focusedPanel =
+          projectShowcasePanelsRef.current[projectShowcaseFocusIndexRef.current];
         let targetVelocity = 0;
         if (projectShowcasePlayingRef.current) {
-          targetVelocity = track.speed * 0.62 * emergencyAutoplayScale;
+          const autoSpeedMultiplier =
+            isAboutElevatorMode && focusedPanel?.aboutRuntime
+              ? focusedPanel.aboutRuntime.autoSpeed
+              : 0.62;
+          targetVelocity = track.speed * autoSpeedMultiplier * emergencyAutoplayScale;
         } else if (projectShowcaseLeverDraggingRef.current) {
           const lever = projectShowcaseLeverValueRef.current;
           // Non-linear response: fine near center, stronger at extremes.
@@ -11352,8 +11385,6 @@ export default function ResumeSpace3D({
             Math.sign(lever) * Math.pow(Math.abs(lever), 1.35);
           targetVelocity = shapedLever * maxManualSpeed;
         }
-        const focusedPanel =
-          projectShowcasePanelsRef.current[projectShowcaseFocusIndexRef.current];
         const focusedIsCta = focusedPanel?.entry?.id === PROJECT_SHOWCASE_CTA_ENTRY_ID;
         if (focusedIsCta && !projectShowcaseLeverDraggingRef.current) {
           targetVelocity *= projectShowcasePlayingRef.current ? 0.45 : 0.28;
@@ -11375,10 +11406,25 @@ export default function ResumeSpace3D({
         if (Math.abs(projectShowcaseVelocityRef.current) > 0.002) {
           let nextRun =
             projectShowcaseRunPosRef.current + projectShowcaseVelocityRef.current * dt;
-          if (nextRun > maxRun) {
-            nextRun = minRun;
-          } else if (nextRun < minRun) {
-            nextRun = maxRun;
+          if (isAboutElevatorMode) {
+            const clamped = THREE.MathUtils.clamp(nextRun, minRun, maxRun);
+            if (clamped !== nextRun) {
+              projectShowcaseVelocityRef.current = 0;
+              if (clamped >= maxRun) {
+                if (projectShowcasePlayingRef.current) {
+                  projectShowcasePlayingRef.current = false;
+                  setProjectShowcasePlaying(false);
+                }
+                setAboutElevatorReachedEnd(true);
+              }
+            }
+            nextRun = clamped;
+          } else {
+            if (nextRun > maxRun) {
+              nextRun = minRun;
+            } else if (nextRun < minRun) {
+              nextRun = maxRun;
+            }
           }
           setProjectShowcaseRunPosition(nextRun);
         } else if (
@@ -11386,6 +11432,10 @@ export default function ResumeSpace3D({
           !projectShowcaseLeverDraggingRef.current
         ) {
           projectShowcaseForcedFocusIndexRef.current = null;
+        }
+
+        if (isAboutElevatorMode && projectShowcaseRunPosRef.current < maxRun - 0.5) {
+          setAboutElevatorReachedEnd(false);
         }
 
         // Mirror current motion on the throttle UI while coasting/stopping.
@@ -11404,7 +11454,7 @@ export default function ResumeSpace3D({
       }
 
       if (
-        isAboutElevatorMode &&
+        !isAboutElevatorMode &&
         outageRuntime.phase === "flickerOut" &&
         jumpTarget === null
       ) {
@@ -11417,6 +11467,20 @@ export default function ResumeSpace3D({
         if (glitchedRun > maxRun) glitchedRun = minRun;
         if (glitchedRun < minRun) glitchedRun = maxRun;
         setProjectShowcaseRunPosition(glitchedRun);
+      }
+      if (FAST_TRACK_TARGET && isAboutElevatorMode) {
+        const _now = performance.now();
+        const _lastLog = (globalThis as Record<string, number>).__ftLog ?? 0;
+        if (_now - _lastLog > 500) {
+          (globalThis as Record<string, number>).__ftLog = _now;
+          const vel = projectShowcaseVelocityRef.current;
+          const run = projectShowcaseRunPosRef.current;
+          const phase = outageRuntime.phase;
+          const playing = projectShowcasePlayingRef.current;
+          console.log(
+            `[ELEVATOR] run=${run.toFixed(2)} vel=${vel.toFixed(4)} dt=${dt.toFixed(4)} phase=${phase} playing=${playing} jump=${jumpTarget !== null ? jumpTarget.toFixed(2) : "none"}`,
+          );
+        }
       }
       projectShowcaseInteriorLightBasesRef.current.forEach(({ light, baseIntensity }) => {
         const p = outageRuntime.powerLevel;
@@ -17961,6 +18025,7 @@ export default function ResumeSpace3D({
                   0.1,
                   10,
                 ),
+                autoSpeed: slide.autoSpeed ?? aboutHallDefaultAutoSpeedRef.current,
               },
             };
 
@@ -23233,6 +23298,65 @@ export default function ResumeSpace3D({
               );
             }}
           />
+
+          {aboutElevatorReachedEnd &&
+            projectShowcaseActive &&
+            hallwayContentMode === "about" && (
+              <div
+                style={{
+                  position: "fixed",
+                  left: "50%",
+                  top: "50%",
+                  transform: "translate(-50%, -50%)",
+                  zIndex: 1350,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 12,
+                  animation: "aboutReplayFadeIn 0.6s ease-out both",
+                }}
+              >
+                <div
+                  style={{
+                    color: "rgba(180, 230, 255, 0.7)",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    letterSpacing: 1.2,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  End of elevator
+                </div>
+                <button
+                  type="button"
+                  onClick={replayAboutElevator}
+                  style={{
+                    padding: "12px 28px",
+                    borderRadius: 10,
+                    border: "1px solid rgba(145, 232, 255, 0.6)",
+                    background: "rgba(8, 18, 34, 0.88)",
+                    color: "#def5ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    cursor: "pointer",
+                    transition: "background 0.25s, border-color 0.25s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(20, 50, 80, 0.92)";
+                    e.currentTarget.style.borderColor = "rgba(145, 232, 255, 0.9)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(8, 18, 34, 0.88)";
+                    e.currentTarget.style.borderColor = "rgba(145, 232, 255, 0.6)";
+                  }}
+                >
+                  Replay
+                </button>
+              </div>
+            )}
 
           {IS_DEBUG_QUERY_ENABLED &&
             aboutFlowOverlayEnabled &&

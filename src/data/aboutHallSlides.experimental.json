@@ -1,4 +1,5 @@
 {
+  "autoSpeed": 0.2,
   "slides": [
     {
       "id": "exp-slide-1",
@@ -21,13 +22,13 @@
                 "backgroundColor": "rgba(54, 27, 12, 0.92)",
                 "fontColor": "rgba(255, 240, 224, 0.99)",
                 "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
-                "fontSize": "34px",
+                "fontSize": "65px",
                 "fontShadow": "0px 0px 12px rgba(255, 172, 120, 0.34)",
-                "horizontalAlign": "center",
+                "horizontalAlign": "left",
                 "verticalAlign": "middle",
                 "textContent": "Left monitor: context lane.",
                 "flowDirection": "bottomToTop",
-                "flowUnitsPerDistance": 1.5,
+                "flowUnitsPerDistance": 1,
                 "heightRatio": 0.9
               }
             ]
@@ -41,13 +42,13 @@
                 "backgroundColor": "rgba(11, 28, 58, 0.92)",
                 "fontColor": "rgba(242, 251, 255, 0.99)",
                 "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
-                "fontSize": "52px",
+                "fontSize": "75px",
                 "fontShadow": "0px 0px 18px rgba(112, 205, 255, 0.4)",
                 "horizontalAlign": "center",
                 "verticalAlign": "middle",
                 "textContent": "Center monitor: core story stream.",
                 "flowDirection": "topToBottom",
-                "flowUnitsPerDistance": 1.5,
+                "flowUnitsPerDistance": 1,
                 "heightRatio": 1.08,
                 "widthRatio": 0.95
               }
@@ -62,13 +63,13 @@
                 "backgroundColor": "rgba(15, 48, 28, 0.92)",
                 "fontColor": "rgba(224, 255, 236, 0.99)",
                 "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
-                "fontSize": "30px",
+                "fontSize": "65px",
                 "fontShadow": "0px 0px 10px rgba(145, 255, 196, 0.32)",
                 "horizontalAlign": "center",
                 "verticalAlign": "middle",
                 "textContent": "React  •  TypeScript  •  Three.js",
                 "flowDirection": "topToBottom",
-                "flowUnitsPerDistance": 0.25,
+                "flowUnitsPerDistance": 2,
                 "heightRatio": 0.84
               }
             ]
