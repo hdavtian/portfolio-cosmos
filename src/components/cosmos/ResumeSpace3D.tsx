@@ -935,10 +935,10 @@ type AboutHallSlide = {
 type AboutHallSlidesFile = {
   slides: AboutHallSlide[];
   autoSpeed?: number;
-  /** World units of camera travel before the first slide triggers (default: panelSpacing ≈ 24–50). */
-  initialTravelDistance?: number;
   /** Ruler-based start position — 0 = bottom of elevator shaft model. */
   startPosition?: number;
+  /** Ruler-based position of the first slide (0 = shaft bottom). Subsequent slides chain automatically after each fades. */
+  firstSlidePosition?: number;
 };
 type AboutSlideCellRuntime = {
   mesh: THREE.Mesh;
@@ -2050,10 +2050,10 @@ export default function ResumeSpace3D({
   useEffect(() => {
     aboutHallDefaultAutoSpeedRef.current = aboutHallData.autoSpeed ?? 0.62;
   }, [aboutHallData.autoSpeed]);
-  const aboutHallInitialTravelRef = useRef(aboutHallData.initialTravelDistance);
+  const aboutHallFirstSlidePositionRef = useRef(aboutHallData.firstSlidePosition);
   useEffect(() => {
-    aboutHallInitialTravelRef.current = aboutHallData.initialTravelDistance;
-  }, [aboutHallData.initialTravelDistance]);
+    aboutHallFirstSlidePositionRef.current = aboutHallData.firstSlidePosition;
+  }, [aboutHallData.firstSlidePosition]);
   const aboutHallStartPositionRef = useRef(aboutHallData.startPosition);
   useEffect(() => {
     aboutHallStartPositionRef.current = aboutHallData.startPosition;
@@ -17887,12 +17887,35 @@ export default function ResumeSpace3D({
           50,
         );
         const runStart = -((publishedShowcase.length - 1) * panelSpacing) / 2;
+        const shaftBottomWorld = -trenchSizeScaled.y / 2;
         const panelRecords: ShowcasePanelRecord[] = [];
+        let slideRunPositions: number[] = [];
         if (hallwayContentModeRef.current === "about") {
           const wallOffset = trenchWidth * 0.34;
           const elevatorOppositeWall = -Math.min(trenchWidth * 0.34, Math.max(2.6, trenchWidth * 0.5 - 1.15));
           const elevatorCreditsMode = runAxis === "y";
           const elevatorCreditsWall = elevatorOppositeWall * 0.32;
+
+          const setupFovRad = THREE.MathUtils.degToRad(45);
+          const setupCameraX = Math.min(trenchWidth * 0.36, Math.max(2.8, trenchWidth * 0.5 - 1.05));
+          const setupWallDistance = Math.abs(setupCameraX - elevatorCreditsWall);
+          const estimatedVisibleHeight = 2 * setupWallDistance * Math.tan(setupFovRad * 0.5);
+          const fixedTriggerDistance = 12;
+
+          const firstSlidePos = aboutHallFirstSlidePositionRef.current ?? 190;
+          aboutHallwaySlides.forEach((slide, index) => {
+            if (index === 0) {
+              slideRunPositions.push(shaftBottomWorld + firstSlidePos);
+            } else {
+              const prevSlide = aboutHallwaySlides[index - 1];
+              const prevFadeVH = THREE.MathUtils.clamp(prevSlide.flowFadeOutDistanceViewportHeights ?? 1.5, 0.1, 10);
+              const prevFadeThreshold = estimatedVisibleHeight * prevFadeVH;
+              const prevFadeSpan = estimatedVisibleHeight * 0.2;
+              const slideLifeDistance = fixedTriggerDistance + prevFadeThreshold + prevFadeSpan;
+              slideRunPositions.push(slideRunPositions[index - 1] + slideLifeDistance + 4);
+            }
+          });
+
           aboutHallwaySlides.forEach((slide, index) => {
             const entry =
               aboutShowcaseEntries[index] ??
@@ -17904,9 +17927,7 @@ export default function ResumeSpace3D({
                 fit: "contain",
               } as ShowcaseEntry);
             const panelGroup = new THREE.Group();
-            // initialTravelDistance: world units of camera travel before first slide (default: panelSpacing ≈ 24–50)
-            const initialGap = aboutHallInitialTravelRef.current ?? panelSpacing;
-            const runPos = runStart + initialGap + index * panelSpacing;
+            const runPos = slideRunPositions[index];
             const horizontal = slide.horizontalAlign;
             const vertical = slide.verticalAlign;
             const slideHasColumnChoreo = true;
@@ -18088,9 +18109,7 @@ export default function ResumeSpace3D({
                 mode: "about",
                 slideId: slide.id,
                 cells: [],
-                // Must be less than visibleHeight * flowFadeOutDistanceViewportHeights
-                // so cells don't fade before the camera reaches the panel.
-                triggerDistance: Math.min(panelSpacing * 0.45, 16),
+                triggerDistance: fixedTriggerDistance,
                 activated: false,
                 activatedAt: 0,
                 activatedAtRun: 0,
@@ -19553,16 +19572,17 @@ export default function ResumeSpace3D({
         panelRecords.forEach((panel) => {
           panel.group.visible = false;
         });
-        const edgeRunPadding = Math.max(14, panelSpacing * 0.9);
-        const shaftBottomWorld = -trenchSizeScaled.y / 2;
+        const edgeRunPadding = 14;
         const startPosRun = aboutHallStartPositionRef.current != null
           ? shaftBottomWorld + aboutHallStartPositionRef.current
           : null;
-        const minRun = startPosRun != null
-          ? Math.min(runStart - edgeRunPadding, startPosRun - 5)
-          : runStart - edgeRunPadding;
-        const maxRun =
-          runStart + (publishedShowcase.length - 1) * panelSpacing + edgeRunPadding;
+        const firstSlideRun = slideRunPositions.length > 0 ? slideRunPositions[0] : runStart;
+        const lastSlideRun = slideRunPositions.length > 0 ? slideRunPositions[slideRunPositions.length - 1] : runStart;
+        const minRun = Math.min(
+          firstSlideRun - edgeRunPadding,
+          startPosRun != null ? startPosRun - 5 : firstSlideRun - edgeRunPadding,
+        );
+        const maxRun = lastSlideRun + edgeRunPadding + 40;
         projectShowcaseElevatorPeekersRef.current = [];
         if (
           PROJECT_SHOWCASE_ELEVATOR_PEEKERS_ENABLED &&
