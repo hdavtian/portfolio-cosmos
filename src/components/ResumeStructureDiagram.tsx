@@ -19,7 +19,17 @@ const savedNodePositions: {
 
 type ColumnId = "left" | "center" | "right";
 
+const IS_DEBUG_QUERY = (() => {
+  if (typeof window === "undefined") return false;
+  try {
+    return new URLSearchParams(window.location.search).get("debug") === "true";
+  } catch {
+    return false;
+  }
+})();
+
 function ImmersiveColumnRigPanel() {
+  const [collapsed, setCollapsed] = useState(false);
   const [selected, setSelected] = useState<ColumnId>("center");
   const [tick, setTick] = useState(0);
   const bump = useCallback(() => setTick((t) => t + 1), []);
@@ -93,74 +103,93 @@ function ImmersiveColumnRigPanel() {
         right: 16,
         bottom: 56,
         zIndex: 1300,
-        padding: "10px 12px",
+        padding: collapsed ? "6px 10px" : "10px 12px",
         borderRadius: 10,
         border: "1px solid rgba(145, 232, 255, 0.45)",
         background: "rgba(8, 18, 34, 0.92)",
         color: "#def5ff",
         fontFamily: "'Rajdhani', sans-serif",
-        minWidth: 240,
+        minWidth: collapsed ? 120 : 240,
         maxHeight: "70vh",
         overflowY: "auto",
       }}
     >
-      <div style={{ fontSize: 11, letterSpacing: 0.8, color: "#9fe3ff" }}>
-        COLUMN RIG
-      </div>
-      <div style={{ marginTop: 6, display: "flex", gap: 4 }}>
-        {(["left", "center", "right"] as ColumnId[]).map((col) => (
-          <button
-            key={col}
-            onClick={() => setSelected(col)}
-            style={{
-              flex: 1,
-              padding: "4px 0",
-              borderRadius: 6,
-              border: selected === col
-                ? "1px solid rgba(145, 232, 255, 0.9)"
-                : "1px solid rgba(145, 232, 255, 0.3)",
-              background: selected === col
-                ? "rgba(20, 58, 92, 0.84)"
-                : "rgba(8, 18, 34, 0.68)",
-              color: "#e8f7ff",
-              fontFamily: "'Rajdhani', sans-serif",
-              fontSize: 11,
-              fontWeight: 700,
-              cursor: "pointer",
-              textTransform: "capitalize",
-            }}
-          >
-            {col}
-          </button>
-        ))}
-      </div>
-
-      {sliderRow("Width", "width", 0.5, 16, 0.1)}
-      {sliderRow("Height", "height", 0.5, 12, 0.1)}
-      {sliderRow("Pos X (lateral)", "posX", -12, 12, 0.05)}
-      {sliderRow("Pos Y (vertical)", "posY", -8, 8, 0.05)}
-      {sliderRow("Depth (toward cam)", "depth", -6, 6, 0.05)}
-      {sliderRow("Angle (deg)", "angleDeg", -60, 60, 0.5)}
-      {sliderRow("Angle Multiplier", "angleMultiplier", 0, 20, 0.1)}
-
-      <button
-        onClick={exportToConsole}
+      <div
+        onClick={() => setCollapsed((c) => !c)}
         style={{
-          marginTop: 8,
-          width: "100%",
-          padding: "6px 0",
-          borderRadius: 7,
-          border: "1px solid rgba(255, 210, 120, 0.6)",
-          background: "rgba(40, 28, 10, 0.84)",
-          color: "#ffe8c4",
-          fontFamily: "'Rajdhani', sans-serif",
-          fontSize: 12,
-          fontWeight: 700,
+          fontSize: 11,
+          letterSpacing: 0.8,
+          color: "#9fe3ff",
           cursor: "pointer",
+          userSelect: "none",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
         }}
       >
-        Export to Console
-      </button>
+        <span>COLUMN RIG</span>
+        <span style={{ fontSize: 10, color: "#6dc8e8" }}>
+          {collapsed ? "\u25b6" : "\u25bc"}
+        </span>
+      </div>
+      {!collapsed && (
+        <>
+          <div style={{ marginTop: 6, display: "flex", gap: 4 }}>
+            {(["left", "center", "right"] as ColumnId[]).map((col) => (
+              <button
+                key={col}
+                onClick={() => setSelected(col)}
+                style={{
+                  flex: 1,
+                  padding: "4px 0",
+                  borderRadius: 6,
+                  border: selected === col
+                    ? "1px solid rgba(145, 232, 255, 0.9)"
+                    : "1px solid rgba(145, 232, 255, 0.3)",
+                  background: selected === col
+                    ? "rgba(20, 58, 92, 0.84)"
+                    : "rgba(8, 18, 34, 0.68)",
+                  color: "#e8f7ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  textTransform: "capitalize",
+                }}
+              >
+                {col}
+              </button>
+            ))}
+          </div>
+
+          {sliderRow("Width", "width", 0.5, 16, 0.1)}
+          {sliderRow("Height", "height", 0.5, 12, 0.1)}
+          {sliderRow("Pos X (lateral)", "posX", -12, 12, 0.05)}
+          {sliderRow("Pos Y (vertical)", "posY", -8, 8, 0.05)}
+          {sliderRow("Depth (toward cam)", "depth", -6, 6, 0.05)}
+          {sliderRow("Angle (deg)", "angleDeg", -60, 60, 0.5)}
+          {sliderRow("Angle Multiplier", "angleMultiplier", 0, 20, 0.1)}
+
+          <button
+            onClick={exportToConsole}
+            style={{
+              marginTop: 8,
+              width: "100%",
+              padding: "6px 0",
+              borderRadius: 7,
+              border: "1px solid rgba(255, 210, 120, 0.6)",
+              background: "rgba(40, 28, 10, 0.84)",
+              color: "#ffe8c4",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Export to Console
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -214,7 +243,7 @@ function ResumeStructureDiagram({
   if (style === "space") {
     return (
       <div style={{ position: "relative", width: "100%", height: "100%" }}>
-        {hallwayContentMode === "about" && projectShowcaseActive && (
+        {IS_DEBUG_QUERY && hallwayContentMode === "about" && projectShowcaseActive && (
           <ImmersiveColumnRigPanel />
         )}
         <button

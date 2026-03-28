@@ -935,6 +935,8 @@ type AboutHallSlide = {
 type AboutHallSlidesFile = {
   slides: AboutHallSlide[];
   autoSpeed?: number;
+  /** World units of camera travel before the first slide triggers (default: panelSpacing ≈ 24–50). */
+  initialTravelDistance?: number;
 };
 type AboutSlideCellRuntime = {
   mesh: THREE.Mesh;
@@ -1854,9 +1856,14 @@ const createAboutCellTexture = (
     return fallback;
   }
 
-  const transparentBackground = opts?.transparentBackground ?? false;
-  if (!transparentBackground) {
-    ctx.fillStyle = content.backgroundColor || "rgba(8, 16, 32, 0.9)";
+  const bgValue = content.backgroundColor?.trim() ?? "";
+  const isTransparentBg =
+    opts?.transparentBackground ||
+    bgValue === "" ||
+    bgValue === "transparent" ||
+    bgValue === "none";
+  if (!isTransparentBg) {
+    ctx.fillStyle = bgValue || "rgba(8, 16, 32, 0.9)";
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
   } else {
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
@@ -2041,6 +2048,10 @@ export default function ResumeSpace3D({
   useEffect(() => {
     aboutHallDefaultAutoSpeedRef.current = aboutHallData.autoSpeed ?? 0.62;
   }, [aboutHallData.autoSpeed]);
+  const aboutHallInitialTravelRef = useRef(aboutHallData.initialTravelDistance);
+  useEffect(() => {
+    aboutHallInitialTravelRef.current = aboutHallData.initialTravelDistance;
+  }, [aboutHallData.initialTravelDistance]);
   const portfolioCoreBuild = useMemo(
     () =>
       buildPortfolioRegistryModel(
@@ -3026,6 +3037,15 @@ export default function ResumeSpace3D({
     Array<{ mat: THREE.MeshBasicMaterial; runT: number }>
   >([]);
   const projectShowcaseElevatorPeekersRef = useRef<ElevatorWindowPeekerRecord[]>([]);
+  const projectShowcaseDebugRulerRef = useRef<{
+    group: THREE.Group;
+    trackingLine: THREE.Mesh;
+    label: THREE.Sprite;
+    labelCanvas: HTMLCanvasElement;
+    labelCtx: CanvasRenderingContext2D;
+    lastLabelText: string;
+    origin: number;
+  } | null>(null);
   const projectShowcaseLookVectorRef = useRef<THREE.Vector3 | null>(null);
   const projectShowcaseForwardLockUntilRef = useRef(0);
   const projectShowcaseAboutEntryTimeoutRef = useRef<number | null>(null);
@@ -6380,8 +6400,34 @@ export default function ResumeSpace3D({
   const replayAboutElevator = useCallback(() => {
     const track = projectShowcaseTrackRef.current;
     if (!track) return;
-    const endPad = 10;
-    const startRun = track.minRun + endPad;
+    const panels = projectShowcasePanelsRef.current;
+    const firstPanelRun = panels.length > 0 ? panels[0].runPos : 0;
+    const triggerDist = panels.length > 0 && panels[0].aboutRuntime
+      ? panels[0].aboutRuntime.triggerDistance
+      : 16;
+    // Start outside the trigger zone of slide 1 with a small lead-in buffer.
+    const startRun = Math.max(track.minRun, firstPanelRun - triggerDist - 8);
+    // Reset activation state so slides trigger fresh.
+    panels.forEach((panel) => {
+      if (panel.aboutRuntime) {
+        panel.aboutRuntime.activated = false;
+        panel.aboutRuntime.activatedAt = 0;
+        panel.aboutRuntime.activatedAtRun = 0;
+        panel.aboutRuntime.cells.forEach((cell) => {
+          cell.state = "idle";
+          cell.flowEnteredViewportAtRun = null;
+          cell.flowSpawnOffset = 0;
+          cell.flowFadedOut = false;
+          cell.mesh.visible = false;
+          cell.mesh.position.set(
+            cell.basePosition.x,
+            cell.basePosition.y + cell.flowOffsetUnits,
+            cell.basePosition.z,
+          );
+          cell.material.opacity = 0;
+        });
+      }
+    });
     setAboutElevatorReachedEnd(false);
     projectShowcaseVelocityRef.current = 0;
     projectShowcaseJumpTargetRef.current = null;
@@ -11624,7 +11670,7 @@ export default function ResumeSpace3D({
                 const halfVisible = visibleHeight * 0.5;
                 const cellWorldHeight = getCellWorldHeight(cell);
                 const halfCell = cellWorldHeight * 0.5;
-                const edgeGap = Math.max(0.01, visibleHeight * 0.01);
+                const edgeGap = Math.max(1.0, visibleHeight * 0.15);
                 const spawnCenterWorldY =
                   cell.flowDirection === "topToBottom"
                     ? cameraY + halfVisible + halfCell + edgeGap
@@ -11697,9 +11743,11 @@ export default function ResumeSpace3D({
               const visibleHeight = getVisibleHeightAtCell(cell);
               const halfVisible = visibleHeight * 0.5;
               cell.mesh.getWorldPosition(tempCellWorldPos);
+              const cellWorldHeight = getCellWorldHeight(cell);
+              const halfCell = cellWorldHeight * 0.5;
               const inViewport =
-                tempCellWorldPos.y > cameraY - halfVisible &&
-                tempCellWorldPos.y < cameraY + halfVisible;
+                tempCellWorldPos.y + halfCell > cameraY - halfVisible &&
+                tempCellWorldPos.y - halfCell < cameraY + halfVisible;
               if (inViewport && cell.flowEnteredViewportAtRun === null) {
                 cell.flowEnteredViewportAtRun = runNow;
               }
@@ -11707,8 +11755,9 @@ export default function ResumeSpace3D({
                 cell.material.opacity = 0;
                 return;
               }
-              cell.material.opacity = 1;
               const scrollSinceEntry = Math.abs(runNow - cell.flowEnteredViewportAtRun);
+              const fadeInSpan = Math.max(visibleHeight * 0.12, 0.5);
+              const fadeInT = THREE.MathUtils.clamp(scrollSinceEntry / fadeInSpan, 0, 1);
               const fadeThreshold =
                 visibleHeight * panel.aboutRuntime.flowFadeOutDistanceViewportHeights;
               const fadeSpan = Math.max(visibleHeight * 0.2, 0.01);
@@ -11717,9 +11766,7 @@ export default function ResumeSpace3D({
                 0,
                 1,
               );
-              if (fadeOutT > 0) {
-                cell.material.opacity = THREE.MathUtils.clamp(1 - fadeOutT, 0, 1);
-              }
+              cell.material.opacity = Math.min(fadeInT, THREE.MathUtils.clamp(1 - fadeOutT, 0, 1));
               if (fadeOutT >= 1) {
                 cell.flowFadedOut = true;
                 cell.mesh.visible = false;
@@ -11827,6 +11874,27 @@ export default function ResumeSpace3D({
       }
 
       const run = projectShowcaseRunPosRef.current;
+
+      // Update debug ruler tracking line (zero-based from shaft bottom)
+      const debugRuler = projectShowcaseDebugRulerRef.current;
+      if (debugRuler) {
+        debugRuler.trackingLine.position.y = run;
+        debugRuler.label.position.y = run;
+        const displayRun = (run - debugRuler.origin).toFixed(1);
+        if (displayRun !== debugRuler.lastLabelText) {
+          debugRuler.lastLabelText = displayRun;
+          const ctx = debugRuler.labelCtx;
+          ctx.clearRect(0, 0, 256, 64);
+          ctx.font = "bold 64px Rajdhani, monospace";
+          ctx.fillStyle = "rgba(255,68,102,0.95)";
+          ctx.textAlign = "right";
+          ctx.textBaseline = "middle";
+          ctx.fillText(displayRun, 248, 32);
+          const spriteMat = debugRuler.label.material as THREE.SpriteMaterial;
+          if (spriteMat.map) spriteMat.map.needsUpdate = true;
+        }
+      }
+
       const elevatorPeekers = projectShowcaseElevatorPeekersRef.current;
       if (track.axis === "y" && elevatorPeekers.length > 0) {
         const minRun = track.minRun + 10;
@@ -17834,7 +17902,9 @@ export default function ResumeSpace3D({
                 fit: "contain",
               } as ShowcaseEntry);
             const panelGroup = new THREE.Group();
-            const runPos = runStart + panelSpacing + index * panelSpacing;
+            // initialTravelDistance: world units of camera travel before first slide (default: panelSpacing ≈ 24–50)
+            const initialGap = aboutHallInitialTravelRef.current ?? panelSpacing;
+            const runPos = runStart + initialGap + index * panelSpacing;
             const horizontal = slide.horizontalAlign;
             const vertical = slide.verticalAlign;
             const slideHasColumnChoreo = true;
@@ -18016,7 +18086,9 @@ export default function ResumeSpace3D({
                 mode: "about",
                 slideId: slide.id,
                 cells: [],
-                triggerDistance: panelSpacing * 1.25,
+                // Must be less than visibleHeight * flowFadeOutDistanceViewportHeights
+                // so cells don't fade before the camera reaches the panel.
+                triggerDistance: Math.min(panelSpacing * 0.45, 16),
                 activated: false,
                 activatedAt: 0,
                 activatedAtRun: 0,
@@ -19614,6 +19686,135 @@ export default function ResumeSpace3D({
         projectShowcaseRunPosRef.current = initialRun;
         setProjectShowcaseRunPosition(initialRun);
         setProjectShowcaseFocus(0);
+
+        // --- Debug ruler (only with ?debug=true) ---
+        // Zero-based: 0 = bottom of elevator shaft (minRun).
+        if (IS_DEBUG_QUERY_ENABLED && runAxis === "y") {
+          const rulerGroup = new THREE.Group();
+          rulerGroup.name = "ElevatorDebugRuler";
+          const rulerX = -(trenchWidth * 0.48);
+          const rulerZ = -1.2;
+          const rulerOrigin = -trenchSizeScaled.y / 2;
+          const tickSpacing = 5;
+          const labelEvery = 10;
+          const rulerBottomWorld = Math.floor(rulerOrigin / tickSpacing) * tickSpacing;
+          const rulerTopWorld = Math.ceil(maxRun / tickSpacing) * tickSpacing;
+
+          const backbonePts = [
+            new THREE.Vector3(rulerX, rulerBottomWorld, rulerZ),
+            new THREE.Vector3(rulerX, rulerTopWorld, rulerZ),
+          ];
+          const backboneGeo = new THREE.BufferGeometry().setFromPoints(backbonePts);
+          const backboneMat = new THREE.LineBasicMaterial({
+            color: 0x55ddff, opacity: 0.6, transparent: true, depthTest: false,
+          });
+          const backboneLine = new THREE.Line(backboneGeo, backboneMat);
+          backboneLine.renderOrder = 998;
+          rulerGroup.add(backboneLine);
+
+          const makeTextSprite = (text: string, size: number, color: string) => {
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d")!;
+            canvas.width = 256;
+            canvas.height = 64;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "bold 64px Rajdhani, monospace";
+            ctx.fillStyle = color;
+            ctx.textAlign = "right";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, canvas.width - 8, canvas.height / 2);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.minFilter = THREE.LinearFilter;
+            const mat = new THREE.SpriteMaterial({
+              map: tex, transparent: true, depthTest: false,
+            });
+            const sprite = new THREE.Sprite(mat);
+            sprite.scale.set(size * (canvas.width / canvas.height), size, 1);
+            return sprite;
+          };
+
+          for (let worldY = rulerBottomWorld; worldY <= rulerTopWorld; worldY += tickSpacing) {
+            const displayVal = Math.round(worldY - rulerOrigin);
+            const isLabel = displayVal % labelEvery === 0;
+            const tickLen = isLabel ? 1.2 : 0.5;
+            const tickPts = [
+              new THREE.Vector3(rulerX, worldY, rulerZ),
+              new THREE.Vector3(rulerX + tickLen, worldY, rulerZ),
+            ];
+            const tickGeo = new THREE.BufferGeometry().setFromPoints(tickPts);
+            const tickMat = new THREE.LineBasicMaterial({
+              color: isLabel ? 0x88eeff : 0x44aacc,
+              opacity: isLabel ? 0.8 : 0.4,
+              transparent: true, depthTest: false,
+            });
+            rulerGroup.add(new THREE.Line(tickGeo, tickMat));
+
+            if (isLabel) {
+              const label = makeTextSprite(String(displayVal), 1.0, "rgba(136,238,255,0.9)");
+              label.position.set(rulerX - 0.8, worldY, rulerZ);
+              rulerGroup.add(label);
+            }
+          }
+
+          // Panel position markers (display zero-based values)
+          panelRecords.forEach((panel, idx) => {
+            const markerLen = 2.0;
+            const markerPts = [
+              new THREE.Vector3(rulerX - 0.3, panel.runPos, rulerZ),
+              new THREE.Vector3(rulerX + markerLen, panel.runPos, rulerZ),
+            ];
+            const markerGeo = new THREE.BufferGeometry().setFromPoints(markerPts);
+            const markerMat = new THREE.LineBasicMaterial({
+              color: 0xffaa44, opacity: 0.9, transparent: true, depthTest: false,
+            });
+            rulerGroup.add(new THREE.Line(markerGeo, markerMat));
+            const panelDisplayVal = (panel.runPos - rulerOrigin).toFixed(1);
+            const slideLabel = makeTextSprite(
+              `S${idx + 1} @${panelDisplayVal}`, 0.8, "rgba(255,170,68,0.95)",
+            );
+            slideLabel.position.set(rulerX + markerLen + 0.6, panel.runPos, rulerZ);
+            rulerGroup.add(slideLabel);
+          });
+
+          // Horizontal tracking line at camera center
+          const trackLineWidth = trenchWidth * 0.9;
+          const trackLineGeo = new THREE.PlaneGeometry(trackLineWidth, 0.06);
+          const trackLineMat = new THREE.MeshBasicMaterial({
+            color: 0xff4466, opacity: 0.7, transparent: true,
+            depthTest: false, side: THREE.DoubleSide,
+          });
+          const trackLineMesh = new THREE.Mesh(trackLineGeo, trackLineMat);
+          trackLineMesh.position.set(0, initialRun, rulerZ);
+          trackLineMesh.renderOrder = 999;
+          rulerGroup.add(trackLineMesh);
+
+          // Current-position label — create with a shared canvas for per-frame updates
+          const rulerLabelCanvas = document.createElement("canvas");
+          rulerLabelCanvas.width = 256;
+          rulerLabelCanvas.height = 64;
+          const rulerLabelCtx = rulerLabelCanvas.getContext("2d")!;
+          const posLabelTex = new THREE.CanvasTexture(rulerLabelCanvas);
+          posLabelTex.minFilter = THREE.LinearFilter;
+          const posLabelMat = new THREE.SpriteMaterial({
+            map: posLabelTex, transparent: true, depthTest: false,
+          });
+          const posLabel = new THREE.Sprite(posLabelMat);
+          posLabel.scale.set(1.2 * (256 / 64), 1.2, 1);
+          posLabel.position.set(rulerX + 3.0, initialRun, rulerZ);
+          posLabel.renderOrder = 999;
+          rulerGroup.add(posLabel);
+
+          showcaseRoot.add(rulerGroup);
+          projectShowcaseDebugRulerRef.current = {
+            group: rulerGroup,
+            trackingLine: trackLineMesh,
+            label: posLabel,
+            labelCanvas: rulerLabelCanvas,
+            labelCtx: rulerLabelCtx,
+            lastLabelText: "",
+            origin: rulerOrigin,
+          };
+        }
 
         if (hallwayContentModeRef.current === "about") {
           const aboutExteriorRoot = new THREE.Group();
@@ -21254,6 +21455,7 @@ export default function ResumeSpace3D({
       projectShowcasePanelsRef.current = [];
       projectShowcaseFloorPulseMatsRef.current = [];
       projectShowcaseElevatorPeekersRef.current = [];
+      projectShowcaseDebugRulerRef.current = null;
       projectShowcaseTrackRef.current = null;
 
 
