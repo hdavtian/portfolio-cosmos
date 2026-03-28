@@ -1824,10 +1824,13 @@ const drawAboutSlideText = (
     ctx.shadowOffsetY = 0;
   } else {
     ctx.fillStyle = content.fontColor || "rgba(240, 248, 255, 0.98)";
-    ctx.shadowColor = content.fontShadow || HALLWAY_TEXT_DEFAULT_SHADOW;
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
+    const rawShadow = content.fontShadow || HALLWAY_TEXT_DEFAULT_SHADOW;
+    const pxParts = rawShadow.match(/(-?\d+(?:\.\d+)?)\s*px/g);
+    const colorPart = rawShadow.match(/(rgba?\([^)]+\)|#[0-9a-fA-F]{3,8})/);
+    ctx.shadowColor = colorPart ? colorPart[1] : rawShadow;
+    ctx.shadowBlur = pxParts && pxParts.length >= 3 ? parseFloat(pxParts[2]) : 8;
+    ctx.shadowOffsetX = pxParts && pxParts.length >= 1 ? parseFloat(pxParts[0]) : 0;
+    ctx.shadowOffsetY = pxParts && pxParts.length >= 2 ? parseFloat(pxParts[1]) : 0;
   }
 
   lines.forEach((line, index) => {
