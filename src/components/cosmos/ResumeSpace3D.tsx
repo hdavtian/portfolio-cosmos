@@ -997,9 +997,77 @@ type AboutFlowOverlaySnapshot = {
   run: number;
   cameraY: number;
   visibleHeight: number;
-  fadeThreshold: number;
+  maxCellVisibility: number;
   cells: AboutFlowOverlayColumnSnapshot[];
 };
+
+function AboutFlowDebugPanel({ snapshot }: { snapshot: AboutFlowOverlaySnapshot | null }) {
+  const [collapsed, setCollapsed] = useState(true);
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: 16,
+        top: 72,
+        zIndex: 1400,
+        width: collapsed ? 160 : 340,
+        borderRadius: 8,
+        border: "1px solid rgba(130, 220, 255, 0.45)",
+        background: "rgba(4, 12, 24, 0.86)",
+        color: "#d7efff",
+        fontFamily: "'Rajdhani', sans-serif",
+        fontSize: 12,
+        padding: collapsed ? "6px 10px" : "8px 10px",
+        pointerEvents: "auto",
+      }}
+    >
+      <div
+        onClick={() => setCollapsed((c) => !c)}
+        style={{
+          fontWeight: 700,
+          letterSpacing: 0.8,
+          color: "#9fdfff",
+          cursor: "pointer",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          userSelect: "none",
+        }}
+      >
+        <span>ABOUT FLOW DEBUG</span>
+        <span style={{ fontSize: 10, color: "#6dc8e8" }}>
+          {collapsed ? "\u25b6" : "\u25bc"}
+        </span>
+      </div>
+      {!collapsed && (
+        snapshot ? (
+          <>
+            <div style={{ marginTop: 4 }}>
+              slide={snapshot.slideId} run={snapshot.run.toFixed(2)}
+            </div>
+            <div>
+              camY={snapshot.cameraY.toFixed(2)} visibleH=
+              {snapshot.visibleHeight.toFixed(2)} maxVis=
+              {(snapshot.maxCellVisibility * 100).toFixed(1)}%
+            </div>
+            <div style={{ marginTop: 5, borderTop: "1px solid rgba(130,220,255,0.25)", paddingTop: 4 }}>
+              {snapshot.cells.map((c) => (
+                <div key={c.column}>
+                  {c.column}: {c.direction} speed={c.speed.toFixed(2)} y={c.y.toFixed(2)}{" "}
+                  {c.inViewport ? "IN" : "OUT"} alpha={c.opacity.toFixed(2)}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ marginTop: 4, opacity: 0.85 }}>
+            Waiting for about-elevator flow snapshot...
+          </div>
+        )
+      )}
+    </div>
+  );
+}
 
 const DEFAULT_BACKGROUND_MUSIC_TRACK = Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
 const EXPERIENCE_MOON_TEXTURE_BY_JOB_ID: Record<string, string> = {
@@ -1667,8 +1735,7 @@ const splitHtmlBreakLines = (text: string): string[] =>
   text
     .split(/<br\s*\/?>/gi)
     .flatMap((line) => line.split(/\r?\n/))
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+    .map((line) => line.trim());
 
 const resolveCanvasAlign = (
   align?: HallwayHorizontalAlign,
@@ -1787,8 +1854,9 @@ const drawAboutSlideText = (
   const sourceLines = splitHtmlBreakLines(contentText);
   const lines: string[] = [];
   sourceLines.forEach((line) => {
+    if (line.length === 0) { lines.push(""); return; }
     const words = line.split(/\s+/).filter(Boolean);
-    if (words.length === 0) return;
+    if (words.length === 0) { lines.push(""); return; }
     let current = words[0];
     for (let i = 1; i < words.length; i += 1) {
       const candidate = `${current} ${words[i]}`;
@@ -1842,6 +1910,52 @@ const drawAboutSlideText = (
   ctx.shadowBlur = 0;
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 0;
+};
+
+const measureAboutTextHeight = (
+  content: AboutHallSlideContent,
+  canvasWidth: number,
+  canvasHeight: number,
+  opts?: { creditsStyle?: boolean },
+): number => {
+  const creditsStyle = opts?.creditsStyle ?? false;
+  const contentText = resolveAboutContentText(content);
+  const fontSize = parsePixelSize(content.fontSize, 42);
+  const fontFamily = content.fontFamily?.length > 0
+    ? content.fontFamily.map((font) => `'${font}'`).join(", ")
+    : HALLWAY_OSWALD_FONT_STACK;
+  const lineHeight = Math.round(fontSize * (creditsStyle ? 1.15 : 1.24));
+  const padX = Math.max(24, canvasWidth * (creditsStyle ? 0.045 : 0.09));
+  const padY = Math.max(20, canvasHeight * (creditsStyle ? 0.08 : 0.11));
+  const maxLineWidth = Math.max(120, canvasWidth - padX * 2);
+
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = 1;
+  tempCanvas.height = 1;
+  const ctx = tempCanvas.getContext("2d");
+  if (!ctx) return canvasHeight;
+
+  ctx.font = `600 ${fontSize}px ${fontFamily}`;
+  const sourceLines = splitHtmlBreakLines(contentText);
+  let lineCount = 0;
+  sourceLines.forEach((line) => {
+    if (line.length === 0) { lineCount++; return; }
+    const words = line.split(/\s+/).filter(Boolean);
+    if (words.length === 0) { lineCount++; return; }
+    let current = words[0];
+    for (let i = 1; i < words.length; i += 1) {
+      const candidate = `${current} ${words[i]}`;
+      if (ctx.measureText(candidate).width <= maxLineWidth) {
+        current = candidate;
+      } else {
+        lineCount++;
+        current = words[i];
+      }
+    }
+    lineCount++;
+  });
+  if (lineCount === 0) lineCount = 1;
+  return Math.max(lineCount * lineHeight + padY * 2, canvasHeight);
 };
 
 const createAboutCellTexture = (
@@ -11736,14 +11850,16 @@ export default function ResumeSpace3D({
               cell.material.opacity = 0;
             });
           }
-          panel.aboutRuntime.cells.forEach((cell) => {
+          const cellFadeInfos: { fadeInT: number; visibleFraction: number; ci: number }[] = [];
+          panel.aboutRuntime.cells.forEach((cell, ci) => {
             if (!panel.aboutRuntime?.activated) return;
             if (cell.immersiveColumn && immersiveColumnRigRef.current) {
               const rig = immersiveColumnRigRef.current[cell.immersiveColumn];
               const geo = cell.mesh.geometry as THREE.PlaneGeometry;
-              if (Math.abs(geo.parameters.width - rig.width) > 0.01 || Math.abs(geo.parameters.height - rig.height) > 0.01) {
+              if (Math.abs(geo.parameters.width - rig.width) > 0.01) {
+                const keepHeight = geo.parameters.height;
                 cell.mesh.geometry.dispose();
-                cell.mesh.geometry = new THREE.PlaneGeometry(rig.width, rig.height);
+                cell.mesh.geometry = new THREE.PlaneGeometry(rig.width, keepHeight);
               }
               const parent = cell.mesh.parent;
               if (parent) {
@@ -11755,45 +11871,51 @@ export default function ResumeSpace3D({
             } else {
               cell.mesh.rotation.y = cell.baseYawRad * aboutHallAngleMultiplierRef.current;
             }
-            if (cell.state === "done") {
-              if (cell.flowUnitsPerDistance <= 0) return;
-              const dir = cell.flowDirection === "bottomToTop" ? 1 : -1;
-              const runDelta = runNow - panel.aboutRuntime.activatedAtRun;
-              const travel = runDelta + runDelta * cell.flowUnitsPerDistance * dir;
-              cell.mesh.position.set(
-                cell.basePosition.x,
-                cell.basePosition.y + cell.flowSpawnOffset + cell.flowOffsetUnits + travel,
-                cell.basePosition.z,
-              );
-              const visibleHeight = getVisibleHeightAtCell(cell);
-              const halfVisible = visibleHeight * 0.5;
-              cell.mesh.getWorldPosition(tempCellWorldPos);
-              const cellWorldHeight = getCellWorldHeight(cell);
-              const halfCell = cellWorldHeight * 0.5;
-              const inViewport =
-                tempCellWorldPos.y + halfCell > cameraY - halfVisible &&
-                tempCellWorldPos.y - halfCell < cameraY + halfVisible;
-              if (inViewport && cell.flowEnteredViewportAtRun === null) {
-                cell.flowEnteredViewportAtRun = runNow;
-              }
-              if (cell.flowEnteredViewportAtRun === null) {
-                cell.material.opacity = 0;
-                return;
-              }
-              const scrollSinceEntry = Math.abs(runNow - cell.flowEnteredViewportAtRun);
-              const fadeInSpan = Math.max(visibleHeight * 0.12, 0.5);
-              const fadeInT = THREE.MathUtils.clamp(scrollSinceEntry / fadeInSpan, 0, 1);
-              const fadeThreshold =
-                visibleHeight * panel.aboutRuntime.flowFadeOutDistanceViewportHeights;
-              const fadeSpan = Math.max(visibleHeight * 0.2, 0.01);
-              const fadeOutT = THREE.MathUtils.clamp(
-                (scrollSinceEntry - fadeThreshold) / fadeSpan,
-                0,
-                1,
-              );
-              cell.material.opacity = Math.min(fadeInT, THREE.MathUtils.clamp(1 - fadeOutT, 0, 1));
-              cell.flowFadedOut = fadeOutT >= 1;
+            if (cell.state !== "done" || cell.flowUnitsPerDistance <= 0) return;
+            const dir = cell.flowDirection === "bottomToTop" ? 1 : -1;
+            const runDelta = runNow - panel.aboutRuntime.activatedAtRun;
+            const travel = runDelta + runDelta * cell.flowUnitsPerDistance * dir;
+            cell.mesh.position.set(
+              cell.basePosition.x,
+              cell.basePosition.y + cell.flowSpawnOffset + cell.flowOffsetUnits + travel,
+              cell.basePosition.z,
+            );
+            const visibleHeight = getVisibleHeightAtCell(cell);
+            const halfVisible = visibleHeight * 0.5;
+            cell.mesh.getWorldPosition(tempCellWorldPos);
+            const cellWorldHeight = getCellWorldHeight(cell);
+            const halfCell = cellWorldHeight * 0.5;
+            const inViewport =
+              tempCellWorldPos.y + halfCell > cameraY - halfVisible &&
+              tempCellWorldPos.y - halfCell < cameraY + halfVisible;
+            if (inViewport && cell.flowEnteredViewportAtRun === null) {
+              cell.flowEnteredViewportAtRun = runNow;
             }
+            if (cell.flowEnteredViewportAtRun === null) {
+              cell.material.opacity = 0;
+              return;
+            }
+            const scrollSinceEntry = Math.abs(runNow - cell.flowEnteredViewportAtRun);
+            const fadeInSpan = Math.max(visibleHeight * 0.12, 0.5);
+            const fadeInT = THREE.MathUtils.clamp(scrollSinceEntry / fadeInSpan, 0, 1);
+            const cellTop = tempCellWorldPos.y + halfCell;
+            const cellBottom = tempCellWorldPos.y - halfCell;
+            const viewTop = cameraY + halfVisible;
+            const viewBottom = cameraY - halfVisible;
+            const visibleOverlap = Math.max(0, Math.min(cellTop, viewTop) - Math.max(cellBottom, viewBottom));
+            const visibleFraction = cellWorldHeight > 0.01 ? visibleOverlap / cellWorldHeight : 0;
+            cellFadeInfos.push({ fadeInT, visibleFraction, ci });
+          });
+          const maxCellVisibility = cellFadeInfos.length > 0
+            ? Math.max(...cellFadeInfos.map((d) => d.visibleFraction))
+            : 1;
+          const coordFadeOutT = maxCellVisibility < 0.05
+            ? THREE.MathUtils.clamp((0.05 - maxCellVisibility) / 0.05, 0, 1)
+            : 0;
+          cellFadeInfos.forEach(({ fadeInT, ci }) => {
+            const cell = panel.aboutRuntime!.cells[ci];
+            cell.material.opacity = Math.min(fadeInT, 1 - coordFadeOutT);
+            cell.flowFadedOut = coordFadeOutT >= 1;
           });
           if (
             aboutFlowOverlayEnabledRef.current &&
@@ -11829,8 +11951,7 @@ export default function ResumeSpace3D({
                 run: runNow,
                 cameraY,
                 visibleHeight,
-                fadeThreshold:
-                  visibleHeight * panel.aboutRuntime.flowFadeOutDistanceViewportHeights,
+                maxCellVisibility: maxCellVisibility,
                 cells: sampleCells,
               });
               aboutFlowOverlayLastUpdateRef.current = nowMs;
@@ -17920,17 +18041,48 @@ export default function ResumeSpace3D({
           const setupWallDistance = Math.abs(setupCameraX - elevatorCreditsWall);
           const estimatedVisibleHeight = 2 * setupWallDistance * Math.tan(setupFovRad * 0.5);
           const fixedTriggerDistance = 12;
+          const immersiveWidths: Record<AboutHallColumnId, number> = { left: 12.1, center: 14.3, right: 12.1 };
+          const immersiveHeights: Record<AboutHallColumnId, number> = { left: 10.6, center: 10.1, right: 10.3 };
 
           const firstSlidePos = aboutHallFirstSlidePositionRef.current ?? 190;
+          const estimateTallestCellHeight = (s: AboutHallSlide): number => {
+            const cols = s.configuration.columns ?? {};
+            const pw = elevatorCreditsMode
+              ? THREE.MathUtils.clamp(s.width * 1.18, 9.2, 13.8)
+              : THREE.MathUtils.clamp(s.width, 8, 13.8);
+            const ph = elevatorCreditsMode
+              ? THREE.MathUtils.clamp(s.height * 1.02, 5.2, 8.4)
+              : THREE.MathUtils.clamp(s.height, 4.8, 8.8);
+            let tallest = 0;
+            (["left", "center", "right"] as AboutHallColumnId[]).forEach((colId) => {
+              const colCfg = cols[colId];
+              if (!colCfg?.messages?.length) return;
+              colCfg.messages.forEach((msg) => {
+                const wr = THREE.MathUtils.clamp(msg.widthRatio ?? 1, 0.35, 2.6);
+                const hr = THREE.MathUtils.clamp(msg.heightRatio ?? 1, 0.2, 2.4);
+                const cw = immersiveWidths[colId] * wr;
+                const ch = immersiveHeights[colId] * hr;
+                const sw = Math.max(256, Math.floor(1300 * (cw / Math.max(pw, 1))));
+                const sh = Math.max(220, Math.floor(1000 * (ch / Math.max(ph, 1))));
+                const resolved = { ...msg, textContent: resolveAboutContentText(msg) };
+                const needed = measureAboutTextHeight(resolved, sw, sh, { creditsStyle: false });
+                const actual = needed > sh ? ch * (needed / sh) : ch;
+                tallest = Math.max(tallest, actual);
+              });
+            });
+            return tallest;
+          };
+
           aboutHallwaySlides.forEach((slide, index) => {
             if (index === 0) {
               slideRunPositions.push(shaftBottomWorld + firstSlidePos);
             } else {
               const prevSlide = aboutHallwaySlides[index - 1];
               const prevFadeVH = THREE.MathUtils.clamp(prevSlide.flowFadeOutDistanceViewportHeights ?? 1.5, 0.1, 10);
-              const prevFadeThreshold = estimatedVisibleHeight * prevFadeVH;
-              const prevFadeSpan = estimatedVisibleHeight * 0.2;
-              const slideLifeDistance = fixedTriggerDistance + prevFadeThreshold + prevFadeSpan;
+              const prevTallest = estimateTallestCellHeight(prevSlide);
+              const heightExcess = Math.max(0, prevTallest - estimatedVisibleHeight);
+              const baseLife = fixedTriggerDistance + estimatedVisibleHeight * prevFadeVH + estimatedVisibleHeight * 0.2;
+              const slideLifeDistance = baseLife + heightExcess;
               slideRunPositions.push(slideRunPositions[index - 1] + slideLifeDistance + 4);
             }
           });
@@ -18176,12 +18328,23 @@ export default function ResumeSpace3D({
               },
             ) => {
               const safeWidth = Math.max(256, Math.floor(1300 * (cellWidth / Math.max(panelWidth, 1))));
-              const safeHeight = Math.max(220, Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))));
+              let safeHeight = Math.max(220, Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))));
+              const resolvedContent = {
+                ...content,
+                textContent: resolveAboutContentText(content),
+              };
+              const neededHeight = measureAboutTextHeight(
+                resolvedContent, safeWidth, safeHeight,
+                { creditsStyle: opts?.creditsStyle ?? false },
+              );
+              let actualCellHeight = cellHeight;
+              if (neededHeight > safeHeight) {
+                const scale = neededHeight / safeHeight;
+                safeHeight = neededHeight;
+                actualCellHeight = cellHeight * scale;
+              }
               const tex = createAboutCellTexture(
-                {
-                  ...content,
-                  textContent: resolveAboutContentText(content),
-                },
+                resolvedContent,
                 safeWidth,
                 safeHeight,
                 {
@@ -18191,10 +18354,7 @@ export default function ResumeSpace3D({
               );
               const emergencyTex = opts?.creditsStyle
                 ? createAboutCellTexture(
-                    {
-                      ...content,
-                      textContent: resolveAboutContentText(content),
-                    },
+                    resolvedContent,
                     safeWidth,
                     safeHeight,
                     {
@@ -18214,7 +18374,7 @@ export default function ResumeSpace3D({
                 depthWrite: false,
               });
               const mesh = new THREE.Mesh(
-                new THREE.PlaneGeometry(cellWidth, cellHeight),
+                new THREE.PlaneGeometry(cellWidth, actualCellHeight),
                 material,
               );
               mesh.position.set(cellX, cellY, opts?.columnDepth ?? 0.02);
@@ -18277,8 +18437,6 @@ export default function ResumeSpace3D({
                   };
                   const widthRatio = THREE.MathUtils.clamp(message.widthRatio ?? 1, 0.35, 2.6);
                   const heightRatio = THREE.MathUtils.clamp(message.heightRatio ?? 1, 0.2, 2.4);
-                  const immersiveWidths: Record<AboutHallColumnId, number> = { left: 12.1, center: 14.3, right: 12.1 };
-                  const immersiveHeights: Record<AboutHallColumnId, number> = { left: 10.6, center: 10.1, right: 10.3 };
                   const cellWidth = useImmersiveColumnGrouping
                     ? immersiveWidths[columnId] * widthRatio
                     : panelWidth * 0.26 * widthRatio;
@@ -18322,16 +18480,13 @@ export default function ResumeSpace3D({
                 };
                 const makeVals = (col: AboutHallColumnId): ImmersiveColumnRigValues => {
                   const cell = firstCell(col);
-                  if (!cell) return { width: 3, height: 3, posX: columnX[col], posY: 0, depth: columnZ[col], angleDeg: columnDefaults[col], angleMultiplier: columnAngleMultipliers[col] };
-                  const geo = cell.mesh.geometry as THREE.PlaneGeometry;
-                  const params = geo.parameters;
                   return {
-                    width: params.width,
-                    height: params.height,
+                    width: immersiveWidths[col],
+                    height: immersiveHeights[col],
                     posX: columnX[col],
                     posY: 0,
                     depth: columnZ[col],
-                    angleDeg: THREE.MathUtils.radToDeg(cell.baseYawRad),
+                    angleDeg: cell ? THREE.MathUtils.radToDeg(cell.baseYawRad) : columnDefaults[col],
                     angleMultiplier: columnAngleMultipliers[col],
                   };
                 };
@@ -23613,52 +23768,7 @@ export default function ResumeSpace3D({
             projectShowcaseActive &&
             hallwayContentMode === "about" &&
             projectShowcaseTrackRef.current?.axis === "y" && (
-              <div
-                style={{
-                  position: "fixed",
-                  left: 16,
-                  top: 72,
-                  zIndex: 1400,
-                  width: 340,
-                  borderRadius: 8,
-                  border: "1px solid rgba(130, 220, 255, 0.45)",
-                  background: "rgba(4, 12, 24, 0.86)",
-                  color: "#d7efff",
-                  fontFamily: "'Rajdhani', sans-serif",
-                  fontSize: 12,
-                  padding: "8px 10px",
-                  pointerEvents: "none",
-                }}
-              >
-                <div style={{ fontWeight: 700, letterSpacing: 0.8, color: "#9fdfff" }}>
-                  ABOUT FLOW DEBUG
-                </div>
-                {aboutFlowOverlaySnapshot ? (
-                  <>
-                    <div style={{ marginTop: 4 }}>
-                      slide=`{aboutFlowOverlaySnapshot.slideId}` run=
-                      {aboutFlowOverlaySnapshot.run.toFixed(2)}
-                    </div>
-                    <div>
-                      camY={aboutFlowOverlaySnapshot.cameraY.toFixed(2)} visibleH=
-                      {aboutFlowOverlaySnapshot.visibleHeight.toFixed(2)} fadeAt=
-                      {aboutFlowOverlaySnapshot.fadeThreshold.toFixed(2)}
-                    </div>
-                    <div style={{ marginTop: 5, borderTop: "1px solid rgba(130,220,255,0.25)", paddingTop: 4 }}>
-                      {aboutFlowOverlaySnapshot.cells.map((c) => (
-                        <div key={c.column}>
-                          {c.column}: {c.direction} speed={c.speed.toFixed(2)} y={c.y.toFixed(2)}{" "}
-                          {c.inViewport ? "IN" : "OUT"} alpha={c.opacity.toFixed(2)}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ marginTop: 4, opacity: 0.85 }}>
-                    Waiting for about-elevator flow snapshot...
-                  </div>
-                )}
-              </div>
+              <AboutFlowDebugPanel snapshot={aboutFlowOverlaySnapshot} />
             )}
 
           {/* Ship destination nav panel — left side (all ship modes) */}

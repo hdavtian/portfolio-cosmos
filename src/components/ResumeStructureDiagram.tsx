@@ -29,7 +29,7 @@ const IS_DEBUG_QUERY = (() => {
 })();
 
 function ImmersiveColumnRigPanel() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [selected, setSelected] = useState<ColumnId>("center");
   const [tick, setTick] = useState(0);
   const bump = useCallback(() => setTick((t) => t + 1), []);

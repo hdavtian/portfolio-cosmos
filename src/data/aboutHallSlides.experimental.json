@@ -69,7 +69,7 @@
                 "fontShadow": "0px 0px 60px rgba(0, 255, 120, 1)",
                 "horizontalAlign": "center",
                 "verticalAlign": "middle",
-                "textContent": "S1: React  •  TypeScript  •  Three.js",
+                "textContent": "S1:\n\nAngular\n\nReact\n\nTypeScript\n\nThree.js\n\nC#\n\nJava\n\nHTML\n\nCSS\n\nSCSS\n\nWeb API\n\nSpringBoot\n\n",
                 "flowDirection": "topToBottom",
                 "flowUnitsPerDistance": 0.8,
                 "heightRatio": 0.84
