@@ -6401,6 +6401,26 @@ export default function ResumeSpace3D({
       projectShowcaseJumpTargetRef.current = null;
       projectShowcaseForcedFocusIndexRef.current = null;
       setProjectShowcaseLever(0);
+      projectShowcasePanelsRef.current.forEach((panel) => {
+        if (panel.aboutRuntime) {
+          panel.aboutRuntime.activated = false;
+          panel.aboutRuntime.activatedAt = 0;
+          panel.aboutRuntime.activatedAtRun = 0;
+          panel.aboutRuntime.cells.forEach((cell) => {
+            cell.state = "idle";
+            cell.flowEnteredViewportAtRun = null;
+            cell.flowSpawnOffset = 0;
+            cell.flowFadedOut = false;
+            cell.mesh.visible = false;
+            cell.mesh.position.set(
+              cell.basePosition.x,
+              cell.basePosition.y + cell.flowOffsetUnits,
+              cell.basePosition.z,
+            );
+            cell.material.opacity = 0;
+          });
+        }
+      });
     }
   }, [setProjectShowcaseLever]);
 
@@ -11698,8 +11718,12 @@ export default function ResumeSpace3D({
           if (panel.aboutRuntime.activated && distanceToTram > panel.aboutRuntime.triggerDistance) {
             const allFaded = panel.aboutRuntime.cells.length > 0 &&
               panel.aboutRuntime.cells.every((c) => c.flowFadedOut || c.flowUnitsPerDistance <= 0);
-            const safetyMax = panel.aboutRuntime.triggerDistance * 8;
-            if (allFaded || distanceToTram > safetyMax) {
+            const scrolledSinceActivation = Math.abs(runNow - panel.aboutRuntime.activatedAtRun);
+            const visHeight = panel.aboutRuntime.cells.length > 0 ? getVisibleHeightAtCell(panel.aboutRuntime.cells[0]) : 12;
+            const estimatedLifespan = panel.aboutRuntime.triggerDistance +
+              visHeight * panel.aboutRuntime.flowFadeOutDistanceViewportHeights +
+              visHeight * 0.3;
+            if (allFaded || scrolledSinceActivation > estimatedLifespan) {
               panel.aboutRuntime.activated = false;
               panel.aboutRuntime.activatedAt = 0;
               panel.aboutRuntime.activatedAtRun = 0;
