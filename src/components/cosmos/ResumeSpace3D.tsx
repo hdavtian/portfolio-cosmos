@@ -893,6 +893,11 @@ type AboutHallContentType =
   | "r2c1"
   | "r2c2";
 type AboutHallFlowDirection = "topToBottom" | "bottomToTop";
+type AboutContentImage = {
+  src: string;
+  title?: string;
+  description?: string;
+};
 type AboutHallSlideContent = {
   id: string;
   type: AboutHallContentType;
@@ -912,6 +917,7 @@ type AboutHallSlideContent = {
   columnAngleDeg?: number;
   offsetX?: number;
   offsetY?: number;
+  images?: AboutContentImage[];
 };
 type AboutHallColumnConfig = {
   angleDeg?: number;
@@ -929,7 +935,7 @@ type AboutHallSlide = {
   autoSpeed?: number;
   configuration: {
     contents: AboutHallSlideContent[];
-    columns: Partial<Record<AboutHallColumnId, AboutHallColumnConfig>>;
+    columns?: Partial<Record<AboutHallColumnId, AboutHallColumnConfig>>;
   };
 };
 type AboutHallSlidesFile = {
@@ -1788,10 +1794,11 @@ const resolveAboutContentText = (content: AboutHallSlideContent): string => {
 const getAboutColumnMessages = (
   slide: AboutHallSlide,
 ): Record<AboutHallColumnId, AboutHallSlideContent[]> => {
+  const cols = slide.configuration.columns;
   return {
-    left: slide.configuration.columns.left?.messages ?? [],
-    center: slide.configuration.columns.center?.messages ?? [],
-    right: slide.configuration.columns.right?.messages ?? [],
+    left: cols?.left?.messages ?? [],
+    center: cols?.center?.messages ?? [],
+    right: cols?.right?.messages ?? [],
   };
 };
 
@@ -1833,7 +1840,7 @@ const drawAboutSlideText = (
   width: number,
   height: number,
   opts?: { creditsStyle?: boolean; emergencyMood?: boolean },
-) => {
+): number => {
   const creditsStyle = opts?.creditsStyle ?? false;
   const emergencyMood = opts?.emergencyMood ?? false;
   const contentText = resolveAboutContentText(content);
@@ -1910,13 +1917,46 @@ const drawAboutSlideText = (
   ctx.shadowBlur = 0;
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 0;
+
+  return baseY + lines.length * lineHeight;
+};
+
+const measureAboutImagesHeight = (
+  images: AboutContentImage[] | undefined,
+  maxDrawWidth: number,
+  fontSize: number,
+  loadedImages?: Map<string, HTMLImageElement>,
+  pixelAspect?: number,
+): number => {
+  if (!images || images.length === 0) return 0;
+  const pa = pixelAspect && pixelAspect > 0 ? pixelAspect : 1;
+  const titleFontSize = Math.round(fontSize * 0.42);
+  const descFontSize = Math.round(fontSize * 0.36);
+  const imgPad = Math.round(fontSize * 0.3);
+  const gapBetween = Math.round(fontSize * 0.5);
+  let total = 0;
+  images.forEach((entry, i) => {
+    if (i > 0) total += gapBetween;
+    const hasTitle = !!entry.title?.trim();
+    const hasDesc = !!entry.description?.trim();
+    if (hasTitle) total += Math.round(titleFontSize * 1.3) + imgPad;
+    const loaded = loadedImages?.get(entry.src);
+    if (loaded && loaded.naturalWidth > 0 && loaded.naturalHeight > 0) {
+      const aspect = loaded.naturalHeight / loaded.naturalWidth;
+      total += Math.round(maxDrawWidth * aspect / pa);
+    } else {
+      total += Math.round(maxDrawWidth * 0.56 / pa);
+    }
+    if (hasDesc) total += imgPad + Math.round(descFontSize * 1.3);
+  });
+  return total;
 };
 
 const measureAboutTextHeight = (
   content: AboutHallSlideContent,
   canvasWidth: number,
   canvasHeight: number,
-  opts?: { creditsStyle?: boolean },
+  opts?: { creditsStyle?: boolean; loadedImages?: Map<string, HTMLImageElement>; pixelAspect?: number },
 ): number => {
   const creditsStyle = opts?.creditsStyle ?? false;
   const contentText = resolveAboutContentText(content);
@@ -1955,14 +1995,102 @@ const measureAboutTextHeight = (
     lineCount++;
   });
   if (lineCount === 0) lineCount = 1;
-  return Math.max(lineCount * lineHeight + padY * 2, canvasHeight);
+  const textHeight = lineCount * lineHeight + padY * 2;
+  const imagesHeight = measureAboutImagesHeight(
+    content.images, maxLineWidth, fontSize, opts?.loadedImages, opts?.pixelAspect,
+  );
+  const imagesGap = imagesHeight > 0 ? Math.round(fontSize * 0.5) : 0;
+  return Math.max(textHeight + imagesGap + imagesHeight, canvasHeight);
+};
+
+const drawAboutSlideImages = (
+  ctx: CanvasRenderingContext2D,
+  content: AboutHallSlideContent,
+  canvasWidth: number,
+  startY: number,
+  loadedImages?: Map<string, HTMLImageElement>,
+  pixelAspect?: number,
+): void => {
+  const images = content.images;
+  if (!images || images.length === 0) return;
+  const pa = pixelAspect && pixelAspect > 0 ? pixelAspect : 1;
+  const fontSize = parsePixelSize(content.fontSize, 42);
+  const padX = Math.max(24, canvasWidth * 0.09);
+  const maxDrawWidth = Math.max(120, canvasWidth - padX * 2);
+  const titleFontSize = Math.round(fontSize * 0.42);
+  const descFontSize = Math.round(fontSize * 0.36);
+  const imgPad = Math.round(fontSize * 0.3);
+  const gapBetween = Math.round(fontSize * 0.5);
+  const textGap = Math.round(fontSize * 0.5);
+
+  let curY = startY + textGap;
+
+  images.forEach((entry, i) => {
+    if (i > 0) curY += gapBetween;
+    const hasTitle = !!entry.title?.trim();
+    const hasDesc = !!entry.description?.trim();
+
+    if (hasTitle) {
+      ctx.save();
+      ctx.font = `500 ${titleFontSize}px 'Oswald', 'Montserrat', Arial, sans-serif`;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 1;
+      ctx.fillText(entry.title!.trim(), padX, curY);
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+      ctx.restore();
+      curY += Math.round(titleFontSize * 1.3) + imgPad;
+    }
+
+    const loaded = loadedImages?.get(entry.src);
+    if (loaded && loaded.naturalWidth > 0 && loaded.naturalHeight > 0) {
+      const aspect = loaded.naturalHeight / loaded.naturalWidth;
+      const drawW = maxDrawWidth;
+      const drawH = Math.round(drawW * aspect / pa);
+      try {
+        ctx.drawImage(loaded, padX, curY, drawW, drawH);
+      } catch {
+        ctx.fillStyle = "rgba(40, 50, 70, 0.6)";
+        ctx.fillRect(padX, curY, drawW, drawH);
+      }
+      curY += drawH;
+    } else {
+      const placeholderH = Math.round(maxDrawWidth * 0.56 / pa);
+      ctx.fillStyle = "rgba(40, 50, 70, 0.4)";
+      ctx.fillRect(padX, curY, maxDrawWidth, placeholderH);
+      curY += placeholderH;
+    }
+
+    if (hasDesc) {
+      curY += imgPad;
+      ctx.save();
+      ctx.font = `400 ${descFontSize}px 'Oswald', 'Montserrat', Arial, sans-serif`;
+      ctx.fillStyle = "rgba(200, 220, 240, 0.75)";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(entry.description!.trim(), padX, curY);
+      ctx.restore();
+      curY += Math.round(descFontSize * 1.3);
+    }
+  });
 };
 
 const createAboutCellTexture = (
   content: AboutHallSlideContent,
   canvasWidth: number,
   canvasHeight: number,
-  opts?: { transparentBackground?: boolean; creditsStyle?: boolean; emergencyMood?: boolean },
+  opts?: {
+    transparentBackground?: boolean;
+    creditsStyle?: boolean;
+    emergencyMood?: boolean;
+    loadedImages?: Map<string, HTMLImageElement>;
+    pixelAspect?: number;
+  },
 ): THREE.CanvasTexture => {
   const canvas = document.createElement("canvas");
   canvas.width = canvasWidth;
@@ -1987,10 +2115,11 @@ const createAboutCellTexture = (
   } else {
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
   }
-  drawAboutSlideText(ctx, content, canvasWidth, canvasHeight, {
+  const textBottomY = drawAboutSlideText(ctx, content, canvasWidth, canvasHeight, {
     creditsStyle: opts?.creditsStyle,
     emergencyMood: opts?.emergencyMood,
   });
+  drawAboutSlideImages(ctx, content, canvasWidth, textBottomY, opts?.loadedImages, opts?.pixelAspect);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -9349,7 +9478,7 @@ export default function ResumeSpace3D({
         } else if (controlsAny.target) {
           controlsAny.target.copy(INTRO_CAMERA_FINAL_TARGET);
         }
-        controls.update?.();
+        controls.update?.(0);
       }
       console.warn("[FAST_TRACK] Skipping intro sequence, positioning camera at home");
       setStartupDestinationsVisible(true);
@@ -11655,9 +11784,9 @@ export default function ResumeSpace3D({
       }
       if (FAST_TRACK_TARGET && isAboutElevatorMode) {
         const _now = performance.now();
-        const _lastLog = (globalThis as Record<string, number>).__ftLog ?? 0;
+        const _lastLog = (globalThis as unknown as Record<string, number>).__ftLog ?? 0;
         if (_now - _lastLog > 500) {
-          (globalThis as Record<string, number>).__ftLog = _now;
+          (globalThis as unknown as Record<string, number>).__ftLog = _now;
           const vel = projectShowcaseVelocityRef.current;
           const run = projectShowcaseRunPosRef.current;
           const phase = outageRuntime.phase;
@@ -18064,8 +18193,9 @@ export default function ResumeSpace3D({
                 const ch = immersiveHeights[colId] * hr;
                 const sw = Math.max(256, Math.floor(1300 * (cw / Math.max(pw, 1))));
                 const sh = Math.max(220, Math.floor(1000 * (ch / Math.max(ph, 1))));
+                const pa = (sw / cw) / (sh / ch);
                 const resolved = { ...msg, textContent: resolveAboutContentText(msg) };
-                const needed = measureAboutTextHeight(resolved, sw, sh, { creditsStyle: false });
+                const needed = measureAboutTextHeight(resolved, sw, sh, { creditsStyle: false, loadedImages: aboutImageCacheRef.current, pixelAspect: pa });
                 const actual = needed > sh ? ch * (needed / sh) : ch;
                 tallest = Math.max(tallest, actual);
               });
@@ -18073,7 +18203,7 @@ export default function ResumeSpace3D({
             return tallest;
           };
 
-          aboutHallwaySlides.forEach((slide, index) => {
+          aboutHallwaySlides.forEach((_slide, index) => {
             if (index === 0) {
               slideRunPositions.push(shaftBottomWorld + firstSlidePos);
             } else {
@@ -18086,6 +18216,32 @@ export default function ResumeSpace3D({
               slideRunPositions.push(slideRunPositions[index - 1] + slideLifeDistance + 4);
             }
           });
+
+          const allImageSrcs = new Set<string>();
+          aboutHallwaySlides.forEach((s) => {
+            const cols = s.configuration.columns ?? {};
+            (["left", "center", "right"] as AboutHallColumnId[]).forEach((colId) => {
+              const colCfg = cols[colId];
+              if (!colCfg?.messages?.length) return;
+              colCfg.messages.forEach((msg) => {
+                msg.images?.forEach((img) => { if (img.src) allImageSrcs.add(img.src); });
+              });
+            });
+          });
+          if (allImageSrcs.size > 0) {
+            await Promise.all(
+              Array.from(allImageSrcs).map(async (src) => {
+                if (aboutImageCacheRef.current.has(src)) return;
+                const img = new Image();
+                img.src = src;
+                await new Promise<void>((resolve) => {
+                  img.onload = () => resolve();
+                  img.onerror = () => resolve();
+                });
+                aboutImageCacheRef.current.set(src, img);
+              }),
+            );
+          }
 
           aboutHallwaySlides.forEach((slide, index) => {
             const entry =
@@ -18329,13 +18485,14 @@ export default function ResumeSpace3D({
             ) => {
               const safeWidth = Math.max(256, Math.floor(1300 * (cellWidth / Math.max(panelWidth, 1))));
               let safeHeight = Math.max(220, Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))));
+              const pixelAspect = (safeWidth / cellWidth) / (safeHeight / cellHeight);
               const resolvedContent = {
                 ...content,
                 textContent: resolveAboutContentText(content),
               };
               const neededHeight = measureAboutTextHeight(
                 resolvedContent, safeWidth, safeHeight,
-                { creditsStyle: opts?.creditsStyle ?? false },
+                { creditsStyle: opts?.creditsStyle ?? false, loadedImages: aboutImageCacheRef.current, pixelAspect },
               );
               let actualCellHeight = cellHeight;
               if (neededHeight > safeHeight) {
@@ -18350,6 +18507,8 @@ export default function ResumeSpace3D({
                 {
                   transparentBackground: opts?.transparentBackground ?? false,
                   creditsStyle: opts?.creditsStyle ?? false,
+                  loadedImages: aboutImageCacheRef.current,
+                  pixelAspect,
                 },
               );
               const emergencyTex = opts?.creditsStyle
@@ -18361,6 +18520,8 @@ export default function ResumeSpace3D({
                       transparentBackground: opts?.transparentBackground ?? false,
                       creditsStyle: true,
                       emergencyMood: true,
+                      loadedImages: aboutImageCacheRef.current,
+                      pixelAspect,
                     },
                   )
                 : tex;

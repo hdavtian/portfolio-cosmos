@@ -154,6 +154,99 @@
           }
         }
       }
+    },
+    {
+      "id": "exp-slide-3",
+      "registryBtnTitle": "Image Test",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(122, 219, 255, 0.72)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "left": {
+            "angleDeg": 34,
+            "messages": [
+              {
+                "id": "exp-3-left-text",
+                "type": "left",
+                "backgroundColor": "rgba(54, 27, 12, 0.92)",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "65px",
+                "fontShadow": "0px 0px 12px rgba(255, 172, 120, 0.34)",
+                "horizontalAlign": "left",
+                "verticalAlign": "top",
+                "textContent": "S3: Image without title/desc",
+                "flowDirection": "bottomToTop",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 0.9,
+                "images": [
+                  {
+                    "src": "/images/about/img1.jpg"
+                  }
+                ]
+              }
+            ]
+          },
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "exp-3-center-text",
+                "type": "center",
+                "backgroundColor": "rgba(11, 28, 58, 0.92)",
+                "fontColor": "rgba(242, 251, 255, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "65px",
+                "fontShadow": "0px 0px 18px rgba(112, 205, 255, 0.4)",
+                "horizontalAlign": "center",
+                "verticalAlign": "top",
+                "textContent": "S3: Project Highlights",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95,
+                "images": [
+                  {
+                    "src": "/images/about/img2.jpg",
+                    "title": "Analytics Dashboard",
+                    "description": "Real-time monitoring with live data feeds"
+                  },
+                  {
+                    "src": "/images/about/img3.jpg",
+                    "title": "Settings Panel",
+                    "description": "Configuration and preferences interface"
+                  }
+                ]
+              }
+            ]
+          },
+          "right": {
+            "angleDeg": -34,
+            "messages": [
+              {
+                "id": "exp-3-right-tech",
+                "type": "right",
+                "backgroundColor": "rgba(15, 48, 28, 0.92)",
+                "fontColor": "rgba(224, 255, 236, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "65px",
+                "fontShadow": "0px 0px 10px rgba(145, 255, 196, 0.32)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "S3: React  •  TypeScript  •  Three.js",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 0.84
+              }
+            ]
+          }
+        }
+      }
     }
   ]
 }

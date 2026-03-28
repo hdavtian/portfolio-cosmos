@@ -3,7 +3,7 @@ import * as d3 from "d3";
 import resumeData from "../data/resume.json";
 import { type DiagramStyle, type DiagramStyleOptions } from "./DiagramSettings";
 import ResumeSpace3D from "./cosmos/ResumeSpace3D";
-import { immersiveColumnRigRef, type ImmersiveColumnRig, type ImmersiveColumnRigValues } from "./cosmos/ResumeSpace3D";
+import { immersiveColumnRigRef, type ImmersiveColumnRigValues } from "./cosmos/ResumeSpace3D";
 
 interface ResumeStructureDiagramProps {
   onNavigate: (section: number) => void;
@@ -38,7 +38,7 @@ function ImmersiveColumnRigPanel() {
   if (rig) rig.activeColumn = selected;
   const vals: ImmersiveColumnRigValues = rig
     ? rig[selected]
-    : { width: 3, height: 3, posX: 0, posY: 0, angleDeg: 0 };
+    : { width: 3, height: 3, posX: 0, posY: 0, depth: 0, angleDeg: 0, angleMultiplier: 1 };
 
   const update = (field: keyof ImmersiveColumnRigValues, value: number) => {
     if (!rig) return;
