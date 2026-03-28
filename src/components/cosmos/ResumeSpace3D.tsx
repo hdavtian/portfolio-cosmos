@@ -11696,22 +11696,27 @@ export default function ResumeSpace3D({
             });
           }
           if (panel.aboutRuntime.activated && distanceToTram > panel.aboutRuntime.triggerDistance) {
-            panel.aboutRuntime.activated = false;
-            panel.aboutRuntime.activatedAt = 0;
-            panel.aboutRuntime.activatedAtRun = 0;
-            panel.aboutRuntime.cells.forEach((cell) => {
-              cell.state = "idle";
-              cell.flowEnteredViewportAtRun = null;
-              cell.flowSpawnOffset = 0;
-              cell.flowFadedOut = false;
-              cell.mesh.visible = false;
-              cell.mesh.position.set(
-                cell.basePosition.x,
-                cell.basePosition.y + cell.flowOffsetUnits,
-                cell.basePosition.z,
-              );
-              cell.material.opacity = 0;
-            });
+            const allFaded = panel.aboutRuntime.cells.length > 0 &&
+              panel.aboutRuntime.cells.every((c) => c.flowFadedOut || c.flowUnitsPerDistance <= 0);
+            const safetyMax = panel.aboutRuntime.triggerDistance * 8;
+            if (allFaded || distanceToTram > safetyMax) {
+              panel.aboutRuntime.activated = false;
+              panel.aboutRuntime.activatedAt = 0;
+              panel.aboutRuntime.activatedAtRun = 0;
+              panel.aboutRuntime.cells.forEach((cell) => {
+                cell.state = "idle";
+                cell.flowEnteredViewportAtRun = null;
+                cell.flowSpawnOffset = 0;
+                cell.flowFadedOut = false;
+                cell.mesh.visible = false;
+                cell.mesh.position.set(
+                  cell.basePosition.x,
+                  cell.basePosition.y + cell.flowOffsetUnits,
+                  cell.basePosition.z,
+                );
+                cell.material.opacity = 0;
+              });
+            }
           }
           panel.aboutRuntime.cells.forEach((cell) => {
             if (!panel.aboutRuntime?.activated) return;
