@@ -11715,32 +11715,23 @@ export default function ResumeSpace3D({
               cell.material.opacity = 0;
             });
           }
-          if (panel.aboutRuntime.activated && distanceToTram > panel.aboutRuntime.triggerDistance) {
-            const allFaded = panel.aboutRuntime.cells.length > 0 &&
-              panel.aboutRuntime.cells.every((c) => c.flowFadedOut || c.flowUnitsPerDistance <= 0);
-            const scrolledSinceActivation = Math.abs(runNow - panel.aboutRuntime.activatedAtRun);
-            const visHeight = panel.aboutRuntime.cells.length > 0 ? getVisibleHeightAtCell(panel.aboutRuntime.cells[0]) : 12;
-            const estimatedLifespan = panel.aboutRuntime.triggerDistance +
-              visHeight * panel.aboutRuntime.flowFadeOutDistanceViewportHeights +
-              visHeight * 0.3;
-            if (allFaded || scrolledSinceActivation > estimatedLifespan) {
-              panel.aboutRuntime.activated = false;
-              panel.aboutRuntime.activatedAt = 0;
-              panel.aboutRuntime.activatedAtRun = 0;
-              panel.aboutRuntime.cells.forEach((cell) => {
-                cell.state = "idle";
-                cell.flowEnteredViewportAtRun = null;
-                cell.flowSpawnOffset = 0;
-                cell.flowFadedOut = false;
-                cell.mesh.visible = false;
-                cell.mesh.position.set(
-                  cell.basePosition.x,
-                  cell.basePosition.y + cell.flowOffsetUnits,
-                  cell.basePosition.z,
-                );
-                cell.material.opacity = 0;
-              });
-            }
+          if (panel.aboutRuntime.activated && distanceToTram > track.cullHalfWindow) {
+            panel.aboutRuntime.activated = false;
+            panel.aboutRuntime.activatedAt = 0;
+            panel.aboutRuntime.activatedAtRun = 0;
+            panel.aboutRuntime.cells.forEach((cell) => {
+              cell.state = "idle";
+              cell.flowEnteredViewportAtRun = null;
+              cell.flowSpawnOffset = 0;
+              cell.flowFadedOut = false;
+              cell.mesh.visible = false;
+              cell.mesh.position.set(
+                cell.basePosition.x,
+                cell.basePosition.y + cell.flowOffsetUnits,
+                cell.basePosition.z,
+              );
+              cell.material.opacity = 0;
+            });
           }
           panel.aboutRuntime.cells.forEach((cell) => {
             if (!panel.aboutRuntime?.activated) return;
@@ -11762,7 +11753,7 @@ export default function ResumeSpace3D({
               cell.mesh.rotation.y = cell.baseYawRad * aboutHallAngleMultiplierRef.current;
             }
             if (cell.state === "done") {
-              if (cell.flowUnitsPerDistance <= 0 || cell.flowFadedOut) return;
+              if (cell.flowUnitsPerDistance <= 0) return;
               const dir = cell.flowDirection === "bottomToTop" ? 1 : -1;
               const runDelta = runNow - panel.aboutRuntime.activatedAtRun;
               const travel = runDelta + runDelta * cell.flowUnitsPerDistance * dir;
@@ -11798,11 +11789,7 @@ export default function ResumeSpace3D({
                 1,
               );
               cell.material.opacity = Math.min(fadeInT, THREE.MathUtils.clamp(1 - fadeOutT, 0, 1));
-              if (fadeOutT >= 1) {
-                cell.flowFadedOut = true;
-                cell.mesh.visible = false;
-                cell.material.opacity = 0;
-              }
+              cell.flowFadedOut = fadeOutT >= 1;
             }
           });
           if (
