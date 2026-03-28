@@ -951,15 +951,12 @@ type AboutSlideCellRuntime = {
   material: THREE.MeshBasicMaterial;
   normalTexture: THREE.Texture;
   emergencyTexture: THREE.Texture;
-  state: "idle" | "done";
   basePosition: THREE.Vector3;
   flowDirection: AboutHallFlowDirection;
   flowUnitsPerDistance: number;
   flowOffsetUnits: number;
   baseYawRad: number;
-  flowEnteredViewportAtRun: number | null;
-  flowSpawnOffset: number;
-  flowFadedOut: boolean;
+  homeY: number;
   immersiveColumn?: AboutHallColumnId;
 };
 type AboutSlideRuntime = {
@@ -967,9 +964,7 @@ type AboutSlideRuntime = {
   slideId: string;
   cells: AboutSlideCellRuntime[];
   triggerDistance: number;
-  activated: boolean;
-  activatedAt: number;
-  activatedAtRun: number;
+  slideStartRun: number;
   flowFadeOutDistanceViewportHeights: number;
   autoSpeed: number;
 };
@@ -6649,20 +6644,8 @@ export default function ResumeSpace3D({
       setProjectShowcaseLever(0);
       projectShowcasePanelsRef.current.forEach((panel) => {
         if (panel.aboutRuntime) {
-          panel.aboutRuntime.activated = false;
-          panel.aboutRuntime.activatedAt = 0;
-          panel.aboutRuntime.activatedAtRun = 0;
           panel.aboutRuntime.cells.forEach((cell) => {
-            cell.state = "idle";
-            cell.flowEnteredViewportAtRun = null;
-            cell.flowSpawnOffset = 0;
-            cell.flowFadedOut = false;
             cell.mesh.visible = false;
-            cell.mesh.position.set(
-              cell.basePosition.x,
-              cell.basePosition.y + cell.flowOffsetUnits,
-              cell.basePosition.z,
-            );
             cell.material.opacity = 0;
           });
         }
@@ -6675,23 +6658,10 @@ export default function ResumeSpace3D({
     if (!track) return;
     const panels = projectShowcasePanelsRef.current;
     const startRun = track.startRun;
-    // Reset activation state so slides trigger fresh.
     panels.forEach((panel) => {
       if (panel.aboutRuntime) {
-        panel.aboutRuntime.activated = false;
-        panel.aboutRuntime.activatedAt = 0;
-        panel.aboutRuntime.activatedAtRun = 0;
         panel.aboutRuntime.cells.forEach((cell) => {
-          cell.state = "idle";
-          cell.flowEnteredViewportAtRun = null;
-          cell.flowSpawnOffset = 0;
-          cell.flowFadedOut = false;
           cell.mesh.visible = false;
-          cell.mesh.position.set(
-            cell.basePosition.x,
-            cell.basePosition.y + cell.flowOffsetUnits,
-            cell.basePosition.z,
-          );
           cell.material.opacity = 0;
         });
       }
@@ -11895,7 +11865,6 @@ export default function ResumeSpace3D({
               : THREE.MathUtils.degToRad(45);
           const tempCellWorldPos = new THREE.Vector3();
           const tempCellWorldScale = new THREE.Vector3();
-          const tempParentWorldPos = new THREE.Vector3();
           const getVisibleHeightAtCell = (cell: AboutSlideCellRuntime): number => {
             if (!(activeCamera instanceof THREE.PerspectiveCamera)) return 12;
             cell.mesh.getWorldPosition(tempCellWorldPos);
@@ -11925,127 +11894,69 @@ export default function ResumeSpace3D({
             return Math.max(0.01, Math.abs(tempCellWorldScale.y) * (localHeight ?? 1));
           };
           const distanceToTram = Math.abs(panel.runPos - projectShowcaseRunPosRef.current);
-          if (!panel.aboutRuntime.activated && distanceToTram <= panel.aboutRuntime.triggerDistance) {
-            panel.aboutRuntime.activated = true;
-            panel.aboutRuntime.activatedAt = now;
-            panel.aboutRuntime.activatedAtRun = runNow;
-            panel.aboutRuntime.cells.forEach((cell) => {
-              cell.state = "done";
-              cell.flowEnteredViewportAtRun = null;
-              cell.flowFadedOut = false;
-              if (cell.flowUnitsPerDistance > 0) {
-                const visibleHeight = getVisibleHeightAtCell(cell);
-                const halfVisible = visibleHeight * 0.5;
-                const cellWorldHeight = getCellWorldHeight(cell);
-                const halfCell = cellWorldHeight * 0.5;
-                const edgeGap = Math.max(1.0, visibleHeight * 0.15);
-                const spawnCenterWorldY =
-                  cell.flowDirection === "topToBottom"
-                    ? cameraY + halfVisible + halfCell + edgeGap
-                    : cameraY - halfVisible - halfCell - edgeGap;
-                const parentWorldY = cell.mesh.parent
-                  ? cell.mesh.parent.getWorldPosition(tempParentWorldPos).y
-                  : 0;
-                const spawnCenterLocalY = spawnCenterWorldY - parentWorldY;
-                const baseLocalYWithOffset = cell.basePosition.y + cell.flowOffsetUnits;
-                cell.flowSpawnOffset = spawnCenterLocalY - baseLocalYWithOffset;
-              } else {
-                cell.flowSpawnOffset = 0;
-              }
+          const inRange = distanceToTram <= track.cullHalfWindow;
+          let maxCellVisibility = 1;
+          if (inRange) {
+            const cellFadeInfos: { fadeInT: number; visibleFraction: number; ci: number }[] = [];
+            panel.aboutRuntime.cells.forEach((cell, ci) => {
               cell.mesh.visible = true;
+              if (cell.immersiveColumn && immersiveColumnRigRef.current) {
+                const rig = immersiveColumnRigRef.current[cell.immersiveColumn];
+                const geo = cell.mesh.geometry as THREE.PlaneGeometry;
+                if (Math.abs(geo.parameters.width - rig.width) > 0.01) {
+                  const keepHeight = geo.parameters.height;
+                  cell.mesh.geometry.dispose();
+                  cell.mesh.geometry = new THREE.PlaneGeometry(rig.width, keepHeight);
+                }
+                const parent = cell.mesh.parent;
+                if (parent) {
+                  parent.position.x = rig.posX;
+                  parent.position.y = rig.posY;
+                  parent.position.z = rig.depth;
+                }
+                cell.mesh.rotation.y = THREE.MathUtils.degToRad(rig.angleDeg) * rig.angleMultiplier;
+              } else {
+                cell.mesh.rotation.y = cell.baseYawRad * aboutHallAngleMultiplierRef.current;
+              }
+              if (cell.flowUnitsPerDistance <= 0) return;
+              const progress = runNow - panel.aboutRuntime!.slideStartRun;
+              const dir = cell.flowDirection === "bottomToTop" ? 1 : -1;
+              const travelRate = 1 + cell.flowUnitsPerDistance * dir;
               cell.mesh.position.set(
                 cell.basePosition.x,
-                cell.basePosition.y + cell.flowSpawnOffset + cell.flowOffsetUnits,
+                cell.homeY + cell.flowOffsetUnits + progress * travelRate,
                 cell.basePosition.z,
               );
-              cell.material.opacity = 0;
+              const visibleHeight = getVisibleHeightAtCell(cell);
+              const halfVisible = visibleHeight * 0.5;
+              cell.mesh.getWorldPosition(tempCellWorldPos);
+              const cellWorldHeight = getCellWorldHeight(cell);
+              const halfCell = cellWorldHeight * 0.5;
+              const cellTop = tempCellWorldPos.y + halfCell;
+              const cellBottom = tempCellWorldPos.y - halfCell;
+              const viewTop = cameraY + halfVisible;
+              const viewBottom = cameraY - halfVisible;
+              const visibleOverlap = Math.max(0, Math.min(cellTop, viewTop) - Math.max(cellBottom, viewBottom));
+              const visibleFraction = cellWorldHeight > 0.01 ? visibleOverlap / cellWorldHeight : 0;
+              const fadeInT = THREE.MathUtils.clamp(visibleFraction / 0.15, 0, 1);
+              cellFadeInfos.push({ fadeInT, visibleFraction, ci });
             });
-          }
-          if (panel.aboutRuntime.activated && distanceToTram > track.cullHalfWindow) {
-            panel.aboutRuntime.activated = false;
-            panel.aboutRuntime.activatedAt = 0;
-            panel.aboutRuntime.activatedAtRun = 0;
+            maxCellVisibility = cellFadeInfos.length > 0
+              ? Math.max(...cellFadeInfos.map((d) => d.visibleFraction))
+              : 1;
+            const coordFadeOutT = maxCellVisibility < 0.05
+              ? THREE.MathUtils.clamp((0.05 - maxCellVisibility) / 0.05, 0, 1)
+              : 0;
+            cellFadeInfos.forEach(({ fadeInT, ci }) => {
+              const cell = panel.aboutRuntime!.cells[ci];
+              cell.material.opacity = Math.min(fadeInT, 1 - coordFadeOutT);
+            });
+          } else {
             panel.aboutRuntime.cells.forEach((cell) => {
-              cell.state = "idle";
-              cell.flowEnteredViewportAtRun = null;
-              cell.flowSpawnOffset = 0;
-              cell.flowFadedOut = false;
               cell.mesh.visible = false;
-              cell.mesh.position.set(
-                cell.basePosition.x,
-                cell.basePosition.y + cell.flowOffsetUnits,
-                cell.basePosition.z,
-              );
               cell.material.opacity = 0;
             });
           }
-          const cellFadeInfos: { fadeInT: number; visibleFraction: number; ci: number }[] = [];
-          panel.aboutRuntime.cells.forEach((cell, ci) => {
-            if (!panel.aboutRuntime?.activated) return;
-            if (cell.immersiveColumn && immersiveColumnRigRef.current) {
-              const rig = immersiveColumnRigRef.current[cell.immersiveColumn];
-              const geo = cell.mesh.geometry as THREE.PlaneGeometry;
-              if (Math.abs(geo.parameters.width - rig.width) > 0.01) {
-                const keepHeight = geo.parameters.height;
-                cell.mesh.geometry.dispose();
-                cell.mesh.geometry = new THREE.PlaneGeometry(rig.width, keepHeight);
-              }
-              const parent = cell.mesh.parent;
-              if (parent) {
-                parent.position.x = rig.posX;
-                parent.position.y = rig.posY;
-                parent.position.z = rig.depth;
-              }
-              cell.mesh.rotation.y = THREE.MathUtils.degToRad(rig.angleDeg) * rig.angleMultiplier;
-            } else {
-              cell.mesh.rotation.y = cell.baseYawRad * aboutHallAngleMultiplierRef.current;
-            }
-            if (cell.state !== "done" || cell.flowUnitsPerDistance <= 0) return;
-            const dir = cell.flowDirection === "bottomToTop" ? 1 : -1;
-            const runDelta = runNow - panel.aboutRuntime.activatedAtRun;
-            const travel = runDelta + runDelta * cell.flowUnitsPerDistance * dir;
-            cell.mesh.position.set(
-              cell.basePosition.x,
-              cell.basePosition.y + cell.flowSpawnOffset + cell.flowOffsetUnits + travel,
-              cell.basePosition.z,
-            );
-            const visibleHeight = getVisibleHeightAtCell(cell);
-            const halfVisible = visibleHeight * 0.5;
-            cell.mesh.getWorldPosition(tempCellWorldPos);
-            const cellWorldHeight = getCellWorldHeight(cell);
-            const halfCell = cellWorldHeight * 0.5;
-            const inViewport =
-              tempCellWorldPos.y + halfCell > cameraY - halfVisible &&
-              tempCellWorldPos.y - halfCell < cameraY + halfVisible;
-            if (inViewport && cell.flowEnteredViewportAtRun === null) {
-              cell.flowEnteredViewportAtRun = runNow;
-            }
-            if (cell.flowEnteredViewportAtRun === null) {
-              cell.material.opacity = 0;
-              return;
-            }
-            const scrollSinceEntry = Math.abs(runNow - cell.flowEnteredViewportAtRun);
-            const fadeInSpan = Math.max(visibleHeight * 0.12, 0.5);
-            const fadeInT = THREE.MathUtils.clamp(scrollSinceEntry / fadeInSpan, 0, 1);
-            const cellTop = tempCellWorldPos.y + halfCell;
-            const cellBottom = tempCellWorldPos.y - halfCell;
-            const viewTop = cameraY + halfVisible;
-            const viewBottom = cameraY - halfVisible;
-            const visibleOverlap = Math.max(0, Math.min(cellTop, viewTop) - Math.max(cellBottom, viewBottom));
-            const visibleFraction = cellWorldHeight > 0.01 ? visibleOverlap / cellWorldHeight : 0;
-            cellFadeInfos.push({ fadeInT, visibleFraction, ci });
-          });
-          const maxCellVisibility = cellFadeInfos.length > 0
-            ? Math.max(...cellFadeInfos.map((d) => d.visibleFraction))
-            : 1;
-          const coordFadeOutT = maxCellVisibility < 0.05
-            ? THREE.MathUtils.clamp((0.05 - maxCellVisibility) / 0.05, 0, 1)
-            : 0;
-          cellFadeInfos.forEach(({ fadeInT, ci }) => {
-            const cell = panel.aboutRuntime!.cells[ci];
-            cell.material.opacity = Math.min(fadeInT, 1 - coordFadeOutT);
-            cell.flowFadedOut = coordFadeOutT >= 1;
-          });
           if (
             aboutFlowOverlayEnabledRef.current &&
             idx === focusIndex &&
@@ -18437,9 +18348,7 @@ export default function ResumeSpace3D({
                 slideId: slide.id,
                 cells: [],
                 triggerDistance: fixedTriggerDistance,
-                activated: false,
-                activatedAt: 0,
-                activatedAtRun: 0,
+                slideStartRun: runPos - fixedTriggerDistance,
                 flowFadeOutDistanceViewportHeights: THREE.MathUtils.clamp(
                   slide.flowFadeOutDistanceViewportHeights ?? 1.5,
                   0.1,
@@ -18540,20 +18449,25 @@ export default function ResumeSpace3D({
               );
               mesh.position.set(cellX, cellY, opts?.columnDepth ?? 0.02);
               (opts?.parentGroup ?? panelGroup).add(mesh);
+              const flowDir = normalizeAboutFlowDirection(content.flowDirection);
+              const flowOff = content.flowOffsetUnits ?? 0;
+              const halfVisible = estimatedVisibleHeight * 0.5;
+              const halfCell = actualCellHeight * 0.5;
+              const edgeGap = Math.max(1.0, estimatedVisibleHeight * 0.15);
+              const computedHomeY = flowDir === "topToBottom"
+                ? -fixedTriggerDistance + halfVisible + halfCell + edgeGap - flowOff
+                : -fixedTriggerDistance - halfVisible - halfCell - edgeGap - flowOff;
               panelRecord.aboutRuntime?.cells.push({
                 mesh,
                 material,
                 normalTexture: tex,
                 emergencyTexture: emergencyTex,
-                state: "idle",
                 basePosition: mesh.position.clone(),
-                flowDirection: normalizeAboutFlowDirection(content.flowDirection),
+                flowDirection: flowDir,
                 flowUnitsPerDistance: Math.max(0, content.flowUnitsPerDistance ?? 0),
-                flowOffsetUnits: content.flowOffsetUnits ?? 0,
+                flowOffsetUnits: flowOff,
                 baseYawRad: mesh.rotation.y,
-                flowEnteredViewportAtRun: null,
-                flowSpawnOffset: 0,
-                flowFadedOut: false,
+                homeY: computedHomeY,
               });
             };
             if (useElevatorCreditsCard) {
