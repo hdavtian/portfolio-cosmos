@@ -937,6 +937,8 @@ type AboutHallSlidesFile = {
   autoSpeed?: number;
   /** World units of camera travel before the first slide triggers (default: panelSpacing ≈ 24–50). */
   initialTravelDistance?: number;
+  /** Ruler-based start position — 0 = bottom of elevator shaft model. */
+  startPosition?: number;
 };
 type AboutSlideCellRuntime = {
   mesh: THREE.Mesh;
@@ -2052,6 +2054,10 @@ export default function ResumeSpace3D({
   useEffect(() => {
     aboutHallInitialTravelRef.current = aboutHallData.initialTravelDistance;
   }, [aboutHallData.initialTravelDistance]);
+  const aboutHallStartPositionRef = useRef(aboutHallData.startPosition);
+  useEffect(() => {
+    aboutHallStartPositionRef.current = aboutHallData.startPosition;
+  }, [aboutHallData.startPosition]);
   const portfolioCoreBuild = useMemo(
     () =>
       buildPortfolioRegistryModel(
@@ -3032,6 +3038,7 @@ export default function ResumeSpace3D({
     lookAhead: number;
     speed: number;
     cullHalfWindow: number;
+    startRun: number;
   } | null>(null);
   const projectShowcaseFloorPulseMatsRef = useRef<
     Array<{ mat: THREE.MeshBasicMaterial; runT: number }>
@@ -5229,7 +5236,7 @@ export default function ResumeSpace3D({
         if (!rootAnchor || !track) {
           return rootAnchor ? rootAnchor.clone() : null;
         }
-        const run = track.minRun + 10;
+        const run = track.startRun;
         const sway = Math.sin(run * 0.025) * (track.axis === "y" ? 0.6 : 1.2);
         const travelAxis =
           track.axis === "y"
@@ -6145,7 +6152,7 @@ export default function ResumeSpace3D({
       projectShowcaseAboutEntryTimeoutRef.current = null;
       const track = projectShowcaseTrackRef.current;
       if (track) {
-        const startRun = track.minRun + 10;
+        const startRun = track.startRun;
         setProjectShowcaseRunPosition(startRun);
         projectShowcaseLastTickRef.current = performance.now();
         const rootPos = new THREE.Vector3();
@@ -6401,12 +6408,7 @@ export default function ResumeSpace3D({
     const track = projectShowcaseTrackRef.current;
     if (!track) return;
     const panels = projectShowcasePanelsRef.current;
-    const firstPanelRun = panels.length > 0 ? panels[0].runPos : 0;
-    const triggerDist = panels.length > 0 && panels[0].aboutRuntime
-      ? panels[0].aboutRuntime.triggerDistance
-      : 16;
-    // Start outside the trigger zone of slide 1 with a small lead-in buffer.
-    const startRun = Math.max(track.minRun, firstPanelRun - triggerDist - 8);
+    const startRun = track.startRun;
     // Reset activation state so slides trigger fresh.
     panels.forEach((panel) => {
       if (panel.aboutRuntime) {
@@ -7126,7 +7128,7 @@ export default function ResumeSpace3D({
 
     const rootPos = new THREE.Vector3();
     showcaseRoot.getWorldPosition(rootPos);
-    const run = track.minRun + 10;
+    const run = track.startRun;
     const sway = Math.sin(run * 0.025) * (track.axis === "y" ? 0.6 : 1.2);
     const travelAxis =
       track.axis === "y"
@@ -19552,7 +19554,13 @@ export default function ResumeSpace3D({
           panel.group.visible = false;
         });
         const edgeRunPadding = Math.max(14, panelSpacing * 0.9);
-        const minRun = runStart - edgeRunPadding;
+        const shaftBottomWorld = -trenchSizeScaled.y / 2;
+        const startPosRun = aboutHallStartPositionRef.current != null
+          ? shaftBottomWorld + aboutHallStartPositionRef.current
+          : null;
+        const minRun = startPosRun != null
+          ? Math.min(runStart - edgeRunPadding, startPosRun - 5)
+          : runStart - edgeRunPadding;
         const maxRun =
           runStart + (publishedShowcase.length - 1) * panelSpacing + edgeRunPadding;
         projectShowcaseElevatorPeekersRef.current = [];
@@ -19672,6 +19680,7 @@ export default function ResumeSpace3D({
           Math.max(2.8, trenchWidth * 0.5 - 1.05),
         );
         const elevatorCameraDepthOffset = -Math.min(2.4, Math.max(1.2, trenchWidth * 0.2));
+        const initialRun = startPosRun ?? minRun + 10;
         projectShowcaseTrackRef.current = {
           axis: runAxis,
           minRun,
@@ -19681,8 +19690,8 @@ export default function ResumeSpace3D({
           lookAhead: THREE.MathUtils.clamp(panelSpacing * 1.9, 22, 48),
           speed: THREE.MathUtils.clamp(panelSpacing * 0.1625, 2.5, 5.5),
           cullHalfWindow: THREE.MathUtils.clamp(panelSpacing * 4.4, 70, 130),
+          startRun: initialRun,
         };
-        const initialRun = minRun + 10;
         projectShowcaseRunPosRef.current = initialRun;
         setProjectShowcaseRunPosition(initialRun);
         setProjectShowcaseFocus(0);
@@ -19694,7 +19703,7 @@ export default function ResumeSpace3D({
           rulerGroup.name = "ElevatorDebugRuler";
           const rulerX = -(trenchWidth * 0.48);
           const rulerZ = -1.2;
-          const rulerOrigin = -trenchSizeScaled.y / 2;
+          const rulerOrigin = shaftBottomWorld;
           const tickSpacing = 5;
           const labelEvery = 10;
           const rulerBottomWorld = Math.floor(rulerOrigin / tickSpacing) * tickSpacing;

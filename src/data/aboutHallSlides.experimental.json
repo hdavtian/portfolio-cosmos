@@ -1,6 +1,7 @@
 {
   "autoSpeed": 0.5,
-  "initialTravelDistance": 15,
+  "initialTravelDistance": 5,
+  "startPosition": 50,
   "slides": [
     {
       "id": "exp-slide-1",
