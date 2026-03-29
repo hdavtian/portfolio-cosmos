@@ -10,6 +10,8 @@ interface ResumeStructureDiagramProps {
   style: DiagramStyle;
   options: DiagramStyleOptions;
   onOptionsChange?: (options: DiagramStyleOptions) => void;
+  spaceReloadKey?: number;
+  onReloadUniverse?: () => void;
 }
 
 // Store node positions at module level to persist across component remounts
@@ -199,9 +201,10 @@ function ResumeStructureDiagram({
   style,
   options,
   onOptionsChange,
+  spaceReloadKey = 0,
+  onReloadUniverse,
 }: ResumeStructureDiagramProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [spaceReloadKey, setSpaceReloadKey] = useState(0);
   const [hallwayContentMode, setHallwayContentMode] = useState<
     "projects" | "about" | null
   >(null);
@@ -246,26 +249,6 @@ function ResumeStructureDiagram({
         {IS_DEBUG_QUERY && hallwayContentMode === "about" && projectShowcaseActive && (
           <ImmersiveColumnRigPanel />
         )}
-        <button
-          onClick={() => setSpaceReloadKey((prev) => prev + 1)}
-          style={{
-            position: "absolute",
-            right: 16,
-            bottom: 16,
-            zIndex: 1300,
-            padding: "8px 12px",
-            borderRadius: 8,
-            border: "1px solid rgba(145, 232, 255, 0.5)",
-            background: "rgba(8, 18, 34, 0.86)",
-            color: "#def5ff",
-            fontFamily: "'Rajdhani', sans-serif",
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          Reload Universe
-        </button>
         <ResumeSpace3D
           key={`space-reload-${spaceReloadKey}`}
           onNavigate={onNavigate}
@@ -275,6 +258,7 @@ function ResumeStructureDiagram({
           aboutHallColumnAngleMultiplier={1}
           onHallwayContentModeChange={setHallwayContentMode}
           onProjectShowcaseActiveChange={setProjectShowcaseActive}
+          onReloadUniverse={onReloadUniverse}
         />
       </div>
     );

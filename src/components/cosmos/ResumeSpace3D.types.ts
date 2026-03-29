@@ -11,6 +11,7 @@ export interface ResumeSpace3DProps {
   aboutHallColumnAngleMultiplier?: number;
   onHallwayContentModeChange?: (mode: "projects" | "about") => void;
   onProjectShowcaseActiveChange?: (active: boolean) => void;
+  onReloadUniverse?: () => void;
 }
 
 export interface SceneRef {

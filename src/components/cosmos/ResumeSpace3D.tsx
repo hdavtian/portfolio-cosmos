@@ -2271,6 +2271,7 @@ export default function ResumeSpace3D({
   aboutHallColumnAngleMultiplier = 1,
   onHallwayContentModeChange,
   onProjectShowcaseActiveChange,
+  onReloadUniverse,
 }: ResumeSpace3DProps) {
   const aboutDeckData = aboutDeck as AboutDeckData;
   const aboutSlides = aboutDeckData.aboutDeck.slides;
@@ -2496,7 +2497,7 @@ export default function ResumeSpace3D({
   const [overallVolume, setOverallVolume] = useState(0.3);
   const [backgroundMusicVolume, setBackgroundMusicVolume] = useState(1);
   const [showSoundSettingsModal, setShowSoundSettingsModal] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"sound" | "logs">("sound");
+  const [settingsTab, setSettingsTab] = useState<"general" | "sound" | "logs">("general");
   const availableMusicTracks = useMemo(
     () => Object.keys(COSMIC_AUDIO_TRACKS),
     [],
@@ -2806,8 +2807,17 @@ export default function ResumeSpace3D({
         // Step 2 — Compile all shader programs asynchronously
         const compileStart = performance.now();
         await yieldToMainThread();
-        await renderer.compileAsync(mainScene, liveCamera);
+        const COMPILE_TIMEOUT_MS = 8000;
+        await Promise.race([
+          renderer.compileAsync(mainScene, liveCamera).catch((err) => {
+            console.warn("[PERF:warmup] compileAsync error (non-fatal):", err);
+          }),
+          new Promise<void>((resolve) => setTimeout(resolve, COMPILE_TIMEOUT_MS)),
+        ]);
         const compileMs = performance.now() - compileStart;
+        if (compileMs >= COMPILE_TIMEOUT_MS) {
+          console.warn(`[PERF:warmup] compileAsync timed out after ${COMPILE_TIMEOUT_MS}ms — continuing`);
+        }
 
         // Step 3 — Force geometry buffer uploads via a single render pass.
         // This is the only way to transfer vertex/index buffers to the GPU.
@@ -21869,7 +21879,6 @@ export default function ResumeSpace3D({
   const renderUnifiedRegistryPanel = () => {
     if (!activeRegistryMode || !registryCapabilities) return null;
     if (activeRegistryMode === "about") {
-      const orbitalRegistryPanelWidth = 430;
       const activeSlide =
         aboutHallwaySlides[
           THREE.MathUtils.clamp(
@@ -21889,10 +21898,10 @@ export default function ResumeSpace3D({
               display: "flex",
               flexDirection: "column",
               gap: 8,
-              width: orbitalRegistryPanelWidth,
+              width: "fit-content",
               transform: orbitalRegistryPanelVisible
                 ? "translateX(0)"
-                : `translateX(${orbitalRegistryPanelWidth + 24}px)`,
+                : "translateX(calc(100% + 40px))",
               opacity: orbitalRegistryPanelVisible ? 1 : 0,
               pointerEvents: orbitalRegistryPanelVisible ? "auto" : "none",
               transition: "transform 240ms ease, opacity 180ms ease",
@@ -21900,6 +21909,7 @@ export default function ResumeSpace3D({
           >
             <div
               style={{
+                position: "relative",
                 padding: "10px 12px",
                 borderRadius: 10,
                 border: "1px solid rgba(150, 230, 255, 0.55)",
@@ -21909,6 +21919,28 @@ export default function ResumeSpace3D({
                 fontFamily: "'Rajdhani', sans-serif",
               }}
             >
+              <button
+                onClick={() => setOrbitalRegistryPanelVisible(false)}
+                style={{
+                  position: "absolute",
+                  left: -28,
+                  top: 42,
+                  width: 28,
+                  height: 56,
+                  borderRadius: "10px 0 0 10px",
+                  border: "1px solid rgba(120, 220, 255, 0.5)",
+                  borderRight: "none",
+                  background:
+                    "linear-gradient(180deg, rgba(6, 16, 30, 0.9) 0%, rgba(4, 10, 22, 0.9) 100%)",
+                  color: "#dff5ff",
+                  fontSize: 16,
+                  cursor: "pointer",
+                  zIndex: 1,
+                }}
+                title="Hide Hallway Registry"
+              >
+                {">"}
+              </button>
               <div style={{ fontSize: 12, letterSpacing: 1.2, color: "#9fe3ff" }}>
                 ABOUT
               </div>
@@ -21981,6 +22013,8 @@ export default function ResumeSpace3D({
                   border: "1px solid rgba(145, 232, 255, 0.24)",
                   background: "rgba(8, 18, 34, 0.58)",
                   padding: 6,
+                  display: "flex",
+                  flexDirection: "column",
                 }}
               >
                 {aboutHallwaySlides.map((slide, index) => {
@@ -21990,8 +22024,8 @@ export default function ResumeSpace3D({
                       key={slide.id}
                       onClick={() => jumpProjectShowcaseToIndex(index)}
                       style={{
-                        width: "100%",
                         textAlign: "left",
+                        whiteSpace: "nowrap",
                         borderRadius: 7,
                         border: isActive
                           ? "1px solid rgba(145, 232, 255, 0.92)"
@@ -22001,7 +22035,7 @@ export default function ResumeSpace3D({
                           : "rgba(8, 18, 34, 0.68)",
                         color: "#e8f7ff",
                         cursor: "pointer",
-                        padding: "6px 8px",
+                        padding: "6px 12px",
                         marginBottom: 5,
                         fontSize: 12,
                         fontWeight: 700,
@@ -22015,59 +22049,28 @@ export default function ResumeSpace3D({
             </div>
           </div>
           {!orbitalRegistryPanelVisible && (
-            <div
+            <button
+              onClick={() => setOrbitalRegistryPanelVisible(true)}
               style={{
                 position: "fixed",
-                right: -5,
-                top: 184,
-                zIndex: 1101,
-                pointerEvents: "none",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 0,
-                padding: "8px 5px 9px",
-                borderRadius: 0,
-                border: "none",
-                background: "#000000",
+                right: -1,
+                top: 120,
+                zIndex: 1102,
+                width: 28,
+                height: 56,
+                borderRadius: "10px 0 0 10px",
+                border: "1px solid rgba(120, 220, 255, 0.5)",
+                background:
+                  "linear-gradient(180deg, rgba(6, 16, 30, 0.9) 0%, rgba(4, 10, 22, 0.9) 100%)",
                 color: "#dff5ff",
-                fontFamily: "'Rajdhani', sans-serif",
-                writingMode: "vertical-rl",
-                transform: "rotate(180deg)",
-                textTransform: "uppercase",
-                letterSpacing: 0.6,
+                fontSize: 16,
+                cursor: "pointer",
               }}
+              title="Show Hallway Registry"
             >
-              <span style={{ fontSize: 10, color: "#9fdfff", opacity: 0.9, lineHeight: "100%" }}>
-                About
-              </span>
-              <span style={{ fontSize: 10, fontWeight: 700, lineHeight: "auto" }}>
-                Hallway Registry
-              </span>
-            </div>
+              {"<"}
+            </button>
           )}
-          <button
-            onClick={() => setOrbitalRegistryPanelVisible((prev) => !prev)}
-            style={{
-              position: "fixed",
-              right: orbitalRegistryPanelVisible ? 447 : -1,
-              top: 120,
-              zIndex: 1102,
-              width: 28,
-              height: 56,
-              borderRadius: "10px 0 0 10px",
-              border: "1px solid rgba(120, 220, 255, 0.5)",
-              background:
-                "linear-gradient(180deg, rgba(6, 16, 30, 0.9) 0%, rgba(4, 10, 22, 0.9) 100%)",
-              color: "#dff5ff",
-              fontSize: 16,
-              cursor: "pointer",
-              transition: "right 240ms ease",
-            }}
-            title={orbitalRegistryPanelVisible ? "Hide Hallway Registry" : "Show Hallway Registry"}
-          >
-            {orbitalRegistryPanelVisible ? ">" : "<"}
-          </button>
         </>
       );
     }
@@ -23866,7 +23869,7 @@ export default function ResumeSpace3D({
               type="button"
               title="General settings"
               onClick={() => {
-                setSettingsTab("sound");
+                setSettingsTab("general");
                 setShowSoundSettingsModal(true);
               }}
               style={{
@@ -24013,6 +24016,25 @@ export default function ResumeSpace3D({
                     paddingBottom: 8,
                   }}
                 >
+                  <button
+                    type="button"
+                    onClick={() => setSettingsTab("general")}
+                    style={{
+                      borderRadius: 6,
+                      border: "1px solid rgba(148, 210, 255, 0.42)",
+                      background:
+                        settingsTab === "general"
+                          ? "rgba(22, 56, 88, 0.92)"
+                          : "rgba(10, 22, 37, 0.82)",
+                      color: "#d8eeff",
+                      padding: "3px 9px",
+                      fontSize: 12,
+                      letterSpacing: 0.35,
+                      cursor: "pointer",
+                    }}
+                  >
+                    General
+                  </button>
                   <button
                     type="button"
                     onClick={() => setSettingsTab("sound")}
@@ -24383,6 +24405,40 @@ export default function ResumeSpace3D({
                         <span>{item.label}</span>
                       </label>
                     ))}
+                  </div>
+                )}
+                {settingsTab === "general" && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                      fontSize: 13,
+                    }}
+                  >
+                    {onReloadUniverse && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSoundSettingsModal(false);
+                          onReloadUniverse();
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(145, 232, 255, 0.5)",
+                          background: "rgba(8, 18, 34, 0.86)",
+                          color: "#def5ff",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          fontSize: 13,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Reload Universe
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

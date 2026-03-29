@@ -452,6 +452,7 @@ function App() {
     connectionDensity: 50,
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [spaceReloadKey, setSpaceReloadKey] = useState(0);
 
   useEffect(() => {
     // Animate hero on load
@@ -687,6 +688,8 @@ function App() {
             style={diagramStyle}
             options={diagramOptions}
             onOptionsChange={setDiagramOptions}
+            spaceReloadKey={spaceReloadKey}
+            onReloadUniverse={() => setSpaceReloadKey((k) => k + 1)}
           />
         </div>
         <div
