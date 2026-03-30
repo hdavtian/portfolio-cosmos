@@ -222,8 +222,7 @@ const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_OUT_MS = 1150;
 const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_DARK_HOLD_MS = 50000;
 const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_IN_MS = 1300;
 const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_TEXT_SWAP_POWER = 0.4;
-const PROJECT_SHOWCASE_ELEVATOR_PEEKERS_ENABLED = true;
-const PROJECT_SHOWCASE_ELEVATOR_PEEKER_FLOOR_MULT = 2.2;
+
 const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = true;
 const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
 const EXPERIENCE_END_CAMERA_POSITION = new THREE.Vector3(11281.3, -534.0, 1301.6);
@@ -1190,18 +1189,6 @@ type ShowcasePanelRecord = {
     baseColor: THREE.Color;
   }>;
   aboutRuntime?: AboutSlideRuntime;
-};
-
-type ElevatorWindowPeekerRecord = {
-  root: THREE.Group;
-  actor: "falcon" | "drone";
-  wallX: number;
-  baseZ: number;
-  floorStride: number;
-  floorPhase: number;
-  bobPhase: number;
-  bobAmp: number;
-  yawBase: number;
 };
 
 type OrbitalPortfolioStationRecord = {
@@ -3294,7 +3281,6 @@ export default function ResumeSpace3D({
   const projectShowcaseFloorPulseMatsRef = useRef<
     Array<{ mat: THREE.MeshBasicMaterial; runT: number }>
   >([]);
-  const projectShowcaseElevatorPeekersRef = useRef<ElevatorWindowPeekerRecord[]>([]);
   const projectShowcaseDebugRulerRef = useRef<{
     group: THREE.Group;
     trackingLine: THREE.Mesh;
@@ -12087,48 +12073,6 @@ export default function ResumeSpace3D({
         }
       }
 
-      const elevatorPeekers = projectShowcaseElevatorPeekersRef.current;
-      if (track.axis === "y" && elevatorPeekers.length > 0) {
-        const minRun = track.minRun + 10;
-        const smoothstep = (a: number, b: number, t: number) => {
-          const x = THREE.MathUtils.clamp((t - a) / Math.max(1e-6, b - a), 0, 1);
-          return x * x * (3 - 2 * x);
-        };
-        elevatorPeekers.forEach((peeker) => {
-          const cycle = (run - minRun) / Math.max(peeker.floorStride, 1e-3);
-          const nearest = Math.round(cycle - peeker.floorPhase);
-          const anchorRun = minRun + (nearest + peeker.floorPhase) * peeker.floorStride;
-          const dist = run - anchorRun;
-          const activeRange = Math.max(peeker.floorStride * 1.35, 12);
-          const norm = Math.abs(dist) / Math.max(activeRange, 1e-4);
-          const visibleT = 1 - THREE.MathUtils.clamp(norm, 0, 1);
-          if (visibleT <= 0.001) {
-            peeker.root.visible = false;
-            return;
-          }
-          const hoverT = 1 - smoothstep(0.82, 1, norm);
-          const departT = smoothstep(0.9, 1, norm);
-          const lifePulse = Math.sin(now * 0.0025 + peeker.bobPhase);
-          const secondaryPulse = Math.sin(now * 0.0032 + peeker.bobPhase * 1.61);
-          const inwardSign = peeker.wallX < 0 ? 1 : -1;
-          const outsideOffset = -inwardSign * 1.3;
-          const lateralOffset = outsideOffset + (-inwardSign * 2.1) * departT;
-          const hover = lifePulse * peeker.bobAmp * 0.45 * hoverT;
-          const bob = lifePulse * peeker.bobAmp * 0.18 * hoverT;
-          peeker.root.visible = true;
-          peeker.root.position.set(
-            peeker.wallX + lateralOffset,
-            anchorRun + hover + departT * 2.2,
-            peeker.baseZ + bob,
-          );
-          peeker.root.rotation.x = secondaryPulse * 0.01 * hoverT;
-          peeker.root.rotation.y =
-            peeker.yawBase + inwardSign * 0.05 * hoverT + secondaryPulse * 0.024 * hoverT;
-          peeker.root.rotation.z = lifePulse * 0.012 * hoverT;
-          const pulseScale = THREE.MathUtils.lerp(1.24, 1.44, hoverT);
-          peeker.root.scale.setScalar(pulseScale);
-        });
-      }
       const sway = Math.sin(run * 0.025) * (track.axis === "y" ? 0.6 : 1.2);
       const rootPos = new THREE.Vector3();
       showcaseRoot.getWorldPosition(rootPos);
@@ -19842,118 +19786,7 @@ export default function ResumeSpace3D({
           startPosRun != null ? startPosRun - 5 : firstSlideRun - edgeRunPadding,
         );
         const maxRun = lastSlideRun + edgeRunPadding + 40;
-        projectShowcaseElevatorPeekersRef.current = [];
-        if (
-          PROJECT_SHOWCASE_ELEVATOR_PEEKERS_ENABLED &&
-          runAxis === "y" &&
-          hallwayContentModeRef.current === "about"
-        ) {
-          const fitCloneToSpan = (obj: THREE.Object3D, targetSpan: number) => {
-            obj.updateMatrixWorld(true);
-            const bounds = new THREE.Box3().setFromObject(obj);
-            const size = bounds.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z, 1e-3);
-            const scaleMult = targetSpan / maxDim;
-            obj.scale.multiplyScalar(scaleMult);
-            obj.updateMatrixWorld(true);
-          };
-          const oppositeWallX = -Math.max(
-            trenchWidth * 0.5 + 4.2,
-            trenchWidth * 0.545,
-          );
-          const peekerFloorStride = panelSpacing * PROJECT_SHOWCASE_ELEVATOR_PEEKER_FLOOR_MULT;
-          const peekerWallZ = 0.22;
-          const simplifyPeekerMaterials = (
-            obj: THREE.Object3D,
-            colorTint: number,
-            opacityBoost = 1,
-          ) => {
-            obj.traverse((child) => {
-              const mesh = child as THREE.Mesh;
-              if (!(mesh as any).isMesh) return;
-              const original = mesh.material;
-              const mats = Array.isArray(original) ? original : [original];
-              const converted = mats.map((mat) => {
-                const source = mat as THREE.Material & {
-                  map?: THREE.Texture | null;
-                  color?: THREE.Color;
-                  transparent?: boolean;
-                  opacity?: number;
-                  side?: THREE.Side;
-                };
-                const basic = new THREE.MeshBasicMaterial({
-                  color: source.color?.clone() ?? new THREE.Color(colorTint),
-                  map: source.map ?? null,
-                  transparent: source.transparent ?? true,
-                  opacity: THREE.MathUtils.clamp((source.opacity ?? 1) * opacityBoost, 0.2, 1),
-                  side: source.side ?? THREE.FrontSide,
-                  toneMapped: false,
-                });
-                basic.depthWrite = true;
-                basic.depthTest = true;
-                return basic;
-              });
-              mesh.material = Array.isArray(original) ? converted : converted[0];
-            });
-          };
-          const makePeeker = (
-            actor: "falcon" | "drone",
-            src: THREE.Object3D | null,
-            targetSpan: number,
-            floorPhase: number,
-            zOffset: number,
-            yawBase: number,
-          ): ElevatorWindowPeekerRecord | null => {
-            const source = src?.clone(true) ?? null;
-            if (!source) return null;
-            if (actor === "falcon") {
-              simplifyPeekerMaterials(source, 0xb4d2ff, 1.05);
-            } else {
-              simplifyPeekerMaterials(source, 0x86deff, 0.9);
-            }
-            const root = new THREE.Group();
-            root.name = actor === "falcon" ? "ElevatorPeekerFalcon" : "ElevatorPeekerDrone";
-            source.visible = true;
-            fitCloneToSpan(source, targetSpan);
-            source.position.set(0, 0, 0);
-            root.add(source);
-            root.visible = false;
-            root.traverse((child) => child.layers.set(PROJECT_SHOWCASE_LAYER));
-            showcaseInteriorRoot.add(root);
-            return {
-              root,
-              actor,
-              wallX: oppositeWallX,
-              baseZ: peekerWallZ + zOffset,
-              floorStride: actor === "falcon" ? peekerFloorStride * 1.4 : peekerFloorStride * 1.38,
-              floorPhase,
-              bobPhase: Math.random() * Math.PI * 2,
-              bobAmp: actor === "falcon" ? 0.2 : 0.14,
-              yawBase,
-            };
-          };
 
-          const falconPeekerMain = makePeeker(
-            "falcon",
-            spaceshipRef.current ?? spaceshipPreloadedGltfRef.current?.scene ?? null,
-            22,
-            0.18,
-            0.08,
-            Math.PI * 0.32,
-          );
-          const falconPeekerAlt = makePeeker(
-            "falcon",
-            spaceshipRef.current ?? spaceshipPreloadedGltfRef.current?.scene ?? null,
-            20,
-            0.68,
-            -0.24,
-            Math.PI * 0.3,
-          );
-          if (falconPeekerMain) falconPeekerMain.bobAmp = 0.03;
-          if (falconPeekerAlt) falconPeekerAlt.bobAmp = 0.028;
-          if (falconPeekerMain) projectShowcaseElevatorPeekersRef.current.push(falconPeekerMain);
-          if (falconPeekerAlt) projectShowcaseElevatorPeekersRef.current.push(falconPeekerAlt);
-        }
         const elevatorCameraWallOffset = Math.min(
           trenchWidth * 0.36,
           Math.max(2.8, trenchWidth * 0.5 - 1.05),
@@ -21742,7 +21575,6 @@ export default function ResumeSpace3D({
       skillsLegacyBodiesRef.current = [];
       projectShowcasePanelsRef.current = [];
       projectShowcaseFloorPulseMatsRef.current = [];
-      projectShowcaseElevatorPeekersRef.current = [];
       projectShowcaseDebugRulerRef.current = null;
       projectShowcaseTrackRef.current = null;
 
