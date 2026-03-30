@@ -2,6 +2,15 @@
   "autoSpeed": 0.5,
   "startPosition": 30,
   "firstSlidePosition": 50,
+  "levelTransition": {
+    "enabled": true,
+    "style": "squares",
+    "colorFamily": "blue",
+    "gridSize": 28,
+    "fillDurationMs": 1000,
+    "clearDurationMs": 1000,
+    "titleFadeDurationMs": 800
+  },
   "slides": [
     {
       "id": "exp-slide-1",

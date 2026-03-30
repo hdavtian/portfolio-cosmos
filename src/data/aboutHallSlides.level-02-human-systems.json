@@ -2,6 +2,15 @@
   "autoSpeed": 0.5,
   "startPosition": 30,
   "firstSlidePosition": 50,
+  "levelTransition": {
+    "enabled": true,
+    "style": "squares",
+    "colorFamily": "purple",
+    "gridSize": 10,
+    "fillDurationMs": 1000,
+    "clearDurationMs": 1000,
+    "titleFadeDurationMs": 3000
+  },
   "slides": [
     {
       "id": "hs-slide-1",

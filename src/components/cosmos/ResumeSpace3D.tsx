@@ -974,13 +974,23 @@ type AboutHallSlide = {
     columns?: Partial<Record<AboutHallColumnId, AboutHallColumnConfig>>;
   };
 };
+type AboutLevelTransitionConfig = {
+  enabled?: boolean;
+  style?: "squares" | "fade";
+  colorFamily?: "blue" | "green" | "yellow" | "purple" | "custom";
+  gridSize?: number;
+  fillDurationMs?: number;
+  clearDurationMs?: number;
+  titleFadeDurationMs?: number;
+  titleText?: string;
+  palette?: string[];
+};
 type AboutHallSlidesFile = {
   slides: AboutHallSlide[];
   autoSpeed?: number;
-  /** Ruler-based start position — 0 = bottom of elevator shaft model. */
   startPosition?: number;
-  /** Ruler-based position of the first slide (0 = shaft bottom). Subsequent slides chain automatically after each fades. */
   firstSlidePosition?: number;
+  levelTransition?: AboutLevelTransitionConfig;
 };
 type AboutSlideCellRuntime = {
   mesh: THREE.Mesh;
@@ -1825,6 +1835,45 @@ const THRESHOLD_MIN_HANDOFF_DISTANCE = 6;
 const THRESHOLD_PERCENT_MIN = 40;
 const THRESHOLD_PERCENT_MAX = 90;
 
+const TRANSITION_DEFAULTS: Required<Omit<AboutLevelTransitionConfig, "palette" | "titleText">> & { palette: string[] } = {
+  enabled: true,
+  style: "squares",
+  colorFamily: "blue",
+  gridSize: 24,
+  fillDurationMs: 1000,
+  clearDurationMs: 1000,
+  titleFadeDurationMs: 800,
+  palette: [],
+};
+
+const TRANSITION_COLOR_FAMILIES: Record<string, string[]> = {
+  blue:   ["#0a1628", "#102040", "#1a3a6a", "#2a5ca8", "#3a7ce0", "#5a9cf0", "#7abcff", "#a0d4ff", "#c8e8ff", "#e8f4ff", "#ffffff"],
+  green:  ["#081810", "#0c2818", "#144028", "#1c6038", "#28884c", "#38a860", "#50c878", "#78d898", "#a0e8b8", "#c8f0d8", "#ffffff"],
+  yellow: ["#181408", "#28200c", "#403414", "#60501c", "#887028", "#a89038", "#c8b050", "#d8c878", "#e8e0a0", "#f0ecc8", "#ffffff"],
+  purple: ["#100828", "#1c0c40", "#2c1460", "#3c1c88", "#5028a8", "#6838c8", "#8050e0", "#9870f0", "#b898ff", "#d0c0ff", "#ffffff"],
+};
+
+function resolveTransitionConfig(cfg?: AboutLevelTransitionConfig): Required<Omit<AboutLevelTransitionConfig, "palette" | "titleText">> & { palette: string[]; titleText: string } {
+  const style = cfg?.style ?? TRANSITION_DEFAULTS.style;
+  const colorFamily = cfg?.colorFamily ?? TRANSITION_DEFAULTS.colorFamily;
+  const gridSize = Math.max(4, Math.min(80, cfg?.gridSize ?? TRANSITION_DEFAULTS.gridSize));
+  const fillDurationMs = Math.max(200, Math.min(5000, cfg?.fillDurationMs ?? TRANSITION_DEFAULTS.fillDurationMs));
+  const clearDurationMs = Math.max(200, Math.min(5000, cfg?.clearDurationMs ?? TRANSITION_DEFAULTS.clearDurationMs));
+  const titleFadeDurationMs = Math.max(200, Math.min(3000, cfg?.titleFadeDurationMs ?? TRANSITION_DEFAULTS.titleFadeDurationMs));
+  let palette = cfg?.palette && cfg.palette.length > 0 ? cfg.palette : TRANSITION_COLOR_FAMILIES[colorFamily] ?? TRANSITION_COLOR_FAMILIES.blue;
+  return {
+    enabled: cfg?.enabled ?? TRANSITION_DEFAULTS.enabled,
+    style,
+    colorFamily,
+    gridSize,
+    fillDurationMs,
+    clearDurationMs,
+    titleFadeDurationMs,
+    palette,
+    titleText: cfg?.titleText ?? "",
+  };
+}
+
 /**
  * Computes a reduced slide-life distance for a previous slide when it opts into
  * `centerTopThreshold` mode. Returns `null` to signal fallback to legacy spacing.
@@ -2352,6 +2401,12 @@ export default function ResumeSpace3D({
   const [aboutLevelGateActive, setAboutLevelGateActive] = useState(false);
   const aboutLevelGateActiveRef = useRef(false);
   const [visitedAboutLevels, setVisitedAboutLevels] = useState<string[]>(() => getAboutElevatorVisitedLevels());
+
+  const [aboutTransitionActive, setAboutTransitionActive] = useState(false);
+  const aboutTransitionActiveRef = useRef(false);
+  const aboutTransitionCleanupRef = useRef<(() => void) | null>(null);
+  const [aboutEntryFadeOpacity, setAboutEntryFadeOpacity] = useState(0);
+  const aboutEntryFadeRafRef = useRef<number>(0);
 
   const resolveAboutHallData = useCallback((levelId: string | null): AboutHallSlidesFile => {
     if (!levelId) return aboutHallSlidesLegacy as AboutHallSlidesFile;
@@ -6599,6 +6654,20 @@ export default function ResumeSpace3D({
       projectShowcaseSawProjectsTravelRef.current = false;
 
       if (aboutMode) {
+        setAboutEntryFadeOpacity(1);
+        if (aboutEntryFadeRafRef.current) cancelAnimationFrame(aboutEntryFadeRafRef.current);
+        const fadeStart = performance.now();
+        const fadeDur = 1200;
+        const tickFade = () => {
+          const elapsed = performance.now() - fadeStart;
+          const t = Math.min(elapsed / fadeDur, 1);
+          const eased = 1 - t * t;
+          setAboutEntryFadeOpacity(eased);
+          if (t < 1) aboutEntryFadeRafRef.current = requestAnimationFrame(tickFade);
+          else aboutEntryFadeRafRef.current = 0;
+        };
+        aboutEntryFadeRafRef.current = requestAnimationFrame(tickFade);
+
         const isFirstVisit = !getAboutElevatorHasVisited();
         if (isFirstVisit) {
           setAboutElevatorHasVisited();
@@ -7139,9 +7208,143 @@ export default function ResumeSpace3D({
     projectShowcaseForcedFocusIndexRef.current = null;
   }, [setProjectShowcaseRunPosition]);
 
+  const runAboutLevelTransition = useCallback((
+    cfg: AboutLevelTransitionConfig | undefined,
+    titleOverride: string,
+    onMidpoint: () => void,
+  ): Promise<void> => {
+    const resolved = resolveTransitionConfig(cfg);
+    if (!resolved.enabled) {
+      onMidpoint();
+      return Promise.resolve();
+    }
+    const title = titleOverride || resolved.titleText || "";
+
+    if (aboutTransitionActiveRef.current) {
+      if (aboutTransitionCleanupRef.current) aboutTransitionCleanupRef.current();
+    }
+    aboutTransitionActiveRef.current = true;
+    setAboutTransitionActive(true);
+
+    return new Promise<void>((resolve) => {
+      const overlayEl = document.getElementById("about-level-transition-overlay");
+      if (!overlayEl) { onMidpoint(); aboutTransitionActiveRef.current = false; setAboutTransitionActive(false); resolve(); return; }
+
+      const { gridSize, fillDurationMs, clearDurationMs, titleFadeDurationMs, palette, style } = resolved;
+      let cancelled = false;
+
+      const cleanup = () => {
+        cancelled = true;
+        overlayEl.innerHTML = "";
+        overlayEl.style.opacity = "0";
+        aboutTransitionActiveRef.current = false;
+        setAboutTransitionActive(false);
+        aboutTransitionCleanupRef.current = null;
+      };
+      aboutTransitionCleanupRef.current = cleanup;
+
+      if (style === "fade") {
+        overlayEl.innerHTML = "";
+        overlayEl.style.background = "rgba(2, 5, 12, 1)";
+        overlayEl.style.opacity = "0";
+        overlayEl.style.transition = `opacity ${fillDurationMs}ms ease-in`;
+        requestAnimationFrame(() => { overlayEl.style.opacity = "1"; });
+        setTimeout(() => {
+          if (cancelled) return;
+          onMidpoint();
+          overlayEl.style.transition = `opacity ${clearDurationMs}ms ease-out`;
+          requestAnimationFrame(() => { overlayEl.style.opacity = "0"; });
+          setTimeout(() => { if (!cancelled) cleanup(); resolve(); }, clearDurationMs + 50);
+        }, fillDurationMs + 50);
+        return;
+      }
+
+      const cols = gridSize;
+      const rect = overlayEl.getBoundingClientRect();
+      const cellW = rect.width / cols;
+      const rows = Math.ceil(rect.height / cellW);
+      const totalCells = rows * cols;
+
+      overlayEl.style.opacity = "1";
+      overlayEl.style.transition = "none";
+      overlayEl.style.background = "transparent";
+      overlayEl.innerHTML = "";
+
+      const grid = document.createElement("div");
+      grid.style.cssText = `position:absolute;inset:0;display:grid;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);`;
+      overlayEl.appendChild(grid);
+
+      const titleEl = document.createElement("div");
+      titleEl.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none;";
+      titleEl.innerHTML = `<span style="
+        font-family:'Rajdhani','Oswald',sans-serif;font-weight:700;font-size:clamp(24px,4vw,56px);
+        letter-spacing:0.18em;text-transform:uppercase;color:rgba(220,235,255,0.95);
+        text-shadow:0 0 24px rgba(100,160,255,0.5),0 2px 8px rgba(0,0,0,0.7);
+        opacity:0;transition:opacity 400ms ease-in;
+      ">${title}</span>`;
+      overlayEl.appendChild(titleEl);
+
+      const cells: HTMLDivElement[] = [];
+      for (let i = 0; i < totalCells; i++) {
+        const cell = document.createElement("div");
+        const color = palette[Math.floor(Math.random() * palette.length)];
+        cell.style.cssText = `background:${color};opacity:0;transition:opacity ${60 + Math.random() * 120}ms ease-in;`;
+        grid.appendChild(cell);
+        cells.push(cell);
+      }
+
+      const fillIndices = Array.from({ length: totalCells }, (_, i) => i);
+      for (let i = fillIndices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [fillIndices[i], fillIndices[j]] = [fillIndices[j], fillIndices[i]];
+      }
+
+      const fillInterval = fillDurationMs / totalCells;
+      fillIndices.forEach((ci, idx) => {
+        setTimeout(() => { if (!cancelled && cells[ci]) cells[ci].style.opacity = "1"; }, idx * fillInterval);
+      });
+
+      setTimeout(() => {
+        if (cancelled) return;
+        const titleSpan = titleEl.querySelector("span") as HTMLElement | null;
+        if (titleSpan) titleSpan.style.opacity = "1";
+      }, fillDurationMs * 0.4);
+
+      setTimeout(() => {
+        if (cancelled) return;
+        onMidpoint();
+
+        const clearIndices = Array.from({ length: totalCells }, (_, i) => i);
+        for (let i = clearIndices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [clearIndices[i], clearIndices[j]] = [clearIndices[j], clearIndices[i]];
+        }
+        const clearInterval = clearDurationMs / totalCells;
+        clearIndices.forEach((ci, idx) => {
+          setTimeout(() => { if (!cancelled && cells[ci]) cells[ci].style.opacity = "0"; }, idx * clearInterval);
+        });
+
+        const titleSpan = titleEl.querySelector("span") as HTMLElement | null;
+        if (titleSpan) {
+          titleSpan.style.transition = `opacity ${titleFadeDurationMs}ms ease-out`;
+          setTimeout(() => { if (!cancelled && titleSpan) titleSpan.style.opacity = "0"; }, clearDurationMs * 0.5);
+        }
+
+        setTimeout(() => {
+          if (!cancelled) cleanup();
+          resolve();
+        }, Math.max(clearDurationMs, titleFadeDurationMs) + 100);
+      }, fillDurationMs + 80);
+    });
+  }, []);
+
   const selectAboutElevatorLevel = useCallback(async (levelId: string) => {
+    if (aboutTransitionActiveRef.current) return;
+
     const data = ABOUT_HALL_LEVEL_DATA_MAP[levelId] as AboutHallSlidesFile | undefined;
     if (!data) return;
+
+    const isManualSwitch = selectedAboutLevelIdRef.current !== null && selectedAboutLevelIdRef.current !== levelId;
 
     selectedAboutLevelIdRef.current = levelId;
     setSelectedAboutLevelId(levelId);
@@ -7162,7 +7365,19 @@ export default function ResumeSpace3D({
       };
     });
 
-    await rebuildAboutElevatorPanels(newSlides, newEntries);
+    const levelMeta = (aboutHallLevelsManifest as { levels: { id: string; label: string }[] }).levels.find(l => l.id === levelId);
+    const transitionTitle = levelMeta?.label ?? levelId;
+
+    if (isManualSwitch && data.levelTransition?.enabled !== false) {
+      projectShowcasePlayingRef.current = false;
+      setProjectShowcasePlaying(false);
+
+      await runAboutLevelTransition(data.levelTransition, transitionTitle, () => {
+        rebuildAboutElevatorPanels(newSlides, newEntries);
+      });
+    } else {
+      await rebuildAboutElevatorPanels(newSlides, newEntries);
+    }
 
     markAboutElevatorLevelVisited(levelId);
     setVisitedAboutLevels(getAboutElevatorVisitedLevels());
@@ -7173,7 +7388,7 @@ export default function ResumeSpace3D({
     projectShowcasePlayingRef.current = true;
     setProjectShowcasePlaying(true);
     setProjectShowcaseLever(0);
-  }, [rebuildAboutElevatorPanels, setProjectShowcaseLever]);
+  }, [rebuildAboutElevatorPanels, setProjectShowcaseLever, runAboutLevelTransition]);
 
   const stopOrbitalPortfolioToneSequence = useCallback(() => {
     const runtime = orbitalPortfolioToneRuntimeRef.current;
@@ -22020,6 +22235,13 @@ export default function ResumeSpace3D({
       setSkillsNavHereActive(false);
       setExternalCosmosLabelsHiddenForAbout(false);
       cancelAboutMemorySquareEntrySequence();
+      if (aboutEntryFadeRafRef.current) {
+        cancelAnimationFrame(aboutEntryFadeRafRef.current);
+        aboutEntryFadeRafRef.current = 0;
+      }
+      if (aboutTransitionCleanupRef.current) {
+        aboutTransitionCleanupRef.current();
+      }
       if (aboutCellRafRef.current !== null) {
         cancelAnimationFrame(aboutCellRafRef.current);
         aboutCellRafRef.current = null;
@@ -23442,6 +23664,28 @@ export default function ResumeSpace3D({
               left: 0,
             }}
           />
+          <div
+            id="about-level-transition-overlay"
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 1050,
+              pointerEvents: "none",
+              opacity: 0,
+              overflow: "hidden",
+            }}
+          />
+          {aboutEntryFadeOpacity > 0.003 && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 1049,
+                pointerEvents: "none",
+                background: `rgba(2, 5, 12, ${aboutEntryFadeOpacity.toFixed(3)})`,
+              }}
+            />
+          )}
           {!isLoading && startupConsoleVisible && (
             <button
               ref={startupConsoleButtonRef}
