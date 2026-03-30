@@ -913,7 +913,7 @@ const REGISTRY_PANEL_CAPABILITIES: Record<RegistryPanelMode, RegistryPanelCapabi
   },
   about: {
     showStopOrbits: false,
-    showExit: false,
+    showExit: true,
     showAutoPlay: false,
     showPlayPause: true,
     alwaysShowArrows: true,
@@ -4264,6 +4264,14 @@ export default function ResumeSpace3D({
   const skillsLatticeEnvelopeEdgeMatRef = useRef<THREE.LineBasicMaterial | null>(null);
   const skillsLatticeEnvelopeRadiusRef = useRef(0);
   const skillsLatticeEnvelopeInsideRef = useRef<boolean | null>(null);
+  const skillsLatticeReturnViewRef = useRef<{
+    cam: THREE.Vector3;
+    target: THREE.Vector3;
+  } | null>(null);
+  const skillsLatticeHomeViewRef = useRef<{
+    cam: THREE.Vector3;
+    target: THREE.Vector3;
+  } | null>(null);
   const skillsLatticeBeaconRef = useRef<THREE.Mesh | null>(null);
   const skillsLatticeBeaconMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
   const skillsLatticeBeaconEdgeMatRef = useRef<THREE.LineBasicMaterial | null>(null);
@@ -8651,19 +8659,23 @@ export default function ResumeSpace3D({
       latticeBeacon.userData.sectionId = "skills";
     }
     if (camera) camera.layers.disable(SKILLS_LATTICE_LAYER);
-    const prev = skillsLatticePrevStateRef.current;
-    if (restoreShip && prev) {
-      setFollowingSpaceship(prev.followingSpaceship);
-      followingSpaceshipRef.current = prev.followingSpaceship;
-      if (spaceshipRef.current) {
-        spaceshipRef.current.visible = prev.shipVisible;
-      }
-      if (controls) controls.enabled = prev.controlsEnabled;
-    } else if (restoreShip) {
+    if (restoreShip) {
       setFollowingSpaceship(true);
       followingSpaceshipRef.current = true;
       if (spaceshipRef.current) spaceshipRef.current.visible = true;
       if (controls) controls.enabled = true;
+      if (camera && controls && skillsLatticeReturnViewRef.current) {
+        const view = skillsLatticeReturnViewRef.current;
+        controls.setLookAt(
+          view.cam.x,
+          view.cam.y,
+          view.cam.z,
+          view.target.x,
+          view.target.y,
+          view.target.z,
+          true,
+        );
+      }
     } else {
       setFollowingSpaceship(false);
       followingSpaceshipRef.current = false;
@@ -8686,6 +8698,8 @@ export default function ResumeSpace3D({
     skillsLatticeSelectedNodeRef.current = null;
     setSkillsLatticeSelection(null);
     skillsLatticeEnvelopeInsideRef.current = null;
+    skillsLatticeReturnViewRef.current = null;
+    skillsLatticeHomeViewRef.current = null;
     vlog("🧠 Skills lattice exited");
   }, [
     setExternalCosmosLabelsHiddenForLattice,
@@ -8748,6 +8762,10 @@ export default function ResumeSpace3D({
     const startCam = camera.position.clone();
     const camDir = camera.getWorldDirection(new THREE.Vector3()).normalize();
     const startTarget = startCam.clone().addScaledVector(camDir, 1200);
+    skillsLatticeReturnViewRef.current = {
+      cam: startCam.clone(),
+      target: startTarget.clone(),
+    };
     // Freeze controls at the current camera orientation so we do not snap
     // sideways to any prior ship-follow target before the lattice push begins.
     controls.setLookAt(
@@ -8825,6 +8843,7 @@ export default function ResumeSpace3D({
       entrySeq.raf = null;
     }
     entrySeq.active = true;
+    skillsLatticeHomeViewRef.current = null;
 
     const tick = () => {
       if (!skillsLatticeEntrySequenceRef.current.active) return;
@@ -8849,6 +8868,10 @@ export default function ResumeSpace3D({
         skillsLatticeEntrySequenceRef.current.active = false;
         skillsLatticeEntrySequenceRef.current.raf = null;
         controls.enabled = true;
+        skillsLatticeHomeViewRef.current = {
+          cam: cam.clone(),
+          target: target.clone(),
+        };
         skillsLatticeActiveRef.current = true;
         setSkillsLatticeActive(true);
         const toneRuntime = orbitalPortfolioToneRuntimeRef.current;
@@ -8910,10 +8933,45 @@ export default function ResumeSpace3D({
     followingSpaceshipRef.current = false;
     if (spaceshipRef.current) spaceshipRef.current.visible = false;
     controls.enabled = true;
+    const controlsAny = controls as unknown as {
+      getTarget?: (out: THREE.Vector3) => void;
+    };
+    const target = new THREE.Vector3();
+    if (controlsAny.getTarget) {
+      controlsAny.getTarget(target);
+    } else {
+      const forward = camera.getWorldDirection(new THREE.Vector3()).normalize();
+      target.copy(camera.position).addScaledVector(forward, 1200);
+    }
+    skillsLatticeReturnViewRef.current = {
+      cam: camera.position.clone(),
+      target: target.clone(),
+    };
+    skillsLatticeHomeViewRef.current = {
+      cam: camera.position.clone(),
+      target,
+    };
     skillsLatticeActiveRef.current = true;
     setSkillsLatticeActive(true);
     setSkillsNavHereActive(true);
   }, [setExternalCosmosLabelsHiddenForLattice, setSkillsNavHereActive]);
+
+  const goToSkillsLatticeHomeView = useCallback(() => {
+    const controls = sceneRef.current.controls;
+    const homeView = skillsLatticeHomeViewRef.current;
+    if (!controls || !homeView) return;
+    controls.setLookAt(
+      homeView.cam.x,
+      homeView.cam.y,
+      homeView.cam.z,
+      homeView.target.x,
+      homeView.target.y,
+      homeView.target.z,
+      true,
+    );
+    skillsLatticeSelectedNodeRef.current = null;
+    setSkillsLatticeSelection(null);
+  }, []);
 
   const cancelAboutMemorySquareEntrySequence = useCallback(() => {
     const seq = aboutMemorySquareEntrySequenceRef.current;
@@ -22700,8 +22758,33 @@ export default function ResumeSpace3D({
               <div style={{ fontSize: 12, letterSpacing: 1.2, color: "#9fe3ff" }}>
                 ELEVATOR LEVELS
               </div>
-              <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}>
-                Story Selection
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                }}
+              >
+                <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}>
+                  Story Selection
+                </div>
+                <button
+                  onClick={exitProjectShowcase}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255, 195, 160, 0.45)",
+                    background: "rgba(28, 14, 10, 0.82)",
+                    color: "#ffe2d5",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 11,
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  Exit
+                </button>
               </div>
               <div
                 style={{
@@ -23195,7 +23278,11 @@ export default function ResumeSpace3D({
               )}
               {registryCapabilities.showExit && (
                 <button
-                  onClick={exitOrbitalPortfolio}
+                  onClick={
+                    activeRegistryMode === "about"
+                      ? exitProjectShowcase
+                      : exitOrbitalPortfolio
+                  }
                   style={{
                     padding: "4px 6px",
                     borderRadius: 8,
@@ -25408,6 +25495,28 @@ export default function ResumeSpace3D({
                   ? "Category"
                   : `Skill in ${skillsLatticeSelection.category}`}
               </div>
+              <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={goToSkillsLatticeHomeView}
+                  disabled={!skillsLatticeHomeViewRef.current}
+                  style={{
+                    padding: "5px 8px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(145, 232, 255, 0.55)",
+                    background: skillsLatticeHomeViewRef.current
+                      ? "rgba(8, 18, 34, 0.82)"
+                      : "rgba(8, 18, 34, 0.42)",
+                    color: skillsLatticeHomeViewRef.current
+                      ? "#dff3ff"
+                      : "rgba(223,243,255,0.55)",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 11,
+                    cursor: skillsLatticeHomeViewRef.current ? "pointer" : "default",
+                  }}
+                >
+                  Skills Lattice Home
+                </button>
+              </div>
               <div
                 style={{
                   marginTop: 9,
@@ -25425,6 +25534,44 @@ export default function ResumeSpace3D({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {skillsLatticeActive && (
+            <div
+              style={{
+                position: "fixed",
+                right: 18,
+                top: 72,
+                width: "fit-content",
+                zIndex: 1121,
+                borderRadius: 10,
+                border: "1px solid rgba(110, 210, 255, 0.38)",
+                background: "rgba(6, 14, 26, 0.8)",
+                color: "#d8eeff",
+                padding: "8px 10px",
+                fontFamily: "'Rajdhani', sans-serif",
+                backdropFilter: "blur(6px)",
+                display: "flex",
+                gap: 8,
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                onClick={() => exitSkillsLattice({ restoreShip: true, clearSystem: true })}
+                style={{
+                  padding: "5px 8px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255, 195, 160, 0.45)",
+                  background: "rgba(28, 14, 10, 0.82)",
+                  color: "#ffe2d5",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                Exit
+              </button>
             </div>
           )}
           
@@ -26452,6 +26599,23 @@ export default function ResumeSpace3D({
                           );
                         })}
                       </div>
+              <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={exitProjectShowcase}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255, 195, 160, 0.45)",
+                    background: "rgba(28, 14, 10, 0.82)",
+                    color: "#ffe2d5",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  Exit
+                </button>
+              </div>
                     </div>
                   </div>
                   <div
