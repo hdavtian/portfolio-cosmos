@@ -6,7 +6,7 @@ interface CosmosLoaderProps {
   isSceneReady?: boolean;
 }
 
-type Phase = "idle" | "colorCycle" | "teaser" | "frenzy" | "flash" | "done";
+type Phase = "idle" | "colorCycle" | "teaser" | "frenzy" | "done";
 
 const TEASER_COLORS = ["#007A87", "#720000"];
 const DATA_COLORS = ["#665B00", "#001459"];
@@ -14,7 +14,6 @@ const DEFAULT_REVEAL_LINES = 36;
 const REVEAL_LINE_MIN_RATIO = 0.2; // 1/5th of max line thickness
 const FRENZY_BASE_DURATION_MS = 333 * DEFAULT_REVEAL_LINES;
 const PROGRAM_TEXT = "Program: Portfolio";
-const OPTIONAL_CODE_SESSION_KEY = "cosmosOptionalCode";
 
 const buildRevealLineFractions = (): number[] => {
   const max = 1 / DEFAULT_REVEAL_LINES;
@@ -63,11 +62,7 @@ export default function CosmosLoader({
   const [showEndMessage, setShowEndMessage] = useState(false);
   const [entryGateVisible, setEntryGateVisible] = useState(false);
   const [hasEntered, setHasEntered] = useState(fastTrackEnabled);
-  const [endMessageFlashVariant, setEndMessageFlashVariant] = useState<"a" | "b">("a");
-  const [optionalCode, setOptionalCode] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return window.sessionStorage.getItem(OPTIONAL_CODE_SESSION_KEY) ?? "";
-  });
+  const [showInspirationOverlay, setShowInspirationOverlay] = useState(false);
   const [progress, setProgress] = useState(0);
   const [revealedSet, setRevealedSet] = useState<Set<number>>(new Set());
   const [revealLineFractions, setRevealLineFractions] = useState<number[]>(
@@ -120,17 +115,11 @@ export default function CosmosLoader({
     [markDebugMode],
   );
 
-  const saveOptionalCodeToSession = useCallback((value: string) => {
-    if (typeof window === "undefined") return;
-    window.sessionStorage.setItem(OPTIONAL_CODE_SESSION_KEY, value);
-  }, []);
-
   const handleEnterLoader = useCallback(() => {
     if (hasEntered) return;
-    saveOptionalCodeToSession(optionalCode);
     setHasEntered(true);
     markDebugMode("user-entered");
-  }, [hasEntered, markDebugMode, optionalCode, saveOptionalCodeToSession]);
+  }, [hasEntered, markDebugMode]);
 
   // ── Canvas renderers ─────────────────────────────────────────
 
@@ -310,29 +299,10 @@ export default function CosmosLoader({
       setStageText("Ready for exploration");
       setShowEndMessage(true);
       setEntryGateVisible(true);
-      setEndMessageFlashVariant("a");
       markDebugMode("ready-message");
-
-      queueTimeout(() => {
-        setLoaderPhase("flash", "flash");
-        markDebugMode("flash");
-        let flashCount = 0;
-        const flashId = queueInterval(() => {
-          setEndMessageFlashVariant((prev) => (prev === "a" ? "b" : "a"));
-          fillSolid(flashCount % 2 === 0 ? "#fff" : "#000");
-          flashCount++;
-          if (flashCount >= 6) {
-            clearQueuedInterval(flashId);
-            queueTimeout(() => {
-              fillSolid("#000");
-              setLoaderPhase("done", "done");
-              setAnimationDone(true);
-              setEndMessageFlashVariant("a");
-              markDebugMode("done");
-            }, 200);
-          }
-        }, 200);
-      }, 1000);
+      setLoaderPhase("done", "done");
+      setAnimationDone(true);
+      markDebugMode("done");
     };
 
     // ── Chained sequence ──
@@ -379,6 +349,19 @@ export default function CosmosLoader({
   useEffect(() => {
     if (isSceneReady) markDebugMode("scene-ready");
   }, [isSceneReady, markDebugMode]);
+
+  useEffect(() => {
+    if (!showInspirationOverlay) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowInspirationOverlay(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showInspirationOverlay]);
 
   // Dismiss only when animation, scene readiness, and user entry are complete.
   useEffect(() => {
@@ -434,10 +417,22 @@ export default function CosmosLoader({
               ))}
             </div>
             {showEndMessage && (
-              <div
-                className={`cosmos-loader__end-message cosmos-loader__end-message--flash-${endMessageFlashVariant}`}
-              >
-                App Load Completed
+              <div className="cosmos-loader__end-row">
+                <div className="cosmos-loader__end-message">Load completed ...</div>
+                {entryGateVisible && (
+                  <div
+                    className="cosmos-loader__entry-gate"
+                  >
+                    <button
+                      type="button"
+                      className="cosmos-loader__enter-button"
+                      onClick={handleEnterLoader}
+                      disabled={hasEntered}
+                    >
+                      {hasEntered ? "Entering..." : "Enter"}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -464,36 +459,43 @@ export default function CosmosLoader({
             </div>
 
             <div className="cosmos-loader__percentage">{progress}%</div>
+            <button
+              type="button"
+              className="cosmos-loader__about-trigger"
+              onClick={() => setShowInspirationOverlay(true)}
+              aria-label="About this loader"
+            >
+              ?
+            </button>
+          </div>
+        )}
 
-            {entryGateVisible && (
-              <form
-                className="cosmos-loader__entry-gate"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleEnterLoader();
-                }}
+        {showInspirationOverlay && (
+          <div
+            className="cosmos-loader__about-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Sinclair loader inspiration"
+            onClick={() => setShowInspirationOverlay(false)}
+          >
+            <div
+              className="cosmos-loader__about-card"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="cosmos-loader__about-close"
+                onClick={() => setShowInspirationOverlay(false)}
+                aria-label="Close overlay"
               >
-                <label className="cosmos-loader__entry-label" htmlFor="optional-code">
-                  Optional code
-                </label>
-                <input
-                  id="optional-code"
-                  className="cosmos-loader__entry-input"
-                  type="text"
-                  value={optionalCode}
-                  onChange={(e) => setOptionalCode(e.target.value)}
-                  placeholder="Enter optional code"
-                  autoComplete="off"
-                />
-                <button
-                  type="submit"
-                  className="cosmos-loader__enter-button"
-                  disabled={hasEntered}
-                >
-                  {hasEntered ? "Entering..." : "Enter"}
-                </button>
-              </form>
-            )}
+                X
+              </button>
+              <p className="cosmos-loader__about-text">
+                This loader was inspired by my very first computer, a British-made
+                Sinclair Spectrum from the 1980s. The game load screens are forever
+                etched in my memory.
+              </p>
+            </div>
           </div>
         )}
       </div>
