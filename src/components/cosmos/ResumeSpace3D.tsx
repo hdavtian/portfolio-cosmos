@@ -6,8 +6,10 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
 import portfolioCores from "../../data/portfolioCores.json";
 import aboutDeck from "../../data/aboutDeck.json";
-import aboutHallSlides from "../../data/aboutHallSlides.json";
-import aboutHallSlidesExperimental from "../../data/aboutHallSlides.experimental.json";
+import aboutHallSlidesLegacy from "../../data/aboutHallSlides.json";
+import aboutHallSlidesLevel01 from "../../data/aboutHallSlides.level-01-signal-origins.json";
+import aboutHallSlidesLevel02 from "../../data/aboutHallSlides.level-02-human-systems.json";
+import aboutHallLevelsManifest from "../../data/aboutHallLevels.json";
 import CosmosLoader from "../CosmosLoader";
 import {
   DEFAULT_CONTROL_SENSITIVITY,
@@ -228,9 +230,41 @@ const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
 const EXPERIENCE_END_CAMERA_POSITION = new THREE.Vector3(11281.3, -534.0, 1301.6);
 const EXPERIENCE_END_CAMERA_TARGET = new THREE.Vector3(11970.8, -828.9, -116.5);
 const HALLWAY_DEFAULT_CONTENT_MODE = "about";
-const ABOUT_HALL_EXPERIMENTAL_DATASET =
-  String(import.meta.env.VITE_ABOUT_HALL_DATASET || "experimental").toLowerCase() !==
-  "legacy";
+
+const ABOUT_HALL_LEVEL_DATA_MAP: Record<string, unknown> = {
+  "level-01": aboutHallSlidesLevel01,
+  "level-02": aboutHallSlidesLevel02,
+};
+const ABOUT_HALL_DEFAULT_LEVEL_ID = aboutHallLevelsManifest.levels.find((l) => l.default)?.id ?? "level-01";
+
+const ABOUT_ELEVATOR_COOKIE_FIRST_VISIT = "aboutElevatorVisited";
+const ABOUT_ELEVATOR_COOKIE_VISITED_LEVELS = "aboutElevatorVisitedLevels";
+
+function getAboutElevatorHasVisited(): boolean {
+  try {
+    return document.cookie.split(";").some((c) => c.trim().startsWith(ABOUT_ELEVATOR_COOKIE_FIRST_VISIT + "="));
+  } catch { return false; }
+}
+function setAboutElevatorHasVisited(): void {
+  try {
+    document.cookie = `${ABOUT_ELEVATOR_COOKIE_FIRST_VISIT}=1;path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
+  } catch { /* noop */ }
+}
+function getAboutElevatorVisitedLevels(): string[] {
+  try {
+    const match = document.cookie.split(";").find((c) => c.trim().startsWith(ABOUT_ELEVATOR_COOKIE_VISITED_LEVELS + "="));
+    if (!match) return [];
+    return decodeURIComponent(match.split("=")[1] ?? "").split(",").filter(Boolean);
+  } catch { return []; }
+}
+function markAboutElevatorLevelVisited(levelId: string): void {
+  try {
+    const visited = new Set(getAboutElevatorVisitedLevels());
+    visited.add(levelId);
+    document.cookie = `${ABOUT_ELEVATOR_COOKIE_VISITED_LEVELS}=${encodeURIComponent(Array.from(visited).join(","))};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
+  } catch { /* noop */ }
+}
+
 const HALLWAY_OSWALD_FONT_STACK =
   "'Oswald', 'Montserrat', 'Segoe UI', Arial, sans-serif";
 const HALLWAY_TEXT_DEFAULT_SHADOW = "0px 0px 10px rgba(0, 0, 0, 0.4)";
@@ -922,6 +956,7 @@ type AboutHallColumnConfig = {
   angleDeg?: number;
   messages: AboutHallSlideContent[];
 };
+type AboutHallSlideTriggerMode = "default" | "centerTopThreshold";
 type AboutHallSlide = {
   id: string;
   registryBtnTitle: string;
@@ -932,6 +967,8 @@ type AboutHallSlide = {
   border?: string;
   flowFadeOutDistanceViewportHeights?: number;
   autoSpeed?: number;
+  nextSlideTriggerMode?: AboutHallSlideTriggerMode;
+  nextSlideTriggerTopViewportPercent?: number;
   configuration: {
     contents: AboutHallSlideContent[];
     columns?: Partial<Record<AboutHallColumnId, AboutHallColumnConfig>>;
@@ -1784,6 +1821,52 @@ const getAboutColumnMessages = (
   };
 };
 
+const THRESHOLD_MIN_HANDOFF_DISTANCE = 6;
+const THRESHOLD_PERCENT_MIN = 40;
+const THRESHOLD_PERCENT_MAX = 90;
+
+/**
+ * Computes a reduced slide-life distance for a previous slide when it opts into
+ * `centerTopThreshold` mode. Returns `null` to signal fallback to legacy spacing.
+ *
+ * The idea: the next slide should start when the *top edge* of the current slide's
+ * center-column content crosses a given viewport-percent line. A viewport percent of
+ * 70 means "when the center content's top reaches 70% from the top of the screen."
+ *
+ * All measurements are in world-run units (same coordinate space as slideRunPositions).
+ */
+const computeCenterTopThresholdDistance = (
+  prevSlide: AboutHallSlide,
+  estimatedVisibleHeight: number,
+  fixedTriggerDistance: number,
+  immersiveWidths: Record<AboutHallColumnId, number>,
+  immersiveHeights: Record<AboutHallColumnId, number>,
+  measureFn: (slide: AboutHallSlide) => number,
+): number | null => {
+  if (prevSlide.nextSlideTriggerMode !== "centerTopThreshold") return null;
+
+  const centerMsgs = prevSlide.configuration.columns?.center?.messages;
+  if (!centerMsgs?.length) return null;
+
+  const rawPercent = prevSlide.nextSlideTriggerTopViewportPercent;
+  if (rawPercent == null || !Number.isFinite(rawPercent)) return null;
+
+  const safePercent = THREE.MathUtils.clamp(rawPercent, THRESHOLD_PERCENT_MIN, THRESHOLD_PERCENT_MAX);
+
+  const centerTallest = measureFn(prevSlide);
+  const halfVisible = estimatedVisibleHeight * 0.5;
+  const halfContent = centerTallest * 0.5;
+
+  const viewportFractionFromTop = safePercent / 100;
+  const crossingY = halfVisible - estimatedVisibleHeight * viewportFractionFromTop;
+
+  const topEdgeHome = halfContent;
+  const distanceToTravel = topEdgeHome - crossingY;
+
+  const handoffDistance = fixedTriggerDistance + Math.max(0, distanceToTravel);
+  return Math.max(THRESHOLD_MIN_HANDOFF_DISTANCE, handoffDistance);
+};
+
 const normalizeAboutSlideColumns = (slide: AboutHallSlide): AboutHallSlide => {
   if (slide.configuration.columns) return slide;
   const source = slide.configuration.contents ?? [];
@@ -2254,7 +2337,7 @@ type AboutCellAnimationRuntime = {
 export default function ResumeSpace3D({
   options,
   onOptionsChange,
-  aboutHallDatasetOverride,
+  aboutHallInitialLevelId,
   aboutHallColumnAngleMultiplier = 1,
   onHallwayContentModeChange,
   onProjectShowcaseActiveChange,
@@ -2262,12 +2345,24 @@ export default function ResumeSpace3D({
 }: ResumeSpace3DProps) {
   const aboutDeckData = aboutDeck as AboutDeckData;
   const aboutSlides = aboutDeckData.aboutDeck.slides;
-  const useExperimentalAboutDataset =
-    aboutHallDatasetOverride === "experimental" ||
-    (aboutHallDatasetOverride !== "legacy" && ABOUT_HALL_EXPERIMENTAL_DATASET);
-  const aboutHallData = (
-    useExperimentalAboutDataset ? aboutHallSlidesExperimental : aboutHallSlides
-  ) as AboutHallSlidesFile;
+
+  const effectiveInitialLevel = aboutHallInitialLevelId ?? ABOUT_HALL_DEFAULT_LEVEL_ID;
+  const [selectedAboutLevelId, setSelectedAboutLevelId] = useState<string | null>(effectiveInitialLevel);
+  const selectedAboutLevelIdRef = useRef<string | null>(effectiveInitialLevel);
+  const [aboutLevelGateActive, setAboutLevelGateActive] = useState(false);
+  const aboutLevelGateActiveRef = useRef(false);
+  const [visitedAboutLevels, setVisitedAboutLevels] = useState<string[]>(() => getAboutElevatorVisitedLevels());
+
+  const resolveAboutHallData = useCallback((levelId: string | null): AboutHallSlidesFile => {
+    if (!levelId) return aboutHallSlidesLegacy as AboutHallSlidesFile;
+    const data = ABOUT_HALL_LEVEL_DATA_MAP[levelId];
+    return (data ?? aboutHallSlidesLegacy) as AboutHallSlidesFile;
+  }, []);
+
+  const aboutHallData = useMemo(
+    () => resolveAboutHallData(selectedAboutLevelId),
+    [selectedAboutLevelId, resolveAboutHallData],
+  );
   const aboutHallwaySlides = useMemo<AboutHallSlide[]>(
     () =>
       (aboutHallData.slides || []).map((slide) =>
@@ -3244,6 +3339,23 @@ export default function ResumeSpace3D({
   const projectShowcaseInteriorRootRef = useRef<THREE.Group | null>(null);
   const projectShowcaseExteriorRootRef = useRef<THREE.Group | null>(null);
   const projectShowcaseAboutExteriorModelRef = useRef<THREE.Object3D | null>(null);
+  const aboutTrenchContextRef = useRef<{
+    trenchWidth: number;
+    trenchSizeScaledY: number;
+    runAxis: "x" | "z" | "y";
+    panelSpacing: number;
+    panelY: number;
+    shaftBottomWorld: number;
+    wallOffset: number;
+    elevatorOppositeWall: number;
+    elevatorCreditsMode: boolean;
+    elevatorCreditsWall: number;
+    estimatedVisibleHeight: number;
+    fixedTriggerDistance: number;
+    immersiveWidths: Record<AboutHallColumnId, number>;
+    immersiveHeights: Record<AboutHallColumnId, number>;
+  } | null>(null);
+
   const projectShowcasePreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
   const projectShowcaseAboutExteriorPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
   const spaceshipPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
@@ -6485,7 +6597,28 @@ export default function ResumeSpace3D({
       pendingProjectShowcaseEntryRef.current = false;
       projectShowcaseAwaitingProjectsArrivalRef.current = false;
       projectShowcaseSawProjectsTravelRef.current = false;
-      startProjectShowcaseAngleIntroSequence();
+
+      if (aboutMode) {
+        const isFirstVisit = !getAboutElevatorHasVisited();
+        if (isFirstVisit) {
+          setAboutElevatorHasVisited();
+          if (!selectedAboutLevelIdRef.current) {
+            selectedAboutLevelIdRef.current = ABOUT_HALL_DEFAULT_LEVEL_ID;
+            setSelectedAboutLevelId(ABOUT_HALL_DEFAULT_LEVEL_ID);
+          }
+          markAboutElevatorLevelVisited(selectedAboutLevelIdRef.current ?? ABOUT_HALL_DEFAULT_LEVEL_ID);
+          setVisitedAboutLevels(getAboutElevatorVisitedLevels());
+          startProjectShowcaseAngleIntroSequence();
+        } else {
+          aboutLevelGateActiveRef.current = true;
+          setAboutLevelGateActive(true);
+          projectShowcasePlayingRef.current = false;
+          setProjectShowcasePlaying(false);
+          onScreenMessage("Select a level to begin ascent", { durationMs: 5000 });
+        }
+      } else {
+        startProjectShowcaseAngleIntroSequence();
+      }
       vlog("🛰️ Entered Project Showcase");
     };
 
@@ -6671,6 +6804,376 @@ export default function ResumeSpace3D({
     setProjectShowcasePlaying(true);
     setProjectShowcaseLever(0);
   }, [setProjectShowcaseRunPosition, setProjectShowcaseLever]);
+
+  const rebuildAboutElevatorPanels = useCallback(async (
+    slides: AboutHallSlide[],
+    showcaseEntries: ShowcaseEntry[],
+  ) => {
+    const ctx = aboutTrenchContextRef.current;
+    const interiorRoot = projectShowcaseInteriorRootRef.current;
+    if (!ctx || !interiorRoot) return;
+
+    const oldPanels = projectShowcasePanelsRef.current;
+    oldPanels.forEach((panel) => {
+      if (panel.aboutRuntime) {
+        panel.aboutRuntime.cells.forEach((cell) => {
+          cell.mesh.geometry.dispose();
+          cell.material.dispose();
+          cell.normalTexture.dispose();
+          if (cell.emergencyTexture !== cell.normalTexture) cell.emergencyTexture.dispose();
+        });
+      }
+      panel.group.removeFromParent();
+    });
+    projectShowcasePanelsRef.current = [];
+
+    const {
+      trenchWidth, trenchSizeScaledY, runAxis, shaftBottomWorld,
+      wallOffset, elevatorOppositeWall, elevatorCreditsMode, elevatorCreditsWall,
+      estimatedVisibleHeight, fixedTriggerDistance, immersiveWidths, immersiveHeights,
+      panelY,
+    } = ctx;
+
+    const firstSlidePos = aboutHallFirstSlidePositionRef.current ?? 190;
+    const slideRunPositions: number[] = [];
+    const estimateTallest = (s: AboutHallSlide): number => {
+      const cols = s.configuration.columns ?? {};
+      const pw = elevatorCreditsMode
+        ? THREE.MathUtils.clamp(s.width * 1.18, 9.2, 13.8)
+        : THREE.MathUtils.clamp(s.width, 8, 13.8);
+      const ph = elevatorCreditsMode
+        ? THREE.MathUtils.clamp(s.height * 1.02, 5.2, 8.4)
+        : THREE.MathUtils.clamp(s.height, 4.8, 8.8);
+      let tallest = 0;
+      (["left", "center", "right"] as AboutHallColumnId[]).forEach((colId) => {
+        const colCfg = cols[colId];
+        if (!colCfg?.messages?.length) return;
+        colCfg.messages.forEach((msg) => {
+          const wr = THREE.MathUtils.clamp(msg.widthRatio ?? 1, 0.35, 2.6);
+          const hr = THREE.MathUtils.clamp(msg.heightRatio ?? 1, 0.2, 2.4);
+          const cw = immersiveWidths[colId] * wr;
+          const ch = immersiveHeights[colId] * hr;
+          const sw = Math.max(256, Math.floor(1300 * (cw / Math.max(pw, 1))));
+          const sh = Math.max(220, Math.floor(1000 * (ch / Math.max(ph, 1))));
+          const pa = (sw / cw) / (sh / ch);
+          const resolved = { ...msg, textContent: resolveAboutContentText(msg) };
+          const needed = measureAboutTextHeight(resolved, sw, sh, { creditsStyle: false, loadedImages: aboutImageCacheRef.current, pixelAspect: pa });
+          const actual = needed > sh ? ch * (needed / sh) : ch;
+          tallest = Math.max(tallest, actual);
+        });
+      });
+      return tallest;
+    };
+
+    slides.forEach((_slide, index) => {
+      if (index === 0) {
+        slideRunPositions.push(shaftBottomWorld + firstSlidePos);
+      } else {
+        const prevSlide = slides[index - 1];
+
+        const thresholdDist = computeCenterTopThresholdDistance(
+          prevSlide, estimatedVisibleHeight, fixedTriggerDistance,
+          immersiveWidths, immersiveHeights, estimateTallest,
+        );
+
+        if (thresholdDist != null) {
+          slideRunPositions.push(slideRunPositions[index - 1] + thresholdDist + 4);
+        } else {
+          const prevFadeVH = THREE.MathUtils.clamp(prevSlide.flowFadeOutDistanceViewportHeights ?? 1.5, 0.1, 10);
+          const prevTallest = estimateTallest(prevSlide);
+          const heightExcess = Math.max(0, prevTallest - estimatedVisibleHeight);
+          const baseLife = fixedTriggerDistance + estimatedVisibleHeight * prevFadeVH + estimatedVisibleHeight * 0.2;
+          const slideLifeDistance = baseLife + heightExcess;
+          slideRunPositions.push(slideRunPositions[index - 1] + slideLifeDistance + 4);
+        }
+      }
+    });
+
+    const allImageSrcs = new Set<string>();
+    slides.forEach((s) => {
+      const cols = s.configuration.columns ?? {};
+      (["left", "center", "right"] as AboutHallColumnId[]).forEach((colId) => {
+        const colCfg = cols[colId];
+        if (!colCfg?.messages?.length) return;
+        colCfg.messages.forEach((msg) => {
+          msg.images?.forEach((img) => { if (img.src) allImageSrcs.add(img.src); });
+        });
+      });
+    });
+    if (allImageSrcs.size > 0) {
+      await Promise.all(
+        Array.from(allImageSrcs).map(async (src) => {
+          if (aboutImageCacheRef.current.has(src)) return;
+          const img = new Image();
+          img.src = src;
+          await new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          });
+          aboutImageCacheRef.current.set(src, img);
+        }),
+      );
+    }
+
+    const panelRecords: ShowcasePanelRecord[] = [];
+    const useImmersiveColumnGrouping = runAxis === "y";
+
+    slides.forEach((slide, index) => {
+      const entry = showcaseEntries[index] ?? ({
+        id: slide.id, title: slide.registryBtnTitle,
+        image: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+        fit: "contain",
+      } as ShowcaseEntry);
+      const panelGroup = new THREE.Group();
+      const runPos = slideRunPositions[index];
+      const slideHasColumnChoreo = true;
+      const useElevatorCreditsCard = elevatorCreditsMode && !slideHasColumnChoreo;
+      if (runAxis === "y") {
+        if (useImmersiveColumnGrouping) {
+          panelGroup.position.set(elevatorCreditsWall, runPos, 0);
+        } else {
+          panelGroup.position.set(elevatorCreditsWall, runPos, 0);
+        }
+      }
+      const ySide = elevatorOppositeWall >= 0 ? 1 : -1;
+      let inwardRotationY = 0;
+      let frontFacingRotationY = 0;
+      let cantSign: -1 | 1 = 1;
+      if (runAxis === "y") {
+        if (ySide < 0) { inwardRotationY = Math.PI / 2; frontFacingRotationY = Math.PI / 2; cantSign = 1; }
+        else if (ySide > 0) { inwardRotationY = -Math.PI / 2; frontFacingRotationY = -Math.PI / 2; cantSign = -1; }
+        else { inwardRotationY = Math.PI; frontFacingRotationY = Math.PI; cantSign = 1; }
+      }
+      panelGroup.rotation.y = inwardRotationY;
+
+      const panelWidth = elevatorCreditsMode
+        ? THREE.MathUtils.clamp(slide.width * 1.18, 9.2, 13.8)
+        : THREE.MathUtils.clamp(slide.width, 8, 13.8);
+      const panelHeight = elevatorCreditsMode
+        ? THREE.MathUtils.clamp(slide.height * 1.02, 5.2, 8.4)
+        : THREE.MathUtils.clamp(slide.height, 4.8, 8.8);
+      const borderStyle = parseBorderStyle(slide.border);
+      const borderColor = new THREE.Color(0x74d2ff);
+      try { borderColor.setStyle(borderStyle.color); } catch { borderColor.setHex(0x74d2ff); }
+
+      const frame = new THREE.Mesh(
+        new THREE.PlaneGeometry(panelWidth * 1.02, panelHeight * 1.02),
+        new THREE.MeshBasicMaterial({ color: borderColor, transparent: true, opacity: useElevatorCreditsCard ? 0 : 0.28, side: THREE.DoubleSide, toneMapped: false }),
+      );
+      const frameMat = frame.material as THREE.MeshBasicMaterial;
+      frame.position.z = -0.04;
+      if (!useElevatorCreditsCard && !useImmersiveColumnGrouping) panelGroup.add(frame);
+
+      const panelRecord: ShowcasePanelRecord = {
+        group: panelGroup, runPos, entry, displayTitle: slide.registryBtnTitle, fitMode: "contain",
+        inwardRotationY, frontFacingRotationY, cantSign, focusBlend: 0, frameMat,
+        imageMesh: new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, side: THREE.DoubleSide, toneMapped: false })),
+        imageMat: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, side: THREE.DoubleSide, toneMapped: false }),
+        texture: null, baseRepeat: new THREE.Vector2(1, 1), baseOffset: new THREE.Vector2(0, 0),
+        zoom: 1, panX: 0, panY: 0, clientVariants: [], activeVariantIndex: 0, setActiveVariant: () => {},
+        mediaItems: [], activeMediaIndex: 0, setActiveMedia: () => {}, mediaFadeStartMs: -Infinity, mediaFadeDurationMs: 1,
+        setThumbnailPageStart: () => {}, triggerThumbnailNavPress: () => {}, thumbnailPageStart: 0,
+        thumbnailHitTargets: [], thumbnailFrameMats: [], thumbnailImageMats: [],
+        detailMat: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 }),
+        detailTexture: null, detailMesh: null, detailScrollThumbMesh: null, detailAllLines: [], detailVisibleLines: 0,
+        detailScrollOffset: 0, detailScrollMax: 0, updateDetailTexture: () => {}, techBadgeRoot: null, techBadgeFx: [],
+        aboutRuntime: {
+          mode: "about", slideId: slide.id, cells: [],
+          triggerDistance: fixedTriggerDistance, slideStartRun: runPos - fixedTriggerDistance,
+          flowFadeOutDistanceViewportHeights: THREE.MathUtils.clamp(slide.flowFadeOutDistanceViewportHeights ?? 1.5, 0.1, 10),
+          autoSpeed: slide.autoSpeed ?? aboutHallDefaultAutoSpeedRef.current,
+        },
+      };
+
+      const columnMessages = getAboutColumnMessages(slide);
+      const createCell = (
+        content: AboutHallSlideContent, cellWidth: number, cellHeight: number,
+        cellX: number, cellY: number,
+        opts?: { transparentBackground?: boolean; creditsStyle?: boolean; columnDepth?: number; parentGroup?: THREE.Group },
+      ) => {
+        const safeWidth = Math.max(256, Math.floor(1300 * (cellWidth / Math.max(panelWidth, 1))));
+        let safeHeight = Math.max(220, Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))));
+        const pixelAspect = (safeWidth / cellWidth) / (safeHeight / cellHeight);
+        const resolvedContent = { ...content, textContent: resolveAboutContentText(content) };
+        const neededHeight = measureAboutTextHeight(resolvedContent, safeWidth, safeHeight, { creditsStyle: opts?.creditsStyle ?? false, loadedImages: aboutImageCacheRef.current, pixelAspect });
+        let actualCellHeight = cellHeight;
+        if (neededHeight > safeHeight) {
+          const scale = neededHeight / safeHeight;
+          safeHeight = neededHeight;
+          actualCellHeight = cellHeight * scale;
+        }
+        const tex = createAboutCellTexture(resolvedContent, safeWidth, safeHeight, {
+          transparentBackground: opts?.transparentBackground ?? false, creditsStyle: opts?.creditsStyle ?? false,
+          loadedImages: aboutImageCacheRef.current, pixelAspect,
+        });
+        const emergencyTex = opts?.creditsStyle
+          ? createAboutCellTexture(resolvedContent, safeWidth, safeHeight, {
+              transparentBackground: opts?.transparentBackground ?? false, creditsStyle: true, emergencyMood: true,
+              loadedImages: aboutImageCacheRef.current, pixelAspect,
+            })
+          : tex;
+        const material = new THREE.MeshBasicMaterial({
+          map: tex, color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide, toneMapped: false, depthWrite: false,
+        });
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cellWidth, actualCellHeight), material);
+        mesh.position.set(cellX, cellY, opts?.columnDepth ?? 0.02);
+        (opts?.parentGroup ?? panelGroup).add(mesh);
+        const flowDir = normalizeAboutFlowDirection(content.flowDirection);
+        const flowOff = content.flowOffsetUnits ?? 0;
+        const halfVisible = estimatedVisibleHeight * 0.5;
+        const halfCell = actualCellHeight * 0.5;
+        const edgeGap = Math.max(1.0, estimatedVisibleHeight * 0.15);
+        const computedHomeY = flowDir === "topToBottom"
+          ? -fixedTriggerDistance + halfVisible + halfCell + edgeGap - flowOff
+          : -fixedTriggerDistance - halfVisible - halfCell - edgeGap - flowOff;
+        panelRecord.aboutRuntime?.cells.push({
+          mesh, material, normalTexture: tex, emergencyTexture: emergencyTex,
+          basePosition: mesh.position.clone(), flowDirection: flowDir,
+          flowUnitsPerDistance: Math.max(0, content.flowUnitsPerDistance ?? 0),
+          flowOffsetUnits: flowOff, baseYawRad: mesh.rotation.y, homeY: computedHomeY,
+        });
+      };
+
+      if (useElevatorCreditsCard) {
+        const allMsgs = [...columnMessages.left, ...columnMessages.center, ...columnMessages.right];
+        const creditContent: AboutHallSlideContent = {
+          id: `${slide.id}-credit`, type: "column1", backgroundColor: "transparent",
+          fontColor: "rgba(8, 12, 18, 0.98)", fontFamily: ["Oswald", "Montserrat"],
+          fontSize: "150px", fontShadow: "0px 0px 14px rgba(0, 0, 0, 0.62)",
+          horizontalAlign: "center", verticalAlign: "middle",
+          textContent: allMsgs.map((c) => splitHtmlBreakLines(c.textContent).join("\n")).filter((t) => t.length > 0).join("\n\n"),
+        };
+        createCell(creditContent, panelWidth, panelHeight, 0, 0, { transparentBackground: true, creditsStyle: true });
+      } else {
+        const columnX: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
+          ? { left: -9.56, center: 1.05, right: 10.65 }
+          : { left: -panelWidth * 0.34, center: 0, right: panelWidth * 0.34 };
+        const columnZ: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
+          ? { left: 3.35, center: 0, right: 6 }
+          : { left: 0, center: 0, right: 0 };
+        const columnDefaults: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
+          ? { left: 34, center: 0, right: -34 }
+          : { left: 16, center: 0, right: -16 };
+        (["left", "center", "right"] as AboutHallColumnId[]).forEach((columnId) => {
+          const msgs = columnMessages[columnId];
+          if (msgs.length === 0) return;
+          const columnConfig = slide.configuration.columns?.[columnId];
+          const baseAngleDeg = columnConfig?.angleDeg ?? columnDefaults[columnId];
+          const columnAnchor = new THREE.Group();
+          columnAnchor.position.set(columnX[columnId], 0, columnZ[columnId]);
+          panelGroup.add(columnAnchor);
+          const verticalRange = useImmersiveColumnGrouping ? panelHeight * 0.22 : panelHeight * 0.78;
+          const slotCount = Math.max(1, msgs.length);
+          const slotStep = slotCount > 1 ? verticalRange / (slotCount - 1) : 0;
+          msgs.forEach((rawMessage, msgIndex) => {
+            const message = { ...rawMessage, horizontalAlign: rawMessage.horizontalAlign ?? "center", verticalAlign: rawMessage.verticalAlign ?? "middle", textContent: resolveAboutContentText(rawMessage) };
+            const widthRatio = THREE.MathUtils.clamp(message.widthRatio ?? 1, 0.35, 2.6);
+            const heightRatio = THREE.MathUtils.clamp(message.heightRatio ?? 1, 0.2, 2.4);
+            const cellWidth = useImmersiveColumnGrouping ? immersiveWidths[columnId] * widthRatio : panelWidth * 0.26 * widthRatio;
+            const cellHeight = useImmersiveColumnGrouping ? immersiveHeights[columnId] * heightRatio : panelHeight * 0.24 * heightRatio;
+            const autoY = slotCount <= 1 ? 0 : verticalRange * 0.5 - slotStep * msgIndex;
+            const baseY = autoY + (message.offsetY ?? 0);
+            const baseX = message.offsetX ?? 0;
+            const cellCountBefore = panelRecord.aboutRuntime?.cells.length ?? 0;
+            createCell(message, cellWidth, cellHeight, baseX, baseY, { columnDepth: 0.03 + msgIndex * 0.002, parentGroup: columnAnchor, transparentBackground: false });
+            const runtimeCells = panelRecord.aboutRuntime?.cells;
+            if (!runtimeCells) return;
+            const newCells = runtimeCells.slice(cellCountBefore);
+            const angleDeg = (message as AboutHallSlideContent & { columnAngleDeg?: number }).columnAngleDeg ?? baseAngleDeg;
+            newCells.forEach((cell) => {
+              cell.mesh.rotation.y = THREE.MathUtils.degToRad(angleDeg);
+              cell.baseYawRad = cell.mesh.rotation.y;
+              if (useImmersiveColumnGrouping) cell.immersiveColumn = columnId;
+              if (cell.flowUnitsPerDistance <= 0) cell.flowUnitsPerDistance = 0.25;
+            });
+          });
+        });
+      }
+
+      const framePulse = new THREE.Mesh(
+        new THREE.PlaneGeometry(panelWidth + borderStyle.width * 0.02, panelHeight + borderStyle.width * 0.02),
+        new THREE.MeshBasicMaterial({ color: borderColor, transparent: true, opacity: 0.09, side: THREE.DoubleSide, toneMapped: false }),
+      );
+      framePulse.position.z = -0.07;
+      if (!useElevatorCreditsCard && !useImmersiveColumnGrouping) panelGroup.add(framePulse);
+
+      panelRecord.imageMesh = panelRecord.aboutRuntime?.cells[0]?.mesh ?? panelRecord.imageMesh;
+      panelRecord.imageMat = panelRecord.aboutRuntime?.cells[0]?.material ?? panelRecord.imageMat;
+
+      panelGroup.traverse((child) => { child.layers.set(PROJECT_SHOWCASE_CARD_LAYER); });
+      interiorRoot.add(panelGroup);
+      panelRecords.push(panelRecord);
+    });
+
+    projectShowcasePanelsRef.current = panelRecords;
+    panelRecords.forEach((panel) => { panel.group.visible = true; });
+
+    const edgeRunPadding = 14;
+    const startPosRun = aboutHallStartPositionRef.current != null
+      ? shaftBottomWorld + aboutHallStartPositionRef.current
+      : null;
+    const firstSlideRun = slideRunPositions.length > 0 ? slideRunPositions[0] : 0;
+    const lastSlideRun = slideRunPositions.length > 0 ? slideRunPositions[slideRunPositions.length - 1] : 0;
+    const minRun = Math.min(firstSlideRun - edgeRunPadding, startPosRun != null ? startPosRun - 5 : firstSlideRun - edgeRunPadding);
+    const maxRun = lastSlideRun + edgeRunPadding + 40;
+    const elevatorCameraWallOffset = Math.min(trenchWidth * 0.36, Math.max(2.8, trenchWidth * 0.5 - 1.05));
+    const elevatorCameraDepthOffset = -Math.min(2.4, Math.max(1.2, trenchWidth * 0.2));
+    const initialRun = startPosRun ?? minRun + 10;
+    projectShowcaseTrackRef.current = {
+      axis: runAxis,
+      minRun, maxRun,
+      centerCross: runAxis === "y" ? elevatorCameraWallOffset : 0,
+      cameraHeight: runAxis === "y" ? elevatorCameraDepthOffset : panelY,
+      lookAhead: THREE.MathUtils.clamp(ctx.panelSpacing * 1.9, 22, 48),
+      speed: THREE.MathUtils.clamp(ctx.panelSpacing * 0.1625, 2.5, 5.5),
+      cullHalfWindow: ctx.panelSpacing * 3.2,
+      startRun: initialRun,
+    };
+
+    setProjectShowcaseRunPosition(initialRun);
+    setProjectShowcaseFocusIndex(0);
+    projectShowcaseFocusIndexRef.current = 0;
+    setAboutElevatorReachedEnd(false);
+    projectShowcaseVelocityRef.current = 0;
+    projectShowcaseJumpTargetRef.current = null;
+    projectShowcaseForcedFocusIndexRef.current = null;
+  }, [setProjectShowcaseRunPosition]);
+
+  const selectAboutElevatorLevel = useCallback(async (levelId: string) => {
+    const data = ABOUT_HALL_LEVEL_DATA_MAP[levelId] as AboutHallSlidesFile | undefined;
+    if (!data) return;
+
+    selectedAboutLevelIdRef.current = levelId;
+    setSelectedAboutLevelId(levelId);
+
+    aboutHallDefaultAutoSpeedRef.current = data.autoSpeed ?? 0.62;
+    aboutHallFirstSlidePositionRef.current = data.firstSlidePosition;
+    aboutHallStartPositionRef.current = data.startPosition;
+
+    const newSlides = (data.slides || []).map((slide) => normalizeAboutSlideColumns({ ...slide }));
+    const newEntries: ShowcaseEntry[] = newSlides.map((slide) => {
+      const byColumn = getAboutColumnMessages(slide);
+      const messages = [...byColumn.left, ...byColumn.center, ...byColumn.right];
+      return {
+        id: slide.id, title: slide.registryBtnTitle,
+        image: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+        description: messages.map((cell) => resolveAboutContentText(cell)).join(" "),
+        technologies: [], year: 2026, fit: "contain", galleryMedia: [], clientVariants: [],
+      };
+    });
+
+    await rebuildAboutElevatorPanels(newSlides, newEntries);
+
+    markAboutElevatorLevelVisited(levelId);
+    setVisitedAboutLevels(getAboutElevatorVisitedLevels());
+
+    aboutLevelGateActiveRef.current = false;
+    setAboutLevelGateActive(false);
+
+    projectShowcasePlayingRef.current = true;
+    setProjectShowcasePlaying(true);
+    setProjectShowcaseLever(0);
+  }, [rebuildAboutElevatorPanels, setProjectShowcaseLever]);
 
   const stopOrbitalPortfolioToneSequence = useCallback(() => {
     const runtime = orbitalPortfolioToneRuntimeRef.current;
@@ -18038,6 +18541,12 @@ export default function ResumeSpace3D({
           const immersiveWidths: Record<AboutHallColumnId, number> = { left: 12.1, center: 14.3, right: 12.1 };
           const immersiveHeights: Record<AboutHallColumnId, number> = { left: 10.6, center: 10.1, right: 10.3 };
 
+          aboutTrenchContextRef.current = {
+            trenchWidth, trenchSizeScaledY: trenchSizeScaled.y, runAxis, panelSpacing, panelY,
+            shaftBottomWorld, wallOffset, elevatorOppositeWall, elevatorCreditsMode, elevatorCreditsWall,
+            estimatedVisibleHeight, fixedTriggerDistance, immersiveWidths, immersiveHeights,
+          };
+
           const firstSlidePos = aboutHallFirstSlidePositionRef.current ?? 190;
           const estimateTallestCellHeight = (s: AboutHallSlide): number => {
             const cols = s.configuration.columns ?? {};
@@ -18073,12 +18582,22 @@ export default function ResumeSpace3D({
               slideRunPositions.push(shaftBottomWorld + firstSlidePos);
             } else {
               const prevSlide = aboutHallwaySlides[index - 1];
-              const prevFadeVH = THREE.MathUtils.clamp(prevSlide.flowFadeOutDistanceViewportHeights ?? 1.5, 0.1, 10);
-              const prevTallest = estimateTallestCellHeight(prevSlide);
-              const heightExcess = Math.max(0, prevTallest - estimatedVisibleHeight);
-              const baseLife = fixedTriggerDistance + estimatedVisibleHeight * prevFadeVH + estimatedVisibleHeight * 0.2;
-              const slideLifeDistance = baseLife + heightExcess;
-              slideRunPositions.push(slideRunPositions[index - 1] + slideLifeDistance + 4);
+
+              const thresholdDist = computeCenterTopThresholdDistance(
+                prevSlide, estimatedVisibleHeight, fixedTriggerDistance,
+                immersiveWidths, immersiveHeights, estimateTallestCellHeight,
+              );
+
+              if (thresholdDist != null) {
+                slideRunPositions.push(slideRunPositions[index - 1] + thresholdDist + 4);
+              } else {
+                const prevFadeVH = THREE.MathUtils.clamp(prevSlide.flowFadeOutDistanceViewportHeights ?? 1.5, 0.1, 10);
+                const prevTallest = estimateTallestCellHeight(prevSlide);
+                const heightExcess = Math.max(0, prevTallest - estimatedVisibleHeight);
+                const baseLife = fixedTriggerDistance + estimatedVisibleHeight * prevFadeVH + estimatedVisibleHeight * 0.2;
+                const slideLifeDistance = baseLife + heightExcess;
+                slideRunPositions.push(slideRunPositions[index - 1] + slideLifeDistance + 4);
+              }
             }
           });
 
@@ -21774,10 +22293,10 @@ export default function ResumeSpace3D({
                 {">"}
               </button>
               <div style={{ fontSize: 12, letterSpacing: 1.2, color: "#9fe3ff" }}>
-                ABOUT
+                ELEVATOR LEVELS
               </div>
               <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}>
-                Hallway Registry
+                Story Selection
               </div>
               <div
                 style={{
@@ -21786,98 +22305,202 @@ export default function ResumeSpace3D({
                   background: "rgba(140, 220, 255, 0.28)",
                 }}
               />
-              <div style={{ marginTop: 7, display: "flex", gap: 4, alignItems: "center" }}>
-                <button
-                  onClick={() => stepProjectShowcaseFocus(-1)}
+              {aboutLevelGateActive && (
+                <div
                   style={{
-                    padding: "4px 6px",
+                    marginTop: 8,
+                    padding: "8px 10px",
                     borderRadius: 8,
-                    border: "1px solid rgba(170, 225, 255, 0.45)",
-                    background: "rgba(8, 18, 34, 0.82)",
-                    color: "#dff3ff",
+                    border: "1px solid rgba(255, 200, 100, 0.6)",
+                    background: "rgba(40, 28, 8, 0.85)",
+                    color: "#ffe0a0",
                     fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 11,
-                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    textAlign: "center",
+                    letterSpacing: 0.5,
+                    animation: "aboutReplayFadeIn 0.6s ease-out both",
                   }}
                 >
-                  Reverse
-                </button>
-                <button
-                  onClick={() => stepProjectShowcaseFocus(1)}
-                  style={{
-                    padding: "4px 6px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(170, 225, 255, 0.45)",
-                    background: "rgba(8, 18, 34, 0.82)",
-                    color: "#dff3ff",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 11,
-                    cursor: "pointer",
-                  }}
-                >
-                  Forward
-                </button>
-                <button
-                  onClick={toggleProjectShowcasePlayback}
-                  style={{
-                    padding: "4px 6px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(170, 225, 255, 0.45)",
-                    background: "rgba(8, 18, 34, 0.82)",
-                    color: "#dff3ff",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 11,
-                    cursor: "pointer",
-                  }}
-                >
-                  {projectShowcasePlaying ? "Pause" : "Play"}
-                </button>
-              </div>
-              <div style={{ marginTop: 8, fontSize: 13, color: "#e8f8ff" }}>
-                {activeSlide?.registryBtnTitle ?? "About Slide"}
-              </div>
+                  SELECT A LEVEL TO BEGIN ASCENT
+                </div>
+              )}
               <div
                 style={{
                   marginTop: 8,
-                  maxHeight: 254,
-                  overflowY: "auto",
-                  borderRadius: 8,
-                  border: "1px solid rgba(145, 232, 255, 0.24)",
-                  background: "rgba(8, 18, 34, 0.58)",
-                  padding: 6,
                   display: "flex",
                   flexDirection: "column",
+                  gap: 5,
                 }}
               >
-                {aboutHallwaySlides.map((slide, index) => {
-                  const isActive = index === projectShowcaseFocusIndex;
+                {aboutHallLevelsManifest.levels.map((level) => {
+                  const isActive = selectedAboutLevelId === level.id;
+                  const isVisited = visitedAboutLevels.includes(level.id);
                   return (
                     <button
-                      key={slide.id}
-                      onClick={() => jumpProjectShowcaseToIndex(index)}
+                      key={level.id}
+                      onClick={() => void selectAboutElevatorLevel(level.id)}
                       style={{
                         textAlign: "left",
-                        whiteSpace: "nowrap",
-                        borderRadius: 7,
+                        borderRadius: 8,
                         border: isActive
                           ? "1px solid rgba(145, 232, 255, 0.92)"
-                          : "1px solid rgba(145, 232, 255, 0.24)",
+                          : aboutLevelGateActive
+                            ? "1px solid rgba(255, 200, 100, 0.55)"
+                            : "1px solid rgba(145, 232, 255, 0.35)",
                         background: isActive
-                          ? "rgba(20, 58, 92, 0.84)"
-                          : "rgba(8, 18, 34, 0.68)",
-                        color: "#e8f7ff",
+                          ? "rgba(20, 58, 92, 0.88)"
+                          : aboutLevelGateActive
+                            ? "rgba(30, 22, 8, 0.82)"
+                            : "rgba(8, 18, 34, 0.72)",
+                        color: isVisited && !isActive
+                          ? "#a0d8b0"
+                          : isActive
+                            ? "#e8f7ff"
+                            : "#dff3ff",
                         cursor: "pointer",
-                        padding: "6px 12px",
-                        marginBottom: 5,
-                        fontSize: 12,
+                        padding: "8px 12px",
+                        fontSize: 13,
                         fontWeight: 700,
+                        fontFamily: "'Rajdhani', sans-serif",
+                        letterSpacing: 0.4,
+                        transition: "background 0.2s, border-color 0.2s",
                       }}
                     >
-                      {slide.registryBtnTitle}
+                      <span>{level.label}</span>
+                      {isVisited && !isActive && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 10,
+                            opacity: 0.7,
+                            color: "#a0d8b0",
+                          }}
+                        >
+                          VISITED
+                        </span>
+                      )}
+                      {isActive && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 10,
+                            opacity: 0.8,
+                            color: "#9fe3ff",
+                          }}
+                        >
+                          ACTIVE
+                        </span>
+                      )}
                     </button>
                   );
                 })}
               </div>
+
+              <div
+                style={{
+                  marginTop: 10,
+                  height: 1,
+                  background: "rgba(140, 220, 255, 0.18)",
+                }}
+              />
+
+              {!aboutLevelGateActive && (
+                <>
+                  <div style={{ marginTop: 7, display: "flex", gap: 4, alignItems: "center" }}>
+                    <button
+                      onClick={() => stepProjectShowcaseFocus(-1)}
+                      style={{
+                        padding: "4px 6px",
+                        borderRadius: 8,
+                        border: "1px solid rgba(170, 225, 255, 0.45)",
+                        background: "rgba(8, 18, 34, 0.82)",
+                        color: "#dff3ff",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Reverse
+                    </button>
+                    <button
+                      onClick={() => stepProjectShowcaseFocus(1)}
+                      style={{
+                        padding: "4px 6px",
+                        borderRadius: 8,
+                        border: "1px solid rgba(170, 225, 255, 0.45)",
+                        background: "rgba(8, 18, 34, 0.82)",
+                        color: "#dff3ff",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Forward
+                    </button>
+                    <button
+                      onClick={toggleProjectShowcasePlayback}
+                      style={{
+                        padding: "4px 6px",
+                        borderRadius: 8,
+                        border: "1px solid rgba(170, 225, 255, 0.45)",
+                        background: "rgba(8, 18, 34, 0.82)",
+                        color: "#dff3ff",
+                        fontFamily: "'Rajdhani', sans-serif",
+                        fontSize: 11,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {projectShowcasePlaying ? "Pause" : "Play"}
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 13, color: "#e8f8ff" }}>
+                    {activeSlide?.registryBtnTitle ?? "About Slide"}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      maxHeight: 254,
+                      overflowY: "auto",
+                      borderRadius: 8,
+                      border: "1px solid rgba(145, 232, 255, 0.24)",
+                      background: "rgba(8, 18, 34, 0.58)",
+                      padding: 6,
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    {aboutHallwaySlides.map((slide, index) => {
+                      const isActive = index === projectShowcaseFocusIndex;
+                      return (
+                        <button
+                          key={slide.id}
+                          onClick={() => jumpProjectShowcaseToIndex(index)}
+                          style={{
+                            textAlign: "left",
+                            whiteSpace: "nowrap",
+                            borderRadius: 7,
+                            border: isActive
+                              ? "1px solid rgba(145, 232, 255, 0.92)"
+                              : "1px solid rgba(145, 232, 255, 0.24)",
+                            background: isActive
+                              ? "rgba(20, 58, 92, 0.84)"
+                              : "rgba(8, 18, 34, 0.68)",
+                            color: "#e8f7ff",
+                            cursor: "pointer",
+                            padding: "6px 12px",
+                            marginBottom: 5,
+                            fontSize: 12,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {slide.registryBtnTitle}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </div>
           {!orbitalRegistryPanelVisible && (
@@ -23669,6 +24292,39 @@ export default function ResumeSpace3D({
                   }}
                 >
                   Replay
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAboutElevatorReachedEnd(false);
+                    aboutLevelGateActiveRef.current = true;
+                    setAboutLevelGateActive(true);
+                    projectShowcasePlayingRef.current = false;
+                    setProjectShowcasePlaying(false);
+                  }}
+                  style={{
+                    padding: "10px 22px",
+                    borderRadius: 10,
+                    border: "1px solid rgba(255, 200, 100, 0.5)",
+                    background: "rgba(30, 22, 8, 0.85)",
+                    color: "#ffe0a0",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    letterSpacing: 1,
+                    cursor: "pointer",
+                    transition: "background 0.25s, border-color 0.25s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(45, 35, 12, 0.92)";
+                    e.currentTarget.style.borderColor = "rgba(255, 200, 100, 0.8)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(30, 22, 8, 0.85)";
+                    e.currentTarget.style.borderColor = "rgba(255, 200, 100, 0.5)";
+                  }}
+                >
+                  Switch Level
                 </button>
               </div>
             )}

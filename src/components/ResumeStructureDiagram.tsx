@@ -254,7 +254,7 @@ function ResumeStructureDiagram({
           onNavigate={onNavigate}
           options={options}
           onOptionsChange={onOptionsChange}
-          aboutHallDatasetOverride="experimental"
+          aboutHallInitialLevelId="level-01"
           aboutHallColumnAngleMultiplier={1}
           onHallwayContentModeChange={setHallwayContentMode}
           onProjectShowcaseActiveChange={setProjectShowcaseActive}

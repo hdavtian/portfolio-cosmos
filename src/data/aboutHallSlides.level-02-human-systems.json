@@ -1,0 +1,423 @@
+{
+  "autoSpeed": 0.5,
+  "startPosition": 30,
+  "firstSlidePosition": 50,
+  "slides": [
+    {
+      "id": "hs-slide-1",
+      "registryBtnTitle": "Opening",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "nextSlideTriggerMode": "centerTopThreshold",
+      "nextSlideTriggerTopViewportPercent": 50,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(122, 219, 255, 0.72)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "hs-1-center",
+                "type": "center",
+                "backgroundColor": "",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "95px",
+                "fontShadow": "3px 4px 6px rgba(0, 0, 0, 0.8)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Building software has never just been about code.<br><br>It's about bringing ideas to life.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "hs-slide-2",
+      "registryBtnTitle": "Started Early",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "nextSlideTriggerMode": "centerTopThreshold",
+      "nextSlideTriggerTopViewportPercent": 50,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(122, 219, 255, 0.72)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "hs-2-center",
+                "type": "center",
+                "backgroundColor": "",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "95px",
+                "fontShadow": "3px 4px 6px rgba(0, 0, 0, 0.8)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "For me... it started early.<br><br>Curiosity.<br>Experimenting.<br>Figuring things out.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "hs-slide-3",
+      "registryBtnTitle": "Curiosity To Craft",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "nextSlideTriggerMode": "centerTopThreshold",
+      "nextSlideTriggerTopViewportPercent": 50,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(122, 219, 255, 0.72)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "hs-3-center",
+                "type": "center",
+                "backgroundColor": "",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "95px",
+                "fontShadow": "3px 4px 6px rgba(0, 0, 0, 0.8)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Over time... that curiosity became a craft.<br><br>From simple interfaces<br>to full systems<br>to ideas brought to life.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "hs-slide-4",
+      "registryBtnTitle": "Full Stack",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "nextSlideTriggerMode": "centerTopThreshold",
+      "nextSlideTriggerTopViewportPercent": 50,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(122, 219, 255, 0.72)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "hs-4-center",
+                "type": "center",
+                "backgroundColor": "",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "95px",
+                "fontShadow": "3px 4px 6px rgba(0, 0, 0, 0.8)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Frontend.<br>Backend.<br>Data.<br>Infrastructure.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "hs-slide-5",
+      "registryBtnTitle": "Build Systems",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "nextSlideTriggerMode": "centerTopThreshold",
+      "nextSlideTriggerTopViewportPercent": 50,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(122, 219, 255, 0.72)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "hs-5-center",
+                "type": "center",
+                "backgroundColor": "",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "95px",
+                "fontShadow": "3px 4px 6px rgba(0, 0, 0, 0.8)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "I don't just build features.<br><br>I build systems<br>that are meant to last.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "hs-slide-6",
+      "registryBtnTitle": "Built With Intent",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "nextSlideTriggerMode": "centerTopThreshold",
+      "nextSlideTriggerTopViewportPercent": 50,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(122, 219, 255, 0.72)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "hs-6-center",
+                "type": "center",
+                "backgroundColor": "",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "95px",
+                "fontShadow": "3px 4px 6px rgba(0, 0, 0, 0.8)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Clean. Scalable. Thoughtful.<br><br>Not over-engineered.<br>Not rushed.<br>Built with intent.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "hs-slide-7",
+      "registryBtnTitle": "Still Building",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "nextSlideTriggerMode": "centerTopThreshold",
+      "nextSlideTriggerTopViewportPercent": 50,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(122, 219, 255, 0.72)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "hs-7-center",
+                "type": "center",
+                "backgroundColor": "",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "95px",
+                "fontShadow": "3px 4px 6px rgba(0, 0, 0, 0.8)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Today, I'm still building.<br><br>Refining.<br>Learning.<br>Pushing ideas further.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "hs-slide-8",
+      "registryBtnTitle": "Young Family",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "nextSlideTriggerMode": "centerTopThreshold",
+      "nextSlideTriggerTopViewportPercent": 50,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(255, 179, 140, 0.78)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "hs-8-center",
+                "type": "center",
+                "backgroundColor": "",
+                "fontColor": "rgba(255, 240, 233, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "95px",
+                "fontShadow": "3px 4px 6px rgba(0, 0, 0, 0.8)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "And doing it during one of the most important times of my life...<br><br>Raising a young family.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "hs-slide-9",
+      "registryBtnTitle": "What Matters",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "nextSlideTriggerMode": "centerTopThreshold",
+      "nextSlideTriggerTopViewportPercent": 50,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(122, 219, 255, 0.72)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "hs-9-center",
+                "type": "center",
+                "backgroundColor": "",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "95px",
+                "fontShadow": "3px 4px 6px rgba(0, 0, 0, 0.8)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "That changes things.<br><br>You value time more.<br>Focus more.<br>Build what actually matters.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "hs-slide-10",
+      "registryBtnTitle": "Closing",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "nextSlideTriggerMode": "centerTopThreshold",
+      "nextSlideTriggerTopViewportPercent": 50,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(122, 219, 255, 0.72)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "hs-10-center",
+                "type": "center",
+                "backgroundColor": "",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "95px",
+                "fontShadow": "3px 4px 6px rgba(0, 0, 0, 0.8)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Because in the end...<br><br>Great software isn't just functional.<br><br>It's thoughtful.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "hs-slide-final",
+      "registryBtnTitle": "Let's Build",
+      "width": 12.6,
+      "height": 7.6,
+      "flowFadeOutDistanceViewportHeights": 1.5,
+      "horizontalAlign": "center",
+      "verticalAlign": "middle",
+      "border": "2px solid rgba(153, 236, 255, 0.78)",
+      "configuration": {
+        "contents": [],
+        "columns": {
+          "center": {
+            "angleDeg": 0,
+            "messages": [
+              {
+                "id": "hs-final-center",
+                "type": "center",
+                "backgroundColor": "",
+                "fontColor": "rgba(255, 240, 224, 0.99)",
+                "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+                "fontSize": "95px",
+                "fontShadow": "3px 4px 6px rgba(0, 0, 0, 0.8)",
+                "horizontalAlign": "center",
+                "verticalAlign": "middle",
+                "textContent": "Harma Davtian<br><br>Full Stack Engineer<br><br>Let's build something<br>meaningful.",
+                "flowDirection": "topToBottom",
+                "flowUnitsPerDistance": 1,
+                "heightRatio": 1.08,
+                "widthRatio": 0.95
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

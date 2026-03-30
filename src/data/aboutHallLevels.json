@@ -1,0 +1,20 @@
+{
+  "levels": [
+    {
+      "id": "level-01",
+      "label": "Level 01: Signal Origins",
+      "shortLabel": "Signal Origins",
+      "fileKey": "level-01-signal-origins",
+      "order": 1,
+      "default": true
+    },
+    {
+      "id": "level-02",
+      "label": "Level 02: Human Systems",
+      "shortLabel": "Human Systems",
+      "fileKey": "level-02-human-systems",
+      "order": 2,
+      "default": false
+    }
+  ]
+}
