@@ -6,10 +6,11 @@
     "enabled": true,
     "style": "squares",
     "colorFamily": "purple",
-    "gridSize": 10,
+    "colorFamilies": ["purple", "yellow", "blue"],
+    "gridSize": 24,
     "fillDurationMs": 1000,
     "clearDurationMs": 1000,
-    "titleFadeDurationMs": 3000
+    "titleFadeDurationMs": 800
   },
   "slides": [
     {

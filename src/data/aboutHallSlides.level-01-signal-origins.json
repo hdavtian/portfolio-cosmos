@@ -6,6 +6,7 @@
     "enabled": true,
     "style": "squares",
     "colorFamily": "blue",
+    "colorFamilies": ["blue", "green", "yellow"],
     "gridSize": 28,
     "fillDurationMs": 1000,
     "clearDurationMs": 1000,

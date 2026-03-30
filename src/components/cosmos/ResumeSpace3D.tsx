@@ -978,6 +978,7 @@ type AboutLevelTransitionConfig = {
   enabled?: boolean;
   style?: "squares" | "fade";
   colorFamily?: "blue" | "green" | "yellow" | "purple" | "custom";
+  colorFamilies?: string[];
   gridSize?: number;
   fillDurationMs?: number;
   clearDurationMs?: number;
@@ -1835,16 +1836,64 @@ const THRESHOLD_MIN_HANDOFF_DISTANCE = 6;
 const THRESHOLD_PERCENT_MIN = 40;
 const THRESHOLD_PERCENT_MAX = 90;
 
-const TRANSITION_DEFAULTS: Required<Omit<AboutLevelTransitionConfig, "palette" | "titleText">> & { palette: string[] } = {
+const TRANSITION_DEFAULTS = {
   enabled: true,
-  style: "squares",
-  colorFamily: "blue",
+  style: "squares" as const,
+  colorFamily: "blue" as const,
   gridSize: 24,
   fillDurationMs: 1000,
   clearDurationMs: 1000,
   titleFadeDurationMs: 800,
-  palette: [],
+  palette: [] as string[],
 };
+
+const TRANSITION_SHAPE_OPACITY_MIN = 0.58;
+const TRANSITION_SHAPE_OPACITY_MAX = 1;
+
+type TransitionCellDescriptor = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: string;
+  shapeOpacity: number;
+};
+
+function buildTransitionCellDescriptors(
+  rect: DOMRect,
+  gridSize: number,
+  palette: string[],
+): TransitionCellDescriptor[] {
+  const descriptors: TransitionCellDescriptor[] = [];
+  const safePalette = palette.length > 0 ? palette : ["#ffffff"];
+
+  const pushDescriptor = (x: number, y: number, w: number, h: number) => {
+    if (x > rect.width || y > rect.height || x + w < 0 || y + h < 0) return;
+    descriptors.push({
+      x,
+      y,
+      w,
+      h,
+      color: safePalette[Math.floor(Math.random() * safePalette.length)] ?? "#ffffff",
+      shapeOpacity:
+        TRANSITION_SHAPE_OPACITY_MIN +
+        Math.random() * (TRANSITION_SHAPE_OPACITY_MAX - TRANSITION_SHAPE_OPACITY_MIN),
+    });
+  };
+
+  const cols = Math.max(4, gridSize);
+  const cellW = rect.width / cols;
+  const rows = Math.ceil(rect.height / cellW);
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const x = col * cellW;
+      const y = row * cellW;
+      pushDescriptor(x, y, cellW, cellW);
+    }
+  }
+
+  return descriptors;
+}
 
 const TRANSITION_COLOR_FAMILIES: Record<string, string[]> = {
   blue:   ["#0a1628", "#102040", "#1a3a6a", "#2a5ca8", "#3a7ce0", "#5a9cf0", "#7abcff", "#a0d4ff", "#c8e8ff", "#e8f4ff", "#ffffff"],
@@ -1853,14 +1902,42 @@ const TRANSITION_COLOR_FAMILIES: Record<string, string[]> = {
   purple: ["#100828", "#1c0c40", "#2c1460", "#3c1c88", "#5028a8", "#6838c8", "#8050e0", "#9870f0", "#b898ff", "#d0c0ff", "#ffffff"],
 };
 
-function resolveTransitionConfig(cfg?: AboutLevelTransitionConfig): Required<Omit<AboutLevelTransitionConfig, "palette" | "titleText">> & { palette: string[]; titleText: string } {
+function resolveTransitionPalette(cfg: AboutLevelTransitionConfig | undefined, colorFamily: string): string[] {
+  const families = Array.isArray(cfg?.colorFamilies) ? cfg?.colorFamilies : [];
+  const familyPalette = families
+    .map((family) => (family ? TRANSITION_COLOR_FAMILIES[String(family).toLowerCase()] : undefined))
+    .flatMap((colors) => colors ?? []);
+
+  const customPalette = Array.isArray(cfg?.palette) ? cfg.palette.filter((c) => typeof c === "string" && c.trim().length > 0) : [];
+  if (familyPalette.length > 0 && customPalette.length > 0) {
+    return [...familyPalette, ...customPalette];
+  }
+  if (familyPalette.length > 0) return familyPalette;
+  if (customPalette.length > 0) return customPalette;
+  return TRANSITION_COLOR_FAMILIES[colorFamily] ?? TRANSITION_COLOR_FAMILIES.blue;
+}
+
+type ResolvedTransitionConfig = {
+  enabled: boolean;
+  style: "squares" | "fade";
+  colorFamily: string;
+  gridSize: number;
+  fillDurationMs: number;
+  clearDurationMs: number;
+  titleFadeDurationMs: number;
+  palette: string[];
+  titleText: string;
+};
+
+function resolveTransitionConfig(cfg?: AboutLevelTransitionConfig): ResolvedTransitionConfig {
   const style = cfg?.style ?? TRANSITION_DEFAULTS.style;
   const colorFamily = cfg?.colorFamily ?? TRANSITION_DEFAULTS.colorFamily;
   const gridSize = Math.max(4, Math.min(80, cfg?.gridSize ?? TRANSITION_DEFAULTS.gridSize));
   const fillDurationMs = Math.max(200, Math.min(5000, cfg?.fillDurationMs ?? TRANSITION_DEFAULTS.fillDurationMs));
   const clearDurationMs = Math.max(200, Math.min(5000, cfg?.clearDurationMs ?? TRANSITION_DEFAULTS.clearDurationMs));
   const titleFadeDurationMs = Math.max(200, Math.min(3000, cfg?.titleFadeDurationMs ?? TRANSITION_DEFAULTS.titleFadeDurationMs));
-  let palette = cfg?.palette && cfg.palette.length > 0 ? cfg.palette : TRANSITION_COLOR_FAMILIES[colorFamily] ?? TRANSITION_COLOR_FAMILIES.blue;
+  const palette = resolveTransitionPalette(cfg, colorFamily);
+
   return {
     enabled: cfg?.enabled ?? TRANSITION_DEFAULTS.enabled,
     style,
@@ -7259,11 +7336,9 @@ export default function ResumeSpace3D({
         return;
       }
 
-      const cols = gridSize;
       const rect = overlayEl.getBoundingClientRect();
-      const cellW = rect.width / cols;
-      const rows = Math.ceil(rect.height / cellW);
-      const totalCells = rows * cols;
+      const cellDescriptors = buildTransitionCellDescriptors(rect, gridSize, palette);
+      const totalCells = Math.max(1, cellDescriptors.length);
 
       overlayEl.style.opacity = "1";
       overlayEl.style.transition = "none";
@@ -7271,7 +7346,7 @@ export default function ResumeSpace3D({
       overlayEl.innerHTML = "";
 
       const grid = document.createElement("div");
-      grid.style.cssText = `position:absolute;inset:0;display:grid;grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);`;
+      grid.style.cssText = "position:absolute;inset:0;overflow:hidden;";
       overlayEl.appendChild(grid);
 
       const titleEl = document.createElement("div");
@@ -7285,10 +7360,15 @@ export default function ResumeSpace3D({
       overlayEl.appendChild(titleEl);
 
       const cells: HTMLDivElement[] = [];
-      for (let i = 0; i < totalCells; i++) {
+      for (let i = 0; i < cellDescriptors.length; i++) {
+        const descriptor = cellDescriptors[i];
+        if (!descriptor) continue;
         const cell = document.createElement("div");
-        const color = palette[Math.floor(Math.random() * palette.length)];
-        cell.style.cssText = `background:${color};opacity:0;transition:opacity ${60 + Math.random() * 120}ms ease-in;`;
+        cell.style.cssText = `position:absolute;left:${descriptor.x}px;top:${descriptor.y}px;width:${descriptor.w}px;height:${descriptor.h}px;opacity:0;transition:opacity ${60 + Math.random() * 120}ms ease-in;background:${descriptor.color};`;
+        const tint = document.createElement("div");
+        tint.style.cssText = `position:absolute;inset:0;background:${descriptor.color};opacity:${descriptor.shapeOpacity.toFixed(3)};`;
+        cell.appendChild(tint);
+
         grid.appendChild(cell);
         cells.push(cell);
       }
