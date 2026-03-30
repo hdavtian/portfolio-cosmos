@@ -170,7 +170,7 @@ type ShipLabelMark = {
 };
 
 const PROJECT_SHOWCASE_NAV_ID = "project-showcase";
-const ABOUT_MEMORY_SQUARE_NAV_ID = "about2";
+const ABOUT_MEMORY_SQUARE_NAV_ID = "memory-squares";
 const PROJECT_SHOWCASE_LAYER = 2;
 const ORBITAL_PORTFOLIO_NAV_ID = "orbital-portfolio";
 const ORBITAL_PORTFOLIO_LAYER = 4;
@@ -406,13 +406,10 @@ const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(1158.5, 157.5, 14760.375);
-// Dedicated travel waypoint for "Portfolio" section navigation.
-// Keeps the actual portfolio structure anchored in its original universe location.
-const ORBITAL_PORTFOLIO_NAV_ENTRY_POINT = new THREE.Vector3(-9200, 240, -9800);
 const PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR = new THREE.Vector3(
-  -695.1,
+  13723.38,
   157.5,
-  -8856.225,
+  5556.945,
 );
 const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 620;
 const ORBITAL_PORTFOLIO_NAV_STANDOFF_DIST = 560;
@@ -4655,7 +4652,7 @@ export default function ResumeSpace3D({
     },
     {
       id: ABOUT_MEMORY_SQUARE_NAV_ID,
-      label: "About2",
+      label: "Memory Squares",
       type: "section" as const,
       icon: "⊙",
     },
@@ -5821,7 +5818,29 @@ export default function ResumeSpace3D({
           .add(new THREE.Vector3(0, 54, 0));
       }
       if (targetId === "portfolio") {
-        return ORBITAL_PORTFOLIO_NAV_ENTRY_POINT.clone();
+        const anchor =
+          orbitalPortfolioWorldAnchorRef.current ?? ORBITAL_PORTFOLIO_WORLD_ANCHOR;
+        const ship = spaceshipRef.current;
+        if (!ship) {
+          return anchor
+            .clone()
+            .add(
+              new THREE.Vector3(
+                0,
+                ORBITAL_PORTFOLIO_NAV_VERTICAL_OFFSET,
+                ORBITAL_PORTFOLIO_NAV_STANDOFF_DIST,
+              ),
+            );
+        }
+        const outward = ship.position.clone().sub(anchor);
+        // Keep the approach mostly horizontal to avoid unnecessary dive/climb.
+        outward.y *= 0.2;
+        if (outward.lengthSq() < 1e-5) outward.set(0, 0.12, 1);
+        outward.normalize();
+        return anchor
+          .clone()
+          .addScaledVector(outward, ORBITAL_PORTFOLIO_NAV_STANDOFF_DIST)
+          .add(new THREE.Vector3(0, ORBITAL_PORTFOLIO_NAV_VERTICAL_OFFSET, 0));
       }
       return null;
     },
@@ -9054,7 +9073,7 @@ export default function ResumeSpace3D({
         controls.enabled = true;
         seq.active = false;
         seq.raf = null;
-        vlog("👨‍🚀 About memory square entered");
+        vlog("👨‍🚀 Memory Squares entered");
         shipLog(
           `ABOUTDBG arrival phase=${aboutCellAnimationRef.current.phase} prepared=${aboutSlidePreparedIndexRef.current + 1} ready=${aboutSlideReadyRef.current ? 1 : 0} mats=${aboutTileContentMatsRef.current.length} maps=${
             aboutTileContentMatsRef.current.slice(0, 4).map((m) => (m?.map ? "1" : "0")).join("")
@@ -9947,7 +9966,7 @@ export default function ResumeSpace3D({
           enterAboutMemorySquare();
         } else {
           handleQuickNav(ABOUT_MEMORY_SQUARE_NAV_ID, "section");
-          vlog("👨‍🚀 Routing to About memory square");
+          vlog("👨‍🚀 Routing to Memory Squares");
         }
         return;
       }
@@ -21578,7 +21597,7 @@ export default function ResumeSpace3D({
           break;
         case ABOUT_MEMORY_SQUARE_NAV_ID:
           setAboutNavHereActive(true);
-          vlog("👨‍🚀 About — routing to memory square...");
+          vlog("👨‍🚀 Memory Squares — routing to destination...");
           if (!manualFlightModeRef.current) {
             setFollowingSpaceship(true);
             followingSpaceshipRef.current = true;
@@ -25538,41 +25557,25 @@ export default function ResumeSpace3D({
           )}
 
           {skillsLatticeActive && (
-            <div
+            <button
+              onClick={() => exitSkillsLattice({ restoreShip: true, clearSystem: true })}
               style={{
                 position: "fixed",
                 right: 18,
                 top: 72,
-                width: "fit-content",
                 zIndex: 1121,
-                borderRadius: 10,
-                border: "1px solid rgba(110, 210, 255, 0.38)",
-                background: "rgba(6, 14, 26, 0.8)",
-                color: "#d8eeff",
-                padding: "8px 10px",
+                padding: "5px 8px",
+                borderRadius: 8,
+                border: "1px solid rgba(255, 195, 160, 0.45)",
+                background: "rgba(28, 14, 10, 0.82)",
+                color: "#ffe2d5",
                 fontFamily: "'Rajdhani', sans-serif",
-                backdropFilter: "blur(6px)",
-                display: "flex",
-                gap: 8,
-                justifyContent: "flex-end",
+                fontSize: 11,
+                cursor: "pointer",
               }}
             >
-              <button
-                onClick={() => exitSkillsLattice({ restoreShip: true, clearSystem: true })}
-                style={{
-                  padding: "5px 8px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(255, 195, 160, 0.45)",
-                  background: "rgba(28, 14, 10, 0.82)",
-                  color: "#ffe2d5",
-                  fontFamily: "'Rajdhani', sans-serif",
-                  fontSize: 11,
-                  cursor: "pointer",
-                }}
-              >
-                Exit
-              </button>
-            </div>
+              Exit
+            </button>
           )}
           
           {skillsLatticeActive && (
