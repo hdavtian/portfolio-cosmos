@@ -216,8 +216,10 @@ const PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_MS = 1500;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_HOLD_MS = 540;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS = 1180;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS = 320;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS = 0.2;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_RAD_PER_SEC = 0.55;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS = 0.75;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_APPROACH_SPIN_RAD_PER_SEC = 0.75;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_TURNS = 0;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_RAD_PER_SEC = 0.9;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_SCALE_MULT = 4;
 const PROJECT_SHOWCASE_ABOUT_BEACON_CORE_SIZE = 280;
 const PROJECT_SHOWCASE_ABOUT_BEACON_HALO_SIZE = 760;
@@ -6800,15 +6802,15 @@ export default function ResumeSpace3D({
       if (interior) interior.visible = false;
       exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
       const exteriorModel = projectShowcaseAboutExteriorModelRef.current;
-      const tardisBounds = exteriorModel
+      const stationBounds = exteriorModel
         ? new THREE.Box3().setFromObject(exteriorModel)
         : new THREE.Box3().setFromObject(exterior);
-      const tardisWorld = tardisBounds.getCenter(new THREE.Vector3());
-      const tardisSize = tardisBounds.getSize(new THREE.Vector3());
+      const stationWorld = stationBounds.getCenter(new THREE.Vector3());
+      const stationSize = stationBounds.getSize(new THREE.Vector3());
       const startCam = camera.position.clone();
-      const approachTarget = tardisWorld
+      const approachTarget = stationWorld
         .clone()
-        .add(new THREE.Vector3(0, Math.max(3.6, tardisSize.y * 0.08), 0));
+        .add(new THREE.Vector3(0, Math.max(4.5, stationSize.y * 0.1), 0));
       const approachDir = startCam.clone().sub(approachTarget);
       if (approachDir.lengthSq() < 1e-5) {
         approachDir.set(0, 0.04, 1);
@@ -6822,10 +6824,16 @@ export default function ResumeSpace3D({
       } else {
         approachDir.normalize();
       }
+      const maxStationDim = Math.max(stationSize.x, stationSize.y, stationSize.z);
+      const stationSphere = stationBounds.getBoundingSphere(new THREE.Sphere());
+      const verticalFovRad = camera instanceof THREE.PerspectiveCamera
+        ? THREE.MathUtils.degToRad(camera.fov)
+        : THREE.MathUtils.degToRad(52);
+      const fitDistanceFromFov = stationSphere.radius / Math.tan(verticalFovRad * 0.5);
       const showcaseDist = THREE.MathUtils.clamp(
-        Math.max(tardisSize.x, tardisSize.y, tardisSize.z) * 1.95,
-        34,
-        72,
+        Math.max(maxStationDim * 2.7, fitDistanceFromFov * 1.22),
+        68,
+        220,
       );
       const showcaseCam = approachTarget.clone().addScaledVector(approachDir, showcaseDist);
       const runDirectStage = (
@@ -6846,10 +6854,9 @@ export default function ResumeSpace3D({
           const eased = t * t * (3 - 2 * t);
           const camPos = fromCam.clone().lerp(toCam, eased);
           if (spinRoot) {
-            const spinT = THREE.MathUtils.clamp((eased - 0.08) / 0.84, 0, 1);
             spinRoot.rotation.y =
               spinStartY +
-              PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS * Math.PI * 2 * spinT;
+              PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS * Math.PI * 2 * t;
           }
           controls.setLookAt(
             camPos.x,
@@ -6877,13 +6884,15 @@ export default function ResumeSpace3D({
         const stageStart = performance.now();
         const spinRoot = projectShowcaseAboutExteriorModelRef.current;
         const spinStartY = spinRoot?.rotation.y ?? 0;
+        const holdSpinTotalRad =
+          PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_TURNS * Math.PI * 2;
         const tick = () => {
           const elapsed = performance.now() - stageStart;
           const t = THREE.MathUtils.clamp(elapsed / Math.max(1, durationMs), 0, 1);
           if (spinRoot) {
             spinRoot.rotation.y =
               spinStartY +
-              (elapsed / 1000) * PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_RAD_PER_SEC;
+              holdSpinTotalRad * t;
           }
           controls.setLookAt(
             camPos.x,
@@ -6904,12 +6913,19 @@ export default function ResumeSpace3D({
         projectShowcaseAboutEntryRafRef.current = requestAnimationFrame(tick);
       };
 
-      const totalApproachMs =
+      const baseApproachMs =
         PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_MS +
         PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS;
+      const approachSpinDurationMs =
+        (PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS * Math.PI * 2 * 1000) /
+        Math.max(0.05, PROJECT_SHOWCASE_ABOUT_EXTERIOR_APPROACH_SPIN_RAD_PER_SEC);
+      const totalApproachMs = Math.max(baseApproachMs, approachSpinDurationMs);
+      const holdSpinDurationMs =
+        (PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_TURNS * Math.PI * 2 * 1000) /
+        Math.max(0.05, PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_RAD_PER_SEC);
       const entryHoldMs =
         Math.max(
-          1000,
+          holdSpinDurationMs,
           PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_HOLD_MS +
             PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS,
         );
