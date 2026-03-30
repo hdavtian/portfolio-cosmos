@@ -218,6 +218,15 @@ const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS = 1180;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS = 320;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS = 0.2;
 const PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_RAD_PER_SEC = 0.55;
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_SCALE_MULT = 4;
+const PROJECT_SHOWCASE_ABOUT_BEACON_CORE_SIZE = 280;
+const PROJECT_SHOWCASE_ABOUT_BEACON_HALO_SIZE = 760;
+const PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_FAR = 0.74;
+const PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_NEAR = 0.08;
+const PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_FAR = 0.2;
+const PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_NEAR = 0.02;
+const PROJECT_SHOWCASE_ABOUT_BEACON_FADE_NEAR_DIST = 380;
+const PROJECT_SHOWCASE_ABOUT_BEACON_FADE_FAR_DIST = 2200;
 const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MIN_INTERVAL_MS = 17000;
 const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MAX_INTERVAL_MS = 32000;
 const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_OUT_MS = 1150;
@@ -345,7 +354,8 @@ const ACTIVE_PROJECT_SHOWCASE_MODEL: ProjectShowcaseModelKey = "spaceHallwayBrig
 const PROJECT_SHOWCASE_ACTIVE_PROFILE =
   PROJECT_SHOWCASE_MODEL_PROFILES[ACTIVE_PROJECT_SHOWCASE_MODEL];
 const PROJECT_SHOWCASE_MODEL_PATH = PROJECT_SHOWCASE_ACTIVE_PROFILE.modelPath;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH = "/models/tardis/tardis.glb";
+const PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH =
+  "/models/space-station/lunar_gateway_space_station.glb";
 const PROJECT_SHOWCASE_TEXTURE_BASE_PATH =
   PROJECT_SHOWCASE_ACTIVE_PROFILE.textureBasePath;
 const PROJECT_SHOWCASE_ENABLE_FLOOR_PULSES =
@@ -396,10 +406,13 @@ const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(1158.5, 157.5, 14760.375);
+// Dedicated travel waypoint for "Portfolio" section navigation.
+// Keeps the actual portfolio structure anchored in its original universe location.
+const ORBITAL_PORTFOLIO_NAV_ENTRY_POINT = new THREE.Vector3(-9200, 240, -9800);
 const PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR = new THREE.Vector3(
-  -ORBITAL_PORTFOLIO_WORLD_ANCHOR.x * 0.6,
-  ORBITAL_PORTFOLIO_WORLD_ANCHOR.y,
-  -ORBITAL_PORTFOLIO_WORLD_ANCHOR.z * 0.6,
+  -695.1,
+  157.5,
+  -8856.225,
 );
 const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 620;
 const ORBITAL_PORTFOLIO_NAV_STANDOFF_DIST = 560;
@@ -3172,7 +3185,7 @@ export default function ResumeSpace3D({
         console.warn("[PERF:load] preloadCriticalAssets START");
         debugLog(
           "loader",
-          `[models] preload start hallway=${PROJECT_SHOWCASE_MODEL_PATH} tardis=${PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH} falcon=/models/spaceship/scene.gltf sd=/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb drone=${OBLIVION_DRONE_MODEL_PATH}`,
+          `[models] preload start hallway=${PROJECT_SHOWCASE_MODEL_PATH} aboutExterior=${PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH} falcon=/models/spaceship/scene.gltf sd=/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb drone=${OBLIVION_DRONE_MODEL_PATH}`,
         );
         if (hallwayContentModeRef.current === "about" && !hallwayFontsReadyRef.current) {
           try {
@@ -3256,7 +3269,10 @@ export default function ResumeSpace3D({
           projectShowcaseAboutExteriorPreloadedGltfRef.current = aboutExteriorGltf as {
             scene: THREE.Group;
           };
-          debugLog("loader", "[models] preloaded Falcon, Star Destroyer, Hallway, TARDIS, Drone");
+          debugLog(
+            "loader",
+            "[models] preloaded Falcon, Star Destroyer, Hallway, About Exterior, Drone",
+          );
         }
 
         const trenchTextureKeys = new Set<string>();
@@ -3471,6 +3487,12 @@ export default function ResumeSpace3D({
   const projectShowcaseInteriorRootRef = useRef<THREE.Group | null>(null);
   const projectShowcaseExteriorRootRef = useRef<THREE.Group | null>(null);
   const projectShowcaseAboutExteriorModelRef = useRef<THREE.Object3D | null>(null);
+  const projectShowcaseAboutBeaconCoreMatRef = useRef<THREE.SpriteMaterial | null>(
+    null,
+  );
+  const projectShowcaseAboutBeaconHaloMatRef = useRef<THREE.SpriteMaterial | null>(
+    null,
+  );
   const aboutTrenchContextRef = useRef<{
     trenchWidth: number;
     trenchSizeScaledY: number;
@@ -5791,28 +5813,7 @@ export default function ResumeSpace3D({
           .add(new THREE.Vector3(0, 54, 0));
       }
       if (targetId === "portfolio") {
-        const anchor = orbitalPortfolioWorldAnchorRef.current;
-        if (!anchor) return null;
-        const ship = spaceshipRef.current;
-        if (!ship) {
-          return anchor
-            .clone()
-            .add(
-              new THREE.Vector3(
-                0,
-                ORBITAL_PORTFOLIO_NAV_VERTICAL_OFFSET,
-                ORBITAL_PORTFOLIO_NAV_STANDOFF_DIST,
-              ),
-            );
-        }
-        const outward = ship.position.clone().sub(anchor);
-        if (outward.lengthSq() < 1e-5) outward.set(0.35, 0.2, 0.92);
-        outward.normalize();
-        const approach = anchor
-          .clone()
-          .addScaledVector(outward, ORBITAL_PORTFOLIO_NAV_STANDOFF_DIST);
-        approach.y = anchor.y + ORBITAL_PORTFOLIO_NAV_VERTICAL_OFFSET;
-        return approach;
+        return ORBITAL_PORTFOLIO_NAV_ENTRY_POINT.clone();
       }
       return null;
     },
@@ -10777,6 +10778,45 @@ export default function ResumeSpace3D({
       }
     };
 
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [sceneReady]);
+
+  useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
+    const modelWorld = new THREE.Vector3();
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const camera = sceneRef.current.camera;
+      const model = projectShowcaseAboutExteriorModelRef.current;
+      const coreMat = projectShowcaseAboutBeaconCoreMatRef.current;
+      const haloMat = projectShowcaseAboutBeaconHaloMatRef.current;
+      if (!camera || !model || !coreMat || !haloMat) return;
+
+      model.getWorldPosition(modelWorld);
+      const dist = camera.position.distanceTo(modelWorld);
+      const t = THREE.MathUtils.clamp(
+        (dist - PROJECT_SHOWCASE_ABOUT_BEACON_FADE_NEAR_DIST) /
+          Math.max(
+            1,
+            PROJECT_SHOWCASE_ABOUT_BEACON_FADE_FAR_DIST -
+              PROJECT_SHOWCASE_ABOUT_BEACON_FADE_NEAR_DIST,
+          ),
+        0,
+        1,
+      );
+      coreMat.opacity = THREE.MathUtils.lerp(
+        PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_NEAR,
+        PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_FAR,
+        t,
+      );
+      haloMat.opacity = THREE.MathUtils.lerp(
+        PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_NEAR,
+        PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_FAR,
+        t,
+      );
+    };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [sceneReady]);
@@ -18308,6 +18348,8 @@ export default function ResumeSpace3D({
       projectShowcaseInteriorRootRef.current = null;
       projectShowcaseExteriorRootRef.current = null;
       projectShowcaseAboutExteriorModelRef.current = null;
+      projectShowcaseAboutBeaconCoreMatRef.current = null;
+      projectShowcaseAboutBeaconHaloMatRef.current = null;
       projectShowcaseInteriorLightBasesRef.current = [];
       projectShowcaseElevatorEmergencyLightsRef.current = null;
       projectShowcaseElevatorPowerRef.current.phase = "normal";
@@ -18348,6 +18390,8 @@ export default function ResumeSpace3D({
         projectShowcaseInteriorRootRef.current = showcaseInteriorRoot;
         projectShowcaseExteriorRootRef.current = null;
         projectShowcaseAboutExteriorModelRef.current = null;
+        projectShowcaseAboutBeaconCoreMatRef.current = null;
+        projectShowcaseAboutBeaconHaloMatRef.current = null;
         const trenchWorldAnchor = getProjectShowcaseWorldAnchor(
           hallwayContentModeRef.current,
         );
@@ -20763,7 +20807,7 @@ export default function ResumeSpace3D({
               const tardisRoot = tardisGltf.scene.clone(true);
               const bounds = new THREE.Box3().setFromObject(tardisRoot);
               const size = bounds.getSize(new THREE.Vector3());
-              const desiredHeight = 58;
+              const desiredHeight = 58 * PROJECT_SHOWCASE_ABOUT_EXTERIOR_SCALE_MULT;
               const maxDim = Math.max(size.x, size.y, size.z, 1);
               const scale = desiredHeight / maxDim;
               tardisRoot.scale.setScalar(scale);
@@ -20791,6 +20835,63 @@ export default function ResumeSpace3D({
               });
               aboutExteriorRoot.add(tardisRoot);
               projectShowcaseAboutExteriorModelRef.current = tardisRoot;
+
+              // Add a soft navigation beacon so the station remains readable
+              // from deep-space distances without changing close approach framing.
+              const beaconCanvas = document.createElement("canvas");
+              beaconCanvas.width = 256;
+              beaconCanvas.height = 256;
+              const beaconCtx = beaconCanvas.getContext("2d");
+              if (beaconCtx) {
+                const grad = beaconCtx.createRadialGradient(128, 128, 0, 128, 128, 128);
+                grad.addColorStop(0, "rgba(206, 232, 255, 1.0)");
+                grad.addColorStop(0.16, "rgba(140, 198, 255, 0.95)");
+                grad.addColorStop(0.55, "rgba(70, 150, 255, 0.38)");
+                grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+                beaconCtx.fillStyle = grad;
+                beaconCtx.fillRect(0, 0, 256, 256);
+              }
+              const beaconTexture = new THREE.CanvasTexture(beaconCanvas);
+              beaconTexture.minFilter = THREE.LinearFilter;
+              beaconTexture.magFilter = THREE.LinearFilter;
+              beaconTexture.colorSpace = THREE.SRGBColorSpace;
+              const beaconCoreMat = new THREE.SpriteMaterial({
+                map: beaconTexture,
+                color: 0xb9e0ff,
+                opacity: PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_FAR,
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending,
+              });
+              const beaconCore = new THREE.Sprite(beaconCoreMat);
+              beaconCore.scale.set(
+                PROJECT_SHOWCASE_ABOUT_BEACON_CORE_SIZE,
+                PROJECT_SHOWCASE_ABOUT_BEACON_CORE_SIZE,
+                1,
+              );
+              beaconCore.position.set(0, 36, 0);
+              beaconCore.layers.set(PROJECT_SHOWCASE_LAYER);
+              beaconCore.frustumCulled = false;
+              const beaconHaloMat = new THREE.SpriteMaterial({
+                map: beaconTexture,
+                color: 0x78bcff,
+                opacity: PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_FAR,
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending,
+              });
+              const beaconHalo = new THREE.Sprite(beaconHaloMat);
+              beaconHalo.scale.set(
+                PROJECT_SHOWCASE_ABOUT_BEACON_HALO_SIZE,
+                PROJECT_SHOWCASE_ABOUT_BEACON_HALO_SIZE,
+                1,
+              );
+              beaconHalo.position.copy(beaconCore.position);
+              beaconHalo.layers.set(PROJECT_SHOWCASE_LAYER);
+              beaconHalo.frustumCulled = false;
+              aboutExteriorRoot.add(beaconHalo, beaconCore);
+              projectShowcaseAboutBeaconCoreMatRef.current = beaconCoreMat;
+              projectShowcaseAboutBeaconHaloMatRef.current = beaconHaloMat;
 
               const tardisKey = new THREE.SpotLight(
                 0xe8f4ff,
@@ -22277,6 +22378,8 @@ export default function ResumeSpace3D({
       projectShowcaseInteriorRootRef.current = null;
       projectShowcaseExteriorRootRef.current = null;
       projectShowcaseAboutExteriorModelRef.current = null;
+      projectShowcaseAboutBeaconCoreMatRef.current = null;
+      projectShowcaseAboutBeaconHaloMatRef.current = null;
       projectShowcaseInteriorLightBasesRef.current = [];
       projectShowcaseElevatorEmergencyLightsRef.current = null;
       projectShowcaseElevatorPowerRef.current.phase = "normal";

@@ -1974,9 +1974,16 @@ export const useNavigationSystem = (deps: {
           vlog("🛑 Projects failsafe: forcing final straight-in approach");
         }
       }
-      const decelDist = distance > NAV_LIGHTSPEED_ENGAGE_DIST
-        ? NAV_LIGHTSPEED_DECEL_DIST   // lightspeed needs longer to slow down
-        : arrivalDistance + NAV_DECEL_EXTRA;
+      const shouldForcePortfolioLightspeed =
+        target.type === "section" && target.id === "portfolio";
+      const decelDist = shouldForcePortfolioLightspeed
+        ? Math.max(
+            arrivalDistance + 36,
+            Math.min(NAV_LIGHTSPEED_DECEL_DIST, distance * 0.18),
+          )
+        : distance > NAV_LIGHTSPEED_ENGAGE_DIST
+          ? NAV_LIGHTSPEED_DECEL_DIST // lightspeed needs longer to slow down
+          : arrivalDistance + NAV_DECEL_EXTRA;
       if (!target.lightspeedLockedOut && distance <= decelDist) {
         target.lightspeedLockedOut = true;
       }
