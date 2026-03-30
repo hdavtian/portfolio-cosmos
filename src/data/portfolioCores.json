@@ -1,5 +1,596 @@
 [
   {
+    "core": "InvestCloud",
+    "coreColor": "#FFD65C",
+    "plains": [
+      {
+        "angle": 0,
+        "items": [
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#FAB41E",
+            "items": [
+              {
+                "id": "tcc",
+                "title": "Test Control Center",
+                "image": "/images/investcloud/tcc/tcc-1.jpg",
+                "description": "An winform application running selenium test cases.",
+                "technologies": [
+                  ".NET",
+                  "WinForms",
+                  "C#",
+                  "Selenium/Java",
+                  "TestNG"
+                ],
+                "year": 2018,
+                "fit": "contain",
+                "galleryMedia": [
+                  {
+                    "id": "tcc-2",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-2.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-3",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-3.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-10",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-10.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-11",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-11.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-12",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-12.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-13",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-13.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "tcc-14",
+                    "type": "image",
+                    "image": "/images/investcloud/tcc/tcc-14.jpg",
+                    "title": "TCC",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  }
+                ]
+              },
+              {
+                "id": "v4-analyzer",
+                "title": "V4 Analyzer",
+                "image": "/images/investcloud/v4-analyzer/v4a-1.jpg",
+                "description": "A JavaScript/TypeScript application to help analyze InvestCloud Portals",
+                "technologies": [
+                  "JavaScript",
+                  "TypeScript",
+                  "HTML",
+                  "CSS"
+                ],
+                "year": 2019,
+                "fit": "contain",
+                "galleryMedia": [
+                  {
+                    "id": "v4a-2",
+                    "type": "image",
+                    "image": "/images/investcloud/v4-analyzer/v4a-2.jpg",
+                    "title": "V4 Analyzer",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "v4a-3",
+                    "type": "image",
+                    "image": "/images/investcloud/v4-analyzer/v4a-3.jpg",
+                    "title": "V4 Analyzer",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "v4a-4",
+                    "type": "image",
+                    "image": "/images/investcloud/v4-analyzer/v4a-4.jpg",
+                    "title": "V4 Analyzer",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "v4a-5",
+                    "type": "image",
+                    "image": "/images/investcloud/v4-analyzer/v4a-5.jpg",
+                    "title": "V4 Analyzer",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "v4a-6",
+                    "type": "image",
+                    "image": "/images/investcloud/v4-analyzer/v4a-6.jpg",
+                    "title": "V4 Analyzer",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  }
+                ]
+              },
+              {
+                "id": "taffie",
+                "title": "Test Automation Framework for InvestCloud Efficiency",
+                "image": "/images/investcloud/taffie/taffie-1.jpg",
+                "description": "A C# Playwright framework to help automate the testing of InvestCloud Portals",
+                "technologies": [
+                  ".NET/C#",
+                  ".NET Web API",
+                  "Angular",
+                  "Playwright",
+                  "JavaScript",
+                  "TypeScript",
+                  "HTML",
+                  "CSS"
+                ],
+                "year": 2024,
+                "fit": "contain",
+                "galleryMedia": [
+                  {
+                    "id": "taffie-2",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-2.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-3",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-3.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-4",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-4.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-5",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-5.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-6",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-6.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-7",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-7.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-8",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-8.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-9",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-9.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-10",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-10.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-11",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-11.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-12",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-12.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-13",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-13.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-14",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-14.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  },
+                  {
+                    "id": "taffie-50",
+                    "type": "image",
+                    "image": "/images/investcloud/taffie/taffie-50.jpg",
+                    "title": "Taffie",
+                    "description": "Placeholder description.",
+                    "fit": "contain"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "core": "Disney Inspired",
+    "coreColor": "#9cc2ff",
+    "plains": [
+      {
+        "angle": 25,
+        "items": [
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#1EA2FA",
+            "items": [
+              {
+                "id": "disney-demo-1",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-1.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],
+                "year": null,
+                "fit": "contain"
+              },
+              {
+                "id": "disney-demo-2",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-2.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],
+                "year": null,
+                "fit": "contain"
+              },
+              {
+                "id": "disney-demo-3",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-3.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],
+                "year": null,
+                "fit": "contain"
+              },
+              {
+                "id": "disney-demo-4",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-4.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],
+                "year": null,
+                "fit": "contain"
+              },
+              {
+                "id": "disney-demo-5",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-5.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-6",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-6.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-7",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-7.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-8",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-8.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-9",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-9.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-10",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-10.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }, {
+                "id": "disney-demo-11",
+                "title": "Disney Demo",
+                "image": "/images/disney-demo/disney-demo-11.jpg",
+                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
+                "technologies": [
+                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                ],  
+                "year": null,
+                "fit": "contain"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "core": "Murad",
+    "coreColor": "#ff9cfc",
+    "plains": [
+      {
+        "angle": -25,
+        "items": [
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#ff9cfc",
+            "items": [
+              {
+                "id": "murad-1",
+                "title": "Murad",
+                "image": "/images/murad/murad-1.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, {
+                "id": "murad-2",
+                "title": "Murad",
+                "image": "/images/murad/murad-2.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-3",
+                "title": "Murad",
+                "image": "/images/murad/murad-3.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-4",
+                "title": "Murad",
+                "image": "/images/murad/murad-4.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-5",
+                "title": "Murad",
+                "image": "/images/murad/murad-5.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-6",
+                "title": "Murad",
+                "image": "/images/murad/murad-6.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-7",
+                "title": "Murad",
+                "image": "/images/murad/murad-7.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-8",
+                "title": "Murad",
+                "image": "/images/murad/murad-8.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-9",
+                "title": "Murad",
+                "image": "/images/murad/murad-9.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-10",
+                "title": "Murad",
+                "image": "/images/murad/murad-10.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-11",
+                "title": "Murad",
+                "image": "/images/murad/murad-11.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }, 
+              {
+                "id": "murad-12",
+                "title": "Murad",
+                "image": "/images/murad/murad-12.jpg",
+                "description": "Landing pages and emails for Murad products.",
+                "technologies": [
+                  "HTML", "CSS", "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
     "core": "StormScape",
     "coreColor": "#5ED9FF",
     "plains": [
@@ -726,597 +1317,6 @@
                     "fit": "cover"
                   }
                 ]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "core": "InvestCloud",
-    "coreColor": "#FFD65C",
-    "plains": [
-      {
-        "angle": 0,
-        "items": [
-          {
-            "orbitColor": "#545353",
-            "items": []
-          },
-          {
-            "orbitColor": "#FAB41E",
-            "items": [
-              {
-                "id": "tcc",
-                "title": "Test Control Center",
-                "image": "/images/investcloud/tcc/tcc-1.jpg",
-                "description": "An winform application running selenium test cases.",
-                "technologies": [
-                  ".NET",
-                  "WinForms",
-                  "C#",
-                  "Selenium/Java",
-                  "TestNG"
-                ],
-                "year": 2018,
-                "fit": "contain",
-                "galleryMedia": [
-                  {
-                    "id": "tcc-2",
-                    "type": "image",
-                    "image": "/images/investcloud/tcc/tcc-2.jpg",
-                    "title": "TCC",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "tcc-3",
-                    "type": "image",
-                    "image": "/images/investcloud/tcc/tcc-3.jpg",
-                    "title": "TCC",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "tcc-10",
-                    "type": "image",
-                    "image": "/images/investcloud/tcc/tcc-10.jpg",
-                    "title": "TCC",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "tcc-11",
-                    "type": "image",
-                    "image": "/images/investcloud/tcc/tcc-11.jpg",
-                    "title": "TCC",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "tcc-12",
-                    "type": "image",
-                    "image": "/images/investcloud/tcc/tcc-12.jpg",
-                    "title": "TCC",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "tcc-13",
-                    "type": "image",
-                    "image": "/images/investcloud/tcc/tcc-13.jpg",
-                    "title": "TCC",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "tcc-14",
-                    "type": "image",
-                    "image": "/images/investcloud/tcc/tcc-14.jpg",
-                    "title": "TCC",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  }
-                ]
-              },
-              {
-                "id": "v4-analyzer",
-                "title": "V4 Analyzer",
-                "image": "/images/investcloud/v4-analyzer/v4a-1.jpg",
-                "description": "A JavaScript/TypeScript application to help analyze InvestCloud Portals",
-                "technologies": [
-                  "JavaScript",
-                  "TypeScript",
-                  "HTML",
-                  "CSS"
-                ],
-                "year": 2019,
-                "fit": "contain",
-                "galleryMedia": [
-                  {
-                    "id": "v4a-2",
-                    "type": "image",
-                    "image": "/images/investcloud/v4-analyzer/v4a-2.jpg",
-                    "title": "V4 Analyzer",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "v4a-3",
-                    "type": "image",
-                    "image": "/images/investcloud/v4-analyzer/v4a-3.jpg",
-                    "title": "V4 Analyzer",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "v4a-4",
-                    "type": "image",
-                    "image": "/images/investcloud/v4-analyzer/v4a-4.jpg",
-                    "title": "V4 Analyzer",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "v4a-5",
-                    "type": "image",
-                    "image": "/images/investcloud/v4-analyzer/v4a-5.jpg",
-                    "title": "V4 Analyzer",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "v4a-6",
-                    "type": "image",
-                    "image": "/images/investcloud/v4-analyzer/v4a-6.jpg",
-                    "title": "V4 Analyzer",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  }
-                ]
-              },
-              {
-                "id": "taffie",
-                "title": "Test Automation Framework for InvestCloud Efficiency",
-                "image": "/images/investcloud/taffie/taffie-1.jpg",
-                "description": "A C# Playwright framework to help automate the testing of InvestCloud Portals",
-                "technologies": [
-                  ".NET/C#",
-                  ".NET Web API",
-                  "Angular",
-                  "Playwright",
-                  "JavaScript",
-                  "TypeScript",
-                  "HTML",
-                  "CSS"
-                ],
-                "year": 2024,
-                "fit": "contain",
-                "galleryMedia": [
-                  {
-                    "id": "taffie-2",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-2.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-3",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-3.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-4",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-4.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-5",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-5.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-6",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-6.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-7",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-7.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-8",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-8.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-9",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-9.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-10",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-10.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-11",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-11.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-12",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-12.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-13",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-13.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-14",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-14.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  },
-                  {
-                    "id": "taffie-50",
-                    "type": "image",
-                    "image": "/images/investcloud/taffie/taffie-50.jpg",
-                    "title": "Taffie",
-                    "description": "Placeholder description.",
-                    "fit": "contain"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "core": "Disney Demo",
-    "coreColor": "#9cc2ff",
-    "plains": [
-      {
-        "angle": 25,
-        "items": [
-          {
-            "orbitColor": "#545353",
-            "items": []
-          },
-          {
-            "orbitColor": "#545353",
-            "items": []
-          },
-          {
-            "orbitColor": "#545353",
-            "items": []
-          },
-          {
-            "orbitColor": "#545353",
-            "items": []
-          },
-          {
-            "orbitColor": "#1EA2FA",
-            "items": [
-              {
-                "id": "disney-demo-1",
-                "title": "Disney Demo",
-                "image": "/images/disney-demo/disney-demo-1.jpg",
-                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-                "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],
-                "year": null,
-                "fit": "contain"
-              },
-              {
-                "id": "disney-demo-2",
-                "title": "Disney Demo",
-                "image": "/images/disney-demo/disney-demo-2.jpg",
-                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-                "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],
-                "year": null,
-                "fit": "contain"
-              },
-              {
-                "id": "disney-demo-3",
-                "title": "Disney Demo",
-                "image": "/images/disney-demo/disney-demo-3.jpg",
-                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-                "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],
-                "year": null,
-                "fit": "contain"
-              },
-              {
-                "id": "disney-demo-4",
-                "title": "Disney Demo",
-                "image": "/images/disney-demo/disney-demo-4.jpg",
-                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-                "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],
-                "year": null,
-                "fit": "contain"
-              },
-              {
-                "id": "disney-demo-5",
-                "title": "Disney Demo",
-                "image": "/images/disney-demo/disney-demo-5.jpg",
-                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-                "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
-                "year": null,
-                "fit": "contain"
-              }, {
-                "id": "disney-demo-6",
-                "title": "Disney Demo",
-                "image": "/images/disney-demo/disney-demo-6.jpg",
-                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-                "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
-                "year": null,
-                "fit": "contain"
-              }, {
-                "id": "disney-demo-7",
-                "title": "Disney Demo",
-                "image": "/images/disney-demo/disney-demo-7.jpg",
-                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-                "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
-                "year": null,
-                "fit": "contain"
-              }, {
-                "id": "disney-demo-8",
-                "title": "Disney Demo",
-                "image": "/images/disney-demo/disney-demo-8.jpg",
-                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-                "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
-                "year": null,
-                "fit": "contain"
-              }, {
-                "id": "disney-demo-9",
-                "title": "Disney Demo",
-                "image": "/images/disney-demo/disney-demo-9.jpg",
-                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-                "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
-                "year": null,
-                "fit": "contain"
-              }, {
-                "id": "disney-demo-10",
-                "title": "Disney Demo",
-                "image": "/images/disney-demo/disney-demo-10.jpg",
-                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-                "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
-                "year": null,
-                "fit": "contain"
-              }, {
-                "id": "disney-demo-11",
-                "title": "Disney Demo",
-                "image": "/images/disney-demo/disney-demo-11.jpg",
-                "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-                "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
-                "year": null,
-                "fit": "contain"
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "core": "Murad",
-    "coreColor": "#ff9cfc",
-    "plains": [
-      {
-        "angle": -25,
-        "items": [
-          {
-            "orbitColor": "#545353",
-            "items": []
-          },
-          {
-            "orbitColor": "#545353",
-            "items": []
-          },
-          {
-            "orbitColor": "#545353",
-            "items": []
-          },
-          {
-            "orbitColor": "#545353",
-            "items": []
-          },
-          {
-            "orbitColor": "#ff9cfc",
-            "items": [
-              {
-                "id": "murad-1",
-                "title": "Murad",
-                "image": "/images/murad/murad-1.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
-              }, {
-                "id": "murad-2",
-                "title": "Murad",
-                "image": "/images/murad/murad-2.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
-              }, 
-              {
-                "id": "murad-3",
-                "title": "Murad",
-                "image": "/images/murad/murad-3.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
-              }, 
-              {
-                "id": "murad-4",
-                "title": "Murad",
-                "image": "/images/murad/murad-4.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
-              }, 
-              {
-                "id": "murad-5",
-                "title": "Murad",
-                "image": "/images/murad/murad-5.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
-              }, 
-              {
-                "id": "murad-6",
-                "title": "Murad",
-                "image": "/images/murad/murad-6.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
-              }, 
-              {
-                "id": "murad-7",
-                "title": "Murad",
-                "image": "/images/murad/murad-7.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
-              }, 
-              {
-                "id": "murad-8",
-                "title": "Murad",
-                "image": "/images/murad/murad-8.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
-              }, 
-              {
-                "id": "murad-9",
-                "title": "Murad",
-                "image": "/images/murad/murad-9.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
-              }, 
-              {
-                "id": "murad-10",
-                "title": "Murad",
-                "image": "/images/murad/murad-10.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
-              }, 
-              {
-                "id": "murad-11",
-                "title": "Murad",
-                "image": "/images/murad/murad-11.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
-              }, 
-              {
-                "id": "murad-12",
-                "title": "Murad",
-                "image": "/images/murad/murad-12.jpg",
-                "description": "Landing pages and emails for Murad products.",
-                "technologies": [
-                  "HTML", "CSS", "JavaScript"
-                ],
-                "year": null,
-                "fit": "cover"
               }
             ]
           }
