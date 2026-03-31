@@ -1977,8 +1977,6 @@ const computeCenterTopThresholdDistance = (
   prevSlide: AboutHallSlide,
   estimatedVisibleHeight: number,
   fixedTriggerDistance: number,
-  immersiveWidths: Record<AboutHallColumnId, number>,
-  immersiveHeights: Record<AboutHallColumnId, number>,
   measureFn: (slide: AboutHallSlide) => number,
 ): number | null => {
   if (prevSlide.nextSlideTriggerMode !== "centerTopThreshold") return null;
@@ -2491,7 +2489,7 @@ export default function ResumeSpace3D({
   const aboutLevelGateActiveRef = useRef(false);
   const [visitedAboutLevels, setVisitedAboutLevels] = useState<string[]>(() => getAboutElevatorVisitedLevels());
 
-  const [aboutTransitionActive, setAboutTransitionActive] = useState(false);
+  const [, setAboutTransitionActive] = useState(false);
   const aboutTransitionActiveRef = useRef(false);
   const aboutTransitionCleanupRef = useRef<(() => void) | null>(null);
   const [aboutEntryFadeOpacity, setAboutEntryFadeOpacity] = useState(0);
@@ -7018,8 +7016,8 @@ export default function ResumeSpace3D({
     projectShowcasePanelsRef.current = [];
 
     const {
-      trenchWidth, trenchSizeScaledY, runAxis, shaftBottomWorld,
-      wallOffset, elevatorOppositeWall, elevatorCreditsMode, elevatorCreditsWall,
+      trenchWidth, runAxis, shaftBottomWorld,
+      elevatorOppositeWall, elevatorCreditsMode, elevatorCreditsWall,
       estimatedVisibleHeight, fixedTriggerDistance, immersiveWidths, immersiveHeights,
       panelY,
     } = ctx;
@@ -7063,7 +7061,7 @@ export default function ResumeSpace3D({
 
         const thresholdDist = computeCenterTopThresholdDistance(
           prevSlide, estimatedVisibleHeight, fixedTriggerDistance,
-          immersiveWidths, immersiveHeights, estimateTallest,
+          estimateTallest,
         );
 
         if (thresholdDist != null) {
@@ -19017,7 +19015,7 @@ export default function ResumeSpace3D({
 
               const thresholdDist = computeCenterTopThresholdDistance(
                 prevSlide, estimatedVisibleHeight, fixedTriggerDistance,
-                immersiveWidths, immersiveHeights, estimateTallestCellHeight,
+                estimateTallestCellHeight,
               );
 
               if (thresholdDist != null) {
@@ -23314,7 +23312,7 @@ export default function ResumeSpace3D({
               {registryCapabilities.showExit && (
                 <button
                   onClick={
-                    activeRegistryMode === "about"
+                    projectShowcaseActive
                       ? exitProjectShowcase
                       : exitOrbitalPortfolio
                   }
