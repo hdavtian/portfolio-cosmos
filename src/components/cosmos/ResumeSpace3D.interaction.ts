@@ -171,6 +171,34 @@ export const createPointerInteractionHandlers = (deps: {
 
     // Check for hover
     raycaster.setFromCamera(pointer, camera);
+
+    // Prioritize hologram badges/panels so hover does not bounce to planet hits
+    // behind the screen-space HUD elements.
+    const hologramPanelPickables = getHologramPanelClickables?.() ?? [];
+    if (hologramPanelPickables.length > 0) {
+      const hologramHits = raycaster.intersectObjects(hologramPanelPickables, false);
+      if (hologramHits.length > 0) {
+        if (hoveredObject) {
+          const prev = hoveredObject;
+          prev.userData.isPointerOver = false;
+          if (!prev.userData.flashActive) prev.userData.hoverStartTime = 0;
+          if (prev.userData.hasHaloLayers) {
+            prev.userData.auroraTargetOpacity = 0;
+            prev.userData.ringTargetOpacity = 0;
+            prev.userData.coreTargetOpacity = 0;
+          }
+          hoveredObject = null;
+        }
+        const code = Number(
+          (hologramHits[0].object.userData as { hologramPanelIndex?: number })
+            .hologramPanelIndex,
+        );
+        setHologramHover(Number.isFinite(code) ? code : null);
+        document.body.style.cursor = "pointer";
+        return;
+      }
+    }
+
     const intersects = raycaster.intersectObjects(clickablePlanets, false);
 
     // Determine the object under pointer (if any)
@@ -282,20 +310,6 @@ export const createPointerInteractionHandlers = (deps: {
           true,
         );
         if (sdHits.length > 0) {
-          document.body.style.cursor = "pointer";
-          return;
-        }
-      }
-
-      const hologramPanelPickables = getHologramPanelClickables?.() ?? [];
-      if (hologramPanelPickables.length > 0) {
-        const hologramHits = raycaster.intersectObjects(hologramPanelPickables, false);
-        if (hologramHits.length > 0) {
-          const code = Number(
-            (hologramHits[0].object.userData as { hologramPanelIndex?: number })
-              .hologramPanelIndex,
-          );
-          setHologramHover(Number.isFinite(code) ? code : null);
           document.body.style.cursor = "pointer";
           return;
         }

@@ -25,11 +25,11 @@ export const TargetPreviewTVPanel: React.FC<Props> = ({
   const [activeTab, setActiveTab] = useState<ActiveTab>("target");
   const prevVisibleRef = useRef(false);
 
-  // Randomly pick initial tab when the panel becomes visible
+  // Default to target feed on first visible frame; user can still switch tabs.
   useEffect(() => {
     const isVisible = tvPhase !== "hidden" || dashcamPhase !== "hidden";
     if (isVisible && !prevVisibleRef.current) {
-      setActiveTab(Math.random() > 0.5 ? "flight" : "target");
+      setActiveTab("target");
     }
     prevVisibleRef.current = isVisible;
   }, [tvPhase, dashcamPhase]);

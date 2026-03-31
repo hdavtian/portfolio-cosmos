@@ -56,6 +56,7 @@ const TECH_BADGE_PAD_X = 20;
 const TECH_BADGE_PAD_Y = 10;
 const TECH_BADGE_HOVER_INDEX_BASE = 10000;
 const TECH_BADGE_HOVER_SPIN_DURATION = 0.55;
+const TECH_BADGE_HOVER_SPIN_COOLDOWN_MS = 700;
 const RULER_NDC_X = 0.965;
 const RULER_COLOR = 0x2a9968;
 const RULER_NOTCH_LEN_NDC = 0.016;
@@ -155,6 +156,7 @@ type TechBadgeRecord = {
   hoverSpinActive: boolean;
   hoverSpinProgress: number;
   hoverSpinAngle: number;
+  lastSpinAtMs: number;
   launched: boolean;
   techEntry: JobTechEntry;
 };
@@ -236,6 +238,8 @@ export class HologramDroneDisplay {
   private rulerLineMat: THREE.LineBasicMaterial | null = null;
   private rulerNotches: THREE.Line[] = [];
   private rulerNotchMats: THREE.LineBasicMaterial[] = [];
+  private rulerRevealActive = false;
+  private rulerRevealProgress = 0;
 
   private flyStartPos = new THREE.Vector3();
   private flyEndPos = new THREE.Vector3();
@@ -1269,9 +1273,13 @@ export class HologramDroneDisplay {
         this.hoveredTechBadgeIndex = badgeIdx;
         if (oldHover !== badgeIdx) {
           const badge = this.techBadges[badgeIdx];
-          badge.hoverSpinActive = true;
-          badge.hoverSpinProgress = 0;
-          badge.hoverSpinAngle = 0;
+          const nowMs = performance.now();
+          if (nowMs - badge.lastSpinAtMs >= TECH_BADGE_HOVER_SPIN_COOLDOWN_MS) {
+            badge.hoverSpinActive = true;
+            badge.hoverSpinProgress = 0;
+            badge.hoverSpinAngle = 0;
+            badge.lastSpinAtMs = nowMs;
+          }
           if (this.lockedTechBadgeIndex === null) {
             this.applySearHighlight(badge.techEntry.highlightMatches, "preview");
           }
@@ -2015,6 +2023,8 @@ export class HologramDroneDisplay {
     this.techSequenceTotalDuration = 0;
     this.hoveredTechBadgeIndex = null;
     this.lockedTechBadgeIndex = null;
+    this.rulerRevealActive = false;
+    this.rulerRevealProgress = 0;
     this.clearRuler();
   }
 
@@ -2099,6 +2109,7 @@ export class HologramDroneDisplay {
         hoverSpinActive: false,
         hoverSpinProgress: 0,
         hoverSpinAngle: 0,
+        lastSpinAtMs: 0,
         launched: false,
         techEntry: entry,
       });
@@ -2186,12 +2197,16 @@ export class HologramDroneDisplay {
     this.techSequenceElapsed += dt;
 
     const depth = Math.max(12, camera.position.distanceTo(this.flyEndPos) * 0.52);
+    let allLanded = true;
     const droneWorldNow = this._tmpV.copy(this.droneGroup.position);
     this.rootGroup.localToWorld(droneWorldNow);
     for (let i = 0; i < this.techBadges.length; i++) {
       const badge = this.techBadges[i];
       const elapsed = this.techSequenceElapsed - badge.revealTime;
-      if (elapsed < 0) continue;
+      if (elapsed < 0) {
+        allLanded = false;
+        continue;
+      }
 
       if (!badge.launched) {
         badge.startWorld.copy(droneWorldNow);
@@ -2200,6 +2215,7 @@ export class HologramDroneDisplay {
       }
 
       const t = Math.min(1, elapsed / TECH_BADGE_FLY_DURATION);
+      if (t < 1) allLanded = false;
       const eased = 1 - Math.pow(1 - t, 3);
 
       const target = this.getTechBadgeTarget(i, camera, depth);
@@ -2236,7 +2252,19 @@ export class HologramDroneDisplay {
         badge.mesh.quaternion.multiply(this._tmpQ);
       }
     }
-    this.buildRuler(camera, depth);
+
+    if (allLanded) {
+      if (!this.rulerRevealActive && this.rulerRevealProgress === 0) {
+        this.rulerRevealActive = true;
+      }
+      if (this.rulerRevealActive) {
+        this.rulerRevealProgress = Math.min(1, this.rulerRevealProgress + dt / 0.42);
+        if (this.rulerRevealProgress >= 1) this.rulerRevealActive = false;
+      }
+      this.buildRuler(camera, depth);
+    } else {
+      this.clearRuler();
+    }
 
     if (this.rulerLine && this.rulerLineMat) {
       const rulerPulse = 0.25 + Math.sin(this.techSequenceElapsed * 1.6) * 0.1;
@@ -2281,6 +2309,7 @@ export class HologramDroneDisplay {
       camera,
       depth,
     );
+    const rulerCurrentEnd = rulerTop.clone().lerp(rulerBottom, this.rulerRevealProgress);
 
     if (!this.rulerLine || !this.rulerLineMat) {
       this.rulerLineMat = new THREE.LineBasicMaterial({
@@ -2288,14 +2317,14 @@ export class HologramDroneDisplay {
         transparent: true,
         opacity: 0.55,
       });
-      const rulerGeo = new THREE.BufferGeometry().setFromPoints([rulerTop, rulerBottom]);
+      const rulerGeo = new THREE.BufferGeometry().setFromPoints([rulerTop, rulerCurrentEnd]);
       this.rulerLine = new THREE.Line(rulerGeo, this.rulerLineMat);
       this.rulerLine.renderOrder = 1998;
       this.panelGroup.add(this.rulerLine);
     } else {
       const rulerPos = this.rulerLine.geometry.attributes.position as THREE.BufferAttribute;
       rulerPos.setXYZ(0, rulerTop.x, rulerTop.y, rulerTop.z);
-      rulerPos.setXYZ(1, rulerBottom.x, rulerBottom.y, rulerBottom.z);
+      rulerPos.setXYZ(1, rulerCurrentEnd.x, rulerCurrentEnd.y, rulerCurrentEnd.z);
       rulerPos.needsUpdate = true;
     }
 
@@ -2328,6 +2357,7 @@ export class HologramDroneDisplay {
     for (let i = 0; i < this.techBadges.length; i++) {
       const target = this.getTechBadgeTarget(i, camera, depth);
       const targetNdc = target.clone().project(camera);
+      const notchT = i / Math.max(1, this.techBadges.length - 1);
       const notchStart = this.ndcToWorldOnViewPlane(
         RULER_NDC_X,
         targetNdc.y,
@@ -2346,6 +2376,7 @@ export class HologramDroneDisplay {
       notchPos.setXYZ(0, notchStart.x, notchStart.y, notchStart.z);
       notchPos.setXYZ(1, notchEnd.x, notchEnd.y, notchEnd.z);
       notchPos.needsUpdate = true;
+      notch.visible = this.rulerRevealProgress >= notchT;
     }
   }
 
