@@ -61,6 +61,16 @@ export function createTVPreviewController(): TVPreviewController {
 
   let rt: THREE.WebGLRenderTarget | null = null;
 
+  // Dedicated preview lighting — added to scene during live_feed,
+  // positioned near the preview camera so the target is always lit.
+  const previewKeyLight = new THREE.PointLight(0xffffff, 2.5, 0, 1.2);
+  previewKeyLight.name = "TVPreviewKeyLight";
+  const previewFillLight = new THREE.PointLight(0x8ec8ff, 1.2, 0, 1.5);
+  previewFillLight.name = "TVPreviewFillLight";
+  const previewAmbient = new THREE.AmbientLight(0xffffff, 0.6);
+  previewAmbient.name = "TVPreviewAmbient";
+  let lightsInScene = false;
+
   let orbitAngle = 0;
   let orbitPitchBase = 0.2;
 
@@ -71,6 +81,15 @@ export function createTVPreviewController(): TVPreviewController {
   let frameTick = 0;
 
   // ── Internal helpers ─────────────────────────────────────────────────────
+
+  function removeLightsFromScene(scene: THREE.Scene) {
+    if (lightsInScene) {
+      scene.remove(previewKeyLight);
+      scene.remove(previewFillLight);
+      scene.remove(previewAmbient);
+      lightsInScene = false;
+    }
+  }
 
   function setPhase(p: TVPhase) {
     if (p === phase) return;
@@ -178,17 +197,26 @@ export function createTVPreviewController(): TVPreviewController {
   }
 
   function updateOrbitCamera(deltaMs: number) {
-    const speed = 0.35;
+    const speed = 0.65;
     orbitAngle += (deltaMs / 1000) * speed;
-    const pitch = orbitPitchBase + Math.sin(orbitAngle * 0.25) * 0.12;
+    const pitch = orbitPitchBase + Math.sin(orbitAngle * 0.3) * 0.18;
     const dist = Math.max(targetRadius * 2.8, 120);
 
-    previewCam.position.set(
-      targetPos.x + Math.cos(orbitAngle) * Math.cos(pitch) * dist,
-      targetPos.y + Math.sin(pitch) * dist * 0.5,
-      targetPos.z + Math.sin(orbitAngle) * Math.cos(pitch) * dist,
-    );
+    const camX = targetPos.x + Math.cos(orbitAngle) * Math.cos(pitch) * dist;
+    const camY = targetPos.y + Math.sin(pitch) * dist * 0.6;
+    const camZ = targetPos.z + Math.sin(orbitAngle) * Math.cos(pitch) * dist;
+
+    previewCam.position.set(camX, camY, camZ);
     previewCam.lookAt(targetPos);
+
+    // Key light rides with the camera so the target face is always lit
+    previewKeyLight.position.set(camX, camY, camZ);
+
+    // Fill light opposite the camera for softer shadow fill
+    const fillX = targetPos.x - Math.cos(orbitAngle) * dist * 0.6;
+    const fillY = targetPos.y + dist * 0.4;
+    const fillZ = targetPos.z - Math.sin(orbitAngle) * dist * 0.6;
+    previewFillLight.position.set(fillX, fillY, fillZ);
   }
 
   function blitRTToCanvas(renderer: THREE.WebGLRenderer) {
@@ -293,6 +321,14 @@ export function createTVPreviewController(): TVPreviewController {
         updateOrbitCamera(deltaMs);
         frameTick++;
         if (frameTick % 2 === 0 && rt) {
+          // Inject preview lights for this render only
+          if (!lightsInScene) {
+            scene.add(previewKeyLight);
+            scene.add(previewFillLight);
+            scene.add(previewAmbient);
+            lightsInScene = true;
+          }
+
           const prevRT = renderer.getRenderTarget();
           const prevAC = renderer.autoClear;
           renderer.setRenderTarget(rt);
@@ -301,11 +337,18 @@ export function createTVPreviewController(): TVPreviewController {
           renderer.setRenderTarget(prevRT);
           renderer.autoClear = prevAC;
           blitRTToCanvas(renderer);
+
+          // Remove preview lights so they don't affect the main scene
+          scene.remove(previewKeyLight);
+          scene.remove(previewFillLight);
+          scene.remove(previewAmbient);
+          lightsInScene = false;
         }
         break;
       }
 
       case "outro_terminator": {
+        removeLightsFromScene(scene);
         const progress = Math.min(elapsed / OUTRO_MS, 1);
         drawTerminatorOutro(progress);
         if (progress >= 1) setPhase("hidden");
