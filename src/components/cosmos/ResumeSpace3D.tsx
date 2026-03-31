@@ -7884,13 +7884,30 @@ export default function ResumeSpace3D({
     (coreId: string) => {
       const core = orbitalPortfolioCoresByIdRef.current.get(coreId);
       if (!core) return;
+      const coreFocusZoomDistance = 1.52;
+      const groups = orbitalPortfolioGroupsRef.current;
+      const firstGroupIndexForCore = groups.findIndex((group) => group.coreId === coreId);
       setOrbitalPortfolioFocusedCoreId(coreId);
       setOrbitalRegistrySelectedCoreId(coreId);
       setOrbitalPortfolioManualLock(false, "focus-core");
       orbitalPortfolioInspectedStationIndexRef.current = null;
       orbitalPortfolioInspectDistanceRef.current = null;
       orbitalPortfolioInspectStartedAtRef.current = 0;
-      setOrbitalPortfolioHasActiveFocus(false);
+      if (firstGroupIndexForCore >= 0) {
+        orbitalPortfolioFocusIndexRef.current = firstGroupIndexForCore;
+        setOrbitalPortfolioFocusIndex(firstGroupIndexForCore);
+        setOrbitalPortfolioVariantIndex(0);
+        setOrbitalPortfolioMediaIndex(0);
+        setOrbitalPortfolioThumbPageStart(0);
+        orbitalPortfolioPrevThumbPageStartRef.current = 0;
+        orbitalPortfolioThumbSlideDirectionRef.current = null;
+      }
+      orbitalPortfolioCameraDistanceTargetRef.current = coreFocusZoomDistance;
+      orbitalPortfolioCameraDistanceRef.current = Math.min(
+        orbitalPortfolioCameraDistanceRef.current,
+        2.05,
+      );
+      setOrbitalPortfolioHasActiveFocus(true);
       orbitalPortfolioPlayingRef.current = true;
       orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
       orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 800;
@@ -7898,6 +7915,54 @@ export default function ResumeSpace3D({
     },
     [setOrbitalPortfolioManualLock, shipLog],
   );
+
+  const goToOrbitalPortfolioSettledView = useCallback(() => {
+    if (!orbitalPortfolioActiveRef.current) return;
+    const controls = sceneRef.current.controls;
+    if (!controls) return;
+
+    const anchor =
+      orbitalPortfolioWorldAnchorRef.current ?? ORBITAL_PORTFOLIO_WORLD_ANCHOR;
+    const cores = orbitalPortfolioCoresRef.current;
+    const center = anchor.clone();
+    if (cores.length > 0) {
+      const avg = new THREE.Vector3();
+      cores.forEach((core) => avg.add(core.centerLocal));
+      avg.multiplyScalar(1 / cores.length);
+      center.add(avg);
+    }
+    const settledTarget = center.clone().add(new THREE.Vector3(0, 14, 0));
+    const settledCam = center
+      .clone()
+      .add(new THREE.Vector3(420, 210, 620).multiplyScalar(2.05));
+
+    orbitalPortfolioEntrySequenceRef.current.active = false;
+    orbitalPortfolioPendingInspectRequestRef.current = null;
+    orbitalPortfolioInspectedStationIndexRef.current = null;
+    orbitalPortfolioInspectDistanceRef.current = null;
+    orbitalPortfolioInspectStartedAtRef.current = 0;
+    orbitalPortfolioCameraDistanceRef.current = 2.05;
+    orbitalPortfolioCameraDistanceTargetRef.current = 2.05;
+    orbitalPortfolioCameraInitializedRef.current = true;
+    orbitalPortfolioCameraPosRef.current.copy(settledCam);
+    orbitalPortfolioCameraTargetRef.current.copy(settledTarget);
+    orbitalPortfolioPlayingRef.current = true;
+    orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
+    orbitalPortfolioAutoRef.current.pausedUntil = performance.now() + 450;
+    setOrbitalPortfolioManualLock(false, "registry-home");
+    setOrbitalPortfolioHasActiveFocus(false);
+    setOrbitalPortfolioFocusedCoreId("");
+    controls.setLookAt(
+      settledCam.x,
+      settledCam.y,
+      settledCam.z,
+      settledTarget.x,
+      settledTarget.y,
+      settledTarget.z,
+      true,
+    );
+    shipLog("Portfolio view reset to home framing", "info");
+  }, [setOrbitalPortfolioManualLock, shipLog]);
 
   const focusOrbitalPortfolioStation = useCallback(
     (
@@ -23249,6 +23314,23 @@ export default function ResumeSpace3D({
               }}
             />
             <div style={{ marginTop: 7, display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+              {isPortfolioMode && (
+                <button
+                  onClick={goToOrbitalPortfolioSettledView}
+                  style={{
+                    padding: "4px 6px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(170, 225, 255, 0.45)",
+                    background: "rgba(8, 18, 34, 0.82)",
+                    color: "#dff3ff",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  Home
+                </button>
+              )}
               <button
                 onClick={onPrev}
                 style={{
