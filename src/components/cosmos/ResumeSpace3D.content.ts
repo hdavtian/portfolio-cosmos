@@ -84,6 +84,25 @@ export const createFinalizeFocusOnMoon = (deps: {
         });
       });
 
+      const jobTech = Array.isArray(company.jobTech)
+        ? (company.jobTech as unknown[])
+            .map((entry) => {
+              if (!entry || typeof entry !== "object") return null;
+              const obj = entry as { label?: unknown; highlightMatches?: unknown };
+              const label = String(obj.label ?? "").trim();
+              if (!label) return null;
+              const matches = Array.isArray(obj.highlightMatches)
+                ? (obj.highlightMatches as unknown[])
+                    .map((m) => String(m ?? "").trim())
+                    .filter((m) => m.length > 0)
+                : [];
+              return { label, highlightMatches: matches };
+            })
+            .filter(
+              (e): e is { label: string; highlightMatches: string[] } => !!e,
+            )
+        : [];
+
       const jobContent: OverlayContent = {
         title: company.company,
         subtitle: `${company.startDate || ""} - ${company.endDate || "Present"} • ${company.location || ""}`,
@@ -91,6 +110,7 @@ export const createFinalizeFocusOnMoon = (deps: {
           company.positions?.[0]?.responsibilities?.[0] ||
           `Professional experience at ${company.company}.`,
         sections,
+        jobTech,
         projects: Array.isArray(company.Projects) ? company.Projects : [],
         enableDroneCardDock:
           Array.isArray(company.Projects) && company.Projects.length > 0,

@@ -34,6 +34,22 @@
         { "type": "memory", "text": "Led automation platform initiative" },
         { "type": "memory", "text": "Mentored cross-functional teams" }
       ],
+      "jobTech": [
+        { "label": "Angular", "highlightMatches": ["Angular"] },
+        { "label": "React + Redux", "highlightMatches": ["React", "Redux"] },
+        { "label": "TypeScript", "highlightMatches": ["TypeScript"] },
+        { "label": "C# + .NET", "highlightMatches": ["C#", ".NET"] },
+        { "label": "Playwright", "highlightMatches": ["Playwright"] },
+        { "label": "Java + Spring Boot", "highlightMatches": ["Java", "Spring Boot"] },
+        { "label": "Selenium + TestNG", "highlightMatches": ["Selenium", "TestNG"] },
+        { "label": "RabbitMQ + MongoDB", "highlightMatches": ["RabbitMQ", "MongoDB"] },
+        { "label": "PostgreSQL", "highlightMatches": ["PostgreSQL"] },
+        { "label": "Azure + GitLab CI/CD", "highlightMatches": ["Azure", "GitLab", "CI/CD"] },
+        { "label": "RxJS", "highlightMatches": ["RxJS"] },
+        { "label": "Chrome Extension", "highlightMatches": ["Chrome extension"] },
+        { "label": "OAuth", "highlightMatches": ["OAuth"] },
+        { "label": "SCRUM / AGILE", "highlightMatches": ["SCRUM", "AGILE", "Product Owner"] }
+      ],
       "navLabel": "InvestCloud",
       "location": "Los Angeles, CA",
       "startDate": "04/2018",
@@ -94,6 +110,17 @@
         { "type": "code", "text": "MySQL + Docker" },
         { "type": "tech", "text": "AWS + Azure CI/CD" }
       ],
+      "jobTech": [
+        { "label": "React + Redux", "highlightMatches": ["React", "Redux"] },
+        { "label": "Next.js", "highlightMatches": ["Next.js"] },
+        { "label": "Framer Motion + GSAP", "highlightMatches": ["Framer Motion", "GSAP"] },
+        { "label": "Java + Spring Boot", "highlightMatches": ["Java", "Spring Boot"] },
+        { "label": "MySQL + Docker", "highlightMatches": ["MySQL", "Docker"] },
+        { "label": "AWS + Azure CI/CD", "highlightMatches": ["AWS", "Azure", "CI/CD"] },
+        { "label": "Gulp + Webpack", "highlightMatches": ["Gulp", "Grunt", "Webpack"] },
+        { "label": "PHP + WordPress", "highlightMatches": ["PHP", "WordPress"] },
+        { "label": "Semantic HTML + SCSS", "highlightMatches": ["HTML", "CSS", "SCSS"] }
+      ],
       "navLabel": "RPA",
       "location": "Santa Monica, CA",
       "startDate": "10/2014",
@@ -137,6 +164,15 @@
         { "type": "memory", "text": "Migrated infra to AWS" },
         { "type": "memory", "text": "Introduced jQuery to the team" }
       ],
+      "jobTech": [
+        { "label": "PHP", "highlightMatches": ["PHP"] },
+        { "label": "JavaScript + jQuery", "highlightMatches": ["JavaScript", "jQuery"] },
+        { "label": "CakePHP + MySQL", "highlightMatches": ["CakePHP", "MySQL"] },
+        { "label": "AWS (EC2 + RDS + S3)", "highlightMatches": ["AWS", "EC2", "RDS", "S3"] },
+        { "label": "HTML + CSS", "highlightMatches": ["HTML", "CSS"] },
+        { "label": "Adobe Test & Target", "highlightMatches": ["Adobe Test & Target"] },
+        { "label": "Agile / Scrum", "highlightMatches": ["Scrum", "Agile"] }
+      ],
       "navLabel": "Boingo",
       "location": "Los Angeles, CA",
       "startDate": "08/2010",
@@ -166,6 +202,11 @@
         { "type": "tech", "text": "Tax Calculators" },
         { "type": "tech", "text": "Java Team Integration" }
       ],
+      "jobTech": [
+        { "label": "HTML + CSS + JS", "highlightMatches": ["HTML", "CSS", "JavaScript"] },
+        { "label": "Java Integration", "highlightMatches": ["Java"] },
+        { "label": "Tax & Financial Content", "highlightMatches": ["tax", "calculators"] }
+      ],
       "navLabel": "Capital Group",
       "location": "Los Angeles, CA",
       "startDate": "04/2008",
@@ -190,6 +231,13 @@
         { "type": "tech", "text": "IBM iStore Ecommerce" },
         { "type": "tech", "text": "SEO + Analytics" },
         { "type": "code", "text": "Cross-browser CSS" }
+      ],
+      "jobTech": [
+        { "label": "HTML Email", "highlightMatches": ["HTML Emails", "Email"] },
+        { "label": "IBM iStore", "highlightMatches": ["IBM iStore", "ecommerce"] },
+        { "label": "SEO + Analytics", "highlightMatches": ["SEO", "Google Analytics", "search engine"] },
+        { "label": "Cross-browser CSS", "highlightMatches": ["CSS", "cross browser"] },
+        { "label": "Marketing Microsites", "highlightMatches": ["microsites", "Marketing"] }
       ],
       "navLabel": "Murad",
       "location": "El Segundo, CA",
@@ -217,6 +265,11 @@
         { "type": "tech", "text": "LAMP Stack Deployment" },
         { "type": "memory", "text": "Data Center Operations" }
       ],
+      "jobTech": [
+        { "label": "HTML + CSS + PHP", "highlightMatches": ["HTML", "CSS", "PHP"] },
+        { "label": "LAMP Stack", "highlightMatches": ["LAMP", "Linux"] },
+        { "label": "Data Center Ops", "highlightMatches": ["data center", "server", "hardware"] }
+      ],
       "navLabel": "UnitedLayer",
       "location": "Los Angeles, CA",
       "startDate": "01/2001",
@@ -242,6 +295,14 @@
         { "type": "tech", "text": "Ecommerce Integrations" },
         { "type": "memory", "text": "Interactive Flash Era Builds" },
         { "type": "memory", "text": "Long-term Client Support" }
+      ],
+      "jobTech": [
+        { "label": "PHP", "highlightMatches": ["PHP"] },
+        { "label": "Drupal + WordPress", "highlightMatches": ["Drupal", "WordPress", "CMS"] },
+        { "label": "Flash + HTML", "highlightMatches": ["Flash", "HTML"] },
+        { "label": "OpenTable Integration", "highlightMatches": ["OpenTable"] },
+        { "label": "E-commerce (ShopSite)", "highlightMatches": ["ShopSite", "e-commerce", "shopping cart"] },
+        { "label": "Dreamweaver-era Tools", "highlightMatches": ["Dreamweaver"] }
       ],
       "navLabel": "Stormscape",
       "location": "Glendale, CA",

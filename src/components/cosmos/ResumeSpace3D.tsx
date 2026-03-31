@@ -21943,7 +21943,17 @@ export default function ResumeSpace3D({
       getHologramPanelClickables: () =>
         hologramDroneRef.current?.getInteractivePanelMeshes() ?? [],
       onHologramPanelPicked: (panelIndex) => {
-        hologramDroneRef.current?.selectPanel(panelIndex);
+        if (hologramDroneRef.current?.isTechBadgeIndex(panelIndex)) {
+          hologramDroneRef.current.handleTechBadgeClick(panelIndex);
+        } else {
+          hologramDroneRef.current?.selectPanel(panelIndex);
+        }
+      },
+      onHologramPanelHover: (panelIndex) => {
+        hologramDroneRef.current?.setHoveredPanelIndex(panelIndex ?? null);
+      },
+      onHologramEmptyClick: () => {
+        hologramDroneRef.current?.clearLockedSear();
       },
     });
 

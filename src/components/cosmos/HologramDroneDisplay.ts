@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import type { OverlayContent } from "../CosmicContentOverlay";
+import type { OverlayContent, JobTechEntry } from "../CosmicContentOverlay";
 import {
   HOLO_PANEL_WIDTH,
   HOLO_SIDE_OFFSET,
@@ -41,6 +41,29 @@ const AUTO_EXIT_AFTER_DRAW = true;
 const POST_DRAW_DRONE_EXIT_DURATION = 0.55;
 const PANELS_DOCK_DURATION = 0.38;
 const CARD_CONTAINER_SHIFT_NDC_X = 0.08; // approx ~75px on 1920px wide view
+
+const TECH_BADGE_TOP_NDC = 0.62;
+const TECH_BADGE_WORLD_HEIGHT = 0.28;
+const TECH_BADGE_GAP_PX = 7;
+const TECH_BADGE_MIN_WORLD_WIDTH = 0.5;
+const TECH_BADGE_MAX_WORLD_WIDTH = 2.8;
+const TECH_BADGE_STAGGER = 0.14;
+const TECH_BADGE_FLY_DURATION = 0.34;
+const TECH_BADGE_TOTAL_DURATION_CAP = 2.0;
+const TECH_BADGE_CONNECTOR_PULSE_SPEED = 2.8;
+const TECH_BADGE_FONT_PX = 21;
+const TECH_BADGE_PAD_X = 20;
+const TECH_BADGE_PAD_Y = 10;
+const TECH_BADGE_HOVER_INDEX_BASE = 10000;
+const TECH_BADGE_HOVER_SPIN_DURATION = 0.55;
+const RULER_NDC_X = 0.965;
+const RULER_COLOR = 0x2a9968;
+const RULER_NOTCH_LEN_NDC = 0.016;
+const RULER_LABEL_GAP_NDC = 0.008;
+const SEAR_PREVIEW_TEXT_COLOR = "#f5c842";
+const SEAR_LOCKED_TEXT_COLOR = "#ffaa20";
+const SEAR_GLOW_COLOR_PREVIEW = "rgba(255, 200, 60, 0.18)";
+const SEAR_GLOW_COLOR_LOCKED = "rgba(255, 160, 30, 0.35)";
 
 const BASE_SIDE_OFFSET = HOLO_SIDE_OFFSET;
 const DRONE_FORWARD_RATIO = 0.3;
@@ -110,6 +133,32 @@ type ScanAngles = {
 
 type ScanTurnPhase = "idle" | "turning" | "holding";
 
+type TextLayoutRun = {
+  text: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  font: string;
+};
+
+type TechBadgeRecord = {
+  mesh: THREE.Mesh;
+  material: THREE.MeshBasicMaterial;
+  texture: THREE.CanvasTexture;
+  connector: THREE.Line;
+  connectorMat: THREE.LineBasicMaterial;
+  revealTime: number;
+  startWorld: THREE.Vector3;
+  worldWidth: number;
+  worldHeight: number;
+  hoverSpinActive: boolean;
+  hoverSpinProgress: number;
+  hoverSpinAngle: number;
+  launched: boolean;
+  techEntry: JobTechEntry;
+};
+
 export class HologramDroneDisplay {
   private scene: THREE.Scene;
   private rootGroup: THREE.Group;
@@ -174,6 +223,19 @@ export class HologramDroneDisplay {
   private panelDockProgress = 0;
   private activePanelIndex: number | null = null;
   private shouldDockPanels = true;
+
+  private techBadges: TechBadgeRecord[] = [];
+  private techSequenceElapsed = 0;
+  private techSequenceTotalDuration = 0;
+  private hoveredTechBadgeIndex: number | null = null;
+  private lockedTechBadgeIndex: number | null = null;
+  private panelTextRuns: TextLayoutRun[][] = [];
+  private activeSearMatches: string[] = [];
+  private searMode: "none" | "preview" | "locked" = "none";
+  private rulerLine: THREE.Line | null = null;
+  private rulerLineMat: THREE.LineBasicMaterial | null = null;
+  private rulerNotches: THREE.Line[] = [];
+  private rulerNotchMats: THREE.LineBasicMaterial[] = [];
 
   private flyStartPos = new THREE.Vector3();
   private flyEndPos = new THREE.Vector3();
@@ -1075,6 +1137,7 @@ export class HologramDroneDisplay {
     const distScale = this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
     const _scBuildStart = performance.now();
     this.buildTextPanels(content, camera, distScale);
+    this.buildTechBadges(content);
     const _scLaserStart = performance.now();
     this.ensureLaserRigCount(this.panels.length);
     this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
@@ -1172,12 +1235,20 @@ export class HologramDroneDisplay {
   }
 
   getInteractivePanelMeshes(): THREE.Object3D[] {
-    if (!this.active || !this.panelsDocked) return [];
-    return this.panels.map((panel) => panel.mesh);
+    const result: THREE.Object3D[] = [];
+    if (this.active && this.panelsDocked) {
+      for (const panel of this.panels) result.push(panel.mesh);
+    }
+    if (this.active && this.drawFinished && this.techBadges.length > 0) {
+      for (const badge of this.techBadges) result.push(badge.mesh);
+    }
+    return result;
   }
 
   getPanelTextures(): THREE.CanvasTexture[] {
-    return this.panels.map((panel) => panel.texture);
+    const textures = this.panels.map((panel) => panel.texture);
+    for (const badge of this.techBadges) textures.push(badge.texture);
+    return textures;
   }
 
   getPanelGroup(): THREE.Group {
@@ -1188,6 +1259,54 @@ export class HologramDroneDisplay {
     if (!this.active || !this.panelsDocked) return;
     if (panelIndex < 0 || panelIndex >= this.panels.length) return;
     this.activePanelIndex = this.activePanelIndex === panelIndex ? null : panelIndex;
+  }
+
+  setHoveredPanelIndex(panelIndex: number | null): void {
+    const oldHover = this.hoveredTechBadgeIndex;
+    if (panelIndex !== null && panelIndex >= TECH_BADGE_HOVER_INDEX_BASE) {
+      const badgeIdx = panelIndex - TECH_BADGE_HOVER_INDEX_BASE;
+      if (badgeIdx >= 0 && badgeIdx < this.techBadges.length) {
+        this.hoveredTechBadgeIndex = badgeIdx;
+        if (oldHover !== badgeIdx) {
+          const badge = this.techBadges[badgeIdx];
+          badge.hoverSpinActive = true;
+          badge.hoverSpinProgress = 0;
+          badge.hoverSpinAngle = 0;
+          if (this.lockedTechBadgeIndex === null) {
+            this.applySearHighlight(badge.techEntry.highlightMatches, "preview");
+          }
+        }
+        return;
+      }
+    }
+    this.hoveredTechBadgeIndex = null;
+    if (oldHover !== null && this.lockedTechBadgeIndex === null) {
+      this.clearSearHighlight();
+    }
+  }
+
+  handleTechBadgeClick(panelIndex: number): void {
+    if (panelIndex < TECH_BADGE_HOVER_INDEX_BASE) return;
+    const badgeIdx = panelIndex - TECH_BADGE_HOVER_INDEX_BASE;
+    if (badgeIdx < 0 || badgeIdx >= this.techBadges.length) return;
+
+    if (this.lockedTechBadgeIndex === badgeIdx) {
+      this.clearSearHighlight();
+      return;
+    }
+    this.lockedTechBadgeIndex = badgeIdx;
+    const badge = this.techBadges[badgeIdx];
+    this.applySearHighlight(badge.techEntry.highlightMatches, "locked");
+  }
+
+  clearLockedSear(): void {
+    if (this.lockedTechBadgeIndex !== null) {
+      this.clearSearHighlight();
+    }
+  }
+
+  isTechBadgeIndex(panelIndex: number): boolean {
+    return panelIndex >= TECH_BADGE_HOVER_INDEX_BASE;
   }
 
   private _droneUpdateCount = 0;
@@ -1396,8 +1515,10 @@ export class HologramDroneDisplay {
     }
 
     if (this.waitingPostDrawHold && !this.droneExitingAfterDraw) {
+      const techDone = this.techBadges.length === 0 ||
+        this.techSequenceElapsed >= this.computeTechSequenceTotalDuration();
       this.postDrawHoldElapsed += dt;
-      if (this.postDrawHoldElapsed >= POST_DRAW_HOLD_DURATION) {
+      if (this.postDrawHoldElapsed >= POST_DRAW_HOLD_DURATION && techDone) {
         this.waitingPostDrawHold = false;
         if (AUTO_EXIT_AFTER_DRAW) {
           this.droneExitingAfterDraw = true;
@@ -1423,6 +1544,10 @@ export class HologramDroneDisplay {
         this.droneGroup.visible = false;
         this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
       }
+    }
+
+    if (this.drawFinished && this.techBadges.length > 0) {
+      this.updateTechBadges(dt, camera);
     }
 
     this.updateThrusterGlow(dt);
@@ -1485,6 +1610,29 @@ export class HologramDroneDisplay {
     return camera.position.clone().addScaledVector(dir, depth);
   }
 
+  // Maps NDC onto a camera-facing plane at fixed depth.
+  // This keeps alignment stable across Y positions in perspective mode.
+  private ndcToWorldOnViewPlane(
+    ndcX: number,
+    ndcY: number,
+    camera: THREE.Camera,
+    depth: number,
+  ): THREE.Vector3 {
+    if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+      const cam = camera as THREE.PerspectiveCamera;
+      const halfH = depth * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+      const halfW = halfH * cam.aspect;
+      const forward = camera.getWorldDirection(new THREE.Vector3()).normalize();
+      const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+      const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+      const center = camera.position.clone().addScaledVector(forward, depth);
+      return center
+        .addScaledVector(right, ndcX * halfW)
+        .addScaledVector(up, ndcY * halfH);
+    }
+    return this.ndcToWorld(ndcX, ndcY, camera, depth);
+  }
+
   private getDockTarget(index: number, camera: THREE.Camera, depth: number): THREE.Vector3 {
     // Card-deck cascade: top-left anchor, each next card shifts down-right.
     const ndcX = -0.8 + index * 0.065 + CARD_CONTAINER_SHIFT_NDC_X;
@@ -1513,9 +1661,16 @@ export class HologramDroneDisplay {
     panel.penX = pen.x;
     panel.penY = pen.y;
     if (panel.borderComplete && panel.contentFade > 0) {
+      const panelIdx = this.panels.indexOf(panel);
+      if (panelIdx >= 0 && this.searMode !== "none") {
+        this.renderSearOverlay(ctx, panelIdx);
+      }
       ctx.globalAlpha = panel.contentFade;
       ctx.drawImage(contentCanvas, 0, 0);
       ctx.globalAlpha = 1;
+      if (panelIdx >= 0 && this.searMode !== "none") {
+        this.renderSearOverlay(ctx, panelIdx);
+      }
     }
     panel.texture.needsUpdate = true;
   }
@@ -1587,6 +1742,7 @@ export class HologramDroneDisplay {
     camera: THREE.Camera,
     distScale: number = 1,
   ): void {
+    this.panelTextRuns = [];
     const panelDataList: { title: string; lines: string[]; isHeader: boolean }[] = [];
     panelDataList.push({
       title: content.title,
@@ -1650,6 +1806,7 @@ export class HologramDroneDisplay {
         data.isHeader,
         CANVAS_W,
         canvasH,
+        i,
       );
       const displayCanvas = document.createElement("canvas");
       displayCanvas.width = CANVAS_W;
@@ -1748,14 +1905,17 @@ export class HologramDroneDisplay {
     isHeader: boolean,
     w: number,
     h: number,
+    panelIndex: number,
   ): HTMLCanvasElement {
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext("2d")!;
 
+    const runs: TextLayoutRun[] = [];
     const titleSize = isHeader ? 38 : 30;
-    ctx.font = `bold ${titleSize}px Rajdhani, sans-serif`;
+    const titleFont = `bold ${titleSize}px Rajdhani, sans-serif`;
+    ctx.font = titleFont;
     ctx.fillStyle = isHeader ? "#6aa8c0" : ACCENT_COLOR;
     ctx.textBaseline = "top";
 
@@ -1763,6 +1923,8 @@ export class HologramDroneDisplay {
     const titleLines = this.wrapText(ctx, title, w - 2 * PADDING);
     for (const tl of titleLines) {
       ctx.fillText(tl, PADDING, y);
+      const tw = ctx.measureText(tl).width;
+      runs.push({ text: tl, x: PADDING, y, w: tw, h: titleSize + 6, font: titleFont });
       y += titleSize + 6;
     }
 
@@ -1773,7 +1935,8 @@ export class HologramDroneDisplay {
     ctx.globalAlpha = 1;
     y += 16;
 
-    ctx.font = "22px Rajdhani, sans-serif";
+    const bodyFont = "22px Rajdhani, sans-serif";
+    ctx.font = bodyFont;
     ctx.fillStyle = TEXT_COLOR;
     for (const line of lines) {
       const wrapped = this.wrapText(ctx, line, w - 2 * PADDING - 30);
@@ -1785,11 +1948,15 @@ export class HologramDroneDisplay {
         ctx.globalAlpha = 1;
         ctx.fillStyle = TEXT_COLOR;
         ctx.fillText(wl, PADDING + 22, y);
+        const tw = ctx.measureText(wl).width;
+        runs.push({ text: wl, x: PADDING + 22, y, w: tw, h: 28, font: bodyFont });
         y += 28;
       }
       y += 6;
     }
 
+    while (this.panelTextRuns.length <= panelIndex) this.panelTextRuns.push([]);
+    this.panelTextRuns[panelIndex] = runs;
     return canvas;
   }
 
@@ -1825,6 +1992,443 @@ export class HologramDroneDisplay {
     this.activePanelIndex = null;
     this.panelsDocked = false;
     this.dockingPanels = false;
+    this.clearTechBadges();
+    this.panelTextRuns = [];
+    this.activeSearMatches = [];
+    this.searMode = "none";
+  }
+
+  // ─── Tech Badges ──────────────────────────────────────────────────
+
+  private clearTechBadges(): void {
+    for (const b of this.techBadges) {
+      b.material.dispose();
+      b.mesh.geometry.dispose();
+      b.texture.dispose();
+      b.connectorMat.dispose();
+      b.connector.geometry.dispose();
+      this.panelGroup.remove(b.mesh);
+      this.panelGroup.remove(b.connector);
+    }
+    this.techBadges = [];
+    this.techSequenceElapsed = 0;
+    this.techSequenceTotalDuration = 0;
+    this.hoveredTechBadgeIndex = null;
+    this.lockedTechBadgeIndex = null;
+    this.clearRuler();
+  }
+
+  private clearRuler(): void {
+    if (this.rulerLine) {
+      this.rulerLineMat?.dispose();
+      this.rulerLine.geometry.dispose();
+      this.panelGroup.remove(this.rulerLine);
+      this.rulerLine = null;
+      this.rulerLineMat = null;
+    }
+    for (const n of this.rulerNotches) {
+      n.geometry.dispose();
+      this.panelGroup.remove(n);
+    }
+    for (const m of this.rulerNotchMats) m.dispose();
+    this.rulerNotches = [];
+    this.rulerNotchMats = [];
+  }
+
+  private buildTechBadges(content: OverlayContent): void {
+    const tech = content.jobTech ?? [];
+    if (tech.length === 0) return;
+
+    const droneWorldPos = this._tmpV.copy(this.droneGroup.position);
+    this.rootGroup.localToWorld(droneWorldPos);
+    const startWorld = droneWorldPos.clone();
+
+    const totalStagger = TECH_BADGE_STAGGER * (tech.length - 1) + TECH_BADGE_FLY_DURATION;
+    this.techSequenceTotalDuration = Math.min(totalStagger, TECH_BADGE_TOTAL_DURATION_CAP);
+    const effectiveStagger = tech.length > 1
+      ? Math.min(TECH_BADGE_STAGGER, (this.techSequenceTotalDuration - TECH_BADGE_FLY_DURATION) / (tech.length - 1))
+      : 0;
+
+    for (let i = 0; i < tech.length; i++) {
+      const entry = tech[i];
+      const { canvas, worldWidth, worldHeight } = this.createTechBadgeCanvas(entry.label);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(worldWidth, worldHeight),
+        material,
+      );
+      mesh.userData.hologramPanelIndex = TECH_BADGE_HOVER_INDEX_BASE + i;
+      mesh.renderOrder = 2000 + i;
+      mesh.position.copy(startWorld);
+      mesh.scale.setScalar(0.01);
+      this.panelGroup.add(mesh);
+
+      const connectorGeo = new THREE.BufferGeometry().setFromPoints([
+        startWorld.clone(),
+        startWorld.clone(),
+      ]);
+      const connectorMat = new THREE.LineBasicMaterial({
+        color: 0x2a9968,
+        transparent: true,
+        opacity: 0,
+      });
+      const connector = new THREE.Line(connectorGeo, connectorMat);
+      connector.renderOrder = 1999;
+      this.panelGroup.add(connector);
+
+      this.techBadges.push({
+        mesh,
+        material,
+        texture,
+        connector,
+        connectorMat,
+        revealTime: i * effectiveStagger,
+        startWorld: startWorld.clone(),
+        worldWidth,
+        worldHeight,
+        hoverSpinActive: false,
+        hoverSpinProgress: 0,
+        hoverSpinAngle: 0,
+        launched: false,
+        techEntry: entry,
+      });
+    }
+  }
+
+  private createTechBadgeCanvas(
+    label: string,
+  ): { canvas: HTMLCanvasElement; worldWidth: number; worldHeight: number } {
+    const canvas = document.createElement("canvas");
+    const tmpCtx = canvas.getContext("2d")!;
+    tmpCtx.font = `bold ${TECH_BADGE_FONT_PX}px Rajdhani, sans-serif`;
+    const metrics = tmpCtx.measureText(label);
+    const textW = metrics.width;
+
+    const canvasW = Math.ceil(textW + TECH_BADGE_PAD_X * 2);
+    const canvasH = Math.ceil(TECH_BADGE_FONT_PX + TECH_BADGE_PAD_Y * 2);
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "rgba(4, 14, 22, 0.72)";
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    ctx.strokeStyle = ACCENT_COLOR;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.55;
+    ctx.strokeRect(1, 1, canvasW - 2, canvasH - 2);
+    ctx.globalAlpha = 1;
+
+    for (let row = 0; row < canvasH; row += 4) {
+      ctx.fillStyle = "rgba(42, 153, 104, 0.025)";
+      ctx.fillRect(0, row, canvasW, 2);
+    }
+
+    ctx.font = `bold ${TECH_BADGE_FONT_PX}px Rajdhani, sans-serif`;
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#88dda8";
+    ctx.fillText(label, TECH_BADGE_PAD_X, canvasH / 2 + 1);
+
+    const aspect = canvasW / canvasH;
+    const worldHeight = TECH_BADGE_WORLD_HEIGHT;
+    let worldWidth = worldHeight * aspect;
+    worldWidth = Math.max(TECH_BADGE_MIN_WORLD_WIDTH, Math.min(TECH_BADGE_MAX_WORLD_WIDTH, worldWidth));
+
+    return { canvas, worldWidth, worldHeight };
+  }
+
+  private getCameraFrustumSizeAtDepth(camera: THREE.Camera, depth: number): { w: number; h: number } {
+    if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+      const cam = camera as THREE.PerspectiveCamera;
+      const halfH = depth * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+      return { w: halfH * cam.aspect * 2, h: halfH * 2 };
+    }
+    return { w: 20, h: 20 };
+  }
+
+  private getTechBadgeTarget(
+    index: number,
+    camera: THREE.Camera,
+    depth: number,
+  ): THREE.Vector3 {
+    const frust = this.getCameraFrustumSizeAtDepth(camera, depth);
+    const viewportH = Math.max(1, window.innerHeight || 1080);
+    const gapNdc = (TECH_BADGE_GAP_PX / viewportH) * 2;
+    let yTopNdc = TECH_BADGE_TOP_NDC;
+    for (let j = 0; j < index; j++) {
+      const prev = this.techBadges[j];
+      yTopNdc -= prev.worldHeight / (frust.h / 2);
+      yTopNdc -= gapNdc;
+    }
+    const badge = this.techBadges[index];
+    const badgeHeightNdc = badge.worldHeight / (frust.h / 2);
+    const yNdc = yTopNdc - badgeHeightNdc * 0.5;
+
+    const badgeNdcW = badge.worldWidth / (frust.w / 2);
+    const badgeRightNdc = RULER_NDC_X - RULER_NOTCH_LEN_NDC - RULER_LABEL_GAP_NDC;
+    const centerX = badgeRightNdc - badgeNdcW * 0.5;
+
+    return this.ndcToWorldOnViewPlane(centerX, yNdc, camera, depth);
+  }
+
+  private updateTechBadges(dt: number, camera: THREE.Camera): void {
+    if (this.techBadges.length === 0) return;
+    this.techSequenceElapsed += dt;
+
+    const depth = Math.max(12, camera.position.distanceTo(this.flyEndPos) * 0.52);
+    const droneWorldNow = this._tmpV.copy(this.droneGroup.position);
+    this.rootGroup.localToWorld(droneWorldNow);
+    for (let i = 0; i < this.techBadges.length; i++) {
+      const badge = this.techBadges[i];
+      const elapsed = this.techSequenceElapsed - badge.revealTime;
+      if (elapsed < 0) continue;
+
+      if (!badge.launched) {
+        badge.startWorld.copy(droneWorldNow);
+        badge.mesh.position.copy(droneWorldNow);
+        badge.launched = true;
+      }
+
+      const t = Math.min(1, elapsed / TECH_BADGE_FLY_DURATION);
+      const eased = 1 - Math.pow(1 - t, 3);
+
+      const target = this.getTechBadgeTarget(i, camera, depth);
+      badge.mesh.position.lerpVectors(badge.startWorld, target, eased);
+      badge.mesh.scale.setScalar(eased);
+      badge.material.opacity = eased * 0.94;
+
+      const isLocked = this.lockedTechBadgeIndex === i;
+      if (isLocked) {
+        badge.material.opacity = 1.0;
+      }
+
+      const positions = badge.connector.geometry.attributes.position as THREE.BufferAttribute;
+      positions.setXYZ(0, badge.startWorld.x, badge.startWorld.y, badge.startWorld.z);
+      positions.setXYZ(1, badge.mesh.position.x, badge.mesh.position.y, badge.mesh.position.z);
+      positions.needsUpdate = true;
+
+      const pulse = 0.18 + Math.sin(this.techSequenceElapsed * TECH_BADGE_CONNECTOR_PULSE_SPEED + i * 0.6) * 0.12;
+      badge.connectorMat.opacity = eased * pulse;
+
+      badge.mesh.quaternion.copy(camera.quaternion);
+      if (badge.hoverSpinActive) {
+        badge.hoverSpinProgress += dt / TECH_BADGE_HOVER_SPIN_DURATION;
+        if (badge.hoverSpinProgress >= 1) {
+          badge.hoverSpinActive = false;
+          badge.hoverSpinProgress = 0;
+          badge.hoverSpinAngle = 0;
+        } else {
+          badge.hoverSpinAngle = badge.hoverSpinProgress * Math.PI * 2;
+        }
+      }
+      if (badge.hoverSpinAngle !== 0) {
+        this._tmpQ.setFromAxisAngle(new THREE.Vector3(1, 0, 0), badge.hoverSpinAngle);
+        badge.mesh.quaternion.multiply(this._tmpQ);
+      }
+    }
+    this.buildRuler(camera, depth);
+
+    if (this.rulerLine && this.rulerLineMat) {
+      const rulerPulse = 0.25 + Math.sin(this.techSequenceElapsed * 1.6) * 0.1;
+      this.rulerLineMat.opacity = rulerPulse;
+      for (const nm of this.rulerNotchMats) {
+        nm.opacity = rulerPulse + 0.15;
+      }
+    }
+  }
+
+  private computeTechSequenceTotalDuration(): number {
+    if (this.techBadges.length === 0) return 0;
+    const last = this.techBadges[this.techBadges.length - 1];
+    return last.revealTime + TECH_BADGE_FLY_DURATION;
+  }
+
+  private buildRuler(camera: THREE.Camera, depth: number): void {
+    if (this.techBadges.length === 0) {
+      this.clearRuler();
+      return;
+    }
+
+    const first = this.techBadges[0];
+    const last = this.techBadges[this.techBadges.length - 1];
+    const frust = this.getCameraFrustumSizeAtDepth(camera, depth);
+    const firstTarget = this.getTechBadgeTarget(0, camera, depth);
+    const lastTarget = this.getTechBadgeTarget(this.techBadges.length - 1, camera, depth);
+    const firstNdc = firstTarget.clone().project(camera);
+    const lastNdc = lastTarget.clone().project(camera);
+    const firstHalfNdc = (first.worldHeight / (frust.h / 2)) * 0.55;
+    const lastHalfNdc = (last.worldHeight / (frust.h / 2)) * 0.55;
+
+    const rulerTop = this.ndcToWorldOnViewPlane(
+      RULER_NDC_X,
+      firstNdc.y + firstHalfNdc,
+      camera,
+      depth,
+    );
+    const rulerBottom = this.ndcToWorldOnViewPlane(
+      RULER_NDC_X,
+      lastNdc.y - lastHalfNdc,
+      camera,
+      depth,
+    );
+
+    if (!this.rulerLine || !this.rulerLineMat) {
+      this.rulerLineMat = new THREE.LineBasicMaterial({
+        color: RULER_COLOR,
+        transparent: true,
+        opacity: 0.55,
+      });
+      const rulerGeo = new THREE.BufferGeometry().setFromPoints([rulerTop, rulerBottom]);
+      this.rulerLine = new THREE.Line(rulerGeo, this.rulerLineMat);
+      this.rulerLine.renderOrder = 1998;
+      this.panelGroup.add(this.rulerLine);
+    } else {
+      const rulerPos = this.rulerLine.geometry.attributes.position as THREE.BufferAttribute;
+      rulerPos.setXYZ(0, rulerTop.x, rulerTop.y, rulerTop.z);
+      rulerPos.setXYZ(1, rulerBottom.x, rulerBottom.y, rulerBottom.z);
+      rulerPos.needsUpdate = true;
+    }
+
+    if (this.rulerNotches.length !== this.techBadges.length) {
+      for (const n of this.rulerNotches) {
+        n.geometry.dispose();
+        this.panelGroup.remove(n);
+      }
+      for (const m of this.rulerNotchMats) m.dispose();
+      this.rulerNotches = [];
+      this.rulerNotchMats = [];
+      for (let i = 0; i < this.techBadges.length; i++) {
+        const notchMat = new THREE.LineBasicMaterial({
+          color: RULER_COLOR,
+          transparent: true,
+          opacity: 0.7,
+        });
+        const notchGeo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(),
+          new THREE.Vector3(),
+        ]);
+        const notch = new THREE.Line(notchGeo, notchMat);
+        notch.renderOrder = 1998;
+        this.panelGroup.add(notch);
+        this.rulerNotches.push(notch);
+        this.rulerNotchMats.push(notchMat);
+      }
+    }
+
+    for (let i = 0; i < this.techBadges.length; i++) {
+      const target = this.getTechBadgeTarget(i, camera, depth);
+      const targetNdc = target.clone().project(camera);
+      const notchStart = this.ndcToWorldOnViewPlane(
+        RULER_NDC_X,
+        targetNdc.y,
+        camera,
+        depth,
+      );
+      const notchEnd = this.ndcToWorldOnViewPlane(
+        RULER_NDC_X - RULER_NOTCH_LEN_NDC,
+        targetNdc.y,
+        camera,
+        depth,
+      );
+
+      const notch = this.rulerNotches[i];
+      const notchPos = notch.geometry.attributes.position as THREE.BufferAttribute;
+      notchPos.setXYZ(0, notchStart.x, notchStart.y, notchStart.z);
+      notchPos.setXYZ(1, notchEnd.x, notchEnd.y, notchEnd.z);
+      notchPos.needsUpdate = true;
+    }
+  }
+
+  // ─── Sear Highlighting ────────────────────────────────────────────
+
+  private applySearHighlight(matches: string[], mode: "preview" | "locked"): void {
+    this.activeSearMatches = matches;
+    this.searMode = mode;
+    for (const panel of this.panels) {
+      if (panel.contentFade >= 1) this.redrawPanel(panel, false);
+    }
+  }
+
+  private clearSearHighlight(): void {
+    this.activeSearMatches = [];
+    this.searMode = "none";
+    this.lockedTechBadgeIndex = null;
+    for (const panel of this.panels) {
+      if (panel.contentFade >= 1) this.redrawPanel(panel, false);
+    }
+  }
+
+  private renderSearOverlay(
+    ctx: CanvasRenderingContext2D,
+    panelIndex: number,
+  ): void {
+    if (this.searMode === "none" || this.activeSearMatches.length === 0) return;
+    const runs = this.panelTextRuns[panelIndex];
+    if (!runs) return;
+
+    const isLocked = this.searMode === "locked";
+    const textColor = isLocked ? SEAR_LOCKED_TEXT_COLOR : SEAR_PREVIEW_TEXT_COLOR;
+    const glowColor = isLocked ? SEAR_GLOW_COLOR_LOCKED : SEAR_GLOW_COLOR_PREVIEW;
+
+    for (const run of runs) {
+      const textLower = run.text.toLowerCase();
+      for (const match of this.activeSearMatches) {
+        const matchLower = match.toLowerCase();
+        let startIdx = 0;
+        while (true) {
+          const idx = textLower.indexOf(matchLower, startIdx);
+          if (idx === -1) break;
+          ctx.font = run.font;
+          const preW = ctx.measureText(run.text.substring(0, idx)).width;
+          const matchStr = run.text.substring(idx, idx + match.length);
+          const matchW = ctx.measureText(matchStr).width;
+          const rx = run.x + preW;
+          const ry = run.y - 2;
+          const rh = run.h;
+
+          ctx.save();
+          const grad = ctx.createLinearGradient(rx, ry, rx, ry + rh);
+          grad.addColorStop(0, glowColor);
+          grad.addColorStop(0.3, "rgba(0,0,0,0)");
+          grad.addColorStop(0.7, "rgba(0,0,0,0)");
+          grad.addColorStop(1, glowColor);
+          ctx.fillStyle = grad;
+          ctx.fillRect(rx - 3, ry, matchW + 6, rh);
+
+          if (isLocked) {
+            ctx.shadowColor = "#ff9520";
+            ctx.shadowBlur = 10;
+          } else {
+            ctx.shadowColor = "#f5c842";
+            ctx.shadowBlur = 6;
+          }
+          ctx.fillStyle = textColor;
+          ctx.textBaseline = "top";
+          ctx.fillText(matchStr, rx, run.y);
+
+          if (isLocked) {
+            ctx.shadowBlur = 18;
+            ctx.shadowColor = "rgba(255, 140, 20, 0.5)";
+            ctx.globalAlpha = 0.35;
+            ctx.fillText(matchStr, rx, run.y);
+            ctx.globalAlpha = 1;
+          }
+          ctx.restore();
+
+          startIdx = idx + match.length;
+        }
+      }
+    }
   }
 
   dispose(): void {
@@ -1845,6 +2449,7 @@ export class HologramDroneDisplay {
       this.attachedAudioCamera.remove(this.scanCueListener);
       this.attachedAudioCamera = null;
     }
+    this.clearTechBadges();
     this.clearPanels();
     this.ensureLaserRigCount(0);
     this.scene.remove(this.rootGroup);

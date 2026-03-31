@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./CosmicContentOverlay.scss";
 
+export interface JobTechEntry {
+  label: string;
+  highlightMatches: string[];
+}
+
 export interface OverlayContent {
   title: string;
   subtitle?: string;
   description: string;
   sections: OverlaySection[];
+  jobTech?: JobTechEntry[];
   projects?: unknown[];
   enableDroneCardDock?: boolean;
   media?: MediaContent;

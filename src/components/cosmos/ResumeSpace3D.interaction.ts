@@ -122,6 +122,8 @@ export const createPointerInteractionHandlers = (deps: {
   onHologramPanelPicked?: (panelIndex: number) => void;
   /** Callback when hovering hologram controls */
   onHologramPanelHover?: (panelIndex: number | null) => void;
+  /** Callback when clicking empty space while hologram panels are active */
+  onHologramEmptyClick?: () => void;
 }) => {
   const {
     mountRef,
@@ -142,14 +144,24 @@ export const createPointerInteractionHandlers = (deps: {
     getHologramPanelClickables,
     onHologramPanelPicked,
     onHologramPanelHover,
+    onHologramEmptyClick,
   } = deps;
 
   let hoveredObject: THREE.Object3D | null = null;
+  let hoveredHologramPanelIndex: number | null = null;
+
+  const setHologramHover = (index: number | null) => {
+    if (index !== hoveredHologramPanelIndex) {
+      hoveredHologramPanelIndex = index;
+      onHologramPanelHover?.(index);
+    }
+  };
 
   const onPointerMove = (event: MouseEvent) => {
     // Interior mode: ship hull blocks all external object hover interactions.
     if (insideShipRef?.current) {
       document.body.style.cursor = "default";
+      setHologramHover(null);
       return;
     }
     if (!mountRef.current) return;
@@ -159,7 +171,6 @@ export const createPointerInteractionHandlers = (deps: {
 
     // Check for hover
     raycaster.setFromCamera(pointer, camera);
-    onHologramPanelHover?.(null);
     const intersects = raycaster.intersectObjects(clickablePlanets, false);
 
     // Determine the object under pointer (if any)
@@ -171,6 +182,7 @@ export const createPointerInteractionHandlers = (deps: {
 
     // If we hit a valid planet
     if (hit && hit.object.userData.sectionIndex !== undefined) {
+      setHologramHover(null);
       const obj = hit.object;
 
       // If focused/paused, don't activate hover halo
@@ -283,12 +295,13 @@ export const createPointerInteractionHandlers = (deps: {
             (hologramHits[0].object.userData as { hologramPanelIndex?: number })
               .hologramPanelIndex,
           );
-          onHologramPanelHover?.(Number.isFinite(code) ? code : null);
+          setHologramHover(Number.isFinite(code) ? code : null);
           document.body.style.cursor = "pointer";
           return;
         }
       }
 
+      setHologramHover(null);
       document.body.style.cursor = "default";
     }
   };
@@ -355,7 +368,8 @@ export const createPointerInteractionHandlers = (deps: {
       }
     }
 
-    // Clicking empty space should not exit moon focus — only overlay clicks or navigation/zoom do.
+    onHologramEmptyClick?.();
+
     const intersects = raycaster.intersectObjects(clickablePlanets, false);
 
     if (intersects.length > 0) {
