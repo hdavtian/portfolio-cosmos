@@ -116,6 +116,11 @@ export const useNavigationSystem = (deps: {
   setFollowingStarDestroyer: (v: boolean) => void;
   /** Optional non-planet section anchors (e.g., Projects trench) */
   resolveSpecialSectionTarget?: (targetId: string) => THREE.Vector3 | null;
+  /** Returns the actual visual center + extent of a section for the TV preview camera */
+  resolveSectionVisualCenter?: (targetId: string) => {
+    center: THREE.Vector3;
+    radius: number;
+  } | null;
   /** Optional callback fired when moon travel starts after turn/pause */
   onMoonTravelNavigationStarted?: (payload: {
     targetMoonId: string;
@@ -155,6 +160,7 @@ export const useNavigationSystem = (deps: {
     followingStarDestroyerRef,
     setFollowingStarDestroyer,
     resolveSpecialSectionTarget,
+    resolveSectionVisualCenter,
     onMoonTravelNavigationStarted,
     onMoonTravelIntent,
     onMoonTravelArrived,
@@ -162,10 +168,12 @@ export const useNavigationSystem = (deps: {
     enableDiagnosticLogs = true,
   } = deps;
   const resolveSpecialSectionTargetRef = useRef(resolveSpecialSectionTarget);
+  const resolveSectionVisualCenterRef = useRef(resolveSectionVisualCenter);
   const onMoonTravelNavigationStartedRef = useRef(onMoonTravelNavigationStarted);
   const onMoonTravelIntentRef = useRef(onMoonTravelIntent);
   const onMoonTravelArrivedRef = useRef(onMoonTravelArrived);
   resolveSpecialSectionTargetRef.current = resolveSpecialSectionTarget;
+  resolveSectionVisualCenterRef.current = resolveSectionVisualCenter;
   onMoonTravelNavigationStartedRef.current = onMoonTravelNavigationStarted;
   onMoonTravelIntentRef.current = onMoonTravelIntent;
   onMoonTravelArrivedRef.current = onMoonTravelArrived;
@@ -1207,14 +1215,18 @@ export const useNavigationSystem = (deps: {
             vlog("🌀 Projects special-case: skipping turn phase, curving directly");
           }
 
-          // Launch TV preview panel
+          // Launch TV preview panel — use actual visual center when available
+          // so the preview camera orbits the object, not the navigation standoff.
           if (!tvPreviewControllerRef.current) {
             tvPreviewControllerRef.current = createTVPreviewController();
             tvPreviewControllerRef.current.setPhaseCallback(setTvPhase);
           }
+          const tvVisual = resolveSectionVisualCenterRef.current
+            ? resolveSectionVisualCenterRef.current(targetId)
+            : null;
           tvPreviewControllerRef.current.begin({
-            targetPosition: planetCenter,
-            targetRadius,
+            targetPosition: tvVisual ? tvVisual.center : planetCenter,
+            targetRadius: tvVisual ? tvVisual.radius : targetRadius,
             targetId,
             routeKind: "section",
           });

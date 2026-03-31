@@ -5848,6 +5848,31 @@ export default function ResumeSpace3D({
       }
       return null;
     },
+    resolveSectionVisualCenter: (targetId) => {
+      if (targetId === "about") {
+        const exterior = projectShowcaseExteriorRootRef.current;
+        if (exterior) {
+          const bounds = new THREE.Box3().setFromObject(exterior);
+          const center = bounds.getCenter(new THREE.Vector3());
+          const size = bounds.getSize(new THREE.Vector3());
+          return { center, radius: Math.max(size.x, size.y, size.z) * 0.5 };
+        }
+      }
+      if (targetId === "skills") {
+        const anchor = skillsLatticeWorldAnchorRef.current;
+        if (anchor) return { center: anchor.clone(), radius: 250 };
+      }
+      if (targetId === "portfolio") {
+        const anchor =
+          orbitalPortfolioWorldAnchorRef.current ?? ORBITAL_PORTFOLIO_WORLD_ANCHOR;
+        return { center: anchor.clone(), radius: 200 };
+      }
+      if (targetId === "projects") {
+        const anchor = projectShowcaseWorldAnchorRef.current;
+        if (anchor) return { center: anchor.clone(), radius: 180 };
+      }
+      return null;
+    },
   });
 
   useEffect(() => {

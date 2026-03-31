@@ -200,7 +200,13 @@ export function createTVPreviewController(): TVPreviewController {
     const speed = 0.65;
     orbitAngle += (deltaMs / 1000) * speed;
     const pitch = orbitPitchBase + Math.sin(orbitAngle * 0.3) * 0.18;
-    const dist = Math.max(targetRadius * 2.8, 120);
+    // Sections have visual extents (lattices, orbital stations, moons) well
+    // beyond the planet sphere radius — orbit further out so the camera
+    // circles the full structure rather than spinning inside it.
+    const dist =
+      routeKind === "section"
+        ? Math.max(targetRadius * 6, 600)
+        : Math.max(targetRadius * 2.8, 120);
 
     const camX = targetPos.x + Math.cos(orbitAngle) * Math.cos(pitch) * dist;
     const camY = targetPos.y + Math.sin(pitch) * dist * 0.6;
@@ -272,6 +278,10 @@ export function createTVPreviewController(): TVPreviewController {
     orbitPitchBase = 0.15 + rng() * 0.25;
     frameTick = 0;
     burstTotal = 1 + (seed & 1);
+
+    // Wider FOV for sections so the full structure fills the preview nicely
+    previewCam.fov = routeKind === "section" ? 50 : 40;
+    previewCam.updateProjectionMatrix();
 
     if (!rt) {
       rt = new THREE.WebGLRenderTarget(TV_WIDTH, TV_HEIGHT, {
