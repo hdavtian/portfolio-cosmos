@@ -6001,6 +6001,9 @@ export default function ResumeSpace3D({
             onScreenMessage("Adjusting Falcon trajectory");
             void playFalconNavSfx("changeOfDirection", true);
             break;
+          case "target_acquisition":
+            onScreenMessage("Acquiring target lock");
+            break;
           case "transit_cruise":
             onScreenMessage("Cruising toward destination");
             break;

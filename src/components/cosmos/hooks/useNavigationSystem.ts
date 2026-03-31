@@ -31,6 +31,11 @@ import {
   NAV_LIGHTSPEED_LERP,
 } from "../scaleConfig";
 import { computeFalconFollowCameraPose } from "../falconFollowCameraPose";
+import {
+  createTargetingFXController,
+  type TargetingFXController,
+  type TargetingRouteKind,
+} from "../targetingFX";
 
 const NAV_REPEAT_SECTION_EPSILON = 1.5;
 const NAV_MOVEMENT_HEARTBEAT_LOGS = false;
@@ -62,6 +67,7 @@ export type NavigationTravelPhase =
   | "orbit_departure_handoff"
   | "departure_clearance"
   | "trajectory_alignment"
+  | "target_acquisition"
   | "transit_cruise"
   | "lightspeed_engaged"
   | "arrival_approach"
@@ -277,6 +283,9 @@ export const useNavigationSystem = (deps: {
       navigationTravelPhaseStateRef.current.cruiseStartDistance = null;
       navigationTravelPhaseStateRef.current.approachDistance = null;
       navigationTravelPhaseStateRef.current.lightspeedAnnounced = false;
+      if (targetingFXControllerRef.current?.state.active) {
+        targetingFXControllerRef.current.fadeOut();
+      }
       setNavigationPhase("idle", detail);
     },
     [setNavigationPhase],
@@ -304,6 +313,9 @@ export const useNavigationSystem = (deps: {
       navigationTravelPhaseStateRef.current.cruiseStartDistance = null;
       navigationTravelPhaseStateRef.current.approachDistance = null;
       navigationTravelPhaseStateRef.current.lightspeedAnnounced = false;
+      if (targetingFXControllerRef.current?.state.active) {
+        targetingFXControllerRef.current.fadeOut();
+      }
       setNavigationPhase(
         "travel_override",
         `override-retarget:${targetType}:${targetId}`,
@@ -322,6 +334,9 @@ export const useNavigationSystem = (deps: {
     ((moonMesh: THREE.Mesh, company: any) => void) | null
   >(null);
 
+  const targetingFXControllerRef = useRef<TargetingFXController | null>(null);
+  const _acquireLastFrameRef = useRef(0);
+
   const navigationTargetRef = useRef<{
     id: string | null;
     type: "section" | "moon" | null;
@@ -338,10 +353,11 @@ export const useNavigationSystem = (deps: {
     lightspeedBurstUntil?: number;
     decelerationLogged?: boolean;
     // Turn-toward-target phase: ship rotates to face destination before moving
-    turnPhase?: "clearing" | "turning" | "pausing" | "traveling" | "settling";
+    turnPhase?: "clearing" | "turning" | "pausing" | "acquiring" | "traveling" | "settling";
     turnStartTime?: number;
     turnPauseStartTime?: number;
     cameraAlignStartTime?: number;
+    acquireStartTime?: number;
     turnStartQuat?: THREE.Quaternion;
     turnTargetQuat?: THREE.Quaternion;
     clearanceTarget?: THREE.Vector3;
@@ -1404,7 +1420,8 @@ export const useNavigationSystem = (deps: {
       navTarget.id &&
       (navTarget.turnPhase === "clearing" ||
         navTarget.turnPhase === "turning" ||
-        navTarget.turnPhase === "pausing");
+        navTarget.turnPhase === "pausing" ||
+        navTarget.turnPhase === "acquiring");
 
     if (isSectionTravel || isPreTravelTurnPhase) {
       const target = navigationTargetRef.current;
@@ -1610,7 +1627,71 @@ export const useNavigationSystem = (deps: {
         }
 
         if (pauseElapsed >= MIN_PAUSE_DURATION) {
-          // If this was a moon turn, start the navigation system now
+          // Transition to target acquisition phase before travel
+          target.turnPhase = "acquiring";
+          target.acquireStartTime = performance.now();
+          _acquireLastFrameRef.current = 0;
+
+          if (!targetingFXControllerRef.current && sceneRef.current.scene) {
+            targetingFXControllerRef.current = createTargetingFXController(
+              sceneRef.current.scene,
+            );
+          }
+          const fxTarget = target.position ?? target.clearanceTarget;
+          if (targetingFXControllerRef.current && fxTarget) {
+            targetingFXControllerRef.current.begin({
+              targetPosition: fxTarget,
+              shipPosition: ship.position,
+              routeKind: (target.type === "moon" ? "moon" : "section") as TargetingRouteKind,
+              targetId: target.id ?? "unknown",
+            });
+          }
+
+          setNavigationPhase("target_acquisition", "acquire-phase-start");
+          vlog("🎯 Target acquisition sequence initiated");
+        }
+        return; // Hold position during pause
+      }
+
+      // ── ACQUIRING PHASE: cinematic targeting FX before travel ──
+      if (target.turnPhase === "acquiring") {
+        navTrace("updateAutopilotNavigation()", "phase:acquiring", 700);
+        setNavigationPhase("target_acquisition", "turn-phase:acquiring");
+        navTurnActiveRef.current = true;
+        pathData.speed = 0;
+        manualFlightRef.current.currentSpeed = 0;
+
+        if (
+          !insideShipRef.current &&
+          followingSpaceshipRef.current &&
+          sceneRef.current.controls
+        ) {
+          applyFollowCameraToShip(ship, true);
+        }
+
+        const frameNow = performance.now();
+        const deltaMs = _acquireLastFrameRef.current > 0
+          ? Math.min(frameNow - _acquireLastFrameRef.current, 50)
+          : 16;
+        _acquireLastFrameRef.current = frameNow;
+
+        if (targetingFXControllerRef.current && sceneRef.current.camera) {
+          targetingFXControllerRef.current.update(
+            deltaMs,
+            ship,
+            sceneRef.current.camera,
+          );
+        }
+
+        const acquireElapsed = frameNow - (target.acquireStartTime || 0);
+        const ACQUIRE_TIMEOUT_MS = 5000;
+        const fxDone = targetingFXControllerRef.current?.isComplete() ?? true;
+
+        if (fxDone || acquireElapsed >= ACQUIRE_TIMEOUT_MS) {
+          if (targetingFXControllerRef.current && !fxDone) {
+            targetingFXControllerRef.current.fadeOut();
+          }
+
           if (target.pendingMoonId && navigationSystemRef.current) {
             if (target.pendingMoonInterSystem) {
               navigationSystemRef.current.updateConfig({
@@ -1632,7 +1713,7 @@ export const useNavigationSystem = (deps: {
                 targetMoonId: target.pendingMoonId,
                 isInterSystemJump: !!target.pendingMoonInterSystem,
               });
-              vlog(`▶️ Pause done — moon navigation started: ${target.pendingMoonId}`);
+              vlog(`▶️ Acquire done — moon navigation started: ${target.pendingMoonId}`);
               activeMoonLightspeedRef.current = target.pendingMoonInterSystem
                 ? target.pendingMoonId
                 : null;
@@ -1649,8 +1730,6 @@ export const useNavigationSystem = (deps: {
                   : null;
               setNavigationPhase("transit_cruise", "moon-navigation-started");
             }
-            // Clear the section-type navigation state entirely since
-            // moon system now owns navigation and status updates.
             navigationTargetRef.current = {
               id: null,
               type: null,
@@ -1662,13 +1741,13 @@ export const useNavigationSystem = (deps: {
             navTurnActiveRef.current = false;
           } else {
             target.turnPhase = "traveling";
-            pathData.speed = 0; // start from zero speed
+            pathData.speed = 0;
             navTurnActiveRef.current = false;
             setNavigationPhase("transit_cruise", "section-travel-started");
-            vlog("▶️ Pause done — beginning travel");
+            vlog("▶️ Acquire done — beginning travel");
           }
         }
-        return; // Hold position during pause
+        return;
       }
 
       // ── SETTLING PHASE: ship has reached the staging point and now
@@ -2295,6 +2374,10 @@ export const useNavigationSystem = (deps: {
       navigationSystemRef.current.dispose();
       navigationSystemRef.current = null;
     }
+    if (targetingFXControllerRef.current) {
+      targetingFXControllerRef.current.dispose();
+      targetingFXControllerRef.current = null;
+    }
   }, [resetNavigationPhase]);
 
   return {
@@ -2312,5 +2395,6 @@ export const useNavigationSystem = (deps: {
     disposeNavigationSystem,
     /** Set this to receive moon arrival events (triggers orbit) */
     onMoonOrbitArrivalRef,
+    targetingFXControllerRef,
   };
 };

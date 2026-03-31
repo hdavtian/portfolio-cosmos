@@ -7,7 +7,7 @@
     "style": "squares",
     "colorFamily": "purple",
     "colorFamilies": ["purple", "yellow", "blue"],
-    "gridSize": 24,
+    "gridSize": 12,
     "fillDurationMs": 1000,
     "clearDurationMs": 1000,
     "titleFadeDurationMs": 800
