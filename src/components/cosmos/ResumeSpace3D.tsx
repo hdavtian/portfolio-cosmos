@@ -4599,6 +4599,7 @@ export default function ResumeSpace3D({
   const fastTrackConsumedRef = useRef(false);
   const cameraDriverTraceRef = useRef<string>("boot");
   const startupUiRevealTlRef = useRef<gsap.core.Timeline | null>(null);
+  const runStartupUiRevealRef = useRef<(() => void) | null>(null);
   const startupDestinationsPanelRef = useRef<HTMLDivElement | null>(null);
   const startupConsoleButtonRef = useRef<HTMLButtonElement | null>(null);
   const startupMiniMapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -9450,8 +9451,9 @@ export default function ResumeSpace3D({
         shipViewModeRef.current = "exterior";
         setShipUIPhase("ship-engaged");
 
-        // Keep camera fixed at intro settle while Falcon performs pickup
-        // approach. Avoid auto-follow snap here; handoff happens later.
+        // Reveal startup UI now that camera is attached behind the Falcon,
+        // preventing destination clicks before the follow-camera is stable.
+        runStartupUiRevealRef.current?.();
       }
     }, 500);
     return () => clearInterval(check);
@@ -10465,6 +10467,7 @@ export default function ResumeSpace3D({
     });
     return () => window.cancelAnimationFrame(rafId);
   }, [clearStartupUiRevealTimeline]);
+  runStartupUiRevealRef.current = runStartupUiReveal;
 
   useEffect(() => () => clearStartupUiRevealTimeline(), [clearStartupUiRevealTimeline]);
 
@@ -22176,8 +22179,6 @@ export default function ResumeSpace3D({
         onIntroEvent: (event) => {
           if (event === "camera-intro started") {
             resetStartupUiReveal();
-          } else if (event === "camera-intro completed") {
-            runStartupUiReveal();
           }
           if (!CAMERA_TRACE_ENABLED) return;
           shipLog(`[CAMTRACE] ${event}`, "info");
