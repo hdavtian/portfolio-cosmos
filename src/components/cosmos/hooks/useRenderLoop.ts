@@ -7,6 +7,7 @@ import { PhysicsTravelAnchor } from "../PhysicsTravelAnchor";
 import type { OrbitAnchor, OrbitItem } from "../ResumeSpace3D.orbital";
 import type { SceneRef } from "../ResumeSpace3D.types";
 import type { TVPreviewController } from "../targetPreviewTV";
+import type { DashcamController } from "../dashcamTV";
 import {
   FOLLOW_DISTANCE,
   FOLLOW_HEIGHT,
@@ -141,6 +142,7 @@ export const useRenderLoop = () => {
       vlog: (message: string) => void;
       gpuWarmupInProgressRef?: React.MutableRefObject<boolean>;
       tvPreviewControllerRef?: React.MutableRefObject<TVPreviewController | null>;
+      dashcamControllerRef?: React.MutableRefObject<DashcamController | null>;
       [key: string]: unknown;
     }) => {
       const {
@@ -175,6 +177,7 @@ export const useRenderLoop = () => {
         projectShowcaseTrackRef,
         gpuWarmupInProgressRef,
         tvPreviewControllerRef,
+        dashcamControllerRef,
         updateMoonOrbit,
         isMoonOrbiting,
         updateAutopilotNavigation,
@@ -2231,6 +2234,12 @@ export const useRenderLoop = () => {
         if (tvPreviewControllerRef?.current && tvPreviewControllerRef.current.phase !== "hidden") {
           const tvDeltaMs = Math.min(deltaSeconds * 1000, 100);
           tvPreviewControllerRef.current.update(tvDeltaMs, renderer, scene);
+        }
+
+        // Dashcam secondary render
+        if (dashcamControllerRef?.current && dashcamControllerRef.current.phase !== "hidden") {
+          const dcDeltaMs = Math.min(deltaSeconds * 1000, 100);
+          dashcamControllerRef.current.update(dcDeltaMs, renderer, scene);
         }
 
         const _p7 = performance.now();

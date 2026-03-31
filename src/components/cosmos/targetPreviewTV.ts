@@ -485,6 +485,7 @@ export function createTVPreviewController(): TVPreviewController {
       }
 
       case "live_feed": {
+        if (!ctx) break; // inactive tab — skip rendering
         updateOrbitCamera(deltaMs);
         frameTick++;
 

@@ -41,6 +41,11 @@ import {
   type TVPreviewController,
   type TVPhase,
 } from "../targetPreviewTV";
+import {
+  createDashcamController,
+  type DashcamController,
+  type DashcamPhase,
+} from "../dashcamTV";
 
 const NAV_REPEAT_SECTION_EPSILON = 1.5;
 const NAV_MOVEMENT_HEARTBEAT_LOGS = false;
@@ -302,6 +307,9 @@ export const useNavigationSystem = (deps: {
       if (tvPreviewControllerRef.current && tvPreviewControllerRef.current.phase !== "hidden") {
         tvPreviewControllerRef.current.fadeOut();
       }
+      if (dashcamControllerRef.current && dashcamControllerRef.current.phase !== "hidden") {
+        dashcamControllerRef.current.fadeOut();
+      }
       setNavigationPhase("idle", detail);
     },
     [setNavigationPhase],
@@ -335,6 +343,9 @@ export const useNavigationSystem = (deps: {
       if (tvPreviewControllerRef.current && tvPreviewControllerRef.current.phase !== "hidden") {
         tvPreviewControllerRef.current.fadeOut();
       }
+      if (dashcamControllerRef.current && dashcamControllerRef.current.phase !== "hidden") {
+        dashcamControllerRef.current.fadeOut();
+      }
       setNavigationPhase(
         "travel_override",
         `override-retarget:${targetType}:${targetId}`,
@@ -358,6 +369,9 @@ export const useNavigationSystem = (deps: {
 
   const tvPreviewControllerRef = useRef<TVPreviewController | null>(null);
   const [tvPhase, setTvPhase] = useState<TVPhase>("hidden");
+
+  const dashcamControllerRef = useRef<DashcamController | null>(null);
+  const [dashcamPhase, setDashcamPhase] = useState<DashcamPhase>("hidden");
 
   const navigationTargetRef = useRef<{
     id: string | null;
@@ -607,6 +621,9 @@ export const useNavigationSystem = (deps: {
         }
         if (tvPreviewControllerRef.current && tvPreviewControllerRef.current.phase !== "hidden") {
           tvPreviewControllerRef.current.fadeOut();
+        }
+        if (dashcamControllerRef.current && dashcamControllerRef.current.phase !== "hidden") {
+          dashcamControllerRef.current.fadeOut();
         }
         vlog(`✅ ARRIVED at ${targetId}`);
         shipLog("Destination reached", "nav");
@@ -949,6 +966,15 @@ export const useNavigationSystem = (deps: {
           });
         }
 
+        // Launch dashcam panel
+        if (!dashcamControllerRef.current) {
+          dashcamControllerRef.current = createDashcamController();
+          dashcamControllerRef.current.setPhaseCallback(setDashcamPhase);
+        }
+        if (ship) {
+          dashcamControllerRef.current.begin({ ship });
+        }
+
         setNavigationPhase(
           clearanceTarget ? "departure_clearance" : "trajectory_alignment",
           clearanceTarget ? "moon-nav-start:clearance" : "moon-nav-start:turning",
@@ -1230,6 +1256,15 @@ export const useNavigationSystem = (deps: {
             targetId,
             routeKind: "section",
           });
+
+          // Launch dashcam panel
+          if (!dashcamControllerRef.current) {
+            dashcamControllerRef.current = createDashcamController();
+            dashcamControllerRef.current.setPhaseCallback(setDashcamPhase);
+          }
+          if (spaceshipRef.current) {
+            dashcamControllerRef.current.begin({ ship: spaceshipRef.current });
+          }
 
           setCurrentNavigationTarget(targetId);
 
@@ -1860,6 +1895,9 @@ export const useNavigationSystem = (deps: {
           if (tvPreviewControllerRef.current && tvPreviewControllerRef.current.phase !== "hidden") {
             tvPreviewControllerRef.current.fadeOut();
           }
+          if (dashcamControllerRef.current && dashcamControllerRef.current.phase !== "hidden") {
+            dashcamControllerRef.current.fadeOut();
+          }
           setNavigationPhase("arrived", "section-settle-complete");
 
           // ── Directly run arrival cleanup here instead of falling
@@ -2332,6 +2370,9 @@ export const useNavigationSystem = (deps: {
         if (tvPreviewControllerRef.current && tvPreviewControllerRef.current.phase !== "hidden") {
           tvPreviewControllerRef.current.fadeOut();
         }
+        if (dashcamControllerRef.current && dashcamControllerRef.current.phase !== "hidden") {
+          dashcamControllerRef.current.fadeOut();
+        }
         setNavigationPhase("arrived", "section-arrival-threshold-met");
         shipLog("Arriving at destination", "nav");
         vlog(`   Final distance: ${distance.toFixed(2)} units`);
@@ -2446,6 +2487,10 @@ export const useNavigationSystem = (deps: {
       tvPreviewControllerRef.current.dispose();
       tvPreviewControllerRef.current = null;
     }
+    if (dashcamControllerRef.current) {
+      dashcamControllerRef.current.dispose();
+      dashcamControllerRef.current = null;
+    }
   }, [resetNavigationPhase]);
 
   return {
@@ -2466,5 +2511,7 @@ export const useNavigationSystem = (deps: {
     targetingFXControllerRef,
     tvPreviewControllerRef,
     tvPhase,
+    dashcamControllerRef,
+    dashcamPhase,
   };
 };

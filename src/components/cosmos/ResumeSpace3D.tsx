@@ -5674,6 +5674,8 @@ export default function ResumeSpace3D({
     onMoonOrbitArrivalRef,
     tvPreviewControllerRef,
     tvPhase,
+    dashcamControllerRef,
+    dashcamPhase,
   } = useNavigationSystem({
     resumeData,
     emitterRef,
@@ -22183,6 +22185,7 @@ export default function ResumeSpace3D({
       followingStarDestroyerRef,
       gpuWarmupInProgressRef,
       tvPreviewControllerRef,
+      dashcamControllerRef,
       updateAutopilotNavigation,
       updateMoonOrbit: updateOrbit,
       isMoonOrbiting: isOrbiting,
@@ -26952,10 +26955,12 @@ export default function ResumeSpace3D({
 
           {renderUnifiedRegistryPanel()}
 
-          {/* TV Preview Panel */}
+          {/* Unified TV Preview Panel with Target / Flight tab switcher */}
           <TargetPreviewTVPanel
             tvPhase={tvPhase}
-            controllerRef={tvPreviewControllerRef}
+            tvControllerRef={tvPreviewControllerRef}
+            dashcamPhase={dashcamPhase}
+            dashcamControllerRef={dashcamControllerRef}
           />
 
           {/* Spaceship HUD Interface */}
