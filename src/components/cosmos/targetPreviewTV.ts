@@ -58,17 +58,24 @@ export function createTVPreviewController(): TVPreviewController {
     1,
     80000,
   );
+  // Enable all layers so the preview camera can see objects on custom layers
+  // (e.g. About exterior on layer 2, Skills lattice on 3, Portfolio on 4).
+  previewCam.layers.enableAll();
 
   let rt: THREE.WebGLRenderTarget | null = null;
 
   // Dedicated preview lighting — added to scene during live_feed,
   // positioned near the preview camera so the target is always lit.
-  const previewKeyLight = new THREE.PointLight(0xffffff, 2.5, 0, 1.2);
+  // All layers enabled so lights affect objects on custom layers (2-4).
+  const previewKeyLight = new THREE.PointLight(0xffffff, 4.0, 0, 1.0);
   previewKeyLight.name = "TVPreviewKeyLight";
-  const previewFillLight = new THREE.PointLight(0x8ec8ff, 1.2, 0, 1.5);
+  previewKeyLight.layers.enableAll();
+  const previewFillLight = new THREE.PointLight(0x8ec8ff, 2.2, 0, 1.2);
   previewFillLight.name = "TVPreviewFillLight";
-  const previewAmbient = new THREE.AmbientLight(0xffffff, 0.6);
+  previewFillLight.layers.enableAll();
+  const previewAmbient = new THREE.AmbientLight(0xffffff, 1.0);
   previewAmbient.name = "TVPreviewAmbient";
+  previewAmbient.layers.enableAll();
   let lightsInScene = false;
 
   let orbitAngle = 0;

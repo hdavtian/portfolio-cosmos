@@ -5853,10 +5853,17 @@ export default function ResumeSpace3D({
         const exterior = projectShowcaseExteriorRootRef.current;
         if (exterior) {
           const bounds = new THREE.Box3().setFromObject(exterior);
-          const center = bounds.getCenter(new THREE.Vector3());
-          const size = bounds.getSize(new THREE.Vector3());
-          return { center, radius: Math.max(size.x, size.y, size.z) * 0.5 };
+          if (!bounds.isEmpty()) {
+            const center = bounds.getCenter(new THREE.Vector3());
+            const size = bounds.getSize(new THREE.Vector3());
+            // Compact structure — orbit tight for a close-up inspection
+            return { center, radius: Math.max(size.x, size.y, size.z) * 0.004 };
+          }
         }
+        // Fallback: use the About world anchor directly
+        const anchor = projectShowcaseWorldAnchorRef.current
+          ?? PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR;
+        return { center: anchor.clone(), radius: 1.6 };
       }
       if (targetId === "skills") {
         const anchor = skillsLatticeWorldAnchorRef.current;
