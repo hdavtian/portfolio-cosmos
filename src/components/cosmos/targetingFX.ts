@@ -420,6 +420,7 @@ export interface TargetingFXController {
     shipPosition: THREE.Vector3;
     routeKind: TargetingRouteKind;
     targetId: string;
+    targetRadius?: number;
   }) => void;
   update: (
     deltaMs: number,
@@ -528,10 +529,11 @@ export function createTargetingFXController(
     shipPosition: THREE.Vector3;
     routeKind: TargetingRouteKind;
     targetId: string;
+    targetRadius?: number;
   }) {
     clearObjects();
 
-    const { targetPosition, shipPosition, routeKind, targetId } = params;
+    const { targetPosition, shipPosition, routeKind, targetId, targetRadius: bodyRadius } = params;
     const distance = shipPosition.distanceTo(targetPosition);
 
     state.active = true;
@@ -574,7 +576,14 @@ export function createTargetingFXController(
       0.65,
     );
 
-    const baseRadius = THREE.MathUtils.clamp(distance * 0.012, 30, 120);
+    // Scale reticle to the actual body size for larger destinations.
+    // Distance-based fallback for small/unknown objects; body-radius
+    // based floor so big planets/lattices get visually wrapped.
+    const distanceBased = THREE.MathUtils.clamp(distance * 0.012, 30, 120);
+    const bodyBased = bodyRadius != null
+      ? THREE.MathUtils.clamp(bodyRadius * 1.6, 40, 600)
+      : 0;
+    const baseRadius = Math.max(distanceBased, bodyBased);
 
     // ── Inner rings ──
     ringRadii = [];

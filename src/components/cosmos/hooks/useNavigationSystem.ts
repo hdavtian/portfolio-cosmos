@@ -1644,6 +1644,7 @@ export const useNavigationSystem = (deps: {
               shipPosition: ship.position,
               routeKind: (target.type === "moon" ? "moon" : "section") as TargetingRouteKind,
               targetId: target.id ?? "unknown",
+              targetRadius: target.targetRadius,
             });
           }
 
