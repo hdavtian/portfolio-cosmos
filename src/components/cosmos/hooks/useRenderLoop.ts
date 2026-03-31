@@ -6,6 +6,7 @@ import { physicsWorld } from "../PhysicsWorld";
 import { PhysicsTravelAnchor } from "../PhysicsTravelAnchor";
 import type { OrbitAnchor, OrbitItem } from "../ResumeSpace3D.orbital";
 import type { SceneRef } from "../ResumeSpace3D.types";
+import type { TVPreviewController } from "../targetPreviewTV";
 import {
   FOLLOW_DISTANCE,
   FOLLOW_HEIGHT,
@@ -139,6 +140,7 @@ export const useRenderLoop = () => {
       sunMesh: THREE.Object3D;
       vlog: (message: string) => void;
       gpuWarmupInProgressRef?: React.MutableRefObject<boolean>;
+      tvPreviewControllerRef?: React.MutableRefObject<TVPreviewController | null>;
       [key: string]: unknown;
     }) => {
       const {
@@ -172,6 +174,7 @@ export const useRenderLoop = () => {
         projectShowcaseActiveRef,
         projectShowcaseTrackRef,
         gpuWarmupInProgressRef,
+        tvPreviewControllerRef,
         updateMoonOrbit,
         isMoonOrbiting,
         updateAutopilotNavigation,
@@ -2223,6 +2226,13 @@ export const useRenderLoop = () => {
 
         const _p6 = performance.now();
         composer.render();
+
+        // TV preview secondary render (tiny RT, every other frame)
+        if (tvPreviewControllerRef?.current && tvPreviewControllerRef.current.phase !== "hidden") {
+          const tvDeltaMs = Math.min(deltaSeconds * 1000, 100);
+          tvPreviewControllerRef.current.update(tvDeltaMs, renderer, scene);
+        }
+
         const _p7 = performance.now();
 
         // Skip the extra render passes when inside the ship — the

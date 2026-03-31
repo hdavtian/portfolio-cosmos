@@ -36,6 +36,11 @@ import {
   type TargetingFXController,
   type TargetingRouteKind,
 } from "../targetingFX";
+import {
+  createTVPreviewController,
+  type TVPreviewController,
+  type TVPhase,
+} from "../targetPreviewTV";
 
 const NAV_REPEAT_SECTION_EPSILON = 1.5;
 const NAV_MOVEMENT_HEARTBEAT_LOGS = false;
@@ -286,6 +291,9 @@ export const useNavigationSystem = (deps: {
       if (targetingFXControllerRef.current?.state.active) {
         targetingFXControllerRef.current.fadeOut();
       }
+      if (tvPreviewControllerRef.current && tvPreviewControllerRef.current.phase !== "hidden") {
+        tvPreviewControllerRef.current.fadeOut();
+      }
       setNavigationPhase("idle", detail);
     },
     [setNavigationPhase],
@@ -316,6 +324,9 @@ export const useNavigationSystem = (deps: {
       if (targetingFXControllerRef.current?.state.active) {
         targetingFXControllerRef.current.fadeOut();
       }
+      if (tvPreviewControllerRef.current && tvPreviewControllerRef.current.phase !== "hidden") {
+        tvPreviewControllerRef.current.fadeOut();
+      }
       setNavigationPhase(
         "travel_override",
         `override-retarget:${targetType}:${targetId}`,
@@ -336,6 +347,9 @@ export const useNavigationSystem = (deps: {
 
   const targetingFXControllerRef = useRef<TargetingFXController | null>(null);
   const _acquireLastFrameRef = useRef(0);
+
+  const tvPreviewControllerRef = useRef<TVPreviewController | null>(null);
+  const [tvPhase, setTvPhase] = useState<TVPhase>("hidden");
 
   const navigationTargetRef = useRef<{
     id: string | null;
@@ -582,6 +596,9 @@ export const useNavigationSystem = (deps: {
           });
         } else {
           resetNavigationPhase(`non-moon-arrival:${targetId}`);
+        }
+        if (tvPreviewControllerRef.current && tvPreviewControllerRef.current.phase !== "hidden") {
+          tvPreviewControllerRef.current.fadeOut();
         }
         vlog(`✅ ARRIVED at ${targetId}`);
         shipLog("Destination reached", "nav");
@@ -909,6 +926,21 @@ export const useNavigationSystem = (deps: {
         navigationTravelPhaseStateRef.current.cruiseStartDistance = null;
         navigationTravelPhaseStateRef.current.approachDistance = null;
         navigationTravelPhaseStateRef.current.lightspeedAnnounced = false;
+
+        // Launch TV preview panel
+        if (!tvPreviewControllerRef.current) {
+          tvPreviewControllerRef.current = createTVPreviewController();
+          tvPreviewControllerRef.current.setPhaseCallback(setTvPhase);
+        }
+        if (currentPos?.worldPosition) {
+          tvPreviewControllerRef.current.begin({
+            targetPosition: currentPos.worldPosition,
+            targetRadius: 30,
+            targetId,
+            routeKind: "moon",
+          });
+        }
+
         setNavigationPhase(
           clearanceTarget ? "departure_clearance" : "trajectory_alignment",
           clearanceTarget ? "moon-nav-start:clearance" : "moon-nav-start:turning",
@@ -1174,6 +1206,19 @@ export const useNavigationSystem = (deps: {
             navTurnActiveRef.current = false;
             vlog("🌀 Projects special-case: skipping turn phase, curving directly");
           }
+
+          // Launch TV preview panel
+          if (!tvPreviewControllerRef.current) {
+            tvPreviewControllerRef.current = createTVPreviewController();
+            tvPreviewControllerRef.current.setPhaseCallback(setTvPhase);
+          }
+          tvPreviewControllerRef.current.begin({
+            targetPosition: planetCenter,
+            targetRadius,
+            targetId,
+            routeKind: "section",
+          });
+
           setCurrentNavigationTarget(targetId);
 
           vlog(
@@ -1800,6 +1845,9 @@ export const useNavigationSystem = (deps: {
 
         if (t >= 1) {
           vlog("🛸 Settle complete — ship now facing planet system");
+          if (tvPreviewControllerRef.current && tvPreviewControllerRef.current.phase !== "hidden") {
+            tvPreviewControllerRef.current.fadeOut();
+          }
           setNavigationPhase("arrived", "section-settle-complete");
 
           // ── Directly run arrival cleanup here instead of falling
@@ -2269,6 +2317,9 @@ export const useNavigationSystem = (deps: {
         }
 
         vlog(`✅ ARRIVED at ${target.id}`);
+        if (tvPreviewControllerRef.current && tvPreviewControllerRef.current.phase !== "hidden") {
+          tvPreviewControllerRef.current.fadeOut();
+        }
         setNavigationPhase("arrived", "section-arrival-threshold-met");
         shipLog("Arriving at destination", "nav");
         vlog(`   Final distance: ${distance.toFixed(2)} units`);
@@ -2379,6 +2430,10 @@ export const useNavigationSystem = (deps: {
       targetingFXControllerRef.current.dispose();
       targetingFXControllerRef.current = null;
     }
+    if (tvPreviewControllerRef.current) {
+      tvPreviewControllerRef.current.dispose();
+      tvPreviewControllerRef.current = null;
+    }
   }, [resetNavigationPhase]);
 
   return {
@@ -2397,5 +2452,7 @@ export const useNavigationSystem = (deps: {
     /** Set this to receive moon arrival events (triggers orbit) */
     onMoonOrbitArrivalRef,
     targetingFXControllerRef,
+    tvPreviewControllerRef,
+    tvPhase,
   };
 };

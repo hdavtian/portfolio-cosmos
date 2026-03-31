@@ -79,6 +79,7 @@ import {
   type NavigationTravelPhase,
 } from "./hooks/useNavigationSystem";
 import { useRenderLoop } from "./hooks/useRenderLoop";
+import { TargetPreviewTVPanel } from "./TargetPreviewTVPanel";
 import {
   createIntroSequenceRunner,
   INTRO_CAMERA_FINAL_POS,
@@ -5671,6 +5672,8 @@ export default function ResumeSpace3D({
     updateAutopilotNavigation,
     disposeNavigationSystem,
     onMoonOrbitArrivalRef,
+    tvPreviewControllerRef,
+    tvPhase,
   } = useNavigationSystem({
     resumeData,
     emitterRef,
@@ -22147,6 +22150,7 @@ export default function ResumeSpace3D({
       starDestroyerRef,
       followingStarDestroyerRef,
       gpuWarmupInProgressRef,
+      tvPreviewControllerRef,
       updateAutopilotNavigation,
       updateMoonOrbit: updateOrbit,
       isMoonOrbiting: isOrbiting,
@@ -26915,6 +26919,12 @@ export default function ResumeSpace3D({
           )}
 
           {renderUnifiedRegistryPanel()}
+
+          {/* TV Preview Panel */}
+          <TargetPreviewTVPanel
+            tvPhase={tvPhase}
+            controllerRef={tvPreviewControllerRef}
+          />
 
           {/* Spaceship HUD Interface */}
           <SpaceshipHUD
