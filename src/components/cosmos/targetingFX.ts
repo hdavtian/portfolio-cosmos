@@ -410,6 +410,8 @@ export interface TargetingFXState {
   shipNoseOffset: THREE.Vector3;
   totalDurationMs: number;
   progress: number;
+  /** Set by controller at lock moment so caller can nudge camera FOV */
+  lockFlashT: number;
 }
 
 export interface TargetingFXController {
@@ -450,6 +452,7 @@ export function createTargetingFXController(
     shipNoseOffset: new THREE.Vector3(0, 0, 12),
     totalDurationMs: 2000,
     progress: 0,
+    lockFlashT: 0,
   };
 
   // ── Internal objects ──
@@ -465,6 +468,8 @@ export function createTargetingFXController(
   let cornerBrackets: THREE.LineSegments | null = null;
   let beamDataSprites: THREE.Sprite[] = [];
   let targetingGrid: THREE.LineSegments | null = null;
+  let lockFlashRing: THREE.Line | null = null;
+  let trailingBeam: THREE.Line | null = null;
 
   let ringRotationSpeeds: number[] = [];
   let ringBaseAngles: number[] = [];
@@ -481,6 +486,11 @@ export function createTargetingFXController(
   let sweepArcRadius = 0;
   let gridStartPos = new THREE.Vector3();
   let gridHalfSize = 0;
+  let lockFlashStartTime = 0;
+  let lockFlashFired = false;
+  let crosshairSpreadFactor = 1;   // 1 = fully spread, 0 = converged
+  let ringLockOrder: number[] = []; // per-ring stagger delay (seconds)
+  let baseCameraFov: number | null = null;
 
   const _tmpVec = new THREE.Vector3();
   const _tmpVec2 = new THREE.Vector3();
@@ -514,6 +524,13 @@ export function createTargetingFXController(
     for (const s of beamDataSprites) disposeObject3D(s);
     beamDataSprites = [];
     if (targetingGrid) { disposeObject3D(targetingGrid); targetingGrid = null; }
+    if (lockFlashRing) { disposeObject3D(lockFlashRing); lockFlashRing = null; }
+    if (trailingBeam) { disposeObject3D(trailingBeam); trailingBeam = null; }
+    lockFlashFired = false;
+    lockFlashStartTime = 0;
+    crosshairSpreadFactor = 1;
+    ringLockOrder = [];
+    baseCameraFov = null;
     ringRotationSpeeds = [];
     ringBaseAngles = [];
     ringRadii = [];
@@ -549,6 +566,7 @@ export function createTargetingFXController(
       3500,
     );
     state.progress = 0;
+    state.lockFlashT = 0;
     laserProgress = 0;
     masterOpacity = 0;
     fadeStartTime = 0;
@@ -756,6 +774,38 @@ export function createTargetingFXController(
     flareSprite.renderOrder = 999;
     group.add(flareSprite);
 
+    // ── Trailing beam (dimmer segment behind flare head) ──
+    const trailColor = schemeColors[0].clone().multiplyScalar(0.5);
+    trailingBeam = createLaserBeam(trailColor);
+    trailingBeam.renderOrder = 997;
+    group.add(trailingBeam);
+
+    // ── Lock flash ring (expanding pulse at lock moment) ──
+    const flashGeo = createOuterEncircleGeometry(baseRadius * 0.8, 1, 64);
+    const flashMat = new THREE.LineBasicMaterial({
+      color: new THREE.Color(1, 1, 1),
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+    });
+    lockFlashRing = new THREE.Line(flashGeo, flashMat);
+    lockFlashRing.renderOrder = 1000;
+    lockFlashRing.visible = false;
+    group.add(lockFlashRing);
+
+    // ── Per-ring staggered lock order ──
+    lockFlashFired = false;
+    lockFlashStartTime = 0;
+    crosshairSpreadFactor = 1;
+    baseCameraFov = null;
+    state.lockFlashT = 0;
+    ringLockOrder = [];
+    const staggerStep = 0.12;
+    for (let i = 0; i < scheme.ringCount; i++) {
+      ringLockOrder.push(i * staggerStep);
+    }
+
     group.visible = true;
   }
 
@@ -783,6 +833,16 @@ export function createTargetingFXController(
     }
     if (state.phase === "locking" && elapsed > lockEnd) {
       state.phase = "locked";
+      // Fire lock flash pulse
+      if (!lockFlashFired) {
+        lockFlashFired = true;
+        lockFlashStartTime = performance.now();
+        if (lockFlashRing) lockFlashRing.visible = true;
+        // Capture base FOV for nudge
+        if (camera instanceof THREE.PerspectiveCamera && baseCameraFov === null) {
+          baseCameraFov = camera.fov;
+        }
+      }
     }
     if (state.phase === "locked" && elapsed > lockedEnd) {
       state.phase = "fading";
@@ -844,10 +904,18 @@ export function createTargetingFXController(
       const mat = ring.material as THREE.LineBasicMaterial;
       let targetOpacity = 0.5 + 0.15 * Math.sin(seconds * 2 + i);
       if (state.phase === "locked" || state.phase === "locking") {
-        const lockT = state.phase === "locked" ? 1 :
+        const globalLockT = state.phase === "locked" ? 1 :
           Math.min((elapsed - state.totalDurationMs * 0.3) / (state.totalDurationMs * 0.4), 1);
-        mat.color.copy(schemeColors[i]).lerp(lockColor, lockT * 0.6);
-        targetOpacity = 0.6 + 0.2 * lockT;
+        // Staggered per-ring lock: each ring snaps at its own delay
+        const ringDelaySec = ringLockOrder[i] ?? 0;
+        const ringLockT = THREE.MathUtils.clamp(
+          globalLockT - ringDelaySec / (state.totalDurationMs * 0.4 / 1000),
+          0, 1,
+        );
+        // Snap curve: stays near 0 then jumps to 1
+        const snapT = ringLockT < 0.3 ? 0 : Math.min((ringLockT - 0.3) / 0.15, 1);
+        mat.color.copy(schemeColors[i]).lerp(lockColor, snapT * 0.7);
+        targetOpacity = 0.6 + 0.25 * snapT;
       } else {
         mat.color.copy(schemeColors[i]);
       }
@@ -964,10 +1032,27 @@ export function createTargetingFXController(
       bMat.opacity = bOp * masterOpacity;
     }
 
-    // ── Crosshair ──
+    // ── Crosshair (convergence animation: arms start spread, tighten inward) ──
     if (crosshair) {
       crosshair.position.copy(state.targetPosition);
       crosshair.quaternion.copy(_lookQuat);
+
+      // Convergence: spread factor lerps from 1 (wide) to 0 (tight)
+      if (state.phase === "spawning") {
+        crosshairSpreadFactor = 1 - Math.min(elapsed / (state.totalDurationMs * 0.3), 1) * 0.3;
+      } else if (state.phase === "locking") {
+        const lockingT = Math.min(
+          (elapsed - state.totalDurationMs * 0.3) / (state.totalDurationMs * 0.4), 1,
+        );
+        crosshairSpreadFactor = 0.7 - 0.7 * (lockingT < 0.5 ? 2 * lockingT * lockingT : 1 - Math.pow(-2 * lockingT + 2, 2) / 2);
+      } else if (state.phase === "locked") {
+        crosshairSpreadFactor = 0;
+      }
+
+      // Apply spread as uniform scale (1.0 = normal, up to 2.2 = spread)
+      const chScale = 1.0 + crosshairSpreadFactor * 1.2;
+      crosshair.scale.setScalar(chScale);
+
       const chMat = crosshair.material as THREE.LineBasicMaterial;
       let chOp = 0;
       if (state.phase === "spawning") {
@@ -1154,6 +1239,65 @@ export function createTargetingFXController(
       const flareScale = THREE.MathUtils.clamp(camDist * 0.02, 4, 30);
       flareSprite.scale.setScalar(flareScale);
     }
+
+    // ── Trailing beam (dimmer tail behind flare) ──
+    if (trailingBeam && laserProgress > 0.05) {
+      const trailLen = 0.35;
+      const trailStart = Math.max(laserProgress - trailLen, 0);
+      const trailEnd = laserProgress;
+      const trailA = _tmpVec.lerpVectors(_shipNose, state.targetPosition, trailStart);
+      const trailB = _tmpVec2.lerpVectors(_shipNose, state.targetPosition, trailEnd);
+      const tPosAttr = trailingBeam.geometry.getAttribute("position") as THREE.BufferAttribute;
+      tPosAttr.setXYZ(0, trailA.x, trailA.y, trailA.z);
+      tPosAttr.setXYZ(1, trailB.x, trailB.y, trailB.z);
+      tPosAttr.needsUpdate = true;
+      const tMat = trailingBeam.material as THREE.LineBasicMaterial;
+      tMat.opacity = Math.min(laserProgress * 0.4, 0.2) * masterOpacity;
+    }
+
+    // ── Lock-on flash ring (expanding pulse at lock moment) ──
+    if (lockFlashRing && lockFlashFired) {
+      const flashElapsed = performance.now() - lockFlashStartTime;
+      const FLASH_DURATION_MS = 450;
+      const flashT = Math.min(flashElapsed / FLASH_DURATION_MS, 1);
+
+      lockFlashRing.position.copy(state.targetPosition);
+      lockFlashRing.quaternion.copy(_lookQuat);
+
+      // Rapid expansion from 1x to ~2.5x
+      const expandScale = 1 + flashT * 1.5;
+      lockFlashRing.scale.setScalar(expandScale);
+
+      // Bright start, quick fade
+      const flashOp = (1 - flashT) * 0.9;
+      (lockFlashRing.material as THREE.LineBasicMaterial).color.copy(lockColor);
+      (lockFlashRing.material as THREE.LineBasicMaterial).opacity = flashOp;
+
+      state.lockFlashT = flashT < 1 ? 1 - flashT : 0;
+
+      if (flashT >= 1) {
+        lockFlashRing.visible = false;
+        state.lockFlashT = 0;
+      }
+    }
+
+    // ── Camera FOV nudge at lock moment ──
+    if (baseCameraFov !== null && camera instanceof THREE.PerspectiveCamera) {
+      const nudgeElapsed = performance.now() - lockFlashStartTime;
+      const NUDGE_MS = 500;
+      if (nudgeElapsed < NUDGE_MS) {
+        const nudgeT = nudgeElapsed / NUDGE_MS;
+        // Outward bump: 0→peak→0
+        const bump = Math.sin(nudgeT * Math.PI) * 2.5;
+        camera.fov = baseCameraFov + bump;
+        camera.updateProjectionMatrix();
+      } else if (nudgeElapsed < NUDGE_MS + 100) {
+        // Restore
+        camera.fov = baseCameraFov;
+        camera.updateProjectionMatrix();
+        baseCameraFov = null;
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1162,6 +1306,7 @@ export function createTargetingFXController(
     if (state.active && state.phase !== "fading" && state.phase !== "done") {
       state.phase = "fading";
       fadeStartTime = performance.now();
+      state.lockFlashT = 0;
     }
   }
 
