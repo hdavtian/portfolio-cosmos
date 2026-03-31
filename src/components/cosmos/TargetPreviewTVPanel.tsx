@@ -14,6 +14,7 @@ export const TargetPreviewTVPanel: React.FC<Props> = ({
   controllerRef,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const shakeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const ctrl = controllerRef.current;
@@ -24,6 +25,32 @@ export const TargetPreviewTVPanel: React.FC<Props> = ({
       ctrl?.setCanvas(null);
     };
   }, [controllerRef, tvPhase]);
+
+  // Screen shake (#4): subtle jitter during live_feed via rAF
+  useEffect(() => {
+    if (tvPhase !== "live_feed") {
+      if (shakeRef.current) shakeRef.current.style.transform = "";
+      return;
+    }
+    let raf: number;
+    let last = 0;
+    const tick = (t: number) => {
+      if (t - last > 90) {
+        last = t;
+        if (shakeRef.current) {
+          const x = (Math.random() - 0.5) * 2.8;
+          const y = (Math.random() - 0.5) * 2.8;
+          shakeRef.current.style.transform = `translate(${x}px, ${y}px)`;
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (shakeRef.current) shakeRef.current.style.transform = "";
+    };
+  }, [tvPhase]);
 
   const isVisible = tvPhase !== "hidden";
 
@@ -51,6 +78,14 @@ export const TargetPreviewTVPanel: React.FC<Props> = ({
         pointerEvents: "none",
       }}
     >
+      {/* Keyframes for signal bar pulse */}
+      <style>{`
+        @keyframes tvSignalPulse {
+          0%, 100% { opacity: 0.25; }
+          50% { opacity: 1; }
+        }
+      `}</style>
+
       <div
         style={{
           background: "rgba(6, 14, 26, 0.94)",
@@ -77,7 +112,7 @@ export const TargetPreviewTVPanel: React.FC<Props> = ({
           Target Preview
         </div>
 
-        {/* Canvas container */}
+        {/* Canvas container with shake wrapper */}
         <div
           style={{
             width: TV_DISPLAY_W,
@@ -89,14 +124,16 @@ export const TargetPreviewTVPanel: React.FC<Props> = ({
             background: "#000",
           }}
         >
-          <canvas
-            ref={canvasRef}
-            style={{
-              width: TV_DISPLAY_W,
-              height: TV_DISPLAY_H,
-              display: "block",
-            }}
-          />
+          <div ref={shakeRef}>
+            <canvas
+              ref={canvasRef}
+              style={{
+                width: TV_DISPLAY_W,
+                height: TV_DISPLAY_H,
+                display: "block",
+              }}
+            />
+          </div>
           {/* CRT vignette */}
           <div
             style={{
@@ -110,7 +147,7 @@ export const TargetPreviewTVPanel: React.FC<Props> = ({
           />
         </div>
 
-        {/* Status bar */}
+        {/* Status bar with signal strength */}
         <div
           style={{
             fontFamily: "'Rajdhani', 'Courier New', monospace",
@@ -126,9 +163,40 @@ export const TargetPreviewTVPanel: React.FC<Props> = ({
             marginTop: 3,
             textAlign: "center",
             lineHeight: 1,
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            gap: 0,
           }}
         >
-          {statusText}
+          <span>{statusText}</span>
+
+          {/* Signal strength bars (#8) */}
+          {tvPhase === "live_feed" && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "flex-end",
+                gap: 1.2,
+                marginLeft: 7,
+                height: 10,
+              }}
+            >
+              {[3, 5, 7, 9, 11].map((h, i) => (
+                <span
+                  key={i}
+                  style={{
+                    display: "block",
+                    width: 2,
+                    height: h,
+                    background: "rgba(80, 255, 120, 0.6)",
+                    animation: `tvSignalPulse ${0.7 + i * 0.15}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.12}s`,
+                  }}
+                />
+              ))}
+            </span>
+          )}
         </div>
       </div>
     </div>

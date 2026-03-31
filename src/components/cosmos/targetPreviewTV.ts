@@ -87,6 +87,21 @@ export function createTVPreviewController(): TVPreviewController {
   let burstTotal = 1;
   let frameTick = 0;
 
+  // Phosphor ghosting (#5): offscreen canvas for compositing trails
+  let ghostCanvas: HTMLCanvasElement | null = null;
+  let ghostCtx: CanvasRenderingContext2D | null = null;
+
+  // Signal interference (#2)
+  let nextGlitchAt = 0;
+  let glitchEndAt = 0;
+
+  // Dynamic FOV zoom (#3)
+  let liveFeedStartTime = 0;
+  let baseFov = 40;
+
+  // Frame counter (#7)
+  let frameCount = 0;
+
   // ── Internal helpers ─────────────────────────────────────────────────────
 
   function removeLightsFromScene(scene: THREE.Scene) {
@@ -102,6 +117,12 @@ export function createTVPreviewController(): TVPreviewController {
     if (p === phase) return;
     phase = p;
     phaseStart = performance.now();
+    if (p === "live_feed") {
+      liveFeedStartTime = performance.now();
+      frameCount = 0;
+      nextGlitchAt = performance.now() + 3000 + Math.random() * 5000;
+      glitchEndAt = 0;
+    }
     phaseCallback?.(p);
   }
 
@@ -203,6 +224,115 @@ export function createTVPreviewController(): TVPreviewController {
     addScanlines(0.1);
   }
 
+  function drawInterferenceOverlay() {
+    if (!ctx) return;
+    let s = (performance.now() | 0) ^ seed;
+    const rng = () => {
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      return s / 0x7fffffff;
+    };
+    // Horizontal noise bands
+    for (let i = 0; i < 8; i++) {
+      const y = rng() * TV_HEIGHT;
+      const h = 1 + rng() * 5;
+      const v = Math.floor(rng() * 120);
+      ctx.fillStyle = `rgba(${v},${v + 20},${v},${0.3 + rng() * 0.3})`;
+      ctx.fillRect(0, y, TV_WIDTH, h);
+    }
+    // Bright scan line
+    const lineY = rng() * TV_HEIGHT;
+    ctx.fillStyle = "rgba(200,220,255,0.18)";
+    ctx.fillRect(0, lineY, TV_WIDTH, 1);
+    // Brief overall brightness flash
+    ctx.fillStyle = "rgba(160,180,200,0.06)";
+    ctx.fillRect(0, 0, TV_WIDTH, TV_HEIGHT);
+  }
+
+  function drawTargetAcquiredFlash(elapsed: number) {
+    if (!ctx) return;
+    const FLASH_MS = 550;
+    if (elapsed > FLASH_MS) return;
+    const t = elapsed / FLASH_MS;
+    const alpha =
+      t < 0.12 ? t / 0.12 : t > 0.65 ? 1 - (t - 0.65) / 0.35 : 1;
+    const wipeY = t * TV_HEIGHT * 1.4;
+    const cx = TV_WIDTH / 2;
+    const cy = TV_HEIGHT / 2;
+    const tint = routeKind === "moon" ? [64, 255, 128] : [80, 160, 255];
+
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.92;
+
+    // Dark bar behind text
+    const barH = 26;
+    const barY = cy - barH / 2;
+    if (barY < wipeY) {
+      ctx.fillStyle = "rgba(0,0,0,0.65)";
+      ctx.fillRect(0, barY, TV_WIDTH, Math.min(barH, wipeY - barY));
+    }
+
+    if (cy < wipeY) {
+      // Flanking lines
+      ctx.strokeStyle = `rgba(${tint[0]},${tint[1]},${tint[2]},0.4)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(12, cy - 9);
+      ctx.lineTo(TV_WIDTH * 0.28, cy - 9);
+      ctx.moveTo(TV_WIDTH * 0.72, cy - 9);
+      ctx.lineTo(TV_WIDTH - 12, cy - 9);
+      ctx.moveTo(12, cy + 9);
+      ctx.lineTo(TV_WIDTH * 0.28, cy + 9);
+      ctx.moveTo(TV_WIDTH * 0.72, cy + 9);
+      ctx.lineTo(TV_WIDTH - 12, cy + 9);
+      ctx.stroke();
+
+      // Main text
+      ctx.fillStyle = `rgb(${tint[0]},${tint[1]},${tint[2]})`;
+      ctx.font = "bold 13px 'Rajdhani', 'Courier New', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("TARGET ACQUIRED", cx, cy);
+    }
+
+    ctx.restore();
+  }
+
+  function drawFrameCounter() {
+    if (!ctx) return;
+    frameCount++;
+    const now = new Date();
+    const ts =
+      String(now.getHours()).padStart(2, "0") +
+      ":" +
+      String(now.getMinutes()).padStart(2, "0") +
+      ":" +
+      String(now.getSeconds()).padStart(2, "0") +
+      ":" +
+      String(frameCount % 100).padStart(2, "0");
+
+    ctx.save();
+    ctx.font = "9px 'Courier New', monospace";
+    ctx.textBaseline = "bottom";
+
+    // Timestamp bottom-left
+    ctx.fillStyle = "rgba(160,190,220,0.45)";
+    ctx.textAlign = "left";
+    ctx.fillText(ts, 6, TV_HEIGHT - 5);
+
+    // REC indicator bottom-right
+    const pulse = 0.4 + 0.3 * Math.sin(performance.now() * 0.005);
+    ctx.fillStyle = `rgba(255,40,30,${pulse})`;
+    ctx.beginPath();
+    ctx.arc(TV_WIDTH - 17, TV_HEIGHT - 9, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(255,40,30,${pulse * 0.85})`;
+    ctx.font = "8px 'Courier New', monospace";
+    ctx.textAlign = "right";
+    ctx.fillText("REC", TV_WIDTH - 24, TV_HEIGHT - 4);
+
+    ctx.restore();
+  }
+
   function updateOrbitCamera(deltaMs: number) {
     const speed = 0.65;
     orbitAngle += (deltaMs / 1000) * speed;
@@ -236,7 +366,7 @@ export function createTVPreviewController(): TVPreviewController {
     if (!rt || !ctx) return;
     renderer.readRenderTargetPixels(rt, 0, 0, TV_WIDTH, TV_HEIGHT, pixBuf);
 
-    const img = ctx.createImageData(TV_WIDTH, TV_HEIGHT);
+    const img = (ghostCtx ?? ctx).createImageData(TV_WIDTH, TV_HEIGHT);
     for (let y = 0; y < TV_HEIGHT; y++) {
       const src = (TV_HEIGHT - 1 - y) * TV_WIDTH * 4;
       const dst = y * TV_WIDTH * 4;
@@ -244,7 +374,17 @@ export function createTVPreviewController(): TVPreviewController {
         img.data[dst + x] = pixBuf[src + x];
       }
     }
-    ctx.putImageData(img, 0, 0);
+
+    if (ghostCtx && ghostCanvas) {
+      // Phosphor ghosting: fade previous frame, then composite new on top
+      ghostCtx.putImageData(img, 0, 0);
+      ctx.fillStyle = "rgba(0,0,0,0.82)";
+      ctx.fillRect(0, 0, TV_WIDTH, TV_HEIGHT);
+      ctx.drawImage(ghostCanvas, 0, 0);
+    } else {
+      ctx.putImageData(img, 0, 0);
+    }
+
     addScanlines();
     addCRTTint();
   }
@@ -260,8 +400,14 @@ export function createTVPreviewController(): TVPreviewController {
       c.width = TV_WIDTH;
       c.height = TV_HEIGHT;
       ctx = c.getContext("2d");
+      ghostCanvas = document.createElement("canvas");
+      ghostCanvas.width = TV_WIDTH;
+      ghostCanvas.height = TV_HEIGHT;
+      ghostCtx = ghostCanvas.getContext("2d");
     } else {
       ctx = null;
+      ghostCanvas = null;
+      ghostCtx = null;
     }
   }
 
@@ -285,9 +431,13 @@ export function createTVPreviewController(): TVPreviewController {
     orbitPitchBase = 0.15 + rng() * 0.25;
     frameTick = 0;
     burstTotal = 1 + (seed & 1);
+    frameCount = 0;
+    nextGlitchAt = 0;
+    glitchEndAt = 0;
+    liveFeedStartTime = 0;
 
-    // Wider FOV for sections so the full structure fills the preview nicely
-    previewCam.fov = routeKind === "section" ? 50 : 40;
+    baseFov = routeKind === "section" ? 50 : 40;
+    previewCam.fov = baseFov;
     previewCam.updateProjectionMatrix();
 
     if (!rt) {
@@ -337,8 +487,15 @@ export function createTVPreviewController(): TVPreviewController {
       case "live_feed": {
         updateOrbitCamera(deltaMs);
         frameTick++;
+
+        // Dynamic FOV zoom (#3): gradually tighten as ship approaches
+        const lfElapsed = performance.now() - liveFeedStartTime;
+        const zoomT = Math.min(lfElapsed / 25000, 1);
+        const fovEnd = baseFov * 0.65;
+        previewCam.fov = baseFov - (baseFov - fovEnd) * zoomT * zoomT;
+        previewCam.updateProjectionMatrix();
+
         if (frameTick % 2 === 0 && rt) {
-          // Inject preview lights for this render only
           if (!lightsInScene) {
             scene.add(previewKeyLight);
             scene.add(previewFillLight);
@@ -355,12 +512,29 @@ export function createTVPreviewController(): TVPreviewController {
           renderer.autoClear = prevAC;
           blitRTToCanvas(renderer);
 
-          // Remove preview lights so they don't affect the main scene
           scene.remove(previewKeyLight);
           scene.remove(previewFillLight);
           scene.remove(previewAmbient);
           lightsInScene = false;
         }
+
+        // Signal interference bursts (#2)
+        const nowMs = performance.now();
+        if (nowMs < glitchEndAt) {
+          drawInterferenceOverlay();
+        } else if (nowMs >= nextGlitchAt && nextGlitchAt > 0) {
+          glitchEndAt = nowMs + 40 + Math.random() * 80;
+          nextGlitchAt = nowMs + 4000 + Math.random() * 8000;
+        }
+
+        // TARGET ACQUIRED flash (#6)
+        if (lfElapsed < 600) {
+          drawTargetAcquiredFlash(lfElapsed);
+        }
+
+        // Frame counter (#7)
+        drawFrameCounter();
+
         break;
       }
 
@@ -387,6 +561,8 @@ export function createTVPreviewController(): TVPreviewController {
     }
     setPhase("hidden");
     ctx = null;
+    ghostCanvas = null;
+    ghostCtx = null;
   }
 
   return {
