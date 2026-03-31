@@ -60,6 +60,7 @@ export default function CosmosLoader({
   const [stageText, setStageText] = useState("");
   const [showStatusUI, setShowStatusUI] = useState(false);
   const [showEndMessage, setShowEndMessage] = useState(false);
+  const [typedCompletionText, setTypedCompletionText] = useState("");
   const [entryGateVisible, setEntryGateVisible] = useState(false);
   const [hasEntered, setHasEntered] = useState(fastTrackEnabled);
   const [showInspirationOverlay, setShowInspirationOverlay] = useState(false);
@@ -75,6 +76,7 @@ export default function CosmosLoader({
   const [animationDone, setAnimationDone] = useState(fastTrackEnabled);
   const [debugCurrentMode, setDebugCurrentMode] = useState("boot");
   const [debugModeHistory, setDebugModeHistory] = useState<string[]>([]);
+  const currentYear = new Date().getFullYear();
 
   const shuffledOrderRef = useRef<number[]>([]);
   const revealCountRef = useRef(0);
@@ -296,7 +298,7 @@ export default function CosmosLoader({
       setLoaderPhase("idle", "end-prep");
       fillSolid("#000");
       setProgress(100);
-      setStageText("Ready for exploration");
+      setStageText("Ready for Exploration");
       setShowEndMessage(true);
       setEntryGateVisible(true);
       markDebugMode("ready-message");
@@ -363,6 +365,26 @@ export default function CosmosLoader({
     };
   }, [showInspirationOverlay]);
 
+  useEffect(() => {
+    if (!showEndMessage) {
+      setTypedCompletionText("");
+      return;
+    }
+    const finalText = "... Load Completed ...";
+    setTypedCompletionText("");
+    let index = 0;
+    const typeId = window.setInterval(() => {
+      index += 1;
+      setTypedCompletionText(finalText.slice(0, index));
+      if (index >= finalText.length) {
+        clearInterval(typeId);
+      }
+    }, 42);
+    return () => {
+      clearInterval(typeId);
+    };
+  }, [showEndMessage]);
+
   // Dismiss only when animation, scene readiness, and user entry are complete.
   useEffect(() => {
     if (animationDone && isSceneReady && hasEntered) {
@@ -416,57 +438,63 @@ export default function CosmosLoader({
                 />
               ))}
             </div>
-            {showEndMessage && (
-              <div className="cosmos-loader__end-row">
-                <div className="cosmos-loader__end-message">Load completed ...</div>
-                {entryGateVisible && (
-                  <div
-                    className="cosmos-loader__entry-gate"
-                  >
-                    <button
-                      type="button"
-                      className="cosmos-loader__enter-button"
-                      onClick={handleEnterLoader}
-                      disabled={hasEntered}
-                    >
-                      {hasEntered ? "Entering..." : "Enter"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
         {showStatusUI && (
           <div className="cosmos-loader__info">
-            <p className="cosmos-loader__stage">{stageText}</p>
-
-            <div className="cosmos-loader__progress-grid" aria-hidden="true">
-              {Array.from({ length: 24 }).map((_, i) => {
-                const threshold = ((i + 1) / 24) * 100;
-                return (
-                  <span
-                    key={i}
-                    className={`cosmos-loader__progress-cell${
-                      progress >= threshold
-                        ? " cosmos-loader__progress-cell--active"
-                        : ""
-                    }`}
-                  />
-                );
-              })}
+            <div className="cosmos-loader__status-row">
+              <div className="cosmos-loader__status-inline">
+                <p className="cosmos-loader__stage">{stageText}</p>
+                <div className="cosmos-loader__progress-grid" aria-hidden="true">
+                  {Array.from({ length: 24 }).map((_, i) => {
+                    const threshold = ((i + 1) / 24) * 100;
+                    return (
+                      <span
+                        key={i}
+                        className={`cosmos-loader__progress-cell${
+                          progress >= threshold
+                            ? " cosmos-loader__progress-cell--active"
+                            : ""
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="cosmos-loader__percentage">{progress}%</div>
+                {showEndMessage && (
+                  <div className="cosmos-loader__end-message" aria-live="polite">
+                    {typedCompletionText}
+                  </div>
+                )}
+              </div>
+              {entryGateVisible && (
+                <div className="cosmos-loader__entry-gate">
+                  <button
+                    type="button"
+                    className="cosmos-loader__enter-button"
+                    onClick={handleEnterLoader}
+                    disabled={hasEntered}
+                  >
+                    {hasEntered ? "Entering..." : "Enter"}
+                  </button>
+                </div>
+              )}
             </div>
-
-            <div className="cosmos-loader__percentage">{progress}%</div>
-            <button
-              type="button"
-              className="cosmos-loader__about-trigger"
-              onClick={() => setShowInspirationOverlay(true)}
-              aria-label="About this loader"
-            >
-              ?
-            </button>
+            <div className="cosmos-loader__footer-line">
+              <span>harmadavtian.com</span>
+              <span aria-hidden="true">|</span>
+              <span>{currentYear}</span>
+              <span aria-hidden="true">|</span>
+              <button
+                type="button"
+                className="cosmos-loader__about-trigger"
+                onClick={() => setShowInspirationOverlay(true)}
+                aria-label="About this loader"
+              >
+                about loader
+              </button>
+            </div>
           </div>
         )}
 
