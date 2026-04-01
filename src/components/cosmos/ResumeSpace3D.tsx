@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
 import portfolioCores from "../../data/portfolioCores.json";
+import { moonPortfolioMapping } from "../../data/moonPortfolioMapping";
 import aboutDeck from "../../data/aboutDeck.json";
 import aboutHallSlidesLegacy from "../../data/aboutHallSlides.json";
 import aboutHallSlidesLevel01 from "../../data/aboutHallSlides.level-01-signal-origins.json";
@@ -145,6 +146,7 @@ import {
   type PortfolioCoreView,
   type PortfolioGroupView,
 } from "./portfolioData";
+import { buildMoonPortfolioPayload } from "./moonPortfolioSelector";
 
 // Extend window for logging timestamps
 declare global {
@@ -2536,6 +2538,29 @@ export default function ResumeSpace3D({
   const portfolioShowcaseEntries = useMemo<ShowcaseEntry[]>(
     () => portfolioCoreBuild.hallwayEntries.map((entry) => ({ ...entry })),
     [portfolioCoreBuild.hallwayEntries],
+  );
+  const moonPortfolioByCompanyId = useMemo(() => {
+    const map = new Map<string, NonNullable<OverlayContent["moonPortfolio"]>>();
+    (resumeData.experience ?? []).forEach((company: any) => {
+      const companyId = String(company?.id ?? "").trim();
+      if (!companyId) return;
+      const payload = buildMoonPortfolioPayload({
+        companyId,
+        companyName: String(company?.company ?? companyId),
+        coreSeeds: portfolioCores as PortfolioCoreSeed[],
+        mappings: moonPortfolioMapping,
+      });
+      if (payload) map.set(companyId, payload);
+    });
+    return map;
+  }, []);
+  const getMoonPortfolio = useCallback(
+    (company: any): OverlayContent["moonPortfolio"] => {
+      const companyId = String(company?.id ?? "").trim();
+      if (!companyId) return null;
+      return moonPortfolioByCompanyId.get(companyId) ?? null;
+    },
+    [moonPortfolioByCompanyId],
   );
   const [hallwayContentMode, setHallwayContentMode] = useState<HallwayContentMode>(
     HALLWAY_DEFAULT_CONTENT_MODE as HallwayContentMode,
@@ -18490,6 +18515,7 @@ export default function ResumeSpace3D({
       freezeOrbitalMotion,
       lastMoonOrbitSpeedRef,
       lastMoonSpinSpeedRef,
+      getMoonPortfolio,
     });
 
     // Wrap enterMoonView so that when arriving via ship navigation

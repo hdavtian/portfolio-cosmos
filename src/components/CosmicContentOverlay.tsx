@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./CosmicContentOverlay.scss";
+import type { MoonPortfolioPayload } from "./cosmos/moonPortfolioSelector";
 
 export interface JobTechEntry {
   label: string;
@@ -13,6 +14,7 @@ export interface OverlayContent {
   sections: OverlaySection[];
   jobTech?: JobTechEntry[];
   projects?: unknown[];
+  moonPortfolio?: MoonPortfolioPayload | null;
   enableDroneCardDock?: boolean;
   media?: MediaContent;
   actions?: OverlayAction[];

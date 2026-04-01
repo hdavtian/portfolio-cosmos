@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { OverlayContent, JobTechEntry } from "../CosmicContentOverlay";
+import type { MoonPortfolioPayload } from "./moonPortfolioSelector";
 import {
   HOLO_PANEL_WIDTH,
   HOLO_SIDE_OFFSET,
@@ -65,6 +66,10 @@ const SEAR_PREVIEW_TEXT_COLOR = "#f5c842";
 const SEAR_LOCKED_TEXT_COLOR = "#ffaa20";
 const SEAR_GLOW_COLOR_PREVIEW = "rgba(255, 200, 60, 0.18)";
 const SEAR_GLOW_COLOR_LOCKED = "rgba(255, 160, 30, 0.35)";
+const MINI_PORTFOLIO_TAB_INDEX_BASE = 20000;
+const MINI_PORTFOLIO_CARD_INDEX_BASE = 21000;
+const MINI_PORTFOLIO_PREVIEW_INDEX = 22000;
+const MINI_PORTFOLIO_MAX_CARDS = 8;
 
 const BASE_SIDE_OFFSET = HOLO_SIDE_OFFSET;
 const DRONE_FORWARD_RATIO = 0.3;
@@ -161,6 +166,37 @@ type TechBadgeRecord = {
   techEntry: JobTechEntry;
 };
 
+type MiniPortfolioTabRecord = {
+  id: string;
+  title: string;
+  mesh: THREE.Mesh;
+  material: THREE.MeshBasicMaterial;
+  texture: THREE.CanvasTexture;
+};
+
+type MiniPortfolioCardRecord = {
+  id: string;
+  title: string;
+  description?: string;
+  technologies: string[];
+  mediaItems: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    textureUrl: string;
+  }>;
+  activeMediaIndex: number;
+  mesh: THREE.Mesh;
+  material: THREE.MeshBasicMaterial;
+  texture: THREE.CanvasTexture;
+};
+
+type MiniPortfolioPreviewRecord = {
+  mesh: THREE.Mesh;
+  material: THREE.MeshBasicMaterial;
+  texture: THREE.CanvasTexture;
+};
+
 export class HologramDroneDisplay {
   private scene: THREE.Scene;
   private rootGroup: THREE.Group;
@@ -240,6 +276,15 @@ export class HologramDroneDisplay {
   private rulerNotchMats: THREE.LineBasicMaterial[] = [];
   private rulerRevealActive = false;
   private rulerRevealProgress = 0;
+  private moonPortfolio: MoonPortfolioPayload | null = null;
+  private miniPortfolioTabs: MiniPortfolioTabRecord[] = [];
+  private miniPortfolioCards: MiniPortfolioCardRecord[] = [];
+  private activeMiniPortfolioTabIndex = 0;
+  private activeMiniPortfolioCardIndex: number | null = null;
+  private hoveredMiniPortfolioCardIndex: number | null = null;
+  private hoveredMiniPortfolioPreview = false;
+  private miniPortfolioPreview: MiniPortfolioPreviewRecord | null = null;
+  private miniPortfolioImageCache = new Map<string, HTMLImageElement>();
 
   private flyStartPos = new THREE.Vector3();
   private flyEndPos = new THREE.Vector3();
@@ -1127,6 +1172,11 @@ export class HologramDroneDisplay {
     // Keep moon drone text panels where they are initially drawn.
     // Do not run post-draw dock/focus repositioning.
     this.shouldDockPanels = false;
+    this.moonPortfolio = content.moonPortfolio ?? null;
+    this.activeMiniPortfolioTabIndex = 0;
+    this.activeMiniPortfolioCardIndex = null;
+    this.hoveredMiniPortfolioCardIndex = null;
+    this.hoveredMiniPortfolioPreview = false;
 
     this.rootGroup.visible = true;
     this.panelGroup.visible = true;
@@ -1142,6 +1192,7 @@ export class HologramDroneDisplay {
     const _scBuildStart = performance.now();
     this.buildTextPanels(content, camera, distScale);
     this.buildTechBadges(content);
+    this.buildMiniPortfolio(content);
     const _scLaserStart = performance.now();
     this.ensureLaserRigCount(this.panels.length);
     this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
@@ -1246,12 +1297,20 @@ export class HologramDroneDisplay {
     if (this.active && this.drawFinished && this.techBadges.length > 0) {
       for (const badge of this.techBadges) result.push(badge.mesh);
     }
+    if (this.active && this.drawFinished) {
+      for (const tab of this.miniPortfolioTabs) result.push(tab.mesh);
+      for (const card of this.miniPortfolioCards) result.push(card.mesh);
+      if (this.miniPortfolioPreview) result.push(this.miniPortfolioPreview.mesh);
+    }
     return result;
   }
 
   getPanelTextures(): THREE.CanvasTexture[] {
     const textures = this.panels.map((panel) => panel.texture);
     for (const badge of this.techBadges) textures.push(badge.texture);
+    for (const tab of this.miniPortfolioTabs) textures.push(tab.texture);
+    for (const card of this.miniPortfolioCards) textures.push(card.texture);
+    if (this.miniPortfolioPreview) textures.push(this.miniPortfolioPreview.texture);
     return textures;
   }
 
@@ -1260,12 +1319,68 @@ export class HologramDroneDisplay {
   }
 
   selectPanel(panelIndex: number): void {
+    if (panelIndex === MINI_PORTFOLIO_PREVIEW_INDEX) {
+      if (
+        this.activeMiniPortfolioCardIndex !== null &&
+        this.activeMiniPortfolioCardIndex >= 0 &&
+        this.activeMiniPortfolioCardIndex < this.miniPortfolioCards.length
+      ) {
+        const card = this.miniPortfolioCards[this.activeMiniPortfolioCardIndex];
+        card.activeMediaIndex =
+          (card.activeMediaIndex + 1) % Math.max(1, card.mediaItems.length);
+        this.refreshMiniPortfolioCardVisuals();
+      }
+      return;
+    }
+    if (panelIndex >= MINI_PORTFOLIO_CARD_INDEX_BASE) {
+      const cardIndex = panelIndex - MINI_PORTFOLIO_CARD_INDEX_BASE;
+      if (cardIndex >= 0 && cardIndex < this.miniPortfolioCards.length) {
+        const card = this.miniPortfolioCards[cardIndex];
+        if (this.activeMiniPortfolioCardIndex === cardIndex) {
+          card.activeMediaIndex = (card.activeMediaIndex + 1) % Math.max(1, card.mediaItems.length);
+          this.redrawMiniPortfolioCard(card, true, this.hoveredMiniPortfolioCardIndex === cardIndex);
+        } else {
+          this.activeMiniPortfolioCardIndex = cardIndex;
+          this.refreshMiniPortfolioCardVisuals();
+        }
+      }
+      return;
+    }
+    if (panelIndex >= MINI_PORTFOLIO_TAB_INDEX_BASE) {
+      const tabIndex = panelIndex - MINI_PORTFOLIO_TAB_INDEX_BASE;
+      if (tabIndex >= 0 && tabIndex < this.miniPortfolioTabs.length) {
+        this.activeMiniPortfolioTabIndex = tabIndex;
+        this.activeMiniPortfolioCardIndex = null;
+        this.rebuildMiniPortfolioCards();
+      }
+      return;
+    }
     if (!this.active || !this.panelsDocked) return;
     if (panelIndex < 0 || panelIndex >= this.panels.length) return;
     this.activePanelIndex = this.activePanelIndex === panelIndex ? null : panelIndex;
   }
 
   setHoveredPanelIndex(panelIndex: number | null): void {
+    if (panelIndex === MINI_PORTFOLIO_PREVIEW_INDEX) {
+      this.hoveredMiniPortfolioPreview = true;
+      this.refreshMiniPortfolioPreviewVisual();
+      return;
+    }
+    if (this.hoveredMiniPortfolioPreview) {
+      this.hoveredMiniPortfolioPreview = false;
+      this.refreshMiniPortfolioPreviewVisual();
+    }
+    if (panelIndex !== null && panelIndex >= MINI_PORTFOLIO_CARD_INDEX_BASE) {
+      const cardIdx = panelIndex - MINI_PORTFOLIO_CARD_INDEX_BASE;
+      this.hoveredMiniPortfolioCardIndex =
+        cardIdx >= 0 && cardIdx < this.miniPortfolioCards.length ? cardIdx : null;
+      this.refreshMiniPortfolioCardVisuals();
+      return;
+    }
+    if (this.hoveredMiniPortfolioCardIndex !== null) {
+      this.hoveredMiniPortfolioCardIndex = null;
+      this.refreshMiniPortfolioCardVisuals();
+    }
     const oldHover = this.hoveredTechBadgeIndex;
     if (panelIndex !== null && panelIndex >= TECH_BADGE_HOVER_INDEX_BASE) {
       const badgeIdx = panelIndex - TECH_BADGE_HOVER_INDEX_BASE;
@@ -1314,7 +1429,10 @@ export class HologramDroneDisplay {
   }
 
   isTechBadgeIndex(panelIndex: number): boolean {
-    return panelIndex >= TECH_BADGE_HOVER_INDEX_BASE;
+    return (
+      panelIndex >= TECH_BADGE_HOVER_INDEX_BASE &&
+      panelIndex < MINI_PORTFOLIO_TAB_INDEX_BASE
+    );
   }
 
   private _droneUpdateCount = 0;
@@ -1556,6 +1674,9 @@ export class HologramDroneDisplay {
 
     if (this.drawFinished && this.techBadges.length > 0) {
       this.updateTechBadges(dt, camera);
+    }
+    if (this.drawFinished) {
+      this.updateMiniPortfolioLayout(camera, dt);
     }
 
     this.updateThrusterGlow(dt);
@@ -2001,9 +2122,414 @@ export class HologramDroneDisplay {
     this.panelsDocked = false;
     this.dockingPanels = false;
     this.clearTechBadges();
+    this.clearMiniPortfolio();
     this.panelTextRuns = [];
     this.activeSearMatches = [];
     this.searMode = "none";
+  }
+
+  private clearMiniPortfolio(): void {
+    for (const tab of this.miniPortfolioTabs) {
+      tab.material.dispose();
+      tab.mesh.geometry.dispose();
+      tab.texture.dispose();
+      this.panelGroup.remove(tab.mesh);
+    }
+    this.miniPortfolioTabs = [];
+    for (const card of this.miniPortfolioCards) {
+      card.material.dispose();
+      card.mesh.geometry.dispose();
+      card.texture.dispose();
+      this.panelGroup.remove(card.mesh);
+    }
+    this.miniPortfolioCards = [];
+    this.activeMiniPortfolioTabIndex = 0;
+    this.activeMiniPortfolioCardIndex = null;
+    this.hoveredMiniPortfolioCardIndex = null;
+    this.hoveredMiniPortfolioPreview = false;
+    if (this.miniPortfolioPreview) {
+      this.miniPortfolioPreview.material.dispose();
+      this.miniPortfolioPreview.mesh.geometry.dispose();
+      this.miniPortfolioPreview.texture.dispose();
+      this.panelGroup.remove(this.miniPortfolioPreview.mesh);
+      this.miniPortfolioPreview = null;
+    }
+    this.miniPortfolioImageCache.clear();
+  }
+
+  private buildMiniPortfolio(content: OverlayContent): void {
+    this.clearMiniPortfolio();
+    const moonPortfolio = content.moonPortfolio;
+    if (!moonPortfolio || moonPortfolio.tabs.length === 0) return;
+    this.moonPortfolio = moonPortfolio;
+    moonPortfolio.tabs.forEach((tab, tabIndex) => {
+      const texture = new THREE.CanvasTexture(
+        this.createMiniTabCanvas(tab.title, tabIndex === this.activeMiniPortfolioTabIndex),
+      );
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: false,
+        opacity: 1,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.85, 0.32), material);
+      mesh.userData.hologramPanelIndex = MINI_PORTFOLIO_TAB_INDEX_BASE + tabIndex;
+      mesh.renderOrder = 2200 + tabIndex;
+      this.panelGroup.add(mesh);
+      this.miniPortfolioTabs.push({
+        id: tab.id,
+        title: tab.title,
+        mesh,
+        material,
+        texture,
+      });
+    });
+    this.rebuildMiniPortfolioCards();
+  }
+
+  private rebuildMiniPortfolioCards(): void {
+    for (const card of this.miniPortfolioCards) {
+      card.material.dispose();
+      card.mesh.geometry.dispose();
+      card.texture.dispose();
+      this.panelGroup.remove(card.mesh);
+    }
+    this.miniPortfolioCards = [];
+    const moonPortfolio = this.moonPortfolio;
+    if (!moonPortfolio) return;
+    const tab = moonPortfolio.tabs[this.activeMiniPortfolioTabIndex];
+    if (!tab) return;
+    tab.cards.slice(0, MINI_PORTFOLIO_MAX_CARDS).forEach((cardData, cardIndex) => {
+      const mediaItems = cardData.mediaItems.map((media) => ({
+        id: media.id,
+        title: media.title,
+        description: media.description,
+        textureUrl: media.textureUrl,
+      }));
+      const texture = new THREE.CanvasTexture(
+        this.createMiniCardCanvas(cardData.title, mediaItems[0], false, false),
+      );
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: false,
+        opacity: 1,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.42), material);
+      mesh.userData.hologramPanelIndex = MINI_PORTFOLIO_CARD_INDEX_BASE + cardIndex;
+      mesh.renderOrder = 2300 + cardIndex;
+      this.panelGroup.add(mesh);
+      this.miniPortfolioCards.push({
+        id: cardData.id,
+        title: cardData.title,
+        description: cardData.description,
+        technologies: cardData.technologies,
+        mediaItems,
+        activeMediaIndex: 0,
+        mesh,
+        material,
+        texture,
+      });
+    });
+    this.activeMiniPortfolioCardIndex = this.miniPortfolioCards.length > 0 ? 0 : null;
+    this.refreshMiniPortfolioTabVisuals();
+    this.refreshMiniPortfolioCardVisuals();
+    this.buildMiniPortfolioPreview();
+  }
+
+  private refreshMiniPortfolioTabVisuals(): void {
+    this.miniPortfolioTabs.forEach((tab, tabIndex) => {
+      const canvas = this.createMiniTabCanvas(
+        tab.title,
+        tabIndex === this.activeMiniPortfolioTabIndex,
+      );
+      tab.texture.image = canvas;
+      tab.texture.needsUpdate = true;
+    });
+  }
+
+  private refreshMiniPortfolioCardVisuals(): void {
+    this.miniPortfolioCards.forEach((card, cardIndex) => {
+      this.redrawMiniPortfolioCard(
+        card,
+        cardIndex === this.activeMiniPortfolioCardIndex,
+        cardIndex === this.hoveredMiniPortfolioCardIndex,
+      );
+    });
+    this.refreshMiniPortfolioPreviewVisual();
+  }
+
+  private redrawMiniPortfolioCard(
+    card: MiniPortfolioCardRecord,
+    isActive: boolean,
+    isHovered: boolean,
+  ): void {
+    const media = card.mediaItems[Math.max(0, card.activeMediaIndex)] ?? null;
+    const canvas = this.createMiniCardCanvas(card.title, media, isActive, isHovered);
+    card.texture.image = canvas;
+    card.texture.needsUpdate = true;
+  }
+
+  private createMiniTabCanvas(title: string, active: boolean): HTMLCanvasElement {
+    const canvas = document.createElement("canvas");
+    canvas.width = 560;
+    canvas.height = 96;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = active ? "rgba(12, 56, 42, 0.88)" : "rgba(4, 14, 22, 0.76)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = active ? "#5df2bf" : "rgba(93, 242, 191, 0.45)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+    ctx.font = "bold 34px Rajdhani, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = active ? "#9fffe0" : "#7cb9d2";
+    ctx.fillText(title, 22, canvas.height / 2 + 1);
+    return canvas;
+  }
+
+  private createMiniCardCanvas(
+    title: string,
+    media: MiniPortfolioCardRecord["mediaItems"][number] | null,
+    active: boolean,
+    hovered: boolean,
+  ): HTMLCanvasElement {
+    const canvas = document.createElement("canvas");
+    canvas.width = 720;
+    canvas.height = 440;
+    const ctx = canvas.getContext("2d")!;
+    const bg = active ? "#081e2d" : "#071725";
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = hovered ? "#9cfde0" : active ? "#5df2bf" : "rgba(93, 242, 191, 0.5)";
+    ctx.lineWidth = hovered ? 3 : 2;
+    ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+
+    ctx.fillStyle = "#0e2e3f";
+    ctx.fillRect(18, 18, canvas.width - 36, 260);
+    ctx.strokeStyle = "rgba(93, 242, 191, 0.45)";
+    ctx.strokeRect(18, 18, canvas.width - 36, 260);
+
+    if (media?.textureUrl) {
+      const cached = this.miniPortfolioImageCache.get(media.textureUrl);
+      if (cached && cached.complete) {
+        const targetX = 22;
+        const targetY = 22;
+        const targetW = canvas.width - 44;
+        const targetH = 252;
+        const imageAspect = Math.max(0.0001, cached.width / Math.max(1, cached.height));
+        const targetAspect = targetW / targetH;
+        let srcW = cached.width;
+        let srcH = cached.height;
+        let srcX = 0;
+        let srcY = 0;
+        if (imageAspect > targetAspect) {
+          srcW = Math.floor(cached.height * targetAspect);
+          srcX = Math.floor((cached.width - srcW) * 0.5);
+        } else {
+          srcH = Math.floor(cached.width / targetAspect);
+          srcY = Math.floor((cached.height - srcH) * 0.5);
+        }
+        ctx.save();
+        ctx.filter = "saturate(1.15) contrast(1.08)";
+        ctx.drawImage(
+          cached,
+          srcX,
+          srcY,
+          srcW,
+          srcH,
+          targetX,
+          targetY,
+          targetW,
+          targetH,
+        );
+        ctx.restore();
+      } else {
+        this.requestMiniPortfolioImage(media.textureUrl);
+        ctx.fillStyle = "#9ad9ff";
+        ctx.font = "22px Rajdhani, sans-serif";
+        ctx.fillText("Loading image...", 28, 44);
+      }
+    }
+    ctx.fillStyle = "#97f0d4";
+    ctx.font = "bold 34px Rajdhani, sans-serif";
+    ctx.fillText(title, 20, 308);
+    if (media?.title) {
+      ctx.fillStyle = "#7cb9d2";
+      ctx.font = "22px Rajdhani, sans-serif";
+      ctx.fillText(media.title, 20, 342);
+    }
+    if (active) {
+      ctx.fillStyle = "#9fffe0";
+      ctx.font = "20px Rajdhani, sans-serif";
+      ctx.fillText("Click card to cycle media", 20, 388);
+    }
+    return canvas;
+  }
+
+  private buildMiniPortfolioPreview(): void {
+    if (this.miniPortfolioPreview) {
+      this.miniPortfolioPreview.material.dispose();
+      this.miniPortfolioPreview.mesh.geometry.dispose();
+      this.miniPortfolioPreview.texture.dispose();
+      this.panelGroup.remove(this.miniPortfolioPreview.mesh);
+      this.miniPortfolioPreview = null;
+    }
+    const texture = new THREE.CanvasTexture(this.createMiniPreviewCanvas(false));
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: false,
+      opacity: 1,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 3.7), material);
+    mesh.userData.hologramPanelIndex = MINI_PORTFOLIO_PREVIEW_INDEX;
+    mesh.renderOrder = 2450;
+    this.panelGroup.add(mesh);
+    this.miniPortfolioPreview = { mesh, material, texture };
+    this.refreshMiniPortfolioPreviewVisual();
+  }
+
+  private refreshMiniPortfolioPreviewVisual(): void {
+    if (!this.miniPortfolioPreview) return;
+    const canvas = this.createMiniPreviewCanvas(this.hoveredMiniPortfolioPreview);
+    this.miniPortfolioPreview.texture.image = canvas;
+    this.miniPortfolioPreview.texture.needsUpdate = true;
+  }
+
+  private createMiniPreviewCanvas(hovered: boolean): HTMLCanvasElement {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1280;
+    canvas.height = 740;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#071725";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = hovered ? "#b4ffe8" : "#5df2bf";
+    ctx.lineWidth = hovered ? 4 : 3;
+    ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
+
+    const card =
+      this.activeMiniPortfolioCardIndex !== null
+        ? this.miniPortfolioCards[this.activeMiniPortfolioCardIndex] ?? null
+        : null;
+    const media = card?.mediaItems[Math.max(0, card.activeMediaIndex)] ?? null;
+    const imageX = 24;
+    const imageY = 24;
+    const imageW = canvas.width - 48;
+    const imageH = 550;
+    ctx.fillStyle = "#0f2d3d";
+    ctx.fillRect(imageX, imageY, imageW, imageH);
+    if (media?.textureUrl) {
+      const cached = this.miniPortfolioImageCache.get(media.textureUrl);
+      if (cached && cached.complete) {
+        const imageAspect = Math.max(0.0001, cached.width / Math.max(1, cached.height));
+        const targetAspect = imageW / imageH;
+        let srcW = cached.width;
+        let srcH = cached.height;
+        let srcX = 0;
+        let srcY = 0;
+        if (imageAspect > targetAspect) {
+          srcW = Math.floor(cached.height * targetAspect);
+          srcX = Math.floor((cached.width - srcW) * 0.5);
+        } else {
+          srcH = Math.floor(cached.width / targetAspect);
+          srcY = Math.floor((cached.height - srcH) * 0.5);
+        }
+        ctx.save();
+        ctx.filter = "saturate(1.2) contrast(1.1)";
+        ctx.drawImage(cached, srcX, srcY, srcW, srcH, imageX, imageY, imageW, imageH);
+        ctx.restore();
+      } else {
+        this.requestMiniPortfolioImage(media.textureUrl);
+        ctx.fillStyle = "#9ad9ff";
+        ctx.font = "28px Rajdhani, sans-serif";
+        ctx.fillText("Loading preview...", imageX + 20, imageY + 40);
+      }
+    } else {
+      ctx.fillStyle = "#9ad9ff";
+      ctx.font = "28px Rajdhani, sans-serif";
+      ctx.fillText("No media for this project", imageX + 20, imageY + 40);
+    }
+    const title = card?.title ?? "Select a project card";
+    ctx.fillStyle = "#97f0d4";
+    ctx.font = "bold 44px Rajdhani, sans-serif";
+    ctx.fillText(title, 28, 620);
+    const subtitle = media?.title ?? "";
+    if (subtitle) {
+      ctx.fillStyle = "#7cb9d2";
+      ctx.font = "26px Rajdhani, sans-serif";
+      ctx.fillText(subtitle, 28, 660);
+    }
+    ctx.fillStyle = "#b4ffe8";
+    ctx.font = "24px Rajdhani, sans-serif";
+    ctx.fillText("Click preview or selected card to cycle images", 28, 702);
+    return canvas;
+  }
+
+  private requestMiniPortfolioImage(url: string): void {
+    if (!url || this.miniPortfolioImageCache.has(url)) return;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      this.miniPortfolioImageCache.set(url, img);
+      this.refreshMiniPortfolioCardVisuals();
+    };
+    img.onerror = () => {
+      // Keep failures non-fatal; card still renders metadata.
+    };
+    img.src = url;
+    this.miniPortfolioImageCache.set(url, img);
+  }
+
+  private updateMiniPortfolioLayout(camera: THREE.Camera, dt: number): void {
+    if (this.miniPortfolioTabs.length === 0 && this.miniPortfolioCards.length === 0) return;
+    const depth = Math.max(11, camera.position.distanceTo(this.flyEndPos) * 0.52);
+    const tabStartX = -0.78;
+    this.miniPortfolioTabs.forEach((tab, index) => {
+      const target = this.ndcToWorldOnViewPlane(
+        tabStartX + index * 0.21,
+        -0.5,
+        camera,
+        depth,
+      );
+      tab.mesh.position.lerp(target, 1 - Math.exp(-dt * 12));
+      tab.mesh.quaternion.copy(camera.quaternion);
+    });
+    this.miniPortfolioCards.forEach((card, index) => {
+      const isActive = index === this.activeMiniPortfolioCardIndex;
+      const x = -0.76 + index * 0.2;
+      const y = isActive ? -0.79 : -0.82;
+      const target = this.ndcToWorldOnViewPlane(x, y, camera, depth);
+      card.mesh.position.lerp(target, 1 - Math.exp(-dt * 12));
+      card.mesh.quaternion.copy(camera.quaternion);
+      const targetScale = isActive ? 1.02 : 0.78;
+      const nextScale =
+        card.mesh.scale.x + (targetScale - card.mesh.scale.x) * (1 - Math.exp(-dt * 15));
+      card.mesh.scale.setScalar(nextScale);
+      card.mesh.renderOrder = isActive ? 2399 : 2300 + index;
+    });
+    if (this.miniPortfolioPreview) {
+      const previewTarget = this.ndcToWorldOnViewPlane(0.2, -0.03, camera, depth);
+      this.miniPortfolioPreview.mesh.position.lerp(
+        previewTarget,
+        1 - Math.exp(-dt * 10),
+      );
+      this.miniPortfolioPreview.mesh.quaternion.copy(camera.quaternion);
+      this.miniPortfolioPreview.mesh.scale.setScalar(1);
+    }
   }
 
   // ─── Tech Badges ──────────────────────────────────────────────────

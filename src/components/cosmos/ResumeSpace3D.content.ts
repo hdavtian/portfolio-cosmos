@@ -32,6 +32,7 @@ export const createFinalizeFocusOnMoon = (deps: {
   sceneRef: React.MutableRefObject<{ camera?: THREE.Camera }>;
   focusedMoonRef: React.MutableRefObject<THREE.Mesh | null>;
   focusedMoonCameraDistanceRef: React.MutableRefObject<number | null>;
+  getMoonPortfolio?: (company: any) => OverlayContent["moonPortfolio"];
   onFocus?: () => void;
 }) => {
   const {
@@ -44,6 +45,7 @@ export const createFinalizeFocusOnMoon = (deps: {
     sceneRef,
     focusedMoonRef,
     focusedMoonCameraDistanceRef,
+    getMoonPortfolio,
     onFocus,
   } = deps;
 
@@ -112,6 +114,7 @@ export const createFinalizeFocusOnMoon = (deps: {
         sections,
         jobTech,
         projects: Array.isArray(company.Projects) ? company.Projects : [],
+        moonPortfolio: getMoonPortfolio ? getMoonPortfolio(company) : null,
         enableDroneCardDock:
           Array.isArray(company.Projects) && company.Projects.length > 0,
       };
