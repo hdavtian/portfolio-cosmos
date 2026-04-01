@@ -12,6 +12,10 @@ const TABS_VISIBLE = 3;
 const CARDS_VISIBLE = 3;
 const THUMB_MIN_WIDTH_PX = 92;
 const THUMB_GAP_PX = 4;
+const ZOOM_MIN = 50;
+const ZOOM_MAX = 500;
+const ZOOM_STEP = 25;
+const PAN_STEP = 28;
 
 const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
   portfolio,
@@ -26,13 +30,21 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
   const [cardPage, setCardPage] = useState(0);
   const [thumbsPerPage, setThumbsPerPage] = useState(2);
   const [imageDescCollapsed, setImageDescCollapsed] = useState(false);
+  const [zoomPercent, setZoomPercent] = useState(100);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [imgError, setImgError] = useState<Set<string>>(() => new Set());
+  const imageViewportRef = useRef<HTMLDivElement>(null);
   const tabTrackRef = useRef<HTMLDivElement>(null);
   const thumbRowRef = useRef<HTMLDivElement>(null);
   const tabSlideDirectionRef = useRef<1 | -1>(1);
   const thumbSlideDirectionRef = useRef<1 | -1>(1);
   const prevTabPageRef = useRef(0);
   const prevThumbPageRef = useRef(0);
+  const isPanningRef = useRef(false);
+  const panDragStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const panOffsetRef = useRef({ x: 0, y: 0 });
+  const activePointerIdRef = useRef<number | null>(null);
+  const stopPanListenersRef = useRef<(() => void) | null>(null);
 
   const tabs = portfolio?.tabs ?? [];
   const activeTab: MoonPortfolioTab | undefined = tabs[activeTabIndex];
@@ -56,13 +68,37 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
     setThumbPage(0);
     setCardPage(0);
     setImageDescCollapsed(false);
+    setZoomPercent(100);
+    setPanOffset({ x: 0, y: 0 });
   }, [activeTabIndex]);
 
   useEffect(() => {
     setActiveMediaIndex(0);
     setThumbPage(0);
     setImageDescCollapsed(false);
+    setZoomPercent(100);
+    setPanOffset({ x: 0, y: 0 });
   }, [activeCardIndex]);
+
+  useEffect(() => {
+    setZoomPercent(100);
+    setPanOffset({ x: 0, y: 0 });
+  }, [activeMedia?.id]);
+
+  useEffect(() => {
+    panOffsetRef.current = panOffset;
+  }, [panOffset]);
+
+  useEffect(() => {
+    return () => {
+      if (stopPanListenersRef.current) {
+        stopPanListenersRef.current();
+        stopPanListenersRef.current = null;
+      }
+      isPanningRef.current = false;
+      activePointerIdRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const el = thumbRowRef.current;
@@ -126,6 +162,87 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
     setActiveTabIndex(globalIndex);
   }, []);
 
+  const clampZoom = useCallback((value: number) => {
+    return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value));
+  }, []);
+
+  const applyZoom = useCallback(
+    (nextZoom: number) => {
+      setZoomPercent(clampZoom(nextZoom));
+    },
+    [clampZoom],
+  );
+
+  const nudgePan = useCallback((dx: number, dy: number) => {
+    setPanOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+  }, []);
+
+  const handleImageWheel = useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      if (e.shiftKey) {
+        setPanOffset((prev) => ({
+          x: prev.x,
+          y: prev.y - e.deltaY,
+        }));
+        return;
+      }
+      const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+      applyZoom(zoomPercent + delta);
+    },
+    [applyZoom, zoomPercent],
+  );
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (stopPanListenersRef.current) {
+      stopPanListenersRef.current();
+      stopPanListenersRef.current = null;
+    }
+    isPanningRef.current = true;
+    activePointerIdRef.current = e.pointerId;
+    panDragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      panX: panOffsetRef.current.x,
+      panY: panOffsetRef.current.y,
+    };
+
+    const onPointerMove = (ev: PointerEvent) => {
+      if (!isPanningRef.current) return;
+      if (activePointerIdRef.current !== null && ev.pointerId !== activePointerIdRef.current) {
+        return;
+      }
+      ev.preventDefault();
+      const start = panDragStartRef.current;
+      const dx = ev.clientX - start.x;
+      const dy = ev.clientY - start.y;
+      setPanOffset({ x: start.panX + dx, y: start.panY + dy });
+    };
+
+    const onPointerEnd = (ev: PointerEvent) => {
+      if (activePointerIdRef.current !== null && ev.pointerId !== activePointerIdRef.current) {
+        return;
+      }
+      isPanningRef.current = false;
+      activePointerIdRef.current = null;
+      if (stopPanListenersRef.current) {
+        stopPanListenersRef.current();
+        stopPanListenersRef.current = null;
+      }
+    };
+
+    window.addEventListener("pointermove", onPointerMove, { passive: false });
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", onPointerEnd);
+
+    stopPanListenersRef.current = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", onPointerEnd);
+    };
+  }, []);
+
   const thumbStart = thumbPage * thumbsPerPage;
   const visibleThumbs = mediaItems.slice(thumbStart, thumbStart + thumbsPerPage);
 
@@ -152,17 +269,75 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
               aria-hidden="true"
             />
           </button>
+          <div className="moon-portfolio__image-controls">
+            <div className="moon-portfolio__zoom-row">
+              <button className="moon-portfolio__ctrl-btn" onClick={() => applyZoom(zoomPercent - ZOOM_STEP)}>
+                -
+              </button>
+              <input
+                className="moon-portfolio__zoom-range"
+                type="range"
+                min={ZOOM_MIN}
+                max={ZOOM_MAX}
+                step={ZOOM_STEP}
+                value={zoomPercent}
+                onChange={(e) => applyZoom(Number(e.target.value))}
+              />
+              <button className="moon-portfolio__ctrl-btn" onClick={() => applyZoom(zoomPercent + ZOOM_STEP)}>
+                +
+              </button>
+              <span className="moon-portfolio__zoom-value">{zoomPercent}%</span>
+            </div>
+            <div className="moon-portfolio__zoom-presets">
+              {[50, 100, 150, 200, 250, 300].map((value) => (
+                <button
+                  key={value}
+                  className={`moon-portfolio__ctrl-btn ${zoomPercent === value ? "moon-portfolio__ctrl-btn--active" : ""}`}
+                  onClick={() => applyZoom(value)}
+                >
+                  {value}%
+                </button>
+              ))}
+            </div>
+            <div className="moon-portfolio__pan-row">
+              <button className="moon-portfolio__ctrl-btn" onClick={() => nudgePan(0, -PAN_STEP)}>
+                ↑
+              </button>
+              <button className="moon-portfolio__ctrl-btn" onClick={() => nudgePan(-PAN_STEP, 0)}>
+                ←
+              </button>
+              <button className="moon-portfolio__ctrl-btn" onClick={() => setPanOffset({ x: 0, y: 0 })}>
+                C
+              </button>
+              <button className="moon-portfolio__ctrl-btn" onClick={() => nudgePan(PAN_STEP, 0)}>
+                →
+              </button>
+              <button className="moon-portfolio__ctrl-btn" onClick={() => nudgePan(0, PAN_STEP)}>
+                ↓
+              </button>
+            </div>
+          </div>
           {activeMedia ? (
             imgError.has(activeMedia.textureUrl) ? (
               <div className="moon-portfolio__fallback">Image unavailable</div>
             ) : (
-              <img
-                src={activeMedia.textureUrl}
-                alt={activeMedia.title}
-                className="moon-portfolio__img"
-                style={{ objectFit: activeMedia.fit || "cover" }}
-                onError={() => handleImgError(activeMedia.textureUrl)}
-              />
+              <div
+                ref={imageViewportRef}
+                className="moon-portfolio__img-viewport moon-portfolio__img-viewport--grab"
+                onWheel={handleImageWheel}
+                onPointerDown={handlePointerDown}
+              >
+                <img
+                  src={activeMedia.textureUrl}
+                  alt={activeMedia.title}
+                  className="moon-portfolio__img"
+                  style={{
+                    objectFit: "contain",
+                    transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomPercent / 100})`,
+                  }}
+                  onError={() => handleImgError(activeMedia.textureUrl)}
+                />
+              </div>
             )
           ) : (
             <div className="moon-portfolio__fallback">No media</div>

@@ -384,12 +384,97 @@ $section-bg: rgba(4, 14, 22, 0.72);
     }
   }
 
+  &__image-controls {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    background: rgba(4, 14, 22, 0.86);
+    border: 1px solid $panel-border;
+    border-radius: 4px;
+    min-width: 246px;
+    backdrop-filter: blur(1px);
+  }
+
+  &__zoom-row,
+  &__zoom-presets,
+  &__pan-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__zoom-range {
+    width: 108px;
+    accent-color: #2a9968;
+    cursor: pointer;
+  }
+
+  &__zoom-value {
+    min-width: 42px;
+    text-align: right;
+    color: $text-bright;
+    font-size: 10px;
+    font-family: var(--font-hud);
+  }
+
+  &__ctrl-btn {
+    height: 18px;
+    min-width: 20px;
+    padding: 0 6px;
+    border: 1px solid $panel-border;
+    border-radius: 3px;
+    background: rgba(11, 34, 50, 0.92);
+    color: $text-primary;
+    font-family: var(--font-hud);
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      color: $text-bright;
+      border-color: $accent;
+      background: rgba(24, 77, 112, 0.9);
+    }
+
+    &--active {
+      color: #d8fff2;
+      border-color: $accent;
+      background: rgba(36, 161, 111, 0.42);
+    }
+  }
+
+  &__img-viewport {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+
+    &--grab {
+      cursor: grab;
+
+      &:active {
+        cursor: grabbing;
+      }
+    }
+  }
+
   &__img {
     max-width: 100%;
     max-height: 100%;
     width: 100%;
     height: 100%;
     display: block;
+    transform-origin: center center;
+    transition: transform 0.18s ease-out;
+    user-select: none;
+    -webkit-user-drag: none;
+    pointer-events: none;
   }
 
   &__fallback {
