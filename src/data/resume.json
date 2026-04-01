@@ -18,6 +18,7 @@
     {
       "id": "investcloud",
       "company": "InvestCloud Inc.",
+      "droneIntroText": "Seven years architecting enterprise platforms — from Angular component libraries and C# Playwright automation to full-stack cloud deployments on Azure. Led cross-functional teams, owned the product roadmap, and shipped systems that scaled globally.",
       "jobMemories": [
         { "type": "tech", "text": "Angular" },
         { "type": "tech", "text": "AngularJS" },
@@ -102,6 +103,7 @@
     {
       "id": "rpa",
       "company": "RPA (Rubin Postaer & Associates)",
+      "droneIntroText": "Built experiential marketing portals for Honda and Farmers using React, Redux, and Next.js — pairing rich GSAP/Framer Motion animation with Spring Boot APIs and Dockerized AWS deployments.",
       "jobMemories": [
         { "type": "tech", "text": "React + Redux" },
         { "type": "code", "text": "Next.js" },
@@ -154,6 +156,7 @@
     {
       "id": "boingo",
       "company": "Boingo Wireless Inc.",
+      "droneIntroText": "Four years as web engineer — maintained the corporate site, built marketing microsites, migrated infrastructure to AWS, and introduced jQuery to the front-end team. Wore Scrum Master and Product Owner hats in an Agile shop.",
       "jobMemories": [
         { "type": "code", "text": "PHP" },
         { "type": "code", "text": "JavaScript + jQuery" },
@@ -196,6 +199,7 @@
     {
       "id": "capital-group",
       "company": "Capital Group Companies",
+      "droneIntroText": "Front-end coding in a highly regulated financial environment — delivering tax content, calculators, and graphs while collaborating with backend Java teams.",
       "jobMemories": [
         { "type": "code", "text": "HTML + CSS + JavaScript" },
         { "type": "tech", "text": "Financial Web Content" },
@@ -225,6 +229,7 @@
     {
       "id": "murad",
       "company": "Murad Inc.",
+      "droneIntroText": "Three years crafting HTML email campaigns, marketing microsites, and IBM iStore ecommerce integrations — with a focus on cross-browser CSS and SEO.",
       "jobMemories": [
         { "type": "tech", "text": "Marketing Microsites" },
         { "type": "tech", "text": "Email Campaign Engineering" },
@@ -260,6 +265,7 @@
     {
       "id": "unitedlayer",
       "company": "UnitedLayer Inc.",
+      "droneIntroText": "Web development on a LAMP stack with hands-on data center operations — designing the company site and supporting LA-based server infrastructure.",
       "jobMemories": [
         { "type": "code", "text": "HTML + CSS + PHP" },
         { "type": "tech", "text": "LAMP Stack Deployment" },
@@ -288,6 +294,7 @@
     {
       "id": "stormscape",
       "company": "Stormscape (DBA for Harma Davtian)",
+      "droneIntroText": "A decade of independent consulting — end-to-end web solutions for political campaigns, healthcare, restaurants, nonprofits, and ecommerce clients using PHP, Drupal, WordPress, and Flash-era tooling.",
       "jobMemories": [
         { "type": "memory", "text": "Client Solutions End-to-End" },
         { "type": "code", "text": "Drupal + WordPress" },

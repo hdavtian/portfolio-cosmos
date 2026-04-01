@@ -111,6 +111,7 @@ export const createFinalizeFocusOnMoon = (deps: {
         description:
           company.positions?.[0]?.responsibilities?.[0] ||
           `Professional experience at ${company.company}.`,
+        droneIntroText: typeof company.droneIntroText === "string" ? company.droneIntroText : undefined,
         sections,
         jobTech,
         projects: Array.isArray(company.Projects) ? company.Projects : [],

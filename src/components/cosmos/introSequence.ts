@@ -10,6 +10,7 @@ import {
   INTRO_ORBIT_ENABLED_DIST,
   INTRO_DIST_FACTOR_DIV,
 } from "./scaleConfig";
+import { emitCosmosEvent } from "./cosmosEventBus";
 
 // --- INTRO FINAL POSITIONS (captured via debugCamera → F9) ---
 // Camera settles at Experience planet vantage point.
@@ -329,6 +330,7 @@ export const createIntroSequenceRunner = (
     const previousControlsEnabled = controls.enabled;
     controls.enabled = false;
     onIntroEvent?.("camera-intro started");
+    emitCosmosEvent("intro:camera-started", { at: performance.now() });
     controls.setLookAt(
       startPos.x,
       startPos.y,
@@ -414,6 +416,10 @@ export const createIntroSequenceRunner = (
       ship.position.copy(startHeroPos);
       ship.quaternion.copy(startHeroQuat);
       onIntroEvent?.("ship-cinematic started");
+      emitCosmosEvent("ship:cinematic-started", {
+        at: performance.now(),
+        phase: "approach",
+      });
       const retreatStartProgress = INTRO_CAMERA_RETREAT_START_PROGRESS;
       const retreatStartTarget = currentControls
         .getTarget(new THREE.Vector3())
@@ -467,6 +473,7 @@ export const createIntroSequenceRunner = (
         setHudVisible(false);
         console.warn(`[PERF:intro] camera intro COMPLETED after ${_introFrameCount} frames, elapsed=${elapsed.toFixed(0)}ms`);
         onIntroEvent?.("camera-intro completed");
+        emitCosmosEvent("intro:camera-completed", { at: performance.now() });
         onIntroEvent?.("ship-cinematic trigger @intro-end");
         startShipCinematic();
       }

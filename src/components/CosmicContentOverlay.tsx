@@ -11,6 +11,7 @@ export interface OverlayContent {
   title: string;
   subtitle?: string;
   description: string;
+  droneIntroText?: string;
   sections: OverlaySection[];
   jobTech?: JobTechEntry[];
   projects?: unknown[];

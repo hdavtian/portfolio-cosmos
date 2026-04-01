@@ -21,6 +21,7 @@ import {
   INTERIOR_MAX_DIST,
 } from "../scaleConfig";
 import { computeFalconFollowCameraPose } from "../falconFollowCameraPose";
+import { emitCosmosEvent } from "../cosmosEventBus";
 
 export const useRenderLoop = () => {
   const animationFrameRef = useRef<number | null>(null);
@@ -1274,6 +1275,10 @@ export const useRenderLoop = () => {
               if (progress >= 1) {
                 introCameraPrealignedRef.current = true;
                 cinematic.phase = "hover";
+                emitCosmosEvent("ship:cinematic-hover", {
+                  at: performance.now(),
+                  phase: "hover",
+                });
                 cinematic.hoverStartTime = now;
                 cinematic.hoverBasePos = currentPos.clone();
                 cinematic.hoverStartQuat = ship.quaternion.clone();

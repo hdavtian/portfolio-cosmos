@@ -1,0 +1,554 @@
+@use "../../styles/tokens";
+@use "../../styles/hud-mixins" as hud;
+
+// ── Moon HTML Layout ────────────────────────────────────────
+// Three-column grid overlaid on the 3D canvas when in moon orbit
+// Column 1 = NaviComputer (external), Column 2 = Portfolio,
+// Column 3 = Narrative, Column 4 = Tech Chips.
+
+$accent: #2a9968;
+$accent-dim: rgba(42, 153, 104, 0.45);
+$accent-glow: rgba(42, 153, 104, 0.2);
+$text-primary: #8ab0c8;
+$text-secondary: #6a8da8;
+$text-bright: #c0e8ff;
+$panel-bg: rgba(4, 10, 22, 0.82);
+$panel-border: rgba(42, 153, 104, 0.35);
+$section-bg: rgba(4, 14, 22, 0.72);
+
+.moon-html-layout {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: 11% 1fr 34% 11%;
+  grid-template-rows: 1fr;
+  gap: 6px;
+  padding: 2vh 0;
+  font-family: var(--font-hud);
+  color: $text-primary;
+  opacity: 0;
+
+  > * {
+    pointer-events: auto;
+  }
+
+  &--no-portfolio {
+    .moon-html-layout__narrative {
+      grid-column: 3 / 4;
+    }
+  }
+
+  &__portfolio {
+    grid-column: 2 / 3;
+    grid-row: 1;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  &__narrative {
+    grid-column: 3 / 4;
+    grid-row: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__tech {
+    grid-column: 4 / 5;
+    grid-row: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding-right: 8px;
+  }
+}
+
+// ── Narrative Panel ─────────────────────────────────────────
+
+.moon-narrative {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: $panel-bg;
+  border: 1px solid $panel-border;
+  border-radius: 4px;
+  overflow: hidden;
+
+  &__header {
+    padding: 14px 18px 8px;
+    border-bottom: 1px solid $panel-border;
+    flex-shrink: 0;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: $accent;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  &__subtitle {
+    margin: 4px 0 0;
+    font-size: var(--text-sm);
+    color: $text-secondary;
+    letter-spacing: 0.03em;
+  }
+
+  &__scroll {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 12px 18px 18px;
+    scrollbar-width: thin;
+    scrollbar-color: $accent-dim transparent;
+
+    &::-webkit-scrollbar {
+      width: 5px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: $accent-dim;
+      border-radius: 3px;
+    }
+  }
+
+  &__section {
+    margin-bottom: 16px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  &__section-title {
+    margin: 0 0 6px;
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: $text-bright;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  &__date {
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: $text-secondary;
+    white-space: nowrap;
+  }
+
+  &__list {
+    margin: 0;
+    padding-left: 16px;
+    list-style: none;
+  }
+
+  &__item {
+    position: relative;
+    padding: 3px 0;
+    font-size: var(--text-sm);
+    line-height: 1.55;
+    color: $text-primary;
+
+    &::before {
+      content: "\25B8";
+      position: absolute;
+      left: -14px;
+      color: $accent;
+      font-size: 10px;
+      top: 5px;
+    }
+  }
+}
+
+// ── Highlight marks ─────────────────────────────────────────
+
+.moon-hl {
+  background: transparent;
+  color: inherit;
+  border-radius: 2px;
+  transition: background 0.2s ease, color 0.2s ease;
+
+  &--preview {
+    background: rgba(245, 200, 66, 0.12);
+    color: #f5c842;
+  }
+
+  &--locked {
+    background: rgba(255, 170, 32, 0.22);
+    color: #ffaa20;
+    font-weight: 600;
+  }
+}
+
+// ── Tech Chips ──────────────────────────────────────────────
+
+.moon-tech {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__label {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    color: $accent;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    padding: 4px 0;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  &__chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: $section-bg;
+    border: 1px solid $panel-border;
+    border-radius: 4px;
+    color: $text-primary;
+    font-family: var(--font-hud);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &:hover,
+    &--active {
+      background: $accent-glow;
+      border-color: $accent;
+      color: $text-bright;
+      box-shadow: 0 0 8px $accent-glow;
+    }
+
+    &--locked {
+      background: rgba(255, 170, 32, 0.15);
+      border-color: #ffaa20;
+      color: #ffcc66;
+      box-shadow: 0 0 10px rgba(255, 170, 32, 0.2);
+    }
+  }
+
+  &__chip-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: $accent;
+    flex-shrink: 0;
+    transition: background 0.18s ease;
+
+    .moon-tech__chip--locked & {
+      background: #ffaa20;
+    }
+  }
+}
+
+// ── Portfolio Panel ─────────────────────────────────────────
+
+.moon-portfolio {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  background: $panel-bg;
+  border: 1px solid $panel-border;
+  border-radius: 4px;
+  overflow: hidden;
+
+  &--empty {
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__empty-msg {
+    color: $text-secondary;
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  &__main {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  &__large-image {
+    flex: 0 1 60%;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+  }
+
+  &__img {
+    max-width: 100%;
+    max-height: 100%;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  &__fallback {
+    color: $text-secondary;
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  &__bottom {
+    flex: 1 1 40%;
+    display: flex;
+    gap: 6px;
+    min-height: 0;
+    border-top: 1px solid $panel-border;
+  }
+
+  // Left column inside bottom: tabs → cards → thumbnails stacked vertically
+  &__thumbs-col {
+    flex: 0 0 55%;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 4px 6px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  // ── Tab slider ────────────────────────────────────────────
+  &__tabs {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  &__tab-track {
+    display: flex;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  &__tab {
+    padding: 2px 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: $text-secondary;
+    font-family: var(--font-hud);
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.15s ease;
+
+    &:hover {
+      color: $text-primary;
+      border-color: $panel-border;
+    }
+
+    &--active {
+      color: $accent;
+      border-color: $accent;
+      background: $accent-glow;
+    }
+  }
+
+  &__tab-arrow {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    background: $section-bg;
+    border: 1px solid $panel-border;
+    border-radius: 3px;
+    color: $text-primary;
+    font-size: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    padding: 0;
+
+    &:hover {
+      border-color: $accent;
+      color: $accent;
+    }
+  }
+
+  // ── Card buttons (project variants) ───────────────────────
+  &__cards {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  &__card-track {
+    display: flex;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  &__card-btn {
+    padding: 2px 8px;
+    background: transparent;
+    border: 1px solid $panel-border;
+    border-radius: 3px;
+    color: $text-secondary;
+    font-family: var(--font-hud);
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.15s ease;
+
+    &:hover {
+      color: $text-primary;
+    }
+
+    &--active {
+      color: $accent;
+      border-color: $accent;
+      background: $accent-glow;
+    }
+  }
+
+  // ── Thumbnails ────────────────────────────────────────────
+  &__thumbs-area {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  &__thumb-row {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  &__thumb {
+    flex: 0 0 calc(25% - 3px);
+    aspect-ratio: 16 / 10;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid $panel-border;
+    border-radius: 3px;
+    cursor: pointer;
+    overflow: hidden;
+    padding: 0;
+    transition: border-color 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    &:hover {
+      border-color: $text-primary;
+    }
+
+    &--active {
+      border-color: $accent;
+      box-shadow: 0 0 6px $accent-glow;
+    }
+  }
+
+  &__thumb-fallback {
+    color: $text-secondary;
+    font-size: 14px;
+  }
+
+  &__thumb-arrow {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    background: $section-bg;
+    border: 1px solid $panel-border;
+    border-radius: 3px;
+    color: $text-primary;
+    font-size: 9px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    padding: 0;
+
+    &:hover {
+      border-color: $accent;
+      color: $accent;
+    }
+  }
+
+  // ── Description pane ──────────────────────────────────────
+  &__desc {
+    flex: 1 1 auto;
+    padding: 8px 10px;
+    overflow-y: auto;
+    min-width: 0;
+    border-left: 1px solid $panel-border;
+    scrollbar-width: thin;
+    scrollbar-color: $accent-dim transparent;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: $accent-dim;
+      border-radius: 2px;
+    }
+  }
+
+  &__desc-title {
+    margin: 0 0 4px;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: $text-bright;
+  }
+
+  &__desc-text,
+  &__desc-media-text {
+    margin: 0 0 6px;
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    color: $text-primary;
+  }
+}

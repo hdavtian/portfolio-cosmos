@@ -81,11 +81,14 @@ import {
 } from "./hooks/useNavigationSystem";
 import { useRenderLoop } from "./hooks/useRenderLoop";
 import { TargetPreviewTVPanel } from "./TargetPreviewTVPanel";
+import DebugZoneOverlay from "./DebugZoneOverlay";
+import MoonOrbitHtmlLayout from "./MoonOrbitHtmlLayout";
 import {
   createIntroSequenceRunner,
   INTRO_CAMERA_FINAL_POS,
   INTRO_CAMERA_FINAL_TARGET,
 } from "./introSequence";
+import { subscribeCosmosEvent } from "./cosmosEventBus";
 import {
   attachAudioListenerToCamera,
   createPositionalAudio,
@@ -2734,6 +2737,10 @@ export default function ResumeSpace3D({
   const [orbitPhase, setOrbitPhase] = useState<OrbitPhase>("idle");
   const [droneSummonNonce, setDroneSummonNonce] = useState(0);
   const [droneInspectMode, setDroneInspectMode] = useState(false);
+  const [moonHtmlVisible, setMoonHtmlVisible] = useState(false);
+  const [moonIntroComplete, setMoonIntroComplete] = useState(false);
+  const moonHtmlLayoutRef = useRef<HTMLDivElement | null>(null);
+  const moonHtmlTimelineRef = useRef<gsap.core.Timeline | null>(null);
   const [droneSoundEnabled, setDroneSoundEnabled] = useState(true);
   const [droneSoundVolume, setDroneSoundVolume] = useState(0.35);
   const [falconSoundEnabled, setFalconSoundEnabled] = useState(true);
@@ -2828,24 +2835,20 @@ export default function ResumeSpace3D({
       if (moon && cam) {
         const moonWorldPos = new THREE.Vector3();
         moon.getWorldPosition(moonWorldPos);
-        // During orbit, anchor the drone above the ship rather than beside the moon
         const ship = spaceshipRef.current;
         const anchor = (orbitPhase === "orbiting" && ship)
           ? ship.position.clone()
           : undefined;
         if (droneInspectMode) {
-          debugLog("drone", `showInspectMode called — orbitPhase=${orbitPhase}, anchor=${anchor ? `[${anchor.x.toFixed(0)},${anchor.y.toFixed(0)},${anchor.z.toFixed(0)}]` : "none"}, moonPos=[${moonWorldPos.x.toFixed(0)},${moonWorldPos.y.toFixed(0)},${moonWorldPos.z.toFixed(0)}]`);
+          debugLog("drone", `showInspectMode called — orbitPhase=${orbitPhase}`);
           drone.showInspectMode(moonWorldPos, cam, anchor);
-        } else if (overlayContent) {
-          debugLog("drone", `showContent called — orbitPhase=${orbitPhase}, anchor=${anchor ? `[${anchor.x.toFixed(0)},${anchor.y.toFixed(0)},${anchor.z.toFixed(0)}]` : "none"}, moonPos=[${moonWorldPos.x.toFixed(0)},${moonWorldPos.y.toFixed(0)},${moonWorldPos.z.toFixed(0)}]`);
-          drone.showContent(overlayContent, moonWorldPos, cam, anchor);
+        } else if (overlayContent && !moonIntroComplete) {
+          debugLog("drone", `showIntroCard called — orbitPhase=${orbitPhase}`);
+          drone.showIntroCard(overlayContent, moonWorldPos, cam, anchor);
         }
-        // Pre-upload new drone panel textures and compile any new
-        // shader variants so the next frame doesn't stall.
         const droneRenderer = rendererRef.current;
         const droneCamera = sceneRef.current.camera;
         if (droneRenderer && droneCamera) {
-          const _fs = performance.now();
           const panelTextures = drone.getPanelTextures();
           for (const tex of panelTextures) {
             droneRenderer.initTexture(tex);
@@ -2854,18 +2857,65 @@ export default function ResumeSpace3D({
           if (panelScene) {
             droneRenderer.compile(panelScene, droneCamera as THREE.Camera);
           }
-          console.warn(`[PERF:drone] initTexture+compile ${panelTextures.length} panel textures in ${(performance.now() - _fs).toFixed(1)}ms`);
         }
       } else {
         debugLog("drone", `useEffect: missing moon=${!!moon} cam=${!!cam}`);
       }
     } else {
-      // On orbit exit / destination switch, remove drone + panels immediately
-      // to avoid any visible trailing frame during departure.
       drone.hideContentImmediate();
       if (droneInspectMode) setDroneInspectMode(false);
+      // Clean up HTML layout on orbit exit
+      if (moonHtmlTimelineRef.current) {
+        moonHtmlTimelineRef.current.kill();
+        moonHtmlTimelineRef.current = null;
+      }
+      setMoonHtmlVisible(false);
+      setMoonIntroComplete(false);
     }
-  }, [overlayContent, orbitPhase, droneSummonNonce, droneInspectMode]);
+  }, [overlayContent, orbitPhase, droneSummonNonce, droneInspectMode, moonIntroComplete]);
+
+  useEffect(() => {
+    const onWheel = (event: WheelEvent) => {
+      if (orbitPhase !== "orbiting" || !overlayContent || orbitalPortfolioActiveRef.current) {
+        return;
+      }
+      if (moonHtmlVisible) return;
+      const consumed = hologramDroneRef.current?.handleScroll(event.deltaY) ?? false;
+      if (!consumed) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    return () => {
+      window.removeEventListener("wheel", onWheel, { capture: true });
+    };
+  }, [orbitPhase, overlayContent, moonHtmlVisible]);
+
+  useEffect(() => {
+    if (!moonHtmlVisible || !moonHtmlLayoutRef.current) return;
+    const wrapper = moonHtmlLayoutRef.current;
+    const layoutEl = wrapper.querySelector(".moon-html-layout");
+    if (!layoutEl) return;
+    if (moonHtmlTimelineRef.current) {
+      moonHtmlTimelineRef.current.kill();
+    }
+    const tl = gsap.timeline();
+    tl.fromTo(
+      layoutEl,
+      { opacity: 0, y: 30 },
+      { opacity: 1, y: 0, duration: 0.7, ease: "power2.out" },
+    );
+    tl.fromTo(
+      wrapper.querySelectorAll(".moon-html-layout__portfolio, .moon-html-layout__narrative, .moon-html-layout__tech"),
+      { opacity: 0, y: 20, scale: 0.97 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power2.out", stagger: 0.1 },
+      "-=0.3",
+    );
+    moonHtmlTimelineRef.current = tl;
+    return () => {
+      tl.kill();
+    };
+  }, [moonHtmlVisible]);
 
   const [shipMovementDebug, setShipMovementDebug] = useState(false);
   const [systemStatusLogs, setSystemStatusLogs] = useState<string[]>([]);
@@ -9560,33 +9610,70 @@ export default function ResumeSpace3D({
   // - createMoonFocusController: moon enter/exit + overlays
 
   // ── Ship auto-engage on intro completion ──────────────
-  // When the intro cinematic reaches "hover", auto-engage ship mode
-  // (no more choice between "Use Falcon" / "Freely Explore").
+  // Event-driven auto-engage: listen for cinematic lifecycle events
+  // and reveal startup UI exactly when hover is reached.
   useEffect(() => {
     if (shipUIPhase !== "hidden") return;
-    const check = setInterval(() => {
-      if (
-        shipCinematicRef.current?.active &&
-        shipCinematicRef.current.phase === "hover"
-      ) {
-        clearInterval(check);
-        // Auto-engage the ship — same as the old handleUseShip path
-        // Keep cinematic hover active so the Falcon continues a subtle
-        // motion after entering frame, instead of freezing immediately.
-        setFollowingSpaceship(true);
-        followingSpaceshipRef.current = true;
-        setInsideShip(false);
-        insideShipRef.current = false;
-        setShipViewMode("exterior");
-        shipViewModeRef.current = "exterior";
-        setShipUIPhase("ship-engaged");
-
-        // Reveal startup UI now that camera is attached behind the Falcon,
-        // preventing destination clicks before the follow-camera is stable.
-        runStartupUiRevealRef.current?.();
+    let engaged = false;
+    let hardTimeoutId: number | null = null;
+    const engageShipAndRevealUI = (source: string) => {
+      if (engaged) return;
+      engaged = true;
+      if (hardTimeoutId !== null) {
+        window.clearTimeout(hardTimeoutId);
+        hardTimeoutId = null;
       }
-    }, 500);
-    return () => clearInterval(check);
+      console.warn(`[UI-SAFEGUARD] Ship UI engage source: ${source}`);
+      setFollowingSpaceship(true);
+      followingSpaceshipRef.current = true;
+      setInsideShip(false);
+      insideShipRef.current = false;
+      setShipViewMode("exterior");
+      shipViewModeRef.current = "exterior";
+      setShipUIPhase("ship-engaged");
+      runStartupUiRevealRef.current?.();
+    };
+    const armHardTimeout = () => {
+      if (hardTimeoutId !== null) window.clearTimeout(hardTimeoutId);
+      hardTimeoutId = window.setTimeout(() => {
+        engageShipAndRevealUI("hard-timeout");
+      }, 22000);
+    };
+
+    const unsubscribeHover = subscribeCosmosEvent("ship:cinematic-hover", () => {
+      engageShipAndRevealUI("event:ship-cinematic-hover");
+    });
+    const unsubscribeStarted = subscribeCosmosEvent("ship:cinematic-started", () => {
+      armHardTimeout();
+    });
+    const unsubscribeCameraCompleted = subscribeCosmosEvent(
+      "intro:camera-completed",
+      () => {
+        armHardTimeout();
+      },
+    );
+
+    // Late-subscription safety: if hover happened before this listener mounted,
+    // promote immediately based on the current cinematic state snapshot.
+    const currentCinematic = shipCinematicRef.current;
+    if (currentCinematic?.phase === "hover") {
+      engageShipAndRevealUI("state-snapshot:hover");
+    } else if (
+      currentCinematic &&
+      !currentCinematic.active &&
+      introCameraPrealignedRef.current
+    ) {
+      engageShipAndRevealUI("state-snapshot:prealigned-finished");
+    }
+
+    return () => {
+      unsubscribeHover();
+      unsubscribeStarted();
+      unsubscribeCameraCompleted();
+      if (hardTimeoutId !== null) {
+        window.clearTimeout(hardTimeoutId);
+      }
+    };
   }, [shipUIPhase]);
 
   // ── Autonomous ship wander ─────────────────────────
@@ -10554,11 +10641,23 @@ export default function ResumeSpace3D({
     setStartupConsoleVisible(true);
     setStartupMiniMapVisible(true);
 
-    const rafId = window.requestAnimationFrame(() => {
+    let attempts = 0;
+    const maxAttempts = 10;
+    const tryAnimate = () => {
       const destinationsEl = startupDestinationsPanelRef.current;
       const consoleEl = startupConsoleButtonRef.current;
       const miniMapEl = startupMiniMapContainerRef.current;
-      if (!destinationsEl || !consoleEl || !miniMapEl) return;
+      if (!destinationsEl || !consoleEl || !miniMapEl) {
+        attempts++;
+        if (attempts < maxAttempts) {
+          window.requestAnimationFrame(tryAnimate);
+          return;
+        }
+        // After max retries, DOM refs still not ready — state flags are
+        // already true so elements will render with default visibility.
+        console.warn("[UI-SAFEGUARD] Startup UI refs unavailable after retries; elements visible via state flags");
+        return;
+      }
       gsap.set(destinationsEl, { x: -200, opacity: 0 });
       gsap.set(consoleEl, { x: 200, opacity: 0 });
       gsap.set(miniMapEl, { x: 200, opacity: 0 });
@@ -10594,12 +10693,34 @@ export default function ResumeSpace3D({
           miniMapStartAt,
         );
       startupUiRevealTlRef.current = tl;
-    });
-    return () => window.cancelAnimationFrame(rafId);
+    };
+    window.requestAnimationFrame(tryAnimate);
   }, [clearStartupUiRevealTimeline]);
   runStartupUiRevealRef.current = runStartupUiReveal;
 
   useEffect(() => () => clearStartupUiRevealTimeline(), [clearStartupUiRevealTimeline]);
+
+  // Watchdog: if the ship is engaged but startup UI flags are still false
+  // after a short delay, force them on. Catches any edge case where the
+  // reveal call was skipped or its state updates were lost.
+  useEffect(() => {
+    if (shipUIPhase !== "ship-engaged") return;
+    const watchdog = window.setTimeout(() => {
+      setStartupDestinationsVisible((prev) => {
+        if (!prev) console.warn("[UI-SAFEGUARD] Watchdog forcing destinations visible");
+        return true;
+      });
+      setStartupConsoleVisible((prev) => {
+        if (!prev) console.warn("[UI-SAFEGUARD] Watchdog forcing console visible");
+        return true;
+      });
+      setStartupMiniMapVisible((prev) => {
+        if (!prev) console.warn("[UI-SAFEGUARD] Watchdog forcing minimap visible");
+        return true;
+      });
+    }, 3000);
+    return () => window.clearTimeout(watchdog);
+  }, [shipUIPhase]);
 
   useEffect(() => {
     if (!CAMERA_TRACE_ENABLED) return;
@@ -15891,6 +16012,13 @@ export default function ResumeSpace3D({
           shipLog(`[audio] ${msg}`, "info");
         }
       },
+    });
+
+    hologramDroneRef.current.setOnSeeDetails(() => {
+      debugLog("drone", "See details clicked — transitioning to HTML layout");
+      setMoonIntroComplete(true);
+      setMoonHtmlVisible(true);
+      hologramDroneRef.current?.hideContent();
     });
 
     // --- OBJECTS ---
@@ -27778,6 +27906,15 @@ export default function ResumeSpace3D({
           />
         </div>
       </div>
+      {overlayContent && moonHtmlVisible && (
+        <div ref={moonHtmlLayoutRef}>
+          <MoonOrbitHtmlLayout
+            content={overlayContent}
+            visible={moonHtmlVisible}
+          />
+        </div>
+      )}
+      <DebugZoneOverlay enabled={IS_DEBUG_QUERY_ENABLED} />
 
     </>
   );

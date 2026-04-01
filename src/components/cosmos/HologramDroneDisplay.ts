@@ -3,13 +3,11 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { OverlayContent, JobTechEntry } from "../CosmicContentOverlay";
 import type { MoonPortfolioPayload } from "./moonPortfolioSelector";
 import {
-  HOLO_PANEL_WIDTH,
   HOLO_SIDE_OFFSET,
   HOLO_REF_DISTANCE,
 } from "./scaleConfig";
 
 const CANVAS_W = 768;
-const BASE_PANEL_WORLD_WIDTH = HOLO_PANEL_WIDTH;
 const PADDING = 28;
 const BORDER_MARGIN = 6;
 
@@ -21,7 +19,6 @@ const SECTION_BG = "rgba(4, 10, 22, 0.78)";
 const FLY_IN_DURATION = 1.2;
 const BORDER_DRAW_DURATION = 1.6;
 const CONTENT_FADE_DURATION = 0.5;
-const PANEL_STAGGER = 0.18;
 const LASER_STAGGER = 0.2;
 const PRE_DRAW_WAIT_DURATION = 1.0;
 const PRE_DRAW_SCAN_STEPS = 3;
@@ -69,7 +66,32 @@ const SEAR_GLOW_COLOR_LOCKED = "rgba(255, 160, 30, 0.35)";
 const MINI_PORTFOLIO_TAB_INDEX_BASE = 20000;
 const MINI_PORTFOLIO_CARD_INDEX_BASE = 21000;
 const MINI_PORTFOLIO_PREVIEW_INDEX = 22000;
+const MINI_PORTFOLIO_NAV_PREV_INDEX = 23000;
+const MINI_PORTFOLIO_NAV_NEXT_INDEX = 23001;
+const MINI_PORTFOLIO_DETAIL_INDEX = 23002;
+const INTRO_CARD_INDEX = 25000;
 const MINI_PORTFOLIO_MAX_CARDS = 8;
+const MINI_PORTFOLIO_VISIBLE_CARD_SLOTS = 3;
+const GUIDE_LINE_DRAW_DURATION = 0.95;
+const NARRATIVE_VIEWPORT_CANVAS_H = 980;
+// Responsive guide-line anchors from zone-exported column boundaries:
+// 1) left edge of portfolio area, 2) left edge of job column, 3) left edge of tech column.
+const GUIDE_LINE_X_FRACTIONS = [0.11302, 0.55365, 0.89219];
+const LAYOUT_COL2_LEFT = 0.11302;
+const LAYOUT_COL2_RIGHT = 0.55365;
+const LAYOUT_COL3_LEFT = 0.55365;
+const LAYOUT_COL3_RIGHT = 0.89219;
+const LAYOUT_TOP = 0.02;
+const LAYOUT_BOTTOM = 0.978;
+const LAYOUT_LARGE_TOP = 0.03292;
+const LAYOUT_LARGE_BOTTOM = 0.75281;
+const LAYOUT_ROW2_TOP = 0.75281;
+const LAYOUT_ROW2_BOTTOM = 0.97558;
+const LAYOUT_THUMBS_LEFT = 0.11771;
+const LAYOUT_THUMBS_RIGHT = 0.38906;
+const LAYOUT_DESC_LEFT = 0.38906;
+const LAYOUT_DESC_RIGHT = 0.54531;
+const LAYOUT_GAP = 0.0065;
 
 const BASE_SIDE_OFFSET = HOLO_SIDE_OFFSET;
 const DRONE_FORWARD_RATIO = 0.3;
@@ -117,6 +139,8 @@ type TextPanel = {
   drawOriginWorld: THREE.Vector3;
   dockScale: number;
   expandedScale: number;
+  scrollOffset: number;
+  maxScroll: number;
 };
 
 type LaserRig = {
@@ -195,6 +219,27 @@ type MiniPortfolioPreviewRecord = {
   mesh: THREE.Mesh;
   material: THREE.MeshBasicMaterial;
   texture: THREE.CanvasTexture;
+};
+
+type MiniPortfolioNavRecord = {
+  id: "prev" | "next";
+  mesh: THREE.Mesh;
+  material: THREE.MeshBasicMaterial;
+  texture: THREE.CanvasTexture;
+};
+
+type MiniPortfolioDetailRecord = {
+  mesh: THREE.Mesh;
+  material: THREE.MeshBasicMaterial;
+  texture: THREE.CanvasTexture;
+  scrollOffset: number;
+  maxScroll: number;
+};
+
+type GuideLineRecord = {
+  xFraction: number;
+  line: THREE.Line;
+  material: THREE.LineBasicMaterial;
 };
 
 export class HologramDroneDisplay {
@@ -283,8 +328,19 @@ export class HologramDroneDisplay {
   private activeMiniPortfolioCardIndex: number | null = null;
   private hoveredMiniPortfolioCardIndex: number | null = null;
   private hoveredMiniPortfolioPreview = false;
+  private hoveredNarrativePanel = false;
+  private hoveredMiniPortfolioDetail = false;
+  private hoveredMiniPortfolioNav: "prev" | "next" | null = null;
   private miniPortfolioPreview: MiniPortfolioPreviewRecord | null = null;
+  private miniPortfolioDetail: MiniPortfolioDetailRecord | null = null;
+  private miniPortfolioNavButtons: MiniPortfolioNavRecord[] = [];
+  private miniPortfolioCardPage = 0;
   private miniPortfolioImageCache = new Map<string, HTMLImageElement>();
+  private miniPortfolioImageFailures = new Set<string>();
+  private guideLines: GuideLineRecord[] = [];
+
+  private introMode = false;
+  private onSeeDetailsCallback: (() => void) | null = null;
 
   private flyStartPos = new THREE.Vector3();
   private flyEndPos = new THREE.Vector3();
@@ -1177,6 +1233,10 @@ export class HologramDroneDisplay {
     this.activeMiniPortfolioCardIndex = null;
     this.hoveredMiniPortfolioCardIndex = null;
     this.hoveredMiniPortfolioPreview = false;
+    this.hoveredNarrativePanel = false;
+    this.hoveredMiniPortfolioDetail = false;
+    this.hoveredMiniPortfolioNav = null;
+    this.miniPortfolioCardPage = 0;
 
     this.rootGroup.visible = true;
     this.panelGroup.visible = true;
@@ -1191,10 +1251,11 @@ export class HologramDroneDisplay {
     const distScale = this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
     const _scBuildStart = performance.now();
     this.buildTextPanels(content, camera, distScale);
+    this.buildGuideLines();
     this.buildTechBadges(content);
     this.buildMiniPortfolio(content);
     const _scLaserStart = performance.now();
-    this.ensureLaserRigCount(this.panels.length);
+    this.ensureLaserRigCount(Math.max(1, this.panels.length));
     this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
     this.rootGroup.position.copy(this.flyStartPos);
     this.scannerLight.position.copy(this.rootGroup.position);
@@ -1252,6 +1313,146 @@ export class HologramDroneDisplay {
     this.scannerLight.position.copy(this.rootGroup.position);
   }
 
+  setOnSeeDetails(cb: (() => void) | null): void {
+    this.onSeeDetailsCallback = cb;
+  }
+
+  showIntroCard(
+    content: OverlayContent,
+    moonWorldPos: THREE.Vector3,
+    camera: THREE.Camera,
+    orbitAnchor?: THREE.Vector3,
+  ): void {
+    this.clearPanels();
+    this.clearIntroCard();
+    this.active = true;
+    this.introMode = true;
+    this.hiding = false;
+    this.hideProgress = 0;
+    this.flyInProgress = 0;
+    this.contentStartTime = 0;
+    this.drawSequenceElapsed = 0;
+    this.drawEnabled = false;
+    this.inspectionMode = false;
+    this.idleTime = 0;
+    this.drawFinished = false;
+    this.waitingPostDrawHold = false;
+    this.postDrawLingerActive = false;
+    this.postDrawHoldElapsed = 0;
+    this.droneExitingAfterDraw = false;
+    this.droneExitProgress = 0;
+    this.activationPlayedThisRun = false;
+    this.activationRetryUntilTime = performance.now() + 8000;
+    this.dockingPanels = false;
+    this.panelsDocked = false;
+    this.panelDockProgress = 0;
+    this.activePanelIndex = null;
+    this.shouldDockPanels = false;
+
+    this.rootGroup.visible = true;
+    this.panelGroup.visible = true;
+    this.droneGroup.visible = true;
+    this.droneGroup.position.set(0, 0, 0);
+    this.droneGroup.rotation.set(0, 0, 0);
+    this.droneGroup.scale.setScalar(0);
+    this.previousDroneQuat = null;
+    this.smoothedTurnSpeed = 0;
+    this.resetInquisitiveScanState();
+
+    this.prepareDronePlacement(moonWorldPos, camera, orbitAnchor);
+    this.buildIntroCardPanel(content, camera);
+    this.ensureLaserRigCount(1);
+    this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
+    this.rootGroup.position.copy(this.flyStartPos);
+    this.scannerLight.position.copy(this.rootGroup.position);
+  }
+
+  private buildIntroCardPanel(content: OverlayContent, camera: THREE.Camera): void {
+    this.panelTextRuns = [];
+    const introText = content.droneIntroText || content.description || "";
+    const lines: string[] = [];
+    if (content.subtitle) lines.push(content.subtitle);
+    lines.push("");
+    lines.push(introText);
+    lines.push("");
+    lines.push("\u25B6  SEE DETAILS");
+
+    const depth = Math.max(11, camera.position.distanceTo(this.flyEndPos) * 0.52);
+    const frust = this.getCameraFrustumSizeAtDepth(camera, depth);
+    const panelWorldWidth = frust.w * 0.28;
+
+    const contentHeight = this.measureContentHeight(content.title, lines, false);
+    const canvasH = contentHeight;
+    const panelWorldHeight = panelWorldWidth * (canvasH / CANVAS_W);
+
+    const contentCanvas = this.createContentCanvas(
+      content.title,
+      lines,
+      false,
+      CANVAS_W,
+      canvasH,
+      0,
+    );
+    const displayCanvas = document.createElement("canvas");
+    displayCanvas.width = CANVAS_W;
+    displayCanvas.height = canvasH;
+    const displayCtx = displayCanvas.getContext("2d")!;
+
+    const texture = new THREE.CanvasTexture(displayCanvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(panelWorldWidth, panelWorldHeight),
+      new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    mesh.userData.hologramPanelIndex = INTRO_CARD_INDEX;
+    mesh.renderOrder = 1000;
+    const material = mesh.material as THREE.MeshBasicMaterial;
+
+    const centerWorld = this.ndcToWorldOnViewPlane(0, 0, camera, depth);
+    const drawOffset = centerWorld.clone().sub(this.flyEndPos);
+    mesh.position.copy(this.flyEndPos).add(drawOffset);
+    this.panelGroup.add(mesh);
+
+    this.panels.push({
+      mesh,
+      material,
+      texture,
+      contentCanvas,
+      displayCanvas,
+      displayCtx,
+      canvasW: CANVAS_W,
+      canvasH,
+      panelW: panelWorldWidth,
+      panelH: panelWorldHeight,
+      targetOpacity: 0.94,
+      revealTime: 0,
+      borderProgress: 0,
+      contentFade: 0,
+      borderComplete: false,
+      isHeader: false,
+      penX: BORDER_MARGIN,
+      penY: BORDER_MARGIN,
+      drawOffset,
+      drawOriginWorld: mesh.position.clone(),
+      dockScale: 1,
+      expandedScale: 1,
+      scrollOffset: 0,
+      maxScroll: 0,
+    });
+  }
+
+  private clearIntroCard(): void {
+    this.introMode = false;
+  }
+
   hideContent(): void {
     if (!this.active) return;
     this.hiding = true;
@@ -1283,6 +1484,7 @@ export class HologramDroneDisplay {
       this.setLaserRigOpacity(rig, 0);
     }
     this.clearPanels();
+    this.clearIntroCard();
     this.previousDroneQuat = null;
     this.smoothedTurnSpeed = 0;
     this.activationPlayedThisRun = false;
@@ -1291,6 +1493,10 @@ export class HologramDroneDisplay {
 
   getInteractivePanelMeshes(): THREE.Object3D[] {
     const result: THREE.Object3D[] = [];
+    if (this.active && this.introMode && this.drawFinished) {
+      for (const panel of this.panels) result.push(panel.mesh);
+      return result;
+    }
     if (this.active && this.panelsDocked) {
       for (const panel of this.panels) result.push(panel.mesh);
     }
@@ -1299,8 +1505,12 @@ export class HologramDroneDisplay {
     }
     if (this.active && this.drawFinished) {
       for (const tab of this.miniPortfolioTabs) result.push(tab.mesh);
-      for (const card of this.miniPortfolioCards) result.push(card.mesh);
+      for (const card of this.miniPortfolioCards) {
+        if (card.mesh.visible) result.push(card.mesh);
+      }
       if (this.miniPortfolioPreview) result.push(this.miniPortfolioPreview.mesh);
+      if (this.miniPortfolioDetail) result.push(this.miniPortfolioDetail.mesh);
+      for (const nav of this.miniPortfolioNavButtons) result.push(nav.mesh);
     }
     return result;
   }
@@ -1311,6 +1521,8 @@ export class HologramDroneDisplay {
     for (const tab of this.miniPortfolioTabs) textures.push(tab.texture);
     for (const card of this.miniPortfolioCards) textures.push(card.texture);
     if (this.miniPortfolioPreview) textures.push(this.miniPortfolioPreview.texture);
+    if (this.miniPortfolioDetail) textures.push(this.miniPortfolioDetail.texture);
+    for (const nav of this.miniPortfolioNavButtons) textures.push(nav.texture);
     return textures;
   }
 
@@ -1319,6 +1531,23 @@ export class HologramDroneDisplay {
   }
 
   selectPanel(panelIndex: number): void {
+    if (panelIndex === INTRO_CARD_INDEX) {
+      if (this.introMode && this.onSeeDetailsCallback) {
+        this.onSeeDetailsCallback();
+      }
+      return;
+    }
+    if (panelIndex === MINI_PORTFOLIO_DETAIL_INDEX) {
+      return;
+    }
+    if (panelIndex === MINI_PORTFOLIO_NAV_PREV_INDEX) {
+      this.shiftMiniPortfolioPage(-1);
+      return;
+    }
+    if (panelIndex === MINI_PORTFOLIO_NAV_NEXT_INDEX) {
+      this.shiftMiniPortfolioPage(1);
+      return;
+    }
     if (panelIndex === MINI_PORTFOLIO_PREVIEW_INDEX) {
       if (
         this.activeMiniPortfolioCardIndex !== null &&
@@ -1335,6 +1564,9 @@ export class HologramDroneDisplay {
     if (panelIndex >= MINI_PORTFOLIO_CARD_INDEX_BASE) {
       const cardIndex = panelIndex - MINI_PORTFOLIO_CARD_INDEX_BASE;
       if (cardIndex >= 0 && cardIndex < this.miniPortfolioCards.length) {
+        const pageStart = this.miniPortfolioCardPage * MINI_PORTFOLIO_VISIBLE_CARD_SLOTS;
+        const pageEnd = pageStart + MINI_PORTFOLIO_VISIBLE_CARD_SLOTS;
+        if (cardIndex < pageStart || cardIndex >= pageEnd) return;
         const card = this.miniPortfolioCards[cardIndex];
         if (this.activeMiniPortfolioCardIndex === cardIndex) {
           card.activeMediaIndex = (card.activeMediaIndex + 1) % Math.max(1, card.mediaItems.length);
@@ -1361,7 +1593,28 @@ export class HologramDroneDisplay {
   }
 
   setHoveredPanelIndex(panelIndex: number | null): void {
+    if (panelIndex === MINI_PORTFOLIO_NAV_PREV_INDEX || panelIndex === MINI_PORTFOLIO_NAV_NEXT_INDEX) {
+      this.hoveredNarrativePanel = false;
+      this.hoveredMiniPortfolioNav = panelIndex === MINI_PORTFOLIO_NAV_PREV_INDEX ? "prev" : "next";
+      this.refreshMiniPortfolioNavVisuals();
+      return;
+    }
+    if (this.hoveredMiniPortfolioNav) {
+      this.hoveredMiniPortfolioNav = null;
+      this.refreshMiniPortfolioNavVisuals();
+    }
+    if (panelIndex === MINI_PORTFOLIO_DETAIL_INDEX) {
+      this.hoveredNarrativePanel = false;
+      this.hoveredMiniPortfolioDetail = true;
+      this.refreshMiniPortfolioDetailVisual();
+      return;
+    }
+    if (this.hoveredMiniPortfolioDetail) {
+      this.hoveredMiniPortfolioDetail = false;
+      this.refreshMiniPortfolioDetailVisual();
+    }
     if (panelIndex === MINI_PORTFOLIO_PREVIEW_INDEX) {
+      this.hoveredNarrativePanel = false;
       this.hoveredMiniPortfolioPreview = true;
       this.refreshMiniPortfolioPreviewVisual();
       return;
@@ -1371,6 +1624,7 @@ export class HologramDroneDisplay {
       this.refreshMiniPortfolioPreviewVisual();
     }
     if (panelIndex !== null && panelIndex >= MINI_PORTFOLIO_CARD_INDEX_BASE) {
+      this.hoveredNarrativePanel = false;
       const cardIdx = panelIndex - MINI_PORTFOLIO_CARD_INDEX_BASE;
       this.hoveredMiniPortfolioCardIndex =
         cardIdx >= 0 && cardIdx < this.miniPortfolioCards.length ? cardIdx : null;
@@ -1382,6 +1636,7 @@ export class HologramDroneDisplay {
       this.refreshMiniPortfolioCardVisuals();
     }
     const oldHover = this.hoveredTechBadgeIndex;
+    this.hoveredNarrativePanel = panelIndex === 0;
     if (panelIndex !== null && panelIndex >= TECH_BADGE_HOVER_INDEX_BASE) {
       const badgeIdx = panelIndex - TECH_BADGE_HOVER_INDEX_BASE;
       if (badgeIdx >= 0 && badgeIdx < this.techBadges.length) {
@@ -1435,6 +1690,30 @@ export class HologramDroneDisplay {
     );
   }
 
+  handleScroll(deltaY: number): boolean {
+    let consumed = false;
+    const activePanel = this.panels[0];
+    if (this.hoveredNarrativePanel && activePanel && activePanel.maxScroll > 0) {
+      const prev = activePanel.scrollOffset;
+      const next = THREE.MathUtils.clamp(prev + deltaY * 0.55, 0, activePanel.maxScroll);
+      if (Math.abs(next - prev) > 0.01) {
+        activePanel.scrollOffset = next;
+        this.redrawPanel(activePanel, false);
+        consumed = true;
+      }
+    }
+    if (this.hoveredMiniPortfolioDetail && this.miniPortfolioDetail && this.miniPortfolioDetail.maxScroll > 0) {
+      const prev = this.miniPortfolioDetail.scrollOffset;
+      const next = THREE.MathUtils.clamp(prev + deltaY * 0.55, 0, this.miniPortfolioDetail.maxScroll);
+      if (Math.abs(next - prev) > 0.01) {
+        this.miniPortfolioDetail.scrollOffset = next;
+        this.refreshMiniPortfolioDetailVisual();
+        consumed = true;
+      }
+    }
+    return consumed;
+  }
+
   private _droneUpdateCount = 0;
   update(delta: number, camera: THREE.Camera): void {
     if (!this.active) return;
@@ -1459,6 +1738,7 @@ export class HologramDroneDisplay {
         this.rootGroup.visible = false;
         this.panelGroup.visible = false;
         this.clearPanels();
+        this.clearIntroCard();
       }
       this.scannerLight.position.copy(this.rootGroup.position);
       return;
@@ -1537,10 +1817,17 @@ export class HologramDroneDisplay {
 
     const laserTargets: Array<{ panelIndex: number; target: THREE.Vector3 }> = [];
     let anyDrawing = false;
+    const guideDuration = this.guideLines.length * GUIDE_LINE_DRAW_DURATION;
+    const guideProgress = guideDuration > 0 ? Math.min(1, this.contentStartTime / guideDuration) : 1;
+    const guideLaserTarget = this.updateGuideLines(camera, guideProgress);
+    if (guideLaserTarget) {
+      anyDrawing = true;
+      laserTargets.push({ panelIndex: 0, target: guideLaserTarget });
+    }
     if (this.drawEnabled && !this.drawFinished) {
       for (let i = 0; i < this.panels.length; i += 1) {
         const panel = this.panels[i];
-        const elapsed = this.contentStartTime - panel.revealTime;
+        const elapsed = this.contentStartTime - guideDuration - panel.revealTime;
         if (elapsed < 0) {
           panel.material.opacity = 0;
           continue;
@@ -1619,7 +1906,7 @@ export class HologramDroneDisplay {
     const startLocal = this.rootGroup.worldToLocal(droneWorld.clone());
     const pulse = 0.5 + Math.sin(this.idleTime * 4) * 0.15;
 
-    this.ensureLaserRigCount(this.panels.length);
+    this.ensureLaserRigCount(Math.max(1, this.panels.length));
     if (laserTargets.length > 0 && anyDrawing) {
       this.playTransmissionSound();
       for (let i = 0; i < this.laserRigs.length; i += 1) {
@@ -1646,7 +1933,7 @@ export class HologramDroneDisplay {
       this.postDrawHoldElapsed += dt;
       if (this.postDrawHoldElapsed >= POST_DRAW_HOLD_DURATION && techDone) {
         this.waitingPostDrawHold = false;
-        if (AUTO_EXIT_AFTER_DRAW) {
+        if (AUTO_EXIT_AFTER_DRAW && !this.introMode) {
           this.droneExitingAfterDraw = true;
           this.droneExitProgress = 0;
         }
@@ -1719,7 +2006,11 @@ export class HologramDroneDisplay {
 
     for (const panel of this.panels) {
       panel.mesh.quaternion.copy(camera.quaternion);
-      panel.material.opacity = panel.targetOpacity;
+      const guideDuration = this.guideLines.length * GUIDE_LINE_DRAW_DURATION;
+      panel.material.opacity =
+        this.drawEnabled && this.contentStartTime >= guideDuration
+          ? panel.targetOpacity
+          : 0;
     }
 
     const _uMs = performance.now() - _uStart;
@@ -1737,6 +2028,62 @@ export class HologramDroneDisplay {
     const projected = new THREE.Vector3(ndcX, ndcY, 0.5).unproject(camera);
     const dir = projected.sub(camera.position).normalize();
     return camera.position.clone().addScaledVector(dir, depth);
+  }
+
+  private clearGuideLines(): void {
+    for (const guide of this.guideLines) {
+      guide.material.dispose();
+      guide.line.geometry.dispose();
+      this.panelGroup.remove(guide.line);
+    }
+    this.guideLines = [];
+  }
+
+  private buildGuideLines(): void {
+    this.clearGuideLines();
+    for (const xFraction of GUIDE_LINE_X_FRACTIONS) {
+      const mat = new THREE.LineBasicMaterial({
+        color: 0x2a9968,
+        transparent: true,
+        opacity: 0.72,
+        depthTest: false,
+        depthWrite: false,
+      });
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(),
+        new THREE.Vector3(),
+      ]);
+      const line = new THREE.Line(geo, mat);
+      line.renderOrder = 6000;
+      line.frustumCulled = false;
+      this.panelGroup.add(line);
+      this.guideLines.push({ xFraction, line, material: mat });
+    }
+  }
+
+  private updateGuideLines(camera: THREE.Camera, progress: number): THREE.Vector3 | null {
+    if (this.guideLines.length === 0) return null;
+    const depth = Math.max(11, camera.position.distanceTo(this.flyEndPos) * 0.52);
+    const topNdc = 0.82;
+    const bottomNdc = -0.9;
+    const stagedProgress = progress * this.guideLines.length;
+    let activeTarget: THREE.Vector3 | null = null;
+    for (let i = 0; i < this.guideLines.length; i += 1) {
+      const localProgress = THREE.MathUtils.clamp(stagedProgress - i, 0, 1);
+      const ndcX = THREE.MathUtils.clamp(this.guideLines[i].xFraction, 0, 1) * 2 - 1;
+      const start = this.ndcToWorldOnViewPlane(ndcX, topNdc, camera, depth);
+      const fullEnd = this.ndcToWorldOnViewPlane(ndcX, bottomNdc, camera, depth);
+      const end = start.clone().lerp(fullEnd, localProgress);
+      const pos = this.guideLines[i].line.geometry.attributes.position as THREE.BufferAttribute;
+      pos.setXYZ(0, start.x, start.y, start.z);
+      pos.setXYZ(1, end.x, end.y, end.z);
+      pos.needsUpdate = true;
+      this.guideLines[i].line.visible = localProgress > 0.001 && this.drawEnabled;
+      if (localProgress > 0 && localProgress < 1) {
+        activeTarget = end;
+      }
+    }
+    return activeTarget;
   }
 
   // Maps NDC onto a camera-facing plane at fixed depth.
@@ -1795,7 +2142,7 @@ export class HologramDroneDisplay {
         this.renderSearOverlay(ctx, panelIdx);
       }
       ctx.globalAlpha = panel.contentFade;
-      ctx.drawImage(contentCanvas, 0, 0);
+      ctx.drawImage(contentCanvas, 0, -panel.scrollOffset);
       ctx.globalAlpha = 1;
       if (panelIdx >= 0 && this.searMode !== "none") {
         this.renderSearOverlay(ctx, panelIdx);
@@ -1871,134 +2218,106 @@ export class HologramDroneDisplay {
     camera: THREE.Camera,
     distScale: number = 1,
   ): void {
+    void distScale;
     this.panelTextRuns = [];
-    const panelDataList: { title: string; lines: string[]; isHeader: boolean }[] = [];
-    panelDataList.push({
-      title: content.title,
-      lines: [content.subtitle || "", content.description || ""].filter(Boolean),
-      isHeader: true,
-    });
-
+    const lines: string[] = [];
+    if (content.subtitle) lines.push(content.subtitle);
+    if (content.description) lines.push(content.description);
     for (const section of content.sections) {
-      const sectionLines = Array.isArray(section.content)
-        ? section.content
-        : section.content.split("\n\n• ").filter(Boolean);
-      const cleanLines = sectionLines.map((line) => line.replace(/^• /, ""));
       const dateStr = section.data?.startDate
         ? `${section.data.startDate} – ${section.data.endDate || "Present"}`
         : "";
-      panelDataList.push({
-        title: dateStr ? `${section.title}  [${dateStr}]` : section.title,
-        lines: cleanLines,
-        isHeader: false,
-      });
+      lines.push(dateStr ? `${section.title}  [${dateStr}]` : section.title);
+      const sectionLines = Array.isArray(section.content)
+        ? section.content
+        : section.content.split("\n\n• ").filter(Boolean);
+      lines.push(...sectionLines.map((line) => line.replace(/^• /, "")));
     }
-
-    const panelWorldWidth = BASE_PANEL_WORLD_WIDTH * distScale;
-    const droneToCamera = this._tmpV.subVectors(camera.position, this.flyEndPos).normalize();
-    const panelGap = this.isOrbitMode ? 1.2 * distScale : 0.8 * distScale;
-
-    const panelHeights: number[] = [];
-    const canvasHeights: number[] = [];
-    for (const data of panelDataList) {
-      const canvasH = this.measureContentHeight(data.title, data.lines, data.isHeader);
-      canvasHeights.push(canvasH);
-      panelHeights.push(panelWorldWidth * (canvasH / CANVAS_W));
-    }
-
-    const totalHeight =
-      panelHeights.reduce((sum, h) => sum + h, 0) + panelGap * (panelHeights.length - 1);
-    const totalWidth =
-      panelHeights.reduce((sum) => sum + panelWorldWidth, 0) +
-      panelGap * (panelHeights.length - 1);
-
-    const camUp = this.isOrbitMode
-      ? camera.up.clone().normalize()
-      : new THREE.Vector3(0, 1, 0);
-    const camRight = this.isOrbitMode
-      ? new THREE.Vector3()
-          .crossVectors(camera.getWorldDirection(new THREE.Vector3()), camUp)
-          .normalize()
-      : new THREE.Vector3();
-
-    let yAccum = totalHeight * 0.2;
-    let xAccum = -totalWidth / 2 - totalWidth * 0.15;
-
-    for (let i = 0; i < panelDataList.length; i += 1) {
-      const data = panelDataList[i];
-      const canvasH = canvasHeights[i];
-      const panelH = panelHeights[i];
-
-      const contentCanvas = this.createContentCanvas(
-        data.title,
-        data.lines,
-        data.isHeader,
-        CANVAS_W,
-        canvasH,
-        i,
-      );
-      const displayCanvas = document.createElement("canvas");
-      displayCanvas.width = CANVAS_W;
-      displayCanvas.height = canvasH;
-      const displayCtx = displayCanvas.getContext("2d")!;
-
-      const texture = new THREE.CanvasTexture(displayCanvas);
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-
-      const mesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(panelWorldWidth, panelH),
-        new THREE.MeshBasicMaterial({
-          map: texture,
-          transparent: true,
-          opacity: 0,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        }),
-      );
-      mesh.userData.hologramPanelIndex = i;
-      mesh.renderOrder = 1000 + i;
-      const material = mesh.material as THREE.MeshBasicMaterial;
-      // Keep panels behind the drone so the drone remains visually in front.
-      const forwardPush = droneToCamera.clone().multiplyScalar(-2.6 * distScale);
-      const drawOffset = new THREE.Vector3();
-      if (this.isOrbitMode) {
-        const xCenter = xAccum + panelWorldWidth / 2;
-        xAccum += panelWorldWidth + panelGap;
-        drawOffset.copy(forwardPush).addScaledVector(camRight, xCenter);
-      } else {
-        const yOff = yAccum - panelH / 2;
-        yAccum -= panelH + panelGap;
-        drawOffset.set(forwardPush.x, yOff, forwardPush.z);
-      }
-
-      mesh.position.copy(this.flyEndPos).add(drawOffset);
-      this.panelGroup.add(mesh);
-      this.panels.push({
-        mesh,
-        material,
-        texture,
-        contentCanvas,
-        displayCanvas,
-        displayCtx,
-        canvasW: CANVAS_W,
-        canvasH,
-        panelW: panelWorldWidth,
-        panelH,
-        targetOpacity: 0.94,
-        revealTime: i * PANEL_STAGGER,
-        borderProgress: 0,
-        contentFade: 0,
-        borderComplete: false,
-        isHeader: data.isHeader,
-        penX: BORDER_MARGIN,
-        penY: BORDER_MARGIN,
-        drawOffset,
-        drawOriginWorld: mesh.position.clone(),
-        dockScale: 0.28,
-        expandedScale: 0.78,
-      });
-    }
+    const depth = Math.max(11, camera.position.distanceTo(this.flyEndPos) * 0.52);
+    const frust = this.getCameraFrustumSizeAtDepth(camera, depth);
+    const col3WidthFraction = Math.max(
+      0.08,
+      LAYOUT_COL3_RIGHT - LAYOUT_COL3_LEFT - LAYOUT_GAP * 2,
+    );
+    const col3HeightFraction = Math.max(
+      0.2,
+      LAYOUT_BOTTOM - LAYOUT_TOP - LAYOUT_GAP * 2,
+    );
+    const panelWorldWidth = col3WidthFraction * frust.w;
+    const panelWorldHeight = col3HeightFraction * frust.h;
+    const contentHeight = this.measureContentHeight(content.title, lines, false);
+    const viewportCanvasH = this.isOrbitMode
+      ? Math.min(
+        NARRATIVE_VIEWPORT_CANVAS_H,
+        Math.max(320, Math.round(CANVAS_W * (panelWorldHeight / Math.max(0.01, panelWorldWidth)))),
+      )
+      : contentHeight;
+    const panelH = panelWorldHeight;
+    const contentCanvas = this.createContentCanvas(
+      content.title,
+      lines,
+      false,
+      CANVAS_W,
+      contentHeight,
+      0,
+    );
+    const displayCanvas = document.createElement("canvas");
+    displayCanvas.width = CANVAS_W;
+    displayCanvas.height = viewportCanvasH;
+    const displayCtx = displayCanvas.getContext("2d")!;
+    const texture = new THREE.CanvasTexture(displayCanvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(panelWorldWidth, panelH),
+      new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    mesh.userData.hologramPanelIndex = 0;
+    mesh.renderOrder = 1000;
+    const material = mesh.material as THREE.MeshBasicMaterial;
+    const narrativeCenterX = ((LAYOUT_COL3_LEFT + LAYOUT_COL3_RIGHT) * 0.5) * 2 - 1;
+    const narrativeCenterY = (1 - 2 * ((LAYOUT_TOP + LAYOUT_BOTTOM) * 0.5));
+    const narrativeTarget = this.ndcToWorldOnViewPlane(
+      narrativeCenterX,
+      narrativeCenterY,
+      camera,
+      depth,
+    );
+    const drawOffset = narrativeTarget.clone().sub(this.flyEndPos);
+    mesh.position.copy(this.flyEndPos).add(drawOffset);
+    this.panelGroup.add(mesh);
+    this.panels.push({
+      mesh,
+      material,
+      texture,
+      contentCanvas,
+      displayCanvas,
+      displayCtx,
+      canvasW: CANVAS_W,
+      canvasH: viewportCanvasH,
+      panelW: panelWorldWidth,
+      panelH,
+      targetOpacity: 0.94,
+      revealTime: 0,
+      borderProgress: 0,
+      contentFade: 0,
+      borderComplete: false,
+      isHeader: false,
+      penX: BORDER_MARGIN,
+      penY: BORDER_MARGIN,
+      drawOffset,
+      drawOriginWorld: mesh.position.clone(),
+      dockScale: 0.28,
+      expandedScale: 0.78,
+      scrollOffset: 0,
+      maxScroll: Math.max(0, contentHeight - viewportCanvasH),
+    });
   }
 
   private measureContentHeight(
@@ -2123,6 +2442,7 @@ export class HologramDroneDisplay {
     this.dockingPanels = false;
     this.clearTechBadges();
     this.clearMiniPortfolio();
+    this.clearGuideLines();
     this.panelTextRuns = [];
     this.activeSearMatches = [];
     this.searMode = "none";
@@ -2147,6 +2467,9 @@ export class HologramDroneDisplay {
     this.activeMiniPortfolioCardIndex = null;
     this.hoveredMiniPortfolioCardIndex = null;
     this.hoveredMiniPortfolioPreview = false;
+    this.hoveredMiniPortfolioDetail = false;
+    this.hoveredMiniPortfolioNav = null;
+    this.miniPortfolioCardPage = 0;
     if (this.miniPortfolioPreview) {
       this.miniPortfolioPreview.material.dispose();
       this.miniPortfolioPreview.mesh.geometry.dispose();
@@ -2154,7 +2477,22 @@ export class HologramDroneDisplay {
       this.panelGroup.remove(this.miniPortfolioPreview.mesh);
       this.miniPortfolioPreview = null;
     }
+    if (this.miniPortfolioDetail) {
+      this.miniPortfolioDetail.material.dispose();
+      this.miniPortfolioDetail.mesh.geometry.dispose();
+      this.miniPortfolioDetail.texture.dispose();
+      this.panelGroup.remove(this.miniPortfolioDetail.mesh);
+      this.miniPortfolioDetail = null;
+    }
+    for (const nav of this.miniPortfolioNavButtons) {
+      nav.material.dispose();
+      nav.mesh.geometry.dispose();
+      nav.texture.dispose();
+      this.panelGroup.remove(nav.mesh);
+    }
+    this.miniPortfolioNavButtons = [];
     this.miniPortfolioImageCache.clear();
+    this.miniPortfolioImageFailures.clear();
   }
 
   private buildMiniPortfolio(content: OverlayContent): void {
@@ -2240,10 +2578,15 @@ export class HologramDroneDisplay {
         texture,
       });
     });
+    this.miniPortfolioCardPage = 0;
     this.activeMiniPortfolioCardIndex = this.miniPortfolioCards.length > 0 ? 0 : null;
     this.refreshMiniPortfolioTabVisuals();
     this.refreshMiniPortfolioCardVisuals();
     this.buildMiniPortfolioPreview();
+    this.buildMiniPortfolioDetail();
+    this.buildMiniPortfolioNavButtons();
+    this.refreshMiniPortfolioNavVisuals();
+    this.refreshMiniPortfolioDetailVisual();
   }
 
   private refreshMiniPortfolioTabVisuals(): void {
@@ -2266,6 +2609,8 @@ export class HologramDroneDisplay {
       );
     });
     this.refreshMiniPortfolioPreviewVisual();
+    this.refreshMiniPortfolioDetailVisual();
+    this.refreshMiniPortfolioNavVisuals();
   }
 
   private redrawMiniPortfolioCard(
@@ -2320,7 +2665,11 @@ export class HologramDroneDisplay {
 
     if (media?.textureUrl) {
       const cached = this.miniPortfolioImageCache.get(media.textureUrl);
-      if (cached && cached.complete) {
+      const imageReady = !!cached &&
+        cached.complete &&
+        cached.naturalWidth > 0 &&
+        cached.naturalHeight > 0;
+      if (imageReady) {
         const targetX = 22;
         const targetY = 22;
         const targetW = canvas.width - 44;
@@ -2352,6 +2701,10 @@ export class HologramDroneDisplay {
           targetH,
         );
         ctx.restore();
+      } else if (this.miniPortfolioImageFailures.has(media.textureUrl)) {
+        ctx.fillStyle = "#9ad9ff";
+        ctx.font = "22px Rajdhani, sans-serif";
+        ctx.fillText("Image unavailable", 28, 44);
       } else {
         this.requestMiniPortfolioImage(media.textureUrl);
         ctx.fillStyle = "#9ad9ff";
@@ -2410,6 +2763,217 @@ export class HologramDroneDisplay {
     this.miniPortfolioPreview.texture.needsUpdate = true;
   }
 
+  private buildMiniPortfolioDetail(): void {
+    if (this.miniPortfolioDetail) {
+      this.miniPortfolioDetail.material.dispose();
+      this.miniPortfolioDetail.mesh.geometry.dispose();
+      this.miniPortfolioDetail.texture.dispose();
+      this.panelGroup.remove(this.miniPortfolioDetail.mesh);
+    }
+    const initialDetail = this.createMiniDetailCanvas(false, 0);
+    const texture = new THREE.CanvasTexture(initialDetail.canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: false,
+      opacity: 1,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(3.28, 2.52), material);
+    mesh.userData.hologramPanelIndex = MINI_PORTFOLIO_DETAIL_INDEX;
+    mesh.renderOrder = 2442;
+    this.panelGroup.add(mesh);
+    this.miniPortfolioDetail = {
+      mesh,
+      material,
+      texture,
+      scrollOffset: 0,
+      maxScroll: initialDetail.maxScroll,
+    };
+  }
+
+  private buildMiniPortfolioNavButtons(): void {
+    for (const nav of this.miniPortfolioNavButtons) {
+      nav.material.dispose();
+      nav.mesh.geometry.dispose();
+      nav.texture.dispose();
+      this.panelGroup.remove(nav.mesh);
+    }
+    this.miniPortfolioNavButtons = [];
+    const mk = (id: "prev" | "next", panelIndex: number) => {
+      const texture = new THREE.CanvasTexture(this.createMiniNavCanvas(id, false, true));
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: false,
+        opacity: 1,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), material);
+      mesh.userData.hologramPanelIndex = panelIndex;
+      mesh.renderOrder = 2443;
+      this.panelGroup.add(mesh);
+      this.miniPortfolioNavButtons.push({ id, mesh, material, texture });
+    };
+    mk("prev", MINI_PORTFOLIO_NAV_PREV_INDEX);
+    mk("next", MINI_PORTFOLIO_NAV_NEXT_INDEX);
+  }
+
+  private shiftMiniPortfolioPage(direction: -1 | 1): void {
+    if (this.miniPortfolioCards.length <= MINI_PORTFOLIO_VISIBLE_CARD_SLOTS) return;
+    const maxPage = Math.max(
+      0,
+      Math.ceil(this.miniPortfolioCards.length / MINI_PORTFOLIO_VISIBLE_CARD_SLOTS) - 1,
+    );
+    const nextPage = THREE.MathUtils.clamp(this.miniPortfolioCardPage + direction, 0, maxPage);
+    if (nextPage === this.miniPortfolioCardPage) return;
+    this.miniPortfolioCardPage = nextPage;
+    const start = nextPage * MINI_PORTFOLIO_VISIBLE_CARD_SLOTS;
+    const end = Math.min(this.miniPortfolioCards.length, start + MINI_PORTFOLIO_VISIBLE_CARD_SLOTS);
+    if (
+      this.activeMiniPortfolioCardIndex === null ||
+      this.activeMiniPortfolioCardIndex < start ||
+      this.activeMiniPortfolioCardIndex >= end
+    ) {
+      this.activeMiniPortfolioCardIndex = start;
+    }
+    this.refreshMiniPortfolioCardVisuals();
+    this.refreshMiniPortfolioNavVisuals();
+    this.refreshMiniPortfolioDetailVisual();
+    this.refreshMiniPortfolioPreviewVisual();
+  }
+
+  private refreshMiniPortfolioNavVisuals(): void {
+    const maxPage = Math.max(
+      0,
+      Math.ceil(this.miniPortfolioCards.length / MINI_PORTFOLIO_VISIBLE_CARD_SLOTS) - 1,
+    );
+    const canPrev = this.miniPortfolioCardPage > 0;
+    const canNext = this.miniPortfolioCardPage < maxPage;
+    for (const nav of this.miniPortfolioNavButtons) {
+      const hovered = this.hoveredMiniPortfolioNav === nav.id;
+      const enabled = nav.id === "prev" ? canPrev : canNext;
+      nav.texture.image = this.createMiniNavCanvas(nav.id, hovered, enabled);
+      nav.texture.needsUpdate = true;
+      nav.mesh.visible = this.miniPortfolioCards.length > MINI_PORTFOLIO_VISIBLE_CARD_SLOTS;
+    }
+  }
+
+  private createMiniNavCanvas(
+    direction: "prev" | "next",
+    hovered: boolean,
+    enabled: boolean,
+  ): HTMLCanvasElement {
+    const canvas = document.createElement("canvas");
+    canvas.width = 180;
+    canvas.height = 180;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = enabled ? "rgba(4, 14, 22, 0.84)" : "rgba(4, 14, 22, 0.42)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = enabled
+      ? hovered ? "#b4ffe8" : "#5df2bf"
+      : "rgba(93, 242, 191, 0.26)";
+    ctx.lineWidth = hovered ? 4 : 3;
+    ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+    ctx.fillStyle = enabled ? "#97f0d4" : "rgba(151, 240, 212, 0.38)";
+    ctx.font = "bold 82px Rajdhani, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(direction === "prev" ? "‹" : "›", canvas.width / 2, canvas.height / 2 + 3);
+    return canvas;
+  }
+
+  private refreshMiniPortfolioDetailVisual(): void {
+    if (!this.miniPortfolioDetail) return;
+    const detail = this.createMiniDetailCanvas(
+      this.hoveredMiniPortfolioDetail,
+      this.miniPortfolioDetail.scrollOffset,
+    );
+    this.miniPortfolioDetail.maxScroll = detail.maxScroll;
+    this.miniPortfolioDetail.scrollOffset = THREE.MathUtils.clamp(
+      this.miniPortfolioDetail.scrollOffset,
+      0,
+      this.miniPortfolioDetail.maxScroll,
+    );
+    this.miniPortfolioDetail.texture.image = detail.canvas;
+    this.miniPortfolioDetail.texture.needsUpdate = true;
+  }
+
+  private createMiniDetailCanvas(
+    hovered: boolean,
+    scrollOffset: number,
+  ): { canvas: HTMLCanvasElement; maxScroll: number } {
+    const viewportW = 780;
+    const viewportH = 600;
+    const contentCanvas = document.createElement("canvas");
+    contentCanvas.width = viewportW;
+    contentCanvas.height = 2200;
+    const contentCtx = contentCanvas.getContext("2d")!;
+    const card =
+      this.activeMiniPortfolioCardIndex !== null
+        ? this.miniPortfolioCards[this.activeMiniPortfolioCardIndex] ?? null
+        : null;
+    const media = card?.mediaItems[Math.max(0, card.activeMediaIndex)] ?? null;
+    contentCtx.fillStyle = "#071725";
+    contentCtx.fillRect(0, 0, viewportW, contentCanvas.height);
+    contentCtx.strokeStyle = hovered ? "#b4ffe8" : "#5df2bf";
+    contentCtx.lineWidth = 3;
+    contentCtx.strokeRect(5, 5, viewportW - 10, contentCanvas.height - 10);
+    let y = 24;
+    contentCtx.fillStyle = "#9fffe0";
+    contentCtx.font = "bold 44px Rajdhani, sans-serif";
+    contentCtx.fillText(card?.title ?? "Select a portfolio item", 24, y);
+    y += 54;
+    if (media?.title) {
+      contentCtx.fillStyle = "#7cb9d2";
+      contentCtx.font = "30px Rajdhani, sans-serif";
+      contentCtx.fillText(media.title, 24, y);
+      y += 42;
+    }
+    const body = (media?.description || card?.description || "No portfolio notes yet.").trim();
+    contentCtx.fillStyle = "#8ab0c8";
+    contentCtx.font = "28px Rajdhani, sans-serif";
+    for (const line of this.wrapText(contentCtx, body, viewportW - 56)) {
+      contentCtx.fillText(line, 24, y);
+      y += 34;
+    }
+    y += 16;
+    if (card?.technologies?.length) {
+      contentCtx.fillStyle = "#97f0d4";
+      contentCtx.font = "bold 30px Rajdhani, sans-serif";
+      contentCtx.fillText("Tech Stack", 24, y);
+      y += 36;
+      contentCtx.fillStyle = "#8ab0c8";
+      contentCtx.font = "26px Rajdhani, sans-serif";
+      for (const tech of card.technologies) {
+        contentCtx.fillText(`▸ ${tech}`, 24, y);
+        y += 30;
+      }
+    }
+    y += 10;
+    contentCtx.fillStyle = "#b4ffe8";
+    contentCtx.font = "24px Rajdhani, sans-serif";
+    contentCtx.fillText("Use wheel while hovering here to scroll details", 24, y);
+    const finalH = Math.min(contentCanvas.height, Math.max(viewportH, y + 28));
+    const display = document.createElement("canvas");
+    display.width = viewportW;
+    display.height = viewportH;
+    const displayCtx = display.getContext("2d")!;
+    displayCtx.fillStyle = "#071725";
+    displayCtx.fillRect(0, 0, viewportW, viewportH);
+    const maxScroll = Math.max(0, finalH - viewportH);
+    const yOffset = THREE.MathUtils.clamp(scrollOffset, 0, maxScroll);
+    displayCtx.drawImage(contentCanvas, 0, -yOffset);
+    return { canvas: display, maxScroll };
+  }
+
   private createMiniPreviewCanvas(hovered: boolean): HTMLCanvasElement {
     const canvas = document.createElement("canvas");
     canvas.width = 1280;
@@ -2434,7 +2998,11 @@ export class HologramDroneDisplay {
     ctx.fillRect(imageX, imageY, imageW, imageH);
     if (media?.textureUrl) {
       const cached = this.miniPortfolioImageCache.get(media.textureUrl);
-      if (cached && cached.complete) {
+      const imageReady = !!cached &&
+        cached.complete &&
+        cached.naturalWidth > 0 &&
+        cached.naturalHeight > 0;
+      if (imageReady) {
         const imageAspect = Math.max(0.0001, cached.width / Math.max(1, cached.height));
         const targetAspect = imageW / imageH;
         let srcW = cached.width;
@@ -2452,6 +3020,10 @@ export class HologramDroneDisplay {
         ctx.filter = "saturate(1.2) contrast(1.1)";
         ctx.drawImage(cached, srcX, srcY, srcW, srcH, imageX, imageY, imageW, imageH);
         ctx.restore();
+      } else if (this.miniPortfolioImageFailures.has(media.textureUrl)) {
+        ctx.fillStyle = "#9ad9ff";
+        ctx.font = "28px Rajdhani, sans-serif";
+        ctx.fillText("Image unavailable", imageX + 20, imageY + 40);
       } else {
         this.requestMiniPortfolioImage(media.textureUrl);
         ctx.fillStyle = "#9ad9ff";
@@ -2480,15 +3052,25 @@ export class HologramDroneDisplay {
   }
 
   private requestMiniPortfolioImage(url: string): void {
-    if (!url || this.miniPortfolioImageCache.has(url)) return;
+    if (!url || this.miniPortfolioImageCache.has(url) || this.miniPortfolioImageFailures.has(url)) {
+      return;
+    }
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
+      if (img.naturalWidth <= 0 || img.naturalHeight <= 0) {
+        this.miniPortfolioImageCache.delete(url);
+        this.miniPortfolioImageFailures.add(url);
+        this.refreshMiniPortfolioCardVisuals();
+        return;
+      }
       this.miniPortfolioImageCache.set(url, img);
       this.refreshMiniPortfolioCardVisuals();
     };
     img.onerror = () => {
-      // Keep failures non-fatal; card still renders metadata.
+      this.miniPortfolioImageCache.delete(url);
+      this.miniPortfolioImageFailures.add(url);
+      this.refreshMiniPortfolioCardVisuals();
     };
     img.src = url;
     this.miniPortfolioImageCache.set(url, img);
@@ -2497,38 +3079,116 @@ export class HologramDroneDisplay {
   private updateMiniPortfolioLayout(camera: THREE.Camera, dt: number): void {
     if (this.miniPortfolioTabs.length === 0 && this.miniPortfolioCards.length === 0) return;
     const depth = Math.max(11, camera.position.distanceTo(this.flyEndPos) * 0.52);
-    const tabStartX = -0.78;
+    const frust = this.getCameraFrustumSizeAtDepth(camera, depth);
+    const toNdcX = (fraction: number) => fraction * 2 - 1;
+    const toNdcY = (fraction: number) => 1 - fraction * 2;
+    const portfolioLeft = toNdcX(LAYOUT_COL2_LEFT + LAYOUT_GAP);
+    const portfolioRight = toNdcX(LAYOUT_COL2_RIGHT - LAYOUT_GAP);
+    const largeTop = toNdcY(LAYOUT_LARGE_TOP + LAYOUT_GAP);
+    const largeBottom = toNdcY(LAYOUT_LARGE_BOTTOM - LAYOUT_GAP);
+    const thumbsLeft = toNdcX(LAYOUT_THUMBS_LEFT + LAYOUT_GAP);
+    const thumbsRight = toNdcX(LAYOUT_THUMBS_RIGHT - LAYOUT_GAP);
+    const descLeft = toNdcX(LAYOUT_DESC_LEFT + LAYOUT_GAP);
+    const descRight = toNdcX(LAYOUT_DESC_RIGHT - LAYOUT_GAP);
+    const row2Top = toNdcY(LAYOUT_ROW2_TOP + LAYOUT_GAP);
+    const row2Bottom = toNdcY(LAYOUT_ROW2_BOTTOM - LAYOUT_GAP);
+    const center = (a: number, b: number) => (a + b) * 0.5;
+    const fitScale = (
+      mesh: THREE.Mesh,
+      targetNdcW: number,
+      targetNdcH: number,
+      uniformBoost: number = 1,
+    ) => {
+      const geometry = mesh.geometry as THREE.PlaneGeometry;
+      const baseW = geometry.parameters.width as number;
+      const baseH = geometry.parameters.height as number;
+      const targetWorldW = Math.max(0.01, targetNdcW) * (frust.w * 0.5);
+      const targetWorldH = Math.max(0.01, targetNdcH) * (frust.h * 0.5);
+      const uniform = Math.min(targetWorldW / baseW, targetWorldH / baseH) * uniformBoost;
+      mesh.scale.setScalar(Math.max(0.05, uniform));
+    };
+
+    const tabStartX = thumbsLeft;
     this.miniPortfolioTabs.forEach((tab, index) => {
+      const tabNdcW = Math.min(
+        0.13,
+        Math.max(0.06, (thumbsRight - thumbsLeft) / Math.max(1, this.miniPortfolioTabs.length)),
+      );
+      const tabNdcH = Math.max(0.028, (row2Top - row2Bottom) * 0.18);
       const target = this.ndcToWorldOnViewPlane(
-        tabStartX + index * 0.21,
-        -0.5,
+        tabStartX + tabNdcW * 0.5 + index * (tabNdcW + 0.008),
+        row2Top - tabNdcH * 0.65,
         camera,
         depth,
       );
       tab.mesh.position.lerp(target, 1 - Math.exp(-dt * 12));
       tab.mesh.quaternion.copy(camera.quaternion);
+      fitScale(tab.mesh, tabNdcW, tabNdcH);
     });
+    const pageStart = this.miniPortfolioCardPage * MINI_PORTFOLIO_VISIBLE_CARD_SLOTS;
+    const pageEnd = pageStart + MINI_PORTFOLIO_VISIBLE_CARD_SLOTS;
+    const thumbsUsableTop = row2Top - Math.max(0.03, (row2Top - row2Bottom) * 0.22);
+    const thumbsUsableBottom = row2Bottom;
+    const thumbsAreaW = Math.max(0.06, thumbsRight - thumbsLeft);
+    const thumbsAreaH = Math.max(0.06, thumbsUsableTop - thumbsUsableBottom);
+    const slotGap = Math.min(0.012, thumbsAreaW * 0.06);
+    const slotW = (thumbsAreaW - slotGap * (MINI_PORTFOLIO_VISIBLE_CARD_SLOTS - 1))
+      / MINI_PORTFOLIO_VISIBLE_CARD_SLOTS;
     this.miniPortfolioCards.forEach((card, index) => {
+      const inPage = index >= pageStart && index < pageEnd;
+      card.mesh.visible = inPage;
+      if (!inPage) return;
       const isActive = index === this.activeMiniPortfolioCardIndex;
-      const x = -0.76 + index * 0.2;
-      const y = isActive ? -0.79 : -0.82;
+      const slot = index - pageStart;
+      const x = thumbsLeft + slotW * 0.5 + slot * (slotW + slotGap);
+      const y = center(thumbsUsableTop, thumbsUsableBottom);
       const target = this.ndcToWorldOnViewPlane(x, y, camera, depth);
       card.mesh.position.lerp(target, 1 - Math.exp(-dt * 12));
       card.mesh.quaternion.copy(camera.quaternion);
-      const targetScale = isActive ? 1.02 : 0.78;
-      const nextScale =
-        card.mesh.scale.x + (targetScale - card.mesh.scale.x) * (1 - Math.exp(-dt * 15));
-      card.mesh.scale.setScalar(nextScale);
+      fitScale(card.mesh, slotW, thumbsAreaH, isActive ? 1.02 : 0.92);
       card.mesh.renderOrder = isActive ? 2399 : 2300 + index;
     });
     if (this.miniPortfolioPreview) {
-      const previewTarget = this.ndcToWorldOnViewPlane(0.2, -0.03, camera, depth);
+      const previewNdcW = Math.max(0.12, portfolioRight - portfolioLeft);
+      const previewNdcH = Math.max(0.14, largeTop - largeBottom);
+      const previewTarget = this.ndcToWorldOnViewPlane(
+        center(portfolioLeft, portfolioRight),
+        center(largeTop, largeBottom),
+        camera,
+        depth,
+      );
       this.miniPortfolioPreview.mesh.position.lerp(
         previewTarget,
         1 - Math.exp(-dt * 10),
       );
       this.miniPortfolioPreview.mesh.quaternion.copy(camera.quaternion);
-      this.miniPortfolioPreview.mesh.scale.setScalar(1);
+      fitScale(this.miniPortfolioPreview.mesh, previewNdcW, previewNdcH, 0.98);
+    }
+    if (this.miniPortfolioDetail) {
+      const detailNdcW = Math.max(0.08, descRight - descLeft);
+      const detailNdcH = Math.max(0.08, row2Top - row2Bottom);
+      const detailTarget = this.ndcToWorldOnViewPlane(
+        center(descLeft, descRight),
+        center(row2Top, row2Bottom),
+        camera,
+        depth,
+      );
+      this.miniPortfolioDetail.mesh.position.lerp(detailTarget, 1 - Math.exp(-dt * 12));
+      this.miniPortfolioDetail.mesh.quaternion.copy(camera.quaternion);
+      fitScale(this.miniPortfolioDetail.mesh, detailNdcW, detailNdcH, 0.98);
+    }
+    for (const nav of this.miniPortfolioNavButtons) {
+      const navPad = Math.min(0.02, thumbsAreaW * 0.05);
+      const navX = nav.id === "prev" ? thumbsLeft - navPad : thumbsRight + navPad;
+      const navTarget = this.ndcToWorldOnViewPlane(
+        navX,
+        center(thumbsUsableTop, thumbsUsableBottom),
+        camera,
+        depth,
+      );
+      nav.mesh.position.lerp(navTarget, 1 - Math.exp(-dt * 14));
+      nav.mesh.quaternion.copy(camera.quaternion);
+      fitScale(nav.mesh, 0.022, 0.05);
     }
   }
 
