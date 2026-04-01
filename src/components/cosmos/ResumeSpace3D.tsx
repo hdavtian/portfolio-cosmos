@@ -21204,6 +21204,22 @@ export default function ResumeSpace3D({
           aboutExteriorRoot.layers.set(PROJECT_SHOWCASE_LAYER);
           showcaseRoot.add(aboutExteriorRoot);
           projectShowcaseExteriorRootRef.current = aboutExteriorRoot;
+          const aboutStationLabel = createLabel("About Orbital Station");
+          aboutStationLabel.userData.projectShowcaseAboutStationLabel = true;
+          aboutStationLabel.position.set(0, 74, 0);
+          const aboutStationLabelEl = (aboutStationLabel as unknown as {
+            element?: HTMLElement;
+          }).element;
+          if (aboutStationLabelEl) {
+            aboutStationLabelEl.style.pointerEvents = "none";
+            aboutStationLabelEl.style.textShadow = "0 0 12px rgba(140,210,255,0.85)";
+            const title = aboutStationLabelEl.firstElementChild as HTMLElement | null;
+            if (title) {
+              title.style.fontSize = "20px";
+              title.style.letterSpacing = "1.3px";
+            }
+          }
+          aboutExteriorRoot.add(aboutStationLabel);
 
           const handleAboutExteriorLoaded = (tardisGltf: { scene: THREE.Group }) => {
               const tardisRoot = tardisGltf.scene.clone(true);
