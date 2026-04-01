@@ -16,16 +16,29 @@ $panel-bg: rgba(4, 10, 22, 0.82);
 $panel-border: rgba(42, 153, 104, 0.35);
 $section-bg: rgba(4, 14, 22, 0.72);
 
-.moon-html-layout {
+.moon-html-layout-shell {
   position: fixed;
   inset: 0;
   z-index: 120;
   pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2vh 2vw;
+  --moon-layout-width: 90vw;
+  --moon-layout-height: 80vh;
+}
+
+.moon-html-layout {
+  position: relative;
+  width: min(var(--moon-layout-width), 1600px);
+  height: min(var(--moon-layout-height), 92vh);
+  max-width: 100%;
+  max-height: 100%;
   display: grid;
   grid-template-columns: 11% 1fr 34% 11%;
   grid-template-rows: 1fr;
   gap: 6px;
-  padding: 2vh 0;
   font-family: var(--font-hud);
   color: $text-primary;
   opacity: 0;
@@ -37,6 +50,19 @@ $section-bg: rgba(4, 14, 22, 0.72);
   &--no-portfolio {
     .moon-html-layout__narrative {
       grid-column: 3 / 4;
+    }
+  }
+
+  &--portfolio-expanded {
+    grid-template-columns: 1fr;
+
+    .moon-html-layout__portfolio {
+      grid-column: 1 / -1;
+    }
+
+    .moon-html-layout__narrative,
+    .moon-html-layout__tech {
+      display: none;
     }
   }
 
@@ -151,7 +177,7 @@ $section-bg: rgba(4, 14, 22, 0.72);
   &__item {
     position: relative;
     padding: 3px 0;
-    font-size: var(--text-sm);
+    font-size: var(--text-xs);
     line-height: 1.55;
     color: $text-primary;
 
@@ -194,7 +220,7 @@ $section-bg: rgba(4, 14, 22, 0.72);
   gap: 8px;
 
   &__label {
-    font-size: var(--text-xs);
+    font-size: 11px;
     font-weight: 700;
     color: $accent;
     text-transform: uppercase;
@@ -218,7 +244,7 @@ $section-bg: rgba(4, 14, 22, 0.72);
     border-radius: 4px;
     color: $text-primary;
     font-family: var(--font-hud);
-    font-size: var(--text-xs);
+    font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-align: left;
@@ -298,6 +324,32 @@ $section-bg: rgba(4, 14, 22, 0.72);
     background: rgba(0, 0, 0, 0.4);
     overflow: hidden;
     position: relative;
+  }
+
+  &__expand-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 3;
+    width: 28px;
+    height: 28px;
+    border: 1px solid $panel-border;
+    border-radius: 4px;
+    background: rgba(4, 14, 22, 0.86);
+    color: $text-bright;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.18s ease;
+
+    &:hover {
+      border-color: $accent;
+      color: $accent;
+      box-shadow: 0 0 10px $accent-glow;
+    }
   }
 
   &__img {

@@ -13,6 +13,7 @@ interface Props {
 const MoonOrbitHtmlLayout: React.FC<Props> = ({ content, visible }) => {
   const [hoveredTechIndex, setHoveredTechIndex] = useState<number | null>(null);
   const [lockedTechIndex, setLockedTechIndex] = useState<number | null>(null);
+  const [portfolioExpanded, setPortfolioExpanded] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const techEntries: JobTechEntry[] = content.jobTech ?? [];
@@ -20,6 +21,7 @@ const MoonOrbitHtmlLayout: React.FC<Props> = ({ content, visible }) => {
   useEffect(() => {
     setHoveredTechIndex(null);
     setLockedTechIndex(null);
+    setPortfolioExpanded(false);
   }, [content.title]);
 
   const handleTechSelect = useCallback(
@@ -64,33 +66,41 @@ const MoonOrbitHtmlLayout: React.FC<Props> = ({ content, visible }) => {
   return (
     <div
       ref={rootRef}
-      className={`moon-html-layout${hasPortfolio ? "" : " moon-html-layout--no-portfolio"}`}
+      className="moon-html-layout-shell"
       onClick={handleBackdropClick}
     >
-      {hasPortfolio && (
-        <div className="moon-html-layout__portfolio">
-          <MoonOrbitHtmlPortfolio portfolio={content.moonPortfolio!} />
+      <div
+        className={`moon-html-layout${hasPortfolio ? "" : " moon-html-layout--no-portfolio"}${portfolioExpanded ? " moon-html-layout--portfolio-expanded" : ""}`}
+      >
+        {hasPortfolio && (
+          <div className="moon-html-layout__portfolio">
+            <MoonOrbitHtmlPortfolio
+              portfolio={content.moonPortfolio!}
+              isExpanded={portfolioExpanded}
+              onToggleExpand={() => setPortfolioExpanded((prev) => !prev)}
+            />
+          </div>
+        )}
+
+        <div className="moon-html-layout__narrative">
+          <MoonOrbitHtmlNarrative
+            title={content.title}
+            subtitle={content.subtitle}
+            sections={content.sections}
+            highlightTerms={highlightTerms}
+            highlightMode={highlightMode}
+          />
         </div>
-      )}
 
-      <div className="moon-html-layout__narrative">
-        <MoonOrbitHtmlNarrative
-          title={content.title}
-          subtitle={content.subtitle}
-          sections={content.sections}
-          highlightTerms={highlightTerms}
-          highlightMode={highlightMode}
-        />
-      </div>
-
-      <div className="moon-html-layout__tech">
-        <MoonOrbitHtmlTechChips
-          techEntries={techEntries}
-          hoveredIndex={hoveredTechIndex}
-          lockedIndex={lockedTechIndex}
-          onHover={handleTechHover}
-          onSelect={handleTechSelect}
-        />
+        <div className="moon-html-layout__tech">
+          <MoonOrbitHtmlTechChips
+            techEntries={techEntries}
+            hoveredIndex={hoveredTechIndex}
+            lockedIndex={lockedTechIndex}
+            onHover={handleTechHover}
+            onSelect={handleTechSelect}
+          />
+        </div>
       </div>
     </div>
   );

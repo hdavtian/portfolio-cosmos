@@ -4,6 +4,8 @@ import type { MoonPortfolioPayload, MoonPortfolioTab } from "./moonPortfolioSele
 
 interface Props {
   portfolio: MoonPortfolioPayload | null;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
 }
 
 const TABS_VISIBLE = 3;
@@ -11,7 +13,11 @@ const CARDS_VISIBLE = 3;
 const THUMB_MIN_WIDTH_PX = 92;
 const THUMB_GAP_PX = 4;
 
-const MoonOrbitHtmlPortfolio: React.FC<Props> = ({ portfolio }) => {
+const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
+  portfolio,
+  isExpanded,
+  onToggleExpand,
+}) => {
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
@@ -135,6 +141,17 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({ portfolio }) => {
     <div className="moon-portfolio">
       <div className="moon-portfolio__main">
         <div className="moon-portfolio__large-image">
+          <button
+            className="moon-portfolio__expand-btn"
+            onClick={onToggleExpand}
+            aria-label={isExpanded ? "Restore layout" : "Expand portfolio layout"}
+            title={isExpanded ? "Restore layout" : "Expand portfolio layout"}
+          >
+            <i
+              className={`fa-solid ${isExpanded ? "fa-minimize" : "fa-maximize"}`}
+              aria-hidden="true"
+            />
+          </button>
           {activeMedia ? (
             imgError.has(activeMedia.textureUrl) ? (
               <div className="moon-portfolio__fallback">Image unavailable</div>
