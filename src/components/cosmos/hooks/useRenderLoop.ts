@@ -142,6 +142,7 @@ export const useRenderLoop = () => {
       sunMesh: THREE.Object3D;
       vlog: (message: string) => void;
       gpuWarmupInProgressRef?: React.MutableRefObject<boolean>;
+      loadingActiveRef?: React.MutableRefObject<boolean>;
       tvPreviewControllerRef?: React.MutableRefObject<TVPreviewController | null>;
       dashcamControllerRef?: React.MutableRefObject<DashcamController | null>;
       [key: string]: unknown;
@@ -177,6 +178,7 @@ export const useRenderLoop = () => {
         projectShowcaseActiveRef,
         projectShowcaseTrackRef,
         gpuWarmupInProgressRef,
+        loadingActiveRef,
         tvPreviewControllerRef,
         dashcamControllerRef,
         updateMoonOrbit,
@@ -856,6 +858,8 @@ export const useRenderLoop = () => {
           return;
         }
 
+        const loadPhaseActive = loadingActiveRef?.current === true;
+
         const _p0 = performance.now();
         _perfFrameCount++;
 
@@ -990,11 +994,17 @@ export const useRenderLoop = () => {
           // Render scene
           sunMesh.rotation.y += 0.002;
           const _pExploreRenderStart = performance.now();
-          composer.render();
+          if (loadPhaseActive) {
+            renderer.render(scene, camera);
+          } else {
+            composer.render();
+          }
           const _pExploreTotal = performance.now() - _p0;
           if (_pExploreTotal > 50) {
             const renderMs = performance.now() - _pExploreRenderStart;
-            console.warn(`[PERF] EXPLORE frame #${_perfFrameCount} total=${_pExploreTotal.toFixed(1)}ms composer.render=${renderMs.toFixed(1)}ms`);
+            console.warn(
+              `[PERF] EXPLORE frame #${_perfFrameCount} total=${_pExploreTotal.toFixed(1)}ms primaryRender=${renderMs.toFixed(1)}ms loadPhase=${loadPhaseActive}`,
+            );
           }
           return; // Skip all other camera/render logic
         }
@@ -2233,16 +2243,28 @@ export const useRenderLoop = () => {
         }
 
         const _p6 = performance.now();
-        composer.render();
+        if (loadPhaseActive) {
+          renderer.render(scene, camera);
+        } else {
+          composer.render();
+        }
 
         // TV preview secondary render (tiny RT, every other frame)
-        if (tvPreviewControllerRef?.current && tvPreviewControllerRef.current.phase !== "hidden") {
+        if (
+          !loadPhaseActive &&
+          tvPreviewControllerRef?.current &&
+          tvPreviewControllerRef.current.phase !== "hidden"
+        ) {
           const tvDeltaMs = Math.min(deltaSeconds * 1000, 100);
           tvPreviewControllerRef.current.update(tvDeltaMs, renderer, scene);
         }
 
         // Dashcam secondary render
-        if (dashcamControllerRef?.current && dashcamControllerRef.current.phase !== "hidden") {
+        if (
+          !loadPhaseActive &&
+          dashcamControllerRef?.current &&
+          dashcamControllerRef.current.phase !== "hidden"
+        ) {
           const dcDeltaMs = Math.min(deltaSeconds * 1000, 100);
           dashcamControllerRef.current.update(dcDeltaMs, renderer, scene);
         }
@@ -2252,7 +2274,7 @@ export const useRenderLoop = () => {
         // Skip the extra render passes when inside the ship — the
         // layer-1 overlay meshes and CSS2D labels aren't visible from
         // the interior, so rendering them just wastes GPU time.
-        if (!insideShipRef.current || focusedMoonRef.current) {
+        if (!loadPhaseActive && (!insideShipRef.current || focusedMoonRef.current)) {
           const prevMask = camera.layers.mask;
           camera.layers.set(1);
           const prevAutoClear = renderer.autoClear;
@@ -2282,7 +2304,7 @@ export const useRenderLoop = () => {
             ` | orbitSys+ctrl=${(_p4 - _p3).toFixed(1)}ms` +
             ` | droneUpdate=${(_p5 - _p4).toFixed(1)}ms` +
             ` | lightspeed+comets=${(_p6 - _p5).toFixed(1)}ms` +
-            ` | composer.render=${(_p7 - _p6).toFixed(1)}ms` +
+            ` | primaryRender=${(_p7 - _p6).toFixed(1)}ms` +
             ` | layer1+labels=${(_pEnd - _p7).toFixed(1)}ms`
           );
         }

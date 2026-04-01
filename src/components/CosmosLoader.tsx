@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./CosmosLoader.scss";
 
-interface CosmosLoaderProps {
+export interface CosmosLoaderProps {
   onLoadingComplete: () => void;
   isSceneReady?: boolean;
+  loadingProgressHint?: number;
+  loadingStageHint?: string;
 }
 
 type Phase = "idle" | "colorCycle" | "teaser" | "frenzy" | "done";
@@ -41,6 +43,8 @@ const buildRevealLineFractions = (): number[] => {
 export default function CosmosLoader({
   onLoadingComplete,
   isSceneReady = false,
+  loadingProgressHint = 0,
+  loadingStageHint = "",
 }: CosmosLoaderProps) {
   const debugEnabled =
     typeof window !== "undefined" &&
@@ -77,6 +81,19 @@ export default function CosmosLoader({
   const [debugCurrentMode, setDebugCurrentMode] = useState("boot");
   const [debugModeHistory, setDebugModeHistory] = useState<string[]>([]);
   const currentYear = new Date().getFullYear();
+
+  useEffect(() => {
+    if (animationDone) return;
+    if (phaseRef.current === "frenzy" || phaseRef.current === "done") return;
+    const normalizedHint = Math.max(0, Math.min(99, Math.round(loadingProgressHint)));
+    setProgress((prev) => Math.max(prev, normalizedHint));
+  }, [loadingProgressHint, animationDone]);
+
+  useEffect(() => {
+    if (!loadingStageHint || showEndMessage) return;
+    if (phaseRef.current === "frenzy" || phaseRef.current === "done") return;
+    setStageText(loadingStageHint);
+  }, [loadingStageHint, showEndMessage]);
 
   const shuffledOrderRef = useRef<number[]>([]);
   const revealCountRef = useRef(0);
@@ -224,7 +241,7 @@ export default function CosmosLoader({
     setTypedText(PROGRAM_TEXT);
     setShowStatusUI(true);
     setStageText("Initializing...");
-    setProgress(0);
+    setProgress((prev) => Math.max(prev, 0));
     setRevealedSet(new Set());
     markDebugMode("status-ui-visible");
 

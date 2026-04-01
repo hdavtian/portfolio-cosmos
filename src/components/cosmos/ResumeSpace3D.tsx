@@ -2926,6 +2926,9 @@ export default function ResumeSpace3D({
   const [loaderVisualComplete, setLoaderVisualComplete] = useState(false);
   const [criticalAssetsReady, setCriticalAssetsReady] = useState(false);
   const [droneGpuWarmupReady, setDroneGpuWarmupReady] = useState(false);
+  const [loaderProgressHint, setLoaderProgressHint] = useState(0);
+  const [loaderStageHint, setLoaderStageHint] = useState("Initializing...");
+  const loadingActiveRef = useRef(true);
   const gpuWarmupInProgressRef = useRef(false);
   const sceneModelsLoadedRef = useRef(0);
   const [allSceneModelsLoaded, setAllSceneModelsLoaded] = useState(false);
@@ -3027,6 +3030,10 @@ export default function ResumeSpace3D({
   // The render loop is paused during this process (gpuWarmupInProgressRef)
   // to prevent interference from concurrent compositor renders.
   useEffect(() => {
+    loadingActiveRef.current = isLoading;
+  }, [isLoading]);
+
+  useEffect(() => {
     if (!sceneReady || !criticalAssetsReady || !allSceneModelsLoaded) return;
     if (droneGpuWarmupDoneRef.current) return;
     const renderer = rendererRef.current;
@@ -3038,6 +3045,8 @@ export default function ResumeSpace3D({
 
     const warmup = async () => {
       try {
+        setLoaderProgressHint((prev) => Math.max(prev, 78));
+        setLoaderStageHint("Warming up GPU...");
         gpuWarmupInProgressRef.current = true;
         const warmupStart = performance.now();
         const yieldToMainThread = () =>
@@ -3045,32 +3054,24 @@ export default function ResumeSpace3D({
             window.requestAnimationFrame(() => resolve());
           });
 
-        // Save camera layer mask and enable all layers so compileAsync
-        // and the warmup render cover objects on every layer (e.g. the
-        // orbital portfolio on layer 4, skills lattice on layer 3).
-        const savedCameraLayerMask = liveCamera.layers.mask;
-        liveCamera.layers.enableAll();
-
-        // Save original visibility and temporarily force every object
-        // visible + non-culled so the warmup covers hidden objects
-        // (e.g. the drone, which is invisible until moon orbit).
-        // IMPORTANT: skip lights — changing the number of visible lights
-        // alters NUM_POINT_LIGHTS / NUM_DIR_LIGHTS #defines, which forces
-        // Three.js to recompile every MeshStandardMaterial program when
-        // visibility is restored.  Lights that are hidden at warmup time
-        // don't contribute to the shader defines used in normal rendering,
-        // so they must stay hidden to keep the defines stable.
-        const savedState: Array<{ obj: THREE.Object3D; visible: boolean; culled: boolean }> = [];
+        // Keep warmup focused on currently visible scene content so the
+        // loader stays responsive. Full-scene forcing was causing long
+        // monolithic stalls during frenzy.
+        const activeCameraMask = liveCamera.layers.mask;
         let meshCount = 0;
+        let objectCount = 0;
         mainScene.traverse((obj) => {
-          savedState.push({ obj, visible: obj.visible, culled: obj.frustumCulled });
-          if (!(obj as any).isLight) {
-            obj.visible = true;
+          objectCount++;
+          const mesh = obj as THREE.Mesh;
+          if (
+            mesh.isMesh &&
+            obj.visible &&
+            (obj.layers.mask & activeCameraMask) !== 0
+          ) {
+            meshCount++;
           }
-          obj.frustumCulled = false;
-          if ((obj as THREE.Mesh).isMesh) meshCount++;
         });
-        console.warn(`[PERF:warmup] GPU warmup STARTING — ${meshCount} meshes, ${savedState.length} objects`);
+        console.warn(`[PERF:warmup] GPU warmup STARTING — ${meshCount} visible meshes, ${objectCount} objects`);
 
         // Step 1 — Upload every texture to the GPU in chunks so
         // the browser can keep painting loader animations smoothly.
@@ -3078,7 +3079,13 @@ export default function ResumeSpace3D({
         const meshList: THREE.Mesh[] = [];
         mainScene.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
-          if (mesh.isMesh) meshList.push(mesh);
+          if (
+            mesh.isMesh &&
+            obj.visible &&
+            (obj.layers.mask & activeCameraMask) !== 0
+          ) {
+            meshList.push(mesh);
+          }
         });
         const WARMUP_CHUNK_SIZE = 24;
         for (let i = 0; i < meshList.length; i += 1) {
@@ -3102,6 +3109,8 @@ export default function ResumeSpace3D({
           }
         }
         const initTextureMs = performance.now() - warmupStart;
+        setLoaderProgressHint((prev) => Math.max(prev, 88));
+        setLoaderStageHint("Compiling shaders...");
         console.warn(`[PERF:warmup] initTexture: ${textureCount} textures in ${initTextureMs.toFixed(1)}ms`);
 
         // Step 2 — Compile all shader programs asynchronously
@@ -3118,22 +3127,15 @@ export default function ResumeSpace3D({
         if (compileMs >= COMPILE_TIMEOUT_MS) {
           console.warn(`[PERF:warmup] compileAsync timed out after ${COMPILE_TIMEOUT_MS}ms — continuing`);
         }
+        setLoaderProgressHint((prev) => Math.max(prev, 94));
+        setLoaderStageHint("Finalizing render pipeline...");
 
-        // Step 3 — Force geometry buffer uploads via a single render pass.
-        // This is the only way to transfer vertex/index buffers to the GPU.
+        // Step 3 — Lightweight geometry upload pass using renderer only.
+        // Avoid composer here because full postprocessing was causing long
+        // loader freezes; this still warms visible geometry paths.
         const renderStart = performance.now();
-        const composer = composerRef.current;
-        if (composer) {
-          composer.render();
-        }
+        renderer.render(mainScene, liveCamera);
         const renderMs = performance.now() - renderStart;
-
-        // Restore camera layers and original visible / frustumCulled state.
-        liveCamera.layers.mask = savedCameraLayerMask;
-        for (const entry of savedState) {
-          entry.obj.visible = entry.visible;
-          entry.obj.frustumCulled = entry.culled;
-        }
 
         const totalMs = performance.now() - warmupStart;
         console.warn(
@@ -3143,6 +3145,8 @@ export default function ResumeSpace3D({
         console.warn("[PERF:warmup] GPU warmup error:", e);
       } finally {
         gpuWarmupInProgressRef.current = false;
+        setLoaderProgressHint((prev) => Math.max(prev, 99));
+        setLoaderStageHint("Almost ready...");
         setDroneGpuWarmupReady(true);
       }
     };
@@ -3255,6 +3259,8 @@ export default function ResumeSpace3D({
     const _preloadStart = performance.now();
     const preloadCriticalAssets = async () => {
       try {
+        setLoaderProgressHint((prev) => Math.max(prev, 8));
+        setLoaderStageHint("Loading critical assets...");
         console.warn("[PERF:load] preloadCriticalAssets START");
         debugLog(
           "loader",
@@ -3346,6 +3352,12 @@ export default function ResumeSpace3D({
             "loader",
             "[models] preloaded Falcon, Star Destroyer, Hallway, About Exterior, Drone",
           );
+          setLoaderProgressHint((prev) => Math.max(prev, 70));
+          setLoaderStageHint("Preparing scene...");
+        }
+
+        if (!cancelled) {
+          projectShowcasePreloadedGltfRef.current = trenchGltf as { scene: THREE.Group };
         }
 
         const trenchTextureKeys = new Set<string>();
@@ -3455,19 +3467,33 @@ export default function ResumeSpace3D({
             }
           });
 
-        await Promise.all([
+        const deferredJobCount =
+          trenchTextureJobs.length +
+          showcaseImageJobs.length +
+          portfolioCoreImageJobs.length +
+          moonTextureWarmupJobs.length +
+          musicTrackWarmupJobs.length;
+        console.warn(
+          `[PERF:load] critical assets done; scheduling deferred preload jobs=${deferredJobCount}`,
+        );
+        void Promise.allSettled([
           ...trenchTextureJobs,
           ...showcaseImageJobs,
           ...portfolioCoreImageJobs,
           ...moonTextureWarmupJobs,
           ...musicTrackWarmupJobs,
-        ]);
-        if (!cancelled) {
-          projectShowcasePreloadedGltfRef.current = trenchGltf as { scene: THREE.Group };
-        }
+        ]).then(() => {
+          if (!cancelled) {
+            console.warn(
+              `[PERF:load] deferred preload COMPLETE jobs=${deferredJobCount}`,
+            );
+          }
+        });
       } finally {
         if (!cancelled) {
           console.warn(`[PERF:load] setCriticalAssetsReady(true) after ${(performance.now() - _preloadStart).toFixed(0)}ms`);
+          setLoaderProgressHint((prev) => Math.max(prev, 75));
+          setLoaderStageHint("Starting GPU warmup...");
           setCriticalAssetsReady(true);
         }
       }
@@ -22478,6 +22504,7 @@ export default function ResumeSpace3D({
       starDestroyerRef,
       followingStarDestroyerRef,
       gpuWarmupInProgressRef,
+      loadingActiveRef,
       tvPreviewControllerRef,
       dashcamControllerRef,
       updateAutopilotNavigation,
@@ -24245,6 +24272,8 @@ export default function ResumeSpace3D({
       {isLoading && (
         <CosmosLoader
           isSceneReady={criticalAssetsReady && droneGpuWarmupReady}
+          loadingProgressHint={loaderProgressHint}
+          loadingStageHint={loaderStageHint}
           onLoadingComplete={() => {
             setLoaderVisualComplete(true);
           }}
