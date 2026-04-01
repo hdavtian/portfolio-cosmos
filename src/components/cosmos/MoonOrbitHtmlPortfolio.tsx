@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import gsap from "gsap";
-import type { MoonPortfolioPayload, MoonPortfolioTab } from "./moonPortfolioSelector";
+import type { MoonPortfolioPayload, MoonPortfolioTab, MoonPortfolioSubcategory } from "./moonPortfolioSelector";
 
 interface Props {
   portfolio: MoonPortfolioPayload | null;
@@ -9,7 +9,7 @@ interface Props {
 }
 
 const TABS_VISIBLE = 3;
-const CARDS_VISIBLE = 3;
+const SUBCATS_VISIBLE = 4;
 const THUMB_MIN_WIDTH_PX = 92;
 const THUMB_GAP_PX = 4;
 const ZOOM_MIN = 50;
@@ -27,8 +27,9 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [thumbPage, setThumbPage] = useState(0);
   const [tabPage, setTabPage] = useState(0);
-  const [cardPage, setCardPage] = useState(0);
   const [thumbsPerPage, setThumbsPerPage] = useState(2);
+  const [activeSubcatIndex, setActiveSubcatIndex] = useState(0);
+  const [subcatPage, setSubcatPage] = useState(0);
   const [imageDescCollapsed, setImageDescCollapsed] = useState(false);
   const [zoomPercent, setZoomPercent] = useState(100);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -38,8 +39,11 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
   const thumbRowRef = useRef<HTMLDivElement>(null);
   const tabSlideDirectionRef = useRef<1 | -1>(1);
   const thumbSlideDirectionRef = useRef<1 | -1>(1);
+  const subcatSlideDirectionRef = useRef<1 | -1>(1);
   const prevTabPageRef = useRef(0);
   const prevThumbPageRef = useRef(0);
+  const prevSubcatPageRef = useRef(0);
+  const subcatTrackRef = useRef<HTMLDivElement>(null);
   const isPanningRef = useRef(false);
   const panDragStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const panOffsetRef = useRef({ x: 0, y: 0 });
@@ -50,35 +54,50 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
   const activeTab: MoonPortfolioTab | undefined = tabs[activeTabIndex];
   const cards = activeTab?.cards ?? [];
   const activeCard = cards[activeCardIndex];
-  const mediaItems = activeCard?.mediaItems ?? [];
+  const subcategories: MoonPortfolioSubcategory[] = activeCard?.subcategories ?? [];
+  const hasSubcats = subcategories.length > 0;
+  const activeSubcat: MoonPortfolioSubcategory | undefined = hasSubcats
+    ? subcategories[activeSubcatIndex]
+    : undefined;
+  const mediaItems = activeSubcat?.mediaItems ?? activeCard?.mediaItems ?? [];
   const activeMedia = mediaItems[activeMediaIndex];
   const totalPages = Math.ceil(mediaItems.length / thumbsPerPage);
+
+  const subcatTotalPages = Math.ceil(subcategories.length / SUBCATS_VISIBLE);
+  const subcatStart = subcatPage * SUBCATS_VISIBLE;
+  const visibleSubcats = subcategories.slice(subcatStart, subcatStart + SUBCATS_VISIBLE);
 
   const tabTotalPages = Math.ceil(tabs.length / TABS_VISIBLE);
   const tabStart = tabPage * TABS_VISIBLE;
   const visibleTabs = tabs.slice(tabStart, tabStart + TABS_VISIBLE);
 
-  const cardTotalPages = Math.ceil(cards.length / CARDS_VISIBLE);
-  const cardStart = cardPage * CARDS_VISIBLE;
-  const visibleCards = cards.slice(cardStart, cardStart + CARDS_VISIBLE);
-
   useEffect(() => {
     setActiveCardIndex(0);
+    setActiveSubcatIndex(0);
+    setSubcatPage(0);
     setActiveMediaIndex(0);
     setThumbPage(0);
-    setCardPage(0);
     setImageDescCollapsed(false);
     setZoomPercent(100);
     setPanOffset({ x: 0, y: 0 });
   }, [activeTabIndex]);
 
   useEffect(() => {
+    setActiveSubcatIndex(0);
+    setSubcatPage(0);
     setActiveMediaIndex(0);
     setThumbPage(0);
     setImageDescCollapsed(false);
     setZoomPercent(100);
     setPanOffset({ x: 0, y: 0 });
   }, [activeCardIndex]);
+
+  useEffect(() => {
+    setActiveMediaIndex(0);
+    setThumbPage(0);
+    setZoomPercent(100);
+    setPanOffset({ x: 0, y: 0 });
+  }, [activeSubcatIndex]);
 
   useEffect(() => {
     setZoomPercent(100);
@@ -136,6 +155,19 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
       { x: 0, opacity: 1, duration: 0.25, ease: "power2.out" },
     );
   }, [tabPage]);
+
+  useEffect(() => {
+    if (subcatPage === prevSubcatPageRef.current) return;
+    prevSubcatPageRef.current = subcatPage;
+    const el = subcatTrackRef.current;
+    if (!el) return;
+    const dir = subcatSlideDirectionRef.current;
+    gsap.fromTo(
+      el,
+      { x: 20 * dir, opacity: 0.3 },
+      { x: 0, opacity: 1, duration: 0.25, ease: "power2.out" },
+    );
+  }, [subcatPage]);
 
   useEffect(() => {
     if (thumbPage === prevThumbPageRef.current) return;
@@ -359,12 +391,16 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
               </button>
               {!imageDescCollapsed && (
                 <div className="moon-portfolio__image-desc-body">
-                  <h4 className="moon-portfolio__desc-title">{activeCard.title}</h4>
-                  {activeCard.description && (
-                    <p className="moon-portfolio__desc-text">{activeCard.description}</p>
+                  <h4 className="moon-portfolio__desc-title">
+                    {activeSubcat?.title ?? activeCard.title}
+                  </h4>
+                  {(activeSubcat?.description ?? activeCard.description) && (
+                    <p className="moon-portfolio__desc-text">
+                      {activeSubcat?.description ?? activeCard.description}
+                    </p>
                   )}
                   {activeMedia?.description &&
-                    activeMedia.description !== activeCard.description && (
+                    activeMedia.description !== (activeSubcat?.description ?? activeCard.description) && (
                       <p className="moon-portfolio__desc-media-text">{activeMedia.description}</p>
                     )}
                 </div>
@@ -418,32 +454,54 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
 
             {cards.length > 1 && (
               <div className="moon-portfolio__cards">
-                {cardTotalPages > 1 && cardPage > 0 && (
+                <div className="moon-portfolio__card-track">
+                  {cards.map((card, idx) => (
+                    <button
+                      key={card.id}
+                      className={`moon-portfolio__card-btn ${idx === activeCardIndex ? "moon-portfolio__card-btn--active" : ""}`}
+                      onClick={() => setActiveCardIndex(idx)}
+                    >
+                      {card.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {hasSubcats && (
+              <div className="moon-portfolio__subcats">
+                {subcatTotalPages > 1 && subcatPage > 0 && (
                   <button
-                    className="moon-portfolio__tab-arrow"
-                    onClick={() => setCardPage((p) => Math.max(0, p - 1))}
+                    className="moon-portfolio__tab-arrow moon-portfolio__subcat-arrow"
+                    onClick={() => {
+                      subcatSlideDirectionRef.current = -1;
+                      setSubcatPage((p) => Math.max(0, p - 1));
+                    }}
                   >
                     &#9664;
                   </button>
                 )}
-                <div className="moon-portfolio__card-track">
-                  {visibleCards.map((card, vi) => {
-                    const globalIdx = cardStart + vi;
+                <div className="moon-portfolio__subcat-track" ref={subcatTrackRef}>
+                  {visibleSubcats.map((sc, vi) => {
+                    const globalIdx = subcatStart + vi;
                     return (
                       <button
-                        key={card.id}
-                        className={`moon-portfolio__card-btn ${globalIdx === activeCardIndex ? "moon-portfolio__card-btn--active" : ""}`}
-                        onClick={() => setActiveCardIndex(globalIdx)}
+                        key={sc.id}
+                        className={`moon-portfolio__subcat-btn ${globalIdx === activeSubcatIndex ? "moon-portfolio__subcat-btn--active" : ""}`}
+                        onClick={() => setActiveSubcatIndex(globalIdx)}
                       >
-                        {card.title}
+                        {sc.title}
                       </button>
                     );
                   })}
                 </div>
-                {cardTotalPages > 1 && cardPage < cardTotalPages - 1 && (
+                {subcatTotalPages > 1 && subcatPage < subcatTotalPages - 1 && (
                   <button
-                    className="moon-portfolio__tab-arrow"
-                    onClick={() => setCardPage((p) => Math.min(cardTotalPages - 1, p + 1))}
+                    className="moon-portfolio__tab-arrow moon-portfolio__subcat-arrow"
+                    onClick={() => {
+                      subcatSlideDirectionRef.current = 1;
+                      setSubcatPage((p) => Math.min(subcatTotalPages - 1, p + 1));
+                    }}
                   >
                     &#9654;
                   </button>

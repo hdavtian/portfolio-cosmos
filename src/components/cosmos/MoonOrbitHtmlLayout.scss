@@ -582,12 +582,12 @@ $section-bg: rgba(4, 14, 22, 0.72);
 
   &__card-track {
     display: flex;
+    flex-wrap: wrap;
     gap: 2px;
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    padding-top: 20px;
-    padding-bottom: 20px;
+    padding-top: 6px;
+    padding-bottom: 6px;
   }
 
   &__card-btn {
@@ -614,6 +614,59 @@ $section-bg: rgba(4, 14, 22, 0.72);
       border-color: $accent;
       background: $accent-glow;
     }
+  }
+
+  // ── Subcategory row ─────────────────────────────────────────
+  &__subcats {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  &__subcat-track {
+    display: flex;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    padding: 4px 0;
+  }
+
+  &__subcat-btn {
+    padding: 2px 8px;
+    background: rgba(42, 72, 100, 0.55);
+    border: 1px solid rgba(72, 130, 170, 0.3);
+    border-radius: 3px;
+    color: rgba(148, 198, 230, 0.85);
+    font-family: var(--font-hud);
+    font-size: 9px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: all 0.15s ease;
+
+    &:hover {
+      color: $text-bright;
+      border-color: rgba(72, 160, 200, 0.55);
+      background: rgba(42, 82, 120, 0.65);
+    }
+
+    &--active {
+      color: #92d8ff;
+      border-color: rgba(100, 180, 230, 0.7);
+      background: rgba(30, 100, 170, 0.35);
+      box-shadow: 0 0 6px rgba(70, 170, 230, 0.18);
+    }
+  }
+
+  &__subcat-arrow {
+    width: 16px;
+    height: 16px;
+    font-size: 7px;
   }
 
   // ── Thumbnails ────────────────────────────────────────────

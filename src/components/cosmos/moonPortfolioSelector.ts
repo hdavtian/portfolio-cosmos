@@ -9,12 +9,21 @@ import type {
   MoonPortfolioTabMapping,
 } from "../../data/moonPortfolioMapping";
 
+export type MoonPortfolioSubcategory = {
+  id: string;
+  title: string;
+  description?: string;
+  technologies: string[];
+  mediaItems: PortfolioResolvedMediaItem[];
+};
+
 export type MoonPortfolioCard = {
   id: string;
   title: string;
   description?: string;
   technologies: string[];
   mediaItems: PortfolioResolvedMediaItem[];
+  subcategories?: MoonPortfolioSubcategory[];
 };
 
 export type MoonPortfolioTab = {
@@ -95,13 +104,31 @@ const collectCoreEntries = (
 };
 
 const toCards = (entries: PortfolioEntry[]): MoonPortfolioCard[] =>
-  entries.map((entry) => ({
-    id: entry.id,
-    title: entry.title,
-    description: entry.description,
-    technologies: entry.technologies ?? [],
-    mediaItems: resolvePortfolioMediaItems(entry, { maxMediaItems: 12 }),
-  }));
+  entries.map((entry) => {
+    const variants = (entry.clientVariants ?? []).filter((v) => Boolean(v?.title));
+    const subcategories: MoonPortfolioSubcategory[] | undefined =
+      variants.length > 0
+        ? variants.map((variant, vi) => ({
+            id: variant.id,
+            title: variant.title,
+            description: variant.description,
+            technologies: variant.technologies ?? entry.technologies ?? [],
+            mediaItems: resolvePortfolioMediaItems(entry, {
+              variant,
+              variantIndex: vi,
+              maxMediaItems: 12,
+            }),
+          }))
+        : undefined;
+    return {
+      id: entry.id,
+      title: entry.title,
+      description: entry.description,
+      technologies: entry.technologies ?? [],
+      mediaItems: resolvePortfolioMediaItems(entry, { maxMediaItems: 12 }),
+      subcategories,
+    };
+  });
 
 const resolveTabEntries = (
   tab: MoonPortfolioTabMapping,
