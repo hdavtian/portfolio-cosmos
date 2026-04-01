@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useMemo } from "react";
+import gsap from "gsap";
 import type { OverlaySection } from "../CosmicContentOverlay";
 
 interface Props {
@@ -46,10 +47,48 @@ const MoonOrbitHtmlNarrative: React.FC<Props> = ({
   highlightMode,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastAutoScrollKeyRef = useRef<string>("");
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [title]);
+
+  useEffect(() => {
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return;
+
+    if (highlightMode !== "locked" || highlightTerms.length === 0) {
+      lastAutoScrollKeyRef.current = "";
+      return;
+    }
+
+    const key = `${title}::${highlightTerms.map((t) => t.toLowerCase()).join("|")}`;
+    if (lastAutoScrollKeyRef.current === key) return;
+    lastAutoScrollKeyRef.current = key;
+
+    const firstMatch = scrollEl.querySelector<HTMLElement>(".moon-hl--locked");
+    if (!firstMatch) return; // No visible match in text; leave scroll as-is.
+
+    const containerRect = scrollEl.getBoundingClientRect();
+    const matchRect = firstMatch.getBoundingClientRect();
+    const fullyVisible =
+      matchRect.top >= containerRect.top + 4
+      && matchRect.bottom <= containerRect.bottom - 4;
+    if (fullyVisible) return;
+
+    const currentTop = scrollEl.scrollTop;
+    const matchCenterY = matchRect.top + matchRect.height / 2;
+    const containerCenterY = containerRect.top + containerRect.height / 2;
+    const delta = matchCenterY - containerCenterY;
+    const maxScroll = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    const targetTop = Math.min(maxScroll, Math.max(0, currentTop + delta));
+
+    gsap.to(scrollEl, {
+      scrollTop: targetTop,
+      duration: 0.45,
+      ease: "power2.out",
+    });
+  }, [highlightMode, highlightTerms, title]);
 
   const renderedSections = useMemo(() => {
     return sections.map((section) => {
