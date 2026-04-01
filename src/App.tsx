@@ -455,6 +455,7 @@ function App() {
   const [spaceReloadKey, setSpaceReloadKey] = useState(0);
 
   useEffect(() => {
+    if (!document.querySelector(".hero__content")) return;
     // Animate hero on load
     const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
     tl.fromTo(

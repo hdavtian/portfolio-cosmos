@@ -490,8 +490,8 @@ section {
     }
 
     &__zoom-slider {
-        -webkit-appearance: slider-vertical;
-        writing-mode: bt-lr;
+        writing-mode: vertical-lr;
+        direction: rtl;
         width: 10px;
         height: 200px;
         background: linear-gradient(to top,

@@ -1813,17 +1813,38 @@ const parseBorderStyle = (
   if (!border) return { width: 2, color: "rgba(130, 210, 255, 0.72)" };
   const widthMatch = border.match(/(\d+(?:\.\d+)?)px/i);
   const width = widthMatch ? Number.parseFloat(widthMatch[1]) : 2;
-  const colorMatch = border.match(
-    /(rgba?\([^)]+\)|#[0-9a-f]{3,8}|[a-zA-Z]+)/,
+  const colorCandidates = border.match(
+    /(rgba?\([^)]+\)|#[0-9a-f]{3,8}|[a-zA-Z]+)/g,
   );
+  const disallowedTokens = new Set([
+    "solid",
+    "dashed",
+    "dotted",
+    "double",
+    "none",
+    "inherit",
+    "initial",
+    "unset",
+    "transparent",
+    "px",
+  ]);
   const color =
-    colorMatch?.[0] && colorMatch[0].toLowerCase() !== "solid"
-      ? colorMatch[0]
-      : "rgba(130, 210, 255, 0.72)";
+    colorCandidates?.find((candidate) => {
+      const normalized = candidate.trim().toLowerCase();
+      return !disallowedTokens.has(normalized);
+    }) ?? "rgba(130, 210, 255, 0.72)";
   return {
     width: Number.isFinite(width) && width > 0 ? width : 2,
     color,
   };
+};
+
+const toThreeColorStyle = (color: string): string => {
+  const rgbaMatch = color.match(
+    /^rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*[\d.]+\s*\)$/i,
+  );
+  if (!rgbaMatch) return color;
+  return `rgb(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]})`;
 };
 
 const normalizeAboutFlowDirection = (
@@ -7284,7 +7305,7 @@ export default function ResumeSpace3D({
         : THREE.MathUtils.clamp(slide.height, 4.8, 8.8);
       const borderStyle = parseBorderStyle(slide.border);
       const borderColor = new THREE.Color(0x74d2ff);
-      try { borderColor.setStyle(borderStyle.color); } catch { borderColor.setHex(0x74d2ff); }
+      try { borderColor.setStyle(toThreeColorStyle(borderStyle.color)); } catch { borderColor.setHex(0x74d2ff); }
 
       const frame = new THREE.Mesh(
         new THREE.PlaneGeometry(panelWidth * 1.02, panelHeight * 1.02),
@@ -16647,8 +16668,13 @@ export default function ResumeSpace3D({
     const latticeLinkSegments: SkillsLatticeLinkSegment[] = [];
 
     // Muted, larger outer "glass drone" shell around the lattice.
-    const latticeEnvelopeGeometry = new THREE.IcosahedronGeometry(latticeEnvelopeRadius, 1)
-      .toNonIndexed();
+    const latticeEnvelopeGeometryBase = new THREE.IcosahedronGeometry(
+      latticeEnvelopeRadius,
+      1,
+    );
+    const latticeEnvelopeGeometry = latticeEnvelopeGeometryBase.index
+      ? latticeEnvelopeGeometryBase.toNonIndexed()
+      : latticeEnvelopeGeometryBase;
     const envelopePosAttr = latticeEnvelopeGeometry.getAttribute(
       "position",
     ) as THREE.BufferAttribute;
@@ -19501,7 +19527,7 @@ export default function ResumeSpace3D({
             const borderStyle = parseBorderStyle(slide.border);
             const borderColor = new THREE.Color(0x74d2ff);
             try {
-              borderColor.setStyle(borderStyle.color);
+              borderColor.setStyle(toThreeColorStyle(borderStyle.color));
             } catch {
               borderColor.setHex(0x74d2ff);
             }
