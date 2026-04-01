@@ -290,13 +290,14 @@ $section-bg: rgba(4, 14, 22, 0.72);
   }
 
   &__large-image {
-    flex: 0 1 60%;
+    flex: 1 1 auto;
     min-height: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.4);
     overflow: hidden;
+    position: relative;
   }
 
   &__img {
@@ -315,20 +316,22 @@ $section-bg: rgba(4, 14, 22, 0.72);
   }
 
   &__bottom {
-    flex: 1 1 40%;
+    flex-shrink: 0;
     display: flex;
     gap: 6px;
-    min-height: 0;
+    // height: 190px;
+    // min-height: 190px;
+    // max-height: 190px;
     border-top: 1px solid $panel-border;
   }
 
   // Left column inside bottom: tabs → cards → thumbnails stacked vertically
   &__thumbs-col {
-    flex: 0 0 55%;
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     gap: 3px;
-    padding: 4px 6px;
+    padding: 4px 8px;
     min-width: 0;
     overflow: hidden;
   }
@@ -414,6 +417,8 @@ $section-bg: rgba(4, 14, 22, 0.72);
     flex: 1;
     min-width: 0;
     overflow: hidden;
+    padding-top: 20px;
+    padding-bottom: 20px;
   }
 
   &__card-btn {
@@ -447,8 +452,8 @@ $section-bg: rgba(4, 14, 22, 0.72);
     display: flex;
     align-items: center;
     gap: 4px;
-    flex: 1 1 auto;
-    min-height: 0;
+    flex: 0 0 auto;
+    padding: 1px 0;
     overflow: hidden;
   }
 
@@ -458,10 +463,11 @@ $section-bg: rgba(4, 14, 22, 0.72);
     flex: 1;
     min-width: 0;
     overflow: hidden;
+    justify-content: flex-start;
   }
 
   &__thumb {
-    flex: 0 0 calc(25% - 3px);
+    flex: 0 0 clamp(92px, 10vw, 116px);
     aspect-ratio: 16 / 10;
     background: rgba(0, 0, 0, 0.5);
     border: 1px solid $panel-border;
@@ -518,13 +524,66 @@ $section-bg: rgba(4, 14, 22, 0.72);
     }
   }
 
-  // ── Description pane ──────────────────────────────────────
-  &__desc {
-    flex: 1 1 auto;
+  // ── Image description overlay ─────────────────────────────
+  &__image-desc {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    width: 400px;
+    max-width: calc(100% - 24px);
+    max-height: 400px;
+    background: rgba(8, 14, 20, 0.92);
+    border: 1px solid $panel-border;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 0 18px rgba(0, 0, 0, 0.45);
+
+    &--collapsed {
+      width: auto;
+      min-width: 120px;
+    }
+  }
+
+  &__image-desc-head {
+    height: 24px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba($panel-border, 0.7);
+    font-family: var(--font-hud);
+    font-size: 10px;
+    color: $text-bright;
+    letter-spacing: 0.08em;
+    background: rgba(0, 0, 0, 0.18);
+  }
+
+  &__image-desc-toggle {
+    width: 18px;
+    height: 18px;
+    border: 1px solid $panel-border;
+    border-radius: 3px;
+    background: transparent;
+    color: $text-primary;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    line-height: 1;
+    transition: all 0.15s ease;
+
+    &:hover {
+      border-color: $accent;
+      color: $accent;
+    }
+  }
+
+  &__image-desc-body {
     padding: 8px 10px;
     overflow-y: auto;
-    min-width: 0;
-    border-left: 1px solid $panel-border;
+    max-height: calc(400px - 24px);
     scrollbar-width: thin;
     scrollbar-color: $accent-dim transparent;
 

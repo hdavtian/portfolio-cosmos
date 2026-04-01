@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import gsap from "gsap";
 import type { MoonPortfolioPayload, MoonPortfolioTab } from "./moonPortfolioSelector";
 
 interface Props {
@@ -7,6 +8,8 @@ interface Props {
 
 const TABS_VISIBLE = 3;
 const CARDS_VISIBLE = 3;
+const THUMB_MIN_WIDTH_PX = 92;
+const THUMB_GAP_PX = 4;
 
 const MoonOrbitHtmlPortfolio: React.FC<Props> = ({ portfolio }) => {
   const [activeTabIndex, setActiveTabIndex] = useState(0);
@@ -15,8 +18,15 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({ portfolio }) => {
   const [thumbPage, setThumbPage] = useState(0);
   const [tabPage, setTabPage] = useState(0);
   const [cardPage, setCardPage] = useState(0);
+  const [thumbsPerPage, setThumbsPerPage] = useState(2);
+  const [imageDescCollapsed, setImageDescCollapsed] = useState(false);
   const [imgError, setImgError] = useState<Set<string>>(() => new Set());
+  const tabTrackRef = useRef<HTMLDivElement>(null);
   const thumbRowRef = useRef<HTMLDivElement>(null);
+  const tabSlideDirectionRef = useRef<1 | -1>(1);
+  const thumbSlideDirectionRef = useRef<1 | -1>(1);
+  const prevTabPageRef = useRef(0);
+  const prevThumbPageRef = useRef(0);
 
   const tabs = portfolio?.tabs ?? [];
   const activeTab: MoonPortfolioTab | undefined = tabs[activeTabIndex];
@@ -24,7 +34,6 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({ portfolio }) => {
   const activeCard = cards[activeCardIndex];
   const mediaItems = activeCard?.mediaItems ?? [];
   const activeMedia = mediaItems[activeMediaIndex];
-  const thumbsPerPage = 4;
   const totalPages = Math.ceil(mediaItems.length / thumbsPerPage);
 
   const tabTotalPages = Math.ceil(tabs.length / TABS_VISIBLE);
@@ -40,12 +49,64 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({ portfolio }) => {
     setActiveMediaIndex(0);
     setThumbPage(0);
     setCardPage(0);
+    setImageDescCollapsed(false);
   }, [activeTabIndex]);
 
   useEffect(() => {
     setActiveMediaIndex(0);
     setThumbPage(0);
+    setImageDescCollapsed(false);
   }, [activeCardIndex]);
+
+  useEffect(() => {
+    const el = thumbRowRef.current;
+    if (!el) return;
+    const updateThumbCapacity = () => {
+      const width = el.clientWidth;
+      if (!Number.isFinite(width) || width <= 0) return;
+      const fit = Math.max(
+        1,
+        Math.floor((width + THUMB_GAP_PX) / (THUMB_MIN_WIDTH_PX + THUMB_GAP_PX)),
+      );
+      setThumbsPerPage((prev) => (prev === fit ? prev : fit));
+    };
+    updateThumbCapacity();
+    const observer = new ResizeObserver(updateThumbCapacity);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (thumbPage >= totalPages) {
+      setThumbPage(Math.max(0, totalPages - 1));
+    }
+  }, [thumbPage, totalPages]);
+
+  useEffect(() => {
+    if (tabPage === prevTabPageRef.current) return;
+    prevTabPageRef.current = tabPage;
+    const el = tabTrackRef.current;
+    if (!el) return;
+    const dir = tabSlideDirectionRef.current;
+    gsap.fromTo(
+      el,
+      { x: 20 * dir, opacity: 0.3 },
+      { x: 0, opacity: 1, duration: 0.25, ease: "power2.out" },
+    );
+  }, [tabPage]);
+
+  useEffect(() => {
+    if (thumbPage === prevThumbPageRef.current) return;
+    prevThumbPageRef.current = thumbPage;
+    const el = thumbRowRef.current;
+    if (!el) return;
+    const dir = thumbSlideDirectionRef.current;
+    gsap.fromTo(
+      el,
+      { x: 24 * dir, opacity: 0.3 },
+      { x: 0, opacity: 1, duration: 0.28, ease: "power2.out" },
+    );
+  }, [thumbPage]);
 
   const handleThumbClick = useCallback((mediaIdx: number) => {
     setActiveMediaIndex(mediaIdx);
@@ -89,6 +150,38 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({ portfolio }) => {
           ) : (
             <div className="moon-portfolio__fallback">No media</div>
           )}
+          {activeCard && (
+            <div
+              className={[
+                "moon-portfolio__image-desc",
+                imageDescCollapsed ? "moon-portfolio__image-desc--collapsed" : "",
+              ].join(" ")}
+            >
+              <div className="moon-portfolio__image-desc-head">
+                <span>DETAILS</span>
+                <button
+                  className="moon-portfolio__image-desc-toggle"
+                  onClick={() => setImageDescCollapsed((prev) => !prev)}
+                  aria-label={imageDescCollapsed ? "Expand details" : "Collapse details"}
+                  title={imageDescCollapsed ? "Expand details" : "Collapse details"}
+                >
+                  {imageDescCollapsed ? "\u25BC" : "\u25B2"}
+                </button>
+              </div>
+              {!imageDescCollapsed && (
+                <div className="moon-portfolio__image-desc-body">
+                  <h4 className="moon-portfolio__desc-title">{activeCard.title}</h4>
+                  {activeCard.description && (
+                    <p className="moon-portfolio__desc-text">{activeCard.description}</p>
+                  )}
+                  {activeMedia?.description &&
+                    activeMedia.description !== activeCard.description && (
+                      <p className="moon-portfolio__desc-media-text">{activeMedia.description}</p>
+                    )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="moon-portfolio__bottom">
@@ -98,12 +191,15 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({ portfolio }) => {
                 {tabTotalPages > 1 && tabPage > 0 && (
                   <button
                     className="moon-portfolio__tab-arrow"
-                    onClick={() => setTabPage((p) => Math.max(0, p - 1))}
+                    onClick={() => {
+                      tabSlideDirectionRef.current = -1;
+                      setTabPage((p) => Math.max(0, p - 1));
+                    }}
                   >
                     &#9664;
                   </button>
                 )}
-                <div className="moon-portfolio__tab-track">
+                <div className="moon-portfolio__tab-track" ref={tabTrackRef}>
                   {visibleTabs.map((tab, vi) => {
                     const globalIdx = tabStart + vi;
                     return (
@@ -120,7 +216,10 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({ portfolio }) => {
                 {tabTotalPages > 1 && tabPage < tabTotalPages - 1 && (
                   <button
                     className="moon-portfolio__tab-arrow"
-                    onClick={() => setTabPage((p) => Math.min(tabTotalPages - 1, p + 1))}
+                    onClick={() => {
+                      tabSlideDirectionRef.current = 1;
+                      setTabPage((p) => Math.min(tabTotalPages - 1, p + 1));
+                    }}
                   >
                     &#9654;
                   </button>
@@ -167,7 +266,10 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({ portfolio }) => {
               {totalPages > 1 && thumbPage > 0 && (
                 <button
                   className="moon-portfolio__thumb-arrow moon-portfolio__thumb-arrow--prev"
-                  onClick={() => setThumbPage((p) => Math.max(0, p - 1))}
+                  onClick={() => {
+                    thumbSlideDirectionRef.current = -1;
+                    setThumbPage((p) => Math.max(0, p - 1));
+                  }}
                 >
                   &#9664;
                 </button>
@@ -199,26 +301,15 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({ portfolio }) => {
               {totalPages > 1 && thumbPage < totalPages - 1 && (
                 <button
                   className="moon-portfolio__thumb-arrow moon-portfolio__thumb-arrow--next"
-                  onClick={() => setThumbPage((p) => Math.min(totalPages - 1, p + 1))}
+                  onClick={() => {
+                    thumbSlideDirectionRef.current = 1;
+                    setThumbPage((p) => Math.min(totalPages - 1, p + 1));
+                  }}
                 >
                   &#9654;
                 </button>
               )}
             </div>
-          </div>
-
-          <div className="moon-portfolio__desc">
-            {activeCard && (
-              <>
-                <h4 className="moon-portfolio__desc-title">{activeCard.title}</h4>
-                {activeCard.description && (
-                  <p className="moon-portfolio__desc-text">{activeCard.description}</p>
-                )}
-                {activeMedia?.description && activeMedia.description !== activeCard.description && (
-                  <p className="moon-portfolio__desc-media-text">{activeMedia.description}</p>
-                )}
-              </>
-            )}
           </div>
         </div>
       </div>
