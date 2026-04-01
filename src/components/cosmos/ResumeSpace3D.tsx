@@ -11734,39 +11734,87 @@ export default function ResumeSpace3D({
     const labelWorld = new THREE.Vector3();
     const toLabel = new THREE.Vector3();
     const raycaster = new THREE.Raycaster();
+    const occluders: THREE.Object3D[] = [];
+    const occluderIds = new Set<string>();
+    const addOccluder = (obj: THREE.Object3D | null | undefined) => {
+      if (!obj) return;
+      if (!obj.visible || obj.parent === null) return;
+      if (!(obj instanceof THREE.Mesh)) return;
+      if (occluderIds.has(obj.uuid)) return;
+      occluderIds.add(obj.uuid);
+      occluders.push(obj);
+    };
+    const addDescendantOccluders = (root: THREE.Object3D | null | undefined) => {
+      if (!root || !root.visible || root.parent === null) return;
+      root.traverse((obj) => addOccluder(obj));
+    };
     const tick = () => {
       raf = requestAnimationFrame(tick);
       if (orbitalPortfolioActiveRef.current) return;
       const camera = sceneRef.current.camera;
       const scene = sceneRef.current.scene;
       if (!camera || !scene) return;
-      const occluders = itemsRef.current
-        .map((item) => item.mesh)
-        .filter((mesh) => mesh.visible && mesh.parent !== null);
+      occluders.length = 0;
+      occluderIds.clear();
+      itemsRef.current.forEach((item) => addOccluder(item.mesh));
+      // Include interior/elevator surfaces so labels do not bleed through walls.
+      addDescendantOccluders(spaceshipRef.current);
+      addDescendantOccluders(aboutMemorySquareRootRef.current);
+      addDescendantOccluders(projectShowcaseInteriorRootRef.current);
       if (occluders.length === 0) return;
       scene.traverse((obj) => {
-        const maybeCss = obj as THREE.Object3D & {
+        const maybeObject = obj as THREE.Object3D & {
           isCSS2DObject?: boolean;
           userData: Record<string, unknown>;
         };
-        if (!maybeCss.isCSS2DObject) return;
-        if (!maybeCss.userData?.orbitalPortfolioLabel) return;
-        if (maybeCss.userData?.orbitalPortfolioStationLabel) {
-          maybeCss.visible = false;
+        const isCssLabel = !!maybeObject.isCSS2DObject;
+        const isPortfolioHalo = !!maybeObject.userData?.orbitalPortfolioMediaHalo;
+        if (!isCssLabel && !isPortfolioHalo) return;
+        if (isPortfolioHalo) {
+          maybeObject.getWorldPosition(labelWorld);
+          toLabel.subVectors(labelWorld, camera.position);
+          const haloDist = toLabel.length();
+          if (haloDist < 0.001) {
+            maybeObject.visible = true;
+            return;
+          }
+          toLabel.multiplyScalar(1 / haloDist);
+          raycaster.set(camera.position, toLabel);
+          raycaster.near = 0.05;
+          raycaster.far = Math.max(0.05, haloDist - 0.25);
+          const haloHits = raycaster.intersectObjects(occluders, false);
+          const haloBlocked = haloHits.some((h) => h.distance < haloDist - 0.3);
+          maybeObject.visible = !haloBlocked;
           return;
         }
-        maybeCss.getWorldPosition(labelWorld);
+        const tracksPortfolioLabel = !!maybeObject.userData?.orbitalPortfolioLabel;
+        const tracksAboutLabel = !!maybeObject.userData?.aboutMemorySquareLabel;
+        if (!tracksPortfolioLabel && !tracksAboutLabel) return;
+        // While riding the About elevator, external portfolio labels should not be visible.
+        if (
+          tracksPortfolioLabel &&
+          hallwayContentModeRef.current === "about" &&
+          projectShowcaseActiveRef.current
+        ) {
+          maybeObject.visible = false;
+          return;
+        }
+        if (maybeObject.userData?.orbitalPortfolioStationLabel) {
+          maybeObject.visible = false;
+          return;
+        }
+        maybeObject.getWorldPosition(labelWorld);
         toLabel.subVectors(labelWorld, camera.position);
         const labelDist = toLabel.length();
         if (
-          maybeCss.userData?.orbitalPortfolioCoreLabel &&
+          maybeObject.userData?.orbitalPortfolioCoreLabel &&
           labelDist > ORBITAL_PORTFOLIO_CORE_LABEL_MAX_DISTANCE
         ) {
-          maybeCss.visible = false;
+          maybeObject.visible = false;
           return;
         }
         if (labelDist < 0.001) {
-          maybeCss.visible = true;
+          maybeObject.visible = true;
           return;
         }
         toLabel.multiplyScalar(1 / labelDist);
@@ -11775,7 +11823,7 @@ export default function ResumeSpace3D({
         raycaster.far = Math.max(0.05, labelDist - 0.15);
         const hits = raycaster.intersectObjects(occluders, false);
         const blocked = hits.some((h) => h.distance < labelDist - 0.25);
-        maybeCss.visible = !blocked;
+        maybeObject.visible = !blocked;
       });
     };
     raf = requestAnimationFrame(tick);
@@ -17346,6 +17394,7 @@ export default function ResumeSpace3D({
       // Intentionally left empty: orbiting globes around focused slides removed.
       stationGroup.add(variantSatelliteGroup);
       const mediaHaloGroup = new THREE.Group();
+      mediaHaloGroup.userData.orbitalPortfolioMediaHalo = true;
       const mediaItems = (group.variants[0]?.mediaItems ?? []).slice(0, 10);
       mediaItems.forEach((item, mi) => {
         const ma = (mi / Math.max(1, mediaItems.length)) * Math.PI * 2;
