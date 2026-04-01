@@ -174,17 +174,14 @@ const MoonOrbitHtmlPortfolio: React.FC<Props> = ({
                 imageDescCollapsed ? "moon-portfolio__image-desc--collapsed" : "",
               ].join(" ")}
             >
-              <div className="moon-portfolio__image-desc-head">
-                <span>DETAILS</span>
-                <button
-                  className="moon-portfolio__image-desc-toggle"
-                  onClick={() => setImageDescCollapsed((prev) => !prev)}
-                  aria-label={imageDescCollapsed ? "Expand details" : "Collapse details"}
-                  title={imageDescCollapsed ? "Expand details" : "Collapse details"}
-                >
-                  {imageDescCollapsed ? "\u25BC" : "\u25B2"}
-                </button>
-              </div>
+              <button
+                className="moon-portfolio__image-desc-toggle"
+                onClick={() => setImageDescCollapsed((prev) => !prev)}
+                aria-label={imageDescCollapsed ? "Expand details" : "Collapse details"}
+                title={imageDescCollapsed ? "Expand details" : "Collapse details"}
+              >
+                {imageDescCollapsed ? "\u25BC" : "\u25B2"}
+              </button>
               {!imageDescCollapsed && (
                 <div className="moon-portfolio__image-desc-body">
                   <h4 className="moon-portfolio__desc-title">{activeCard.title}</h4>

@@ -38,7 +38,7 @@ $section-bg: rgba(4, 14, 22, 0.72);
   display: grid;
   grid-template-columns: 11% 1fr 34% 11%;
   grid-template-rows: 1fr;
-  gap: 6px;
+  gap: 15px;
   font-family: var(--font-hud);
   color: $text-primary;
   opacity: 0;
@@ -217,7 +217,7 @@ $section-bg: rgba(4, 14, 22, 0.72);
 .moon-tech {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 
   &__label {
     font-size: 11px;
@@ -231,56 +231,88 @@ $section-bg: rgba(4, 14, 22, 0.72);
   &__list {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
+    position: relative;
+    padding-left: 16px;
+
+    &::before {
+      content: "";
+      position: absolute;
+      left: 2px;
+      top: 2px;
+      bottom: 2px;
+      width: 1px;
+      background: rgba(42, 153, 104, 0.66);
+      box-shadow: 0 0 6px rgba(42, 153, 104, 0.24);
+    }
+
   }
 
   &__chip {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    background: $section-bg;
-    border: 1px solid $panel-border;
-    border-radius: 4px;
-    color: $text-primary;
+    justify-content: flex-start;
+    padding: 4px 10px;
+    background: rgba(28, 76, 124, 0.9);
+    border: none;
+    border-radius: 0;
+    color: #d5ecff;
     font-family: var(--font-hud);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     text-align: left;
     cursor: pointer;
-    transition: all 0.18s ease;
+    transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible;
+    clip-path: none;
+    box-shadow: 0 0 0 transparent;
+    filter: saturate(1.05);
+    position: relative;
+
+    &::before {
+      content: "";
+      position: absolute;
+      left: -14px;
+      top: 50%;
+      width: 13px;
+      height: 1px;
+      transform: translateY(-50%);
+      background: rgba(42, 153, 104, 0.7);
+      box-shadow: 0 0 5px rgba(42, 153, 104, 0.26);
+    }
 
     &:hover,
     &--active {
-      background: $accent-glow;
-      border-color: $accent;
-      color: $text-bright;
-      box-shadow: 0 0 8px $accent-glow;
+      background: rgba(36, 161, 111, 0.88);
+      color: #f2fffb;
+      box-shadow: 0 0 8px rgba(36, 161, 111, 0.28);
+      filter: saturate(1.15);
+
+      &::before {
+        background: rgba(36, 161, 111, 0.95);
+      }
     }
 
     &--locked {
       background: rgba(255, 170, 32, 0.15);
-      border-color: #ffaa20;
       color: #ffcc66;
-      box-shadow: 0 0 10px rgba(255, 170, 32, 0.2);
+      box-shadow: 0 0 8px rgba(255, 170, 32, 0.2);
+
+      &::before {
+        background: rgba(255, 170, 32, 0.85);
+      }
     }
   }
 
-  &__chip-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: $accent;
-    flex-shrink: 0;
-    transition: background 0.18s ease;
-
-    .moon-tech__chip--locked & {
-      background: #ffaa20;
-    }
+  &__chip-text {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
   }
 }
 
@@ -589,32 +621,25 @@ $section-bg: rgba(4, 14, 22, 0.72);
     border-radius: 4px;
     overflow: hidden;
     box-shadow: 0 0 18px rgba(0, 0, 0, 0.45);
+    padding: 8px 10px;
 
     &--collapsed {
       width: auto;
       min-width: 120px;
+      padding: 8px;
+      min-height: 24px;
     }
   }
 
-  &__image-desc-head {
-    height: 24px;
-    padding: 0 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid rgba($panel-border, 0.7);
-    font-family: var(--font-hud);
-    font-size: 10px;
-    color: $text-bright;
-    letter-spacing: 0.08em;
-    background: rgba(0, 0, 0, 0.18);
-  }
-
   &__image-desc-toggle {
-    width: 18px;
-    height: 18px;
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+    width: 9px;
+    height: 9px;
     border: 1px solid $panel-border;
-    border-radius: 3px;
+    border-radius: 2px;
     background: transparent;
     color: $text-primary;
     padding: 0;
@@ -622,7 +647,7 @@ $section-bg: rgba(4, 14, 22, 0.72);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 9px;
+    font-size: 6px;
     line-height: 1;
     transition: all 0.15s ease;
 
@@ -633,9 +658,10 @@ $section-bg: rgba(4, 14, 22, 0.72);
   }
 
   &__image-desc-body {
-    padding: 8px 10px;
+    padding: 0;
+    padding-right: 14px;
     overflow-y: auto;
-    max-height: calc(400px - 24px);
+    max-height: 400px;
     scrollbar-width: thin;
     scrollbar-color: $accent-dim transparent;
 
@@ -650,7 +676,7 @@ $section-bg: rgba(4, 14, 22, 0.72);
 
   &__desc-title {
     margin: 0 0 4px;
-    font-size: var(--text-sm);
+    font-size: 10px;
     font-weight: 700;
     color: $text-bright;
   }
@@ -658,8 +684,8 @@ $section-bg: rgba(4, 14, 22, 0.72);
   &__desc-text,
   &__desc-media-text {
     margin: 0 0 6px;
-    font-size: var(--text-xs);
-    line-height: 1.5;
+    font-size: 9px;
+    line-height: 1;
     color: $text-primary;
   }
 }

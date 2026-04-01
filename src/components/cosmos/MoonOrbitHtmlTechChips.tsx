@@ -35,19 +35,28 @@ const MoonOrbitHtmlTechChips: React.FC<Props> = ({
       onHover(index);
       const el = chipRefs.current[index];
       if (el) {
-        gsap.to(el, { x: 3, duration: 0.18, ease: "power2.out" });
+        gsap.killTweensOf(el);
+        gsap.set(el, {
+          transformPerspective: 700,
+          transformOrigin: "50% 50%",
+          rotationX: 0,
+        });
+        gsap.to(el, {
+          rotationX: 360,
+          duration: 0.45,
+          ease: "power2.inOut",
+          onComplete: () => {
+            gsap.set(el, { rotationX: 0 });
+          },
+        });
       }
     },
     [onHover],
   );
 
   const handleLeave = useCallback(
-    (index: number) => {
+    (_index: number) => {
       onHover(null);
-      const el = chipRefs.current[index];
-      if (el) {
-        gsap.to(el, { x: 0, duration: 0.18, ease: "power2.out" });
-      }
     },
     [onHover],
   );
@@ -79,8 +88,7 @@ const MoonOrbitHtmlTechChips: React.FC<Props> = ({
               onPointerLeave={() => handleLeave(i)}
               onClick={() => handleClick(i)}
             >
-              <span className="moon-tech__chip-dot" />
-              {entry.label}
+              <span className="moon-tech__chip-text">{entry.label}</span>
             </button>
           );
         })}
