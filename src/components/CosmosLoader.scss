@@ -165,9 +165,16 @@
         flex-direction: column;
     }
 
+    // Fills any subpixel rounding gap left by percentage-height strips
+    &__tv-mask::after {
+        content: "";
+        flex: 1 0 0;
+        background: #000;
+    }
+
     // Each strip starts opaque black; "peeled" = transparent (shows content)
     &__tv-strip {
-        flex: 1 1 0;
+        flex: 0 0 auto;
         background: #000;
         transition: background 0.3s ease-out;
     }

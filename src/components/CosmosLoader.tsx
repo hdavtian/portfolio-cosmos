@@ -84,7 +84,7 @@ export default function CosmosLoader({
 
   useEffect(() => {
     if (animationDone) return;
-    if (phaseRef.current === "frenzy" || phaseRef.current === "done") return;
+    if (phaseRef.current !== "frenzy") return;
     const normalizedHint = Math.max(0, Math.min(99, Math.round(loadingProgressHint)));
     setProgress((prev) => Math.max(prev, normalizedHint));
   }, [loadingProgressHint, animationDone]);
@@ -462,7 +462,6 @@ export default function CosmosLoader({
           <div className="cosmos-loader__info">
             <div className="cosmos-loader__status-row">
               <div className="cosmos-loader__status-inline">
-                <p className="cosmos-loader__stage">{stageText}</p>
                 <div className="cosmos-loader__progress-grid" aria-hidden="true">
                   {Array.from({ length: 24 }).map((_, i) => {
                     const threshold = ((i + 1) / 24) * 100;
@@ -479,6 +478,7 @@ export default function CosmosLoader({
                   })}
                 </div>
                 <div className="cosmos-loader__percentage">{progress}%</div>
+                <p className="cosmos-loader__stage">{stageText}</p>
                 {showEndMessage && (
                   <div className="cosmos-loader__end-message" aria-live="polite">
                     {typedCompletionText}
