@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import * as d3 from "d3";
 import resumeData from "./data/resume.json";
@@ -7,6 +7,7 @@ import DiagramSettings, {
   type DiagramStyle,
   type DiagramStyleOptions,
 } from "./components/DiagramSettings";
+import CosmosIntroGateway from "./components/CosmosIntroGateway";
 import "./styles/main.scss";
 
 // Skills Diagram Component using D3.js force-directed graph
@@ -434,6 +435,7 @@ function App() {
   const fastTrackParam = typeof window !== "undefined"
     ? new URLSearchParams(window.location.search).get("fastTrack")
     : null;
+  const [showIntro, setShowIntro] = useState(!fastTrackParam);
   const [diagramStyle, setDiagramStyle] = useState<DiagramStyle>(
     fastTrackParam ? "space" : "circles",
   );
@@ -629,6 +631,15 @@ function App() {
     if (index === totalSections - 1) return "Education";
     return "";
   };
+
+  const handleIntroEnter = useCallback(() => {
+    setDiagramStyle("space");
+    setShowIntro(false);
+  }, []);
+
+  if (showIntro) {
+    return <CosmosIntroGateway onEnter={handleIntroEnter} />;
+  }
 
   return (
     <div className="app">

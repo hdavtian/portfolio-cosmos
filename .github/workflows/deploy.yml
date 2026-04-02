@@ -25,6 +25,8 @@ jobs:
 
       - name: Build production site
         run: npm run build
+        env:
+          VITE_GA_MEASUREMENT_ID: ${{ vars.VITE_GA_MEASUREMENT_ID }}
 
       - name: Deploy dist to GoDaddy
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5

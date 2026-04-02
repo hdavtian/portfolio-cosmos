@@ -114,7 +114,7 @@
         background-color: #e8e8e8;
         background-image: url("/images/portfolio-covers/portfolio-loading-1.gif");
         background-repeat: no-repeat;
-        background-position: center center;
+        background-position: center bottom;
         background-size: cover;
     }
 
@@ -326,10 +326,19 @@
         animation: none;
     }
 
+    &__divider {
+        width: 100%;
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+        margin: 4px 0 2px;
+    }
+
     &__footer-line {
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 10px;
+        width: 100%;
         color: rgba(233, 233, 233, 0.86);
         font-family: "ZX Spectrum", "Courier New", Courier, monospace;
         font-size: 11px;
@@ -337,18 +346,25 @@
         text-transform: lowercase;
     }
 
+    &__footer-about {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+
     &__about-trigger {
         border: 0;
         background: transparent;
-        color: #e9e9e9;
-        font-family: "ZX Spectrum", "Courier New", Courier, monospace;
-        font-size: 11px;
+        color: rgba(200, 200, 200, 0.7);
+        font-family: "Courier New", Courier, monospace;
+        font-size: 9px;
         line-height: 1;
         padding: 0;
         cursor: pointer;
         text-transform: lowercase;
         text-decoration: underline;
         text-underline-offset: 2px;
+        letter-spacing: 0.5px;
     }
 
     &__about-trigger:hover {

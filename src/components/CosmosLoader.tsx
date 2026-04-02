@@ -15,7 +15,7 @@ const DATA_COLORS = ["#665B00", "#001459"];
 const DEFAULT_REVEAL_LINES = 36;
 const REVEAL_LINE_MIN_RATIO = 0.2; // 1/5th of max line thickness
 const FRENZY_BASE_DURATION_MS = 333 * DEFAULT_REVEAL_LINES;
-const PROGRAM_TEXT = "Program: Portfolio";
+const PROGRAM_TEXT = "Program: My Tech Journey";
 
 const buildRevealLineFractions = (): number[] => {
   const max = 1 / DEFAULT_REVEAL_LINES;
@@ -498,11 +498,13 @@ export default function CosmosLoader({
                 </div>
               )}
             </div>
+            <hr className="cosmos-loader__divider" />
             <div className="cosmos-loader__footer-line">
               <span>harmadavtian.com</span>
               <span aria-hidden="true">|</span>
               <span>{currentYear}</span>
-              <span aria-hidden="true">|</span>
+            </div>
+            <div className="cosmos-loader__footer-about">
               <button
                 type="button"
                 className="cosmos-loader__about-trigger"
