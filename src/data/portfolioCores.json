@@ -312,7 +312,11 @@
                 "image": "/images/disney-demo/disney-demo-1.jpg",
                 "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
                 "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                  "React",
+                  "Java",
+                  "PostgreSQL",
+                  "Docker",
+                  "CI/CD"
                 ],
                 "year": null,
                 "fit": "contain"
@@ -323,7 +327,11 @@
                 "image": "/images/disney-demo/disney-demo-2.jpg",
                 "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
                 "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                  "React",
+                  "Java",
+                  "PostgreSQL",
+                  "Docker",
+                  "CI/CD"
                 ],
                 "year": null,
                 "fit": "contain"
@@ -334,7 +342,11 @@
                 "image": "/images/disney-demo/disney-demo-3.jpg",
                 "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
                 "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                  "React",
+                  "Java",
+                  "PostgreSQL",
+                  "Docker",
+                  "CI/CD"
                 ],
                 "year": null,
                 "fit": "contain"
@@ -345,7 +357,11 @@
                 "image": "/images/disney-demo/disney-demo-4.jpg",
                 "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
                 "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
+                  "React",
+                  "Java",
+                  "PostgreSQL",
+                  "Docker",
+                  "CI/CD"
                 ],
                 "year": null,
                 "fit": "contain"
@@ -356,68 +372,102 @@
                 "image": "/images/disney-demo/disney-demo-5.jpg",
                 "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
                 "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
+                  "React",
+                  "Java",
+                  "PostgreSQL",
+                  "Docker",
+                  "CI/CD"
+                ],
                 "year": null,
                 "fit": "contain"
-              }, {
+              },
+              {
                 "id": "disney-demo-6",
                 "title": "Disney Demo",
                 "image": "/images/disney-demo/disney-demo-6.jpg",
                 "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
                 "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
+                  "React",
+                  "Java",
+                  "PostgreSQL",
+                  "Docker",
+                  "CI/CD"
+                ],
                 "year": null,
                 "fit": "contain"
-              }, {
+              },
+              {
                 "id": "disney-demo-7",
                 "title": "Disney Demo",
                 "image": "/images/disney-demo/disney-demo-7.jpg",
                 "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
                 "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
+                  "React",
+                  "Java",
+                  "PostgreSQL",
+                  "Docker",
+                  "CI/CD"
+                ],
                 "year": null,
                 "fit": "contain"
-              }, {
+              },
+              {
                 "id": "disney-demo-8",
                 "title": "Disney Demo",
                 "image": "/images/disney-demo/disney-demo-8.jpg",
                 "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
                 "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
+                  "React",
+                  "Java",
+                  "PostgreSQL",
+                  "Docker",
+                  "CI/CD"
+                ],
                 "year": null,
                 "fit": "contain"
-              }, {
+              },
+              {
                 "id": "disney-demo-9",
                 "title": "Disney Demo",
                 "image": "/images/disney-demo/disney-demo-9.jpg",
                 "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
                 "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
+                  "React",
+                  "Java",
+                  "PostgreSQL",
+                  "Docker",
+                  "CI/CD"
+                ],
                 "year": null,
                 "fit": "contain"
-              }, {
+              },
+              {
                 "id": "disney-demo-10",
                 "title": "Disney Demo",
                 "image": "/images/disney-demo/disney-demo-10.jpg",
                 "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
                 "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
+                  "React",
+                  "Java",
+                  "PostgreSQL",
+                  "Docker",
+                  "CI/CD"
+                ],
                 "year": null,
                 "fit": "contain"
-              }, {
+              },
+              {
                 "id": "disney-demo-11",
                 "title": "Disney Demo",
                 "image": "/images/disney-demo/disney-demo-11.jpg",
                 "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
                 "technologies": [
-                  "React", "Java", "PostgreSQL", "Docker", "CI/CD"
-                ],  
+                  "React",
+                  "Java",
+                  "PostgreSQL",
+                  "Docker",
+                  "CI/CD"
+                ],
                 "year": null,
                 "fit": "contain"
               }
@@ -459,130 +509,416 @@
                 "image": "/images/murad/murad-1.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
-              }, {
+              },
+              {
                 "id": "murad-2",
                 "title": "Murad",
                 "image": "/images/murad/murad-2.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
-              }, 
+              },
               {
                 "id": "murad-3",
                 "title": "Murad",
                 "image": "/images/murad/murad-3.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
-              }, 
+              },
               {
                 "id": "murad-4",
                 "title": "Murad",
                 "image": "/images/murad/murad-4.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
-              }, 
+              },
               {
                 "id": "murad-5",
                 "title": "Murad",
                 "image": "/images/murad/murad-5.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
-              }, 
+              },
               {
                 "id": "murad-6",
                 "title": "Murad",
                 "image": "/images/murad/murad-6.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
-              }, 
+              },
               {
                 "id": "murad-7",
                 "title": "Murad",
                 "image": "/images/murad/murad-7.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
-              }, 
+              },
               {
                 "id": "murad-8",
                 "title": "Murad",
                 "image": "/images/murad/murad-8.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
-              }, 
+              },
               {
                 "id": "murad-9",
                 "title": "Murad",
                 "image": "/images/murad/murad-9.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
-              }, 
+              },
               {
                 "id": "murad-10",
                 "title": "Murad",
                 "image": "/images/murad/murad-10.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
-              }, 
+              },
               {
                 "id": "murad-11",
                 "title": "Murad",
                 "image": "/images/murad/murad-11.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
-              }, 
+              },
               {
                 "id": "murad-12",
                 "title": "Murad",
                 "image": "/images/murad/murad-12.jpg",
                 "description": "Landing pages and emails for Murad products.",
                 "technologies": [
-                  "HTML", "CSS", "JavaScript"
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
                 ],
                 "year": null,
                 "fit": "cover"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "core": "RPA",
+    "coreColor": "#1EFAA2",
+    "plains": [
+      {
+        "angle": 0,
+        "items": [
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#1EFAA2",
+            "items": [
+              {
+                "id": "race-with-honda",
+                "title": "Race with Honda",
+                "image": "/images/rpa/racewithhonda-1.png",
+                "description": "Experiential marketing portal for Honda motorsports featuring race events, driver profiles, and multimedia content.",
+                "technologies": [
+                  "React",
+                  "Redux",
+                  "Next.js",
+                  "Framer Motion",
+                  "GSAP",
+                  "Java",
+                  "Spring Boot"
+                ],
+                "year": null,
+                "fit": "cover",
+                "galleryMedia": [
+                  {
+                    "id": "race-with-honda-02",
+                    "type": "image",
+                    "image": "/images/rpa/racewithhonda-2.png",
+                    "title": "Race with Honda - View 2",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "race-with-honda-03",
+                    "type": "image",
+                    "image": "/images/rpa/racewithhonda-3.png",
+                    "title": "Race with Honda - View 3",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "race-with-honda-04",
+                    "type": "image",
+                    "image": "/images/rpa/racewithhonda-4.png",
+                    "title": "Race with Honda - View 4",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "race-with-honda-05",
+                    "type": "image",
+                    "image": "/images/rpa/racewithhonda-5.png",
+                    "title": "Race with Honda - View 5",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "race-with-honda-06",
+                    "type": "image",
+                    "image": "/images/rpa/racewithhonda-6.png",
+                    "title": "Race with Honda - View 6",
+                    "description": "",
+                    "fit": "cover"
+                  }
+                ]
+              },
+              {
+                "id": "hall-of-claims",
+                "title": "Hall of Claims",
+                "image": "/images/rpa/hall-of-claims-1.png",
+                "description": "Interactive campaign portal for Farmers Insurance featuring animated storytelling and claims education.",
+                "technologies": [
+                  "React",
+                  "Redux",
+                  "Next.js",
+                  "Framer Motion",
+                  "GSAP",
+                  "Java",
+                  "Spring Boot"
+                ],
+                "year": null,
+                "fit": "cover",
+                "galleryMedia": [
+                  {
+                    "id": "hall-of-claims-02",
+                    "type": "image",
+                    "image": "/images/rpa/hall-of-claims-2.png",
+                    "title": "Hall of Claims - View 2",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "hall-of-claims-03",
+                    "type": "image",
+                    "image": "/images/rpa/hall-of-claims-3.png",
+                    "title": "Hall of Claims - View 3",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "hall-of-claims-04",
+                    "type": "image",
+                    "image": "/images/rpa/hall-of-claims-4.png",
+                    "title": "Hall of Claims - View 4",
+                    "description": "",
+                    "fit": "cover"
+                  }
+                ]
+              },
+              {
+                "id": "honda-automobiles",
+                "title": "Honda Automobiles",
+                "image": "/images/rpa/honda-automobiles-1.png",
+                "description": "Marketing portal showcasing Honda automobile lineup with interactive features and responsive design.",
+                "technologies": [
+                  "React",
+                  "Redux",
+                  "Next.js",
+                  "Framer Motion",
+                  "GSAP",
+                  "Java",
+                  "Spring Boot"
+                ],
+                "year": null,
+                "fit": "cover",
+                "galleryMedia": [
+                  {
+                    "id": "honda-automobiles-02",
+                    "type": "image",
+                    "image": "/images/rpa/honda-automobiles-2.png",
+                    "title": "Honda Automobiles - View 2",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "honda-automobiles-03",
+                    "type": "image",
+                    "image": "/images/rpa/honda-automobiles-3.png",
+                    "title": "Honda Automobiles - View 3",
+                    "description": "",
+                    "fit": "cover"
+                  }
+                ]
+              },
+              {
+                "id": "rpa-redesign",
+                "title": "RPA Agency Redesign",
+                "image": "/images/rpa/rpa-redesign-1.png",
+                "description": "Agency website redesign for RPA (Rubin Postaer and Associates) with modern responsive layout.",
+                "technologies": [
+                  "React",
+                  "Redux",
+                  "Next.js",
+                  "Framer Motion",
+                  "GSAP",
+                  "Java",
+                  "Spring Boot"
+                ],
+                "year": null,
+                "fit": "cover",
+                "galleryMedia": [
+                  {
+                    "id": "rpa-redesign-02",
+                    "type": "image",
+                    "image": "/images/rpa/rpa-redesign-2.png",
+                    "title": "RPA Redesign - View 2",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "rpa-redesign-03",
+                    "type": "image",
+                    "image": "/images/rpa/rpa-redesign-3.png",
+                    "title": "RPA Redesign - View 3",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "rpa-redesign-04",
+                    "type": "image",
+                    "image": "/images/rpa/rpa-redesign-4.png",
+                    "title": "RPA Redesign - View 4",
+                    "description": "",
+                    "fit": "cover"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "core": "Boingo",
+    "coreColor": "#FF6B35",
+    "plains": [
+      {
+        "angle": 0,
+        "items": [
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#545353",
+            "items": []
+          },
+          {
+            "orbitColor": "#FF6B35",
+            "items": [
+              {
+                "id": "boingo-wifinder",
+                "title": "WiFinder",
+                "image": "/images/boingo/wifinder-1.png",
+                "description": "Consumer-facing WiFi hotspot finder application helping users locate Boingo wireless access points.",
+                "technologies": [
+                  "React",
+                  "JavaScript",
+                  "HTML",
+                  "CSS",
+                  "REST APIs"
+                ],
+                "year": null,
+                "fit": "cover",
+                "galleryMedia": [
+                  {
+                    "id": "boingo-wifinder-02",
+                    "type": "image",
+                    "image": "/images/boingo/wifinder-2.png",
+                    "title": "WiFinder - View 2",
+                    "description": "",
+                    "fit": "cover"
+                  }
+                ]
               }
             ]
           }
@@ -615,7 +951,7 @@
               {
                 "id": "equipment-resellers",
                 "title": "Equipment Resellers",
-                "image": "/images/legacy-web/acecount.com 1.png",
+                "image": "/images/legacy-web/acecount-1.png",
                 "description": "Equipment reseller websites grouped by client.",
                 "technologies": [
                   "php",
@@ -630,7 +966,7 @@
                   {
                     "id": "equipment-acecount",
                     "title": "acecount.com",
-                    "image": "/images/legacy-web/acecount.com 1.png",
+                    "image": "/images/legacy-web/acecount-1.png",
                     "description": "Equipment reseller storefront and product catalog presentation.",
                     "technologies": [
                       "php",
@@ -645,7 +981,7 @@
                       {
                         "id": "equipment-acecount-02",
                         "type": "image",
-                        "image": "/images/legacy-web/acecount.com 2.png",
+                        "image": "/images/legacy-web/acecount-2.png",
                         "title": "acecount.com - View 2",
                         "description": "Placeholder description.",
                         "fit": "cover"
@@ -653,7 +989,7 @@
                       {
                         "id": "equipment-acecount-03",
                         "type": "image",
-                        "image": "/images/legacy-web/acecount.com 3.png",
+                        "image": "/images/legacy-web/acecount-3.png",
                         "title": "acecount.com - View 3",
                         "description": "Placeholder description.",
                         "fit": "cover"
@@ -661,7 +997,7 @@
                       {
                         "id": "equipment-acecount-04",
                         "type": "image",
-                        "image": "/images/legacy-web/acecount.com 4.png",
+                        "image": "/images/legacy-web/acecount-4.png",
                         "title": "acecount.com - View 4",
                         "description": "Placeholder description.",
                         "fit": "cover"
@@ -725,6 +1061,39 @@
                         "fit": "cover"
                       }
                     ]
+                  },
+                  {
+                    "id": "equipment-ammlock",
+                    "title": "Ammlock",
+                    "image": "/images/legacy-web/ammlock-1.jpg",
+                    "description": "Equipment and security solutions website.",
+                    "technologies": [
+                      "PHP",
+                      "MySQL",
+                      "HTML",
+                      "CSS",
+                      "JavaScript"
+                    ],
+                    "year": null,
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "equipment-ammlock-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/ammlock-2.jpg",
+                        "title": "Ammlock - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "equipment-ammlock-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/ammlock-3.jpg",
+                        "title": "Ammlock - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   }
                 ]
               },
@@ -756,7 +1125,25 @@
                       "javascript"
                     ],
                     "year": null,
-                    "fit": "cover"
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "cultural-agbuypla-demo-01",
+                        "type": "image",
+                        "image": "/images/legacy-web/agbuypla-demo-1.jpg",
+                        "title": "AGBU YPLA Demo - View 1",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "cultural-agbuypla-demo-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/agbuypla-demo-2.jpg",
+                        "title": "AGBU YPLA Demo - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   },
                   {
                     "id": "cultural-agbuypny",
@@ -779,6 +1166,178 @@
                         "image": "/images/legacy-web/agbuypny-2.jpg",
                         "title": "AGBU YPNY - View 2",
                         "description": "Placeholder description.",
+                        "fit": "cover"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "cultural-agbuyp-demo",
+                    "title": "AGBU YP Demos",
+                    "image": "/images/legacy-web/agbuyp-demo-1.jpg",
+                    "description": "Demo websites for AGBU Young Professionals chapters.",
+                    "technologies": [
+                      "PHP",
+                      "MySQL",
+                      "HTML",
+                      "CSS",
+                      "JavaScript"
+                    ],
+                    "year": null,
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "cultural-agbuyp-demo-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/agbuyp-demo-2.jpg",
+                        "title": "AGBU YP Demo - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "cultural-agbuyp-demo-2-1",
+                        "type": "image",
+                        "image": "/images/legacy-web/agbuyp-demo-2-1.jpg",
+                        "title": "AGBU YP Demo 2 - View 1",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "cultural-agbuyp-demo-2-2",
+                        "type": "image",
+                        "image": "/images/legacy-web/agbuyp-demo-2-2.jpg",
+                        "title": "AGBU YP Demo 2 - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "cultural-agbuyp-demo-2-3",
+                        "type": "image",
+                        "image": "/images/legacy-web/agbuyp-demo-2-3.jpg",
+                        "title": "AGBU YP Demo 2 - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "cultural-agbuyp-demo-2-4",
+                        "type": "image",
+                        "image": "/images/legacy-web/agbuyp-demo-2-4.jpg",
+                        "title": "AGBU YP Demo 2 - View 4",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "cultural-agbuyp-demo-3-1",
+                        "type": "image",
+                        "image": "/images/legacy-web/agbuyp-demo-3-1.jpg",
+                        "title": "AGBU YP Demo 3 - View 1",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "cultural-agbuyp-demo-3-2",
+                        "type": "image",
+                        "image": "/images/legacy-web/agbuyp-demo-3-2.jpg",
+                        "title": "AGBU YP Demo 3 - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "cultural-agbuyp-demo-3-3",
+                        "type": "image",
+                        "image": "/images/legacy-web/agbuyp-demo-3-3.jpg",
+                        "title": "AGBU YP Demo 3 - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "cultural-affma",
+                    "title": "AFFMA",
+                    "image": "/images/legacy-web/affma-1.jpg",
+                    "description": "Website for the Armenian Film Foundation and Media Arts.",
+                    "technologies": [
+                      "PHP",
+                      "MySQL",
+                      "HTML",
+                      "CSS",
+                      "JavaScript"
+                    ],
+                    "year": null,
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "cultural-affma-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/affma-2.jpg",
+                        "title": "AFFMA - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "cultural-affma-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/affma-3.jpg",
+                        "title": "AFFMA - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "cultural-gennext",
+                    "title": "GenNext Demo",
+                    "image": "/images/legacy-web/gennext-demo-1.jpg",
+                    "description": "Demo website for a GenNext cultural initiative.",
+                    "technologies": [
+                      "PHP",
+                      "MySQL",
+                      "HTML",
+                      "CSS",
+                      "JavaScript"
+                    ],
+                    "year": null,
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "cultural-gennext-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/gennext-demo-2.jpg",
+                        "title": "GenNext Demo - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "cultural-gennext-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/gennext-demo-3.jpg",
+                        "title": "GenNext Demo - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "cultural-hacob",
+                    "title": "Hacob",
+                    "image": "/images/legacy-web/hacob-1.jpg",
+                    "description": "Website for Hacob.",
+                    "technologies": [
+                      "PHP",
+                      "MySQL",
+                      "HTML",
+                      "CSS",
+                      "JavaScript"
+                    ],
+                    "year": null,
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "cultural-hacob-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/hacob-2.jpg",
+                        "title": "Hacob - View 2",
+                        "description": "",
                         "fit": "cover"
                       }
                     ]
@@ -844,7 +1403,7 @@
                   {
                     "id": "political-simmons-for-governor",
                     "title": "Simmons for Governor",
-                    "image": "/images/legacy-web/simmonsforgovernor.com.png",
+                    "image": "/images/legacy-web/simmonsforgovernor-1.jpg",
                     "description": "Placeholder description for Simmons for Governor.",
                     "technologies": [
                       "php",
@@ -854,7 +1413,25 @@
                       "javascript"
                     ],
                     "year": null,
-                    "fit": "cover"
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "political-simmons-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/simmonsforgovernor-2.jpg",
+                        "title": "Simmons for Governor - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "political-simmons-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/simmonsforgovernor-3.jpg",
+                        "title": "Simmons for Governor - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   },
                   {
                     "id": "political-paul-krekorian",
@@ -934,7 +1511,57 @@
                       "javascript"
                     ],
                     "year": null,
-                    "fit": "cover"
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "restaurant-arroyo-chop-house-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/arroyo-chop-house-2.jpg",
+                        "title": "Arroyo Chop House - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "restaurant-arroyo-chop-house-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/arroyo-chop-house-3.jpg",
+                        "title": "Arroyo Chop House - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "restaurant-arroyo-chop-house-04",
+                        "type": "image",
+                        "image": "/images/legacy-web/arroyo-chop-house-4.jpg",
+                        "title": "Arroyo Chop House - View 4",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "restaurant-arroyo-chop-house-demo-01",
+                        "type": "image",
+                        "image": "/images/legacy-web/arroyo-chop-house-demo-1.jpg",
+                        "title": "Arroyo Chop House Demo - View 1",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "restaurant-arroyo-chop-house-demo-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/arroyo-chop-house-demo-2.jpg",
+                        "title": "Arroyo Chop House Demo - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "restaurant-arroyo-chop-house-demo-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/arroyo-chop-house-demo-3.jpg",
+                        "title": "Arroyo Chop House Demo - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   },
                   {
                     "id": "restaurant-parkway-grill",
@@ -949,7 +1576,25 @@
                       "javascript"
                     ],
                     "year": null,
-                    "fit": "cover"
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "restaurant-parkway-grill-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/parkway-grill-2.jpg",
+                        "title": "Parkway Grill - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "restaurant-parkway-grill-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/parkway-grill-3.jpg",
+                        "title": "Parkway Grill - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   },
                   {
                     "id": "restaurant-smittys-grill",
@@ -964,12 +1609,22 @@
                       "javascript"
                     ],
                     "year": null,
-                    "fit": "cover"
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "restaurant-smittys-grill-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/smittys-grill-2.jpg",
+                        "title": "Smitty's Grill - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   },
                   {
                     "id": "restaurant-smith-brothers-corp",
                     "title": "Smith Brothers Restaurants Corp",
-                    "image": "/images/legacy-web/smith-brothers-restaurants-corp-1jpg.jpg",
+                    "image": "/images/legacy-web/smbr-1.jpg",
                     "description": "Placeholder description for Smith Brothers Restaurants Corp.",
                     "technologies": [
                       "php",
@@ -979,7 +1634,25 @@
                       "javascript"
                     ],
                     "year": null,
-                    "fit": "cover"
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "restaurant-smith-brothers-corp-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/smbr-2.jpg",
+                        "title": "Smith Brothers Restaurants Corp - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "restaurant-smith-brothers-corp-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/smbr3.jpg",
+                        "title": "Smith Brothers Restaurants Corp - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   },
                   {
                     "id": "restaurant-vibrato-grill-jazz",
@@ -994,7 +1667,41 @@
                       "javascript"
                     ],
                     "year": null,
-                    "fit": "cover"
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "restaurant-vibrato-grill-jazz-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/vibrato-grill-jazz-2.jpg",
+                        "title": "Vibrato Grill Jazz - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "restaurant-vibrato-grill-jazz-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/vibrato-grill-jazz-3.jpg",
+                        "title": "Vibrato Grill Jazz - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "restaurant-vibrato-grill-jazz-04",
+                        "type": "image",
+                        "image": "/images/legacy-web/vibrato-grill-jazz-4.jpg",
+                        "title": "Vibrato Grill Jazz - View 4",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "restaurant-vibrato-grill-jazz-05",
+                        "type": "image",
+                        "image": "/images/legacy-web/vibrato-grill-jazz-5.jpg",
+                        "title": "Vibrato Grill Jazz - View 5",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   },
                   {
                     "id": "restaurant-brandview-collection",
@@ -1009,7 +1716,17 @@
                       "javascript"
                     ],
                     "year": null,
-                    "fit": "cover"
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "restaurant-brandview-collection-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/brandview-collection-2.jpg",
+                        "title": "Brandview Collection - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   },
                   {
                     "id": "restaurant-caspers-hot-dogs",
@@ -1024,14 +1741,24 @@
                       "javascript"
                     ],
                     "year": null,
-                    "fit": "cover"
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "restaurant-caspers-hot-dogs-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/caspers-hot-dogs-2.jpg",
+                        "title": "Caspers Hot Dogs - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   }
                 ]
               },
               {
                 "id": "attorney-websites",
                 "title": "Attorney Websites",
-                "image": "/images/legacy-web/ourfalian-law-a-1.jpg",
+                "image": "/images/legacy-web/ourfalian-law-1-1.jpg",
                 "description": "Attorney website projects grouped by practice presentation.",
                 "technologies": [
                   "php",
@@ -1046,7 +1773,7 @@
                   {
                     "id": "attorney-ourfalian-law-a",
                     "title": "Ourfalian Law (A)",
-                    "image": "/images/legacy-web/ourfalian-law-a-1.jpg",
+                    "image": "/images/legacy-web/ourfalian-law-1-1.jpg",
                     "description": "Placeholder description for Ourfalian Law A.",
                     "technologies": [
                       "php",
@@ -1056,12 +1783,30 @@
                       "javascript"
                     ],
                     "year": null,
-                    "fit": "cover"
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "attorney-ourfalian-law-a-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/ourfalian-law-1-2.jpg",
+                        "title": "Ourfalian Law A - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "attorney-ourfalian-law-a-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/ourfalian-law-1-3.jpg",
+                        "title": "Ourfalian Law A - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   },
                   {
                     "id": "attorney-ourfalian-law-b",
                     "title": "Ourfalian Law (B)",
-                    "image": "/images/legacy-web/ourfalian-law-b-1.jpg",
+                    "image": "/images/legacy-web/ourfalian-law-2-1.jpg",
                     "description": "Placeholder description for Ourfalian Law B.",
                     "technologies": [
                       "php",
@@ -1071,7 +1816,66 @@
                       "javascript"
                     ],
                     "year": null,
-                    "fit": "cover"
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "attorney-ourfalian-law-b-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/ourfalian-law-2-2.jpg",
+                        "title": "Ourfalian Law B - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "attorney-ourfalian-law-b-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/ourfalian-law-2-3.jpg",
+                        "title": "Ourfalian Law B - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "attorney-dana-profili",
+                    "title": "Dana Profili",
+                    "image": "/images/legacy-web/dana-profili-1.jpg",
+                    "description": "Professional website for Dana Profili.",
+                    "technologies": [
+                      "PHP",
+                      "MySQL",
+                      "HTML",
+                      "CSS",
+                      "JavaScript"
+                    ],
+                    "year": null,
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "attorney-dana-profili-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/dana-profili-2.jpg",
+                        "title": "Dana Profili - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "attorney-dana-profili-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/dana-profili-3.jpg",
+                        "title": "Dana Profili - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "attorney-dana-profili-04",
+                        "type": "image",
+                        "image": "/images/legacy-web/dana-profili-4.jpg",
+                        "title": "Dana Profili - View 4",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   }
                 ]
               },
@@ -1089,22 +1893,97 @@
                 ],
                 "year": null,
                 "fit": "cover",
-                "galleryMedia": [
+                "clientVariants": [
                   {
-                    "id": "health-ucla-researchcore-02",
-                    "type": "image",
-                    "image": "/images/legacy-web/ucla-researchcore-2.jpg",
-                    "title": "UCLA Research Core - View 2",
-                    "description": "Placeholder description.",
-                    "fit": "cover"
+                    "id": "health-ucla-researchcore",
+                    "title": "UCLA Research Core",
+                    "image": "/images/legacy-web/ucla-researchcore-1.jpg",
+                    "description": "Website for UCLA Research Core.",
+                    "technologies": [
+                      "PHP",
+                      "MySQL",
+                      "HTML",
+                      "CSS",
+                      "JavaScript"
+                    ],
+                    "year": null,
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "health-ucla-researchcore-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/ucla-researchcore-2.jpg",
+                        "title": "UCLA Research Core - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "health-ucla-researchcore-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/ucla-researchcore-3.jpg",
+                        "title": "UCLA Research Core - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   },
                   {
-                    "id": "health-ucla-researchcore-03",
-                    "type": "image",
-                    "image": "/images/legacy-web/ucla-researchcore-3.jpg",
-                    "title": "UCLA Research Core - View 3",
-                    "description": "Placeholder description.",
-                    "fit": "cover"
+                    "id": "health-central-valley-bariatrics",
+                    "title": "Central Valley Bariatrics",
+                    "image": "/images/legacy-web/central-valley-bariatrics-1.jpg",
+                    "description": "Website for Central Valley Bariatrics medical practice.",
+                    "technologies": [
+                      "PHP",
+                      "MySQL",
+                      "HTML",
+                      "CSS",
+                      "JavaScript"
+                    ],
+                    "year": null,
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "health-cvb-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/central-valley-bariatrics-2.jpg",
+                        "title": "Central Valley Bariatrics - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      },
+                      {
+                        "id": "health-cvb-03",
+                        "type": "image",
+                        "image": "/images/legacy-web/central-valley-bariatrics-3.jpg",
+                        "title": "Central Valley Bariatrics - View 3",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "health-ucla-digestive",
+                    "title": "UCLA Digestive Diseases Demo",
+                    "image": "/images/legacy-web/ucla-digestive-diseases-demo-1.jpg",
+                    "description": "Demo website for UCLA Digestive Diseases center.",
+                    "technologies": [
+                      "PHP",
+                      "MySQL",
+                      "HTML",
+                      "CSS",
+                      "JavaScript"
+                    ],
+                    "year": null,
+                    "fit": "cover",
+                    "galleryMedia": [
+                      {
+                        "id": "health-ucla-digestive-02",
+                        "type": "image",
+                        "image": "/images/legacy-web/ucla-digestive-diseases-demo-2.jpg",
+                        "title": "UCLA Digestive Diseases - View 2",
+                        "description": "",
+                        "fit": "cover"
+                      }
+                    ]
                   }
                 ]
               }
@@ -1133,7 +2012,7 @@
               {
                 "id": "bwvideo-productions",
                 "title": "BWVideo Productions",
-                "image": "/images/legacy-web/bwvideoproductions.com 1.png",
+                "image": "/images/legacy-web/bwvideoproductions-1.jpg",
                 "description": "Placeholder description for BWVideo Productions.",
                 "technologies": [
                   "php",
@@ -1143,7 +2022,25 @@
                   "javascript"
                 ],
                 "year": null,
-                "fit": "cover"
+                "fit": "cover",
+                "galleryMedia": [
+                  {
+                    "id": "bwvideo-02",
+                    "type": "image",
+                    "image": "/images/legacy-web/bwvideoproductions-2.jpg",
+                    "title": "BWVideo Productions - View 2",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "bwvideo-03",
+                    "type": "image",
+                    "image": "/images/legacy-web/bwvideoproductions-3.jpg",
+                    "title": "BWVideo Productions - View 3",
+                    "description": "",
+                    "fit": "cover"
+                  }
+                ]
               },
               {
                 "id": "commerce-escrow-company",
@@ -1174,6 +2071,14 @@
                     "image": "/images/legacy-web/commerce-escrow-company-3.jpg",
                     "title": "Commerce Escrow Company - View 3",
                     "description": "Placeholder description.",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "commerce-escrow-company-04",
+                    "type": "image",
+                    "image": "/images/legacy-web/commerce-escrow-company-4.jpg",
+                    "title": "Commerce Escrow Company - View 4",
+                    "description": "",
                     "fit": "cover"
                   }
                 ]
@@ -1206,55 +2111,6 @@
                     "type": "image",
                     "image": "/images/legacy-web/haigmats-3-1999.jpg",
                     "title": "Haigmats.com - View 3",
-                    "description": "Placeholder description.",
-                    "fit": "cover"
-                  }
-                ]
-              },
-              {
-                "id": "race-with-honda",
-                "title": "Race with Honda",
-                "image": "/images/legacy-web/racewithhonda.com 1.png",
-                "description": "Placeholder description for Race with Honda.",
-                "technologies": [
-                  "php",
-                  "mysql",
-                  "html",
-                  "css",
-                  "javascript"
-                ],
-                "year": null,
-                "fit": "cover",
-                "galleryMedia": [
-                  {
-                    "id": "race-with-honda-02",
-                    "type": "image",
-                    "image": "/images/legacy-web/racewithhonda.com 2.png",
-                    "title": "Race with Honda - View 2",
-                    "description": "Placeholder description.",
-                    "fit": "cover"
-                  },
-                  {
-                    "id": "race-with-honda-03",
-                    "type": "image",
-                    "image": "/images/legacy-web/racewithhonda.com 3.png",
-                    "title": "Race with Honda - View 3",
-                    "description": "Placeholder description.",
-                    "fit": "cover"
-                  },
-                  {
-                    "id": "race-with-honda-04",
-                    "type": "image",
-                    "image": "/images/legacy-web/racewithhonda.com 4.png",
-                    "title": "Race with Honda - View 4",
-                    "description": "Placeholder description.",
-                    "fit": "cover"
-                  },
-                  {
-                    "id": "race-with-honda-05",
-                    "type": "image",
-                    "image": "/images/legacy-web/racewithhonda.com 5.png",
-                    "title": "Race with Honda - View 5",
                     "description": "Placeholder description.",
                     "fit": "cover"
                   }
@@ -1315,8 +2171,200 @@
                     "title": "StormScape Studios - Under Construction",
                     "description": "Placeholder description.",
                     "fit": "cover"
+                  },
+                  {
+                    "id": "sss-01",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-1.jpg",
+                    "title": "StormScape Studios - Screenshot 1",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-02",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-2.jpg",
+                    "title": "StormScape Studios - Screenshot 2",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-03",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-3.jpg",
+                    "title": "StormScape Studios - Screenshot 3",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-04",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-4.jpg",
+                    "title": "StormScape Studios - Screenshot 4",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-layout-01",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-layout-1.jpg",
+                    "title": "StormScape Studios - Layout 1",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-layout-02",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-layout-2.jpg",
+                    "title": "StormScape Studios - Layout 2",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-layout-3a",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-layout-3a.jpg",
+                    "title": "StormScape Studios - Layout 3a",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-layout-3b",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-layout-3b.jpg",
+                    "title": "StormScape Studios - Layout 3b",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-layout-4a",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-layout-4a.jpg",
+                    "title": "StormScape Studios - Layout 4a",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-layout-4b",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-layout-4b.jpg",
+                    "title": "StormScape Studios - Layout 4b",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-layout-5a",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-layout-5a.jpg",
+                    "title": "StormScape Studios - Layout 5a",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-layout-5b",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-layout-5b.jpg",
+                    "title": "StormScape Studios - Layout 5b",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "sss-layout-07",
+                    "type": "image",
+                    "image": "/images/legacy-web/sss-layout-7.jpg",
+                    "title": "StormScape Studios - Layout 7",
+                    "description": "",
+                    "fit": "cover"
                   }
                 ]
+              },
+              {
+                "id": "pacobond-demo",
+                "title": "Pacobond Demo",
+                "image": "/images/legacy-web/pacobond-demo-1.jpg",
+                "description": "Demo website for Pacobond.",
+                "technologies": [
+                  "PHP",
+                  "MySQL",
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover",
+                "galleryMedia": [
+                  {
+                    "id": "pacobond-demo-02",
+                    "type": "image",
+                    "image": "/images/legacy-web/pacobond-demo-2.jpg",
+                    "title": "Pacobond Demo - View 2",
+                    "description": "",
+                    "fit": "cover"
+                  },
+                  {
+                    "id": "pacobond-demo-03",
+                    "type": "image",
+                    "image": "/images/legacy-web/pacobond-demo-3.jpg",
+                    "title": "Pacobond Demo - View 3",
+                    "description": "",
+                    "fit": "cover"
+                  }
+                ]
+              },
+              {
+                "id": "sdceng",
+                "title": "SDC Engineering",
+                "image": "/images/legacy-web/sdceng-1.jpg",
+                "description": "Website for SDC Engineering.",
+                "technologies": [
+                  "PHP",
+                  "MySQL",
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover",
+                "galleryMedia": [
+                  {
+                    "id": "sdceng-02",
+                    "type": "image",
+                    "image": "/images/legacy-web/sdceng-2.jpg",
+                    "title": "SDC Engineering - View 2",
+                    "description": "",
+                    "fit": "cover"
+                  }
+                ]
+              },
+              {
+                "id": "gd-demo",
+                "title": "GD Demo",
+                "image": "/images/legacy-web/gd-demo-1.jpg",
+                "description": "Demo website for GD.",
+                "technologies": [
+                  "PHP",
+                  "MySQL",
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
+              },
+              {
+                "id": "hd-portfolio",
+                "title": "HD Portfolio",
+                "image": "/images/legacy-web/hd-portfolio-1.jpg",
+                "description": "Portfolio presentation demo.",
+                "technologies": [
+                  "PHP",
+                  "MySQL",
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
+                "year": null,
+                "fit": "cover"
               }
             ]
           }

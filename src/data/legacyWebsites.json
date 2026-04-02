@@ -2,7 +2,7 @@
   {
     "id": "equipment-resellers",
     "title": "Equipment Resellers",
-    "image": "/images/legacy-web/acecount.com 1.png",
+    "image": "/images/legacy-web/acecount-1.png",
     "phone": "",
     "description": "Equipment reseller websites grouped by client.",
     "technologies": ["php", "mysql", "html", "css", "javascript"],
@@ -12,15 +12,15 @@
       {
         "id": "equipment-acecount",
         "title": "acecount.com",
-        "image": "/images/legacy-web/acecount.com 1.png",
+        "image": "/images/legacy-web/acecount-1.png",
         "description": "Equipment reseller storefront and product catalog presentation.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
         "year": null,
         "fit": "cover",
         "galleryMedia": [
-          { "id": "equipment-acecount-02", "type": "image", "image": "/images/legacy-web/acecount.com 2.png", "title": "acecount.com - View 2", "description": "Placeholder description.", "fit": "cover" },
-          { "id": "equipment-acecount-03", "type": "image", "image": "/images/legacy-web/acecount.com 3.png", "title": "acecount.com - View 3", "description": "Placeholder description.", "fit": "cover" },
-          { "id": "equipment-acecount-04", "type": "image", "image": "/images/legacy-web/acecount.com 4.png", "title": "acecount.com - View 4", "description": "Placeholder description.", "fit": "cover" }
+          { "id": "equipment-acecount-02", "type": "image", "image": "/images/legacy-web/acecount-2.png", "title": "acecount.com - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "equipment-acecount-03", "type": "image", "image": "/images/legacy-web/acecount-3.png", "title": "acecount.com - View 3", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "equipment-acecount-04", "type": "image", "image": "/images/legacy-web/acecount-4.png", "title": "acecount.com - View 4", "description": "Placeholder description.", "fit": "cover" }
         ]
       },
       {
@@ -112,7 +112,7 @@
       {
         "id": "political-simmons-for-governor",
         "title": "Simmons for Governor",
-        "image": "/images/legacy-web/simmonsforgovernor.com.png",
+        "image": "/images/legacy-web/simmonsforgovernor-1.jpg",
         "description": "Placeholder description for Simmons for Governor.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
         "year": null,
@@ -195,14 +195,14 @@
       {
         "id": "restaurant-smith-brothers-corp",
         "title": "Smith Brothers Restaurants Corp",
-        "image": "/images/legacy-web/smith-brothers-restaurants-corp-1jpg.jpg",
+        "image": "/images/legacy-web/smbr-1.jpg",
         "description": "Placeholder description for Smith Brothers Restaurants Corp.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
         "year": null,
         "fit": "cover",
         "galleryMedia": [
-          { "id": "restaurant-smith-brothers-corp-02", "type": "image", "image": "/images/legacy-web/smith-brothers-restaurants-corp-2.jpg", "title": "Smith Brothers Restaurants Corp - View 2", "description": "Placeholder description.", "fit": "cover" },
-          { "id": "restaurant-smith-brothers-corp-03", "type": "image", "image": "/images/legacy-web/smith-brothers-restaurants-corp-3.jpg", "title": "Smith Brothers Restaurants Corp - View 3", "description": "Placeholder description.", "fit": "cover" }
+          { "id": "restaurant-smith-brothers-corp-02", "type": "image", "image": "/images/legacy-web/smbr-2.jpg", "title": "Smith Brothers Restaurants Corp - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "restaurant-smith-brothers-corp-03", "type": "image", "image": "/images/legacy-web/smbr3.jpg", "title": "Smith Brothers Restaurants Corp - View 3", "description": "Placeholder description.", "fit": "cover" }
         ]
       },
       {
@@ -250,7 +250,7 @@
   {
     "id": "attorney-websites",
     "title": "Attorney Websites",
-    "image": "/images/legacy-web/ourfalian-law-a-1.jpg",
+    "image": "/images/legacy-web/ourfalian-law-1-1.jpg",
     "phone": "",
     "description": "Attorney website projects grouped by practice presentation.",
     "technologies": ["php", "mysql", "html", "css", "javascript"],
@@ -260,27 +260,27 @@
       {
         "id": "attorney-ourfalian-law-a",
         "title": "Ourfalian Law (A)",
-        "image": "/images/legacy-web/ourfalian-law-a-1.jpg",
+        "image": "/images/legacy-web/ourfalian-law-1-1.jpg",
         "description": "Placeholder description for Ourfalian Law A.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
         "year": null,
         "fit": "cover",
         "galleryMedia": [
-          { "id": "attorney-ourfalian-law-a-02", "type": "image", "image": "/images/legacy-web/ourfalian-law-a-2.jpg", "title": "Ourfalian Law A - View 2", "description": "Placeholder description.", "fit": "cover" },
-          { "id": "attorney-ourfalian-law-a-03", "type": "image", "image": "/images/legacy-web/ourfalian-law-a-3.jpg", "title": "Ourfalian Law A - View 3", "description": "Placeholder description.", "fit": "cover" }
+          { "id": "attorney-ourfalian-law-a-02", "type": "image", "image": "/images/legacy-web/ourfalian-law-1-2.jpg", "title": "Ourfalian Law A - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "attorney-ourfalian-law-a-03", "type": "image", "image": "/images/legacy-web/ourfalian-law-1-3.jpg", "title": "Ourfalian Law A - View 3", "description": "Placeholder description.", "fit": "cover" }
         ]
       },
       {
         "id": "attorney-ourfalian-law-b",
         "title": "Ourfalian Law (B)",
-        "image": "/images/legacy-web/ourfalian-law-b-1.jpg",
+        "image": "/images/legacy-web/ourfalian-law-2-1.jpg",
         "description": "Placeholder description for Ourfalian Law B.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
         "year": null,
         "fit": "cover",
         "galleryMedia": [
-          { "id": "attorney-ourfalian-law-b-02", "type": "image", "image": "/images/legacy-web/ourfalian-law-b-2.jpg", "title": "Ourfalian Law B - View 2", "description": "Placeholder description.", "fit": "cover" },
-          { "id": "attorney-ourfalian-law-b-03", "type": "image", "image": "/images/legacy-web/ourfalian-law-b-3.jpg", "title": "Ourfalian Law B - View 3", "description": "Placeholder description.", "fit": "cover" }
+          { "id": "attorney-ourfalian-law-b-02", "type": "image", "image": "/images/legacy-web/ourfalian-law-2-2.jpg", "title": "Ourfalian Law B - View 2", "description": "Placeholder description.", "fit": "cover" },
+          { "id": "attorney-ourfalian-law-b-03", "type": "image", "image": "/images/legacy-web/ourfalian-law-2-3.jpg", "title": "Ourfalian Law B - View 3", "description": "Placeholder description.", "fit": "cover" }
         ]
       }
     ],
@@ -304,7 +304,7 @@
   {
     "id": "bwvideo-productions",
     "title": "BWVideo Productions",
-    "image": "/images/legacy-web/bwvideoproductions.com 1.png",
+    "image": "/images/legacy-web/bwvideoproductions-1.jpg",
     "phone": "",
     "description": "Placeholder description for BWVideo Productions.",
     "technologies": ["php", "mysql", "html", "css", "javascript"],
@@ -345,17 +345,17 @@
   {
     "id": "race-with-honda",
     "title": "Race with Honda",
-    "image": "/images/legacy-web/racewithhonda.com 1.png",
+    "image": "/images/rpa/racewithhonda-1.png",
     "phone": "",
     "description": "Placeholder description for Race with Honda.",
     "technologies": ["php", "mysql", "html", "css", "javascript"],
     "year": null,
     "fit": "cover",
     "galleryMedia": [
-      { "id": "race-with-honda-02", "type": "image", "image": "/images/legacy-web/racewithhonda.com 2.png", "title": "Race with Honda - View 2", "description": "Placeholder description.", "fit": "cover" },
-      { "id": "race-with-honda-03", "type": "image", "image": "/images/legacy-web/racewithhonda.com 3.png", "title": "Race with Honda - View 3", "description": "Placeholder description.", "fit": "cover" },
-      { "id": "race-with-honda-04", "type": "image", "image": "/images/legacy-web/racewithhonda.com 4.png", "title": "Race with Honda - View 4", "description": "Placeholder description.", "fit": "cover" },
-      { "id": "race-with-honda-05", "type": "image", "image": "/images/legacy-web/racewithhonda.com 5.png", "title": "Race with Honda - View 5", "description": "Placeholder description.", "fit": "cover" }
+      { "id": "race-with-honda-02", "type": "image", "image": "/images/rpa/racewithhonda-2.png", "title": "Race with Honda - View 2", "description": "Placeholder description.", "fit": "cover" },
+      { "id": "race-with-honda-03", "type": "image", "image": "/images/rpa/racewithhonda-3.png", "title": "Race with Honda - View 3", "description": "Placeholder description.", "fit": "cover" },
+      { "id": "race-with-honda-04", "type": "image", "image": "/images/rpa/racewithhonda-4.png", "title": "Race with Honda - View 4", "description": "Placeholder description.", "fit": "cover" },
+      { "id": "race-with-honda-05", "type": "image", "image": "/images/rpa/racewithhonda-5.png", "title": "Race with Honda - View 5", "description": "Placeholder description.", "fit": "cover" }
     ],
     "published": true
   },

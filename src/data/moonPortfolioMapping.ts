@@ -20,14 +20,8 @@ export const moonPortfolioMapping: MoonPortfolioCompanyMapping[] = [
   },
   {
     companyId: "rpa",
-    includeEntryIds: ["race-with-honda"],
-    tabs: [
-      {
-        id: "agency-projects",
-        title: "Agency Projects",
-        includeEntryIds: ["race-with-honda"],
-      },
-    ],
+    coreTitles: ["RPA"],
+    tabs: [{ id: "rpa-projects", title: "RPA Projects" }],
   },
   {
     companyId: "murad",
@@ -46,9 +40,14 @@ export const moonPortfolioMapping: MoonPortfolioCompanyMapping[] = [
     ],
   },
   {
+    companyId: "boingo",
+    coreTitles: ["Boingo"],
+    tabs: [{ id: "boingo-projects", title: "Boingo Projects" }],
+  },
+  {
     companyId: "stormscape",
     coreTitles: ["StormScape"],
-    excludeEntryIds: ["race-with-honda", "unitedlayer-inc"],
+    excludeEntryIds: ["unitedlayer-inc"],
     tabs: [{ id: "stormscape-projects", title: "StormScape Projects" }],
   },
 ];
