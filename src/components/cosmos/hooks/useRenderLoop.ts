@@ -22,6 +22,7 @@ import {
 } from "../scaleConfig";
 import { computeFalconFollowCameraPose } from "../falconFollowCameraPose";
 import { emitCosmosEvent } from "../cosmosEventBus";
+import { getCosmosPerfFlags } from "../perfConfig";
 
 export const useRenderLoop = () => {
   const animationFrameRef = useRef<number | null>(null);
@@ -128,13 +129,15 @@ export const useRenderLoop = () => {
         orbitAnchors: OrbitAnchor[];
         camera: THREE.Camera;
         options: any;
+        occlusionFrame?: number;
+        occlusionCadence?: number;
       }) => void;
       renderer: THREE.WebGLRenderer;
       items: OrbitItem[];
       orbitAnchors: OrbitAnchor[];
       camera: THREE.Camera;
       controls: CameraControls;
-      composer: { render: () => void };
+      composer: { render: () => void; setSize?: (w: number, h: number) => void };
       labelRenderer: {
         render: (scene: THREE.Scene, camera: THREE.Camera) => void;
       };
@@ -232,6 +235,19 @@ export const useRenderLoop = () => {
       const _orbitCamTarget = new THREE.Vector3();
       const _orbitCurUp = new THREE.Vector3(0, 1, 0);
       const _engineTint = new THREE.Color(0x5aa7ff);
+      // Cinematic reusable temps (avoid per-frame GC)
+      const _cinLookM = new THREE.Matrix4();
+      const _cinUpV = new THREE.Vector3(0, 1, 0);
+      const _cinQuat = new THREE.Quaternion();
+      const _cinQuat2 = new THREE.Quaternion();
+      const _cinPos = new THREE.Vector3();
+      const _cinBezA = new THREE.Vector3();
+      const _cinBezB = new THREE.Vector3();
+      const _cinBezC = new THREE.Vector3();
+      const _cinRollAxis = new THREE.Vector3();
+      const _cinSpinQ = new THREE.Quaternion();
+      const _cinLastPos = new THREE.Vector3();
+      const _cinSettleBase = new THREE.Vector3();
       const _lightspeedColor = new THREE.Color();
       let _orbitUpActive = false;
       let interiorLightSnapshot: {
@@ -850,6 +866,71 @@ export const useRenderLoop = () => {
       let _perfFrameCount = 0;
       let _perfSlowFrames = 0;
 
+      // ── Runtime perf config ──────────────────────────────────────
+      const _perfFlags = getCosmosPerfFlags();
+      let _pressureFrames = 0;
+      let _stableFrames = 0;
+      let _currentRenderScale = 1;
+      let _occlusionFrameCounter = 0;
+      const _rendererSize = new THREE.Vector2();
+      let _nativeDpr = Math.min(
+        window.devicePixelRatio,
+        _perfFlags.maxDpr > 0 ? _perfFlags.maxDpr : Infinity,
+      );
+      let _appliedDpr = _nativeDpr;
+      let _adaptiveActive = false; // only true while scale < 1
+
+      /**
+       * Evaluate frame pressure and adjust render scale.
+       * Fast degrade (step 0.1 per spike window), slow recover (step 0.02).
+       * Only engages in moonOrbit / autopilot when profile is "balanced".
+       */
+      const _updateAdaptiveQuality = (frameMs: number, isModeEligible: boolean) => {
+        if (_perfFlags.profile === "baseline") return;
+        if (!isModeEligible) {
+          // Outside eligible modes — recover immediately if degraded
+          if (_currentRenderScale < 1) {
+            _currentRenderScale = 1;
+            _applyRenderScale();
+          }
+          _pressureFrames = 0;
+          _stableFrames = 0;
+          return;
+        }
+
+        if (frameMs > _perfFlags.spikeThresholdMs) {
+          _pressureFrames++;
+          _stableFrames = 0;
+          if (_pressureFrames >= _perfFlags.degradeAfterFrames && _currentRenderScale > _perfFlags.minRenderScale) {
+            _currentRenderScale = Math.max(_perfFlags.minRenderScale, _currentRenderScale - 0.1);
+            _pressureFrames = 0;
+            _applyRenderScale();
+          }
+        } else {
+          _stableFrames++;
+          _pressureFrames = Math.max(0, _pressureFrames - 1);
+          if (_stableFrames >= _perfFlags.recoverAfterFrames && _currentRenderScale < 1) {
+            _currentRenderScale = Math.min(1, _currentRenderScale + 0.02);
+            _stableFrames = 0;
+            _applyRenderScale();
+          }
+        }
+      };
+
+      const _applyRenderScale = () => {
+        const targetDpr = _nativeDpr * _currentRenderScale;
+        if (Math.abs(targetDpr - _appliedDpr) < 0.01) return;
+        _appliedDpr = targetDpr;
+        renderer.setPixelRatio(targetDpr);
+        renderer.getSize(_rendererSize);
+        renderer.setSize(_rendererSize.x, _rendererSize.y);
+        composer.setSize?.(_rendererSize.x, _rendererSize.y);
+        _adaptiveActive = _currentRenderScale < 1;
+        if (_adaptiveActive) {
+          console.info(`[PERF:adaptive] scale=${_currentRenderScale.toFixed(2)} dpr=${targetDpr.toFixed(2)}`);
+        }
+      };
+
       const animate = () => {
         animationFrameRef.current = requestAnimationFrame(animate);
 
@@ -1064,6 +1145,7 @@ export const useRenderLoop = () => {
             if (keys.ArrowDown) ship.rotation.x -= turnSpeed;
             if (keys.KeyQ) ship.rotation.z += turnSpeed;
             if (keys.KeyE) ship.rotation.z -= turnSpeed;
+            _p2 = performance.now();
           } else if (cinematic?.active) {
             const now = performance.now();
             const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -1089,21 +1171,15 @@ export const useRenderLoop = () => {
                 orbitCenter.z + Math.sin(orbitAngle) * orbitRadius,
               );
 
-              const lookMatrix = new THREE.Matrix4().lookAt(
-                ship.position,
-                orbitCenter,
-                new THREE.Vector3(0, 1, 0),
-              );
-              const orbitQuat = new THREE.Quaternion().setFromRotationMatrix(
-                lookMatrix,
-              );
+              _cinLookM.lookAt(ship.position, orbitCenter, _cinUpV.set(0, 1, 0));
+              _cinQuat.setFromRotationMatrix(_cinLookM);
               const forwardOffset = ship.userData.forwardOffset as
                 | THREE.Quaternion
                 | undefined;
               if (forwardOffset) {
-                orbitQuat.multiply(forwardOffset);
+                _cinQuat.multiply(forwardOffset);
               }
-              ship.quaternion.copy(orbitQuat);
+              ship.quaternion.copy(_cinQuat);
 
               if (orbitProgress >= 1) {
                 cinematic.phase = "approach";
@@ -1130,81 +1206,58 @@ export const useRenderLoop = () => {
                   easedPos < 0.5 ? easedPos / 0.5 : (easedPos - 0.5) / 0.5;
                 const segOneMinus = 1 - segT;
                 if (easedPos < 0.5) {
-                  currentPos = new THREE.Vector3()
+                  _cinBezA.copy(cinematic.controlPos).multiplyScalar(2 * segOneMinus * segT);
+                  _cinBezB.copy(mid).multiplyScalar(segT * segT);
+                  currentPos = _cinPos
                     .copy(cinematic.startPos)
                     .multiplyScalar(segOneMinus * segOneMinus)
-                    .add(
-                      cinematic.controlPos
-                        .clone()
-                        .multiplyScalar(2 * segOneMinus * segT),
-                    )
-                    .add(mid.clone().multiplyScalar(segT * segT));
+                    .add(_cinBezA)
+                    .add(_cinBezB);
                 } else {
                   const controlTwo =
                     cinematic.controlPos2 || cinematic.controlPos;
-                  currentPos = new THREE.Vector3()
+                  _cinBezA.copy(controlTwo).multiplyScalar(2 * segOneMinus * segT);
+                  _cinBezB.copy(cinematic.endPos).multiplyScalar(segT * segT);
+                  currentPos = _cinPos
                     .copy(mid)
                     .multiplyScalar(segOneMinus * segOneMinus)
-                    .add(
-                      controlTwo.clone().multiplyScalar(2 * segOneMinus * segT),
-                    )
-                    .add(cinematic.endPos.clone().multiplyScalar(segT * segT));
+                    .add(_cinBezA)
+                    .add(_cinBezB);
                 }
               } else if (cinematic.controlPos2) {
-                currentPos = new THREE.Vector3()
+                _cinBezA.copy(cinematic.controlPos).multiplyScalar(3 * oneMinus * oneMinus * easedPos);
+                _cinBezB.copy(cinematic.controlPos2).multiplyScalar(3 * oneMinus * easedPos * easedPos);
+                _cinBezC.copy(cinematic.endPos).multiplyScalar(easedPos * easedPos * easedPos);
+                currentPos = _cinPos
                   .copy(cinematic.startPos)
                   .multiplyScalar(oneMinus * oneMinus * oneMinus)
-                  .add(
-                    cinematic.controlPos
-                      .clone()
-                      .multiplyScalar(3 * oneMinus * oneMinus * easedPos),
-                  )
-                  .add(
-                    cinematic.controlPos2
-                      .clone()
-                      .multiplyScalar(3 * oneMinus * easedPos * easedPos),
-                  )
-                  .add(
-                    cinematic.endPos
-                      .clone()
-                      .multiplyScalar(easedPos * easedPos * easedPos),
-                  );
+                  .add(_cinBezA)
+                  .add(_cinBezB)
+                  .add(_cinBezC);
               } else {
-                currentPos = new THREE.Vector3()
+                _cinBezA.copy(cinematic.controlPos).multiplyScalar(2 * oneMinus * easedPos);
+                _cinBezB.copy(cinematic.endPos).multiplyScalar(easedPos * easedPos);
+                currentPos = _cinPos
                   .copy(cinematic.startPos)
                   .multiplyScalar(oneMinus * oneMinus)
-                  .add(
-                    cinematic.controlPos
-                      .clone()
-                      .multiplyScalar(2 * oneMinus * easedPos),
-                  )
-                  .add(
-                    cinematic.endPos
-                      .clone()
-                      .multiplyScalar(easedPos * easedPos),
-                  );
+                  .add(_cinBezA)
+                  .add(_cinBezB);
               }
 
               const lookAtTarget = cinematic.approachLookAt || camera.position;
-              const approachLook = new THREE.Matrix4().lookAt(
-                currentPos,
-                lookAtTarget,
-                new THREE.Vector3(0, 1, 0),
-              );
-              const approachQuat = new THREE.Quaternion().setFromRotationMatrix(
-                approachLook,
-              );
-              const forwardOffset = ship.userData.forwardOffset as
+              _cinLookM.lookAt(currentPos, lookAtTarget, _cinUpV.set(0, 1, 0));
+              _cinQuat.setFromRotationMatrix(_cinLookM);
+              const forwardOffset2 = ship.userData.forwardOffset as
                 | THREE.Quaternion
                 | undefined;
-              if (forwardOffset) {
-                approachQuat.multiply(forwardOffset);
+              if (forwardOffset2) {
+                _cinQuat.multiply(forwardOffset2);
               }
 
               const easedRot = easeOutCubic(progress);
-              const currentQuat = new THREE.Quaternion().slerpQuaternions(
+              const currentQuat = _cinQuat2.slerpQuaternions(
                 cinematic.startQuat,
-                approachQuat,
+                _cinQuat,
                 easedRot,
               );
 
@@ -1226,14 +1279,11 @@ export const useRenderLoop = () => {
                   );
                   const angle =
                     easedSpin * Math.PI * 2 * (cinematic.spinTurns || 1);
-                  const rollAxis = new THREE.Vector3(0, 0, -1)
+                  _cinRollAxis.set(0, 0, -1)
                     .applyQuaternion(currentQuat)
                     .normalize();
-                  const spinQuat = new THREE.Quaternion().setFromAxisAngle(
-                    rollAxis,
-                    angle,
-                  );
-                  currentQuat.multiply(spinQuat);
+                  _cinSpinQ.setFromAxisAngle(_cinRollAxis, angle);
+                  currentQuat.multiply(_cinSpinQ);
                 }
               }
 
@@ -1310,8 +1360,8 @@ export const useRenderLoop = () => {
                   1,
                 );
                 const easedSettle = THREE.MathUtils.smootherstep(settleT, 0, 1);
-                basePos = basePos
-                  .clone()
+                basePos = _cinSettleBase
+                  .copy(basePos)
                   .lerp(cinematic.settleTargetPos, easedSettle);
               }
               shipIsIdleHover = true; // skip physics while idling in cinematic hover
@@ -1370,7 +1420,7 @@ export const useRenderLoop = () => {
                 speed = ship.position.distanceTo(lastPos) / dt;
               }
 
-              ship.userData.cinematicLastPos = ship.position.clone();
+              ship.userData.cinematicLastPos = _cinLastPos.copy(ship.position);
               ship.userData.cinematicLastTime = now;
 
               const speedFactor = Math.min(speed / 60, 1.6);
@@ -1385,6 +1435,7 @@ export const useRenderLoop = () => {
                 blueAmount * 1.0,
               );
             }
+            _p2 = performance.now();
           } else if (manualFlightModeRef.current) {
             const manual = manualFlightRef.current;
             const keyboard = keyboardStateRef.current;
@@ -1558,6 +1609,7 @@ export const useRenderLoop = () => {
                 }
               });
             }
+            _p2 = performance.now();
           } else {
             updateAutopilotNavigation();
 
@@ -2074,11 +2126,14 @@ export const useRenderLoop = () => {
 
         const _p3 = performance.now();
 
+        _occlusionFrameCounter++;
         updateOrbitSystem({
           items,
           orbitAnchors,
           camera,
           options: optionsRef.current,
+          occlusionFrame: _occlusionFrameCounter,
+          occlusionCadence: _perfFlags.labelOcclusionCadence,
         });
 
         // Only call controls.update() here when NOT inside the ship —
@@ -2243,15 +2298,30 @@ export const useRenderLoop = () => {
         }
 
         const _p6 = performance.now();
+
+        // Compute mode eligibility for adaptive quality early so secondary-pass
+        // throttling can reference it within the same frame.
+        const _isModeEligible = !loadPhaseActive && (
+          isMoonOrbiting() ||
+          (!shipExploreModeRef.current &&
+           !shipStagingModeRef.current &&
+           !shipCinematicRef.current?.active &&
+           !manualFlightModeRef.current)
+        );
+
         if (loadPhaseActive) {
           renderer.render(scene, camera);
         } else {
           composer.render();
         }
 
-        // TV preview secondary render (tiny RT, every other frame)
+        // Under sustained pressure in eligible modes, skip secondary passes
+        const _underPressure = _perfFlags.throttleSecondaryPasses && _pressureFrames >= 2 && _isModeEligible;
+
+        // TV preview secondary render
         if (
           !loadPhaseActive &&
+          !_underPressure &&
           tvPreviewControllerRef?.current &&
           tvPreviewControllerRef.current.phase !== "hidden"
         ) {
@@ -2262,6 +2332,7 @@ export const useRenderLoop = () => {
         // Dashcam secondary render
         if (
           !loadPhaseActive &&
+          !_underPressure &&
           dashcamControllerRef?.current &&
           dashcamControllerRef.current.phase !== "hidden"
         ) {
@@ -2271,10 +2342,10 @@ export const useRenderLoop = () => {
 
         const _p7 = performance.now();
 
-        // Skip the extra render passes when inside the ship — the
-        // layer-1 overlay meshes and CSS2D labels aren't visible from
-        // the interior, so rendering them just wastes GPU time.
-        if (!loadPhaseActive && (!insideShipRef.current || focusedMoonRef.current)) {
+        // Layer-1 overlay + CSS2D labels — throttle to every other frame
+        // under sustained pressure to reduce GPU work.
+        const _skipLayer1 = _underPressure && (_perfFrameCount & 1) === 0;
+        if (!loadPhaseActive && !_skipLayer1 && (!insideShipRef.current || focusedMoonRef.current)) {
           const prevMask = camera.layers.mask;
           camera.layers.set(1);
           const prevAutoClear = renderer.autoClear;
@@ -2288,6 +2359,9 @@ export const useRenderLoop = () => {
 
         const _pEnd = performance.now();
         const _pTotal = _pEnd - _p0;
+
+        _updateAdaptiveQuality(_pTotal, _isModeEligible);
+
         if (_pTotal > 50) {
           _perfSlowFrames++;
           const mode = shipExploreModeRef.current ? "explore"
@@ -2296,8 +2370,9 @@ export const useRenderLoop = () => {
             : manualFlightModeRef.current ? "manual"
             : isMoonOrbiting() ? "moonOrbit"
             : "autopilot";
+          const scaleTag = _currentRenderScale < 1 ? ` scale=${_currentRenderScale.toFixed(2)}` : "";
           console.warn(
-            `[PERF] SLOW FRAME #${_perfFrameCount} (slow#${_perfSlowFrames}) total=${_pTotal.toFixed(1)}ms mode=${mode}\n` +
+            `[PERF] SLOW FRAME #${_perfFrameCount} (slow#${_perfSlowFrames}) total=${_pTotal.toFixed(1)}ms mode=${mode}${scaleTag}\n` +
             `  exitFocus=${(_p1 - _p0).toFixed(1)}ms` +
             ` | shipLogic=${((_p2 ?? _p1) - _p1).toFixed(1)}ms` +
             ` | camFollow+bokeh=${(_p3 - (_p2 ?? _p1)).toFixed(1)}ms` +

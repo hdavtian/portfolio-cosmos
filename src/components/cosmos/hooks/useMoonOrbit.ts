@@ -67,6 +67,25 @@ const SHIP_FORWARD_OFFSET = new THREE.Quaternion().setFromEuler(
   new THREE.Euler(0, Math.PI, 0),
 );
 
+const _hoverOutward = new THREE.Vector3();
+const _entryOutward = new THREE.Vector3();
+const _tangentA = new THREE.Vector3();
+const _tangentB = new THREE.Vector3();
+const _hcTangent = new THREE.Vector3();
+const _hcCamPos = new THREE.Vector3();
+const _hcSurfBelow = new THREE.Vector3();
+const _hcSkyAbove = new THREE.Vector3();
+const _hcCamTarget = new THREE.Vector3();
+const _hcCamUp = new THREE.Vector3();
+const _orientTangent = new THREE.Vector3();
+const _orientLookTarget = new THREE.Vector3();
+const _orientM = new THREE.Matrix4();
+const _exitLookTarget = new THREE.Vector3();
+const _exitM = new THREE.Matrix4();
+const _exitCamPos = new THREE.Vector3();
+const _exitCamTarget = new THREE.Vector3();
+const _exitCamUp = new THREE.Vector3(0, 1, 0);
+
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export const useMoonOrbit = (
@@ -134,7 +153,7 @@ export const useMoonOrbit = (
 
   const computeHoverStation = useCallback(
     (moonCenter: THREE.Vector3, moonRadius: number, shipPos: THREE.Vector3) => {
-      const outward = new THREE.Vector3()
+      const outward = _hoverOutward
         .copy(shipPos)
         .sub(moonCenter);
       if (outward.lengthSq() < 0.01) outward.set(0, 1, 0);
@@ -347,7 +366,7 @@ export const useMoonOrbit = (
 
         // Use current outward each frame so orientation/camera naturally follows
         // the descent into station instead of "bouncing".
-        const entryOutward = new THREE.Vector3()
+        const entryOutward = _entryOutward
           .subVectors(shipObj.position, moonCenterRef.current);
         if (entryOutward.lengthSq() < 0.01) entryOutward.copy(outward);
         entryOutward.normalize();
@@ -396,13 +415,9 @@ export const useMoonOrbit = (
         const driftAmt = moonR * ORBIT_DRIFT_AMP;
         const freq = ORBIT_DRIFT_FREQ * Math.PI * 2;
 
-        const tangentA = new THREE.Vector3()
-          .crossVectors(outward, _up)
-          .normalize();
-        if (tangentA.lengthSq() < 0.01) tangentA.set(1, 0, 0);
-        const tangentB = new THREE.Vector3()
-          .crossVectors(outward, tangentA)
-          .normalize();
+        _tangentA.crossVectors(outward, _up).normalize();
+        if (_tangentA.lengthSq() < 0.01) _tangentA.set(1, 0, 0);
+        _tangentB.crossVectors(outward, _tangentA).normalize();
 
         const driftX = Math.sin(driftTime * freq) * driftAmt * driftRamp;
         const driftZ = Math.sin(driftTime * freq * 0.7 + 1.3) * driftAmt * 0.6 * driftRamp;
@@ -411,8 +426,8 @@ export const useMoonOrbit = (
         computeHoverStation(moonCenterRef.current, moonR, entryPosRef.current);
         shipObj.position
           .copy(hoverPosRef.current)
-          .addScaledVector(tangentA, driftX)
-          .addScaledVector(tangentB, driftZ)
+          .addScaledVector(_tangentA, driftX)
+          .addScaledVector(_tangentB, driftZ)
           .addScaledVector(outward, driftY);
 
         orientShipForHover(shipObj, outward, 1.0);
@@ -434,15 +449,13 @@ export const useMoonOrbit = (
         const ease = t * t;
 
         if (phaseTimerRef.current <= dt * 2) {
-          const tangentA = new THREE.Vector3()
-            .crossVectors(outward, _up)
-            .normalize();
-          if (tangentA.lengthSq() < 0.01) tangentA.set(1, 0, 0);
+          _tangentA.crossVectors(outward, _up).normalize();
+          if (_tangentA.lengthSq() < 0.01) _tangentA.set(1, 0, 0);
 
           exitDirRef.current
             .copy(outward)
             .multiplyScalar(Math.cos(ORBIT_EXIT_ANGLE))
-            .addScaledVector(tangentA, Math.sin(ORBIT_EXIT_ANGLE))
+            .addScaledVector(_tangentA, Math.sin(ORBIT_EXIT_ANGLE))
             .normalize();
           exitStartPosRef.current.copy(shipObj.position);
           debugLog("orbit", `exiting first frame — exitDir=[${exitDirRef.current.x.toFixed(2)},${exitDirRef.current.y.toFixed(2)},${exitDirRef.current.z.toFixed(2)}]`);
@@ -467,10 +480,9 @@ export const useMoonOrbit = (
 
         return {
           cameraPosition: computeExitCamera(shipObj.position, exitDirRef.current),
-          cameraTarget: shipObj.position.clone(),
+          cameraTarget: _exitCamTarget.copy(shipObj.position),
           lerpFactor: 0.05,
-          // Gently roll camera.up back to world-Y during exit
-          cameraUp: new THREE.Vector3(0, 1, 0),
+          cameraUp: _exitCamUp.set(0, 1, 0),
         };
       }
 
@@ -511,43 +523,33 @@ function computeHoverCamera(
     lerpFactor?: number;
   },
 ): OrbitCameraInstruction {
-  const tangent = new THREE.Vector3().crossVectors(outward, _up).normalize();
-  if (tangent.lengthSq() < 0.01) tangent.set(1, 0, 0);
+  _hcTangent.crossVectors(outward, _up).normalize();
+  if (_hcTangent.lengthSq() < 0.01) _hcTangent.set(1, 0, 0);
 
   const behindDist = moonR * _behind();
   const aboveDist = moonR * _above();
 
-  const camPos = new THREE.Vector3()
+  _hcCamPos
     .copy(shipPos)
-    .addScaledVector(tangent, -behindDist)
+    .addScaledVector(_hcTangent, -behindDist)
     .addScaledVector(outward, aboveDist);
 
-  // Blend: 0 = surface, 0.5 = ship, 1 = sky above ship
-  const surfaceBelow = new THREE.Vector3()
-    .copy(moonCenter)
-    .addScaledVector(outward, moonR);
-  const skyAbove = new THREE.Vector3()
-    .copy(shipPos)
-    .addScaledVector(outward, moonR * 0.5);
+  _hcSurfBelow.copy(moonCenter).addScaledVector(outward, moonR);
+  _hcSkyAbove.copy(shipPos).addScaledVector(outward, moonR * 0.5);
   const targetBlend = options?.targetBlend ?? _pitch();
-  const camTarget = new THREE.Vector3().lerpVectors(
-    surfaceBelow,
-    skyAbove,
-    targetBlend,
-  );
-  const camUp = new THREE.Vector3()
+  _hcCamTarget.lerpVectors(_hcSurfBelow, _hcSkyAbove, targetBlend);
+  _hcCamUp
     .copy(_up)
     .lerp(outward, THREE.MathUtils.clamp(options?.upBlend ?? 1, 0, 1))
     .normalize();
 
-  log("hoverCam", `tangent=[${tangent.x.toFixed(2)},${tangent.y.toFixed(2)},${tangent.z.toFixed(2)}] behind=${behindDist.toFixed(0)} above=${aboveDist.toFixed(0)} | camPos=[${camPos.x.toFixed(0)},${camPos.y.toFixed(0)},${camPos.z.toFixed(0)}] lookAt=[${camTarget.x.toFixed(0)},${camTarget.y.toFixed(0)},${camTarget.z.toFixed(0)}] | surfBelow=[${surfaceBelow.x.toFixed(0)},${surfaceBelow.y.toFixed(0)},${surfaceBelow.z.toFixed(0)}] blend=${targetBlend.toFixed(2)} upBlend=${THREE.MathUtils.clamp(options?.upBlend ?? 1, 0, 1).toFixed(2)}`);
+  log("hoverCam", `tangent=[${_hcTangent.x.toFixed(2)},${_hcTangent.y.toFixed(2)},${_hcTangent.z.toFixed(2)}] behind=${behindDist.toFixed(0)} above=${aboveDist.toFixed(0)} | camPos=[${_hcCamPos.x.toFixed(0)},${_hcCamPos.y.toFixed(0)},${_hcCamPos.z.toFixed(0)}] lookAt=[${_hcCamTarget.x.toFixed(0)},${_hcCamTarget.y.toFixed(0)},${_hcCamTarget.z.toFixed(0)}] | surfBelow=[${_hcSurfBelow.x.toFixed(0)},${_hcSurfBelow.y.toFixed(0)},${_hcSurfBelow.z.toFixed(0)}] blend=${targetBlend.toFixed(2)} upBlend=${THREE.MathUtils.clamp(options?.upBlend ?? 1, 0, 1).toFixed(2)}`);
 
   return {
-    cameraPosition: camPos,
-    cameraTarget: camTarget,
+    cameraPosition: _hcCamPos,
+    cameraTarget: _hcCamTarget,
     lerpFactor: options?.lerpFactor ?? 0.04,
-    // "Up" = outward from moon surface → makes the moon appear as ground/horizon
-    cameraUp: camUp,
+    cameraUp: _hcCamUp,
   };
 }
 
@@ -556,16 +558,16 @@ function orientShipForHover(
   outward: THREE.Vector3,
   blendAmount: number,
 ) {
-  const tangent = new THREE.Vector3().crossVectors(outward, _up).normalize();
-  if (tangent.lengthSq() < 0.01) tangent.set(1, 0, 0);
+  _orientTangent.crossVectors(outward, _up).normalize();
+  if (_orientTangent.lengthSq() < 0.01) _orientTangent.set(1, 0, 0);
 
-  const lookTarget = new THREE.Vector3()
+  _orientLookTarget
     .copy(ship.position)
-    .addScaledVector(tangent, 10)
-    .addScaledVector(outward, _noseTilt()); // negative = nose down toward surface
+    .addScaledVector(_orientTangent, 10)
+    .addScaledVector(outward, _noseTilt());
 
-  const m = new THREE.Matrix4().lookAt(ship.position, lookTarget, outward);
-  _q.setFromRotationMatrix(m);
+  _orientM.lookAt(ship.position, _orientLookTarget, outward);
+  _q.setFromRotationMatrix(_orientM);
   _q.multiply(SHIP_FORWARD_OFFSET);
 
   ship.quaternion.slerp(_q, 0.02 + blendAmount * 0.04);
@@ -576,11 +578,9 @@ function orientShipForExit(
   exitDir: THREE.Vector3,
   t: number,
 ) {
-  const lookTarget = new THREE.Vector3()
-    .copy(ship.position)
-    .addScaledVector(exitDir, 10);
-  const m = new THREE.Matrix4().lookAt(ship.position, lookTarget, _up);
-  _q.setFromRotationMatrix(m);
+  _exitLookTarget.copy(ship.position).addScaledVector(exitDir, 10);
+  _exitM.lookAt(ship.position, _exitLookTarget, _up);
+  _q.setFromRotationMatrix(_exitM);
   _q.multiply(SHIP_FORWARD_OFFSET);
   ship.quaternion.slerp(_q, 0.03 + t * 0.05);
 }
@@ -589,8 +589,7 @@ function computeExitCamera(
   shipPos: THREE.Vector3,
   exitDir: THREE.Vector3,
 ): THREE.Vector3 {
-  return new THREE.Vector3()
-    .copy(shipPos)
-    .addScaledVector(exitDir, -12)
-    .add(new THREE.Vector3(0, 4, 0));
+  _exitCamPos.copy(shipPos).addScaledVector(exitDir, -12);
+  _exitCamPos.y += 4;
+  return _exitCamPos;
 }

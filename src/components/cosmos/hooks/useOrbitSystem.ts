@@ -8,6 +8,21 @@ import {
 } from "../ResumeSpace3D.orbital";
 import { easeOutCubic } from "../ResumeSpace3D.helpers";
 
+// ─── Reusable temps (module-level, avoids per-frame GC) ────────────────────
+const _raycaster = new THREE.Raycaster();
+const _camDir = new THREE.Vector3();
+const _panelWorldPos = new THREE.Vector3();
+const _baseWorld = new THREE.Vector3();
+const _dirT = new THREE.Vector3();
+const _titlePos = new THREE.Vector3();
+const _targetPos = new THREE.Vector3();
+const _startPos = new THREE.Vector3();
+const _labelPos = new THREE.Vector3();
+const _ovPos = new THREE.Vector3();
+const _ovDir = new THREE.Vector3();
+const _nearColor = new THREE.Color();
+const _farColor = new THREE.Color();
+
 export const useOrbitSystem = (params: {
   sceneRef: MutableRefObject<{ camera?: THREE.Camera }>;
   focusedMoonRef: MutableRefObject<THREE.Mesh | null>;
@@ -28,8 +43,12 @@ export const useOrbitSystem = (params: {
       spaceMoonOrbitSpeed?: number;
       spaceMoonSpinSpeed?: number;
     };
+    occlusionFrame?: number;
+    occlusionCadence?: number;
   }) => {
     const { items, orbitAnchors, camera, options } = args;
+    const occlusionCadence = args.occlusionCadence ?? 1;
+    const runOcclusion = (args.occlusionFrame ?? 0) % occlusionCadence === 0;
 
     const time = Date.now() * 0.001;
 
@@ -97,15 +116,11 @@ export const useOrbitSystem = (params: {
       if (item.mesh.userData.detailOverlay) {
         const panel = item.mesh.userData.detailOverlay as THREE.Mesh;
         if (panel && sceneRef.current && sceneRef.current.camera) {
-          const panelWorldPos = new THREE.Vector3();
-          panel.getWorldPosition(panelWorldPos);
-          const camPos = sceneRef.current.camera.position.clone();
+          panel.getWorldPosition(_panelWorldPos);
+          _dirT.copy(sceneRef.current.camera.position).sub(_panelWorldPos);
+          _dirT.y = 0;
 
-          const dir = camPos.sub(panelWorldPos);
-          dir.y = 0;
-          const angle = Math.atan2(dir.x, dir.z);
-
-          panel.rotation.y = angle;
+          panel.rotation.y = Math.atan2(_dirT.x, _dirT.z);
           panel.rotation.x = 0;
           panel.rotation.z = 0;
         }
@@ -121,41 +136,39 @@ export const useOrbitSystem = (params: {
         sceneRef.current.camera
       ) {
         const camPos = sceneRef.current.camera.position;
-        const baseWorld = new THREE.Vector3();
         const size =
           ((item.mesh.geometry as any)?.parameters?.radius as number) || 5;
         const dt = 1 / 60;
         multi.forEach((ov, ovIdx) => {
           if (ov.userData?.isTitleOverlay) {
-            item.mesh.getWorldPosition(baseWorld);
+            item.mesh.getWorldPosition(_baseWorld);
             const titleOffset =
               (ov.userData.titleOffset as number) || size * 0.03;
             ov.position.set(
-              baseWorld.x,
-              baseWorld.y + size + titleOffset,
-              baseWorld.z,
+              _baseWorld.x,
+              _baseWorld.y + size + titleOffset,
+              _baseWorld.z,
             );
-            const dirT = new THREE.Vector3().subVectors(camPos, ov.position);
-            dirT.y = 0;
-            ov.rotation.set(0, Math.atan2(dirT.x, dirT.z), 0);
+            _dirT.subVectors(camPos, ov.position);
+            _dirT.y = 0;
+            ov.rotation.set(0, Math.atan2(_dirT.x, _dirT.z), 0);
             return;
           }
 
           const isBullet = ov.userData?.isBulletOverlay;
           if (isBullet) {
-            item.mesh.getWorldPosition(baseWorld);
+            item.mesh.getWorldPosition(_baseWorld);
 
             const titleMesh = item.mesh.userData?.titleOverlay as
               | THREE.Mesh
               | undefined;
-            const titlePos = new THREE.Vector3();
             if (titleMesh) {
-              titleMesh.getWorldPosition(titlePos);
+              titleMesh.getWorldPosition(_titlePos);
             } else {
-              titlePos.set(
-                baseWorld.x,
-                baseWorld.y + size + size * 0.03,
-                baseWorld.z,
+              _titlePos.set(
+                _baseWorld.x,
+                _baseWorld.y + size + size * 0.03,
+                _baseWorld.z,
               );
             }
 
@@ -166,14 +179,14 @@ export const useOrbitSystem = (params: {
 
             const titleWidth =
               (titleMesh && titleMesh.userData?.planeWidth) || size * 1.2;
-            const titleLeft = titlePos.x - titleWidth * 0.5;
+            const titleLeft = _titlePos.x - titleWidth * 0.5;
             const inset = Math.min(planeW * 0.15, titleWidth * 0.05);
             const bulletTargetX = titleLeft + planeW * 0.5 + inset;
 
-            const targetPos = new THREE.Vector3(
+            _targetPos.set(
               bulletTargetX,
-              titlePos.y - planeH * 0.6 - index * spacing,
-              titlePos.z,
+              _titlePos.y - planeH * 0.6 - index * spacing,
+              _titlePos.z,
             );
 
             const sp = ov.userData?.slideProgress ?? 0;
@@ -189,16 +202,16 @@ export const useOrbitSystem = (params: {
 
             const startOffset = (titleWidth || planeW) * 0.9;
             const sd = ov.userData?.slideDir ?? 1;
-            const startPos = new THREE.Vector3(
-              targetPos.x + sd * startOffset,
-              targetPos.y,
-              targetPos.z,
+            _startPos.set(
+              _targetPos.x + sd * startOffset,
+              _targetPos.y,
+              _targetPos.z,
             );
-            ov.position.lerpVectors(startPos, targetPos, t);
+            ov.position.lerpVectors(_startPos, _targetPos, t);
 
-            const dirT = new THREE.Vector3().subVectors(camPos, ov.position);
-            dirT.y = 0;
-            ov.rotation.set(0, Math.atan2(dirT.x, dirT.z), 0);
+            _dirT.subVectors(camPos, ov.position);
+            _dirT.y = 0;
+            ov.rotation.set(0, Math.atan2(_dirT.x, _dirT.z), 0);
 
             ov.visible = nextSp > 0.01;
 
@@ -212,7 +225,7 @@ export const useOrbitSystem = (params: {
                     index,
                     slide: nextSp,
                     pos: ov.position.clone().toArray(),
-                    target: targetPos.toArray(),
+                    target: _targetPos.toArray(),
                   })}`,
                 );
               }
@@ -222,9 +235,9 @@ export const useOrbitSystem = (params: {
           } else {
             ov.rotation.x = 0;
             ov.rotation.z = 0;
-            const dirT = new THREE.Vector3().subVectors(camPos, ov.position);
-            dirT.y = 0;
-            ov.rotation.y = Math.atan2(dirT.x, dirT.z);
+            _dirT.subVectors(camPos, ov.position);
+            _dirT.y = 0;
+            ov.rotation.y = Math.atan2(_dirT.x, _dirT.z);
           }
         });
       }
@@ -237,9 +250,7 @@ export const useOrbitSystem = (params: {
       focusedMoon: focusedMoonRef.current,
     });
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.camera = camera;
-    const cameraDirection = new THREE.Vector3();
+    _raycaster.camera = camera;
     const cameraPos = camera.position;
 
     // Context boost: when the camera is close to a main planet,
@@ -293,66 +304,70 @@ export const useOrbitSystem = (params: {
 
       if (label) {
         try {
-          const labelPos = new THREE.Vector3();
-          label.getWorldPosition(labelPos);
+          label.getWorldPosition(_labelPos);
+          const distanceToLabel = camera.position.distanceTo(_labelPos);
 
-          cameraDirection.copy(labelPos).sub(camera.position).normalize();
-          raycaster.set(camera.position, cameraDirection);
-          const distanceToLabel = camera.position.distanceTo(labelPos);
+          // Raycast occlusion is expensive — run on cadence, cache result
+          let isOccluded: boolean;
+          if (runOcclusion) {
+            isOccluded = false;
 
-          let isOccluded = false;
+            _camDir.copy(_labelPos).sub(camera.position).normalize();
+            _raycaster.set(camera.position, _camDir);
 
-          for (const otherItem of items) {
-            if (
-              otherItem !== item &&
-              otherItem.mesh &&
-              otherItem.mesh.matrixWorld
-            ) {
-              const intersects = raycaster.intersectObject(
-                otherItem.mesh,
-                false,
+            for (const otherItem of items) {
+              if (
+                otherItem !== item &&
+                otherItem.mesh &&
+                otherItem.mesh.matrixWorld
+              ) {
+                const intersects = _raycaster.intersectObject(
+                  otherItem.mesh,
+                  false,
+                );
+                if (
+                  intersects.length > 0 &&
+                  intersects[0].distance < distanceToLabel - 5
+                ) {
+                  isOccluded = true;
+                  break;
+                }
+              }
+            }
+
+            if (!isOccluded && spaceshipRef.current?.matrixWorld) {
+              const intersects = _raycaster.intersectObject(
+                spaceshipRef.current,
+                true,
               );
               if (
                 intersects.length > 0 &&
                 intersects[0].distance < distanceToLabel - 5
               ) {
                 isOccluded = true;
-                break;
               }
             }
-          }
 
-          if (!isOccluded && spaceshipRef.current?.matrixWorld) {
-            const intersects = raycaster.intersectObject(
-              spaceshipRef.current,
-              true,
-            );
-            if (
-              intersects.length > 0 &&
-              intersects[0].distance < distanceToLabel - 5
-            ) {
+            if (!isOccluded && starDestroyerRef.current?.matrixWorld) {
+              const intersects = _raycaster.intersectObject(
+                starDestroyerRef.current,
+                true,
+              );
+              if (
+                intersects.length > 0 &&
+                intersects[0].distance < distanceToLabel - 5
+              ) {
+                isOccluded = true;
+              }
+            }
+
+            if (insideShipRef.current) {
               isOccluded = true;
             }
-          }
 
-          // Star Destroyer occlusion — the SD is large enough to hide
-          // labels behind it.  Use recursive intersect (true) so that
-          // the full GLTF sub-mesh hierarchy is tested.
-          if (!isOccluded && starDestroyerRef.current?.matrixWorld) {
-            const intersects = raycaster.intersectObject(
-              starDestroyerRef.current,
-              true,
-            );
-            if (
-              intersects.length > 0 &&
-              intersects[0].distance < distanceToLabel - 5
-            ) {
-              isOccluded = true;
-            }
-          }
-
-          if (insideShipRef.current) {
-            isOccluded = true;
+            item.mesh.userData._occluded = isOccluded;
+          } else {
+            isOccluded = !!(item.mesh.userData._occluded);
           }
 
           if (label.element) {
@@ -363,8 +378,6 @@ export const useOrbitSystem = (params: {
             const meshRadius =
               ((item.mesh.geometry as any)?.parameters?.radius as number | undefined) ||
               (item.mesh.geometry.boundingSphere?.radius ?? 20);
-            // Moons need a longer fade range than planets, otherwise they
-            // disappear too early during normal approach.
             const nearDist = isMoon
               ? Math.max(220, meshRadius * 10.0)
               : Math.max(90, meshRadius * 7.0);
@@ -386,22 +399,17 @@ export const useOrbitSystem = (params: {
               !!nearbySystemId &&
               ((item.mesh.userData?.systemId as string | undefined) || "").toLowerCase() === nearbySystemId;
 
-            // If we're near a main planet, keep that whole system readable:
-            // destination planet + its moons remain visible from distance,
-            // and brighten as we get closer.
             if (inActiveSystem && !isOccluded) {
               const systemFloor = isMoon
                 ? 0.70 + 0.30 * nearbySystemBoost
                 : 0.82 + 0.18 * nearbySystemBoost;
               targetOpacity = Math.max(targetOpacity, systemFloor);
-              // Two extra visibility steps at destination/system-view range.
               targetOpacity = Math.min(1, targetOpacity * 1.8);
             }
 
-            // Keep labels neutral white (no hue shift).
-            const nearColor = new THREE.Color(0xffffff);
-            const farColor = new THREE.Color(0xffffff);
-            const blended = nearColor.lerp(farColor, t);
+            _nearColor.setHex(0xffffff);
+            _farColor.setHex(0xffffff);
+            const blended = _nearColor.lerp(_farColor, t);
             const titleEl = label.element.firstElementChild as HTMLElement | null;
             const subEl = label.element.children[1] as HTMLElement | undefined;
 
@@ -439,10 +447,8 @@ export const useOrbitSystem = (params: {
     // These meshes use depthTest:false so they render on top of
     // everything.  Raycast from the camera to each visible overlay;
     // if the Star Destroyer blocks the line of sight, fade it out.
-    if (starDestroyerRef.current?.matrixWorld) {
+    if (runOcclusion && starDestroyerRef.current?.matrixWorld) {
       const sdGroup = starDestroyerRef.current;
-      const ovPos = new THREE.Vector3();
-      const ovDir = new THREE.Vector3();
 
       items.forEach((item) => {
         const overlays = item.mesh.userData.detailOverlays as
@@ -453,12 +459,12 @@ export const useOrbitSystem = (params: {
         overlays.forEach((ov) => {
           if (!ov.visible) return;
 
-          ov.getWorldPosition(ovPos);
-          ovDir.copy(ovPos).sub(camera.position).normalize();
-          raycaster.set(camera.position, ovDir);
+          ov.getWorldPosition(_ovPos);
+          _ovDir.copy(_ovPos).sub(camera.position).normalize();
+          _raycaster.set(camera.position, _ovDir);
 
-          const distToOverlay = camera.position.distanceTo(ovPos);
-          const hits = raycaster.intersectObject(sdGroup, true);
+          const distToOverlay = camera.position.distanceTo(_ovPos);
+          const hits = _raycaster.intersectObject(sdGroup, true);
 
           const occluded =
             hits.length > 0 && hits[0].distance < distToOverlay - 5;

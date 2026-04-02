@@ -3563,7 +3563,7 @@ export default function ResumeSpace3D({
   const [projectShowcaseActive, setProjectShowcaseActive] = useState(false);
   const [projectShowcasePlaying, setProjectShowcasePlaying] = useState(false);
   const [aboutElevatorReachedEnd, setAboutElevatorReachedEnd] = useState(false);
-  const [cosmosIntroOverlayOpacity, setCosmosIntroOverlayOpacity] = useState(0);
+  const [cosmosIntroOverlayOpacity, setCosmosIntroOverlayOpacity] = useState(1);
   const [projectShowcaseEntryOverlayOpacity, setProjectShowcaseEntryOverlayOpacity] =
     useState(0);
   const [projectShowcaseLeverValue, setProjectShowcaseLeverValue] = useState(0);
@@ -10612,7 +10612,6 @@ export default function ResumeSpace3D({
     const startIntro = startIntroSequenceRef.current;
     if (!startIntro) return;
     let fadeRaf = 0;
-    setCosmosIntroOverlayOpacity(0.42);
     const fadeStartedAt = performance.now();
     const fadeDurationMs = 2000;
     const tickFade = () => {
@@ -10622,7 +10621,7 @@ export default function ResumeSpace3D({
         1,
       );
       const ease = 1 - Math.pow(1 - t, 3);
-      setCosmosIntroOverlayOpacity(THREE.MathUtils.lerp(0.42, 0, ease));
+      setCosmosIntroOverlayOpacity(THREE.MathUtils.lerp(1, 0, ease));
       if (t >= 1) {
         setCosmosIntroOverlayOpacity(0);
         if (CAMERA_TRACE_ENABLED) {
@@ -24312,7 +24311,8 @@ export default function ResumeSpace3D({
           height: "100%",
           position: "relative",
           opacity: !isLoading && sceneReady ? 1 : 0,
-          transition: "opacity 1.5s ease-in-out",
+          visibility: !isLoading && sceneReady ? "visible" : "hidden",
+          transition: "opacity 1.5s ease-in-out, visibility 0s linear 0s",
         }}
       >
         <div style={{ width: "100%", height: "100%", position: "relative" }}>

@@ -1098,6 +1098,11 @@ ol {
     color: $accent-text;
 }
 
+.hero.active {
+  animation: none;
+  opacity: 1;
+}
+
 // --- HERO CANVAS STYLES (Added for Full Screen Pan/Zoom) ---
 
 .hero {
