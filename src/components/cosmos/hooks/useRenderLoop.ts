@@ -124,6 +124,11 @@ export const useRenderLoop = () => {
       } | null;
       isMoonOrbiting: () => boolean;
       updateAutopilotNavigation: () => void;
+      moonPrewarmRequestRef?: React.MutableRefObject<{
+        targetPos: THREE.Vector3;
+        radius: number;
+        targetId: string;
+      } | null>;
       updateOrbitSystem: (params: {
         items: OrbitItem[];
         orbitAnchors: OrbitAnchor[];
@@ -131,6 +136,7 @@ export const useRenderLoop = () => {
         options: any;
         occlusionFrame?: number;
         occlusionCadence?: number;
+        skipOcclusion?: boolean;
       }) => void;
       renderer: THREE.WebGLRenderer;
       items: OrbitItem[];
@@ -187,6 +193,7 @@ export const useRenderLoop = () => {
         updateMoonOrbit,
         isMoonOrbiting,
         updateAutopilotNavigation,
+        moonPrewarmRequestRef,
         updateOrbitSystem,
         renderer,
         items,
@@ -234,6 +241,10 @@ export const useRenderLoop = () => {
       const _tmpCamClamped = new THREE.Vector3();
       const _orbitCamTarget = new THREE.Vector3();
       const _orbitCurUp = new THREE.Vector3(0, 1, 0);
+      const _prewarmOutward = new THREE.Vector3();
+      const _prewarmCam = new THREE.PerspectiveCamera(60, 1, 0.1, 50000);
+      const _prewarmRT = new THREE.WebGLRenderTarget(1, 1);
+      let _prewarmDoneForTarget = "";
       const _engineTint = new THREE.Color(0x5aa7ff);
       // Cinematic reusable temps (avoid per-frame GC)
       const _cinLookM = new THREE.Matrix4();
@@ -1613,6 +1624,34 @@ export const useRenderLoop = () => {
           } else {
             updateAutopilotNavigation();
 
+            // GPU pre-warm: when approaching a moon, do a single throwaway
+            // render from a camera near the surface to force shader compilation
+            // before orbit entry (avoids the massive primaryRender spike).
+            if (
+              moonPrewarmRequestRef?.current &&
+              moonPrewarmRequestRef.current.targetId !== _prewarmDoneForTarget
+            ) {
+              const req = moonPrewarmRequestRef.current;
+              _prewarmDoneForTarget = req.targetId;
+              const outward = _prewarmOutward
+                .subVectors(ship.position, req.targetPos)
+                .normalize();
+              if (outward.lengthSq() < 0.001) outward.set(0, 1, 0);
+              const hoverDist = req.radius * (1 + 0.15);
+              _prewarmCam.position
+                .copy(req.targetPos)
+                .addScaledVector(outward, hoverDist);
+              _prewarmCam.lookAt(req.targetPos);
+              _prewarmCam.updateMatrixWorld();
+              const pwStart = performance.now();
+              renderer.setRenderTarget(_prewarmRT);
+              renderer.render(scene, _prewarmCam);
+              renderer.setRenderTarget(null);
+              console.warn(
+                `[PERF:prewarm] moon approach pre-render ${(performance.now() - pwStart).toFixed(1)}ms target=${req.targetId}`,
+              );
+            }
+
             // Moon orbit camera override (restores orbit behavior after arrival)
             if (isMoonOrbiting() && !navTurnActiveRef.current) {
               const camInstr = updateMoonOrbit(deltaSeconds, ship);
@@ -2134,6 +2173,7 @@ export const useRenderLoop = () => {
           options: optionsRef.current,
           occlusionFrame: _occlusionFrameCounter,
           occlusionCadence: _perfFlags.labelOcclusionCadence,
+          skipOcclusion: !!shipCinematicRef.current?.active,
         });
 
         // Only call controls.update() here when NOT inside the ship —

@@ -45,10 +45,11 @@ export const useOrbitSystem = (params: {
     };
     occlusionFrame?: number;
     occlusionCadence?: number;
+    skipOcclusion?: boolean;
   }) => {
     const { items, orbitAnchors, camera, options } = args;
     const occlusionCadence = args.occlusionCadence ?? 1;
-    const runOcclusion = (args.occlusionFrame ?? 0) % occlusionCadence === 0;
+    const runOcclusion = !args.skipOcclusion && (args.occlusionFrame ?? 0) % occlusionCadence === 0;
 
     const time = Date.now() * 0.001;
 
@@ -295,7 +296,7 @@ export const useOrbitSystem = (params: {
       }
     }
 
-    items.forEach((item) => {
+    if (!args.skipOcclusion) items.forEach((item) => {
       if (!item.mesh || !item.mesh.matrixWorld) return;
 
       const label = item.mesh.children.find(
@@ -447,7 +448,7 @@ export const useOrbitSystem = (params: {
     // These meshes use depthTest:false so they render on top of
     // everything.  Raycast from the camera to each visible overlay;
     // if the Star Destroyer blocks the line of sight, fade it out.
-    if (runOcclusion && starDestroyerRef.current?.matrixWorld) {
+    if (runOcclusion && !args.skipOcclusion && starDestroyerRef.current?.matrixWorld) {
       const sdGroup = starDestroyerRef.current;
 
       items.forEach((item) => {

@@ -3152,15 +3152,33 @@ export default function ResumeSpace3D({
         setLoaderStageHint("Finalizing render pipeline...");
 
         // Step 3 — Lightweight geometry upload pass using renderer only.
-        // Avoid composer here because full postprocessing was causing long
-        // loader freezes; this still warms visible geometry paths.
         const renderStart = performance.now();
         renderer.render(mainScene, liveCamera);
         const renderMs = performance.now() - renderStart;
 
+        // Step 4 — Warm the EffectComposer at 1/4 resolution so bloom and
+        // bokeh shaders are compiled before the live render loop uses them.
+        // Previous attempts at full-resolution composer warmup caused long
+        // loader freezes; the reduced size keeps the cost manageable while
+        // still triggering all shader compilation paths.
+        let composerWarmMs = 0;
+        const composer = composerRef.current;
+        if (composer) {
+          const composerWarmStart = performance.now();
+          const origSize = renderer.getSize(new THREE.Vector2());
+          const qw = Math.max(1, Math.ceil(origSize.x / 4));
+          const qh = Math.max(1, Math.ceil(origSize.y / 4));
+          renderer.setSize(qw, qh, false);
+          composer.setSize(qw, qh);
+          composer.render();
+          renderer.setSize(origSize.x, origSize.y, false);
+          composer.setSize(origSize.x, origSize.y);
+          composerWarmMs = performance.now() - composerWarmStart;
+        }
+
         const totalMs = performance.now() - warmupStart;
         console.warn(
-          `[PERF:warmup] GPU warmup COMPLETE — initTexture=${initTextureMs.toFixed(1)}ms compileAsync=${compileMs.toFixed(1)}ms render=${renderMs.toFixed(1)}ms total=${totalMs.toFixed(1)}ms`
+          `[PERF:warmup] GPU warmup COMPLETE — initTexture=${initTextureMs.toFixed(1)}ms compileAsync=${compileMs.toFixed(1)}ms render=${renderMs.toFixed(1)}ms composerWarm=${composerWarmMs.toFixed(1)}ms total=${totalMs.toFixed(1)}ms`
         );
       } catch (e) {
         console.warn("[PERF:warmup] GPU warmup error:", e);
@@ -5794,6 +5812,7 @@ export default function ResumeSpace3D({
     updateAutopilotNavigation,
     disposeNavigationSystem,
     onMoonOrbitArrivalRef,
+    moonPrewarmRequestRef,
     tvPreviewControllerRef,
     tvPhase,
     dashcamControllerRef,
@@ -22533,6 +22552,7 @@ export default function ResumeSpace3D({
       tvPreviewControllerRef,
       dashcamControllerRef,
       updateAutopilotNavigation,
+      moonPrewarmRequestRef,
       updateMoonOrbit: updateOrbit,
       isMoonOrbiting: isOrbiting,
       updateOrbitSystem,

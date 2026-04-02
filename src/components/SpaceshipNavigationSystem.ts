@@ -46,6 +46,7 @@ export interface NavigationStatus {
   speed: number;
   isTurboActive: boolean;
   targetFrozen: boolean;
+  targetPosition: THREE.Vector3 | null;
 }
 
 export type NavigationCallback = (status: NavigationStatus) => void;
@@ -561,6 +562,7 @@ export class SpaceshipNavigationSystem {
       speed: this.currentSpeed,
       isTurboActive: this.isTurboActive,
       targetFrozen: this.currentTarget.frozen,
+      targetPosition: this.currentTarget.lastPosition?.clone() ?? null,
     };
 
     this.onStatusChange(status);
@@ -624,6 +626,7 @@ export class SpaceshipNavigationSystem {
       speed: this.currentSpeed,
       isTurboActive: this.isTurboActive,
       targetFrozen: this.currentTarget.frozen,
+      targetPosition: this.currentTarget.lastPosition?.clone() ?? null,
     };
   }
 

@@ -364,6 +364,16 @@ export const useNavigationSystem = (deps: {
     ((moonMesh: THREE.Mesh, company: any) => void) | null
   >(null);
 
+  /** Set once per moon approach when within pre-warm distance so the render
+   *  loop can do a throwaway render from a camera near the moon surface,
+   *  forcing GPU shader compilation before orbit entry. Cleared by the
+   *  render loop after the pre-render, or on navigation target change. */
+  const moonPrewarmRequestRef = useRef<{
+    targetPos: THREE.Vector3;
+    radius: number;
+    targetId: string;
+  } | null>(null);
+
   const targetingFXControllerRef = useRef<TargetingFXController | null>(null);
   const _acquireLastFrameRef = useRef(0);
 
@@ -1471,6 +1481,25 @@ export const useNavigationSystem = (deps: {
           } else {
             setNavigationPhase("transit_cruise", "distance-above-approach-window");
           }
+
+          // GPU pre-warm: request a throwaway render when close to the moon
+          // so the render loop can force shader compilation from a close-up
+          // camera angle before orbit entry causes a massive GPU spike.
+          const MOON_NAV_PREWARM_DIST = 200;
+          if (
+            statusAfterUpdate.distance !== null &&
+            statusAfterUpdate.distance < MOON_NAV_PREWARM_DIST &&
+            statusAfterUpdate.targetPosition &&
+            moonTargetId &&
+            (!moonPrewarmRequestRef.current ||
+              moonPrewarmRequestRef.current.targetId !== moonTargetId)
+          ) {
+            moonPrewarmRequestRef.current = {
+              targetPos: statusAfterUpdate.targetPosition.clone(),
+              radius: 30,
+              targetId: moonTargetId,
+            };
+          }
         }
       }
       manualFlightRef.current.currentSpeed = statusAfterUpdate.speed;
@@ -2508,6 +2537,8 @@ export const useNavigationSystem = (deps: {
     disposeNavigationSystem,
     /** Set this to receive moon arrival events (triggers orbit) */
     onMoonOrbitArrivalRef,
+    /** Render loop reads & clears this to pre-warm GPU near a moon */
+    moonPrewarmRequestRef,
     targetingFXControllerRef,
     tvPreviewControllerRef,
     tvPhase,
