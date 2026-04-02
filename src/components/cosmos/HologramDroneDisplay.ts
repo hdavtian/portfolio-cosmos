@@ -359,7 +359,7 @@ export class HologramDroneDisplay {
     this.droneVariant = options?.droneVariant ?? "classic";
     this.oblivionDroneTemplate = options?.oblivionDroneTemplate ?? null;
     this.droneAudioBuffers = options?.droneAudioBuffers ?? null;
-    this.soundEnabled = options?.soundEnabled ?? true;
+    this.soundEnabled = options?.soundEnabled ?? false;
     this.droneSoundVolume = THREE.MathUtils.clamp(options?.soundVolume ?? 1, 0, 1);
     this.onAudioDebug = options?.onAudioDebug;
     this.rootGroup = new THREE.Group();

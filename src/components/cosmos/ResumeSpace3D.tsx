@@ -2762,9 +2762,9 @@ export default function ResumeSpace3D({
   const [moonIntroComplete, setMoonIntroComplete] = useState(false);
   const moonHtmlLayoutRef = useRef<HTMLDivElement | null>(null);
   const moonHtmlTimelineRef = useRef<gsap.core.Timeline | null>(null);
-  const [droneSoundEnabled, setDroneSoundEnabled] = useState(true);
+  const [droneSoundEnabled, setDroneSoundEnabled] = useState(false);
   const [droneSoundVolume, setDroneSoundVolume] = useState(0.35);
-  const [falconSoundEnabled, setFalconSoundEnabled] = useState(true);
+  const [falconSoundEnabled, setFalconSoundEnabled] = useState(false);
   const [falconSoundVolume, setFalconSoundVolume] = useState(
     FALCON_MOON_TRAVEL_DEFAULT_VOLUME,
   );
