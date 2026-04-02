@@ -1,11 +1,3 @@
-# Disable HTTP/3 (QUIC) — GoDaddy's QUIC implementation drops large
-# transfers mid-stream (ERR_QUIC_PROTOCOL_ERROR). Removing the Alt-Svc
-# header keeps browsers on stable HTTP/2.
-<IfModule mod_headers.c>
-  Header unset Alt-Svc
-  Header always unset Alt-Svc
-</IfModule>
-
 RewriteEngine On
 RewriteBase /
 RewriteRule ^index\.html$ - [L]
