@@ -2,11 +2,14 @@ const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID as
   | string
   | undefined;
 
-const PRODUCTION_HOSTNAME = "harmadavtian.com";
+const PRODUCTION_HOSTNAMES: ReadonlySet<string> = new Set([
+  "harmadavtian.com",
+  "www.harmadavtian.com",
+]);
 
 function isProductionHost(): boolean {
   try {
-    return window.location.hostname === PRODUCTION_HOSTNAME;
+    return PRODUCTION_HOSTNAMES.has(window.location.hostname);
   } catch {
     return false;
   }
