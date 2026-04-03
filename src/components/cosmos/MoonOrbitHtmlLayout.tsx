@@ -35,16 +35,15 @@ const MoonOrbitHtmlLayout: React.FC<Props> = ({ content, visible }) => {
     setHoveredTechIndex(index);
   }, []);
 
-  const activeIndex = lockedTechIndex ?? hoveredTechIndex;
-  const highlightMode: "none" | "preview" | "locked" =
-    lockedTechIndex !== null
-      ? "locked"
-      : hoveredTechIndex !== null
-        ? "preview"
-        : "none";
-  const highlightTerms: string[] =
-    activeIndex !== null && techEntries[activeIndex]
-      ? techEntries[activeIndex].highlightMatches
+  const lockedHighlightTerms: string[] =
+    lockedTechIndex !== null && techEntries[lockedTechIndex]
+      ? techEntries[lockedTechIndex].highlightMatches
+      : [];
+  const previewHighlightTerms: string[] =
+    hoveredTechIndex !== null &&
+    hoveredTechIndex !== lockedTechIndex &&
+    techEntries[hoveredTechIndex]
+      ? techEntries[hoveredTechIndex].highlightMatches
       : [];
 
   const handleBackdropClick = useCallback(
@@ -87,8 +86,8 @@ const MoonOrbitHtmlLayout: React.FC<Props> = ({ content, visible }) => {
             title={content.title}
             subtitle={content.subtitle}
             sections={content.sections}
-            highlightTerms={highlightTerms}
-            highlightMode={highlightMode}
+            lockedHighlightTerms={lockedHighlightTerms}
+            previewHighlightTerms={previewHighlightTerms}
           />
         </div>
 

@@ -6,30 +6,41 @@ interface Props {
   title: string;
   subtitle?: string;
   sections: OverlaySection[];
-  highlightTerms: string[];
-  highlightMode: "none" | "preview" | "locked";
+  lockedHighlightTerms: string[];
+  previewHighlightTerms: string[];
 }
 
 function highlightText(
   text: string,
-  terms: string[],
-  mode: "none" | "preview" | "locked",
+  lockedTerms: string[],
+  previewTerms: string[],
 ): React.ReactNode[] {
-  if (mode === "none" || terms.length === 0) return [text];
+  const lockedSet = new Set(lockedTerms.map((t) => t.toLowerCase()));
+  const previewSet = new Set(previewTerms.map((t) => t.toLowerCase()));
+  const allTerms = Array.from(new Set([...lockedSet, ...previewSet]));
+  if (allTerms.length === 0) return [text];
 
-  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const escaped = allTerms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const pattern = new RegExp(`(${escaped.join("|")})`, "gi");
   const parts = text.split(pattern);
 
   return parts.map((part, i) => {
-    const isMatch = terms.some(
-      (t) => t.toLowerCase() === part.toLowerCase(),
-    );
-    if (isMatch) {
+    const normalized = part.toLowerCase();
+    if (lockedSet.has(normalized)) {
       return (
         <mark
           key={i}
-          className={`moon-hl moon-hl--${mode}`}
+          className="moon-hl moon-hl--locked"
+        >
+          {part}
+        </mark>
+      );
+    }
+    if (previewSet.has(normalized)) {
+      return (
+        <mark
+          key={i}
+          className="moon-hl moon-hl--preview"
         >
           {part}
         </mark>
@@ -43,8 +54,8 @@ const MoonOrbitHtmlNarrative: React.FC<Props> = ({
   title,
   subtitle,
   sections,
-  highlightTerms,
-  highlightMode,
+  lockedHighlightTerms,
+  previewHighlightTerms,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastAutoScrollKeyRef = useRef<string>("");
@@ -57,12 +68,12 @@ const MoonOrbitHtmlNarrative: React.FC<Props> = ({
     const scrollEl = scrollRef.current;
     if (!scrollEl) return;
 
-    if (highlightMode !== "locked" || highlightTerms.length === 0) {
+    if (lockedHighlightTerms.length === 0) {
       lastAutoScrollKeyRef.current = "";
       return;
     }
 
-    const key = `${title}::${highlightTerms.map((t) => t.toLowerCase()).join("|")}`;
+    const key = `${title}::${lockedHighlightTerms.map((t) => t.toLowerCase()).join("|")}`;
     if (lastAutoScrollKeyRef.current === key) return;
     lastAutoScrollKeyRef.current = key;
 
@@ -88,7 +99,7 @@ const MoonOrbitHtmlNarrative: React.FC<Props> = ({
       duration: 0.45,
       ease: "power2.out",
     });
-  }, [highlightMode, highlightTerms, title]);
+  }, [lockedHighlightTerms, title]);
 
   const renderedSections = useMemo(() => {
     return sections.map((section) => {
@@ -127,7 +138,7 @@ const MoonOrbitHtmlNarrative: React.FC<Props> = ({
             <ul className="moon-narrative__list">
               {section.lines.map((line, li) => (
                 <li key={li} className="moon-narrative__item">
-                  {highlightText(line, highlightTerms, highlightMode)}
+                  {highlightText(line, lockedHighlightTerms, previewHighlightTerms)}
                 </li>
               ))}
             </ul>
