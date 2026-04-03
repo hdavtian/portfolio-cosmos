@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { trackEvent } from "../lib/analytics";
 import "./CosmosIntroGateway.scss";
 
 interface CosmosIntroGatewayProps {
@@ -24,6 +25,7 @@ export default function CosmosIntroGateway({ onEnter }: CosmosIntroGatewayProps)
 
   const handleEnter = useCallback(() => {
     if (exiting) return;
+    trackEvent("enter_the_universe_click");
     setExiting(true);
     setTimeout(onEnter, 750);
   }, [exiting, onEnter]);

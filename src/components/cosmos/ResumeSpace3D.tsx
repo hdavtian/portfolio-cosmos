@@ -4,6 +4,7 @@ import gsap from "gsap";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
+import { trackEvent } from "../../lib/analytics";
 import portfolioCores from "../../data/portfolioCores.json";
 import { moonPortfolioMapping } from "../../data/moonPortfolioMapping";
 import aboutDeck from "../../data/aboutDeck.json";
@@ -10355,6 +10356,11 @@ export default function ResumeSpace3D({
         return;
       }
       if (targetId === "portfolio" || targetId === ORBITAL_PORTFOLIO_NAV_ID) {
+        trackEvent("portfolio_section_click", {
+          target_type: "navigation",
+          target_id: targetId,
+          source: "cockpit_navigate",
+        });
         setPortfolioNavHereActive(true);
         if (!orbitalPortfolioReady) {
           vlog("⚠️ Orbital Portfolio is loading");
@@ -15465,6 +15471,11 @@ export default function ResumeSpace3D({
         hit.kind === pending.kind;
       if (elapsed <= 420 && moved <= 7 && same) {
         if (pending.kind === "core" && pending.coreId) {
+          trackEvent("portfolio_moon_click", {
+            moon_id: `core-${pending.coreId}`,
+            portfolio_core_id: pending.coreId,
+            kind: "core",
+          });
           focusOrbitalPortfolioCore(pending.coreId);
         } else if (
           pending.kind === "variant" &&
@@ -15539,6 +15550,13 @@ export default function ResumeSpace3D({
             }
           });
         } else if (typeof pending.stationIndex === "number") {
+          trackEvent("portfolio_moon_click", {
+            moon_id: `station-${pending.stationIndex}`,
+            portfolio_core_id: pending.coreId ?? null,
+            kind: "station",
+            station_index: pending.stationIndex,
+            media_index: pending.mediaIndex ?? null,
+          });
           focusOrbitalPortfolioStation(pending.stationIndex, pending.mediaIndex);
         }
         e.stopPropagation();
@@ -24424,7 +24442,10 @@ export default function ResumeSpace3D({
               type="button"
               aria-label={consoleVisible ? "Hide ship terminal" : "Show ship terminal"}
               title={consoleVisible ? "Hide ship terminal" : "Show ship terminal"}
-              onClick={() => setConsoleVisible((prev) => !prev)}
+              onClick={() => {
+                trackEvent("console_toggle", { action: consoleVisible ? "hide" : "show" });
+                setConsoleVisible((prev) => !prev);
+              }}
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
               style={{
@@ -25390,9 +25411,11 @@ export default function ResumeSpace3D({
                 <input
                   type="checkbox"
                   checked={spaceBackgroundVisible}
-                  onChange={(event) =>
-                    setSpaceBackgroundVisible(event.currentTarget.checked)
-                  }
+                  onChange={(event) => {
+                    const checked = event.currentTarget.checked;
+                    trackEvent("space_background_toggle", { enabled: checked });
+                    setSpaceBackgroundVisible(checked);
+                  }}
                 />
                 Space Background
               </label>

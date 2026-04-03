@@ -1,3 +1,4 @@
+import { trackEvent } from "../lib/analytics";
 import "./DiagramSettings.scss";
 
 export type DiagramStyle =
@@ -432,7 +433,10 @@ export default function DiagramSettings({
     <>
       <button
         className="settings-toggle"
-        onClick={onToggle}
+        onClick={() => {
+          trackEvent("settings_toggle", { action: isOpen ? "close" : "open" });
+          onToggle();
+        }}
         title="Diagram Settings"
         style={{
           display: currentStyle === "space" ? "none" : "flex",

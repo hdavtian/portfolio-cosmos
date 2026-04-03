@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import type { OrbitItem } from "../cosmos/ResumeSpace3D.orbital";
+import { trackEvent } from "../../lib/analytics";
 
 type Props = {
   visible: boolean;
@@ -683,6 +684,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
         <button
           type="button"
           onClick={() => {
+            trackEvent("minimap_toggle", { action: "show" });
             setMapVisible(true);
             setProjectAutoHidden(false);
           }}
@@ -1044,7 +1046,10 @@ const CosmicMiniMap3D: React.FC<Props> = ({
           </button>
           <button
             type="button"
-            onClick={() => setMapVisible(false)}
+            onClick={() => {
+              trackEvent("minimap_toggle", { action: "hide" });
+              setMapVisible(false);
+            }}
             style={{
               width: 18,
               height: 18,

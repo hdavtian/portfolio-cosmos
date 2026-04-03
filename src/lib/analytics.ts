@@ -1,6 +1,7 @@
-const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID as
-  | string
-  | undefined;
+import posthog from "posthog-js";
+
+const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
+const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST as string | undefined;
 
 const PRODUCTION_HOSTNAMES: ReadonlySet<string> = new Set([
   "harmadavtian.com",
@@ -17,28 +18,32 @@ function isProductionHost(): boolean {
 
 let initialized = false;
 
-export function initGA() {
-  if (initialized || !GA_MEASUREMENT_ID) return;
+export function initAnalytics(): void {
+  if (initialized || !POSTHOG_KEY) return;
   if (!isProductionHost()) return;
   initialized = true;
 
-  const script = document.createElement("script");
-  script.async = true;
-  script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
-  document.head.appendChild(script);
-
-  window.dataLayer = window.dataLayer || [];
-  function gtag(...args: unknown[]) {
-    window.dataLayer!.push(args);
-  }
-  gtag("js", new Date());
-  gtag("config", GA_MEASUREMENT_ID, {
-    debug_mode: !isProductionHost(),
+  posthog.init(POSTHOG_KEY, {
+    api_host: POSTHOG_HOST || "https://us.i.posthog.com",
+    autocapture: false,
+    capture_pageview: true,
+    capture_pageleave: true,
+    persistence: "localStorage+cookie",
   });
 }
 
-declare global {
-  interface Window {
-    dataLayer?: unknown[];
-  }
+export function trackEvent(
+  name: string,
+  properties?: Record<string, unknown>,
+): void {
+  if (!initialized) return;
+  posthog.capture(name, properties);
+}
+
+export function trackPageView(
+  path: string,
+  properties?: Record<string, unknown>,
+): void {
+  if (!initialized) return;
+  posthog.capture("$pageview", { $current_url: path, ...properties });
 }

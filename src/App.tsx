@@ -8,6 +8,7 @@ import DiagramSettings, {
   type DiagramStyleOptions,
 } from "./components/DiagramSettings";
 import CosmosIntroGateway from "./components/CosmosIntroGateway";
+import { trackEvent } from "./lib/analytics";
 import "./styles/main.scss";
 
 // Skills Diagram Component using D3.js force-directed graph
@@ -603,6 +604,12 @@ function App() {
     if (isNavigating.current || index === currentSection) return;
     isNavigating.current = true;
 
+    trackEvent("section_navigate", {
+      from_section: currentSection,
+      to_section: index,
+      to_label: getSectionLabel(index),
+    });
+
     setCurrentSection(index);
 
     // Handle animations for specific sections
@@ -633,6 +640,7 @@ function App() {
   };
 
   const handleIntroEnter = useCallback(() => {
+    trackEvent("intro_entered");
     setDiagramStyle("space");
     setShowIntro(false);
   }, []);
@@ -672,7 +680,13 @@ function App() {
                 className={`nav__item ${
                   currentSection === index ? "nav__item--active" : ""
                 } ${isExperienceItem ? "nav__item--experience" : ""}`}
-                onClick={() => navigateToSection(index)}
+                onClick={() => {
+                  trackEvent("hero_nav_click", {
+                    target_section: index,
+                    target_label: getSectionLabel(index),
+                  });
+                  navigateToSection(index);
+                }}
                 aria-label={`Navigate to ${getSectionLabel(index)}`}
               >
                 <span className="nav__tick"></span>

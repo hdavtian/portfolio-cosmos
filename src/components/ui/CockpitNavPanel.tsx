@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { trackEvent } from "../../lib/analytics";
 
 // ============================================================
 // CockpitNavPanel — Destination navigation panel
@@ -342,7 +343,14 @@ const CockpitNavPanel: React.FC<Props> = ({
                 target={planet}
                 isCurrent={isCurrent}
                 isNavigatingTo={isNav}
-                onClick={() => onNavigate(planet.id, "section")}
+                onClick={() => {
+                  trackEvent("navicomputer_click", {
+                    target_id: planet.id,
+                    target_type: "section",
+                    target_label: planet.label,
+                  });
+                  onNavigate(planet.id, "section");
+                }}
                 stopEvt={stopEvt}
               />
 
@@ -416,7 +424,14 @@ const CockpitNavPanel: React.FC<Props> = ({
                             target={moon}
                             isCurrent={moonCurrent}
                             isNavigatingTo={moonNav}
-                            onClick={() => onNavigate(moon.id, "moon")}
+                            onClick={() => {
+                              trackEvent("navicomputer_click", {
+                                target_id: moon.id,
+                                target_type: "moon",
+                                target_label: moon.label,
+                              });
+                              onNavigate(moon.id, "moon");
+                            }}
                             stopEvt={stopEvt}
                           />
                         </div>

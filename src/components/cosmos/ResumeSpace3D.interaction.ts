@@ -1,5 +1,6 @@
 import type React from "react";
 import * as THREE from "three";
+import { trackEvent } from "../../lib/analytics";
 
 export const createFocusedMoonRotationHandlers = (deps: {
   mountRef: React.RefObject<HTMLDivElement | null>;
@@ -349,6 +350,7 @@ export const createPointerInteractionHandlers = (deps: {
             .hologramPanelIndex,
         );
         if (Number.isFinite(panelIndex)) {
+          trackEvent("hologram_panel_pick", { panel_index: panelIndex });
           onHologramPanelPicked?.(panelIndex);
           return;
         }
@@ -375,6 +377,7 @@ export const createPointerInteractionHandlers = (deps: {
         true,
       );
       if (sdHits.length > 0) {
+        trackEvent("star_destroyer_click");
         vlog("🔺 Star Destroyer clicked — initiating escort");
         exitFocusedMoon();          // leave moon view if active
         onStarDestroyerClick();
@@ -382,7 +385,10 @@ export const createPointerInteractionHandlers = (deps: {
       }
     }
 
-    onHologramEmptyClick?.();
+    if (onHologramEmptyClick) {
+      trackEvent("hologram_empty_click");
+      onHologramEmptyClick();
+    }
 
     const intersects = raycaster.intersectObjects(clickablePlanets, false);
 
@@ -434,6 +440,7 @@ export const createPointerInteractionHandlers = (deps: {
                   ? "portfolio"
                   : "projects";
 
+          trackEvent("planet_click", { planet_name: planetName, target });
           vlog(`🌍 Planet clicked: ${planetName}, flying to ${target}`);
           handleNavigation(target);
           return;
@@ -449,7 +456,10 @@ export const createPointerInteractionHandlers = (deps: {
             const cid =
               (jobData as any).id ||
               (jobData.company || "").toLowerCase().replace(/\s+/g, "-");
-            // fire-and-forget: start the camera travel and moon focus
+            trackEvent("experience_moon_click", {
+              company: jobData.company,
+              company_id: cid,
+            });
             handleNavigation(`experience-${cid}`);
           } catch (e) {
             // ignore if function not yet defined

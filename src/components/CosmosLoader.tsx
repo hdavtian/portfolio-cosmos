@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { trackEvent } from "../lib/analytics";
 import "./CosmosLoader.scss";
 
 export interface CosmosLoaderProps {
@@ -136,6 +137,7 @@ export default function CosmosLoader({
 
   const handleEnterLoader = useCallback(() => {
     if (hasEntered) return;
+    trackEvent("loader_enter_click");
     setHasEntered(true);
     markDebugMode("user-entered");
   }, [hasEntered, markDebugMode]);
@@ -508,7 +510,10 @@ export default function CosmosLoader({
               <button
                 type="button"
                 className="cosmos-loader__about-trigger"
-                onClick={() => setShowInspirationOverlay(true)}
+                onClick={() => {
+                  trackEvent("loader_about_click");
+                  setShowInspirationOverlay(true);
+                }}
                 aria-label="About this loader"
               >
                 about loader
