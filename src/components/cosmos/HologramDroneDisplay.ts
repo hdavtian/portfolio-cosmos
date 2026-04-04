@@ -1962,6 +1962,10 @@ export class HologramDroneDisplay {
     if (this.drawFinished && this.techBadges.length > 0) {
       this.updateTechBadges(dt, camera);
     }
+    if (this.drawFinished && this.introMode && this.panels.length > 0) {
+      // Keep intro CTA animation alive after draw completes.
+      this.redrawPanel(this.panels[0], false);
+    }
     if (this.drawFinished) {
       this.updateMiniPortfolioLayout(camera, dt);
     }
@@ -2144,11 +2148,56 @@ export class HologramDroneDisplay {
       ctx.globalAlpha = panel.contentFade;
       ctx.drawImage(contentCanvas, 0, -panel.scrollOffset);
       ctx.globalAlpha = 1;
+      if (panelIdx >= 0) {
+        this.renderIntroSeeDetailsCta(ctx, panel, panelIdx);
+      }
       if (panelIdx >= 0 && this.searMode !== "none") {
         this.renderSearOverlay(ctx, panelIdx);
       }
     }
     panel.texture.needsUpdate = true;
+  }
+
+  private renderIntroSeeDetailsCta(
+    ctx: CanvasRenderingContext2D,
+    panel: TextPanel,
+    panelIndex: number,
+  ): void {
+    if (!this.introMode) return;
+    if (panel.mesh.userData.hologramPanelIndex !== INTRO_CARD_INDEX) return;
+
+    const runs = this.panelTextRuns[panelIndex];
+    if (!runs || runs.length === 0) return;
+    const run = runs.find((r) => r.text.toUpperCase().includes("SEE DETAILS"));
+    if (!run) return;
+
+    const y = run.y - panel.scrollOffset;
+    if (y + run.h < BORDER_MARGIN || y > panel.canvasH - BORDER_MARGIN) return;
+
+    // Gentle pulse/fade that stays within the established HUD palette.
+    const pulse = 0.5 + 0.5 * Math.sin(this.idleTime * 4.8);
+    const boxX = Math.max(BORDER_MARGIN + 3, run.x - 26);
+    const boxY = y - 2;
+    const boxW = Math.min(panel.canvasW - boxX - BORDER_MARGIN - 3, run.w + 46);
+    const boxH = Math.max(24, run.h - 3);
+
+    ctx.save();
+    ctx.fillStyle = `rgba(42, 153, 104, ${0.12 + pulse * 0.16})`;
+    ctx.strokeStyle = `rgba(138, 176, 200, ${0.34 + pulse * 0.42})`;
+    ctx.lineWidth = 1.35;
+    ctx.shadowColor = "rgba(42, 153, 104, 0.65)";
+    ctx.shadowBlur = 8 + pulse * 10;
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+    ctx.font = run.font;
+    ctx.textBaseline = "top";
+    ctx.globalAlpha = 0.8 + pulse * 0.2;
+    ctx.fillStyle = "#d9fff0";
+    ctx.shadowColor = "rgba(42, 153, 104, 0.8)";
+    ctx.shadowBlur = 10 + pulse * 8;
+    ctx.fillText(run.text, run.x, y);
+    ctx.restore();
   }
 
   private drawBorderTrace(

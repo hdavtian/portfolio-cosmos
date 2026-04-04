@@ -1813,6 +1813,22 @@ export const useNavigationSystem = (deps: {
           if (targetingFXControllerRef.current && !fxDone) {
             targetingFXControllerRef.current.fadeOut();
           }
+          const endTravelFeedsForTravelStart = () => {
+            if (
+              tvPreviewControllerRef.current &&
+              tvPreviewControllerRef.current.phase !== "hidden" &&
+              tvPreviewControllerRef.current.phase !== "outro_terminator"
+            ) {
+              tvPreviewControllerRef.current.fadeOut();
+            }
+            if (
+              dashcamControllerRef.current &&
+              dashcamControllerRef.current.phase !== "hidden" &&
+              dashcamControllerRef.current.phase !== "outro_terminator"
+            ) {
+              dashcamControllerRef.current.fadeOut();
+            }
+          };
 
           if (target.pendingMoonId && navigationSystemRef.current) {
             if (target.pendingMoonInterSystem) {
@@ -1850,6 +1866,8 @@ export const useNavigationSystem = (deps: {
                       NAV_MOON_APPROACH_MAX_DISTANCE,
                     )
                   : null;
+              // End TV feeds right as cruise/lightspeed travel starts for performance.
+              endTravelFeedsForTravelStart();
               setNavigationPhase("transit_cruise", "moon-navigation-started");
             }
             navigationTargetRef.current = {
@@ -1865,6 +1883,8 @@ export const useNavigationSystem = (deps: {
             target.turnPhase = "traveling";
             pathData.speed = 0;
             navTurnActiveRef.current = false;
+            // End TV feeds right as section cruise travel starts for performance.
+            endTravelFeedsForTravelStart();
             setNavigationPhase("transit_cruise", "section-travel-started");
             vlog("▶️ Acquire done — beginning travel");
           }
