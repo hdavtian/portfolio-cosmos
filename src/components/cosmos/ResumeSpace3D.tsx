@@ -2,6 +2,7 @@ import type { MutableRefObject } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
 import * as THREE from "three";
+import ThreeGlobe from "three-globe";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
 import { trackEvent } from "../../lib/analytics";
@@ -1137,7 +1138,7 @@ function AboutFlowDebugPanel({ snapshot }: { snapshot: AboutFlowOverlaySnapshot 
 }
 
 const DEFAULT_BACKGROUND_MUSIC_TRACK = Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
-const EXPERIENCE_MOON_TEXTURE_BY_JOB_ID: Record<string, string> = {
+const EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID: Record<string, string> = {
   investcloud: "/textures/custom-planet-textures/investcloud.jpg",
   rpa: "/textures/custom-planet-textures/texture4-rpa.jpg",
   boingo: "/textures/custom-planet-textures/boingo.jpg",
@@ -1146,6 +1147,16 @@ const EXPERIENCE_MOON_TEXTURE_BY_JOB_ID: Record<string, string> = {
   unitedlayer: "/textures/custom-planet-textures/unitedlayer.jpg",
   stormscape: "/textures/custom-planet-textures/stormscape.jpg",
 };
+
+const EXPERIENCE_MOON_BASE_TEXTURES: string[] = [
+  "/textures/custom-planet-textures/2k_jupiter.jpg",
+  "/textures/custom-planet-textures/2k_mars.jpg",
+  "/textures/custom-planet-textures/2k_mercury.jpg",
+  "/textures/custom-planet-textures/2k_neptune.jpg",
+  "/textures/custom-planet-textures/2k_saturn.jpg",
+  "/textures/custom-planet-textures/2k_venus_atmosphere.jpg",
+  "/textures/custom-planet-textures/2k_venus_surface.jpg",
+];
 
 type ShowcaseMediaEntry = {
   id: string;
@@ -3471,9 +3482,12 @@ export default function ResumeSpace3D({
           );
           return Array.from(urls).map((textureUrl) => loadTextureSafe(textureUrl));
         })();
-        const moonTextureWarmupJobs = Array.from(
-          new Set(Object.values(EXPERIENCE_MOON_TEXTURE_BY_JOB_ID)),
-        ).map((textureUrl) => loadTextureSafe(textureUrl));
+        const moonTextureWarmupJobs = [
+          ...Array.from(
+            new Set(Object.values(EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID)),
+          ).map((textureUrl) => loadTextureSafe(textureUrl)),
+          ...EXPERIENCE_MOON_BASE_TEXTURES.map((textureUrl) => loadTextureSafe(textureUrl)),
+        ];
 
         const musicTrackWarmupJobs = Object.values(COSMIC_AUDIO_TRACKS)
           .filter((url) => typeof url === "string" && url.trim().length > 0)
@@ -16239,6 +16253,19 @@ export default function ResumeSpace3D({
       0.0002,
       1,
       "/textures/mars.jpg",
+      undefined,
+      {
+        enabled: false,
+      },
+      {
+        enabled: true,
+          textureUrl:
+            "https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/clouds/clouds.png",
+        altitude: 0.0065,
+        opacity: 0.5,
+        rotationSpeed: -0.00012,
+        segments: 72,
+      },
     );
 
     // Skills no longer uses legacy planet/moon bodies.
@@ -16663,7 +16690,8 @@ export default function ResumeSpace3D({
     const experienceStartOffset = Math.PI * 0.15;
 
     experienceJobs.forEach((job, i) => {
-      const textureUrl = EXPERIENCE_MOON_TEXTURE_BY_JOB_ID[job.id];
+      const overlayTextureUrl = EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID[job.id];
+      const baseTextureUrl = EXPERIENCE_MOON_BASE_TEXTURES[i % EXPERIENCE_MOON_BASE_TEXTURES.length];
 
       // Job moons should be clickable with section index 2+i
       // (section 0 = hero+summary, section 1 = skills, sections 2+ = jobs)
@@ -16674,10 +16702,53 @@ export default function ResumeSpace3D({
         0xffaadd,
         expPlanet,
         0.002 + Math.random() * 0.001,
-        2 + i, // Make job moons clickable with correct section index
-        textureUrl,
+        2 + i,
+        baseTextureUrl,
         experienceStartOffset + (i * Math.PI * 2) / experienceCount,
+        {
+          enabled: false,
+        },
+        {
+          enabled: true,
+          textureUrl:
+            "https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/clouds/clouds.png",
+          altitude: 0.006,
+          opacity: 0.42,
+          rotationSpeed: -0.0001 - Math.random() * 0.00008,
+          segments: 64,
+        },
+        {
+          enabled: true,
+          textureUrl: overlayTextureUrl,
+          opacity: 0.5,
+        },
       );
+
+      const greyShades = [255, 220, 180, 140, 100, 60, 0];
+      const makeRingInterpolator = () => {
+        const v = greyShades[Math.floor(Math.random() * greyShades.length)] ?? 200;
+        return (t: number) => `rgba(${v},${v},${v},${Math.sqrt(Math.max(0, 1 - t))})`;
+      };
+      const ringCount = 3 + Math.floor(Math.random() * 7);
+      const ringData = Array.from({ length: ringCount }, () => ({
+        lat: (Math.random() - 0.5) * 180,
+        lng: (Math.random() - 0.5) * 360,
+        maxR: Math.random() * 20 + 3,
+        propagationSpeed: (Math.random() - 0.5) * 20 + 1,
+        repeatPeriod: Math.random() * 2000 + 200,
+        colorInterpolator: makeRingInterpolator(),
+      }));
+      const moonRingsGlobe = new ThreeGlobe({ waitForGlobeReady: false, animateIn: false })
+        .showGlobe(false)
+        .showAtmosphere(false)
+        .ringsData(ringData)
+        .ringColor((d: any) => d.colorInterpolator)
+        .ringMaxRadius("maxR")
+        .ringPropagationSpeed("propagationSpeed")
+        .ringRepeatPeriod("repeatPeriod");
+      const ringsScale = EXP_MOON_RADIUS / moonRingsGlobe.getGlobeRadius();
+      moonRingsGlobe.scale.setScalar(ringsScale);
+      moonMesh.add(moonRingsGlobe as unknown as THREE.Object3D);
 
       // Register moon with position emitter for tracking
       const moonId = `moon-${job.id}`;

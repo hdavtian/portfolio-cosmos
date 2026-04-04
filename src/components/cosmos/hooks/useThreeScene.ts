@@ -164,7 +164,7 @@ export const useThreeScene = (params: {
       new THREE.Vector2(container.clientWidth, container.clientHeight),
       Math.min((optionsRef.current.spaceSunIntensity || 2.5) * 0.4, 3),
       0.6,
-      0.92, // Threshold: only very bright pixels bloom (sun surface, not reflections)
+      0.92,
     );
     composer.addPass(bloomPass);
     sceneRef.current.bloomPass = bloomPass;

@@ -13,6 +13,8 @@ import {
 
 const PRIMARY_UNIVERSE_STARFIELD_TEXTURE = "/textures/8k_stars.jpg";
 const PRIMARY_UNIVERSE_SKYFIELD_TEXTURE = "/textures/stars.jpg";
+const THREE_GLOBE_CLOUDS_TEXTURE_URL =
+  "https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/clouds/clouds.png";
 
 type OrbitItem = {
   mesh: THREE.Mesh;
@@ -509,6 +511,26 @@ export const createPlanetFactory = (deps: {
     sectionIndex?: number,
     textureUrl?: string,
     startAngleOverride?: number,
+    atmosphereOptions?: {
+      enabled?: boolean;
+      scale?: number;
+      rimColor?: number;
+      rimStrength?: number;
+      rimPower?: number;
+    },
+    cloudOptions?: {
+      enabled?: boolean;
+      textureUrl?: string;
+      altitude?: number;
+      opacity?: number;
+      rotationSpeed?: number;
+      segments?: number;
+    },
+    overlayTextureOptions?: {
+      enabled?: boolean;
+      textureUrl?: string;
+      opacity?: number;
+    },
   ): THREE.Mesh => {
     // Orbit Path - Render as smooth ellipses instead of segmented torus rings
     // Make rings thinner: main orbits slightly thicker than moon orbits
@@ -606,10 +628,10 @@ export const createPlanetFactory = (deps: {
     planetMesh.castShadow = false;
     planetMesh.receiveShadow = false;
 
-    // Keep the soft rim shell only on main planets; moon overlays can flash
-    // as white discs during fast camera transitions (reported artifact).
-    if (parent === scene) {
-      const atmosphereScale = 1.045;
+    const defaultAtmosphereEnabled = parent === scene;
+    const atmosphereEnabled = atmosphereOptions?.enabled ?? defaultAtmosphereEnabled;
+    if (atmosphereEnabled) {
+      const atmosphereScale = atmosphereOptions?.scale ?? 1.045;
       const atmosphereGeometry = new THREE.SphereGeometry(
         size * atmosphereScale,
         sphereSegments,
@@ -617,9 +639,9 @@ export const createPlanetFactory = (deps: {
       );
       const atmosphereMaterial = new THREE.ShaderMaterial({
         uniforms: {
-          rimColor: { value: new THREE.Color(0xb8c8ff) },
-          rimStrength: { value: 0.105 },
-          rimPower: { value: 2.25 },
+          rimColor: { value: new THREE.Color(atmosphereOptions?.rimColor ?? 0xb8c8ff) },
+          rimStrength: { value: atmosphereOptions?.rimStrength ?? 0.105 },
+          rimPower: { value: atmosphereOptions?.rimPower ?? 2.25 },
         },
         vertexShader: `
           varying vec3 vNormal;
@@ -655,6 +677,54 @@ export const createPlanetFactory = (deps: {
       atmosphereShell.receiveShadow = false;
       planetMesh.add(atmosphereShell);
       planetMesh.userData.atmosphereShell = atmosphereShell;
+    }
+
+    if (overlayTextureOptions?.enabled && overlayTextureOptions.textureUrl) {
+      const overlayOpacity = THREE.MathUtils.clamp(overlayTextureOptions.opacity ?? 0.5, 0.05, 1);
+      const overlayTexture = textureLoader.load(overlayTextureOptions.textureUrl);
+      overlayTexture.colorSpace = THREE.SRGBColorSpace;
+      const overlayMaterial = new THREE.MeshStandardMaterial({
+        map: overlayTexture,
+        transparent: true,
+        opacity: overlayOpacity,
+        depthWrite: false,
+        metalness: 0.05,
+        roughness: 1.0,
+      });
+      const overlayShell = new THREE.Mesh(
+        new THREE.SphereGeometry(size * 1.001, sphereSegments, sphereSegments),
+        overlayMaterial,
+      );
+      overlayShell.name = `${name}-overlay-texture`;
+      overlayShell.castShadow = false;
+      overlayShell.receiveShadow = false;
+      planetMesh.add(overlayShell);
+      planetMesh.userData.overlayTextureShell = overlayShell;
+    }
+
+    if (cloudOptions?.enabled) {
+      const cloudAltitude = Math.max(0.001, cloudOptions.altitude ?? 0.004);
+      const cloudSegments = Math.max(24, Math.floor(cloudOptions.segments ?? 75));
+      const cloudOpacity = THREE.MathUtils.clamp(cloudOptions.opacity ?? 0.56, 0.05, 1);
+      const cloudTextureUrl = cloudOptions.textureUrl || THREE_GLOBE_CLOUDS_TEXTURE_URL;
+      const cloudTexture = textureLoader.load(cloudTextureUrl);
+      cloudTexture.colorSpace = THREE.SRGBColorSpace;
+      const cloudMaterial = new THREE.MeshPhongMaterial({
+        map: cloudTexture,
+        transparent: true,
+        opacity: cloudOpacity,
+        depthWrite: false,
+      });
+      const cloudShell = new THREE.Mesh(
+        new THREE.SphereGeometry(size * (1 + cloudAltitude), cloudSegments, cloudSegments),
+        cloudMaterial,
+      );
+      cloudShell.name = `${name}-cloud-shell`;
+      cloudShell.castShadow = false;
+      cloudShell.receiveShadow = false;
+      planetMesh.add(cloudShell);
+      planetMesh.userData.cloudShell = cloudShell;
+      planetMesh.userData.cloudRotationSpeed = cloudOptions.rotationSpeed ?? -0.000105;
     }
 
     // Start position

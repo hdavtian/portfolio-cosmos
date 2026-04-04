@@ -91,6 +91,11 @@ export const updateOrbit = (params: {
       item.mesh.rotation.y += baseSpin;
     }
 
+    const cloudShell = item.mesh.userData?.cloudShell as THREE.Object3D | undefined;
+    if (cloudShell) {
+      cloudShell.rotation.y += Number(item.mesh.userData?.cloudRotationSpeed ?? -0.000105);
+    }
+
     // Apply any residual spin velocity from user interaction (always applied)
     const spin = item.mesh.userData.spinVelocity as THREE.Vector3 | undefined;
     if (spin) {
