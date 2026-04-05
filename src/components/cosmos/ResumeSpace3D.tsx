@@ -1,19 +1,20 @@
+import type CameraControls from "camera-controls";
+import gsap from "gsap";
 import type { MutableRefObject } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import gsap from "gsap";
 import * as THREE from "three";
 import ThreeGlobe from "three-globe";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import resumeData from "../../data/resume.json";
-import { trackEvent } from "../../lib/analytics";
-import { IS_DEBUG, dlog, dwarn } from "../../lib/debugLog";
-import portfolioCores from "../../data/portfolioCores.json";
-import { moonPortfolioMapping } from "../../data/moonPortfolioMapping";
 import aboutDeck from "../../data/aboutDeck.json";
+import aboutHallLevelsManifest from "../../data/aboutHallLevels.json";
 import aboutHallSlidesLegacy from "../../data/aboutHallSlides.json";
 import aboutHallSlidesLevel01 from "../../data/aboutHallSlides.level-01-signal-origins.json";
 import aboutHallSlidesLevel02 from "../../data/aboutHallSlides.level-02-human-systems.json";
-import aboutHallLevelsManifest from "../../data/aboutHallLevels.json";
+import { moonPortfolioMapping } from "../../data/moonPortfolioMapping";
+import portfolioCores from "../../data/portfolioCores.json";
+import resumeData from "../../data/resume.json";
+import { trackEvent } from "../../lib/analytics";
+import { IS_DEBUG, dlog, dwarn } from "../../lib/debugLog";
 import CosmosLoader from "../CosmosLoader";
 import {
   DEFAULT_CONTROL_SENSITIVITY,
@@ -28,140 +29,140 @@ import {
   createLighting,
   createPlanetFactory,
   createStarfieldMeshes,
-  createSunMesh,
   createSunGlowTexture,
+  createSunMesh,
 } from "./ResumeSpace3D.factories";
 import { type OrbitAnchor, type OrbitItem } from "./ResumeSpace3D.orbital";
 import {
   freezeSystemForMoon,
   type FrozenSystemState,
 } from "./ResumeSpace3D.systemFreeze";
-import type CameraControls from "camera-controls";
 import type { ResumeSpace3DProps, SceneRef } from "./ResumeSpace3D.types";
 // Import our new cosmic systems
+import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import type { OverlayContent } from "../CosmicContentOverlay";
 import {
-  CosmosCameraDirector,
   COSMIC_AUDIO_TRACKS,
   CosmicTourGuide,
+  CosmosCameraDirector,
   NavigationInterface,
   type NavigationWaypoint,
 } from "../CosmicNavigation";
-import type { OverlayContent } from "../CosmicContentOverlay";
 import {
   TourDefinitionBuilder,
   type PlanetData,
 } from "../TourDefinitionBuilder";
-import SpaceshipHUD from "../ui/SpaceshipHUD";
-import ShipControlBar, { type ShipUIPhase } from "../ui/ShipControlBar";
 import CockpitNavPanel from "../ui/CockpitNavPanel";
-import ShipTerminal, { type ShipTerminalToolAction } from "../ui/ShipTerminal";
-import UserOnScreenMessages from "../ui/UserOnScreenMessages";
 import CosmicMiniMap3D from "../ui/CosmicMiniMap3D";
 import {
   clearOnScreenTelemetry,
   onScreenMessage,
   setOnScreenTelemetry,
 } from "../ui/onScreenMessaging";
+import ShipControlBar, { type ShipUIPhase } from "../ui/ShipControlBar";
+import ShipTerminal, { type ShipTerminalToolAction } from "../ui/ShipTerminal";
+import SpaceshipHUD from "../ui/SpaceshipHUD";
+import UserOnScreenMessages from "../ui/UserOnScreenMessages";
 import {
   HologramDroneDisplay,
   type DroneAudioBuffers,
   type DroneVisualVariant,
 } from "./HologramDroneDisplay";
-import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 // CockpitHologramPanels kept for potential future use
 import { getOrbitalPositionEmitter } from "../OrbitalPositionEmitter";
 import { StarDestroyerCruiser } from "../StarDestroyerCruiser";
-import { useCosmosLogs } from "./hooks/useCosmosLogs";
-import { useCosmosOptions } from "./hooks/useCosmosOptions";
-import { useKeyboardControls } from "./hooks/useKeyboardControls";
-import { usePointerInteractions } from "./hooks/usePointerInteractions";
-import { useThreeScene } from "./hooks/useThreeScene";
-import { useOrbitSystem } from "./hooks/useOrbitSystem";
-import { createMoonFocusController } from "./ResumeSpace3D.focusController";
-import { useMoonOrbit, type OrbitPhase } from "./hooks/useMoonOrbit";
 import {
-  useNavigationSystem,
-  type NavigationTravelPhase,
-} from "./hooks/useNavigationSystem";
-import { useRenderLoop } from "./hooks/useRenderLoop";
-import { TargetPreviewTVPanel } from "./TargetPreviewTVPanel";
-import DebugZoneOverlay from "./DebugZoneOverlay";
-import MoonOrbitHtmlLayout from "./MoonOrbitHtmlLayout";
-import {
-  createIntroSequenceRunner,
-  INTRO_CAMERA_FINAL_POS,
-  INTRO_CAMERA_FINAL_TARGET,
-} from "./introSequence";
-import { subscribeCosmosEvent } from "./cosmosEventBus";
+  AboutJourneyController,
+  AboutJourneyPhase,
+} from "./aboutJourney/AboutJourneyController";
+import AboutJourneyDebugPanel from "./aboutJourney/AboutJourneyDebugPanel";
 import {
   createAboutParticleSwarm,
   type AboutParticleSwarmHandle,
 } from "./aboutJourney/AboutParticleSwarm";
 import {
-  AboutJourneyController,
-  AboutJourneyPhase,
-} from "./aboutJourney/AboutJourneyController";
-import {
-  attachAudioListenerToCamera,
-  createPositionalAudio,
-  playPositionalOneShot,
-} from "./audio/threeAudioUtils";
-import { createKeyboardStudioEngine } from "./audio/keyboardStudioEngine";
-import {
   COSMOS_SOUND_EVENT_IDS,
+  DEFAULT_KEYBOARD_STUDIO_SOUND_DESIGN,
+  KEYBOARD_STUDIO_ENABLED_KEY,
+  loadBindings,
+  loadPanelLayout,
+  loadPresets,
+  normalizeSoundDesign,
+  onCosmosSoundEvent,
+  saveBindings,
+  saveBooleanStorage,
+  savePanelLayout,
+  savePresets,
   type KeyboardRecordedNoteEvent,
   type KeyboardStudioEventBinding,
   type KeyboardStudioPanelLayout,
   type KeyboardStudioPreset,
   type KeyboardStudioSoundDesign,
-  KEYBOARD_STUDIO_ENABLED_KEY,
-  DEFAULT_KEYBOARD_STUDIO_SOUND_DESIGN,
-  saveBooleanStorage,
-  loadPanelLayout,
-  savePanelLayout,
-  loadPresets,
-  savePresets,
-  loadBindings,
-  saveBindings,
-  normalizeSoundDesign,
-  onCosmosSoundEvent,
 } from "./audio/keyboardStudioBindings";
+import { createKeyboardStudioEngine } from "./audio/keyboardStudioEngine";
 import {
-  SUN_GLOW_SPRITE_SIZE,
-  EXPERIENCE_ORBIT,
-  EXPERIENCE_RADIUS,
-  EXP_MOON_ORBIT_BASE,
-  EXP_MOON_ORBIT_STEP,
-  EXP_MOON_RADIUS,
-  FALCON_SCALE,
-  FALCON_INITIAL_POS,
-  SD_SCALE,
-  SD_INITIAL_POS,
-  SD_CONE_LENGTH,
-  SD_CONE_RADIUS,
-  NEAR_DEFAULT,
-  NEAR_OVERVIEW,
-  CONTROLS_MAX_DIST,
-  CAMERA_FAR,
-  FOLLOW_DISTANCE,
-  FOLLOW_HEIGHT,
-  EXP_WANDER_RADIUS,
-  SKILLS_WANDER_RADIUS,
-  PROJ_WANDER_RADIUS,
-  SUN_WANDER_RADIUS,
-  SKYFIELD_RADIUS,
-  EXP_FOCUS_DIST,
-  SKILLS_FOCUS_DIST,
-  CINE_DURATION_DIVISOR,
-  orbitDebug,
-} from "./scaleConfig";
+  attachAudioListenerToCamera,
+  createPositionalAudio,
+  playPositionalOneShot,
+} from "./audio/threeAudioUtils";
+import { subscribeCosmosEvent } from "./cosmosEventBus";
+import DebugZoneOverlay from "./DebugZoneOverlay";
+import { useCosmosLogs } from "./hooks/useCosmosLogs";
+import { useCosmosOptions } from "./hooks/useCosmosOptions";
+import { useKeyboardControls } from "./hooks/useKeyboardControls";
+import { useMoonOrbit, type OrbitPhase } from "./hooks/useMoonOrbit";
+import {
+  useNavigationSystem,
+  type NavigationTravelPhase,
+} from "./hooks/useNavigationSystem";
+import { useOrbitSystem } from "./hooks/useOrbitSystem";
+import { usePointerInteractions } from "./hooks/usePointerInteractions";
+import { useRenderLoop } from "./hooks/useRenderLoop";
+import { useThreeScene } from "./hooks/useThreeScene";
+import {
+  INTRO_CAMERA_FINAL_POS,
+  INTRO_CAMERA_FINAL_TARGET,
+  createIntroSequenceRunner,
+} from "./introSequence";
+import MoonOrbitHtmlLayout from "./MoonOrbitHtmlLayout";
+import { buildMoonPortfolioPayload } from "./moonPortfolioSelector";
 import {
   buildPortfolioRegistryModel,
   type PortfolioCoreSeed,
   type PortfolioCoreView,
   type PortfolioGroupView,
 } from "./portfolioData";
-import { buildMoonPortfolioPayload } from "./moonPortfolioSelector";
+import { createMoonFocusController } from "./ResumeSpace3D.focusController";
+import {
+  CAMERA_FAR,
+  CINE_DURATION_DIVISOR,
+  CONTROLS_MAX_DIST,
+  EXPERIENCE_ORBIT,
+  EXPERIENCE_RADIUS,
+  EXP_FOCUS_DIST,
+  EXP_MOON_ORBIT_BASE,
+  EXP_MOON_ORBIT_STEP,
+  EXP_MOON_RADIUS,
+  EXP_WANDER_RADIUS,
+  FALCON_INITIAL_POS,
+  FALCON_SCALE,
+  FOLLOW_DISTANCE,
+  FOLLOW_HEIGHT,
+  NEAR_DEFAULT,
+  NEAR_OVERVIEW,
+  PROJ_WANDER_RADIUS,
+  SD_CONE_LENGTH,
+  SD_CONE_RADIUS,
+  SD_INITIAL_POS,
+  SD_SCALE,
+  SKILLS_FOCUS_DIST,
+  SKILLS_WANDER_RADIUS,
+  SKYFIELD_RADIUS,
+  SUN_GLOW_SPRITE_SIZE,
+  SUN_WANDER_RADIUS,
+  orbitDebug,
+} from "./scaleConfig";
+import { TargetPreviewTVPanel } from "./TargetPreviewTVPanel";
 
 // Extend window for logging timestamps
 declare global {
@@ -256,7 +257,11 @@ const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_TEXT_SWAP_POWER = 0.4;
 
 const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = false;
 const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
-const EXPERIENCE_END_CAMERA_POSITION = new THREE.Vector3(11281.3, -534.0, 1301.6);
+const EXPERIENCE_END_CAMERA_POSITION = new THREE.Vector3(
+  11281.3,
+  -534.0,
+  1301.6,
+);
 const EXPERIENCE_END_CAMERA_TARGET = new THREE.Vector3(11970.8, -828.9, -116.5);
 const HALLWAY_DEFAULT_CONTENT_MODE = "about";
 
@@ -264,34 +269,53 @@ const ABOUT_HALL_LEVEL_DATA_MAP: Record<string, unknown> = {
   "level-01": aboutHallSlidesLevel01,
   "level-02": aboutHallSlidesLevel02,
 };
-const ABOUT_HALL_DEFAULT_LEVEL_ID = aboutHallLevelsManifest.levels.find((l) => l.default)?.id ?? "level-01";
+const ABOUT_HALL_DEFAULT_LEVEL_ID =
+  aboutHallLevelsManifest.levels.find((l) => l.default)?.id ?? "level-01";
 
 const ABOUT_ELEVATOR_COOKIE_FIRST_VISIT = "aboutElevatorVisited";
 const ABOUT_ELEVATOR_COOKIE_VISITED_LEVELS = "aboutElevatorVisitedLevels";
 
 function getAboutElevatorHasVisited(): boolean {
   try {
-    return document.cookie.split(";").some((c) => c.trim().startsWith(ABOUT_ELEVATOR_COOKIE_FIRST_VISIT + "="));
-  } catch { return false; }
+    return document.cookie
+      .split(";")
+      .some((c) =>
+        c.trim().startsWith(ABOUT_ELEVATOR_COOKIE_FIRST_VISIT + "="),
+      );
+  } catch {
+    return false;
+  }
 }
 function setAboutElevatorHasVisited(): void {
   try {
     document.cookie = `${ABOUT_ELEVATOR_COOKIE_FIRST_VISIT}=1;path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
 }
 function getAboutElevatorVisitedLevels(): string[] {
   try {
-    const match = document.cookie.split(";").find((c) => c.trim().startsWith(ABOUT_ELEVATOR_COOKIE_VISITED_LEVELS + "="));
+    const match = document.cookie
+      .split(";")
+      .find((c) =>
+        c.trim().startsWith(ABOUT_ELEVATOR_COOKIE_VISITED_LEVELS + "="),
+      );
     if (!match) return [];
-    return decodeURIComponent(match.split("=")[1] ?? "").split(",").filter(Boolean);
-  } catch { return []; }
+    return decodeURIComponent(match.split("=")[1] ?? "")
+      .split(",")
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 function markAboutElevatorLevelVisited(levelId: string): void {
   try {
     const visited = new Set(getAboutElevatorVisitedLevels());
     visited.add(levelId);
     document.cookie = `${ABOUT_ELEVATOR_COOKIE_VISITED_LEVELS}=${encodeURIComponent(Array.from(visited).join(","))};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
 }
 
 const HALLWAY_OSWALD_FONT_STACK =
@@ -370,7 +394,8 @@ const PROJECT_SHOWCASE_MODEL_PROFILES: Record<
   },
 };
 // A/B switch for project hallway model comparisons.
-const ACTIVE_PROJECT_SHOWCASE_MODEL: ProjectShowcaseModelKey = "spaceHallwayBright";
+const ACTIVE_PROJECT_SHOWCASE_MODEL: ProjectShowcaseModelKey =
+  "spaceHallwayBright";
 const PROJECT_SHOWCASE_ACTIVE_PROFILE =
   PROJECT_SHOWCASE_MODEL_PROFILES[ACTIVE_PROJECT_SHOWCASE_MODEL];
 const PROJECT_SHOWCASE_MODEL_PATH = PROJECT_SHOWCASE_ACTIVE_PROFILE.modelPath;
@@ -403,7 +428,8 @@ const PROJECT_SHOWCASE_SUN_BEAM_INTENSITY =
 const OBLIVION_DRONE_MODEL_PATH = "/models/oblivion-drone/oblivion_drone.glb";
 const OBLIVION_DRONE_AUDIO_PATHS = {
   activation: "/models/oblivion-drone/199938__drzhnn__01-activation.wav",
-  transmission: "/models/oblivion-drone/199939__drzhnn__08-data-transmission.wav",
+  transmission:
+    "/models/oblivion-drone/199939__drzhnn__08-data-transmission.wav",
   movement: [
     "/models/oblivion-drone/199941__drzhnn__06-blip.wav",
     "/models/oblivion-drone/199942__drzhnn__05-klaxon.wav",
@@ -425,7 +451,11 @@ const FALCON_MOON_TRAVEL_DEFAULT_VOLUME = 0.68;
 const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
   "/models/alternate-universe/starmap_16k.jpg";
 const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
-const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(1158.5, 157.5, 14760.375);
+const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(
+  1158.5,
+  157.5,
+  14760.375,
+);
 const PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR = new THREE.Vector3(
   13723.38,
   157.5,
@@ -441,9 +471,13 @@ const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 // Recenter deep-space destinations so the universe extent remains sun-centered.
 const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(13600, 220, -12000);
 const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -13200);
-const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR = PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR.clone();
+const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR =
+  PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR.clone();
 const ABOUT_MEMORY_SQUARE_NAV_STANDOFF_DIST = 4200;
 const ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST = 4550;
+/** Tighter CameraControls distance limits while the about journey allows free look (keeps points visible). */
+const ABOUT_JOURNEY_CAM_MIN_DIST = 280;
+const ABOUT_JOURNEY_CAM_MAX_DIST = 7200;
 const ABOUT_MEMORY_SQUARE_CAMERA_STOP_DIST = 3900;
 const ABOUT_CELL_GRID_DIVISIONS = 14;
 const ABOUT_CELL_BACK_GRID_DIVISIONS = 6;
@@ -648,8 +682,8 @@ const SKILLS_LATTICE_TONE_PRESETS: SkillsLatticeTonePreset[] = [
   },
 ];
 const resolveSkillsLatticeTonePreset = (id: string): SkillsLatticeTonePreset =>
-  SKILLS_LATTICE_TONE_PRESETS.find((preset) => preset.id === id)
-  ?? SKILLS_LATTICE_TONE_PRESETS[0];
+  SKILLS_LATTICE_TONE_PRESETS.find((preset) => preset.id === id) ??
+  SKILLS_LATTICE_TONE_PRESETS[0];
 const FAST_TRACK_TARGET: string | null = (() => {
   if (typeof window === "undefined") return null;
   try {
@@ -743,89 +777,451 @@ const makeKeyboardStudioFactoryPreset = (
 };
 const KEYBOARD_STUDIO_FACTORY_PRESETS: KeyboardStudioPreset[] = [
   makeKeyboardStudioFactoryPreset("factory-nebula-keys", "Nebula Keys", {
-    attack: 0.012, decay: 0.18, sustain: 0.45, release: 0.6, filterCutoff: 2200, drive: 0.1, chorusDepth: 0.38, delayFeedback: 0.32, reverbMix: 0.26, outputGainDb: -10, velocityCurve: 0.95, oscillatorType: "triangle8", filterType: "lowpass",
+    attack: 0.012,
+    decay: 0.18,
+    sustain: 0.45,
+    release: 0.6,
+    filterCutoff: 2200,
+    drive: 0.1,
+    chorusDepth: 0.38,
+    delayFeedback: 0.32,
+    reverbMix: 0.26,
+    outputGainDb: -10,
+    velocityCurve: 0.95,
+    oscillatorType: "triangle8",
+    filterType: "lowpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-cinematic-bell", "Cinematic Bell", {
-    attack: 0.004, decay: 0.38, sustain: 0.28, release: 1.25, filterCutoff: 5200, drive: 0.05, chorusDepth: 0.14, delayFeedback: 0.24, reverbDecay: 4.3, reverbMix: 0.35, stereoWidth: 0.62, outputGainDb: -12, oscillatorType: "sine4", filterType: "bandpass",
+    attack: 0.004,
+    decay: 0.38,
+    sustain: 0.28,
+    release: 1.25,
+    filterCutoff: 5200,
+    drive: 0.05,
+    chorusDepth: 0.14,
+    delayFeedback: 0.24,
+    reverbDecay: 4.3,
+    reverbMix: 0.35,
+    stereoWidth: 0.62,
+    outputGainDb: -12,
+    oscillatorType: "sine4",
+    filterType: "bandpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-synth-pluck", "Synth Pluck", {
-    attack: 0.002, decay: 0.09, sustain: 0.14, release: 0.3, filterCutoff: 3000, filterQ: 1.6, drive: 0.22, chorusDepth: 0.16, delayTime: 0.12, delayFeedback: 0.18, reverbMix: 0.12, outputGainDb: -11.5, velocityCurve: 1.2, oscillatorType: "square6", filterType: "bandpass",
+    attack: 0.002,
+    decay: 0.09,
+    sustain: 0.14,
+    release: 0.3,
+    filterCutoff: 3000,
+    filterQ: 1.6,
+    drive: 0.22,
+    chorusDepth: 0.16,
+    delayTime: 0.12,
+    delayFeedback: 0.18,
+    reverbMix: 0.12,
+    outputGainDb: -11.5,
+    velocityCurve: 1.2,
+    oscillatorType: "square6",
+    filterType: "bandpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-solar-winds", "Solar Winds", {
-    attack: 0.08, decay: 0.32, sustain: 0.72, release: 2.2, filterCutoff: 1400, filterQ: 0.7, drive: 0.04, chorusDepth: 0.55, chorusRate: 0.34, delayTime: 0.28, delayFeedback: 0.44, reverbDecay: 6.8, reverbMix: 0.54, stereoWidth: 0.86, outputGainDb: -13.5, velocityCurve: 0.88, oscillatorType: "sine8", filterType: "lowpass",
+    attack: 0.08,
+    decay: 0.32,
+    sustain: 0.72,
+    release: 2.2,
+    filterCutoff: 1400,
+    filterQ: 0.7,
+    drive: 0.04,
+    chorusDepth: 0.55,
+    chorusRate: 0.34,
+    delayTime: 0.28,
+    delayFeedback: 0.44,
+    reverbDecay: 6.8,
+    reverbMix: 0.54,
+    stereoWidth: 0.86,
+    outputGainDb: -13.5,
+    velocityCurve: 0.88,
+    oscillatorType: "sine8",
+    filterType: "lowpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-aurora-pad", "Aurora Pad", {
-    attack: 0.045, decay: 0.24, sustain: 0.64, release: 1.6, filterCutoff: 1900, chorusDepth: 0.42, delayFeedback: 0.28, reverbMix: 0.32, stereoWidth: 0.74, outputGainDb: -11.8, oscillatorType: "triangle4", filterType: "lowpass",
+    attack: 0.045,
+    decay: 0.24,
+    sustain: 0.64,
+    release: 1.6,
+    filterCutoff: 1900,
+    chorusDepth: 0.42,
+    delayFeedback: 0.28,
+    reverbMix: 0.32,
+    stereoWidth: 0.74,
+    outputGainDb: -11.8,
+    oscillatorType: "triangle4",
+    filterType: "lowpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-ion-spark", "Ion Spark", {
-    attack: 0.002, decay: 0.06, sustain: 0.1, release: 0.22, filterCutoff: 6100, filterQ: 1.9, drive: 0.26, chorusDepth: 0.11, delayTime: 0.08, delayFeedback: 0.14, reverbMix: 0.08, outputGainDb: -12.4, velocityCurve: 1.38, oscillatorType: "sawtooth8", filterType: "highpass",
+    attack: 0.002,
+    decay: 0.06,
+    sustain: 0.1,
+    release: 0.22,
+    filterCutoff: 6100,
+    filterQ: 1.9,
+    drive: 0.26,
+    chorusDepth: 0.11,
+    delayTime: 0.08,
+    delayFeedback: 0.14,
+    reverbMix: 0.08,
+    outputGainDb: -12.4,
+    velocityCurve: 1.38,
+    oscillatorType: "sawtooth8",
+    filterType: "highpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-cosmic-choir", "Cosmic Choir", {
-    attack: 0.03, decay: 0.29, sustain: 0.58, release: 1.45, filterCutoff: 2400, drive: 0.08, chorusDepth: 0.36, delayTime: 0.22, delayFeedback: 0.29, reverbDecay: 5.2, reverbMix: 0.42, stereoWidth: 0.7, outputGainDb: -12, oscillatorType: "sine8", filterType: "lowpass",
+    attack: 0.03,
+    decay: 0.29,
+    sustain: 0.58,
+    release: 1.45,
+    filterCutoff: 2400,
+    drive: 0.08,
+    chorusDepth: 0.36,
+    delayTime: 0.22,
+    delayFeedback: 0.29,
+    reverbDecay: 5.2,
+    reverbMix: 0.42,
+    stereoWidth: 0.7,
+    outputGainDb: -12,
+    oscillatorType: "sine8",
+    filterType: "lowpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-deep-pulse", "Deep Pulse", {
-    attack: 0.004, decay: 0.12, sustain: 0.22, release: 0.38, filterCutoff: 980, filterQ: 1.3, drive: 0.33, chorusDepth: 0.09, delayFeedback: 0.11, reverbMix: 0.08, outputGainDb: -10.5, velocityCurve: 1.25, oscillatorType: "square8", filterType: "lowpass",
+    attack: 0.004,
+    decay: 0.12,
+    sustain: 0.22,
+    release: 0.38,
+    filterCutoff: 980,
+    filterQ: 1.3,
+    drive: 0.33,
+    chorusDepth: 0.09,
+    delayFeedback: 0.11,
+    reverbMix: 0.08,
+    outputGainDb: -10.5,
+    velocityCurve: 1.25,
+    oscillatorType: "square8",
+    filterType: "lowpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-glass-orbit", "Glass Orbit", {
-    attack: 0.006, decay: 0.2, sustain: 0.24, release: 1.4, filterCutoff: 7000, filterQ: 1.1, drive: 0.02, chorusDepth: 0.26, delayTime: 0.31, delayFeedback: 0.36, reverbDecay: 4.8, reverbMix: 0.46, stereoWidth: 0.82, outputGainDb: -13, oscillatorType: "sine2", filterType: "bandpass",
+    attack: 0.006,
+    decay: 0.2,
+    sustain: 0.24,
+    release: 1.4,
+    filterCutoff: 7000,
+    filterQ: 1.1,
+    drive: 0.02,
+    chorusDepth: 0.26,
+    delayTime: 0.31,
+    delayFeedback: 0.36,
+    reverbDecay: 4.8,
+    reverbMix: 0.46,
+    stereoWidth: 0.82,
+    outputGainDb: -13,
+    oscillatorType: "sine2",
+    filterType: "bandpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-neutron-pluck", "Neutron Pluck", {
-    attack: 0.001, decay: 0.05, sustain: 0.08, release: 0.18, filterCutoff: 4200, filterQ: 2.2, drive: 0.37, chorusDepth: 0.08, delayTime: 0.09, delayFeedback: 0.1, reverbMix: 0.06, outputGainDb: -12.5, velocityCurve: 1.48, oscillatorType: "square4", filterType: "highpass",
+    attack: 0.001,
+    decay: 0.05,
+    sustain: 0.08,
+    release: 0.18,
+    filterCutoff: 4200,
+    filterQ: 2.2,
+    drive: 0.37,
+    chorusDepth: 0.08,
+    delayTime: 0.09,
+    delayFeedback: 0.1,
+    reverbMix: 0.06,
+    outputGainDb: -12.5,
+    velocityCurve: 1.48,
+    oscillatorType: "square4",
+    filterType: "highpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-dream-keys", "Dream Keys", {
-    attack: 0.02, decay: 0.16, sustain: 0.43, release: 0.74, filterCutoff: 2800, drive: 0.09, chorusDepth: 0.28, delayTime: 0.17, delayFeedback: 0.24, reverbMix: 0.24, stereoWidth: 0.56, outputGainDb: -11.2, oscillatorType: "triangle16", filterType: "lowpass",
+    attack: 0.02,
+    decay: 0.16,
+    sustain: 0.43,
+    release: 0.74,
+    filterCutoff: 2800,
+    drive: 0.09,
+    chorusDepth: 0.28,
+    delayTime: 0.17,
+    delayFeedback: 0.24,
+    reverbMix: 0.24,
+    stereoWidth: 0.56,
+    outputGainDb: -11.2,
+    oscillatorType: "triangle16",
+    filterType: "lowpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-sunrise-lead", "Sunrise Lead", {
-    attack: 0.007, decay: 0.12, sustain: 0.31, release: 0.42, filterCutoff: 3600, filterQ: 1.4, drive: 0.24, chorusDepth: 0.18, chorusRate: 1.2, delayTime: 0.14, delayFeedback: 0.21, reverbMix: 0.15, outputGainDb: -10.8, oscillatorType: "sawtooth12", filterType: "bandpass",
+    attack: 0.007,
+    decay: 0.12,
+    sustain: 0.31,
+    release: 0.42,
+    filterCutoff: 3600,
+    filterQ: 1.4,
+    drive: 0.24,
+    chorusDepth: 0.18,
+    chorusRate: 1.2,
+    delayTime: 0.14,
+    delayFeedback: 0.21,
+    reverbMix: 0.15,
+    outputGainDb: -10.8,
+    oscillatorType: "sawtooth12",
+    filterType: "bandpass",
   }),
-  makeKeyboardStudioFactoryPreset("factory-voyager-ambient", "Voyager Ambient", {
-    attack: 0.09, decay: 0.4, sustain: 0.76, release: 2.8, filterCutoff: 1200, drive: 0.03, chorusDepth: 0.52, chorusRate: 0.26, delayTime: 0.34, delayFeedback: 0.5, reverbDecay: 8.2, reverbMix: 0.62, stereoWidth: 0.92, outputGainDb: -14, oscillatorType: "sine16", filterType: "lowpass",
-  }),
+  makeKeyboardStudioFactoryPreset(
+    "factory-voyager-ambient",
+    "Voyager Ambient",
+    {
+      attack: 0.09,
+      decay: 0.4,
+      sustain: 0.76,
+      release: 2.8,
+      filterCutoff: 1200,
+      drive: 0.03,
+      chorusDepth: 0.52,
+      chorusRate: 0.26,
+      delayTime: 0.34,
+      delayFeedback: 0.5,
+      reverbDecay: 8.2,
+      reverbMix: 0.62,
+      stereoWidth: 0.92,
+      outputGainDb: -14,
+      oscillatorType: "sine16",
+      filterType: "lowpass",
+    },
+  ),
   makeKeyboardStudioFactoryPreset("factory-grand-piano", "Grand Piano", {
-    attack: 0.002, decay: 0.24, sustain: 0.35, release: 0.56, filterCutoff: 4600, drive: 0.06, chorusDepth: 0.05, reverbMix: 0.16, outputGainDb: -10.8, oscillatorType: "triangle2", filterType: "lowpass",
+    attack: 0.002,
+    decay: 0.24,
+    sustain: 0.35,
+    release: 0.56,
+    filterCutoff: 4600,
+    drive: 0.06,
+    chorusDepth: 0.05,
+    reverbMix: 0.16,
+    outputGainDb: -10.8,
+    oscillatorType: "triangle2",
+    filterType: "lowpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-electric-piano", "Electric Piano", {
-    attack: 0.006, decay: 0.16, sustain: 0.44, release: 0.68, filterCutoff: 3800, drive: 0.12, chorusDepth: 0.22, delayFeedback: 0.16, reverbMix: 0.2, outputGainDb: -10.6, oscillatorType: "sine2", filterType: "bandpass",
+    attack: 0.006,
+    decay: 0.16,
+    sustain: 0.44,
+    release: 0.68,
+    filterCutoff: 3800,
+    drive: 0.12,
+    chorusDepth: 0.22,
+    delayFeedback: 0.16,
+    reverbMix: 0.2,
+    outputGainDb: -10.6,
+    oscillatorType: "sine2",
+    filterType: "bandpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-organ", "Organ", {
-    attack: 0.005, decay: 0.1, sustain: 0.82, release: 0.42, filterCutoff: 2800, drive: 0.14, chorusDepth: 0.18, reverbMix: 0.18, outputGainDb: -11.4, oscillatorType: "square2", filterType: "lowpass",
+    attack: 0.005,
+    decay: 0.1,
+    sustain: 0.82,
+    release: 0.42,
+    filterCutoff: 2800,
+    drive: 0.14,
+    chorusDepth: 0.18,
+    reverbMix: 0.18,
+    outputGainDb: -11.4,
+    oscillatorType: "square2",
+    filterType: "lowpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-violin", "Violin", {
-    attack: 0.045, decay: 0.22, sustain: 0.61, release: 0.88, filterCutoff: 3400, chorusDepth: 0.25, reverbMix: 0.27, outputGainDb: -12.2, oscillatorType: "sawtooth3", filterType: "lowpass",
+    attack: 0.045,
+    decay: 0.22,
+    sustain: 0.61,
+    release: 0.88,
+    filterCutoff: 3400,
+    chorusDepth: 0.25,
+    reverbMix: 0.27,
+    outputGainDb: -12.2,
+    oscillatorType: "sawtooth3",
+    filterType: "lowpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-flute", "Flute", {
-    attack: 0.02, decay: 0.18, sustain: 0.57, release: 0.7, filterCutoff: 5200, drive: 0.03, chorusDepth: 0.14, reverbMix: 0.24, outputGainDb: -12.8, oscillatorType: "sine1", filterType: "bandpass",
+    attack: 0.02,
+    decay: 0.18,
+    sustain: 0.57,
+    release: 0.7,
+    filterCutoff: 5200,
+    drive: 0.03,
+    chorusDepth: 0.14,
+    reverbMix: 0.24,
+    outputGainDb: -12.8,
+    oscillatorType: "sine1",
+    filterType: "bandpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-guitar", "Guitar", {
-    attack: 0.003, decay: 0.14, sustain: 0.29, release: 0.38, filterCutoff: 4200, drive: 0.19, chorusDepth: 0.1, reverbMix: 0.12, outputGainDb: -11.2, oscillatorType: "triangle4", filterType: "bandpass",
+    attack: 0.003,
+    decay: 0.14,
+    sustain: 0.29,
+    release: 0.38,
+    filterCutoff: 4200,
+    drive: 0.19,
+    chorusDepth: 0.1,
+    reverbMix: 0.12,
+    outputGainDb: -11.2,
+    oscillatorType: "triangle4",
+    filterType: "bandpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-sitar", "Sitar (Exotic)", {
-    attack: 0.002, decay: 0.22, sustain: 0.2, release: 0.46, filterCutoff: 5600, filterQ: 2.4, drive: 0.18, chorusDepth: 0.08, reverbMix: 0.18, outputGainDb: -12.4, oscillatorType: "sawtooth4", filterType: "highpass",
+    attack: 0.002,
+    decay: 0.22,
+    sustain: 0.2,
+    release: 0.46,
+    filterCutoff: 5600,
+    filterQ: 2.4,
+    drive: 0.18,
+    chorusDepth: 0.08,
+    reverbMix: 0.18,
+    outputGainDb: -12.4,
+    oscillatorType: "sawtooth4",
+    filterType: "highpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-kalimba", "Kalimba (Exotic)", {
-    attack: 0.001, decay: 0.19, sustain: 0.15, release: 0.8, filterCutoff: 6500, drive: 0.04, chorusDepth: 0.09, delayFeedback: 0.26, reverbMix: 0.3, outputGainDb: -13.1, oscillatorType: "triangle2", filterType: "highpass",
+    attack: 0.001,
+    decay: 0.19,
+    sustain: 0.15,
+    release: 0.8,
+    filterCutoff: 6500,
+    drive: 0.04,
+    chorusDepth: 0.09,
+    delayFeedback: 0.26,
+    reverbMix: 0.3,
+    outputGainDb: -13.1,
+    oscillatorType: "triangle2",
+    filterType: "highpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-drum-kit", "Drum Kit", {
-    attack: 0.001, decay: 0.05, sustain: 0.05, release: 0.12, filterCutoff: 2900, filterQ: 1.9, drive: 0.42, chorusDepth: 0.04, reverbMix: 0.08, outputGainDb: -9.8, velocityCurve: 1.4, oscillatorType: "square16", filterType: "highpass",
+    attack: 0.001,
+    decay: 0.05,
+    sustain: 0.05,
+    release: 0.12,
+    filterCutoff: 2900,
+    filterQ: 1.9,
+    drive: 0.42,
+    chorusDepth: 0.04,
+    reverbMix: 0.08,
+    outputGainDb: -9.8,
+    velocityCurve: 1.4,
+    oscillatorType: "square16",
+    filterType: "highpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-808-kick", "808 Kick", {
-    attack: 0.001, decay: 0.11, sustain: 0.02, release: 0.2, filterCutoff: 700, filterQ: 1.1, drive: 0.5, chorusDepth: 0, reverbMix: 0.03, outputGainDb: -8.6, velocityCurve: 1.45, oscillatorType: "sine32", filterType: "lowpass",
+    attack: 0.001,
+    decay: 0.11,
+    sustain: 0.02,
+    release: 0.2,
+    filterCutoff: 700,
+    filterQ: 1.1,
+    drive: 0.5,
+    chorusDepth: 0,
+    reverbMix: 0.03,
+    outputGainDb: -8.6,
+    velocityCurve: 1.45,
+    oscillatorType: "sine32",
+    filterType: "lowpass",
   }),
-  makeKeyboardStudioFactoryPreset("factory-cinematic-chords", "Cinematic Chords", {
-    attack: 0.04, decay: 0.28, sustain: 0.66, release: 1.4, filterCutoff: 2100, drive: 0.08, chorusDepth: 0.31, delayFeedback: 0.24, reverbMix: 0.38, stereoWidth: 0.78, outputGainDb: -12.5, oscillatorType: "triangle8", filterType: "lowpass",
-  }),
+  makeKeyboardStudioFactoryPreset(
+    "factory-cinematic-chords",
+    "Cinematic Chords",
+    {
+      attack: 0.04,
+      decay: 0.28,
+      sustain: 0.66,
+      release: 1.4,
+      filterCutoff: 2100,
+      drive: 0.08,
+      chorusDepth: 0.31,
+      delayFeedback: 0.24,
+      reverbMix: 0.38,
+      stereoWidth: 0.78,
+      outputGainDb: -12.5,
+      oscillatorType: "triangle8",
+      filterType: "lowpass",
+    },
+  ),
   makeKeyboardStudioFactoryPreset("factory-laser-zap", "Laser Zap (SFX)", {
-    attack: 0.001, decay: 0.04, sustain: 0.02, release: 0.09, filterCutoff: 7600, filterQ: 2.8, drive: 0.36, chorusDepth: 0.05, delayFeedback: 0.06, reverbMix: 0.05, outputGainDb: -10.4, velocityCurve: 1.55, oscillatorType: "sawtooth16", filterType: "highpass",
+    attack: 0.001,
+    decay: 0.04,
+    sustain: 0.02,
+    release: 0.09,
+    filterCutoff: 7600,
+    filterQ: 2.8,
+    drive: 0.36,
+    chorusDepth: 0.05,
+    delayFeedback: 0.06,
+    reverbMix: 0.05,
+    outputGainDb: -10.4,
+    velocityCurve: 1.55,
+    oscillatorType: "sawtooth16",
+    filterType: "highpass",
   }),
   makeKeyboardStudioFactoryPreset("factory-impact-boom", "Impact Boom (SFX)", {
-    attack: 0.001, decay: 0.2, sustain: 0.08, release: 0.4, filterCutoff: 900, drive: 0.44, chorusDepth: 0, reverbMix: 0.12, outputGainDb: -9.7, velocityCurve: 1.35, oscillatorType: "square32", filterType: "lowpass",
+    attack: 0.001,
+    decay: 0.2,
+    sustain: 0.08,
+    release: 0.4,
+    filterCutoff: 900,
+    drive: 0.44,
+    chorusDepth: 0,
+    reverbMix: 0.12,
+    outputGainDb: -9.7,
+    velocityCurve: 1.35,
+    oscillatorType: "square32",
+    filterType: "lowpass",
   }),
-  makeKeyboardStudioFactoryPreset("factory-spaceship-console", "Spaceship Console", {
-    attack: 0.002, decay: 0.07, sustain: 0.12, release: 0.24, filterCutoff: 4800, filterQ: 2.2, drive: 0.22, chorusDepth: 0.18, delayFeedback: 0.2, reverbMix: 0.14, outputGainDb: -11.7, oscillatorType: "square8", filterType: "bandpass",
-  }),
-  makeKeyboardStudioFactoryPreset("factory-hyperdrive-whine", "Hyperdrive Whine", {
-    attack: 0.035, decay: 0.24, sustain: 0.54, release: 1.1, filterCutoff: 3100, filterQ: 1.5, drive: 0.17, chorusDepth: 0.41, delayFeedback: 0.36, reverbMix: 0.45, stereoWidth: 0.88, outputGainDb: -13.4, oscillatorType: "sawtooth20", filterType: "bandpass",
-  }),
+  makeKeyboardStudioFactoryPreset(
+    "factory-spaceship-console",
+    "Spaceship Console",
+    {
+      attack: 0.002,
+      decay: 0.07,
+      sustain: 0.12,
+      release: 0.24,
+      filterCutoff: 4800,
+      filterQ: 2.2,
+      drive: 0.22,
+      chorusDepth: 0.18,
+      delayFeedback: 0.2,
+      reverbMix: 0.14,
+      outputGainDb: -11.7,
+      oscillatorType: "square8",
+      filterType: "bandpass",
+    },
+  ),
+  makeKeyboardStudioFactoryPreset(
+    "factory-hyperdrive-whine",
+    "Hyperdrive Whine",
+    {
+      attack: 0.035,
+      decay: 0.24,
+      sustain: 0.54,
+      release: 1.1,
+      filterCutoff: 3100,
+      filterQ: 1.5,
+      drive: 0.17,
+      chorusDepth: 0.41,
+      delayFeedback: 0.36,
+      reverbMix: 0.45,
+      stereoWidth: 0.88,
+      outputGainDb: -13.4,
+      oscillatorType: "sawtooth20",
+      filterType: "bandpass",
+    },
+  ),
 ];
 const KEYBOARD_STUDIO_BEAT_PATTERNS = {
   pulse: [
@@ -906,7 +1302,10 @@ type RegistryPanelCapabilities = {
   showPlayPause: boolean;
   alwaysShowArrows: boolean;
 };
-const REGISTRY_PANEL_CAPABILITIES: Record<RegistryPanelMode, RegistryPanelCapabilities> = {
+const REGISTRY_PANEL_CAPABILITIES: Record<
+  RegistryPanelMode,
+  RegistryPanelCapabilities
+> = {
   portfolio: {
     showStopOrbits: true,
     showExit: true,
@@ -1054,7 +1453,9 @@ export type ImmersiveColumnRig = {
   right: ImmersiveColumnRigValues;
   activeColumn: AboutHallColumnId;
 };
-export const immersiveColumnRigRef: { current: ImmersiveColumnRig | null } = { current: null };
+export const immersiveColumnRigRef: { current: ImmersiveColumnRig | null } = {
+  current: null,
+};
 type AboutFlowOverlayColumnSnapshot = {
   column: AboutHallColumnId;
   direction: AboutHallFlowDirection;
@@ -1072,7 +1473,11 @@ type AboutFlowOverlaySnapshot = {
   cells: AboutFlowOverlayColumnSnapshot[];
 };
 
-function AboutFlowDebugPanel({ snapshot }: { snapshot: AboutFlowOverlaySnapshot | null }) {
+function AboutFlowDebugPanel({
+  snapshot,
+}: {
+  snapshot: AboutFlowOverlaySnapshot | null;
+}) {
   const [collapsed, setCollapsed] = useState(true);
   return (
     <div
@@ -1110,8 +1515,8 @@ function AboutFlowDebugPanel({ snapshot }: { snapshot: AboutFlowOverlaySnapshot 
           {collapsed ? "\u25b6" : "\u25bc"}
         </span>
       </div>
-      {!collapsed && (
-        snapshot ? (
+      {!collapsed &&
+        (snapshot ? (
           <>
             <div style={{ marginTop: 4 }}>
               slide={snapshot.slideId} run={snapshot.run.toFixed(2)}
@@ -1121,11 +1526,18 @@ function AboutFlowDebugPanel({ snapshot }: { snapshot: AboutFlowOverlaySnapshot 
               {snapshot.visibleHeight.toFixed(2)} maxVis=
               {(snapshot.maxCellVisibility * 100).toFixed(1)}%
             </div>
-            <div style={{ marginTop: 5, borderTop: "1px solid rgba(130,220,255,0.25)", paddingTop: 4 }}>
+            <div
+              style={{
+                marginTop: 5,
+                borderTop: "1px solid rgba(130,220,255,0.25)",
+                paddingTop: 4,
+              }}
+            >
               {snapshot.cells.map((c) => (
                 <div key={c.column}>
-                  {c.column}: {c.direction} speed={c.speed.toFixed(2)} y={c.y.toFixed(2)}{" "}
-                  {c.inViewport ? "IN" : "OUT"} alpha={c.opacity.toFixed(2)}
+                  {c.column}: {c.direction} speed={c.speed.toFixed(2)} y=
+                  {c.y.toFixed(2)} {c.inViewport ? "IN" : "OUT"} alpha=
+                  {c.opacity.toFixed(2)}
                 </div>
               ))}
             </div>
@@ -1134,13 +1546,13 @@ function AboutFlowDebugPanel({ snapshot }: { snapshot: AboutFlowOverlaySnapshot 
           <div style={{ marginTop: 4, opacity: 0.85 }}>
             Waiting for about-elevator flow snapshot...
           </div>
-        )
-      )}
+        ))}
     </div>
   );
 }
 
-const DEFAULT_BACKGROUND_MUSIC_TRACK = Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
+const DEFAULT_BACKGROUND_MUSIC_TRACK =
+  Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
 const EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID: Record<string, string> = {
   investcloud: "/textures/custom-planet-textures/investcloud.jpg",
   rpa: "/textures/custom-planet-textures/texture4-rpa.jpg",
@@ -1433,7 +1845,9 @@ const applyTextureCoverTop = (
   panelAspect: number,
   scrollNorm: number,
 ): number => {
-  const image = texture.image as { width?: number; height?: number } | undefined;
+  const image = texture.image as
+    | { width?: number; height?: number }
+    | undefined;
   const iw = image?.width ?? 0;
   const ih = image?.height ?? 0;
   if (iw <= 0 || ih <= 0 || panelAspect <= 0) return 0;
@@ -1465,7 +1879,9 @@ const applyTextureContainCentered = (
   texture: THREE.Texture,
   panelAspect: number,
 ) => {
-  const image = texture.image as { width?: number; height?: number } | undefined;
+  const image = texture.image as
+    | { width?: number; height?: number }
+    | undefined;
   const iw = image?.width ?? 0;
   const ih = image?.height ?? 0;
   if (iw <= 0 || ih <= 0 || panelAspect <= 0) return;
@@ -1503,7 +1919,9 @@ const applyTextureForFitMode = (
   return applyTextureCoverTop(texture, panelAspect, scrollNorm);
 };
 
-const createMoonTravelSignTexture = (entry: JobMemoryEntry): THREE.CanvasTexture => {
+const createMoonTravelSignTexture = (
+  entry: JobMemoryEntry,
+): THREE.CanvasTexture => {
   const canvas = document.createElement("canvas");
   const text = String(entry?.text ?? "");
   const type = entry?.type ?? "default";
@@ -1513,7 +1931,10 @@ const createMoonTravelSignTexture = (entry: JobMemoryEntry): THREE.CanvasTexture
     .trim();
   const splitForLines = () => {
     if (normalized.length <= 48) return [normalized];
-    const parts = normalized.split(" • ").map((p) => p.trim()).filter(Boolean);
+    const parts = normalized
+      .split(" • ")
+      .map((p) => p.trim())
+      .filter(Boolean);
     if (parts.length <= 1) return [normalized];
     const half = Math.ceil(parts.length * 0.5);
     const lineA = parts.slice(0, half).join(" • ").trim();
@@ -1532,7 +1953,10 @@ const createMoonTravelSignTexture = (entry: JobMemoryEntry): THREE.CanvasTexture
   const maxTextWidth = canvas.width * 0.9;
   while (fontSize > 52) {
     ctx.font = `700 ${fontSize}px Rajdhani, Segoe UI, sans-serif`;
-    const widest = lines.reduce((max, line) => Math.max(max, ctx.measureText(line).width), 0);
+    const widest = lines.reduce(
+      (max, line) => Math.max(max, ctx.measureText(line).width),
+      0,
+    );
     if (widest <= maxTextWidth) break;
     fontSize -= 3;
   }
@@ -1598,8 +2022,11 @@ const createMoonTravelSignTexture = (entry: JobMemoryEntry): THREE.CanvasTexture
   ctx.fillStyle = style.fillStyle;
   const x = canvas.width * 0.5;
   const lineGap = fontSize * 1.16;
-  const startY = canvas.height * 0.5 - ((lines.length - 1) * lineGap) * 0.5;
-  const widestLine = lines.reduce((max, line) => Math.max(max, ctx.measureText(line).width), 0);
+  const startY = canvas.height * 0.5 - (lines.length - 1) * lineGap * 0.5;
+  const widestLine = lines.reduce(
+    (max, line) => Math.max(max, ctx.measureText(line).width),
+    0,
+  );
   if (style.drawBackdrop) {
     // For code-style memories, make the box hug text like fit-content with light padding.
     const padX = Math.max(24, fontSize * 0.34);
@@ -1609,7 +2036,11 @@ const createMoonTravelSignTexture = (entry: JobMemoryEntry): THREE.CanvasTexture
     const w = Math.min(canvas.width - 24, widestLine + padX * 2);
     const h = Math.min(canvas.height - 24, textBottom - textTop + padY * 2);
     const left = THREE.MathUtils.clamp(x - w * 0.5, 12, canvas.width - w - 12);
-    const top = THREE.MathUtils.clamp(textTop - padY, 12, canvas.height - h - 12);
+    const top = THREE.MathUtils.clamp(
+      textTop - padY,
+      12,
+      canvas.height - h - 12,
+    );
     const r = Math.min(22, h * 0.2);
     ctx.shadowBlur = 0;
     ctx.beginPath();
@@ -1862,9 +2293,7 @@ const toThreeColorStyle = (color: string): string => {
   return `rgb(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]})`;
 };
 
-const normalizeAboutFlowDirection = (
-  raw?: string,
-): AboutHallFlowDirection => {
+const normalizeAboutFlowDirection = (raw?: string): AboutHallFlowDirection => {
   if (raw === "bottomToTop" || raw === "topToBottom") {
     return raw;
   }
@@ -1928,10 +2357,13 @@ function buildTransitionCellDescriptors(
       y,
       w,
       h,
-      color: safePalette[Math.floor(Math.random() * safePalette.length)] ?? "#ffffff",
+      color:
+        safePalette[Math.floor(Math.random() * safePalette.length)] ??
+        "#ffffff",
       shapeOpacity:
         TRANSITION_SHAPE_OPACITY_MIN +
-        Math.random() * (TRANSITION_SHAPE_OPACITY_MAX - TRANSITION_SHAPE_OPACITY_MIN),
+        Math.random() *
+          (TRANSITION_SHAPE_OPACITY_MAX - TRANSITION_SHAPE_OPACITY_MIN),
     });
   };
 
@@ -1950,25 +2382,84 @@ function buildTransitionCellDescriptors(
 }
 
 const TRANSITION_COLOR_FAMILIES: Record<string, string[]> = {
-  blue:   ["#0a1628", "#102040", "#1a3a6a", "#2a5ca8", "#3a7ce0", "#5a9cf0", "#7abcff", "#a0d4ff", "#c8e8ff", "#e8f4ff", "#ffffff"],
-  green:  ["#081810", "#0c2818", "#144028", "#1c6038", "#28884c", "#38a860", "#50c878", "#78d898", "#a0e8b8", "#c8f0d8", "#ffffff"],
-  yellow: ["#181408", "#28200c", "#403414", "#60501c", "#887028", "#a89038", "#c8b050", "#d8c878", "#e8e0a0", "#f0ecc8", "#ffffff"],
-  purple: ["#100828", "#1c0c40", "#2c1460", "#3c1c88", "#5028a8", "#6838c8", "#8050e0", "#9870f0", "#b898ff", "#d0c0ff", "#ffffff"],
+  blue: [
+    "#0a1628",
+    "#102040",
+    "#1a3a6a",
+    "#2a5ca8",
+    "#3a7ce0",
+    "#5a9cf0",
+    "#7abcff",
+    "#a0d4ff",
+    "#c8e8ff",
+    "#e8f4ff",
+    "#ffffff",
+  ],
+  green: [
+    "#081810",
+    "#0c2818",
+    "#144028",
+    "#1c6038",
+    "#28884c",
+    "#38a860",
+    "#50c878",
+    "#78d898",
+    "#a0e8b8",
+    "#c8f0d8",
+    "#ffffff",
+  ],
+  yellow: [
+    "#181408",
+    "#28200c",
+    "#403414",
+    "#60501c",
+    "#887028",
+    "#a89038",
+    "#c8b050",
+    "#d8c878",
+    "#e8e0a0",
+    "#f0ecc8",
+    "#ffffff",
+  ],
+  purple: [
+    "#100828",
+    "#1c0c40",
+    "#2c1460",
+    "#3c1c88",
+    "#5028a8",
+    "#6838c8",
+    "#8050e0",
+    "#9870f0",
+    "#b898ff",
+    "#d0c0ff",
+    "#ffffff",
+  ],
 };
 
-function resolveTransitionPalette(cfg: AboutLevelTransitionConfig | undefined, colorFamily: string): string[] {
+function resolveTransitionPalette(
+  cfg: AboutLevelTransitionConfig | undefined,
+  colorFamily: string,
+): string[] {
   const families = Array.isArray(cfg?.colorFamilies) ? cfg?.colorFamilies : [];
   const familyPalette = families
-    .map((family) => (family ? TRANSITION_COLOR_FAMILIES[String(family).toLowerCase()] : undefined))
+    .map((family) =>
+      family
+        ? TRANSITION_COLOR_FAMILIES[String(family).toLowerCase()]
+        : undefined,
+    )
     .flatMap((colors) => colors ?? []);
 
-  const customPalette = Array.isArray(cfg?.palette) ? cfg.palette.filter((c) => typeof c === "string" && c.trim().length > 0) : [];
+  const customPalette = Array.isArray(cfg?.palette)
+    ? cfg.palette.filter((c) => typeof c === "string" && c.trim().length > 0)
+    : [];
   if (familyPalette.length > 0 && customPalette.length > 0) {
     return [...familyPalette, ...customPalette];
   }
   if (familyPalette.length > 0) return familyPalette;
   if (customPalette.length > 0) return customPalette;
-  return TRANSITION_COLOR_FAMILIES[colorFamily] ?? TRANSITION_COLOR_FAMILIES.blue;
+  return (
+    TRANSITION_COLOR_FAMILIES[colorFamily] ?? TRANSITION_COLOR_FAMILIES.blue
+  );
 }
 
 type ResolvedTransitionConfig = {
@@ -1983,13 +2474,30 @@ type ResolvedTransitionConfig = {
   titleText: string;
 };
 
-function resolveTransitionConfig(cfg?: AboutLevelTransitionConfig): ResolvedTransitionConfig {
+function resolveTransitionConfig(
+  cfg?: AboutLevelTransitionConfig,
+): ResolvedTransitionConfig {
   const style = cfg?.style ?? TRANSITION_DEFAULTS.style;
   const colorFamily = cfg?.colorFamily ?? TRANSITION_DEFAULTS.colorFamily;
-  const gridSize = Math.max(4, Math.min(80, cfg?.gridSize ?? TRANSITION_DEFAULTS.gridSize));
-  const fillDurationMs = Math.max(200, Math.min(5000, cfg?.fillDurationMs ?? TRANSITION_DEFAULTS.fillDurationMs));
-  const clearDurationMs = Math.max(200, Math.min(5000, cfg?.clearDurationMs ?? TRANSITION_DEFAULTS.clearDurationMs));
-  const titleFadeDurationMs = Math.max(200, Math.min(3000, cfg?.titleFadeDurationMs ?? TRANSITION_DEFAULTS.titleFadeDurationMs));
+  const gridSize = Math.max(
+    4,
+    Math.min(80, cfg?.gridSize ?? TRANSITION_DEFAULTS.gridSize),
+  );
+  const fillDurationMs = Math.max(
+    200,
+    Math.min(5000, cfg?.fillDurationMs ?? TRANSITION_DEFAULTS.fillDurationMs),
+  );
+  const clearDurationMs = Math.max(
+    200,
+    Math.min(5000, cfg?.clearDurationMs ?? TRANSITION_DEFAULTS.clearDurationMs),
+  );
+  const titleFadeDurationMs = Math.max(
+    200,
+    Math.min(
+      3000,
+      cfg?.titleFadeDurationMs ?? TRANSITION_DEFAULTS.titleFadeDurationMs,
+    ),
+  );
   const palette = resolveTransitionPalette(cfg, colorFamily);
 
   return {
@@ -2029,14 +2537,19 @@ const computeCenterTopThresholdDistance = (
   const rawPercent = prevSlide.nextSlideTriggerTopViewportPercent;
   if (rawPercent == null || !Number.isFinite(rawPercent)) return null;
 
-  const safePercent = THREE.MathUtils.clamp(rawPercent, THRESHOLD_PERCENT_MIN, THRESHOLD_PERCENT_MAX);
+  const safePercent = THREE.MathUtils.clamp(
+    rawPercent,
+    THRESHOLD_PERCENT_MIN,
+    THRESHOLD_PERCENT_MAX,
+  );
 
   const centerTallest = measureFn(prevSlide);
   const halfVisible = estimatedVisibleHeight * 0.5;
   const halfContent = centerTallest * 0.5;
 
   const viewportFractionFromTop = safePercent / 100;
-  const crossingY = halfVisible - estimatedVisibleHeight * viewportFractionFromTop;
+  const crossingY =
+    halfVisible - estimatedVisibleHeight * viewportFractionFromTop;
 
   const topEdgeHome = halfContent;
   const distanceToTravel = topEdgeHome - crossingY;
@@ -2057,7 +2570,12 @@ const normalizeAboutSlideColumns = (slide: AboutHallSlide): AboutHallSlide => {
       left.push(content);
       return;
     }
-    if (type === "right" || type === "column2" || type === "r1c2" || type === "r2c2") {
+    if (
+      type === "right" ||
+      type === "column2" ||
+      type === "r1c2" ||
+      type === "r2c2"
+    ) {
       right.push(content);
       return;
     }
@@ -2088,14 +2606,13 @@ const drawAboutSlideText = (
   const emergencyMood = opts?.emergencyMood ?? false;
   const contentText = resolveAboutContentText(content);
   const fontSize = parsePixelSize(content.fontSize, 42);
-  const fontFamily = content.fontFamily?.length > 0
-    ? content.fontFamily.map((font) => `'${font}'`).join(", ")
-    : HALLWAY_OSWALD_FONT_STACK;
+  const fontFamily =
+    content.fontFamily?.length > 0
+      ? content.fontFamily.map((font) => `'${font}'`).join(", ")
+      : HALLWAY_OSWALD_FONT_STACK;
   const textAlign = resolveCanvasAlign(content.horizontalAlign);
   const verticalAnchor = resolveCanvasBaselineAnchor(content.verticalAlign);
-  const lineHeight = Math.round(
-    fontSize * (creditsStyle ? 1.15 : 1.24),
-  );
+  const lineHeight = Math.round(fontSize * (creditsStyle ? 1.15 : 1.24));
   const padX = Math.max(24, width * (creditsStyle ? 0.045 : 0.09));
   const padY = Math.max(20, height * (creditsStyle ? 0.08 : 0.11));
   const maxLineWidth = Math.max(120, width - padX * 2);
@@ -2104,9 +2621,15 @@ const drawAboutSlideText = (
   const sourceLines = splitHtmlBreakLines(contentText);
   const lines: string[] = [];
   sourceLines.forEach((line) => {
-    if (line.length === 0) { lines.push(""); return; }
+    if (line.length === 0) {
+      lines.push("");
+      return;
+    }
     const words = line.split(/\s+/).filter(Boolean);
-    if (words.length === 0) { lines.push(""); return; }
+    if (words.length === 0) {
+      lines.push("");
+      return;
+    }
     let current = words[0];
     for (let i = 1; i < words.length; i += 1) {
       const candidate = `${current} ${words[i]}`;
@@ -2128,12 +2651,15 @@ const drawAboutSlideText = (
 
   let baseY = height * 0.5 - blockHeight * 0.5 + lineHeight * 0.5;
   if (verticalAnchor === "top") baseY = padY + lineHeight * 0.5;
-  if (verticalAnchor === "bottom") baseY = height - padY - blockHeight + lineHeight * 0.5;
+  if (verticalAnchor === "bottom")
+    baseY = height - padY - blockHeight + lineHeight * 0.5;
 
   ctx.textAlign = textAlign;
   ctx.textBaseline = "middle";
   if (creditsStyle) {
-    ctx.fillStyle = emergencyMood ? "rgba(248, 252, 255, 0.98)" : "rgba(10, 10, 12, 0.98)";
+    ctx.fillStyle = emergencyMood
+      ? "rgba(248, 252, 255, 0.98)"
+      : "rgba(10, 10, 12, 0.98)";
     ctx.shadowColor = emergencyMood
       ? "rgba(96, 255, 172, 0.82)"
       : "rgba(248, 252, 255, 0.95)";
@@ -2146,9 +2672,12 @@ const drawAboutSlideText = (
     const pxParts = rawShadow.match(/(-?\d+(?:\.\d+)?)\s*px/g);
     const colorPart = rawShadow.match(/(rgba?\([^)]+\)|#[0-9a-fA-F]{3,8})/);
     ctx.shadowColor = colorPart ? colorPart[1] : rawShadow;
-    ctx.shadowBlur = pxParts && pxParts.length >= 3 ? parseFloat(pxParts[2]) : 8;
-    ctx.shadowOffsetX = pxParts && pxParts.length >= 1 ? parseFloat(pxParts[0]) : 0;
-    ctx.shadowOffsetY = pxParts && pxParts.length >= 2 ? parseFloat(pxParts[1]) : 0;
+    ctx.shadowBlur =
+      pxParts && pxParts.length >= 3 ? parseFloat(pxParts[2]) : 8;
+    ctx.shadowOffsetX =
+      pxParts && pxParts.length >= 1 ? parseFloat(pxParts[0]) : 0;
+    ctx.shadowOffsetY =
+      pxParts && pxParts.length >= 2 ? parseFloat(pxParts[1]) : 0;
   }
 
   lines.forEach((line, index) => {
@@ -2186,9 +2715,9 @@ const measureAboutImagesHeight = (
     const loaded = loadedImages?.get(entry.src);
     if (loaded && loaded.naturalWidth > 0 && loaded.naturalHeight > 0) {
       const aspect = loaded.naturalHeight / loaded.naturalWidth;
-      total += Math.round(maxDrawWidth * aspect / pa);
+      total += Math.round((maxDrawWidth * aspect) / pa);
     } else {
-      total += Math.round(maxDrawWidth * 0.56 / pa);
+      total += Math.round((maxDrawWidth * 0.56) / pa);
     }
     if (hasDesc) total += imgPad + Math.round(descFontSize * 1.3);
   });
@@ -2199,14 +2728,19 @@ const measureAboutTextHeight = (
   content: AboutHallSlideContent,
   canvasWidth: number,
   canvasHeight: number,
-  opts?: { creditsStyle?: boolean; loadedImages?: Map<string, HTMLImageElement>; pixelAspect?: number },
+  opts?: {
+    creditsStyle?: boolean;
+    loadedImages?: Map<string, HTMLImageElement>;
+    pixelAspect?: number;
+  },
 ): number => {
   const creditsStyle = opts?.creditsStyle ?? false;
   const contentText = resolveAboutContentText(content);
   const fontSize = parsePixelSize(content.fontSize, 42);
-  const fontFamily = content.fontFamily?.length > 0
-    ? content.fontFamily.map((font) => `'${font}'`).join(", ")
-    : HALLWAY_OSWALD_FONT_STACK;
+  const fontFamily =
+    content.fontFamily?.length > 0
+      ? content.fontFamily.map((font) => `'${font}'`).join(", ")
+      : HALLWAY_OSWALD_FONT_STACK;
   const lineHeight = Math.round(fontSize * (creditsStyle ? 1.15 : 1.24));
   const padX = Math.max(24, canvasWidth * (creditsStyle ? 0.045 : 0.09));
   const padY = Math.max(20, canvasHeight * (creditsStyle ? 0.08 : 0.11));
@@ -2222,9 +2756,15 @@ const measureAboutTextHeight = (
   const sourceLines = splitHtmlBreakLines(contentText);
   let lineCount = 0;
   sourceLines.forEach((line) => {
-    if (line.length === 0) { lineCount++; return; }
+    if (line.length === 0) {
+      lineCount++;
+      return;
+    }
     const words = line.split(/\s+/).filter(Boolean);
-    if (words.length === 0) { lineCount++; return; }
+    if (words.length === 0) {
+      lineCount++;
+      return;
+    }
     let current = words[0];
     for (let i = 1; i < words.length; i += 1) {
       const candidate = `${current} ${words[i]}`;
@@ -2240,7 +2780,11 @@ const measureAboutTextHeight = (
   if (lineCount === 0) lineCount = 1;
   const textHeight = lineCount * lineHeight + padY * 2;
   const imagesHeight = measureAboutImagesHeight(
-    content.images, maxLineWidth, fontSize, opts?.loadedImages, opts?.pixelAspect,
+    content.images,
+    maxLineWidth,
+    fontSize,
+    opts?.loadedImages,
+    opts?.pixelAspect,
   );
   const imagesGap = imagesHeight > 0 ? Math.round(fontSize * 0.5) : 0;
   return Math.max(textHeight + imagesGap + imagesHeight, canvasHeight);
@@ -2294,7 +2838,7 @@ const drawAboutSlideImages = (
     if (loaded && loaded.naturalWidth > 0 && loaded.naturalHeight > 0) {
       const aspect = loaded.naturalHeight / loaded.naturalWidth;
       const drawW = maxDrawWidth;
-      const drawH = Math.round(drawW * aspect / pa);
+      const drawH = Math.round((drawW * aspect) / pa);
       try {
         ctx.drawImage(loaded, padX, curY, drawW, drawH);
       } catch {
@@ -2303,7 +2847,7 @@ const drawAboutSlideImages = (
       }
       curY += drawH;
     } else {
-      const placeholderH = Math.round(maxDrawWidth * 0.56 / pa);
+      const placeholderH = Math.round((maxDrawWidth * 0.56) / pa);
       ctx.fillStyle = "rgba(40, 50, 70, 0.4)";
       ctx.fillRect(padX, curY, maxDrawWidth, placeholderH);
       curY += placeholderH;
@@ -2358,11 +2902,24 @@ const createAboutCellTexture = (
   } else {
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
   }
-  const textBottomY = drawAboutSlideText(ctx, content, canvasWidth, canvasHeight, {
-    creditsStyle: opts?.creditsStyle,
-    emergencyMood: opts?.emergencyMood,
-  });
-  drawAboutSlideImages(ctx, content, canvasWidth, textBottomY, opts?.loadedImages, opts?.pixelAspect);
+  const textBottomY = drawAboutSlideText(
+    ctx,
+    content,
+    canvasWidth,
+    canvasHeight,
+    {
+      creditsStyle: opts?.creditsStyle,
+      emergencyMood: opts?.emergencyMood,
+    },
+  );
+  drawAboutSlideImages(
+    ctx,
+    content,
+    canvasWidth,
+    textBottomY,
+    opts?.loadedImages,
+    opts?.pixelAspect,
+  );
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -2413,7 +2970,12 @@ type SkillsLatticeFlowMeta = {
   hueDrift: number;
 };
 
-type AboutSwarmPhase = "assembledHold" | "breakOut" | "swarm" | "reform" | "settle";
+type AboutSwarmPhase =
+  | "assembledHold"
+  | "breakOut"
+  | "swarm"
+  | "reform"
+  | "settle";
 
 type AboutDeckBlock = {
   type: "text" | "image";
@@ -2524,12 +3086,17 @@ export default function ResumeSpace3D({
   const aboutDeckData = aboutDeck as AboutDeckData;
   const aboutSlides = aboutDeckData.aboutDeck.slides;
 
-  const effectiveInitialLevel = aboutHallInitialLevelId ?? ABOUT_HALL_DEFAULT_LEVEL_ID;
-  const [selectedAboutLevelId, setSelectedAboutLevelId] = useState<string | null>(effectiveInitialLevel);
+  const effectiveInitialLevel =
+    aboutHallInitialLevelId ?? ABOUT_HALL_DEFAULT_LEVEL_ID;
+  const [selectedAboutLevelId, setSelectedAboutLevelId] = useState<
+    string | null
+  >(effectiveInitialLevel);
   const selectedAboutLevelIdRef = useRef<string | null>(effectiveInitialLevel);
   const [aboutLevelGateActive, setAboutLevelGateActive] = useState(false);
   const aboutLevelGateActiveRef = useRef(false);
-  const [visitedAboutLevels, setVisitedAboutLevels] = useState<string[]>(() => getAboutElevatorVisitedLevels());
+  const [visitedAboutLevels, setVisitedAboutLevels] = useState<string[]>(() =>
+    getAboutElevatorVisitedLevels(),
+  );
 
   const [, setAboutTransitionActive] = useState(false);
   const aboutTransitionActiveRef = useRef(false);
@@ -2537,11 +3104,14 @@ export default function ResumeSpace3D({
   const [aboutEntryFadeOpacity, setAboutEntryFadeOpacity] = useState(0);
   const aboutEntryFadeRafRef = useRef<number>(0);
 
-  const resolveAboutHallData = useCallback((levelId: string | null): AboutHallSlidesFile => {
-    if (!levelId) return aboutHallSlidesLegacy as AboutHallSlidesFile;
-    const data = ABOUT_HALL_LEVEL_DATA_MAP[levelId];
-    return (data ?? aboutHallSlidesLegacy) as AboutHallSlidesFile;
-  }, []);
+  const resolveAboutHallData = useCallback(
+    (levelId: string | null): AboutHallSlidesFile => {
+      if (!levelId) return aboutHallSlidesLegacy as AboutHallSlidesFile;
+      const data = ABOUT_HALL_LEVEL_DATA_MAP[levelId];
+      return (data ?? aboutHallSlidesLegacy) as AboutHallSlidesFile;
+    },
+    [],
+  );
 
   const aboutHallData = useMemo(
     () => resolveAboutHallData(selectedAboutLevelId),
@@ -2558,7 +3128,9 @@ export default function ResumeSpace3D({
   useEffect(() => {
     aboutHallDefaultAutoSpeedRef.current = aboutHallData.autoSpeed ?? 0.62;
   }, [aboutHallData.autoSpeed]);
-  const aboutHallFirstSlidePositionRef = useRef(aboutHallData.firstSlidePosition);
+  const aboutHallFirstSlidePositionRef = useRef(
+    aboutHallData.firstSlidePosition,
+  );
   useEffect(() => {
     aboutHallFirstSlidePositionRef.current = aboutHallData.firstSlidePosition;
   }, [aboutHallData.firstSlidePosition]);
@@ -2601,9 +3173,10 @@ export default function ResumeSpace3D({
     },
     [moonPortfolioByCompanyId],
   );
-  const [hallwayContentMode, setHallwayContentMode] = useState<HallwayContentMode>(
-    HALLWAY_DEFAULT_CONTENT_MODE as HallwayContentMode,
-  );
+  const [hallwayContentMode, setHallwayContentMode] =
+    useState<HallwayContentMode>(
+      HALLWAY_DEFAULT_CONTENT_MODE as HallwayContentMode,
+    );
   const hallwayContentModeRef = useRef<HallwayContentMode>(
     HALLWAY_DEFAULT_CONTENT_MODE as HallwayContentMode,
   );
@@ -2613,7 +3186,11 @@ export default function ResumeSpace3D({
     () =>
       aboutHallwaySlides.map((slide) => {
         const byColumn = getAboutColumnMessages(slide);
-        const messages = [...byColumn.left, ...byColumn.center, ...byColumn.right];
+        const messages = [
+          ...byColumn.left,
+          ...byColumn.center,
+          ...byColumn.right,
+        ];
         return {
           id: slide.id,
           title: slide.registryBtnTitle,
@@ -2631,9 +3208,10 @@ export default function ResumeSpace3D({
       }),
     [aboutHallwaySlides],
   );
-  const projectShowcaseEntries = hallwayContentMode === "about"
-    ? aboutShowcaseEntries
-    : portfolioShowcaseEntries;
+  const projectShowcaseEntries =
+    hallwayContentMode === "about"
+      ? aboutShowcaseEntries
+      : portfolioShowcaseEntries;
   // EXPORT SURFACE
   // Props: options, onOptionsChange
   // Emits: onOptionsChange (options sync)
@@ -2680,16 +3258,19 @@ export default function ResumeSpace3D({
     setDebugLogs,
     debugLogTotal,
   } = useCosmosLogs();
-  const [emitFalconLocationLogs, setEmitFalconLocationLogs] = useState(IS_DEBUG);
+  const [emitFalconLocationLogs, setEmitFalconLocationLogs] =
+    useState(IS_DEBUG);
   const [emitSDLocationLogs, setEmitSDLocationLogs] = useState(IS_DEBUG);
   const [logCamTraceEnabled, setLogCamTraceEnabled] = useState(IS_DEBUG);
   const [logAboutDebugEnabled, setLogAboutDebugEnabled] = useState(IS_DEBUG);
   const [logNavTraceEnabled, setLogNavTraceEnabled] = useState(IS_DEBUG);
   const [logNavDiagEnabled, setLogNavDiagEnabled] = useState(IS_DEBUG);
-  const [logAudioChannelEnabled, setLogAudioChannelEnabled] = useState(IS_DEBUG);
+  const [logAudioChannelEnabled, setLogAudioChannelEnabled] =
+    useState(IS_DEBUG);
   const [logDroneDebugEnabled, setLogDroneDebugEnabled] = useState(IS_DEBUG);
   const [logNavDebugEnabled, setLogNavDebugEnabled] = useState(IS_DEBUG);
-  const [aboutFlowOverlayEnabled, setAboutFlowOverlayEnabled] = useState(IS_DEBUG);
+  const [aboutFlowOverlayEnabled, setAboutFlowOverlayEnabled] =
+    useState(IS_DEBUG);
   const aboutFlowOverlayEnabledRef = useRef(IS_DEBUG);
   const [aboutFlowOverlaySnapshot, setAboutFlowOverlaySnapshot] =
     useState<AboutFlowOverlaySnapshot | null>(null);
@@ -2746,11 +3327,7 @@ export default function ResumeSpace3D({
     ],
   );
   const toggleLogChannel = useCallback(
-    (
-      label: string,
-      next: boolean,
-      setter: (next: boolean) => void,
-    ) => {
+    (label: string, next: boolean, setter: (next: boolean) => void) => {
       setter(next);
       shipLog(`[LOGCFG] ${label} ${next ? "enabled" : "disabled"}`, "info");
       if (next) {
@@ -2790,7 +3367,9 @@ export default function ResumeSpace3D({
   const [overallVolume, setOverallVolume] = useState(0.3);
   const [backgroundMusicVolume, setBackgroundMusicVolume] = useState(1);
   const [showSoundSettingsModal, setShowSoundSettingsModal] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"general" | "sound" | "logs">("general");
+  const [settingsTab, setSettingsTab] = useState<"general" | "sound" | "logs">(
+    "general",
+  );
   const availableMusicTracks = useMemo(
     () => Object.keys(COSMIC_AUDIO_TRACKS),
     [],
@@ -2809,7 +3388,8 @@ export default function ResumeSpace3D({
     const active = projectShowcaseActiveRef.current;
     if (aboutMode) {
       if (interior) interior.visible = active;
-      if (exterior) exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE && !active;
+      if (exterior)
+        exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE && !active;
       // Prevent CSS title overlay leaking through hallway walls.
       if (aboutLabel) aboutLabel.visible = !active;
     } else {
@@ -2831,12 +3411,16 @@ export default function ResumeSpace3D({
           if (!cancelled) setHallwayFontsReady(true);
           return;
         }
-        await (document as Document & {
-          fonts: FontFaceSet;
-        }).fonts.load(`600 32px ${HALLWAY_OSWALD_FONT_STACK}`);
-        await (document as Document & {
-          fonts: FontFaceSet;
-        }).fonts.ready;
+        await (
+          document as Document & {
+            fonts: FontFaceSet;
+          }
+        ).fonts.load(`600 32px ${HALLWAY_OSWALD_FONT_STACK}`);
+        await (
+          document as Document & {
+            fonts: FontFaceSet;
+          }
+        ).fonts.ready;
       } catch {
         // Keep hallway usable even if custom fonts fail to load.
       } finally {
@@ -2872,11 +3456,13 @@ export default function ResumeSpace3D({
         const moonWorldPos = new THREE.Vector3();
         moon.getWorldPosition(moonWorldPos);
         const ship = spaceshipRef.current;
-        const anchor = (orbitPhase === "orbiting" && ship)
-          ? ship.position.clone()
-          : undefined;
+        const anchor =
+          orbitPhase === "orbiting" && ship ? ship.position.clone() : undefined;
         if (droneInspectMode) {
-          debugLog("drone", `showInspectMode called — orbitPhase=${orbitPhase}`);
+          debugLog(
+            "drone",
+            `showInspectMode called — orbitPhase=${orbitPhase}`,
+          );
           drone.showInspectMode(moonWorldPos, cam, anchor);
         } else if (overlayContent && !moonIntroComplete) {
           debugLog("drone", `showIntroCard called — orbitPhase=${orbitPhase}`);
@@ -2908,20 +3494,34 @@ export default function ResumeSpace3D({
       setMoonHtmlVisible(false);
       setMoonIntroComplete(false);
     }
-  }, [overlayContent, orbitPhase, droneSummonNonce, droneInspectMode, moonIntroComplete]);
+  }, [
+    overlayContent,
+    orbitPhase,
+    droneSummonNonce,
+    droneInspectMode,
+    moonIntroComplete,
+  ]);
 
   useEffect(() => {
     const onWheel = (event: WheelEvent) => {
-      if (orbitPhase !== "orbiting" || !overlayContent || orbitalPortfolioActiveRef.current) {
+      if (
+        orbitPhase !== "orbiting" ||
+        !overlayContent ||
+        orbitalPortfolioActiveRef.current
+      ) {
         return;
       }
       if (moonHtmlVisible) return;
-      const consumed = hologramDroneRef.current?.handleScroll(event.deltaY) ?? false;
+      const consumed =
+        hologramDroneRef.current?.handleScroll(event.deltaY) ?? false;
       if (!consumed) return;
       event.preventDefault();
       event.stopPropagation();
     };
-    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    window.addEventListener("wheel", onWheel, {
+      passive: false,
+      capture: true,
+    });
     return () => {
       window.removeEventListener("wheel", onWheel, { capture: true });
     };
@@ -2942,9 +3542,18 @@ export default function ResumeSpace3D({
       { opacity: 1, y: 0, duration: 0.7, ease: "power2.out" },
     );
     tl.fromTo(
-      wrapper.querySelectorAll(".moon-html-layout__portfolio, .moon-html-layout__narrative, .moon-html-layout__tech"),
+      wrapper.querySelectorAll(
+        ".moon-html-layout__portfolio, .moon-html-layout__narrative, .moon-html-layout__tech",
+      ),
       { opacity: 0, y: 20, scale: 0.97 },
-      { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power2.out", stagger: 0.1 },
+      {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        duration: 0.5,
+        ease: "power2.out",
+        stagger: 0.1,
+      },
       "-=0.3",
     );
     moonHtmlTimelineRef.current = tl;
@@ -3107,7 +3716,9 @@ export default function ResumeSpace3D({
             meshCount++;
           }
         });
-        dwarn(`[PERF:warmup] GPU warmup STARTING — ${meshCount} visible meshes, ${objectCount} objects`);
+        dwarn(
+          `[PERF:warmup] GPU warmup STARTING — ${meshCount} visible meshes, ${objectCount} objects`,
+        );
 
         // Step 1 — Upload every texture to the GPU in chunks so
         // the browser can keep painting loader animations smoothly.
@@ -3147,7 +3758,9 @@ export default function ResumeSpace3D({
         const initTextureMs = performance.now() - warmupStart;
         setLoaderProgressHint((prev) => Math.max(prev, 88));
         setLoaderStageHint("Compiling shaders...");
-        dwarn(`[PERF:warmup] initTexture: ${textureCount} textures in ${initTextureMs.toFixed(1)}ms`);
+        dwarn(
+          `[PERF:warmup] initTexture: ${textureCount} textures in ${initTextureMs.toFixed(1)}ms`,
+        );
 
         // Step 2 — Compile all shader programs asynchronously
         const compileStart = performance.now();
@@ -3157,11 +3770,15 @@ export default function ResumeSpace3D({
           renderer.compileAsync(mainScene, liveCamera).catch((err) => {
             dwarn("[PERF:warmup] compileAsync error (non-fatal):", err);
           }),
-          new Promise<void>((resolve) => setTimeout(resolve, COMPILE_TIMEOUT_MS)),
+          new Promise<void>((resolve) =>
+            setTimeout(resolve, COMPILE_TIMEOUT_MS),
+          ),
         ]);
         const compileMs = performance.now() - compileStart;
         if (compileMs >= COMPILE_TIMEOUT_MS) {
-          dwarn(`[PERF:warmup] compileAsync timed out after ${COMPILE_TIMEOUT_MS}ms — continuing`);
+          dwarn(
+            `[PERF:warmup] compileAsync timed out after ${COMPILE_TIMEOUT_MS}ms — continuing`,
+          );
         }
         setLoaderProgressHint((prev) => Math.max(prev, 94));
         setLoaderStageHint("Finalizing render pipeline...");
@@ -3193,7 +3810,7 @@ export default function ResumeSpace3D({
 
         const totalMs = performance.now() - warmupStart;
         dwarn(
-          `[PERF:warmup] GPU warmup COMPLETE — initTexture=${initTextureMs.toFixed(1)}ms compileAsync=${compileMs.toFixed(1)}ms render=${renderMs.toFixed(1)}ms composerWarm=${composerWarmMs.toFixed(1)}ms total=${totalMs.toFixed(1)}ms`
+          `[PERF:warmup] GPU warmup COMPLETE — initTexture=${initTextureMs.toFixed(1)}ms compileAsync=${compileMs.toFixed(1)}ms render=${renderMs.toFixed(1)}ms composerWarm=${composerWarmMs.toFixed(1)}ms total=${totalMs.toFixed(1)}ms`,
         );
       } catch (e) {
         dwarn("[PERF:warmup] GPU warmup error:", e);
@@ -3217,7 +3834,10 @@ export default function ResumeSpace3D({
         if (!falconTravelAudioListenerRef.current) {
           falconTravelAudioListenerRef.current = new THREE.AudioListener();
         }
-        attachAudioListenerToCamera(camera, falconTravelAudioListenerRef.current);
+        attachAudioListenerToCamera(
+          camera,
+          falconTravelAudioListenerRef.current,
+        );
       }
       const ctx = falconTravelAudioListenerRef.current?.context;
       if (ctx && ctx.state !== "running") {
@@ -3225,7 +3845,8 @@ export default function ResumeSpace3D({
       }
       const toneRuntime = orbitalPortfolioToneRuntimeRef.current;
       if (!toneRuntime.context && falconTravelAudioListenerRef.current) {
-        toneRuntime.context = falconTravelAudioListenerRef.current.context as AudioContext;
+        toneRuntime.context = falconTravelAudioListenerRef.current
+          .context as AudioContext;
       }
       if (toneRuntime.context && !toneRuntime.masterGain) {
         toneRuntime.masterGain = toneRuntime.context.createGain();
@@ -3320,12 +3941,17 @@ export default function ResumeSpace3D({
           "loader",
           `[models] preload start hallway=${PROJECT_SHOWCASE_MODEL_PATH} aboutExterior=${PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH} falcon=/models/spaceship/scene.gltf sd=/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb drone=${OBLIVION_DRONE_MODEL_PATH}`,
         );
-        if (hallwayContentModeRef.current === "about" && !hallwayFontsReadyRef.current) {
+        if (
+          hallwayContentModeRef.current === "about" &&
+          !hallwayFontsReadyRef.current
+        ) {
           try {
             if (typeof document !== "undefined" && "fonts" in document) {
-              await (document as Document & {
-                fonts: FontFaceSet;
-              }).fonts.ready;
+              await (
+                document as Document & {
+                  fonts: FontFaceSet;
+                }
+              ).fonts.ready;
             }
           } catch {
             // Keep loading resilient if browser blocks font status APIs.
@@ -3348,7 +3974,9 @@ export default function ResumeSpace3D({
         ] = await Promise.all([
           gltfPreloader.loadAsync(PROJECT_SHOWCASE_MODEL_PATH),
           gltfPreloader.loadAsync("/models/spaceship/scene.gltf"),
-          gltfPreloader.loadAsync("/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb"),
+          gltfPreloader.loadAsync(
+            "/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb",
+          ),
           gltfPreloader.loadAsync(PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH),
           gltfPreloader.loadAsync(OBLIVION_DRONE_MODEL_PATH),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.activation),
@@ -3358,13 +3986,17 @@ export default function ResumeSpace3D({
           loadAudioSafe(FALCON_NAV_SFX_PATHS.speedOfLight),
           loadAudioSafe(FALCON_NAV_SFX_PATHS.changeOfDirection),
           loadAudioSafe(FALCON_NAV_SFX_PATHS.override),
-          ...OBLIVION_DRONE_AUDIO_PATHS.movement.map((url) => loadAudioSafe(url)),
+          ...OBLIVION_DRONE_AUDIO_PATHS.movement.map((url) =>
+            loadAudioSafe(url),
+          ),
         ]);
 
         if (!cancelled) {
           // Inject drone model/audio as soon as they resolve; do not block on
           // unrelated texture/music warmups.
-          oblivionDronePreloadedRef.current = (oblivionDroneGltf as { scene: THREE.Object3D }).scene;
+          oblivionDronePreloadedRef.current = (
+            oblivionDroneGltf as { scene: THREE.Object3D }
+          ).scene;
           hologramDroneRef.current?.setDroneVariant(
             MOON_VISIT_DRONE_VARIANT,
             oblivionDronePreloadedRef.current,
@@ -3380,9 +4012,10 @@ export default function ResumeSpace3D({
             oblivionDroneAudioBuffersRef.current,
           );
           falconNavCueBuffersRef.current = {
-            moonTravel: [falconMoonTravelBuffer1, falconMoonTravelBuffer2].filter(
-              (buffer): buffer is AudioBuffer => !!buffer,
-            ),
+            moonTravel: [
+              falconMoonTravelBuffer1,
+              falconMoonTravelBuffer2,
+            ].filter((buffer): buffer is AudioBuffer => !!buffer),
             speedOfLight: falconSpeedOfLightBuffer,
             changeOfDirection: falconChangeOfDirectionBuffer,
             override: falconOverrideBuffer,
@@ -3395,13 +4028,16 @@ export default function ResumeSpace3D({
             "audio",
             `[falcon] preload moon=${falconNavCueBuffersRef.current.moonTravel.length} speedOfLight=${!!falconSpeedOfLightBuffer} changeOfDirection=${!!falconChangeOfDirectionBuffer} override=${!!falconOverrideBuffer}`,
           );
-          spaceshipPreloadedGltfRef.current = spaceshipGltf as { scene: THREE.Group };
+          spaceshipPreloadedGltfRef.current = spaceshipGltf as {
+            scene: THREE.Group;
+          };
           starDestroyerPreloadedGltfRef.current = starDestroyerGltf as {
             scene: THREE.Group;
           };
-          projectShowcaseAboutExteriorPreloadedGltfRef.current = aboutExteriorGltf as {
-            scene: THREE.Group;
-          };
+          projectShowcaseAboutExteriorPreloadedGltfRef.current =
+            aboutExteriorGltf as {
+              scene: THREE.Group;
+            };
           debugLog(
             "loader",
             "[models] preloaded Falcon, Star Destroyer, Hallway, About Exterior, Drone",
@@ -3411,14 +4047,18 @@ export default function ResumeSpace3D({
         }
 
         if (!cancelled) {
-          projectShowcasePreloadedGltfRef.current = trenchGltf as { scene: THREE.Group };
+          projectShowcasePreloadedGltfRef.current = trenchGltf as {
+            scene: THREE.Group;
+          };
         }
 
         const trenchTextureKeys = new Set<string>();
         trenchGltf.scene.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (!(mesh as any).isMesh || !mesh.material) return;
-          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          const mats = Array.isArray(mesh.material)
+            ? mesh.material
+            : [mesh.material];
           mats.forEach((mat) => {
             const m = mat as THREE.MeshStandardMaterial;
             if (m.name) trenchTextureKeys.add(m.name);
@@ -3429,34 +4069,42 @@ export default function ResumeSpace3D({
         if (PROJECT_SHOWCASE_INJECT_NAMED_DIFFUSE_MAPS) {
           trenchTextureKeys.forEach((key) => {
             const basePath = `${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}/${key}_diffuse`;
-            trenchTextureJobs.push((async () => {
-              const exts = ["jpeg", "jpg", "png"];
-              for (const ext of exts) {
-                const tex = await loadTextureSafe(`${basePath}.${ext}`);
-                if (tex) return tex;
-              }
-              debugLog(
-                "project-showcase",
-                `[textures] missing optional diffuse for material "${key}" under ${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}`,
-              );
-              return null;
-            })());
+            trenchTextureJobs.push(
+              (async () => {
+                const exts = ["jpeg", "jpg", "png"];
+                for (const ext of exts) {
+                  const tex = await loadTextureSafe(`${basePath}.${ext}`);
+                  if (tex) return tex;
+                }
+                debugLog(
+                  "project-showcase",
+                  `[textures] missing optional diffuse for material "${key}" under ${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}`,
+                );
+                return null;
+              })(),
+            );
           });
         }
 
-        const showcaseImageJobs = hallwayContentModeRef.current === "projects"
-          ? projectShowcaseEntries.flatMap((entry) => {
-            const variants =
-              (entry.clientVariants ?? []).filter((variant) => !!variant?.title) ?? [];
-            const items =
-              variants.length > 0
-                ? variants.flatMap((variant, variantIndex) =>
-                    resolveShowcaseMediaItems(entry, { variant, variantIndex }),
-                  )
-                : resolveShowcaseMediaItems(entry);
-            return items.map((item) => loadTextureSafe(item.textureUrl));
-          })
-          : [];
+        const showcaseImageJobs =
+          hallwayContentModeRef.current === "projects"
+            ? projectShowcaseEntries.flatMap((entry) => {
+                const variants =
+                  (entry.clientVariants ?? []).filter(
+                    (variant) => !!variant?.title,
+                  ) ?? [];
+                const items =
+                  variants.length > 0
+                    ? variants.flatMap((variant, variantIndex) =>
+                        resolveShowcaseMediaItems(entry, {
+                          variant,
+                          variantIndex,
+                        }),
+                      )
+                    : resolveShowcaseMediaItems(entry);
+                return items.map((item) => loadTextureSafe(item.textureUrl));
+              })
+            : [];
         const portfolioCoreImageJobs = (() => {
           const urls = new Set<string>();
           const visit = (value: unknown) => {
@@ -3466,30 +4114,36 @@ export default function ResumeSpace3D({
               return;
             }
             if (typeof value !== "object") return;
-            Object.entries(value as Record<string, unknown>).forEach(([key, nested]) => {
-              if (
-                (key === "image" || key === "thumbnail") &&
-                typeof nested === "string" &&
-                nested.trim().length > 0
-              ) {
-                urls.add(nested.trim());
-                return;
-              }
-              visit(nested);
-            });
+            Object.entries(value as Record<string, unknown>).forEach(
+              ([key, nested]) => {
+                if (
+                  (key === "image" || key === "thumbnail") &&
+                  typeof nested === "string" &&
+                  nested.trim().length > 0
+                ) {
+                  urls.add(nested.trim());
+                  return;
+                }
+                visit(nested);
+              },
+            );
           };
           visit(portfolioCores);
           debugLog(
             "project-showcase",
             `[textures] portfolio core preload urls=${urls.size}`,
           );
-          return Array.from(urls).map((textureUrl) => loadTextureSafe(textureUrl));
+          return Array.from(urls).map((textureUrl) =>
+            loadTextureSafe(textureUrl),
+          );
         })();
         const moonTextureWarmupJobs = [
           ...Array.from(
             new Set(Object.values(EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID)),
           ).map((textureUrl) => loadTextureSafe(textureUrl)),
-          ...EXPERIENCE_MOON_BASE_TEXTURES.map((textureUrl) => loadTextureSafe(textureUrl)),
+          ...EXPERIENCE_MOON_BASE_TEXTURES.map((textureUrl) =>
+            loadTextureSafe(textureUrl),
+          ),
         ];
 
         const musicTrackWarmupJobs = Object.values(COSMIC_AUDIO_TRACKS)
@@ -3513,7 +4167,9 @@ export default function ResumeSpace3D({
                   probe.removeEventListener("loadeddata", onReady);
                   probe.removeEventListener("error", onError);
                 };
-                probe.addEventListener("canplaythrough", onReady, { once: true });
+                probe.addEventListener("canplaythrough", onReady, {
+                  once: true,
+                });
                 probe.addEventListener("loadeddata", onReady, { once: true });
                 probe.addEventListener("error", onError, { once: true });
                 probe.load();
@@ -3548,7 +4204,9 @@ export default function ResumeSpace3D({
         });
       } finally {
         if (!cancelled) {
-          dwarn(`[PERF:load] setCriticalAssetsReady(true) after ${(performance.now() - _preloadStart).toFixed(0)}ms`);
+          dwarn(
+            `[PERF:load] setCriticalAssetsReady(true) after ${(performance.now() - _preloadStart).toFixed(0)}ms`,
+          );
           setLoaderProgressHint((prev) => Math.max(prev, 75));
           setLoaderStageHint("Starting GPU warmup...");
           setCriticalAssetsReady(true);
@@ -3573,7 +4231,9 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     if (loaderVisualComplete && criticalAssetsReady && droneGpuWarmupReady) {
-      dwarn(`[PERF:load] isLoading→false (loaderVisualComplete=${loaderVisualComplete} criticalAssetsReady=${criticalAssetsReady} droneGpuWarmupReady=${droneGpuWarmupReady})`);
+      dwarn(
+        `[PERF:load] isLoading→false (loaderVisualComplete=${loaderVisualComplete} criticalAssetsReady=${criticalAssetsReady} droneGpuWarmupReady=${droneGpuWarmupReady})`,
+      );
       setIsLoading(false);
     }
   }, [loaderVisualComplete, criticalAssetsReady, droneGpuWarmupReady]);
@@ -3600,8 +4260,10 @@ export default function ResumeSpace3D({
   const [projectShowcasePlaying, setProjectShowcasePlaying] = useState(false);
   const [aboutElevatorReachedEnd, setAboutElevatorReachedEnd] = useState(false);
   const [cosmosIntroOverlayOpacity, setCosmosIntroOverlayOpacity] = useState(1);
-  const [projectShowcaseEntryOverlayOpacity, setProjectShowcaseEntryOverlayOpacity] =
-    useState(0);
+  const [
+    projectShowcaseEntryOverlayOpacity,
+    setProjectShowcaseEntryOverlayOpacity,
+  ] = useState(0);
   const [projectShowcaseLeverValue, setProjectShowcaseLeverValue] = useState(0);
   const [projectShowcaseAnglePercent, setProjectShowcaseAnglePercentState] =
     useState(PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT);
@@ -3642,13 +4304,13 @@ export default function ResumeSpace3D({
   const projectShowcasePanelsRef = useRef<ShowcasePanelRecord[]>([]);
   const projectShowcaseInteriorRootRef = useRef<THREE.Group | null>(null);
   const projectShowcaseExteriorRootRef = useRef<THREE.Group | null>(null);
-  const projectShowcaseAboutExteriorModelRef = useRef<THREE.Object3D | null>(null);
-  const projectShowcaseAboutBeaconCoreMatRef = useRef<THREE.SpriteMaterial | null>(
+  const projectShowcaseAboutExteriorModelRef = useRef<THREE.Object3D | null>(
     null,
   );
-  const projectShowcaseAboutBeaconHaloMatRef = useRef<THREE.SpriteMaterial | null>(
-    null,
-  );
+  const projectShowcaseAboutBeaconCoreMatRef =
+    useRef<THREE.SpriteMaterial | null>(null);
+  const projectShowcaseAboutBeaconHaloMatRef =
+    useRef<THREE.SpriteMaterial | null>(null);
   const aboutTrenchContextRef = useRef<{
     trenchWidth: number;
     trenchSizeScaledY: number;
@@ -3666,10 +4328,16 @@ export default function ResumeSpace3D({
     immersiveHeights: Record<AboutHallColumnId, number>;
   } | null>(null);
 
-  const projectShowcasePreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
-  const projectShowcaseAboutExteriorPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
+  const projectShowcasePreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(
+    null,
+  );
+  const projectShowcaseAboutExteriorPreloadedGltfRef = useRef<{
+    scene: THREE.Group;
+  } | null>(null);
   const spaceshipPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
-  const starDestroyerPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
+  const starDestroyerPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(
+    null,
+  );
   const oblivionDronePreloadedRef = useRef<THREE.Object3D | null>(null);
   const oblivionDroneAudioBuffersRef = useRef<DroneAudioBuffers | null>(null);
   const falconNavCueBuffersRef = useRef<{
@@ -3764,16 +4432,20 @@ export default function ResumeSpace3D({
   const orbitalPortfolioWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const orbitalPortfolioRootRef = useRef<THREE.Group | null>(null);
   const orbitalPortfolioBeaconRef = useRef<THREE.Mesh | null>(null);
-  const orbitalPortfolioStationsRef = useRef<OrbitalPortfolioStationRecord[]>([]);
+  const orbitalPortfolioStationsRef = useRef<OrbitalPortfolioStationRecord[]>(
+    [],
+  );
   const orbitalPortfolioGroupsRef = useRef<PortfolioGroupView[]>([]);
   const orbitalPortfolioCoresRef = useRef<OrbitalPortfolioCoreRecord[]>([]);
-  const orbitalPortfolioCoresByIdRef = useRef<Map<string, OrbitalPortfolioCoreRecord>>(
-    new Map(),
-  );
+  const orbitalPortfolioCoresByIdRef = useRef<
+    Map<string, OrbitalPortfolioCoreRecord>
+  >(new Map());
   const orbitalPortfolioCoreViewsRef = useRef<PortfolioCoreView[]>([]);
   const orbitalPortfolioConnectorLinesRef = useRef<THREE.Line[]>([]);
   const orbitalPortfolioMatterGroupRef = useRef<THREE.Group | null>(null);
-  const orbitalPortfolioMatterPacketsRef = useRef<OrbitalPortfolioMatterPacketRecord[]>([]);
+  const orbitalPortfolioMatterPacketsRef = useRef<
+    OrbitalPortfolioMatterPacketRecord[]
+  >([]);
   const orbitalPortfolioCorePickMeshesRef = useRef<THREE.Mesh[]>([]);
   const orbitalPortfolioOuterRingsRef = useRef<THREE.Line[]>([]);
   const moonTravelSignGroupRef = useRef<THREE.Group | null>(null);
@@ -3795,7 +4467,9 @@ export default function ResumeSpace3D({
   const moonTravelSignPoolRef = useRef<JobMemoryEntry[]>([]);
   const moonTravelSignPoolCursorRef = useRef(0);
   const moonTravelSignActiveCompanyRef = useRef<string | null>(null);
-  const moonTravelSignTextureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
+  const moonTravelSignTextureCacheRef = useRef<Map<string, THREE.Texture>>(
+    new Map(),
+  );
   const [orbitSignTuning, setOrbitSignTuning] = useState<OrbitSignTuning>({
     timeBetweenMessagesSec: 1.8,
     continuousLoop: true,
@@ -3806,15 +4480,18 @@ export default function ResumeSpace3D({
     endFontScale: 1.86,
   });
   const orbitSignTuningRef = useRef<OrbitSignTuning>(orbitSignTuning);
-  const [showOrbitSignTuningControls, setShowOrbitSignTuningControls] = useState(false);
+  const [showOrbitSignTuningControls, setShowOrbitSignTuningControls] =
+    useState(false);
   const [viewerMemoriesEnabled, setViewerMemoriesEnabled] = useState(false);
-  const [moonMemoryControlsVisible, setMoonMemoryControlsVisible] = useState(false);
+  const [moonMemoryControlsVisible, setMoonMemoryControlsVisible] =
+    useState(false);
   const viewerMemoriesEnabledRef = useRef(false);
   const moonMemoryUiWaitingForDroneExitRef = useRef(false);
   const moonMemoryUiSawDroneRef = useRef(false);
   const [moonMemoryManualMode, setMoonMemoryManualMode] = useState(false);
   const moonMemoryManualModeRef = useRef(false);
-  const [moonMemoryPlaybackPlaying, setMoonMemoryPlaybackPlaying] = useState(false);
+  const [moonMemoryPlaybackPlaying, setMoonMemoryPlaybackPlaying] =
+    useState(false);
   const moonMemoryPlaybackPlayingRef = useRef(false);
   const [moonMemoryScrubValue, setMoonMemoryScrubValue] = useState(0);
   const moonMemoryScrubValueRef = useRef(0);
@@ -3825,29 +4502,43 @@ export default function ResumeSpace3D({
   const [orbitalPortfolioActive, setOrbitalPortfolioActive] = useState(false);
   const orbitalPortfolioActiveRef = useRef(false);
   const orbitalPortfolioPlayingRef = useRef(true);
-  const [orbitalPortfolioOrbitsEnabled, setOrbitalPortfolioOrbitsEnabled] = useState(true);
+  const [orbitalPortfolioOrbitsEnabled, setOrbitalPortfolioOrbitsEnabled] =
+    useState(true);
   const orbitalPortfolioOrbitsEnabledRef = useRef(true);
   const [orbitalPortfolioAutoplayEnabled, setOrbitalPortfolioAutoplayEnabled] =
     useState(false);
   const orbitalPortfolioAutoplayEnabledRef = useRef(false);
-  const [orbitalPortfolioFocusIndex, setOrbitalPortfolioFocusIndex] = useState(0);
+  const [orbitalPortfolioFocusIndex, setOrbitalPortfolioFocusIndex] =
+    useState(0);
   const orbitalPortfolioFocusIndexRef = useRef(0);
-  const [orbitalPortfolioHasActiveFocus, setOrbitalPortfolioHasActiveFocus] = useState(true);
+  const [orbitalPortfolioHasActiveFocus, setOrbitalPortfolioHasActiveFocus] =
+    useState(true);
   const orbitalPortfolioHasActiveFocusRef = useRef(true);
-  const [orbitalPortfolioVariantIndex, setOrbitalPortfolioVariantIndex] = useState(0);
+  const [orbitalPortfolioVariantIndex, setOrbitalPortfolioVariantIndex] =
+    useState(0);
   const orbitalPortfolioVariantIndexRef = useRef(0);
-  const [orbitalPortfolioMediaIndex, setOrbitalPortfolioMediaIndex] = useState(0);
-  const [orbitalPortfolioThumbPageStart, setOrbitalPortfolioThumbPageStart] = useState(0);
+  const [orbitalPortfolioMediaIndex, setOrbitalPortfolioMediaIndex] =
+    useState(0);
+  const [orbitalPortfolioThumbPageStart, setOrbitalPortfolioThumbPageStart] =
+    useState(0);
   const orbitalPortfolioThumbPageStartRef = useRef(0);
   const orbitalPortfolioPrevThumbPageStartRef = useRef(0);
-  const orbitalPortfolioThumbSlideDirectionRef = useRef<"prev" | "next" | null>(null);
-  const [orbitalPortfolioSearchQuery, setOrbitalPortfolioSearchQuery] = useState("");
-  const [orbitalPortfolioYearFilter, setOrbitalPortfolioYearFilter] = useState("all");
-  const [orbitalPortfolioTechFilter, setOrbitalPortfolioTechFilter] = useState("all");
-  const [orbitalPortfolioFocusedCoreId, setOrbitalPortfolioFocusedCoreId] = useState("");
+  const orbitalPortfolioThumbSlideDirectionRef = useRef<"prev" | "next" | null>(
+    null,
+  );
+  const [orbitalPortfolioSearchQuery, setOrbitalPortfolioSearchQuery] =
+    useState("");
+  const [orbitalPortfolioYearFilter, setOrbitalPortfolioYearFilter] =
+    useState("all");
+  const [orbitalPortfolioTechFilter, setOrbitalPortfolioTechFilter] =
+    useState("all");
+  const [orbitalPortfolioFocusedCoreId, setOrbitalPortfolioFocusedCoreId] =
+    useState("");
   const orbitalPortfolioFocusedCoreIdRef = useRef("");
-  const [orbitalRegistrySelectedCoreId, setOrbitalRegistrySelectedCoreId] = useState("");
-  const [orbitalRegistryPanelVisible, setOrbitalRegistryPanelVisible] = useState(true);
+  const [orbitalRegistrySelectedCoreId, setOrbitalRegistrySelectedCoreId] =
+    useState("");
+  const [orbitalRegistryPanelVisible, setOrbitalRegistryPanelVisible] =
+    useState(true);
   const orbitalPortfolioLastViewedRef = useRef<{
     focusIndex: number | null;
     variantIndex: number;
@@ -3950,15 +4641,18 @@ export default function ResumeSpace3D({
     () => resolveSkillsLatticeTonePreset(skillsLatticeTonePresetId),
     [skillsLatticeTonePresetId],
   );
-  const skillsLatticeTonePhrasePauseState = useState(SKILLS_LATTICE_TONE_PHRASE_PAUSE_MS);
+  const skillsLatticeTonePhrasePauseState = useState(
+    SKILLS_LATTICE_TONE_PHRASE_PAUSE_MS,
+  );
   const skillsLatticeTonePhrasePauseMs = skillsLatticeTonePhrasePauseState[0];
-  const skillsLatticeTonePhrasePauseMsRef = useRef(skillsLatticeTonePhrasePauseMs);
+  const skillsLatticeTonePhrasePauseMsRef = useRef(
+    skillsLatticeTonePhrasePauseMs,
+  );
   useEffect(() => {
     skillsLatticeTonePhrasePauseMsRef.current = skillsLatticeTonePhrasePauseMs;
   }, [skillsLatticeTonePhrasePauseMs]);
-  const [skillsLatticeToneReleaseSec, setSkillsLatticeToneReleaseSec] = useState(
-    activeSkillsLatticeTonePreset.releaseSec,
-  );
+  const [skillsLatticeToneReleaseSec, setSkillsLatticeToneReleaseSec] =
+    useState(activeSkillsLatticeTonePreset.releaseSec);
   const skillsLatticeToneReleaseSecRef = useRef(skillsLatticeToneReleaseSec);
   useEffect(() => {
     skillsLatticeToneReleaseSecRef.current = skillsLatticeToneReleaseSec;
@@ -3968,84 +4662,100 @@ export default function ResumeSpace3D({
   }, [activeSkillsLatticeTonePreset.releaseSec]);
   const onscreenKeyboardKeys = useMemo(() => buildOnscreenKeyboardKeys(), []);
   const [keyboardStudioEnabled] = useState(false);
-  const [onscreenKeyboardPanelLayout, setOnscreenKeyboardPanelLayout] = useState(() =>
-    loadPanelLayout(KEYBOARD_STUDIO_DEFAULT_LAYOUT)
-  );
-  const [onscreenKeyboardPanelVisible, setOnscreenKeyboardPanelVisible] = useState(false);
-  const [onscreenKeyboardPanelCollapsed, setOnscreenKeyboardPanelCollapsed] = useState(
-    loadPanelLayout(KEYBOARD_STUDIO_DEFAULT_LAYOUT).collapsed,
-  );
-  const [onscreenKeyboardRecording, setOnscreenKeyboardRecording] = useState(false);
+  const [onscreenKeyboardPanelLayout, setOnscreenKeyboardPanelLayout] =
+    useState(() => loadPanelLayout(KEYBOARD_STUDIO_DEFAULT_LAYOUT));
+  const [onscreenKeyboardPanelVisible, setOnscreenKeyboardPanelVisible] =
+    useState(false);
+  const [onscreenKeyboardPanelCollapsed, setOnscreenKeyboardPanelCollapsed] =
+    useState(loadPanelLayout(KEYBOARD_STUDIO_DEFAULT_LAYOUT).collapsed);
+  const [onscreenKeyboardRecording, setOnscreenKeyboardRecording] =
+    useState(false);
   const [onscreenKeyboardPlaying, setOnscreenKeyboardPlaying] = useState(false);
-  const [onscreenKeyboardGhostAutoplay, setOnscreenKeyboardGhostAutoplay] = useState(true);
-  const [onscreenKeyboardPressedNotes, setOnscreenKeyboardPressedNotes] = useState<string[]>([]);
-  const [onscreenKeyboardGhostPressedNotes, setOnscreenKeyboardGhostPressedNotes] = useState<
-    string[]
-  >([]);
-  const [onscreenKeyboardRecordedEvents, setOnscreenKeyboardRecordedEvents] = useState<
-    KeyboardRecordedNoteEvent[]
-  >([]);
-  const [keyboardStudioPresets, setKeyboardStudioPresets] = useState<KeyboardStudioPreset[]>(
-    () => loadPresets(),
-  );
-  const [keyboardStudioBindings, setKeyboardStudioBindings] = useState<KeyboardStudioEventBinding[]>(
-    () => loadBindings(),
-  );
+  const [onscreenKeyboardGhostAutoplay, setOnscreenKeyboardGhostAutoplay] =
+    useState(true);
+  const [onscreenKeyboardPressedNotes, setOnscreenKeyboardPressedNotes] =
+    useState<string[]>([]);
+  const [
+    onscreenKeyboardGhostPressedNotes,
+    setOnscreenKeyboardGhostPressedNotes,
+  ] = useState<string[]>([]);
+  const [onscreenKeyboardRecordedEvents, setOnscreenKeyboardRecordedEvents] =
+    useState<KeyboardRecordedNoteEvent[]>([]);
+  const [keyboardStudioPresets, setKeyboardStudioPresets] = useState<
+    KeyboardStudioPreset[]
+  >(() => loadPresets());
+  const [keyboardStudioBindings, setKeyboardStudioBindings] = useState<
+    KeyboardStudioEventBinding[]
+  >(() => loadBindings());
   const [keyboardStudioPresetName, setKeyboardStudioPresetName] = useState("");
-  const [keyboardStudioSelectedPresetId, setKeyboardStudioSelectedPresetId] = useState<string>("factory-nebula-keys");
-  const [keyboardStudioSelectedSource, setKeyboardStudioSelectedSource] = useState<string>("factory-nebula-keys");
-  const [keyboardStudioBeatPatternId, setKeyboardStudioBeatPatternId] = useState<
-    keyof typeof KEYBOARD_STUDIO_BEAT_PATTERNS
-  >("pulse");
-  const [keyboardStudioBeatTempoBpm, setKeyboardStudioBeatTempoBpm] = useState(96);
-  const [keyboardStudioBeatLoopEnabled, setKeyboardStudioBeatLoopEnabled] = useState(false);
-  const [keyboardStudioKnownEventIds, setKeyboardStudioKnownEventIds] = useState<string[]>(
-    () => [...COSMOS_SOUND_EVENT_IDS],
-  );
-  const [keyboardStudioSoundDesign, setKeyboardStudioSoundDesign] = useState<KeyboardStudioSoundDesign>(
-    DEFAULT_KEYBOARD_STUDIO_SOUND_DESIGN,
-  );
-  const [keyboardStudioSavedSettings, setKeyboardStudioSavedSettings] = useState<
-    Array<{
-      id: string;
-      name: string;
-      createdAt: string;
-      soundDesign: KeyboardStudioSoundDesign;
-    }>
-  >(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = window.localStorage.getItem(KEYBOARD_STUDIO_SETTINGS_SLOTS_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw) as Array<{
-        id?: string;
-        name?: string;
-        createdAt?: string;
-        soundDesign?: Partial<KeyboardStudioSoundDesign>;
-      }>;
-      if (!Array.isArray(parsed)) return [];
-      return parsed
-        .slice(0, 10)
-        .filter((slot) => !!slot.id && !!slot.name)
-        .map((slot) => ({
-          id: String(slot.id),
-          name: String(slot.name),
-          createdAt: String(slot.createdAt || new Date().toISOString()),
-          soundDesign: normalizeSoundDesign(slot.soundDesign),
-        }));
-    } catch {
-      return [];
-    }
-  });
-  const [keyboardStudioSelectedSettingsId, setKeyboardStudioSelectedSettingsId] = useState("");
-  const [keyboardStudioMainColumnWidth, setKeyboardStudioMainColumnWidth] = useState(510);
+  const [keyboardStudioSelectedPresetId, setKeyboardStudioSelectedPresetId] =
+    useState<string>("factory-nebula-keys");
+  const [keyboardStudioSelectedSource, setKeyboardStudioSelectedSource] =
+    useState<string>("factory-nebula-keys");
+  const [keyboardStudioBeatPatternId, setKeyboardStudioBeatPatternId] =
+    useState<keyof typeof KEYBOARD_STUDIO_BEAT_PATTERNS>("pulse");
+  const [keyboardStudioBeatTempoBpm, setKeyboardStudioBeatTempoBpm] =
+    useState(96);
+  const [keyboardStudioBeatLoopEnabled, setKeyboardStudioBeatLoopEnabled] =
+    useState(false);
+  const [keyboardStudioKnownEventIds, setKeyboardStudioKnownEventIds] =
+    useState<string[]>(() => [...COSMOS_SOUND_EVENT_IDS]);
+  const [keyboardStudioSoundDesign, setKeyboardStudioSoundDesign] =
+    useState<KeyboardStudioSoundDesign>(DEFAULT_KEYBOARD_STUDIO_SOUND_DESIGN);
+  const [keyboardStudioSavedSettings, setKeyboardStudioSavedSettings] =
+    useState<
+      Array<{
+        id: string;
+        name: string;
+        createdAt: string;
+        soundDesign: KeyboardStudioSoundDesign;
+      }>
+    >(() => {
+      if (typeof window === "undefined") return [];
+      try {
+        const raw = window.localStorage.getItem(
+          KEYBOARD_STUDIO_SETTINGS_SLOTS_KEY,
+        );
+        if (!raw) return [];
+        const parsed = JSON.parse(raw) as Array<{
+          id?: string;
+          name?: string;
+          createdAt?: string;
+          soundDesign?: Partial<KeyboardStudioSoundDesign>;
+        }>;
+        if (!Array.isArray(parsed)) return [];
+        return parsed
+          .slice(0, 10)
+          .filter((slot) => !!slot.id && !!slot.name)
+          .map((slot) => ({
+            id: String(slot.id),
+            name: String(slot.name),
+            createdAt: String(slot.createdAt || new Date().toISOString()),
+            soundDesign: normalizeSoundDesign(slot.soundDesign),
+          }));
+      } catch {
+        return [];
+      }
+    });
+  const [
+    keyboardStudioSelectedSettingsId,
+    setKeyboardStudioSelectedSettingsId,
+  ] = useState("");
+  const [keyboardStudioMainColumnWidth, setKeyboardStudioMainColumnWidth] =
+    useState(510);
   const onscreenKeyboardPressedNotesRef = useRef<string[]>([]);
-  const onscreenKeyboardRecordedEventsRef = useRef<KeyboardRecordedNoteEvent[]>([]);
+  const onscreenKeyboardRecordedEventsRef = useRef<KeyboardRecordedNoteEvent[]>(
+    [],
+  );
   const onscreenKeyboardRecordingRef = useRef(false);
   const onscreenKeyboardGhostAutoplayRef = useRef(true);
   const onscreenKeyboardRecordStartRef = useRef(0);
-  const onscreenKeyboardActiveNotesRef = useRef(new Map<string, { startMs: number; velocity: number }>());
-  const keyboardStudioEngineRef = useRef<ReturnType<typeof createKeyboardStudioEngine> | null>(null);
+  const onscreenKeyboardActiveNotesRef = useRef(
+    new Map<string, { startMs: number; velocity: number }>(),
+  );
+  const keyboardStudioEngineRef = useRef<ReturnType<
+    typeof createKeyboardStudioEngine
+  > | null>(null);
   const keyboardStudioBeatLoopTimerRef = useRef<number | null>(null);
   const keyboardStudioControlFeedbackLastAtRef = useRef(0);
   const onscreenKeyboardPanelDragRef = useRef<{
@@ -4061,7 +4771,9 @@ export default function ResumeSpace3D({
     startWidth: number;
   } | null>(null);
   const keyboardStudioPointerNoteRef = useRef<Map<number, string>>(new Map());
-  const keyboardStudioNotePointerCountRef = useRef<Map<string, number>>(new Map());
+  const keyboardStudioNotePointerCountRef = useRef<Map<string, number>>(
+    new Map(),
+  );
   const keyboardStudioPressedCodesRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     onscreenKeyboardPressedNotesRef.current = onscreenKeyboardPressedNotes;
@@ -4107,12 +4819,17 @@ export default function ResumeSpace3D({
   );
   const selectedKeyboardStudioPreset = useMemo(
     () =>
-      allKeyboardStudioPresetOptions.find((preset) => preset.id === keyboardStudioSelectedSource)
-      ?? KEYBOARD_STUDIO_FACTORY_PRESETS[0],
+      allKeyboardStudioPresetOptions.find(
+        (preset) => preset.id === keyboardStudioSelectedSource,
+      ) ?? KEYBOARD_STUDIO_FACTORY_PRESETS[0],
     [allKeyboardStudioPresetOptions, keyboardStudioSelectedSource],
   );
   const onscreenKeyboardActiveNoteSet = useMemo(
-    () => new Set([...onscreenKeyboardPressedNotes, ...onscreenKeyboardGhostPressedNotes]),
+    () =>
+      new Set([
+        ...onscreenKeyboardPressedNotes,
+        ...onscreenKeyboardGhostPressedNotes,
+      ]),
     [onscreenKeyboardGhostPressedNotes, onscreenKeyboardPressedNotes],
   );
   const onscreenKeyboardGhostNoteSet = useMemo(
@@ -4132,7 +4849,10 @@ export default function ResumeSpace3D({
     (next: boolean, source: string) => {
       const prev = orbitalPortfolioManualCameraLockRef.current;
       if (prev !== next) {
-        shipLog(`[PORTENTRY] manualLock:${next ? "on" : "off"} source=${source}`, "info");
+        shipLog(
+          `[PORTENTRY] manualLock:${next ? "on" : "off"} source=${source}`,
+          "info",
+        );
       }
       orbitalPortfolioManualCameraLockRef.current = next;
     },
@@ -4162,7 +4882,10 @@ export default function ResumeSpace3D({
       moonTravelSignPauseUntilRef.current = 0;
     }
     // Re-evaluate spawn timing right away so message timing changes feel live.
-    moonTravelSignLastSpawnAtRef.current = Math.min(moonTravelSignLastSpawnAtRef.current, now + 90);
+    moonTravelSignLastSpawnAtRef.current = Math.min(
+      moonTravelSignLastSpawnAtRef.current,
+      now + 90,
+    );
   }, [orbitSignTuning]);
   useEffect(() => {
     viewerMemoriesEnabledRef.current = viewerMemoriesEnabled;
@@ -4237,9 +4960,9 @@ export default function ResumeSpace3D({
     const tick = () => {
       raf = requestAnimationFrame(tick);
       if (!moonMemoryUiWaitingForDroneExitRef.current) return;
-      const drone = hologramDroneRef.current as
-        | { isDroneVisible?: () => boolean }
-        | null;
+      const drone = hologramDroneRef.current as {
+        isDroneVisible?: () => boolean;
+      } | null;
       const droneVisible = !!drone?.isDroneVisible?.();
       if (droneVisible) {
         moonMemoryUiSawDroneRef.current = true;
@@ -4256,7 +4979,9 @@ export default function ResumeSpace3D({
   }, [orbitPhase, shipLog]);
   const exportOrbitSignTuning = useCallback(() => {
     const payload = {
-      timeBetweenMessagesSec: Number(orbitSignTuning.timeBetweenMessagesSec.toFixed(2)),
+      timeBetweenMessagesSec: Number(
+        orbitSignTuning.timeBetweenMessagesSec.toFixed(2),
+      ),
       continuousLoop: !!orbitSignTuning.continuousLoop,
       waitAfterStreamSec: Number(orbitSignTuning.waitAfterStreamSec.toFixed(2)),
       travelSpeed: Number(orbitSignTuning.travelSpeed.toFixed(2)),
@@ -4277,6 +5002,11 @@ export default function ResumeSpace3D({
   const aboutMemorySquareWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const aboutMemorySquareRootRef = useRef<THREE.Group | null>(null);
   const aboutParticleSwarmRef = useRef<AboutParticleSwarmHandle | null>(null);
+  const aboutHydrateSwarmRef = useRef<AboutParticleSwarmHandle | null>(null);
+  const aboutJourneyCameraDistSavedRef = useRef<{
+    min: number;
+    max: number;
+  } | null>(null);
   const aboutJourneyRef = useRef<AboutJourneyController | null>(null);
   const aboutJourneyPendingEntryRef = useRef(false);
   const navigationDistanceRef = useRef<number | null>(null);
@@ -4303,8 +5033,15 @@ export default function ResumeSpace3D({
   });
   const aboutCellMeshRef = useRef<THREE.InstancedMesh | null>(null);
   const aboutCellShaderMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
-  const aboutCellRevealAttrRef = useRef<THREE.InstancedBufferAttribute | null>(null);
-  const aboutSlideTexturesRef = useRef<Array<THREE.Texture | null>>([null, null, null, null]);
+  const aboutCellRevealAttrRef = useRef<THREE.InstancedBufferAttribute | null>(
+    null,
+  );
+  const aboutSlideTexturesRef = useRef<Array<THREE.Texture | null>>([
+    null,
+    null,
+    null,
+    null,
+  ]);
   const aboutCellRafRef = useRef<number | null>(null);
   const aboutSwarmManualTriggerRef = useRef(false);
   const aboutSwarmManualReformRef = useRef(false);
@@ -4319,7 +5056,8 @@ export default function ResumeSpace3D({
   const [aboutNavHereActive, setAboutNavHereActive] = useState(false);
   const [projectsNavHereActive, setProjectsNavHereActive] = useState(false);
   const [skillsNavHereActive, setSkillsNavHereActive] = useState(false);
-  const [aboutSwarmTriggerVisible, setAboutSwarmTriggerVisible] = useState(false);
+  const [aboutSwarmTriggerVisible, setAboutSwarmTriggerVisible] =
+    useState(false);
   const [aboutActiveSlideIndex, setAboutActiveSlideIndex] = useState(0);
   const aboutFrontSlotIndicesRef = useRef<number[]>([]);
   const aboutCellBaseColorsRef = useRef<THREE.Color[]>([]);
@@ -4344,15 +5082,25 @@ export default function ResumeSpace3D({
     lastPrepared: -1,
     lastReady: false,
   });
-  const skillsSDPatrolStateRef = useRef<{ angle: number }>({ angle: Math.PI * 0.25 });
+  const skillsSDPatrolStateRef = useRef<{ angle: number }>({
+    angle: Math.PI * 0.25,
+  });
   const moonTravelSignCatalog = useMemo(() => {
     const experience = (resumeData as { experience?: unknown }).experience;
     const entries = Array.isArray(experience)
       ? (experience as Array<Record<string, unknown>>)
       : [];
     const normalizeMemoryType = (value: unknown): JobMemoryType => {
-      const raw = String(value ?? "").trim().toLowerCase();
-      if (raw === "tech" || raw === "code" || raw === "memory" || raw === "default") return raw;
+      const raw = String(value ?? "")
+        .trim()
+        .toLowerCase();
+      if (
+        raw === "tech" ||
+        raw === "code" ||
+        raw === "memory" ||
+        raw === "default"
+      )
+        return raw;
       return "default";
     };
     const catalog = new Map<string, { pool: JobMemoryEntry[] }>();
@@ -4377,7 +5125,8 @@ export default function ResumeSpace3D({
         : [];
       const company = String(entry.company ?? "").trim();
       if (sequence.length > 0) catalog.set(id, { pool: sequence });
-      else if (company) catalog.set(id, { pool: [{ text: company, type: "default" }] });
+      else if (company)
+        catalog.set(id, { pool: [{ text: company, type: "default" }] });
     });
     return catalog;
   }, []);
@@ -4386,7 +5135,8 @@ export default function ResumeSpace3D({
       const id = companyId.toLowerCase();
       const record = moonTravelSignCatalog.get(id);
       const pool =
-        moonTravelSignActiveCompanyRef.current === id && moonTravelSignPoolRef.current.length > 0
+        moonTravelSignActiveCompanyRef.current === id &&
+        moonTravelSignPoolRef.current.length > 0
           ? moonTravelSignPoolRef.current
           : (record?.pool ?? []);
       if (pool.length === 0) return null;
@@ -4419,9 +5169,13 @@ export default function ResumeSpace3D({
   const skillsLatticeFlowPointsRef = useRef<THREE.Points | null>(null);
   const skillsLatticeFlowMetaRef = useRef<SkillsLatticeFlowMeta[]>([]);
   const skillsLatticeEnvelopeRef = useRef<THREE.Mesh | null>(null);
-  const skillsLatticeEnvelopeMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
-  const skillsLatticeEnvelopeBasicMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
-  const skillsLatticeEnvelopeEdgeMatRef = useRef<THREE.LineBasicMaterial | null>(null);
+  const skillsLatticeEnvelopeMatRef = useRef<THREE.MeshPhongMaterial | null>(
+    null,
+  );
+  const skillsLatticeEnvelopeBasicMatRef =
+    useRef<THREE.MeshBasicMaterial | null>(null);
+  const skillsLatticeEnvelopeEdgeMatRef =
+    useRef<THREE.LineBasicMaterial | null>(null);
   const skillsLatticeEnvelopeRadiusRef = useRef(0);
   const skillsLatticeEnvelopeInsideRef = useRef<boolean | null>(null);
   const skillsLatticeReturnViewRef = useRef<{
@@ -4433,8 +5187,12 @@ export default function ResumeSpace3D({
     target: THREE.Vector3;
   } | null>(null);
   const skillsLatticeBeaconRef = useRef<THREE.Mesh | null>(null);
-  const skillsLatticeBeaconMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
-  const skillsLatticeBeaconEdgeMatRef = useRef<THREE.LineBasicMaterial | null>(null);
+  const skillsLatticeBeaconMatRef = useRef<THREE.MeshPhongMaterial | null>(
+    null,
+  );
+  const skillsLatticeBeaconEdgeMatRef = useRef<THREE.LineBasicMaterial | null>(
+    null,
+  );
   const skillsLatticeBeaconLabelRef = useRef<THREE.Object3D | null>(null);
   const skillsLatticeNodeLabelsRef = useRef<THREE.Object3D[]>([]);
   const skillsLatticeSystemActiveRef = useRef(false);
@@ -4451,7 +5209,9 @@ export default function ResumeSpace3D({
     center: new THREE.Vector3(),
     startedAt: 0,
   });
-  const skillsLatticeSelectedNodeRef = useRef<SkillsLatticeNodeRecord | null>(null);
+  const skillsLatticeSelectedNodeRef = useRef<SkillsLatticeNodeRecord | null>(
+    null,
+  );
   const skillsLegacyBodiesRef = useRef<THREE.Object3D[]>([]);
   const skillsLatticePendingEntryRef = useRef(false);
   const skillsLatticeActiveRef = useRef(false);
@@ -4489,7 +5249,6 @@ export default function ResumeSpace3D({
   const cosmosIntroPlayedRef = useRef(false);
   const cosmosIntroCompletedRef = useRef(false);
   const introCameraPrealignedRef = useRef(false);
-
 
   const shipStagingModeRef = useRef(false);
   const shipStagingKeysRef = useRef<Record<string, boolean>>({
@@ -4631,27 +5390,26 @@ export default function ResumeSpace3D({
     controlsMaxDistance: number;
   } | null>(null);
 
-  const formatNavTargetLabel = useCallback(
-    (targetId: string): string => {
-      const company = resumeData.experience.find((exp: any) => exp.id === targetId);
-      if (company) return company.navLabel || company.company || targetId;
+  const formatNavTargetLabel = useCallback((targetId: string): string => {
+    const company = resumeData.experience.find(
+      (exp: any) => exp.id === targetId,
+    );
+    if (company) return company.navLabel || company.company || targetId;
 
-      const known: Record<string, string> = {
-        experience: "Experience",
-        skills: "Skills",
-        projects: "Projects",
-        portfolio: "Portfolio",
-        about: "About",
-        home: "Home",
-      };
-      const lowered = targetId.toLowerCase();
-      if (known[lowered]) return known[lowered];
-      return targetId
-        .replace(/-/g, " ")
-        .replace(/\b\w/g, (ch) => ch.toUpperCase());
-    },
-    [],
-  );
+    const known: Record<string, string> = {
+      experience: "Experience",
+      skills: "Skills",
+      projects: "Projects",
+      portfolio: "Portfolio",
+      about: "About",
+      home: "Home",
+    };
+    const lowered = targetId.toLowerCase();
+    if (known[lowered]) return known[lowered];
+    return targetId
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (ch) => ch.toUpperCase());
+  }, []);
 
   // Items ref to track orbital objects (moons, planets)
   const itemsRef = useRef<
@@ -4673,10 +5431,18 @@ export default function ResumeSpace3D({
   const [shipExploreMode, setShipExploreMode] = useState(false);
   const shipExploreModeRef = useRef(false);
   const shipExploreKeysRef = useRef<Record<string, boolean>>({
-    KeyW: false, KeyA: false, KeyS: false, KeyD: false,
-    KeyQ: false, KeyE: false,
-    ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false,
-    ShiftLeft: false, ShiftRight: false,
+    KeyW: false,
+    KeyA: false,
+    KeyS: false,
+    KeyD: false,
+    KeyQ: false,
+    KeyE: false,
+    ArrowUp: false,
+    ArrowDown: false,
+    ArrowLeft: false,
+    ArrowRight: false,
+    ShiftLeft: false,
+    ShiftRight: false,
   });
   const shipExploreCoordsRef = useRef<{
     local: [number, number, number];
@@ -4766,7 +5532,8 @@ export default function ResumeSpace3D({
   const startupDestinationsPanelRef = useRef<HTMLDivElement | null>(null);
   const startupConsoleButtonRef = useRef<HTMLButtonElement | null>(null);
   const startupMiniMapContainerRef = useRef<HTMLDivElement | null>(null);
-  const [startupDestinationsVisible, setStartupDestinationsVisible] = useState(false);
+  const [startupDestinationsVisible, setStartupDestinationsVisible] =
+    useState(false);
   const [startupConsoleVisible, setStartupConsoleVisible] = useState(false);
   const [startupMiniMapVisible, setStartupMiniMapVisible] = useState(false);
 
@@ -4865,8 +5632,7 @@ export default function ResumeSpace3D({
       `   Stored speeds: planet=${frozenOrbitalSpeedsRef.current.parentPlanetOrbitSpeed}, moonOrbit=${frozenOrbitalSpeedsRef.current.parentPlanetMoonOrbitSpeed}, thisMoon=${frozenOrbitalSpeedsRef.current.moonOrbitSpeed}`,
     );
 
-    lastMoonOrbitSpeedRef.current =
-      optionsRef.current.spaceMoonOrbitSpeed ?? 0;
+    lastMoonOrbitSpeedRef.current = optionsRef.current.spaceMoonOrbitSpeed ?? 0;
 
     if (sceneRef.current.scene) {
       freezeSystemForMoon({
@@ -4990,7 +5756,8 @@ export default function ResumeSpace3D({
     }
     const positionalAudio = falconTravelAudioRef.current;
     if (positionalAudio.parent !== camera) {
-      if (positionalAudio.parent) positionalAudio.parent.remove(positionalAudio);
+      if (positionalAudio.parent)
+        positionalAudio.parent.remove(positionalAudio);
       camera.add(positionalAudio);
     }
     return positionalAudio;
@@ -5074,71 +5841,96 @@ export default function ResumeSpace3D({
     await engine.setSoundDesign(keyboardStudioSoundDesign);
     return engine;
   }, [getKeyboardStudioEngine, keyboardStudioSoundDesign, overallVolume]);
-  const appendOnscreenKeyboardRecordedEvent = useCallback((event: KeyboardRecordedNoteEvent) => {
-    const normalized: KeyboardRecordedNoteEvent = {
-      note: event.note,
-      startMs: Math.max(0, Number(event.startMs) || 0),
-      durationMs: Math.max(ONSCREEN_KEYBOARD_MIN_DURATION_MS, Number(event.durationMs) || 0),
-      velocity: THREE.MathUtils.clamp(
-        Number.isFinite(event.velocity) ? event.velocity : ONSCREEN_KEYBOARD_DEFAULT_VELOCITY,
-        0.05,
-        1,
-      ),
-    };
-    const next = [...onscreenKeyboardRecordedEventsRef.current, normalized]
-      .sort((a, b) => a.startMs - b.startMs);
-    onscreenKeyboardRecordedEventsRef.current = next;
-    setOnscreenKeyboardRecordedEvents(next);
-  }, []);
-  const trimKeyboardStudioEvents = useCallback((events: KeyboardRecordedNoteEvent[]) => {
-    if (events.length === 0) return [] as KeyboardRecordedNoteEvent[];
-    const sorted = [...events]
-      .map((event) => ({
-        ...event,
+  const appendOnscreenKeyboardRecordedEvent = useCallback(
+    (event: KeyboardRecordedNoteEvent) => {
+      const normalized: KeyboardRecordedNoteEvent = {
+        note: event.note,
         startMs: Math.max(0, Number(event.startMs) || 0),
-        durationMs: Math.max(ONSCREEN_KEYBOARD_MIN_DURATION_MS, Number(event.durationMs) || 0),
-      }))
-      .sort((a, b) => a.startMs - b.startMs);
-    const firstStart = sorted[0]?.startMs ?? 0;
-    return sorted.map((event) => ({
-      ...event,
-      startMs: Math.max(0, event.startMs - firstStart),
-    }));
-  }, []);
-  const previewKeyboardStudioControlFeedback = useCallback(
-    (note = "C5") => {
-      const now = performance.now();
-      if (now - keyboardStudioControlFeedbackLastAtRef.current < 70) return;
-      keyboardStudioControlFeedbackLastAtRef.current = now;
-      const engine = keyboardStudioEngineRef.current;
-      if (!engine) return;
-      engine.noteOn(note, 0.64);
-      window.setTimeout(() => {
-        keyboardStudioEngineRef.current?.noteOff(note);
-      }, 120);
+        durationMs: Math.max(
+          ONSCREEN_KEYBOARD_MIN_DURATION_MS,
+          Number(event.durationMs) || 0,
+        ),
+        velocity: THREE.MathUtils.clamp(
+          Number.isFinite(event.velocity)
+            ? event.velocity
+            : ONSCREEN_KEYBOARD_DEFAULT_VELOCITY,
+          0.05,
+          1,
+        ),
+      };
+      const next = [
+        ...onscreenKeyboardRecordedEventsRef.current,
+        normalized,
+      ].sort((a, b) => a.startMs - b.startMs);
+      onscreenKeyboardRecordedEventsRef.current = next;
+      setOnscreenKeyboardRecordedEvents(next);
     },
     [],
   );
-  const stopOnscreenKeyboardPlayback = useCallback((resetTransport = true) => {
-    if (resetTransport) {
-      getKeyboardStudioEngine().stopPlayback();
-    }
-    setOnscreenKeyboardGhostPressedNotes([]);
-    setOnscreenKeyboardPlaying(false);
-  }, [getKeyboardStudioEngine]);
-  const finishOnscreenKeyboardRecordedNote = useCallback((note: string, releaseAtMs: number) => {
-    const active = onscreenKeyboardActiveNotesRef.current.get(note);
-    if (!active) return;
-    onscreenKeyboardActiveNotesRef.current.delete(note);
-    const startMs = Math.max(0, active.startMs - onscreenKeyboardRecordStartRef.current);
-    const durationMs = Math.max(ONSCREEN_KEYBOARD_MIN_DURATION_MS, releaseAtMs - active.startMs);
-    appendOnscreenKeyboardRecordedEvent({
-      note,
-      startMs,
-      durationMs,
-      velocity: active.velocity,
-    });
-  }, [appendOnscreenKeyboardRecordedEvent]);
+  const trimKeyboardStudioEvents = useCallback(
+    (events: KeyboardRecordedNoteEvent[]) => {
+      if (events.length === 0) return [] as KeyboardRecordedNoteEvent[];
+      const sorted = [...events]
+        .map((event) => ({
+          ...event,
+          startMs: Math.max(0, Number(event.startMs) || 0),
+          durationMs: Math.max(
+            ONSCREEN_KEYBOARD_MIN_DURATION_MS,
+            Number(event.durationMs) || 0,
+          ),
+        }))
+        .sort((a, b) => a.startMs - b.startMs);
+      const firstStart = sorted[0]?.startMs ?? 0;
+      return sorted.map((event) => ({
+        ...event,
+        startMs: Math.max(0, event.startMs - firstStart),
+      }));
+    },
+    [],
+  );
+  const previewKeyboardStudioControlFeedback = useCallback((note = "C5") => {
+    const now = performance.now();
+    if (now - keyboardStudioControlFeedbackLastAtRef.current < 70) return;
+    keyboardStudioControlFeedbackLastAtRef.current = now;
+    const engine = keyboardStudioEngineRef.current;
+    if (!engine) return;
+    engine.noteOn(note, 0.64);
+    window.setTimeout(() => {
+      keyboardStudioEngineRef.current?.noteOff(note);
+    }, 120);
+  }, []);
+  const stopOnscreenKeyboardPlayback = useCallback(
+    (resetTransport = true) => {
+      if (resetTransport) {
+        getKeyboardStudioEngine().stopPlayback();
+      }
+      setOnscreenKeyboardGhostPressedNotes([]);
+      setOnscreenKeyboardPlaying(false);
+    },
+    [getKeyboardStudioEngine],
+  );
+  const finishOnscreenKeyboardRecordedNote = useCallback(
+    (note: string, releaseAtMs: number) => {
+      const active = onscreenKeyboardActiveNotesRef.current.get(note);
+      if (!active) return;
+      onscreenKeyboardActiveNotesRef.current.delete(note);
+      const startMs = Math.max(
+        0,
+        active.startMs - onscreenKeyboardRecordStartRef.current,
+      );
+      const durationMs = Math.max(
+        ONSCREEN_KEYBOARD_MIN_DURATION_MS,
+        releaseAtMs - active.startMs,
+      );
+      appendOnscreenKeyboardRecordedEvent({
+        note,
+        startMs,
+        durationMs,
+        velocity: active.velocity,
+      });
+    },
+    [appendOnscreenKeyboardRecordedEvent],
+  );
   const startOnscreenKeyboardRecording = useCallback(async () => {
     await ensureOnscreenKeyboardAudioReady();
     stopOnscreenKeyboardPlayback();
@@ -5152,48 +5944,69 @@ export default function ResumeSpace3D({
   const stopOnscreenKeyboardRecording = useCallback(() => {
     if (!onscreenKeyboardRecordingRef.current) return;
     const releaseAtMs = performance.now();
-    const activeNotes = Array.from(onscreenKeyboardActiveNotesRef.current.keys());
-    activeNotes.forEach((note) => finishOnscreenKeyboardRecordedNote(note, releaseAtMs));
+    const activeNotes = Array.from(
+      onscreenKeyboardActiveNotesRef.current.keys(),
+    );
+    activeNotes.forEach((note) =>
+      finishOnscreenKeyboardRecordedNote(note, releaseAtMs),
+    );
     onscreenKeyboardActiveNotesRef.current.clear();
     onscreenKeyboardRecordingRef.current = false;
     setOnscreenKeyboardRecording(false);
   }, [finishOnscreenKeyboardRecordedNote]);
-  const playOnscreenKeyboardSequence = useCallback(async (events: KeyboardRecordedNoteEvent[]) => {
-    const cleaned = events
-      .map((event) => ({
-        note: event.note,
-        startMs: Math.max(0, Number(event.startMs) || 0),
-        durationMs: Math.max(ONSCREEN_KEYBOARD_MIN_DURATION_MS, Number(event.durationMs) || 0),
-        velocity: THREE.MathUtils.clamp(
-          Number.isFinite(event.velocity) ? event.velocity : ONSCREEN_KEYBOARD_DEFAULT_VELOCITY,
-          0.05,
-          1,
-        ),
-      }))
-      .filter((event) => Number.isFinite(event.startMs) && Number.isFinite(event.durationMs))
-      .sort((a, b) => a.startMs - b.startMs);
-    if (cleaned.length === 0) return;
-    const engine = await ensureOnscreenKeyboardAudioReady();
-    stopOnscreenKeyboardRecording();
-    stopOnscreenKeyboardPlayback();
-    setOnscreenKeyboardPlaying(true);
-    setOnscreenKeyboardGhostPressedNotes([]);
-    await engine.playSequence(cleaned, {
-      gain: 1,
-      ghostPlayback: onscreenKeyboardGhostAutoplayRef.current,
-      onStateChange: (playing) => setOnscreenKeyboardPlaying(playing),
-      onNoteOn: (note) =>
-        setOnscreenKeyboardGhostPressedNotes((prev) => (prev.includes(note) ? prev : [...prev, note])),
-      onNoteOff: (note) =>
-        setOnscreenKeyboardGhostPressedNotes((prev) => prev.filter((activeNote) => activeNote !== note)),
-    });
-  }, [
-    ensureOnscreenKeyboardAudioReady,
-    stopOnscreenKeyboardPlayback,
-    stopOnscreenKeyboardRecording,
-  ]);
+  const playOnscreenKeyboardSequence = useCallback(
+    async (events: KeyboardRecordedNoteEvent[]) => {
+      const cleaned = events
+        .map((event) => ({
+          note: event.note,
+          startMs: Math.max(0, Number(event.startMs) || 0),
+          durationMs: Math.max(
+            ONSCREEN_KEYBOARD_MIN_DURATION_MS,
+            Number(event.durationMs) || 0,
+          ),
+          velocity: THREE.MathUtils.clamp(
+            Number.isFinite(event.velocity)
+              ? event.velocity
+              : ONSCREEN_KEYBOARD_DEFAULT_VELOCITY,
+            0.05,
+            1,
+          ),
+        }))
+        .filter(
+          (event) =>
+            Number.isFinite(event.startMs) && Number.isFinite(event.durationMs),
+        )
+        .sort((a, b) => a.startMs - b.startMs);
+      if (cleaned.length === 0) return;
+      const engine = await ensureOnscreenKeyboardAudioReady();
+      stopOnscreenKeyboardRecording();
+      stopOnscreenKeyboardPlayback();
+      setOnscreenKeyboardPlaying(true);
+      setOnscreenKeyboardGhostPressedNotes([]);
+      await engine.playSequence(cleaned, {
+        gain: 1,
+        ghostPlayback: onscreenKeyboardGhostAutoplayRef.current,
+        onStateChange: (playing) => setOnscreenKeyboardPlaying(playing),
+        onNoteOn: (note) =>
+          setOnscreenKeyboardGhostPressedNotes((prev) =>
+            prev.includes(note) ? prev : [...prev, note],
+          ),
+        onNoteOff: (note) =>
+          setOnscreenKeyboardGhostPressedNotes((prev) =>
+            prev.filter((activeNote) => activeNote !== note),
+          ),
+      });
+    },
+    [
+      ensureOnscreenKeyboardAudioReady,
+      stopOnscreenKeyboardPlayback,
+      stopOnscreenKeyboardRecording,
+    ],
+  );
   const playOnscreenKeyboardRecording = useCallback(() => {
-    void playOnscreenKeyboardSequence(onscreenKeyboardRecordedEventsRef.current);
+    void playOnscreenKeyboardSequence(
+      onscreenKeyboardRecordedEventsRef.current,
+    );
   }, [playOnscreenKeyboardSequence]);
   const playOnscreenKeyboardAutoplay = useCallback(() => {
     const fallbackAutoplay: KeyboardRecordedNoteEvent[] = [
@@ -5211,15 +6024,20 @@ export default function ResumeSpace3D({
       { note: "B4", startMs: 4700, durationMs: 480, velocity: 0.8 },
       { note: "G4", startMs: 5220, durationMs: 540, velocity: 0.8 },
     ];
-    const hasRecordedEvents = onscreenKeyboardRecordedEventsRef.current.length > 0;
+    const hasRecordedEvents =
+      onscreenKeyboardRecordedEventsRef.current.length > 0;
     void playOnscreenKeyboardSequence(
-      hasRecordedEvents ? onscreenKeyboardRecordedEventsRef.current : fallbackAutoplay,
+      hasRecordedEvents
+        ? onscreenKeyboardRecordedEventsRef.current
+        : fallbackAutoplay,
     );
   }, [playOnscreenKeyboardSequence]);
   const buildKeyboardStudioBeatEvents = useCallback(() => {
-    const base = KEYBOARD_STUDIO_BEAT_PATTERNS[keyboardStudioBeatPatternId]
-      ?? KEYBOARD_STUDIO_BEAT_PATTERNS.pulse;
-    const tempoScale = 96 / THREE.MathUtils.clamp(keyboardStudioBeatTempoBpm, 56, 180);
+    const base =
+      KEYBOARD_STUDIO_BEAT_PATTERNS[keyboardStudioBeatPatternId] ??
+      KEYBOARD_STUDIO_BEAT_PATTERNS.pulse;
+    const tempoScale =
+      96 / THREE.MathUtils.clamp(keyboardStudioBeatTempoBpm, 56, 180);
     return base.map((event) => ({
       ...event,
       startMs: Math.round(event.startMs * tempoScale),
@@ -5230,35 +6048,48 @@ export default function ResumeSpace3D({
     const beatEvents = buildKeyboardStudioBeatEvents();
     void playOnscreenKeyboardSequence(beatEvents);
   }, [buildKeyboardStudioBeatEvents, playOnscreenKeyboardSequence]);
-  const pressOnscreenKeyboardNote = useCallback(async (note: string) => {
-    const engine = await ensureOnscreenKeyboardAudioReady();
-    if (!engine) return;
-    if (onscreenKeyboardPressedNotesRef.current.includes(note)) {
-      // Repeated strike: cancel prior held voice before re-attacking.
-      engine.noteOff(note);
-      if (onscreenKeyboardRecordingRef.current && onscreenKeyboardActiveNotesRef.current.has(note)) {
-        finishOnscreenKeyboardRecordedNote(note, performance.now());
+  const pressOnscreenKeyboardNote = useCallback(
+    async (note: string) => {
+      const engine = await ensureOnscreenKeyboardAudioReady();
+      if (!engine) return;
+      if (onscreenKeyboardPressedNotesRef.current.includes(note)) {
+        // Repeated strike: cancel prior held voice before re-attacking.
+        engine.noteOff(note);
+        if (
+          onscreenKeyboardRecordingRef.current &&
+          onscreenKeyboardActiveNotesRef.current.has(note)
+        ) {
+          finishOnscreenKeyboardRecordedNote(note, performance.now());
+        }
       }
-    }
-    setOnscreenKeyboardPressedNotes((prev) => (prev.includes(note) ? prev : [...prev, note]));
-    engine.noteOn(note, ONSCREEN_KEYBOARD_DEFAULT_VELOCITY);
-    if (onscreenKeyboardRecordingRef.current) {
-      onscreenKeyboardActiveNotesRef.current.set(note, {
-        startMs: performance.now(),
-        velocity: ONSCREEN_KEYBOARD_DEFAULT_VELOCITY,
-      });
-    }
-  }, [ensureOnscreenKeyboardAudioReady, finishOnscreenKeyboardRecordedNote]);
-  const releaseOnscreenKeyboardNote = useCallback((note: string) => {
-    const engine = keyboardStudioEngineRef.current;
-    setOnscreenKeyboardPressedNotes((prev) => prev.filter((activeNote) => activeNote !== note));
-    if (engine) engine.noteOff(note);
-    if (onscreenKeyboardRecordingRef.current) {
-      finishOnscreenKeyboardRecordedNote(note, performance.now());
-    } else {
-      onscreenKeyboardActiveNotesRef.current.delete(note);
-    }
-  }, [finishOnscreenKeyboardRecordedNote]);
+      setOnscreenKeyboardPressedNotes((prev) =>
+        prev.includes(note) ? prev : [...prev, note],
+      );
+      engine.noteOn(note, ONSCREEN_KEYBOARD_DEFAULT_VELOCITY);
+      if (onscreenKeyboardRecordingRef.current) {
+        onscreenKeyboardActiveNotesRef.current.set(note, {
+          startMs: performance.now(),
+          velocity: ONSCREEN_KEYBOARD_DEFAULT_VELOCITY,
+        });
+      }
+    },
+    [ensureOnscreenKeyboardAudioReady, finishOnscreenKeyboardRecordedNote],
+  );
+  const releaseOnscreenKeyboardNote = useCallback(
+    (note: string) => {
+      const engine = keyboardStudioEngineRef.current;
+      setOnscreenKeyboardPressedNotes((prev) =>
+        prev.filter((activeNote) => activeNote !== note),
+      );
+      if (engine) engine.noteOff(note);
+      if (onscreenKeyboardRecordingRef.current) {
+        finishOnscreenKeyboardRecordedNote(note, performance.now());
+      } else {
+        onscreenKeyboardActiveNotesRef.current.delete(note);
+      }
+    },
+    [finishOnscreenKeyboardRecordedNote],
+  );
   const releaseAllOnscreenKeyboardNotes = useCallback(() => {
     keyboardStudioPointerNoteRef.current.clear();
     keyboardStudioNotePointerCountRef.current.clear();
@@ -5354,9 +6185,9 @@ export default function ResumeSpace3D({
       keyboardStudioBeatLoopTimerRef.current = null;
     }
     if (
-      !keyboardStudioEnabled
-      || !onscreenKeyboardPanelVisible
-      || !keyboardStudioBeatLoopEnabled
+      !keyboardStudioEnabled ||
+      !onscreenKeyboardPanelVisible ||
+      !keyboardStudioBeatLoopEnabled
     ) {
       return () => {};
     }
@@ -5384,17 +6215,21 @@ export default function ResumeSpace3D({
     onscreenKeyboardPanelVisible,
     playOnscreenKeyboardSequence,
   ]);
-  const downloadOnscreenKeyboardBlob = useCallback((filename: string, blob: Blob) => {
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 3000);
-  }, []);
+  const downloadOnscreenKeyboardBlob = useCallback(
+    (filename: string, blob: Blob) => {
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 3000);
+    },
+    [],
+  );
   const exportOnscreenKeyboardJson = useCallback(() => {
-    const events = [...onscreenKeyboardRecordedEventsRef.current]
-      .sort((a, b) => a.startMs - b.startMs);
+    const events = [...onscreenKeyboardRecordedEventsRef.current].sort(
+      (a, b) => a.startMs - b.startMs,
+    );
     const payload = {
       createdAt: new Date().toISOString(),
       root: "C3",
@@ -5424,55 +6259,73 @@ export default function ResumeSpace3D({
       source: "custom",
       createdAt: now,
       updatedAt: now,
-      events: trimKeyboardStudioEvents([...onscreenKeyboardRecordedEventsRef.current]),
+      events: trimKeyboardStudioEvents([
+        ...onscreenKeyboardRecordedEventsRef.current,
+      ]),
       soundDesign: normalizeSoundDesign(keyboardStudioSoundDesign),
     };
     setKeyboardStudioPresets((prev) => [...prev, preset]);
     setKeyboardStudioSelectedPresetId(preset.id);
     setKeyboardStudioSelectedSource(preset.id);
     setKeyboardStudioPresetName("");
-  }, [keyboardStudioPresetName, keyboardStudioSoundDesign, trimKeyboardStudioEvents]);
-  const deleteKeyboardStudioPreset = useCallback((presetId: string) => {
-    setKeyboardStudioPresets((prev) => prev.filter((preset) => preset.id !== presetId));
-    setKeyboardStudioBindings((prev) => prev.filter((binding) => binding.presetId !== presetId));
-    if (keyboardStudioSelectedPresetId === presetId) {
-      setKeyboardStudioSelectedPresetId("");
-    }
-  }, [keyboardStudioSelectedPresetId]);
-  const importKeyboardStudioPresetJson = useCallback((raw: string) => {
-    try {
-      const parsed = JSON.parse(raw) as {
-        name?: string;
-        events?: KeyboardRecordedNoteEvent[];
-        soundDesign?: Partial<KeyboardStudioSoundDesign>;
-      };
-      if (!Array.isArray(parsed.events)) return;
-      const now = new Date().toISOString();
-      const preset: KeyboardStudioPreset = {
-        id: crypto.randomUUID(),
-        name: parsed.name?.trim() || `Imported ${new Date().toLocaleTimeString()}`,
-        source: "custom",
-        createdAt: now,
-        updatedAt: now,
-        events: trimKeyboardStudioEvents(parsed.events),
-        soundDesign: normalizeSoundDesign(parsed.soundDesign),
-      };
-      setKeyboardStudioPresets((prev) => [...prev, preset]);
-      setKeyboardStudioSelectedSource(preset.id);
-      setOnscreenKeyboardRecordedEvents([...preset.events]);
-      onscreenKeyboardRecordedEventsRef.current = [...preset.events];
-      setKeyboardStudioSoundDesign(preset.soundDesign);
-    } catch {
-      // no-op invalid json
-    }
-  }, [trimKeyboardStudioEvents]);
+  }, [
+    keyboardStudioPresetName,
+    keyboardStudioSoundDesign,
+    trimKeyboardStudioEvents,
+  ]);
+  const deleteKeyboardStudioPreset = useCallback(
+    (presetId: string) => {
+      setKeyboardStudioPresets((prev) =>
+        prev.filter((preset) => preset.id !== presetId),
+      );
+      setKeyboardStudioBindings((prev) =>
+        prev.filter((binding) => binding.presetId !== presetId),
+      );
+      if (keyboardStudioSelectedPresetId === presetId) {
+        setKeyboardStudioSelectedPresetId("");
+      }
+    },
+    [keyboardStudioSelectedPresetId],
+  );
+  const importKeyboardStudioPresetJson = useCallback(
+    (raw: string) => {
+      try {
+        const parsed = JSON.parse(raw) as {
+          name?: string;
+          events?: KeyboardRecordedNoteEvent[];
+          soundDesign?: Partial<KeyboardStudioSoundDesign>;
+        };
+        if (!Array.isArray(parsed.events)) return;
+        const now = new Date().toISOString();
+        const preset: KeyboardStudioPreset = {
+          id: crypto.randomUUID(),
+          name:
+            parsed.name?.trim() ||
+            `Imported ${new Date().toLocaleTimeString()}`,
+          source: "custom",
+          createdAt: now,
+          updatedAt: now,
+          events: trimKeyboardStudioEvents(parsed.events),
+          soundDesign: normalizeSoundDesign(parsed.soundDesign),
+        };
+        setKeyboardStudioPresets((prev) => [...prev, preset]);
+        setKeyboardStudioSelectedSource(preset.id);
+        setOnscreenKeyboardRecordedEvents([...preset.events]);
+        onscreenKeyboardRecordedEventsRef.current = [...preset.events];
+        setKeyboardStudioSoundDesign(preset.soundDesign);
+      } catch {
+        // no-op invalid json
+      }
+    },
+    [trimKeyboardStudioEvents],
+  );
   const setKeyboardStudioBindingPreset = useCallback(
     (eventId: KeyboardStudioEventBinding["eventId"], presetId: string) => {
       setKeyboardStudioBindings((prev) => {
         const existing = prev.find((binding) => binding.eventId === eventId);
         if (existing) {
           return prev.map((binding) =>
-            binding.eventId === eventId ? { ...binding, presetId } : binding
+            binding.eventId === eventId ? { ...binding, presetId } : binding,
           );
         }
         return [...prev, { eventId, presetId, enabled: true, gain: 1 }];
@@ -5495,18 +6348,31 @@ export default function ResumeSpace3D({
     });
     setKeyboardStudioSelectedSettingsId(slot.id);
   }, [keyboardStudioSoundDesign]);
-  const loadKeyboardStudioSettingsSlot = useCallback((slotId: string) => {
-    const slot = keyboardStudioSavedSettings.find((item) => item.id === slotId);
-    if (!slot) return;
-    setKeyboardStudioSoundDesign(normalizeSoundDesign(slot.soundDesign));
-    previewKeyboardStudioControlFeedback("A5");
-  }, [keyboardStudioSavedSettings, previewKeyboardStudioControlFeedback]);
-  const deleteKeyboardStudioSettingsSlot = useCallback((slotId: string) => {
-    setKeyboardStudioSavedSettings((prev) => prev.filter((slot) => slot.id !== slotId));
-    if (keyboardStudioSelectedSettingsId === slotId) setKeyboardStudioSelectedSettingsId("");
-  }, [keyboardStudioSelectedSettingsId]);
+  const loadKeyboardStudioSettingsSlot = useCallback(
+    (slotId: string) => {
+      const slot = keyboardStudioSavedSettings.find(
+        (item) => item.id === slotId,
+      );
+      if (!slot) return;
+      setKeyboardStudioSoundDesign(normalizeSoundDesign(slot.soundDesign));
+      previewKeyboardStudioControlFeedback("A5");
+    },
+    [keyboardStudioSavedSettings, previewKeyboardStudioControlFeedback],
+  );
+  const deleteKeyboardStudioSettingsSlot = useCallback(
+    (slotId: string) => {
+      setKeyboardStudioSavedSettings((prev) =>
+        prev.filter((slot) => slot.id !== slotId),
+      );
+      if (keyboardStudioSelectedSettingsId === slotId)
+        setKeyboardStudioSelectedSettingsId("");
+    },
+    [keyboardStudioSelectedSettingsId],
+  );
   useEffect(() => {
-    const preset = allKeyboardStudioPresetOptions.find((item) => item.id === keyboardStudioSelectedSource);
+    const preset = allKeyboardStudioPresetOptions.find(
+      (item) => item.id === keyboardStudioSelectedSource,
+    );
     if (!preset) return;
     setKeyboardStudioSoundDesign(normalizeSoundDesign(preset.soundDesign));
     setOnscreenKeyboardRecordedEvents([...preset.events]);
@@ -5532,13 +6398,17 @@ export default function ResumeSpace3D({
     if (!keyboardStudioEnabled) return () => {};
     return onCosmosSoundEvent((event) => {
       setKeyboardStudioKnownEventIds((prev) =>
-        prev.includes(event.id) ? prev : [...prev, event.id].sort((a, b) => a.localeCompare(b))
+        prev.includes(event.id)
+          ? prev
+          : [...prev, event.id].sort((a, b) => a.localeCompare(b)),
       );
       const binding = keyboardStudioBindings.find(
         (candidate) => candidate.eventId === event.id && candidate.enabled,
       );
       if (!binding) return;
-      const preset = allKeyboardStudioPresetOptions.find((item) => item.id === binding.presetId);
+      const preset = allKeyboardStudioPresetOptions.find(
+        (item) => item.id === binding.presetId,
+      );
       if (!preset || preset.events.length === 0) return;
       const trimmedEvents = trimKeyboardStudioEvents(preset.events);
       if (trimmedEvents.length === 0) return;
@@ -5569,7 +6439,8 @@ export default function ResumeSpace3D({
     };
   }, [releaseAllOnscreenKeyboardNotes]);
   useEffect(() => {
-    const keyboardActive = keyboardStudioEnabled && onscreenKeyboardPanelVisible;
+    const keyboardActive =
+      keyboardStudioEnabled && onscreenKeyboardPanelVisible;
     if (!keyboardActive) {
       keyboardStudioPressedCodesRef.current.clear();
       releaseAllOnscreenKeyboardNotes();
@@ -5615,53 +6486,65 @@ export default function ResumeSpace3D({
     releaseAllOnscreenKeyboardNotes,
     releaseOnscreenKeyboardNote,
   ]);
-  useEffect(() => () => {
-    stopOnscreenKeyboardPlayback();
-    releaseAllOnscreenKeyboardNotes();
-    keyboardStudioEngineRef.current?.dispose();
-    keyboardStudioEngineRef.current = null;
-  }, [releaseAllOnscreenKeyboardNotes, stopOnscreenKeyboardPlayback]);
-  const beginOnscreenKeyboardDrag = useCallback((event: {
-    pointerId: number;
-    clientX: number;
-    clientY: number;
-    button?: number;
-    target?: EventTarget | null;
-  }) => {
-    if (event.button !== undefined && event.button !== 0) return;
-    const targetElement = event.target instanceof HTMLElement ? event.target : null;
-    if (
-      targetElement
-      && ["BUTTON", "INPUT", "SELECT", "TEXTAREA", "OPTION", "LABEL"].includes(targetElement.tagName)
-    ) {
-      return;
-    }
-    onscreenKeyboardPanelDragRef.current = {
-      active: true,
-      pointerId: event.pointerId,
-      offsetX: event.clientX - onscreenKeyboardPanelLayout.x,
-      offsetY: event.clientY - onscreenKeyboardPanelLayout.y,
-    };
-  }, [onscreenKeyboardPanelLayout.x, onscreenKeyboardPanelLayout.y]);
-  const beginKeyboardStudioMainColumnResize = useCallback((event: {
-    button: number;
-    pointerId: number;
-    clientX: number;
-    preventDefault: () => void;
-    stopPropagation: () => void;
-    currentTarget: { setPointerCapture: (pointerId: number) => void };
-  }) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    keyboardStudioMainColumnResizeRef.current = {
-      active: true,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startWidth: keyboardStudioMainColumnWidth,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }, [keyboardStudioMainColumnWidth]);
+  useEffect(
+    () => () => {
+      stopOnscreenKeyboardPlayback();
+      releaseAllOnscreenKeyboardNotes();
+      keyboardStudioEngineRef.current?.dispose();
+      keyboardStudioEngineRef.current = null;
+    },
+    [releaseAllOnscreenKeyboardNotes, stopOnscreenKeyboardPlayback],
+  );
+  const beginOnscreenKeyboardDrag = useCallback(
+    (event: {
+      pointerId: number;
+      clientX: number;
+      clientY: number;
+      button?: number;
+      target?: EventTarget | null;
+    }) => {
+      if (event.button !== undefined && event.button !== 0) return;
+      const targetElement =
+        event.target instanceof HTMLElement ? event.target : null;
+      if (
+        targetElement &&
+        ["BUTTON", "INPUT", "SELECT", "TEXTAREA", "OPTION", "LABEL"].includes(
+          targetElement.tagName,
+        )
+      ) {
+        return;
+      }
+      onscreenKeyboardPanelDragRef.current = {
+        active: true,
+        pointerId: event.pointerId,
+        offsetX: event.clientX - onscreenKeyboardPanelLayout.x,
+        offsetY: event.clientY - onscreenKeyboardPanelLayout.y,
+      };
+    },
+    [onscreenKeyboardPanelLayout.x, onscreenKeyboardPanelLayout.y],
+  );
+  const beginKeyboardStudioMainColumnResize = useCallback(
+    (event: {
+      button: number;
+      pointerId: number;
+      clientX: number;
+      preventDefault: () => void;
+      stopPropagation: () => void;
+      currentTarget: { setPointerCapture: (pointerId: number) => void };
+    }) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      keyboardStudioMainColumnResizeRef.current = {
+        active: true,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startWidth: keyboardStudioMainColumnWidth,
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [keyboardStudioMainColumnWidth],
+  );
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
       const drag = onscreenKeyboardPanelDragRef.current;
@@ -5685,7 +6568,9 @@ export default function ResumeSpace3D({
       const resize = keyboardStudioMainColumnResizeRef.current;
       if (!resize?.active) return;
       const nextWidth = resize.startWidth + (event.clientX - resize.startX);
-      setKeyboardStudioMainColumnWidth(THREE.MathUtils.clamp(nextWidth, 420, 700));
+      setKeyboardStudioMainColumnWidth(
+        THREE.MathUtils.clamp(nextWidth, 420, 700),
+      );
     };
     const stopDrag = () => {
       onscreenKeyboardPanelDragRef.current = null;
@@ -5735,73 +6620,69 @@ export default function ResumeSpace3D({
     if (positionalAudio.isPlaying) positionalAudio.stop();
     falconActiveCueKindRef.current = null;
     positionalAudio.setVolume(
-      THREE.MathUtils.clamp(
-        overallVolume * falconSoundVolume,
-        0,
-        1,
-      ),
+      THREE.MathUtils.clamp(overallVolume * falconSoundVolume, 0, 1),
     );
     debugLog("audio", "[falcon] cue stopped immediately");
   }, [debugLog, falconSoundVolume, overallVolume]);
 
-  const playFalconNavSfx = useCallback(async (kind: FalconNavCueKind, forceRestart = false) => {
-    if (!falconSoundEnabled) return;
-    if (falconPendingCueKindRef.current === kind) return;
-    const cueBuffers = falconNavCueBuffersRef.current;
-    const buffer = kind === "moonTravel"
-      ? (() => {
-          const moonBuffers = cueBuffers.moonTravel;
-          if (moonBuffers.length === 0) return null;
-          const index = Math.floor(Math.random() * moonBuffers.length);
-          return moonBuffers[index] ?? null;
-        })()
-      : cueBuffers[kind];
-    if (!buffer) return;
-    const positionalAudio = ensureFalconTravelAudioNode();
-    if (!positionalAudio) return;
-    if (positionalAudio.isPlaying) {
-      const sameCueAsCurrent = falconActiveCueKindRef.current === kind;
-      if (sameCueAsCurrent) {
-        // Keep the original one-shot running across adjacent phases using same cue.
-        return;
+  const playFalconNavSfx = useCallback(
+    async (kind: FalconNavCueKind, forceRestart = false) => {
+      if (!falconSoundEnabled) return;
+      if (falconPendingCueKindRef.current === kind) return;
+      const cueBuffers = falconNavCueBuffersRef.current;
+      const buffer =
+        kind === "moonTravel"
+          ? (() => {
+              const moonBuffers = cueBuffers.moonTravel;
+              if (moonBuffers.length === 0) return null;
+              const index = Math.floor(Math.random() * moonBuffers.length);
+              return moonBuffers[index] ?? null;
+            })()
+          : cueBuffers[kind];
+      if (!buffer) return;
+      const positionalAudio = ensureFalconTravelAudioNode();
+      if (!positionalAudio) return;
+      if (positionalAudio.isPlaying) {
+        const sameCueAsCurrent = falconActiveCueKindRef.current === kind;
+        if (sameCueAsCurrent) {
+          // Keep the original one-shot running across adjacent phases using same cue.
+          return;
+        }
+        if (!forceRestart) return;
+        positionalAudio.stop();
       }
-      if (!forceRestart) return;
-      positionalAudio.stop();
-    }
-    if (falconTravelFadeTimeoutRef.current !== null) {
-      window.clearTimeout(falconTravelFadeTimeoutRef.current);
-      falconTravelFadeTimeoutRef.current = null;
-    }
-    falconPendingCueKindRef.current = kind;
-    await resumeFalconTravelAudioContext();
-    try {
-      // Non-looping one-shot cue for moon travel.
-      playPositionalOneShot(
-        positionalAudio,
-        buffer,
-        THREE.MathUtils.clamp(
-          overallVolume * falconSoundVolume,
-          0,
-          1,
-        ),
-      );
-      falconActiveCueKindRef.current = kind;
-      debugLog("audio", `[falcon] ${kind} cue played`);
-    } catch {
-      debugLog("audio", `[falcon] ${kind} cue blocked`);
-    } finally {
-      if (falconPendingCueKindRef.current === kind) {
-        falconPendingCueKindRef.current = null;
+      if (falconTravelFadeTimeoutRef.current !== null) {
+        window.clearTimeout(falconTravelFadeTimeoutRef.current);
+        falconTravelFadeTimeoutRef.current = null;
       }
-    }
-  }, [
-    debugLog,
-    ensureFalconTravelAudioNode,
-    falconSoundEnabled,
-    falconSoundVolume,
-    overallVolume,
-    resumeFalconTravelAudioContext,
-  ]);
+      falconPendingCueKindRef.current = kind;
+      await resumeFalconTravelAudioContext();
+      try {
+        // Non-looping one-shot cue for moon travel.
+        playPositionalOneShot(
+          positionalAudio,
+          buffer,
+          THREE.MathUtils.clamp(overallVolume * falconSoundVolume, 0, 1),
+        );
+        falconActiveCueKindRef.current = kind;
+        debugLog("audio", `[falcon] ${kind} cue played`);
+      } catch {
+        debugLog("audio", `[falcon] ${kind} cue blocked`);
+      } finally {
+        if (falconPendingCueKindRef.current === kind) {
+          falconPendingCueKindRef.current = null;
+        }
+      }
+    },
+    [
+      debugLog,
+      ensureFalconTravelAudioNode,
+      falconSoundEnabled,
+      falconSoundVolume,
+      overallVolume,
+      resumeFalconTravelAudioContext,
+    ],
+  );
 
   const { buildRotationHandlers, buildPointerHandlers } =
     usePointerInteractions({
@@ -5939,7 +6820,9 @@ export default function ResumeSpace3D({
         const finalApproachDist =
           track.lookAhead * PROJECT_SHOWCASE_NAV_APPROACH_LOOKAHEAD_MULT;
         const navLift =
-          track.axis === "y" ? new THREE.Vector3(0, 0, 14) : new THREE.Vector3(0, 14, 0);
+          track.axis === "y"
+            ? new THREE.Vector3(0, 0, 14)
+            : new THREE.Vector3(0, 14, 0);
         return trenchCam
           .clone()
           .addScaledVector(travelAxis, -finalApproachDist)
@@ -5974,12 +6857,16 @@ export default function ResumeSpace3D({
         }
         return anchor
           .clone()
-          .addScaledVector(approachNormal, ABOUT_MEMORY_SQUARE_NAV_STANDOFF_DIST)
+          .addScaledVector(
+            approachNormal,
+            ABOUT_MEMORY_SQUARE_NAV_STANDOFF_DIST,
+          )
           .add(new THREE.Vector3(0, 54, 0));
       }
       if (targetId === "portfolio") {
         const anchor =
-          orbitalPortfolioWorldAnchorRef.current ?? ORBITAL_PORTFOLIO_WORLD_ANCHOR;
+          orbitalPortfolioWorldAnchorRef.current ??
+          ORBITAL_PORTFOLIO_WORLD_ANCHOR;
         const ship = spaceshipRef.current;
         if (!ship) {
           return anchor
@@ -6010,7 +6897,10 @@ export default function ResumeSpace3D({
         if (swarm) {
           return { center: swarm.group.position.clone(), radius: 220 };
         }
-        return { center: ABOUT_PARTICLE_SWARM_WORLD_ANCHOR.clone(), radius: 220 };
+        return {
+          center: ABOUT_PARTICLE_SWARM_WORLD_ANCHOR.clone(),
+          radius: 220,
+        };
       }
       if (targetId === "skills") {
         const anchor = skillsLatticeWorldAnchorRef.current;
@@ -6018,7 +6908,8 @@ export default function ResumeSpace3D({
       }
       if (targetId === "portfolio") {
         const anchor =
-          orbitalPortfolioWorldAnchorRef.current ?? ORBITAL_PORTFOLIO_WORLD_ANCHOR;
+          orbitalPortfolioWorldAnchorRef.current ??
+          ORBITAL_PORTFOLIO_WORLD_ANCHOR;
         return { center: anchor.clone(), radius: 200 };
       }
       if (targetId === "projects") {
@@ -6108,7 +6999,11 @@ export default function ResumeSpace3D({
       }
 
       const instantaneousUnitsPerSecond = dist / dt;
-      const clamped = THREE.MathUtils.clamp(instantaneousUnitsPerSecond, 0, 5000);
+      const clamped = THREE.MathUtils.clamp(
+        instantaneousUnitsPerSecond,
+        0,
+        5000,
+      );
       measuredTravelSpeedRef.current = THREE.MathUtils.lerp(
         measuredTravelSpeedRef.current,
         clamped,
@@ -6199,7 +7094,8 @@ export default function ResumeSpace3D({
             break;
           case "arrived": {
             const label =
-              navState.targetLabel ?? formatNavTargetLabel(navState.activeTarget);
+              navState.targetLabel ??
+              formatNavTargetLabel(navState.activeTarget);
             const isPortfolioArrival =
               (navState.activeTarget ?? "").toLowerCase() === "portfolio";
             if (!navState.arrivalAnnounced) {
@@ -6228,7 +7124,8 @@ export default function ResumeSpace3D({
       }
       // Navigation has finished; dismiss KPI strip immediately.
       if (!currentNavigationTarget && navigationDistance === null) {
-        const label = navState.targetLabel ?? formatNavTargetLabel(navState.activeTarget);
+        const label =
+          navState.targetLabel ?? formatNavTargetLabel(navState.activeTarget);
         const isPortfolioArrival =
           (navState.activeTarget ?? "").toLowerCase() === "portfolio";
         if (!navState.arrivalAnnounced) {
@@ -6255,14 +7152,21 @@ export default function ResumeSpace3D({
         const now = performance.now();
         const navSample = navDistanceSampleRef.current;
         if (!navSample) {
-          navDistanceSampleRef.current = { t: now, distance: navigationDistance };
+          navDistanceSampleRef.current = {
+            t: now,
+            distance: navigationDistance,
+          };
         } else {
           const dt = Math.max((now - navSample.t) / 1000, 1 / 240);
           const deltaDist = Math.abs(navigationDistance - navSample.distance);
           navSample.t = now;
           navSample.distance = navigationDistance;
           const instantaneousUnitsPerSecond = deltaDist / dt;
-          const clamped = THREE.MathUtils.clamp(instantaneousUnitsPerSecond, 0, 5000);
+          const clamped = THREE.MathUtils.clamp(
+            instantaneousUnitsPerSecond,
+            0,
+            5000,
+          );
           navDistanceDerivedSpeedRef.current = THREE.MathUtils.lerp(
             navDistanceDerivedSpeedRef.current,
             clamped,
@@ -6322,7 +7226,9 @@ export default function ResumeSpace3D({
       })();
       const speed = speedRaw > 0.01 ? speedRaw : heldSpeed;
       const effectiveDistance =
-        navigationDistance !== null ? navigationDistance : navState.lastDistance;
+        navigationDistance !== null
+          ? navigationDistance
+          : navState.lastDistance;
       setOnScreenTelemetry({
         distance: effectiveDistance,
         speed,
@@ -6355,56 +7261,67 @@ export default function ResumeSpace3D({
     formatNavTargetLabel,
   ]);
 
-  const setProjectShowcaseFocus = useCallback((index: number) => {
-    const panels = projectShowcasePanelsRef.current;
-    if (panels.length === 0) return;
-    const safeIndex = THREE.MathUtils.clamp(index, 0, panels.length - 1);
-    const previousIndex = projectShowcaseFocusIndexRef.current;
-    projectShowcaseFocusIndexRef.current = safeIndex;
-    if (previousIndex !== safeIndex) {
-      panels[safeIndex]?.setActiveVariant(0);
-      if (projectShowcaseActiveRef.current) {
-        const title = panels[safeIndex]?.displayTitle || panels[safeIndex]?.entry?.title;
-        if (title) {
-          onScreenMessage(`Hallway marker: ${title}`, { durationMs: 1600 });
+  const setProjectShowcaseFocus = useCallback(
+    (index: number) => {
+      const panels = projectShowcasePanelsRef.current;
+      if (panels.length === 0) return;
+      const safeIndex = THREE.MathUtils.clamp(index, 0, panels.length - 1);
+      const previousIndex = projectShowcaseFocusIndexRef.current;
+      projectShowcaseFocusIndexRef.current = safeIndex;
+      if (previousIndex !== safeIndex) {
+        panels[safeIndex]?.setActiveVariant(0);
+        if (projectShowcaseActiveRef.current) {
+          const title =
+            panels[safeIndex]?.displayTitle || panels[safeIndex]?.entry?.title;
+          if (title) {
+            onScreenMessage(`Hallway marker: ${title}`, { durationMs: 1600 });
+          }
         }
       }
-    }
-    setProjectShowcaseFocusIndex(safeIndex);
-  }, [onScreenMessage]);
+      setProjectShowcaseFocusIndex(safeIndex);
+    },
+    [onScreenMessage],
+  );
 
-  const setProjectShowcaseRunPosition = useCallback((runPos: number) => {
-    projectShowcaseRunPosRef.current = runPos;
-    const panels = projectShowcasePanelsRef.current;
-    if (panels.length === 0) return;
-    const track = projectShowcaseTrackRef.current;
-    const minRun = track ? track.minRun + 10 : -Infinity;
-    const maxRun = track ? track.maxRun - 10 : Infinity;
+  const setProjectShowcaseRunPosition = useCallback(
+    (runPos: number) => {
+      projectShowcaseRunPosRef.current = runPos;
+      const panels = projectShowcasePanelsRef.current;
+      if (panels.length === 0) return;
+      const track = projectShowcaseTrackRef.current;
+      const minRun = track ? track.minRun + 10 : -Infinity;
+      const maxRun = track ? track.maxRun - 10 : Infinity;
 
-    const forcedIndex = projectShowcaseForcedFocusIndexRef.current;
-    if (forcedIndex !== null) {
-      setProjectShowcaseFocus(forcedIndex);
-    } else {
-      // Find nearest panel by true panel centers for stable highlight timing.
-      let bestIndex = 0;
-      let bestDist = Infinity;
-      panels.forEach((panel, idx) => {
-        const panelCenter = THREE.MathUtils.clamp(panel.runPos, minRun, maxRun);
-        const d = Math.abs(panelCenter - runPos);
-        if (d < bestDist) {
-          bestDist = d;
-          bestIndex = idx;
-        }
+      const forcedIndex = projectShowcaseForcedFocusIndexRef.current;
+      if (forcedIndex !== null) {
+        setProjectShowcaseFocus(forcedIndex);
+      } else {
+        // Find nearest panel by true panel centers for stable highlight timing.
+        let bestIndex = 0;
+        let bestDist = Infinity;
+        panels.forEach((panel, idx) => {
+          const panelCenter = THREE.MathUtils.clamp(
+            panel.runPos,
+            minRun,
+            maxRun,
+          );
+          const d = Math.abs(panelCenter - runPos);
+          if (d < bestDist) {
+            bestDist = d;
+            bestIndex = idx;
+          }
+        });
+        setProjectShowcaseFocus(bestIndex);
+      }
+
+      if (!track) return;
+      const halfWindow = track.cullHalfWindow;
+      panels.forEach((panel) => {
+        panel.group.visible = Math.abs(panel.runPos - runPos) <= halfWindow;
       });
-      setProjectShowcaseFocus(bestIndex);
-    }
-
-    if (!track) return;
-    const halfWindow = track.cullHalfWindow;
-    panels.forEach((panel) => {
-      panel.group.visible = Math.abs(panel.runPos - runPos) <= halfWindow;
-    });
-  }, [setProjectShowcaseFocus]);
+    },
+    [setProjectShowcaseFocus],
+  );
 
   const setProjectShowcaseLever = useCallback((value: number) => {
     const clamped = THREE.MathUtils.clamp(value, -1, 1);
@@ -6430,7 +7347,9 @@ export default function ResumeSpace3D({
     nebulaRoot.traverse((obj: THREE.Object3D) => {
       const mesh = obj as THREE.Mesh;
       if (!(mesh as any).isMesh || !mesh.material) return;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const mats = Array.isArray(mesh.material)
+        ? mesh.material
+        : [mesh.material];
       mats.forEach((mat) => {
         const m = mat as THREE.Material & {
           transparent?: boolean;
@@ -6478,9 +7397,9 @@ export default function ResumeSpace3D({
       const repX = baseRepeatX / zoom;
       const repY = baseRepeatY / zoom;
       const minPanX = -panel.baseOffset.x;
-      const maxPanX = (1 - repX) - panel.baseOffset.x;
+      const maxPanX = 1 - repX - panel.baseOffset.x;
       const minPanY = -panel.baseOffset.y;
-      const maxPanY = (1 - repY) - panel.baseOffset.y;
+      const maxPanY = 1 - repY - panel.baseOffset.y;
       panel.panX = THREE.MathUtils.clamp(panel.panX, minPanX, maxPanX);
       panel.panY = THREE.MathUtils.clamp(panel.panY, minPanY, maxPanY);
 
@@ -6631,7 +7550,11 @@ export default function ResumeSpace3D({
       // Reversed mapping per UX request:
       // Wheel down => move backward, wheel up => move forward.
       const direction = e.deltaY > 0 ? -1 : 1;
-      const notchStrength = THREE.MathUtils.clamp(Math.abs(e.deltaY) / 120, 0.2, 4);
+      const notchStrength = THREE.MathUtils.clamp(
+        Math.abs(e.deltaY) / 120,
+        0.2,
+        4,
+      );
       const aggressiveBoost = THREE.MathUtils.lerp(
         1,
         13.5,
@@ -6658,7 +7581,11 @@ export default function ResumeSpace3D({
       // Kick the throttle lever immediately; loop inertia will continue animating it.
       const leverImpulse =
         direction *
-        THREE.MathUtils.clamp(0.22 + Math.pow(notchStrength, 0.85) * 0.3, 0.22, 1);
+        THREE.MathUtils.clamp(
+          0.22 + Math.pow(notchStrength, 0.85) * 0.3,
+          0.22,
+          1,
+        );
       setProjectShowcaseLever(leverImpulse);
 
       e.preventDefault();
@@ -6666,7 +7593,10 @@ export default function ResumeSpace3D({
       e.stopImmediatePropagation();
     };
 
-    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    window.addEventListener("wheel", onWheel, {
+      passive: false,
+      capture: true,
+    });
     return () => {
       window.removeEventListener("wheel", onWheel, { capture: true });
     };
@@ -6756,9 +7686,11 @@ export default function ResumeSpace3D({
     outageRuntime.powerLevel = 1;
     outageRuntime.emergencyTextActive = false;
     outageRuntime.resumeAutoplayAfterEmergency = false;
-    projectShowcaseInteriorLightBasesRef.current.forEach(({ light, baseIntensity }) => {
-      light.intensity = baseIntensity;
-    });
+    projectShowcaseInteriorLightBasesRef.current.forEach(
+      ({ light, baseIntensity }) => {
+        light.intensity = baseIntensity;
+      },
+    );
     const emergencyLights = projectShowcaseElevatorEmergencyLightsRef.current;
     if (emergencyLights) {
       emergencyLights.ambient.intensity = 0;
@@ -6852,7 +7784,8 @@ export default function ResumeSpace3D({
         projectShowcaseLastTickRef.current = performance.now();
         const rootPos = new THREE.Vector3();
         showcaseRoot.getWorldPosition(rootPos);
-        const sway = Math.sin(startRun * 0.025) * (track.axis === "y" ? 0.6 : 1.2);
+        const sway =
+          Math.sin(startRun * 0.025) * (track.axis === "y" ? 0.6 : 1.2);
         const baseCam =
           track.axis === "y"
             ? new THREE.Vector3(
@@ -6882,10 +7815,14 @@ export default function ResumeSpace3D({
               ? new THREE.Vector3(
                   rootPos.x + track.centerCross + sway,
                   rootPos.y + track.cameraHeight - 0.3,
-                  rootPos.z + startRun + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
+                  rootPos.z +
+                    startRun +
+                    track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
                 )
               : new THREE.Vector3(
-                  rootPos.x + startRun + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
+                  rootPos.x +
+                    startRun +
+                    track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
                   rootPos.y + track.cameraHeight - 0.3,
                   rootPos.z + track.centerCross + sway,
                 );
@@ -6946,7 +7883,8 @@ export default function ResumeSpace3D({
 
       if (aboutMode) {
         setAboutEntryFadeOpacity(1);
-        if (aboutEntryFadeRafRef.current) cancelAnimationFrame(aboutEntryFadeRafRef.current);
+        if (aboutEntryFadeRafRef.current)
+          cancelAnimationFrame(aboutEntryFadeRafRef.current);
         const fadeStart = performance.now();
         const fadeDur = 1200;
         const tickFade = () => {
@@ -6954,7 +7892,8 @@ export default function ResumeSpace3D({
           const t = Math.min(elapsed / fadeDur, 1);
           const eased = 1 - t * t;
           setAboutEntryFadeOpacity(eased);
-          if (t < 1) aboutEntryFadeRafRef.current = requestAnimationFrame(tickFade);
+          if (t < 1)
+            aboutEntryFadeRafRef.current = requestAnimationFrame(tickFade);
           else aboutEntryFadeRafRef.current = 0;
         };
         aboutEntryFadeRafRef.current = requestAnimationFrame(tickFade);
@@ -6966,7 +7905,9 @@ export default function ResumeSpace3D({
             selectedAboutLevelIdRef.current = ABOUT_HALL_DEFAULT_LEVEL_ID;
             setSelectedAboutLevelId(ABOUT_HALL_DEFAULT_LEVEL_ID);
           }
-          markAboutElevatorLevelVisited(selectedAboutLevelIdRef.current ?? ABOUT_HALL_DEFAULT_LEVEL_ID);
+          markAboutElevatorLevelVisited(
+            selectedAboutLevelIdRef.current ?? ABOUT_HALL_DEFAULT_LEVEL_ID,
+          );
           setVisitedAboutLevels(getAboutElevatorVisitedLevels());
           startProjectShowcaseAngleIntroSequence();
         } else {
@@ -6974,7 +7915,9 @@ export default function ResumeSpace3D({
           setAboutLevelGateActive(true);
           projectShowcasePlayingRef.current = false;
           setProjectShowcasePlaying(false);
-          onScreenMessage("Select a level to begin ascent", { durationMs: 5000 });
+          onScreenMessage("Select a level to begin ascent", {
+            durationMs: 5000,
+          });
         }
       } else {
         startProjectShowcaseAngleIntroSequence();
@@ -7008,18 +7951,26 @@ export default function ResumeSpace3D({
       } else {
         approachDir.normalize();
       }
-      const maxStationDim = Math.max(stationSize.x, stationSize.y, stationSize.z);
+      const maxStationDim = Math.max(
+        stationSize.x,
+        stationSize.y,
+        stationSize.z,
+      );
       const stationSphere = stationBounds.getBoundingSphere(new THREE.Sphere());
-      const verticalFovRad = camera instanceof THREE.PerspectiveCamera
-        ? THREE.MathUtils.degToRad(camera.fov)
-        : THREE.MathUtils.degToRad(52);
-      const fitDistanceFromFov = stationSphere.radius / Math.tan(verticalFovRad * 0.5);
+      const verticalFovRad =
+        camera instanceof THREE.PerspectiveCamera
+          ? THREE.MathUtils.degToRad(camera.fov)
+          : THREE.MathUtils.degToRad(52);
+      const fitDistanceFromFov =
+        stationSphere.radius / Math.tan(verticalFovRad * 0.5);
       const showcaseDist = THREE.MathUtils.clamp(
         Math.max(maxStationDim * 2.7, fitDistanceFromFov * 1.22),
         68,
         220,
       );
-      const showcaseCam = approachTarget.clone().addScaledVector(approachDir, showcaseDist);
+      const showcaseCam = approachTarget
+        .clone()
+        .addScaledVector(approachDir, showcaseDist);
       const runDirectStage = (
         fromCam: THREE.Vector3,
         toCam: THREE.Vector3,
@@ -7072,11 +8023,13 @@ export default function ResumeSpace3D({
           PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_TURNS * Math.PI * 2;
         const tick = () => {
           const elapsed = performance.now() - stageStart;
-          const t = THREE.MathUtils.clamp(elapsed / Math.max(1, durationMs), 0, 1);
+          const t = THREE.MathUtils.clamp(
+            elapsed / Math.max(1, durationMs),
+            0,
+            1,
+          );
           if (spinRoot) {
-            spinRoot.rotation.y =
-              spinStartY +
-              holdSpinTotalRad * t;
+            spinRoot.rotation.y = spinStartY + holdSpinTotalRad * t;
           }
           controls.setLookAt(
             camPos.x,
@@ -7102,29 +8055,29 @@ export default function ResumeSpace3D({
         PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS;
       const approachSpinDurationMs =
         (PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS * Math.PI * 2 * 1000) /
-        Math.max(0.05, PROJECT_SHOWCASE_ABOUT_EXTERIOR_APPROACH_SPIN_RAD_PER_SEC);
+        Math.max(
+          0.05,
+          PROJECT_SHOWCASE_ABOUT_EXTERIOR_APPROACH_SPIN_RAD_PER_SEC,
+        );
       const totalApproachMs = Math.max(baseApproachMs, approachSpinDurationMs);
       const holdSpinDurationMs =
         (PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_TURNS * Math.PI * 2 * 1000) /
         Math.max(0.05, PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_RAD_PER_SEC);
-      const entryHoldMs =
-        Math.max(
-          holdSpinDurationMs,
-          PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_HOLD_MS +
-            PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS,
-        );
-      runDirectStage(
-        startCam,
-        showcaseCam,
-        totalApproachMs,
-        () => {
-          runHoldStage(showcaseCam, entryHoldMs, () => {
-            projectShowcaseAboutEntryTimeoutRef.current = window.setTimeout(() => {
-              finalizeInteriorEntry();
-            }, 80);
-          });
-        },
+      const entryHoldMs = Math.max(
+        holdSpinDurationMs,
+        PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_HOLD_MS +
+          PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS,
       );
+      runDirectStage(startCam, showcaseCam, totalApproachMs, () => {
+        runHoldStage(showcaseCam, entryHoldMs, () => {
+          projectShowcaseAboutEntryTimeoutRef.current = window.setTimeout(
+            () => {
+              finalizeInteriorEntry();
+            },
+            80,
+          );
+        });
+      });
       return;
     }
 
@@ -7179,524 +8132,882 @@ export default function ResumeSpace3D({
     setProjectShowcaseLever(0);
   }, [setProjectShowcaseRunPosition, setProjectShowcaseLever]);
 
-  const rebuildAboutElevatorPanels = useCallback(async (
-    slides: AboutHallSlide[],
-    showcaseEntries: ShowcaseEntry[],
-  ) => {
-    const ctx = aboutTrenchContextRef.current;
-    const interiorRoot = projectShowcaseInteriorRootRef.current;
-    if (!ctx || !interiorRoot) return;
+  const rebuildAboutElevatorPanels = useCallback(
+    async (slides: AboutHallSlide[], showcaseEntries: ShowcaseEntry[]) => {
+      const ctx = aboutTrenchContextRef.current;
+      const interiorRoot = projectShowcaseInteriorRootRef.current;
+      if (!ctx || !interiorRoot) return;
 
-    const oldPanels = projectShowcasePanelsRef.current;
-    oldPanels.forEach((panel) => {
-      if (panel.aboutRuntime) {
-        panel.aboutRuntime.cells.forEach((cell) => {
-          cell.mesh.geometry.dispose();
-          cell.material.dispose();
-          cell.normalTexture.dispose();
-          if (cell.emergencyTexture !== cell.normalTexture) cell.emergencyTexture.dispose();
-        });
-      }
-      panel.group.removeFromParent();
-    });
-    projectShowcasePanelsRef.current = [];
-
-    const {
-      trenchWidth, runAxis, shaftBottomWorld,
-      elevatorOppositeWall, elevatorCreditsMode, elevatorCreditsWall,
-      estimatedVisibleHeight, fixedTriggerDistance, immersiveWidths, immersiveHeights,
-      panelY,
-    } = ctx;
-
-    const firstSlidePos = aboutHallFirstSlidePositionRef.current ?? 190;
-    const slideRunPositions: number[] = [];
-    const estimateTallest = (s: AboutHallSlide): number => {
-      const cols = s.configuration.columns ?? {};
-      const pw = elevatorCreditsMode
-        ? THREE.MathUtils.clamp(s.width * 1.18, 9.2, 13.8)
-        : THREE.MathUtils.clamp(s.width, 8, 13.8);
-      const ph = elevatorCreditsMode
-        ? THREE.MathUtils.clamp(s.height * 1.02, 5.2, 8.4)
-        : THREE.MathUtils.clamp(s.height, 4.8, 8.8);
-      let tallest = 0;
-      (["left", "center", "right"] as AboutHallColumnId[]).forEach((colId) => {
-        const colCfg = cols[colId];
-        if (!colCfg?.messages?.length) return;
-        colCfg.messages.forEach((msg) => {
-          const wr = THREE.MathUtils.clamp(msg.widthRatio ?? 1, 0.35, 2.6);
-          const hr = THREE.MathUtils.clamp(msg.heightRatio ?? 1, 0.2, 2.4);
-          const cw = immersiveWidths[colId] * wr;
-          const ch = immersiveHeights[colId] * hr;
-          const sw = Math.max(256, Math.floor(1300 * (cw / Math.max(pw, 1))));
-          const sh = Math.max(220, Math.floor(1000 * (ch / Math.max(ph, 1))));
-          const pa = (sw / cw) / (sh / ch);
-          const resolved = { ...msg, textContent: resolveAboutContentText(msg) };
-          const needed = measureAboutTextHeight(resolved, sw, sh, { creditsStyle: false, loadedImages: aboutImageCacheRef.current, pixelAspect: pa });
-          const actual = needed > sh ? ch * (needed / sh) : ch;
-          tallest = Math.max(tallest, actual);
-        });
-      });
-      return tallest;
-    };
-
-    slides.forEach((_slide, index) => {
-      if (index === 0) {
-        slideRunPositions.push(shaftBottomWorld + firstSlidePos);
-      } else {
-        const prevSlide = slides[index - 1];
-
-        const thresholdDist = computeCenterTopThresholdDistance(
-          prevSlide, estimatedVisibleHeight, fixedTriggerDistance,
-          estimateTallest,
-        );
-
-        if (thresholdDist != null) {
-          slideRunPositions.push(slideRunPositions[index - 1] + thresholdDist + 4);
-        } else {
-          const prevFadeVH = THREE.MathUtils.clamp(prevSlide.flowFadeOutDistanceViewportHeights ?? 1.5, 0.1, 10);
-          const prevTallest = estimateTallest(prevSlide);
-          const heightExcess = Math.max(0, prevTallest - estimatedVisibleHeight);
-          const baseLife = fixedTriggerDistance + estimatedVisibleHeight * prevFadeVH + estimatedVisibleHeight * 0.2;
-          const slideLifeDistance = baseLife + heightExcess;
-          slideRunPositions.push(slideRunPositions[index - 1] + slideLifeDistance + 4);
-        }
-      }
-    });
-
-    const allImageSrcs = new Set<string>();
-    slides.forEach((s) => {
-      const cols = s.configuration.columns ?? {};
-      (["left", "center", "right"] as AboutHallColumnId[]).forEach((colId) => {
-        const colCfg = cols[colId];
-        if (!colCfg?.messages?.length) return;
-        colCfg.messages.forEach((msg) => {
-          msg.images?.forEach((img) => { if (img.src) allImageSrcs.add(img.src); });
-        });
-      });
-    });
-    if (allImageSrcs.size > 0) {
-      await Promise.all(
-        Array.from(allImageSrcs).map(async (src) => {
-          if (aboutImageCacheRef.current.has(src)) return;
-          const img = new Image();
-          img.src = src;
-          await new Promise<void>((resolve) => {
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
+      const oldPanels = projectShowcasePanelsRef.current;
+      oldPanels.forEach((panel) => {
+        if (panel.aboutRuntime) {
+          panel.aboutRuntime.cells.forEach((cell) => {
+            cell.mesh.geometry.dispose();
+            cell.material.dispose();
+            cell.normalTexture.dispose();
+            if (cell.emergencyTexture !== cell.normalTexture)
+              cell.emergencyTexture.dispose();
           });
-          aboutImageCacheRef.current.set(src, img);
-        }),
-      );
-    }
-
-    const panelRecords: ShowcasePanelRecord[] = [];
-    const useImmersiveColumnGrouping = runAxis === "y";
-
-    slides.forEach((slide, index) => {
-      const entry = showcaseEntries[index] ?? ({
-        id: slide.id, title: slide.registryBtnTitle,
-        image: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
-        fit: "contain",
-      } as ShowcaseEntry);
-      const panelGroup = new THREE.Group();
-      const runPos = slideRunPositions[index];
-      const slideHasColumnChoreo = true;
-      const useElevatorCreditsCard = elevatorCreditsMode && !slideHasColumnChoreo;
-      if (runAxis === "y") {
-        if (useImmersiveColumnGrouping) {
-          panelGroup.position.set(elevatorCreditsWall, runPos, 0);
-        } else {
-          panelGroup.position.set(elevatorCreditsWall, runPos, 0);
         }
-      }
-      const ySide = elevatorOppositeWall >= 0 ? 1 : -1;
-      let inwardRotationY = 0;
-      let frontFacingRotationY = 0;
-      let cantSign: -1 | 1 = 1;
-      if (runAxis === "y") {
-        if (ySide < 0) { inwardRotationY = Math.PI / 2; frontFacingRotationY = Math.PI / 2; cantSign = 1; }
-        else if (ySide > 0) { inwardRotationY = -Math.PI / 2; frontFacingRotationY = -Math.PI / 2; cantSign = -1; }
-        else { inwardRotationY = Math.PI; frontFacingRotationY = Math.PI; cantSign = 1; }
-      }
-      panelGroup.rotation.y = inwardRotationY;
+        panel.group.removeFromParent();
+      });
+      projectShowcasePanelsRef.current = [];
 
-      const panelWidth = elevatorCreditsMode
-        ? THREE.MathUtils.clamp(slide.width * 1.18, 9.2, 13.8)
-        : THREE.MathUtils.clamp(slide.width, 8, 13.8);
-      const panelHeight = elevatorCreditsMode
-        ? THREE.MathUtils.clamp(slide.height * 1.02, 5.2, 8.4)
-        : THREE.MathUtils.clamp(slide.height, 4.8, 8.8);
-      const borderStyle = parseBorderStyle(slide.border);
-      const borderColor = new THREE.Color(0x74d2ff);
-      try { borderColor.setStyle(toThreeColorStyle(borderStyle.color)); } catch { borderColor.setHex(0x74d2ff); }
+      const {
+        trenchWidth,
+        runAxis,
+        shaftBottomWorld,
+        elevatorOppositeWall,
+        elevatorCreditsMode,
+        elevatorCreditsWall,
+        estimatedVisibleHeight,
+        fixedTriggerDistance,
+        immersiveWidths,
+        immersiveHeights,
+        panelY,
+      } = ctx;
 
-      const frame = new THREE.Mesh(
-        new THREE.PlaneGeometry(panelWidth * 1.02, panelHeight * 1.02),
-        new THREE.MeshBasicMaterial({ color: borderColor, transparent: true, opacity: useElevatorCreditsCard ? 0 : 0.28, side: THREE.DoubleSide, toneMapped: false }),
-      );
-      const frameMat = frame.material as THREE.MeshBasicMaterial;
-      frame.position.z = -0.04;
-      if (!useElevatorCreditsCard && !useImmersiveColumnGrouping) panelGroup.add(frame);
-
-      const panelRecord: ShowcasePanelRecord = {
-        group: panelGroup, runPos, entry, displayTitle: slide.registryBtnTitle, fitMode: "contain",
-        inwardRotationY, frontFacingRotationY, cantSign, focusBlend: 0, frameMat,
-        imageMesh: new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, side: THREE.DoubleSide, toneMapped: false })),
-        imageMat: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, side: THREE.DoubleSide, toneMapped: false }),
-        texture: null, baseRepeat: new THREE.Vector2(1, 1), baseOffset: new THREE.Vector2(0, 0),
-        zoom: 1, panX: 0, panY: 0, clientVariants: [], activeVariantIndex: 0, setActiveVariant: () => {},
-        mediaItems: [], activeMediaIndex: 0, setActiveMedia: () => {}, mediaFadeStartMs: -Infinity, mediaFadeDurationMs: 1,
-        setThumbnailPageStart: () => {}, triggerThumbnailNavPress: () => {}, thumbnailPageStart: 0,
-        thumbnailHitTargets: [], thumbnailFrameMats: [], thumbnailImageMats: [],
-        detailMat: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 }),
-        detailTexture: null, detailMesh: null, detailScrollThumbMesh: null, detailAllLines: [], detailVisibleLines: 0,
-        detailScrollOffset: 0, detailScrollMax: 0, updateDetailTexture: () => {}, techBadgeRoot: null, techBadgeFx: [],
-        aboutRuntime: {
-          mode: "about", slideId: slide.id, cells: [],
-          triggerDistance: fixedTriggerDistance, slideStartRun: runPos - fixedTriggerDistance,
-          flowFadeOutDistanceViewportHeights: THREE.MathUtils.clamp(slide.flowFadeOutDistanceViewportHeights ?? 1.5, 0.1, 10),
-          autoSpeed: slide.autoSpeed ?? aboutHallDefaultAutoSpeedRef.current,
-        },
-      };
-
-      const columnMessages = getAboutColumnMessages(slide);
-      const createCell = (
-        content: AboutHallSlideContent, cellWidth: number, cellHeight: number,
-        cellX: number, cellY: number,
-        opts?: { transparentBackground?: boolean; creditsStyle?: boolean; columnDepth?: number; parentGroup?: THREE.Group },
-      ) => {
-        const safeWidth = Math.max(256, Math.floor(1300 * (cellWidth / Math.max(panelWidth, 1))));
-        let safeHeight = Math.max(220, Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))));
-        const pixelAspect = (safeWidth / cellWidth) / (safeHeight / cellHeight);
-        const resolvedContent = { ...content, textContent: resolveAboutContentText(content) };
-        const neededHeight = measureAboutTextHeight(resolvedContent, safeWidth, safeHeight, { creditsStyle: opts?.creditsStyle ?? false, loadedImages: aboutImageCacheRef.current, pixelAspect });
-        let actualCellHeight = cellHeight;
-        if (neededHeight > safeHeight) {
-          const scale = neededHeight / safeHeight;
-          safeHeight = neededHeight;
-          actualCellHeight = cellHeight * scale;
-        }
-        const tex = createAboutCellTexture(resolvedContent, safeWidth, safeHeight, {
-          transparentBackground: opts?.transparentBackground ?? false, creditsStyle: opts?.creditsStyle ?? false,
-          loadedImages: aboutImageCacheRef.current, pixelAspect,
-        });
-        const emergencyTex = opts?.creditsStyle
-          ? createAboutCellTexture(resolvedContent, safeWidth, safeHeight, {
-              transparentBackground: opts?.transparentBackground ?? false, creditsStyle: true, emergencyMood: true,
-              loadedImages: aboutImageCacheRef.current, pixelAspect,
-            })
-          : tex;
-        const material = new THREE.MeshBasicMaterial({
-          map: tex, color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide, toneMapped: false, depthWrite: false,
-        });
-        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cellWidth, actualCellHeight), material);
-        mesh.position.set(cellX, cellY, opts?.columnDepth ?? 0.02);
-        (opts?.parentGroup ?? panelGroup).add(mesh);
-        const flowDir = normalizeAboutFlowDirection(content.flowDirection);
-        const flowOff = content.flowOffsetUnits ?? 0;
-        const halfVisible = estimatedVisibleHeight * 0.5;
-        const halfCell = actualCellHeight * 0.5;
-        const edgeGap = Math.max(1.0, estimatedVisibleHeight * 0.15);
-        const computedHomeY = flowDir === "topToBottom"
-          ? -fixedTriggerDistance + halfVisible + halfCell + edgeGap - flowOff
-          : -fixedTriggerDistance - halfVisible - halfCell - edgeGap - flowOff;
-        panelRecord.aboutRuntime?.cells.push({
-          mesh, material, normalTexture: tex, emergencyTexture: emergencyTex,
-          basePosition: mesh.position.clone(), flowDirection: flowDir,
-          flowUnitsPerDistance: Math.max(0, content.flowUnitsPerDistance ?? 0),
-          flowOffsetUnits: flowOff, baseYawRad: mesh.rotation.y, homeY: computedHomeY,
-        });
-      };
-
-      if (useElevatorCreditsCard) {
-        const allMsgs = [...columnMessages.left, ...columnMessages.center, ...columnMessages.right];
-        const creditContent: AboutHallSlideContent = {
-          id: `${slide.id}-credit`, type: "column1", backgroundColor: "transparent",
-          fontColor: "rgba(8, 12, 18, 0.98)", fontFamily: ["Oswald", "Montserrat"],
-          fontSize: "150px", fontShadow: "0px 0px 14px rgba(0, 0, 0, 0.62)",
-          horizontalAlign: "center", verticalAlign: "middle",
-          textContent: allMsgs.map((c) => splitHtmlBreakLines(c.textContent).join("\n")).filter((t) => t.length > 0).join("\n\n"),
-        };
-        createCell(creditContent, panelWidth, panelHeight, 0, 0, { transparentBackground: true, creditsStyle: true });
-      } else {
-        const columnX: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
-          ? { left: -9.56, center: 1.05, right: 10.65 }
-          : { left: -panelWidth * 0.34, center: 0, right: panelWidth * 0.34 };
-        const columnZ: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
-          ? { left: 3.35, center: 0, right: 6 }
-          : { left: 0, center: 0, right: 0 };
-        const columnDefaults: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
-          ? { left: 34, center: 0, right: -34 }
-          : { left: 16, center: 0, right: -16 };
-        (["left", "center", "right"] as AboutHallColumnId[]).forEach((columnId) => {
-          const msgs = columnMessages[columnId];
-          if (msgs.length === 0) return;
-          const columnConfig = slide.configuration.columns?.[columnId];
-          const baseAngleDeg = columnConfig?.angleDeg ?? columnDefaults[columnId];
-          const columnAnchor = new THREE.Group();
-          columnAnchor.position.set(columnX[columnId], 0, columnZ[columnId]);
-          panelGroup.add(columnAnchor);
-          const verticalRange = useImmersiveColumnGrouping ? panelHeight * 0.22 : panelHeight * 0.78;
-          const slotCount = Math.max(1, msgs.length);
-          const slotStep = slotCount > 1 ? verticalRange / (slotCount - 1) : 0;
-          msgs.forEach((rawMessage, msgIndex) => {
-            const message = { ...rawMessage, horizontalAlign: rawMessage.horizontalAlign ?? "center", verticalAlign: rawMessage.verticalAlign ?? "middle", textContent: resolveAboutContentText(rawMessage) };
-            const widthRatio = THREE.MathUtils.clamp(message.widthRatio ?? 1, 0.35, 2.6);
-            const heightRatio = THREE.MathUtils.clamp(message.heightRatio ?? 1, 0.2, 2.4);
-            const cellWidth = useImmersiveColumnGrouping ? immersiveWidths[columnId] * widthRatio : panelWidth * 0.26 * widthRatio;
-            const cellHeight = useImmersiveColumnGrouping ? immersiveHeights[columnId] * heightRatio : panelHeight * 0.24 * heightRatio;
-            const autoY = slotCount <= 1 ? 0 : verticalRange * 0.5 - slotStep * msgIndex;
-            const baseY = autoY + (message.offsetY ?? 0);
-            const baseX = message.offsetX ?? 0;
-            const cellCountBefore = panelRecord.aboutRuntime?.cells.length ?? 0;
-            createCell(message, cellWidth, cellHeight, baseX, baseY, { columnDepth: 0.03 + msgIndex * 0.002, parentGroup: columnAnchor, transparentBackground: false });
-            const runtimeCells = panelRecord.aboutRuntime?.cells;
-            if (!runtimeCells) return;
-            const newCells = runtimeCells.slice(cellCountBefore);
-            const angleDeg = (message as AboutHallSlideContent & { columnAngleDeg?: number }).columnAngleDeg ?? baseAngleDeg;
-            newCells.forEach((cell) => {
-              cell.mesh.rotation.y = THREE.MathUtils.degToRad(angleDeg);
-              cell.baseYawRad = cell.mesh.rotation.y;
-              if (useImmersiveColumnGrouping) cell.immersiveColumn = columnId;
-              if (cell.flowUnitsPerDistance <= 0) cell.flowUnitsPerDistance = 0.25;
+      const firstSlidePos = aboutHallFirstSlidePositionRef.current ?? 190;
+      const slideRunPositions: number[] = [];
+      const estimateTallest = (s: AboutHallSlide): number => {
+        const cols = s.configuration.columns ?? {};
+        const pw = elevatorCreditsMode
+          ? THREE.MathUtils.clamp(s.width * 1.18, 9.2, 13.8)
+          : THREE.MathUtils.clamp(s.width, 8, 13.8);
+        const ph = elevatorCreditsMode
+          ? THREE.MathUtils.clamp(s.height * 1.02, 5.2, 8.4)
+          : THREE.MathUtils.clamp(s.height, 4.8, 8.8);
+        let tallest = 0;
+        (["left", "center", "right"] as AboutHallColumnId[]).forEach(
+          (colId) => {
+            const colCfg = cols[colId];
+            if (!colCfg?.messages?.length) return;
+            colCfg.messages.forEach((msg) => {
+              const wr = THREE.MathUtils.clamp(msg.widthRatio ?? 1, 0.35, 2.6);
+              const hr = THREE.MathUtils.clamp(msg.heightRatio ?? 1, 0.2, 2.4);
+              const cw = immersiveWidths[colId] * wr;
+              const ch = immersiveHeights[colId] * hr;
+              const sw = Math.max(
+                256,
+                Math.floor(1300 * (cw / Math.max(pw, 1))),
+              );
+              const sh = Math.max(
+                220,
+                Math.floor(1000 * (ch / Math.max(ph, 1))),
+              );
+              const pa = sw / cw / (sh / ch);
+              const resolved = {
+                ...msg,
+                textContent: resolveAboutContentText(msg),
+              };
+              const needed = measureAboutTextHeight(resolved, sw, sh, {
+                creditsStyle: false,
+                loadedImages: aboutImageCacheRef.current,
+                pixelAspect: pa,
+              });
+              const actual = needed > sh ? ch * (needed / sh) : ch;
+              tallest = Math.max(tallest, actual);
             });
-          });
-        });
-      }
-
-      const framePulse = new THREE.Mesh(
-        new THREE.PlaneGeometry(panelWidth + borderStyle.width * 0.02, panelHeight + borderStyle.width * 0.02),
-        new THREE.MeshBasicMaterial({ color: borderColor, transparent: true, opacity: 0.09, side: THREE.DoubleSide, toneMapped: false }),
-      );
-      framePulse.position.z = -0.07;
-      if (!useElevatorCreditsCard && !useImmersiveColumnGrouping) panelGroup.add(framePulse);
-
-      panelRecord.imageMesh = panelRecord.aboutRuntime?.cells[0]?.mesh ?? panelRecord.imageMesh;
-      panelRecord.imageMat = panelRecord.aboutRuntime?.cells[0]?.material ?? panelRecord.imageMat;
-
-      panelGroup.traverse((child) => { child.layers.set(PROJECT_SHOWCASE_CARD_LAYER); });
-      interiorRoot.add(panelGroup);
-      panelRecords.push(panelRecord);
-    });
-
-    projectShowcasePanelsRef.current = panelRecords;
-    panelRecords.forEach((panel) => { panel.group.visible = true; });
-
-    const edgeRunPadding = 14;
-    const startPosRun = aboutHallStartPositionRef.current != null
-      ? shaftBottomWorld + aboutHallStartPositionRef.current
-      : null;
-    const firstSlideRun = slideRunPositions.length > 0 ? slideRunPositions[0] : 0;
-    const lastSlideRun = slideRunPositions.length > 0 ? slideRunPositions[slideRunPositions.length - 1] : 0;
-    const minRun = Math.min(firstSlideRun - edgeRunPadding, startPosRun != null ? startPosRun - 5 : firstSlideRun - edgeRunPadding);
-    const maxRun = lastSlideRun + edgeRunPadding + 40;
-    const elevatorCameraWallOffset = Math.min(trenchWidth * 0.36, Math.max(2.8, trenchWidth * 0.5 - 1.05));
-    const elevatorCameraDepthOffset = -Math.min(2.4, Math.max(1.2, trenchWidth * 0.2));
-    const initialRun = startPosRun ?? minRun + 10;
-    projectShowcaseTrackRef.current = {
-      axis: runAxis,
-      minRun, maxRun,
-      centerCross: runAxis === "y" ? elevatorCameraWallOffset : 0,
-      cameraHeight: runAxis === "y" ? elevatorCameraDepthOffset : panelY,
-      lookAhead: THREE.MathUtils.clamp(ctx.panelSpacing * 1.9, 22, 48),
-      speed: THREE.MathUtils.clamp(ctx.panelSpacing * 0.1625, 2.5, 5.5),
-      cullHalfWindow: ctx.panelSpacing * 3.2,
-      startRun: initialRun,
-    };
-
-    setProjectShowcaseRunPosition(initialRun);
-    setProjectShowcaseFocusIndex(0);
-    projectShowcaseFocusIndexRef.current = 0;
-    setAboutElevatorReachedEnd(false);
-    projectShowcaseVelocityRef.current = 0;
-    projectShowcaseJumpTargetRef.current = null;
-    projectShowcaseForcedFocusIndexRef.current = null;
-  }, [setProjectShowcaseRunPosition]);
-
-  const runAboutLevelTransition = useCallback((
-    cfg: AboutLevelTransitionConfig | undefined,
-    titleOverride: string,
-    onMidpoint: () => void,
-  ): Promise<void> => {
-    const resolved = resolveTransitionConfig(cfg);
-    if (!resolved.enabled) {
-      onMidpoint();
-      return Promise.resolve();
-    }
-    const title = titleOverride || resolved.titleText || "";
-
-    if (aboutTransitionActiveRef.current) {
-      if (aboutTransitionCleanupRef.current) aboutTransitionCleanupRef.current();
-    }
-    aboutTransitionActiveRef.current = true;
-    setAboutTransitionActive(true);
-
-    return new Promise<void>((resolve) => {
-      const overlayEl = document.getElementById("about-level-transition-overlay");
-      if (!overlayEl) { onMidpoint(); aboutTransitionActiveRef.current = false; setAboutTransitionActive(false); resolve(); return; }
-
-      const { gridSize, fillDurationMs, clearDurationMs, titleFadeDurationMs, palette, style } = resolved;
-      let cancelled = false;
-
-      const cleanup = () => {
-        cancelled = true;
-        overlayEl.innerHTML = "";
-        overlayEl.style.opacity = "0";
-        aboutTransitionActiveRef.current = false;
-        setAboutTransitionActive(false);
-        aboutTransitionCleanupRef.current = null;
+          },
+        );
+        return tallest;
       };
-      aboutTransitionCleanupRef.current = cleanup;
 
-      if (style === "fade") {
-        overlayEl.innerHTML = "";
-        overlayEl.style.background = "rgba(2, 5, 12, 1)";
-        overlayEl.style.opacity = "0";
-        overlayEl.style.transition = `opacity ${fillDurationMs}ms ease-in`;
-        requestAnimationFrame(() => { overlayEl.style.opacity = "1"; });
-        setTimeout(() => {
-          if (cancelled) return;
-          onMidpoint();
-          overlayEl.style.transition = `opacity ${clearDurationMs}ms ease-out`;
-          requestAnimationFrame(() => { overlayEl.style.opacity = "0"; });
-          setTimeout(() => { if (!cancelled) cleanup(); resolve(); }, clearDurationMs + 50);
-        }, fillDurationMs + 50);
-        return;
+      slides.forEach((_slide, index) => {
+        if (index === 0) {
+          slideRunPositions.push(shaftBottomWorld + firstSlidePos);
+        } else {
+          const prevSlide = slides[index - 1];
+
+          const thresholdDist = computeCenterTopThresholdDistance(
+            prevSlide,
+            estimatedVisibleHeight,
+            fixedTriggerDistance,
+            estimateTallest,
+          );
+
+          if (thresholdDist != null) {
+            slideRunPositions.push(
+              slideRunPositions[index - 1] + thresholdDist + 4,
+            );
+          } else {
+            const prevFadeVH = THREE.MathUtils.clamp(
+              prevSlide.flowFadeOutDistanceViewportHeights ?? 1.5,
+              0.1,
+              10,
+            );
+            const prevTallest = estimateTallest(prevSlide);
+            const heightExcess = Math.max(
+              0,
+              prevTallest - estimatedVisibleHeight,
+            );
+            const baseLife =
+              fixedTriggerDistance +
+              estimatedVisibleHeight * prevFadeVH +
+              estimatedVisibleHeight * 0.2;
+            const slideLifeDistance = baseLife + heightExcess;
+            slideRunPositions.push(
+              slideRunPositions[index - 1] + slideLifeDistance + 4,
+            );
+          }
+        }
+      });
+
+      const allImageSrcs = new Set<string>();
+      slides.forEach((s) => {
+        const cols = s.configuration.columns ?? {};
+        (["left", "center", "right"] as AboutHallColumnId[]).forEach(
+          (colId) => {
+            const colCfg = cols[colId];
+            if (!colCfg?.messages?.length) return;
+            colCfg.messages.forEach((msg) => {
+              msg.images?.forEach((img) => {
+                if (img.src) allImageSrcs.add(img.src);
+              });
+            });
+          },
+        );
+      });
+      if (allImageSrcs.size > 0) {
+        await Promise.all(
+          Array.from(allImageSrcs).map(async (src) => {
+            if (aboutImageCacheRef.current.has(src)) return;
+            const img = new Image();
+            img.src = src;
+            await new Promise<void>((resolve) => {
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+            });
+            aboutImageCacheRef.current.set(src, img);
+          }),
+        );
       }
 
-      const rect = overlayEl.getBoundingClientRect();
-      const cellDescriptors = buildTransitionCellDescriptors(rect, gridSize, palette);
-      const totalCells = Math.max(1, cellDescriptors.length);
+      const panelRecords: ShowcasePanelRecord[] = [];
+      const useImmersiveColumnGrouping = runAxis === "y";
 
-      overlayEl.style.opacity = "1";
-      overlayEl.style.transition = "none";
-      overlayEl.style.background = "transparent";
-      overlayEl.innerHTML = "";
+      slides.forEach((slide, index) => {
+        const entry =
+          showcaseEntries[index] ??
+          ({
+            id: slide.id,
+            title: slide.registryBtnTitle,
+            image:
+              "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+            fit: "contain",
+          } as ShowcaseEntry);
+        const panelGroup = new THREE.Group();
+        const runPos = slideRunPositions[index];
+        const slideHasColumnChoreo = true;
+        const useElevatorCreditsCard =
+          elevatorCreditsMode && !slideHasColumnChoreo;
+        if (runAxis === "y") {
+          if (useImmersiveColumnGrouping) {
+            panelGroup.position.set(elevatorCreditsWall, runPos, 0);
+          } else {
+            panelGroup.position.set(elevatorCreditsWall, runPos, 0);
+          }
+        }
+        const ySide = elevatorOppositeWall >= 0 ? 1 : -1;
+        let inwardRotationY = 0;
+        let frontFacingRotationY = 0;
+        let cantSign: -1 | 1 = 1;
+        if (runAxis === "y") {
+          if (ySide < 0) {
+            inwardRotationY = Math.PI / 2;
+            frontFacingRotationY = Math.PI / 2;
+            cantSign = 1;
+          } else if (ySide > 0) {
+            inwardRotationY = -Math.PI / 2;
+            frontFacingRotationY = -Math.PI / 2;
+            cantSign = -1;
+          } else {
+            inwardRotationY = Math.PI;
+            frontFacingRotationY = Math.PI;
+            cantSign = 1;
+          }
+        }
+        panelGroup.rotation.y = inwardRotationY;
 
-      const grid = document.createElement("div");
-      grid.style.cssText = "position:absolute;inset:0;overflow:hidden;";
-      overlayEl.appendChild(grid);
+        const panelWidth = elevatorCreditsMode
+          ? THREE.MathUtils.clamp(slide.width * 1.18, 9.2, 13.8)
+          : THREE.MathUtils.clamp(slide.width, 8, 13.8);
+        const panelHeight = elevatorCreditsMode
+          ? THREE.MathUtils.clamp(slide.height * 1.02, 5.2, 8.4)
+          : THREE.MathUtils.clamp(slide.height, 4.8, 8.8);
+        const borderStyle = parseBorderStyle(slide.border);
+        const borderColor = new THREE.Color(0x74d2ff);
+        try {
+          borderColor.setStyle(toThreeColorStyle(borderStyle.color));
+        } catch {
+          borderColor.setHex(0x74d2ff);
+        }
 
-      const titleEl = document.createElement("div");
-      titleEl.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none;";
-      titleEl.innerHTML = `<span style="
+        const frame = new THREE.Mesh(
+          new THREE.PlaneGeometry(panelWidth * 1.02, panelHeight * 1.02),
+          new THREE.MeshBasicMaterial({
+            color: borderColor,
+            transparent: true,
+            opacity: useElevatorCreditsCard ? 0 : 0.28,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+          }),
+        );
+        const frameMat = frame.material as THREE.MeshBasicMaterial;
+        frame.position.z = -0.04;
+        if (!useElevatorCreditsCard && !useImmersiveColumnGrouping)
+          panelGroup.add(frame);
+
+        const panelRecord: ShowcasePanelRecord = {
+          group: panelGroup,
+          runPos,
+          entry,
+          displayTitle: slide.registryBtnTitle,
+          fitMode: "contain",
+          inwardRotationY,
+          frontFacingRotationY,
+          cantSign,
+          focusBlend: 0,
+          frameMat,
+          imageMesh: new THREE.Mesh(
+            new THREE.PlaneGeometry(1, 1),
+            new THREE.MeshBasicMaterial({
+              color: 0xffffff,
+              transparent: true,
+              opacity: 1,
+              side: THREE.DoubleSide,
+              toneMapped: false,
+            }),
+          ),
+          imageMat: new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 1,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+          }),
+          texture: null,
+          baseRepeat: new THREE.Vector2(1, 1),
+          baseOffset: new THREE.Vector2(0, 0),
+          zoom: 1,
+          panX: 0,
+          panY: 0,
+          clientVariants: [],
+          activeVariantIndex: 0,
+          setActiveVariant: () => {},
+          mediaItems: [],
+          activeMediaIndex: 0,
+          setActiveMedia: () => {},
+          mediaFadeStartMs: -Infinity,
+          mediaFadeDurationMs: 1,
+          setThumbnailPageStart: () => {},
+          triggerThumbnailNavPress: () => {},
+          thumbnailPageStart: 0,
+          thumbnailHitTargets: [],
+          thumbnailFrameMats: [],
+          thumbnailImageMats: [],
+          detailMat: new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0,
+          }),
+          detailTexture: null,
+          detailMesh: null,
+          detailScrollThumbMesh: null,
+          detailAllLines: [],
+          detailVisibleLines: 0,
+          detailScrollOffset: 0,
+          detailScrollMax: 0,
+          updateDetailTexture: () => {},
+          techBadgeRoot: null,
+          techBadgeFx: [],
+          aboutRuntime: {
+            mode: "about",
+            slideId: slide.id,
+            cells: [],
+            triggerDistance: fixedTriggerDistance,
+            slideStartRun: runPos - fixedTriggerDistance,
+            flowFadeOutDistanceViewportHeights: THREE.MathUtils.clamp(
+              slide.flowFadeOutDistanceViewportHeights ?? 1.5,
+              0.1,
+              10,
+            ),
+            autoSpeed: slide.autoSpeed ?? aboutHallDefaultAutoSpeedRef.current,
+          },
+        };
+
+        const columnMessages = getAboutColumnMessages(slide);
+        const createCell = (
+          content: AboutHallSlideContent,
+          cellWidth: number,
+          cellHeight: number,
+          cellX: number,
+          cellY: number,
+          opts?: {
+            transparentBackground?: boolean;
+            creditsStyle?: boolean;
+            columnDepth?: number;
+            parentGroup?: THREE.Group;
+          },
+        ) => {
+          const safeWidth = Math.max(
+            256,
+            Math.floor(1300 * (cellWidth / Math.max(panelWidth, 1))),
+          );
+          let safeHeight = Math.max(
+            220,
+            Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))),
+          );
+          const pixelAspect = safeWidth / cellWidth / (safeHeight / cellHeight);
+          const resolvedContent = {
+            ...content,
+            textContent: resolveAboutContentText(content),
+          };
+          const neededHeight = measureAboutTextHeight(
+            resolvedContent,
+            safeWidth,
+            safeHeight,
+            {
+              creditsStyle: opts?.creditsStyle ?? false,
+              loadedImages: aboutImageCacheRef.current,
+              pixelAspect,
+            },
+          );
+          let actualCellHeight = cellHeight;
+          if (neededHeight > safeHeight) {
+            const scale = neededHeight / safeHeight;
+            safeHeight = neededHeight;
+            actualCellHeight = cellHeight * scale;
+          }
+          const tex = createAboutCellTexture(
+            resolvedContent,
+            safeWidth,
+            safeHeight,
+            {
+              transparentBackground: opts?.transparentBackground ?? false,
+              creditsStyle: opts?.creditsStyle ?? false,
+              loadedImages: aboutImageCacheRef.current,
+              pixelAspect,
+            },
+          );
+          const emergencyTex = opts?.creditsStyle
+            ? createAboutCellTexture(resolvedContent, safeWidth, safeHeight, {
+                transparentBackground: opts?.transparentBackground ?? false,
+                creditsStyle: true,
+                emergencyMood: true,
+                loadedImages: aboutImageCacheRef.current,
+                pixelAspect,
+              })
+            : tex;
+          const material = new THREE.MeshBasicMaterial({
+            map: tex,
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+            depthWrite: false,
+          });
+          const mesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(cellWidth, actualCellHeight),
+            material,
+          );
+          mesh.position.set(cellX, cellY, opts?.columnDepth ?? 0.02);
+          (opts?.parentGroup ?? panelGroup).add(mesh);
+          const flowDir = normalizeAboutFlowDirection(content.flowDirection);
+          const flowOff = content.flowOffsetUnits ?? 0;
+          const halfVisible = estimatedVisibleHeight * 0.5;
+          const halfCell = actualCellHeight * 0.5;
+          const edgeGap = Math.max(1.0, estimatedVisibleHeight * 0.15);
+          const computedHomeY =
+            flowDir === "topToBottom"
+              ? -fixedTriggerDistance +
+                halfVisible +
+                halfCell +
+                edgeGap -
+                flowOff
+              : -fixedTriggerDistance -
+                halfVisible -
+                halfCell -
+                edgeGap -
+                flowOff;
+          panelRecord.aboutRuntime?.cells.push({
+            mesh,
+            material,
+            normalTexture: tex,
+            emergencyTexture: emergencyTex,
+            basePosition: mesh.position.clone(),
+            flowDirection: flowDir,
+            flowUnitsPerDistance: Math.max(
+              0,
+              content.flowUnitsPerDistance ?? 0,
+            ),
+            flowOffsetUnits: flowOff,
+            baseYawRad: mesh.rotation.y,
+            homeY: computedHomeY,
+          });
+        };
+
+        if (useElevatorCreditsCard) {
+          const allMsgs = [
+            ...columnMessages.left,
+            ...columnMessages.center,
+            ...columnMessages.right,
+          ];
+          const creditContent: AboutHallSlideContent = {
+            id: `${slide.id}-credit`,
+            type: "column1",
+            backgroundColor: "transparent",
+            fontColor: "rgba(8, 12, 18, 0.98)",
+            fontFamily: ["Oswald", "Montserrat"],
+            fontSize: "150px",
+            fontShadow: "0px 0px 14px rgba(0, 0, 0, 0.62)",
+            horizontalAlign: "center",
+            verticalAlign: "middle",
+            textContent: allMsgs
+              .map((c) => splitHtmlBreakLines(c.textContent).join("\n"))
+              .filter((t) => t.length > 0)
+              .join("\n\n"),
+          };
+          createCell(creditContent, panelWidth, panelHeight, 0, 0, {
+            transparentBackground: true,
+            creditsStyle: true,
+          });
+        } else {
+          const columnX: Record<AboutHallColumnId, number> =
+            useImmersiveColumnGrouping
+              ? { left: -9.56, center: 1.05, right: 10.65 }
+              : {
+                  left: -panelWidth * 0.34,
+                  center: 0,
+                  right: panelWidth * 0.34,
+                };
+          const columnZ: Record<AboutHallColumnId, number> =
+            useImmersiveColumnGrouping
+              ? { left: 3.35, center: 0, right: 6 }
+              : { left: 0, center: 0, right: 0 };
+          const columnDefaults: Record<AboutHallColumnId, number> =
+            useImmersiveColumnGrouping
+              ? { left: 34, center: 0, right: -34 }
+              : { left: 16, center: 0, right: -16 };
+          (["left", "center", "right"] as AboutHallColumnId[]).forEach(
+            (columnId) => {
+              const msgs = columnMessages[columnId];
+              if (msgs.length === 0) return;
+              const columnConfig = slide.configuration.columns?.[columnId];
+              const baseAngleDeg =
+                columnConfig?.angleDeg ?? columnDefaults[columnId];
+              const columnAnchor = new THREE.Group();
+              columnAnchor.position.set(
+                columnX[columnId],
+                0,
+                columnZ[columnId],
+              );
+              panelGroup.add(columnAnchor);
+              const verticalRange = useImmersiveColumnGrouping
+                ? panelHeight * 0.22
+                : panelHeight * 0.78;
+              const slotCount = Math.max(1, msgs.length);
+              const slotStep =
+                slotCount > 1 ? verticalRange / (slotCount - 1) : 0;
+              msgs.forEach((rawMessage, msgIndex) => {
+                const message = {
+                  ...rawMessage,
+                  horizontalAlign: rawMessage.horizontalAlign ?? "center",
+                  verticalAlign: rawMessage.verticalAlign ?? "middle",
+                  textContent: resolveAboutContentText(rawMessage),
+                };
+                const widthRatio = THREE.MathUtils.clamp(
+                  message.widthRatio ?? 1,
+                  0.35,
+                  2.6,
+                );
+                const heightRatio = THREE.MathUtils.clamp(
+                  message.heightRatio ?? 1,
+                  0.2,
+                  2.4,
+                );
+                const cellWidth = useImmersiveColumnGrouping
+                  ? immersiveWidths[columnId] * widthRatio
+                  : panelWidth * 0.26 * widthRatio;
+                const cellHeight = useImmersiveColumnGrouping
+                  ? immersiveHeights[columnId] * heightRatio
+                  : panelHeight * 0.24 * heightRatio;
+                const autoY =
+                  slotCount <= 1
+                    ? 0
+                    : verticalRange * 0.5 - slotStep * msgIndex;
+                const baseY = autoY + (message.offsetY ?? 0);
+                const baseX = message.offsetX ?? 0;
+                const cellCountBefore =
+                  panelRecord.aboutRuntime?.cells.length ?? 0;
+                createCell(message, cellWidth, cellHeight, baseX, baseY, {
+                  columnDepth: 0.03 + msgIndex * 0.002,
+                  parentGroup: columnAnchor,
+                  transparentBackground: false,
+                });
+                const runtimeCells = panelRecord.aboutRuntime?.cells;
+                if (!runtimeCells) return;
+                const newCells = runtimeCells.slice(cellCountBefore);
+                const angleDeg =
+                  (
+                    message as AboutHallSlideContent & {
+                      columnAngleDeg?: number;
+                    }
+                  ).columnAngleDeg ?? baseAngleDeg;
+                newCells.forEach((cell) => {
+                  cell.mesh.rotation.y = THREE.MathUtils.degToRad(angleDeg);
+                  cell.baseYawRad = cell.mesh.rotation.y;
+                  if (useImmersiveColumnGrouping)
+                    cell.immersiveColumn = columnId;
+                  if (cell.flowUnitsPerDistance <= 0)
+                    cell.flowUnitsPerDistance = 0.25;
+                });
+              });
+            },
+          );
+        }
+
+        const framePulse = new THREE.Mesh(
+          new THREE.PlaneGeometry(
+            panelWidth + borderStyle.width * 0.02,
+            panelHeight + borderStyle.width * 0.02,
+          ),
+          new THREE.MeshBasicMaterial({
+            color: borderColor,
+            transparent: true,
+            opacity: 0.09,
+            side: THREE.DoubleSide,
+            toneMapped: false,
+          }),
+        );
+        framePulse.position.z = -0.07;
+        if (!useElevatorCreditsCard && !useImmersiveColumnGrouping)
+          panelGroup.add(framePulse);
+
+        panelRecord.imageMesh =
+          panelRecord.aboutRuntime?.cells[0]?.mesh ?? panelRecord.imageMesh;
+        panelRecord.imageMat =
+          panelRecord.aboutRuntime?.cells[0]?.material ?? panelRecord.imageMat;
+
+        panelGroup.traverse((child) => {
+          child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+        });
+        interiorRoot.add(panelGroup);
+        panelRecords.push(panelRecord);
+      });
+
+      projectShowcasePanelsRef.current = panelRecords;
+      panelRecords.forEach((panel) => {
+        panel.group.visible = true;
+      });
+
+      const edgeRunPadding = 14;
+      const startPosRun =
+        aboutHallStartPositionRef.current != null
+          ? shaftBottomWorld + aboutHallStartPositionRef.current
+          : null;
+      const firstSlideRun =
+        slideRunPositions.length > 0 ? slideRunPositions[0] : 0;
+      const lastSlideRun =
+        slideRunPositions.length > 0
+          ? slideRunPositions[slideRunPositions.length - 1]
+          : 0;
+      const minRun = Math.min(
+        firstSlideRun - edgeRunPadding,
+        startPosRun != null ? startPosRun - 5 : firstSlideRun - edgeRunPadding,
+      );
+      const maxRun = lastSlideRun + edgeRunPadding + 40;
+      const elevatorCameraWallOffset = Math.min(
+        trenchWidth * 0.36,
+        Math.max(2.8, trenchWidth * 0.5 - 1.05),
+      );
+      const elevatorCameraDepthOffset = -Math.min(
+        2.4,
+        Math.max(1.2, trenchWidth * 0.2),
+      );
+      const initialRun = startPosRun ?? minRun + 10;
+      projectShowcaseTrackRef.current = {
+        axis: runAxis,
+        minRun,
+        maxRun,
+        centerCross: runAxis === "y" ? elevatorCameraWallOffset : 0,
+        cameraHeight: runAxis === "y" ? elevatorCameraDepthOffset : panelY,
+        lookAhead: THREE.MathUtils.clamp(ctx.panelSpacing * 1.9, 22, 48),
+        speed: THREE.MathUtils.clamp(ctx.panelSpacing * 0.1625, 2.5, 5.5),
+        cullHalfWindow: ctx.panelSpacing * 3.2,
+        startRun: initialRun,
+      };
+
+      setProjectShowcaseRunPosition(initialRun);
+      setProjectShowcaseFocusIndex(0);
+      projectShowcaseFocusIndexRef.current = 0;
+      setAboutElevatorReachedEnd(false);
+      projectShowcaseVelocityRef.current = 0;
+      projectShowcaseJumpTargetRef.current = null;
+      projectShowcaseForcedFocusIndexRef.current = null;
+    },
+    [setProjectShowcaseRunPosition],
+  );
+
+  const runAboutLevelTransition = useCallback(
+    (
+      cfg: AboutLevelTransitionConfig | undefined,
+      titleOverride: string,
+      onMidpoint: () => void,
+    ): Promise<void> => {
+      const resolved = resolveTransitionConfig(cfg);
+      if (!resolved.enabled) {
+        onMidpoint();
+        return Promise.resolve();
+      }
+      const title = titleOverride || resolved.titleText || "";
+
+      if (aboutTransitionActiveRef.current) {
+        if (aboutTransitionCleanupRef.current)
+          aboutTransitionCleanupRef.current();
+      }
+      aboutTransitionActiveRef.current = true;
+      setAboutTransitionActive(true);
+
+      return new Promise<void>((resolve) => {
+        const overlayEl = document.getElementById(
+          "about-level-transition-overlay",
+        );
+        if (!overlayEl) {
+          onMidpoint();
+          aboutTransitionActiveRef.current = false;
+          setAboutTransitionActive(false);
+          resolve();
+          return;
+        }
+
+        const {
+          gridSize,
+          fillDurationMs,
+          clearDurationMs,
+          titleFadeDurationMs,
+          palette,
+          style,
+        } = resolved;
+        let cancelled = false;
+
+        const cleanup = () => {
+          cancelled = true;
+          overlayEl.innerHTML = "";
+          overlayEl.style.opacity = "0";
+          aboutTransitionActiveRef.current = false;
+          setAboutTransitionActive(false);
+          aboutTransitionCleanupRef.current = null;
+        };
+        aboutTransitionCleanupRef.current = cleanup;
+
+        if (style === "fade") {
+          overlayEl.innerHTML = "";
+          overlayEl.style.background = "rgba(2, 5, 12, 1)";
+          overlayEl.style.opacity = "0";
+          overlayEl.style.transition = `opacity ${fillDurationMs}ms ease-in`;
+          requestAnimationFrame(() => {
+            overlayEl.style.opacity = "1";
+          });
+          setTimeout(() => {
+            if (cancelled) return;
+            onMidpoint();
+            overlayEl.style.transition = `opacity ${clearDurationMs}ms ease-out`;
+            requestAnimationFrame(() => {
+              overlayEl.style.opacity = "0";
+            });
+            setTimeout(() => {
+              if (!cancelled) cleanup();
+              resolve();
+            }, clearDurationMs + 50);
+          }, fillDurationMs + 50);
+          return;
+        }
+
+        const rect = overlayEl.getBoundingClientRect();
+        const cellDescriptors = buildTransitionCellDescriptors(
+          rect,
+          gridSize,
+          palette,
+        );
+        const totalCells = Math.max(1, cellDescriptors.length);
+
+        overlayEl.style.opacity = "1";
+        overlayEl.style.transition = "none";
+        overlayEl.style.background = "transparent";
+        overlayEl.innerHTML = "";
+
+        const grid = document.createElement("div");
+        grid.style.cssText = "position:absolute;inset:0;overflow:hidden;";
+        overlayEl.appendChild(grid);
+
+        const titleEl = document.createElement("div");
+        titleEl.style.cssText =
+          "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none;";
+        titleEl.innerHTML = `<span style="
         font-family:'Rajdhani','Oswald',sans-serif;font-weight:700;font-size:clamp(24px,4vw,56px);
         letter-spacing:0.18em;text-transform:uppercase;color:rgba(220,235,255,0.95);
         text-shadow:0 0 24px rgba(100,160,255,0.5),0 2px 8px rgba(0,0,0,0.7);
         opacity:0;transition:opacity 400ms ease-in;
       ">${title}</span>`;
-      overlayEl.appendChild(titleEl);
+        overlayEl.appendChild(titleEl);
 
-      const cells: HTMLDivElement[] = [];
-      for (let i = 0; i < cellDescriptors.length; i++) {
-        const descriptor = cellDescriptors[i];
-        if (!descriptor) continue;
-        const cell = document.createElement("div");
-        cell.style.cssText = `position:absolute;left:${descriptor.x}px;top:${descriptor.y}px;width:${descriptor.w}px;height:${descriptor.h}px;opacity:0;transition:opacity ${60 + Math.random() * 120}ms ease-in;background:${descriptor.color};`;
-        const tint = document.createElement("div");
-        tint.style.cssText = `position:absolute;inset:0;background:${descriptor.color};opacity:${descriptor.shapeOpacity.toFixed(3)};`;
-        cell.appendChild(tint);
+        const cells: HTMLDivElement[] = [];
+        for (let i = 0; i < cellDescriptors.length; i++) {
+          const descriptor = cellDescriptors[i];
+          if (!descriptor) continue;
+          const cell = document.createElement("div");
+          cell.style.cssText = `position:absolute;left:${descriptor.x}px;top:${descriptor.y}px;width:${descriptor.w}px;height:${descriptor.h}px;opacity:0;transition:opacity ${60 + Math.random() * 120}ms ease-in;background:${descriptor.color};`;
+          const tint = document.createElement("div");
+          tint.style.cssText = `position:absolute;inset:0;background:${descriptor.color};opacity:${descriptor.shapeOpacity.toFixed(3)};`;
+          cell.appendChild(tint);
 
-        grid.appendChild(cell);
-        cells.push(cell);
-      }
-
-      const fillIndices = Array.from({ length: totalCells }, (_, i) => i);
-      for (let i = fillIndices.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [fillIndices[i], fillIndices[j]] = [fillIndices[j], fillIndices[i]];
-      }
-
-      const fillInterval = fillDurationMs / totalCells;
-      fillIndices.forEach((ci, idx) => {
-        setTimeout(() => { if (!cancelled && cells[ci]) cells[ci].style.opacity = "1"; }, idx * fillInterval);
-      });
-
-      setTimeout(() => {
-        if (cancelled) return;
-        const titleSpan = titleEl.querySelector("span") as HTMLElement | null;
-        if (titleSpan) titleSpan.style.opacity = "1";
-      }, fillDurationMs * 0.4);
-
-      setTimeout(() => {
-        if (cancelled) return;
-        onMidpoint();
-
-        const clearIndices = Array.from({ length: totalCells }, (_, i) => i);
-        for (let i = clearIndices.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [clearIndices[i], clearIndices[j]] = [clearIndices[j], clearIndices[i]];
+          grid.appendChild(cell);
+          cells.push(cell);
         }
-        const clearInterval = clearDurationMs / totalCells;
-        clearIndices.forEach((ci, idx) => {
-          setTimeout(() => { if (!cancelled && cells[ci]) cells[ci].style.opacity = "0"; }, idx * clearInterval);
+
+        const fillIndices = Array.from({ length: totalCells }, (_, i) => i);
+        for (let i = fillIndices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [fillIndices[i], fillIndices[j]] = [fillIndices[j], fillIndices[i]];
+        }
+
+        const fillInterval = fillDurationMs / totalCells;
+        fillIndices.forEach((ci, idx) => {
+          setTimeout(() => {
+            if (!cancelled && cells[ci]) cells[ci].style.opacity = "1";
+          }, idx * fillInterval);
         });
 
-        const titleSpan = titleEl.querySelector("span") as HTMLElement | null;
-        if (titleSpan) {
-          titleSpan.style.transition = `opacity ${titleFadeDurationMs}ms ease-out`;
-          setTimeout(() => { if (!cancelled && titleSpan) titleSpan.style.opacity = "0"; }, clearDurationMs * 0.5);
-        }
+        setTimeout(() => {
+          if (cancelled) return;
+          const titleSpan = titleEl.querySelector("span") as HTMLElement | null;
+          if (titleSpan) titleSpan.style.opacity = "1";
+        }, fillDurationMs * 0.4);
 
         setTimeout(() => {
-          if (!cancelled) cleanup();
-          resolve();
-        }, Math.max(clearDurationMs, titleFadeDurationMs) + 100);
-      }, fillDurationMs + 80);
-    });
-  }, []);
+          if (cancelled) return;
+          onMidpoint();
 
-  const selectAboutElevatorLevel = useCallback(async (levelId: string) => {
-    if (aboutTransitionActiveRef.current) return;
+          const clearIndices = Array.from({ length: totalCells }, (_, i) => i);
+          for (let i = clearIndices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [clearIndices[i], clearIndices[j]] = [
+              clearIndices[j],
+              clearIndices[i],
+            ];
+          }
+          const clearInterval = clearDurationMs / totalCells;
+          clearIndices.forEach((ci, idx) => {
+            setTimeout(() => {
+              if (!cancelled && cells[ci]) cells[ci].style.opacity = "0";
+            }, idx * clearInterval);
+          });
 
-    const data = ABOUT_HALL_LEVEL_DATA_MAP[levelId] as AboutHallSlidesFile | undefined;
-    if (!data) return;
+          const titleSpan = titleEl.querySelector("span") as HTMLElement | null;
+          if (titleSpan) {
+            titleSpan.style.transition = `opacity ${titleFadeDurationMs}ms ease-out`;
+            setTimeout(() => {
+              if (!cancelled && titleSpan) titleSpan.style.opacity = "0";
+            }, clearDurationMs * 0.5);
+          }
 
-    const isManualSwitch = selectedAboutLevelIdRef.current !== null && selectedAboutLevelIdRef.current !== levelId;
-
-    selectedAboutLevelIdRef.current = levelId;
-    setSelectedAboutLevelId(levelId);
-
-    aboutHallDefaultAutoSpeedRef.current = data.autoSpeed ?? 0.62;
-    aboutHallFirstSlidePositionRef.current = data.firstSlidePosition;
-    aboutHallStartPositionRef.current = data.startPosition;
-
-    const newSlides = (data.slides || []).map((slide) => normalizeAboutSlideColumns({ ...slide }));
-    const newEntries: ShowcaseEntry[] = newSlides.map((slide) => {
-      const byColumn = getAboutColumnMessages(slide);
-      const messages = [...byColumn.left, ...byColumn.center, ...byColumn.right];
-      return {
-        id: slide.id, title: slide.registryBtnTitle,
-        image: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
-        description: messages.map((cell) => resolveAboutContentText(cell)).join(" "),
-        technologies: [], year: 2026, fit: "contain", galleryMedia: [], clientVariants: [],
-      };
-    });
-
-    const levelMeta = (aboutHallLevelsManifest as { levels: { id: string; label: string }[] }).levels.find(l => l.id === levelId);
-    const transitionTitle = levelMeta?.label ?? levelId;
-
-    if (isManualSwitch && data.levelTransition?.enabled !== false) {
-      projectShowcasePlayingRef.current = false;
-      setProjectShowcasePlaying(false);
-
-      await runAboutLevelTransition(data.levelTransition, transitionTitle, () => {
-        rebuildAboutElevatorPanels(newSlides, newEntries);
+          setTimeout(
+            () => {
+              if (!cancelled) cleanup();
+              resolve();
+            },
+            Math.max(clearDurationMs, titleFadeDurationMs) + 100,
+          );
+        }, fillDurationMs + 80);
       });
-    } else {
-      await rebuildAboutElevatorPanels(newSlides, newEntries);
-    }
+    },
+    [],
+  );
 
-    markAboutElevatorLevelVisited(levelId);
-    setVisitedAboutLevels(getAboutElevatorVisitedLevels());
+  const selectAboutElevatorLevel = useCallback(
+    async (levelId: string) => {
+      if (aboutTransitionActiveRef.current) return;
 
-    aboutLevelGateActiveRef.current = false;
-    setAboutLevelGateActive(false);
+      const data = ABOUT_HALL_LEVEL_DATA_MAP[levelId] as
+        | AboutHallSlidesFile
+        | undefined;
+      if (!data) return;
 
-    projectShowcasePlayingRef.current = true;
-    setProjectShowcasePlaying(true);
-    setProjectShowcaseLever(0);
-  }, [rebuildAboutElevatorPanels, setProjectShowcaseLever, runAboutLevelTransition]);
+      const isManualSwitch =
+        selectedAboutLevelIdRef.current !== null &&
+        selectedAboutLevelIdRef.current !== levelId;
+
+      selectedAboutLevelIdRef.current = levelId;
+      setSelectedAboutLevelId(levelId);
+
+      aboutHallDefaultAutoSpeedRef.current = data.autoSpeed ?? 0.62;
+      aboutHallFirstSlidePositionRef.current = data.firstSlidePosition;
+      aboutHallStartPositionRef.current = data.startPosition;
+
+      const newSlides = (data.slides || []).map((slide) =>
+        normalizeAboutSlideColumns({ ...slide }),
+      );
+      const newEntries: ShowcaseEntry[] = newSlides.map((slide) => {
+        const byColumn = getAboutColumnMessages(slide);
+        const messages = [
+          ...byColumn.left,
+          ...byColumn.center,
+          ...byColumn.right,
+        ];
+        return {
+          id: slide.id,
+          title: slide.registryBtnTitle,
+          image:
+            "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+          description: messages
+            .map((cell) => resolveAboutContentText(cell))
+            .join(" "),
+          technologies: [],
+          year: 2026,
+          fit: "contain",
+          galleryMedia: [],
+          clientVariants: [],
+        };
+      });
+
+      const levelMeta = (
+        aboutHallLevelsManifest as { levels: { id: string; label: string }[] }
+      ).levels.find((l) => l.id === levelId);
+      const transitionTitle = levelMeta?.label ?? levelId;
+
+      if (isManualSwitch && data.levelTransition?.enabled !== false) {
+        projectShowcasePlayingRef.current = false;
+        setProjectShowcasePlaying(false);
+
+        await runAboutLevelTransition(
+          data.levelTransition,
+          transitionTitle,
+          () => {
+            rebuildAboutElevatorPanels(newSlides, newEntries);
+          },
+        );
+      } else {
+        await rebuildAboutElevatorPanels(newSlides, newEntries);
+      }
+
+      markAboutElevatorLevelVisited(levelId);
+      setVisitedAboutLevels(getAboutElevatorVisitedLevels());
+
+      aboutLevelGateActiveRef.current = false;
+      setAboutLevelGateActive(false);
+
+      projectShowcasePlayingRef.current = true;
+      setProjectShowcasePlaying(true);
+      setProjectShowcaseLever(0);
+    },
+    [
+      rebuildAboutElevatorPanels,
+      setProjectShowcaseLever,
+      runAboutLevelTransition,
+    ],
+  );
 
   const stopOrbitalPortfolioToneSequence = useCallback(() => {
     const runtime = orbitalPortfolioToneRuntimeRef.current;
@@ -7738,9 +9049,12 @@ export default function ResumeSpace3D({
     });
     runtime.activeVoices = [];
   }, [shipLog]);
-  useEffect(() => () => {
-    stopOrbitalPortfolioToneSequence();
-  }, [stopOrbitalPortfolioToneSequence]);
+  useEffect(
+    () => () => {
+      stopOrbitalPortfolioToneSequence();
+    },
+    [stopOrbitalPortfolioToneSequence],
+  );
 
   const exitOrbitalPortfolio = useCallback(() => {
     const root = orbitalPortfolioRootRef.current;
@@ -7889,7 +9203,8 @@ export default function ResumeSpace3D({
         .copy(orbitalPortfolioCameraPosRef.current)
         .addScaledVector(forward, 1200);
     }
-    const anchor = orbitalPortfolioWorldAnchorRef.current ?? ORBITAL_PORTFOLIO_WORLD_ANCHOR;
+    const anchor =
+      orbitalPortfolioWorldAnchorRef.current ?? ORBITAL_PORTFOLIO_WORLD_ANCHOR;
     const cores = orbitalPortfolioCoresRef.current;
     const center = anchor.clone();
     if (cores.length > 0) {
@@ -7907,11 +9222,15 @@ export default function ResumeSpace3D({
     seq.revealTarget.copy(center).add(new THREE.Vector3(0, 14, 0));
     seq.revealCam.copy(center).add(new THREE.Vector3(760, 340, 1080));
     seq.finalTarget.copy(center).add(new THREE.Vector3(0, 14, 0));
-    seq.finalCam.copy(center).add(
-      new THREE.Vector3(420, 210, 620).multiplyScalar(2.05),
+    seq.finalCam
+      .copy(center)
+      .add(new THREE.Vector3(420, 210, 620).multiplyScalar(2.05));
+    shipLog(
+      `[PORTENTRY] entrySequence:start durationMs=${seq.durationMs}`,
+      "info",
     );
-    shipLog(`[PORTENTRY] entrySequence:start durationMs=${seq.durationMs}`, "info");
-    orbitalPortfolioIgnoreManualUntilRef.current = seq.startedAt + seq.durationMs + 900;
+    orbitalPortfolioIgnoreManualUntilRef.current =
+      seq.startedAt + seq.durationMs + 900;
     orbitalPortfolioAutoRef.current.lastAdvanceAt = performance.now();
     orbitalPortfolioAutoRef.current.pausedUntil = 0;
     orbitalPortfolioCameraDistanceRef.current = 2.05;
@@ -7930,7 +9249,9 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioSearchQuery("");
     setOrbitalPortfolioYearFilter("all");
     setOrbitalPortfolioTechFilter("all");
-    setOrbitalRegistrySelectedCoreId(orbitalPortfolioCoreViewsRef.current[0]?.id ?? "");
+    setOrbitalRegistrySelectedCoreId(
+      orbitalPortfolioCoreViewsRef.current[0]?.id ?? "",
+    );
     orbitalPortfolioFocusIndexRef.current = 0;
     setOrbitalPortfolioFocusIndex(0);
     setOrbitalPortfolioHasActiveFocus(false);
@@ -7992,7 +9313,11 @@ export default function ResumeSpace3D({
   ]);
 
   const exitOrbitalPortfolioInspectMode = useCallback(
-    (options?: { resumeOrbits?: boolean; keepManualControl?: boolean; reason?: string }) => {
+    (options?: {
+      resumeOrbits?: boolean;
+      keepManualControl?: boolean;
+      reason?: string;
+    }) => {
       const resumeOrbits = options?.resumeOrbits ?? true;
       const keepManualControl = options?.keepManualControl ?? false;
       const hadInspectMode =
@@ -8031,7 +9356,9 @@ export default function ResumeSpace3D({
       if (!core) return;
       const coreFocusZoomDistance = 1.52;
       const groups = orbitalPortfolioGroupsRef.current;
-      const firstGroupIndexForCore = groups.findIndex((group) => group.coreId === coreId);
+      const firstGroupIndexForCore = groups.findIndex(
+        (group) => group.coreId === coreId,
+      );
       setOrbitalPortfolioFocusedCoreId(coreId);
       setOrbitalRegistrySelectedCoreId(coreId);
       setOrbitalPortfolioManualLock(false, "focus-core");
@@ -8137,7 +9464,8 @@ export default function ResumeSpace3D({
       setOrbitalPortfolioHasActiveFocus(true);
       const variantCount = Math.max(1, groups[next]?.variants?.length ?? 1);
       const forcedVariant =
-        typeof options?.variantIndex === "number" && Number.isFinite(options.variantIndex)
+        typeof options?.variantIndex === "number" &&
+        Number.isFinite(options.variantIndex)
           ? THREE.MathUtils.clamp(
               Math.floor(options.variantIndex),
               0,
@@ -8191,7 +9519,10 @@ export default function ResumeSpace3D({
           mediaIndex,
           options,
         };
-        shipLog("[PORTENTRY] inspect request queued until entry sequence completes", "info");
+        shipLog(
+          "[PORTENTRY] inspect request queued until entry sequence completes",
+          "info",
+        );
         return;
       }
 
@@ -8206,7 +9537,8 @@ export default function ResumeSpace3D({
       const controlsAny = controls as unknown as {
         getTarget?: (out: THREE.Vector3) => void;
       };
-      const useCanonicalInspectDistance = options?.enforceCanonicalInspectDistance === true;
+      const useCanonicalInspectDistance =
+        options?.enforceCanonicalInspectDistance === true;
       let inferredDistanceFromCurrentTarget: number | null = null;
       if (
         !useCanonicalInspectDistance &&
@@ -8227,7 +9559,9 @@ export default function ResumeSpace3D({
       station.plate.getWorldPosition(plateWorld);
       const plateQuat = new THREE.Quaternion();
       station.plate.getWorldQuaternion(plateQuat);
-      const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(plateQuat).normalize();
+      const normal = new THREE.Vector3(0, 0, 1)
+        .applyQuaternion(plateQuat)
+        .normalize();
       const savedDistance = orbitalPortfolioInspectDistanceRef.current;
       const canonicalInspectDistance = THREE.MathUtils.clamp(
         ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE *
@@ -8251,14 +9585,17 @@ export default function ResumeSpace3D({
         );
       } else if (typeof inferredDistanceFromCurrentTarget === "number") {
         inspectDistance = THREE.MathUtils.clamp(
-          inferredDistanceFromCurrentTarget * ORBITAL_PORTFOLIO_INSPECT_ZOOM_OUT_MULTIPLIER,
+          inferredDistanceFromCurrentTarget *
+            ORBITAL_PORTFOLIO_INSPECT_ZOOM_OUT_MULTIPLIER,
           ORBITAL_PORTFOLIO_INSPECT_MIN_REASONABLE_DISTANCE,
           ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE,
         );
       }
       orbitalPortfolioInspectDistanceRef.current = inspectDistance;
       // Keep inspect framing straight-on to the slide face.
-      const camPos = plateWorld.clone().addScaledVector(normal, inspectDistance);
+      const camPos = plateWorld
+        .clone()
+        .addScaledVector(normal, inspectDistance);
       const lookTarget = plateWorld.clone();
       controls.setLookAt(
         camPos.x,
@@ -8293,7 +9630,8 @@ export default function ResumeSpace3D({
       if (
         orbitalPortfolioTechFilter !== "all" &&
         !group.technologies.some(
-          (tech) => tech.toLowerCase() === orbitalPortfolioTechFilter.toLowerCase(),
+          (tech) =>
+            tech.toLowerCase() === orbitalPortfolioTechFilter.toLowerCase(),
         )
       ) {
         return false;
@@ -8303,7 +9641,11 @@ export default function ResumeSpace3D({
         `${group.title} ${group.description ?? ""} ${group.technologies.join(" ")}`.toLowerCase();
       return haystack.includes(query);
     });
-  }, [orbitalPortfolioSearchQuery, orbitalPortfolioTechFilter, orbitalPortfolioYearFilter]);
+  }, [
+    orbitalPortfolioSearchQuery,
+    orbitalPortfolioTechFilter,
+    orbitalPortfolioYearFilter,
+  ]);
 
   const stepOrbitalPortfolioSequence = useCallback(
     (direction: -1 | 1) => {
@@ -8311,20 +9653,22 @@ export default function ResumeSpace3D({
       if (groups.length === 0) return;
       const filtered = getFilteredOrbitalGroups();
       if (filtered.length === 0) return;
-      const activeGroupId = groups[
-        THREE.MathUtils.clamp(
-          orbitalPortfolioFocusIndexRef.current,
-          0,
-          Math.max(0, groups.length - 1),
-        )
-      ]?.id;
+      const activeGroupId =
+        groups[
+          THREE.MathUtils.clamp(
+            orbitalPortfolioFocusIndexRef.current,
+            0,
+            Math.max(0, groups.length - 1),
+          )
+        ]?.id;
       const flattened: Array<{
         groupId: string;
         variantIndex: number;
         mediaIndex: number;
       }> = [];
       filtered.forEach((group) => {
-        const variants = group.variants.length > 0 ? group.variants : [{ mediaItems: [] }];
+        const variants =
+          group.variants.length > 0 ? group.variants : [{ mediaItems: [] }];
         variants.forEach((variant, variantIndex) => {
           const mediaCount = Math.max(1, variant.mediaItems?.length ?? 0);
           for (let mediaIndex = 0; mediaIndex < mediaCount; mediaIndex += 1) {
@@ -8347,17 +9691,24 @@ export default function ResumeSpace3D({
               flattened.findIndex((item) => item.groupId === activeGroupId),
             );
       const nextIndex =
-        ((startIndex + direction) % flattened.length + flattened.length) % flattened.length;
+        (((startIndex + direction) % flattened.length) + flattened.length) %
+        flattened.length;
       const target = flattened[nextIndex];
       if (!target) return;
-      const stationIndex = groups.findIndex((group) => group.id === target.groupId);
+      const stationIndex = groups.findIndex(
+        (group) => group.id === target.groupId,
+      );
       if (stationIndex < 0) return;
       focusOrbitalPortfolioStation(stationIndex, target.mediaIndex, {
         variantIndex: target.variantIndex,
         enforceCanonicalInspectDistance: true,
       });
     },
-    [focusOrbitalPortfolioStation, getFilteredOrbitalGroups, orbitalPortfolioMediaIndex],
+    [
+      focusOrbitalPortfolioStation,
+      getFilteredOrbitalGroups,
+      orbitalPortfolioMediaIndex,
+    ],
   );
 
   function startProjectShowcaseAngleIntroSequence() {
@@ -8414,7 +9765,11 @@ export default function ResumeSpace3D({
       const fadeMs = 700;
       const fadeTick = () => {
         if (!projectShowcaseEntrySequenceRef.current.active) return;
-        const t = THREE.MathUtils.clamp((performance.now() - fadeStart) / fadeMs, 0, 1);
+        const t = THREE.MathUtils.clamp(
+          (performance.now() - fadeStart) / fadeMs,
+          0,
+          1,
+        );
         const eased = t * t * (3 - 2 * t);
         setProjectShowcaseEntryOverlayOpacity(1 - eased);
         if (t >= 1) {
@@ -8423,9 +9778,11 @@ export default function ResumeSpace3D({
           projectShowcaseEntrySequenceRef.current.raf = null;
           return;
         }
-        projectShowcaseEntrySequenceRef.current.raf = requestAnimationFrame(fadeTick);
+        projectShowcaseEntrySequenceRef.current.raf =
+          requestAnimationFrame(fadeTick);
       };
-      projectShowcaseEntrySequenceRef.current.raf = requestAnimationFrame(fadeTick);
+      projectShowcaseEntrySequenceRef.current.raf =
+        requestAnimationFrame(fadeTick);
       return;
     }
 
@@ -8520,9 +9877,13 @@ export default function ResumeSpace3D({
       ? track.lookAhead * 5.8
       : track.lookAhead * 1.2;
     const approachLift =
-      track.axis === "y" ? new THREE.Vector3(0, 0, 14.0) : new THREE.Vector3(0, 14.0, 0);
+      track.axis === "y"
+        ? new THREE.Vector3(0, 0, 14.0)
+        : new THREE.Vector3(0, 14.0, 0);
     const approachTargetLift =
-      track.axis === "y" ? new THREE.Vector3(0, 0, 8.2) : new THREE.Vector3(0, 8.2, 0);
+      track.axis === "y"
+        ? new THREE.Vector3(0, 0, 8.2)
+        : new THREE.Vector3(0, 8.2, 0);
     const approachCam = trenchCam
       .clone()
       .addScaledVector(travelAxis, -finalApproachDist)
@@ -8797,7 +10158,8 @@ export default function ResumeSpace3D({
           vlog("🎬 Project Showcase exit sequence complete");
           return;
         }
-        projectShowcaseExitSequenceRef.current.raf = requestAnimationFrame(tick);
+        projectShowcaseExitSequenceRef.current.raf =
+          requestAnimationFrame(tick);
       };
 
       projectShowcaseExitSequenceRef.current.raf = requestAnimationFrame(tick);
@@ -8830,7 +10192,10 @@ export default function ResumeSpace3D({
       skillsLatticeRippleRef.current.startedAt = performance.now();
       const camPos = camera.position.clone();
       const dir = camPos.sub(worldPos).normalize();
-      const nextCam = worldPos.clone().addScaledVector(dir, 62).add(new THREE.Vector3(0, 9, 0));
+      const nextCam = worldPos
+        .clone()
+        .addScaledVector(dir, 62)
+        .add(new THREE.Vector3(0, 9, 0));
       controls.setLookAt(
         nextCam.x,
         nextCam.y,
@@ -8862,14 +10227,24 @@ export default function ResumeSpace3D({
       anchor.y + 84,
       anchor.z + Math.sin(a + 0.35) * SKILLS_SD_PATROL_RADIUS,
     );
-    const lookMat = new THREE.Matrix4().lookAt(sd.position, lookAtPos, new THREE.Vector3(0, 1, 0));
+    const lookMat = new THREE.Matrix4().lookAt(
+      sd.position,
+      lookAtPos,
+      new THREE.Vector3(0, 1, 0),
+    );
     const q = new THREE.Quaternion().setFromRotationMatrix(lookMat);
-    const forwardOffset = sd.userData?.forwardOffset as THREE.Quaternion | undefined;
+    const forwardOffset = sd.userData?.forwardOffset as
+      | THREE.Quaternion
+      | undefined;
     if (forwardOffset) q.multiply(forwardOffset);
     sd.quaternion.copy(q);
     sd.visible = true;
-    const readabilityKey = sd.userData.readabilityKey as THREE.PointLight | undefined;
-    const readabilityRim = sd.userData.readabilityRim as THREE.PointLight | undefined;
+    const readabilityKey = sd.userData.readabilityKey as
+      | THREE.PointLight
+      | undefined;
+    const readabilityRim = sd.userData.readabilityRim as
+      | THREE.PointLight
+      | undefined;
     if (readabilityKey) readabilityKey.intensity = 1.1;
     if (readabilityRim) readabilityRim.intensity = 0.95;
     skillsSDLockActiveRef.current = true;
@@ -8882,115 +10257,121 @@ export default function ResumeSpace3D({
     shipLog("SD repositioned near Skills", "info");
   }, [shipLog, vlog]);
 
-  const setExternalCosmosLabelsHiddenForLattice = useCallback((hidden: boolean) => {
-    const scene = sceneRef.current.scene;
-    if (!scene) return;
-    if (externalCosmosLabelsHiddenForLatticeRef.current === hidden) return;
-    externalCosmosLabelsHiddenForLatticeRef.current = hidden;
-    // In lattice mode we now do per-label occlusion checks instead of
-    // blanket hiding. Keep visibility restoration when mode ends.
-    if (hidden) return;
-    scene.traverse((obj) => {
-      const maybeCss = obj as THREE.Object3D & {
-        isCSS2DObject?: boolean;
-        userData: Record<string, unknown>;
-      };
-      if (!maybeCss.isCSS2DObject) return;
-      if (maybeCss.userData?.skillsLatticeLabel) return;
-      maybeCss.visible = !hidden;
-    });
-  }, []);
+  const setExternalCosmosLabelsHiddenForLattice = useCallback(
+    (hidden: boolean) => {
+      const scene = sceneRef.current.scene;
+      if (!scene) return;
+      if (externalCosmosLabelsHiddenForLatticeRef.current === hidden) return;
+      externalCosmosLabelsHiddenForLatticeRef.current = hidden;
+      // In lattice mode we now do per-label occlusion checks instead of
+      // blanket hiding. Keep visibility restoration when mode ends.
+      if (hidden) return;
+      scene.traverse((obj) => {
+        const maybeCss = obj as THREE.Object3D & {
+          isCSS2DObject?: boolean;
+          userData: Record<string, unknown>;
+        };
+        if (!maybeCss.isCSS2DObject) return;
+        if (maybeCss.userData?.skillsLatticeLabel) return;
+        maybeCss.visible = !hidden;
+      });
+    },
+    [],
+  );
 
-  const setExternalCosmosLabelsHiddenForAbout = useCallback((hidden: boolean) => {
-    const scene = sceneRef.current.scene;
-    if (!scene) return;
-    if (externalCosmosLabelsHiddenForAboutRef.current === hidden) return;
-    externalCosmosLabelsHiddenForAboutRef.current = hidden;
-    scene.traverse((obj) => {
-      const maybeCss = obj as THREE.Object3D & {
-        isCSS2DObject?: boolean;
-        userData: Record<string, unknown>;
-      };
-      if (!maybeCss.isCSS2DObject) return;
-      if (maybeCss.userData?.aboutMemorySquareLabel) return;
-      maybeCss.visible = !hidden;
-    });
-  }, []);
+  const setExternalCosmosLabelsHiddenForAbout = useCallback(
+    (hidden: boolean) => {
+      const scene = sceneRef.current.scene;
+      if (!scene) return;
+      if (externalCosmosLabelsHiddenForAboutRef.current === hidden) return;
+      externalCosmosLabelsHiddenForAboutRef.current = hidden;
+      scene.traverse((obj) => {
+        const maybeCss = obj as THREE.Object3D & {
+          isCSS2DObject?: boolean;
+          userData: Record<string, unknown>;
+        };
+        if (!maybeCss.isCSS2DObject) return;
+        if (maybeCss.userData?.aboutMemorySquareLabel) return;
+        maybeCss.visible = !hidden;
+      });
+    },
+    [],
+  );
 
-  const exitSkillsLattice = useCallback((options?: {
-    restoreShip?: boolean;
-    clearSystem?: boolean;
-  }) => {
-    const restoreShip = options?.restoreShip ?? true;
-    const clearSystem = options?.clearSystem ?? true;
-    const latticeBeacon = skillsLatticeBeaconRef.current;
-    const camera = sceneRef.current.camera;
-    const controls = sceneRef.current.controls;
-    const entrySeq = skillsLatticeEntrySequenceRef.current;
-    if (entrySeq.raf !== null) {
-      cancelAnimationFrame(entrySeq.raf);
-      entrySeq.raf = null;
-    }
-    stopOrbitalPortfolioToneSequence();
-    entrySeq.active = false;
-    skillsLatticeNodeLabelsRef.current.forEach((label) => {
-      label.visible = false;
-    });
-    if (latticeBeacon) {
-      latticeBeacon.visible = true;
-      latticeBeacon.userData.sectionIndex = 2;
-      latticeBeacon.userData.planetName = "Skills";
-      latticeBeacon.userData.sectionId = "skills";
-    }
-    if (camera) camera.layers.disable(SKILLS_LATTICE_LAYER);
-    if (restoreShip) {
-      setFollowingSpaceship(true);
-      followingSpaceshipRef.current = true;
-      if (spaceshipRef.current) spaceshipRef.current.visible = true;
-      if (controls) controls.enabled = true;
-      if (camera && controls && skillsLatticeReturnViewRef.current) {
-        const view = skillsLatticeReturnViewRef.current;
-        controls.setLookAt(
-          view.cam.x,
-          view.cam.y,
-          view.cam.z,
-          view.target.x,
-          view.target.y,
-          view.target.z,
-          true,
-        );
+  const exitSkillsLattice = useCallback(
+    (options?: { restoreShip?: boolean; clearSystem?: boolean }) => {
+      const restoreShip = options?.restoreShip ?? true;
+      const clearSystem = options?.clearSystem ?? true;
+      const latticeBeacon = skillsLatticeBeaconRef.current;
+      const camera = sceneRef.current.camera;
+      const controls = sceneRef.current.controls;
+      const entrySeq = skillsLatticeEntrySequenceRef.current;
+      if (entrySeq.raf !== null) {
+        cancelAnimationFrame(entrySeq.raf);
+        entrySeq.raf = null;
       }
-    } else {
-      setFollowingSpaceship(false);
-      followingSpaceshipRef.current = false;
-      if (spaceshipRef.current) spaceshipRef.current.visible = false;
-      if (controls) controls.enabled = true;
-    }
-    skillsLegacyBodiesRef.current.forEach((obj) => {
-      obj.visible = true;
-    });
-    skillsLatticePendingEntryRef.current = false;
-    if (clearSystem) {
-      skillsLatticePrevStateRef.current = null;
-      skillsLatticeSystemActiveRef.current = false;
-      setExternalCosmosLabelsHiddenForLattice(false);
-    }
-    skillsLatticeActiveRef.current = false;
-    setSkillsLatticeActive(false);
-    setSkillsNavHereActive(false);
-    skillsLatticeRippleRef.current.active = false;
-    skillsLatticeSelectedNodeRef.current = null;
-    setSkillsLatticeSelection(null);
-    skillsLatticeEnvelopeInsideRef.current = null;
-    skillsLatticeReturnViewRef.current = null;
-    skillsLatticeHomeViewRef.current = null;
-    vlog("🧠 Skills lattice exited");
-  }, [
-    setExternalCosmosLabelsHiddenForLattice,
-    setSkillsNavHereActive,
-    stopOrbitalPortfolioToneSequence,
-    vlog,
-  ]);
+      stopOrbitalPortfolioToneSequence();
+      entrySeq.active = false;
+      skillsLatticeNodeLabelsRef.current.forEach((label) => {
+        label.visible = false;
+      });
+      if (latticeBeacon) {
+        latticeBeacon.visible = true;
+        latticeBeacon.userData.sectionIndex = 2;
+        latticeBeacon.userData.planetName = "Skills";
+        latticeBeacon.userData.sectionId = "skills";
+      }
+      if (camera) camera.layers.disable(SKILLS_LATTICE_LAYER);
+      if (restoreShip) {
+        setFollowingSpaceship(true);
+        followingSpaceshipRef.current = true;
+        if (spaceshipRef.current) spaceshipRef.current.visible = true;
+        if (controls) controls.enabled = true;
+        if (camera && controls && skillsLatticeReturnViewRef.current) {
+          const view = skillsLatticeReturnViewRef.current;
+          controls.setLookAt(
+            view.cam.x,
+            view.cam.y,
+            view.cam.z,
+            view.target.x,
+            view.target.y,
+            view.target.z,
+            true,
+          );
+        }
+      } else {
+        setFollowingSpaceship(false);
+        followingSpaceshipRef.current = false;
+        if (spaceshipRef.current) spaceshipRef.current.visible = false;
+        if (controls) controls.enabled = true;
+      }
+      skillsLegacyBodiesRef.current.forEach((obj) => {
+        obj.visible = true;
+      });
+      skillsLatticePendingEntryRef.current = false;
+      if (clearSystem) {
+        skillsLatticePrevStateRef.current = null;
+        skillsLatticeSystemActiveRef.current = false;
+        setExternalCosmosLabelsHiddenForLattice(false);
+      }
+      skillsLatticeActiveRef.current = false;
+      setSkillsLatticeActive(false);
+      setSkillsNavHereActive(false);
+      skillsLatticeRippleRef.current.active = false;
+      skillsLatticeSelectedNodeRef.current = null;
+      setSkillsLatticeSelection(null);
+      skillsLatticeEnvelopeInsideRef.current = null;
+      skillsLatticeReturnViewRef.current = null;
+      skillsLatticeHomeViewRef.current = null;
+      vlog("🧠 Skills lattice exited");
+    },
+    [
+      setExternalCosmosLabelsHiddenForLattice,
+      setSkillsNavHereActive,
+      stopOrbitalPortfolioToneSequence,
+      vlog,
+    ],
+  );
 
   const enterSkillsLattice = useCallback(() => {
     if (skillsLatticeActiveRef.current) return;
@@ -9015,7 +10396,10 @@ export default function ResumeSpace3D({
     skillsLatticeNodeLabelsRef.current.forEach((label) => {
       label.visible = false;
     });
-    if (!skillsLatticeSystemActiveRef.current || !skillsLatticePrevStateRef.current) {
+    if (
+      !skillsLatticeSystemActiveRef.current ||
+      !skillsLatticePrevStateRef.current
+    ) {
       skillsLatticePrevStateRef.current = {
         followingSpaceship: followingSpaceshipRef.current,
         shipVisible: spaceshipRef.current?.visible ?? true,
@@ -9067,8 +10451,9 @@ export default function ResumeSpace3D({
     const worldCategoryPoints = skillsLatticeNodesRef.current
       .filter((n) => n.nodeType === "category")
       .map((n) => n.mesh.getWorldPosition(new THREE.Vector3()));
-    const worldAllPoints = skillsLatticeNodesRef.current
-      .map((n) => n.mesh.getWorldPosition(new THREE.Vector3()));
+    const worldAllPoints = skillsLatticeNodesRef.current.map((n) =>
+      n.mesh.getWorldPosition(new THREE.Vector3()),
+    );
 
     const centroid = new THREE.Vector3();
     if (worldAllPoints.length > 0) {
@@ -9111,9 +10496,13 @@ export default function ResumeSpace3D({
     const fitDistance = (maxInPlaneRadius * 1.25) / Math.tan(fovRad * 0.5);
     const finalDistance = THREE.MathUtils.clamp(fitDistance, 150, 300);
 
-    const revealCam = centroid.clone().addScaledVector(planeNormal, finalDistance * 0.78);
+    const revealCam = centroid
+      .clone()
+      .addScaledVector(planeNormal, finalDistance * 0.78);
     const revealTarget = centroid.clone().add(new THREE.Vector3(0, 2, 0));
-    const finalCam = centroid.clone().addScaledVector(planeNormal, finalDistance);
+    const finalCam = centroid
+      .clone()
+      .addScaledVector(planeNormal, finalDistance);
     const finalTarget = centroid.clone().add(new THREE.Vector3(0, 2, 0));
     const startedAt = performance.now();
     const durationMs = 7000;
@@ -9147,7 +10536,15 @@ export default function ResumeSpace3D({
         cam.lerpVectors(revealCam, finalCam, s);
         target.lerpVectors(revealTarget, finalTarget, s);
       }
-      controls.setLookAt(cam.x, cam.y, cam.z, target.x, target.y, target.z, false);
+      controls.setLookAt(
+        cam.x,
+        cam.y,
+        cam.z,
+        target.x,
+        target.y,
+        target.z,
+        false,
+      );
       if (t >= 1) {
         skillsLatticeEntrySequenceRef.current.active = false;
         skillsLatticeEntrySequenceRef.current.raf = null;
@@ -9198,7 +10595,8 @@ export default function ResumeSpace3D({
   ]);
 
   const resumeSkillsLatticeInPlace = useCallback(() => {
-    if (!skillsLatticeSystemActiveRef.current || skillsLatticeActiveRef.current) return;
+    if (!skillsLatticeSystemActiveRef.current || skillsLatticeActiveRef.current)
+      return;
     const latticeRoot = skillsLatticeRootRef.current;
     const latticeBeacon = skillsLatticeBeaconRef.current;
     const camera = sceneRef.current.camera;
@@ -9267,7 +10665,10 @@ export default function ResumeSpace3D({
   }, []);
 
   const enterAboutMemorySquare = useCallback(() => {
-    if (aboutMemorySquareActiveRef.current || aboutMemorySquareEntrySequenceRef.current.active) {
+    if (
+      aboutMemorySquareActiveRef.current ||
+      aboutMemorySquareEntrySequenceRef.current.active
+    ) {
       return;
     }
     const aboutRoot = aboutMemorySquareRootRef.current;
@@ -9288,19 +10689,24 @@ export default function ResumeSpace3D({
     aboutRoot.getWorldPosition(center);
     const rootQuat = new THREE.Quaternion();
     aboutRoot.getWorldQuaternion(rootQuat);
-    const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(rootQuat).normalize();
+    const normal = new THREE.Vector3(0, 0, 1)
+      .applyQuaternion(rootQuat)
+      .normalize();
     const startCam = camera.position.clone();
     const startDir = camera.getWorldDirection(new THREE.Vector3()).normalize();
     const startTarget = startCam.clone().addScaledVector(startDir, 1200);
-    const finalCam = center.clone()
+    const finalCam = center
+      .clone()
       .addScaledVector(normal, ABOUT_MEMORY_SQUARE_CAMERA_STOP_DIST)
       .add(new THREE.Vector3(0, 68, 0));
     const finalTarget = center.clone().add(new THREE.Vector3(0, 34, 0));
-    const controlCam = startCam.clone()
+    const controlCam = startCam
+      .clone()
       .lerp(finalCam, 0.5)
       .addScaledVector(normal, 180)
       .add(new THREE.Vector3(0, 260, 0));
-    const controlTarget = startTarget.clone()
+    const controlTarget = startTarget
+      .clone()
       .lerp(finalTarget, 0.5)
       .add(new THREE.Vector3(0, 90, 0));
     const startedAt = performance.now();
@@ -9333,16 +10739,25 @@ export default function ResumeSpace3D({
       const s = smooth(t);
       bezierPoint(cam, startCam, controlCam, finalCam, s);
       bezierPoint(target, startTarget, controlTarget, finalTarget, s);
-      controls.setLookAt(cam.x, cam.y, cam.z, target.x, target.y, target.z, false);
+      controls.setLookAt(
+        cam.x,
+        cam.y,
+        cam.z,
+        target.x,
+        target.y,
+        target.z,
+        false,
+      );
       if (t >= 1) {
         controls.enabled = true;
         seq.active = false;
         seq.raf = null;
         vlog("👨‍🚀 Memory Squares entered");
         shipLog(
-          `ABOUTDBG arrival phase=${aboutCellAnimationRef.current.phase} prepared=${aboutSlidePreparedIndexRef.current + 1} ready=${aboutSlideReadyRef.current ? 1 : 0} mats=${aboutTileContentMatsRef.current.length} maps=${
-            aboutTileContentMatsRef.current.slice(0, 4).map((m) => (m?.map ? "1" : "0")).join("")
-          }`,
+          `ABOUTDBG arrival phase=${aboutCellAnimationRef.current.phase} prepared=${aboutSlidePreparedIndexRef.current + 1} ready=${aboutSlideReadyRef.current ? 1 : 0} mats=${aboutTileContentMatsRef.current.length} maps=${aboutTileContentMatsRef.current
+            .slice(0, 4)
+            .map((m) => (m?.map ? "1" : "0"))
+            .join("")}`,
           "nav",
         );
         return;
@@ -9379,8 +10794,7 @@ export default function ResumeSpace3D({
       const panels = projectShowcasePanelsRef.current;
       if (panels.length === 0) return;
       const current = projectShowcaseFocusIndexRef.current;
-      const next =
-        (current + direction + panels.length) % panels.length;
+      const next = (current + direction + panels.length) % panels.length;
       projectShowcasePlayingRef.current = false;
       setProjectShowcasePlaying(false);
       projectShowcaseVelocityRef.current = 0;
@@ -9436,7 +10850,10 @@ export default function ResumeSpace3D({
         if (focusedName) {
           const focusedId = focusedName.toLowerCase().replace(/\s+/g, "-");
           if (focusedId === companyId) {
-            debugLog("nav", `Ignored click on same moon "${companyId}" — already orbiting`);
+            debugLog(
+              "nav",
+              `Ignored click on same moon "${companyId}" — already orbiting`,
+            );
             return;
           }
         }
@@ -9490,8 +10907,12 @@ export default function ResumeSpace3D({
         setProjectsNavHereActive(false);
         setSkillsNavHereActive(false);
       } else if (targetType === "section" && targetId === "about") {
-        dlog(`[handleQuickNav:about] setting up about journey — followShip=true, pending=true`);
-        dlog(`[handleQuickNav:about] aboutJourneyRef.current exists=${!!aboutJourneyRef.current}`);
+        dlog(
+          `[handleQuickNav:about] setting up about journey — followShip=true, pending=true`,
+        );
+        dlog(
+          `[handleQuickNav:about] aboutJourneyRef.current exists=${!!aboutJourneyRef.current}`,
+        );
         setAboutNavHereActive(true);
         setSkillsNavHereActive(false);
         setProjectsNavHereActive(false);
@@ -9500,17 +10921,22 @@ export default function ResumeSpace3D({
         if (spaceshipRef.current) spaceshipRef.current.visible = true;
         aboutJourneyPendingEntryRef.current = true;
         aboutJourneyRef.current?.beginTransit();
-        dlog(`[handleQuickNav:about] after beginTransit — pendingEntry=${aboutJourneyPendingEntryRef.current}, phase=${aboutJourneyRef.current?.phase}`);
-      } else if (
-        targetType === "section" &&
-        targetId === "projects"
-      ) {
+        dlog(
+          `[handleQuickNav:about] after beginTransit — pendingEntry=${aboutJourneyPendingEntryRef.current}, phase=${aboutJourneyRef.current?.phase}`,
+        );
+      } else if (targetType === "section" && targetId === "projects") {
         setProjectsNavHereActive(true);
         setSkillsNavHereActive(false);
-      } else if (targetType === "section" && (targetId === "skills" || targetId === SKILLS_LATTICE_NAV_ID)) {
+      } else if (
+        targetType === "section" &&
+        (targetId === "skills" || targetId === SKILLS_LATTICE_NAV_ID)
+      ) {
         setSkillsNavHereActive(true);
         setProjectsNavHereActive(false);
-      } else if (targetType === "section" && targetId !== ABOUT_MEMORY_SQUARE_NAV_ID) {
+      } else if (
+        targetType === "section" &&
+        targetId !== ABOUT_MEMORY_SQUARE_NAV_ID
+      ) {
         aboutMemorySquarePendingEntryRef.current = false;
         aboutMemorySquareActiveRef.current = false;
         aboutMemorySquareNavIntentUntilRef.current = 0;
@@ -9610,7 +11036,10 @@ export default function ResumeSpace3D({
         orbitDebug.active = active;
         if (active) {
           orbitDebug.reset();
-          shipLog("ORBIT DEBUG ON — W/S alt, A/D behind, Q/E above, R/F pitch, T/G tilt, F9 dump", "info");
+          shipLog(
+            "ORBIT DEBUG ON — W/S alt, A/D behind, Q/E above, R/F pitch, T/G tilt, F9 dump",
+            "info",
+          );
         } else {
           shipLog("ORBIT DEBUG OFF", "info");
         }
@@ -9629,23 +11058,57 @@ export default function ResumeSpace3D({
       let changed = true;
 
       switch (k) {
-        case "w": orbitDebug.altitudeMult += STEP_SMALL; break;
-        case "s": orbitDebug.altitudeMult = Math.max(0.05, orbitDebug.altitudeMult - STEP_SMALL); break;
-        case "a": orbitDebug.camBehind += STEP_SMALL; break;
-        case "d": orbitDebug.camBehind = Math.max(0.05, orbitDebug.camBehind - STEP_SMALL); break;
-        case "q": orbitDebug.camAbove += STEP_SMALL; break;
-        case "e": orbitDebug.camAbove = Math.max(0, orbitDebug.camAbove - STEP_SMALL); break;
-        case "r": orbitDebug.pitchBlend = Math.min(1, orbitDebug.pitchBlend + STEP_SMALL); break;
-        case "f": orbitDebug.pitchBlend = Math.max(0, orbitDebug.pitchBlend - STEP_SMALL); break;
-        case "t": orbitDebug.noseTilt -= STEP_TILT; break;
-        case "g": orbitDebug.noseTilt += STEP_TILT; break;
-        default: changed = false;
+        case "w":
+          orbitDebug.altitudeMult += STEP_SMALL;
+          break;
+        case "s":
+          orbitDebug.altitudeMult = Math.max(
+            0.05,
+            orbitDebug.altitudeMult - STEP_SMALL,
+          );
+          break;
+        case "a":
+          orbitDebug.camBehind += STEP_SMALL;
+          break;
+        case "d":
+          orbitDebug.camBehind = Math.max(
+            0.05,
+            orbitDebug.camBehind - STEP_SMALL,
+          );
+          break;
+        case "q":
+          orbitDebug.camAbove += STEP_SMALL;
+          break;
+        case "e":
+          orbitDebug.camAbove = Math.max(0, orbitDebug.camAbove - STEP_SMALL);
+          break;
+        case "r":
+          orbitDebug.pitchBlend = Math.min(
+            1,
+            orbitDebug.pitchBlend + STEP_SMALL,
+          );
+          break;
+        case "f":
+          orbitDebug.pitchBlend = Math.max(
+            0,
+            orbitDebug.pitchBlend - STEP_SMALL,
+          );
+          break;
+        case "t":
+          orbitDebug.noseTilt -= STEP_TILT;
+          break;
+        case "g":
+          orbitDebug.noseTilt += STEP_TILT;
+          break;
+        default:
+          changed = false;
       }
 
       if (changed) {
         e.preventDefault();
-        debugLog("orbitDbg",
-          `alt=${orbitDebug.altitudeMult.toFixed(3)} behind=${orbitDebug.camBehind.toFixed(3)} above=${orbitDebug.camAbove.toFixed(3)} pitch=${orbitDebug.pitchBlend.toFixed(3)} tilt=${orbitDebug.noseTilt.toFixed(2)}`
+        debugLog(
+          "orbitDbg",
+          `alt=${orbitDebug.altitudeMult.toFixed(3)} behind=${orbitDebug.camBehind.toFixed(3)} above=${orbitDebug.camAbove.toFixed(3)} pitch=${orbitDebug.pitchBlend.toFixed(3)} tilt=${orbitDebug.noseTilt.toFixed(2)}`,
         );
       }
     };
@@ -9722,12 +11185,18 @@ export default function ResumeSpace3D({
       }, 22000);
     };
 
-    const unsubscribeHover = subscribeCosmosEvent("ship:cinematic-hover", () => {
-      engageShipAndRevealUI("event:ship-cinematic-hover");
-    });
-    const unsubscribeStarted = subscribeCosmosEvent("ship:cinematic-started", () => {
-      armHardTimeout();
-    });
+    const unsubscribeHover = subscribeCosmosEvent(
+      "ship:cinematic-hover",
+      () => {
+        engageShipAndRevealUI("event:ship-cinematic-hover");
+      },
+    );
+    const unsubscribeStarted = subscribeCosmosEvent(
+      "ship:cinematic-started",
+      () => {
+        armHardTimeout();
+      },
+    );
     const unsubscribeCameraCompleted = subscribeCosmosEvent(
       "intro:camera-completed",
       () => {
@@ -9884,7 +11353,9 @@ export default function ResumeSpace3D({
       const controls = sceneRef.current.controls;
       if (!falcon || !camera || !controls) {
         if (source === "console") {
-          dlog("❌ inspectFalcon() unavailable — Falcon/camera/controls not ready");
+          dlog(
+            "❌ inspectFalcon() unavailable — Falcon/camera/controls not ready",
+          );
         }
         return false;
       }
@@ -10005,7 +11476,10 @@ export default function ResumeSpace3D({
         return false;
       }
       if (!isAboutElevatorFlowContextActive()) {
-        shipLog("About flow overlay is available only in About elevator mode.", "error");
+        shipLog(
+          "About flow overlay is available only in About elevator mode.",
+          "error",
+        );
         return false;
       }
       aboutFlowOverlayEnabledRef.current = next;
@@ -10060,15 +11534,60 @@ export default function ResumeSpace3D({
       }
     };
     return [
-      { id: "locate-falcon", label: "locateFalcon()", hint: "Beacon to Millennium Falcon", onRun: () => invoke("locateFalcon") },
-      { id: "inspect-falcon", label: "inspectFalcon()", hint: "Orbit/zoom inspect camera around Falcon", onRun: () => invoke("inspectFalcon") },
-      { id: "inspect-falcon-exit", label: "exitInspectFalcon()", hint: "Exit Falcon inspect mode", onRun: () => invoke("exitInspectFalcon") },
-      { id: "locate-sd", label: "locateSD()", hint: "Beacon to Star Destroyer", onRun: () => invoke("locateSD") },
-      { id: "shadow-sd", label: "shadowSD()", hint: "Lock camera to Star Destroyer", onRun: () => invoke("shadowSD") },
-      { id: "unshadow-sd", label: "unShadowSD()", hint: "Release SD camera lock", onRun: () => invoke("unShadowSD") },
-      { id: "sd-status", label: "sdStatus()", hint: "Print SD status to console", onRun: () => invoke("sdStatus") },
-      { id: "sd-on", label: "sdAutonomyOn()", hint: "Enable SD autonomy", onRun: () => invoke("sdAutonomyOn") },
-      { id: "sd-off", label: "sdAutonomyOff()", hint: "Disable SD autonomy", onRun: () => invoke("sdAutonomyOff") },
+      {
+        id: "locate-falcon",
+        label: "locateFalcon()",
+        hint: "Beacon to Millennium Falcon",
+        onRun: () => invoke("locateFalcon"),
+      },
+      {
+        id: "inspect-falcon",
+        label: "inspectFalcon()",
+        hint: "Orbit/zoom inspect camera around Falcon",
+        onRun: () => invoke("inspectFalcon"),
+      },
+      {
+        id: "inspect-falcon-exit",
+        label: "exitInspectFalcon()",
+        hint: "Exit Falcon inspect mode",
+        onRun: () => invoke("exitInspectFalcon"),
+      },
+      {
+        id: "locate-sd",
+        label: "locateSD()",
+        hint: "Beacon to Star Destroyer",
+        onRun: () => invoke("locateSD"),
+      },
+      {
+        id: "shadow-sd",
+        label: "shadowSD()",
+        hint: "Lock camera to Star Destroyer",
+        onRun: () => invoke("shadowSD"),
+      },
+      {
+        id: "unshadow-sd",
+        label: "unShadowSD()",
+        hint: "Release SD camera lock",
+        onRun: () => invoke("unShadowSD"),
+      },
+      {
+        id: "sd-status",
+        label: "sdStatus()",
+        hint: "Print SD status to console",
+        onRun: () => invoke("sdStatus"),
+      },
+      {
+        id: "sd-on",
+        label: "sdAutonomyOn()",
+        hint: "Enable SD autonomy",
+        onRun: () => invoke("sdAutonomyOn"),
+      },
+      {
+        id: "sd-off",
+        label: "sdAutonomyOff()",
+        hint: "Disable SD autonomy",
+        onRun: () => invoke("sdAutonomyOff"),
+      },
       {
         id: "send-sd",
         label: "sendSD(name)",
@@ -10079,8 +11598,18 @@ export default function ResumeSpace3D({
           invoke("sendSD", name);
         },
       },
-      { id: "debug-cam", label: "debugCamera()", hint: "Enter free debug camera mode", onRun: () => invoke("debugCamera") },
-      { id: "debug-cam-exit", label: "exitDebugCamera()", hint: "Exit debug camera mode", onRun: () => invoke("exitDebugCamera") },
+      {
+        id: "debug-cam",
+        label: "debugCamera()",
+        hint: "Enter free debug camera mode",
+        onRun: () => invoke("debugCamera"),
+      },
+      {
+        id: "debug-cam-exit",
+        label: "exitDebugCamera()",
+        hint: "Exit debug camera mode",
+        onRun: () => invoke("exitDebugCamera"),
+      },
       {
         id: "toggle-orbit-sign-tuning",
         label: "toggleOrbitSignTuning()",
@@ -10124,7 +11653,10 @@ export default function ResumeSpace3D({
             return;
           }
           if (!overlayContent) {
-            shipLog("No moon visit content loaded yet for drone summon", "error");
+            shipLog(
+              "No moon visit content loaded yet for drone summon",
+              "error",
+            );
             return;
           }
           setDroneInspectMode(false);
@@ -10138,7 +11670,10 @@ export default function ResumeSpace3D({
         hint: "Summon drone and keep it on screen",
         onRun: () => {
           if (orbitPhase !== "orbiting" || !focusedMoonRef.current) {
-            shipLog("inspectMoonDrone() only works during moon visits", "error");
+            shipLog(
+              "inspectMoonDrone() only works during moon visits",
+              "error",
+            );
             return;
           }
           setDroneInspectMode(true);
@@ -10171,10 +11706,24 @@ export default function ResumeSpace3D({
       cancelAboutMemorySquareEntrySequence();
     }
     if (nextTargetId !== "about") {
-      if (aboutJourneyRef.current && aboutJourneyRef.current.phase !== AboutJourneyPhase.IDLE) {
-        aboutJourneyRef.current.exit();
-        restoredShip = true;
-        interrupted = true;
+      const aboutJourney = aboutJourneyRef.current;
+      if (aboutJourney && aboutJourney.phase !== AboutJourneyPhase.IDLE) {
+        const shouldDisperseOnRetarget =
+          aboutJourney.phase === AboutJourneyPhase.PATH_READY ||
+          aboutJourney.phase === AboutJourneyPhase.PATH_TRAVEL;
+
+        if (shouldDisperseOnRetarget) {
+          // Keep the completed path visible until the Falcon is intentionally
+          // sent to another destination, then disperse as part of that handoff.
+          aboutJourney.beginPathTravel();
+          aboutJourney.beginPathDispersal("falcon-retarget");
+          restoredShip = true;
+          interrupted = true;
+        } else {
+          aboutJourney.exit();
+          restoredShip = true;
+          interrupted = true;
+        }
       }
       aboutJourneyPendingEntryRef.current = false;
     }
@@ -10209,7 +11758,10 @@ export default function ResumeSpace3D({
         restoredShip = true;
       }
     }
-    if (nextTargetId !== "portfolio" && nextTargetId !== ORBITAL_PORTFOLIO_NAV_ID) {
+    if (
+      nextTargetId !== "portfolio" &&
+      nextTargetId !== ORBITAL_PORTFOLIO_NAV_ID
+    ) {
       setPortfolioNavHereActive(false);
       pendingOrbitalPortfolioEntryRef.current = false;
       orbitalPortfolioAwaitingArrivalRef.current = false;
@@ -10282,9 +11834,11 @@ export default function ResumeSpace3D({
         aboutMemorySquareNavIntentUntilRef.current = performance.now() + 20000;
         const aboutAnchor = aboutMemorySquareWorldAnchorRef.current;
         const ship = spaceshipRef.current;
-        const alreadyNearAbout = !!aboutAnchor
-          && !!ship
-          && ship.position.distanceTo(aboutAnchor) <= ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST;
+        const alreadyNearAbout =
+          !!aboutAnchor &&
+          !!ship &&
+          ship.position.distanceTo(aboutAnchor) <=
+            ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST;
         if (alreadyNearAbout) {
           enterAboutMemorySquare();
         } else {
@@ -10309,7 +11863,9 @@ export default function ResumeSpace3D({
         aboutJourneyPendingEntryRef.current = true;
         aboutJourneyRef.current?.beginTransit();
         handleQuickNav("about", "section");
-        dlog(`[handleCockpitNavigate:about] after — pending=${aboutJourneyPendingEntryRef.current} phase=${aboutJourneyRef.current?.phase}`);
+        dlog(
+          `[handleCockpitNavigate:about] after — pending=${aboutJourneyPendingEntryRef.current} phase=${aboutJourneyRef.current?.phase}`,
+        );
         return;
       }
       if (targetId === "projects" || targetId === PROJECT_SHOWCASE_NAV_ID) {
@@ -10350,7 +11906,9 @@ export default function ResumeSpace3D({
           projectShowcaseAwaitingProjectsArrivalRef.current = true;
           projectShowcaseSawProjectsTravelRef.current = false;
           handleQuickNav("projects", "section");
-          vlog("🛰️ Routing to Projects — Project Showcase will open on arrival");
+          vlog(
+            "🛰️ Routing to Projects — Project Showcase will open on arrival",
+          );
         }
         return;
       }
@@ -10384,7 +11942,8 @@ export default function ResumeSpace3D({
         const nearPortfolioAnchor =
           !!portfolioAnchor &&
           !!shipPos &&
-          shipPos.distanceTo(portfolioAnchor) <= ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST;
+          shipPos.distanceTo(portfolioAnchor) <=
+            ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST;
         const atPortfolio =
           currentNavigationTarget === "portfolio" &&
           navigationDistance === null &&
@@ -10399,7 +11958,9 @@ export default function ResumeSpace3D({
           orbitalPortfolioAwaitingArrivalRef.current = true;
           orbitalPortfolioSawTravelRef.current = false;
           handleQuickNav("portfolio", "section");
-          vlog("✨ Routing to Portfolio — Orbital Registry will open on arrival");
+          vlog(
+            "✨ Routing to Portfolio — Orbital Registry will open on arrival",
+          );
         }
         return;
       }
@@ -10440,7 +12001,10 @@ export default function ResumeSpace3D({
     if (projectShowcaseAwaitingProjectsArrivalRef.current) {
       const hallwayNavTarget =
         hallwayContentModeRef.current === "about" ? "about" : "projects";
-      if (currentNavigationTarget === hallwayNavTarget && navigationDistance !== null) {
+      if (
+        currentNavigationTarget === hallwayNavTarget &&
+        navigationDistance !== null
+      ) {
         projectShowcaseSawProjectsTravelRef.current = true;
       }
       if (
@@ -10473,8 +12037,7 @@ export default function ResumeSpace3D({
       !!anchor &&
       ship.position.distanceTo(anchor) <= ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST;
     const arrivedByPhase =
-      navigationTravelPhase === "arrived" &&
-      navigationDistance === null;
+      navigationTravelPhase === "arrived" && navigationDistance === null;
     const signature =
       `near=${nearAnchor ? 1 : 0}` +
       ` phaseArrived=${arrivedByPhase ? 1 : 0}` +
@@ -10489,7 +12052,10 @@ export default function ResumeSpace3D({
     }
     if (!nearAnchor && !arrivedByPhase) return;
     if (orbitalPortfolioAwaitingArrivalRef.current) {
-      if (currentNavigationTarget === "portfolio" && navigationDistance !== null) {
+      if (
+        currentNavigationTarget === "portfolio" &&
+        navigationDistance !== null
+      ) {
         orbitalPortfolioSawTravelRef.current = true;
       }
       if (
@@ -10539,15 +12105,19 @@ export default function ResumeSpace3D({
   }, [orbitalPortfolioActive]);
 
   useEffect(() => {
-    if (!skillsLatticePendingEntryRef.current || skillsLatticeActiveRef.current) {
+    if (
+      !skillsLatticePendingEntryRef.current ||
+      skillsLatticeActiveRef.current
+    ) {
       return;
     }
     const ship = spaceshipRef.current;
     const anchor = skillsLatticeWorldAnchorRef.current;
-    const arrivedAtSkills = !!ship
-      && !!anchor
-      && ship.position.distanceTo(anchor) <= SKILLS_LATTICE_ENTRY_TRIGGER_DIST
-      && navigationDistance === null;
+    const arrivedAtSkills =
+      !!ship &&
+      !!anchor &&
+      ship.position.distanceTo(anchor) <= SKILLS_LATTICE_ENTRY_TRIGGER_DIST &&
+      navigationDistance === null;
     if (arrivedAtSkills) {
       // Continuous handoff: lightspeed ends outside shell and immediately
       // transitions to non-ship glide into lattice (no artificial pause).
@@ -10566,15 +12136,17 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     if (
-      aboutMemorySquareActiveRef.current
-      || aboutMemorySquareEntrySequenceRef.current.active
+      aboutMemorySquareActiveRef.current ||
+      aboutMemorySquareEntrySequenceRef.current.active
     ) {
       return;
     }
     const ship = spaceshipRef.current;
     const anchor = aboutMemorySquareWorldAnchorRef.current;
     if (!ship || !anchor) return;
-    const nearAbout = ship.position.distanceTo(anchor) <= ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST;
+    const nearAbout =
+      ship.position.distanceTo(anchor) <=
+      ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST;
     if (!nearAbout) return;
     const now = performance.now();
     const hasIntent =
@@ -10587,11 +12159,11 @@ export default function ResumeSpace3D({
   useEffect(() => {
     const prev = aboutMemorySquarePrevNavTargetRef.current;
     if (
-      prev === ABOUT_MEMORY_SQUARE_NAV_ID
-      && currentNavigationTarget === null
-      && !aboutMemorySquareActiveRef.current
-      && !aboutMemorySquareEntrySequenceRef.current.active
-      && performance.now() <= aboutMemorySquareNavIntentUntilRef.current
+      prev === ABOUT_MEMORY_SQUARE_NAV_ID &&
+      currentNavigationTarget === null &&
+      !aboutMemorySquareActiveRef.current &&
+      !aboutMemorySquareEntrySequenceRef.current.active &&
+      performance.now() <= aboutMemorySquareNavIntentUntilRef.current
     ) {
       enterAboutMemorySquare();
     }
@@ -10663,7 +12235,9 @@ export default function ResumeSpace3D({
     };
     fadeRaf = requestAnimationFrame(tickFade);
     introStartConsumedRef.current = true;
-    dwarn("[PERF:intro] intro sequence STARTING (isLoading=false, sceneReady=true)");
+    dwarn(
+      "[PERF:intro] intro sequence STARTING (isLoading=false, sceneReady=true)",
+    );
     if (CAMERA_TRACE_ENABLED) {
       shipLog("[CAMTRACE] invoking camera-intro start + fade start", "info");
     }
@@ -10731,7 +12305,9 @@ export default function ResumeSpace3D({
         }
         // After max retries, DOM refs still not ready — state flags are
         // already true so elements will render with default visibility.
-        dwarn("[UI-SAFEGUARD] Startup UI refs unavailable after retries; elements visible via state flags");
+        dwarn(
+          "[UI-SAFEGUARD] Startup UI refs unavailable after retries; elements visible via state flags",
+        );
         return;
       }
       gsap.set(destinationsEl, { x: -200, opacity: 0 });
@@ -10774,7 +12350,10 @@ export default function ResumeSpace3D({
   }, [clearStartupUiRevealTimeline]);
   runStartupUiRevealRef.current = runStartupUiReveal;
 
-  useEffect(() => () => clearStartupUiRevealTimeline(), [clearStartupUiRevealTimeline]);
+  useEffect(
+    () => () => clearStartupUiRevealTimeline(),
+    [clearStartupUiRevealTimeline],
+  );
 
   // Watchdog: if the ship is engaged but startup UI flags are still false
   // after a short delay, force them on. Catches any edge case where the
@@ -10783,7 +12362,8 @@ export default function ResumeSpace3D({
     if (shipUIPhase !== "ship-engaged") return;
     const watchdog = window.setTimeout(() => {
       setStartupDestinationsVisible((prev) => {
-        if (!prev) dwarn("[UI-SAFEGUARD] Watchdog forcing destinations visible");
+        if (!prev)
+          dwarn("[UI-SAFEGUARD] Watchdog forcing destinations visible");
         return true;
       });
       setStartupConsoleVisible((prev) => {
@@ -10854,13 +12434,16 @@ export default function ResumeSpace3D({
     return () => window.clearInterval(intervalId);
   }, [isLoading, isOrbiting, sceneReady, shipLog]);
 
-  const goToAboutSlide = useCallback((direction: -1 | 1) => {
-    if (aboutSlides.length === 0) return;
-    setAboutActiveSlideIndex((prev) => {
-      const total = aboutSlides.length;
-      return (prev + direction + total) % total;
-    });
-  }, [aboutSlides.length]);
+  const goToAboutSlide = useCallback(
+    (direction: -1 | 1) => {
+      if (aboutSlides.length === 0) return;
+      setAboutActiveSlideIndex((prev) => {
+        const total = aboutSlides.length;
+        return (prev + direction + total) % total;
+      });
+    },
+    [aboutSlides.length],
+  );
 
   const stampAboutContentIntoCells = useCallback(() => {
     const revealAttr = aboutCellRevealAttrRef.current;
@@ -10883,8 +12466,8 @@ export default function ResumeSpace3D({
   const triggerAboutSwarmBreakApart = useCallback(() => {
     const run = async () => {
       if (
-        aboutSlidePreparedIndexRef.current !== aboutActiveSlideIndex
-        || !aboutSlideReadyRef.current
+        aboutSlidePreparedIndexRef.current !== aboutActiveSlideIndex ||
+        !aboutSlideReadyRef.current
       ) {
         aboutSlideReadyRef.current = false;
         await prepareAboutSlide(aboutActiveSlideIndex);
@@ -10924,12 +12507,20 @@ export default function ResumeSpace3D({
 
   async function prepareAboutSlide(slideIndex: number) {
     if (!aboutSlides.length) return;
-    const slide = aboutSlides[((slideIndex % aboutSlides.length) + aboutSlides.length) % aboutSlides.length];
-    const blocks = Array.from({ length: 4 }, (_, i) => slide.blocks[i] ?? {
-      type: "text" as const,
-      title: "Placeholder",
-      body: "Content incoming.",
-    });
+    const slide =
+      aboutSlides[
+        ((slideIndex % aboutSlides.length) + aboutSlides.length) %
+          aboutSlides.length
+      ];
+    const blocks = Array.from(
+      { length: 4 },
+      (_, i) =>
+        slide.blocks[i] ?? {
+          type: "text" as const,
+          title: "Placeholder",
+          body: "Content incoming.",
+        },
+    );
     const canvasSize = 384;
     const canvases = blocks.map((block, idx) => {
       const canvas = document.createElement("canvas");
@@ -10981,11 +12572,18 @@ export default function ResumeSpace3D({
       return canvas;
     });
 
-    const applyCanvasesToSlideTextures = (inputCanvases: HTMLCanvasElement[]) => {
+    const applyCanvasesToSlideTextures = (
+      inputCanvases: HTMLCanvasElement[],
+    ) => {
       const contentMats = aboutTileContentMatsRef.current;
       const shaderMat = aboutCellShaderMaterialRef.current;
       const prevTextures = aboutSlideTexturesRef.current;
-      const nextTextures: Array<THREE.Texture | null> = [null, null, null, null];
+      const nextTextures: Array<THREE.Texture | null> = [
+        null,
+        null,
+        null,
+        null,
+      ];
       for (let i = 0; i < Math.min(4, contentMats.length); i += 1) {
         const mat = contentMats[i];
         if (!mat) continue;
@@ -11013,49 +12611,62 @@ export default function ResumeSpace3D({
     // 1) Apply immediate placeholders/text so slides are visible on load.
     applyCanvasesToSlideTextures(canvases);
 
-    await Promise.all(blocks.map(async (block, idx) => {
-      if (block.type !== "image" || !block.src) return;
-      const canvas = canvases[idx];
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      let img = aboutImageCacheRef.current.get(block.src);
-      if (!img) {
-        img = new Image();
-        img.src = block.src;
-        await new Promise<void>((resolve) => {
-          img!.onload = () => resolve();
-          img!.onerror = () => resolve();
-        });
-        aboutImageCacheRef.current.set(block.src, img);
-      }
-      const iw = Math.max(1, img.naturalWidth || canvasSize);
-      const ih = Math.max(1, img.naturalHeight || canvasSize);
-      const scale = Math.max(canvasSize / iw, canvasSize / ih);
-      const dw = iw * scale;
-      const dh = ih * scale;
-      const dx = (canvasSize - dw) * 0.5;
-      const dy = (canvasSize - dh) * 0.5;
-      ctx.clearRect(0, 0, canvasSize, canvasSize);
-      try {
-        ctx.drawImage(img, dx, dy, dw, dh);
-      } catch {
-        // Keep fallback gradient/title when image decode fails.
-      }
-      ctx.fillStyle = "rgba(8,18,32,0.18)";
-      ctx.fillRect(0, 0, canvasSize, canvasSize);
-      ctx.fillStyle = "#f4fbff";
-      ctx.font = "700 30px Arial";
-      ctx.fillText(block.title ?? "Image", 20, canvasSize - 28, canvasSize - 40);
-    }));
+    await Promise.all(
+      blocks.map(async (block, idx) => {
+        if (block.type !== "image" || !block.src) return;
+        const canvas = canvases[idx];
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        let img = aboutImageCacheRef.current.get(block.src);
+        if (!img) {
+          img = new Image();
+          img.src = block.src;
+          await new Promise<void>((resolve) => {
+            img!.onload = () => resolve();
+            img!.onerror = () => resolve();
+          });
+          aboutImageCacheRef.current.set(block.src, img);
+        }
+        const iw = Math.max(1, img.naturalWidth || canvasSize);
+        const ih = Math.max(1, img.naturalHeight || canvasSize);
+        const scale = Math.max(canvasSize / iw, canvasSize / ih);
+        const dw = iw * scale;
+        const dh = ih * scale;
+        const dx = (canvasSize - dw) * 0.5;
+        const dy = (canvasSize - dh) * 0.5;
+        ctx.clearRect(0, 0, canvasSize, canvasSize);
+        try {
+          ctx.drawImage(img, dx, dy, dw, dh);
+        } catch {
+          // Keep fallback gradient/title when image decode fails.
+        }
+        ctx.fillStyle = "rgba(8,18,32,0.18)";
+        ctx.fillRect(0, 0, canvasSize, canvasSize);
+        ctx.fillStyle = "#f4fbff";
+        ctx.font = "700 30px Arial";
+        ctx.fillText(
+          block.title ?? "Image",
+          20,
+          canvasSize - 28,
+          canvasSize - 40,
+        );
+      }),
+    );
 
     // 2) Re-apply with loaded image content once available.
     applyCanvasesToSlideTextures(canvases);
 
-    const images = canvases.map((canvas) => canvas.getContext("2d")!.getImageData(0, 0, canvasSize, canvasSize).data);
+    const images = canvases.map(
+      (canvas) =>
+        canvas.getContext("2d")!.getImageData(0, 0, canvasSize, canvasSize)
+          .data,
+    );
     const targetColors = aboutCellTargetColorsRef.current;
     const revealAt = aboutCellRevealAtMsRef.current;
     const cellOrderNoise = (u: number, v: number) =>
-      Math.abs(Math.sin((u * 12.9898 + v * 78.233 + slideIndex * 17.77) * 43758.5453)) % 1;
+      Math.abs(
+        Math.sin((u * 12.9898 + v * 78.233 + slideIndex * 17.77) * 43758.5453),
+      ) % 1;
     const pattern = slide.reveal?.pattern ?? "scanline";
     const blockStagger = Math.max(120, slide.reveal?.blockStaggerMs ?? 360);
     const cellReveal = Math.max(900, slide.reveal?.cellRevealMs ?? 1700);
@@ -11065,8 +12676,16 @@ export default function ResumeSpace3D({
     const baseColors = aboutCellBaseColorsRef.current;
     slots.forEach((slot, slotIdx) => {
       const blockIdx = THREE.MathUtils.clamp(slot.tileIndex, 0, 3);
-      const px = THREE.MathUtils.clamp(Math.floor(slot.u * (canvasSize - 1)), 0, canvasSize - 1);
-      const py = THREE.MathUtils.clamp(Math.floor((1 - slot.v) * (canvasSize - 1)), 0, canvasSize - 1);
+      const px = THREE.MathUtils.clamp(
+        Math.floor(slot.u * (canvasSize - 1)),
+        0,
+        canvasSize - 1,
+      );
+      const py = THREE.MathUtils.clamp(
+        Math.floor((1 - slot.v) * (canvasSize - 1)),
+        0,
+        canvasSize - 1,
+      );
       const p = (py * canvasSize + px) * 4;
       const data = images[blockIdx];
       const r = data[p] / 255;
@@ -11084,19 +12703,28 @@ export default function ResumeSpace3D({
       if (pattern === "center-out") {
         const dx = slot.u - 0.5;
         const dy = slot.v - 0.5;
-        localOrder = THREE.MathUtils.clamp(Math.sqrt(dx * dx + dy * dy) / 0.7072, 0, 1);
+        localOrder = THREE.MathUtils.clamp(
+          Math.sqrt(dx * dx + dy * dy) / 0.7072,
+          0,
+          1,
+        );
       } else if (pattern === "spiral") {
         const dx = slot.u - 0.5;
         const dy = slot.v - 0.5;
         const angle = (Math.atan2(dy, dx) + Math.PI) / (Math.PI * 2);
-        const radius = THREE.MathUtils.clamp(Math.sqrt(dx * dx + dy * dy) / 0.7072, 0, 1);
+        const radius = THREE.MathUtils.clamp(
+          Math.sqrt(dx * dx + dy * dy) / 0.7072,
+          0,
+          1,
+        );
         localOrder = (angle * 0.5 + radius * 0.5) % 1;
       } else if (pattern === "noise-cluster") {
         localOrder = cellOrderNoise(slot.u, slot.v);
       }
-      revealAt[slotIdx] = slot.face === "front"
-        ? blockIdx * blockStagger + localOrder * cellReveal
-        : 0;
+      revealAt[slotIdx] =
+        slot.face === "front"
+          ? blockIdx * blockStagger + localOrder * cellReveal
+          : 0;
       if (!baseColors[slotIdx]) baseColors[slotIdx] = new THREE.Color(0x8cbcff);
     });
   }
@@ -11105,11 +12733,13 @@ export default function ResumeSpace3D({
     if (aboutSlides.length === 0) return;
     if (aboutSlidePreparePendingRef.current) return;
     if (aboutTileContentMatsRef.current.length < 4) return;
-    const hasAllMaps = aboutTileContentMatsRef.current.slice(0, 4).every((m) => !!m?.map);
+    const hasAllMaps = aboutTileContentMatsRef.current
+      .slice(0, 4)
+      .every((m) => !!m?.map);
     const needsPrepare =
-      aboutSlidePreparedIndexRef.current !== aboutActiveSlideIndex
-      || !aboutSlideReadyRef.current
-      || !hasAllMaps;
+      aboutSlidePreparedIndexRef.current !== aboutActiveSlideIndex ||
+      !aboutSlideReadyRef.current ||
+      !hasAllMaps;
     if (!needsPrepare) return;
     shipLog(
       `ABOUTDBG prepare:start slide=${aboutActiveSlideIndex + 1} mats=${aboutTileContentMatsRef.current.length} maps=${hasAllMaps ? "yes" : "no"}`,
@@ -11117,18 +12747,21 @@ export default function ResumeSpace3D({
     );
     aboutSlidePreparePendingRef.current = true;
     aboutSlideReadyRef.current = false;
-    void prepareAboutSlide(aboutActiveSlideIndex).then(() => {
-      aboutSlidePreparedIndexRef.current = aboutActiveSlideIndex;
-      aboutSlideReadyRef.current = true;
-      shipLog(
-        `ABOUTDBG prepare:done slide=${aboutActiveSlideIndex + 1} maps=${
-          aboutTileContentMatsRef.current.slice(0, 4).map((m) => (m?.map ? "1" : "0")).join("")
-        }`,
-        "nav",
-      );
-    }).finally(() => {
-      aboutSlidePreparePendingRef.current = false;
-    });
+    void prepareAboutSlide(aboutActiveSlideIndex)
+      .then(() => {
+        aboutSlidePreparedIndexRef.current = aboutActiveSlideIndex;
+        aboutSlideReadyRef.current = true;
+        shipLog(
+          `ABOUTDBG prepare:done slide=${aboutActiveSlideIndex + 1} maps=${aboutTileContentMatsRef.current
+            .slice(0, 4)
+            .map((m) => (m?.map ? "1" : "0"))
+            .join("")}`,
+          "nav",
+        );
+      })
+      .finally(() => {
+        aboutSlidePreparePendingRef.current = false;
+      });
   }, [aboutSlides.length, aboutActiveSlideIndex, shipLog]);
 
   useEffect(() => {
@@ -11140,12 +12773,14 @@ export default function ResumeSpace3D({
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const shouldShow =
-        aboutMemorySquareActiveRef.current
-        && !aboutMemorySquareEntrySequenceRef.current.active
-        && !projectShowcaseActiveRef.current
-        && !orbitalPortfolioActiveRef.current
-        && !skillsLatticeActiveRef.current;
-      setAboutSwarmTriggerVisible((prev) => (prev === shouldShow ? prev : shouldShow));
+        aboutMemorySquareActiveRef.current &&
+        !aboutMemorySquareEntrySequenceRef.current.active &&
+        !projectShowcaseActiveRef.current &&
+        !orbitalPortfolioActiveRef.current &&
+        !skillsLatticeActiveRef.current;
+      setAboutSwarmTriggerVisible((prev) =>
+        prev === shouldShow ? prev : shouldShow,
+      );
     };
     raf = requestAnimationFrame(tick);
     return () => {
@@ -11265,16 +12900,21 @@ export default function ResumeSpace3D({
     const tick = () => {
       raf = requestAnimationFrame(tick);
       if (
-        aboutSlidePreparedIndexRef.current !== aboutActiveSlideIndex
-        || !aboutSlideReadyRef.current
-        || !aboutTileContentMatsRef.current.slice(0, 4).every((m) => !!m?.map)
+        aboutSlidePreparedIndexRef.current !== aboutActiveSlideIndex ||
+        !aboutSlideReadyRef.current ||
+        !aboutTileContentMatsRef.current.slice(0, 4).every((m) => !!m?.map)
       ) {
         ensureAboutSlidePrepared();
       }
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [sceneReady, aboutSlides.length, aboutActiveSlideIndex, ensureAboutSlidePrepared]);
+  }, [
+    sceneReady,
+    aboutSlides.length,
+    aboutActiveSlideIndex,
+    ensureAboutSlidePrepared,
+  ]);
 
   useEffect(() => {
     if (!sceneReady) return;
@@ -11313,8 +12953,10 @@ export default function ResumeSpace3D({
       const runtime = aboutCellAnimationRef.current;
       runtime.phase = phase;
       runtime.phaseStartedAt = now;
-      if (phase === "assembledHold") runtime.phaseDurationMs = ABOUT_SWARM_ASSEMBLED_HOLD_MS;
-      if (phase === "breakOut") runtime.phaseDurationMs = ABOUT_SWARM_BREAKOUT_MS;
+      if (phase === "assembledHold")
+        runtime.phaseDurationMs = ABOUT_SWARM_ASSEMBLED_HOLD_MS;
+      if (phase === "breakOut")
+        runtime.phaseDurationMs = ABOUT_SWARM_BREAKOUT_MS;
       if (phase === "swarm") {
         runtime.swarmDurationMs = THREE.MathUtils.lerp(
           ABOUT_SWARM_MIN_MS,
@@ -11351,7 +12993,9 @@ export default function ResumeSpace3D({
       const records = aboutCellRecordsRef.current;
       // Per breakout cycle, each of the 4 large panels randomly picks one spin style:
       // 0 = graceful twirl, 1 = aggressive tumble.
-      aboutPanelSpinStyleRef.current = Array.from({ length: 4 }, () => (Math.random() < 0.5 ? 0 : 1));
+      aboutPanelSpinStyleRef.current = Array.from({ length: 4 }, () =>
+        Math.random() < 0.5 ? 0 : 1,
+      );
       slotCenter.set(0, 0, 0);
       slots.forEach((slot) => slotCenter.add(slot.worldPosition));
       slotCenter.multiplyScalar(1 / Math.max(1, slots.length));
@@ -11360,16 +13004,21 @@ export default function ResumeSpace3D({
         const sourceSlot = slots[rec.sourceSlotIndex] ?? slot;
         const panelIdx = THREE.MathUtils.clamp(sourceSlot.tileIndex, 0, 3);
         const panelSpinStyle = aboutPanelSpinStyleRef.current[panelIdx] ?? 0;
-        const spinRateScale = panelSpinStyle === 1
-          ? (3.2 + Math.random() * 2.5)
-          : (1.25 + Math.random() * 0.95);
+        const spinRateScale =
+          panelSpinStyle === 1
+            ? 3.2 + Math.random() * 2.5
+            : 1.25 + Math.random() * 0.95;
         rec.position.copy(slot.worldPosition);
         rec.quaternion.copy(slot.worldQuaternion);
         rec.velocity.set(0, 0, 0);
         toCenter.subVectors(rec.position, slotCenter);
         const baseLen = Math.max(60, toCenter.length());
         if (toCenter.lengthSq() < 1e-6) {
-          toCenter.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
+          toCenter.set(
+            Math.random() - 0.5,
+            Math.random() - 0.5,
+            Math.random() - 0.5,
+          );
         }
         toCenter.normalize();
         randomDir.set(
@@ -11405,18 +13054,30 @@ export default function ResumeSpace3D({
           (Math.random() * 2 - 1) * ABOUT_SPIN_MAX,
         );
         rec.spinAxisPrimary
-          .set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1)
+          .set(
+            Math.random() * 2 - 1,
+            Math.random() * 2 - 1,
+            Math.random() * 2 - 1,
+          )
           .normalize();
         rec.spinAxisSecondary
-          .set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1)
+          .set(
+            Math.random() * 2 - 1,
+            Math.random() * 2 - 1,
+            Math.random() * 2 - 1,
+          )
           .normalize();
-        if (rec.spinAxisPrimary.lengthSq() < 1e-6) rec.spinAxisPrimary.set(0.47, 0.63, -0.62);
-        if (rec.spinAxisSecondary.lengthSq() < 1e-6) rec.spinAxisSecondary.set(-0.28, 0.86, 0.42);
-        rec.spinRatePrimary = (Math.random() * 2 - 1) * ABOUT_SPIN_MAX * spinRateScale;
-        rec.spinRateSecondary = (Math.random() * 2 - 1)
-          * ABOUT_SPIN_MAX
-          * spinRateScale
-          * (panelSpinStyle === 1 ? 0.9 : 0.72);
+        if (rec.spinAxisPrimary.lengthSq() < 1e-6)
+          rec.spinAxisPrimary.set(0.47, 0.63, -0.62);
+        if (rec.spinAxisSecondary.lengthSq() < 1e-6)
+          rec.spinAxisSecondary.set(-0.28, 0.86, 0.42);
+        rec.spinRatePrimary =
+          (Math.random() * 2 - 1) * ABOUT_SPIN_MAX * spinRateScale;
+        rec.spinRateSecondary =
+          (Math.random() * 2 - 1) *
+          ABOUT_SPIN_MAX *
+          spinRateScale *
+          (panelSpinStyle === 1 ? 0.9 : 0.72);
       });
       setPhase("breakOut", now);
     };
@@ -11433,11 +13094,11 @@ export default function ResumeSpace3D({
       const records = aboutCellRecordsRef.current;
       const slots = aboutCellSlotsRef.current;
       if (
-        !runtime.active
-        || !runtime.initialized
-        || !mesh
-        || records.length === 0
-        || slots.length === 0
+        !runtime.active ||
+        !runtime.initialized ||
+        !mesh ||
+        records.length === 0 ||
+        slots.length === 0
       ) {
         return;
       }
@@ -11454,14 +13115,22 @@ export default function ResumeSpace3D({
       }
 
       const phaseElapsed = now - runtime.phaseStartedAt;
-      const phaseT = THREE.MathUtils.clamp(phaseElapsed / Math.max(1, runtime.phaseDurationMs), 0, 1);
+      const phaseT = THREE.MathUtils.clamp(
+        phaseElapsed / Math.max(1, runtime.phaseDurationMs),
+        0,
+        1,
+      );
       updateGridLineVisibility(runtime.phase);
       // In assembled mode, content planes own the visible slide;
       // hide instanced shards so they do not occlude the planes.
       mesh.visible = runtime.phase !== "assembledHold";
       const slideCount = Math.max(0, aboutSlides.length);
 
-      const applyRecordMatrix = (idx: number, rec: AboutCellRecord, pulse = 1) => {
+      const applyRecordMatrix = (
+        idx: number,
+        rec: AboutCellRecord,
+        pulse = 1,
+      ) => {
         const slot = slots[rec.targetSlotIndex] ?? slots[idx];
         tempScale.copy(slot.scale).multiplyScalar(pulse);
         tempMatrix.compose(rec.position, rec.quaternion, tempScale);
@@ -11481,14 +13150,20 @@ export default function ResumeSpace3D({
 
       if (runtime.distanceGateActive) {
         // Keep slide planes visible at long range; skip heavy shard motion work.
-        const canShowSlidePlanes = aboutTileContentMatsRef.current.some((mat) => !!mat?.map);
+        const canShowSlidePlanes = aboutTileContentMatsRef.current.some(
+          (mat) => !!mat?.map,
+        );
         if (!canShowSlidePlanes) {
           ensureAboutSlidePrepared();
         }
         let distanceAlpha = 1;
         if (camera && anchor) {
           const d = camera.position.distanceTo(anchor);
-          distanceAlpha = THREE.MathUtils.clamp(1 - (d - 7000) / 36000, 0.24, 1);
+          distanceAlpha = THREE.MathUtils.clamp(
+            1 - (d - 7000) / 36000,
+            0.24,
+            1,
+          );
         }
         aboutTileContentMatsRef.current.forEach((mat) => {
           if (!mat) return;
@@ -11497,20 +13172,24 @@ export default function ResumeSpace3D({
         const dbg = aboutDebugStateRef.current;
         const nowMs = performance.now();
         const prepChanged =
-          dbg.lastPrepared !== aboutSlidePreparedIndexRef.current
-          || dbg.lastReady !== aboutSlideReadyRef.current;
+          dbg.lastPrepared !== aboutSlidePreparedIndexRef.current ||
+          dbg.lastReady !== aboutSlideReadyRef.current;
         const phaseChanged = dbg.lastPhase !== runtime.phase;
         const canShowChanged = dbg.lastCanShow !== canShowSlidePlanes;
-        if ((prepChanged || phaseChanged || canShowChanged) && nowMs - dbg.lastLogMs > 600) {
+        if (
+          (prepChanged || phaseChanged || canShowChanged) &&
+          nowMs - dbg.lastLogMs > 600
+        ) {
           dbg.lastLogMs = nowMs;
           dbg.lastPhase = runtime.phase;
           dbg.lastCanShow = canShowSlidePlanes;
           dbg.lastPrepared = aboutSlidePreparedIndexRef.current;
           dbg.lastReady = aboutSlideReadyRef.current;
           shipLog(
-            `ABOUTDBG far phase=${runtime.phase} canShow=${canShowSlidePlanes ? 1 : 0} alpha=${distanceAlpha.toFixed(2)} prepared=${aboutSlidePreparedIndexRef.current + 1} ready=${aboutSlideReadyRef.current ? 1 : 0} maps=${
-              aboutTileContentMatsRef.current.slice(0, 4).map((m) => (m?.map ? "1" : "0")).join("")
-            }`,
+            `ABOUTDBG far phase=${runtime.phase} canShow=${canShowSlidePlanes ? 1 : 0} alpha=${distanceAlpha.toFixed(2)} prepared=${aboutSlidePreparedIndexRef.current + 1} ready=${aboutSlideReadyRef.current ? 1 : 0} maps=${aboutTileContentMatsRef.current
+              .slice(0, 4)
+              .map((m) => (m?.map ? "1" : "0"))
+              .join("")}`,
             "nav",
           );
         }
@@ -11526,29 +13205,47 @@ export default function ResumeSpace3D({
           const panelSpinStyle = aboutPanelSpinStyleRef.current[panelIdx] ?? 0;
           const spinPrimaryGain = panelSpinStyle === 1 ? 1.48 : 0.82;
           const spinSecondaryGain = panelSpinStyle === 1 ? 1.28 : 0.72;
-          const pulse = 1 + Math.sin(now * 0.001 + rec.pulsePhase) * 0.08 * phaseT;
+          const pulse =
+            1 + Math.sin(now * 0.001 + rec.pulsePhase) * 0.08 * phaseT;
           tempScale.setScalar(pulse);
           toCenter.subVectors(rec.position, slotCenter).normalize();
           spinAxis.copy(rec.angularVelocity);
           if (spinAxis.lengthSq() < 1e-6) spinAxis.set(0.31, 0.87, 0.39);
           spinAxis.normalize();
           tangent.crossVectors(toCenter, spinAxis);
-          if (tangent.lengthSq() < 1e-6) tangent.crossVectors(toCenter, worldUp);
+          if (tangent.lengthSq() < 1e-6)
+            tangent.crossVectors(toCenter, worldUp);
           tangent.normalize();
-          rec.velocity.addScaledVector(rec.burstDirection, ABOUT_BREAK_IMPULSE * dt * 0.26);
-          rec.velocity.addScaledVector(toCenter, ABOUT_BREAK_IMPULSE * dt * 0.14);
-          rec.velocity.addScaledVector(tangent, ABOUT_BREAK_IMPULSE * dt * 0.17);
+          rec.velocity.addScaledVector(
+            rec.burstDirection,
+            ABOUT_BREAK_IMPULSE * dt * 0.26,
+          );
+          rec.velocity.addScaledVector(
+            toCenter,
+            ABOUT_BREAK_IMPULSE * dt * 0.14,
+          );
+          rec.velocity.addScaledVector(
+            tangent,
+            ABOUT_BREAK_IMPULSE * dt * 0.17,
+          );
           rec.velocity.multiplyScalar(0.986);
           rec.position.addScaledVector(rec.velocity, dt);
-          rec.spinAxisPrimary.addScaledVector(rec.velocity, dt * 0.0022).normalize();
-          rec.spinAxisSecondary.addScaledVector(tangent, dt * 0.0065).normalize();
+          rec.spinAxisPrimary
+            .addScaledVector(rec.velocity, dt * 0.0022)
+            .normalize();
+          rec.spinAxisSecondary
+            .addScaledVector(tangent, dt * 0.0065)
+            .normalize();
           deltaQuat.setFromAxisAngle(
             rec.spinAxisPrimary,
             rec.spinRatePrimary * spinPrimaryGain * (1.15 + phaseT * 0.75) * dt,
           );
           deltaQuatB.setFromAxisAngle(
             rec.spinAxisSecondary,
-            rec.spinRateSecondary * spinSecondaryGain * (0.95 + phaseT * 0.45) * dt,
+            rec.spinRateSecondary *
+              spinSecondaryGain *
+              (0.95 + phaseT * 0.45) *
+              dt,
           );
           rec.quaternion.multiply(deltaQuat).multiply(deltaQuatB).normalize();
           applyRecordMatrix(idx, rec, pulse);
@@ -11567,16 +13264,21 @@ export default function ResumeSpace3D({
           const pulse = 1 + Math.sin(now * 0.0014 + rec.pulsePhase) * 0.1;
           tempScale.setScalar(pulse);
           drift.set(
-            Math.sin(rec.position.y * 0.010 + now * 0.00065) * 15,
+            Math.sin(rec.position.y * 0.01 + now * 0.00065) * 15,
             Math.cos(rec.position.x * 0.009 + now * 0.0007) * 15,
-            Math.sin((rec.position.x + rec.position.y + rec.position.z) * 0.007 + now * 0.00045) * 15,
+            Math.sin(
+              (rec.position.x + rec.position.y + rec.position.z) * 0.007 +
+                now * 0.00045,
+            ) * 15,
           );
           spinAxis.copy(rec.angularVelocity);
           if (spinAxis.lengthSq() < 1e-6) spinAxis.set(0.21, 0.93, -0.29);
           spinAxis.normalize();
           tangent.crossVectors(drift, spinAxis);
-          if (tangent.lengthSq() < 1e-6) tangent.crossVectors(rec.velocity, spinAxis);
-          if (tangent.lengthSq() < 1e-6) tangent.set(-rec.position.y, rec.position.x, rec.position.z * 0.25);
+          if (tangent.lengthSq() < 1e-6)
+            tangent.crossVectors(rec.velocity, spinAxis);
+          if (tangent.lengthSq() < 1e-6)
+            tangent.set(-rec.position.y, rec.position.x, rec.position.z * 0.25);
           tangent.normalize();
           rec.velocity.addScaledVector(drift, dt);
           rec.velocity.addScaledVector(tangent, dt * 8);
@@ -11589,15 +13291,21 @@ export default function ResumeSpace3D({
             rec.angularVelocity.addScaledVector(drift, (dt * 0.16) / driftLen);
           }
           rec.spinAxisPrimary.addScaledVector(drift, dt * 0.0016).normalize();
-          rec.spinAxisSecondary.addScaledVector(rec.velocity, dt * 0.0012).normalize();
-          const swarmWobble = 0.7 + 0.3 * Math.sin(now * 0.0018 + rec.pulsePhase);
+          rec.spinAxisSecondary
+            .addScaledVector(rec.velocity, dt * 0.0012)
+            .normalize();
+          const swarmWobble =
+            0.7 + 0.3 * Math.sin(now * 0.0018 + rec.pulsePhase);
           deltaQuat.setFromAxisAngle(
             rec.spinAxisPrimary,
             rec.spinRatePrimary * spinPrimaryGain * swarmWobble * dt,
           );
           deltaQuatB.setFromAxisAngle(
             rec.spinAxisSecondary,
-            rec.spinRateSecondary * spinSecondaryGain * (1.05 - 0.25 * swarmWobble) * dt,
+            rec.spinRateSecondary *
+              spinSecondaryGain *
+              (1.05 - 0.25 * swarmWobble) *
+              dt,
           );
           rec.quaternion.multiply(deltaQuat).multiply(deltaQuatB).normalize();
           applyRecordMatrix(idx, rec, pulse);
@@ -11613,18 +13321,25 @@ export default function ResumeSpace3D({
           const panelSpinStyle = aboutPanelSpinStyleRef.current[panelIdx] ?? 0;
           const reformProgress = phaseT;
           const freeSpinBlend = 1 - reformProgress;
-          const attractionGain = THREE.MathUtils.lerp(0.52, 1.02, reformProgress);
-          const reformSpinDecayPerFrame = panelSpinStyle === 1
-            ? THREE.MathUtils.lerp(0.998, 0.968, reformProgress)
-            : THREE.MathUtils.lerp(0.999, 0.972, reformProgress);
+          const attractionGain = THREE.MathUtils.lerp(
+            0.52,
+            1.02,
+            reformProgress,
+          );
+          const reformSpinDecayPerFrame =
+            panelSpinStyle === 1
+              ? THREE.MathUtils.lerp(0.998, 0.968, reformProgress)
+              : THREE.MathUtils.lerp(0.999, 0.972, reformProgress);
           const targetSlot = slots[rec.targetSlotIndex] ?? slots[idx];
           toTarget.subVectors(targetSlot.worldPosition, rec.position);
           spinAxis.copy(rec.spinAxisPrimary);
           if (spinAxis.lengthSq() < 1e-6) spinAxis.set(0.31, 0.77, -0.55);
           spinAxis.normalize();
           tangent.crossVectors(toTarget, spinAxis);
-          if (tangent.lengthSq() < 1e-6) tangent.crossVectors(toTarget, worldUp);
-          if (tangent.lengthSq() < 1e-6) tangent.set(-toTarget.y, toTarget.x, toTarget.z * 0.25);
+          if (tangent.lengthSq() < 1e-6)
+            tangent.crossVectors(toTarget, worldUp);
+          if (tangent.lengthSq() < 1e-6)
+            tangent.set(-toTarget.y, toTarget.x, toTarget.z * 0.25);
           tangent.normalize();
           randomDir.set(
             Math.sin(rec.pulsePhase * 1.91 + now * 0.00115),
@@ -11633,20 +13348,41 @@ export default function ResumeSpace3D({
           );
           if (randomDir.lengthSq() < 1e-6) randomDir.set(0.36, -0.48, 0.8);
           randomDir.normalize();
-          rec.velocity.addScaledVector(toTarget, ABOUT_REFORM_STIFFNESS * attractionGain * dt);
+          rec.velocity.addScaledVector(
+            toTarget,
+            ABOUT_REFORM_STIFFNESS * attractionGain * dt,
+          );
           rec.velocity.addScaledVector(tangent, dt * 10.5 * freeSpinBlend);
           rec.velocity.addScaledVector(randomDir, dt * 6.8 * freeSpinBlend);
-          rec.velocity.multiplyScalar(Math.pow(THREE.MathUtils.lerp(ABOUT_REFORM_DAMPING, 0.965, reformProgress), dt * 60));
+          rec.velocity.multiplyScalar(
+            Math.pow(
+              THREE.MathUtils.lerp(ABOUT_REFORM_DAMPING, 0.965, reformProgress),
+              dt * 60,
+            ),
+          );
           rec.position.addScaledVector(rec.velocity, dt);
           rec.angularVelocity.multiplyScalar(0.92);
           rec.spinRatePrimary *= Math.pow(reformSpinDecayPerFrame, dt * 60);
           rec.spinRateSecondary *= Math.pow(reformSpinDecayPerFrame, dt * 60);
-          rec.spinAxisPrimary.addScaledVector(rec.velocity, dt * 0.0017 * freeSpinBlend).normalize();
-          rec.spinAxisSecondary.addScaledVector(tangent, dt * 0.0026 * freeSpinBlend).normalize();
+          rec.spinAxisPrimary
+            .addScaledVector(rec.velocity, dt * 0.0017 * freeSpinBlend)
+            .normalize();
+          rec.spinAxisSecondary
+            .addScaledVector(tangent, dt * 0.0026 * freeSpinBlend)
+            .normalize();
           targetQuat.copy(targetSlot.worldQuaternion);
           rec.quaternion.slerp(
             targetQuat,
-            THREE.MathUtils.clamp(dt * THREE.MathUtils.lerp(0.85, 8.8, reformProgress * reformProgress), 0, 1),
+            THREE.MathUtils.clamp(
+              dt *
+                THREE.MathUtils.lerp(
+                  0.85,
+                  8.8,
+                  reformProgress * reformProgress,
+                ),
+              0,
+              1,
+            ),
           );
           deltaQuat.setFromAxisAngle(
             rec.spinAxisPrimary,
@@ -11666,9 +13402,15 @@ export default function ResumeSpace3D({
       } else if (runtime.phase === "settle") {
         records.forEach((rec, idx) => {
           const targetSlot = slots[rec.targetSlotIndex] ?? slots[idx];
-          rec.position.lerp(targetSlot.worldPosition, THREE.MathUtils.clamp(dt * 9, 0, 1));
+          rec.position.lerp(
+            targetSlot.worldPosition,
+            THREE.MathUtils.clamp(dt * 9, 0, 1),
+          );
           rec.velocity.multiplyScalar(0.72);
-          rec.quaternion.slerp(targetSlot.worldQuaternion, THREE.MathUtils.clamp(dt * 10, 0, 1));
+          rec.quaternion.slerp(
+            targetSlot.worldQuaternion,
+            THREE.MathUtils.clamp(dt * 10, 0, 1),
+          );
           applyRecordMatrix(idx, rec, 1);
         });
         if (phaseElapsed >= runtime.phaseDurationMs) {
@@ -11693,11 +13435,17 @@ export default function ResumeSpace3D({
           rec.quaternion.slerp(targetSlot.worldQuaternion, 0.22);
           applyRecordMatrix(idx, rec, 1);
         });
-        const canShowSlidePlanes = aboutTileContentMatsRef.current.some((mat) => !!mat?.map);
+        const canShowSlidePlanes = aboutTileContentMatsRef.current.some(
+          (mat) => !!mat?.map,
+        );
         let distanceAlpha = 1;
         if (camera && anchor) {
           const d = camera.position.distanceTo(anchor);
-          distanceAlpha = THREE.MathUtils.clamp(1 - (d - 7000) / 36000, 0.24, 1);
+          distanceAlpha = THREE.MathUtils.clamp(
+            1 - (d - 7000) / 36000,
+            0.24,
+            1,
+          );
         }
         aboutTileContentMatsRef.current.forEach((mat) => {
           if (!mat) return;
@@ -11710,20 +13458,24 @@ export default function ResumeSpace3D({
         const dbg = aboutDebugStateRef.current;
         const nowMs = performance.now();
         const prepChanged =
-          dbg.lastPrepared !== aboutSlidePreparedIndexRef.current
-          || dbg.lastReady !== aboutSlideReadyRef.current;
+          dbg.lastPrepared !== aboutSlidePreparedIndexRef.current ||
+          dbg.lastReady !== aboutSlideReadyRef.current;
         const phaseChanged = dbg.lastPhase !== runtime.phase;
         const canShowChanged = dbg.lastCanShow !== canShowSlidePlanes;
-        if ((prepChanged || phaseChanged || canShowChanged) && nowMs - dbg.lastLogMs > 600) {
+        if (
+          (prepChanged || phaseChanged || canShowChanged) &&
+          nowMs - dbg.lastLogMs > 600
+        ) {
           dbg.lastLogMs = nowMs;
           dbg.lastPhase = runtime.phase;
           dbg.lastCanShow = canShowSlidePlanes;
           dbg.lastPrepared = aboutSlidePreparedIndexRef.current;
           dbg.lastReady = aboutSlideReadyRef.current;
           shipLog(
-            `ABOUTDBG near phase=${runtime.phase} canShow=${canShowSlidePlanes ? 1 : 0} alpha=${distanceAlpha.toFixed(2)} prepared=${aboutSlidePreparedIndexRef.current + 1} ready=${aboutSlideReadyRef.current ? 1 : 0} maps=${
-              aboutTileContentMatsRef.current.slice(0, 4).map((m) => (m?.map ? "1" : "0")).join("")
-            }`,
+            `ABOUTDBG near phase=${runtime.phase} canShow=${canShowSlidePlanes ? 1 : 0} alpha=${distanceAlpha.toFixed(2)} prepared=${aboutSlidePreparedIndexRef.current + 1} ready=${aboutSlideReadyRef.current ? 1 : 0} maps=${aboutTileContentMatsRef.current
+              .slice(0, 4)
+              .map((m) => (m?.map ? "1" : "0"))
+              .join("")}`,
             "nav",
           );
         }
@@ -11762,7 +13514,11 @@ export default function ResumeSpace3D({
     const raycaster = new THREE.Raycaster();
     const tick = () => {
       raf = requestAnimationFrame(tick);
-      if (!skillsLatticeSystemActiveRef.current || skillsLatticeActiveRef.current) return;
+      if (
+        !skillsLatticeSystemActiveRef.current ||
+        skillsLatticeActiveRef.current
+      )
+        return;
       const camera = sceneRef.current.camera;
       const shell = skillsLatticeEnvelopeRef.current;
       const scene = sceneRef.current.scene;
@@ -11820,7 +13576,9 @@ export default function ResumeSpace3D({
       occluderIds.add(obj.uuid);
       occluders.push(obj);
     };
-    const addDescendantOccluders = (root: THREE.Object3D | null | undefined) => {
+    const addDescendantOccluders = (
+      root: THREE.Object3D | null | undefined,
+    ) => {
       if (!root || !root.visible || root.parent === null) return;
       root.traverse((obj) => addOccluder(obj));
     };
@@ -11844,7 +13602,8 @@ export default function ResumeSpace3D({
           userData: Record<string, unknown>;
         };
         const isCssLabel = !!maybeObject.isCSS2DObject;
-        const isPortfolioHalo = !!maybeObject.userData?.orbitalPortfolioMediaHalo;
+        const isPortfolioHalo =
+          !!maybeObject.userData?.orbitalPortfolioMediaHalo;
         if (!isCssLabel && !isPortfolioHalo) return;
         if (isPortfolioHalo) {
           maybeObject.getWorldPosition(labelWorld);
@@ -11863,7 +13622,8 @@ export default function ResumeSpace3D({
           maybeObject.visible = !haloBlocked;
           return;
         }
-        const tracksPortfolioLabel = !!maybeObject.userData?.orbitalPortfolioLabel;
+        const tracksPortfolioLabel =
+          !!maybeObject.userData?.orbitalPortfolioLabel;
         const tracksAboutLabel = !!maybeObject.userData?.aboutMemorySquareLabel;
         if (!tracksPortfolioLabel && !tracksAboutLabel) return;
         // While riding the About elevator, external portfolio labels should not be visible.
@@ -11937,7 +13697,9 @@ export default function ResumeSpace3D({
         const toneRuntime = orbitalPortfolioToneRuntimeRef.current;
         const selected = skillsLatticeSelectedNodeRef.current;
         const plasmaActive = !!selected;
-        const categoryNodes = skillsLatticeNodesRef.current.filter((n) => n.nodeType === "category");
+        const categoryNodes = skillsLatticeNodesRef.current.filter(
+          (n) => n.nodeType === "category",
+        );
         if (toneRuntime.enabled && categoryNodes.length > 0) {
           if (toneRuntime.nextEventAtMs <= 0) {
             toneRuntime.nextEventAtMs = nowMs + 300;
@@ -11951,10 +13713,13 @@ export default function ResumeSpace3D({
                   0,
                   Math.max(0, motifs.length - 1),
                 )
-              ] ?? motifs[0] ?? [];
+              ] ??
+              motifs[0] ??
+              [];
             if (toneRuntime.noteIndex >= motif.length) {
               toneRuntime.noteIndex = 0;
-              toneRuntime.motifIndex = (toneRuntime.motifIndex + 1) % Math.max(1, motifs.length);
+              toneRuntime.motifIndex =
+                (toneRuntime.motifIndex + 1) % Math.max(1, motifs.length);
               toneRuntime.nextEventAtMs =
                 nowMs +
                 THREE.MathUtils.clamp(
@@ -11966,17 +13731,28 @@ export default function ResumeSpace3D({
               toneRuntime.accentNodeLabel = "";
             } else {
               const freq = motif[toneRuntime.noteIndex] ?? 329.63;
-              let accentIdx = Math.floor(Math.random() * Math.max(1, categoryNodes.length));
-              if (categoryNodes.length > 1 && accentIdx === toneRuntime.accentCoreIndex) {
-                accentIdx = (accentIdx + 1 + Math.floor(Math.random() * (categoryNodes.length - 1)))
-                  % categoryNodes.length;
+              let accentIdx = Math.floor(
+                Math.random() * Math.max(1, categoryNodes.length),
+              );
+              if (
+                categoryNodes.length > 1 &&
+                accentIdx === toneRuntime.accentCoreIndex
+              ) {
+                accentIdx =
+                  (accentIdx +
+                    1 +
+                    Math.floor(Math.random() * (categoryNodes.length - 1))) %
+                  categoryNodes.length;
               }
               const accentNode = categoryNodes[accentIdx];
-              const preset = resolveSkillsLatticeTonePreset(skillsLatticeTonePresetIdRef.current);
+              const preset = resolveSkillsLatticeTonePreset(
+                skillsLatticeTonePresetIdRef.current,
+              );
               toneRuntime.accentCoreIndex = accentIdx;
               toneRuntime.accentNodeLabel = accentNode?.label ?? "";
               toneRuntime.accentColorHex = preset.accentColor;
-              toneRuntime.accentUntilAtMs = nowMs + SKILLS_LATTICE_TONE_NOTE_DURATION_MS;
+              toneRuntime.accentUntilAtMs =
+                nowMs + SKILLS_LATTICE_TONE_NOTE_DURATION_MS;
               if (ORBITAL_PORTFOLIO_DEBUG_LOGS) {
                 shipLog(
                   `[LATTICE-TONE] skills-queue motif=${toneRuntime.motifIndex} note=${toneRuntime.noteIndex} node=${toneRuntime.accentNodeLabel || accentIdx} freq=${freq.toFixed(2)} preset=${preset.id} ctx=${toneRuntime.context?.state ?? "null"}`,
@@ -11985,7 +13761,8 @@ export default function ResumeSpace3D({
               }
               playOrbitalPortfolioTone(freq);
               toneRuntime.noteIndex += 1;
-              toneRuntime.nextEventAtMs = nowMs + SKILLS_LATTICE_TONE_NOTE_STEP_MS;
+              toneRuntime.nextEventAtMs =
+                nowMs + SKILLS_LATTICE_TONE_NOTE_STEP_MS;
             }
           }
         }
@@ -12004,7 +13781,10 @@ export default function ResumeSpace3D({
           shell.rotation.y += dt * shellSpin.y;
           shell.rotation.z += dt * shellSpin.z;
           shell.getWorldPosition(shellCenter);
-          const shellRadius = Math.max(1, skillsLatticeEnvelopeRadiusRef.current);
+          const shellRadius = Math.max(
+            1,
+            skillsLatticeEnvelopeRadiusRef.current,
+          );
           const distance = camera.position.distanceTo(shellCenter);
           if (distance > shellRadius * 1.14) {
             exitSkillsLattice({ restoreShip: false, clearSystem: false });
@@ -12056,16 +13836,24 @@ export default function ResumeSpace3D({
           }
           shellMat.emissive.setHSL(0.58 + pulse * 0.02, 0.55, 0.34);
           shellMat.emissiveIntensity = THREE.MathUtils.clamp(
-            THREE.MathUtils.lerp(0.2, 0.58, outsideT) + pulse * 0.14 + glintBoost * 0.45,
+            THREE.MathUtils.lerp(0.2, 0.58, outsideT) +
+              pulse * 0.14 +
+              glintBoost * 0.45,
             0.1,
             0.95,
           );
           shellEdgeMat.opacity = THREE.MathUtils.clamp(
-            THREE.MathUtils.lerp(0.08, 0.4, outsideT) + pulse * 0.08 + glintBoost * 0.34,
+            THREE.MathUtils.lerp(0.08, 0.4, outsideT) +
+              pulse * 0.08 +
+              glintBoost * 0.34,
             0.03,
             0.74,
           );
-          shellEdgeMat.color.setHSL(0.58 + pulse * 0.04 + glintBoost * 0.03, 0.76, 0.7);
+          shellEdgeMat.color.setHSL(
+            0.58 + pulse * 0.04 + glintBoost * 0.03,
+            0.76,
+            0.7,
+          );
           const caustics = skillsLatticeCausticLightsRef.current;
           if (caustics.length > 0) {
             const baseInt = insideShell ? 0.85 : 0.08;
@@ -12077,7 +13865,9 @@ export default function ResumeSpace3D({
                 Math.sin(p0 * 1.15 + idx * 1.4) * (34 + idx * 10),
               );
               light.intensity =
-                baseInt + (insideShell ? 0.45 : 0.06) * (0.5 + 0.5 * Math.sin(t * 1.7 + idx * 1.3));
+                baseInt +
+                (insideShell ? 0.45 : 0.06) *
+                  (0.5 + 0.5 * Math.sin(t * 1.7 + idx * 1.3));
             });
           }
           const showNodeLabels = insideT > 0.55;
@@ -12087,7 +13877,11 @@ export default function ResumeSpace3D({
         }
         let rippleRadius = -1;
         if (ripple.active) {
-          const rt = THREE.MathUtils.clamp((nowMs - ripple.startedAt) / 1200, 0, 1);
+          const rt = THREE.MathUtils.clamp(
+            (nowMs - ripple.startedAt) / 1200,
+            0,
+            1,
+          );
           rippleRadius = rt * 90;
           if (rt >= 1) ripple.active = false;
         }
@@ -12100,7 +13894,9 @@ export default function ResumeSpace3D({
           const toneAccentT = toneAccentActive
             ? 1 -
               THREE.MathUtils.clamp(
-                (nowMs - (toneRuntime.accentUntilAtMs - SKILLS_LATTICE_TONE_NOTE_DURATION_MS)) /
+                (nowMs -
+                  (toneRuntime.accentUntilAtMs -
+                    SKILLS_LATTICE_TONE_NOTE_DURATION_MS)) /
                   Math.max(1, SKILLS_LATTICE_TONE_NOTE_DURATION_MS),
                 0,
                 1,
@@ -12108,12 +13904,15 @@ export default function ResumeSpace3D({
             : 0;
           const pulse = 1 + Math.sin(t * 1.7 + node.phase) * 0.08;
           const isSelected = selected?.mesh === node.mesh;
-          const isRelated = !selected
-            || (selected.nodeType === "category"
+          const isRelated =
+            !selected ||
+            (selected.nodeType === "category"
               ? node.category === selected.category
-              : node.category === selected.category || node.label === selected.label);
+              : node.category === selected.category ||
+                node.label === selected.label);
           const selectedBoost = isSelected ? 1.28 : isRelated ? 1.03 : 0.96;
-          const toneBoost = node.nodeType === "category" ? toneAccentT * 0.4 : 0;
+          const toneBoost =
+            node.nodeType === "category" ? toneAccentT * 0.4 : 0;
           node.mesh.scale.setScalar(node.baseScale * pulse * selectedBoost);
           if (toneBoost > 0) {
             node.mesh.scale.multiplyScalar(1 + toneBoost);
@@ -12121,7 +13920,9 @@ export default function ResumeSpace3D({
           const bodyMat = node.mesh.material as THREE.MeshBasicMaterial;
           const baseNodeOpacity = node.nodeType === "category" ? 0.9 : 0.82;
           bodyMat.opacity = latticeInternalsVisible
-            ? (isRelated ? baseNodeOpacity + toneAccentT * 0.26 : 0.2)
+            ? isRelated
+              ? baseNodeOpacity + toneAccentT * 0.26
+              : 0.2
             : 0;
           if (plasmaActive) {
             const baseColor =
@@ -12135,15 +13936,23 @@ export default function ResumeSpace3D({
               node.mesh.getWorldPosition(worldNodePos);
               const d = worldNodePos.distanceTo(selectedPos);
               const bandRadius = ((t * 1.7) % 1) * 92;
-              plasmaMix = Math.max(plasmaMix, Math.max(0, 1 - Math.abs(d - bandRadius) / 12) * 0.55);
+              plasmaMix = Math.max(
+                plasmaMix,
+                Math.max(0, 1 - Math.abs(d - bandRadius) / 12) * 0.55,
+              );
             }
             bodyMat.color.copy(baseColor).lerp(plasmaColor, plasmaMix);
           } else {
-            bodyMat.color.set(node.nodeType === "category" ? 0x8fd3ff : 0xdaf1ff);
+            bodyMat.color.set(
+              node.nodeType === "category" ? 0x8fd3ff : 0xdaf1ff,
+            );
           }
           if (toneAccentT > 0) {
             toneAccentColor.setHex(toneRuntime.accentColorHex);
-            bodyMat.color.lerp(toneAccentColor, THREE.MathUtils.clamp(0.25 + toneAccentT * 0.55, 0, 1));
+            bodyMat.color.lerp(
+              toneAccentColor,
+              THREE.MathUtils.clamp(0.25 + toneAccentT * 0.55, 0, 1),
+            );
           }
           if (node.halo?.material) {
             const hMat = node.halo.material as THREE.SpriteMaterial;
@@ -12152,10 +13961,14 @@ export default function ResumeSpace3D({
             if (ripple.active && rippleRadius >= 0) {
               node.mesh.getWorldPosition(worldNodePos);
               const d = worldNodePos.distanceTo(ripple.center);
-              rippleBoost = Math.max(0, 1 - Math.abs(d - rippleRadius) / 14) * 0.42;
+              rippleBoost =
+                Math.max(0, 1 - Math.abs(d - rippleRadius) / 14) * 0.42;
             }
             hMat.opacity = THREE.MathUtils.clamp(
-              focusAlpha + Math.sin(t * 2.2 + node.phase) * 0.06 + rippleBoost + toneAccentT * 0.28,
+              focusAlpha +
+                Math.sin(t * 2.2 + node.phase) * 0.06 +
+                rippleBoost +
+                toneAccentT * 0.28,
               0.04,
               0.9,
             );
@@ -12164,8 +13977,9 @@ export default function ResumeSpace3D({
         });
         skillsLatticeLineGroupsRef.current.forEach((group, idx) => {
           const wave = 0.3 + 0.14 * Math.sin(t * 1.15 + idx * 0.68);
-          const isRelated = !selected
-            || (group.kind === "ring"
+          const isRelated =
+            !selected ||
+            (group.kind === "ring"
               ? selected.nodeType === "category"
               : group.category === selected.category);
           const baseOpacity = isRelated ? wave : 0.08;
@@ -12176,10 +13990,15 @@ export default function ResumeSpace3D({
           if (plasmaActive) {
             const lineBase = group.kind === "ring" ? 0x66c6ff : 0x9ad9ff;
             const linePlasma = 0xce93ff;
-            const lineMix = (isRelated ? 0.2 : 0.08) + 0.16 * Math.sin(t * 1.9 + idx * 0.55);
-            group.material.color.set(lineBase).lerp(new THREE.Color(linePlasma), lineMix);
+            const lineMix =
+              (isRelated ? 0.2 : 0.08) + 0.16 * Math.sin(t * 1.9 + idx * 0.55);
+            group.material.color
+              .set(lineBase)
+              .lerp(new THREE.Color(linePlasma), lineMix);
           } else {
-            group.material.color.set(group.kind === "ring" ? 0x66c6ff : 0x9ad9ff);
+            group.material.color.set(
+              group.kind === "ring" ? 0x66c6ff : 0x9ad9ff,
+            );
           }
         });
         const flow = skillsLatticeFlowPointsRef.current;
@@ -12187,7 +14006,11 @@ export default function ResumeSpace3D({
         const segs = skillsLatticeLinkSegmentsRef.current;
         if (flow && flowMeta.length > 0 && segs.length > 0) {
           const flowMat = flow.material as THREE.PointsMaterial;
-          flowMat.opacity = latticeInternalsVisible ? (plasmaActive ? 0.9 : 0.78) : 0;
+          flowMat.opacity = latticeInternalsVisible
+            ? plasmaActive
+              ? 0.9
+              : 0.78
+            : 0;
           flowMat.size = plasmaActive ? 0.82 : 0.72;
           if (!latticeInternalsVisible) {
             const arcs = skillsLatticeArcRecordsRef.current;
@@ -12199,8 +14022,12 @@ export default function ResumeSpace3D({
             raf = requestAnimationFrame(tick);
             return;
           }
-          const attr = flow.geometry.getAttribute("position") as THREE.BufferAttribute;
-          const colorAttr = flow.geometry.getAttribute("color") as THREE.BufferAttribute | null;
+          const attr = flow.geometry.getAttribute(
+            "position",
+          ) as THREE.BufferAttribute;
+          const colorAttr = flow.geometry.getAttribute(
+            "color",
+          ) as THREE.BufferAttribute | null;
           for (let i = 0; i < flowMeta.length; i += 1) {
             const meta = flowMeta[i];
             const seg = segs[meta.segmentIndex % segs.length];
@@ -12210,7 +14037,9 @@ export default function ResumeSpace3D({
             if (colorAttr) {
               if (plasmaActive) {
                 const hue = THREE.MathUtils.euclideanModulo(
-                  meta.hue + t * meta.hueDrift + Math.sin(t * 1.5 + i * 0.37) * 0.03,
+                  meta.hue +
+                    t * meta.hueDrift +
+                    Math.sin(t * 1.5 + i * 0.37) * 0.03,
                   1,
                 );
                 flowColor.setHSL(hue, 0.85, 0.7);
@@ -12243,14 +14072,16 @@ export default function ResumeSpace3D({
                 if (selected) {
                   pool = nodes.filter(
                     (n) =>
-                      n.mesh !== sourceNode.mesh
-                      && (n.category === selected.category || n.label === selected.label),
+                      n.mesh !== sourceNode.mesh &&
+                      (n.category === selected.category ||
+                        n.label === selected.label),
                   );
                   if (pool.length === 0) {
                     pool = nodes.filter((n) => n.mesh !== sourceNode.mesh);
                   }
                 }
-                const pick = pool[Math.floor(Math.random() * Math.max(1, pool.length))];
+                const pick =
+                  pool[Math.floor(Math.random() * Math.max(1, pool.length))];
                 const nextIdx = nodes.findIndex((n) => n.mesh === pick.mesh);
                 arc.targetIndex = nextIdx >= 0 ? nextIdx : arc.targetIndex;
               }
@@ -12267,27 +14098,43 @@ export default function ResumeSpace3D({
               }
               bend.crossVectors(direct, ortho).normalize();
               for (let p = 0; p < arc.points.length / 3; p += 1) {
-                const alpha = p / ((arc.points.length / 3) - 1);
+                const alpha = p / (arc.points.length / 3 - 1);
                 arcPos.lerpVectors(selectedPos, targetPos, alpha);
                 const envelope = Math.sin(alpha * Math.PI);
                 const jitter =
-                  Math.sin((alpha * 10 + t * 8 + idx * 1.2) * (1 + arc.sway * 0.22))
-                  * (0.8 + 0.2 * Math.sin(t * 13 + idx));
-                const helix =
-                  Math.cos(alpha * 12 + t * 7 + idx * 0.8) * 0.45;
+                  Math.sin(
+                    (alpha * 10 + t * 8 + idx * 1.2) * (1 + arc.sway * 0.22),
+                  ) *
+                  (0.8 + 0.2 * Math.sin(t * 13 + idx));
+                const helix = Math.cos(alpha * 12 + t * 7 + idx * 0.8) * 0.45;
                 arcPos.addScaledVector(ortho, envelope * jitter * arc.sway);
-                arcPos.addScaledVector(bend, envelope * helix * arc.sway * 0.72);
-                arcPos.addScaledVector(direct, Math.sin(alpha * Math.PI * 5 + t * 16) * 0.06);
+                arcPos.addScaledVector(
+                  bend,
+                  envelope * helix * arc.sway * 0.72,
+                );
+                arcPos.addScaledVector(
+                  direct,
+                  Math.sin(alpha * Math.PI * 5 + t * 16) * 0.06,
+                );
                 arc.points[p * 3] = arcPos.x;
                 arc.points[p * 3 + 1] = arcPos.y;
                 arc.points[p * 3 + 2] = arcPos.z;
               }
-              const attr = arc.line.geometry.getAttribute("position") as THREE.BufferAttribute;
+              const attr = arc.line.geometry.getAttribute(
+                "position",
+              ) as THREE.BufferAttribute;
               attr.needsUpdate = true;
               const mat = arc.line.material as THREE.LineBasicMaterial;
-              const energy = 0.35 + 0.3 * Math.sin(t * 12 + idx * 2.1) + Math.min(0.35, dist / 140);
+              const energy =
+                0.35 +
+                0.3 * Math.sin(t * 12 + idx * 2.1) +
+                Math.min(0.35, dist / 140);
               mat.opacity = THREE.MathUtils.clamp(energy, 0.2, 0.9);
-              mat.color.setHSL((0.62 + 0.08 * Math.sin(t * 0.8 + idx)) % 1, 0.8, 0.72);
+              mat.color.setHSL(
+                (0.62 + 0.08 * Math.sin(t * 0.8 + idx)) % 1,
+                0.8,
+                0.72,
+              );
               arc.line.visible = true;
             });
           }
@@ -12339,17 +14186,21 @@ export default function ResumeSpace3D({
               nextPulseAt = pulseEndAt + 2800 + Math.random() * 4200;
             }
             const pulseDur = Math.max(1, pulseEndAt - pulseStartAt);
-            const pulseP = pulseEndAt > nowShell
-              ? (nowShell - pulseStartAt) / pulseDur : 0;
+            const pulseP =
+              pulseEndAt > nowShell ? (nowShell - pulseStartAt) / pulseDur : 0;
             const periodic = 0.5 + 0.5 * Math.sin(t * 0.75);
-            const pulse = pulseEndAt > nowShell
-              ? Math.sin(pulseP * Math.PI) : 0;
+            const pulse =
+              pulseEndAt > nowShell ? Math.sin(pulseP * Math.PI) : 0;
             const boost = periodic * 0.22 + pulse * 0.95;
             shellEdgeMat.opacity = THREE.MathUtils.clamp(
-              0.17 + boost * 0.24, 0.12, 0.5,
+              0.17 + boost * 0.24,
+              0.12,
+              0.5,
             );
             shellEdgeMat.color.setHSL(
-              (0.57 + 0.03 * periodic + pulse * 0.04) % 1, 0.82, 0.7,
+              (0.57 + 0.03 * periodic + pulse * 0.04) % 1,
+              0.82,
+              0.7,
             );
           }
         }
@@ -12389,7 +14240,11 @@ export default function ResumeSpace3D({
       // Pulse brightness only; keep emissive hue neutral so panel colors stay distinct.
       const shimmerHue = 0.58 + 0.025 * Math.sin(t * 3.1) + pulse * 0.03;
       beaconMat.emissive.setHSL(shimmerHue % 1, 0.28, 0.22);
-      beaconMat.emissiveIntensity = THREE.MathUtils.clamp(0.06 + boost * 0.22, 0.05, 0.34);
+      beaconMat.emissiveIntensity = THREE.MathUtils.clamp(
+        0.06 + boost * 0.22,
+        0.05,
+        0.34,
+      );
       // Beacon remains clickable but visually hidden; outer shell carries visuals.
       edgeMat.opacity = 0;
     };
@@ -12411,7 +14266,8 @@ export default function ResumeSpace3D({
       const sd = starDestroyerRef.current;
       const anchor = skillsLatticeWorldAnchorRef.current;
       const skillsRouteActive = currentNavigationTargetRef.current === "skills";
-      const holdNearSkills = skillsLatticeActiveRef.current || skillsRouteActive;
+      const holdNearSkills =
+        skillsLatticeActiveRef.current || skillsRouteActive;
       if (sd && anchor && holdNearSkills) {
         if (!skillsSDLockActiveRef.current) {
           skillsSDLockActiveRef.current = true;
@@ -12422,7 +14278,7 @@ export default function ResumeSpace3D({
             anchor.z + Math.sin(a0) * (SKILLS_SD_PATROL_RADIUS * 0.9),
           );
           vlog("🔺 SD skills-lock engaged");
-            shipLog("SD lock engaged (Skills)", "info");
+          shipLog("SD lock engaged (Skills)", "info");
         }
         sd.visible = true;
         skillsSDPatrolStateRef.current.angle += dt * SKILLS_SD_PATROL_SPEED;
@@ -12439,7 +14295,9 @@ export default function ResumeSpace3D({
         );
         sd.position.lerp(desiredPos, 0.028);
         const lookMat = new THREE.Matrix4().lookAt(sd.position, lookAtPos, up);
-        const targetQuat = new THREE.Quaternion().setFromRotationMatrix(lookMat);
+        const targetQuat = new THREE.Quaternion().setFromRotationMatrix(
+          lookMat,
+        );
         const forwardOffset = sd.userData?.forwardOffset as
           | THREE.Quaternion
           | undefined;
@@ -12558,7 +14416,9 @@ export default function ResumeSpace3D({
       const hits = raycaster.intersectObjects(meshes, false);
       if (hits.length === 0) return null;
       const hitMesh = hits[0].object as THREE.Mesh;
-      return skillsLatticeNodesRef.current.find((n) => n.mesh === hitMesh) ?? null;
+      return (
+        skillsLatticeNodesRef.current.find((n) => n.mesh === hitMesh) ?? null
+      );
     };
 
     const onPointerDown = (event: PointerEvent) => {
@@ -12570,7 +14430,9 @@ export default function ResumeSpace3D({
     };
     mount.addEventListener("pointerdown", onPointerDown, { capture: true });
     return () => {
-      mount.removeEventListener("pointerdown", onPointerDown, { capture: true });
+      mount.removeEventListener("pointerdown", onPointerDown, {
+        capture: true,
+      });
     };
   }, [focusSkillsLatticeNode]);
 
@@ -12625,7 +14487,8 @@ export default function ResumeSpace3D({
         const now = performance.now();
         if (now - projectShowcaseNebulaDebugLastLogMsRef.current > 2600) {
           projectShowcaseNebulaDebugLastLogMsRef.current = now;
-          const nebulaVisible = projectShowcaseNebulaRootRef.current?.visible ?? false;
+          const nebulaVisible =
+            projectShowcaseNebulaRootRef.current?.visible ?? false;
           vlog(
             `🌌 Nebula travel dbg: dist=${distFromKnownCenter.toFixed(0)} alpha=${realmAlpha.toFixed(
               2,
@@ -12662,9 +14525,11 @@ export default function ResumeSpace3D({
           }
           if (wantsSD) {
             parts.push(
-              `SD ${sdPos
-                ? `[${sdPos.x.toFixed(0)}, ${sdPos.y.toFixed(0)}, ${sdPos.z.toFixed(0)}]`
-                : "[not-loaded]"}`,
+              `SD ${
+                sdPos
+                  ? `[${sdPos.x.toFixed(0)}, ${sdPos.y.toFixed(0)}, ${sdPos.z.toFixed(0)}]`
+                  : "[not-loaded]"
+              }`,
             );
           }
           if (wantsFalcon && wantsSD && sdDist !== null) {
@@ -12751,7 +14616,11 @@ export default function ResumeSpace3D({
 
       const bob = Math.sin(elapsed * 0.0017) * 0.18;
       const sway = Math.cos(elapsed * 0.0012) * 0.08;
-      ship.position.set(baseShipPos.x + sway, baseShipPos.y + bob, baseShipPos.z);
+      ship.position.set(
+        baseShipPos.x + sway,
+        baseShipPos.y + bob,
+        baseShipPos.z,
+      );
       ship.quaternion.slerp(baseShipQuat, 0.14);
 
       const camPos = new THREE.Vector3().lerpVectors(startCam, endCam, ease);
@@ -12805,11 +14674,16 @@ export default function ResumeSpace3D({
       const isAboutElevatorMode =
         hallwayContentModeRef.current === "about" && track.axis === "y";
       if (!isAboutElevatorMode) {
-        if (outageRuntime.phase === "normal" && now >= outageRuntime.nextOutageAt) {
+        if (
+          outageRuntime.phase === "normal" &&
+          now >= outageRuntime.nextOutageAt
+        ) {
           outageRuntime.phase = "flickerOut";
           outageRuntime.phaseStartedAt = now;
-          outageRuntime.phaseEndsAt = now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_OUT_MS;
-          outageRuntime.resumeAutoplayAfterEmergency = projectShowcasePlayingRef.current;
+          outageRuntime.phaseEndsAt =
+            now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_OUT_MS;
+          outageRuntime.resumeAutoplayAfterEmergency =
+            projectShowcasePlayingRef.current;
           if (projectShowcasePlayingRef.current) {
             projectShowcasePlayingRef.current = false;
             setProjectShowcasePlaying(false);
@@ -12823,7 +14697,8 @@ export default function ResumeSpace3D({
           if (outageRuntime.phase === "flickerOut") {
             outageRuntime.phase = "outage";
             outageRuntime.phaseStartedAt = now;
-            outageRuntime.phaseEndsAt = now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_DARK_HOLD_MS;
+            outageRuntime.phaseEndsAt =
+              now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_DARK_HOLD_MS;
             if (
               outageRuntime.resumeAutoplayAfterEmergency &&
               !projectShowcasePlayingRef.current
@@ -12834,7 +14709,8 @@ export default function ResumeSpace3D({
           } else if (outageRuntime.phase === "outage") {
             outageRuntime.phase = "flickerIn";
             outageRuntime.phaseStartedAt = now;
-            outageRuntime.phaseEndsAt = now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_IN_MS;
+            outageRuntime.phaseEndsAt =
+              now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_IN_MS;
           } else {
             outageRuntime.phase = "normal";
             outageRuntime.phaseStartedAt = now;
@@ -12878,8 +14754,14 @@ export default function ResumeSpace3D({
         outageRuntime.phase = "normal";
         outageRuntime.phaseStartedAt = now;
         outageRuntime.phaseEndsAt = 0;
-        outageRuntime.nextOutageAt = now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MIN_INTERVAL_MS;
-        outageRuntime.powerLevel = THREE.MathUtils.damp(outageRuntime.powerLevel, 1, 12, dt);
+        outageRuntime.nextOutageAt =
+          now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MIN_INTERVAL_MS;
+        outageRuntime.powerLevel = THREE.MathUtils.damp(
+          outageRuntime.powerLevel,
+          1,
+          12,
+          dt,
+        );
         outageRuntime.resumeAutoplayAfterEmergency = false;
       }
       const emergencyAutoplayScale =
@@ -12892,14 +14774,12 @@ export default function ResumeSpace3D({
               : 1;
 
       if (jumpTarget !== null) {
-        const normalizedCurrent = THREE.MathUtils.euclideanModulo(
-          currentRun - minRun,
-          loopLen,
-        ) + minRun;
-        const normalizedTarget = THREE.MathUtils.euclideanModulo(
-          jumpTarget - minRun,
-          loopLen,
-        ) + minRun;
+        const normalizedCurrent =
+          THREE.MathUtils.euclideanModulo(currentRun - minRun, loopLen) +
+          minRun;
+        const normalizedTarget =
+          THREE.MathUtils.euclideanModulo(jumpTarget - minRun, loopLen) +
+          minRun;
         const forwardDist =
           normalizedTarget >= normalizedCurrent
             ? normalizedTarget - normalizedCurrent
@@ -12957,14 +14837,17 @@ export default function ResumeSpace3D({
       } else {
         const maxManualSpeed = track.speed * 11.4;
         const focusedPanel =
-          projectShowcasePanelsRef.current[projectShowcaseFocusIndexRef.current];
+          projectShowcasePanelsRef.current[
+            projectShowcaseFocusIndexRef.current
+          ];
         let targetVelocity = 0;
         if (projectShowcasePlayingRef.current) {
           const autoSpeedMultiplier =
             isAboutElevatorMode && focusedPanel?.aboutRuntime
               ? focusedPanel.aboutRuntime.autoSpeed
               : 0.62;
-          targetVelocity = track.speed * autoSpeedMultiplier * emergencyAutoplayScale;
+          targetVelocity =
+            track.speed * autoSpeedMultiplier * emergencyAutoplayScale;
         } else if (projectShowcaseLeverDraggingRef.current) {
           const lever = projectShowcaseLeverValueRef.current;
           // Non-linear response: fine near center, stronger at extremes.
@@ -12972,7 +14855,8 @@ export default function ResumeSpace3D({
             Math.sign(lever) * Math.pow(Math.abs(lever), 1.35);
           targetVelocity = shapedLever * maxManualSpeed;
         }
-        const focusedIsCta = focusedPanel?.entry?.id === PROJECT_SHOWCASE_CTA_ENTRY_ID;
+        const focusedIsCta =
+          focusedPanel?.entry?.id === PROJECT_SHOWCASE_CTA_ENTRY_ID;
         if (focusedIsCta && !projectShowcaseLeverDraggingRef.current) {
           targetVelocity *= projectShowcasePlayingRef.current ? 0.45 : 0.28;
         }
@@ -12992,7 +14876,8 @@ export default function ResumeSpace3D({
 
         if (Math.abs(projectShowcaseVelocityRef.current) > 0.002) {
           let nextRun =
-            projectShowcaseRunPosRef.current + projectShowcaseVelocityRef.current * dt;
+            projectShowcaseRunPosRef.current +
+            projectShowcaseVelocityRef.current * dt;
           if (isAboutElevatorMode) {
             const clamped = THREE.MathUtils.clamp(nextRun, minRun, maxRun);
             if (clamped !== nextRun) {
@@ -13021,14 +14906,18 @@ export default function ResumeSpace3D({
           projectShowcaseForcedFocusIndexRef.current = null;
         }
 
-        if (isAboutElevatorMode && projectShowcaseRunPosRef.current < maxRun - 0.5) {
+        if (
+          isAboutElevatorMode &&
+          projectShowcaseRunPosRef.current < maxRun - 0.5
+        ) {
           setAboutElevatorReachedEnd(false);
         }
 
         // Mirror current motion on the throttle UI while coasting/stopping.
         if (!projectShowcaseLeverDraggingRef.current) {
           const derivedLever = THREE.MathUtils.clamp(
-            projectShowcaseVelocityRef.current / Math.max(track.speed * 6.5, 0.0001),
+            projectShowcaseVelocityRef.current /
+              Math.max(track.speed * 6.5, 0.0001),
             -1,
             1,
           );
@@ -13057,7 +14946,8 @@ export default function ResumeSpace3D({
       }
       if (FAST_TRACK_TARGET && isAboutElevatorMode) {
         const _now = performance.now();
-        const _lastLog = (globalThis as unknown as Record<string, number>).__ftLog ?? 0;
+        const _lastLog =
+          (globalThis as unknown as Record<string, number>).__ftLog ?? 0;
         if (_now - _lastLog > 500) {
           (globalThis as unknown as Record<string, number>).__ftLog = _now;
           const vel = projectShowcaseVelocityRef.current;
@@ -13069,10 +14959,12 @@ export default function ResumeSpace3D({
           );
         }
       }
-      projectShowcaseInteriorLightBasesRef.current.forEach(({ light, baseIntensity }) => {
-        const p = outageRuntime.powerLevel;
-        light.intensity = baseIntensity * (0.05 + p * 0.95);
-      });
+      projectShowcaseInteriorLightBasesRef.current.forEach(
+        ({ light, baseIntensity }) => {
+          const p = outageRuntime.powerLevel;
+          light.intensity = baseIntensity * (0.05 + p * 0.95);
+        },
+      );
       const emergencyLights = projectShowcaseElevatorEmergencyLightsRef.current;
       if (emergencyLights) {
         const emergencyLevel = 1 - outageRuntime.powerLevel;
@@ -13095,13 +14987,16 @@ export default function ResumeSpace3D({
       }
       const emergencyTextActive =
         isAboutElevatorMode &&
-        outageRuntime.powerLevel <= PROJECT_SHOWCASE_ELEVATOR_OUTAGE_TEXT_SWAP_POWER;
+        outageRuntime.powerLevel <=
+          PROJECT_SHOWCASE_ELEVATOR_OUTAGE_TEXT_SWAP_POWER;
       if (outageRuntime.emergencyTextActive !== emergencyTextActive) {
         outageRuntime.emergencyTextActive = emergencyTextActive;
         projectShowcasePanelsRef.current.forEach((panel) => {
           if (panel.aboutRuntime?.mode !== "about") return;
           panel.aboutRuntime.cells.forEach((cell) => {
-            const targetMap = emergencyTextActive ? cell.emergencyTexture : cell.normalTexture;
+            const targetMap = emergencyTextActive
+              ? cell.emergencyTexture
+              : cell.normalTexture;
             if (cell.material.map !== targetMap) {
               cell.material.map = targetMap;
               cell.material.needsUpdate = true;
@@ -13114,11 +15009,18 @@ export default function ResumeSpace3D({
           if (panel.aboutRuntime?.mode !== "about") return;
           panel.aboutRuntime.cells.forEach((cell, cellIdx) => {
             const hue = THREE.MathUtils.euclideanModulo(
-              now * 0.00013 + panel.runPos * 0.00038 + panelIdx * 0.09 + cellIdx * 0.021,
+              now * 0.00013 +
+                panel.runPos * 0.00038 +
+                panelIdx * 0.09 +
+                cellIdx * 0.021,
               1,
             );
             const light = 0.68 + Math.sin(now * 0.002 + cellIdx * 0.7) * 0.08;
-            cell.material.color.setHSL(hue, 0.9, THREE.MathUtils.clamp(light, 0.52, 0.82));
+            cell.material.color.setHSL(
+              hue,
+              0.9,
+              THREE.MathUtils.clamp(light, 0.52, 0.82),
+            );
           });
         });
       } else if (isAboutElevatorMode) {
@@ -13144,17 +15046,23 @@ export default function ResumeSpace3D({
       );
       projectShowcasePanelsRef.current.forEach((panel, idx) => {
         const target = idx === focusIndex ? 1 : 0;
-        const focusedCta = idx === focusIndex && panel.entry.id === PROJECT_SHOWCASE_CTA_ENTRY_ID;
-        panel.focusBlend = THREE.MathUtils.damp(panel.focusBlend, target, 8, dt);
+        const focusedCta =
+          idx === focusIndex &&
+          panel.entry.id === PROJECT_SHOWCASE_CTA_ENTRY_ID;
+        panel.focusBlend = THREE.MathUtils.damp(
+          panel.focusBlend,
+          target,
+          8,
+          dt,
+        );
         const toFrontDelta = Math.atan2(
           Math.sin(panel.frontFacingRotationY - panel.inwardRotationY),
           Math.cos(panel.frontFacingRotationY - panel.inwardRotationY),
         );
-        panel.group.rotation.y =
-          panel.inwardRotationY +
-          toFrontDelta * angleT;
+        panel.group.rotation.y = panel.inwardRotationY + toFrontDelta * angleT;
         panel.group.scale.setScalar(1);
-        panel.frameMat.opacity = 0.22 + panel.focusBlend * (focusedCta ? 0.4 : 0.26);
+        panel.frameMat.opacity =
+          0.22 + panel.focusBlend * (focusedCta ? 0.4 : 0.26);
         panel.frameMat.color.setHex(
           focusedCta ? 0xbef4ff : idx === focusIndex ? 0x91ddff : 0x72c6ff,
         );
@@ -13168,7 +15076,9 @@ export default function ResumeSpace3D({
               : THREE.MathUtils.degToRad(45);
           const tempCellWorldPos = new THREE.Vector3();
           const tempCellWorldScale = new THREE.Vector3();
-          const getVisibleHeightAtCell = (cell: AboutSlideCellRuntime): number => {
+          const getVisibleHeightAtCell = (
+            cell: AboutSlideCellRuntime,
+          ): number => {
             if (!(activeCamera instanceof THREE.PerspectiveCamera)) return 12;
             cell.mesh.getWorldPosition(tempCellWorldPos);
             const wallDistance = Math.max(
@@ -13194,13 +15104,22 @@ export default function ResumeSpace3D({
               }
             }
             cell.mesh.getWorldScale(tempCellWorldScale);
-            return Math.max(0.01, Math.abs(tempCellWorldScale.y) * (localHeight ?? 1));
+            return Math.max(
+              0.01,
+              Math.abs(tempCellWorldScale.y) * (localHeight ?? 1),
+            );
           };
-          const distanceToTram = Math.abs(panel.runPos - projectShowcaseRunPosRef.current);
+          const distanceToTram = Math.abs(
+            panel.runPos - projectShowcaseRunPosRef.current,
+          );
           const inRange = distanceToTram <= track.cullHalfWindow;
           let maxCellVisibility = 1;
           if (inRange) {
-            const cellFadeInfos: { fadeInT: number; visibleFraction: number; ci: number }[] = [];
+            const cellFadeInfos: {
+              fadeInT: number;
+              visibleFraction: number;
+              ci: number;
+            }[] = [];
             panel.aboutRuntime.cells.forEach((cell, ci) => {
               cell.mesh.visible = true;
               if (cell.immersiveColumn && immersiveColumnRigRef.current) {
@@ -13209,7 +15128,10 @@ export default function ResumeSpace3D({
                 if (Math.abs(geo.parameters.width - rig.width) > 0.01) {
                   const keepHeight = geo.parameters.height;
                   cell.mesh.geometry.dispose();
-                  cell.mesh.geometry = new THREE.PlaneGeometry(rig.width, keepHeight);
+                  cell.mesh.geometry = new THREE.PlaneGeometry(
+                    rig.width,
+                    keepHeight,
+                  );
                 }
                 const parent = cell.mesh.parent;
                 if (parent) {
@@ -13217,9 +15139,11 @@ export default function ResumeSpace3D({
                   parent.position.y = rig.posY;
                   parent.position.z = rig.depth;
                 }
-                cell.mesh.rotation.y = THREE.MathUtils.degToRad(rig.angleDeg) * rig.angleMultiplier;
+                cell.mesh.rotation.y =
+                  THREE.MathUtils.degToRad(rig.angleDeg) * rig.angleMultiplier;
               } else {
-                cell.mesh.rotation.y = cell.baseYawRad * aboutHallAngleMultiplierRef.current;
+                cell.mesh.rotation.y =
+                  cell.baseYawRad * aboutHallAngleMultiplierRef.current;
               }
               if (cell.flowUnitsPerDistance <= 0) return;
               const progress = runNow - panel.aboutRuntime!.slideStartRun;
@@ -13239,17 +15163,27 @@ export default function ResumeSpace3D({
               const cellBottom = tempCellWorldPos.y - halfCell;
               const viewTop = cameraY + halfVisible;
               const viewBottom = cameraY - halfVisible;
-              const visibleOverlap = Math.max(0, Math.min(cellTop, viewTop) - Math.max(cellBottom, viewBottom));
-              const visibleFraction = cellWorldHeight > 0.01 ? visibleOverlap / cellWorldHeight : 0;
-              const fadeInT = THREE.MathUtils.clamp(visibleFraction / 0.15, 0, 1);
+              const visibleOverlap = Math.max(
+                0,
+                Math.min(cellTop, viewTop) - Math.max(cellBottom, viewBottom),
+              );
+              const visibleFraction =
+                cellWorldHeight > 0.01 ? visibleOverlap / cellWorldHeight : 0;
+              const fadeInT = THREE.MathUtils.clamp(
+                visibleFraction / 0.15,
+                0,
+                1,
+              );
               cellFadeInfos.push({ fadeInT, visibleFraction, ci });
             });
-            maxCellVisibility = cellFadeInfos.length > 0
-              ? Math.max(...cellFadeInfos.map((d) => d.visibleFraction))
-              : 1;
-            const coordFadeOutT = maxCellVisibility < 0.05
-              ? THREE.MathUtils.clamp((0.05 - maxCellVisibility) / 0.05, 0, 1)
-              : 0;
+            maxCellVisibility =
+              cellFadeInfos.length > 0
+                ? Math.max(...cellFadeInfos.map((d) => d.visibleFraction))
+                : 1;
+            const coordFadeOutT =
+              maxCellVisibility < 0.05
+                ? THREE.MathUtils.clamp((0.05 - maxCellVisibility) / 0.05, 0, 1)
+                : 0;
             cellFadeInfos.forEach(({ fadeInT, ci }) => {
               const cell = panel.aboutRuntime!.cells[ci];
               cell.material.opacity = Math.min(fadeInT, 1 - coordFadeOutT);
@@ -13288,7 +15222,9 @@ export default function ResumeSpace3D({
               const firstCell = panel.aboutRuntime.cells.find(
                 (cell) => !!cell.immersiveColumn,
               );
-              const visibleHeight = firstCell ? getVisibleHeightAtCell(firstCell) : 0;
+              const visibleHeight = firstCell
+                ? getVisibleHeightAtCell(firstCell)
+                : 0;
               setAboutFlowOverlaySnapshot({
                 slideId: panel.aboutRuntime.slideId,
                 run: runNow,
@@ -13316,13 +15252,17 @@ export default function ResumeSpace3D({
         }
         if (panel.techBadgeRoot) {
           panel.techBadgeRoot.visible =
-            idx === focusIndex && panel.group.visible && panel.techBadgeFx.length > 0;
+            idx === focusIndex &&
+            panel.group.visible &&
+            panel.techBadgeFx.length > 0;
         }
         // Subtle vertical shimmer over tech badges (top-to-bottom feel via phase offsets).
         panel.techBadgeFx.forEach((fx) => {
           const shimmer = 0.5 + 0.5 * Math.sin(now * 0.00125 - fx.phase);
           fx.mat.opacity = fx.baseOpacity * (0.8 + shimmer * 0.24);
-          fx.mat.color.copy(fx.baseColor).lerp(new THREE.Color(0x8fe7ff), shimmer * 0.28);
+          fx.mat.color
+            .copy(fx.baseColor)
+            .lerp(new THREE.Color(0x8fe7ff), shimmer * 0.28);
         });
       });
       // Floor lane pulses: travel from forward to aft, looped.
@@ -13345,7 +15285,10 @@ export default function ResumeSpace3D({
             mat.color.set(0x2ccfff);
             return;
           }
-          const d1 = Math.min(Math.abs(runT - pulseCenter), 1 - Math.abs(runT - pulseCenter));
+          const d1 = Math.min(
+            Math.abs(runT - pulseCenter),
+            1 - Math.abs(runT - pulseCenter),
+          );
           const d2 = Math.min(
             Math.abs(runT - pulseTrailCenter),
             1 - Math.abs(runT - pulseTrailCenter),
@@ -13412,49 +15355,56 @@ export default function ResumeSpace3D({
             ? new THREE.Vector3(
                 rootPos.x + track.centerCross + sway,
                 rootPos.y + track.cameraHeight - 0.3,
-                rootPos.z + run + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
+                rootPos.z +
+                  run +
+                  track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
               )
             : new THREE.Vector3(
-                rootPos.x + run + track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
+                rootPos.x +
+                  run +
+                  track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
                 rootPos.y + track.cameraHeight - 0.3,
                 rootPos.z + track.centerCross + sway,
               );
       let targetPos = defaultTarget;
       if (PROJECT_SHOWCASE_FREE_LOOK_ENABLED) {
-        const lockForward = performance.now() < projectShowcaseForwardLockUntilRef.current;
+        const lockForward =
+          performance.now() < projectShowcaseForwardLockUntilRef.current;
         if (lockForward) {
           targetPos = defaultTarget;
           projectShowcaseLookVectorRef.current = targetPos.clone().sub(camPos);
         } else {
-        const controlsAny = controls as unknown as {
-          getTarget?: (out: THREE.Vector3) => void;
-        };
-        const liveTarget = new THREE.Vector3();
-        if (controlsAny.getTarget) {
-          controlsAny.getTarget(liveTarget);
-        } else {
-          liveTarget.copy(defaultTarget);
-        }
-        let lookVec = liveTarget.sub(camera.position);
-        if (lookVec.lengthSq() < 1e-6) {
-          lookVec =
-            projectShowcaseLookVectorRef.current?.clone() ??
-            defaultTarget.clone().sub(camPos);
-        }
-        const lookDist = THREE.MathUtils.clamp(
-          lookVec.length(),
-          PROJECT_SHOWCASE_FREE_LOOK_MIN_DISTANCE,
-          PROJECT_SHOWCASE_FREE_LOOK_MAX_DISTANCE,
-        );
-        const lookDir = lookVec.normalize();
-        const lookYClamp = track.axis === "y" ? 0.94 : 0.72;
-        lookDir.y = THREE.MathUtils.clamp(lookDir.y, -lookYClamp, lookYClamp);
-        lookDir.normalize();
-        targetPos = camPos.clone().addScaledVector(lookDir, lookDist);
-        projectShowcaseLookVectorRef.current = targetPos.clone().sub(camPos);
+          const controlsAny = controls as unknown as {
+            getTarget?: (out: THREE.Vector3) => void;
+          };
+          const liveTarget = new THREE.Vector3();
+          if (controlsAny.getTarget) {
+            controlsAny.getTarget(liveTarget);
+          } else {
+            liveTarget.copy(defaultTarget);
+          }
+          let lookVec = liveTarget.sub(camera.position);
+          if (lookVec.lengthSq() < 1e-6) {
+            lookVec =
+              projectShowcaseLookVectorRef.current?.clone() ??
+              defaultTarget.clone().sub(camPos);
+          }
+          const lookDist = THREE.MathUtils.clamp(
+            lookVec.length(),
+            PROJECT_SHOWCASE_FREE_LOOK_MIN_DISTANCE,
+            PROJECT_SHOWCASE_FREE_LOOK_MAX_DISTANCE,
+          );
+          const lookDir = lookVec.normalize();
+          const lookYClamp = track.axis === "y" ? 0.94 : 0.72;
+          lookDir.y = THREE.MathUtils.clamp(lookDir.y, -lookYClamp, lookYClamp);
+          lookDir.normalize();
+          targetPos = camPos.clone().addScaledVector(lookDir, lookDist);
+          projectShowcaseLookVectorRef.current = targetPos.clone().sub(camPos);
         }
       } else {
-        projectShowcaseLookVectorRef.current = defaultTarget.clone().sub(camPos);
+        projectShowcaseLookVectorRef.current = defaultTarget
+          .clone()
+          .sub(camPos);
       }
       controls.setLookAt(
         camPos.x,
@@ -13492,7 +15442,10 @@ export default function ResumeSpace3D({
       const root = orbitalPortfolioRootRef.current;
       if (!controls || !camera || !root) return;
       root.getWorldPosition(anchor);
-      if (ORBITAL_PORTFOLIO_DEBUG_LOGS && !orbitalPortfolioDebugDumpedRef.current) {
+      if (
+        ORBITAL_PORTFOLIO_DEBUG_LOGS &&
+        !orbitalPortfolioDebugDumpedRef.current
+      ) {
         orbitalPortfolioDebugDumpedRef.current = true;
         const planeRows: string[] = [];
         const spriteRows: string[] = [];
@@ -13553,14 +15506,16 @@ export default function ResumeSpace3D({
         sceneRef.current.camera &&
         sceneRef.current.controls
       ) {
-        const inspectedStation = orbitalPortfolioStationsRef.current[inspectedIndex];
+        const inspectedStation =
+          orbitalPortfolioStationsRef.current[inspectedIndex];
         const controlsAny = sceneRef.current.controls as unknown as {
           getTarget?: (out: THREE.Vector3) => void;
         };
         if (inspectedStation && controlsAny.getTarget) {
           const controlTarget = new THREE.Vector3();
           controlsAny.getTarget(controlTarget);
-          const cameraDistance = sceneRef.current.camera.position.distanceTo(controlTarget);
+          const cameraDistance =
+            sceneRef.current.camera.position.distanceTo(controlTarget);
           const inspectedPlateWorld = new THREE.Vector3();
           inspectedStation.plate.getWorldPosition(inspectedPlateWorld);
           const targetDrift = controlTarget.distanceTo(inspectedPlateWorld);
@@ -13634,11 +15589,13 @@ export default function ResumeSpace3D({
       let haloThumbsMissingMap = 0;
       const stationDebugRows: string[] = [];
       const orbitMotionEnabled = orbitalPortfolioOrbitsEnabledRef.current;
-      const inspectedStationIndex = orbitalPortfolioInspectedStationIndexRef.current;
+      const inspectedStationIndex =
+        orbitalPortfolioInspectedStationIndexRef.current;
       const inspectedOrbitKey =
         inspectedStationIndex !== null
           ? (() => {
-              const inspected = orbitalPortfolioStationsRef.current[inspectedStationIndex];
+              const inspected =
+                orbitalPortfolioStationsRef.current[inspectedStationIndex];
               if (!inspected) return undefined;
               return `${inspected.coreId}|${inspected.plainIndex}|${inspected.ringIndex}`;
             })()
@@ -13650,22 +15607,27 @@ export default function ResumeSpace3D({
         const isFocused =
           orbitalPortfolioHasActiveFocusRef.current &&
           idx === orbitalPortfolioFocusIndexRef.current;
-        const isInspected = idx === orbitalPortfolioInspectedStationIndexRef.current;
+        const isInspected =
+          idx === orbitalPortfolioInspectedStationIndexRef.current;
         // Keep the currently visited card stable so camera-inspect never drifts.
         // Also freeze peers in the same orbit ring to prevent distracting
         // pass-through motion across the focused card while inspecting.
         const inInspectedOrbit =
           !!inspectedOrbitKey &&
-          `${station.coreId}|${station.plainIndex}|${station.ringIndex}` === inspectedOrbitKey;
+          `${station.coreId}|${station.plainIndex}|${station.ringIndex}` ===
+            inspectedOrbitKey;
         const lockStationOrbit =
           isInspected ||
           inInspectedOrbit ||
-          (hasInspectContext && isFocused && orbitalPortfolioManualCameraLockRef.current);
+          (hasInspectContext &&
+            isFocused &&
+            orbitalPortfolioManualCameraLockRef.current);
         if (lockStationOrbit) {
           freezeCount += 1;
           if (isInspected) inspectedFreezeCount += 1;
           else if (inInspectedOrbit) laneFreezeCount += 1;
-          else if (isFocused && orbitalPortfolioManualCameraLockRef.current) manualFreezeCount += 1;
+          else if (isFocused && orbitalPortfolioManualCameraLockRef.current)
+            manualFreezeCount += 1;
         }
         const targetOrbitBlend =
           !orbitMotionEnabled || lockStationOrbit ? 0 : 1;
@@ -13738,9 +15700,13 @@ export default function ResumeSpace3D({
             let rippleDz = 0;
             if (dist <= rippleFront + station.rippleWavelength * 1.2) {
               const wavePhase =
-                ((dist - rippleFront) / Math.max(1, station.rippleWavelength)) * Math.PI * 2;
+                ((dist - rippleFront) / Math.max(1, station.rippleWavelength)) *
+                Math.PI *
+                2;
               const waveFalloff = THREE.MathUtils.clamp(
-                1 - Math.abs(dist - rippleFront) / (station.rippleWavelength * 1.25),
+                1 -
+                  Math.abs(dist - rippleFront) /
+                    (station.rippleWavelength * 1.25),
                 0,
                 1,
               );
@@ -13763,7 +15729,8 @@ export default function ResumeSpace3D({
         const frameMat = station.frame.material as THREE.MeshBasicMaterial;
         const plateMat = station.plate.material as THREE.MeshBasicMaterial;
         const hasTexture = Boolean(
-          (station.plate.userData as { hasLoadedTexture?: boolean }).hasLoadedTexture,
+          (station.plate.userData as { hasLoadedTexture?: boolean })
+            .hasLoadedTexture,
         );
         frameMat.opacity = THREE.MathUtils.damp(
           frameMat.opacity,
@@ -13773,7 +15740,11 @@ export default function ResumeSpace3D({
         );
         plateMat.opacity = THREE.MathUtils.damp(
           plateMat.opacity,
-          isFocused ? 0.98 : hasTexture ? ORBITAL_PORTFOLIO_NONFOCUS_PLATE_OPACITY : 0.0,
+          isFocused
+            ? 0.98
+            : hasTexture
+              ? ORBITAL_PORTFOLIO_NONFOCUS_PLATE_OPACITY
+              : 0.0,
           8.5,
           dt,
         );
@@ -13800,7 +15771,11 @@ export default function ResumeSpace3D({
           tab.frame.visible = isFocused && hasVariant;
           const isActiveTab = tab.variantIndex === orbitalPortfolioVariantIndex;
           const hoverPulse =
-            0.985 + 0.015 * Math.sin(now * 0.004 + station.pulsePhase + tab.variantIndex * 0.9);
+            0.985 +
+            0.015 *
+              Math.sin(
+                now * 0.004 + station.pulsePhase + tab.variantIndex * 0.9,
+              );
           mat.opacity = isFocused ? 0.95 : 0;
           mat.color.setHex(isActiveTab ? 0x1d466d : 0x102742);
           frameMat.opacity = isFocused ? (isActiveTab ? 0.96 : 0.5) : 0;
@@ -13816,25 +15791,41 @@ export default function ResumeSpace3D({
           const showThumb = thumb.mesh.userData.orbitalShowThumb !== false;
           thumb.mesh.visible = isFocused && showThumb && hasMedia;
           thumb.frame.visible = isFocused && showThumb && hasMedia;
-          const mappedMediaIndex = Number(thumb.mesh.userData.orbitalMediaIndex ?? thumb.mediaIndex);
+          const mappedMediaIndex = Number(
+            thumb.mesh.userData.orbitalMediaIndex ?? thumb.mediaIndex,
+          );
           const isActiveMedia = mappedMediaIndex === orbitalPortfolioMediaIndex;
           mat.opacity = isFocused ? (isActiveMedia ? 1 : 0.93) : 0;
           mat.color.setHex(0xffffff);
           frameMat.opacity = isFocused ? (isActiveMedia ? 0.96 : 0.6) : 0;
           frameMat.color.setHex(isActiveMedia ? 0xd3f2ff : 0x79b5df);
-          thumb.mesh.scale.setScalar(isFocused ? (isActiveMedia ? 1.05 : 0.96) : 0.9);
+          thumb.mesh.scale.setScalar(
+            isFocused ? (isActiveMedia ? 1.05 : 0.96) : 0.9,
+          );
           thumb.frame.scale.copy(thumb.mesh.scale);
-          const baseX = Number(thumb.mesh.userData.orbitalBaseX ?? thumb.mesh.position.x);
-          const baseY = Number(thumb.mesh.userData.orbitalBaseY ?? thumb.mesh.position.y);
-          const meshSlideStartAt = Number(thumb.mesh.userData.orbitalThumbSlideStartAt ?? 0);
+          const baseX = Number(
+            thumb.mesh.userData.orbitalBaseX ?? thumb.mesh.position.x,
+          );
+          const baseY = Number(
+            thumb.mesh.userData.orbitalBaseY ?? thumb.mesh.position.y,
+          );
+          const meshSlideStartAt = Number(
+            thumb.mesh.userData.orbitalThumbSlideStartAt ?? 0,
+          );
           const meshSlideDuration = Math.max(
             1,
             Number(thumb.mesh.userData.orbitalThumbSlideDurationMs ?? 1),
           );
-          const meshSlideFromX = Number(thumb.mesh.userData.orbitalThumbSlideFromX ?? 0);
+          const meshSlideFromX = Number(
+            thumb.mesh.userData.orbitalThumbSlideFromX ?? 0,
+          );
           let meshSlideOffsetX = 0;
           if (meshSlideStartAt > 0 && meshSlideFromX !== 0) {
-            const t = THREE.MathUtils.clamp((now - meshSlideStartAt) / meshSlideDuration, 0, 1);
+            const t = THREE.MathUtils.clamp(
+              (now - meshSlideStartAt) / meshSlideDuration,
+              0,
+              1,
+            );
             const eased = 1 - (1 - t) * (1 - t) * (1 - t);
             meshSlideOffsetX = meshSlideFromX * (1 - eased);
             if (t >= 1) {
@@ -13842,18 +15833,34 @@ export default function ResumeSpace3D({
               thumb.mesh.userData.orbitalThumbSlideFromX = 0;
             }
           }
-          thumb.mesh.position.set(baseX + meshSlideOffsetX, baseY, thumb.mesh.position.z);
-          const frameBaseX = Number(thumb.frame.userData.orbitalBaseX ?? thumb.frame.position.x);
-          const frameBaseY = Number(thumb.frame.userData.orbitalBaseY ?? thumb.frame.position.y);
-          const frameSlideStartAt = Number(thumb.frame.userData.orbitalThumbSlideStartAt ?? 0);
+          thumb.mesh.position.set(
+            baseX + meshSlideOffsetX,
+            baseY,
+            thumb.mesh.position.z,
+          );
+          const frameBaseX = Number(
+            thumb.frame.userData.orbitalBaseX ?? thumb.frame.position.x,
+          );
+          const frameBaseY = Number(
+            thumb.frame.userData.orbitalBaseY ?? thumb.frame.position.y,
+          );
+          const frameSlideStartAt = Number(
+            thumb.frame.userData.orbitalThumbSlideStartAt ?? 0,
+          );
           const frameSlideDuration = Math.max(
             1,
             Number(thumb.frame.userData.orbitalThumbSlideDurationMs ?? 1),
           );
-          const frameSlideFromX = Number(thumb.frame.userData.orbitalThumbSlideFromX ?? 0);
+          const frameSlideFromX = Number(
+            thumb.frame.userData.orbitalThumbSlideFromX ?? 0,
+          );
           let frameSlideOffsetX = 0;
           if (frameSlideStartAt > 0 && frameSlideFromX !== 0) {
-            const t = THREE.MathUtils.clamp((now - frameSlideStartAt) / frameSlideDuration, 0, 1);
+            const t = THREE.MathUtils.clamp(
+              (now - frameSlideStartAt) / frameSlideDuration,
+              0,
+              1,
+            );
             const eased = 1 - (1 - t) * (1 - t) * (1 - t);
             frameSlideOffsetX = frameSlideFromX * (1 - eased);
             if (t >= 1) {
@@ -13861,19 +15868,37 @@ export default function ResumeSpace3D({
               thumb.frame.userData.orbitalThumbSlideFromX = 0;
             }
           }
-          thumb.frame.position.set(frameBaseX + frameSlideOffsetX, frameBaseY, thumb.frame.position.z);
+          thumb.frame.position.set(
+            frameBaseX + frameSlideOffsetX,
+            frameBaseY,
+            thumb.frame.position.z,
+          );
         });
         station.cardThumbNavMeshes.forEach((nav) => {
           const navMat = nav.mesh.material as THREE.MeshBasicMaterial;
           const navFrameMat = nav.frame.material as THREE.MeshBasicMaterial;
           const canMove = nav.mesh.userData.orbitalNavCanMove === true;
           const showNav = nav.mesh.userData.orbitalShowNav === true;
-          const pressedUntil = Number(nav.mesh.userData.orbitalPressedUntil ?? 0);
+          const pressedUntil = Number(
+            nav.mesh.userData.orbitalPressedUntil ?? 0,
+          );
           const isPressed = pressedUntil > now;
           nav.mesh.visible = isFocused && showNav;
           nav.frame.visible = isFocused && showNav;
-          navMat.opacity = isFocused ? (canMove ? (isPressed ? 1 : 0.94) : 0.34) : 0;
-          navFrameMat.opacity = isFocused ? (canMove ? (isPressed ? 0.96 : 0.84) : 0.24) : 0;
+          navMat.opacity = isFocused
+            ? canMove
+              ? isPressed
+                ? 1
+                : 0.94
+              : 0.34
+            : 0;
+          navFrameMat.opacity = isFocused
+            ? canMove
+              ? isPressed
+                ? 0.96
+                : 0.84
+              : 0.24
+            : 0;
           const targetScale = isFocused ? (isPressed ? 0.9 : 1) : 0.88;
           nav.mesh.scale.setScalar(targetScale);
           nav.frame.scale.setScalar(targetScale);
@@ -13882,12 +15907,26 @@ export default function ResumeSpace3D({
           const navMat = nav.mesh.material as THREE.MeshBasicMaterial;
           const navFrameMat = nav.frame.material as THREE.MeshBasicMaterial;
           const canMove = nav.mesh.userData.orbitalSlideCanMove === true;
-          const pressedUntil = Number(nav.mesh.userData.orbitalPressedUntil ?? 0);
+          const pressedUntil = Number(
+            nav.mesh.userData.orbitalPressedUntil ?? 0,
+          );
           const isPressed = pressedUntil > now;
           nav.mesh.visible = isFocused && canMove;
           nav.frame.visible = isFocused && canMove;
-          navMat.opacity = isFocused ? (canMove ? (isPressed ? 1 : 0.94) : 0.3) : 0;
-          navFrameMat.opacity = isFocused ? (canMove ? (isPressed ? 0.96 : 0.84) : 0.24) : 0;
+          navMat.opacity = isFocused
+            ? canMove
+              ? isPressed
+                ? 1
+                : 0.94
+              : 0.3
+            : 0;
+          navFrameMat.opacity = isFocused
+            ? canMove
+              ? isPressed
+                ? 0.96
+                : 0.84
+              : 0.24
+            : 0;
           const targetScale = isFocused ? (isPressed ? 0.9 : 1) : 0.88;
           nav.mesh.scale.setScalar(targetScale);
           nav.frame.scale.setScalar(targetScale);
@@ -13905,7 +15944,8 @@ export default function ResumeSpace3D({
             0,
             1,
           );
-          const impactMat = station.impactSprite.material as THREE.SpriteMaterial;
+          const impactMat = station.impactSprite
+            .material as THREE.SpriteMaterial;
           station.impactSprite.visible = tImpact < 1;
           impactMat.opacity = (1 - tImpact) * (1 - tImpact) * 0.52;
           const impactScale = 8 + tImpact * 24;
@@ -13916,7 +15956,10 @@ export default function ResumeSpace3D({
             impactMat.opacity = 0;
           }
         }
-        const radialToCore = station.coreAnchorLocal.clone().sub(station.group.position).normalize();
+        const radialToCore = station.coreAnchorLocal
+          .clone()
+          .sub(station.group.position)
+          .normalize();
         const worldUp = new THREE.Vector3(0, 1, 0);
         // Keep slide "top" aligned with world up so inspect view stays landscape.
         const projectedUp = worldUp
@@ -13931,8 +15974,14 @@ export default function ResumeSpace3D({
           station.group.lookAt(station.coreAnchorLocal);
         } else {
           right.normalize();
-          const correctedUp = new THREE.Vector3().crossVectors(radialToCore, right).normalize();
-          const basis = new THREE.Matrix4().makeBasis(right, correctedUp, radialToCore);
+          const correctedUp = new THREE.Vector3()
+            .crossVectors(radialToCore, right)
+            .normalize();
+          const basis = new THREE.Matrix4().makeBasis(
+            right,
+            correctedUp,
+            radialToCore,
+          );
           station.group.quaternion.setFromRotationMatrix(basis);
         }
         station.mediaHaloGroup.children.forEach((child) => {
@@ -13987,16 +16036,24 @@ export default function ResumeSpace3D({
                 0,
                 Math.max(0, motifs.length - 1),
               )
-            ] ?? motifs[0] ?? [];
+            ] ??
+            motifs[0] ??
+            [];
           if (toneRuntime.noteIndex >= motif.length) {
             toneRuntime.noteIndex = 0;
-            toneRuntime.motifIndex = (toneRuntime.motifIndex + 1) % Math.max(1, motifs.length);
-            toneRuntime.nextEventAtMs = now + SKILLS_LATTICE_TONE_PHRASE_PAUSE_MS;
+            toneRuntime.motifIndex =
+              (toneRuntime.motifIndex + 1) % Math.max(1, motifs.length);
+            toneRuntime.nextEventAtMs =
+              now + SKILLS_LATTICE_TONE_PHRASE_PAUSE_MS;
           } else {
             const freq = motif[toneRuntime.noteIndex] ?? 329.63;
-            const maxCoreSlots = Math.max(1, Math.min(5, orbitalPortfolioCoresRef.current.length));
+            const maxCoreSlots = Math.max(
+              1,
+              Math.min(5, orbitalPortfolioCoresRef.current.length),
+            );
             toneRuntime.accentCoreIndex = toneRuntime.noteIndex % maxCoreSlots;
-            toneRuntime.accentUntilAtMs = now + SKILLS_LATTICE_TONE_NOTE_DURATION_MS;
+            toneRuntime.accentUntilAtMs =
+              now + SKILLS_LATTICE_TONE_NOTE_DURATION_MS;
             if (ORBITAL_PORTFOLIO_DEBUG_LOGS) {
               shipLog(
                 `[LATTICE-TONE] queue motif=${toneRuntime.motifIndex} note=${toneRuntime.noteIndex} core=${toneRuntime.accentCoreIndex} freq=${freq.toFixed(2)} ctx=${toneRuntime.context?.state ?? "null"}`,
@@ -14016,7 +16073,9 @@ export default function ResumeSpace3D({
           now < toneRuntime.accentUntilAtMs
             ? 1 -
               THREE.MathUtils.clamp(
-                (now - (toneRuntime.accentUntilAtMs - SKILLS_LATTICE_TONE_NOTE_DURATION_MS)) /
+                (now -
+                  (toneRuntime.accentUntilAtMs -
+                    SKILLS_LATTICE_TONE_NOTE_DURATION_MS)) /
                   Math.max(1, SKILLS_LATTICE_TONE_NOTE_DURATION_MS),
                 0,
                 1,
@@ -14024,7 +16083,9 @@ export default function ResumeSpace3D({
             : 0;
         const glowMat = core.glow.material as THREE.MeshBasicMaterial;
         glowMat.opacity =
-          0.2 + (0.5 + 0.5 * Math.sin(now * 0.0018 + coreIndex)) * 0.2 + accentT * 0.28;
+          0.2 +
+          (0.5 + 0.5 * Math.sin(now * 0.0018 + coreIndex)) * 0.2 +
+          accentT * 0.28;
         core.glow.scale.setScalar(1 + accentT * 0.32);
         core.nucleus.scale.setScalar(1 + accentT * 0.1);
         core.root.rotation.y += dt * 0.03;
@@ -14032,21 +16093,26 @@ export default function ResumeSpace3D({
         core.sliceGroup.rotation.y -= dt * 0.24;
         core.sliceGroup.rotation.z += dt * 0.11;
         core.sliceMats.forEach((mat, idx) => {
-          const pulse = 0.5 + 0.5 * Math.sin(now * 0.0021 + idx * 0.9 + coreIndex);
+          const pulse =
+            0.5 + 0.5 * Math.sin(now * 0.0021 + idx * 0.9 + coreIndex);
           mat.opacity = 0.2 + pulse * 0.28 + accentT * 0.2;
         });
         core.rayMats.forEach((mat, idx) => {
-          const pulse = 0.5 + 0.5 * Math.sin(now * 0.0017 + idx * 0.63 + coreIndex);
+          const pulse =
+            0.5 + 0.5 * Math.sin(now * 0.0017 + idx * 0.63 + coreIndex);
           mat.opacity = 0.12 + pulse * 0.2 + accentT * 0.16;
         });
         if (core.panelMat) {
-          core.panelMat.opacity = 0.12 + (0.5 + 0.5 * Math.sin(now * 0.0016)) * 0.02;
+          core.panelMat.opacity =
+            0.12 + (0.5 + 0.5 * Math.sin(now * 0.0016)) * 0.02;
         }
         if (core.panelColorAttr && core.panelBaseColors) {
           const arr = core.panelColorAttr.array as Float32Array;
-          const lum = 0.86 + (0.5 + 0.5 * Math.sin(now * 0.0012 + coreIndex)) * 0.06;
+          const lum =
+            0.86 + (0.5 + 0.5 * Math.sin(now * 0.0012 + coreIndex)) * 0.06;
           for (let i = 0; i < arr.length; i += 3) {
-            const pulse = 0.98 + 0.02 * Math.sin(now * 0.0019 + i * 0.0013 + coreIndex);
+            const pulse =
+              0.98 + 0.02 * Math.sin(now * 0.0019 + i * 0.0013 + coreIndex);
             arr[i] = core.panelBaseColors[i] * lum * pulse;
             arr[i + 1] = core.panelBaseColors[i + 1] * lum * pulse;
             arr[i + 2] = core.panelBaseColors[i + 2] * lum * pulse;
@@ -14074,11 +16140,15 @@ export default function ResumeSpace3D({
           stations.forEach((station, stationIndex) => {
             if (station.coreId === coreId) candidates.push(stationIndex);
           });
-          if (candidates.length === 0) return Math.floor(Math.random() * stations.length);
+          if (candidates.length === 0)
+            return Math.floor(Math.random() * stations.length);
           return candidates[Math.floor(Math.random() * candidates.length)] ?? 0;
         };
         const randomTargetOffset = () =>
-          new THREE.Vector2((Math.random() - 0.5) * 52, (Math.random() - 0.5) * 28);
+          new THREE.Vector2(
+            (Math.random() - 0.5) * 52,
+            (Math.random() - 0.5) * 28,
+          );
         const randomMissOffset = () =>
           new THREE.Vector3(
             (Math.random() - 0.5) * 520,
@@ -14089,17 +16159,23 @@ export default function ResumeSpace3D({
         packets.forEach((packet, idx) => {
           packet.progress += dt * packet.speed;
           if (packet.progress >= 1) {
-            const impactStation = orbitalPortfolioStationsRef.current[packet.targetStation];
+            const impactStation =
+              orbitalPortfolioStationsRef.current[packet.targetStation];
             if (packet.willImpact && impactStation) {
               impactStation.impactStartedAt = now;
-              const impactMat = impactStation.impactSprite.material as THREE.SpriteMaterial;
+              const impactMat = impactStation.impactSprite
+                .material as THREE.SpriteMaterial;
               const packetMat = packet.mesh.material as THREE.SpriteMaterial;
               impactMat.color.copy(packetMat.color);
               matterTo.set(packet.targetOffset.x, packet.targetOffset.y, 0.2);
               impactStation.plate.localToWorld(matterTo);
               impactStation.group.worldToLocal(matterTo);
               impactStation.impactLocalPoint.set(matterTo.x, matterTo.y);
-              impactStation.impactSprite.position.set(matterTo.x, matterTo.y, 1.38);
+              impactStation.impactSprite.position.set(
+                matterTo.x,
+                matterTo.y,
+                1.38,
+              );
               impactStation.impactSprite.scale.setScalar(8 + Math.random() * 4);
               impactStation.impactDurationMs = 2200 + Math.random() * 1200;
               impactStation.rippleAmplitude = 0.45 + Math.random() * 1.15;
@@ -14110,9 +16186,12 @@ export default function ResumeSpace3D({
             packet.progress = 0;
             packet.speed = 0.24 + Math.random() * 0.32;
             packet.sourceCoreIndex = Math.floor(
-              Math.random() * Math.max(1, orbitalPortfolioCoresRef.current.length),
+              Math.random() *
+                Math.max(1, orbitalPortfolioCoresRef.current.length),
             );
-            packet.targetStation = pickRandomStationIndexForCore(packet.sourceCoreIndex);
+            packet.targetStation = pickRandomStationIndexForCore(
+              packet.sourceCoreIndex,
+            );
             packet.targetOffset.copy(randomTargetOffset());
             packet.willImpact = randomWillImpact();
             packet.missOffset.copy(randomMissOffset());
@@ -14134,7 +16213,8 @@ export default function ResumeSpace3D({
           if (!sourceCore) return;
           sourceCore.root.getWorldPosition(matterFrom);
           if (packet.willImpact) {
-            const targetStation = orbitalPortfolioStationsRef.current[packet.targetStation];
+            const targetStation =
+              orbitalPortfolioStationsRef.current[packet.targetStation];
             if (!targetStation) return;
             matterTo.set(packet.targetOffset.x, packet.targetOffset.y, 0.2);
             targetStation.plate.localToWorld(matterTo);
@@ -14142,8 +16222,12 @@ export default function ResumeSpace3D({
           } else {
             matterTarget.copy(matterFrom).add(packet.missOffset);
           }
-          matterPos.copy(matterFrom).add(packet.startOffset).lerp(matterTarget, packet.progress);
-          const arc = Math.sin(packet.progress * Math.PI) * (8 + (idx % 5) * 1.4);
+          matterPos
+            .copy(matterFrom)
+            .add(packet.startOffset)
+            .lerp(matterTarget, packet.progress);
+          const arc =
+            Math.sin(packet.progress * Math.PI) * (8 + (idx % 5) * 1.4);
           matterPos.y += arc;
           const packetParent = packet.mesh.parent;
           if (packetParent) {
@@ -14152,14 +16236,17 @@ export default function ResumeSpace3D({
             packet.mesh.position.copy(matterPos);
           }
           const pmat = packet.mesh.material as THREE.SpriteMaterial;
-          pmat.opacity = 0.2 + (0.5 + 0.5 * Math.sin(now * 0.004 + packet.phase)) * 0.2;
+          pmat.opacity =
+            0.2 + (0.5 + 0.5 * Math.sin(now * 0.004 + packet.phase)) * 0.2;
         });
       }
       const hasFocusedCore =
         orbitalPortfolioHasActiveFocusRef.current &&
         !!orbitalPortfolioFocusedCoreIdRef.current;
       const focusCore = hasFocusedCore
-        ? orbitalPortfolioCoresByIdRef.current.get(orbitalPortfolioFocusedCoreIdRef.current)
+        ? orbitalPortfolioCoresByIdRef.current.get(
+            orbitalPortfolioFocusedCoreIdRef.current,
+          )
         : null;
       const activeAnchor = (() => {
         if (focusCore) return focusCore.centerLocal.clone().add(anchor);
@@ -14210,11 +16297,23 @@ export default function ResumeSpace3D({
           const p = (t - 0.42) / 0.58;
           const smooth = p * p * (3 - 2 * p);
           cam.lerpVectors(entrySeq.revealCam, entrySeq.finalCam, smooth);
-          target.lerpVectors(entrySeq.revealTarget, entrySeq.finalTarget, smooth);
+          target.lerpVectors(
+            entrySeq.revealTarget,
+            entrySeq.finalTarget,
+            smooth,
+          );
         }
         orbitalPortfolioCameraPosRef.current.copy(cam);
         orbitalPortfolioCameraTargetRef.current.copy(target);
-        controls.setLookAt(cam.x, cam.y, cam.z, target.x, target.y, target.z, false);
+        controls.setLookAt(
+          cam.x,
+          cam.y,
+          cam.z,
+          target.x,
+          target.y,
+          target.z,
+          false,
+        );
         if (t >= 1) {
           entrySeq.active = false;
           shipLog("[PORTENTRY] entrySequence:end", "info");
@@ -14232,7 +16331,8 @@ export default function ResumeSpace3D({
           }
           // Suppress touchpad wheel/pointer residue right after arrival.
           orbitalPortfolioIgnoreManualUntilRef.current = now + 900;
-          const pendingInspect = orbitalPortfolioPendingInspectRequestRef.current;
+          const pendingInspect =
+            orbitalPortfolioPendingInspectRequestRef.current;
           if (pendingInspect) {
             orbitalPortfolioPendingInspectRequestRef.current = null;
             requestAnimationFrame(() => {
@@ -14268,7 +16368,9 @@ export default function ResumeSpace3D({
         }
         const smooth = 1 - Math.exp(-dt * 4.2);
         orbitalPortfolioCameraPosRef.current.lerp(desiredCam, smooth);
-        const desiredTarget = activeAnchor.clone().add(new THREE.Vector3(0, 14, 0));
+        const desiredTarget = activeAnchor
+          .clone()
+          .add(new THREE.Vector3(0, 14, 0));
         orbitalPortfolioCameraTargetRef.current.lerp(desiredTarget, smooth);
         controls.setLookAt(
           orbitalPortfolioCameraPosRef.current.x,
@@ -14319,21 +16421,26 @@ export default function ResumeSpace3D({
         core.sliceGroup.rotation.y -= dt * 0.24;
         core.sliceGroup.rotation.z += dt * 0.11;
         core.sliceMats.forEach((mat, idx) => {
-          const pulse = 0.5 + 0.5 * Math.sin(now * 0.0021 + idx * 0.9 + coreIndex);
+          const pulse =
+            0.5 + 0.5 * Math.sin(now * 0.0021 + idx * 0.9 + coreIndex);
           mat.opacity = 0.2 + pulse * 0.28;
         });
         core.rayMats.forEach((mat, idx) => {
-          const pulse = 0.5 + 0.5 * Math.sin(now * 0.0017 + idx * 0.63 + coreIndex);
+          const pulse =
+            0.5 + 0.5 * Math.sin(now * 0.0017 + idx * 0.63 + coreIndex);
           mat.opacity = 0.12 + pulse * 0.2;
         });
         if (core.panelMat) {
-          core.panelMat.opacity = 0.12 + (0.5 + 0.5 * Math.sin(now * 0.0016)) * 0.02;
+          core.panelMat.opacity =
+            0.12 + (0.5 + 0.5 * Math.sin(now * 0.0016)) * 0.02;
         }
         if (core.panelColorAttr && core.panelBaseColors) {
           const arr = core.panelColorAttr.array as Float32Array;
-          const lum = 0.86 + (0.5 + 0.5 * Math.sin(now * 0.0012 + coreIndex)) * 0.06;
+          const lum =
+            0.86 + (0.5 + 0.5 * Math.sin(now * 0.0012 + coreIndex)) * 0.06;
           for (let i = 0; i < arr.length; i += 3) {
-            const pulse = 0.98 + 0.02 * Math.sin(now * 0.0019 + i * 0.0013 + coreIndex);
+            const pulse =
+              0.98 + 0.02 * Math.sin(now * 0.0019 + i * 0.0013 + coreIndex);
             arr[i] = core.panelBaseColors[i] * lum * pulse;
             arr[i + 1] = core.panelBaseColors[i + 1] * lum * pulse;
             arr[i + 2] = core.panelBaseColors[i + 2] * lum * pulse;
@@ -14344,7 +16451,10 @@ export default function ResumeSpace3D({
       orbitalPortfolioStationsRef.current.forEach((station) => {
         if (station.orbitMotionBlend < 1) {
           station.orbitMotionBlend = THREE.MathUtils.damp(
-            station.orbitMotionBlend, 1, 5.5, dt,
+            station.orbitMotionBlend,
+            1,
+            5.5,
+            dt,
           );
         }
         station.orbitAngle +=
@@ -14410,8 +16520,10 @@ export default function ResumeSpace3D({
     const sameFocusedStation = prevViewed.focusIndex === focusIndex;
     const contentChangedOnFocusedStation =
       sameFocusedStation &&
-      (prevViewed.variantIndex !== variantIndex || prevViewed.mediaIndex !== mediaIndex);
-    const shouldAutoAlignThumbPage = !sameFocusedStation || contentChangedOnFocusedStation;
+      (prevViewed.variantIndex !== variantIndex ||
+        prevViewed.mediaIndex !== mediaIndex);
+    const shouldAutoAlignThumbPage =
+      !sameFocusedStation || contentChangedOnFocusedStation;
     if (
       shouldAutoAlignThumbPage &&
       mediaItems.length > ORBITAL_PORTFOLIO_CARD_MAX_THUMBS &&
@@ -14421,12 +16533,17 @@ export default function ResumeSpace3D({
       thumbPageStart =
         Math.floor(mediaIndex / ORBITAL_PORTFOLIO_CARD_MAX_THUMBS) *
         ORBITAL_PORTFOLIO_CARD_MAX_THUMBS;
-      thumbPageStart = THREE.MathUtils.clamp(thumbPageStart, 0, maxThumbPageStart);
+      thumbPageStart = THREE.MathUtils.clamp(
+        thumbPageStart,
+        0,
+        maxThumbPageStart,
+      );
     }
     if (thumbPageStart !== orbitalPortfolioThumbPageStartRef.current) {
       setOrbitalPortfolioThumbPageStart(thumbPageStart);
     }
-    const thumbPageChanged = thumbPageStart !== orbitalPortfolioPrevThumbPageStartRef.current;
+    const thumbPageChanged =
+      thumbPageStart !== orbitalPortfolioPrevThumbPageStartRef.current;
     const thumbSlideDirection = orbitalPortfolioThumbSlideDirectionRef.current;
     if (thumbPageChanged && thumbSlideDirection) {
       const slideFromX = thumbSlideDirection === "next" ? 7.6 : -7.6;
@@ -14461,7 +16578,9 @@ export default function ResumeSpace3D({
         station.plate.getWorldPosition(plateWorld);
         const plateQuat = new THREE.Quaternion();
         station.plate.getWorldQuaternion(plateQuat);
-        const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(plateQuat).normalize();
+        const normal = new THREE.Vector3(0, 0, 1)
+          .applyQuaternion(plateQuat)
+          .normalize();
         const savedDistance = orbitalPortfolioInspectDistanceRef.current;
         const inspectDistance =
           typeof savedDistance === "number" &&
@@ -14469,7 +16588,9 @@ export default function ResumeSpace3D({
           savedDistance <= ORBITAL_PORTFOLIO_INSPECT_MAX_REASONABLE_DISTANCE
             ? savedDistance
             : ORBITAL_PORTFOLIO_INSPECT_DEFAULT_DISTANCE;
-        const camPos = plateWorld.clone().addScaledVector(normal, inspectDistance);
+        const camPos = plateWorld
+          .clone()
+          .addScaledVector(normal, inspectDistance);
         const lookTarget = plateWorld.clone();
         controls.setLookAt(
           camPos.x,
@@ -14578,7 +16699,9 @@ export default function ResumeSpace3D({
       }
       thumb.mesh.visible = !hideSingleThumbNoVariant;
       thumb.frame.visible = !hideSingleThumbNoVariant;
-      const prevUrl = thumb.mesh.userData.orbitalThumbTextureUrl as string | undefined;
+      const prevUrl = thumb.mesh.userData.orbitalThumbTextureUrl as
+        | string
+        | undefined;
       if (prevUrl === mediaAtThumb.textureUrl && thumbMat.map) return;
       thumb.mesh.userData.orbitalThumbTextureUrl = mediaAtThumb.textureUrl;
       thumbLoader.load(
@@ -14605,7 +16728,8 @@ export default function ResumeSpace3D({
       const canMove =
         nav.direction === "prev"
           ? thumbPageStart > 0
-          : thumbPageStart + ORBITAL_PORTFOLIO_CARD_MAX_THUMBS < mediaItems.length;
+          : thumbPageStart + ORBITAL_PORTFOLIO_CARD_MAX_THUMBS <
+            mediaItems.length;
       nav.mesh.visible = showThumbNav;
       nav.frame.visible = showThumbNav;
       nav.mesh.userData.orbitalStationIndex = focusIndex;
@@ -14644,7 +16768,12 @@ export default function ResumeSpace3D({
         tex.colorSpace = THREE.SRGBColorSpace;
         const plateMat = station.plate.material as THREE.MeshBasicMaterial;
         plateMat.map = tex;
-        const maxOffsetY = applyTextureForFitMode(tex, 72 / 42, station.textureFitMode, 0);
+        const maxOffsetY = applyTextureForFitMode(
+          tex,
+          72 / 42,
+          station.textureFitMode,
+          0,
+        );
         station.textureMaxOffsetY = maxOffsetY;
         station.plate.userData.textureMaxOffsetY = maxOffsetY;
         station.plate.userData.hasLoadedTexture = true;
@@ -14712,37 +16841,62 @@ export default function ResumeSpace3D({
       if (inspectedIndex === null) return;
       const station = orbitalPortfolioStationsRef.current[inspectedIndex];
       if (!station) return;
-      const plateMat = station.plate.material as THREE.MeshBasicMaterial | undefined;
+      const plateMat = station.plate.material as
+        | THREE.MeshBasicMaterial
+        | undefined;
       const texture = plateMat?.map;
       if (!texture) return;
       const maxOffsetY = Math.max(
         0,
-        Number(station.plate.userData.textureMaxOffsetY ?? station.textureMaxOffsetY ?? 0),
+        Number(
+          station.plate.userData.textureMaxOffsetY ??
+            station.textureMaxOffsetY ??
+            0,
+        ),
       );
       if (maxOffsetY <= 0.0001) return;
       const prevNorm = THREE.MathUtils.clamp(
-        Number(station.plate.userData.textureScrollNorm ?? station.textureScrollNorm ?? 0),
+        Number(
+          station.plate.userData.textureScrollNorm ??
+            station.textureScrollNorm ??
+            0,
+        ),
         0,
         1,
       );
-      const nextNorm = THREE.MathUtils.clamp(prevNorm + event.deltaY * 0.0011, 0, 1);
+      const nextNorm = THREE.MathUtils.clamp(
+        prevNorm + event.deltaY * 0.0011,
+        0,
+        1,
+      );
       if (Math.abs(nextNorm - prevNorm) < 1e-4) return;
       station.textureScrollNorm = nextNorm;
       station.plate.userData.textureScrollNorm = nextNorm;
       const activeFitMode =
-        (station.plate.userData.textureFitMode as "contain" | "cover" | undefined) ??
-        station.textureFitMode;
+        (station.plate.userData.textureFitMode as
+          | "contain"
+          | "cover"
+          | undefined) ?? station.textureFitMode;
       applyTextureForFitMode(texture, 72 / 42, activeFitMode, nextNorm);
       event.preventDefault();
       event.stopPropagation();
     };
     window.addEventListener("pointerdown", onPointerDown, { capture: true });
-    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    window.addEventListener("wheel", onWheel, {
+      passive: false,
+      capture: true,
+    });
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown, { capture: true });
+      window.removeEventListener("pointerdown", onPointerDown, {
+        capture: true,
+      });
       window.removeEventListener("wheel", onWheel, { capture: true });
     };
-  }, [orbitalPortfolioActive, exitOrbitalPortfolioInspectMode, setOrbitalPortfolioManualLock]);
+  }, [
+    orbitalPortfolioActive,
+    exitOrbitalPortfolioInspectMode,
+    setOrbitalPortfolioManualLock,
+  ]);
 
   // Orbit horizon signage: readable glowing text that rides moon rotation.
   useEffect(() => {
@@ -14801,7 +16955,9 @@ export default function ResumeSpace3D({
         const base = Math.random() < 0.5 ? baseA : baseB;
         const reversed = Math.random() < 0.5 ? [...base].reverse() : [...base];
         const rotateBy = Math.floor(Math.random() * reversed.length);
-        const rotated = reversed.map((_, idx) => reversed[(idx + rotateBy) % reversed.length] ?? 0);
+        const rotated = reversed.map(
+          (_, idx) => reversed[(idx + rotateBy) % reversed.length] ?? 0,
+        );
         // If first choice lands too close to previous lane, rotate once more.
         const first = rotated[0] ?? 0;
         if (state.lastSlot >= 0 && Math.abs(first - state.lastSlot) <= 1) {
@@ -14875,20 +17031,28 @@ export default function ResumeSpace3D({
       const laneScreen = laneKey * screenRightSign;
       // Camera-aware spawn: keep signs on visible upper/front moon area.
       const horizonDistance = moonRadius * (1.01 + Math.random() * 0.06);
-      moonTopNdc.copy(moonCenter).addScaledVector(camUp, moonRadius).project(cam);
-      moonBottomNdc.copy(moonCenter).addScaledVector(camUp, -moonRadius).project(cam);
-      const moonNdcRadiusY = Math.max(0.02, Math.abs(moonTopNdc.y - moonBottomNdc.y) * 0.5);
+      moonTopNdc
+        .copy(moonCenter)
+        .addScaledVector(camUp, moonRadius)
+        .project(cam);
+      moonBottomNdc
+        .copy(moonCenter)
+        .addScaledVector(camUp, -moonRadius)
+        .project(cam);
+      const moonNdcRadiusY = Math.max(
+        0.02,
+        Math.abs(moonTopNdc.y - moonBottomNdc.y) * 0.5,
+      );
       const moonNdcRadiusX = Math.max(0.02, moonNdcRadiusY * 0.95);
       let bestScore = -Infinity;
       for (let attempt = 0; attempt < 14; attempt += 1) {
         // Pick a point on the projected, visible upper/front part of the moon disk.
         const pickX =
           moonCenterNdc.x +
-          (laneScreen * moonNdcRadiusX * 1.12) +
+          laneScreen * moonNdcRadiusX * 1.12 +
           (Math.random() - 0.5) * moonNdcRadiusX * 0.24;
         const pickY =
-          moonCenterNdc.y +
-          moonNdcRadiusY * (0.21 + Math.random() * 0.66);
+          moonCenterNdc.y + moonNdcRadiusY * (0.21 + Math.random() * 0.66);
         ndcPick.set(
           THREE.MathUtils.clamp(pickX, -0.86, 0.86),
           THREE.MathUtils.clamp(pickY, -0.72, 0.9),
@@ -14912,8 +17076,14 @@ export default function ResumeSpace3D({
             candidatePos
               .copy(moonCenter)
               .addScaledVector(camToMoon, horizonDistance)
-              .addScaledVector(tangent, (Math.random() - 0.5) * moonRadius * 0.12)
-              .addScaledVector(camUp, moonRadius * (0.16 + Math.random() * 0.24));
+              .addScaledVector(
+                tangent,
+                (Math.random() - 0.5) * moonRadius * 0.12,
+              )
+              .addScaledVector(
+                camUp,
+                moonRadius * (0.16 + Math.random() * 0.24),
+              );
           }
         } else {
           candidatePos
@@ -14967,11 +17137,7 @@ export default function ResumeSpace3D({
       sprite.renderOrder = 900;
       signObject = sprite;
       signMaterial = mat;
-      signObject.position.set(
-        worldPos.x,
-        worldPos.y,
-        worldPos.z,
-      );
+      signObject.position.set(worldPos.x, worldPos.y, worldPos.z);
       signObject.userData.orbitSign = true;
       group.add(signObject);
       arcStart = worldPos.clone();
@@ -15129,9 +17295,13 @@ export default function ResumeSpace3D({
       const lightMul = THREE.MathUtils.clamp(tuning.lightIntensity, 0, 3);
       const startScaleMul = THREE.MathUtils.clamp(tuning.startFontScale, 0, 4);
       const endScaleMul = THREE.MathUtils.clamp(tuning.endFontScale, 0, 6);
-      const intervalMs = THREE.MathUtils.clamp(tuning.timeBetweenMessagesSec, 0, 5) * 1000;
+      const intervalMs =
+        THREE.MathUtils.clamp(tuning.timeBetweenMessagesSec, 0, 5) * 1000;
       const immediateMode = intervalMs <= 1;
-      if (moonTravelSignPauseUntilRef.current > 0 && now >= moonTravelSignPauseUntilRef.current) {
+      if (
+        moonTravelSignPauseUntilRef.current > 0 &&
+        now >= moonTravelSignPauseUntilRef.current
+      ) {
         moonTravelSignPauseUntilRef.current = 0;
       }
       const canSpawnNow =
@@ -15165,7 +17335,10 @@ export default function ResumeSpace3D({
           }
 
           const lifetimeUnits = 3.35;
-          const startIndex = Math.max(0, Math.floor(playhead - lifetimeUnits - 1));
+          const startIndex = Math.max(
+            0,
+            Math.floor(playhead - lifetimeUnits - 1),
+          );
           const endIndex = Math.min(pool.length - 1, Math.ceil(playhead));
           const existingByIndex = new Map<number, MoonTravelSignRecord>();
           moonTravelSignsRef.current.forEach((record) => {
@@ -15183,7 +17356,8 @@ export default function ResumeSpace3D({
               });
             }
             if (!activeRecord) continue;
-            activeRecord.ageMs = activeRecord.ttlMs * THREE.MathUtils.clamp(ageNorm, 0, 0.995);
+            activeRecord.ageMs =
+              activeRecord.ttlMs * THREE.MathUtils.clamp(ageNorm, 0, 0.995);
             keepIndices.add(activeRecord.memoryIndex);
           }
 
@@ -15198,12 +17372,17 @@ export default function ResumeSpace3D({
             record.material.dispose();
           });
           moonTravelSignsRef.current = manualSurvivors;
-          moonTravelSignLastSpawnAtRef.current = now + Math.max(260, intervalMs * 0.9);
+          moonTravelSignLastSpawnAtRef.current =
+            now + Math.max(260, intervalMs * 0.9);
         }
         moonMemoryScrubRequestRef.current = null;
       }
       const allowAutoPlayback = !memoryManualMode;
-      if (allowAutoPlayback && canSpawnNow && now >= moonTravelSignLastSpawnAtRef.current) {
+      if (
+        allowAutoPlayback &&
+        canSpawnNow &&
+        now >= moonTravelSignLastSpawnAtRef.current
+      ) {
         let spawnedThisTick = 0;
         const maxPerTick = immediateMode ? 1 : 4;
         while (
@@ -15211,7 +17390,9 @@ export default function ResumeSpace3D({
           spawnedThisTick < maxPerTick
         ) {
           // Fire-and-forget: never block cadence on active-count saturation.
-          while (moonTravelSignsRef.current.length >= MOON_TRAVEL_SIGN_MAX_ACTIVE) {
+          while (
+            moonTravelSignsRef.current.length >= MOON_TRAVEL_SIGN_MAX_ACTIVE
+          ) {
             const oldest = moonTravelSignsRef.current.shift();
             if (!oldest) break;
             const parent = oldest.object.parent;
@@ -15220,14 +17401,16 @@ export default function ResumeSpace3D({
           }
           spawnSign(activeCompanyId, moonMesh, moonRadius);
           if (!memoryManualMode) {
-            moonMemoryScrubValueRef.current = moonTravelSignPoolCursorRef.current;
+            moonMemoryScrubValueRef.current =
+              moonTravelSignPoolCursorRef.current;
           }
           spawnedThisTick += 1;
           if (moonTravelSignSequenceWrappedRef.current) {
             moonTravelSignPauseUntilRef.current =
               now + Math.max(0, tuning.waitAfterStreamSec) * 1000;
             moonTravelSignSequenceWrappedRef.current = false;
-            moonTravelSignLastSpawnAtRef.current = moonTravelSignPauseUntilRef.current;
+            moonTravelSignLastSpawnAtRef.current =
+              moonTravelSignPauseUntilRef.current;
             break;
           }
           if (immediateMode) {
@@ -15246,7 +17429,11 @@ export default function ResumeSpace3D({
         }
         const mat = record.material as THREE.Material & { opacity?: number };
         const spriteMat = record.material as THREE.SpriteMaterial;
-        const t = THREE.MathUtils.clamp(record.ageMs / Math.max(record.ttlMs, 1), 0, 1);
+        const t = THREE.MathUtils.clamp(
+          record.ageMs / Math.max(record.ttlMs, 1),
+          0,
+          1,
+        );
         // Force a deterministic behind->front crossover while still in view.
         // Stage A (early): behind drone text. Stage B (mid/late): pass through.
         const frontPass = t >= 0.28;
@@ -15260,12 +17447,19 @@ export default function ResumeSpace3D({
             .multiplyScalar(inv * inv)
             .addScaledVector(record.arcControl, 2 * inv * t)
             .addScaledVector(record.arcEnd, t * t);
-          const approachScale = startScaleMul + (endScaleMul - startScaleMul) * t;
-          record.object.scale.copy(record.baseScale).multiplyScalar(approachScale);
+          const approachScale =
+            startScaleMul + (endScaleMul - startScaleMul) * t;
+          record.object.scale
+            .copy(record.baseScale)
+            .multiplyScalar(approachScale);
         } else {
-          record.object.position.addScaledVector(record.velocity, dt * 0.62 * travelSpeed);
+          record.object.position.addScaledVector(
+            record.velocity,
+            dt * 0.62 * travelSpeed,
+          );
           const riseScaleT = THREE.MathUtils.clamp(t * 0.7, 0, 1);
-          const riseScale = startScaleMul + (endScaleMul - startScaleMul) * riseScaleT;
+          const riseScale =
+            startScaleMul + (endScaleMul - startScaleMul) * riseScaleT;
           record.object.scale.copy(record.baseScale).multiplyScalar(riseScale);
         }
         const fadeIn = THREE.MathUtils.clamp(t / 0.15, 0, 1);
@@ -15303,7 +17497,11 @@ export default function ResumeSpace3D({
           if (latest) {
             const previewValue =
               latest.memoryIndex +
-              THREE.MathUtils.clamp(latest.ageMs / Math.max(latest.ttlMs, 1), 0, 0.98);
+              THREE.MathUtils.clamp(
+                latest.ageMs / Math.max(latest.ttlMs, 1),
+                0,
+                0.98,
+              );
             moonMemoryScrubValueRef.current = previewValue;
           }
         }
@@ -15334,32 +17532,28 @@ export default function ResumeSpace3D({
     let downX = 0;
     let downY = 0;
     let downAt = 0;
-    let pending:
-      | {
-          stationIndex?: number;
-          coreId?: string;
-          mediaIndex?: number;
-          variantIndex?: number;
-          thumbNavDirection?: "prev" | "next";
-          slideNavDirection?: "prev" | "next";
-          kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav" | "slide-nav";
-        }
-      | null = null;
+    let pending: {
+      stationIndex?: number;
+      coreId?: string;
+      mediaIndex?: number;
+      variantIndex?: number;
+      thumbNavDirection?: "prev" | "next";
+      slideNavDirection?: "prev" | "next";
+      kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav" | "slide-nav";
+    } | null = null;
 
     const pickPortfolioTarget = (
       clientX: number,
       clientY: number,
-    ):
-      | {
-          stationIndex?: number;
-          coreId?: string;
-          mediaIndex?: number;
-          variantIndex?: number;
-          thumbNavDirection?: "prev" | "next";
-          slideNavDirection?: "prev" | "next";
-          kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav" | "slide-nav";
-        }
-      | null => {
+    ): {
+      stationIndex?: number;
+      coreId?: string;
+      mediaIndex?: number;
+      variantIndex?: number;
+      thumbNavDirection?: "prev" | "next";
+      slideNavDirection?: "prev" | "next";
+      kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav" | "slide-nav";
+    } | null => {
       if (!orbitalPortfolioActiveRef.current) return null;
       const cam = sceneRef.current.camera;
       if (!cam) return null;
@@ -15419,8 +17613,7 @@ export default function ResumeSpace3D({
           | "core"
           | "thumb-nav"
           | "slide-nav"
-          | undefined) ??
-        "plate";
+          | undefined) ?? "plate";
       if (kind === "core") {
         const coreId = String(hit.userData?.orbitalCoreId ?? "");
         if (!coreId) return null;
@@ -15429,12 +17622,14 @@ export default function ResumeSpace3D({
       if (!Number.isFinite(stationIndex)) return null;
       if (kind === "variant") {
         const variantIndex = Number(hit.userData?.orbitalVariantIndex);
-        if (!Number.isFinite(variantIndex)) return { stationIndex, kind: "plate" };
+        if (!Number.isFinite(variantIndex))
+          return { stationIndex, kind: "plate" };
         return { stationIndex, variantIndex, kind: "variant" };
       }
       if (kind === "thumb") {
         const mediaIndex = Number(hit.userData?.orbitalMediaIndex);
-        if (!Number.isFinite(mediaIndex)) return { stationIndex, kind: "plate" };
+        if (!Number.isFinite(mediaIndex))
+          return { stationIndex, kind: "plate" };
         return { stationIndex, mediaIndex, kind: "thumb" };
       }
       if (kind === "thumb-nav") {
@@ -15518,7 +17713,8 @@ export default function ResumeSpace3D({
             Math.max(0, (groups[focusStation]?.variants?.length ?? 1) - 1),
           );
           const mediaCount =
-            groups[focusStation]?.variants?.[variantIndex]?.mediaItems?.length ?? 0;
+            groups[focusStation]?.variants?.[variantIndex]?.mediaItems
+              ?.length ?? 0;
           const maxPageStart = Math.max(
             0,
             mediaCount - ORBITAL_PORTFOLIO_CARD_MAX_THUMBS,
@@ -15532,7 +17728,8 @@ export default function ResumeSpace3D({
             0,
             maxPageStart,
           );
-          orbitalPortfolioThumbSlideDirectionRef.current = pending.thumbNavDirection ?? null;
+          orbitalPortfolioThumbSlideDirectionRef.current =
+            pending.thumbNavDirection ?? null;
           setOrbitalPortfolioThumbPageStart(nextPageStart);
           const activeDirection = pending.thumbNavDirection;
           const station = orbitalPortfolioStationsRef.current[focusStation];
@@ -15547,7 +17744,8 @@ export default function ResumeSpace3D({
         ) {
           const direction = pending.slideNavDirection === "next" ? 1 : -1;
           stepOrbitalPortfolioSequence(direction);
-          const station = orbitalPortfolioStationsRef.current[pending.stationIndex];
+          const station =
+            orbitalPortfolioStationsRef.current[pending.stationIndex];
           const activeDirection = pending.slideNavDirection;
           station?.cardSlideNavMeshes.forEach((nav) => {
             if (nav.direction === activeDirection) {
@@ -15562,7 +17760,10 @@ export default function ResumeSpace3D({
             station_index: pending.stationIndex,
             media_index: pending.mediaIndex ?? null,
           });
-          focusOrbitalPortfolioStation(pending.stationIndex, pending.mediaIndex);
+          focusOrbitalPortfolioStation(
+            pending.stationIndex,
+            pending.mediaIndex,
+          );
         }
         e.stopPropagation();
       }
@@ -15572,10 +17773,16 @@ export default function ResumeSpace3D({
     mount.addEventListener("pointerdown", onPointerDown, { capture: true });
     window.addEventListener("pointerup", onPointerUp, { capture: true });
     return () => {
-      mount.removeEventListener("pointerdown", onPointerDown, { capture: true });
+      mount.removeEventListener("pointerdown", onPointerDown, {
+        capture: true,
+      });
       window.removeEventListener("pointerup", onPointerUp, { capture: true });
     };
-  }, [focusOrbitalPortfolioCore, focusOrbitalPortfolioStation, stepOrbitalPortfolioSequence]);
+  }, [
+    focusOrbitalPortfolioCore,
+    focusOrbitalPortfolioStation,
+    stepOrbitalPortfolioSequence,
+  ]);
 
   // ── Project showcase thumbnail clicks (in-trench carousel) ───────────────
   useEffect(() => {
@@ -15625,7 +17832,10 @@ export default function ResumeSpace3D({
         projectShowcasePlayingRef.current = false;
         setProjectShowcasePlaying(false);
       }
-      if (hitTarget.type === "media" && typeof hitTarget.mediaIndex === "number") {
+      if (
+        hitTarget.type === "media" &&
+        typeof hitTarget.mediaIndex === "number"
+      ) {
         panel.setActiveMedia(hitTarget.mediaIndex);
       } else if (
         hitTarget.type === "variant" &&
@@ -15651,7 +17861,9 @@ export default function ResumeSpace3D({
 
     mount.addEventListener("pointerdown", onPointerDown, { capture: true });
     return () => {
-      mount.removeEventListener("pointerdown", onPointerDown, { capture: true });
+      mount.removeEventListener("pointerdown", onPointerDown, {
+        capture: true,
+      });
     };
   }, [bumpProjectShowcaseViewportTick]);
 
@@ -15676,7 +17888,8 @@ export default function ResumeSpace3D({
       const cam = sceneRef.current.camera;
       if (!cam) return null;
       const panels = projectShowcasePanelsRef.current.filter(
-        (panel) => panel.fitMode === "cover" && !!panel.texture && panel.group.visible,
+        (panel) =>
+          panel.fitMode === "cover" && !!panel.texture && panel.group.visible,
       );
       if (panels.length === 0) return null;
       const rect = mount.getBoundingClientRect();
@@ -15907,8 +18120,12 @@ export default function ResumeSpace3D({
     window.addEventListener("pointermove", onPointerMove, { capture: true });
     window.addEventListener("pointerup", onPointerUp, { capture: true });
     return () => {
-      mount.removeEventListener("pointerdown", onPointerDown, { capture: true });
-      window.removeEventListener("pointermove", onPointerMove, { capture: true });
+      mount.removeEventListener("pointerdown", onPointerDown, {
+        capture: true,
+      });
+      window.removeEventListener("pointermove", onPointerMove, {
+        capture: true,
+      });
       window.removeEventListener("pointerup", onPointerUp, { capture: true });
     };
   }, [sceneReady]);
@@ -15947,11 +18164,17 @@ export default function ResumeSpace3D({
     const projects = planetsDataRef.current.get("projects")?.position;
     const portfolio = planetsDataRef.current.get("portfolio")?.position;
     if (exp) targets.push({ pos: exp.clone(), radius: EXP_WANDER_RADIUS });
-    if (skills) targets.push({ pos: skills.clone(), radius: SKILLS_WANDER_RADIUS });
-    if (projects) targets.push({ pos: projects.clone(), radius: PROJ_WANDER_RADIUS });
-    if (portfolio) targets.push({ pos: portfolio.clone(), radius: PROJ_WANDER_RADIUS });
+    if (skills)
+      targets.push({ pos: skills.clone(), radius: SKILLS_WANDER_RADIUS });
+    if (projects)
+      targets.push({ pos: projects.clone(), radius: PROJ_WANDER_RADIUS });
+    if (portfolio)
+      targets.push({ pos: portfolio.clone(), radius: PROJ_WANDER_RADIUS });
     // Sun is centered at origin; keep a tighter band so it's in view.
-    targets.push({ pos: new THREE.Vector3(0, 0, 0), radius: SUN_WANDER_RADIUS });
+    targets.push({
+      pos: new THREE.Vector3(0, 0, 0),
+      radius: SUN_WANDER_RADIUS,
+    });
 
     if (targets.length === 0) {
       return new THREE.Vector3(
@@ -16022,7 +18245,7 @@ export default function ResumeSpace3D({
       // When inside the ship, turn off exterior lights completely —
       // they shine through the hull and add unwanted brightness.
       // When outside: 12 × 0.15 = 1.8 total additive — soft fill.
-      const intensity = insideShip ? 0 : (shipExteriorLights ? 0.15 : 0);
+      const intensity = insideShip ? 0 : shipExteriorLights ? 0.15 : 0;
       spaceshipLightsRef.current.forEach((light) => {
         light.intensity = intensity;
       });
@@ -16117,9 +18340,8 @@ export default function ResumeSpace3D({
     scene.add(skyfield);
 
     // --- LIGHTING ---
-    const { ambientLight, sunLight, fillLight, hemisphereLight } = createLighting(
-      optionsRef.current,
-    );
+    const { ambientLight, sunLight, fillLight, hemisphereLight } =
+      createLighting(optionsRef.current);
     scene.add(ambientLight);
     scene.add(sunLight);
     scene.add(fillLight);
@@ -16181,11 +18403,7 @@ export default function ResumeSpace3D({
       toneMapped: false,
     });
     const sprite = new THREE.Sprite(spriteMaterial);
-    sprite.scale.set(
-      SUN_GLOW_SPRITE_SIZE * 2.2,
-      SUN_GLOW_SPRITE_SIZE * 2.2,
-      1,
-    );
+    sprite.scale.set(SUN_GLOW_SPRITE_SIZE * 2.2, SUN_GLOW_SPRITE_SIZE * 2.2, 1);
     sunMesh.add(sprite);
 
     const haloMaterial = new THREE.SpriteMaterial({
@@ -16251,8 +18469,8 @@ export default function ResumeSpace3D({
       },
       {
         enabled: true,
-          textureUrl:
-            "https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/clouds/clouds.png",
+        textureUrl:
+          "https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/clouds/clouds.png",
         altitude: 0.0065,
         opacity: 0.5,
         rotationSpeed: -0.00012,
@@ -16314,7 +18532,11 @@ export default function ResumeSpace3D({
       });
       aboutTileCoreMatsRef.current.push(coreMat);
       const core = new THREE.Mesh(
-        new THREE.BoxGeometry(aboutSquareSize, aboutSquareSize, aboutSquareDepth),
+        new THREE.BoxGeometry(
+          aboutSquareSize,
+          aboutSquareSize,
+          aboutSquareDepth,
+        ),
         coreMat,
       );
       const edges = new THREE.LineSegments(
@@ -16336,12 +18558,23 @@ export default function ResumeSpace3D({
       const half = aboutSquareSize * 0.5;
       const cellStep = aboutSquareSize / aboutCellDivisions;
       const backCellStep = aboutSquareSize / aboutBackCellDivisions;
-      const rimCellThickness = Math.max(aboutCellDepth, Math.min(cellStep * 0.36, 22));
-      const rimDivisions = Math.max(6, Math.round(aboutSquareSize / Math.max(rimCellThickness, 18)));
+      const rimCellThickness = Math.max(
+        aboutCellDepth,
+        Math.min(cellStep * 0.36, 22),
+      );
+      const rimDivisions = Math.max(
+        6,
+        Math.round(aboutSquareSize / Math.max(rimCellThickness, 18)),
+      );
       const rimStep = aboutSquareSize / rimDivisions;
-      const rimDepthDivisions = Math.max(2, Math.round(aboutSquareDepth / Math.max(aboutCellDepth, 5)));
+      const rimDepthDivisions = Math.max(
+        2,
+        Math.round(aboutSquareDepth / Math.max(aboutCellDepth, 5)),
+      );
       const rimDepthStep = aboutSquareDepth / rimDepthDivisions;
-      const tileQuat = new THREE.Quaternion().setFromEuler(tile.rotation).normalize();
+      const tileQuat = new THREE.Quaternion()
+        .setFromEuler(tile.rotation)
+        .normalize();
       const pushSlot = (
         lx: number,
         ly: number,
@@ -16373,7 +18606,7 @@ export default function ResumeSpace3D({
           v0,
           u1,
           v1,
-          contentStrength: face === "front" ? 1 : (face === "back" ? 0.82 : 0.68),
+          contentStrength: face === "front" ? 1 : face === "back" ? 0.82 : 0.68,
         });
       };
       const patternPoints: number[] = [];
@@ -16383,7 +18616,10 @@ export default function ResumeSpace3D({
         patternPoints.push(-half, c, zf + 0.16, half, c, zf + 0.16);
       }
       const patternGeom = new THREE.BufferGeometry();
-      patternGeom.setAttribute("position", new THREE.Float32BufferAttribute(patternPoints, 3));
+      patternGeom.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(patternPoints, 3),
+      );
       const patternMat = new THREE.LineBasicMaterial({
         color: 0x7fb9ff,
         transparent: true,
@@ -16509,13 +18745,38 @@ export default function ResumeSpace3D({
     const aboutSlots: AboutCellSlot[] = [];
     const aboutTiles = [
       createAboutTile(0, 0, centerZ, -2.8, 0, 0, 0, aboutSlots),
-      createAboutTile(-aboutTileSpacing, dishLift, outerZ, -2.8, 0, 0, 1, aboutSlots),
-      createAboutTile(aboutTileSpacing, dishLift, outerZ, -2.8, 0, 0, 2, aboutSlots),
-      createAboutTile(0, aboutTileSpacing + dishLift * 0.3, outerZ, -2.8, 0, 0, 3, aboutSlots),
+      createAboutTile(
+        -aboutTileSpacing,
+        dishLift,
+        outerZ,
+        -2.8,
+        0,
+        0,
+        1,
+        aboutSlots,
+      ),
+      createAboutTile(
+        aboutTileSpacing,
+        dishLift,
+        outerZ,
+        -2.8,
+        0,
+        0,
+        2,
+        aboutSlots,
+      ),
+      createAboutTile(
+        0,
+        aboutTileSpacing + dishLift * 0.3,
+        outerZ,
+        -2.8,
+        0,
+        0,
+        3,
+        aboutSlots,
+      ),
     ];
-    aboutSquareRoot.add(
-      ...aboutTiles,
-    );
+    aboutSquareRoot.add(...aboutTiles);
     aboutSquareRoot.updateWorldMatrix(true, true);
     aboutCellSlotsRef.current = aboutSlots;
     const aboutCellGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -16626,11 +18887,7 @@ export default function ResumeSpace3D({
     aboutCellRevealAtMsRef.current = aboutSlots.map(() => 0);
     const tempMatrix = new THREE.Matrix4();
     const records: AboutCellRecord[] = aboutSlots.map((slot, idx) => {
-      tempMatrix.compose(
-        slot.worldPosition,
-        slot.worldQuaternion,
-        slot.scale,
-      );
+      tempMatrix.compose(slot.worldPosition, slot.worldQuaternion, slot.scale);
       aboutCells.setMatrixAt(idx, tempMatrix);
       aboutCells.setColorAt(idx, baseColor);
       if (slot.face === "front") {
@@ -16671,7 +18928,11 @@ export default function ResumeSpace3D({
 
     const aboutLabel = createLabel("About", "Memory Square");
     aboutLabel.userData.aboutMemorySquareLabel = true;
-    aboutLabel.position.set(0, aboutSquareSize * 1.66, aboutSquareDepth * 0.5 + 10);
+    aboutLabel.position.set(
+      0,
+      aboutSquareSize * 1.66,
+      aboutSquareDepth * 0.5 + 10,
+    );
     aboutSquareRoot.add(aboutLabel);
     aboutMemorySquareLabelRef.current = aboutLabel;
     scene.add(aboutSquareRoot);
@@ -16681,9 +18942,7 @@ export default function ResumeSpace3D({
     if (aboutParticleSwarmRef.current) {
       aboutParticleSwarmRef.current.dispose();
     }
-    const swarm = createAboutParticleSwarm(
-      ABOUT_PARTICLE_SWARM_WORLD_ANCHOR,
-    );
+    const swarm = createAboutParticleSwarm(ABOUT_PARTICLE_SWARM_WORLD_ANCHOR);
     scene.add(swarm.group);
     aboutParticleSwarmRef.current = swarm;
 
@@ -16708,7 +18967,62 @@ export default function ResumeSpace3D({
       },
       enableControls() {
         const ctrl = sceneRef.current.controls;
-        if (ctrl) ctrl.enabled = true;
+        if (!ctrl) return;
+        ctrl.enabled = true;
+        const j = aboutJourneyRef.current;
+        if (j && j.phase !== AboutJourneyPhase.IDLE) {
+          if (!aboutJourneyCameraDistSavedRef.current) {
+            aboutJourneyCameraDistSavedRef.current = {
+              min: ctrl.minDistance,
+              max: ctrl.maxDistance,
+            };
+          }
+          ctrl.minDistance = ABOUT_JOURNEY_CAM_MIN_DIST;
+          ctrl.maxDistance = ABOUT_JOURNEY_CAM_MAX_DIST;
+        }
+      },
+      onPathDispersalStarted() {
+        if (aboutHydrateSwarmRef.current) return;
+        const sc = sceneRef.current.scene;
+        if (!sc) return;
+        const h = createAboutParticleSwarm(
+          ABOUT_MEMORY_SQUARE_WORLD_ANCHOR.clone(),
+        );
+        sc.add(h.group);
+        aboutHydrateSwarmRef.current = h;
+      },
+      onPathDispersalComplete() {
+        const ctrl = sceneRef.current.controls;
+        const saved = aboutJourneyCameraDistSavedRef.current;
+        if (ctrl && saved) {
+          ctrl.minDistance = saved.min;
+          ctrl.maxDistance = saved.max;
+          aboutJourneyCameraDistSavedRef.current = null;
+        }
+        const old = aboutParticleSwarmRef.current;
+        const next = aboutHydrateSwarmRef.current;
+        aboutHydrateSwarmRef.current = null;
+        if (old && next) {
+          old.dispose();
+          aboutParticleSwarmRef.current = next;
+        } else if (old && !next) {
+          old.dispose();
+          aboutParticleSwarmRef.current = null;
+        }
+      },
+      onAboutJourneyExit() {
+        const ctrl = sceneRef.current.controls;
+        const saved = aboutJourneyCameraDistSavedRef.current;
+        if (ctrl && saved) {
+          ctrl.minDistance = saved.min;
+          ctrl.maxDistance = saved.max;
+          aboutJourneyCameraDistSavedRef.current = null;
+        }
+        const hy = aboutHydrateSwarmRef.current;
+        if (hy) {
+          hy.dispose();
+          aboutHydrateSwarmRef.current = null;
+        }
       },
       getCamera() {
         return sceneRef.current.camera ?? null;
@@ -16733,8 +19047,10 @@ export default function ResumeSpace3D({
     const experienceMoonMeshes: THREE.Mesh[] = [];
 
     experienceJobs.forEach((job, i) => {
-      const overlayTextureUrl = EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID[job.id];
-      const baseTextureUrl = EXPERIENCE_MOON_BASE_TEXTURES[i % EXPERIENCE_MOON_BASE_TEXTURES.length];
+      const overlayTextureUrl =
+        EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID[job.id];
+      const baseTextureUrl =
+        EXPERIENCE_MOON_BASE_TEXTURES[i % EXPERIENCE_MOON_BASE_TEXTURES.length];
 
       // Job moons should be clickable with section index 2+i
       // (section 0 = hero+summary, section 1 = skills, sections 2+ = jobs)
@@ -16769,8 +19085,10 @@ export default function ResumeSpace3D({
 
       const greyShades = [255, 220, 180, 140, 100, 60, 0];
       const makeRingInterpolator = () => {
-        const v = greyShades[Math.floor(Math.random() * greyShades.length)] ?? 200;
-        return (t: number) => `rgba(${v},${v},${v},${Math.sqrt(Math.max(0, 1 - t))})`;
+        const v =
+          greyShades[Math.floor(Math.random() * greyShades.length)] ?? 200;
+        return (t: number) =>
+          `rgba(${v},${v},${v},${Math.sqrt(Math.max(0, 1 - t))})`;
       };
       const ringCount = 3 + Math.floor(Math.random() * 7);
       const ringData = Array.from({ length: ringCount }, () => ({
@@ -16781,7 +19099,10 @@ export default function ResumeSpace3D({
         repeatPeriod: Math.random() * 2000 + 200,
         colorInterpolator: makeRingInterpolator(),
       }));
-      const moonRingsGlobe = new ThreeGlobe({ waitForGlobeReady: false, animateIn: false })
+      const moonRingsGlobe = new ThreeGlobe({
+        waitForGlobeReady: false,
+        animateIn: false,
+      })
         .showGlobe(false)
         .showAtmosphere(false)
         .ringsData(ringData)
@@ -16812,7 +19133,10 @@ export default function ResumeSpace3D({
       const landmarks: Array<{ name: string; position: THREE.Vector3 }> = [
         { name: "Skills", position: SKILLS_LATTICE_WORLD_ANCHOR.clone() },
         { name: "Portfolio", position: ORBITAL_PORTFOLIO_WORLD_ANCHOR.clone() },
-        { name: "Memory Squares", position: ABOUT_MEMORY_SQUARE_WORLD_ANCHOR.clone() },
+        {
+          name: "Memory Squares",
+          position: ABOUT_MEMORY_SQUARE_WORLD_ANCHOR.clone(),
+        },
       ];
       // Pick 2-3 experience moons to fly between (evenly spaced through the list)
       const moonCount = experienceMoonMeshes.length;
@@ -16833,7 +19157,9 @@ export default function ResumeSpace3D({
     // Skills constellation lattice (unique skills representation)
     const skillsLatticeRoot = new THREE.Group();
     skillsLatticeRoot.name = "SkillsConstellationLattice";
-    skillsLatticeRoot.position.copy(skillsAnchor).add(new THREE.Vector3(0, 8, 0));
+    skillsLatticeRoot.position
+      .copy(skillsAnchor)
+      .add(new THREE.Vector3(0, 8, 0));
     skillsLatticeRoot.visible = true;
     const categoryEntries = Object.entries(resumeData.skills) as Array<
       [string, string[]]
@@ -16869,11 +19195,15 @@ export default function ResumeSpace3D({
     for (let i = 0; i < envelopePosAttr.count; i += 3) {
       // Keep each triangle on a single, visibly distinct hue.
       // Using coarse buckets creates larger perceived stained-glass regions.
-      const bucket = Math.floor((i / 3) / 4) % envelopePalette.length;
+      const bucket = Math.floor(i / 3 / 4) % envelopePalette.length;
       envelopeWork.copy(envelopePalette[bucket]);
       const hsl = { h: 0, s: 0, l: 0 };
       envelopeWork.getHSL(hsl);
-      envelopeWork.setHSL(hsl.h, Math.min(1, hsl.s * 1.18), Math.min(0.74, hsl.l * 1.06));
+      envelopeWork.setHSL(
+        hsl.h,
+        Math.min(1, hsl.s * 1.18),
+        Math.min(0.74, hsl.l * 1.06),
+      );
       const shadeJitter = 1.02 + Math.random() * 0.1;
       envelopeWork.multiplyScalar(shadeJitter);
       for (let v = 0; v < 3; v += 1) {
@@ -16887,22 +19217,23 @@ export default function ResumeSpace3D({
       "color",
       new THREE.BufferAttribute(envelopeColors, 3),
     );
-    const latticeEnvelope: THREE.Mesh<THREE.BufferGeometry, THREE.Material> = new THREE.Mesh(
-      latticeEnvelopeGeometry,
-      new THREE.MeshPhongMaterial({
-        color: 0xffffff,
-        vertexColors: true,
-        flatShading: true,
-        shininess: 90,
-        specular: new THREE.Color(0xc9e8ff),
-        emissive: 0x101828,
-        emissiveIntensity: 0.08,
-        transparent: false,
-        opacity: 1,
-        side: THREE.FrontSide,
-        depthWrite: true,
-      }),
-    );
+    const latticeEnvelope: THREE.Mesh<THREE.BufferGeometry, THREE.Material> =
+      new THREE.Mesh(
+        latticeEnvelopeGeometry,
+        new THREE.MeshPhongMaterial({
+          color: 0xffffff,
+          vertexColors: true,
+          flatShading: true,
+          shininess: 90,
+          specular: new THREE.Color(0xc9e8ff),
+          emissive: 0x101828,
+          emissiveIntensity: 0.08,
+          transparent: false,
+          opacity: 1,
+          side: THREE.FrontSide,
+          depthWrite: true,
+        }),
+      );
     (latticeEnvelope.material as THREE.MeshPhongMaterial).toneMapped = false;
     latticeEnvelope.renderOrder = 1;
     const latticeEnvelopeEdges = new THREE.LineSegments(
@@ -16918,7 +19249,8 @@ export default function ResumeSpace3D({
     latticeEnvelope.add(latticeEnvelopeEdges);
     skillsLatticeRoot.add(latticeEnvelope);
     skillsLatticeEnvelopeRef.current = latticeEnvelope;
-    skillsLatticeEnvelopeMatRef.current = latticeEnvelope.material as THREE.MeshPhongMaterial;
+    skillsLatticeEnvelopeMatRef.current =
+      latticeEnvelope.material as THREE.MeshPhongMaterial;
     const envelopeBasicMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       vertexColors: true,
@@ -16982,7 +19314,8 @@ export default function ResumeSpace3D({
     const beaconLabel = createLabel("Skills", "Constellation Lattice");
     beaconLabel.userData.skillsLatticeLabel = true;
     beaconLabel.position.set(0, latticeEnvelopeRadius * 0.82, 0);
-    const labelEl = (beaconLabel as unknown as { element?: HTMLElement }).element;
+    const labelEl = (beaconLabel as unknown as { element?: HTMLElement })
+      .element;
     if (labelEl) {
       labelEl.style.pointerEvents = "none";
       labelEl.style.textShadow = "0 0 10px rgba(120,190,255,0.9)";
@@ -16997,7 +19330,8 @@ export default function ResumeSpace3D({
     clickablePlanets.push(skillsBeacon);
     skillsLatticeBeaconRef.current = skillsBeacon;
     skillsLatticeBeaconMatRef.current = beaconMat;
-    skillsLatticeBeaconEdgeMatRef.current = beaconEdges.material as THREE.LineBasicMaterial;
+    skillsLatticeBeaconEdgeMatRef.current =
+      beaconEdges.material as THREE.LineBasicMaterial;
     skillsLatticeBeaconLabelRef.current = beaconLabel;
 
     // Orbital Registry Portfolio beacon + dedicated scene root
@@ -17036,7 +19370,10 @@ export default function ResumeSpace3D({
     setOrbitalRegistrySelectedCoreId(orbitalCoreViews[0]?.id ?? "");
     setOrbitalPortfolioFocusedCoreId(orbitalCoreViews[0]?.id ?? "");
     const coreSpacing = 1260;
-    const coreColumns = Math.max(1, Math.ceil(Math.sqrt(Math.max(1, orbitalCoreViews.length))));
+    const coreColumns = Math.max(
+      1,
+      Math.ceil(Math.sqrt(Math.max(1, orbitalCoreViews.length))),
+    );
     const coreRecords: OrbitalPortfolioCoreRecord[] = [];
     const corePickMeshes: THREE.Mesh[] = [];
     const coreCardOccluders: THREE.Mesh[] = [];
@@ -17086,14 +19423,18 @@ export default function ResumeSpace3D({
 
     orbitalCoreViews.forEach((coreView, coreIndex) => {
       const coreColor = new THREE.Color(coreView.coreColor);
-      const nucleusColor = coreColor.clone().lerp(new THREE.Color(0xffffff), 0.42);
+      const nucleusColor = coreColor
+        .clone()
+        .lerp(new THREE.Color(0xffffff), 0.42);
       const glowColor = coreColor.clone().lerp(new THREE.Color(0xffffff), 0.18);
       const coreRow = Math.floor(coreIndex / coreColumns);
       const coreCol = coreIndex % coreColumns;
       const centerLocal = new THREE.Vector3(
         (coreCol - (coreColumns - 1) * 0.5) * coreSpacing,
         0,
-        (coreRow - (Math.ceil(orbitalCoreViews.length / coreColumns) - 1) * 0.5) * coreSpacing,
+        (coreRow -
+          (Math.ceil(orbitalCoreViews.length / coreColumns) - 1) * 0.5) *
+          coreSpacing,
       );
 
       const coreRoot = new THREE.Group();
@@ -17167,8 +19508,11 @@ export default function ResumeSpace3D({
       const rayCount = 16;
       for (let i = 0; i < rayCount; i += 1) {
         const a = (i / rayCount) * Math.PI * 2;
-        const dir = new THREE.Vector3(Math.cos(a), Math.sin(i * 0.47) * 0.24, Math.sin(a))
-          .normalize();
+        const dir = new THREE.Vector3(
+          Math.cos(a),
+          Math.sin(i * 0.47) * 0.24,
+          Math.sin(a),
+        ).normalize();
         const rayMat = new THREE.LineBasicMaterial({
           color: slicePalette[i % slicePalette.length],
           transparent: true,
@@ -17218,7 +19562,11 @@ export default function ResumeSpace3D({
           const radius = 130 + ringIndex * 62;
           const pts = Array.from({ length: 180 }, (_, i) => {
             const a = (i / 180) * Math.PI * 2;
-            return new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius)
+            return new THREE.Vector3(
+              Math.cos(a) * radius,
+              0,
+              Math.sin(a) * radius,
+            )
               .applyQuaternion(plainQuat)
               .add(centerLocal);
           });
@@ -17264,7 +19612,9 @@ export default function ResumeSpace3D({
       ringCountByKey.set(key, (ringCountByKey.get(key) ?? 0) + 1);
     });
     const ringSlotCursor = new Map<string, number>();
-    const coreById = new Map(coreRecords.map((core) => [core.id, core] as const));
+    const coreById = new Map(
+      coreRecords.map((core) => [core.id, core] as const),
+    );
     const stationRecords: OrbitalPortfolioStationRecord[] = [];
     orbitalGroups.forEach((group, idx) => {
       const coreId = group.coreId ?? coreRecords[0]?.id ?? "core-default";
@@ -17290,7 +19640,11 @@ export default function ResumeSpace3D({
         THREE.MathUtils.degToRad(plainAngle),
       );
       const stationGroup = new THREE.Group();
-      const startLocalPos = new THREE.Vector3(Math.cos(a) * orbitRadius, 0, Math.sin(a) * orbitRadius)
+      const startLocalPos = new THREE.Vector3(
+        Math.cos(a) * orbitRadius,
+        0,
+        Math.sin(a) * orbitRadius,
+      )
         .applyQuaternion(plainQuat)
         .add(coreRecord.centerLocal);
       stationGroup.position.copy(startLocalPos);
@@ -17337,12 +19691,20 @@ export default function ResumeSpace3D({
       plate.userData.hasLoadedTexture = false;
       plate.userData.textureScrollNorm = 0;
       plate.userData.textureMaxOffsetY = 0;
-      const framePosAttr = frameGeom.getAttribute("position") as THREE.BufferAttribute;
-      const platePosAttr = plateGeom.getAttribute("position") as THREE.BufferAttribute;
+      const framePosAttr = frameGeom.getAttribute(
+        "position",
+      ) as THREE.BufferAttribute;
+      const platePosAttr = plateGeom.getAttribute(
+        "position",
+      ) as THREE.BufferAttribute;
       framePosAttr.setUsage(THREE.DynamicDrawUsage);
       platePosAttr.setUsage(THREE.DynamicDrawUsage);
-      const frameFlatPositions = new Float32Array(framePosAttr.array as Float32Array);
-      const plateFlatPositions = new Float32Array(platePosAttr.array as Float32Array);
+      const frameFlatPositions = new Float32Array(
+        framePosAttr.array as Float32Array,
+      );
+      const plateFlatPositions = new Float32Array(
+        platePosAttr.array as Float32Array,
+      );
       // Keep the original subtle curvature profile from the single-core version.
       const frameArc = 78 / 320;
       const plateArc = 72 / 320;
@@ -17356,8 +19718,18 @@ export default function ResumeSpace3D({
         72,
         plateArc,
       );
-      morphPanelGeometry(framePosAttr, frameCurvedPositions, frameFlatPositions, 0);
-      morphPanelGeometry(platePosAttr, plateCurvedPositions, plateFlatPositions, 0);
+      morphPanelGeometry(
+        framePosAttr,
+        frameCurvedPositions,
+        frameFlatPositions,
+        0,
+      );
+      morphPanelGeometry(
+        platePosAttr,
+        plateCurvedPositions,
+        plateFlatPositions,
+        0,
+      );
       frame.position.z = -0.8;
       stationGroup.add(frame, plate);
       const cardTitleMat = new THREE.MeshBasicMaterial({
@@ -17376,10 +19748,18 @@ export default function ResumeSpace3D({
       cardTitleMesh.visible = false;
       stationGroup.add(cardTitleMesh);
 
-      const cardVariantTabs: Array<{ mesh: THREE.Mesh; frame: THREE.Mesh; variantIndex: number }> = [];
+      const cardVariantTabs: Array<{
+        mesh: THREE.Mesh;
+        frame: THREE.Mesh;
+        variantIndex: number;
+      }> = [];
       const variantTabStartX = -24;
       const variantTabGap = 11.5;
-      for (let variantIndex = 0; variantIndex < ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS; variantIndex += 1) {
+      for (
+        let variantIndex = 0;
+        variantIndex < ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS;
+        variantIndex += 1
+      ) {
         const tabFrame = new THREE.Mesh(
           new THREE.PlaneGeometry(10.9, 3.9),
           new THREE.MeshBasicMaterial({
@@ -17418,10 +19798,18 @@ export default function ResumeSpace3D({
         cardVariantTabs.push({ mesh: tabMesh, frame: tabFrame, variantIndex });
       }
 
-      const cardThumbMeshes: Array<{ mesh: THREE.Mesh; frame: THREE.Mesh; mediaIndex: number }> = [];
+      const cardThumbMeshes: Array<{
+        mesh: THREE.Mesh;
+        frame: THREE.Mesh;
+        mediaIndex: number;
+      }> = [];
       const thumbStartX = -23;
       const thumbGap = 9.3;
-      for (let mediaIndex = 0; mediaIndex < ORBITAL_PORTFOLIO_CARD_MAX_THUMBS; mediaIndex += 1) {
+      for (
+        let mediaIndex = 0;
+        mediaIndex < ORBITAL_PORTFOLIO_CARD_MAX_THUMBS;
+        mediaIndex += 1
+      ) {
         const thumbFrame = new THREE.Mesh(
           new THREE.PlaneGeometry(8.26, 5.26),
           new THREE.MeshBasicMaterial({
@@ -17444,7 +19832,11 @@ export default function ResumeSpace3D({
             depthWrite: false,
           }),
         );
-        thumbFrame.position.set(thumbStartX + mediaIndex * thumbGap, -23.8, 1.16);
+        thumbFrame.position.set(
+          thumbStartX + mediaIndex * thumbGap,
+          -23.8,
+          1.16,
+        );
         thumbMesh.position.set(thumbStartX + mediaIndex * thumbGap, -23.8, 1.2);
         thumbFrame.visible = false;
         thumbMesh.visible = false;
@@ -17453,12 +19845,20 @@ export default function ResumeSpace3D({
         thumbMesh.userData.orbitalBaseX = thumbMesh.position.x;
         thumbMesh.userData.orbitalBaseY = thumbMesh.position.y;
         stationGroup.add(thumbFrame, thumbMesh);
-        cardThumbMeshes.push({ mesh: thumbMesh, frame: thumbFrame, mediaIndex });
+        cardThumbMeshes.push({
+          mesh: thumbMesh,
+          frame: thumbFrame,
+          mediaIndex,
+        });
       }
       const createThumbNav = (
         direction: "prev" | "next",
         x: number,
-      ): { mesh: THREE.Mesh; frame: THREE.Mesh; direction: "prev" | "next" } => {
+      ): {
+        mesh: THREE.Mesh;
+        frame: THREE.Mesh;
+        direction: "prev" | "next";
+      } => {
         const navFrame = new THREE.Mesh(
           new THREE.PlaneGeometry(2.7, 2.9),
           new THREE.MeshBasicMaterial({
@@ -17481,21 +19881,24 @@ export default function ResumeSpace3D({
             depthWrite: false,
           }),
         );
-        const arrowTexture = createDetailTexture([direction === "prev" ? "‹" : "›"], {
-          width: 256,
-          height: 256,
-          bgColor: "rgba(0,0,0,0)",
-          showLine: false,
-          textColor: "rgba(229,243,255,0.98)",
-          fontSize: 162,
-          lineSpacing: 168,
-          textAlign: "center",
-          padding: 128,
-          centerBlock: true,
-          fontFamily: "Rajdhani, sans-serif",
-          fontWeight: 700,
-          crispUI: true,
-        });
+        const arrowTexture = createDetailTexture(
+          [direction === "prev" ? "‹" : "›"],
+          {
+            width: 256,
+            height: 256,
+            bgColor: "rgba(0,0,0,0)",
+            showLine: false,
+            textColor: "rgba(229,243,255,0.98)",
+            fontSize: 162,
+            lineSpacing: 168,
+            textAlign: "center",
+            padding: 128,
+            centerBlock: true,
+            fontFamily: "Rajdhani, sans-serif",
+            fontWeight: 700,
+            crispUI: true,
+          },
+        );
         navMesh.material.map = arrowTexture;
         navFrame.position.set(x, -23.8, 1.16);
         navMesh.position.set(x, -23.8, 1.2);
@@ -17511,7 +19914,11 @@ export default function ResumeSpace3D({
       const createSlideNav = (
         direction: "prev" | "next",
         x: number,
-      ): { mesh: THREE.Mesh; frame: THREE.Mesh; direction: "prev" | "next" } => {
+      ): {
+        mesh: THREE.Mesh;
+        frame: THREE.Mesh;
+        direction: "prev" | "next";
+      } => {
         const navFrame = new THREE.Mesh(
           new THREE.PlaneGeometry(2.7, 2.9),
           new THREE.MeshBasicMaterial({
@@ -17534,21 +19941,24 @@ export default function ResumeSpace3D({
             depthWrite: false,
           }),
         );
-        const arrowTexture = createDetailTexture([direction === "prev" ? "‹" : "›"], {
-          width: 256,
-          height: 256,
-          bgColor: "rgba(0,0,0,0)",
-          showLine: false,
-          textColor: "rgba(255,255,255,0.98)",
-          fontSize: 170,
-          lineSpacing: 168,
-          textAlign: "center",
-          padding: 128,
-          centerBlock: true,
-          fontFamily: "Rajdhani, sans-serif",
-          fontWeight: 700,
-          crispUI: true,
-        });
+        const arrowTexture = createDetailTexture(
+          [direction === "prev" ? "‹" : "›"],
+          {
+            width: 256,
+            height: 256,
+            bgColor: "rgba(0,0,0,0)",
+            showLine: false,
+            textColor: "rgba(255,255,255,0.98)",
+            fontSize: 170,
+            lineSpacing: 168,
+            textAlign: "center",
+            padding: 128,
+            centerBlock: true,
+            fontFamily: "Rajdhani, sans-serif",
+            fontWeight: 700,
+            crispUI: true,
+          },
+        );
         navMesh.material.map = arrowTexture;
         navFrame.position.set(x, 0, 1.16);
         navMesh.position.set(x, 0, 1.2);
@@ -17629,7 +20039,9 @@ export default function ResumeSpace3D({
       mediaItems.forEach((item, mi) => {
         const ma = (mi / Math.max(1, mediaItems.length)) * Math.PI * 2;
         const thumbGeom = new THREE.PlaneGeometry(8, 5, 16, 1);
-        const thumbPosAttr = thumbGeom.getAttribute("position") as THREE.BufferAttribute;
+        const thumbPosAttr = thumbGeom.getAttribute(
+          "position",
+        ) as THREE.BufferAttribute;
         const thumbFlatPositions = new Float32Array(
           thumbPosAttr.array as Float32Array,
         );
@@ -17638,7 +20050,12 @@ export default function ResumeSpace3D({
           8,
           Math.PI * 0.72,
         );
-        morphPanelGeometry(thumbPosAttr, thumbCurvedPositions, thumbFlatPositions, 0);
+        morphPanelGeometry(
+          thumbPosAttr,
+          thumbCurvedPositions,
+          thumbFlatPositions,
+          0,
+        );
         const thumb = new THREE.Mesh(
           thumbGeom,
           new THREE.MeshBasicMaterial({
@@ -17664,7 +20081,11 @@ export default function ResumeSpace3D({
             () => undefined,
           );
         }
-        thumb.position.set(Math.cos(ma) * 37, Math.sin(ma * 2.1) * 3.5, Math.sin(ma) * 37);
+        thumb.position.set(
+          Math.cos(ma) * 37,
+          Math.sin(ma * 2.1) * 3.5,
+          Math.sin(ma) * 37,
+        );
         thumb.lookAt(new THREE.Vector3(0, 0, 0));
         mediaHaloGroup.add(thumb);
       });
@@ -17677,7 +20098,9 @@ export default function ResumeSpace3D({
         ringIndex,
         plainAngle,
         coreAnchorLocal: coreRecord.centerLocal.clone(),
-        plainNormalLocal: new THREE.Vector3(0, 1, 0).applyQuaternion(plainQuat).normalize(),
+        plainNormalLocal: new THREE.Vector3(0, 1, 0)
+          .applyQuaternion(plainQuat)
+          .normalize(),
         group: stationGroup,
         ring,
         plate,
@@ -17792,14 +20215,19 @@ export default function ResumeSpace3D({
       const cores = coreRecords;
       const stations = stationRecords;
       if (stations.length === 0) return 0;
-      const safeCoreIndex = THREE.MathUtils.clamp(coreIndex, 0, Math.max(0, cores.length - 1));
+      const safeCoreIndex = THREE.MathUtils.clamp(
+        coreIndex,
+        0,
+        Math.max(0, cores.length - 1),
+      );
       const coreId = cores[safeCoreIndex]?.id;
       if (!coreId) return Math.floor(Math.random() * stations.length);
       const candidates: number[] = [];
       stations.forEach((station, stationIndex) => {
         if (station.coreId === coreId) candidates.push(stationIndex);
       });
-      if (candidates.length === 0) return Math.floor(Math.random() * stations.length);
+      if (candidates.length === 0)
+        return Math.floor(Math.random() * stations.length);
       return candidates[Math.floor(Math.random() * candidates.length)] ?? 0;
     };
     const matterPackets: OrbitalPortfolioMatterPacketRecord[] = [];
@@ -17831,7 +20259,9 @@ export default function ResumeSpace3D({
       packetMesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
       packetMesh.position.set(0, 0, 0);
       matterGroup.add(packetMesh);
-      const sourceCoreIndex = Math.floor(Math.random() * Math.max(1, coreRecords.length));
+      const sourceCoreIndex = Math.floor(
+        Math.random() * Math.max(1, coreRecords.length),
+      );
       matterPackets.push({
         mesh: packetMesh,
         progress: Math.random(),
@@ -17907,7 +20337,9 @@ export default function ResumeSpace3D({
     const experienceEntries = (
       Array.isArray(rawExperience)
         ? rawExperience
-        : Object.values((rawExperience as Record<string, unknown[]>) ?? {}).flat()
+        : Object.values(
+            (rawExperience as Record<string, unknown[]>) ?? {},
+          ).flat()
     ) as Array<{
       company?: string;
       navLabel?: string;
@@ -17923,7 +20355,9 @@ export default function ResumeSpace3D({
         const responsibilities = (entry.positions ?? []).flatMap(
           (position) => position.responsibilities ?? [],
         );
-        const match = responsibilities.find((line) => line.toLowerCase().includes(needle));
+        const match = responsibilities.find((line) =>
+          line.toLowerCase().includes(needle),
+        );
         if (!match) return;
         const clipped = match.length > 86 ? `${match.slice(0, 83)}...` : match;
         evidence.push(`${company}: ${clipped}`);
@@ -18030,7 +20464,8 @@ export default function ResumeSpace3D({
       const skillLinePoints: number[] = [];
       const skillOrbitR = 11 + Math.min(7, skills.length * 0.7);
       skills.forEach((skill, sIdx) => {
-        const sa = (sIdx / Math.max(1, skills.length)) * Math.PI * 2 + idx * 0.35;
+        const sa =
+          (sIdx / Math.max(1, skills.length)) * Math.PI * 2 + idx * 0.35;
         const sPos = new THREE.Vector3(
           cPos.x + Math.cos(sa) * skillOrbitR,
           cPos.y + Math.sin(sa * 1.4) * 2.2,
@@ -18073,7 +20508,10 @@ export default function ResumeSpace3D({
           category,
           detailItems: skillEvidence.length
             ? [category, ...skillEvidence]
-            : [category, "No mapped evidence yet (add responsibilities with this skill term)."],
+            : [
+                category,
+                "No mapped evidence yet (add responsibilities with this skill term).",
+              ],
           halo: skillHalo ?? undefined,
           lineInfluence: idx + sIdx * 0.15,
         });
@@ -18192,7 +20630,9 @@ export default function ResumeSpace3D({
         arcRecords.push({
           line,
           points,
-          targetIndex: Math.floor(Math.random() * Math.max(1, latticeNodes.length)),
+          targetIndex: Math.floor(
+            Math.random() * Math.max(1, latticeNodes.length),
+          ),
           phase: Math.random(),
           sway: 0.8 + Math.random() * 0.9,
           speed: 0.72 + Math.random() * 0.9,
@@ -18228,7 +20668,11 @@ export default function ResumeSpace3D({
         );
 
         // Position it initially near the sun
-        spaceship.position.set(FALCON_INITIAL_POS.x, FALCON_INITIAL_POS.y, FALCON_INITIAL_POS.z);
+        spaceship.position.set(
+          FALCON_INITIAL_POS.x,
+          FALCON_INITIAL_POS.y,
+          FALCON_INITIAL_POS.z,
+        );
         // Keep Falcon hidden until the intro pickup cinematic reveals it.
         spaceship.visible = false;
 
@@ -18252,12 +20696,16 @@ export default function ResumeSpace3D({
             mesh.geometry.computeBoundingSphere();
           }
           const worldCenter = mesh.geometry?.boundingSphere
-            ? mesh.geometry.boundingSphere.center.clone().applyMatrix4(mesh.matrixWorld)
+            ? mesh.geometry.boundingSphere.center
+                .clone()
+                .applyMatrix4(mesh.matrixWorld)
             : mesh.getWorldPosition(new THREE.Vector3());
           const localToShip = spaceship.worldToLocal(worldCenter.clone());
           const isRearSection = localToShip.z < -0.65;
           if (!isRearSection) return;
-          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          const mats = Array.isArray(mesh.material)
+            ? mesh.material
+            : [mesh.material];
           mats.forEach((material) => {
             const mat = material as THREE.Material & {
               uuid?: string;
@@ -18268,16 +20716,16 @@ export default function ResumeSpace3D({
             if (!mat.emissive) return;
             const e = mat.emissive;
             const isBlueEmissive =
-              e.b > 0.08 &&
-              e.b > e.r * 1.2 &&
-              e.b > e.g * 1.15;
+              e.b > 0.08 && e.b > e.r * 1.2 && e.b > e.g * 1.15;
             if (!isBlueEmissive) return;
             if (seenMaterialUuids.has(mat.uuid)) return;
             seenMaterialUuids.add(mat.uuid);
             if (!mat.userData) mat.userData = {};
             const baseEmissive = e.clone();
             const baseIntensity =
-              typeof mat.emissiveIntensity === "number" ? mat.emissiveIntensity : 1;
+              typeof mat.emissiveIntensity === "number"
+                ? mat.emissiveIntensity
+                : 1;
             mat.userData.engineBaseEmissive = baseEmissive.clone();
             mat.userData.engineBaseIntensity = baseIntensity;
             enginePanelMaterials.push({
@@ -18288,7 +20736,9 @@ export default function ResumeSpace3D({
           });
         });
         spaceship.userData.enginePanelMaterials = enginePanelMaterials;
-        vlog(`🚀 Falcon engine panel mats detected: ${enginePanelMaterials.length}`);
+        vlog(
+          `🚀 Falcon engine panel mats detected: ${enginePanelMaterials.length}`,
+        );
 
         // Subtle ambient light on the ship hull — just enough to see detail.
         // Ship is ~0.8 units long; distance 1.5 = ~2× ship length (tight glow).
@@ -18370,7 +20820,9 @@ export default function ResumeSpace3D({
         const cockpitLookLocal = new THREE.Vector3(-6.05, 3.16, 11.36); // forward through window
         spaceship.userData.cockpitCameraLocal = cockpitCamLocal;
         spaceship.userData.cockpitLookLocal = cockpitLookLocal;
-        vlog(`✈️ Cockpit interior position: camera [${cockpitCamLocal.x.toFixed(1)}, ${cockpitCamLocal.y.toFixed(1)}, ${cockpitCamLocal.z.toFixed(1)}], look [${cockpitLookLocal.x.toFixed(1)}, ${cockpitLookLocal.y.toFixed(1)}, ${cockpitLookLocal.z.toFixed(1)}]`);
+        vlog(
+          `✈️ Cockpit interior position: camera [${cockpitCamLocal.x.toFixed(1)}, ${cockpitCamLocal.y.toFixed(1)}, ${cockpitCamLocal.z.toFixed(1)}], look [${cockpitLookLocal.x.toFixed(1)}, ${cockpitLookLocal.y.toFixed(1)}, ${cockpitLookLocal.z.toFixed(1)}]`,
+        );
 
         // Initialize navigation system
         initializeNavigationSystem(spaceship, scene);
@@ -18402,7 +20854,11 @@ export default function ResumeSpace3D({
         starDestroyer.scale.set(SD_SCALE, SD_SCALE, SD_SCALE);
 
         // Initial position — outer area of the system, above the orbital plane
-        starDestroyer.position.set(SD_INITIAL_POS.x, SD_INITIAL_POS.y, SD_INITIAL_POS.z);
+        starDestroyer.position.set(
+          SD_INITIAL_POS.x,
+          SD_INITIAL_POS.y,
+          SD_INITIAL_POS.z,
+        );
 
         // Forward offset: the model's visual nose is at +Z after centering,
         // but lookAt faces -Z. Rotate 180° around Y so the nose leads.
@@ -18486,7 +20942,13 @@ export default function ResumeSpace3D({
         // to the SD group, since the SD has scale 0.006 which would
         // make the cone invisible).  The cruiser positions/orients it
         // each frame and manages opacity fade-in/out.
-        const coneGeo = new THREE.ConeGeometry(SD_CONE_RADIUS, SD_CONE_LENGTH, 24, 1, true);
+        const coneGeo = new THREE.ConeGeometry(
+          SD_CONE_RADIUS,
+          SD_CONE_LENGTH,
+          24,
+          1,
+          true,
+        );
         // Default cone: tip at +Y, base at -Y.
         // Rotate so tip points along +Z (lookAt direction).
         coneGeo.rotateX(Math.PI / 2);
@@ -18501,10 +20963,10 @@ export default function ResumeSpace3D({
           const z = posAttr.getZ(i);
           // z ranges from 0 (apex/ship) to SD_CONE_LENGTH (base/destination)
           const t = z / SD_CONE_LENGTH; // 0 at ship, 1 at destination
-          const alpha = 1 - t * t;       // quadratic falloff — depletes toward destination
-          colors[i * 4] = 0.3 + 0.4 * (1 - t);   // R: blue-white at base
+          const alpha = 1 - t * t; // quadratic falloff — depletes toward destination
+          colors[i * 4] = 0.3 + 0.4 * (1 - t); // R: blue-white at base
           colors[i * 4 + 1] = 0.5 + 0.3 * (1 - t); // G
-          colors[i * 4 + 2] = 1.0;                  // B: always blue
+          colors[i * 4 + 2] = 1.0; // B: always blue
           colors[i * 4 + 3] = alpha;
         }
         coneGeo.setAttribute("color", new THREE.BufferAttribute(colors, 4));
@@ -18524,7 +20986,9 @@ export default function ResumeSpace3D({
         scene.add(jumpCone);
         cruiser.setJumpCone(jumpCone);
 
-        vlog(`🔺 Star Destroyer loaded — ${sdDests.length} destinations registered`);
+        vlog(
+          `🔺 Star Destroyer loaded — ${sdDests.length} destinations registered`,
+        );
         shipLog("Star Destroyer online", "system");
 
         // Console commands for directing the Star Destroyer
@@ -18539,11 +21003,21 @@ export default function ResumeSpace3D({
           if (ok) {
             const s = cruiser.getStatus();
             dlog(`🔺 Star Destroyer dispatched to "${name}"`);
-            dlog(`   State: ${s.hlState} | Speed: ${s.speed.toFixed(1)} | From: ${s.currentDest ?? "none"}`);
-            dlog(`   SD position:`, starDestroyerRef.current?.position.toArray().map((n: number) => +n.toFixed(0)));
+            dlog(
+              `   State: ${s.hlState} | Speed: ${s.speed.toFixed(1)} | From: ${s.currentDest ?? "none"}`,
+            );
+            dlog(
+              `   SD position:`,
+              starDestroyerRef.current?.position
+                .toArray()
+                .map((n: number) => +n.toFixed(0)),
+            );
           } else {
             const status = cruiser.getStatus();
-            dlog(`❌ Destination "${name}" not found. Available:`, status.destinations.join(", "));
+            dlog(
+              `❌ Destination "${name}" not found. Available:`,
+              status.destinations.join(", "),
+            );
           }
         };
         (window as any).sdStatus = () => {
@@ -18597,7 +21071,14 @@ export default function ResumeSpace3D({
 
           // ── Vertical pillar (thin cylinder stretching up & down) ──
           const pillarHeight = 2000;
-          const pillarGeo = new THREE.CylinderGeometry(2, 2, pillarHeight, 8, 1, true);
+          const pillarGeo = new THREE.CylinderGeometry(
+            2,
+            2,
+            pillarHeight,
+            8,
+            1,
+            true,
+          );
           const pillarMat = new THREE.MeshBasicMaterial({
             color,
             transparent: true,
@@ -18610,7 +21091,11 @@ export default function ResumeSpace3D({
           group.add(pillar);
 
           // ── Expanding rings (3 staggered) ──
-          const rings: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; delay: number }[] = [];
+          const rings: {
+            mesh: THREE.Mesh;
+            mat: THREE.MeshBasicMaterial;
+            delay: number;
+          }[] = [];
           for (let i = 0; i < 3; i++) {
             const ringGeo = new THREE.TorusGeometry(20, 1.5, 8, 64);
             ringGeo.rotateX(Math.PI / 2); // flat horizontal
@@ -18648,9 +21133,14 @@ export default function ResumeSpace3D({
 
             if (t >= 1) {
               scene.remove(group);
-              pillarGeo.dispose(); pillarMat.dispose();
-              pulseGeo.dispose(); pulseMat.dispose();
-              rings.forEach((r) => { r.mesh.geometry.dispose(); r.mat.dispose(); });
+              pillarGeo.dispose();
+              pillarMat.dispose();
+              pulseGeo.dispose();
+              pulseMat.dispose();
+              rings.forEach((r) => {
+                r.mesh.geometry.dispose();
+                r.mat.dispose();
+              });
               return; // stop animation
             }
 
@@ -18664,7 +21154,10 @@ export default function ResumeSpace3D({
 
             // Rings: expand outward with staggered timing
             rings.forEach(({ mesh, mat, delay }) => {
-              const rt = Math.max(0, (elapsed - delay * 1000) / (duration - delay * 1000));
+              const rt = Math.max(
+                0,
+                (elapsed - delay * 1000) / (duration - delay * 1000),
+              );
               const ringScale = 1 + rt * 25; // expand to 25× original
               mesh.scale.set(ringScale, ringScale, ringScale);
               mat.opacity = 0.8 * Math.max(0, 1 - rt * rt);
@@ -18679,12 +21172,17 @@ export default function ResumeSpace3D({
           };
           requestAnimationFrame(animate);
 
-          dlog(`🎯 ${label} located at [${wp.x.toFixed(0)}, ${wp.y.toFixed(0)}, ${wp.z.toFixed(0)}]`);
+          dlog(
+            `🎯 ${label} located at [${wp.x.toFixed(0)}, ${wp.y.toFixed(0)}, ${wp.z.toFixed(0)}]`,
+          );
         };
 
         (window as any).locateFalcon = () => {
           const falcon = spaceshipRef.current;
-          if (!falcon) { dlog("❌ Falcon not loaded yet"); return; }
+          if (!falcon) {
+            dlog("❌ Falcon not loaded yet");
+            return;
+          }
           createLocateBeacon(falcon, 0x4499ff, "Millennium Falcon");
         };
         (window as any).inspectFalcon = () => {
@@ -18696,7 +21194,10 @@ export default function ResumeSpace3D({
 
         (window as any).locateSD = () => {
           const sd = starDestroyerRef.current;
-          if (!sd) { dlog("❌ Star Destroyer not loaded yet"); return; }
+          if (!sd) {
+            dlog("❌ Star Destroyer not loaded yet");
+            return;
+          }
           createLocateBeacon(sd, 0xff4422, "Star Destroyer");
         };
         (window as any).shadowSD = () => {
@@ -18735,13 +21236,23 @@ export default function ResumeSpace3D({
             dlog("═══════════════════════════════════════════════════");
             dlog("📷 DEBUG CAMERA — Position Capture");
             dlog("═══════════════════════════════════════════════════");
-            dlog(`Camera position : { x: ${p.x.toFixed(1)}, y: ${p.y.toFixed(1)}, z: ${p.z.toFixed(1)} }`);
-            dlog(`Look-at target  : { x: ${target.x.toFixed(1)}, y: ${target.y.toFixed(1)}, z: ${target.z.toFixed(1)} }`);
+            dlog(
+              `Camera position : { x: ${p.x.toFixed(1)}, y: ${p.y.toFixed(1)}, z: ${p.z.toFixed(1)} }`,
+            );
+            dlog(
+              `Look-at target  : { x: ${target.x.toFixed(1)}, y: ${target.y.toFixed(1)}, z: ${target.z.toFixed(1)} }`,
+            );
             dlog("");
             dlog("📋 Copy-paste for code:");
-            dlog(`  camera: { x: ${p.x.toFixed(1)}, y: ${p.y.toFixed(1)}, z: ${p.z.toFixed(1)} }`);
-            dlog(`  target: { x: ${target.x.toFixed(1)}, y: ${target.y.toFixed(1)}, z: ${target.z.toFixed(1)} }`);
-            dlog(`  setLookAt(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}, ${target.x.toFixed(1)}, ${target.y.toFixed(1)}, ${target.z.toFixed(1)}, false);`);
+            dlog(
+              `  camera: { x: ${p.x.toFixed(1)}, y: ${p.y.toFixed(1)}, z: ${p.z.toFixed(1)} }`,
+            );
+            dlog(
+              `  target: { x: ${target.x.toFixed(1)}, y: ${target.y.toFixed(1)}, z: ${target.z.toFixed(1)} }`,
+            );
+            dlog(
+              `  setLookAt(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}, ${target.x.toFixed(1)}, ${target.y.toFixed(1)}, ${target.z.toFixed(1)}, false);`,
+            );
             dlog("═══════════════════════════════════════════════════");
           }
           if (e.key === "Escape" && debugCamActive) {
@@ -18757,7 +21268,10 @@ export default function ResumeSpace3D({
           if (!debugCamActive) return;
           const cam = sceneRef.current.camera;
           const cc = sceneRef.current.controls;
-          if (!cam || !cc) { debugCamRAF = requestAnimationFrame(debugCamLoop); return; }
+          if (!cam || !cc) {
+            debugCamRAF = requestAnimationFrame(debugCamLoop);
+            return;
+          }
 
           const dt = 1 / 60; // approximate
           let speed = DEBUG_BASE_SPEED;
@@ -18783,8 +21297,12 @@ export default function ResumeSpace3D({
             const newCam = cam.position.clone().add(move);
             const newTarget = target.clone().add(move);
             (cc as any).setLookAt(
-              newCam.x, newCam.y, newCam.z,
-              newTarget.x, newTarget.y, newTarget.z,
+              newCam.x,
+              newCam.y,
+              newCam.z,
+              newTarget.x,
+              newTarget.y,
+              newTarget.z,
               false,
             );
           }
@@ -18794,7 +21312,9 @@ export default function ResumeSpace3D({
 
         (window as any).debugCamera = () => {
           if (debugCamActive) {
-            dlog("⚠️ Debug camera already active. Use exitDebugCamera() to exit.");
+            dlog(
+              "⚠️ Debug camera already active. Use exitDebugCamera() to exit.",
+            );
             return;
           }
           debugCamActive = true;
@@ -18852,7 +21372,7 @@ export default function ResumeSpace3D({
           window.removeEventListener("keydown", debugKeyDown);
           window.removeEventListener("keyup", debugKeyUp);
           // Clear stuck keys
-          Object.keys(debugKeys).forEach(k => debugKeys[k] = false);
+          Object.keys(debugKeys).forEach((k) => (debugKeys[k] = false));
 
           // Re-engage ship following
           followingSpaceshipRef.current = true;
@@ -18863,12 +21383,20 @@ export default function ResumeSpace3D({
           const cc = sceneRef.current.controls;
           const ship = spaceshipRef.current;
           if (cc && ship) {
-            const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion);
-            const camPos = ship.position.clone().addScaledVector(behind, FOLLOW_DISTANCE);
+            const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(
+              ship.quaternion,
+            );
+            const camPos = ship.position
+              .clone()
+              .addScaledVector(behind, FOLLOW_DISTANCE);
             camPos.y += FOLLOW_HEIGHT;
             cc.setLookAt(
-              camPos.x, camPos.y, camPos.z,
-              ship.position.x, ship.position.y, ship.position.z,
+              camPos.x,
+              camPos.y,
+              camPos.z,
+              ship.position.x,
+              ship.position.y,
+              ship.position.z,
               true,
             );
           }
@@ -18946,8 +21474,12 @@ export default function ResumeSpace3D({
         const camPos = ship.position.clone().addScaledVector(behind, 50);
         camPos.y += 20;
         cc.setLookAt(
-          camPos.x, camPos.y, camPos.z,
-          ship.position.x, ship.position.y, ship.position.z,
+          camPos.x,
+          camPos.y,
+          camPos.z,
+          ship.position.x,
+          ship.position.y,
+          ship.position.z,
           true,
         );
       }
@@ -19004,1054 +21536,1284 @@ export default function ResumeSpace3D({
       markSceneModelLoaded(); // about-exterior slot (load never started)
     };
     const onProjectShowcaseLoaded = async (gltf: { scene: THREE.Group }) => {
-        if (hallwayContentModeRef.current === "about" && !hallwayFontsReadyRef.current) {
-          try {
-            if (typeof document !== "undefined" && "fonts" in document) {
-              await (document as Document & { fonts: FontFaceSet }).fonts.ready;
-            }
-          } catch {
-            // Keep hallway initialization resilient.
+      if (
+        hallwayContentModeRef.current === "about" &&
+        !hallwayFontsReadyRef.current
+      ) {
+        try {
+          if (typeof document !== "undefined" && "fonts" in document) {
+            await (document as Document & { fonts: FontFaceSet }).fonts.ready;
           }
+        } catch {
+          // Keep hallway initialization resilient.
         }
-        const showcaseRoot = new THREE.Group();
-        showcaseRoot.name = "ProjectShowcaseRoot";
-        showcaseRoot.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
-        const showcaseInteriorRoot = new THREE.Group();
-        showcaseInteriorRoot.name = "ProjectShowcaseInteriorRoot";
-        showcaseRoot.add(showcaseInteriorRoot);
-        projectShowcaseInteriorRootRef.current = showcaseInteriorRoot;
-        projectShowcaseExteriorRootRef.current = null;
-        projectShowcaseAboutExteriorModelRef.current = null;
-        projectShowcaseAboutBeaconCoreMatRef.current = null;
-        projectShowcaseAboutBeaconHaloMatRef.current = null;
-        const trenchWorldAnchor = getProjectShowcaseWorldAnchor(
-          hallwayContentModeRef.current,
-        );
-        showcaseRoot.position.copy(trenchWorldAnchor).add(new THREE.Vector3(0, -36, 0));
+      }
+      const showcaseRoot = new THREE.Group();
+      showcaseRoot.name = "ProjectShowcaseRoot";
+      showcaseRoot.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
+      const showcaseInteriorRoot = new THREE.Group();
+      showcaseInteriorRoot.name = "ProjectShowcaseInteriorRoot";
+      showcaseRoot.add(showcaseInteriorRoot);
+      projectShowcaseInteriorRootRef.current = showcaseInteriorRoot;
+      projectShowcaseExteriorRootRef.current = null;
+      projectShowcaseAboutExteriorModelRef.current = null;
+      projectShowcaseAboutBeaconCoreMatRef.current = null;
+      projectShowcaseAboutBeaconHaloMatRef.current = null;
+      const trenchWorldAnchor = getProjectShowcaseWorldAnchor(
+        hallwayContentModeRef.current,
+      );
+      showcaseRoot.position
+        .copy(trenchWorldAnchor)
+        .add(new THREE.Vector3(0, -36, 0));
 
-        const trench = gltf.scene;
-        const trenchDiffuseCache = new Map<string, THREE.Texture>();
-        const trenchDiffusePending = new Map<
-          string,
-          THREE.MeshStandardMaterial[]
-        >();
-        const ensureTrenchDiffuseMap = (mat: THREE.MeshStandardMaterial) => {
-          if (!PROJECT_SHOWCASE_INJECT_NAMED_DIFFUSE_MAPS) return;
-          if (mat.map || !mat.name) return;
-          const key = mat.name;
-          const cached = trenchDiffuseCache.get(key);
-          if (cached) {
-            mat.map = cached;
-            mat.needsUpdate = true;
-            return;
-          }
-          const pending = trenchDiffusePending.get(key);
-          if (pending) {
-            pending.push(mat);
-            return;
-          }
-          trenchDiffusePending.set(key, [mat]);
+      const trench = gltf.scene;
+      const trenchDiffuseCache = new Map<string, THREE.Texture>();
+      const trenchDiffusePending = new Map<
+        string,
+        THREE.MeshStandardMaterial[]
+      >();
+      const ensureTrenchDiffuseMap = (mat: THREE.MeshStandardMaterial) => {
+        if (!PROJECT_SHOWCASE_INJECT_NAMED_DIFFUSE_MAPS) return;
+        if (mat.map || !mat.name) return;
+        const key = mat.name;
+        const cached = trenchDiffuseCache.get(key);
+        if (cached) {
+          mat.map = cached;
+          mat.needsUpdate = true;
+          return;
+        }
+        const pending = trenchDiffusePending.get(key);
+        if (pending) {
+          pending.push(mat);
+          return;
+        }
+        trenchDiffusePending.set(key, [mat]);
 
-          const basePath = `${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}/${key}_diffuse`;
-          const exts = ["jpeg", "jpg", "png"];
-          const tryLoad = (idx: number) => {
-            if (idx >= exts.length) {
-              debugLog(
-                "project-showcase",
-                `[textures] failed to resolve optional diffuse for material "${key}" under ${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}`,
-              );
-              trenchDiffusePending.delete(key);
-              return;
-            }
-            textureLoader.load(
-              `${basePath}.${exts[idx]}`,
-              (texture) => {
-                texture.colorSpace = THREE.SRGBColorSpace;
-                trenchDiffuseCache.set(key, texture);
-                const waiters = trenchDiffusePending.get(key) ?? [];
-                waiters.forEach((waitMat) => {
-                  waitMat.map = texture;
-                  waitMat.needsUpdate = true;
-                });
-                trenchDiffusePending.delete(key);
-              },
-              undefined,
-              () => tryLoad(idx + 1),
+        const basePath = `${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}/${key}_diffuse`;
+        const exts = ["jpeg", "jpg", "png"];
+        const tryLoad = (idx: number) => {
+          if (idx >= exts.length) {
+            debugLog(
+              "project-showcase",
+              `[textures] failed to resolve optional diffuse for material "${key}" under ${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}`,
             );
-          };
-          tryLoad(0);
-        };
-
-        trench.traverse((obj) => {
-          const o = obj as THREE.Object3D & {
-            isMesh?: boolean;
-            isLight?: boolean;
-            name?: string;
-            visible?: boolean;
-            material?: THREE.Material | THREE.Material[];
-          };
-          const name = (o.name || "").toLowerCase();
-
-          // Legacy trench hides embedded cinematic lights; hallway can keep authored lights.
-          if (o.isLight) {
-            if (PROJECT_SHOWCASE_DISABLE_EMBEDDED_MODEL_LIGHTS) o.visible = false;
+            trenchDiffusePending.delete(key);
             return;
           }
-
-          if (!o.isMesh) return;
-          if (
-            PROJECT_SHOWCASE_APPLY_LEGACY_MESH_FILTERS &&
-            (
-              name.includes("xwing") ||
-              name.includes("tie") ||
-              name.includes("fighter") ||
-              name.includes("turret") ||
-              name.includes("laser") ||
-              name.includes("blaster") ||
-              name.includes("bolt") ||
-              name.includes("beam") ||
-              name.includes("explosion") ||
-              name.includes("sun")
-            )
-          ) {
-            o.visible = false;
-            return;
-          }
-
-          // Legacy trench gets stronger normalization; hallway keeps authored material values.
-          const mats = Array.isArray(o.material) ? o.material : [o.material];
-          mats.forEach((mat) => {
-            const src = mat as THREE.MeshStandardMaterial & {
-              emissive?: THREE.Color;
-              emissiveMap?: THREE.Texture | null;
-              emissiveIntensity?: number;
-              map?: THREE.Texture | null;
-              metalness?: number;
-              roughness?: number;
-              color?: THREE.Color;
-              toneMapped?: boolean;
-              vertexColors?: boolean;
-            };
-            if (src.map) src.map.colorSpace = THREE.SRGBColorSpace;
-            if (src.emissiveMap) src.emissiveMap.colorSpace = THREE.SRGBColorSpace;
-            if (PROJECT_SHOWCASE_APPLY_LEGACY_MATERIAL_NORMALIZATION) {
-              if (typeof src.metalness === "number") {
-                src.metalness = Math.min(src.metalness, 0.22);
-              }
-              if (typeof src.roughness === "number") {
-                src.roughness = Math.max(src.roughness, 0.62);
-              }
-              if (typeof src.emissiveIntensity === "number") {
-                src.emissiveIntensity = Math.min(src.emissiveIntensity, 0.35);
-              }
-              // Legacy asset carries vertex colors that tint surfaces cyan in our pipeline.
-              src.vertexColors = false;
-              if (src.color) src.color.set(0xffffff);
-              src.side = THREE.DoubleSide;
-            }
-            ensureTrenchDiffuseMap(src);
-            src.needsUpdate = true;
-          });
-        });
-
-        if (hallwayContentModeRef.current === "about") {
-          trench.rotation.x = -Math.PI / 2;
-          trench.updateMatrixWorld(true);
-        }
-
-        // Normalize model scale so first-pass placement is predictable.
-        const trenchBounds = new THREE.Box3().setFromObject(trench);
-        const trenchSize = trenchBounds.getSize(new THREE.Vector3());
-        const trenchMaxDim = Math.max(trenchSize.x, trenchSize.y, trenchSize.z, 1);
-        const desiredMaxDim = 420;
-        const trenchScale = desiredMaxDim / trenchMaxDim;
-        trench.scale.setScalar(trenchScale);
-        trenchBounds.setFromObject(trench);
-        const trenchSizeScaled = trenchBounds.getSize(new THREE.Vector3());
-        const trenchCenter = trenchBounds.getCenter(new THREE.Vector3());
-        trench.position.sub(trenchCenter);
-        const publishedShowcase = projectShowcaseEntries;
-        const runAxis: "x" | "z" | "y" =
-          trenchSizeScaled.y >= trenchSizeScaled.x && trenchSizeScaled.y >= trenchSizeScaled.z
-            ? "y"
-            : trenchSizeScaled.z >= trenchSizeScaled.x
-              ? "z"
-              : "x";
-        const trenchForward =
-          runAxis === "y"
-            ? new THREE.Vector3(0, 1, 0)
-            : runAxis === "z"
-              ? new THREE.Vector3(0, 0, 1)
-              : new THREE.Vector3(1, 0, 0);
-        const trenchLateral =
-          runAxis === "y"
-            ? new THREE.Vector3(1, 0, 0)
-            : runAxis === "z"
-              ? new THREE.Vector3(1, 0, 0)
-              : new THREE.Vector3(0, 0, -1);
-        const baseRunLength =
-          runAxis === "y"
-            ? trenchSizeScaled.y
-            : runAxis === "z"
-              ? trenchSizeScaled.z
-              : trenchSizeScaled.x;
-        const trenchWidth =
-          runAxis === "y"
-            ? Math.max(trenchSizeScaled.x, trenchSizeScaled.z)
-            : runAxis === "z"
-              ? trenchSizeScaled.x
-              : trenchSizeScaled.z;
-        const spacingSeed = THREE.MathUtils.clamp(
-          baseRunLength / Math.max(6, publishedShowcase.length + 2),
-          24,
-          50,
-        );
-        const spacingPaddingSeed = Math.max(14, spacingSeed * 0.9);
-        const requiredRunLength =
-          Math.max(0, publishedShowcase.length - 1) * spacingSeed +
-          spacingPaddingSeed * 2 +
-          spacingSeed;
-        const segmentOverlap = Math.min(baseRunLength * 0.06, 8);
-        const effectiveSegmentLength = Math.max(1, baseRunLength - segmentOverlap);
-        const hallwaySegmentCount = Math.max(
-          1,
-          Math.ceil(requiredRunLength / effectiveSegmentLength),
-        );
-        const runLength =
-          baseRunLength + Math.max(0, hallwaySegmentCount - 1) * effectiveSegmentLength;
-        const trenchSegmentsRoot = new THREE.Group();
-        trenchSegmentsRoot.name = "ProjectShowcaseHallwaySegments";
-        const segmentStartRun = -((hallwaySegmentCount - 1) * effectiveSegmentLength) / 2;
-        for (let segmentIndex = 0; segmentIndex < hallwaySegmentCount; segmentIndex += 1) {
-          const segment =
-            segmentIndex === 0 ? trench : (trench.clone(true) as THREE.Object3D);
-          const runOffset = segmentStartRun + segmentIndex * effectiveSegmentLength;
-          if (runAxis === "y") {
-            segment.position.set(segment.position.x, runOffset, segment.position.z);
-          } else if (runAxis === "z") {
-            segment.position.set(segment.position.x, segment.position.y, runOffset);
-          } else {
-            segment.position.set(runOffset, segment.position.y, segment.position.z);
-          }
-          trenchSegmentsRoot.add(segment);
-        }
-        showcaseInteriorRoot.add(trenchSegmentsRoot);
-
-        // Isolate trench rendering/lighting from the main cosmos sun.
-        trenchSegmentsRoot.traverse((obj) => {
-          obj.layers.set(PROJECT_SHOWCASE_LAYER);
-        });
-
-        // Add depth-only copies on the card layer so showcase cards are
-        // naturally occluded by tunnel walls from outside.
-        const trenchCardOccluder = trench.clone(true);
-        const trenchCardOccluderMat = new THREE.MeshBasicMaterial({
-          color: 0x000000,
-          side: THREE.DoubleSide,
-        });
-        trenchCardOccluderMat.colorWrite = false;
-        trenchCardOccluderMat.depthWrite = true;
-        trenchCardOccluderMat.depthTest = true;
-        trenchCardOccluder.traverse((obj) => {
-          const mesh = obj as THREE.Mesh;
-          if (!(mesh as any).isMesh) return;
-          mesh.material = trenchCardOccluderMat;
-          mesh.renderOrder = -250;
-          mesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
-        });
-        const trenchOccluderRoot = new THREE.Group();
-        trenchOccluderRoot.name = "ProjectShowcaseHallwayOccluders";
-        for (let segmentIndex = 0; segmentIndex < hallwaySegmentCount; segmentIndex += 1) {
-          const segment =
-            segmentIndex === 0
-              ? trenchCardOccluder
-              : (trenchCardOccluder.clone(true) as THREE.Object3D);
-          const runOffset = segmentStartRun + segmentIndex * effectiveSegmentLength;
-          if (runAxis === "y") {
-            segment.position.set(segment.position.x, runOffset, segment.position.z);
-          } else if (runAxis === "z") {
-            segment.position.set(segment.position.x, segment.position.y, runOffset);
-          } else {
-            segment.position.set(runOffset, segment.position.y, segment.position.z);
-          }
-          trenchOccluderRoot.add(segment);
-        }
-        showcaseInteriorRoot.add(trenchOccluderRoot);
-
-        if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
-          const showcaseAmbient = new THREE.AmbientLight(
-            0xffffff,
-            PROJECT_SHOWCASE_AMBIENT_LIGHT_INTENSITY,
-          );
-          const showcaseKey = new THREE.DirectionalLight(
-            0xdde8ff,
-            PROJECT_SHOWCASE_KEY_LIGHT_INTENSITY,
-          );
-          showcaseKey.position.set(70, 110, 50);
-          const showcaseRim = new THREE.DirectionalLight(
-            0x8db8ff,
-            PROJECT_SHOWCASE_RIM_LIGHT_INTENSITY,
-          );
-          showcaseRim.position.set(-80, 30, -40);
-          showcaseAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseKey.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseRim.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseInteriorRoot.add(showcaseAmbient, showcaseKey, showcaseRim);
-        }
-
-        if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
-          // Trench-realm sun source: a strong angled key + beam into trench.
-          const showcaseSun = new THREE.DirectionalLight(
-            0xffe6c1,
-            PROJECT_SHOWCASE_SUN_LIGHT_INTENSITY,
-          );
-          const trenchLightVertical =
-            runAxis === "y" ? new THREE.Vector3(0, 0, 220) : new THREE.Vector3(0, 220, 0);
-          showcaseSun.position.copy(
-            trenchForward
-              .clone()
-              .multiplyScalar(-340)
-              .add(trenchLateral.clone().multiplyScalar(150))
-              .add(trenchLightVertical),
-          );
-          const showcaseSunTarget = new THREE.Object3D();
-          const trenchLightTargetLift =
-            runAxis === "y" ? new THREE.Vector3(0, 0, 22) : new THREE.Vector3(0, 22, 0);
-          showcaseSunTarget.position.copy(
-            trenchForward.clone().multiplyScalar(280).add(trenchLightTargetLift),
-          );
-          const showcaseSunBeam = new THREE.SpotLight(
-            0xfff1d8,
-            PROJECT_SHOWCASE_SUN_BEAM_INTENSITY,
-            2800,
-            Math.PI / 7.2,
-            0.58,
-            1.2,
-          );
-          const trenchBeamVertical =
-            runAxis === "y" ? new THREE.Vector3(0, 0, 250) : new THREE.Vector3(0, 250, 0);
-          showcaseSunBeam.position.copy(
-            trenchForward
-              .clone()
-              .multiplyScalar(-460)
-              .add(trenchLateral.clone().multiplyScalar(160))
-              .add(trenchBeamVertical),
-          );
-          const showcaseSunBeamTarget = new THREE.Object3D();
-          const trenchBeamTargetLift =
-            runAxis === "y" ? new THREE.Vector3(0, 0, 4) : new THREE.Vector3(0, 4, 0);
-          showcaseSunBeamTarget.position.copy(
-            trenchForward.clone().multiplyScalar(220).add(trenchBeamTargetLift),
-          );
-          showcaseSun.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseSunTarget.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseSunBeam.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseSunBeamTarget.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseSun.target = showcaseSunTarget;
-          showcaseSunBeam.target = showcaseSunBeamTarget;
-          showcaseInteriorRoot.add(
-            showcaseSunTarget,
-            showcaseSun,
-            showcaseSunBeamTarget,
-            showcaseSunBeam,
-          );
-        }
-        const interiorLightBases: Array<{ light: THREE.Light; baseIntensity: number }> = [];
-        showcaseInteriorRoot.traverse((obj) => {
-          const light = obj as THREE.Light;
-          if (!(light as any).isLight) return;
-          interiorLightBases.push({ light, baseIntensity: light.intensity });
-        });
-        projectShowcaseInteriorLightBasesRef.current = interiorLightBases;
-        projectShowcaseElevatorEmergencyLightsRef.current = null;
-        if (runAxis === "y" && hallwayContentModeRef.current === "about") {
-          const emergencyAmbient = new THREE.AmbientLight(0x6dffb0, 0);
-          const emergencyPoint = new THREE.PointLight(0x59fca7, 0, 560, 1.7);
-          emergencyPoint.position.set(0, 24, -1.8);
-          emergencyAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
-          emergencyPoint.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseInteriorRoot.add(emergencyAmbient, emergencyPoint);
-          projectShowcaseElevatorEmergencyLightsRef.current = {
-            ambient: emergencyAmbient,
-            point: emergencyPoint,
-          };
-        }
-        // Keep trench well away from Projects planet so entry can be a true long final.
-        const showcaseForwardOffset = runAxis === "y" ? 320 : 860;
-        const showcaseWorldOffset =
-          runAxis === "y" ? new THREE.Vector3(0, -120, -24) : new THREE.Vector3(0, -36, 0);
-        showcaseRoot.position
-          .copy(trenchWorldAnchor)
-          .addScaledVector(trenchForward, showcaseForwardOffset)
-          .addScaledVector(trenchLateral, 95)
-          .add(showcaseWorldOffset);
-        if (PROJECT_SHOWCASE_USE_NEBULA_REALM) {
           textureLoader.load(
-            PROJECT_SHOWCASE_NEBULA_JPG_PATH,
-            (nebulaTexture) => {
-              nebulaTexture.colorSpace = THREE.SRGBColorSpace;
-              nebulaTexture.mapping = THREE.EquirectangularReflectionMapping;
-              nebulaTexture.wrapS = THREE.RepeatWrapping;
-              nebulaTexture.wrapT = THREE.ClampToEdgeWrapping;
-              nebulaTexture.needsUpdate = true;
-
-              const domeRadius = CAMERA_FAR * 0.48;
-              const nebulaGeo = new THREE.SphereGeometry(domeRadius, 96, 64);
-              const nebulaMat = new THREE.MeshBasicMaterial({
-                map: nebulaTexture,
-                color: 0xffffff,
-                side: THREE.BackSide,
-                transparent: true,
-                opacity: 1,
-                depthWrite: false,
+            `${basePath}.${exts[idx]}`,
+            (texture) => {
+              texture.colorSpace = THREE.SRGBColorSpace;
+              trenchDiffuseCache.set(key, texture);
+              const waiters = trenchDiffusePending.get(key) ?? [];
+              waiters.forEach((waitMat) => {
+                waitMat.map = texture;
+                waitMat.needsUpdate = true;
               });
-              nebulaMat.toneMapped = false;
-              nebulaMat.userData = nebulaMat.userData || {};
-              nebulaMat.userData.nebulaBaseOpacity = 1;
-
-              const nebulaRoot = new THREE.Mesh(nebulaGeo, nebulaMat);
-              nebulaRoot.name = "ProjectShowcaseNebulaRealm";
-              nebulaRoot.layers.set(PROJECT_SHOWCASE_LAYER);
-              nebulaRoot.frustumCulled = false;
-              nebulaRoot.renderOrder = -1000;
-              nebulaRoot.rotation.y = Math.PI * 0.1;
-
-              scene.add(nebulaRoot);
-              projectShowcaseNebulaRootRef.current = nebulaRoot;
-              applyProjectShowcaseNebulaFade(0);
-              vlog(
-                `🌌 Project showcase JPG sky loaded radius=${domeRadius.toFixed(
-                  0,
-                )} path=${PROJECT_SHOWCASE_NEBULA_JPG_PATH}`,
-              );
+              trenchDiffusePending.delete(key);
             },
             undefined,
-            () => {
-              vlog(
-                "⚠️ Project showcase JPG sky failed — using default cosmos outside trench",
-              );
-            },
+            () => tryLoad(idx + 1),
+          );
+        };
+        tryLoad(0);
+      };
+
+      trench.traverse((obj) => {
+        const o = obj as THREE.Object3D & {
+          isMesh?: boolean;
+          isLight?: boolean;
+          name?: string;
+          visible?: boolean;
+          material?: THREE.Material | THREE.Material[];
+        };
+        const name = (o.name || "").toLowerCase();
+
+        // Legacy trench hides embedded cinematic lights; hallway can keep authored lights.
+        if (o.isLight) {
+          if (PROJECT_SHOWCASE_DISABLE_EMBEDDED_MODEL_LIGHTS) o.visible = false;
+          return;
+        }
+
+        if (!o.isMesh) return;
+        if (
+          PROJECT_SHOWCASE_APPLY_LEGACY_MESH_FILTERS &&
+          (name.includes("xwing") ||
+            name.includes("tie") ||
+            name.includes("fighter") ||
+            name.includes("turret") ||
+            name.includes("laser") ||
+            name.includes("blaster") ||
+            name.includes("bolt") ||
+            name.includes("beam") ||
+            name.includes("explosion") ||
+            name.includes("sun"))
+        ) {
+          o.visible = false;
+          return;
+        }
+
+        // Legacy trench gets stronger normalization; hallway keeps authored material values.
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach((mat) => {
+          const src = mat as THREE.MeshStandardMaterial & {
+            emissive?: THREE.Color;
+            emissiveMap?: THREE.Texture | null;
+            emissiveIntensity?: number;
+            map?: THREE.Texture | null;
+            metalness?: number;
+            roughness?: number;
+            color?: THREE.Color;
+            toneMapped?: boolean;
+            vertexColors?: boolean;
+          };
+          if (src.map) src.map.colorSpace = THREE.SRGBColorSpace;
+          if (src.emissiveMap)
+            src.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+          if (PROJECT_SHOWCASE_APPLY_LEGACY_MATERIAL_NORMALIZATION) {
+            if (typeof src.metalness === "number") {
+              src.metalness = Math.min(src.metalness, 0.22);
+            }
+            if (typeof src.roughness === "number") {
+              src.roughness = Math.max(src.roughness, 0.62);
+            }
+            if (typeof src.emissiveIntensity === "number") {
+              src.emissiveIntensity = Math.min(src.emissiveIntensity, 0.35);
+            }
+            // Legacy asset carries vertex colors that tint surfaces cyan in our pipeline.
+            src.vertexColors = false;
+            if (src.color) src.color.set(0xffffff);
+            src.side = THREE.DoubleSide;
+          }
+          ensureTrenchDiffuseMap(src);
+          src.needsUpdate = true;
+        });
+      });
+
+      if (hallwayContentModeRef.current === "about") {
+        trench.rotation.x = -Math.PI / 2;
+        trench.updateMatrixWorld(true);
+      }
+
+      // Normalize model scale so first-pass placement is predictable.
+      const trenchBounds = new THREE.Box3().setFromObject(trench);
+      const trenchSize = trenchBounds.getSize(new THREE.Vector3());
+      const trenchMaxDim = Math.max(
+        trenchSize.x,
+        trenchSize.y,
+        trenchSize.z,
+        1,
+      );
+      const desiredMaxDim = 420;
+      const trenchScale = desiredMaxDim / trenchMaxDim;
+      trench.scale.setScalar(trenchScale);
+      trenchBounds.setFromObject(trench);
+      const trenchSizeScaled = trenchBounds.getSize(new THREE.Vector3());
+      const trenchCenter = trenchBounds.getCenter(new THREE.Vector3());
+      trench.position.sub(trenchCenter);
+      const publishedShowcase = projectShowcaseEntries;
+      const runAxis: "x" | "z" | "y" =
+        trenchSizeScaled.y >= trenchSizeScaled.x &&
+        trenchSizeScaled.y >= trenchSizeScaled.z
+          ? "y"
+          : trenchSizeScaled.z >= trenchSizeScaled.x
+            ? "z"
+            : "x";
+      const trenchForward =
+        runAxis === "y"
+          ? new THREE.Vector3(0, 1, 0)
+          : runAxis === "z"
+            ? new THREE.Vector3(0, 0, 1)
+            : new THREE.Vector3(1, 0, 0);
+      const trenchLateral =
+        runAxis === "y"
+          ? new THREE.Vector3(1, 0, 0)
+          : runAxis === "z"
+            ? new THREE.Vector3(1, 0, 0)
+            : new THREE.Vector3(0, 0, -1);
+      const baseRunLength =
+        runAxis === "y"
+          ? trenchSizeScaled.y
+          : runAxis === "z"
+            ? trenchSizeScaled.z
+            : trenchSizeScaled.x;
+      const trenchWidth =
+        runAxis === "y"
+          ? Math.max(trenchSizeScaled.x, trenchSizeScaled.z)
+          : runAxis === "z"
+            ? trenchSizeScaled.x
+            : trenchSizeScaled.z;
+      const spacingSeed = THREE.MathUtils.clamp(
+        baseRunLength / Math.max(6, publishedShowcase.length + 2),
+        24,
+        50,
+      );
+      const spacingPaddingSeed = Math.max(14, spacingSeed * 0.9);
+      const requiredRunLength =
+        Math.max(0, publishedShowcase.length - 1) * spacingSeed +
+        spacingPaddingSeed * 2 +
+        spacingSeed;
+      const segmentOverlap = Math.min(baseRunLength * 0.06, 8);
+      const effectiveSegmentLength = Math.max(
+        1,
+        baseRunLength - segmentOverlap,
+      );
+      const hallwaySegmentCount = Math.max(
+        1,
+        Math.ceil(requiredRunLength / effectiveSegmentLength),
+      );
+      const runLength =
+        baseRunLength +
+        Math.max(0, hallwaySegmentCount - 1) * effectiveSegmentLength;
+      const trenchSegmentsRoot = new THREE.Group();
+      trenchSegmentsRoot.name = "ProjectShowcaseHallwaySegments";
+      const segmentStartRun =
+        -((hallwaySegmentCount - 1) * effectiveSegmentLength) / 2;
+      for (
+        let segmentIndex = 0;
+        segmentIndex < hallwaySegmentCount;
+        segmentIndex += 1
+      ) {
+        const segment =
+          segmentIndex === 0 ? trench : (trench.clone(true) as THREE.Object3D);
+        const runOffset =
+          segmentStartRun + segmentIndex * effectiveSegmentLength;
+        if (runAxis === "y") {
+          segment.position.set(
+            segment.position.x,
+            runOffset,
+            segment.position.z,
+          );
+        } else if (runAxis === "z") {
+          segment.position.set(
+            segment.position.x,
+            segment.position.y,
+            runOffset,
+          );
+        } else {
+          segment.position.set(
+            runOffset,
+            segment.position.y,
+            segment.position.z,
           );
         }
-        if (PROJECT_SHOWCASE_ENABLE_FLOOR_PULSES) {
-          const floorPulseRecords: Array<{ mat: THREE.MeshBasicMaterial; runT: number }> = [];
-          const floorPulseGroup = new THREE.Group();
-          const floorPulseSegments = 24;
-          const floorPulseStep = runLength / floorPulseSegments;
-          const floorPulseLength = floorPulseStep * 0.82;
-          const floorPulseWidth = THREE.MathUtils.clamp(trenchWidth * 0.038, 0.95, 1.75);
-          // Lift above floor so pulses are visible and not buried by geometry.
-          const floorPulseYOffset = -trenchSizeScaled.y * 0.438;
-          const floorPulseLateral = trenchWidth * 0.286;
-          for (let lane = -1; lane <= 1; lane += 2) {
-            for (let i = 0; i < floorPulseSegments; i += 1) {
-              const seg = new THREE.Mesh(
-                new THREE.PlaneGeometry(floorPulseLength, floorPulseWidth),
-                new THREE.MeshBasicMaterial({
-                  color: 0x22cfff,
-                  transparent: true,
-                  opacity: 0.18,
-                  side: THREE.DoubleSide,
-                  depthWrite: false,
-                  toneMapped: false,
-                  blending: THREE.AdditiveBlending,
-                }),
-              );
-              seg.rotation.x = -Math.PI * 0.5;
-              seg.renderOrder = 42;
-              const runPos = -runLength * 0.5 + floorPulseStep * (i + 0.5);
-              if (runAxis === "y") {
-                seg.position.set(
-                  lane * floorPulseLateral,
-                  runPos,
-                  floorPulseYOffset,
-                );
-              } else if (runAxis === "z") {
-                seg.position.set(lane * floorPulseLateral, floorPulseYOffset, runPos);
-              } else {
-                seg.position.set(runPos, floorPulseYOffset, lane * floorPulseLateral);
-              }
-              floorPulseGroup.add(seg);
-              floorPulseRecords.push({
-                mat: seg.material as THREE.MeshBasicMaterial,
-                runT: (i + 0.5) / floorPulseSegments,
-              });
-            }
-          }
-          floorPulseGroup.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseInteriorRoot.add(floorPulseGroup);
-          projectShowcaseFloorPulseMatsRef.current = floorPulseRecords;
+        trenchSegmentsRoot.add(segment);
+      }
+      showcaseInteriorRoot.add(trenchSegmentsRoot);
+
+      // Isolate trench rendering/lighting from the main cosmos sun.
+      trenchSegmentsRoot.traverse((obj) => {
+        obj.layers.set(PROJECT_SHOWCASE_LAYER);
+      });
+
+      // Add depth-only copies on the card layer so showcase cards are
+      // naturally occluded by tunnel walls from outside.
+      const trenchCardOccluder = trench.clone(true);
+      const trenchCardOccluderMat = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        side: THREE.DoubleSide,
+      });
+      trenchCardOccluderMat.colorWrite = false;
+      trenchCardOccluderMat.depthWrite = true;
+      trenchCardOccluderMat.depthTest = true;
+      trenchCardOccluder.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (!(mesh as any).isMesh) return;
+        mesh.material = trenchCardOccluderMat;
+        mesh.renderOrder = -250;
+        mesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
+      });
+      const trenchOccluderRoot = new THREE.Group();
+      trenchOccluderRoot.name = "ProjectShowcaseHallwayOccluders";
+      for (
+        let segmentIndex = 0;
+        segmentIndex < hallwaySegmentCount;
+        segmentIndex += 1
+      ) {
+        const segment =
+          segmentIndex === 0
+            ? trenchCardOccluder
+            : (trenchCardOccluder.clone(true) as THREE.Object3D);
+        const runOffset =
+          segmentStartRun + segmentIndex * effectiveSegmentLength;
+        if (runAxis === "y") {
+          segment.position.set(
+            segment.position.x,
+            runOffset,
+            segment.position.z,
+          );
+        } else if (runAxis === "z") {
+          segment.position.set(
+            segment.position.x,
+            segment.position.y,
+            runOffset,
+          );
         } else {
-          projectShowcaseFloorPulseMatsRef.current = [];
+          segment.position.set(
+            runOffset,
+            segment.position.y,
+            segment.position.z,
+          );
         }
-        // Nudge the entire showcase module up slightly for better composition.
-        const panelY =
-          THREE.MathUtils.clamp(trenchSizeScaled.y * 0.015, 2.2, 5.4) + 0.35;
-        const panelWidth = THREE.MathUtils.clamp(trenchWidth * 0.2304, 9.072, 13.536);
-          const panelHeight = panelWidth * (9 / 16) * 1.25;
-        const panelSpacing = THREE.MathUtils.clamp(
-          runLength / Math.max(6, publishedShowcase.length + 2),
-          24,
-          50,
+        trenchOccluderRoot.add(segment);
+      }
+      showcaseInteriorRoot.add(trenchOccluderRoot);
+
+      if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
+        const showcaseAmbient = new THREE.AmbientLight(
+          0xffffff,
+          PROJECT_SHOWCASE_AMBIENT_LIGHT_INTENSITY,
         );
-        const runStart = -((publishedShowcase.length - 1) * panelSpacing) / 2;
-        const shaftBottomWorld = -trenchSizeScaled.y / 2;
-        const panelRecords: ShowcasePanelRecord[] = [];
-        let slideRunPositions: number[] = [];
-        if (hallwayContentModeRef.current === "about") {
-          const wallOffset = trenchWidth * 0.34;
-          const elevatorOppositeWall = -Math.min(trenchWidth * 0.34, Math.max(2.6, trenchWidth * 0.5 - 1.15));
-          const elevatorCreditsMode = runAxis === "y";
-          const elevatorCreditsWall = elevatorOppositeWall * 0.32;
+        const showcaseKey = new THREE.DirectionalLight(
+          0xdde8ff,
+          PROJECT_SHOWCASE_KEY_LIGHT_INTENSITY,
+        );
+        showcaseKey.position.set(70, 110, 50);
+        const showcaseRim = new THREE.DirectionalLight(
+          0x8db8ff,
+          PROJECT_SHOWCASE_RIM_LIGHT_INTENSITY,
+        );
+        showcaseRim.position.set(-80, 30, -40);
+        showcaseAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseKey.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseRim.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseInteriorRoot.add(showcaseAmbient, showcaseKey, showcaseRim);
+      }
 
-          const setupFovRad = THREE.MathUtils.degToRad(45);
-          const setupCameraX = Math.min(trenchWidth * 0.36, Math.max(2.8, trenchWidth * 0.5 - 1.05));
-          const setupWallDistance = Math.abs(setupCameraX - elevatorCreditsWall);
-          const estimatedVisibleHeight = 2 * setupWallDistance * Math.tan(setupFovRad * 0.5);
-          const fixedTriggerDistance = 12;
-          const immersiveWidths: Record<AboutHallColumnId, number> = { left: 12.1, center: 14.3, right: 12.1 };
-          const immersiveHeights: Record<AboutHallColumnId, number> = { left: 10.6, center: 10.1, right: 10.3 };
+      if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
+        // Trench-realm sun source: a strong angled key + beam into trench.
+        const showcaseSun = new THREE.DirectionalLight(
+          0xffe6c1,
+          PROJECT_SHOWCASE_SUN_LIGHT_INTENSITY,
+        );
+        const trenchLightVertical =
+          runAxis === "y"
+            ? new THREE.Vector3(0, 0, 220)
+            : new THREE.Vector3(0, 220, 0);
+        showcaseSun.position.copy(
+          trenchForward
+            .clone()
+            .multiplyScalar(-340)
+            .add(trenchLateral.clone().multiplyScalar(150))
+            .add(trenchLightVertical),
+        );
+        const showcaseSunTarget = new THREE.Object3D();
+        const trenchLightTargetLift =
+          runAxis === "y"
+            ? new THREE.Vector3(0, 0, 22)
+            : new THREE.Vector3(0, 22, 0);
+        showcaseSunTarget.position.copy(
+          trenchForward.clone().multiplyScalar(280).add(trenchLightTargetLift),
+        );
+        const showcaseSunBeam = new THREE.SpotLight(
+          0xfff1d8,
+          PROJECT_SHOWCASE_SUN_BEAM_INTENSITY,
+          2800,
+          Math.PI / 7.2,
+          0.58,
+          1.2,
+        );
+        const trenchBeamVertical =
+          runAxis === "y"
+            ? new THREE.Vector3(0, 0, 250)
+            : new THREE.Vector3(0, 250, 0);
+        showcaseSunBeam.position.copy(
+          trenchForward
+            .clone()
+            .multiplyScalar(-460)
+            .add(trenchLateral.clone().multiplyScalar(160))
+            .add(trenchBeamVertical),
+        );
+        const showcaseSunBeamTarget = new THREE.Object3D();
+        const trenchBeamTargetLift =
+          runAxis === "y"
+            ? new THREE.Vector3(0, 0, 4)
+            : new THREE.Vector3(0, 4, 0);
+        showcaseSunBeamTarget.position.copy(
+          trenchForward.clone().multiplyScalar(220).add(trenchBeamTargetLift),
+        );
+        showcaseSun.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseSunTarget.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseSunBeam.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseSunBeamTarget.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseSun.target = showcaseSunTarget;
+        showcaseSunBeam.target = showcaseSunBeamTarget;
+        showcaseInteriorRoot.add(
+          showcaseSunTarget,
+          showcaseSun,
+          showcaseSunBeamTarget,
+          showcaseSunBeam,
+        );
+      }
+      const interiorLightBases: Array<{
+        light: THREE.Light;
+        baseIntensity: number;
+      }> = [];
+      showcaseInteriorRoot.traverse((obj) => {
+        const light = obj as THREE.Light;
+        if (!(light as any).isLight) return;
+        interiorLightBases.push({ light, baseIntensity: light.intensity });
+      });
+      projectShowcaseInteriorLightBasesRef.current = interiorLightBases;
+      projectShowcaseElevatorEmergencyLightsRef.current = null;
+      if (runAxis === "y" && hallwayContentModeRef.current === "about") {
+        const emergencyAmbient = new THREE.AmbientLight(0x6dffb0, 0);
+        const emergencyPoint = new THREE.PointLight(0x59fca7, 0, 560, 1.7);
+        emergencyPoint.position.set(0, 24, -1.8);
+        emergencyAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
+        emergencyPoint.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseInteriorRoot.add(emergencyAmbient, emergencyPoint);
+        projectShowcaseElevatorEmergencyLightsRef.current = {
+          ambient: emergencyAmbient,
+          point: emergencyPoint,
+        };
+      }
+      // Keep trench well away from Projects planet so entry can be a true long final.
+      const showcaseForwardOffset = runAxis === "y" ? 320 : 860;
+      const showcaseWorldOffset =
+        runAxis === "y"
+          ? new THREE.Vector3(0, -120, -24)
+          : new THREE.Vector3(0, -36, 0);
+      showcaseRoot.position
+        .copy(trenchWorldAnchor)
+        .addScaledVector(trenchForward, showcaseForwardOffset)
+        .addScaledVector(trenchLateral, 95)
+        .add(showcaseWorldOffset);
+      if (PROJECT_SHOWCASE_USE_NEBULA_REALM) {
+        textureLoader.load(
+          PROJECT_SHOWCASE_NEBULA_JPG_PATH,
+          (nebulaTexture) => {
+            nebulaTexture.colorSpace = THREE.SRGBColorSpace;
+            nebulaTexture.mapping = THREE.EquirectangularReflectionMapping;
+            nebulaTexture.wrapS = THREE.RepeatWrapping;
+            nebulaTexture.wrapT = THREE.ClampToEdgeWrapping;
+            nebulaTexture.needsUpdate = true;
 
-          aboutTrenchContextRef.current = {
-            trenchWidth, trenchSizeScaledY: trenchSizeScaled.y, runAxis, panelSpacing, panelY,
-            shaftBottomWorld, wallOffset, elevatorOppositeWall, elevatorCreditsMode, elevatorCreditsWall,
-            estimatedVisibleHeight, fixedTriggerDistance, immersiveWidths, immersiveHeights,
-          };
+            const domeRadius = CAMERA_FAR * 0.48;
+            const nebulaGeo = new THREE.SphereGeometry(domeRadius, 96, 64);
+            const nebulaMat = new THREE.MeshBasicMaterial({
+              map: nebulaTexture,
+              color: 0xffffff,
+              side: THREE.BackSide,
+              transparent: true,
+              opacity: 1,
+              depthWrite: false,
+            });
+            nebulaMat.toneMapped = false;
+            nebulaMat.userData = nebulaMat.userData || {};
+            nebulaMat.userData.nebulaBaseOpacity = 1;
 
-          const firstSlidePos = aboutHallFirstSlidePositionRef.current ?? 190;
-          const estimateTallestCellHeight = (s: AboutHallSlide): number => {
-            const cols = s.configuration.columns ?? {};
-            const pw = elevatorCreditsMode
-              ? THREE.MathUtils.clamp(s.width * 1.18, 9.2, 13.8)
-              : THREE.MathUtils.clamp(s.width, 8, 13.8);
-            const ph = elevatorCreditsMode
-              ? THREE.MathUtils.clamp(s.height * 1.02, 5.2, 8.4)
-              : THREE.MathUtils.clamp(s.height, 4.8, 8.8);
-            let tallest = 0;
-            (["left", "center", "right"] as AboutHallColumnId[]).forEach((colId) => {
+            const nebulaRoot = new THREE.Mesh(nebulaGeo, nebulaMat);
+            nebulaRoot.name = "ProjectShowcaseNebulaRealm";
+            nebulaRoot.layers.set(PROJECT_SHOWCASE_LAYER);
+            nebulaRoot.frustumCulled = false;
+            nebulaRoot.renderOrder = -1000;
+            nebulaRoot.rotation.y = Math.PI * 0.1;
+
+            scene.add(nebulaRoot);
+            projectShowcaseNebulaRootRef.current = nebulaRoot;
+            applyProjectShowcaseNebulaFade(0);
+            vlog(
+              `🌌 Project showcase JPG sky loaded radius=${domeRadius.toFixed(
+                0,
+              )} path=${PROJECT_SHOWCASE_NEBULA_JPG_PATH}`,
+            );
+          },
+          undefined,
+          () => {
+            vlog(
+              "⚠️ Project showcase JPG sky failed — using default cosmos outside trench",
+            );
+          },
+        );
+      }
+      if (PROJECT_SHOWCASE_ENABLE_FLOOR_PULSES) {
+        const floorPulseRecords: Array<{
+          mat: THREE.MeshBasicMaterial;
+          runT: number;
+        }> = [];
+        const floorPulseGroup = new THREE.Group();
+        const floorPulseSegments = 24;
+        const floorPulseStep = runLength / floorPulseSegments;
+        const floorPulseLength = floorPulseStep * 0.82;
+        const floorPulseWidth = THREE.MathUtils.clamp(
+          trenchWidth * 0.038,
+          0.95,
+          1.75,
+        );
+        // Lift above floor so pulses are visible and not buried by geometry.
+        const floorPulseYOffset = -trenchSizeScaled.y * 0.438;
+        const floorPulseLateral = trenchWidth * 0.286;
+        for (let lane = -1; lane <= 1; lane += 2) {
+          for (let i = 0; i < floorPulseSegments; i += 1) {
+            const seg = new THREE.Mesh(
+              new THREE.PlaneGeometry(floorPulseLength, floorPulseWidth),
+              new THREE.MeshBasicMaterial({
+                color: 0x22cfff,
+                transparent: true,
+                opacity: 0.18,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                toneMapped: false,
+                blending: THREE.AdditiveBlending,
+              }),
+            );
+            seg.rotation.x = -Math.PI * 0.5;
+            seg.renderOrder = 42;
+            const runPos = -runLength * 0.5 + floorPulseStep * (i + 0.5);
+            if (runAxis === "y") {
+              seg.position.set(
+                lane * floorPulseLateral,
+                runPos,
+                floorPulseYOffset,
+              );
+            } else if (runAxis === "z") {
+              seg.position.set(
+                lane * floorPulseLateral,
+                floorPulseYOffset,
+                runPos,
+              );
+            } else {
+              seg.position.set(
+                runPos,
+                floorPulseYOffset,
+                lane * floorPulseLateral,
+              );
+            }
+            floorPulseGroup.add(seg);
+            floorPulseRecords.push({
+              mat: seg.material as THREE.MeshBasicMaterial,
+              runT: (i + 0.5) / floorPulseSegments,
+            });
+          }
+        }
+        floorPulseGroup.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseInteriorRoot.add(floorPulseGroup);
+        projectShowcaseFloorPulseMatsRef.current = floorPulseRecords;
+      } else {
+        projectShowcaseFloorPulseMatsRef.current = [];
+      }
+      // Nudge the entire showcase module up slightly for better composition.
+      const panelY =
+        THREE.MathUtils.clamp(trenchSizeScaled.y * 0.015, 2.2, 5.4) + 0.35;
+      const panelWidth = THREE.MathUtils.clamp(
+        trenchWidth * 0.2304,
+        9.072,
+        13.536,
+      );
+      const panelHeight = panelWidth * (9 / 16) * 1.25;
+      const panelSpacing = THREE.MathUtils.clamp(
+        runLength / Math.max(6, publishedShowcase.length + 2),
+        24,
+        50,
+      );
+      const runStart = -((publishedShowcase.length - 1) * panelSpacing) / 2;
+      const shaftBottomWorld = -trenchSizeScaled.y / 2;
+      const panelRecords: ShowcasePanelRecord[] = [];
+      let slideRunPositions: number[] = [];
+      if (hallwayContentModeRef.current === "about") {
+        const wallOffset = trenchWidth * 0.34;
+        const elevatorOppositeWall = -Math.min(
+          trenchWidth * 0.34,
+          Math.max(2.6, trenchWidth * 0.5 - 1.15),
+        );
+        const elevatorCreditsMode = runAxis === "y";
+        const elevatorCreditsWall = elevatorOppositeWall * 0.32;
+
+        const setupFovRad = THREE.MathUtils.degToRad(45);
+        const setupCameraX = Math.min(
+          trenchWidth * 0.36,
+          Math.max(2.8, trenchWidth * 0.5 - 1.05),
+        );
+        const setupWallDistance = Math.abs(setupCameraX - elevatorCreditsWall);
+        const estimatedVisibleHeight =
+          2 * setupWallDistance * Math.tan(setupFovRad * 0.5);
+        const fixedTriggerDistance = 12;
+        const immersiveWidths: Record<AboutHallColumnId, number> = {
+          left: 12.1,
+          center: 14.3,
+          right: 12.1,
+        };
+        const immersiveHeights: Record<AboutHallColumnId, number> = {
+          left: 10.6,
+          center: 10.1,
+          right: 10.3,
+        };
+
+        aboutTrenchContextRef.current = {
+          trenchWidth,
+          trenchSizeScaledY: trenchSizeScaled.y,
+          runAxis,
+          panelSpacing,
+          panelY,
+          shaftBottomWorld,
+          wallOffset,
+          elevatorOppositeWall,
+          elevatorCreditsMode,
+          elevatorCreditsWall,
+          estimatedVisibleHeight,
+          fixedTriggerDistance,
+          immersiveWidths,
+          immersiveHeights,
+        };
+
+        const firstSlidePos = aboutHallFirstSlidePositionRef.current ?? 190;
+        const estimateTallestCellHeight = (s: AboutHallSlide): number => {
+          const cols = s.configuration.columns ?? {};
+          const pw = elevatorCreditsMode
+            ? THREE.MathUtils.clamp(s.width * 1.18, 9.2, 13.8)
+            : THREE.MathUtils.clamp(s.width, 8, 13.8);
+          const ph = elevatorCreditsMode
+            ? THREE.MathUtils.clamp(s.height * 1.02, 5.2, 8.4)
+            : THREE.MathUtils.clamp(s.height, 4.8, 8.8);
+          let tallest = 0;
+          (["left", "center", "right"] as AboutHallColumnId[]).forEach(
+            (colId) => {
               const colCfg = cols[colId];
               if (!colCfg?.messages?.length) return;
               colCfg.messages.forEach((msg) => {
-                const wr = THREE.MathUtils.clamp(msg.widthRatio ?? 1, 0.35, 2.6);
-                const hr = THREE.MathUtils.clamp(msg.heightRatio ?? 1, 0.2, 2.4);
+                const wr = THREE.MathUtils.clamp(
+                  msg.widthRatio ?? 1,
+                  0.35,
+                  2.6,
+                );
+                const hr = THREE.MathUtils.clamp(
+                  msg.heightRatio ?? 1,
+                  0.2,
+                  2.4,
+                );
                 const cw = immersiveWidths[colId] * wr;
                 const ch = immersiveHeights[colId] * hr;
-                const sw = Math.max(256, Math.floor(1300 * (cw / Math.max(pw, 1))));
-                const sh = Math.max(220, Math.floor(1000 * (ch / Math.max(ph, 1))));
-                const pa = (sw / cw) / (sh / ch);
-                const resolved = { ...msg, textContent: resolveAboutContentText(msg) };
-                const needed = measureAboutTextHeight(resolved, sw, sh, { creditsStyle: false, loadedImages: aboutImageCacheRef.current, pixelAspect: pa });
+                const sw = Math.max(
+                  256,
+                  Math.floor(1300 * (cw / Math.max(pw, 1))),
+                );
+                const sh = Math.max(
+                  220,
+                  Math.floor(1000 * (ch / Math.max(ph, 1))),
+                );
+                const pa = sw / cw / (sh / ch);
+                const resolved = {
+                  ...msg,
+                  textContent: resolveAboutContentText(msg),
+                };
+                const needed = measureAboutTextHeight(resolved, sw, sh, {
+                  creditsStyle: false,
+                  loadedImages: aboutImageCacheRef.current,
+                  pixelAspect: pa,
+                });
                 const actual = needed > sh ? ch * (needed / sh) : ch;
                 tallest = Math.max(tallest, actual);
               });
-            });
-            return tallest;
-          };
+            },
+          );
+          return tallest;
+        };
 
-          aboutHallwaySlides.forEach((_slide, index) => {
-            if (index === 0) {
-              slideRunPositions.push(shaftBottomWorld + firstSlidePos);
-            } else {
-              const prevSlide = aboutHallwaySlides[index - 1];
+        aboutHallwaySlides.forEach((_slide, index) => {
+          if (index === 0) {
+            slideRunPositions.push(shaftBottomWorld + firstSlidePos);
+          } else {
+            const prevSlide = aboutHallwaySlides[index - 1];
 
-              const thresholdDist = computeCenterTopThresholdDistance(
-                prevSlide, estimatedVisibleHeight, fixedTriggerDistance,
-                estimateTallestCellHeight,
+            const thresholdDist = computeCenterTopThresholdDistance(
+              prevSlide,
+              estimatedVisibleHeight,
+              fixedTriggerDistance,
+              estimateTallestCellHeight,
+            );
+
+            if (thresholdDist != null) {
+              slideRunPositions.push(
+                slideRunPositions[index - 1] + thresholdDist + 4,
               );
-
-              if (thresholdDist != null) {
-                slideRunPositions.push(slideRunPositions[index - 1] + thresholdDist + 4);
-              } else {
-                const prevFadeVH = THREE.MathUtils.clamp(prevSlide.flowFadeOutDistanceViewportHeights ?? 1.5, 0.1, 10);
-                const prevTallest = estimateTallestCellHeight(prevSlide);
-                const heightExcess = Math.max(0, prevTallest - estimatedVisibleHeight);
-                const baseLife = fixedTriggerDistance + estimatedVisibleHeight * prevFadeVH + estimatedVisibleHeight * 0.2;
-                const slideLifeDistance = baseLife + heightExcess;
-                slideRunPositions.push(slideRunPositions[index - 1] + slideLifeDistance + 4);
-              }
+            } else {
+              const prevFadeVH = THREE.MathUtils.clamp(
+                prevSlide.flowFadeOutDistanceViewportHeights ?? 1.5,
+                0.1,
+                10,
+              );
+              const prevTallest = estimateTallestCellHeight(prevSlide);
+              const heightExcess = Math.max(
+                0,
+                prevTallest - estimatedVisibleHeight,
+              );
+              const baseLife =
+                fixedTriggerDistance +
+                estimatedVisibleHeight * prevFadeVH +
+                estimatedVisibleHeight * 0.2;
+              const slideLifeDistance = baseLife + heightExcess;
+              slideRunPositions.push(
+                slideRunPositions[index - 1] + slideLifeDistance + 4,
+              );
             }
-          });
+          }
+        });
 
-          const allImageSrcs = new Set<string>();
-          aboutHallwaySlides.forEach((s) => {
-            const cols = s.configuration.columns ?? {};
-            (["left", "center", "right"] as AboutHallColumnId[]).forEach((colId) => {
+        const allImageSrcs = new Set<string>();
+        aboutHallwaySlides.forEach((s) => {
+          const cols = s.configuration.columns ?? {};
+          (["left", "center", "right"] as AboutHallColumnId[]).forEach(
+            (colId) => {
               const colCfg = cols[colId];
               if (!colCfg?.messages?.length) return;
               colCfg.messages.forEach((msg) => {
-                msg.images?.forEach((img) => { if (img.src) allImageSrcs.add(img.src); });
-              });
-            });
-          });
-          if (allImageSrcs.size > 0) {
-            await Promise.all(
-              Array.from(allImageSrcs).map(async (src) => {
-                if (aboutImageCacheRef.current.has(src)) return;
-                const img = new Image();
-                img.src = src;
-                await new Promise<void>((resolve) => {
-                  img.onload = () => resolve();
-                  img.onerror = () => resolve();
+                msg.images?.forEach((img) => {
+                  if (img.src) allImageSrcs.add(img.src);
                 });
-                aboutImageCacheRef.current.set(src, img);
-              }),
+              });
+            },
+          );
+        });
+        if (allImageSrcs.size > 0) {
+          await Promise.all(
+            Array.from(allImageSrcs).map(async (src) => {
+              if (aboutImageCacheRef.current.has(src)) return;
+              const img = new Image();
+              img.src = src;
+              await new Promise<void>((resolve) => {
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+              });
+              aboutImageCacheRef.current.set(src, img);
+            }),
+          );
+        }
+
+        aboutHallwaySlides.forEach((slide, index) => {
+          const entry =
+            aboutShowcaseEntries[index] ??
+            ({
+              id: slide.id,
+              title: slide.registryBtnTitle,
+              image:
+                "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+              fit: "contain",
+            } as ShowcaseEntry);
+          const panelGroup = new THREE.Group();
+          const runPos = slideRunPositions[index];
+          const horizontal = slide.horizontalAlign;
+          const vertical = slide.verticalAlign;
+          const slideHasColumnChoreo = true;
+          const useElevatorCreditsCard =
+            elevatorCreditsMode && !slideHasColumnChoreo;
+          const useImmersiveColumnGrouping =
+            slideHasColumnChoreo && runAxis === "y";
+          const side =
+            horizontal === "left" ? -1 : horizontal === "right" ? 1 : 0;
+          const lateralOffset = side === 0 ? 0 : side * wallOffset;
+          const verticalOffset =
+            vertical === "top" ? 2.2 : vertical === "bottom" ? -1.2 : 0.6;
+          const depthOffset =
+            vertical === "top" ? -1.3 : vertical === "bottom" ? 1.3 : 0;
+          const sideNudge =
+            horizontal === "left" ? -0.5 : horizontal === "right" ? 0.5 : 0;
+          if (runAxis === "y") {
+            if (useImmersiveColumnGrouping) {
+              panelGroup.position.set(elevatorCreditsWall, runPos, 0);
+            } else {
+              panelGroup.position.set(
+                (elevatorCreditsMode
+                  ? elevatorCreditsWall
+                  : elevatorOppositeWall) +
+                  sideNudge * 0.4,
+                runPos,
+                depthOffset,
+              );
+            }
+          } else if (runAxis === "z") {
+            panelGroup.position.set(
+              lateralOffset,
+              panelY + verticalOffset,
+              runPos,
+            );
+          } else {
+            panelGroup.position.set(
+              runPos,
+              panelY + verticalOffset,
+              -lateralOffset,
             );
           }
-
-          aboutHallwaySlides.forEach((slide, index) => {
-            const entry =
-              aboutShowcaseEntries[index] ??
-              ({
-                id: slide.id,
-                title: slide.registryBtnTitle,
-                image:
-                  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
-                fit: "contain",
-              } as ShowcaseEntry);
-            const panelGroup = new THREE.Group();
-            const runPos = slideRunPositions[index];
-            const horizontal = slide.horizontalAlign;
-            const vertical = slide.verticalAlign;
-            const slideHasColumnChoreo = true;
-            const useElevatorCreditsCard = elevatorCreditsMode && !slideHasColumnChoreo;
-            const useImmersiveColumnGrouping = slideHasColumnChoreo && runAxis === "y";
-            const side =
-              horizontal === "left" ? -1 : horizontal === "right" ? 1 : 0;
-            const lateralOffset = side === 0 ? 0 : side * wallOffset;
-            const verticalOffset =
-              vertical === "top" ? 2.2 : vertical === "bottom" ? -1.2 : 0.6;
-            const depthOffset =
-              vertical === "top" ? -1.3 : vertical === "bottom" ? 1.3 : 0;
-            const sideNudge =
-              horizontal === "left" ? -0.5 : horizontal === "right" ? 0.5 : 0;
-            if (runAxis === "y") {
-              if (useImmersiveColumnGrouping) {
-                panelGroup.position.set(elevatorCreditsWall, runPos, 0);
-              } else {
-                panelGroup.position.set(
-                  (elevatorCreditsMode ? elevatorCreditsWall : elevatorOppositeWall) + sideNudge * 0.4,
-                  runPos,
-                  depthOffset,
-                );
-              }
-            } else if (runAxis === "z") {
-              panelGroup.position.set(
-                lateralOffset,
-                panelY + verticalOffset,
-                runPos,
-              );
+          let inwardRotationY = 0;
+          let frontFacingRotationY = 0;
+          let cantSign: -1 | 1 = 1;
+          if (runAxis === "y") {
+            const ySide = elevatorOppositeWall >= 0 ? 1 : -1;
+            if (ySide < 0) {
+              inwardRotationY = Math.PI / 2;
+              frontFacingRotationY = Math.PI / 2;
+              cantSign = 1;
+            } else if (ySide > 0) {
+              inwardRotationY = -Math.PI / 2;
+              frontFacingRotationY = -Math.PI / 2;
+              cantSign = -1;
             } else {
-              panelGroup.position.set(
-                runPos,
-                panelY + verticalOffset,
-                -lateralOffset,
-              );
+              inwardRotationY = Math.PI;
+              frontFacingRotationY = Math.PI;
+              cantSign = 1;
             }
-            let inwardRotationY = 0;
-            let frontFacingRotationY = 0;
-            let cantSign: -1 | 1 = 1;
-            if (runAxis === "y") {
-              const ySide = elevatorOppositeWall >= 0 ? 1 : -1;
-              if (ySide < 0) {
-                inwardRotationY = Math.PI / 2;
-                frontFacingRotationY = Math.PI / 2;
-                cantSign = 1;
-              } else if (ySide > 0) {
-                inwardRotationY = -Math.PI / 2;
-                frontFacingRotationY = -Math.PI / 2;
-                cantSign = -1;
-              } else {
-                inwardRotationY = Math.PI;
-                frontFacingRotationY = Math.PI;
-                cantSign = 1;
-              }
-            } else if (runAxis === "z") {
-              if (side < 0) {
-                inwardRotationY = Math.PI / 2;
-                frontFacingRotationY = Math.PI;
-                cantSign = 1;
-              } else if (side > 0) {
-                inwardRotationY = -Math.PI / 2;
-                frontFacingRotationY = Math.PI;
-                cantSign = -1;
-              } else {
-                inwardRotationY = Math.PI;
-                frontFacingRotationY = Math.PI;
-                cantSign = 1;
-              }
+          } else if (runAxis === "z") {
+            if (side < 0) {
+              inwardRotationY = Math.PI / 2;
+              frontFacingRotationY = Math.PI;
+              cantSign = 1;
+            } else if (side > 0) {
+              inwardRotationY = -Math.PI / 2;
+              frontFacingRotationY = Math.PI;
+              cantSign = -1;
             } else {
-              if (side < 0) {
-                inwardRotationY = 0;
-                frontFacingRotationY = Math.PI / 2;
-                cantSign = -1;
-              } else if (side > 0) {
-                inwardRotationY = Math.PI;
-                frontFacingRotationY = Math.PI / 2;
-                cantSign = 1;
-              } else {
-                inwardRotationY = Math.PI / 2;
-                frontFacingRotationY = Math.PI / 2;
-                cantSign = 1;
-              }
+              inwardRotationY = Math.PI;
+              frontFacingRotationY = Math.PI;
+              cantSign = 1;
             }
-            panelGroup.rotation.y = inwardRotationY;
-
-            const panelWidth = elevatorCreditsMode
-              ? THREE.MathUtils.clamp(slide.width * 1.18, 9.2, 13.8)
-              : THREE.MathUtils.clamp(slide.width, 8, 13.8);
-            const panelHeight = elevatorCreditsMode
-              ? THREE.MathUtils.clamp(slide.height * 1.02, 5.2, 8.4)
-              : THREE.MathUtils.clamp(slide.height, 4.8, 8.8);
-            const borderStyle = parseBorderStyle(slide.border);
-            const borderColor = new THREE.Color(0x74d2ff);
-            try {
-              borderColor.setStyle(toThreeColorStyle(borderStyle.color));
-            } catch {
-              borderColor.setHex(0x74d2ff);
+          } else {
+            if (side < 0) {
+              inwardRotationY = 0;
+              frontFacingRotationY = Math.PI / 2;
+              cantSign = -1;
+            } else if (side > 0) {
+              inwardRotationY = Math.PI;
+              frontFacingRotationY = Math.PI / 2;
+              cantSign = 1;
+            } else {
+              inwardRotationY = Math.PI / 2;
+              frontFacingRotationY = Math.PI / 2;
+              cantSign = 1;
             }
+          }
+          panelGroup.rotation.y = inwardRotationY;
 
-            const frame = new THREE.Mesh(
-              new THREE.PlaneGeometry(panelWidth * 1.02, panelHeight * 1.02),
+          const panelWidth = elevatorCreditsMode
+            ? THREE.MathUtils.clamp(slide.width * 1.18, 9.2, 13.8)
+            : THREE.MathUtils.clamp(slide.width, 8, 13.8);
+          const panelHeight = elevatorCreditsMode
+            ? THREE.MathUtils.clamp(slide.height * 1.02, 5.2, 8.4)
+            : THREE.MathUtils.clamp(slide.height, 4.8, 8.8);
+          const borderStyle = parseBorderStyle(slide.border);
+          const borderColor = new THREE.Color(0x74d2ff);
+          try {
+            borderColor.setStyle(toThreeColorStyle(borderStyle.color));
+          } catch {
+            borderColor.setHex(0x74d2ff);
+          }
+
+          const frame = new THREE.Mesh(
+            new THREE.PlaneGeometry(panelWidth * 1.02, panelHeight * 1.02),
+            new THREE.MeshBasicMaterial({
+              color: borderColor,
+              transparent: true,
+              opacity: useElevatorCreditsCard ? 0 : 0.28,
+              side: THREE.DoubleSide,
+              toneMapped: false,
+            }),
+          );
+          const frameMat = frame.material as THREE.MeshBasicMaterial;
+          frame.position.z = -0.04;
+          if (!useElevatorCreditsCard && !useImmersiveColumnGrouping)
+            panelGroup.add(frame);
+
+          const panelRecord: ShowcasePanelRecord = {
+            group: panelGroup,
+            runPos,
+            entry,
+            displayTitle: slide.registryBtnTitle,
+            fitMode: "contain",
+            inwardRotationY,
+            frontFacingRotationY,
+            cantSign,
+            focusBlend: 0,
+            frameMat,
+            imageMesh: new THREE.Mesh(
+              new THREE.PlaneGeometry(1, 1),
               new THREE.MeshBasicMaterial({
-                color: borderColor,
-                transparent: true,
-                opacity: useElevatorCreditsCard ? 0 : 0.28,
-                side: THREE.DoubleSide,
-                toneMapped: false,
-              }),
-            );
-            const frameMat = frame.material as THREE.MeshBasicMaterial;
-            frame.position.z = -0.04;
-            if (!useElevatorCreditsCard && !useImmersiveColumnGrouping) panelGroup.add(frame);
-
-            const panelRecord: ShowcasePanelRecord = {
-              group: panelGroup,
-              runPos,
-              entry,
-              displayTitle: slide.registryBtnTitle,
-              fitMode: "contain",
-              inwardRotationY,
-              frontFacingRotationY,
-              cantSign,
-              focusBlend: 0,
-              frameMat,
-              imageMesh: new THREE.Mesh(
-                new THREE.PlaneGeometry(1, 1),
-                new THREE.MeshBasicMaterial({
-                  color: 0xffffff,
-                  transparent: true,
-                  opacity: 1,
-                  side: THREE.DoubleSide,
-                  toneMapped: false,
-                }),
-              ),
-              imageMat: new THREE.MeshBasicMaterial({
                 color: 0xffffff,
                 transparent: true,
                 opacity: 1,
                 side: THREE.DoubleSide,
                 toneMapped: false,
               }),
-              texture: null,
-              baseRepeat: new THREE.Vector2(1, 1),
-              baseOffset: new THREE.Vector2(0, 0),
-              zoom: 1,
-              panX: 0,
-              panY: 0,
-              clientVariants: [],
-              activeVariantIndex: 0,
-              setActiveVariant: () => {},
-              mediaItems: [],
-              activeMediaIndex: 0,
-              setActiveMedia: () => {},
-              mediaFadeStartMs: -Infinity,
-              mediaFadeDurationMs: 1,
-              setThumbnailPageStart: () => {},
-              triggerThumbnailNavPress: () => {},
-              thumbnailPageStart: 0,
-              thumbnailHitTargets: [],
-              thumbnailFrameMats: [],
-              thumbnailImageMats: [],
-              detailMat: new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                transparent: true,
-                opacity: 0,
-              }),
-              detailTexture: null,
-              detailMesh: null,
-              detailScrollThumbMesh: null,
-              detailAllLines: [],
-              detailVisibleLines: 0,
-              detailScrollOffset: 0,
-              detailScrollMax: 0,
-              updateDetailTexture: () => {},
-              techBadgeRoot: null,
-              techBadgeFx: [],
-              aboutRuntime: {
-                mode: "about",
-                slideId: slide.id,
-                cells: [],
-                triggerDistance: fixedTriggerDistance,
-                slideStartRun: runPos - fixedTriggerDistance,
-                flowFadeOutDistanceViewportHeights: THREE.MathUtils.clamp(
-                  slide.flowFadeOutDistanceViewportHeights ?? 1.5,
-                  0.1,
-                  10,
-                ),
-                autoSpeed: slide.autoSpeed ?? aboutHallDefaultAutoSpeedRef.current,
-              },
-            };
+            ),
+            imageMat: new THREE.MeshBasicMaterial({
+              color: 0xffffff,
+              transparent: true,
+              opacity: 1,
+              side: THREE.DoubleSide,
+              toneMapped: false,
+            }),
+            texture: null,
+            baseRepeat: new THREE.Vector2(1, 1),
+            baseOffset: new THREE.Vector2(0, 0),
+            zoom: 1,
+            panX: 0,
+            panY: 0,
+            clientVariants: [],
+            activeVariantIndex: 0,
+            setActiveVariant: () => {},
+            mediaItems: [],
+            activeMediaIndex: 0,
+            setActiveMedia: () => {},
+            mediaFadeStartMs: -Infinity,
+            mediaFadeDurationMs: 1,
+            setThumbnailPageStart: () => {},
+            triggerThumbnailNavPress: () => {},
+            thumbnailPageStart: 0,
+            thumbnailHitTargets: [],
+            thumbnailFrameMats: [],
+            thumbnailImageMats: [],
+            detailMat: new THREE.MeshBasicMaterial({
+              color: 0xffffff,
+              transparent: true,
+              opacity: 0,
+            }),
+            detailTexture: null,
+            detailMesh: null,
+            detailScrollThumbMesh: null,
+            detailAllLines: [],
+            detailVisibleLines: 0,
+            detailScrollOffset: 0,
+            detailScrollMax: 0,
+            updateDetailTexture: () => {},
+            techBadgeRoot: null,
+            techBadgeFx: [],
+            aboutRuntime: {
+              mode: "about",
+              slideId: slide.id,
+              cells: [],
+              triggerDistance: fixedTriggerDistance,
+              slideStartRun: runPos - fixedTriggerDistance,
+              flowFadeOutDistanceViewportHeights: THREE.MathUtils.clamp(
+                slide.flowFadeOutDistanceViewportHeights ?? 1.5,
+                0.1,
+                10,
+              ),
+              autoSpeed:
+                slide.autoSpeed ?? aboutHallDefaultAutoSpeedRef.current,
+            },
+          };
 
-            const columnMessages = getAboutColumnMessages(slide);
-            const allMessages = [
-              ...columnMessages.left,
-              ...columnMessages.center,
-              ...columnMessages.right,
-            ];
-            const creditContent: AboutHallSlideContent = {
-              id: `${slide.id}-credit`,
-              type: "column1",
-              backgroundColor: "transparent",
-              fontColor: "rgba(8, 12, 18, 0.98)",
-              fontFamily: ["Oswald", "Montserrat"],
-              fontSize: "150px",
-              fontShadow: "0px 0px 14px rgba(0, 0, 0, 0.62)",
-              horizontalAlign: "center",
-              verticalAlign: "middle",
-              textContent: allMessages
-                .map((content) => splitHtmlBreakLines(content.textContent).join("\n"))
-                .filter((text) => text.length > 0)
-                .join("\n\n"),
+          const columnMessages = getAboutColumnMessages(slide);
+          const allMessages = [
+            ...columnMessages.left,
+            ...columnMessages.center,
+            ...columnMessages.right,
+          ];
+          const creditContent: AboutHallSlideContent = {
+            id: `${slide.id}-credit`,
+            type: "column1",
+            backgroundColor: "transparent",
+            fontColor: "rgba(8, 12, 18, 0.98)",
+            fontFamily: ["Oswald", "Montserrat"],
+            fontSize: "150px",
+            fontShadow: "0px 0px 14px rgba(0, 0, 0, 0.62)",
+            horizontalAlign: "center",
+            verticalAlign: "middle",
+            textContent: allMessages
+              .map((content) =>
+                splitHtmlBreakLines(content.textContent).join("\n"),
+              )
+              .filter((text) => text.length > 0)
+              .join("\n\n"),
+          };
+          const createAboutRuntimeCell = (
+            content: AboutHallSlideContent,
+            cellWidth: number,
+            cellHeight: number,
+            cellX: number,
+            cellY: number,
+            opts?: {
+              transparentBackground?: boolean;
+              creditsStyle?: boolean;
+              columnDepth?: number;
+              parentGroup?: THREE.Group;
+            },
+          ) => {
+            const safeWidth = Math.max(
+              256,
+              Math.floor(1300 * (cellWidth / Math.max(panelWidth, 1))),
+            );
+            let safeHeight = Math.max(
+              220,
+              Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))),
+            );
+            const pixelAspect =
+              safeWidth / cellWidth / (safeHeight / cellHeight);
+            const resolvedContent = {
+              ...content,
+              textContent: resolveAboutContentText(content),
             };
-            const createAboutRuntimeCell = (
-              content: AboutHallSlideContent,
-              cellWidth: number,
-              cellHeight: number,
-              cellX: number,
-              cellY: number,
-              opts?: {
-                transparentBackground?: boolean;
-                creditsStyle?: boolean;
-                columnDepth?: number;
-                parentGroup?: THREE.Group;
+            const neededHeight = measureAboutTextHeight(
+              resolvedContent,
+              safeWidth,
+              safeHeight,
+              {
+                creditsStyle: opts?.creditsStyle ?? false,
+                loadedImages: aboutImageCacheRef.current,
+                pixelAspect,
               },
-            ) => {
-              const safeWidth = Math.max(256, Math.floor(1300 * (cellWidth / Math.max(panelWidth, 1))));
-              let safeHeight = Math.max(220, Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))));
-              const pixelAspect = (safeWidth / cellWidth) / (safeHeight / cellHeight);
-              const resolvedContent = {
-                ...content,
-                textContent: resolveAboutContentText(content),
-              };
-              const neededHeight = measureAboutTextHeight(
-                resolvedContent, safeWidth, safeHeight,
-                { creditsStyle: opts?.creditsStyle ?? false, loadedImages: aboutImageCacheRef.current, pixelAspect },
-              );
-              let actualCellHeight = cellHeight;
-              if (neededHeight > safeHeight) {
-                const scale = neededHeight / safeHeight;
-                safeHeight = neededHeight;
-                actualCellHeight = cellHeight * scale;
-              }
-              const tex = createAboutCellTexture(
-                resolvedContent,
-                safeWidth,
-                safeHeight,
-                {
+            );
+            let actualCellHeight = cellHeight;
+            if (neededHeight > safeHeight) {
+              const scale = neededHeight / safeHeight;
+              safeHeight = neededHeight;
+              actualCellHeight = cellHeight * scale;
+            }
+            const tex = createAboutCellTexture(
+              resolvedContent,
+              safeWidth,
+              safeHeight,
+              {
+                transparentBackground: opts?.transparentBackground ?? false,
+                creditsStyle: opts?.creditsStyle ?? false,
+                loadedImages: aboutImageCacheRef.current,
+                pixelAspect,
+              },
+            );
+            const emergencyTex = opts?.creditsStyle
+              ? createAboutCellTexture(resolvedContent, safeWidth, safeHeight, {
                   transparentBackground: opts?.transparentBackground ?? false,
-                  creditsStyle: opts?.creditsStyle ?? false,
+                  creditsStyle: true,
+                  emergencyMood: true,
                   loadedImages: aboutImageCacheRef.current,
                   pixelAspect,
-                },
-              );
-              const emergencyTex = opts?.creditsStyle
-                ? createAboutCellTexture(
-                    resolvedContent,
-                    safeWidth,
-                    safeHeight,
-                    {
-                      transparentBackground: opts?.transparentBackground ?? false,
-                      creditsStyle: true,
-                      emergencyMood: true,
-                      loadedImages: aboutImageCacheRef.current,
-                      pixelAspect,
-                    },
-                  )
-                : tex;
-              const material = new THREE.MeshBasicMaterial({
-                map: tex,
-                color: 0xffffff,
-                transparent: true,
-                opacity: 0,
-                side: THREE.DoubleSide,
-                toneMapped: false,
-                depthWrite: false,
-              });
-              const mesh = new THREE.Mesh(
-                new THREE.PlaneGeometry(cellWidth, actualCellHeight),
-                material,
-              );
-              mesh.position.set(cellX, cellY, opts?.columnDepth ?? 0.02);
-              (opts?.parentGroup ?? panelGroup).add(mesh);
-              const flowDir = normalizeAboutFlowDirection(content.flowDirection);
-              const flowOff = content.flowOffsetUnits ?? 0;
-              const halfVisible = estimatedVisibleHeight * 0.5;
-              const halfCell = actualCellHeight * 0.5;
-              const edgeGap = Math.max(1.0, estimatedVisibleHeight * 0.15);
-              const computedHomeY = flowDir === "topToBottom"
-                ? -fixedTriggerDistance + halfVisible + halfCell + edgeGap - flowOff
-                : -fixedTriggerDistance - halfVisible - halfCell - edgeGap - flowOff;
-              panelRecord.aboutRuntime?.cells.push({
-                mesh,
-                material,
-                normalTexture: tex,
-                emergencyTexture: emergencyTex,
-                basePosition: mesh.position.clone(),
-                flowDirection: flowDir,
-                flowUnitsPerDistance: Math.max(0, content.flowUnitsPerDistance ?? 0),
-                flowOffsetUnits: flowOff,
-                baseYawRad: mesh.rotation.y,
-                homeY: computedHomeY,
-              });
-            };
-            if (useElevatorCreditsCard) {
-              createAboutRuntimeCell(creditContent, panelWidth, panelHeight, 0, 0, {
+                })
+              : tex;
+            const material = new THREE.MeshBasicMaterial({
+              map: tex,
+              color: 0xffffff,
+              transparent: true,
+              opacity: 0,
+              side: THREE.DoubleSide,
+              toneMapped: false,
+              depthWrite: false,
+            });
+            const mesh = new THREE.Mesh(
+              new THREE.PlaneGeometry(cellWidth, actualCellHeight),
+              material,
+            );
+            mesh.position.set(cellX, cellY, opts?.columnDepth ?? 0.02);
+            (opts?.parentGroup ?? panelGroup).add(mesh);
+            const flowDir = normalizeAboutFlowDirection(content.flowDirection);
+            const flowOff = content.flowOffsetUnits ?? 0;
+            const halfVisible = estimatedVisibleHeight * 0.5;
+            const halfCell = actualCellHeight * 0.5;
+            const edgeGap = Math.max(1.0, estimatedVisibleHeight * 0.15);
+            const computedHomeY =
+              flowDir === "topToBottom"
+                ? -fixedTriggerDistance +
+                  halfVisible +
+                  halfCell +
+                  edgeGap -
+                  flowOff
+                : -fixedTriggerDistance -
+                  halfVisible -
+                  halfCell -
+                  edgeGap -
+                  flowOff;
+            panelRecord.aboutRuntime?.cells.push({
+              mesh,
+              material,
+              normalTexture: tex,
+              emergencyTexture: emergencyTex,
+              basePosition: mesh.position.clone(),
+              flowDirection: flowDir,
+              flowUnitsPerDistance: Math.max(
+                0,
+                content.flowUnitsPerDistance ?? 0,
+              ),
+              flowOffsetUnits: flowOff,
+              baseYawRad: mesh.rotation.y,
+              homeY: computedHomeY,
+            });
+          };
+          if (useElevatorCreditsCard) {
+            createAboutRuntimeCell(
+              creditContent,
+              panelWidth,
+              panelHeight,
+              0,
+              0,
+              {
                 transparentBackground: true,
                 creditsStyle: true,
-              });
-            } else {
-              const columnX: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
+              },
+            );
+          } else {
+            const columnX: Record<AboutHallColumnId, number> =
+              useImmersiveColumnGrouping
                 ? { left: -9.56, center: 1.05, right: 10.65 }
-                : { left: -panelWidth * 0.34, center: 0, right: panelWidth * 0.34 };
-              const columnZ: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
+                : {
+                    left: -panelWidth * 0.34,
+                    center: 0,
+                    right: panelWidth * 0.34,
+                  };
+            const columnZ: Record<AboutHallColumnId, number> =
+              useImmersiveColumnGrouping
                 ? { left: 3.35, center: 0, right: 6 }
                 : { left: 0, center: 0, right: 0 };
-              const columnDefaults: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
+            const columnDefaults: Record<AboutHallColumnId, number> =
+              useImmersiveColumnGrouping
                 ? { left: 34, center: 0, right: -34 }
                 : { left: 16, center: 0, right: -16 };
-              const columnAngleMultipliers: Record<AboutHallColumnId, number> = useImmersiveColumnGrouping
+            const columnAngleMultipliers: Record<AboutHallColumnId, number> =
+              useImmersiveColumnGrouping
                 ? { left: 1.9, center: 1, right: 2 }
                 : { left: 1, center: 1, right: 1 };
-              const columnOrder: AboutHallColumnId[] = ["left", "center", "right"];
-              columnOrder.forEach((columnId) => {
-                const msgs = columnMessages[columnId];
-                if (msgs.length === 0) return;
-                const columnConfig = slide.configuration.columns?.[columnId];
-                const baseAngleDeg = columnConfig?.angleDeg ?? columnDefaults[columnId];
-                const columnAnchor = new THREE.Group();
-                const columnY = useImmersiveColumnGrouping ? 0 : 0;
-                columnAnchor.position.set(columnX[columnId], columnY, columnZ[columnId]);
-                panelGroup.add(columnAnchor);
-                const verticalRange = useImmersiveColumnGrouping
-                  ? panelHeight * 0.22
-                  : panelHeight * 0.78;
-                const slotCount = Math.max(1, msgs.length);
-                const slotStep = slotCount > 1 ? verticalRange / (slotCount - 1) : 0;
-                msgs.forEach((rawMessage, msgIndex) => {
-                  const message = {
-                    ...rawMessage,
-                    horizontalAlign: rawMessage.horizontalAlign ?? "center",
-                    verticalAlign: rawMessage.verticalAlign ?? "middle",
-                    textContent: resolveAboutContentText(rawMessage),
-                  };
-                  const widthRatio = THREE.MathUtils.clamp(message.widthRatio ?? 1, 0.35, 2.6);
-                  const heightRatio = THREE.MathUtils.clamp(message.heightRatio ?? 1, 0.2, 2.4);
-                  const cellWidth = useImmersiveColumnGrouping
-                    ? immersiveWidths[columnId] * widthRatio
-                    : panelWidth * 0.26 * widthRatio;
-                  const cellHeight = useImmersiveColumnGrouping
-                    ? immersiveHeights[columnId] * heightRatio
-                    : panelHeight * 0.24 * heightRatio;
-                  const autoY = slotCount <= 1
+            const columnOrder: AboutHallColumnId[] = [
+              "left",
+              "center",
+              "right",
+            ];
+            columnOrder.forEach((columnId) => {
+              const msgs = columnMessages[columnId];
+              if (msgs.length === 0) return;
+              const columnConfig = slide.configuration.columns?.[columnId];
+              const baseAngleDeg =
+                columnConfig?.angleDeg ?? columnDefaults[columnId];
+              const columnAnchor = new THREE.Group();
+              const columnY = useImmersiveColumnGrouping ? 0 : 0;
+              columnAnchor.position.set(
+                columnX[columnId],
+                columnY,
+                columnZ[columnId],
+              );
+              panelGroup.add(columnAnchor);
+              const verticalRange = useImmersiveColumnGrouping
+                ? panelHeight * 0.22
+                : panelHeight * 0.78;
+              const slotCount = Math.max(1, msgs.length);
+              const slotStep =
+                slotCount > 1 ? verticalRange / (slotCount - 1) : 0;
+              msgs.forEach((rawMessage, msgIndex) => {
+                const message = {
+                  ...rawMessage,
+                  horizontalAlign: rawMessage.horizontalAlign ?? "center",
+                  verticalAlign: rawMessage.verticalAlign ?? "middle",
+                  textContent: resolveAboutContentText(rawMessage),
+                };
+                const widthRatio = THREE.MathUtils.clamp(
+                  message.widthRatio ?? 1,
+                  0.35,
+                  2.6,
+                );
+                const heightRatio = THREE.MathUtils.clamp(
+                  message.heightRatio ?? 1,
+                  0.2,
+                  2.4,
+                );
+                const cellWidth = useImmersiveColumnGrouping
+                  ? immersiveWidths[columnId] * widthRatio
+                  : panelWidth * 0.26 * widthRatio;
+                const cellHeight = useImmersiveColumnGrouping
+                  ? immersiveHeights[columnId] * heightRatio
+                  : panelHeight * 0.24 * heightRatio;
+                const autoY =
+                  slotCount <= 1
                     ? 0
                     : verticalRange * 0.5 - slotStep * msgIndex;
-                  const baseY =
-                    autoY +
-                    (useImmersiveColumnGrouping ? 0 : 0) +
-                    (message.offsetY ?? 0);
-                  const baseX = (message.offsetX ?? 0);
-                  const cellCountBefore = panelRecord.aboutRuntime?.cells.length ?? 0;
-                  createAboutRuntimeCell(message, cellWidth, cellHeight, baseX, baseY, {
+                const baseY =
+                  autoY +
+                  (useImmersiveColumnGrouping ? 0 : 0) +
+                  (message.offsetY ?? 0);
+                const baseX = message.offsetX ?? 0;
+                const cellCountBefore =
+                  panelRecord.aboutRuntime?.cells.length ?? 0;
+                createAboutRuntimeCell(
+                  message,
+                  cellWidth,
+                  cellHeight,
+                  baseX,
+                  baseY,
+                  {
                     columnDepth: 0.03 + msgIndex * 0.002,
                     parentGroup: columnAnchor,
                     transparentBackground: false,
-                  });
-                  const runtimeCells = panelRecord.aboutRuntime?.cells;
-                  if (!runtimeCells) return;
-                  const newCells = runtimeCells.slice(cellCountBefore);
-                  const angleDeg = message.columnAngleDeg ?? baseAngleDeg;
-                  newCells.forEach((cell) => {
-                    cell.mesh.rotation.y = THREE.MathUtils.degToRad(angleDeg);
-                    cell.baseYawRad = cell.mesh.rotation.y;
-                    if (useImmersiveColumnGrouping) {
-                      cell.immersiveColumn = columnId;
-                    }
-                    if (cell.flowUnitsPerDistance <= 0) {
-                      cell.flowUnitsPerDistance = 0.25;
-                    }
-                  });
+                  },
+                );
+                const runtimeCells = panelRecord.aboutRuntime?.cells;
+                if (!runtimeCells) return;
+                const newCells = runtimeCells.slice(cellCountBefore);
+                const angleDeg = message.columnAngleDeg ?? baseAngleDeg;
+                newCells.forEach((cell) => {
+                  cell.mesh.rotation.y = THREE.MathUtils.degToRad(angleDeg);
+                  cell.baseYawRad = cell.mesh.rotation.y;
+                  if (useImmersiveColumnGrouping) {
+                    cell.immersiveColumn = columnId;
+                  }
+                  if (cell.flowUnitsPerDistance <= 0) {
+                    cell.flowUnitsPerDistance = 0.25;
+                  }
                 });
               });
-              if (useImmersiveColumnGrouping && !immersiveColumnRigRef.current) {
-                const firstCell = (col: AboutHallColumnId) => {
-                  const cells = panelRecord.aboutRuntime?.cells ?? [];
-                  return cells.find((c) => c.immersiveColumn === col);
-                };
-                const makeVals = (col: AboutHallColumnId): ImmersiveColumnRigValues => {
-                  const cell = firstCell(col);
-                  return {
-                    width: immersiveWidths[col],
-                    height: immersiveHeights[col],
-                    posX: columnX[col],
-                    posY: 0,
-                    depth: columnZ[col],
-                    angleDeg: cell ? THREE.MathUtils.radToDeg(cell.baseYawRad) : columnDefaults[col],
-                    angleMultiplier: columnAngleMultipliers[col],
-                  };
-                };
-                immersiveColumnRigRef.current = {
-                  left: makeVals("left"),
-                  center: makeVals("center"),
-                  right: makeVals("right"),
-                  activeColumn: "center",
-                };
-              }
-            }
-
-            const framePulse = new THREE.Mesh(
-              new THREE.PlaneGeometry(
-                panelWidth + borderStyle.width * 0.02,
-                panelHeight + borderStyle.width * 0.02,
-              ),
-              new THREE.MeshBasicMaterial({
-                color: borderColor,
-                transparent: true,
-                opacity: 0.09,
-                side: THREE.DoubleSide,
-                toneMapped: false,
-              }),
-            );
-            framePulse.position.z = -0.07;
-            if (!useElevatorCreditsCard && !useImmersiveColumnGrouping) panelGroup.add(framePulse);
-
-            panelRecord.imageMesh = panelRecord.aboutRuntime?.cells[0]?.mesh ?? panelRecord.imageMesh;
-            panelRecord.imageMat =
-              panelRecord.aboutRuntime?.cells[0]?.material ?? panelRecord.imageMat;
-
-            panelGroup.traverse((child) => {
-              child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
             });
-            showcaseInteriorRoot.add(panelGroup);
-            panelRecords.push(panelRecord);
+            if (useImmersiveColumnGrouping && !immersiveColumnRigRef.current) {
+              const firstCell = (col: AboutHallColumnId) => {
+                const cells = panelRecord.aboutRuntime?.cells ?? [];
+                return cells.find((c) => c.immersiveColumn === col);
+              };
+              const makeVals = (
+                col: AboutHallColumnId,
+              ): ImmersiveColumnRigValues => {
+                const cell = firstCell(col);
+                return {
+                  width: immersiveWidths[col],
+                  height: immersiveHeights[col],
+                  posX: columnX[col],
+                  posY: 0,
+                  depth: columnZ[col],
+                  angleDeg: cell
+                    ? THREE.MathUtils.radToDeg(cell.baseYawRad)
+                    : columnDefaults[col],
+                  angleMultiplier: columnAngleMultipliers[col],
+                };
+              };
+              immersiveColumnRigRef.current = {
+                left: makeVals("left"),
+                center: makeVals("center"),
+                right: makeVals("right"),
+                activeColumn: "center",
+              };
+            }
+          }
+
+          const framePulse = new THREE.Mesh(
+            new THREE.PlaneGeometry(
+              panelWidth + borderStyle.width * 0.02,
+              panelHeight + borderStyle.width * 0.02,
+            ),
+            new THREE.MeshBasicMaterial({
+              color: borderColor,
+              transparent: true,
+              opacity: 0.09,
+              side: THREE.DoubleSide,
+              toneMapped: false,
+            }),
+          );
+          framePulse.position.z = -0.07;
+          if (!useElevatorCreditsCard && !useImmersiveColumnGrouping)
+            panelGroup.add(framePulse);
+
+          panelRecord.imageMesh =
+            panelRecord.aboutRuntime?.cells[0]?.mesh ?? panelRecord.imageMesh;
+          panelRecord.imageMat =
+            panelRecord.aboutRuntime?.cells[0]?.material ??
+            panelRecord.imageMat;
+
+          panelGroup.traverse((child) => {
+            child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
           });
-        } else {
-          const shaftWallOffset = trenchWidth * 0.32;
-          publishedShowcase.forEach((entry, index) => {
+          showcaseInteriorRoot.add(panelGroup);
+          panelRecords.push(panelRecord);
+        });
+      } else {
+        const shaftWallOffset = trenchWidth * 0.32;
+        publishedShowcase.forEach((entry, index) => {
           const side = index % 2 === 0 ? -1 : 1;
           const panelGroup = new THREE.Group();
           const runPos = runStart + index * panelSpacing;
           const clientVariants =
-            (entry.clientVariants ?? []).filter((variant) => !!variant?.title) ?? [];
+            (entry.clientVariants ?? []).filter(
+              (variant) => !!variant?.title,
+            ) ?? [];
           const mediaItems =
             clientVariants.length > 0
               ? clientVariants.flatMap((variant, variantIndex) =>
@@ -20062,8 +22824,11 @@ export default function ResumeSpace3D({
             clientVariants.length === 0 && mediaItems.length <= 1;
           const panelHasAnyThumbStrip =
             clientVariants.length > 0
-              ? clientVariants.some((_, variantIndex) =>
-                  mediaItems.filter((item) => item.variantIndex === variantIndex).length > 1,
+              ? clientVariants.some(
+                  (_, variantIndex) =>
+                    mediaItems.filter(
+                      (item) => item.variantIndex === variantIndex,
+                    ).length > 1,
                 )
               : mediaItems.length > 1;
           const initialVariantMediaCount =
@@ -20080,17 +22845,9 @@ export default function ResumeSpace3D({
               0.35 + panelVerticalOffset * 0.35,
             );
           } else if (runAxis === "z") {
-            panelGroup.position.set(
-              0,
-              panelY + panelVerticalOffset,
-              runPos,
-            );
+            panelGroup.position.set(0, panelY + panelVerticalOffset, runPos);
           } else {
-            panelGroup.position.set(
-              runPos,
-              panelY + panelVerticalOffset,
-              0,
-            );
+            panelGroup.position.set(runPos, panelY + panelVerticalOffset, 0);
           }
           // Keep inward-facing baseline; user controls extra readable cant via slider.
           let inwardRotationY = 0;
@@ -20193,7 +22950,11 @@ export default function ResumeSpace3D({
             nextFitMode?: "contain" | "cover",
           ) => {
             const activeFitMode = nextFitMode ?? panelRecord.fitMode;
-            if (!imageAspect || !Number.isFinite(imageAspect) || imageAspect <= 0) {
+            if (
+              !imageAspect ||
+              !Number.isFinite(imageAspect) ||
+              imageAspect <= 0
+            ) {
               imagePlane.scale.set(panelWidth, panelHeight, 1);
               if (texture) {
                 panelRecord.baseRepeat.set(1, 1);
@@ -20278,7 +23039,8 @@ export default function ResumeSpace3D({
             );
             panelRecord.detailScrollMax = Math.max(
               0,
-              panelRecord.detailAllLines.length - panelRecord.detailVisibleLines,
+              panelRecord.detailAllLines.length -
+                panelRecord.detailVisibleLines,
             );
             panelRecord.detailScrollOffset = THREE.MathUtils.clamp(
               panelRecord.detailScrollOffset,
@@ -20304,12 +23066,20 @@ export default function ResumeSpace3D({
             if (!hasOverflow) return;
             const ratio =
               panelRecord.detailVisibleLines /
-              Math.max(panelRecord.detailAllLines.length, panelRecord.detailVisibleLines);
+              Math.max(
+                panelRecord.detailAllLines.length,
+                panelRecord.detailVisibleLines,
+              );
             const trackHeight = 0.78;
-            const thumbHeight = THREE.MathUtils.clamp(trackHeight * ratio, 0.16, 0.78);
+            const thumbHeight = THREE.MathUtils.clamp(
+              trackHeight * ratio,
+              0.16,
+              0.78,
+            );
             thumb.scale.y = thumbHeight;
             const t =
-              panelRecord.detailScrollOffset / Math.max(panelRecord.detailScrollMax, 1);
+              panelRecord.detailScrollOffset /
+              Math.max(panelRecord.detailScrollMax, 1);
             thumb.position.y = THREE.MathUtils.lerp(
               trackHeight * 0.5 - thumbHeight * 0.5,
               -trackHeight * 0.5 + thumbHeight * 0.5,
@@ -20332,14 +23102,12 @@ export default function ResumeSpace3D({
             const detailTechs =
               panelRecord.clientVariants.length > 0
                 ? panelRecord.clientVariants[panelRecord.activeVariantIndex]
-                    ?.technologies || entry.technologies || []
+                    ?.technologies ||
+                  entry.technologies ||
+                  []
                 : entry.technologies || [];
-            const detailYear =
-              media.variantYear ?? entry.year;
-            const descriptionLines = wrapTextLines(
-              detailDescription,
-              34,
-            );
+            const detailYear = media.variantYear ?? entry.year;
+            const descriptionLines = wrapTextLines(detailDescription, 34);
             panelRecord.detailAllLines = [
               media.variantTitle || media.title || entry.title,
               mediaLabel,
@@ -20382,7 +23150,8 @@ export default function ResumeSpace3D({
             const badgeHeight = panelHeight * 0.05;
             const badgeGap = badgeHeight * 0.32;
             const stackHeight =
-              list.length * badgeHeight + Math.max(0, list.length - 1) * badgeGap;
+              list.length * badgeHeight +
+              Math.max(0, list.length - 1) * badgeGap;
             const startY = stackHeight * 0.5 - badgeHeight * 0.5;
             // Overlap 25% into description side; rest remains on image side.
             const badgeX = imageInward * badgeWidth * 0.25;
@@ -20397,7 +23166,8 @@ export default function ResumeSpace3D({
                 textColor: "rgba(255, 255, 255, 0.98)",
                 showLine: false,
                 fontSize: 92,
-                fontFamily: "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+                fontFamily:
+                  "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
                 fontWeight: 700,
                 lineSpacing: 102,
                 textAlign: "center" as const,
@@ -20450,10 +23220,14 @@ export default function ResumeSpace3D({
           const categoryBarHeight = panelHeight * 0.09;
           const tabRowHeight = panelHeight * 0.098;
           const tabAreaHeight = categoryBarHeight + tabRowHeight;
-          const tabAreaCenterX = side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
+          const tabAreaCenterX =
+            side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
           tabsRoot.position.set(
             tabAreaCenterX,
-            detailCenterY + detailHeight * 0.5 + tabAreaHeight * 0.5 + panelHeight * 0.06,
+            detailCenterY +
+              detailHeight * 0.5 +
+              tabAreaHeight * 0.5 +
+              panelHeight * 0.06,
             0.03,
           );
           tabsRoot.renderOrder = 120;
@@ -20474,7 +23248,10 @@ export default function ResumeSpace3D({
           categoryGlass.renderOrder = 120;
           tabsRoot.add(categoryGlass);
           const categoryFrame = new THREE.Mesh(
-            new THREE.PlaneGeometry(stripWidth * 1.01, categoryBarHeight * 1.04),
+            new THREE.PlaneGeometry(
+              stripWidth * 1.01,
+              categoryBarHeight * 1.04,
+            ),
             new THREE.MeshBasicMaterial({
               color: 0x39d7ff,
               transparent: true,
@@ -20502,7 +23279,8 @@ export default function ResumeSpace3D({
               textColor: "rgba(172, 229, 255, 0.96)",
               showLine: false,
               fontSize: 32,
-              fontFamily: "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+              fontFamily:
+                "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
               fontWeight: 600,
               lineSpacing: 40,
               textAlign: "left" as const,
@@ -20512,7 +23290,10 @@ export default function ResumeSpace3D({
             },
           );
           const categoryLabel = new THREE.Mesh(
-            new THREE.PlaneGeometry(stripWidth * 0.965, categoryBarHeight * 0.66),
+            new THREE.PlaneGeometry(
+              stripWidth * 0.965,
+              categoryBarHeight * 0.66,
+            ),
             new THREE.MeshBasicMaterial({
               map: categoryLabelTex,
               transparent: true,
@@ -20580,10 +23361,16 @@ export default function ResumeSpace3D({
               .slice(0, variantIndex)
               .reduce((sum, w) => sum + w, 0);
             const x =
-              tabStartX + widthBefore + variantIndex * tabGap + tabWidths[variantIndex] * 0.5;
+              tabStartX +
+              widthBefore +
+              variantIndex * tabGap +
+              tabWidths[variantIndex] * 0.5;
             tabGroup.position.set(x, -categoryBarHeight * 0.5, 0.04);
             const tabFill = new THREE.Mesh(
-              new THREE.PlaneGeometry(tabWidths[variantIndex] * 0.982, tabRowHeight * 0.72),
+              new THREE.PlaneGeometry(
+                tabWidths[variantIndex] * 0.982,
+                tabRowHeight * 0.72,
+              ),
               new THREE.MeshBasicMaterial({
                 color: 0x2c4d70,
                 transparent: true,
@@ -20597,7 +23384,10 @@ export default function ResumeSpace3D({
             tabFill.position.z = 0.004;
             tabFill.renderOrder = 130 + variantIndex * 3;
             const tabFrame = new THREE.Mesh(
-              new THREE.PlaneGeometry(tabWidths[variantIndex] * 0.992, tabRowHeight * 0.76),
+              new THREE.PlaneGeometry(
+                tabWidths[variantIndex] * 0.992,
+                tabRowHeight * 0.76,
+              ),
               new THREE.MeshBasicMaterial({
                 color: 0x8fd3ff,
                 transparent: true,
@@ -20621,7 +23411,8 @@ export default function ResumeSpace3D({
               textColor: "rgba(235, 244, 255, 0.96)",
               showLine: false,
               fontSize: 108,
-              fontFamily: "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+              fontFamily:
+                "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
               fontWeight: 500,
               lineSpacing: 120,
               textAlign: "center" as const,
@@ -20630,7 +23421,10 @@ export default function ResumeSpace3D({
               crispUI: true,
             });
             const tabLabel = new THREE.Mesh(
-              new THREE.PlaneGeometry(tabWidths[variantIndex] * 0.93, tabRowHeight * 0.44),
+              new THREE.PlaneGeometry(
+                tabWidths[variantIndex] * 0.93,
+                tabRowHeight * 0.44,
+              ),
               new THREE.MeshBasicMaterial({
                 map: tabLabelTex,
                 transparent: true,
@@ -20658,10 +23452,14 @@ export default function ResumeSpace3D({
 
           const thumbnailRoot = new THREE.Group();
           const stripHeight = panelHeight * 0.28;
-          const stripCenterX = side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
+          const stripCenterX =
+            side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
           thumbnailRoot.position.set(
             stripCenterX,
-            detailCenterY - detailHeight * 0.5 - stripHeight * 0.5 - panelHeight * 0.07,
+            detailCenterY -
+              detailHeight * 0.5 -
+              stripHeight * 0.5 -
+              panelHeight * 0.07,
             0.02,
           );
           const stripGlass = new THREE.Mesh(
@@ -20732,7 +23530,8 @@ export default function ResumeSpace3D({
           );
 
           const thumbSlotsWidthNarrow = stripWidth * 0.56;
-          const thumbWidth = thumbSlotsWidthNarrow / PROJECT_SHOWCASE_THUMBS_PER_PAGE - 0.08;
+          const thumbWidth =
+            thumbSlotsWidthNarrow / PROJECT_SHOWCASE_THUMBS_PER_PAGE - 0.08;
           const thumbHeight = stripHeight * 0.66;
           const thumbGap = 0.08;
           const thumbStep = thumbWidth + thumbGap;
@@ -20743,8 +23542,14 @@ export default function ResumeSpace3D({
             -((PROJECT_SHOWCASE_THUMBS_PER_PAGE - 1) * thumbStep) / 2;
           const thumbGroups: THREE.Group[] = [];
           const thumbIndexByGroup = new Map<THREE.Group, number>();
-          const thumbFrameByMediaIndex = new Map<number, THREE.MeshBasicMaterial>();
-          const thumbImageByMediaIndex = new Map<number, THREE.MeshBasicMaterial>();
+          const thumbFrameByMediaIndex = new Map<
+            number,
+            THREE.MeshBasicMaterial
+          >();
+          const thumbImageByMediaIndex = new Map<
+            number,
+            THREE.MeshBasicMaterial
+          >();
           const activeArrowColor = new THREE.Color(0xdff4ff);
           const disabledArrowColor = new THREE.Color(0x8caec9);
           const getVariantMediaIndices = () => {
@@ -20784,7 +23589,11 @@ export default function ResumeSpace3D({
               imageAspect?: number,
               texture?: THREE.Texture,
             ) => {
-              if (!imageAspect || !Number.isFinite(imageAspect) || imageAspect <= 0) {
+              if (
+                !imageAspect ||
+                !Number.isFinite(imageAspect) ||
+                imageAspect <= 0
+              ) {
                 if (texture) {
                   texture.repeat.set(1, 1);
                   texture.offset.set(0, 0);
@@ -20825,7 +23634,9 @@ export default function ResumeSpace3D({
                   | { width?: number; height?: number }
                   | undefined;
                 const imgAspect =
-                  img?.width && img?.height ? img.width / img.height : undefined;
+                  img?.width && img?.height
+                    ? img.width / img.height
+                    : undefined;
                 applyThumbCoverTopLeftFit(imgAspect, texture);
                 thumbImageMat.needsUpdate = true;
               },
@@ -20843,7 +23654,10 @@ export default function ResumeSpace3D({
               thumbFrame.material as THREE.MeshBasicMaterial,
             );
             panelRecord.thumbnailImageMats[mediaIndex] = thumbImageMat;
-            thumbFrameByMediaIndex.set(mediaIndex, thumbFrame.material as THREE.MeshBasicMaterial);
+            thumbFrameByMediaIndex.set(
+              mediaIndex,
+              thumbFrame.material as THREE.MeshBasicMaterial,
+            );
             thumbImageByMediaIndex.set(mediaIndex, thumbImageMat);
             panelRecord.thumbnailHitTargets.push({
               mesh: thumbImage,
@@ -20880,12 +23694,16 @@ export default function ResumeSpace3D({
               const filteredPosition = variantMediaIndices.indexOf(mediaIndex);
               const wasVisible =
                 filteredPosition >= beforePageStart &&
-                filteredPosition < beforePageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE;
+                filteredPosition <
+                  beforePageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE;
               const willBeVisible =
-                filteredPosition >= panelRecord.thumbnailPageStart && filteredPosition < pageEnd;
-              const shouldAnimate = animate && beforePageStart !== panelRecord.thumbnailPageStart;
+                filteredPosition >= panelRecord.thumbnailPageStart &&
+                filteredPosition < pageEnd;
+              const shouldAnimate =
+                animate && beforePageStart !== panelRecord.thumbnailPageStart;
               const currentSlot = filteredPosition - beforePageStart;
-              const nextSlot = filteredPosition - panelRecord.thumbnailPageStart;
+              const nextSlot =
+                filteredPosition - panelRecord.thumbnailPageStart;
               const fromX = thumbOffsetStart + currentSlot * thumbStep;
               const toX = thumbOffsetStart + nextSlot * thumbStep;
               const frameMat = thumbFrameByMediaIndex.get(mediaIndex);
@@ -20937,14 +23755,19 @@ export default function ResumeSpace3D({
             nextArrowMesh.visible = showNav;
             const prevEnabled = panelRecord.thumbnailPageStart > 0;
             const nextEnabled =
-              panelRecord.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE <
+              panelRecord.thumbnailPageStart +
+                PROJECT_SHOWCASE_THUMBS_PER_PAGE <
               variantMediaIndices.length;
             const prevMat = prevArrowMesh.material as THREE.MeshBasicMaterial;
             const nextMat = nextArrowMesh.material as THREE.MeshBasicMaterial;
             prevMat.opacity = prevEnabled ? 0.96 : 0.36;
             nextMat.opacity = nextEnabled ? 0.96 : 0.36;
-            prevMat.color.copy(prevEnabled ? activeArrowColor : disabledArrowColor);
-            nextMat.color.copy(nextEnabled ? activeArrowColor : disabledArrowColor);
+            prevMat.color.copy(
+              prevEnabled ? activeArrowColor : disabledArrowColor,
+            );
+            nextMat.color.copy(
+              nextEnabled ? activeArrowColor : disabledArrowColor,
+            );
           };
 
           const updateThumbnailVisualState = () => {
@@ -20976,7 +23799,8 @@ export default function ResumeSpace3D({
             );
             const media = panelRecord.mediaItems[safeMediaIndex];
             if (!media) return;
-            const mediaChanged = safeMediaIndex !== panelRecord.activeMediaIndex;
+            const mediaChanged =
+              safeMediaIndex !== panelRecord.activeMediaIndex;
             panelRecord.activeMediaIndex = safeMediaIndex;
             panelRecord.fitMode = media.fit;
             panelRecord.zoom = 1;
@@ -20986,7 +23810,8 @@ export default function ResumeSpace3D({
               variantMediaIndices.indexOf(panelRecord.activeMediaIndex) <
                 panelRecord.thumbnailPageStart ||
               variantMediaIndices.indexOf(panelRecord.activeMediaIndex) >=
-                panelRecord.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE
+                panelRecord.thumbnailPageStart +
+                  PROJECT_SHOWCASE_THUMBS_PER_PAGE
             ) {
               panelRecord.thumbnailPageStart =
                 Math.floor(
@@ -21065,7 +23890,9 @@ export default function ResumeSpace3D({
                   | { width?: number; height?: number }
                   | undefined;
                 const imgAspect =
-                  img?.width && img?.height ? img.width / img.height : undefined;
+                  img?.width && img?.height
+                    ? img.width / img.height
+                    : undefined;
                 applyImageFit(imgAspect, texture, media.fit);
                 imageMat.needsUpdate = true;
               },
@@ -21119,7 +23946,9 @@ export default function ResumeSpace3D({
             updateThumbnailVisualState();
             bumpProjectShowcaseViewportTick();
           };
-          panelRecord.triggerThumbnailNavPress = (direction: "prev" | "next") => {
+          panelRecord.triggerThumbnailNavPress = (
+            direction: "prev" | "next",
+          ) => {
             const variantMediaIndices = getVariantMediaIndices();
             const maxPageStart = Math.max(
               0,
@@ -21150,7 +23979,7 @@ export default function ResumeSpace3D({
               mat,
               { opacity: canMove ? 1 : 0.42 },
               {
-                opacity: canMove ? 0.86 : 0.30,
+                opacity: canMove ? 0.86 : 0.3,
                 duration: 0.11,
                 ease: "power2.out",
                 yoyo: true,
@@ -21170,11 +23999,7 @@ export default function ResumeSpace3D({
             detailMat,
           );
           panelRecord.detailMesh = detailPlane;
-          detailPlane.position.set(
-            0,
-            detailCenterY,
-            -0.02,
-          );
+          detailPlane.position.set(0, detailCenterY, -0.02);
           const detailScrollTrack = new THREE.Mesh(
             new THREE.PlaneGeometry(0.032, 0.78),
             new THREE.MeshBasicMaterial({
@@ -21220,14 +24045,13 @@ export default function ResumeSpace3D({
           const tabsTop = tabsRoot.position.y + tabAreaHeight * 0.5;
           const stripBottom = thumbnailRoot.position.y - stripHeight * 0.5;
           const moduleTop = showVariantTabs ? tabsTop : detailTop;
-          const moduleBottom = panelHasAnyThumbStrip ? stripBottom : detailBottom;
+          const moduleBottom = panelHasAnyThumbStrip
+            ? stripBottom
+            : detailBottom;
           const moduleHeight = (moduleTop - moduleBottom) * 1.01;
           const moduleCenterY = (moduleTop + moduleBottom) * 0.5;
           const moduleFrame = new THREE.Mesh(
-            new THREE.PlaneGeometry(
-              stripWidth * 1.015,
-              moduleHeight,
-            ),
+            new THREE.PlaneGeometry(stripWidth * 1.015, moduleHeight),
             new THREE.MeshBasicMaterial({
               color: 0x39d7ff,
               transparent: true,
@@ -21235,11 +24059,7 @@ export default function ResumeSpace3D({
               side: THREE.DoubleSide,
             }),
           );
-          moduleFrame.position.set(
-            stripCenterX,
-            moduleCenterY,
-            -0.06,
-          );
+          moduleFrame.position.set(stripCenterX, moduleCenterY, -0.06);
           panelGroup.add(detailPlane);
           panelGroup.add(detailFrame);
           panelGroup.add(detailScrollTrack);
@@ -21258,362 +24078,423 @@ export default function ResumeSpace3D({
           });
           showcaseInteriorRoot.add(panelGroup);
           panelRecords.push(panelRecord);
-          });
-        }
-
-        projectShowcasePanelsRef.current = panelRecords;
-        panelRecords.forEach((panel) => {
-          panel.group.visible = false;
         });
-        const edgeRunPadding = 14;
-        const startPosRun = aboutHallStartPositionRef.current != null
+      }
+
+      projectShowcasePanelsRef.current = panelRecords;
+      panelRecords.forEach((panel) => {
+        panel.group.visible = false;
+      });
+      const edgeRunPadding = 14;
+      const startPosRun =
+        aboutHallStartPositionRef.current != null
           ? shaftBottomWorld + aboutHallStartPositionRef.current
           : null;
-        const firstSlideRun = slideRunPositions.length > 0 ? slideRunPositions[0] : runStart;
-        const lastSlideRun = slideRunPositions.length > 0 ? slideRunPositions[slideRunPositions.length - 1] : runStart;
-        const minRun = Math.min(
-          firstSlideRun - edgeRunPadding,
-          startPosRun != null ? startPosRun - 5 : firstSlideRun - edgeRunPadding,
-        );
-        const maxRun = lastSlideRun + edgeRunPadding + 40;
+      const firstSlideRun =
+        slideRunPositions.length > 0 ? slideRunPositions[0] : runStart;
+      const lastSlideRun =
+        slideRunPositions.length > 0
+          ? slideRunPositions[slideRunPositions.length - 1]
+          : runStart;
+      const minRun = Math.min(
+        firstSlideRun - edgeRunPadding,
+        startPosRun != null ? startPosRun - 5 : firstSlideRun - edgeRunPadding,
+      );
+      const maxRun = lastSlideRun + edgeRunPadding + 40;
 
-        const elevatorCameraWallOffset = Math.min(
-          trenchWidth * 0.36,
-          Math.max(2.8, trenchWidth * 0.5 - 1.05),
+      const elevatorCameraWallOffset = Math.min(
+        trenchWidth * 0.36,
+        Math.max(2.8, trenchWidth * 0.5 - 1.05),
+      );
+      const elevatorCameraDepthOffset = -Math.min(
+        2.4,
+        Math.max(1.2, trenchWidth * 0.2),
+      );
+      const initialRun = startPosRun ?? minRun + 10;
+      projectShowcaseTrackRef.current = {
+        axis: runAxis,
+        minRun,
+        maxRun,
+        centerCross: runAxis === "y" ? elevatorCameraWallOffset : 0,
+        cameraHeight: runAxis === "y" ? elevatorCameraDepthOffset : panelY,
+        lookAhead: THREE.MathUtils.clamp(panelSpacing * 1.9, 22, 48),
+        speed: THREE.MathUtils.clamp(panelSpacing * 0.1625, 2.5, 5.5),
+        cullHalfWindow: THREE.MathUtils.clamp(panelSpacing * 4.4, 70, 130),
+        startRun: initialRun,
+      };
+      projectShowcaseRunPosRef.current = initialRun;
+      setProjectShowcaseRunPosition(initialRun);
+      setProjectShowcaseFocus(0);
+
+      // --- Debug ruler (only with ?debug=true) ---
+      // Zero-based: 0 = bottom of elevator shaft (minRun).
+      if (IS_DEBUG && runAxis === "y") {
+        const rulerGroup = new THREE.Group();
+        rulerGroup.name = "ElevatorDebugRuler";
+        const rulerX = -(trenchWidth * 0.48);
+        const rulerZ = -1.2;
+        const rulerOrigin = shaftBottomWorld;
+        const tickSpacing = 5;
+        const labelEvery = 10;
+        const rulerBottomWorld =
+          Math.floor(rulerOrigin / tickSpacing) * tickSpacing;
+        const rulerTopWorld = Math.ceil(maxRun / tickSpacing) * tickSpacing;
+
+        const backbonePts = [
+          new THREE.Vector3(rulerX, rulerBottomWorld, rulerZ),
+          new THREE.Vector3(rulerX, rulerTopWorld, rulerZ),
+        ];
+        const backboneGeo = new THREE.BufferGeometry().setFromPoints(
+          backbonePts,
         );
-        const elevatorCameraDepthOffset = -Math.min(2.4, Math.max(1.2, trenchWidth * 0.2));
-        const initialRun = startPosRun ?? minRun + 10;
-        projectShowcaseTrackRef.current = {
-          axis: runAxis,
-          minRun,
-          maxRun,
-          centerCross: runAxis === "y" ? elevatorCameraWallOffset : 0,
-          cameraHeight: runAxis === "y" ? elevatorCameraDepthOffset : panelY,
-          lookAhead: THREE.MathUtils.clamp(panelSpacing * 1.9, 22, 48),
-          speed: THREE.MathUtils.clamp(panelSpacing * 0.1625, 2.5, 5.5),
-          cullHalfWindow: THREE.MathUtils.clamp(panelSpacing * 4.4, 70, 130),
-          startRun: initialRun,
+        const backboneMat = new THREE.LineBasicMaterial({
+          color: 0x55ddff,
+          opacity: 0.6,
+          transparent: true,
+          depthTest: false,
+        });
+        const backboneLine = new THREE.Line(backboneGeo, backboneMat);
+        backboneLine.renderOrder = 998;
+        rulerGroup.add(backboneLine);
+
+        const makeTextSprite = (text: string, size: number, color: string) => {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d")!;
+          canvas.width = 256;
+          canvas.height = 64;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.font = "bold 64px Rajdhani, monospace";
+          ctx.fillStyle = color;
+          ctx.textAlign = "right";
+          ctx.textBaseline = "middle";
+          ctx.fillText(text, canvas.width - 8, canvas.height / 2);
+          const tex = new THREE.CanvasTexture(canvas);
+          tex.minFilter = THREE.LinearFilter;
+          const mat = new THREE.SpriteMaterial({
+            map: tex,
+            transparent: true,
+            depthTest: false,
+          });
+          const sprite = new THREE.Sprite(mat);
+          sprite.scale.set(size * (canvas.width / canvas.height), size, 1);
+          return sprite;
         };
-        projectShowcaseRunPosRef.current = initialRun;
-        setProjectShowcaseRunPosition(initialRun);
-        setProjectShowcaseFocus(0);
 
-        // --- Debug ruler (only with ?debug=true) ---
-        // Zero-based: 0 = bottom of elevator shaft (minRun).
-        if (IS_DEBUG && runAxis === "y") {
-          const rulerGroup = new THREE.Group();
-          rulerGroup.name = "ElevatorDebugRuler";
-          const rulerX = -(trenchWidth * 0.48);
-          const rulerZ = -1.2;
-          const rulerOrigin = shaftBottomWorld;
-          const tickSpacing = 5;
-          const labelEvery = 10;
-          const rulerBottomWorld = Math.floor(rulerOrigin / tickSpacing) * tickSpacing;
-          const rulerTopWorld = Math.ceil(maxRun / tickSpacing) * tickSpacing;
-
-          const backbonePts = [
-            new THREE.Vector3(rulerX, rulerBottomWorld, rulerZ),
-            new THREE.Vector3(rulerX, rulerTopWorld, rulerZ),
+        for (
+          let worldY = rulerBottomWorld;
+          worldY <= rulerTopWorld;
+          worldY += tickSpacing
+        ) {
+          const displayVal = Math.round(worldY - rulerOrigin);
+          const isLabel = displayVal % labelEvery === 0;
+          const tickLen = isLabel ? 1.2 : 0.5;
+          const tickPts = [
+            new THREE.Vector3(rulerX, worldY, rulerZ),
+            new THREE.Vector3(rulerX + tickLen, worldY, rulerZ),
           ];
-          const backboneGeo = new THREE.BufferGeometry().setFromPoints(backbonePts);
-          const backboneMat = new THREE.LineBasicMaterial({
-            color: 0x55ddff, opacity: 0.6, transparent: true, depthTest: false,
+          const tickGeo = new THREE.BufferGeometry().setFromPoints(tickPts);
+          const tickMat = new THREE.LineBasicMaterial({
+            color: isLabel ? 0x88eeff : 0x44aacc,
+            opacity: isLabel ? 0.8 : 0.4,
+            transparent: true,
+            depthTest: false,
           });
-          const backboneLine = new THREE.Line(backboneGeo, backboneMat);
-          backboneLine.renderOrder = 998;
-          rulerGroup.add(backboneLine);
+          rulerGroup.add(new THREE.Line(tickGeo, tickMat));
 
-          const makeTextSprite = (text: string, size: number, color: string) => {
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d")!;
-            canvas.width = 256;
-            canvas.height = 64;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.font = "bold 64px Rajdhani, monospace";
-            ctx.fillStyle = color;
-            ctx.textAlign = "right";
-            ctx.textBaseline = "middle";
-            ctx.fillText(text, canvas.width - 8, canvas.height / 2);
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.minFilter = THREE.LinearFilter;
-            const mat = new THREE.SpriteMaterial({
-              map: tex, transparent: true, depthTest: false,
-            });
-            const sprite = new THREE.Sprite(mat);
-            sprite.scale.set(size * (canvas.width / canvas.height), size, 1);
-            return sprite;
-          };
-
-          for (let worldY = rulerBottomWorld; worldY <= rulerTopWorld; worldY += tickSpacing) {
-            const displayVal = Math.round(worldY - rulerOrigin);
-            const isLabel = displayVal % labelEvery === 0;
-            const tickLen = isLabel ? 1.2 : 0.5;
-            const tickPts = [
-              new THREE.Vector3(rulerX, worldY, rulerZ),
-              new THREE.Vector3(rulerX + tickLen, worldY, rulerZ),
-            ];
-            const tickGeo = new THREE.BufferGeometry().setFromPoints(tickPts);
-            const tickMat = new THREE.LineBasicMaterial({
-              color: isLabel ? 0x88eeff : 0x44aacc,
-              opacity: isLabel ? 0.8 : 0.4,
-              transparent: true, depthTest: false,
-            });
-            rulerGroup.add(new THREE.Line(tickGeo, tickMat));
-
-            if (isLabel) {
-              const label = makeTextSprite(String(displayVal), 1.0, "rgba(136,238,255,0.9)");
-              label.position.set(rulerX - 0.8, worldY, rulerZ);
-              rulerGroup.add(label);
-            }
-          }
-
-          // Panel position markers (display zero-based values)
-          panelRecords.forEach((panel, idx) => {
-            const markerLen = 2.0;
-            const markerPts = [
-              new THREE.Vector3(rulerX - 0.3, panel.runPos, rulerZ),
-              new THREE.Vector3(rulerX + markerLen, panel.runPos, rulerZ),
-            ];
-            const markerGeo = new THREE.BufferGeometry().setFromPoints(markerPts);
-            const markerMat = new THREE.LineBasicMaterial({
-              color: 0xffaa44, opacity: 0.9, transparent: true, depthTest: false,
-            });
-            rulerGroup.add(new THREE.Line(markerGeo, markerMat));
-            const panelDisplayVal = (panel.runPos - rulerOrigin).toFixed(1);
-            const slideLabel = makeTextSprite(
-              `S${idx + 1} @${panelDisplayVal}`, 0.8, "rgba(255,170,68,0.95)",
+          if (isLabel) {
+            const label = makeTextSprite(
+              String(displayVal),
+              1.0,
+              "rgba(136,238,255,0.9)",
             );
-            slideLabel.position.set(rulerX + markerLen + 0.6, panel.runPos, rulerZ);
-            rulerGroup.add(slideLabel);
-          });
-
-          // Horizontal tracking line at camera center
-          const trackLineWidth = trenchWidth * 0.9;
-          const trackLineGeo = new THREE.PlaneGeometry(trackLineWidth, 0.06);
-          const trackLineMat = new THREE.MeshBasicMaterial({
-            color: 0xff4466, opacity: 0.7, transparent: true,
-            depthTest: false, side: THREE.DoubleSide,
-          });
-          const trackLineMesh = new THREE.Mesh(trackLineGeo, trackLineMat);
-          trackLineMesh.position.set(0, initialRun, rulerZ);
-          trackLineMesh.renderOrder = 999;
-          rulerGroup.add(trackLineMesh);
-
-          // Current-position label — create with a shared canvas for per-frame updates
-          const rulerLabelCanvas = document.createElement("canvas");
-          rulerLabelCanvas.width = 256;
-          rulerLabelCanvas.height = 64;
-          const rulerLabelCtx = rulerLabelCanvas.getContext("2d")!;
-          const posLabelTex = new THREE.CanvasTexture(rulerLabelCanvas);
-          posLabelTex.minFilter = THREE.LinearFilter;
-          const posLabelMat = new THREE.SpriteMaterial({
-            map: posLabelTex, transparent: true, depthTest: false,
-          });
-          const posLabel = new THREE.Sprite(posLabelMat);
-          posLabel.scale.set(1.2 * (256 / 64), 1.2, 1);
-          posLabel.position.set(rulerX + 3.0, initialRun, rulerZ);
-          posLabel.renderOrder = 999;
-          rulerGroup.add(posLabel);
-
-          showcaseRoot.add(rulerGroup);
-          projectShowcaseDebugRulerRef.current = {
-            group: rulerGroup,
-            trackingLine: trackLineMesh,
-            label: posLabel,
-            labelCanvas: rulerLabelCanvas,
-            labelCtx: rulerLabelCtx,
-            lastLabelText: "",
-            origin: rulerOrigin,
-          };
+            label.position.set(rulerX - 0.8, worldY, rulerZ);
+            rulerGroup.add(label);
+          }
         }
 
-        if (hallwayContentModeRef.current === "about") {
-          const aboutExteriorRoot = new THREE.Group();
-          aboutExteriorRoot.name = "ProjectShowcaseAboutExteriorRoot";
-          aboutExteriorRoot.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
-          aboutExteriorRoot.layers.set(PROJECT_SHOWCASE_LAYER);
-          showcaseRoot.add(aboutExteriorRoot);
-          projectShowcaseExteriorRootRef.current = aboutExteriorRoot;
-          const aboutStationLabel = createLabel("About Orbital Station");
-          aboutStationLabel.userData.projectShowcaseAboutStationLabel = true;
-          aboutStationLabel.position.set(0, 74, 0);
-          const aboutStationLabelEl = (aboutStationLabel as unknown as {
+        // Panel position markers (display zero-based values)
+        panelRecords.forEach((panel, idx) => {
+          const markerLen = 2.0;
+          const markerPts = [
+            new THREE.Vector3(rulerX - 0.3, panel.runPos, rulerZ),
+            new THREE.Vector3(rulerX + markerLen, panel.runPos, rulerZ),
+          ];
+          const markerGeo = new THREE.BufferGeometry().setFromPoints(markerPts);
+          const markerMat = new THREE.LineBasicMaterial({
+            color: 0xffaa44,
+            opacity: 0.9,
+            transparent: true,
+            depthTest: false,
+          });
+          rulerGroup.add(new THREE.Line(markerGeo, markerMat));
+          const panelDisplayVal = (panel.runPos - rulerOrigin).toFixed(1);
+          const slideLabel = makeTextSprite(
+            `S${idx + 1} @${panelDisplayVal}`,
+            0.8,
+            "rgba(255,170,68,0.95)",
+          );
+          slideLabel.position.set(
+            rulerX + markerLen + 0.6,
+            panel.runPos,
+            rulerZ,
+          );
+          rulerGroup.add(slideLabel);
+        });
+
+        // Horizontal tracking line at camera center
+        const trackLineWidth = trenchWidth * 0.9;
+        const trackLineGeo = new THREE.PlaneGeometry(trackLineWidth, 0.06);
+        const trackLineMat = new THREE.MeshBasicMaterial({
+          color: 0xff4466,
+          opacity: 0.7,
+          transparent: true,
+          depthTest: false,
+          side: THREE.DoubleSide,
+        });
+        const trackLineMesh = new THREE.Mesh(trackLineGeo, trackLineMat);
+        trackLineMesh.position.set(0, initialRun, rulerZ);
+        trackLineMesh.renderOrder = 999;
+        rulerGroup.add(trackLineMesh);
+
+        // Current-position label — create with a shared canvas for per-frame updates
+        const rulerLabelCanvas = document.createElement("canvas");
+        rulerLabelCanvas.width = 256;
+        rulerLabelCanvas.height = 64;
+        const rulerLabelCtx = rulerLabelCanvas.getContext("2d")!;
+        const posLabelTex = new THREE.CanvasTexture(rulerLabelCanvas);
+        posLabelTex.minFilter = THREE.LinearFilter;
+        const posLabelMat = new THREE.SpriteMaterial({
+          map: posLabelTex,
+          transparent: true,
+          depthTest: false,
+        });
+        const posLabel = new THREE.Sprite(posLabelMat);
+        posLabel.scale.set(1.2 * (256 / 64), 1.2, 1);
+        posLabel.position.set(rulerX + 3.0, initialRun, rulerZ);
+        posLabel.renderOrder = 999;
+        rulerGroup.add(posLabel);
+
+        showcaseRoot.add(rulerGroup);
+        projectShowcaseDebugRulerRef.current = {
+          group: rulerGroup,
+          trackingLine: trackLineMesh,
+          label: posLabel,
+          labelCanvas: rulerLabelCanvas,
+          labelCtx: rulerLabelCtx,
+          lastLabelText: "",
+          origin: rulerOrigin,
+        };
+      }
+
+      if (hallwayContentModeRef.current === "about") {
+        const aboutExteriorRoot = new THREE.Group();
+        aboutExteriorRoot.name = "ProjectShowcaseAboutExteriorRoot";
+        aboutExteriorRoot.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
+        aboutExteriorRoot.layers.set(PROJECT_SHOWCASE_LAYER);
+        showcaseRoot.add(aboutExteriorRoot);
+        projectShowcaseExteriorRootRef.current = aboutExteriorRoot;
+        const aboutStationLabel = createLabel("About Orbital Station");
+        aboutStationLabel.userData.projectShowcaseAboutStationLabel = true;
+        aboutStationLabel.position.set(0, 74, 0);
+        const aboutStationLabelEl = (
+          aboutStationLabel as unknown as {
             element?: HTMLElement;
-          }).element;
-          if (aboutStationLabelEl) {
-            aboutStationLabelEl.style.pointerEvents = "none";
-            aboutStationLabelEl.style.textShadow = "0 0 12px rgba(140,210,255,0.85)";
-            const title = aboutStationLabelEl.firstElementChild as HTMLElement | null;
-            if (title) {
-              title.style.fontSize = "20px";
-              title.style.letterSpacing = "1.3px";
-            }
           }
-          aboutExteriorRoot.add(aboutStationLabel);
+        ).element;
+        if (aboutStationLabelEl) {
+          aboutStationLabelEl.style.pointerEvents = "none";
+          aboutStationLabelEl.style.textShadow =
+            "0 0 12px rgba(140,210,255,0.85)";
+          const title =
+            aboutStationLabelEl.firstElementChild as HTMLElement | null;
+          if (title) {
+            title.style.fontSize = "20px";
+            title.style.letterSpacing = "1.3px";
+          }
+        }
+        aboutExteriorRoot.add(aboutStationLabel);
 
-          const handleAboutExteriorLoaded = (tardisGltf: { scene: THREE.Group }) => {
-              const tardisRoot = tardisGltf.scene.clone(true);
-              const bounds = new THREE.Box3().setFromObject(tardisRoot);
-              const size = bounds.getSize(new THREE.Vector3());
-              const desiredHeight = 58 * PROJECT_SHOWCASE_ABOUT_EXTERIOR_SCALE_MULT;
-              const maxDim = Math.max(size.x, size.y, size.z, 1);
-              const scale = desiredHeight / maxDim;
-              tardisRoot.scale.setScalar(scale);
-              const scaledBounds = new THREE.Box3().setFromObject(tardisRoot);
-              const center = scaledBounds.getCenter(new THREE.Vector3());
-              tardisRoot.position.sub(center);
-              tardisRoot.position.y += 4;
-              tardisRoot.traverse((obj) => {
-                obj.layers.set(PROJECT_SHOWCASE_LAYER);
-                if (!(obj instanceof THREE.Mesh)) return;
-                const materials = Array.isArray(obj.material)
-                  ? obj.material
-                  : [obj.material];
-                materials.forEach((mat) => {
-                  if (!mat) return;
-                  if (
-                    mat instanceof THREE.MeshStandardMaterial ||
-                    mat instanceof THREE.MeshPhysicalMaterial
-                  ) {
-                    mat.envMapIntensity = Math.max(mat.envMapIntensity ?? 0, 1.35);
-                    mat.emissiveIntensity = Math.max(mat.emissiveIntensity ?? 0, 1.05);
-                    mat.needsUpdate = true;
-                  }
-                });
-              });
-              aboutExteriorRoot.add(tardisRoot);
-              projectShowcaseAboutExteriorModelRef.current = tardisRoot;
-
-              // Add a soft navigation beacon so the station remains readable
-              // from deep-space distances without changing close approach framing.
-              const beaconCanvas = document.createElement("canvas");
-              beaconCanvas.width = 256;
-              beaconCanvas.height = 256;
-              const beaconCtx = beaconCanvas.getContext("2d");
-              if (beaconCtx) {
-                const grad = beaconCtx.createRadialGradient(128, 128, 0, 128, 128, 128);
-                grad.addColorStop(0, "rgba(206, 232, 255, 1.0)");
-                grad.addColorStop(0.16, "rgba(140, 198, 255, 0.95)");
-                grad.addColorStop(0.55, "rgba(70, 150, 255, 0.38)");
-                grad.addColorStop(1, "rgba(0, 0, 0, 0)");
-                beaconCtx.fillStyle = grad;
-                beaconCtx.fillRect(0, 0, 256, 256);
+        const handleAboutExteriorLoaded = (tardisGltf: {
+          scene: THREE.Group;
+        }) => {
+          const tardisRoot = tardisGltf.scene.clone(true);
+          const bounds = new THREE.Box3().setFromObject(tardisRoot);
+          const size = bounds.getSize(new THREE.Vector3());
+          const desiredHeight = 58 * PROJECT_SHOWCASE_ABOUT_EXTERIOR_SCALE_MULT;
+          const maxDim = Math.max(size.x, size.y, size.z, 1);
+          const scale = desiredHeight / maxDim;
+          tardisRoot.scale.setScalar(scale);
+          const scaledBounds = new THREE.Box3().setFromObject(tardisRoot);
+          const center = scaledBounds.getCenter(new THREE.Vector3());
+          tardisRoot.position.sub(center);
+          tardisRoot.position.y += 4;
+          tardisRoot.traverse((obj) => {
+            obj.layers.set(PROJECT_SHOWCASE_LAYER);
+            if (!(obj instanceof THREE.Mesh)) return;
+            const materials = Array.isArray(obj.material)
+              ? obj.material
+              : [obj.material];
+            materials.forEach((mat) => {
+              if (!mat) return;
+              if (
+                mat instanceof THREE.MeshStandardMaterial ||
+                mat instanceof THREE.MeshPhysicalMaterial
+              ) {
+                mat.envMapIntensity = Math.max(mat.envMapIntensity ?? 0, 1.35);
+                mat.emissiveIntensity = Math.max(
+                  mat.emissiveIntensity ?? 0,
+                  1.05,
+                );
+                mat.needsUpdate = true;
               }
-              const beaconTexture = new THREE.CanvasTexture(beaconCanvas);
-              beaconTexture.minFilter = THREE.LinearFilter;
-              beaconTexture.magFilter = THREE.LinearFilter;
-              beaconTexture.colorSpace = THREE.SRGBColorSpace;
-              const beaconCoreMat = new THREE.SpriteMaterial({
-                map: beaconTexture,
-                color: 0xb9e0ff,
-                opacity: PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_FAR,
-                transparent: true,
-                depthWrite: false,
-                blending: THREE.AdditiveBlending,
-              });
-              const beaconCore = new THREE.Sprite(beaconCoreMat);
-              beaconCore.scale.set(
-                PROJECT_SHOWCASE_ABOUT_BEACON_CORE_SIZE,
-                PROJECT_SHOWCASE_ABOUT_BEACON_CORE_SIZE,
-                1,
-              );
-              beaconCore.position.set(0, 36, 0);
-              beaconCore.layers.set(PROJECT_SHOWCASE_LAYER);
-              beaconCore.frustumCulled = false;
-              const beaconHaloMat = new THREE.SpriteMaterial({
-                map: beaconTexture,
-                color: 0x78bcff,
-                opacity: PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_FAR,
-                transparent: true,
-                depthWrite: false,
-                blending: THREE.AdditiveBlending,
-              });
-              const beaconHalo = new THREE.Sprite(beaconHaloMat);
-              beaconHalo.scale.set(
-                PROJECT_SHOWCASE_ABOUT_BEACON_HALO_SIZE,
-                PROJECT_SHOWCASE_ABOUT_BEACON_HALO_SIZE,
-                1,
-              );
-              beaconHalo.position.copy(beaconCore.position);
-              beaconHalo.layers.set(PROJECT_SHOWCASE_LAYER);
-              beaconHalo.frustumCulled = false;
-              aboutExteriorRoot.add(beaconHalo, beaconCore);
-              projectShowcaseAboutBeaconCoreMatRef.current = beaconCoreMat;
-              projectShowcaseAboutBeaconHaloMatRef.current = beaconHaloMat;
+            });
+          });
+          aboutExteriorRoot.add(tardisRoot);
+          projectShowcaseAboutExteriorModelRef.current = tardisRoot;
 
-              const tardisKey = new THREE.SpotLight(
-                0xe8f4ff,
-                8.2,
-                460,
-                Math.PI / 4.8,
-                0.62,
-                1.05,
-              );
-              tardisKey.position.set(30, 36, 26);
-              const tardisFill = new THREE.PointLight(0xa8d4ff, 3.55, 320, 1.2);
-              tardisFill.position.set(-20, 16, -18);
-              const tardisRim = new THREE.PointLight(0x72aaff, 2.45, 240, 1.05);
-              tardisRim.position.set(0, 24, 30);
-              const tardisTopBloom = new THREE.PointLight(0xbfdcff, 2.8, 190, 1.3);
-              tardisTopBloom.position.set(0, 43, 0);
-              const tardisAmbient = new THREE.HemisphereLight(0xdbe9ff, 0x25395a, 1.85);
-              const tardisLightTarget = new THREE.Object3D();
-              tardisLightTarget.position.set(0, 6, 0);
-              tardisKey.target = tardisLightTarget;
-              tardisKey.layers.set(PROJECT_SHOWCASE_LAYER);
-              tardisFill.layers.set(PROJECT_SHOWCASE_LAYER);
-              tardisRim.layers.set(PROJECT_SHOWCASE_LAYER);
-              tardisTopBloom.layers.set(PROJECT_SHOWCASE_LAYER);
-              tardisAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
-              tardisLightTarget.layers.set(PROJECT_SHOWCASE_LAYER);
-              aboutExteriorRoot.add(
-                tardisLightTarget,
-                tardisKey,
-                tardisFill,
-                tardisRim,
-                tardisTopBloom,
-                tardisAmbient,
-              );
-              markSceneModelLoaded();
-            };
-          const preloadedAboutExterior = projectShowcaseAboutExteriorPreloadedGltfRef.current;
-          if (preloadedAboutExterior) {
-            handleAboutExteriorLoaded(preloadedAboutExterior);
-            projectShowcaseAboutExteriorPreloadedGltfRef.current = null;
-          } else {
-            loader.load(
-              PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH,
-              (gltf) => handleAboutExteriorLoaded(gltf as { scene: THREE.Group }),
-              undefined,
-              () => {
-                markSceneModelLoaded();
-                if (projectShowcaseInteriorRootRef.current) {
-                  projectShowcaseInteriorRootRef.current.visible = true;
-                }
-              },
+          // Add a soft navigation beacon so the station remains readable
+          // from deep-space distances without changing close approach framing.
+          const beaconCanvas = document.createElement("canvas");
+          beaconCanvas.width = 256;
+          beaconCanvas.height = 256;
+          const beaconCtx = beaconCanvas.getContext("2d");
+          if (beaconCtx) {
+            const grad = beaconCtx.createRadialGradient(
+              128,
+              128,
+              0,
+              128,
+              128,
+              128,
             );
+            grad.addColorStop(0, "rgba(206, 232, 255, 1.0)");
+            grad.addColorStop(0.16, "rgba(140, 198, 255, 0.95)");
+            grad.addColorStop(0.55, "rgba(70, 150, 255, 0.38)");
+            grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+            beaconCtx.fillStyle = grad;
+            beaconCtx.fillRect(0, 0, 256, 256);
           }
-        } else {
+          const beaconTexture = new THREE.CanvasTexture(beaconCanvas);
+          beaconTexture.minFilter = THREE.LinearFilter;
+          beaconTexture.magFilter = THREE.LinearFilter;
+          beaconTexture.colorSpace = THREE.SRGBColorSpace;
+          const beaconCoreMat = new THREE.SpriteMaterial({
+            map: beaconTexture,
+            color: 0xb9e0ff,
+            opacity: PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_FAR,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+          });
+          const beaconCore = new THREE.Sprite(beaconCoreMat);
+          beaconCore.scale.set(
+            PROJECT_SHOWCASE_ABOUT_BEACON_CORE_SIZE,
+            PROJECT_SHOWCASE_ABOUT_BEACON_CORE_SIZE,
+            1,
+          );
+          beaconCore.position.set(0, 36, 0);
+          beaconCore.layers.set(PROJECT_SHOWCASE_LAYER);
+          beaconCore.frustumCulled = false;
+          const beaconHaloMat = new THREE.SpriteMaterial({
+            map: beaconTexture,
+            color: 0x78bcff,
+            opacity: PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_FAR,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+          });
+          const beaconHalo = new THREE.Sprite(beaconHaloMat);
+          beaconHalo.scale.set(
+            PROJECT_SHOWCASE_ABOUT_BEACON_HALO_SIZE,
+            PROJECT_SHOWCASE_ABOUT_BEACON_HALO_SIZE,
+            1,
+          );
+          beaconHalo.position.copy(beaconCore.position);
+          beaconHalo.layers.set(PROJECT_SHOWCASE_LAYER);
+          beaconHalo.frustumCulled = false;
+          aboutExteriorRoot.add(beaconHalo, beaconCore);
+          projectShowcaseAboutBeaconCoreMatRef.current = beaconCoreMat;
+          projectShowcaseAboutBeaconHaloMatRef.current = beaconHaloMat;
+
+          const tardisKey = new THREE.SpotLight(
+            0xe8f4ff,
+            8.2,
+            460,
+            Math.PI / 4.8,
+            0.62,
+            1.05,
+          );
+          tardisKey.position.set(30, 36, 26);
+          const tardisFill = new THREE.PointLight(0xa8d4ff, 3.55, 320, 1.2);
+          tardisFill.position.set(-20, 16, -18);
+          const tardisRim = new THREE.PointLight(0x72aaff, 2.45, 240, 1.05);
+          tardisRim.position.set(0, 24, 30);
+          const tardisTopBloom = new THREE.PointLight(0xbfdcff, 2.8, 190, 1.3);
+          tardisTopBloom.position.set(0, 43, 0);
+          const tardisAmbient = new THREE.HemisphereLight(
+            0xdbe9ff,
+            0x25395a,
+            1.85,
+          );
+          const tardisLightTarget = new THREE.Object3D();
+          tardisLightTarget.position.set(0, 6, 0);
+          tardisKey.target = tardisLightTarget;
+          tardisKey.layers.set(PROJECT_SHOWCASE_LAYER);
+          tardisFill.layers.set(PROJECT_SHOWCASE_LAYER);
+          tardisRim.layers.set(PROJECT_SHOWCASE_LAYER);
+          tardisTopBloom.layers.set(PROJECT_SHOWCASE_LAYER);
+          tardisAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
+          tardisLightTarget.layers.set(PROJECT_SHOWCASE_LAYER);
+          aboutExteriorRoot.add(
+            tardisLightTarget,
+            tardisKey,
+            tardisFill,
+            tardisRim,
+            tardisTopBloom,
+            tardisAmbient,
+          );
           markSceneModelLoaded();
-        }
-
-        const aboutMode = hallwayContentModeRef.current === "about";
-        if (aboutMode) {
-          showcaseInteriorRoot.visible = false;
-          if (projectShowcaseExteriorRootRef.current) {
-            projectShowcaseExteriorRootRef.current.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
-          }
+        };
+        const preloadedAboutExterior =
+          projectShowcaseAboutExteriorPreloadedGltfRef.current;
+        if (preloadedAboutExterior) {
+          handleAboutExteriorLoaded(preloadedAboutExterior);
+          projectShowcaseAboutExteriorPreloadedGltfRef.current = null;
         } else {
-          showcaseInteriorRoot.visible = true;
+          loader.load(
+            PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH,
+            (gltf) => handleAboutExteriorLoaded(gltf as { scene: THREE.Group }),
+            undefined,
+            () => {
+              markSceneModelLoaded();
+              if (projectShowcaseInteriorRootRef.current) {
+                projectShowcaseInteriorRootRef.current.visible = true;
+              }
+            },
+          );
         }
-
-        scene.add(showcaseRoot);
-        projectShowcaseRootRef.current = showcaseRoot;
-        projectShowcaseWorldAnchorRef.current = showcaseRoot.position.clone();
+      } else {
         markSceneModelLoaded();
+      }
 
-        setProjectShowcaseReady(true);
-        vlog("🛰️ Project Showcase trench loaded");
+      const aboutMode = hallwayContentModeRef.current === "about";
+      if (aboutMode) {
+        showcaseInteriorRoot.visible = false;
+        if (projectShowcaseExteriorRootRef.current) {
+          projectShowcaseExteriorRootRef.current.visible =
+            PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
+        }
+      } else {
+        showcaseInteriorRoot.visible = true;
+      }
+
+      scene.add(showcaseRoot);
+      projectShowcaseRootRef.current = showcaseRoot;
+      projectShowcaseWorldAnchorRef.current = showcaseRoot.position.clone();
+      markSceneModelLoaded();
+
+      setProjectShowcaseReady(true);
+      vlog("🛰️ Project Showcase trench loaded");
     };
     const preloadedProjectShowcase = projectShowcasePreloadedGltfRef.current;
     if (preloadedProjectShowcase) {
@@ -21647,13 +24528,22 @@ export default function ResumeSpace3D({
       const geo = moonMesh.geometry;
       if (!geo.boundingSphere) geo.computeBoundingSphere();
       const moonRadius = (geo.boundingSphere?.radius ?? 30) * moonMesh.scale.x;
-      debugLog("orbit", `moonRadius=${moonRadius.toFixed(1)}, scale=${moonMesh.scale.x.toFixed(2)}`);
+      debugLog(
+        "orbit",
+        `moonRadius=${moonRadius.toFixed(1)}, scale=${moonMesh.scale.x.toFixed(2)}`,
+      );
 
       const shipPos = ship.position;
       const moonPos = new THREE.Vector3();
       moonMesh.getWorldPosition(moonPos);
-      debugLog("orbit", `ship=[${shipPos.x.toFixed(1)},${shipPos.y.toFixed(1)},${shipPos.z.toFixed(1)}]`);
-      debugLog("orbit", `moon=[${moonPos.x.toFixed(1)},${moonPos.y.toFixed(1)},${moonPos.z.toFixed(1)}]`);
+      debugLog(
+        "orbit",
+        `ship=[${shipPos.x.toFixed(1)},${shipPos.y.toFixed(1)},${shipPos.z.toFixed(1)}]`,
+      );
+      debugLog(
+        "orbit",
+        `moon=[${moonPos.x.toFixed(1)},${moonPos.y.toFixed(1)},${moonPos.z.toFixed(1)}]`,
+      );
 
       // Kick off orbit
       enterOrbit(moonMesh, moonRadius, ship);
@@ -21667,7 +24557,10 @@ export default function ResumeSpace3D({
         ...optionsRef.current,
         spaceMoonSpinSpeed: prevSpinSpeed / 3,
       };
-      debugLog("orbit", `Moon spin slowed: ${prevSpinSpeed.toFixed(3)} → ${(prevSpinSpeed / 3).toFixed(3)}`);
+      debugLog(
+        "orbit",
+        `Moon spin slowed: ${prevSpinSpeed.toFixed(3)} → ${(prevSpinSpeed / 3).toFixed(3)}`,
+      );
 
       // Suppress zoom-exit detection while in orbit — camera moves continuously
       focusedMoonCameraDistanceRef.current = null;
@@ -21908,7 +24801,10 @@ export default function ResumeSpace3D({
         void navigator.clipboard?.writeText(snapshotJson);
         shipLog("Camera snapshot copied to clipboard", "info");
       } catch {
-        shipLog("Camera snapshot capture complete (clipboard unavailable)", "info");
+        shipLog(
+          "Camera snapshot capture complete (clipboard unavailable)",
+          "info",
+        );
       }
 
       // Gather all planets
@@ -21927,7 +24823,11 @@ export default function ResumeSpace3D({
             (geo?.boundingSphere
               ? (geo.computeBoundingSphere(), geo.boundingSphere?.radius ?? 10)
               : 10);
-          planets.push({ name: obj.userData.sectionId, worldPos: wp, radius: r });
+          planets.push({
+            name: obj.userData.sectionId,
+            worldPos: wp,
+            radius: r,
+          });
         }
       });
 
@@ -21971,7 +24871,10 @@ export default function ResumeSpace3D({
       // Also check planetsDataRef
       if (targets.length === 0) {
         planetsDataRef.current.forEach((data, key) => {
-          if (!planetName || key.toLowerCase().includes(planetName.toLowerCase())) {
+          if (
+            !planetName ||
+            key.toLowerCase().includes(planetName.toLowerCase())
+          ) {
             targets.push({
               name: key,
               worldPos: data.position.clone(),
@@ -21989,7 +24892,8 @@ export default function ResumeSpace3D({
         const phi =
           Math.asin(
             Math.min(1, Math.max(-1, offset.y / Math.max(dist, 0.001))),
-          ) * (180 / Math.PI); // elevation
+          ) *
+          (180 / Math.PI); // elevation
 
         dlog(`\n🪐 Planet: ${planet.name}`);
         dlog(
@@ -22001,9 +24905,7 @@ export default function ResumeSpace3D({
           `   Camera offset:   { x: ${offset.x.toFixed(1)}, y: ${offset.y.toFixed(1)}, z: ${offset.z.toFixed(1)} }`,
         );
         dlog(`   Azimuth: ${theta.toFixed(1)}°  Elevation: ${phi.toFixed(1)}°`);
-        dlog(
-          `   Distance / radius: ${(dist / planet.radius).toFixed(1)}x`,
-        );
+        dlog(`   Distance / radius: ${(dist / planet.radius).toFixed(1)}x`);
 
         // Output a copy-pasteable viewpoint object
         dlog(`   📋 Viewpoint data:`);
@@ -22177,7 +25079,8 @@ export default function ResumeSpace3D({
             if (spaceshipRef.current) spaceshipRef.current.visible = true;
             aboutMemorySquarePendingEntryRef.current = true;
             aboutMemorySquareActiveRef.current = false;
-            aboutMemorySquareNavIntentUntilRef.current = performance.now() + 20000;
+            aboutMemorySquareNavIntentUntilRef.current =
+              performance.now() + 20000;
             handleQuickNav(ABOUT_MEMORY_SQUARE_NAV_ID, "section");
           } else {
             aboutMemorySquarePendingEntryRef.current = false;
@@ -22185,8 +25088,8 @@ export default function ResumeSpace3D({
             aboutMemorySquareNavIntentUntilRef.current = 0;
             setExternalCosmosLabelsHiddenForAbout(true);
             const aboutFocusObject =
-              aboutMemorySquareRootRef.current
-              ?? (() => {
+              aboutMemorySquareRootRef.current ??
+              (() => {
                 const anchor = aboutMemorySquareWorldAnchorRef.current;
                 if (!anchor) return null;
                 const proxy = new THREE.Object3D();
@@ -22233,7 +25136,7 @@ export default function ResumeSpace3D({
               ? `${planetLabel} — Routing to trench destination...`
               : target === "portfolio"
                 ? `${planetLabel} — Routing to orbital registry...`
-              : `${planetLabel} — Traveling to ${target} Planet...`,
+                : `${planetLabel} — Traveling to ${target} Planet...`,
           );
 
           // Always use autopilot — ship is always engaged
@@ -22257,12 +25160,15 @@ export default function ResumeSpace3D({
 
           // Fallback: manual flight mode — direct camera
           if (target === "experience") {
-            await cameraDirectorRef.current.focusPlanet(expPlanet, EXP_FOCUS_DIST);
+            await cameraDirectorRef.current.focusPlanet(
+              expPlanet,
+              EXP_FOCUS_DIST,
+            );
           } else {
             const skillsFocusObject =
-              skillsLatticeBeaconRef.current
-              ?? skillsLatticeRootRef.current
-              ?? (() => {
+              skillsLatticeBeaconRef.current ??
+              skillsLatticeRootRef.current ??
+              (() => {
                 const anchor = skillsLatticeWorldAnchorRef.current;
                 if (!anchor) return null;
                 const proxy = new THREE.Object3D();
@@ -22423,15 +25329,18 @@ export default function ResumeSpace3D({
       onClick(event);
     };
     const onPointerDownRotateGlobal = (event: PointerEvent) => {
-      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current) return;
+      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current)
+        return;
       onPointerDownRotate(event);
     };
     const onPointerMoveRotateGlobal = (event: PointerEvent) => {
-      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current) return;
+      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current)
+        return;
       onPointerMoveRotate(event);
     };
     const onPointerUpRotateGlobal = (event: PointerEvent) => {
-      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current) return;
+      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current)
+        return;
       onPointerUpRotate(event);
     };
 
@@ -22669,7 +25578,9 @@ export default function ResumeSpace3D({
     }
 
     // --- ANIMATION LOOP ---
-    dwarn("[PERF:scene] startRenderLoop called — render loop begins while loading screen is still visible");
+    dwarn(
+      "[PERF:scene] startRenderLoop called — render loop begins while loading screen is still visible",
+    );
     startRenderLoop({
       exitFocusRequestRef,
       exitMoonView,
@@ -22726,6 +25637,7 @@ export default function ResumeSpace3D({
       vlog,
       debugLog,
       aboutParticleSwarmRef,
+      aboutHydrateSwarmRef,
       aboutJourneyRef,
       aboutJourneyPendingEntryRef,
       navigationDistanceRef,
@@ -22743,7 +25655,7 @@ export default function ResumeSpace3D({
         setFollowingSpaceship,
         followingSpaceshipRef,
         introCameraPrealignedRef,
-        setHudVisible: () => {},  // legacy — old HUD panels removed
+        setHudVisible: () => {}, // legacy — old HUD panels removed
         setShipExteriorLights,
         sunMesh,
         onIntroEvent: (event) => {
@@ -22947,9 +25859,19 @@ export default function ResumeSpace3D({
           if (sceneRef.current.controls) {
             const p = shipPos.clone().add(new THREE.Vector3(0, 1, 3));
             const t = shipPos.clone().add(new THREE.Vector3(0, 0, 5));
-            sceneRef.current.controls.setLookAt(p.x, p.y, p.z, t.x, t.y, t.z, false);
+            sceneRef.current.controls.setLookAt(
+              p.x,
+              p.y,
+              p.z,
+              t.x,
+              t.y,
+              t.z,
+              false,
+            );
           }
-          vlog("🔍 Ship explore mode ACTIVATED — use WASD to move, mouse to look");
+          vlog(
+            "🔍 Ship explore mode ACTIVATED — use WASD to move, mouse to look",
+          );
         } else {
           vlog("🔍 Ship explore mode DEACTIVATED");
           // Restore near plane
@@ -23008,8 +25930,12 @@ export default function ResumeSpace3D({
       window.removeEventListener("pointerup", onDebugPointerUp, true);
       window.removeEventListener("keydown", onDebugLabelKey, { capture: true });
       window.removeEventListener("keydown", handleDebugKey);
-      window.removeEventListener("keydown", handleExploreKeyDown, { capture: true });
-      window.removeEventListener("keyup", handleExploreKeyUp, { capture: true });
+      window.removeEventListener("keydown", handleExploreKeyDown, {
+        capture: true,
+      });
+      window.removeEventListener("keyup", handleExploreKeyUp, {
+        capture: true,
+      });
       clearInterval(explorePollInterval);
       delete (window as any).captureCameraSnapshot;
       delete (window as any).__captureViewpoint;
@@ -23071,6 +25997,10 @@ export default function ResumeSpace3D({
       if (aboutParticleSwarmRef.current) {
         aboutParticleSwarmRef.current.dispose();
         aboutParticleSwarmRef.current = null;
+      }
+      if (aboutHydrateSwarmRef.current) {
+        aboutHydrateSwarmRef.current.dispose();
+        aboutHydrateSwarmRef.current = null;
       }
       if (aboutJourneyRef.current) {
         aboutJourneyRef.current.dispose();
@@ -23173,7 +26103,6 @@ export default function ResumeSpace3D({
       projectShowcaseDebugRulerRef.current = null;
       projectShowcaseTrackRef.current = null;
 
-
       // Remove touch event listeners
       renderer.domElement.removeEventListener(
         "touchstart",
@@ -23233,11 +26162,15 @@ export default function ResumeSpace3D({
       ? (() => {
           const moon = focusedMoonRef.current;
           if (!moon) return null;
-          const moonId = String((moon.userData as { moonId?: unknown }).moonId ?? "")
+          const moonId = String(
+            (moon.userData as { moonId?: unknown }).moonId ?? "",
+          )
             .toLowerCase()
             .replace(/^moon-/, "");
           if (moonId) return moonId;
-          const fallback = String((moon.userData as { planetName?: unknown }).planetName ?? "")
+          const fallback = String(
+            (moon.userData as { planetName?: unknown }).planetName ?? "",
+          )
             .trim()
             .toLowerCase()
             .replace(/\s+/g, "-");
@@ -23254,7 +26187,7 @@ export default function ResumeSpace3D({
         ? "portfolio"
         : skillsNavHereActive
           ? "skills"
-          : orbitingMoonNavTarget ?? currentNavigationTarget;
+          : (orbitingMoonNavTarget ?? currentNavigationTarget);
   const activeMoonMemoryPool =
     orbitingMoonNavTarget && viewerMemoriesEnabled
       ? (moonTravelSignCatalog.get(orbitingMoonNavTarget)?.pool ?? [])
@@ -23292,7 +26225,8 @@ export default function ResumeSpace3D({
     }
   };
   const memoryPlaybackEngaged =
-    viewerMemoriesEnabled && (!moonMemoryManualMode || moonMemoryPlaybackPlaying);
+    viewerMemoriesEnabled &&
+    (!moonMemoryManualMode || moonMemoryPlaybackPlaying);
   const activeRegistryMode: RegistryPanelMode | null = projectShowcaseActive
     ? hallwayContentMode === "about"
       ? "about"
@@ -23368,7 +26302,9 @@ export default function ResumeSpace3D({
               >
                 {">"}
               </button>
-              <div style={{ fontSize: 12, letterSpacing: 1.2, color: "#9fe3ff" }}>
+              <div
+                style={{ fontSize: 12, letterSpacing: 1.2, color: "#9fe3ff" }}
+              >
                 ELEVATOR LEVELS
               </div>
               <div
@@ -23379,7 +26315,9 @@ export default function ResumeSpace3D({
                   gap: 10,
                 }}
               >
-                <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}>
+                <div
+                  style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}
+                >
                   Story Selection
                 </div>
                 <button
@@ -23454,11 +26392,12 @@ export default function ResumeSpace3D({
                           : aboutLevelGateActive
                             ? "rgba(30, 22, 8, 0.82)"
                             : "rgba(8, 18, 34, 0.72)",
-                        color: isVisited && !isActive
-                          ? "#a0d8b0"
-                          : isActive
-                            ? "#e8f7ff"
-                            : "#dff3ff",
+                        color:
+                          isVisited && !isActive
+                            ? "#a0d8b0"
+                            : isActive
+                              ? "#e8f7ff"
+                              : "#dff3ff",
                         cursor: "pointer",
                         padding: "8px 12px",
                         fontSize: 13,
@@ -23508,7 +26447,14 @@ export default function ResumeSpace3D({
 
               {!aboutLevelGateActive && (
                 <>
-                  <div style={{ marginTop: 7, display: "flex", gap: 4, alignItems: "center" }}>
+                  <div
+                    style={{
+                      marginTop: 7,
+                      display: "flex",
+                      gap: 4,
+                      alignItems: "center",
+                    }}
+                  >
                     <button
                       onClick={() => stepProjectShowcaseFocus(-1)}
                       style={{
@@ -23653,7 +26599,8 @@ export default function ResumeSpace3D({
           )
         ];
       }
-      if (groups.length === 0 || projectShowcaseEntries.length === 0) return null;
+      if (groups.length === 0 || projectShowcaseEntries.length === 0)
+        return null;
       const focusedEntry =
         projectShowcaseEntries[
           THREE.MathUtils.clamp(
@@ -23696,13 +26643,15 @@ export default function ResumeSpace3D({
       if (
         orbitalPortfolioTechFilter !== "all" &&
         !group.technologies.some(
-          (tech) => tech.toLowerCase() === orbitalPortfolioTechFilter.toLowerCase(),
+          (tech) =>
+            tech.toLowerCase() === orbitalPortfolioTechFilter.toLowerCase(),
         )
       ) {
         return false;
       }
       if (!query) return true;
-      const haystack = `${group.title} ${group.description ?? ""} ${group.technologies.join(" ")}`.toLowerCase();
+      const haystack =
+        `${group.title} ${group.description ?? ""} ${group.technologies.join(" ")}`.toLowerCase();
       return haystack.includes(query);
     });
     const visibleCoreViews = coreViewsBase.filter((core) =>
@@ -23785,7 +26734,15 @@ export default function ResumeSpace3D({
                 background: "rgba(140, 220, 255, 0.28)",
               }}
             />
-            <div style={{ marginTop: 7, display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+            <div
+              style={{
+                marginTop: 7,
+                display: "flex",
+                gap: 4,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
               {isPortfolioMode && (
                 <button
                   onClick={goToOrbitalPortfolioSettledView}
@@ -23868,7 +26825,9 @@ export default function ResumeSpace3D({
                     cursor: "pointer",
                   }}
                 >
-                  {orbitalPortfolioOrbitsEnabled ? "Stop Orbits" : "Start Orbits"}
+                  {orbitalPortfolioOrbitsEnabled
+                    ? "Stop Orbits"
+                    : "Start Orbits"}
                 </button>
               )}
               {registryCapabilities.showAutoPlay && (
@@ -23903,7 +26862,9 @@ export default function ResumeSpace3D({
                     cursor: "pointer",
                   }}
                 >
-                  {orbitalPortfolioAutoplayEnabled ? "Auto-play On" : "Auto-play Off"}
+                  {orbitalPortfolioAutoplayEnabled
+                    ? "Auto-play On"
+                    : "Auto-play Off"}
                 </button>
               )}
               {registryCapabilities.showExit && (
@@ -23929,12 +26890,21 @@ export default function ResumeSpace3D({
                 </button>
               )}
             </div>
-            <div style={{ marginTop: 7, fontSize: 12, color: "#d8f0ff", lineHeight: 1.35 }}>
+            <div
+              style={{
+                marginTop: 7,
+                fontSize: 12,
+                color: "#d8f0ff",
+                lineHeight: 1.35,
+              }}
+            >
               <div style={{ fontSize: 13, color: "#eaf8ff" }}>
                 {activeGroup?.title ?? "No active selection"}
               </div>
               <div style={{ marginTop: 1, color: "rgba(170, 228, 255, 0.96)" }}>
-                Core: {(activeGroup?.coreTitle ?? orbitalPortfolioFocusedCoreId) || "N/A"}
+                Core:{" "}
+                {(activeGroup?.coreTitle ?? orbitalPortfolioFocusedCoreId) ||
+                  "N/A"}
               </div>
               <div style={{ marginTop: 1, color: "rgba(210, 235, 255, 0.84)" }}>
                 {(() => {
@@ -23957,7 +26927,9 @@ export default function ResumeSpace3D({
             >
               <input
                 value={orbitalPortfolioSearchQuery}
-                onChange={(event) => setOrbitalPortfolioSearchQuery(event.currentTarget.value)}
+                onChange={(event) =>
+                  setOrbitalPortfolioSearchQuery(event.currentTarget.value)
+                }
                 placeholder="Search title, description, technology..."
                 style={{
                   flex: 1,
@@ -23973,7 +26945,9 @@ export default function ResumeSpace3D({
               />
               <select
                 value={orbitalPortfolioYearFilter}
-                onChange={(event) => setOrbitalPortfolioYearFilter(event.currentTarget.value)}
+                onChange={(event) =>
+                  setOrbitalPortfolioYearFilter(event.currentTarget.value)
+                }
                 style={{
                   width: 94,
                   padding: "7px 6px",
@@ -23987,10 +26961,16 @@ export default function ResumeSpace3D({
               >
                 <option value="all">All Years</option>
                 {Array.from(
-                  new Set(groups.map((group) => String(group.year ?? "unknown"))),
+                  new Set(
+                    groups.map((group) => String(group.year ?? "unknown")),
+                  ),
                 )
                   .sort((a, b) =>
-                    a === "unknown" ? 1 : b === "unknown" ? -1 : b.localeCompare(a),
+                    a === "unknown"
+                      ? 1
+                      : b === "unknown"
+                        ? -1
+                        : b.localeCompare(a),
                   )
                   .map((year) => (
                     <option key={year} value={year}>
@@ -24000,7 +26980,9 @@ export default function ResumeSpace3D({
               </select>
               <select
                 value={orbitalPortfolioTechFilter}
-                onChange={(event) => setOrbitalPortfolioTechFilter(event.currentTarget.value)}
+                onChange={(event) =>
+                  setOrbitalPortfolioTechFilter(event.currentTarget.value)
+                }
                 style={{
                   width: 112,
                   padding: "7px 6px",
@@ -24013,7 +26995,9 @@ export default function ResumeSpace3D({
                 }}
               >
                 <option value="all">All Tech</option>
-                {Array.from(new Set(groups.flatMap((group) => group.technologies)))
+                {Array.from(
+                  new Set(groups.flatMap((group) => group.technologies)),
+                )
                   .sort((a, b) => a.localeCompare(b))
                   .map((tech) => (
                     <option key={tech} value={tech}>
@@ -24072,7 +27056,9 @@ export default function ResumeSpace3D({
                                 (group) => group.coreId === core.id,
                               );
                               if (!firstGroup) return;
-                              const projectIndex = projectIndexById.get(firstGroup.id);
+                              const projectIndex = projectIndexById.get(
+                                firstGroup.id,
+                              );
                               if (typeof projectIndex === "number") {
                                 jumpProjectShowcaseToIndex(projectIndex);
                               }
@@ -24131,10 +27117,13 @@ export default function ResumeSpace3D({
                                 const groupIndex = groups.findIndex(
                                   (item) => item.id === group.id,
                                 );
-                                if (groupIndex >= 0) focusOrbitalPortfolioStation(groupIndex, 0);
+                                if (groupIndex >= 0)
+                                  focusOrbitalPortfolioStation(groupIndex, 0);
                                 return;
                               }
-                              const projectIndex = projectIndexById.get(group.id);
+                              const projectIndex = projectIndexById.get(
+                                group.id,
+                              );
                               if (typeof projectIndex === "number") {
                                 jumpProjectShowcaseToIndex(projectIndex);
                               }
@@ -24174,7 +27163,9 @@ export default function ResumeSpace3D({
                               <span
                                 style={{
                                   fontSize: 10,
-                                  color: isHere ? "#c0f2ff" : "rgba(180,220,245,0.72)",
+                                  color: isHere
+                                    ? "#c0f2ff"
+                                    : "rgba(180,220,245,0.72)",
                                   flexShrink: 0,
                                 }}
                               >
@@ -24236,7 +27227,14 @@ export default function ResumeSpace3D({
               letterSpacing: 0.6,
             }}
           >
-            <span style={{ fontSize: 10, color: "#9fdfff", opacity: 0.9, lineHeight: "100%" }}>
+            <span
+              style={{
+                fontSize: 10,
+                color: "#9fdfff",
+                opacity: 0.9,
+                lineHeight: "100%",
+              }}
+            >
               {isPortfolioMode ? "Portfolio" : "Projects"}
             </span>
             <span style={{ fontSize: 10, fontWeight: 700, lineHeight: "auto" }}>
@@ -24263,7 +27261,11 @@ export default function ResumeSpace3D({
             cursor: "pointer",
             transition: "right 240ms ease",
           }}
-          title={orbitalRegistryPanelVisible ? `Hide ${titleMain}` : `Show ${titleMain}`}
+          title={
+            orbitalRegistryPanelVisible
+              ? `Hide ${titleMain}`
+              : `Show ${titleMain}`
+          }
         >
           {orbitalRegistryPanelVisible ? ">" : "<"}
         </button>
@@ -24297,7 +27299,11 @@ export default function ResumeSpace3D({
                 cursor: "pointer",
                 boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
               }}
-              title={isPortfolioMode ? "Next portfolio slide" : "Forward in projects hallway"}
+              title={
+                isPortfolioMode
+                  ? "Next portfolio slide"
+                  : "Forward in projects hallway"
+              }
             >
               {nextChevron}
             </button>
@@ -24316,7 +27322,11 @@ export default function ResumeSpace3D({
                 cursor: "pointer",
                 boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
               }}
-              title={isPortfolioMode ? "Previous portfolio slide" : "Reverse in projects hallway"}
+              title={
+                isPortfolioMode
+                  ? "Previous portfolio slide"
+                  : "Reverse in projects hallway"
+              }
             >
               {prevChevron}
             </button>
@@ -24353,7 +27363,13 @@ export default function ResumeSpace3D({
                 gap: 4,
               }}
             >
-              <span style={{ fontSize: 9, letterSpacing: 0.6, color: "rgba(171, 214, 255, 0.88)" }}>
+              <span
+                style={{
+                  fontSize: 9,
+                  letterSpacing: 0.6,
+                  color: "rgba(171, 214, 255, 0.88)",
+                }}
+              >
                 THR
               </span>
               <div
@@ -24433,7 +27449,13 @@ export default function ResumeSpace3D({
                   setProjectShowcaseAnglePercent(Number(e.target.value))
                 }
               />
-              <div style={{ fontSize: 9, color: "rgba(171, 214, 255, 0.88)", letterSpacing: 0.5 }}>
+              <div
+                style={{
+                  fontSize: 9,
+                  color: "rgba(171, 214, 255, 0.88)",
+                  letterSpacing: 0.5,
+                }}
+              >
                 FWD/REV throttle + panel cant
               </div>
             </div>
@@ -24527,7 +27549,9 @@ export default function ResumeSpace3D({
                 pointerEvents: "none",
                 background: `radial-gradient(ellipse at 50% 42%, rgba(8, 16, 30, ${(
                   projectShowcaseEntryOverlayOpacity * 0.32
-                ).toFixed(3)}), rgba(2, 5, 12, ${projectShowcaseEntryOverlayOpacity.toFixed(
+                ).toFixed(
+                  3,
+                )}), rgba(2, 5, 12, ${projectShowcaseEntryOverlayOpacity.toFixed(
                   3,
                 )}) 82%)`,
                 display: "flex",
@@ -24593,10 +27617,16 @@ export default function ResumeSpace3D({
             <button
               ref={startupConsoleButtonRef}
               type="button"
-              aria-label={consoleVisible ? "Hide ship terminal" : "Show ship terminal"}
-              title={consoleVisible ? "Hide ship terminal" : "Show ship terminal"}
+              aria-label={
+                consoleVisible ? "Hide ship terminal" : "Show ship terminal"
+              }
+              title={
+                consoleVisible ? "Hide ship terminal" : "Show ship terminal"
+              }
               onClick={() => {
-                trackEvent("console_toggle", { action: consoleVisible ? "hide" : "show" });
+                trackEvent("console_toggle", {
+                  action: consoleVisible ? "hide" : "show",
+                });
                 setConsoleVisible((prev) => !prev);
               }}
               onMouseDown={(e) => e.stopPropagation()}
@@ -24626,261 +27656,274 @@ export default function ResumeSpace3D({
               {consoleVisible ? "Hide Console" : "Show Console"}
             </button>
           )}
-          {!isLoading && orbitPhase === "orbiting" && showOrbitSignTuningControls && (
-            <div
-              onMouseDown={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-              style={{
-                position: "absolute",
-                top: 52,
-                right: 14,
-                zIndex: 10002,
-                width: 238,
-                borderRadius: 10,
-                border: "1px solid rgba(122, 201, 255, 0.45)",
-                background: "rgba(8, 18, 34, 0.86)",
-                color: "rgba(198, 236, 255, 0.95)",
-                boxShadow: "0 0 14px rgba(75, 163, 255, 0.18)",
-                padding: "8px 10px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 7,
-                fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
-              }}
-            >
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8 }}>
-                ORBIT SIGN TUNING
-              </div>
-              {[
-                {
-                  key: "timeBetweenMessagesSec",
-                  label: "Time between messages",
-                  min: 0,
-                  max: 5,
-                  step: 0.05,
-                  value: orbitSignTuning.timeBetweenMessagesSec,
-                  display: `${orbitSignTuning.timeBetweenMessagesSec.toFixed(2)}s`,
-                },
-                {
-                  key: "waitAfterStreamSec",
-                  label: "Wait after stream",
-                  min: 0,
-                  max: 20,
-                  step: 0.25,
-                  value: orbitSignTuning.waitAfterStreamSec,
-                  display: `${orbitSignTuning.waitAfterStreamSec.toFixed(2)}s`,
-                },
-                {
-                  key: "travelSpeed",
-                  label: "Travel speed",
-                  min: 0,
-                  max: 6,
-                  step: 0.05,
-                  value: orbitSignTuning.travelSpeed,
-                  display: `${orbitSignTuning.travelSpeed.toFixed(2)}x`,
-                },
-                {
-                  key: "lightIntensity",
-                  label: "Light intensity",
-                  min: 0,
-                  max: 3,
-                  step: 0.02,
-                  value: orbitSignTuning.lightIntensity,
-                  display: orbitSignTuning.lightIntensity.toFixed(2),
-                },
-                {
-                  key: "startFontScale",
-                  label: "Start font size",
-                  min: 0,
-                  max: 4,
-                  step: 0.01,
-                  value: orbitSignTuning.startFontScale,
-                  display: `${orbitSignTuning.startFontScale.toFixed(2)}x`,
-                },
-                {
-                  key: "endFontScale",
-                  label: "End font size",
-                  min: 0,
-                  max: 6,
-                  step: 0.02,
-                  value: orbitSignTuning.endFontScale,
-                  display: `${orbitSignTuning.endFontScale.toFixed(2)}x`,
-                },
-              ].map((row) => (
-                <label key={row.key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: 9,
-                      letterSpacing: 0.4,
-                    }}
+          {!isLoading &&
+            orbitPhase === "orbiting" &&
+            showOrbitSignTuningControls && (
+              <div
+                onMouseDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{
+                  position: "absolute",
+                  top: 52,
+                  right: 14,
+                  zIndex: 10002,
+                  width: 238,
+                  borderRadius: 10,
+                  border: "1px solid rgba(122, 201, 255, 0.45)",
+                  background: "rgba(8, 18, 34, 0.86)",
+                  color: "rgba(198, 236, 255, 0.95)",
+                  boxShadow: "0 0 14px rgba(75, 163, 255, 0.18)",
+                  padding: "8px 10px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 7,
+                  fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
+                }}
+              >
+                <div
+                  style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8 }}
+                >
+                  ORBIT SIGN TUNING
+                </div>
+                {[
+                  {
+                    key: "timeBetweenMessagesSec",
+                    label: "Time between messages",
+                    min: 0,
+                    max: 5,
+                    step: 0.05,
+                    value: orbitSignTuning.timeBetweenMessagesSec,
+                    display: `${orbitSignTuning.timeBetweenMessagesSec.toFixed(2)}s`,
+                  },
+                  {
+                    key: "waitAfterStreamSec",
+                    label: "Wait after stream",
+                    min: 0,
+                    max: 20,
+                    step: 0.25,
+                    value: orbitSignTuning.waitAfterStreamSec,
+                    display: `${orbitSignTuning.waitAfterStreamSec.toFixed(2)}s`,
+                  },
+                  {
+                    key: "travelSpeed",
+                    label: "Travel speed",
+                    min: 0,
+                    max: 6,
+                    step: 0.05,
+                    value: orbitSignTuning.travelSpeed,
+                    display: `${orbitSignTuning.travelSpeed.toFixed(2)}x`,
+                  },
+                  {
+                    key: "lightIntensity",
+                    label: "Light intensity",
+                    min: 0,
+                    max: 3,
+                    step: 0.02,
+                    value: orbitSignTuning.lightIntensity,
+                    display: orbitSignTuning.lightIntensity.toFixed(2),
+                  },
+                  {
+                    key: "startFontScale",
+                    label: "Start font size",
+                    min: 0,
+                    max: 4,
+                    step: 0.01,
+                    value: orbitSignTuning.startFontScale,
+                    display: `${orbitSignTuning.startFontScale.toFixed(2)}x`,
+                  },
+                  {
+                    key: "endFontScale",
+                    label: "End font size",
+                    min: 0,
+                    max: 6,
+                    step: 0.02,
+                    value: orbitSignTuning.endFontScale,
+                    display: `${orbitSignTuning.endFontScale.toFixed(2)}x`,
+                  },
+                ].map((row) => (
+                  <label
+                    key={row.key}
+                    style={{ display: "flex", flexDirection: "column", gap: 2 }}
                   >
-                    <span>{row.label}</span>
-                    <span>{row.display}</span>
-                  </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: 9,
+                        letterSpacing: 0.4,
+                      }}
+                    >
+                      <span>{row.label}</span>
+                      <span>{row.display}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={row.min}
+                      max={row.max}
+                      step={row.step}
+                      value={row.value}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        setOrbitSignTuning((prev) => ({
+                          ...prev,
+                          [row.key]: next,
+                        }));
+                      }}
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+                ))}
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    fontSize: 10,
+                    letterSpacing: 0.45,
+                  }}
+                >
+                  <span>Continuous loop</span>
                   <input
-                    type="range"
-                    min={row.min}
-                    max={row.max}
-                    step={row.step}
-                    value={row.value}
-                    onChange={(e) => {
-                      const next = Number(e.target.value);
+                    type="checkbox"
+                    checked={orbitSignTuning.continuousLoop}
+                    onChange={(e) =>
                       setOrbitSignTuning((prev) => ({
                         ...prev,
-                        [row.key]: next,
-                      }));
-                    }}
-                    style={{ width: "100%" }}
+                        continuousLoop: e.target.checked,
+                      }))
+                    }
                   />
                 </label>
-              ))}
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  fontSize: 10,
-                  letterSpacing: 0.45,
-                }}
-              >
-                <span>Continuous loop</span>
-                <input
-                  type="checkbox"
-                  checked={orbitSignTuning.continuousLoop}
-                  onChange={(e) =>
-                    setOrbitSignTuning((prev) => ({
-                      ...prev,
-                      continuousLoop: e.target.checked,
-                    }))
-                  }
-                />
-              </label>
-              <button
-                type="button"
-                onClick={exportOrbitSignTuning}
-                style={{
-                  marginTop: 2,
-                  borderRadius: 7,
-                  border: "1px solid rgba(132, 208, 255, 0.6)",
-                  background: "rgba(10, 30, 54, 0.84)",
-                  color: "rgba(212, 241, 255, 0.96)",
-                  fontSize: 10,
-                  letterSpacing: 0.7,
-                  fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
-                  fontWeight: 700,
-                  padding: "6px 8px",
-                  cursor: "pointer",
-                }}
-              >
-                EXPORT + LOG SETTINGS
-              </button>
-            </div>
-          )}
-          {!isLoading && orbitPhase === "orbiting" && moonMemoryControlsVisible && (
-            <div
-              onMouseDown={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-              style={{
-                position: "absolute",
-                left: "50%",
-                bottom: 18,
-                transform: "translateX(-50%)",
-                zIndex: 10002,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                minWidth: viewerMemoriesEnabled ? 420 : 0,
-                borderRadius: 10,
-                border: "1px solid rgba(136, 210, 255, 0.52)",
-                background: "rgba(8, 20, 34, 0.9)",
-                color: "rgba(214, 242, 255, 0.98)",
-                boxShadow: "0 0 16px rgba(76, 162, 255, 0.24)",
-                padding: viewerMemoriesEnabled ? "7px 10px" : "6px 10px",
-                fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
-                userSelect: "none",
-              }}
-            >
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 7,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: 0.4,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={viewerMemoriesEnabled}
-                  onChange={(e) => setViewerMemoriesEnabled(e.target.checked)}
+                <button
+                  type="button"
+                  onClick={exportOrbitSignTuning}
                   style={{
-                    width: 14,
-                    height: 14,
+                    marginTop: 2,
+                    borderRadius: 7,
+                    border: "1px solid rgba(132, 208, 255, 0.6)",
+                    background: "rgba(10, 30, 54, 0.84)",
+                    color: "rgba(212, 241, 255, 0.96)",
+                    fontSize: 10,
+                    letterSpacing: 0.7,
+                    fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
+                    fontWeight: 700,
+                    padding: "6px 8px",
                     cursor: "pointer",
-                    accentColor: "#7fd8ff",
                   }}
-                />
-                Show my memories
-              </label>
-              {viewerMemoriesEnabled && (
-                <>
-                  <button
-                    type="button"
-                    title={memoryPlaybackEngaged ? "Pause" : "Play"}
-                    aria-label={memoryPlaybackEngaged ? "Pause" : "Play"}
-                    onClick={toggleMoonMemoryPlayback}
-                    disabled={activeMoonMemoryCount <= 0}
-                    style={{
-                      width: 26,
-                      height: 20,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderRadius: 5,
-                      border: "1px solid rgba(143, 212, 255, 0.45)",
-                      background: memoryPlaybackEngaged
-                        ? "rgba(20, 44, 70, 0.9)"
-                        : "rgba(10, 22, 37, 0.86)",
-                      color: "rgba(226, 245, 255, 0.95)",
-                      cursor: activeMoonMemoryCount > 0 ? "pointer" : "not-allowed",
-                      opacity: activeMoonMemoryCount > 0 ? 1 : 0.45,
-                      fontSize: 12,
-                      fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
-                      fontWeight: 700,
-                      lineHeight: 1,
-                      padding: 0,
-                    }}
-                  >
-                    {memoryPlaybackEngaged ? "||" : ">"}
-                  </button>
+                >
+                  EXPORT + LOG SETTINGS
+                </button>
+              </div>
+            )}
+          {!isLoading &&
+            orbitPhase === "orbiting" &&
+            moonMemoryControlsVisible && (
+              <div
+                onMouseDown={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  bottom: 18,
+                  transform: "translateX(-50%)",
+                  zIndex: 10002,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  minWidth: viewerMemoriesEnabled ? 420 : 0,
+                  borderRadius: 10,
+                  border: "1px solid rgba(136, 210, 255, 0.52)",
+                  background: "rgba(8, 20, 34, 0.9)",
+                  color: "rgba(214, 242, 255, 0.98)",
+                  boxShadow: "0 0 16px rgba(76, 162, 255, 0.24)",
+                  padding: viewerMemoriesEnabled ? "7px 10px" : "6px 10px",
+                  fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
+                  userSelect: "none",
+                }}
+              >
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
                   <input
-                    type="range"
-                    min={0}
-                    max={memoryScrubMaxValue}
-                    step={0.01}
-                    value={clampedMoonMemoryScrubValue}
-                    disabled={activeMoonMemoryCount <= 0}
-                    onChange={(e) => {
-                      queueMoonMemoryScrub(Number(e.target.value));
-                    }}
+                    type="checkbox"
+                    checked={viewerMemoriesEnabled}
+                    onChange={(e) => setViewerMemoriesEnabled(e.target.checked)}
                     style={{
-                      width: 220,
-                      minWidth: 160,
+                      width: 14,
+                      height: 14,
+                      cursor: "pointer",
                       accentColor: "#7fd8ff",
-                      opacity: activeMoonMemoryCount > 0 ? 1 : 0.35,
-                      cursor: activeMoonMemoryCount > 0 ? "ew-resize" : "not-allowed",
                     }}
                   />
-                </>
-              )}
-            </div>
-          )}
+                  Show my memories
+                </label>
+                {viewerMemoriesEnabled && (
+                  <>
+                    <button
+                      type="button"
+                      title={memoryPlaybackEngaged ? "Pause" : "Play"}
+                      aria-label={memoryPlaybackEngaged ? "Pause" : "Play"}
+                      onClick={toggleMoonMemoryPlayback}
+                      disabled={activeMoonMemoryCount <= 0}
+                      style={{
+                        width: 26,
+                        height: 20,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 5,
+                        border: "1px solid rgba(143, 212, 255, 0.45)",
+                        background: memoryPlaybackEngaged
+                          ? "rgba(20, 44, 70, 0.9)"
+                          : "rgba(10, 22, 37, 0.86)",
+                        color: "rgba(226, 245, 255, 0.95)",
+                        cursor:
+                          activeMoonMemoryCount > 0 ? "pointer" : "not-allowed",
+                        opacity: activeMoonMemoryCount > 0 ? 1 : 0.45,
+                        fontSize: 12,
+                        fontFamily: "'Rajdhani', 'Segoe UI', sans-serif",
+                        fontWeight: 700,
+                        lineHeight: 1,
+                        padding: 0,
+                      }}
+                    >
+                      {memoryPlaybackEngaged ? "||" : ">"}
+                    </button>
+                    <input
+                      type="range"
+                      min={0}
+                      max={memoryScrubMaxValue}
+                      step={0.01}
+                      value={clampedMoonMemoryScrubValue}
+                      disabled={activeMoonMemoryCount <= 0}
+                      onChange={(e) => {
+                        queueMoonMemoryScrub(Number(e.target.value));
+                      }}
+                      style={{
+                        width: 220,
+                        minWidth: 160,
+                        accentColor: "#7fd8ff",
+                        opacity: activeMoonMemoryCount > 0 ? 1 : 0.35,
+                        cursor:
+                          activeMoonMemoryCount > 0
+                            ? "ew-resize"
+                            : "not-allowed",
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+            )}
 
           {/* Ship Explore Mode Overlay */}
           {shipExploreMode && (
@@ -24964,18 +28007,33 @@ export default function ResumeSpace3D({
                   pointerEvents: "auto",
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, color: "#fff" }}>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 14,
+                    marginBottom: 6,
+                    color: "#fff",
+                  }}
+                >
                   CAMERA POSITION (ship-local)
                 </div>
                 <div>
-                  X: <span style={{ color: "#ff6b6b" }}>{exploreCoords.local[0].toFixed(2)}</span>
-                  &nbsp;&nbsp;
-                  Y: <span style={{ color: "#51cf66" }}>{exploreCoords.local[1].toFixed(2)}</span>
-                  &nbsp;&nbsp;
-                  Z: <span style={{ color: "#339af0" }}>{exploreCoords.local[2].toFixed(2)}</span>
+                  X:{" "}
+                  <span style={{ color: "#ff6b6b" }}>
+                    {exploreCoords.local[0].toFixed(2)}
+                  </span>
+                  &nbsp;&nbsp; Y:{" "}
+                  <span style={{ color: "#51cf66" }}>
+                    {exploreCoords.local[1].toFixed(2)}
+                  </span>
+                  &nbsp;&nbsp; Z:{" "}
+                  <span style={{ color: "#339af0" }}>
+                    {exploreCoords.local[2].toFixed(2)}
+                  </span>
                 </div>
                 <div style={{ color: "#888", fontSize: 11, marginTop: 4 }}>
-                  World: [{exploreCoords.world[0]}, {exploreCoords.world[1]}, {exploreCoords.world[2]}]
+                  World: [{exploreCoords.world[0]}, {exploreCoords.world[1]},{" "}
+                  {exploreCoords.world[2]}]
                 </div>
               </div>
 
@@ -24995,18 +28053,36 @@ export default function ResumeSpace3D({
                 }}
               >
                 {/* ── CONTROLS REFERENCE ── */}
-                <div style={{
-                  background: "rgba(0,0,0,0.85)",
-                  border: "1px solid rgba(255,200,50,0.5)",
-                  borderRadius: 8,
-                  padding: "10px 14px",
-                  color: "#ffd43b",
-                  fontSize: 11,
-                  lineHeight: 1.7,
-                }}>
-                  <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 4, color: "#fff" }}>CONTROLS</div>
-                  <div><span style={{ color: "#aaa" }}>WASD</span> Move &nbsp; <span style={{ color: "#aaa" }}>Q/E</span> Down/Up &nbsp; <span style={{ color: "#aaa" }}>Shift</span> Fast</div>
-                  <div><span style={{ color: "#aaa" }}>Mouse drag</span> Look around</div>
+                <div
+                  style={{
+                    background: "rgba(0,0,0,0.85)",
+                    border: "1px solid rgba(255,200,50,0.5)",
+                    borderRadius: 8,
+                    padding: "10px 14px",
+                    color: "#ffd43b",
+                    fontSize: 11,
+                    lineHeight: 1.7,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 12,
+                      marginBottom: 4,
+                      color: "#fff",
+                    }}
+                  >
+                    CONTROLS
+                  </div>
+                  <div>
+                    <span style={{ color: "#aaa" }}>WASD</span> Move &nbsp;{" "}
+                    <span style={{ color: "#aaa" }}>Q/E</span> Down/Up &nbsp;{" "}
+                    <span style={{ color: "#aaa" }}>Shift</span> Fast
+                  </div>
+                  <div>
+                    <span style={{ color: "#aaa" }}>Mouse drag</span> Look
+                    around
+                  </div>
                 </div>
 
                 {/* ── VIEW ALIGNMENT BUTTONS ── */}
@@ -25020,7 +28096,16 @@ export default function ResumeSpace3D({
                   onMouseDown={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
-                  <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, color: "#fff" }}>LOOK DIRECTION</div>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 12,
+                      marginBottom: 8,
+                      color: "#fff",
+                    }}
+                  >
+                    LOOK DIRECTION
+                  </div>
                   {(() => {
                     const viewBtnStyle: React.CSSProperties = {
                       padding: "7px 8px",
@@ -25038,36 +28123,99 @@ export default function ResumeSpace3D({
                     };
                     const cam = sceneRef.current.camera;
                     // Helper: orient camera to look in a ship-local direction
-                    const lookShipDir = (localDir: [number, number, number], e: React.MouseEvent) => {
+                    const lookShipDir = (
+                      localDir: [number, number, number],
+                      e: React.MouseEvent,
+                    ) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      if (!cam || !spaceshipRef.current || !sceneRef.current.controls) return;
+                      if (
+                        !cam ||
+                        !spaceshipRef.current ||
+                        !sceneRef.current.controls
+                      )
+                        return;
                       const ship = spaceshipRef.current;
                       const quat = new THREE.Quaternion();
                       ship.getWorldQuaternion(quat);
-                      const dir = new THREE.Vector3(...localDir).applyQuaternion(quat).normalize();
+                      const dir = new THREE.Vector3(...localDir)
+                        .applyQuaternion(quat)
+                        .normalize();
                       const cc = sceneRef.current.controls!;
                       const t = cam.position.clone().addScaledVector(dir, 2);
                       cc.setTarget(t.x, t.y, t.z, false);
                     };
-                    const stopEvt = (e: React.MouseEvent) => { e.stopPropagation(); e.preventDefault(); };
+                    const stopEvt = (e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                    };
                     return (
                       <>
-                        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([0, 0, 1], e)}>Look Forward</button>
-                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([0, 0, -1], e)}>Look Back</button>
-                        </div>
-                        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([-1, 0, 0], e)}>Look Right</button>
-                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([1, 0, 0], e)}>Look Left</button>
-                        </div>
-                        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([0, 1, 0], e)}>Look Up</button>
-                          <button style={viewBtnStyle} onMouseDown={stopEvt} onClick={(e) => lookShipDir([0, -1, 0], e)}>Look Down</button>
-                        </div>
-                        <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                        <div
+                          style={{ display: "flex", gap: 4, marginBottom: 4 }}
+                        >
                           <button
-                            style={{ ...viewBtnStyle, background: "rgba(255, 180, 50, 0.3)", color: "#ffcc66", border: "1px solid rgba(255,180,50,0.5)", flex: "1 1 100%" }}
+                            style={viewBtnStyle}
+                            onMouseDown={stopEvt}
+                            onClick={(e) => lookShipDir([0, 0, 1], e)}
+                          >
+                            Look Forward
+                          </button>
+                          <button
+                            style={viewBtnStyle}
+                            onMouseDown={stopEvt}
+                            onClick={(e) => lookShipDir([0, 0, -1], e)}
+                          >
+                            Look Back
+                          </button>
+                        </div>
+                        <div
+                          style={{ display: "flex", gap: 4, marginBottom: 4 }}
+                        >
+                          <button
+                            style={viewBtnStyle}
+                            onMouseDown={stopEvt}
+                            onClick={(e) => lookShipDir([-1, 0, 0], e)}
+                          >
+                            Look Right
+                          </button>
+                          <button
+                            style={viewBtnStyle}
+                            onMouseDown={stopEvt}
+                            onClick={(e) => lookShipDir([1, 0, 0], e)}
+                          >
+                            Look Left
+                          </button>
+                        </div>
+                        <div
+                          style={{ display: "flex", gap: 4, marginBottom: 4 }}
+                        >
+                          <button
+                            style={viewBtnStyle}
+                            onMouseDown={stopEvt}
+                            onClick={(e) => lookShipDir([0, 1, 0], e)}
+                          >
+                            Look Up
+                          </button>
+                          <button
+                            style={viewBtnStyle}
+                            onMouseDown={stopEvt}
+                            onClick={(e) => lookShipDir([0, -1, 0], e)}
+                          >
+                            Look Down
+                          </button>
+                        </div>
+                        <div
+                          style={{ display: "flex", gap: 4, marginBottom: 4 }}
+                        >
+                          <button
+                            style={{
+                              ...viewBtnStyle,
+                              background: "rgba(255, 180, 50, 0.3)",
+                              color: "#ffcc66",
+                              border: "1px solid rgba(255,180,50,0.5)",
+                              flex: "1 1 100%",
+                            }}
                             onMouseDown={stopEvt}
                             onClick={(e) => {
                               stopEvt(e);
@@ -25075,8 +28223,15 @@ export default function ResumeSpace3D({
                               const lookDir = new THREE.Vector3();
                               cam.getWorldDirection(lookDir);
                               lookDir.negate();
-                              const t = cam.position.clone().addScaledVector(lookDir, 2);
-                              sceneRef.current.controls!.setTarget(t.x, t.y, t.z, false);
+                              const t = cam.position
+                                .clone()
+                                .addScaledVector(lookDir, 2);
+                              sceneRef.current.controls!.setTarget(
+                                t.x,
+                                t.y,
+                                t.z,
+                                false,
+                              );
                             }}
                           >
                             Turn Around
@@ -25084,7 +28239,13 @@ export default function ResumeSpace3D({
                         </div>
                         <div style={{ display: "flex", gap: 4 }}>
                           <button
-                            style={{ ...viewBtnStyle, background: "rgba(0,255,150,0.2)", color: "#0f6", border: "1px solid rgba(0,255,150,0.4)", flex: "1 1 100%" }}
+                            style={{
+                              ...viewBtnStyle,
+                              background: "rgba(0,255,150,0.2)",
+                              color: "#0f6",
+                              border: "1px solid rgba(0,255,150,0.4)",
+                              flex: "1 1 100%",
+                            }}
                             onMouseDown={stopEvt}
                             onClick={(e) => {
                               stopEvt(e);
@@ -25092,14 +28253,24 @@ export default function ResumeSpace3D({
                               // Roll left: rotate camera's up vector around the look direction
                               const fwd = new THREE.Vector3();
                               cam.getWorldDirection(fwd);
-                              const rollQuat = new THREE.Quaternion().setFromAxisAngle(fwd, Math.PI / 36); // 5° CCW
+                              const rollQuat =
+                                new THREE.Quaternion().setFromAxisAngle(
+                                  fwd,
+                                  Math.PI / 36,
+                                ); // 5° CCW
                               cam.up.applyQuaternion(rollQuat).normalize();
                             }}
                           >
                             Roll Left
                           </button>
                           <button
-                            style={{ ...viewBtnStyle, background: "rgba(0,255,150,0.2)", color: "#0f6", border: "1px solid rgba(0,255,150,0.4)", flex: "1 1 100%" }}
+                            style={{
+                              ...viewBtnStyle,
+                              background: "rgba(0,255,150,0.2)",
+                              color: "#0f6",
+                              border: "1px solid rgba(0,255,150,0.4)",
+                              flex: "1 1 100%",
+                            }}
                             onMouseDown={stopEvt}
                             onClick={(e) => {
                               stopEvt(e);
@@ -25107,7 +28278,11 @@ export default function ResumeSpace3D({
                               // Roll right: rotate camera's up vector around the look direction
                               const fwd = new THREE.Vector3();
                               cam.getWorldDirection(fwd);
-                              const rollQuat = new THREE.Quaternion().setFromAxisAngle(fwd, -Math.PI / 36); // 5° CW
+                              const rollQuat =
+                                new THREE.Quaternion().setFromAxisAngle(
+                                  fwd,
+                                  -Math.PI / 36,
+                                ); // 5° CW
                               cam.up.applyQuaternion(rollQuat).normalize();
                             }}
                           >
@@ -25130,7 +28305,16 @@ export default function ResumeSpace3D({
                   onMouseDown={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                 >
-                  <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, color: "#fff" }}>MARK POSITION</div>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 12,
+                      marginBottom: 8,
+                      color: "#fff",
+                    }}
+                  >
+                    MARK POSITION
+                  </div>
                   {(() => {
                     const markBtnBase: React.CSSProperties = {
                       padding: "7px 12px",
@@ -25146,37 +28330,86 @@ export default function ResumeSpace3D({
                       textAlign: "center" as const,
                     };
                     return (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 6,
+                        }}
+                      >
                         <button
-                          style={{ ...markBtnBase, background: "rgba(255,60,60,0.85)", border: "2px solid rgba(255,100,100,0.7)" }}
+                          style={{
+                            ...markBtnBase,
+                            background: "rgba(255,60,60,0.85)",
+                            border: "2px solid rgba(255,100,100,0.7)",
+                          }}
                           onClick={() => {
                             const coords = shipExploreCoordsRef.current.local;
-                            setExploreSavedPositions((prev) => [...prev, { label: "COCKPIT", local: [...coords] }]);
+                            setExploreSavedPositions((prev) => [
+                              ...prev,
+                              { label: "COCKPIT", local: [...coords] },
+                            ]);
                             if (spaceshipRef.current) {
-                              const cam = new THREE.Vector3(coords[0], coords[1], coords[2]);
-                              const look = new THREE.Vector3(coords[0], coords[1], coords[2] + 6);
-                              spaceshipRef.current.userData.cockpitCameraLocal = cam;
-                              spaceshipRef.current.userData.cockpitLookLocal = look;
-                              vlog(`COCKPIT MARKED at local [${coords[0]}, ${coords[1]}, ${coords[2]}]`);
+                              const cam = new THREE.Vector3(
+                                coords[0],
+                                coords[1],
+                                coords[2],
+                              );
+                              const look = new THREE.Vector3(
+                                coords[0],
+                                coords[1],
+                                coords[2] + 6,
+                              );
+                              spaceshipRef.current.userData.cockpitCameraLocal =
+                                cam;
+                              spaceshipRef.current.userData.cockpitLookLocal =
+                                look;
+                              vlog(
+                                `COCKPIT MARKED at local [${coords[0]}, ${coords[1]}, ${coords[2]}]`,
+                              );
                             }
                           }}
-                        >Mark Cockpit</button>
+                        >
+                          Mark Cockpit
+                        </button>
                         <button
-                          style={{ ...markBtnBase, background: "rgba(50,150,255,0.85)", border: "2px solid rgba(100,180,255,0.7)" }}
+                          style={{
+                            ...markBtnBase,
+                            background: "rgba(50,150,255,0.85)",
+                            border: "2px solid rgba(100,180,255,0.7)",
+                          }}
                           onClick={() => {
                             const coords = shipExploreCoordsRef.current.local;
-                            setExploreSavedPositions((prev) => [...prev, { label: "CABIN", local: [...coords] }]);
-                            vlog(`CABIN MARKED at local [${coords[0]}, ${coords[1]}, ${coords[2]}]`);
+                            setExploreSavedPositions((prev) => [
+                              ...prev,
+                              { label: "CABIN", local: [...coords] },
+                            ]);
+                            vlog(
+                              `CABIN MARKED at local [${coords[0]}, ${coords[1]}, ${coords[2]}]`,
+                            );
                           }}
-                        >Mark Cabin</button>
+                        >
+                          Mark Cabin
+                        </button>
                         <button
-                          style={{ ...markBtnBase, background: "rgba(50,200,100,0.85)", border: "2px solid rgba(100,220,150,0.7)" }}
+                          style={{
+                            ...markBtnBase,
+                            background: "rgba(50,200,100,0.85)",
+                            border: "2px solid rgba(100,220,150,0.7)",
+                          }}
                           onClick={() => {
                             const coords = shipExploreCoordsRef.current.local;
-                            setExploreSavedPositions((prev) => [...prev, { label: "CUSTOM", local: [...coords] }]);
-                            vlog(`CUSTOM MARKED at local [${coords[0]}, ${coords[1]}, ${coords[2]}]`);
+                            setExploreSavedPositions((prev) => [
+                              ...prev,
+                              { label: "CUSTOM", local: [...coords] },
+                            ]);
+                            vlog(
+                              `CUSTOM MARKED at local [${coords[0]}, ${coords[1]}, ${coords[2]}]`,
+                            );
                           }}
-                        >Mark Custom</button>
+                        >
+                          Mark Custom
+                        </button>
                       </div>
                     );
                   })()}
@@ -25190,16 +28423,39 @@ export default function ResumeSpace3D({
                     e.stopPropagation();
                     const positions = exploreSavedPositions;
                     const current = shipExploreCoordsRef.current;
-                    dlog("\n%c═══ SHIP EXPLORE MODE — SAVED POSITIONS ═══", "color: #ff6b6b; font-weight: bold; font-size: 14px;");
-                    dlog("%cCurrent camera (ship-local):", "color: #0f6; font-weight: bold;", current.local);
-                    dlog("%cCurrent camera (world):", "color: #888;", current.world);
+                    dlog(
+                      "\n%c═══ SHIP EXPLORE MODE — SAVED POSITIONS ═══",
+                      "color: #ff6b6b; font-weight: bold; font-size: 14px;",
+                    );
+                    dlog(
+                      "%cCurrent camera (ship-local):",
+                      "color: #0f6; font-weight: bold;",
+                      current.local,
+                    );
+                    dlog(
+                      "%cCurrent camera (world):",
+                      "color: #888;",
+                      current.world,
+                    );
                     dlog("");
                     positions.forEach((p) => {
-                      const color = p.label === "COCKPIT" ? "#ff6b6b" : p.label === "CABIN" ? "#339af0" : "#51cf66";
-                      dlog(`%c${p.label}:`, `color: ${color}; font-weight: bold;`, `new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]})`);
+                      const color =
+                        p.label === "COCKPIT"
+                          ? "#ff6b6b"
+                          : p.label === "CABIN"
+                            ? "#339af0"
+                            : "#51cf66";
+                      dlog(
+                        `%c${p.label}:`,
+                        `color: ${color}; font-weight: bold;`,
+                        `new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]})`,
+                      );
                     });
                     dlog("");
-                    dlog("%c── Copy-paste ready code ──", "color: #ffd43b; font-weight: bold;");
+                    dlog(
+                      "%c── Copy-paste ready code ──",
+                      "color: #ffd43b; font-weight: bold;",
+                    );
                     const codeLines = [
                       "// ═══ Ship Explore Mode — Saved Positions ═══",
                       `// Generated at ${new Date().toISOString()}`,
@@ -25208,21 +28464,37 @@ export default function ResumeSpace3D({
                     ];
                     positions.forEach((p) => {
                       codeLines.push(`// ${p.label}`);
-                      codeLines.push(`const ${p.label.toLowerCase()}CamLocal = new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]});`);
-                      codeLines.push(`const ${p.label.toLowerCase()}LookLocal = new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2] + 6});`);
+                      codeLines.push(
+                        `const ${p.label.toLowerCase()}CamLocal = new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]});`,
+                      );
+                      codeLines.push(
+                        `const ${p.label.toLowerCase()}LookLocal = new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2] + 6});`,
+                      );
                       codeLines.push("");
                     });
                     if (positions.length === 0) {
-                      codeLines.push("// (no positions marked yet — current camera position below)");
-                      codeLines.push(`const currentLocal = new THREE.Vector3(${current.local[0]}, ${current.local[1]}, ${current.local[2]});`);
+                      codeLines.push(
+                        "// (no positions marked yet — current camera position below)",
+                      );
+                      codeLines.push(
+                        `const currentLocal = new THREE.Vector3(${current.local[0]}, ${current.local[1]}, ${current.local[2]});`,
+                      );
                     }
                     const codeStr = codeLines.join("\n");
                     dlog(codeStr);
                     dlog("%c═══ END ═══", "color: #ff6b6b; font-weight: bold;");
                     // Also try to copy to clipboard
                     navigator.clipboard.writeText(codeStr).then(
-                      () => dlog("%cCopied to clipboard!", "color: #0f6; font-weight: bold;"),
-                      () => dlog("%cClipboard copy failed — please copy from above.", "color: #ff0;"),
+                      () =>
+                        dlog(
+                          "%cCopied to clipboard!",
+                          "color: #0f6; font-weight: bold;",
+                        ),
+                      () =>
+                        dlog(
+                          "%cClipboard copy failed — please copy from above.",
+                          "color: #ff0;",
+                        ),
                     );
                   }}
                   style={{
@@ -25265,12 +28537,36 @@ export default function ResumeSpace3D({
                     pointerEvents: "auto",
                   }}
                 >
-                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, color: "#fff" }}>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 14,
+                      marginBottom: 6,
+                      color: "#fff",
+                    }}
+                  >
                     SAVED POSITIONS
                   </div>
                   {exploreSavedPositions.map((pos, idx) => (
-                    <div key={idx} style={{ borderBottom: "1px solid rgba(180,130,255,0.2)", paddingBottom: 4, marginBottom: 4 }}>
-                      <span style={{ fontWeight: 700, color: pos.label === "COCKPIT" ? "#ff6b6b" : pos.label === "CABIN" ? "#339af0" : "#51cf66" }}>
+                    <div
+                      key={idx}
+                      style={{
+                        borderBottom: "1px solid rgba(180,130,255,0.2)",
+                        paddingBottom: 4,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color:
+                            pos.label === "COCKPIT"
+                              ? "#ff6b6b"
+                              : pos.label === "CABIN"
+                                ? "#339af0"
+                                : "#51cf66",
+                        }}
+                      >
                         {pos.label}
                       </span>
                       : [{pos.local[0]}, {pos.local[1]}, {pos.local[2]}]
@@ -25280,7 +28576,10 @@ export default function ResumeSpace3D({
                     onClick={() => {
                       // Copy all saved positions to clipboard as code
                       const code = exploreSavedPositions
-                        .map((p) => `// ${p.label}: new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]})`)
+                        .map(
+                          (p) =>
+                            `// ${p.label}: new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]})`,
+                        )
                         .join("\n");
                       navigator.clipboard.writeText(code).then(() => {
                         vlog("📋 Positions copied to clipboard!");
@@ -25357,19 +28656,26 @@ export default function ResumeSpace3D({
             logDroneDebugEnabled={logDroneDebugEnabled}
             logNavDebugEnabled={logNavDebugEnabled}
             onLogCamTraceChange={(next) =>
-              toggleLogChannel("CAMTRACE", next, setLogCamTraceEnabled)}
+              toggleLogChannel("CAMTRACE", next, setLogCamTraceEnabled)
+            }
             onLogAboutDebugChange={(next) =>
-              toggleLogChannel("ABOUTDBG", next, setLogAboutDebugEnabled)}
+              toggleLogChannel("ABOUTDBG", next, setLogAboutDebugEnabled)
+            }
             onLogNavTraceChange={(next) =>
-              toggleLogChannel("Nav trace", next, setLogNavTraceEnabled)}
+              toggleLogChannel("Nav trace", next, setLogNavTraceEnabled)
+            }
             onLogNavDiagChange={(next) =>
-              toggleLogChannel("Nav diagnostics", next, setLogNavDiagEnabled)}
+              toggleLogChannel("Nav diagnostics", next, setLogNavDiagEnabled)
+            }
             onLogAudioChannelChange={(next) =>
-              toggleLogChannel("Audio", next, setLogAudioChannelEnabled)}
+              toggleLogChannel("Audio", next, setLogAudioChannelEnabled)
+            }
             onLogDroneDebugChange={(next) =>
-              toggleLogChannel("DBG drone", next, setLogDroneDebugEnabled)}
+              toggleLogChannel("DBG drone", next, setLogDroneDebugEnabled)
+            }
             onLogNavDebugChange={(next) =>
-              toggleLogChannel("DBG nav", next, setLogNavDebugEnabled)}
+              toggleLogChannel("DBG nav", next, setLogNavDebugEnabled)
+            }
             onClearLog={() => {
               shipLogsRef.current = [];
               setShipLogs([]);
@@ -25380,10 +28686,7 @@ export default function ResumeSpace3D({
             onCommand={(cmd) => {
               shipLog(`$ ${cmd}`, "cmd");
               if (runShipTerminalCommand(cmd)) return;
-              shipLog(
-                "Unknown command. Try: help aboutflow",
-                "error",
-              );
+              shipLog("Unknown command. Try: help aboutflow", "error");
             }}
           />
 
@@ -25434,11 +28737,13 @@ export default function ResumeSpace3D({
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = "rgba(20, 50, 80, 0.92)";
-                    e.currentTarget.style.borderColor = "rgba(145, 232, 255, 0.9)";
+                    e.currentTarget.style.borderColor =
+                      "rgba(145, 232, 255, 0.9)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = "rgba(8, 18, 34, 0.88)";
-                    e.currentTarget.style.borderColor = "rgba(145, 232, 255, 0.6)";
+                    e.currentTarget.style.borderColor =
+                      "rgba(145, 232, 255, 0.6)";
                   }}
                 >
                   Replay
@@ -25467,11 +28772,13 @@ export default function ResumeSpace3D({
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = "rgba(45, 35, 12, 0.92)";
-                    e.currentTarget.style.borderColor = "rgba(255, 200, 100, 0.8)";
+                    e.currentTarget.style.borderColor =
+                      "rgba(255, 200, 100, 0.8)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = "rgba(30, 22, 8, 0.85)";
-                    e.currentTarget.style.borderColor = "rgba(255, 200, 100, 0.5)";
+                    e.currentTarget.style.borderColor =
+                      "rgba(255, 200, 100, 0.5)";
                   }}
                 >
                   Switch Level
@@ -25628,7 +28935,13 @@ export default function ResumeSpace3D({
                     marginBottom: 10,
                   }}
                 >
-                  <span style={{ fontSize: 14, letterSpacing: 0.6, fontWeight: 700 }}>
+                  <span
+                    style={{
+                      fontSize: 14,
+                      letterSpacing: 0.6,
+                      fontWeight: 700,
+                    }}
+                  >
                     General Settings
                   </span>
                   <button
@@ -25913,7 +29226,9 @@ export default function ResumeSpace3D({
                       </span>
                       <select
                         value={musicTrack}
-                        onChange={(event) => setMusicTrack(event.currentTarget.value)}
+                        onChange={(event) =>
+                          setMusicTrack(event.currentTarget.value)
+                        }
                         disabled={availableMusicTracks.length === 0}
                         style={{
                           borderRadius: 6,
@@ -25966,7 +29281,9 @@ export default function ResumeSpace3D({
                         list={SOUND_SLIDER_TICKS_ID}
                         value={Math.round(overallVolume * 100)}
                         onChange={(event) =>
-                          setOverallVolume(Number(event.currentTarget.value) / 100)
+                          setOverallVolume(
+                            Number(event.currentTarget.value) / 100,
+                          )
                         }
                       />
                     </label>
@@ -25988,7 +29305,12 @@ export default function ResumeSpace3D({
                       fontSize: 13,
                     }}
                   >
-                    <div style={{ fontSize: 12, color: "rgba(176, 220, 255, 0.92)" }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "rgba(176, 220, 255, 0.92)",
+                      }}
+                    >
                       Enable noisy channels on demand.
                     </div>
                     {[
@@ -26040,7 +29362,9 @@ export default function ResumeSpace3D({
                         <input
                           type="checkbox"
                           checked={item.checked}
-                          onChange={(event) => item.onChange(event.currentTarget.checked)}
+                          onChange={(event) =>
+                            item.onChange(event.currentTarget.checked)
+                          }
                         />
                         <span>{item.label}</span>
                       </label>
@@ -26133,7 +29457,13 @@ export default function ResumeSpace3D({
                   ? "Category"
                   : `Skill in ${skillsLatticeSelection.category}`}
               </div>
-              <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+              <div
+                style={{
+                  marginTop: 8,
+                  display: "flex",
+                  justifyContent: "flex-end",
+                }}
+              >
                 <button
                   onClick={goToSkillsLatticeHomeView}
                   disabled={!skillsLatticeHomeViewRef.current}
@@ -26149,7 +29479,9 @@ export default function ResumeSpace3D({
                       : "rgba(223,243,255,0.55)",
                     fontFamily: "'Rajdhani', sans-serif",
                     fontSize: 11,
-                    cursor: skillsLatticeHomeViewRef.current ? "pointer" : "default",
+                    cursor: skillsLatticeHomeViewRef.current
+                      ? "pointer"
+                      : "default",
                   }}
                 >
                   Skills Lattice Home
@@ -26177,7 +29509,9 @@ export default function ResumeSpace3D({
 
           {skillsLatticeActive && (
             <button
-              onClick={() => exitSkillsLattice({ restoreShip: true, clearSystem: true })}
+              onClick={() =>
+                exitSkillsLattice({ restoreShip: true, clearSystem: true })
+              }
               style={{
                 position: "fixed",
                 right: 18,
@@ -26196,7 +29530,7 @@ export default function ResumeSpace3D({
               Exit
             </button>
           )}
-          
+
           {skillsLatticeActive && (
             <div
               style={{
@@ -26217,7 +29551,8 @@ export default function ResumeSpace3D({
                 backdropFilter: "blur(4px)",
               }}
             >
-              Hint: Shift click to pan, mouse wheel zoom in/out, click nodes to inspect
+              Hint: Shift click to pan, mouse wheel zoom in/out, click nodes to
+              inspect
             </div>
           )}
           {keyboardStudioEnabled && !onscreenKeyboardPanelVisible && (
@@ -26304,8 +29639,11 @@ export default function ResumeSpace3D({
                       marginTop: 1,
                     }}
                   >
-                    3 Octaves (C3-B5) · {onscreenKeyboardRecordedEvents.length} captured notes
-                    {selectedKeyboardStudioPreset ? ` · ${selectedKeyboardStudioPreset.name}` : ""}
+                    3 Octaves (C3-B5) · {onscreenKeyboardRecordedEvents.length}{" "}
+                    captured notes
+                    {selectedKeyboardStudioPreset
+                      ? ` · ${selectedKeyboardStudioPreset.name}`
+                      : ""}
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -26319,7 +29657,8 @@ export default function ResumeSpace3D({
                           collapsed: next,
                         }));
                         return next;
-                      })}
+                      })
+                    }
                     style={{
                       borderRadius: 8,
                       border: "1px solid rgba(130, 190, 236, 0.5)",
@@ -26369,7 +29708,13 @@ export default function ResumeSpace3D({
                       marginBottom: 6,
                     }}
                   >
-                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 3,
+                      }}
+                    >
                       <span
                         style={{
                           fontSize: 10,
@@ -26380,82 +29725,119 @@ export default function ResumeSpace3D({
                       >
                         Sound Type / Instrument
                       </span>
-                    <select
-                      value={keyboardStudioSelectedSource}
-                      onChange={(event) => {
-                        setKeyboardStudioSelectedSource(event.currentTarget.value);
-                        previewKeyboardStudioControlFeedback("E5");
-                      }}
-                      style={{
-                        borderRadius: 8,
-                        border: "1px solid rgba(145, 215, 255, 0.5)",
-                        background: "rgba(10, 24, 38, 0.9)",
-                        color: "#d8eeff",
-                        fontFamily: "'Rajdhani', sans-serif",
-                        fontSize: 12,
-                        padding: "6px 8px",
-                      }}
-                    >
-                      <optgroup label="Keys & Pianos">
-                        {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
-                          ["factory-nebula-keys", "factory-grand-piano", "factory-electric-piano", "factory-dream-keys", "factory-cinematic-bell"].includes(preset.id)
-                        ).map((preset) => (
+                      <select
+                        value={keyboardStudioSelectedSource}
+                        onChange={(event) => {
+                          setKeyboardStudioSelectedSource(
+                            event.currentTarget.value,
+                          );
+                          previewKeyboardStudioControlFeedback("E5");
+                        }}
+                        style={{
+                          borderRadius: 8,
+                          border: "1px solid rgba(145, 215, 255, 0.5)",
+                          background: "rgba(10, 24, 38, 0.9)",
+                          color: "#d8eeff",
+                          fontFamily: "'Rajdhani', sans-serif",
+                          fontSize: 12,
+                          padding: "6px 8px",
+                        }}
+                      >
+                        <optgroup label="Keys & Pianos">
+                          {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
+                            [
+                              "factory-nebula-keys",
+                              "factory-grand-piano",
+                              "factory-electric-piano",
+                              "factory-dream-keys",
+                              "factory-cinematic-bell",
+                            ].includes(preset.id),
+                          ).map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Synth / Pads">
+                          {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
+                            [
+                              "factory-synth-pluck",
+                              "factory-aurora-pad",
+                              "factory-sunrise-lead",
+                              "factory-voyager-ambient",
+                              "factory-cosmic-choir",
+                              "factory-solar-winds",
+                              "factory-hyperdrive-whine",
+                            ].includes(preset.id),
+                          ).map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Instruments">
+                          {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
+                            [
+                              "factory-organ",
+                              "factory-violin",
+                              "factory-flute",
+                              "factory-guitar",
+                              "factory-sitar",
+                              "factory-kalimba",
+                            ].includes(preset.id),
+                          ).map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Drums / Beats">
+                          {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
+                            [
+                              "factory-drum-kit",
+                              "factory-808-kick",
+                              "factory-deep-pulse",
+                              "factory-neutron-pluck",
+                            ].includes(preset.id),
+                          ).map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="FX / Space">
+                          {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
+                            [
+                              "factory-laser-zap",
+                              "factory-impact-boom",
+                              "factory-spaceship-console",
+                              "factory-glass-orbit",
+                              "factory-ion-spark",
+                              "factory-cinematic-chords",
+                            ].includes(preset.id),
+                          ).map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                        {keyboardStudioPresets.length > 0 && (
+                          <option disabled value="__custom-sep__">
+                            -- Saved Presets --
+                          </option>
+                        )}
+                        {keyboardStudioPresets.map((preset) => (
                           <option key={preset.id} value={preset.id}>
                             {preset.name}
                           </option>
                         ))}
-                      </optgroup>
-                      <optgroup label="Synth / Pads">
-                        {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
-                          ["factory-synth-pluck", "factory-aurora-pad", "factory-sunrise-lead", "factory-voyager-ambient", "factory-cosmic-choir", "factory-solar-winds", "factory-hyperdrive-whine"].includes(preset.id)
-                        ).map((preset) => (
-                          <option key={preset.id} value={preset.id}>
-                            {preset.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Instruments">
-                        {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
-                          ["factory-organ", "factory-violin", "factory-flute", "factory-guitar", "factory-sitar", "factory-kalimba"].includes(preset.id)
-                        ).map((preset) => (
-                          <option key={preset.id} value={preset.id}>
-                            {preset.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Drums / Beats">
-                        {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
-                          ["factory-drum-kit", "factory-808-kick", "factory-deep-pulse", "factory-neutron-pluck"].includes(preset.id)
-                        ).map((preset) => (
-                          <option key={preset.id} value={preset.id}>
-                            {preset.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="FX / Space">
-                        {KEYBOARD_STUDIO_FACTORY_PRESETS.filter((preset) =>
-                          ["factory-laser-zap", "factory-impact-boom", "factory-spaceship-console", "factory-glass-orbit", "factory-ion-spark", "factory-cinematic-chords"].includes(preset.id)
-                        ).map((preset) => (
-                          <option key={preset.id} value={preset.id}>
-                            {preset.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      {keyboardStudioPresets.length > 0 && (
-                        <option disabled value="__custom-sep__">
-                          -- Saved Presets --
-                        </option>
-                      )}
-                      {keyboardStudioPresets.map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.name}
-                        </option>
-                      ))}
-                    </select>
+                      </select>
                     </div>
                     <input
                       value={keyboardStudioPresetName}
-                      onChange={(event) => setKeyboardStudioPresetName(event.currentTarget.value)}
+                      onChange={(event) =>
+                        setKeyboardStudioPresetName(event.currentTarget.value)
+                      }
                       placeholder="Name your sound (e.g. InvestCloud Click)"
                       style={{
                         borderRadius: 8,
@@ -26470,7 +29852,10 @@ export default function ResumeSpace3D({
                     <button
                       type="button"
                       onClick={saveKeyboardStudioPreset}
-                      disabled={keyboardStudioPresetName.trim().length === 0 || onscreenKeyboardRecordedEvents.length === 0}
+                      disabled={
+                        keyboardStudioPresetName.trim().length === 0 ||
+                        onscreenKeyboardRecordedEvents.length === 0
+                      }
                       style={{
                         borderRadius: 8,
                         border: "1px solid rgba(150, 255, 210, 0.5)",
@@ -26480,13 +29865,13 @@ export default function ResumeSpace3D({
                         fontWeight: 700,
                         letterSpacing: 0.5,
                         cursor:
-                          keyboardStudioPresetName.trim().length === 0
-                          || onscreenKeyboardRecordedEvents.length === 0
+                          keyboardStudioPresetName.trim().length === 0 ||
+                          onscreenKeyboardRecordedEvents.length === 0
                             ? "not-allowed"
                             : "pointer",
                         opacity:
-                          keyboardStudioPresetName.trim().length === 0
-                          || onscreenKeyboardRecordedEvents.length === 0
+                          keyboardStudioPresetName.trim().length === 0 ||
+                          onscreenKeyboardRecordedEvents.length === 0
                             ? 0.56
                             : 1,
                       }}
@@ -26502,8 +29887,9 @@ export default function ResumeSpace3D({
                       lineHeight: 1.35,
                     }}
                   >
-                    1) Record a phrase, 2) Enter a name, 3) Click <strong>Save Named Sound</strong>.
-                    Saved sounds appear in the dropdown and can be bound to universe events.
+                    1) Record a phrase, 2) Enter a name, 3) Click{" "}
+                    <strong>Save Named Sound</strong>. Saved sounds appear in
+                    the dropdown and can be bound to universe events.
                   </div>
                   <div
                     style={{
@@ -26516,7 +29902,11 @@ export default function ResumeSpace3D({
                   >
                     <select
                       value={keyboardStudioSelectedSettingsId}
-                      onChange={(event) => setKeyboardStudioSelectedSettingsId(event.currentTarget.value)}
+                      onChange={(event) =>
+                        setKeyboardStudioSelectedSettingsId(
+                          event.currentTarget.value,
+                        )
+                      }
                       style={{
                         borderRadius: 8,
                         border: "1px solid rgba(130, 190, 236, 0.5)",
@@ -26555,7 +29945,9 @@ export default function ResumeSpace3D({
                       type="button"
                       onClick={() => {
                         if (!keyboardStudioSelectedSettingsId) return;
-                        loadKeyboardStudioSettingsSlot(keyboardStudioSelectedSettingsId);
+                        loadKeyboardStudioSettingsSlot(
+                          keyboardStudioSelectedSettingsId,
+                        );
                       }}
                       disabled={!keyboardStudioSelectedSettingsId}
                       style={{
@@ -26567,7 +29959,9 @@ export default function ResumeSpace3D({
                         fontFamily: "'Rajdhani', sans-serif",
                         fontSize: 11,
                         fontWeight: 700,
-                        cursor: keyboardStudioSelectedSettingsId ? "pointer" : "not-allowed",
+                        cursor: keyboardStudioSelectedSettingsId
+                          ? "pointer"
+                          : "not-allowed",
                         opacity: keyboardStudioSelectedSettingsId ? 1 : 0.55,
                       }}
                     >
@@ -26577,7 +29971,9 @@ export default function ResumeSpace3D({
                       type="button"
                       onClick={() => {
                         if (!keyboardStudioSelectedSettingsId) return;
-                        deleteKeyboardStudioSettingsSlot(keyboardStudioSelectedSettingsId);
+                        deleteKeyboardStudioSettingsSlot(
+                          keyboardStudioSelectedSettingsId,
+                        );
                       }}
                       disabled={!keyboardStudioSelectedSettingsId}
                       style={{
@@ -26589,7 +29985,9 @@ export default function ResumeSpace3D({
                         fontFamily: "'Rajdhani', sans-serif",
                         fontSize: 11,
                         fontWeight: 700,
-                        cursor: keyboardStudioSelectedSettingsId ? "pointer" : "not-allowed",
+                        cursor: keyboardStudioSelectedSettingsId
+                          ? "pointer"
+                          : "not-allowed",
                         opacity: keyboardStudioSelectedSettingsId ? 1 : 0.55,
                       }}
                     >
@@ -26617,19 +30015,41 @@ export default function ResumeSpace3D({
                         {[
                           {
                             label: "Soft Pad",
-                            sound: { reverbMix: 0.42, delayFeedback: 0.18, drive: 0.04, filterCutoff: 1800 },
+                            sound: {
+                              reverbMix: 0.42,
+                              delayFeedback: 0.18,
+                              drive: 0.04,
+                              filterCutoff: 1800,
+                            },
                           },
                           {
                             label: "Bright Bell",
-                            sound: { reverbMix: 0.32, delayFeedback: 0.24, drive: 0.08, filterCutoff: 6200 },
+                            sound: {
+                              reverbMix: 0.32,
+                              delayFeedback: 0.24,
+                              drive: 0.08,
+                              filterCutoff: 6200,
+                            },
                           },
                           {
                             label: "Deep Bass",
-                            sound: { reverbMix: 0.06, delayFeedback: 0.1, drive: 0.34, filterCutoff: 900, sustain: 0.22 },
+                            sound: {
+                              reverbMix: 0.06,
+                              delayFeedback: 0.1,
+                              drive: 0.34,
+                              filterCutoff: 900,
+                              sustain: 0.22,
+                            },
                           },
                           {
                             label: "Solar Winds",
-                            sound: { reverbMix: 0.54, delayFeedback: 0.44, drive: 0.04, filterCutoff: 1400, release: 2.2 },
+                            sound: {
+                              reverbMix: 0.54,
+                              delayFeedback: 0.44,
+                              drive: 0.04,
+                              filterCutoff: 1400,
+                              release: 2.2,
+                            },
                           },
                         ].map((macro) => (
                           <button
@@ -26637,7 +30057,11 @@ export default function ResumeSpace3D({
                             type="button"
                             onClick={() => {
                               setKeyboardStudioSoundDesign((prev) =>
-                                normalizeSoundDesign({ ...prev, ...macro.sound }));
+                                normalizeSoundDesign({
+                                  ...prev,
+                                  ...macro.sound,
+                                }),
+                              );
                               previewKeyboardStudioControlFeedback("G5");
                             }}
                             style={{
@@ -26667,7 +30091,9 @@ export default function ResumeSpace3D({
                         <button
                           type="button"
                           onClick={() => void startOnscreenKeyboardRecording()}
-                          disabled={onscreenKeyboardRecording || onscreenKeyboardPlaying}
+                          disabled={
+                            onscreenKeyboardRecording || onscreenKeyboardPlaying
+                          }
                           style={{
                             borderRadius: 8,
                             border: "1px solid rgba(160, 255, 195, 0.5)",
@@ -26680,10 +30106,16 @@ export default function ResumeSpace3D({
                             fontSize: 12,
                             fontWeight: 700,
                             letterSpacing: 0.5,
-                            cursor: onscreenKeyboardRecording || onscreenKeyboardPlaying
-                              ? "not-allowed"
-                              : "pointer",
-                            opacity: onscreenKeyboardRecording || onscreenKeyboardPlaying ? 0.6 : 1,
+                            cursor:
+                              onscreenKeyboardRecording ||
+                              onscreenKeyboardPlaying
+                                ? "not-allowed"
+                                : "pointer",
+                            opacity:
+                              onscreenKeyboardRecording ||
+                              onscreenKeyboardPlaying
+                                ? 0.6
+                                : 1,
                           }}
                         >
                           Record
@@ -26723,8 +30155,14 @@ export default function ResumeSpace3D({
                             fontSize: 12,
                             fontWeight: 700,
                             letterSpacing: 0.5,
-                            cursor: onscreenKeyboardRecordedEvents.length === 0 ? "not-allowed" : "pointer",
-                            opacity: onscreenKeyboardRecordedEvents.length === 0 ? 0.55 : 1,
+                            cursor:
+                              onscreenKeyboardRecordedEvents.length === 0
+                                ? "not-allowed"
+                                : "pointer",
+                            opacity:
+                              onscreenKeyboardRecordedEvents.length === 0
+                                ? 0.55
+                                : 1,
                           }}
                         >
                           Play
@@ -26761,8 +30199,14 @@ export default function ResumeSpace3D({
                             fontSize: 12,
                             fontWeight: 700,
                             letterSpacing: 0.5,
-                            cursor: onscreenKeyboardRecordedEvents.length === 0 ? "not-allowed" : "pointer",
-                            opacity: onscreenKeyboardRecordedEvents.length === 0 ? 0.55 : 1,
+                            cursor:
+                              onscreenKeyboardRecordedEvents.length === 0
+                                ? "not-allowed"
+                                : "pointer",
+                            opacity:
+                              onscreenKeyboardRecordedEvents.length === 0
+                                ? 0.55
+                                : 1,
                           }}
                         >
                           Export JSON
@@ -26781,8 +30225,14 @@ export default function ResumeSpace3D({
                             fontSize: 12,
                             fontWeight: 700,
                             letterSpacing: 0.5,
-                            cursor: onscreenKeyboardRecordedEvents.length === 0 ? "not-allowed" : "pointer",
-                            opacity: onscreenKeyboardRecordedEvents.length === 0 ? 0.55 : 1,
+                            cursor:
+                              onscreenKeyboardRecordedEvents.length === 0
+                                ? "not-allowed"
+                                : "pointer",
+                            opacity:
+                              onscreenKeyboardRecordedEvents.length === 0
+                                ? 0.55
+                                : 1,
                           }}
                         >
                           Export MIDI
@@ -26831,7 +30281,9 @@ export default function ResumeSpace3D({
                           type="button"
                           onClick={() => {
                             if (!keyboardStudioSelectedPresetId) return;
-                            deleteKeyboardStudioPreset(keyboardStudioSelectedPresetId);
+                            deleteKeyboardStudioPreset(
+                              keyboardStudioSelectedPresetId,
+                            );
                           }}
                           disabled={!keyboardStudioSelectedPresetId}
                           style={{
@@ -26844,7 +30296,9 @@ export default function ResumeSpace3D({
                             fontSize: 12,
                             fontWeight: 700,
                             letterSpacing: 0.5,
-                            cursor: keyboardStudioSelectedPresetId ? "pointer" : "not-allowed",
+                            cursor: keyboardStudioSelectedPresetId
+                              ? "pointer"
+                              : "not-allowed",
                             opacity: keyboardStudioSelectedPresetId ? 1 : 0.55,
                           }}
                         >
@@ -26865,7 +30319,9 @@ export default function ResumeSpace3D({
                           type="checkbox"
                           checked={onscreenKeyboardGhostAutoplay}
                           onChange={(event) => {
-                            setOnscreenKeyboardGhostAutoplay(event.currentTarget.checked);
+                            setOnscreenKeyboardGhostAutoplay(
+                              event.currentTarget.checked,
+                            );
                             previewKeyboardStudioControlFeedback("E5");
                           }}
                         />
@@ -26880,86 +30336,93 @@ export default function ResumeSpace3D({
                           alignItems: "center",
                         }}
                       >
-                    <select
-                      value={keyboardStudioBeatPatternId}
-                      onChange={(event) => {
-                        setKeyboardStudioBeatPatternId(
-                          event.currentTarget.value as keyof typeof KEYBOARD_STUDIO_BEAT_PATTERNS
-                        );
-                        previewKeyboardStudioControlFeedback("A4");
-                      }}
-                      style={{
-                        borderRadius: 7,
-                        border: "1px solid rgba(130, 190, 236, 0.5)",
-                        background: "rgba(10, 22, 38, 0.9)",
-                        color: "#d8eeff",
-                        fontFamily: "'Rajdhani', sans-serif",
-                        fontSize: 12,
-                        padding: "5px 8px",
-                      }}
-                    >
-                      <option value="pulse">Beat: Pulse Drive</option>
-                      <option value="orbit">Beat: Orbit Groove</option>
-                      <option value="cinematic">Beat: Cinematic Build</option>
-                    </select>
-                    <label
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 2,
-                        fontSize: 11,
-                        color: "rgba(194, 228, 252, 0.9)",
-                      }}
-                    >
-                      <span>Tempo {keyboardStudioBeatTempoBpm} BPM</span>
-                      <input
-                        type="range"
-                        min={56}
-                        max={180}
-                        step={1}
-                        value={keyboardStudioBeatTempoBpm}
-                        onChange={(event) => {
-                          setKeyboardStudioBeatTempoBpm(Number(event.currentTarget.value));
-                          previewKeyboardStudioControlFeedback("F5");
-                        }}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={playKeyboardStudioBeatOneShot}
-                      style={{
-                        borderRadius: 7,
-                        border: "1px solid rgba(145, 215, 255, 0.55)",
-                        background: "rgba(18, 42, 68, 0.9)",
-                        color: "#e8f6ff",
-                        padding: "6px 9px",
-                        fontFamily: "'Rajdhani', sans-serif",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Play Beat
-                    </button>
-                    <label
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 5,
-                        fontSize: 11,
-                        color: "rgba(194, 228, 252, 0.9)",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={keyboardStudioBeatLoopEnabled}
-                        onChange={(event) => {
-                          setKeyboardStudioBeatLoopEnabled(event.currentTarget.checked);
-                          previewKeyboardStudioControlFeedback("B4");
-                        }}
-                      />
-                      Beat Loop
-                    </label>
+                        <select
+                          value={keyboardStudioBeatPatternId}
+                          onChange={(event) => {
+                            setKeyboardStudioBeatPatternId(
+                              event.currentTarget
+                                .value as keyof typeof KEYBOARD_STUDIO_BEAT_PATTERNS,
+                            );
+                            previewKeyboardStudioControlFeedback("A4");
+                          }}
+                          style={{
+                            borderRadius: 7,
+                            border: "1px solid rgba(130, 190, 236, 0.5)",
+                            background: "rgba(10, 22, 38, 0.9)",
+                            color: "#d8eeff",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 12,
+                            padding: "5px 8px",
+                          }}
+                        >
+                          <option value="pulse">Beat: Pulse Drive</option>
+                          <option value="orbit">Beat: Orbit Groove</option>
+                          <option value="cinematic">
+                            Beat: Cinematic Build
+                          </option>
+                        </select>
+                        <label
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 2,
+                            fontSize: 11,
+                            color: "rgba(194, 228, 252, 0.9)",
+                          }}
+                        >
+                          <span>Tempo {keyboardStudioBeatTempoBpm} BPM</span>
+                          <input
+                            type="range"
+                            min={56}
+                            max={180}
+                            step={1}
+                            value={keyboardStudioBeatTempoBpm}
+                            onChange={(event) => {
+                              setKeyboardStudioBeatTempoBpm(
+                                Number(event.currentTarget.value),
+                              );
+                              previewKeyboardStudioControlFeedback("F5");
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={playKeyboardStudioBeatOneShot}
+                          style={{
+                            borderRadius: 7,
+                            border: "1px solid rgba(145, 215, 255, 0.55)",
+                            background: "rgba(18, 42, 68, 0.9)",
+                            color: "#e8f6ff",
+                            padding: "6px 9px",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Play Beat
+                        </button>
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            fontSize: 11,
+                            color: "rgba(194, 228, 252, 0.9)",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={keyboardStudioBeatLoopEnabled}
+                            onChange={(event) => {
+                              setKeyboardStudioBeatLoopEnabled(
+                                event.currentTarget.checked,
+                              );
+                              previewKeyboardStudioControlFeedback("B4");
+                            }}
+                          />
+                          Beat Loop
+                        </label>
                       </div>
                     </div>
                     <div
@@ -27000,7 +30463,8 @@ export default function ResumeSpace3D({
                           marginBottom: 6,
                         }}
                       >
-                        Space=room, Echo=repeats, Warmth=tone, Punch=attack, Motion=stereo, Tail=fade.
+                        Space=room, Echo=repeats, Warmth=tone, Punch=attack,
+                        Motion=stereo, Tail=fade.
                       </div>
                       <div
                         style={{
@@ -27025,7 +30489,7 @@ export default function ResumeSpace3D({
                                   ...prev,
                                   reverbMix: value,
                                   reverbDecay: 1.6 + value * 7.2,
-                                })
+                                }),
                               ),
                           },
                           {
@@ -27041,13 +30505,16 @@ export default function ResumeSpace3D({
                                   ...prev,
                                   delayFeedback: value,
                                   delayTime: 0.06 + value * 0.42,
-                                })
+                                }),
                               ),
                           },
                           {
                             label: "Warmth",
                             hint: "Dark/soft tonal color.",
-                            value: 1 - (keyboardStudioSoundDesign.filterCutoff - 100) / 11900,
+                            value:
+                              1 -
+                              (keyboardStudioSoundDesign.filterCutoff - 100) /
+                                11900,
                             min: 0,
                             max: 1,
                             step: 0.01,
@@ -27057,7 +30524,7 @@ export default function ResumeSpace3D({
                                   ...prev,
                                   filterCutoff: 12000 - value * 11200,
                                   sustain: 0.25 + value * 0.55,
-                                })
+                                }),
                               ),
                           },
                           {
@@ -27073,7 +30540,7 @@ export default function ResumeSpace3D({
                                   ...prev,
                                   drive: value,
                                   attack: Math.max(0.001, 0.03 - value * 0.02),
-                                })
+                                }),
                               ),
                           },
                           {
@@ -27090,7 +30557,7 @@ export default function ResumeSpace3D({
                                   chorusDepth: value,
                                   chorusRate: 0.2 + value * 2.4,
                                   stereoWidth: 0.25 + value * 0.7,
-                                })
+                                }),
                               ),
                           },
                           {
@@ -27105,7 +30572,7 @@ export default function ResumeSpace3D({
                                 normalizeSoundDesign({
                                   ...prev,
                                   release: value,
-                                })
+                                }),
                               ),
                           },
                         ].map((slider) => (
@@ -27128,7 +30595,9 @@ export default function ResumeSpace3D({
                               step={slider.step}
                               value={slider.value}
                               onChange={(event) => {
-                                slider.update(Number(event.currentTarget.value));
+                                slider.update(
+                                  Number(event.currentTarget.value),
+                                );
                                 previewKeyboardStudioControlFeedback("D5");
                               }}
                             />
@@ -27155,7 +30624,9 @@ export default function ResumeSpace3D({
                           EVENT BINDINGS
                         </div>
                         {keyboardStudioKnownEventIds.map((eventId) => {
-                          const binding = keyboardStudioBindings.find((item) => item.eventId === eventId);
+                          const binding = keyboardStudioBindings.find(
+                            (item) => item.eventId === eventId,
+                          );
                           return (
                             <div
                               key={eventId}
@@ -27172,7 +30643,12 @@ export default function ResumeSpace3D({
                               <span>{eventId}</span>
                               <select
                                 value={binding?.presetId ?? ""}
-                                onChange={(event) => setKeyboardStudioBindingPreset(eventId, event.currentTarget.value)}
+                                onChange={(event) =>
+                                  setKeyboardStudioBindingPreset(
+                                    eventId,
+                                    event.currentTarget.value,
+                                  )
+                                }
                                 style={{
                                   borderRadius: 6,
                                   border: "1px solid rgba(130, 190, 236, 0.5)",
@@ -27184,36 +30660,51 @@ export default function ResumeSpace3D({
                                 }}
                               >
                                 <option value="">(none)</option>
-                                {allKeyboardStudioPresetOptions.map((preset) => (
-                                  <option key={preset.id} value={preset.id}>
-                                    {preset.name}
-                                  </option>
-                                ))}
+                                {allKeyboardStudioPresetOptions.map(
+                                  (preset) => (
+                                    <option key={preset.id} value={preset.id}>
+                                      {preset.name}
+                                    </option>
+                                  ),
+                                )}
                               </select>
-                              <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <label
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                }}
+                              >
                                 <input
                                   type="checkbox"
                                   checked={binding?.enabled ?? false}
                                   onChange={(event) =>
                                     setKeyboardStudioBindings((prev) =>
-                                      prev.some((item) => item.eventId === eventId)
+                                      prev.some(
+                                        (item) => item.eventId === eventId,
+                                      )
                                         ? prev.map((item) =>
-                                          item.eventId === eventId
-                                            ? { ...item, enabled: event.currentTarget.checked }
-                                            : item
-                                        )
+                                            item.eventId === eventId
+                                              ? {
+                                                  ...item,
+                                                  enabled:
+                                                    event.currentTarget.checked,
+                                                }
+                                              : item,
+                                          )
                                         : event.currentTarget.checked
                                           ? [
-                                            ...prev,
-                                            {
-                                              eventId,
-                                              presetId: "",
-                                              enabled: true,
-                                              gain: 1,
-                                            },
-                                          ]
-                                          : prev
-                                    )}
+                                              ...prev,
+                                              {
+                                                eventId,
+                                                presetId: "",
+                                                enabled: true,
+                                                gain: 1,
+                                              },
+                                            ]
+                                          : prev,
+                                    )
+                                  }
                                 />
                                 On
                               </label>
@@ -27221,23 +30712,29 @@ export default function ResumeSpace3D({
                           );
                         })}
                       </div>
-              <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  onClick={exitProjectShowcase}
-                  style={{
-                    padding: "4px 8px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(255, 195, 160, 0.45)",
-                    background: "rgba(28, 14, 10, 0.82)",
-                    color: "#ffe2d5",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 11,
-                    cursor: "pointer",
-                  }}
-                >
-                  Exit
-                </button>
-              </div>
+                      <div
+                        style={{
+                          marginTop: 8,
+                          display: "flex",
+                          justifyContent: "flex-end",
+                        }}
+                      >
+                        <button
+                          onClick={exitProjectShowcase}
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: 8,
+                            border: "1px solid rgba(255, 195, 160, 0.45)",
+                            background: "rgba(28, 14, 10, 0.82)",
+                            color: "#ffe2d5",
+                            fontFamily: "'Rajdhani', sans-serif",
+                            fontSize: 11,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Exit
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div
@@ -27256,98 +30753,134 @@ export default function ResumeSpace3D({
                       if (event.buttons > 0) releaseAllOnscreenKeyboardNotes();
                     }}
                   >
-                    {onscreenKeyboardKeys.filter((key) => !key.isBlack).map((key) => {
-                      const isPressed = onscreenKeyboardActiveNoteSet.has(key.note);
-                      const isGhost = onscreenKeyboardGhostNoteSet.has(key.note);
-                      return (
-                        <button
-                          key={key.note}
-                          type="button"
-                          onPointerDown={(event) => handleKeyboardKeyPointerDown(key.note, event)}
-                          onPointerUp={(event) => handleKeyboardKeyPointerUp(key.note, event)}
-                          onPointerCancel={(event) => handleKeyboardKeyPointerUp(key.note, event)}
-                          onLostPointerCapture={(event) => handleKeyboardKeyPointerUp(key.note, event)}
-                          onPointerLeave={(event) => {
-                            if (event.buttons === 0) handleKeyboardKeyPointerUp(key.note, event);
-                          }}
-                          style={{
-                            position: "absolute",
-                            left: `${(key.leftUnit / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT) * 100}%`,
-                            width: `${100 / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT}%`,
-                            top: 0,
-                            bottom: 0,
-                            borderRadius: "0 0 6px 6px",
-                            border: "1px solid rgba(36, 62, 92, 0.7)",
-                            borderTop: "1px solid rgba(134, 179, 226, 0.55)",
-                            background: isPressed
-                              ? isGhost
-                                ? "linear-gradient(180deg, #98b5ff 0%, #6384ff 100%)"
-                                : "linear-gradient(180deg, #f3fbff 0%, #a7deff 100%)"
-                              : "linear-gradient(180deg, #f7fcff 0%, #dceaf8 100%)",
-                            color: isPressed ? "#0b1f34" : "#56789b",
-                            fontFamily: "'Rajdhani', sans-serif",
-                            fontSize: 10,
-                            fontWeight: 700,
-                            letterSpacing: 0.3,
-                            display: "flex",
-                            alignItems: "flex-end",
-                            justifyContent: "center",
-                            paddingBottom: 7,
-                            cursor: "pointer",
-                            transform: isPressed ? "translateY(2px)" : "translateY(0px)",
-                            transition: "transform 90ms ease, background 120ms ease",
-                          }}
-                        >
-                          {key.note}
-                        </button>
-                      );
-                    })}
-                    {onscreenKeyboardKeys.filter((key) => key.isBlack).map((key) => {
-                      const isPressed = onscreenKeyboardActiveNoteSet.has(key.note);
-                      const isGhost = onscreenKeyboardGhostNoteSet.has(key.note);
-                      return (
-                        <button
-                          key={key.note}
-                          type="button"
-                          onPointerDown={(event) => handleKeyboardKeyPointerDown(key.note, event)}
-                          onPointerUp={(event) => handleKeyboardKeyPointerUp(key.note, event)}
-                          onPointerCancel={(event) => handleKeyboardKeyPointerUp(key.note, event)}
-                          onLostPointerCapture={(event) => handleKeyboardKeyPointerUp(key.note, event)}
-                          onPointerLeave={(event) => {
-                            if (event.buttons === 0) handleKeyboardKeyPointerUp(key.note, event);
-                          }}
-                          style={{
-                            position: "absolute",
-                            left: `${(key.leftUnit / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT) * 100}%`,
-                            width: `${100 / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT * 0.64}%`,
-                            top: 0,
-                            height: "62%",
-                            borderRadius: "0 0 5px 5px",
-                            border: "1px solid rgba(5, 10, 20, 0.92)",
-                            background: isPressed
-                              ? isGhost
-                                ? "linear-gradient(180deg, #8d90ff 0%, #4248d8 100%)"
-                                : "linear-gradient(180deg, #66dcff 0%, #1684b8 100%)"
-                              : "linear-gradient(180deg, #1f2c45 0%, #0b1524 100%)",
-                            color: "rgba(212, 236, 255, 0.9)",
-                            fontFamily: "'Rajdhani', sans-serif",
-                            fontSize: 9,
-                            fontWeight: 700,
-                            letterSpacing: 0.2,
-                            display: "flex",
-                            alignItems: "flex-end",
-                            justifyContent: "center",
-                            paddingBottom: 5,
-                            cursor: "pointer",
-                            transform: isPressed ? "translateY(2px)" : "translateY(0px)",
-                            transition: "transform 90ms ease, background 120ms ease",
-                            zIndex: 2,
-                          }}
-                        >
-                          {key.note}
-                        </button>
-                      );
-                    })}
+                    {onscreenKeyboardKeys
+                      .filter((key) => !key.isBlack)
+                      .map((key) => {
+                        const isPressed = onscreenKeyboardActiveNoteSet.has(
+                          key.note,
+                        );
+                        const isGhost = onscreenKeyboardGhostNoteSet.has(
+                          key.note,
+                        );
+                        return (
+                          <button
+                            key={key.note}
+                            type="button"
+                            onPointerDown={(event) =>
+                              handleKeyboardKeyPointerDown(key.note, event)
+                            }
+                            onPointerUp={(event) =>
+                              handleKeyboardKeyPointerUp(key.note, event)
+                            }
+                            onPointerCancel={(event) =>
+                              handleKeyboardKeyPointerUp(key.note, event)
+                            }
+                            onLostPointerCapture={(event) =>
+                              handleKeyboardKeyPointerUp(key.note, event)
+                            }
+                            onPointerLeave={(event) => {
+                              if (event.buttons === 0)
+                                handleKeyboardKeyPointerUp(key.note, event);
+                            }}
+                            style={{
+                              position: "absolute",
+                              left: `${(key.leftUnit / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT) * 100}%`,
+                              width: `${100 / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT}%`,
+                              top: 0,
+                              bottom: 0,
+                              borderRadius: "0 0 6px 6px",
+                              border: "1px solid rgba(36, 62, 92, 0.7)",
+                              borderTop: "1px solid rgba(134, 179, 226, 0.55)",
+                              background: isPressed
+                                ? isGhost
+                                  ? "linear-gradient(180deg, #98b5ff 0%, #6384ff 100%)"
+                                  : "linear-gradient(180deg, #f3fbff 0%, #a7deff 100%)"
+                                : "linear-gradient(180deg, #f7fcff 0%, #dceaf8 100%)",
+                              color: isPressed ? "#0b1f34" : "#56789b",
+                              fontFamily: "'Rajdhani', sans-serif",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: 0.3,
+                              display: "flex",
+                              alignItems: "flex-end",
+                              justifyContent: "center",
+                              paddingBottom: 7,
+                              cursor: "pointer",
+                              transform: isPressed
+                                ? "translateY(2px)"
+                                : "translateY(0px)",
+                              transition:
+                                "transform 90ms ease, background 120ms ease",
+                            }}
+                          >
+                            {key.note}
+                          </button>
+                        );
+                      })}
+                    {onscreenKeyboardKeys
+                      .filter((key) => key.isBlack)
+                      .map((key) => {
+                        const isPressed = onscreenKeyboardActiveNoteSet.has(
+                          key.note,
+                        );
+                        const isGhost = onscreenKeyboardGhostNoteSet.has(
+                          key.note,
+                        );
+                        return (
+                          <button
+                            key={key.note}
+                            type="button"
+                            onPointerDown={(event) =>
+                              handleKeyboardKeyPointerDown(key.note, event)
+                            }
+                            onPointerUp={(event) =>
+                              handleKeyboardKeyPointerUp(key.note, event)
+                            }
+                            onPointerCancel={(event) =>
+                              handleKeyboardKeyPointerUp(key.note, event)
+                            }
+                            onLostPointerCapture={(event) =>
+                              handleKeyboardKeyPointerUp(key.note, event)
+                            }
+                            onPointerLeave={(event) => {
+                              if (event.buttons === 0)
+                                handleKeyboardKeyPointerUp(key.note, event);
+                            }}
+                            style={{
+                              position: "absolute",
+                              left: `${(key.leftUnit / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT) * 100}%`,
+                              width: `${(100 / ONSCREEN_KEYBOARD_WHITE_KEY_COUNT) * 0.64}%`,
+                              top: 0,
+                              height: "62%",
+                              borderRadius: "0 0 5px 5px",
+                              border: "1px solid rgba(5, 10, 20, 0.92)",
+                              background: isPressed
+                                ? isGhost
+                                  ? "linear-gradient(180deg, #8d90ff 0%, #4248d8 100%)"
+                                  : "linear-gradient(180deg, #66dcff 0%, #1684b8 100%)"
+                                : "linear-gradient(180deg, #1f2c45 0%, #0b1524 100%)",
+                              color: "rgba(212, 236, 255, 0.9)",
+                              fontFamily: "'Rajdhani', sans-serif",
+                              fontSize: 9,
+                              fontWeight: 700,
+                              letterSpacing: 0.2,
+                              display: "flex",
+                              alignItems: "flex-end",
+                              justifyContent: "center",
+                              paddingBottom: 5,
+                              cursor: "pointer",
+                              transform: isPressed
+                                ? "translateY(2px)"
+                                : "translateY(0px)",
+                              transition:
+                                "transform 90ms ease, background 120ms ease",
+                              zIndex: 2,
+                            }}
+                          >
+                            {key.note}
+                          </button>
+                        );
+                      })}
                   </div>
                   <div
                     style={{
@@ -27359,10 +30892,17 @@ export default function ResumeSpace3D({
                       gap: 10,
                     }}
                   >
-                    <span>Status: {onscreenKeyboardRecording ? "Recording" : onscreenKeyboardPlaying ? "Playing" : "Idle"}</span>
                     <span>
-                      Press keys directly to perform. Autoplay uses recording if available, otherwise
-                      demo melody.
+                      Status:{" "}
+                      {onscreenKeyboardRecording
+                        ? "Recording"
+                        : onscreenKeyboardPlaying
+                          ? "Playing"
+                          : "Idle"}
+                    </span>
+                    <span>
+                      Press keys directly to perform. Autoplay uses recording if
+                      available, otherwise demo melody.
                     </span>
                   </div>
                 </>
@@ -27398,7 +30938,8 @@ export default function ResumeSpace3D({
                   textTransform: "uppercase",
                 }}
               >
-                Slide {aboutSlides.length > 0 ? aboutActiveSlideIndex + 1 : 0}/{aboutSlides.length}
+                Slide {aboutSlides.length > 0 ? aboutActiveSlideIndex + 1 : 0}/
+                {aboutSlides.length}
               </div>
               <button
                 type="button"
@@ -28230,8 +31771,12 @@ export default function ResumeSpace3D({
           />
         </div>
       )}
+      <AboutJourneyDebugPanel
+        enabled={IS_DEBUG}
+        journeyRef={aboutJourneyRef}
+        swarmRef={aboutParticleSwarmRef}
+      />
       <DebugZoneOverlay enabled={IS_DEBUG} />
-
     </>
   );
 }

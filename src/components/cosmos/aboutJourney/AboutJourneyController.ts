@@ -1,5 +1,5 @@
-import * as THREE from "three";
 import type CameraControls from "camera-controls";
+import * as THREE from "three";
 
 // ---------------------------------------------------------------------------
 // Phase definitions — strict linear progression for the About experience
@@ -12,9 +12,14 @@ export const AboutJourneyPhase = {
   EXCITEMENT: 3,
   PATH_FORMING: 4,
   PATH_READY: 5,
+  /** Falcon travel has started while the completed path remains visible. */
+  PATH_TRAVEL: 6,
+  /** Path particles burst outward and fade; hydrate swarm spins up at the about anchor. */
+  PATH_DISPERSING: 7,
 } as const;
 
-export type AboutJourneyPhase = (typeof AboutJourneyPhase)[keyof typeof AboutJourneyPhase];
+export type AboutJourneyPhase =
+  (typeof AboutJourneyPhase)[keyof typeof AboutJourneyPhase];
 
 const PHASE_NAMES: Record<AboutJourneyPhase, string> = {
   [AboutJourneyPhase.IDLE]: "IDLE",
@@ -23,15 +28,38 @@ const PHASE_NAMES: Record<AboutJourneyPhase, string> = {
   [AboutJourneyPhase.EXCITEMENT]: "EXCITEMENT",
   [AboutJourneyPhase.PATH_FORMING]: "PATH_FORMING",
   [AboutJourneyPhase.PATH_READY]: "PATH_READY",
+  [AboutJourneyPhase.PATH_TRAVEL]: "PATH_TRAVEL",
+  [AboutJourneyPhase.PATH_DISPERSING]: "PATH_DISPERSING",
 };
 
 const ALLOWED_TRANSITIONS: Record<AboutJourneyPhase, AboutJourneyPhase[]> = {
   [AboutJourneyPhase.IDLE]: [AboutJourneyPhase.TRANSIT],
-  [AboutJourneyPhase.TRANSIT]: [AboutJourneyPhase.FLY_THROUGH, AboutJourneyPhase.IDLE],
-  [AboutJourneyPhase.FLY_THROUGH]: [AboutJourneyPhase.EXCITEMENT, AboutJourneyPhase.IDLE],
-  [AboutJourneyPhase.EXCITEMENT]: [AboutJourneyPhase.PATH_FORMING, AboutJourneyPhase.IDLE],
-  [AboutJourneyPhase.PATH_FORMING]: [AboutJourneyPhase.PATH_READY, AboutJourneyPhase.IDLE],
-  [AboutJourneyPhase.PATH_READY]: [AboutJourneyPhase.IDLE],
+  [AboutJourneyPhase.TRANSIT]: [
+    AboutJourneyPhase.FLY_THROUGH,
+    AboutJourneyPhase.IDLE,
+  ],
+  [AboutJourneyPhase.FLY_THROUGH]: [
+    AboutJourneyPhase.EXCITEMENT,
+    AboutJourneyPhase.IDLE,
+  ],
+  [AboutJourneyPhase.EXCITEMENT]: [
+    AboutJourneyPhase.PATH_FORMING,
+    AboutJourneyPhase.IDLE,
+  ],
+  [AboutJourneyPhase.PATH_FORMING]: [
+    AboutJourneyPhase.PATH_READY,
+    AboutJourneyPhase.IDLE,
+  ],
+  [AboutJourneyPhase.PATH_READY]: [
+    AboutJourneyPhase.PATH_TRAVEL,
+    AboutJourneyPhase.PATH_DISPERSING,
+    AboutJourneyPhase.IDLE,
+  ],
+  [AboutJourneyPhase.PATH_TRAVEL]: [
+    AboutJourneyPhase.PATH_DISPERSING,
+    AboutJourneyPhase.IDLE,
+  ],
+  [AboutJourneyPhase.PATH_DISPERSING]: [AboutJourneyPhase.IDLE],
 };
 
 // ---------------------------------------------------------------------------
@@ -89,6 +117,12 @@ export interface AboutJourneyCallbacks {
   getShipPosition(): THREE.Vector3 | null;
   getSwarmWorldPosition(): THREE.Vector3 | null;
   vlog(msg: string): void;
+  /** Spawn the secondary “hydrate” swarm at the about / memory-square anchor. */
+  onPathDispersalStarted(): void;
+  /** Swap hydrate swarm into the primary slot, dispose the old path swarm, restore camera limits. */
+  onPathDispersalComplete(): void;
+  /** Any non-IDLE exit: restore camera limits and drop the hydrate swarm if still present. */
+  onAboutJourneyExit(): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +198,10 @@ export class AboutJourneyController {
 
   get excitementProgress(): number {
     if (this._phase !== AboutJourneyPhase.EXCITEMENT) return 0;
-    return Math.min(1, (performance.now() - this._excitementStartedAt) / EXCITEMENT_DURATION_MS);
+    return Math.min(
+      1,
+      (performance.now() - this._excitementStartedAt) / EXCITEMENT_DURATION_MS,
+    );
   }
 
   get ringAxis(): THREE.Vector3 {
@@ -239,20 +276,25 @@ export class AboutJourneyController {
 
     // Camera starts at current position, ends behind the fly-through point
     this._flyStartCam.copy(camera.position);
-    this._flyEndCam.copy(swarmPos)
+    this._flyEndCam
+      .copy(swarmPos)
       .addScaledVector(flyDir, -FLY_THROUGH_CAM_LAG)
       .add(new THREE.Vector3(0, FLY_THROUGH_CAM_HEIGHT, 0));
 
     // Look target: start at swarm center, end past it
     this._flyStartTarget.copy(swarmPos);
-    this._flyEndTarget.copy(swarmPos).addScaledVector(flyDir, FLY_THROUGH_OVERSHOOT);
+    this._flyEndTarget
+      .copy(swarmPos)
+      .addScaledVector(flyDir, FLY_THROUGH_OVERSHOOT);
 
     // Random ring axis (tilted from vertical for visual interest)
-    this._ringAxis.set(
-      (Math.random() - 0.5) * 0.6,
-      0.7 + Math.random() * 0.3,
-      (Math.random() - 0.5) * 0.6,
-    ).normalize();
+    this._ringAxis
+      .set(
+        (Math.random() - 0.5) * 0.6,
+        0.7 + Math.random() * 0.3,
+        (Math.random() - 0.5) * 0.6,
+      )
+      .normalize();
 
     // Stop following ship, disable user controls
     this._cb.setFollowingSpaceship(false);
@@ -277,8 +319,12 @@ export class AboutJourneyController {
       const ctrl = this._cb.getControls();
       if (ctrl) {
         ctrl.setLookAt(
-          this._tmpCam.x, this._tmpCam.y, this._tmpCam.z,
-          this._tmpTarget.x, this._tmpTarget.y, this._tmpTarget.z,
+          this._tmpCam.x,
+          this._tmpCam.y,
+          this._tmpCam.z,
+          this._tmpTarget.x,
+          this._tmpTarget.y,
+          this._tmpTarget.z,
           false,
         );
       }
@@ -363,7 +409,10 @@ export class AboutJourneyController {
         // Calculate where the spear head currently is on the path
         const elapsed = performance.now() - this._pathFormStartedAt;
         const pathLength = this._cosmicPath.getLength();
-        const headT = Math.min(1, (elapsed / 1000 * PATH_HEAD_SPEED) / pathLength);
+        const headT = Math.min(
+          1,
+          ((elapsed / 1000) * PATH_HEAD_SPEED) / pathLength,
+        );
         const headPos = this._cosmicPath.getPointAt(headT);
 
         // Soft-track: gently nudge the camera's look-at target toward the spear head
@@ -385,7 +434,59 @@ export class AboutJourneyController {
     this._cancelRaf();
     this._transition(AboutJourneyPhase.PATH_READY);
     this._cb.enableControls();
-    this._cb.vlog("✨ [AboutJourney] Cosmic path loop complete — ready to travel");
+    this._cb.vlog(
+      "✨ [AboutJourney] Cosmic path loop complete — path held for Falcon travel",
+    );
+  }
+
+  /** Enter travel mode once the Falcon retargets away from About. */
+  beginPathTravel(): void {
+    if (
+      this._phase !== AboutJourneyPhase.PATH_READY &&
+      this._phase !== AboutJourneyPhase.PATH_TRAVEL
+    ) {
+      return;
+    }
+    if (this._phase === AboutJourneyPhase.PATH_READY) {
+      if (!this._transition(AboutJourneyPhase.PATH_TRAVEL)) return;
+      this._cb.showShip();
+      this._cb.setFollowingSpaceship(true);
+      this._cb.enableControls();
+    }
+    this._cb.vlog(
+      "✨ [AboutJourney] Falcon travel engaged on completed cosmic path",
+    );
+  }
+
+  /** Explicitly disperse the path, e.g. when retargeting Falcon to another destination. */
+  beginPathDispersal(reason = "manual"): void {
+    if (
+      this._phase !== AboutJourneyPhase.PATH_READY &&
+      this._phase !== AboutJourneyPhase.PATH_TRAVEL
+    ) {
+      return;
+    }
+    this._beginPathDispersing(reason);
+  }
+
+  private _beginPathDispersing(reason: string): void {
+    if (!this._transition(AboutJourneyPhase.PATH_DISPERSING)) return;
+    this._cb.enableControls();
+    this._cb.onPathDispersalStarted();
+    this._cb.vlog(
+      `✨ [AboutJourney] Path dispersal (${reason}) — hydrate swarm forming at about anchor`,
+    );
+  }
+
+  /** Called from the render loop when the primary swarm has finished dispersing. */
+  notifyDispersalComplete(): void {
+    if (this._phase !== AboutJourneyPhase.PATH_DISPERSING) return;
+    this._cb.onPathDispersalComplete();
+    this._cosmicPath = null;
+    this._transition(AboutJourneyPhase.IDLE);
+    this._cb.vlog(
+      "✨ [AboutJourney] Handoff complete — swarm reset at about anchor",
+    );
   }
 
   // --- Elapsed time in current phase ---
@@ -402,6 +503,7 @@ export class AboutJourneyController {
     if (this._phase === AboutJourneyPhase.IDLE) return;
 
     const prevPhase = this._phase;
+    this._cb.onAboutJourneyExit();
     this._phase = AboutJourneyPhase.IDLE;
     this._phaseStartedAt = performance.now();
     this._cosmicPath = null;
@@ -412,9 +514,7 @@ export class AboutJourneyController {
       this._cb.enableControls();
     }
 
-    this._cb.vlog(
-      `✨ [AboutJourney] ${PHASE_NAMES[prevPhase]} → IDLE (exit)`,
-    );
+    this._cb.vlog(`✨ [AboutJourney] ${PHASE_NAMES[prevPhase]} → IDLE (exit)`);
   }
 
   private _cancelRaf(): void {

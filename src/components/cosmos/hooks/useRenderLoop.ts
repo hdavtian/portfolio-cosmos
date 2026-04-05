@@ -1,29 +1,29 @@
+import type CameraControls from "camera-controls";
 import type React from "react";
 import { useCallback, useRef } from "react";
 import * as THREE from "three";
-import type CameraControls from "camera-controls";
-import { physicsWorld } from "../PhysicsWorld";
+import { dinfo, dwarn } from "../../../lib/debugLog";
+import { emitCosmosEvent } from "../cosmosEventBus";
+import type { DashcamController } from "../dashcamTV";
+import { computeFalconFollowCameraPose } from "../falconFollowCameraPose";
+import { getCosmosPerfFlags } from "../perfConfig";
 import { PhysicsTravelAnchor } from "../PhysicsTravelAnchor";
+import { physicsWorld } from "../PhysicsWorld";
 import type { OrbitAnchor, OrbitItem } from "../ResumeSpace3D.orbital";
 import type { SceneRef } from "../ResumeSpace3D.types";
-import type { TVPreviewController } from "../targetPreviewTV";
-import type { DashcamController } from "../dashcamTV";
 import {
-  FOLLOW_DISTANCE,
-  FOLLOW_HEIGHT,
-  INTRO_ORBIT_RADIUS,
+  CONTROLS_MAX_DIST,
   ENGINE_LIGHT_BASE_DIST,
   ENGINE_LIGHT_RANGE,
-  NEAR_EXPLORE,
-  CONTROLS_MAX_DIST,
-  NEAR_CABIN,
-  INTERIOR_MIN_DIST,
+  FOLLOW_DISTANCE,
+  FOLLOW_HEIGHT,
   INTERIOR_MAX_DIST,
+  INTERIOR_MIN_DIST,
+  INTRO_ORBIT_RADIUS,
+  NEAR_CABIN,
+  NEAR_EXPLORE,
 } from "../scaleConfig";
-import { computeFalconFollowCameraPose } from "../falconFollowCameraPose";
-import { emitCosmosEvent } from "../cosmosEventBus";
-import { getCosmosPerfFlags } from "../perfConfig";
-import { dinfo, dwarn } from "../../../lib/debugLog";
+import type { TVPreviewController } from "../targetPreviewTV";
 
 export const useRenderLoop = () => {
   const animationFrameRef = useRef<number | null>(null);
@@ -116,7 +116,10 @@ export const useRenderLoop = () => {
         update: (delta: number, camera: THREE.Camera) => void;
         isActive: () => boolean;
       } | null>;
-      updateMoonOrbit: (dt: number, ship: THREE.Object3D) => {
+      updateMoonOrbit: (
+        dt: number,
+        ship: THREE.Object3D,
+      ) => {
         cameraPosition: THREE.Vector3;
         cameraTarget: THREE.Vector3;
         lerpFactor: number;
@@ -144,7 +147,10 @@ export const useRenderLoop = () => {
       orbitAnchors: OrbitAnchor[];
       camera: THREE.Camera;
       controls: CameraControls;
-      composer: { render: () => void; setSize?: (w: number, h: number) => void };
+      composer: {
+        render: () => void;
+        setSize?: (w: number, h: number) => void;
+      };
       labelRenderer: {
         render: (scene: THREE.Scene, camera: THREE.Camera) => void;
       };
@@ -214,8 +220,8 @@ export const useRenderLoop = () => {
 
       void physicsWorld.init();
       let lastFrameTime = performance.now();
-      // Default cockpit/cabin positions — from ship-labeling system.
-      // Cockpit INTERIOR — offset inward from the exterior surface label.
+      // Default cockpit/cabin positions ΓÇö from ship-labeling system.
+      // Cockpit INTERIOR ΓÇö offset inward from the exterior surface label.
       // Exterior surface was (-6.2, 3.6, 7.1). Interior: ~0.8 inward (+X),
       // ~0.5 lower (seated eye), ~1.1 behind windshield.
       // NOTE: these are multiplied by ship.scale (0.5) in the transform below.
@@ -346,10 +352,13 @@ export const useRenderLoop = () => {
         if (lightspeedStreakColors) {
           const ci = i * 6;
           // Some streaks intentionally fainter for depth layering.
-          const tone = Math.random() < 0.34 ? 0.26 + Math.random() * 0.22 : 0.62 + Math.random() * 0.38;
+          const tone =
+            Math.random() < 0.34
+              ? 0.26 + Math.random() * 0.22
+              : 0.62 + Math.random() * 0.38;
           const r = 0.72 * tone;
           const g = 0.85 * tone;
-          const b = 1.00 * tone;
+          const b = 1.0 * tone;
           lightspeedStreakColors[ci] = r;
           lightspeedStreakColors[ci + 1] = g;
           lightspeedStreakColors[ci + 2] = b;
@@ -359,7 +368,13 @@ export const useRenderLoop = () => {
         }
       };
 
-      const writeThickStreakCopies = (i: number, x: number, y: number, z: number, endZ: number) => {
+      const writeThickStreakCopies = (
+        i: number,
+        x: number,
+        y: number,
+        z: number,
+        endZ: number,
+      ) => {
         if (!lightspeedThickPositions) return;
         const base = i * LIGHTSPEED_THICK_COPIES * 6;
         // 3 close parallel lines read visually as "thicker streaks".
@@ -399,10 +414,13 @@ export const useRenderLoop = () => {
         if (lightspeedThickColors) {
           const base = i * LIGHTSPEED_THICK_COPIES * 6;
           // Thick lines also get faint variants, but generally brighter than thin set.
-          const tone = Math.random() < 0.28 ? 0.34 + Math.random() * 0.24 : 0.68 + Math.random() * 0.32;
+          const tone =
+            Math.random() < 0.28
+              ? 0.34 + Math.random() * 0.24
+              : 0.68 + Math.random() * 0.32;
           const r = 0.78 * tone;
-          const g = 0.90 * tone;
-          const b = 1.00 * tone;
+          const g = 0.9 * tone;
+          const b = 1.0 * tone;
           for (let c = 0; c < LIGHTSPEED_THICK_COPIES; c += 1) {
             const ci = base + c * 6;
             lightspeedThickColors[ci] = r;
@@ -417,7 +435,9 @@ export const useRenderLoop = () => {
 
       const ensureLightspeedStreaks = () => {
         if (lightspeedStreakGroup && lightspeedThickGroup) return;
-        lightspeedStreakPositions = new Float32Array(LIGHTSPEED_STREAK_COUNT * 6);
+        lightspeedStreakPositions = new Float32Array(
+          LIGHTSPEED_STREAK_COUNT * 6,
+        );
         lightspeedStreakMeta = new Float32Array(LIGHTSPEED_STREAK_COUNT * 5);
         lightspeedStreakColors = new Float32Array(LIGHTSPEED_STREAK_COUNT * 6);
         for (let i = 0; i < LIGHTSPEED_STREAK_COUNT; i += 1) {
@@ -450,7 +470,9 @@ export const useRenderLoop = () => {
         lightspeedThickPositions = new Float32Array(
           LIGHTSPEED_THICK_STREAK_COUNT * LIGHTSPEED_THICK_COPIES * 6,
         );
-        lightspeedThickMeta = new Float32Array(LIGHTSPEED_THICK_STREAK_COUNT * 5);
+        lightspeedThickMeta = new Float32Array(
+          LIGHTSPEED_THICK_STREAK_COUNT * 5,
+        );
         lightspeedThickColors = new Float32Array(
           LIGHTSPEED_THICK_STREAK_COUNT * LIGHTSPEED_THICK_COPIES * 6,
         );
@@ -469,7 +491,7 @@ export const useRenderLoop = () => {
         const thickMat = new THREE.LineBasicMaterial({
           color: 0xe8f4ff,
           transparent: true,
-          opacity: 0.30,
+          opacity: 0.3,
           vertexColors: true,
           depthTest: false,
           depthWrite: false,
@@ -605,7 +627,10 @@ export const useRenderLoop = () => {
           toneMapped: false,
           alphaTest: 0.01,
         });
-        cometTailGlow = new THREE.Points(cometTailGeometry, cometTailGlowMaterial);
+        cometTailGlow = new THREE.Points(
+          cometTailGeometry,
+          cometTailGlowMaterial,
+        );
         cometTailGlow.renderOrder = 995;
         cometGroup.add(cometTailGlow);
 
@@ -622,7 +647,10 @@ export const useRenderLoop = () => {
           toneMapped: false,
           alphaTest: 0.01,
         });
-        cometTailCore = new THREE.Points(cometTailGeometry, cometTailCoreMaterial);
+        cometTailCore = new THREE.Points(
+          cometTailGeometry,
+          cometTailCoreMaterial,
+        );
         cometTailCore.renderOrder = 996;
         cometGroup.add(cometTailCore);
         cometTailMeta = new Float32Array(COMET_TAIL_POINT_COUNT * 6);
@@ -732,7 +760,10 @@ export const useRenderLoop = () => {
         cometSide.normalize();
         cometDepth.crossVectors(cometDirection, cometSide).normalize();
 
-        const axisSideRange = THREE.MathUtils.randFloat(startXAbs * 0.35, startXAbs);
+        const axisSideRange = THREE.MathUtils.randFloat(
+          startXAbs * 0.35,
+          startXAbs,
+        );
         const axisDepthRange = THREE.MathUtils.randFloat(
           Math.abs(startZMin) * 0.28,
           Math.abs(startZMax),
@@ -765,8 +796,10 @@ export const useRenderLoop = () => {
           const idx = i * 6;
           const lag = t * 0.86 + Math.random() * 0.06;
           cometTailMeta[idx] = lag;
-          cometTailMeta[idx + 1] = (Math.random() - 0.5) * 2.8 * cometTailSpread;
-          cometTailMeta[idx + 2] = (Math.random() - 0.5) * 1.8 * cometTailSpread;
+          cometTailMeta[idx + 1] =
+            (Math.random() - 0.5) * 2.8 * cometTailSpread;
+          cometTailMeta[idx + 2] =
+            (Math.random() - 0.5) * 1.8 * cometTailSpread;
           cometTailMeta[idx + 3] = Math.random() * Math.PI * 2;
           cometTailMeta[idx + 4] = 0.7 + Math.random() * 1.8;
           cometTailMeta[idx + 5] = 0.4 + Math.random() * 0.9;
@@ -822,7 +855,8 @@ export const useRenderLoop = () => {
         const cometAngle = Math.atan2(cometDirection.y, cometDirection.x);
 
         const fadeIn = THREE.MathUtils.smoothstep(progress, 0, 0.15);
-        const fadeOut = 1 - THREE.MathUtils.smoothstep(progress, cometFadeOutStart, 1);
+        const fadeOut =
+          1 - THREE.MathUtils.smoothstep(progress, cometFadeOutStart, 1);
         const alpha = fadeIn * fadeOut * cometAlphaScale;
         const flicker = 0.92 + Math.sin(now * 0.025) * 0.08;
         cometTailCoreMaterial.opacity = 0.82 * alpha * flicker;
@@ -846,9 +880,9 @@ export const useRenderLoop = () => {
           1,
         );
 
-        const tailPositions = (cometTailGeometry.getAttribute(
-          "position",
-        ) as THREE.BufferAttribute).array as Float32Array;
+        const tailPositions = (
+          cometTailGeometry.getAttribute("position") as THREE.BufferAttribute
+        ).array as Float32Array;
         for (let i = 0; i < COMET_TAIL_POINT_COUNT; i += 1) {
           const metaIndex = i * 6;
           const lag = cometTailMeta[metaIndex];
@@ -861,7 +895,8 @@ export const useRenderLoop = () => {
           cometTailPoint.lerpVectors(cometStart, cometEnd, p);
           const stretch = lag * cometTrailLength * (0.75 + drift * 0.25);
           cometTailPoint.addScaledVector(cometDirection, -stretch);
-          const organic = Math.sin(now * 0.006 * speed + phase) * (0.2 + lag * 0.7);
+          const organic =
+            Math.sin(now * 0.006 * speed + phase) * (0.2 + lag * 0.7);
           cometTailPoint.addScaledVector(cometSide, sideAmp + organic);
           cometTailPoint.addScaledVector(
             cometDepth,
@@ -878,7 +913,7 @@ export const useRenderLoop = () => {
       let _perfFrameCount = 0;
       let _perfSlowFrames = 0;
 
-      // ── Runtime perf config ──────────────────────────────────────
+      // ΓöÇΓöÇ Runtime perf config ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
       const _perfFlags = getCosmosPerfFlags();
       let _pressureFrames = 0;
       let _stableFrames = 0;
@@ -898,10 +933,13 @@ export const useRenderLoop = () => {
        * Fast degrade (step 0.1 per spike window), slow recover (step 0.02).
        * Only engages in moonOrbit / autopilot when profile is "balanced".
        */
-      const _updateAdaptiveQuality = (frameMs: number, isModeEligible: boolean) => {
+      const _updateAdaptiveQuality = (
+        frameMs: number,
+        isModeEligible: boolean,
+      ) => {
         if (_perfFlags.profile === "baseline") return;
         if (!isModeEligible) {
-          // Outside eligible modes — recover immediately if degraded
+          // Outside eligible modes ΓÇö recover immediately if degraded
           if (_currentRenderScale < 1) {
             _currentRenderScale = 1;
             _applyRenderScale();
@@ -914,15 +952,24 @@ export const useRenderLoop = () => {
         if (frameMs > _perfFlags.spikeThresholdMs) {
           _pressureFrames++;
           _stableFrames = 0;
-          if (_pressureFrames >= _perfFlags.degradeAfterFrames && _currentRenderScale > _perfFlags.minRenderScale) {
-            _currentRenderScale = Math.max(_perfFlags.minRenderScale, _currentRenderScale - 0.1);
+          if (
+            _pressureFrames >= _perfFlags.degradeAfterFrames &&
+            _currentRenderScale > _perfFlags.minRenderScale
+          ) {
+            _currentRenderScale = Math.max(
+              _perfFlags.minRenderScale,
+              _currentRenderScale - 0.1,
+            );
             _pressureFrames = 0;
             _applyRenderScale();
           }
         } else {
           _stableFrames++;
           _pressureFrames = Math.max(0, _pressureFrames - 1);
-          if (_stableFrames >= _perfFlags.recoverAfterFrames && _currentRenderScale < 1) {
+          if (
+            _stableFrames >= _perfFlags.recoverAfterFrames &&
+            _currentRenderScale < 1
+          ) {
             _currentRenderScale = Math.min(1, _currentRenderScale + 0.02);
             _stableFrames = 0;
             _applyRenderScale();
@@ -940,7 +987,9 @@ export const useRenderLoop = () => {
         composer.setSize?.(_rendererSize.x, _rendererSize.y);
         _adaptiveActive = _currentRenderScale < 1;
         if (_adaptiveActive) {
-          dinfo(`[PERF:adaptive] scale=${_currentRenderScale.toFixed(2)} dpr=${targetDpr.toFixed(2)}`);
+          dinfo(
+            `[PERF:adaptive] scale=${_currentRenderScale.toFixed(2)} dpr=${targetDpr.toFixed(2)}`,
+          );
         }
       };
 
@@ -1006,7 +1055,7 @@ export const useRenderLoop = () => {
           0.16,
         );
 
-        // ─── SHIP EXPLORE MODE ──────────────────────────────────
+        // ΓöÇΓöÇΓöÇ SHIP EXPLORE MODE ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
         // FPS-style free-cam locked near the ship. WASD to move,
         // mouse drag handled by OrbitControls for rotation.
         // The UI overlay reads shipExploreCoordsRef to show the
@@ -1102,7 +1151,7 @@ export const useRenderLoop = () => {
           }
           return; // Skip all other camera/render logic
         }
-        // ─── END EXPLORE MODE ───────────────────────────────────
+        // ΓöÇΓöÇΓöÇ END EXPLORE MODE ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
         let shipIsIdleHover = false;
         let moonOrbitActive = false;
@@ -1124,7 +1173,7 @@ export const useRenderLoop = () => {
             );
             cockpitPosResolved = true;
             vlog(
-              `✈️ Render loop: cockpit resolved [${cockpitLocalPos.x.toFixed(2)}, ${cockpitLocalPos.y.toFixed(2)}, ${cockpitLocalPos.z.toFixed(2)}]`,
+              `Γ£ê∩╕Å Render loop: cockpit resolved [${cockpitLocalPos.x.toFixed(2)}, ${cockpitLocalPos.y.toFixed(2)}, ${cockpitLocalPos.z.toFixed(2)}]`,
             );
           }
 
@@ -1184,7 +1233,11 @@ export const useRenderLoop = () => {
                 orbitCenter.z + Math.sin(orbitAngle) * orbitRadius,
               );
 
-              _cinLookM.lookAt(ship.position, orbitCenter, _cinUpV.set(0, 1, 0));
+              _cinLookM.lookAt(
+                ship.position,
+                orbitCenter,
+                _cinUpV.set(0, 1, 0),
+              );
               _cinQuat.setFromRotationMatrix(_cinLookM);
               const forwardOffset = ship.userData.forwardOffset as
                 | THREE.Quaternion
@@ -1219,7 +1272,9 @@ export const useRenderLoop = () => {
                   easedPos < 0.5 ? easedPos / 0.5 : (easedPos - 0.5) / 0.5;
                 const segOneMinus = 1 - segT;
                 if (easedPos < 0.5) {
-                  _cinBezA.copy(cinematic.controlPos).multiplyScalar(2 * segOneMinus * segT);
+                  _cinBezA
+                    .copy(cinematic.controlPos)
+                    .multiplyScalar(2 * segOneMinus * segT);
                   _cinBezB.copy(mid).multiplyScalar(segT * segT);
                   currentPos = _cinPos
                     .copy(cinematic.startPos)
@@ -1229,7 +1284,9 @@ export const useRenderLoop = () => {
                 } else {
                   const controlTwo =
                     cinematic.controlPos2 || cinematic.controlPos;
-                  _cinBezA.copy(controlTwo).multiplyScalar(2 * segOneMinus * segT);
+                  _cinBezA
+                    .copy(controlTwo)
+                    .multiplyScalar(2 * segOneMinus * segT);
                   _cinBezB.copy(cinematic.endPos).multiplyScalar(segT * segT);
                   currentPos = _cinPos
                     .copy(mid)
@@ -1238,9 +1295,15 @@ export const useRenderLoop = () => {
                     .add(_cinBezB);
                 }
               } else if (cinematic.controlPos2) {
-                _cinBezA.copy(cinematic.controlPos).multiplyScalar(3 * oneMinus * oneMinus * easedPos);
-                _cinBezB.copy(cinematic.controlPos2).multiplyScalar(3 * oneMinus * easedPos * easedPos);
-                _cinBezC.copy(cinematic.endPos).multiplyScalar(easedPos * easedPos * easedPos);
+                _cinBezA
+                  .copy(cinematic.controlPos)
+                  .multiplyScalar(3 * oneMinus * oneMinus * easedPos);
+                _cinBezB
+                  .copy(cinematic.controlPos2)
+                  .multiplyScalar(3 * oneMinus * easedPos * easedPos);
+                _cinBezC
+                  .copy(cinematic.endPos)
+                  .multiplyScalar(easedPos * easedPos * easedPos);
                 currentPos = _cinPos
                   .copy(cinematic.startPos)
                   .multiplyScalar(oneMinus * oneMinus * oneMinus)
@@ -1248,8 +1311,12 @@ export const useRenderLoop = () => {
                   .add(_cinBezB)
                   .add(_cinBezC);
               } else {
-                _cinBezA.copy(cinematic.controlPos).multiplyScalar(2 * oneMinus * easedPos);
-                _cinBezB.copy(cinematic.endPos).multiplyScalar(easedPos * easedPos);
+                _cinBezA
+                  .copy(cinematic.controlPos)
+                  .multiplyScalar(2 * oneMinus * easedPos);
+                _cinBezB
+                  .copy(cinematic.endPos)
+                  .multiplyScalar(easedPos * easedPos);
                 currentPos = _cinPos
                   .copy(cinematic.startPos)
                   .multiplyScalar(oneMinus * oneMinus)
@@ -1292,7 +1359,8 @@ export const useRenderLoop = () => {
                   );
                   const angle =
                     easedSpin * Math.PI * 2 * (cinematic.spinTurns || 1);
-                  _cinRollAxis.set(0, 0, -1)
+                  _cinRollAxis
+                    .set(0, 0, -1)
                     .applyQuaternion(currentQuat)
                     .normalize();
                   _cinSpinQ.setFromAxisAngle(_cinRollAxis, angle);
@@ -1314,7 +1382,8 @@ export const useRenderLoop = () => {
                 );
                 if (progress >= retreatStart) {
                   const retreatT = THREE.MathUtils.smootherstep(
-                    (progress - retreatStart) / Math.max(0.0001, 1 - retreatStart),
+                    (progress - retreatStart) /
+                      Math.max(0.0001, 1 - retreatStart),
                     0,
                     1,
                   );
@@ -1378,7 +1447,7 @@ export const useRenderLoop = () => {
                   .lerp(cinematic.settleTargetPos, easedSettle);
               }
               shipIsIdleHover = true; // skip physics while idling in cinematic hover
-              // Cinematic idle hover — intentionally visible so the ship never
+              // Cinematic idle hover ΓÇö intentionally visible so the ship never
               // looks frozen after the intro settles.
               const floatX = Math.sin(hoverElapsed * 0.36) * 0.11;
               const floatY = Math.sin(hoverElapsed * 0.52) * 0.17;
@@ -1439,7 +1508,8 @@ export const useRenderLoop = () => {
               const speedFactor = Math.min(speed / 60, 1.6);
               const baseIntensity = 0.8;
               engineLight.intensity = baseIntensity + speedFactor * 3.2;
-              engineLight.distance = ENGINE_LIGHT_BASE_DIST + speedFactor * ENGINE_LIGHT_RANGE;
+              engineLight.distance =
+                ENGINE_LIGHT_BASE_DIST + speedFactor * ENGINE_LIGHT_RANGE;
 
               const blueAmount = 0.3 + speedFactor * 0.7;
               engineLight.color.setRGB(
@@ -1506,7 +1576,7 @@ export const useRenderLoop = () => {
                   !manual.isTurboActive
                 ) {
                   manual.isTurboActive = true;
-                  vlog("🔥 TURBO MODE ACTIVATED!");
+                  vlog("≡ƒöÑ TURBO MODE ACTIVATED!");
                 }
               } else {
                 manual.turboStartTime = 0;
@@ -1572,7 +1642,8 @@ export const useRenderLoop = () => {
               const turboBoost = manual.isTurboActive ? 3 : 0;
               const boostIntensity = manual.acceleration * 8 + turboBoost;
               engineLight.intensity = baseIntensity + boostIntensity;
-              engineLight.distance = ENGINE_LIGHT_BASE_DIST + boostIntensity * ENGINE_LIGHT_RANGE;
+              engineLight.distance =
+                ENGINE_LIGHT_BASE_DIST + boostIntensity * ENGINE_LIGHT_RANGE;
 
               if (manual.acceleration > 0) {
                 const blueAmount = 0.3 + manual.acceleration * 0.7;
@@ -1656,7 +1727,9 @@ export const useRenderLoop = () => {
 
             // About journey phase (used to skip camera overrides during ARRIVING glide)
             const aboutJourneyCtrlRef = (params as Record<string, unknown>)
-              .aboutJourneyRef as React.MutableRefObject<{ phase: number } | null> | undefined;
+              .aboutJourneyRef as
+              | React.MutableRefObject<{ phase: number } | null>
+              | undefined;
             const _aboutPhase = aboutJourneyCtrlRef?.current?.phase ?? 0;
 
             // Moon orbit camera override (restores orbit behavior after arrival)
@@ -1724,7 +1797,11 @@ export const useRenderLoop = () => {
               // Re-enable controls ONLY if no subsystem has claimed them.
               // About journey phases 2 (FLY_THROUGH) and 4 (PATH_FORMING) disable controls.
               const _aboutCtrlClaimed = _aboutPhase === 2 || _aboutPhase === 4;
-              if (sceneRef.current.controls && !sceneRef.current.controls.enabled && !_aboutCtrlClaimed) {
+              if (
+                sceneRef.current.controls &&
+                !sceneRef.current.controls.enabled &&
+                !_aboutCtrlClaimed
+              ) {
                 sceneRef.current.controls.enabled = true;
               }
               if (_orbitUpActive) {
@@ -1752,8 +1829,8 @@ export const useRenderLoop = () => {
 
                   // IMPORTANT: the labeled local coordinates are in the mesh's
                   // local space.  The ship group has scale 0.5, so we must
-                  // apply scale before rotation — otherwise the camera ends up
-                  // at 2× the correct distance (outside the hull).
+                  // apply scale before rotation ΓÇö otherwise the camera ends up
+                  // at 2├ù the correct distance (outside the hull).
                   const shipScale = ship.scale.x; // uniform scale
                   desiredCameraPos
                     .copy(localCamera)
@@ -1783,8 +1860,12 @@ export const useRenderLoop = () => {
 
                   cc.minDistance = INTERIOR_MIN_DIST;
                   cc.maxDistance = INTERIOR_MAX_DIST;
-                  cc.minPolarAngle = useCockpit ? Math.PI * 0.25 : Math.PI * 0.1;
-                  cc.maxPolarAngle = useCockpit ? Math.PI * 0.75 : Math.PI * 0.9;
+                  cc.minPolarAngle = useCockpit
+                    ? Math.PI * 0.25
+                    : Math.PI * 0.1;
+                  cc.maxPolarAngle = useCockpit
+                    ? Math.PI * 0.75
+                    : Math.PI * 0.9;
 
                   if (camera instanceof THREE.PerspectiveCamera) {
                     const desiredNear = useCockpit ? NEAR_EXPLORE : NEAR_CABIN;
@@ -1834,7 +1915,8 @@ export const useRenderLoop = () => {
                         mats.forEach((mat: any) => {
                           if (mat.emissiveIntensity > 1) {
                             if (mat._origEmissiveIntensity === undefined) {
-                              mat._origEmissiveIntensity = mat.emissiveIntensity;
+                              mat._origEmissiveIntensity =
+                                mat.emissiveIntensity;
                             }
                             mat.emissiveIntensity = 0.35;
                           }
@@ -1865,7 +1947,12 @@ export const useRenderLoop = () => {
                     _tmpDesired
                       .copy(desiredCameraPos)
                       .addScaledVector(_tmpLookDir, 2);
-                    cc.setTarget(_tmpDesired.x, _tmpDesired.y, _tmpDesired.z, false);
+                    cc.setTarget(
+                      _tmpDesired.x,
+                      _tmpDesired.y,
+                      _tmpDesired.z,
+                      false,
+                    );
                     cc.setPosition(
                       desiredCameraPos.x,
                       desiredCameraPos.y,
@@ -1890,9 +1977,21 @@ export const useRenderLoop = () => {
                   const zFront = useCockpit ? 0.55 : 1.55;
 
                   _tmpCamClamped.set(
-                    THREE.MathUtils.clamp(_tmpCamLocal.x, anchor.x - xPad, anchor.x + xPad),
-                    THREE.MathUtils.clamp(_tmpCamLocal.y, anchor.y - yPad, anchor.y + yPad),
-                    THREE.MathUtils.clamp(_tmpCamLocal.z, anchor.z - zBack, anchor.z + zFront),
+                    THREE.MathUtils.clamp(
+                      _tmpCamLocal.x,
+                      anchor.x - xPad,
+                      anchor.x + xPad,
+                    ),
+                    THREE.MathUtils.clamp(
+                      _tmpCamLocal.y,
+                      anchor.y - yPad,
+                      anchor.y + yPad,
+                    ),
+                    THREE.MathUtils.clamp(
+                      _tmpCamLocal.z,
+                      anchor.z - zBack,
+                      anchor.z + zFront,
+                    ),
                   );
 
                   if (_tmpCamClamped.distanceToSquared(_tmpCamLocal) > 1e-6) {
@@ -1978,7 +2077,8 @@ export const useRenderLoop = () => {
                     cc.minDistance = 5;
                     cc.maxDistance = CONTROLS_MAX_DIST;
                   } else {
-                    const lightspeedActive = !!manualFlightRef.current?.isLightspeedActive;
+                    const lightspeedActive =
+                      !!manualFlightRef.current?.isLightspeedActive;
                     cc.moveTo(
                       ship.position.x,
                       ship.position.y,
@@ -1995,7 +2095,8 @@ export const useRenderLoop = () => {
                     const wantDist = manualFlightRef.current?.isLightspeedActive
                       ? Math.max(2.8, baseFollowDist / 12)
                       : baseFollowDist;
-                    const normalSmooth = optionsRef.current.spaceCameraSmoothTime ?? 0.25;
+                    const normalSmooth =
+                      optionsRef.current.spaceCameraSmoothTime ?? 0.25;
                     cc.smoothTime = manualFlightRef.current?.isLightspeedActive
                       ? Math.max(0.03, normalSmooth / 10)
                       : normalSmooth;
@@ -2014,9 +2115,14 @@ export const useRenderLoop = () => {
                       const desiredCam = _tmpDesired
                         .copy(ship.position)
                         .addScaledVector(back, wantDist)
-                        .addScaledVector(new THREE.Vector3(0, 1, 0), followHeight);
+                        .addScaledVector(
+                          new THREE.Vector3(0, 1, 0),
+                          followHeight,
+                        );
                       // Camera-only rig pitch: rotate boom vector around ship-right axis.
-                      const rel = _tmpScaled.copy(desiredCam).sub(ship.position);
+                      const rel = _tmpScaled
+                        .copy(desiredCam)
+                        .sub(ship.position);
                       const toShip = _tmpLookDir
                         .copy(ship.position)
                         .sub(desiredCam)
@@ -2024,7 +2130,10 @@ export const useRenderLoop = () => {
                       const right = _tmpHoverFloat
                         .crossVectors(toShip, new THREE.Vector3(0, 1, 0))
                         .normalize();
-                      if (right.lengthSq() > 1e-6 && Math.abs(lightspeedRigPitchRad) > 1e-4) {
+                      if (
+                        right.lengthSq() > 1e-6 &&
+                        Math.abs(lightspeedRigPitchRad) > 1e-4
+                      ) {
                         rel.applyAxisAngle(right, lightspeedRigPitchRad);
                         desiredCam.copy(ship.position).add(rel);
                       }
@@ -2052,8 +2161,12 @@ export const useRenderLoop = () => {
             userData: Record<string, unknown>;
           };
           const now = performance.now();
-          const prevPos = ship.userData._enginePanelPrevPos as THREE.Vector3 | undefined;
-          const prevTime = ship.userData._enginePanelPrevTime as number | undefined;
+          const prevPos = ship.userData._enginePanelPrevPos as
+            | THREE.Vector3
+            | undefined;
+          const prevTime = ship.userData._enginePanelPrevTime as
+            | number
+            | undefined;
           let speedUnitsPerSec = 0;
           if (prevPos && prevTime) {
             const dt = Math.max((now - prevTime) / 1000, 1 / 120);
@@ -2072,21 +2185,30 @@ export const useRenderLoop = () => {
               }>
             | undefined;
           if (panelMaterials && panelMaterials.length > 0) {
-            const lightspeedActive = !!manualFlightRef.current?.isLightspeedActive;
-            let speedNorm = THREE.MathUtils.clamp(speedUnitsPerSec / 220, 0, 1.8);
+            const lightspeedActive =
+              !!manualFlightRef.current?.isLightspeedActive;
+            let speedNorm = THREE.MathUtils.clamp(
+              speedUnitsPerSec / 220,
+              0,
+              1.8,
+            );
             if (lightspeedActive) {
               speedNorm = Math.max(speedNorm, 1.1);
             }
             panelMaterials.forEach((entry) => {
               const mat = entry.material;
-              if (!mat.emissive || typeof mat.emissiveIntensity !== "number") return;
+              if (!mat.emissive || typeof mat.emissiveIntensity !== "number")
+                return;
               const baseIntensity = Math.max(0.15, entry.baseIntensity || 1);
               const tintMix = 0.22 + Math.min(0.42, speedNorm * 0.24);
-              const intensityBoost = 1 + speedNorm * 2.5 + (lightspeedActive ? 2.3 : 0);
+              const intensityBoost =
+                1 + speedNorm * 2.5 + (lightspeedActive ? 2.3 : 0);
               mat.emissive
                 .copy(entry.baseEmissive)
                 .lerp(_engineTint, tintMix)
-                .multiplyScalar(1 + speedNorm * 1.7 + (lightspeedActive ? 1.15 : 0));
+                .multiplyScalar(
+                  1 + speedNorm * 1.7 + (lightspeedActive ? 1.15 : 0),
+                );
               mat.emissiveIntensity = THREE.MathUtils.clamp(
                 baseIntensity * intensityBoost,
                 baseIntensity * 0.8,
@@ -2148,8 +2270,11 @@ export const useRenderLoop = () => {
           const fallbackFocusDistance = 52;
           let focusDistance = fallbackFocusDistance;
           try {
-            (controls as unknown as { getTarget: (out: THREE.Vector3) => THREE.Vector3 })
-              .getTarget(focusTarget);
+            (
+              controls as unknown as {
+                getTarget: (out: THREE.Vector3) => THREE.Vector3;
+              }
+            ).getTarget(focusTarget);
             const camToTarget = camera.position.distanceTo(focusTarget);
             if (elevatorShaftMode) {
               // In elevator mode we want opposite-window content crisp while
@@ -2188,7 +2313,7 @@ export const useRenderLoop = () => {
           skipOcclusion: !!shipCinematicRef.current?.active,
         });
 
-        // Only call controls.update() here when NOT inside the ship —
+        // Only call controls.update() here when NOT inside the ship ΓÇö
         // interior mode already called it in the block above.
         if (!insideShipRef.current && (!moonOrbitActive || orbitUserCamFree)) {
           controls.update(deltaSeconds);
@@ -2202,16 +2327,20 @@ export const useRenderLoop = () => {
 
         // About journey: frame-accurate arrival detection
         const aboutJourneyHandle = (params as Record<string, unknown>)
-          .aboutJourneyRef as React.MutableRefObject<{
-          phase: number;
-          checkArrival(): void;
-          excitementProgress: number;
-          ringAxis: { x: number; y: number; z: number };
-          flyThroughPoint: { x: number; y: number; z: number };
-          cosmicPath: unknown;
-        } | null> | undefined;
+          .aboutJourneyRef as
+          | React.MutableRefObject<{
+              phase: number;
+              checkArrival(): void;
+              excitementProgress: number;
+              ringAxis: { x: number; y: number; z: number };
+              flyThroughPoint: { x: number; y: number; z: number };
+              cosmicPath: unknown;
+            } | null>
+          | undefined;
         const aboutPendingRef = (params as Record<string, unknown>)
-          .aboutJourneyPendingEntryRef as React.MutableRefObject<boolean> | undefined;
+          .aboutJourneyPendingEntryRef as
+          | React.MutableRefObject<boolean>
+          | undefined;
         if (
           aboutPendingRef?.current &&
           aboutJourneyHandle?.current &&
@@ -2225,17 +2354,43 @@ export const useRenderLoop = () => {
 
         // About particle swarm: pass phase data for excitement/path-forming visuals
         const aboutSwarmHandle = (params as Record<string, unknown>)
-          .aboutParticleSwarmRef as React.MutableRefObject<{
-          update: (
-            dt: number,
-            elapsed: number,
-            phase: number,
-            excitementProgress: number,
-            ringAxis: any,
-            flyThroughPoint: any,
-            cosmicPath: any,
-          ) => boolean;
-        } | null> | undefined;
+          .aboutParticleSwarmRef as
+          | React.MutableRefObject<{
+              update: (
+                dt: number,
+                elapsed: number,
+                phase: number,
+                excitementProgress: number,
+                ringAxis: any,
+                flyThroughPoint: any,
+                cosmicPath: any,
+              ) =>
+                | boolean
+                | {
+                    pathLoopCompleteEdge?: boolean;
+                    dispersalCompleteEdge?: boolean;
+                  };
+            } | null>
+          | undefined;
+        const aboutHydrateSwarmHandle = (params as Record<string, unknown>)
+          .aboutHydrateSwarmRef as
+          | React.MutableRefObject<{
+              update: (
+                dt: number,
+                elapsed: number,
+                phase: number,
+                excitementProgress: number,
+                ringAxis: any,
+                flyThroughPoint: any,
+                cosmicPath: any,
+              ) =>
+                | boolean
+                | {
+                    pathLoopCompleteEdge?: boolean;
+                    dispersalCompleteEdge?: boolean;
+                  };
+            } | null>
+          | undefined;
         if (aboutSwarmHandle?.current) {
           const elapsed = frameNow / 1000;
           const jCtrl = aboutJourneyHandle?.current;
@@ -2244,12 +2399,48 @@ export const useRenderLoop = () => {
           const rAxis = jCtrl?.ringAxis ?? { x: 0, y: 1, z: 0 };
           const ftPt = jCtrl?.flyThroughPoint ?? { x: 0, y: 0, z: 0 };
           const cPath = jCtrl?.cosmicPath ?? null;
-          const pathDone = aboutSwarmHandle.current.update(
-            deltaSeconds, elapsed, phase, excProg, rAxis as any, ftPt as any, cPath as any,
+          const frameSignals = aboutSwarmHandle.current.update(
+            deltaSeconds,
+            elapsed,
+            phase,
+            excProg,
+            rAxis as any,
+            ftPt as any,
+            cPath as any,
           );
+          const pathLoopCompleteEdge =
+            typeof frameSignals === "boolean"
+              ? frameSignals
+              : !!frameSignals?.pathLoopCompleteEdge;
+          const dispersalCompleteEdge =
+            typeof frameSignals === "object" &&
+            !!frameSignals?.dispersalCompleteEdge;
+
           // Notify controller when the path trace completes
-          if (pathDone && phase === 4 && aboutJourneyHandle?.current) {
+          if (
+            pathLoopCompleteEdge &&
+            phase === 4 &&
+            aboutJourneyHandle?.current
+          ) {
             (aboutJourneyHandle.current as any).notifyPathComplete?.();
+          }
+
+          // Notify controller when path dispersal fully fades out.
+          if (dispersalCompleteEdge && aboutJourneyHandle?.current) {
+            (aboutJourneyHandle.current as any).notifyDispersalComplete?.();
+          }
+
+          // Keep hydrate swarm alive/animated while primary disperses.
+          if (aboutHydrateSwarmHandle?.current) {
+            aboutHydrateSwarmHandle.current.update(
+              deltaSeconds,
+              elapsed,
+              0, // AboutJourneyPhase.IDLE behavior
+              0,
+              rAxis as any,
+              ftPt as any,
+              null,
+            );
           }
         }
 
@@ -2268,13 +2459,15 @@ export const useRenderLoop = () => {
         lightspeedWasActive = lightspeedActive;
         const sinceEnter = performance.now() - lightspeedEnterAt;
         // Let ship dart first, then kick in visuals/FOV after a short delay.
-        const visualTarget =
-          lightspeedActive && sinceEnter > 350 ? 1 : 0;
+        const visualTarget = lightspeedActive && sinceEnter > 350 ? 1 : 0;
         const visualLerp = 1 - Math.exp(-4.5 * deltaSeconds);
         lightspeedVisualIntensity +=
           (visualTarget - lightspeedVisualIntensity) * visualLerp;
 
-        if (camera instanceof THREE.PerspectiveCamera && baseCameraFov !== null) {
+        if (
+          camera instanceof THREE.PerspectiveCamera &&
+          baseCameraFov !== null
+        ) {
           const desiredFov = baseCameraFov + 2.2 * lightspeedVisualIntensity;
           if (Math.abs(camera.fov - desiredFov) > 0.02) {
             camera.fov = desiredFov;
@@ -2283,11 +2476,15 @@ export const useRenderLoop = () => {
         }
 
         ensureLightspeedStreaks();
-        if (lightspeedStreakGroup && lightspeedStreakPositions && lightspeedStreakMeta) {
+        if (
+          lightspeedStreakGroup &&
+          lightspeedStreakPositions &&
+          lightspeedStreakMeta
+        ) {
           const isSkillsLightspeedTravel =
             lightspeedActive &&
-            (currentNavigationTargetRef?.current === "skills"
-              || currentNavigationTargetRef?.current === "skills-lattice");
+            (currentNavigationTargetRef?.current === "skills" ||
+              currentNavigationTargetRef?.current === "skills-lattice");
           lightspeedStreakGroup.visible = lightspeedVisualIntensity > 0.02;
           const mat = lightspeedStreakGroup.material as THREE.LineBasicMaterial;
           mat.opacity = 0.12 + 0.38 * lightspeedVisualIntensity;
@@ -2332,20 +2529,35 @@ export const useRenderLoop = () => {
                 const t = 0.74 + 0.24 * (0.5 + 0.5 * Math.sin(i * 1.7));
                 _lightspeedColor.setRGB(0.7 * t, 0.82 * t, 1.0 * t);
               }
-              colorAttr.setXYZ(i * 2, _lightspeedColor.r, _lightspeedColor.g, _lightspeedColor.b);
-              colorAttr.setXYZ(i * 2 + 1, _lightspeedColor.r, _lightspeedColor.g, _lightspeedColor.b);
+              colorAttr.setXYZ(
+                i * 2,
+                _lightspeedColor.r,
+                _lightspeedColor.g,
+                _lightspeedColor.b,
+              );
+              colorAttr.setXYZ(
+                i * 2 + 1,
+                _lightspeedColor.r,
+                _lightspeedColor.g,
+                _lightspeedColor.b,
+              );
             }
             posAttr.needsUpdate = true;
             colorAttr.needsUpdate = true;
           }
         }
-        if (lightspeedThickGroup && lightspeedThickPositions && lightspeedThickMeta) {
+        if (
+          lightspeedThickGroup &&
+          lightspeedThickPositions &&
+          lightspeedThickMeta
+        ) {
           lightspeedThickGroup.visible = lightspeedVisualIntensity > 0.08;
-          const thickMat = lightspeedThickGroup.material as THREE.LineBasicMaterial;
+          const thickMat =
+            lightspeedThickGroup.material as THREE.LineBasicMaterial;
           const isSkillsLightspeedTravel =
             lightspeedActive &&
-            (currentNavigationTargetRef?.current === "skills"
-              || currentNavigationTargetRef?.current === "skills-lattice");
+            (currentNavigationTargetRef?.current === "skills" ||
+              currentNavigationTargetRef?.current === "skills-lattice");
           if (isSkillsLightspeedTravel) {
             const h = (performance.now() * 0.00006) % 1;
             thickMat.color.setHSL(h, 0.9, 0.7);
@@ -2406,13 +2618,13 @@ export const useRenderLoop = () => {
 
         // Compute mode eligibility for adaptive quality early so secondary-pass
         // throttling can reference it within the same frame.
-        const _isModeEligible = !loadPhaseActive && (
-          isMoonOrbiting() ||
-          (!shipExploreModeRef.current &&
-           !shipStagingModeRef.current &&
-           !shipCinematicRef.current?.active &&
-           !manualFlightModeRef.current)
-        );
+        const _isModeEligible =
+          !loadPhaseActive &&
+          (isMoonOrbiting() ||
+            (!shipExploreModeRef.current &&
+              !shipStagingModeRef.current &&
+              !shipCinematicRef.current?.active &&
+              !manualFlightModeRef.current));
 
         if (loadPhaseActive) {
           renderer.render(scene, camera);
@@ -2421,7 +2633,10 @@ export const useRenderLoop = () => {
         }
 
         // Under sustained pressure in eligible modes, skip secondary passes
-        const _underPressure = _perfFlags.throttleSecondaryPasses && _pressureFrames >= 2 && _isModeEligible;
+        const _underPressure =
+          _perfFlags.throttleSecondaryPasses &&
+          _pressureFrames >= 2 &&
+          _isModeEligible;
 
         // TV preview secondary render
         if (
@@ -2447,10 +2662,14 @@ export const useRenderLoop = () => {
 
         const _p7 = performance.now();
 
-        // Layer-1 overlay + CSS2D labels — throttle to every other frame
+        // Layer-1 overlay + CSS2D labels ΓÇö throttle to every other frame
         // under sustained pressure to reduce GPU work.
         const _skipLayer1 = _underPressure && (_perfFrameCount & 1) === 0;
-        if (!loadPhaseActive && !_skipLayer1 && (!insideShipRef.current || focusedMoonRef.current)) {
+        if (
+          !loadPhaseActive &&
+          !_skipLayer1 &&
+          (!insideShipRef.current || focusedMoonRef.current)
+        ) {
           const prevMask = camera.layers.mask;
           camera.layers.set(1);
           const prevAutoClear = renderer.autoClear;
@@ -2469,23 +2688,31 @@ export const useRenderLoop = () => {
 
         if (_pTotal > 50) {
           _perfSlowFrames++;
-          const mode = shipExploreModeRef.current ? "explore"
-            : shipStagingModeRef.current ? "staging"
-            : shipCinematicRef.current?.active ? `cinematic:${shipCinematicRef.current.phase}`
-            : manualFlightModeRef.current ? "manual"
-            : isMoonOrbiting() ? "moonOrbit"
-            : "autopilot";
-          const scaleTag = _currentRenderScale < 1 ? ` scale=${_currentRenderScale.toFixed(2)}` : "";
+          const mode = shipExploreModeRef.current
+            ? "explore"
+            : shipStagingModeRef.current
+              ? "staging"
+              : shipCinematicRef.current?.active
+                ? `cinematic:${shipCinematicRef.current.phase}`
+                : manualFlightModeRef.current
+                  ? "manual"
+                  : isMoonOrbiting()
+                    ? "moonOrbit"
+                    : "autopilot";
+          const scaleTag =
+            _currentRenderScale < 1
+              ? ` scale=${_currentRenderScale.toFixed(2)}`
+              : "";
           dwarn(
             `[PERF] SLOW FRAME #${_perfFrameCount} (slow#${_perfSlowFrames}) total=${_pTotal.toFixed(1)}ms mode=${mode}${scaleTag}\n` +
-            `  exitFocus=${(_p1 - _p0).toFixed(1)}ms` +
-            ` | shipLogic=${((_p2 ?? _p1) - _p1).toFixed(1)}ms` +
-            ` | camFollow+bokeh=${(_p3 - (_p2 ?? _p1)).toFixed(1)}ms` +
-            ` | orbitSys+ctrl=${(_p4 - _p3).toFixed(1)}ms` +
-            ` | droneUpdate=${(_p5 - _p4).toFixed(1)}ms` +
-            ` | lightspeed+comets=${(_p6 - _p5).toFixed(1)}ms` +
-            ` | primaryRender=${(_p7 - _p6).toFixed(1)}ms` +
-            ` | layer1+labels=${(_pEnd - _p7).toFixed(1)}ms`
+              `  exitFocus=${(_p1 - _p0).toFixed(1)}ms` +
+              ` | shipLogic=${((_p2 ?? _p1) - _p1).toFixed(1)}ms` +
+              ` | camFollow+bokeh=${(_p3 - (_p2 ?? _p1)).toFixed(1)}ms` +
+              ` | orbitSys+ctrl=${(_p4 - _p3).toFixed(1)}ms` +
+              ` | droneUpdate=${(_p5 - _p4).toFixed(1)}ms` +
+              ` | lightspeed+comets=${(_p6 - _p5).toFixed(1)}ms` +
+              ` | primaryRender=${(_p7 - _p6).toFixed(1)}ms` +
+              ` | layer1+labels=${(_pEnd - _p7).toFixed(1)}ms`,
           );
         }
       };
