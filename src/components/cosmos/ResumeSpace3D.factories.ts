@@ -366,7 +366,13 @@ export const createLighting = (_options: { spaceSunIntensity?: number }) => {
   );
   fillLight.position.set(FILL_LIGHT_POS.x, FILL_LIGHT_POS.y, FILL_LIGHT_POS.z);
 
-  return { ambientLight, sunLight, fillLight };
+  // Global hemisphere fill — sky/ground ambient that reaches all objects
+  // regardless of distance. Previously lived on the about-exterior layer;
+  // now promoted to the main scene so universe brightness is independent
+  // of showcase visibility.
+  const hemisphereLight = new THREE.HemisphereLight(0xdbe9ff, 0x25395a, 1.85);
+
+  return { ambientLight, sunLight, fillLight, hemisphereLight };
 };
 
 export const createCoreHaloTexture = (): THREE.CanvasTexture => {

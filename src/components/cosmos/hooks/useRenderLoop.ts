@@ -23,6 +23,7 @@ import {
 import { computeFalconFollowCameraPose } from "../falconFollowCameraPose";
 import { emitCosmosEvent } from "../cosmosEventBus";
 import { getCosmosPerfFlags } from "../perfConfig";
+import { dinfo, dwarn } from "../../../lib/debugLog";
 
 export const useRenderLoop = () => {
   const animationFrameRef = useRef<number | null>(null);
@@ -883,6 +884,7 @@ export const useRenderLoop = () => {
       let _stableFrames = 0;
       let _currentRenderScale = 1;
       let _occlusionFrameCounter = 0;
+      let _rlDebugThrottle = 0;
       const _rendererSize = new THREE.Vector2();
       let _nativeDpr = Math.min(
         window.devicePixelRatio,
@@ -938,7 +940,7 @@ export const useRenderLoop = () => {
         composer.setSize?.(_rendererSize.x, _rendererSize.y);
         _adaptiveActive = _currentRenderScale < 1;
         if (_adaptiveActive) {
-          console.info(`[PERF:adaptive] scale=${_currentRenderScale.toFixed(2)} dpr=${targetDpr.toFixed(2)}`);
+          dinfo(`[PERF:adaptive] scale=${_currentRenderScale.toFixed(2)} dpr=${targetDpr.toFixed(2)}`);
         }
       };
 
@@ -1094,7 +1096,7 @@ export const useRenderLoop = () => {
           const _pExploreTotal = performance.now() - _p0;
           if (_pExploreTotal > 50) {
             const renderMs = performance.now() - _pExploreRenderStart;
-            console.warn(
+            dwarn(
               `[PERF] EXPLORE frame #${_perfFrameCount} total=${_pExploreTotal.toFixed(1)}ms primaryRender=${renderMs.toFixed(1)}ms loadPhase=${loadPhaseActive}`,
             );
           }
@@ -1647,10 +1649,15 @@ export const useRenderLoop = () => {
               renderer.setRenderTarget(_prewarmRT);
               renderer.render(scene, _prewarmCam);
               renderer.setRenderTarget(null);
-              console.warn(
+              dwarn(
                 `[PERF:prewarm] moon approach pre-render ${(performance.now() - pwStart).toFixed(1)}ms target=${req.targetId}`,
               );
             }
+
+            // About journey phase (used to skip camera overrides during ARRIVING glide)
+            const aboutJourneyCtrlRef = (params as Record<string, unknown>)
+              .aboutJourneyRef as React.MutableRefObject<{ phase: number } | null> | undefined;
+            const _aboutPhase = aboutJourneyCtrlRef?.current?.phase ?? 0;
 
             // Moon orbit camera override (restores orbit behavior after arrival)
             if (isMoonOrbiting() && !navTurnActiveRef.current) {
@@ -1714,7 +1721,10 @@ export const useRenderLoop = () => {
                 }
               }
             } else {
-              if (sceneRef.current.controls && !sceneRef.current.controls.enabled) {
+              // Re-enable controls ONLY if no subsystem has claimed them.
+              // About journey phases 2 (FLY_THROUGH) and 4 (PATH_FORMING) disable controls.
+              const _aboutCtrlClaimed = _aboutPhase === 2 || _aboutPhase === 4;
+              if (sceneRef.current.controls && !sceneRef.current.controls.enabled && !_aboutCtrlClaimed) {
                 sceneRef.current.controls.enabled = true;
               }
               if (_orbitUpActive) {
@@ -1726,7 +1736,8 @@ export const useRenderLoop = () => {
 
             _p2 = performance.now();
 
-            if (followingSpaceshipRef.current) {
+            // Skip ship-following camera when about journey has taken over the camera
+            if (followingSpaceshipRef.current && _aboutPhase < 2) {
               if (insideShipRef.current) {
                 ship.getWorldPosition(shipWorldPos);
                 ship.getWorldQuaternion(shipWorldQuat);
@@ -2166,6 +2177,7 @@ export const useRenderLoop = () => {
         const _p3 = performance.now();
 
         _occlusionFrameCounter++;
+        _rlDebugThrottle++;
         updateOrbitSystem({
           items,
           orbitAnchors,
@@ -2186,6 +2198,59 @@ export const useRenderLoop = () => {
 
         if (hologramDroneRef.current) {
           hologramDroneRef.current.update(deltaSeconds, camera);
+        }
+
+        // About journey: frame-accurate arrival detection
+        const aboutJourneyHandle = (params as Record<string, unknown>)
+          .aboutJourneyRef as React.MutableRefObject<{
+          phase: number;
+          checkArrival(): void;
+          excitementProgress: number;
+          ringAxis: { x: number; y: number; z: number };
+          flyThroughPoint: { x: number; y: number; z: number };
+          cosmicPath: unknown;
+        } | null> | undefined;
+        const aboutPendingRef = (params as Record<string, unknown>)
+          .aboutJourneyPendingEntryRef as React.MutableRefObject<boolean> | undefined;
+        if (
+          aboutPendingRef?.current &&
+          aboutJourneyHandle?.current &&
+          aboutJourneyHandle.current.phase === 1 // TRANSIT
+        ) {
+          aboutJourneyHandle.current.checkArrival();
+          if (aboutJourneyHandle.current.phase !== 1) {
+            aboutPendingRef.current = false;
+          }
+        }
+
+        // About particle swarm: pass phase data for excitement/path-forming visuals
+        const aboutSwarmHandle = (params as Record<string, unknown>)
+          .aboutParticleSwarmRef as React.MutableRefObject<{
+          update: (
+            dt: number,
+            elapsed: number,
+            phase: number,
+            excitementProgress: number,
+            ringAxis: any,
+            flyThroughPoint: any,
+            cosmicPath: any,
+          ) => boolean;
+        } | null> | undefined;
+        if (aboutSwarmHandle?.current) {
+          const elapsed = frameNow / 1000;
+          const jCtrl = aboutJourneyHandle?.current;
+          const phase = jCtrl?.phase ?? 0;
+          const excProg = jCtrl?.excitementProgress ?? 0;
+          const rAxis = jCtrl?.ringAxis ?? { x: 0, y: 1, z: 0 };
+          const ftPt = jCtrl?.flyThroughPoint ?? { x: 0, y: 0, z: 0 };
+          const cPath = jCtrl?.cosmicPath ?? null;
+          const pathDone = aboutSwarmHandle.current.update(
+            deltaSeconds, elapsed, phase, excProg, rAxis as any, ftPt as any, cPath as any,
+          );
+          // Notify controller when the path trace completes
+          if (pathDone && phase === 4 && aboutJourneyHandle?.current) {
+            (aboutJourneyHandle.current as any).notifyPathComplete?.();
+          }
         }
 
         const _p5 = performance.now();
@@ -2411,7 +2476,7 @@ export const useRenderLoop = () => {
             : isMoonOrbiting() ? "moonOrbit"
             : "autopilot";
           const scaleTag = _currentRenderScale < 1 ? ` scale=${_currentRenderScale.toFixed(2)}` : "";
-          console.warn(
+          dwarn(
             `[PERF] SLOW FRAME #${_perfFrameCount} (slow#${_perfSlowFrames}) total=${_pTotal.toFixed(1)}ms mode=${mode}${scaleTag}\n` +
             `  exitFocus=${(_p1 - _p0).toFixed(1)}ms` +
             ` | shipLogic=${((_p2 ?? _p1) - _p1).toFixed(1)}ms` +

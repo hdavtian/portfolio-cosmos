@@ -4,6 +4,7 @@ import resumeData from "../data/resume.json";
 import { type DiagramStyle, type DiagramStyleOptions } from "./DiagramSettings";
 import ResumeSpace3D from "./cosmos/ResumeSpace3D";
 import { immersiveColumnRigRef, type ImmersiveColumnRigValues } from "./cosmos/ResumeSpace3D";
+import { IS_DEBUG, dlog } from "../lib/debugLog";
 
 interface ResumeStructureDiagramProps {
   onNavigate: (section: number) => void;
@@ -21,14 +22,6 @@ const savedNodePositions: {
 
 type ColumnId = "left" | "center" | "right";
 
-const IS_DEBUG_QUERY = (() => {
-  if (typeof window === "undefined") return false;
-  try {
-    return new URLSearchParams(window.location.search).get("debug") === "true";
-  } catch {
-    return false;
-  }
-})();
 
 function ImmersiveColumnRigPanel() {
   const [collapsed, setCollapsed] = useState(true);
@@ -50,7 +43,7 @@ function ImmersiveColumnRigPanel() {
 
   const exportToConsole = () => {
     if (!rig) {
-      console.log("[Rig] No immersive column rig data available yet.");
+      dlog("[Rig] No immersive column rig data available yet.");
       return;
     }
     const fmt = (v: ImmersiveColumnRigValues) => ({
@@ -67,9 +60,9 @@ function ImmersiveColumnRigPanel() {
       center: fmt(rig.center),
       right: fmt(rig.right),
     };
-    console.log("=== IMMERSIVE COLUMN RIG EXPORT ===");
-    console.log(JSON.stringify(output, null, 2));
-    console.log("===================================");
+    dlog("=== IMMERSIVE COLUMN RIG EXPORT ===");
+    dlog(JSON.stringify(output, null, 2));
+    dlog("===================================");
   };
 
   const sliderRow = (
@@ -246,7 +239,7 @@ function ResumeStructureDiagram({
   if (style === "space") {
     return (
       <div style={{ position: "relative", width: "100%", height: "100%" }}>
-        {IS_DEBUG_QUERY && hallwayContentMode === "about" && projectShowcaseActive && (
+        {IS_DEBUG && hallwayContentMode === "about" && projectShowcaseActive && (
           <ImmersiveColumnRigPanel />
         )}
         <ResumeSpace3D

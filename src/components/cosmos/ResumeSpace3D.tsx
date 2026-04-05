@@ -6,6 +6,7 @@ import ThreeGlobe from "three-globe";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import resumeData from "../../data/resume.json";
 import { trackEvent } from "../../lib/analytics";
+import { IS_DEBUG, dlog, dwarn } from "../../lib/debugLog";
 import portfolioCores from "../../data/portfolioCores.json";
 import { moonPortfolioMapping } from "../../data/moonPortfolioMapping";
 import aboutDeck from "../../data/aboutDeck.json";
@@ -35,6 +36,7 @@ import {
   freezeSystemForMoon,
   type FrozenSystemState,
 } from "./ResumeSpace3D.systemFreeze";
+import type CameraControls from "camera-controls";
 import type { ResumeSpace3DProps, SceneRef } from "./ResumeSpace3D.types";
 // Import our new cosmic systems
 import {
@@ -91,6 +93,14 @@ import {
   INTRO_CAMERA_FINAL_TARGET,
 } from "./introSequence";
 import { subscribeCosmosEvent } from "./cosmosEventBus";
+import {
+  createAboutParticleSwarm,
+  type AboutParticleSwarmHandle,
+} from "./aboutJourney/AboutParticleSwarm";
+import {
+  AboutJourneyController,
+  AboutJourneyPhase,
+} from "./aboutJourney/AboutJourneyController";
 import {
   attachAudioListenerToCamera,
   createPositionalAudio,
@@ -244,7 +254,7 @@ const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_DARK_HOLD_MS = 50000;
 const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_IN_MS = 1300;
 const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_TEXT_SWAP_POWER = 0.4;
 
-const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = true;
+const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = false;
 const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
 const EXPERIENCE_END_CAMERA_POSITION = new THREE.Vector3(11281.3, -534.0, 1301.6);
 const EXPERIENCE_END_CAMERA_TARGET = new THREE.Vector3(11970.8, -828.9, -116.5);
@@ -431,6 +441,7 @@ const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 // Recenter deep-space destinations so the universe extent remains sun-centered.
 const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(13600, 220, -12000);
 const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -13200);
+const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR = PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR.clone();
 const ABOUT_MEMORY_SQUARE_NAV_STANDOFF_DIST = 4200;
 const ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST = 4550;
 const ABOUT_MEMORY_SQUARE_CAMERA_STOP_DIST = 3900;
@@ -639,14 +650,6 @@ const SKILLS_LATTICE_TONE_PRESETS: SkillsLatticeTonePreset[] = [
 const resolveSkillsLatticeTonePreset = (id: string): SkillsLatticeTonePreset =>
   SKILLS_LATTICE_TONE_PRESETS.find((preset) => preset.id === id)
   ?? SKILLS_LATTICE_TONE_PRESETS[0];
-const IS_DEBUG_QUERY_ENABLED = (() => {
-  if (typeof window === "undefined") return false;
-  try {
-    return new URLSearchParams(window.location.search).get("debug") === "true";
-  } catch {
-    return false;
-  }
-})();
 const FAST_TRACK_TARGET: string | null = (() => {
   if (typeof window === "undefined") return null;
   try {
@@ -2677,17 +2680,17 @@ export default function ResumeSpace3D({
     setDebugLogs,
     debugLogTotal,
   } = useCosmosLogs();
-  const [emitFalconLocationLogs, setEmitFalconLocationLogs] = useState(IS_DEBUG_QUERY_ENABLED);
-  const [emitSDLocationLogs, setEmitSDLocationLogs] = useState(IS_DEBUG_QUERY_ENABLED);
-  const [logCamTraceEnabled, setLogCamTraceEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
-  const [logAboutDebugEnabled, setLogAboutDebugEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
-  const [logNavTraceEnabled, setLogNavTraceEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
-  const [logNavDiagEnabled, setLogNavDiagEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
-  const [logAudioChannelEnabled, setLogAudioChannelEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
-  const [logDroneDebugEnabled, setLogDroneDebugEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
-  const [logNavDebugEnabled, setLogNavDebugEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
-  const [aboutFlowOverlayEnabled, setAboutFlowOverlayEnabled] = useState(IS_DEBUG_QUERY_ENABLED);
-  const aboutFlowOverlayEnabledRef = useRef(IS_DEBUG_QUERY_ENABLED);
+  const [emitFalconLocationLogs, setEmitFalconLocationLogs] = useState(IS_DEBUG);
+  const [emitSDLocationLogs, setEmitSDLocationLogs] = useState(IS_DEBUG);
+  const [logCamTraceEnabled, setLogCamTraceEnabled] = useState(IS_DEBUG);
+  const [logAboutDebugEnabled, setLogAboutDebugEnabled] = useState(IS_DEBUG);
+  const [logNavTraceEnabled, setLogNavTraceEnabled] = useState(IS_DEBUG);
+  const [logNavDiagEnabled, setLogNavDiagEnabled] = useState(IS_DEBUG);
+  const [logAudioChannelEnabled, setLogAudioChannelEnabled] = useState(IS_DEBUG);
+  const [logDroneDebugEnabled, setLogDroneDebugEnabled] = useState(IS_DEBUG);
+  const [logNavDebugEnabled, setLogNavDebugEnabled] = useState(IS_DEBUG);
+  const [aboutFlowOverlayEnabled, setAboutFlowOverlayEnabled] = useState(IS_DEBUG);
+  const aboutFlowOverlayEnabledRef = useRef(IS_DEBUG);
   const [aboutFlowOverlaySnapshot, setAboutFlowOverlaySnapshot] =
     useState<AboutFlowOverlaySnapshot | null>(null);
   const aboutFlowOverlayLastUpdateRef = useRef(0);
@@ -2969,7 +2972,7 @@ export default function ResumeSpace3D({
   const markSceneModelLoaded = useCallback(() => {
     sceneModelsLoadedRef.current += 1;
     if (sceneModelsLoadedRef.current >= SCENE_MODEL_COUNT) {
-      console.warn(`[PERF:load] all ${SCENE_MODEL_COUNT} scene models added to scene`);
+      dwarn(`[PERF:load] all ${SCENE_MODEL_COUNT} scene models added to scene`);
       setAllSceneModelsLoaded(true);
     }
   }, []);
@@ -3104,7 +3107,7 @@ export default function ResumeSpace3D({
             meshCount++;
           }
         });
-        console.warn(`[PERF:warmup] GPU warmup STARTING — ${meshCount} visible meshes, ${objectCount} objects`);
+        dwarn(`[PERF:warmup] GPU warmup STARTING — ${meshCount} visible meshes, ${objectCount} objects`);
 
         // Step 1 — Upload every texture to the GPU in chunks so
         // the browser can keep painting loader animations smoothly.
@@ -3144,7 +3147,7 @@ export default function ResumeSpace3D({
         const initTextureMs = performance.now() - warmupStart;
         setLoaderProgressHint((prev) => Math.max(prev, 88));
         setLoaderStageHint("Compiling shaders...");
-        console.warn(`[PERF:warmup] initTexture: ${textureCount} textures in ${initTextureMs.toFixed(1)}ms`);
+        dwarn(`[PERF:warmup] initTexture: ${textureCount} textures in ${initTextureMs.toFixed(1)}ms`);
 
         // Step 2 — Compile all shader programs asynchronously
         const compileStart = performance.now();
@@ -3152,13 +3155,13 @@ export default function ResumeSpace3D({
         const COMPILE_TIMEOUT_MS = 8000;
         await Promise.race([
           renderer.compileAsync(mainScene, liveCamera).catch((err) => {
-            console.warn("[PERF:warmup] compileAsync error (non-fatal):", err);
+            dwarn("[PERF:warmup] compileAsync error (non-fatal):", err);
           }),
           new Promise<void>((resolve) => setTimeout(resolve, COMPILE_TIMEOUT_MS)),
         ]);
         const compileMs = performance.now() - compileStart;
         if (compileMs >= COMPILE_TIMEOUT_MS) {
-          console.warn(`[PERF:warmup] compileAsync timed out after ${COMPILE_TIMEOUT_MS}ms — continuing`);
+          dwarn(`[PERF:warmup] compileAsync timed out after ${COMPILE_TIMEOUT_MS}ms — continuing`);
         }
         setLoaderProgressHint((prev) => Math.max(prev, 94));
         setLoaderStageHint("Finalizing render pipeline...");
@@ -3189,11 +3192,11 @@ export default function ResumeSpace3D({
         }
 
         const totalMs = performance.now() - warmupStart;
-        console.warn(
+        dwarn(
           `[PERF:warmup] GPU warmup COMPLETE — initTexture=${initTextureMs.toFixed(1)}ms compileAsync=${compileMs.toFixed(1)}ms render=${renderMs.toFixed(1)}ms composerWarm=${composerWarmMs.toFixed(1)}ms total=${totalMs.toFixed(1)}ms`
         );
       } catch (e) {
-        console.warn("[PERF:warmup] GPU warmup error:", e);
+        dwarn("[PERF:warmup] GPU warmup error:", e);
       } finally {
         gpuWarmupInProgressRef.current = false;
         setLoaderProgressHint((prev) => Math.max(prev, 99));
@@ -3312,7 +3315,7 @@ export default function ResumeSpace3D({
       try {
         setLoaderProgressHint((prev) => Math.max(prev, 8));
         setLoaderStageHint("Loading critical assets...");
-        console.warn("[PERF:load] preloadCriticalAssets START");
+        dwarn("[PERF:load] preloadCriticalAssets START");
         debugLog(
           "loader",
           `[models] preload start hallway=${PROJECT_SHOWCASE_MODEL_PATH} aboutExterior=${PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH} falcon=/models/spaceship/scene.gltf sd=/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb drone=${OBLIVION_DRONE_MODEL_PATH}`,
@@ -3527,7 +3530,7 @@ export default function ResumeSpace3D({
           portfolioCoreImageJobs.length +
           moonTextureWarmupJobs.length +
           musicTrackWarmupJobs.length;
-        console.warn(
+        dwarn(
           `[PERF:load] critical assets done; scheduling deferred preload jobs=${deferredJobCount}`,
         );
         void Promise.allSettled([
@@ -3538,14 +3541,14 @@ export default function ResumeSpace3D({
           ...musicTrackWarmupJobs,
         ]).then(() => {
           if (!cancelled) {
-            console.warn(
+            dwarn(
               `[PERF:load] deferred preload COMPLETE jobs=${deferredJobCount}`,
             );
           }
         });
       } finally {
         if (!cancelled) {
-          console.warn(`[PERF:load] setCriticalAssetsReady(true) after ${(performance.now() - _preloadStart).toFixed(0)}ms`);
+          dwarn(`[PERF:load] setCriticalAssetsReady(true) after ${(performance.now() - _preloadStart).toFixed(0)}ms`);
           setLoaderProgressHint((prev) => Math.max(prev, 75));
           setLoaderStageHint("Starting GPU warmup...");
           setCriticalAssetsReady(true);
@@ -3570,7 +3573,7 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     if (loaderVisualComplete && criticalAssetsReady && droneGpuWarmupReady) {
-      console.warn(`[PERF:load] isLoading→false (loaderVisualComplete=${loaderVisualComplete} criticalAssetsReady=${criticalAssetsReady} droneGpuWarmupReady=${droneGpuWarmupReady})`);
+      dwarn(`[PERF:load] isLoading→false (loaderVisualComplete=${loaderVisualComplete} criticalAssetsReady=${criticalAssetsReady} droneGpuWarmupReady=${droneGpuWarmupReady})`);
       setIsLoading(false);
     }
   }, [loaderVisualComplete, criticalAssetsReady, droneGpuWarmupReady]);
@@ -4261,7 +4264,7 @@ export default function ResumeSpace3D({
       startFontScale: Number(orbitSignTuning.startFontScale.toFixed(2)),
       endFontScale: Number(orbitSignTuning.endFontScale.toFixed(2)),
     };
-    console.log("[ORBSIGN_SETTINGS]", payload);
+    dlog("[ORBSIGN_SETTINGS]", payload);
     shipLog(`[ORBSIGN_SETTINGS] ${JSON.stringify(payload)}`, "info");
     try {
       void navigator.clipboard?.writeText(JSON.stringify(payload));
@@ -4273,6 +4276,10 @@ export default function ResumeSpace3D({
   const skillsLatticeWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const aboutMemorySquareWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const aboutMemorySquareRootRef = useRef<THREE.Group | null>(null);
+  const aboutParticleSwarmRef = useRef<AboutParticleSwarmHandle | null>(null);
+  const aboutJourneyRef = useRef<AboutJourneyController | null>(null);
+  const aboutJourneyPendingEntryRef = useRef(false);
+  const navigationDistanceRef = useRef<number | null>(null);
   const aboutMemorySquareLabelRef = useRef<THREE.Object3D | null>(null);
   const aboutMemorySquarePendingEntryRef = useRef(false);
   const aboutMemorySquareActiveRef = useRef(false);
@@ -5871,16 +5878,13 @@ export default function ResumeSpace3D({
     },
     resolveSpecialSectionTarget: (targetId) => {
       if (targetId === "about") {
-        const exterior = projectShowcaseExteriorRootRef.current;
-        if (exterior) {
-          const bounds = new THREE.Box3().setFromObject(exterior);
-          const center = bounds.getCenter(new THREE.Vector3());
-          const size = bounds.getSize(new THREE.Vector3());
+        const swarm = aboutParticleSwarmRef.current;
+        if (swarm) {
+          const center = swarm.group.position.clone();
           const shipPos = spaceshipRef.current?.position;
           const outward = new THREE.Vector3(0, 0, 1);
           if (shipPos) {
             outward.copy(shipPos).sub(center);
-            // Keep a mostly horizontal standoff so we don't route below the TARDIS.
             outward.y *= 0.18;
             if (outward.lengthSq() < 1e-5) {
               outward.set(0.35, 0.05, 0.94);
@@ -5888,16 +5892,10 @@ export default function ResumeSpace3D({
               outward.normalize();
             }
           }
-          const standoff = THREE.MathUtils.clamp(
-            Math.max(size.x, size.z) * 2.1,
-            120,
-            260,
-          );
-          const navPoint = center
-            .clone()
+          const standoff = 400;
+          return center
             .addScaledVector(outward, standoff)
-            .add(new THREE.Vector3(0, size.y * 0.06, 0));
-          return navPoint;
+            .add(new THREE.Vector3(0, 20, 0));
         }
       }
       if (targetId === "projects" || targetId === "about") {
@@ -6008,20 +6006,11 @@ export default function ResumeSpace3D({
     },
     resolveSectionVisualCenter: (targetId) => {
       if (targetId === "about") {
-        const exterior = projectShowcaseExteriorRootRef.current;
-        if (exterior) {
-          const bounds = new THREE.Box3().setFromObject(exterior);
-          if (!bounds.isEmpty()) {
-            const center = bounds.getCenter(new THREE.Vector3());
-            const size = bounds.getSize(new THREE.Vector3());
-            // Compact structure — orbit tight for a close-up inspection
-            return { center, radius: Math.max(size.x, size.y, size.z) * 0.004 };
-          }
+        const swarm = aboutParticleSwarmRef.current;
+        if (swarm) {
+          return { center: swarm.group.position.clone(), radius: 220 };
         }
-        // Fallback: use the About world anchor directly
-        const anchor = projectShowcaseWorldAnchorRef.current
-          ?? PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR;
-        return { center: anchor.clone(), radius: 1.6 };
+        return { center: ABOUT_PARTICLE_SWARM_WORLD_ANCHOR.clone(), radius: 220 };
       }
       if (targetId === "skills") {
         const anchor = skillsLatticeWorldAnchorRef.current;
@@ -9500,9 +9489,21 @@ export default function ResumeSpace3D({
         aboutMemorySquareNavIntentUntilRef.current = performance.now() + 20000;
         setProjectsNavHereActive(false);
         setSkillsNavHereActive(false);
+      } else if (targetType === "section" && targetId === "about") {
+        dlog(`[handleQuickNav:about] setting up about journey — followShip=true, pending=true`);
+        dlog(`[handleQuickNav:about] aboutJourneyRef.current exists=${!!aboutJourneyRef.current}`);
+        setAboutNavHereActive(true);
+        setSkillsNavHereActive(false);
+        setProjectsNavHereActive(false);
+        setFollowingSpaceship(true);
+        followingSpaceshipRef.current = true;
+        if (spaceshipRef.current) spaceshipRef.current.visible = true;
+        aboutJourneyPendingEntryRef.current = true;
+        aboutJourneyRef.current?.beginTransit();
+        dlog(`[handleQuickNav:about] after beginTransit — pendingEntry=${aboutJourneyPendingEntryRef.current}, phase=${aboutJourneyRef.current?.phase}`);
       } else if (
         targetType === "section" &&
-        (targetId === "projects" || targetId === "about")
+        targetId === "projects"
       ) {
         setProjectsNavHereActive(true);
         setSkillsNavHereActive(false);
@@ -9599,7 +9600,7 @@ export default function ResumeSpace3D({
         "════════════════════════════════",
       ];
       lines.forEach((l) => shipLog(l, "info"));
-      console.log(lines.join("\n"));
+      dlog(lines.join("\n"));
     };
 
     const handleKey = (e: KeyboardEvent) => {
@@ -9704,7 +9705,7 @@ export default function ResumeSpace3D({
         window.clearTimeout(hardTimeoutId);
         hardTimeoutId = null;
       }
-      console.warn(`[UI-SAFEGUARD] Ship UI engage source: ${source}`);
+      dwarn(`[UI-SAFEGUARD] Ship UI engage source: ${source}`);
       setFollowingSpaceship(true);
       followingSpaceshipRef.current = true;
       setInsideShip(false);
@@ -9834,8 +9835,8 @@ export default function ResumeSpace3D({
 
       shipLog("shadowSD engaged — camera locked to Star Destroyer", "info");
       if (source === "console") {
-        console.log("🔺 shadowSD engaged — camera now follows Star Destroyer");
-        console.log("   Orbit drag to change angle, scroll to zoom");
+        dlog("🔺 shadowSD engaged — camera now follows Star Destroyer");
+        dlog("   Orbit drag to change angle, scroll to zoom");
       }
       return true;
     },
@@ -9846,7 +9847,7 @@ export default function ResumeSpace3D({
     (source: "console" | "tool" | "system" = "system") => {
       if (!shadowSDModeRef.current) {
         if (source === "console") {
-          console.log("⚠️ unShadowSD() ignored — shadowSD not active");
+          dlog("⚠️ unShadowSD() ignored — shadowSD not active");
         }
         return false;
       }
@@ -9863,7 +9864,7 @@ export default function ResumeSpace3D({
 
       shipLog("shadowSD disengaged", "info");
       if (source === "console") {
-        console.log("🔺 unShadowSD complete — SD camera lock released");
+        dlog("🔺 unShadowSD complete — SD camera lock released");
       }
       return true;
     },
@@ -9874,7 +9875,7 @@ export default function ResumeSpace3D({
     (source: "console" | "tool" | "system" = "tool") => {
       if (inspectFalconModeRef.current) {
         if (source === "console") {
-          console.log("⚠️ inspectFalcon() ignored — Falcon inspect already active");
+          dlog("⚠️ inspectFalcon() ignored — Falcon inspect already active");
         }
         return false;
       }
@@ -9883,7 +9884,7 @@ export default function ResumeSpace3D({
       const controls = sceneRef.current.controls;
       if (!falcon || !camera || !controls) {
         if (source === "console") {
-          console.log("❌ inspectFalcon() unavailable — Falcon/camera/controls not ready");
+          dlog("❌ inspectFalcon() unavailable — Falcon/camera/controls not ready");
         }
         return false;
       }
@@ -9927,8 +9928,8 @@ export default function ResumeSpace3D({
 
       shipLog("inspectFalcon engaged — orbit camera locked to Falcon", "info");
       if (source === "console") {
-        console.log("🛰️ inspectFalcon engaged — camera centered on Millennium Falcon");
-        console.log("   Orbit drag to inspect sides, scroll to zoom");
+        dlog("🛰️ inspectFalcon engaged — camera centered on Millennium Falcon");
+        dlog("   Orbit drag to inspect sides, scroll to zoom");
       }
       return true;
     },
@@ -9939,7 +9940,7 @@ export default function ResumeSpace3D({
     (source: "console" | "tool" | "system" = "system") => {
       if (!inspectFalconModeRef.current) {
         if (source === "console") {
-          console.log("⚠️ exitInspectFalcon() ignored — inspect mode not active");
+          dlog("⚠️ exitInspectFalcon() ignored — inspect mode not active");
         }
         return false;
       }
@@ -9964,7 +9965,7 @@ export default function ResumeSpace3D({
 
       shipLog("inspectFalcon disengaged", "info");
       if (source === "console") {
-        console.log("🛰️ exitInspectFalcon complete — Falcon inspect released");
+        dlog("🛰️ exitInspectFalcon complete — Falcon inspect released");
       }
       return true;
     },
@@ -9999,7 +10000,7 @@ export default function ResumeSpace3D({
 
   const setAboutFlowOverlayVisibility = useCallback(
     (next: boolean) => {
-      if (!IS_DEBUG_QUERY_ENABLED) {
+      if (!IS_DEBUG) {
         shipLog("About flow overlay requires ?debug=true.", "error");
         return false;
       }
@@ -10169,6 +10170,14 @@ export default function ResumeSpace3D({
       setExternalCosmosLabelsHiddenForAbout(false);
       cancelAboutMemorySquareEntrySequence();
     }
+    if (nextTargetId !== "about") {
+      if (aboutJourneyRef.current && aboutJourneyRef.current.phase !== AboutJourneyPhase.IDLE) {
+        aboutJourneyRef.current.exit();
+        restoredShip = true;
+        interrupted = true;
+      }
+      aboutJourneyPendingEntryRef.current = false;
+    }
     if (nextTargetId !== "skills" && nextTargetId !== SKILLS_LATTICE_NAV_ID) {
       setSkillsNavHereActive(false);
       skillsLatticePendingEntryRef.current = false;
@@ -10285,12 +10294,8 @@ export default function ResumeSpace3D({
         return;
       }
       if (targetId === "about") {
-        setHallwayContentMode("about");
-        setProjectsNavHereActive(true);
-        if (!projectShowcaseReady) {
-          vlog("⚠️ Project Showcase is loading");
-          return;
-        }
+        dlog(`[handleCockpitNavigate:about] setting up about journey`);
+        setAboutNavHereActive(true);
         setFollowingSpaceship(true);
         followingSpaceshipRef.current = true;
         setInsideShip(false);
@@ -10300,31 +10305,11 @@ export default function ResumeSpace3D({
         if (spaceshipRef.current) spaceshipRef.current.visible = true;
         if (projectShowcaseActiveRef.current) {
           exitProjectShowcase();
-          return;
         }
-
-        const trenchAnchor = projectShowcaseWorldAnchorRef.current;
-        const shipPos = spaceshipRef.current?.position;
-        const nearTrenchAnchor =
-          !!trenchAnchor &&
-          !!shipPos &&
-          shipPos.distanceTo(trenchAnchor) <= PROJECT_SHOWCASE_NEAR_ANCHOR_DIST;
-        const atAbout =
-          currentNavigationTarget === "about" &&
-          navigationDistance === null &&
-          nearTrenchAnchor;
-        if (atAbout) {
-          projectShowcaseAwaitingProjectsArrivalRef.current = false;
-          projectShowcaseSawProjectsTravelRef.current = false;
-          pendingProjectShowcaseEntryRef.current = true;
-          startProjectShowcaseEntrySequence();
-        } else {
-          pendingProjectShowcaseEntryRef.current = true;
-          projectShowcaseAwaitingProjectsArrivalRef.current = true;
-          projectShowcaseSawProjectsTravelRef.current = false;
-          handleQuickNav("about", "section");
-          vlog("🛰️ Routing to About Hallway — tram section will open on arrival");
-        }
+        aboutJourneyPendingEntryRef.current = true;
+        aboutJourneyRef.current?.beginTransit();
+        handleQuickNav("about", "section");
+        dlog(`[handleCockpitNavigate:about] after — pending=${aboutJourneyPendingEntryRef.current} phase=${aboutJourneyRef.current?.phase}`);
         return;
       }
       if (targetId === "projects" || targetId === PROJECT_SHOWCASE_NAV_ID) {
@@ -10573,6 +10558,12 @@ export default function ResumeSpace3D({
     }
   }, [currentNavigationTarget, navigationDistance, enterSkillsLattice]);
 
+  // Sync navigationDistance to a ref for render-loop access.
+  navigationDistanceRef.current = navigationDistance;
+
+  // About particle swarm arrival detection is handled in the render loop
+  // (aboutJourneyController.checkArrival) for frame-accurate timing.
+
   useEffect(() => {
     if (
       aboutMemorySquareActiveRef.current
@@ -10641,7 +10632,7 @@ export default function ResumeSpace3D({
         }
         controls.update?.(0);
       }
-      console.warn("[FAST_TRACK] Skipping intro sequence, positioning camera at home");
+      dwarn("[FAST_TRACK] Skipping intro sequence, positioning camera at home");
       setStartupDestinationsVisible(true);
       setStartupConsoleVisible(true);
       setStartupMiniMapVisible(true);
@@ -10672,7 +10663,7 @@ export default function ResumeSpace3D({
     };
     fadeRaf = requestAnimationFrame(tickFade);
     introStartConsumedRef.current = true;
-    console.warn("[PERF:intro] intro sequence STARTING (isLoading=false, sceneReady=true)");
+    dwarn("[PERF:intro] intro sequence STARTING (isLoading=false, sceneReady=true)");
     if (CAMERA_TRACE_ENABLED) {
       shipLog("[CAMTRACE] invoking camera-intro start + fade start", "info");
     }
@@ -10689,7 +10680,7 @@ export default function ResumeSpace3D({
     const isShowcaseTarget = target === "about" || target === "projects";
     if (isShowcaseTarget && !projectShowcaseReady) return;
     fastTrackConsumedRef.current = true;
-    console.warn(`[FAST_TRACK] Navigating directly to: ${target}`);
+    dwarn(`[FAST_TRACK] Navigating directly to: ${target}`);
     if (isShowcaseTarget) {
       setHallwayContentMode(target === "about" ? "about" : "projects");
       pendingProjectShowcaseEntryRef.current = true;
@@ -10740,7 +10731,7 @@ export default function ResumeSpace3D({
         }
         // After max retries, DOM refs still not ready — state flags are
         // already true so elements will render with default visibility.
-        console.warn("[UI-SAFEGUARD] Startup UI refs unavailable after retries; elements visible via state flags");
+        dwarn("[UI-SAFEGUARD] Startup UI refs unavailable after retries; elements visible via state flags");
         return;
       }
       gsap.set(destinationsEl, { x: -200, opacity: 0 });
@@ -10792,15 +10783,15 @@ export default function ResumeSpace3D({
     if (shipUIPhase !== "ship-engaged") return;
     const watchdog = window.setTimeout(() => {
       setStartupDestinationsVisible((prev) => {
-        if (!prev) console.warn("[UI-SAFEGUARD] Watchdog forcing destinations visible");
+        if (!prev) dwarn("[UI-SAFEGUARD] Watchdog forcing destinations visible");
         return true;
       });
       setStartupConsoleVisible((prev) => {
-        if (!prev) console.warn("[UI-SAFEGUARD] Watchdog forcing console visible");
+        if (!prev) dwarn("[UI-SAFEGUARD] Watchdog forcing console visible");
         return true;
       });
       setStartupMiniMapVisible((prev) => {
-        if (!prev) console.warn("[UI-SAFEGUARD] Watchdog forcing minimap visible");
+        if (!prev) dwarn("[UI-SAFEGUARD] Watchdog forcing minimap visible");
         return true;
       });
     }, 3000);
@@ -13073,7 +13064,7 @@ export default function ResumeSpace3D({
           const run = projectShowcaseRunPosRef.current;
           const phase = outageRuntime.phase;
           const playing = projectShowcasePlayingRef.current;
-          console.log(
+          dlog(
             `[ELEVATOR] run=${run.toFixed(2)} vel=${vel.toFixed(4)} dt=${dt.toFixed(4)} phase=${phase} playing=${playing} jump=${jumpTarget !== null ? jumpTarget.toFixed(2) : "none"}`,
           );
         }
@@ -16126,12 +16117,13 @@ export default function ResumeSpace3D({
     scene.add(skyfield);
 
     // --- LIGHTING ---
-    const { ambientLight, sunLight, fillLight } = createLighting(
+    const { ambientLight, sunLight, fillLight, hemisphereLight } = createLighting(
       optionsRef.current,
     );
     scene.add(ambientLight);
     scene.add(sunLight);
     scene.add(fillLight);
+    scene.add(hemisphereLight);
     sceneRef.current.ambientLight = ambientLight;
     sceneRef.current.sunLight = sunLight;
     sceneRef.current.fillLight = fillLight;
@@ -16279,6 +16271,7 @@ export default function ResumeSpace3D({
     aboutMemorySquareWorldAnchorRef.current = aboutAnchor.clone();
     const aboutSquareRoot = new THREE.Group();
     aboutSquareRoot.name = "AboutMemorySquare";
+    aboutSquareRoot.visible = false;
     aboutSquareRoot.position.copy(aboutAnchor);
     const aboutSquareSize = 920;
     const aboutSquareDepth = 26;
@@ -16684,10 +16677,60 @@ export default function ResumeSpace3D({
     scene.add(aboutSquareRoot);
     aboutMemorySquareRootRef.current = aboutSquareRoot;
 
+    // 3b. ABOUT PARTICLE SWARM
+    if (aboutParticleSwarmRef.current) {
+      aboutParticleSwarmRef.current.dispose();
+    }
+    const swarm = createAboutParticleSwarm(
+      ABOUT_PARTICLE_SWARM_WORLD_ANCHOR,
+    );
+    scene.add(swarm.group);
+    aboutParticleSwarmRef.current = swarm;
+
+    // 3c. ABOUT JOURNEY CONTROLLER
+    if (aboutJourneyRef.current) {
+      aboutJourneyRef.current.dispose();
+    }
+    aboutJourneyRef.current = new AboutJourneyController({
+      hideShip() {
+        if (spaceshipRef.current) spaceshipRef.current.visible = false;
+      },
+      showShip() {
+        if (spaceshipRef.current) spaceshipRef.current.visible = true;
+      },
+      setFollowingSpaceship(v: boolean) {
+        followingSpaceshipRef.current = v;
+        setFollowingSpaceship(v);
+      },
+      disableControls() {
+        const ctrl = sceneRef.current.controls;
+        if (ctrl) ctrl.enabled = false;
+      },
+      enableControls() {
+        const ctrl = sceneRef.current.controls;
+        if (ctrl) ctrl.enabled = true;
+      },
+      getCamera() {
+        return sceneRef.current.camera ?? null;
+      },
+      getControls() {
+        return (sceneRef.current.controls as CameraControls) ?? null;
+      },
+      getShipPosition() {
+        return spaceshipRef.current?.position.clone() ?? null;
+      },
+      getSwarmWorldPosition() {
+        const s = aboutParticleSwarmRef.current;
+        return s ? s.group.getWorldPosition(new THREE.Vector3()) : null;
+      },
+      vlog,
+    });
+
     // 4. MOONS
     const experienceJobs = Object.values(resumeData.experience).flat();
     const experienceCount = experienceJobs.length || 1;
     const experienceStartOffset = Math.PI * 0.15;
+    const experienceMoonMeshes: THREE.Mesh[] = [];
 
     experienceJobs.forEach((job, i) => {
       const overlayTextureUrl = EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID[job.id];
@@ -16750,6 +16793,8 @@ export default function ResumeSpace3D({
       moonRingsGlobe.scale.setScalar(ringsScale);
       moonMesh.add(moonRingsGlobe as unknown as THREE.Object3D);
 
+      experienceMoonMeshes.push(moonMesh);
+
       // Register moon with position emitter for tracking
       const moonId = `moon-${job.id}`;
       moonMesh.userData.moonId = moonId;
@@ -16758,6 +16803,32 @@ export default function ResumeSpace3D({
       // Remove the rotation that might be causing visual issues
       // moon.rotation.x = Math.PI / 2;
     });
+
+    // Register universe landmarks for the cosmic loop path.
+    // Moons are at fixed positions (orbits paused), so we grab world positions now.
+    {
+      // Force a matrix update so getWorldPosition returns correct values
+      scene.updateMatrixWorld(true);
+      const landmarks: Array<{ name: string; position: THREE.Vector3 }> = [
+        { name: "Skills", position: SKILLS_LATTICE_WORLD_ANCHOR.clone() },
+        { name: "Portfolio", position: ORBITAL_PORTFOLIO_WORLD_ANCHOR.clone() },
+        { name: "Memory Squares", position: ABOUT_MEMORY_SQUARE_WORLD_ANCHOR.clone() },
+      ];
+      // Pick 2-3 experience moons to fly between (evenly spaced through the list)
+      const moonCount = experienceMoonMeshes.length;
+      if (moonCount > 0) {
+        const pickCount = Math.min(3, moonCount);
+        const step = moonCount / pickCount;
+        for (let mi = 0; mi < pickCount; mi++) {
+          const idx = Math.floor(mi * step);
+          const mesh = experienceMoonMeshes[idx];
+          const wp = new THREE.Vector3();
+          mesh.getWorldPosition(wp);
+          landmarks.push({ name: `Moon ${idx}`, position: wp });
+        }
+      }
+      aboutJourneyRef.current?.setLandmarks(landmarks);
+    }
 
     // Skills constellation lattice (unique skills representation)
     const skillsLatticeRoot = new THREE.Group();
@@ -18460,42 +18531,42 @@ export default function ResumeSpace3D({
         (window as any).sendSD = (name: string) => {
           if (!name) {
             const status = cruiser.getStatus();
-            console.log("Usage: sendSD('planet or moon name')");
-            console.log("Available destinations:", status.destinations.join(", "));
+            dlog("Usage: sendSD('planet or moon name')");
+            dlog("Available destinations:", status.destinations.join(", "));
             return;
           }
           const ok = cruiser.sendTo(name);
           if (ok) {
             const s = cruiser.getStatus();
-            console.log(`🔺 Star Destroyer dispatched to "${name}"`);
-            console.log(`   State: ${s.hlState} | Speed: ${s.speed.toFixed(1)} | From: ${s.currentDest ?? "none"}`);
-            console.log(`   SD position:`, starDestroyerRef.current?.position.toArray().map((n: number) => +n.toFixed(0)));
+            dlog(`🔺 Star Destroyer dispatched to "${name}"`);
+            dlog(`   State: ${s.hlState} | Speed: ${s.speed.toFixed(1)} | From: ${s.currentDest ?? "none"}`);
+            dlog(`   SD position:`, starDestroyerRef.current?.position.toArray().map((n: number) => +n.toFixed(0)));
           } else {
             const status = cruiser.getStatus();
-            console.log(`❌ Destination "${name}" not found. Available:`, status.destinations.join(", "));
+            dlog(`❌ Destination "${name}" not found. Available:`, status.destinations.join(", "));
           }
         };
         (window as any).sdStatus = () => {
           const s = cruiser.getStatus();
-          console.log("=== STAR DESTROYER STATUS ===");
-          console.log("  Autonomy enabled:", cruiser.isEnabled());
-          console.log("  High-level state:", s.hlState);
-          console.log("  Local state:", s.localState);
-          console.log("  Speed:", s.speed.toFixed(1), "u/s");
-          console.log("  Current system:", s.currentDest ?? "(none)");
-          console.log("  Next destination:", s.nextDest ?? "(none)");
-          console.log("  Local patrols:", s.localPatrols);
-          console.log("  All destinations:", s.destinations.join(", "));
+          dlog("=== STAR DESTROYER STATUS ===");
+          dlog("  Autonomy enabled:", cruiser.isEnabled());
+          dlog("  High-level state:", s.hlState);
+          dlog("  Local state:", s.localState);
+          dlog("  Speed:", s.speed.toFixed(1), "u/s");
+          dlog("  Current system:", s.currentDest ?? "(none)");
+          dlog("  Next destination:", s.nextDest ?? "(none)");
+          dlog("  Local patrols:", s.localPatrols);
+          dlog("  All destinations:", s.destinations.join(", "));
           return s;
         };
         (window as any).sdAutonomyOn = () => {
           cruiser.setEnabled(true);
-          console.log("🔺 SD autonomy: ON");
+          dlog("🔺 SD autonomy: ON");
           shipLog("SD autonomy enabled", "system");
         };
         (window as any).sdAutonomyOff = () => {
           cruiser.setEnabled(false);
-          console.log("🔺 SD autonomy: OFF");
+          dlog("🔺 SD autonomy: OFF");
           shipLog("SD autonomy disabled", "system");
         };
         (window as any).aboutFlowOverlayOn = () => {
@@ -18608,12 +18679,12 @@ export default function ResumeSpace3D({
           };
           requestAnimationFrame(animate);
 
-          console.log(`🎯 ${label} located at [${wp.x.toFixed(0)}, ${wp.y.toFixed(0)}, ${wp.z.toFixed(0)}]`);
+          dlog(`🎯 ${label} located at [${wp.x.toFixed(0)}, ${wp.y.toFixed(0)}, ${wp.z.toFixed(0)}]`);
         };
 
         (window as any).locateFalcon = () => {
           const falcon = spaceshipRef.current;
-          if (!falcon) { console.log("❌ Falcon not loaded yet"); return; }
+          if (!falcon) { dlog("❌ Falcon not loaded yet"); return; }
           createLocateBeacon(falcon, 0x4499ff, "Millennium Falcon");
         };
         (window as any).inspectFalcon = () => {
@@ -18625,7 +18696,7 @@ export default function ResumeSpace3D({
 
         (window as any).locateSD = () => {
           const sd = starDestroyerRef.current;
-          if (!sd) { console.log("❌ Star Destroyer not loaded yet"); return; }
+          if (!sd) { dlog("❌ Star Destroyer not loaded yet"); return; }
           createLocateBeacon(sd, 0xff4422, "Star Destroyer");
         };
         (window as any).shadowSD = () => {
@@ -18661,17 +18732,17 @@ export default function ResumeSpace3D({
             const p = cam.position;
             const target = new THREE.Vector3();
             (sceneRef.current.controls as any)?.getTarget(target);
-            console.log("═══════════════════════════════════════════════════");
-            console.log("📷 DEBUG CAMERA — Position Capture");
-            console.log("═══════════════════════════════════════════════════");
-            console.log(`Camera position : { x: ${p.x.toFixed(1)}, y: ${p.y.toFixed(1)}, z: ${p.z.toFixed(1)} }`);
-            console.log(`Look-at target  : { x: ${target.x.toFixed(1)}, y: ${target.y.toFixed(1)}, z: ${target.z.toFixed(1)} }`);
-            console.log("");
-            console.log("📋 Copy-paste for code:");
-            console.log(`  camera: { x: ${p.x.toFixed(1)}, y: ${p.y.toFixed(1)}, z: ${p.z.toFixed(1)} }`);
-            console.log(`  target: { x: ${target.x.toFixed(1)}, y: ${target.y.toFixed(1)}, z: ${target.z.toFixed(1)} }`);
-            console.log(`  setLookAt(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}, ${target.x.toFixed(1)}, ${target.y.toFixed(1)}, ${target.z.toFixed(1)}, false);`);
-            console.log("═══════════════════════════════════════════════════");
+            dlog("═══════════════════════════════════════════════════");
+            dlog("📷 DEBUG CAMERA — Position Capture");
+            dlog("═══════════════════════════════════════════════════");
+            dlog(`Camera position : { x: ${p.x.toFixed(1)}, y: ${p.y.toFixed(1)}, z: ${p.z.toFixed(1)} }`);
+            dlog(`Look-at target  : { x: ${target.x.toFixed(1)}, y: ${target.y.toFixed(1)}, z: ${target.z.toFixed(1)} }`);
+            dlog("");
+            dlog("📋 Copy-paste for code:");
+            dlog(`  camera: { x: ${p.x.toFixed(1)}, y: ${p.y.toFixed(1)}, z: ${p.z.toFixed(1)} }`);
+            dlog(`  target: { x: ${target.x.toFixed(1)}, y: ${target.y.toFixed(1)}, z: ${target.z.toFixed(1)} }`);
+            dlog(`  setLookAt(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}, ${target.x.toFixed(1)}, ${target.y.toFixed(1)}, ${target.z.toFixed(1)}, false);`);
+            dlog("═══════════════════════════════════════════════════");
           }
           if (e.key === "Escape" && debugCamActive) {
             e.preventDefault();
@@ -18723,7 +18794,7 @@ export default function ResumeSpace3D({
 
         (window as any).debugCamera = () => {
           if (debugCamActive) {
-            console.log("⚠️ Debug camera already active. Use exitDebugCamera() to exit.");
+            dlog("⚠️ Debug camera already active. Use exitDebugCamera() to exit.");
             return;
           }
           debugCamActive = true;
@@ -18755,25 +18826,25 @@ export default function ResumeSpace3D({
           window.addEventListener("keyup", debugKeyUp);
           debugCamRAF = requestAnimationFrame(debugCamLoop);
 
-          console.log("═══════════════════════════════════════════════════");
-          console.log("🎥 DEBUG CAMERA MODE — ACTIVE");
-          console.log("═══════════════════════════════════════════════════");
-          console.log("  WASD        — fly forward/left/back/right");
-          console.log("  Q / E       — descend / ascend");
-          console.log("  Shift       — 10× speed boost");
-          console.log("  Ctrl        — 0.1× precision mode");
-          console.log("  Mouse drag  — orbit / look around");
-          console.log("  Scroll      — zoom in/out");
-          console.log("  F9          — 📷 capture position to console");
-          console.log("  Escape      — exit debug mode");
-          console.log("═══════════════════════════════════════════════════");
-          console.log("  exitDebugCamera() — re-engage ship follow");
-          console.log("═══════════════════════════════════════════════════");
+          dlog("═══════════════════════════════════════════════════");
+          dlog("🎥 DEBUG CAMERA MODE — ACTIVE");
+          dlog("═══════════════════════════════════════════════════");
+          dlog("  WASD        — fly forward/left/back/right");
+          dlog("  Q / E       — descend / ascend");
+          dlog("  Shift       — 10× speed boost");
+          dlog("  Ctrl        — 0.1× precision mode");
+          dlog("  Mouse drag  — orbit / look around");
+          dlog("  Scroll      — zoom in/out");
+          dlog("  F9          — 📷 capture position to console");
+          dlog("  Escape      — exit debug mode");
+          dlog("═══════════════════════════════════════════════════");
+          dlog("  exitDebugCamera() — re-engage ship follow");
+          dlog("═══════════════════════════════════════════════════");
         };
 
         (window as any).exitDebugCamera = () => {
           if (!debugCamActive) {
-            console.log("⚠️ Debug camera not active.");
+            dlog("⚠️ Debug camera not active.");
             return;
           }
           debugCamActive = false;
@@ -18802,7 +18873,7 @@ export default function ResumeSpace3D({
             );
           }
 
-          console.log("✅ Debug camera exited — ship follow re-engaged");
+          dlog("✅ Debug camera exited — ship follow re-engaged");
         };
       },
       undefined,
@@ -21229,7 +21300,7 @@ export default function ResumeSpace3D({
 
         // --- Debug ruler (only with ?debug=true) ---
         // Zero-based: 0 = bottom of elevator shaft (minRun).
-        if (IS_DEBUG_QUERY_ENABLED && runAxis === "y") {
+        if (IS_DEBUG && runAxis === "y") {
           const rulerGroup = new THREE.Group();
           rulerGroup.name = "ElevatorDebugRuler";
           const rulerX = -(trenchWidth * 0.48);
@@ -21736,7 +21807,7 @@ export default function ResumeSpace3D({
       const cam = sceneRef.current.camera;
       const cc = sceneRef.current.controls;
       if (!cam) {
-        console.log("❌ No camera available");
+        dlog("❌ No camera available");
         return;
       }
 
@@ -21832,7 +21903,7 @@ export default function ResumeSpace3D({
       };
 
       const snapshotJson = JSON.stringify(snapshot, null, 2);
-      console.log("[CAMERA_SNAPSHOT]", snapshot);
+      dlog("[CAMERA_SNAPSHOT]", snapshot);
       try {
         void navigator.clipboard?.writeText(snapshotJson);
         shipLog("Camera snapshot copied to clipboard", "info");
@@ -21868,13 +21939,13 @@ export default function ResumeSpace3D({
         );
       }
 
-      console.log("═══════════════════════════════════════");
-      console.log("📷 CAMERA VIEWPOINT CAPTURE");
-      console.log("═══════════════════════════════════════");
-      console.log(
+      dlog("═══════════════════════════════════════");
+      dlog("📷 CAMERA VIEWPOINT CAPTURE");
+      dlog("═══════════════════════════════════════");
+      dlog(
         `Camera position: { x: ${camPos.x.toFixed(1)}, y: ${camPos.y.toFixed(1)}, z: ${camPos.z.toFixed(1)} }`,
       );
-      console.log(
+      dlog(
         `Orbit target:    { x: ${orbitTarget.x.toFixed(1)}, y: ${orbitTarget.y.toFixed(1)}, z: ${orbitTarget.z.toFixed(1)} }`,
       );
 
@@ -21920,33 +21991,33 @@ export default function ResumeSpace3D({
             Math.min(1, Math.max(-1, offset.y / Math.max(dist, 0.001))),
           ) * (180 / Math.PI); // elevation
 
-        console.log(`\n🪐 Planet: ${planet.name}`);
-        console.log(
+        dlog(`\n🪐 Planet: ${planet.name}`);
+        dlog(
           `   Planet world pos: { x: ${planet.worldPos.x.toFixed(1)}, y: ${planet.worldPos.y.toFixed(1)}, z: ${planet.worldPos.z.toFixed(1)} }`,
         );
-        console.log(`   Planet radius: ${planet.radius.toFixed(1)}`);
-        console.log(`   Camera distance: ${dist.toFixed(1)}`);
-        console.log(
+        dlog(`   Planet radius: ${planet.radius.toFixed(1)}`);
+        dlog(`   Camera distance: ${dist.toFixed(1)}`);
+        dlog(
           `   Camera offset:   { x: ${offset.x.toFixed(1)}, y: ${offset.y.toFixed(1)}, z: ${offset.z.toFixed(1)} }`,
         );
-        console.log(`   Azimuth: ${theta.toFixed(1)}°  Elevation: ${phi.toFixed(1)}°`);
-        console.log(
+        dlog(`   Azimuth: ${theta.toFixed(1)}°  Elevation: ${phi.toFixed(1)}°`);
+        dlog(
           `   Distance / radius: ${(dist / planet.radius).toFixed(1)}x`,
         );
 
         // Output a copy-pasteable viewpoint object
-        console.log(`   📋 Viewpoint data:`);
-        console.log(
+        dlog(`   📋 Viewpoint data:`);
+        dlog(
           `   { offset: { x: ${offset.x.toFixed(1)}, y: ${offset.y.toFixed(1)}, z: ${offset.z.toFixed(1)} }, distance: ${dist.toFixed(1)}, azimuth: ${theta.toFixed(1)}, elevation: ${phi.toFixed(1)} }`,
         );
       }
 
       if (targets.length === 0) {
-        console.log("\n⚠️ No planets found. Available planet names:");
-        planets.forEach((p) => console.log(`   - ${p.name}`));
-        console.log("   (Also try: 'experience', 'skills', 'projects', 'portfolio')");
+        dlog("\n⚠️ No planets found. Available planet names:");
+        planets.forEach((p) => dlog(`   - ${p.name}`));
+        dlog("   (Also try: 'experience', 'skills', 'projects', 'portfolio')");
       }
-      console.log("═══════════════════════════════════════");
+      dlog("═══════════════════════════════════════");
     };
     (window as any).__captureViewpoint = (planetName?: string) => {
       (window as any).captureCameraSnapshot(planetName);
@@ -22078,9 +22149,8 @@ export default function ResumeSpace3D({
           }
           break;
         case "about":
-          setHallwayContentMode("about");
-          setProjectsNavHereActive(true);
-          vlog("🛰️ About hallway — routing to tram corridor...");
+          setAboutNavHereActive(true);
+          vlog("✨ About — routing to particle swarm...");
           if (!manualFlightModeRef.current) {
             setFollowingSpaceship(true);
             followingSpaceshipRef.current = true;
@@ -22089,9 +22159,8 @@ export default function ResumeSpace3D({
             setShipViewMode("exterior");
             shipViewModeRef.current = "exterior";
             if (spaceshipRef.current) spaceshipRef.current.visible = true;
-            pendingProjectShowcaseEntryRef.current = true;
-            projectShowcaseAwaitingProjectsArrivalRef.current = true;
-            projectShowcaseSawProjectsTravelRef.current = false;
+            aboutJourneyPendingEntryRef.current = true;
+            aboutJourneyRef.current?.beginTransit();
             handleQuickNav("about", "section");
           }
           break;
@@ -22470,7 +22539,7 @@ export default function ResumeSpace3D({
         [label]: prev[label] || { name: mesh.name, uuid: mesh.uuid },
       }));
 
-      console.log("SHIP_DEBUG_LABEL", {
+      dlog("SHIP_DEBUG_LABEL", {
         label,
         mesh: mesh.name,
         uuid: mesh.uuid,
@@ -22536,7 +22605,7 @@ export default function ResumeSpace3D({
         });
       });
 
-      console.log("SHIP_DEBUG_LABELS", marks);
+      dlog("SHIP_DEBUG_LABELS", marks);
     };
 
     window.addEventListener("pointermove", onDebugPointerMove);
@@ -22600,7 +22669,7 @@ export default function ResumeSpace3D({
     }
 
     // --- ANIMATION LOOP ---
-    console.warn("[PERF:scene] startRenderLoop called — render loop begins while loading screen is still visible");
+    dwarn("[PERF:scene] startRenderLoop called — render loop begins while loading screen is still visible");
     startRenderLoop({
       exitFocusRequestRef,
       exitMoonView,
@@ -22656,6 +22725,10 @@ export default function ResumeSpace3D({
       sunMesh,
       vlog,
       debugLog,
+      aboutParticleSwarmRef,
+      aboutJourneyRef,
+      aboutJourneyPendingEntryRef,
+      navigationDistanceRef,
     });
 
     // Trigger loading complete with camera animation
@@ -22685,7 +22758,7 @@ export default function ResumeSpace3D({
     startIntroSequenceRef.current = startIntroSequence;
 
     setTimeout(() => {
-      console.warn("[PERF:scene] setSceneReady(true) — scene init complete");
+      dwarn("[PERF:scene] setSceneReady(true) — scene init complete");
       setSceneReady(true);
 
       // Boot message in ship terminal
@@ -22755,7 +22828,7 @@ export default function ResumeSpace3D({
         far: currentCamera.far,
       };
 
-      console.log("CAMERA_SNAPSHOT", snapshot);
+      dlog("CAMERA_SNAPSHOT", snapshot);
     };
 
     const handleSnapshotKey = (event: KeyboardEvent) => {
@@ -22794,7 +22867,7 @@ export default function ResumeSpace3D({
         },
       };
 
-      console.log("SHIP_SNAPSHOT", snapshot);
+      dlog("SHIP_SNAPSHOT", snapshot);
     };
 
     const handleShipStagingKeyDown = (event: KeyboardEvent) => {
@@ -22817,7 +22890,7 @@ export default function ResumeSpace3D({
           shipStagingKeysRef.current[key] = false;
         });
 
-        console.log(
+        dlog(
           `SHIP_STAGING_MODE ${next ? "ENABLED" : "DISABLED"} (WASD/RF move, arrows/QE rotate, Shift for faster).`,
         );
         return;
@@ -22995,6 +23068,15 @@ export default function ResumeSpace3D({
       orbitalPortfolioPlayingRef.current = true;
       aboutMemorySquareRootRef.current = null;
       aboutMemorySquareLabelRef.current = null;
+      if (aboutParticleSwarmRef.current) {
+        aboutParticleSwarmRef.current.dispose();
+        aboutParticleSwarmRef.current = null;
+      }
+      if (aboutJourneyRef.current) {
+        aboutJourneyRef.current.dispose();
+        aboutJourneyRef.current = null;
+      }
+      aboutJourneyPendingEntryRef.current = false;
       aboutMemorySquareWorldAnchorRef.current = null;
       aboutMemorySquarePendingEntryRef.current = false;
       aboutMemorySquareActiveRef.current = false;
@@ -25108,16 +25190,16 @@ export default function ResumeSpace3D({
                     e.stopPropagation();
                     const positions = exploreSavedPositions;
                     const current = shipExploreCoordsRef.current;
-                    console.log("\n%c═══ SHIP EXPLORE MODE — SAVED POSITIONS ═══", "color: #ff6b6b; font-weight: bold; font-size: 14px;");
-                    console.log("%cCurrent camera (ship-local):", "color: #0f6; font-weight: bold;", current.local);
-                    console.log("%cCurrent camera (world):", "color: #888;", current.world);
-                    console.log("");
+                    dlog("\n%c═══ SHIP EXPLORE MODE — SAVED POSITIONS ═══", "color: #ff6b6b; font-weight: bold; font-size: 14px;");
+                    dlog("%cCurrent camera (ship-local):", "color: #0f6; font-weight: bold;", current.local);
+                    dlog("%cCurrent camera (world):", "color: #888;", current.world);
+                    dlog("");
                     positions.forEach((p) => {
                       const color = p.label === "COCKPIT" ? "#ff6b6b" : p.label === "CABIN" ? "#339af0" : "#51cf66";
-                      console.log(`%c${p.label}:`, `color: ${color}; font-weight: bold;`, `new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]})`);
+                      dlog(`%c${p.label}:`, `color: ${color}; font-weight: bold;`, `new THREE.Vector3(${p.local[0]}, ${p.local[1]}, ${p.local[2]})`);
                     });
-                    console.log("");
-                    console.log("%c── Copy-paste ready code ──", "color: #ffd43b; font-weight: bold;");
+                    dlog("");
+                    dlog("%c── Copy-paste ready code ──", "color: #ffd43b; font-weight: bold;");
                     const codeLines = [
                       "// ═══ Ship Explore Mode — Saved Positions ═══",
                       `// Generated at ${new Date().toISOString()}`,
@@ -25135,12 +25217,12 @@ export default function ResumeSpace3D({
                       codeLines.push(`const currentLocal = new THREE.Vector3(${current.local[0]}, ${current.local[1]}, ${current.local[2]});`);
                     }
                     const codeStr = codeLines.join("\n");
-                    console.log(codeStr);
-                    console.log("%c═══ END ═══", "color: #ff6b6b; font-weight: bold;");
+                    dlog(codeStr);
+                    dlog("%c═══ END ═══", "color: #ff6b6b; font-weight: bold;");
                     // Also try to copy to clipboard
                     navigator.clipboard.writeText(codeStr).then(
-                      () => console.log("%cCopied to clipboard!", "color: #0f6; font-weight: bold;"),
-                      () => console.log("%cClipboard copy failed — please copy from above.", "color: #ff0;"),
+                      () => dlog("%cCopied to clipboard!", "color: #0f6; font-weight: bold;"),
+                      () => dlog("%cClipboard copy failed — please copy from above.", "color: #ff0;"),
                     );
                   }}
                   style={{
@@ -25397,7 +25479,7 @@ export default function ResumeSpace3D({
               </div>
             )}
 
-          {IS_DEBUG_QUERY_ENABLED &&
+          {IS_DEBUG &&
             aboutFlowOverlayEnabled &&
             projectShowcaseActive &&
             hallwayContentMode === "about" &&
@@ -28148,7 +28230,7 @@ export default function ResumeSpace3D({
           />
         </div>
       )}
-      <DebugZoneOverlay enabled={IS_DEBUG_QUERY_ENABLED} />
+      <DebugZoneOverlay enabled={IS_DEBUG} />
 
     </>
   );

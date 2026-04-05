@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { trackEvent } from "../lib/analytics";
+import { IS_DEBUG, dlog } from "../lib/debugLog";
 import "./CosmosLoader.scss";
 
 export interface CosmosLoaderProps {
@@ -47,9 +48,7 @@ export default function CosmosLoader({
   loadingProgressHint = 0,
   loadingStageHint = "",
 }: CosmosLoaderProps) {
-  const debugEnabled =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("debug") === "true";
+  const debugEnabled = IS_DEBUG;
   const fastTrackEnabled =
     typeof window !== "undefined" &&
     !!new URLSearchParams(window.location.search).get("fastTrack");
@@ -122,7 +121,7 @@ export default function CosmosLoader({
       setDebugModeHistory((prev) =>
         prev[prev.length - 1] === mode ? prev : [...prev.slice(-9), mode],
       );
-      console.log(`[LOADER:mode] ${mode}`);
+      dlog(`[LOADER:mode] ${mode}`);
     },
     [debugEnabled],
   );

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { dlog } from "../../lib/debugLog";
 
 type ZoneName =
   | "Navicomputer"
@@ -353,7 +354,7 @@ export default function DebugZoneOverlay({ enabled }: { enabled: boolean }): Rea
         },
       })),
     };
-    console.log("[zone-debug-export]", payload);
+    dlog("[zone-debug-export]", payload);
   };
 
   if (!enabled) return null;

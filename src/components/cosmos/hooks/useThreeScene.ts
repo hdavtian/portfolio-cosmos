@@ -11,6 +11,7 @@ import {
   ZOOM_EXIT_THRESHOLD,
 } from "../scaleConfig";
 import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import { dlog, dwarn, dinfo, dtable } from "../../../lib/debugLog";
 
 // Install camera-controls with THREE subset (required once before use)
 CameraControls.install({ THREE });
@@ -187,18 +188,18 @@ export const useThreeScene = (params: {
           });
         }
       });
-      console.table(lights);
-      console.log("Bloom threshold:", bloomPass.threshold, "strength:", bloomPass.strength);
-      console.log("Renderer toneMapping:", renderer.toneMapping, "(0=None, 1=Linear, 4=ACES)");
+      dtable(lights);
+      dlog("Bloom threshold:", bloomPass.threshold, "strength:", bloomPass.strength);
+      dlog("Renderer toneMapping:", renderer.toneMapping, "(0=None, 1=Linear, 4=ACES)");
       return lights;
     };
 
     // Debug: inspect ship materials, lights, sun state, and emissive properties.
     // Call from console while in cockpit/cabin to diagnose brightness issues.
     (window as any).debugShip = () => {
-      console.log("============================================");
-      console.log("=== COCKPIT / CABIN LIGHTING DEBUG ===");
-      console.log("============================================");
+      dlog("============================================");
+      dlog("=== COCKPIT / CABIN LIGHTING DEBUG ===");
+      dlog("============================================");
 
       // --- Sun light state ---
       // The sun PointLight sits at world origin (0,0,0), parented directly to scene.
@@ -211,43 +212,43 @@ export const useThreeScene = (params: {
         }
       });
       if (sunLight) {
-        console.log("--- SUN LIGHT ---");
-        console.log("  intensity:", sunLight.intensity);
-        console.log("  distance:", sunLight.distance);
-        console.log("  decay:", sunLight.decay);
+        dlog("--- SUN LIGHT ---");
+        dlog("  intensity:", sunLight.intensity);
+        dlog("  distance:", sunLight.distance);
+        dlog("  decay:", sunLight.decay);
         const wp = new THREE.Vector3();
         sunLight.getWorldPosition(wp);
-        console.log("  worldPos:", wp.toArray().map((n: number) => +n.toFixed(0)));
+        dlog("  worldPos:", wp.toArray().map((n: number) => +n.toFixed(0)));
       } else {
-        console.log("Sun light: NOT FOUND (scene.sunLight may not be set)");
+        dlog("Sun light: NOT FOUND (scene.sunLight may not be set)");
       }
 
       // --- Bloom ---
-      console.log("--- BLOOM ---");
-      console.log("  threshold:", bloomPass.threshold, "strength:", bloomPass.strength, "radius:", bloomPass.radius);
-      console.log("  toneMapping:", renderer.toneMapping, "(0=None,1=Linear,4=ACES)", "exposure:", renderer.toneMappingExposure);
+      dlog("--- BLOOM ---");
+      dlog("  threshold:", bloomPass.threshold, "strength:", bloomPass.strength, "radius:", bloomPass.radius);
+      dlog("  toneMapping:", renderer.toneMapping, "(0=None,1=Linear,4=ACES)", "exposure:", renderer.toneMappingExposure);
 
       // --- Ship ---
       let shipGroup: THREE.Object3D | null = null;
       scene.traverse((o: any) => {
         if (o.userData?.cockpitCameraLocal) shipGroup = o;
       });
-      if (!shipGroup) { console.log("Ship not found in scene"); return; }
-      console.log("--- SHIP ---");
-      console.log("  scale:", (shipGroup as any).scale.x);
+      if (!shipGroup) { dlog("Ship not found in scene"); return; }
+      dlog("--- SHIP ---");
+      dlog("  scale:", (shipGroup as any).scale.x);
       const sp = (shipGroup as any).position;
-      console.log("  position:", [sp.x, sp.y, sp.z].map((n: number) => +n.toFixed(1)));
+      dlog("  position:", [sp.x, sp.y, sp.z].map((n: number) => +n.toFixed(1)));
 
       // --- Camera ---
-      console.log("--- CAMERA ---");
+      dlog("--- CAMERA ---");
       const cam = camera;
-      console.log("  position:", cam.position.toArray().map((n: number) => +n.toFixed(1)));
+      dlog("  position:", cam.position.toArray().map((n: number) => +n.toFixed(1)));
       const distToShip = cam.position.distanceTo(sp);
-      console.log("  distToShip:", +distToShip.toFixed(2));
+      dlog("  distToShip:", +distToShip.toFixed(2));
       if (sunLight) {
         const sunWp = new THREE.Vector3();
         sunLight.getWorldPosition(sunWp);
-        console.log("  distToSun:", +cam.position.distanceTo(sunWp).toFixed(0));
+        dlog("  distToSun:", +cam.position.distanceTo(sunWp).toFixed(0));
       }
 
       // --- All lights parented to ship ---
@@ -264,8 +265,8 @@ export const useThreeScene = (params: {
           });
         }
       });
-      console.log("--- SHIP LIGHTS (" + shipLights.length + ") ---");
-      console.table(shipLights);
+      dlog("--- SHIP LIGHTS (" + shipLights.length + ") ---");
+      dtable(shipLights);
 
       // --- Emissive materials on ship ---
       const mats: any[] = [];
@@ -290,9 +291,9 @@ export const useThreeScene = (params: {
           });
         }
       });
-      console.log("--- EMISSIVE MATERIALS (" + mats.length + ") ---");
-      if (mats.length > 0) console.table(mats);
-      else console.log("  (none found)");
+      dlog("--- EMISSIVE MATERIALS (" + mats.length + ") ---");
+      if (mats.length > 0) dtable(mats);
+      else dlog("  (none found)");
 
       // --- All scene lights that AREN'T part of the ship ---
       const sceneLights: any[] = [];
@@ -319,10 +320,10 @@ export const useThreeScene = (params: {
           }
         }
       });
-      console.log("--- SCENE LIGHTS (non-ship, active) (" + sceneLights.length + ") ---");
-      if (sceneLights.length > 0) console.table(sceneLights);
+      dlog("--- SCENE LIGHTS (non-ship, active) (" + sceneLights.length + ") ---");
+      if (sceneLights.length > 0) dtable(sceneLights);
 
-      console.log("============================================");
+      dlog("============================================");
       return { shipLights, emissives: mats, sceneLights, sunIntensity: sunLight?.intensity };
     };
 
@@ -344,7 +345,7 @@ export const useThreeScene = (params: {
       // Keep canvas alive while the browser restores context.
       // Without preventDefault many drivers leave a white frame.
       // eslint-disable-next-line no-console
-      console.warn("[cosmos] WebGL context lost");
+      dwarn("[cosmos] WebGL context lost");
     };
     const handleContextRestored = () => {
       const w = container.clientWidth;
@@ -354,7 +355,7 @@ export const useThreeScene = (params: {
       composer.setSize(w, h);
       labelRenderer.setSize(w, h);
       // eslint-disable-next-line no-console
-      console.info("[cosmos] WebGL context restored");
+      dinfo("[cosmos] WebGL context restored");
     };
     renderer.domElement.addEventListener("webglcontextlost", handleContextLost as EventListener, false);
     renderer.domElement.addEventListener(

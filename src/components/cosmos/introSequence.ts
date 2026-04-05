@@ -11,6 +11,7 @@ import {
   INTRO_DIST_FACTOR_DIV,
 } from "./scaleConfig";
 import { emitCosmosEvent } from "./cosmosEventBus";
+import { dwarn } from "../../lib/debugLog";
 
 // --- INTRO FINAL POSITIONS (captured via debugCamera → F9) ---
 // Camera settles at Experience planet vantage point.
@@ -462,7 +463,7 @@ export const createIntroSequenceRunner = (
 
       const _iMs = performance.now() - _iStart;
       if (_iMs > 5) {
-        console.warn(`[PERF:intro] camera frame #${_introFrameCount} progress=${(progress * 100).toFixed(0)}% took ${_iMs.toFixed(1)}ms`);
+        dwarn(`[PERF:intro] camera frame #${_introFrameCount} progress=${(progress * 100).toFixed(0)}% took ${_iMs.toFixed(1)}ms`);
       }
 
       if (progress < 1) {
@@ -471,7 +472,7 @@ export const createIntroSequenceRunner = (
         introRafId = null;
         controls.enabled = previousControlsEnabled;
         setHudVisible(false);
-        console.warn(`[PERF:intro] camera intro COMPLETED after ${_introFrameCount} frames, elapsed=${elapsed.toFixed(0)}ms`);
+        dwarn(`[PERF:intro] camera intro COMPLETED after ${_introFrameCount} frames, elapsed=${elapsed.toFixed(0)}ms`);
         onIntroEvent?.("camera-intro completed");
         emitCosmosEvent("intro:camera-completed", { at: performance.now() });
         onIntroEvent?.("ship-cinematic trigger @intro-end");

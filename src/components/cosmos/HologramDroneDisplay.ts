@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { dwarn } from "../../lib/debugLog";
 import type { OverlayContent, JobTechEntry } from "../CosmicContentOverlay";
 import type { MoonPortfolioPayload } from "./moonPortfolioSelector";
 import {
@@ -635,7 +636,7 @@ export class HologramDroneDisplay {
     }
 
     this.configureDroneVisualLayer(group);
-    console.warn(`[PERF:drone] buildOblivionDrone took ${(performance.now() - _bStart).toFixed(1)}ms`);
+    dwarn(`[PERF:drone] buildOblivionDrone took ${(performance.now() - _bStart).toFixed(1)}ms`);
     return group;
   }
 
@@ -652,7 +653,7 @@ export class HologramDroneDisplay {
     this.rootGroup.add(this.droneGroup);
     this.cacheThrusterGlows();
     this.previousDroneQuat = null;
-    console.warn(`[PERF:drone] rebuildDroneGroup took ${(performance.now() - _rbStart).toFixed(1)}ms`);
+    dwarn(`[PERF:drone] rebuildDroneGroup took ${(performance.now() - _rbStart).toFixed(1)}ms`);
   }
 
   private requestOblivionDroneModel(): void {
@@ -1259,7 +1260,7 @@ export class HologramDroneDisplay {
     this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
     this.rootGroup.position.copy(this.flyStartPos);
     this.scannerLight.position.copy(this.rootGroup.position);
-    console.warn(
+    dwarn(
       `[PERF:drone] showContent total=${(performance.now() - _scStart).toFixed(1)}ms` +
       ` clear+setup=${(_scPlaceStart - _scStart).toFixed(1)}ms` +
       ` placement=${(_scBuildStart - _scPlaceStart).toFixed(1)}ms` +
@@ -2019,7 +2020,7 @@ export class HologramDroneDisplay {
 
     const _uMs = performance.now() - _uStart;
     if (_uMs > 10) {
-      console.warn(`[PERF:drone] update #${this._droneUpdateCount} took ${_uMs.toFixed(1)}ms`);
+      dwarn(`[PERF:drone] update #${this._droneUpdateCount} took ${_uMs.toFixed(1)}ms`);
     }
   }
 
