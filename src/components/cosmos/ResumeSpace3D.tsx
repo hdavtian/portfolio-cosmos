@@ -1490,7 +1490,8 @@ type AboutPathTravelMessage = {
   fontShadow?: string;
 };
 
-const ABOUT_RETARGET_SHATTER_MS = 1700;
+const ABOUT_RETARGET_SHATTER_MS = 2600;
+const ABOUT_CRYSTAL_DISPERSING_FADE_MS = 2400;
 const ABOUT_SKIP_CINEMATIC_PROMPT_MS = 5000;
 
 const ABOUT_PATH_RIDE_MESSAGES: AboutPathTravelMessage[] = (
@@ -5056,8 +5057,27 @@ export default function ResumeSpace3D({
       reveal: number;
     }>
   >([]);
+  const aboutCrystalPanelShatterRef = useRef<
+    Array<{
+      burstDirection: THREE.Vector3;
+      tangentDirection: THREE.Vector3;
+      normalDirection: THREE.Vector3;
+      spinAxisPrimary: THREE.Vector3;
+      spinAxisSecondary: THREE.Vector3;
+      spinRatePrimary: number;
+      spinRateSecondary: number;
+      launchDelay: number;
+      burstImpulse: number;
+      driftPhase: number;
+      driftAmount: number;
+    }>
+  >([]);
   const aboutCrystalPanelMatricesRef = useRef<THREE.Matrix4[]>([]);
   const aboutCrystalShatterUntilRef = useRef(0);
+  const aboutCrystalDispersingStartedAtRef = useRef(0);
+  const aboutCrystalShatterPhaseRef = useRef<AboutJourneyPhase>(
+    AboutJourneyPhase.IDLE,
+  );
   const aboutRetargetDispersalTimeoutRef = useRef<number | null>(null);
   const aboutCrystalSurgesRef = useRef<
     Array<{
@@ -5191,6 +5211,7 @@ export default function ResumeSpace3D({
       aboutCrystalPathRef.current = null;
       aboutCrystalPanelMeshRef.current = null;
       aboutCrystalPanelSeedsRef.current = [];
+      aboutCrystalPanelShatterRef.current = [];
       aboutCrystalPanelMatricesRef.current = [];
       aboutCrystalSurgesRef.current = [];
     };
@@ -5256,31 +5277,32 @@ export default function ResumeSpace3D({
 
       aboutCrystalPathRef.current = path;
       aboutCrystalPanelSeedsRef.current = [];
+      aboutCrystalPanelShatterRef.current = [];
       aboutCrystalPanelMatricesRef.current = [];
       aboutCrystalSurgesRef.current = [];
 
       const segmentCount = 440;
       const panelGeom = new THREE.PlaneGeometry(1, 1, 1, 1);
       const panelMat = new THREE.MeshPhysicalMaterial({
-        color: 0xb7eeff,
+        color: 0xffffff,
         emissive: 0xffffff,
-        emissiveIntensity: 0.32,
+        emissiveIntensity: 0.12,
         transparent: true,
-        opacity: 0.34,
-        roughness: 0.18,
-        metalness: 0.02,
-        transmission: 0.66,
+        opacity: 0.52,
+        roughness: 0.1,
+        metalness: 0.04,
+        transmission: 0.42,
         ior: 1.34,
-        thickness: 1.1,
-        reflectivity: 0.72,
+        thickness: 2.4,
+        reflectivity: 0.92,
         clearcoat: 1,
-        clearcoatRoughness: 0.08,
-        envMapIntensity: 1.2,
+        clearcoatRoughness: 0.03,
+        envMapIntensity: 1.45,
         side: THREE.DoubleSide,
         vertexColors: true,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        toneMapped: false,
+        blending: THREE.NormalBlending,
+        toneMapped: true,
       });
       const panelMesh = new THREE.InstancedMesh(
         panelGeom,
@@ -5302,13 +5324,21 @@ export default function ResumeSpace3D({
       const basis = new THREE.Matrix4();
       const quat = new THREE.Quaternion();
       const color = new THREE.Color();
-      const crystalHuePalette = [
-        0.52, // cyan
-        0.58, // blue
-        0.64, // indigo
-        0.76, // magenta
-        0.32, // green
-        0.12, // amber
+      const toCenter = new THREE.Vector3();
+      const randomDir = new THREE.Vector3();
+      const burstDir = new THREE.Vector3();
+      const tangentDir = new THREE.Vector3();
+      const normalDir = new THREE.Vector3();
+      const spinAxisA = new THREE.Vector3();
+      const spinAxisB = new THREE.Vector3();
+      const crystalColorPalette = [
+        new THREE.Color(0xff9f4a), // orange
+        new THREE.Color(0xffc15e), // amber
+        new THREE.Color(0x44d68a), // emerald
+        new THREE.Color(0x30c7c9), // teal
+        new THREE.Color(0x4c7dff), // sapphire
+        new THREE.Color(0x8c52ff), // violet
+        new THREE.Color(0xff5da8), // rose
       ];
 
       for (let i = 0; i < segmentCount; i++) {
@@ -5330,27 +5360,86 @@ export default function ResumeSpace3D({
         quat.setFromRotationMatrix(basis);
 
         const segLen = Math.max(5, p0.distanceTo(p1));
-        const width = THREE.MathUtils.lerp(30, 56, Math.random());
+        const width = THREE.MathUtils.lerp(44, 84, Math.random());
         aboutCrystalPanelSeedsRef.current.push({
           position: mid.clone(),
           quaternion: quat.clone(),
-          scale: new THREE.Vector3(width, segLen * 1.08, 1),
+          scale: new THREE.Vector3(width, segLen * 1.22, 1),
           reveal: i / Math.max(1, segmentCount - 1),
+        });
+
+        // Seed violent shatter vectors inspired by the old About slide explosion.
+        toCenter.copy(mid).normalize();
+        if (toCenter.lengthSq() < 1e-6) {
+          toCenter.set(
+            Math.random() - 0.5,
+            Math.random() - 0.5,
+            Math.random() - 0.5,
+          );
+        }
+        toCenter.normalize();
+        randomDir
+          .set(
+            Math.sin(i * 2.13 + 0.71),
+            Math.cos(i * 1.71 + 1.12),
+            Math.sin(i * 3.07 + 2.04),
+          )
+          .normalize();
+        burstDir
+          .copy(toCenter)
+          .multiplyScalar(0.68)
+          .addScaledVector(randomDir, 0.92)
+          .normalize();
+        tangentDir.crossVectors(burstDir, randomDir);
+        if (tangentDir.lengthSq() < 1e-6) {
+          tangentDir.crossVectors(
+            burstDir,
+            Math.abs(burstDir.y) < 0.85 ? up : altUp,
+          );
+        }
+        tangentDir.normalize();
+        normalDir.crossVectors(burstDir, tangentDir).normalize();
+        spinAxisA
+          .set(
+            Math.random() * 2 - 1,
+            Math.random() * 2 - 1,
+            Math.random() * 2 - 1,
+          )
+          .normalize();
+        spinAxisB
+          .set(
+            Math.random() * 2 - 1,
+            Math.random() * 2 - 1,
+            Math.random() * 2 - 1,
+          )
+          .normalize();
+        if (spinAxisA.lengthSq() < 1e-6) spinAxisA.set(0.47, 0.63, -0.62);
+        if (spinAxisB.lengthSq() < 1e-6) spinAxisB.set(-0.28, 0.86, 0.42);
+        aboutCrystalPanelShatterRef.current.push({
+          burstDirection: burstDir.clone(),
+          tangentDirection: tangentDir.clone(),
+          normalDirection: normalDir.clone(),
+          spinAxisPrimary: spinAxisA.clone(),
+          spinAxisSecondary: spinAxisB.clone(),
+          spinRatePrimary: THREE.MathUtils.lerp(3.8, 8.6, Math.random()),
+          spinRateSecondary: THREE.MathUtils.lerp(2.4, 6.2, Math.random()),
+          launchDelay: THREE.MathUtils.lerp(0, 0.22, Math.random()),
+          burstImpulse: THREE.MathUtils.lerp(0.82, 1.28, Math.random()),
+          driftPhase: Math.random() * Math.PI * 2,
+          driftAmount: THREE.MathUtils.lerp(8, 28, Math.random()),
         });
         aboutCrystalPanelMatricesRef.current.push(new THREE.Matrix4());
 
         const paletteIndex =
-          (Math.floor(i / 16) + Math.floor(Math.random() * 2)) %
-          crystalHuePalette.length;
-        const baseHue = crystalHuePalette[paletteIndex] ?? 0.58;
-        color.setHSL(
-          THREE.MathUtils.euclideanModulo(
-            baseHue + THREE.MathUtils.randFloatSpread(0.035),
-            1,
-          ),
-          THREE.MathUtils.lerp(0.62, 0.9, Math.random()),
-          THREE.MathUtils.lerp(0.58, 0.84, Math.random()),
-        );
+          (Math.floor(i / 12) + Math.floor(Math.random() * 3)) %
+          crystalColorPalette.length;
+        color
+          .copy(crystalColorPalette[paletteIndex] ?? new THREE.Color(0x4c7dff))
+          .offsetHSL(THREE.MathUtils.randFloatSpread(0.02), 0, 0)
+          .lerp(
+            new THREE.Color(0xffffff),
+            THREE.MathUtils.lerp(0.06, 0.18, Math.random()),
+          );
         panelMesh.setColorAt(i, color);
       }
       panelMesh.instanceColor!.needsUpdate = true;
@@ -5410,7 +5499,8 @@ export default function ResumeSpace3D({
       const shouldShowCrystal =
         !!path &&
         (phase === AboutJourneyPhase.PATH_READY ||
-          phase === AboutJourneyPhase.PATH_TRAVEL);
+          phase === AboutJourneyPhase.PATH_TRAVEL ||
+          phase === AboutJourneyPhase.PATH_DISPERSING);
 
       if (!shouldShowCrystal) {
         const group = aboutCrystalPathGroupRef.current;
@@ -5438,11 +5528,28 @@ export default function ResumeSpace3D({
       const panelMesh = aboutCrystalPanelMeshRef.current;
       if (!panelMesh) return;
       const seeds = aboutCrystalPanelSeedsRef.current;
+      const shatterSeeds = aboutCrystalPanelShatterRef.current;
       const matrices = aboutCrystalPanelMatricesRef.current;
 
       const crystalProgress = journey.pathCrystallizationActive
         ? journey.pathCrystallizationProgress
         : 1;
+      if (
+        phase === AboutJourneyPhase.PATH_DISPERSING &&
+        aboutCrystalShatterPhaseRef.current !==
+          AboutJourneyPhase.PATH_DISPERSING
+      ) {
+        aboutCrystalShatterUntilRef.current = now + ABOUT_RETARGET_SHATTER_MS;
+        aboutCrystalDispersingStartedAtRef.current = now;
+      }
+      if (
+        phase !== AboutJourneyPhase.PATH_DISPERSING &&
+        aboutCrystalShatterPhaseRef.current ===
+          AboutJourneyPhase.PATH_DISPERSING
+      ) {
+        aboutCrystalDispersingStartedAtRef.current = 0;
+      }
+      aboutCrystalShatterPhaseRef.current = phase;
       const shatterRemaining = Math.max(
         0,
         aboutCrystalShatterUntilRef.current - now,
@@ -5451,48 +5558,98 @@ export default function ResumeSpace3D({
       const shatterT = shatterActive
         ? 1 - shatterRemaining / ABOUT_RETARGET_SHATTER_MS
         : 0;
+      const dispersingActive = phase === AboutJourneyPhase.PATH_DISPERSING;
+      const dispersingT = dispersingActive
+        ? THREE.MathUtils.clamp(
+            (now - aboutCrystalDispersingStartedAtRef.current) /
+              ABOUT_CRYSTAL_DISPERSING_FADE_MS,
+            0,
+            1,
+          )
+        : 0;
+      const explosionActive = shatterActive || dispersingActive;
       const panelMaterial = panelMesh.material as THREE.MeshPhysicalMaterial;
       const shatterTravelT = shatterActive ? Math.pow(shatterT, 0.82) : 0;
       const shatterFadeT = shatterActive
-        ? THREE.MathUtils.clamp((shatterT - 0.42) / 0.58, 0, 1)
+        ? THREE.MathUtils.clamp((shatterT - 0.66) / 0.34, 0, 1)
         : 0;
-      panelMaterial.opacity = shatterActive
-        ? THREE.MathUtils.lerp(0.58, 0.02, shatterFadeT)
-        : THREE.MathUtils.lerp(0.24, 0.58, crystalProgress);
+      const explosionTravelT = explosionActive
+        ? Math.max(shatterTravelT, Math.pow(dispersingT, 0.72))
+        : 0;
+      const explosionFadeT = explosionActive
+        ? Math.max(shatterFadeT, dispersingT)
+        : 0;
+      panelMaterial.opacity = explosionActive
+        ? THREE.MathUtils.lerp(0.84, 0.0, explosionFadeT)
+        : THREE.MathUtils.lerp(0.36, 0.74, crystalProgress);
       panelMaterial.emissiveIntensity = THREE.MathUtils.lerp(
-        shatterActive ? 0.62 : 0.34,
-        shatterActive ? 1.35 : 0.62,
-        shatterActive ? Math.min(1, shatterTravelT * 1.1) : crystalProgress,
+        explosionActive ? 0.7 : 0.26,
+        explosionActive ? 1.45 : 0.84,
+        explosionActive ? Math.min(1, explosionTravelT * 1.1) : crystalProgress,
       );
 
       const tempScale = new THREE.Vector3();
       const tempPos = new THREE.Vector3();
-      const burstDir = new THREE.Vector3();
+      const tempQuat = new THREE.Quaternion();
+      const deltaQuat = new THREE.Quaternion();
+      const deltaQuatB = new THREE.Quaternion();
       for (let i = 0; i < seeds.length; i++) {
         const seed = seeds[i];
+        const shatterSeed = shatterSeeds[i];
+        if (!seed || !shatterSeed) continue;
         const w = THREE.MathUtils.clamp(
           (crystalProgress - seed.reveal + 0.06) / 0.16,
           0,
           1,
         );
         const alpha = w * w * (3 - 2 * w);
-        const shatterScale = shatterActive
-          ? Math.max(0.01, alpha * (1 - shatterFadeT * 0.94))
+        const shatterScale = explosionActive
+          ? Math.max(0.01, alpha * (1 - explosionFadeT * 0.94))
           : Math.max(0.02, alpha);
         tempScale.copy(seed.scale).multiplyScalar(shatterScale);
         tempPos.copy(seed.position);
-        if (shatterActive) {
-          burstDir
-            .set(
-              Math.sin(i * 12.9898),
-              0.7 + Math.cos(i * 5.187),
-              Math.sin(i * 7.321 + 1.37),
-            )
-            .normalize();
-          const burstDist = THREE.MathUtils.lerp(0, 138, shatterTravelT);
-          tempPos.addScaledVector(burstDir, burstDist);
+        tempQuat.copy(seed.quaternion);
+        if (explosionActive) {
+          const travelT = THREE.MathUtils.clamp(
+            (shatterT - shatterSeed.launchDelay) /
+              Math.max(0.001, 1 - shatterSeed.launchDelay),
+            0,
+            1,
+          );
+          const easedTravel = Math.max(
+            Math.pow(travelT, 0.72),
+            Math.pow(dispersingT, 0.72),
+          );
+          const primaryDist = THREE.MathUtils.lerp(
+            0,
+            520 * shatterSeed.burstImpulse,
+            easedTravel,
+          );
+          const lateralDist =
+            Math.sin(travelT * 9 + shatterSeed.driftPhase) *
+            shatterSeed.driftAmount *
+            (0.35 + easedTravel);
+          const verticalDist =
+            Math.cos(travelT * 5 + shatterSeed.driftPhase * 0.6) *
+              shatterSeed.driftAmount *
+              0.45 +
+            easedTravel * easedTravel * 90;
+          tempPos
+            .addScaledVector(shatterSeed.burstDirection, primaryDist)
+            .addScaledVector(shatterSeed.tangentDirection, lateralDist)
+            .addScaledVector(shatterSeed.normalDirection, verticalDist);
+
+          deltaQuat.setFromAxisAngle(
+            shatterSeed.spinAxisPrimary,
+            shatterSeed.spinRatePrimary * easedTravel,
+          );
+          deltaQuatB.setFromAxisAngle(
+            shatterSeed.spinAxisSecondary,
+            shatterSeed.spinRateSecondary * easedTravel * 0.85,
+          );
+          tempQuat.multiply(deltaQuat).multiply(deltaQuatB).normalize();
         }
-        matrices[i].compose(tempPos, seed.quaternion, tempScale);
+        matrices[i].compose(tempPos, tempQuat, tempScale);
         panelMesh.setMatrixAt(i, matrices[i]);
       }
       panelMesh.instanceMatrix.needsUpdate = true;
@@ -12488,6 +12645,29 @@ export default function ResumeSpace3D({
     ];
   }, [orbitPhase, overlayContent, runShipTerminalCommand, shipLog]);
 
+  const reattachCameraToFalcon = useCallback((smooth: boolean) => {
+    const controls = sceneRef.current.controls;
+    const ship = spaceshipRef.current;
+    if (!controls || !ship) return;
+
+    const behind = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion);
+    const camPos = ship.position
+      .clone()
+      .addScaledVector(behind, FOLLOW_DISTANCE);
+    camPos.y += FOLLOW_HEIGHT;
+
+    controls.enabled = true;
+    controls.setLookAt(
+      camPos.x,
+      camPos.y,
+      camPos.z,
+      ship.position.x,
+      ship.position.y,
+      ship.position.z,
+      smooth,
+    );
+  }, []);
+
   function interruptTransientTravelFlows(
     nextTargetId: string,
     nextTargetType: "section" | "moon",
@@ -12586,6 +12766,8 @@ export default function ResumeSpace3D({
       setShipViewMode("exterior");
       shipViewModeRef.current = "exterior";
       if (spaceshipRef.current) spaceshipRef.current.visible = true;
+      // Ensure camera is immediately back on Falcon before the next leg.
+      reattachCameraToFalcon(false);
     }
     if (interrupted) {
       markTravelOverride(nextTargetId, nextTargetType);

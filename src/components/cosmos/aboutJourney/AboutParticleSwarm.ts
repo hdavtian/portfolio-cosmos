@@ -78,10 +78,10 @@ const PATH_HOLD_PROFILE_DWELL_MAX_MS = 16000;
 const PATH_HOLD_PROFILE_BLEND_MS = 1800;
 
 // Path dispersal (burst + fade)
-const DISPERSAL_SPEED_MIN = 120;
-const DISPERSAL_SPEED_MAX = 360;
-const DISPERSAL_SIZE_DECAY = 0.68;
-const DISPERSAL_MAX_DURATION_S = 9.5;
+const DISPERSAL_SPEED_MIN = 260;
+const DISPERSAL_SPEED_MAX = 760;
+const DISPERSAL_SIZE_DECAY = 0.34;
+const DISPERSAL_MAX_DURATION_S = 13.5;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -1080,9 +1080,9 @@ export function createAboutParticleSwarm(
         if (cosmicPath) {
           const t = Math.max(0, Math.min(1, pp.pathT));
           const tan = cosmicPath.getTangentAt(t);
-          dirX += tan.x * 0.35;
-          dirY += tan.y * 0.35;
-          dirZ += tan.z * 0.35;
+          dirX += tan.x * 0.9;
+          dirY += tan.y * 0.9;
+          dirZ += tan.z * 0.9;
         }
         const mag = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ) + 1e-5;
         const sp =
@@ -1107,9 +1107,9 @@ export function createAboutParticleSwarm(
       const oy = posArr[i3 + 1];
       const oz = posArr[i3 + 2];
 
-      pp.vx *= 1 - dt * 0.12;
-      pp.vy *= 1 - dt * 0.12;
-      pp.vz *= 1 - dt * 0.12;
+      pp.vx *= 1 - dt * 0.055;
+      pp.vy *= 1 - dt * 0.055;
+      pp.vz *= 1 - dt * 0.055;
 
       posArr[i3] = ox + pp.vx * dt;
       posArr[i3 + 1] = oy + pp.vy * dt;
@@ -1119,7 +1119,7 @@ export function createAboutParticleSwarm(
       szArr[activeCount] = pp.size;
 
       const hue = (pp.hue + dt * 0.04) % 1.0;
-      tmpColor.setHSL(hue, 0.55, 0.35 + pp.size * 0.08);
+      tmpColor.setHSL(hue, 0.78, 0.42 + pp.size * 0.12);
       colArr[i3] = tmpColor.r;
       colArr[i3 + 1] = tmpColor.g;
       colArr[i3 + 2] = tmpColor.b;
