@@ -20,8 +20,7 @@ type PanelData = {
   journey: AboutJourneyState | null;
   swarm: AboutParticleSwarmDebugState | null;
   travelSpeedScale: number;
-  throttleLockedDirection: -1 | 0 | 1;
-  throttleStreakCount: number;
+  travelInputDirection: -1 | 0 | 1;
   updatedAtMs: number;
 };
 
@@ -52,8 +51,7 @@ export default function AboutJourneyDebugPanel({
     journey: null,
     swarm: null,
     travelSpeedScale: 1,
-    throttleLockedDirection: 0,
-    throttleStreakCount: 0,
+    travelInputDirection: 0,
     updatedAtMs: 0,
   });
 
@@ -79,15 +77,12 @@ export default function AboutJourneyDebugPanel({
         const journey = journeyCtrl?.state ?? null;
         const swarm = swarmRef.current?.getDebugState() ?? null;
         const travelSpeedScale = journeyCtrl?.travelSpeedScale ?? 1;
-        const throttleLockedDirection =
-          journeyCtrl?.travelThrottleLockedDirection ?? 0;
-        const throttleStreakCount = journeyCtrl?.travelThrottleStreakCount ?? 0;
+        const travelInputDirection = journeyCtrl?.travelInputDirection ?? 0;
         setPanelData({
           journey,
           swarm,
           travelSpeedScale,
-          throttleLockedDirection,
-          throttleStreakCount,
+          travelInputDirection,
           updatedAtMs: now,
         });
       }
@@ -243,15 +238,12 @@ export default function AboutJourneyDebugPanel({
                     : " (forward)"}
               </div>
               <div style={{ color: "#9fd6e5" }}>
-                Throttle lock:{" "}
-                {panelData.throttleLockedDirection === 0
-                  ? "none"
-                  : panelData.throttleLockedDirection > 0
+                Held input:{" "}
+                {panelData.travelInputDirection === 0
+                  ? "neutral"
+                  : panelData.travelInputDirection > 0
                     ? "forward"
                     : "reverse"}
-                {panelData.throttleLockedDirection === 0
-                  ? ` (streak ${panelData.throttleStreakCount}/20)`
-                  : ""}
               </div>
             </div>
           </div>

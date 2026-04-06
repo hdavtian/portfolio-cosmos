@@ -74,6 +74,7 @@ import { StarDestroyerCruiser } from "../StarDestroyerCruiser";
 import {
   AboutJourneyController,
   AboutJourneyPhase,
+  type AboutTravelCameraMode,
 } from "./aboutJourney/AboutJourneyController";
 import AboutJourneyDebugPanel from "./aboutJourney/AboutJourneyDebugPanel";
 import {
@@ -5010,6 +5011,17 @@ export default function ResumeSpace3D({
   const aboutJourneyAutopilotSuppressedRef = useRef(false);
   const aboutJourneyRef = useRef<AboutJourneyController | null>(null);
   const aboutJourneyPendingEntryRef = useRef(false);
+  const aboutTramKeyUpHeldRef = useRef(false);
+  const aboutTramKeyDownHeldRef = useRef(false);
+  const aboutTramPointerUpHeldRef = useRef(false);
+  const aboutTramPointerDownHeldRef = useRef(false);
+  const [aboutTramHudVisible, setAboutTramHudVisible] = useState(false);
+  const [aboutTramUpHeld, setAboutTramUpHeld] = useState(false);
+  const [aboutTramDownHeld, setAboutTramDownHeld] = useState(false);
+  const [aboutTramMomentumNorm, setAboutTramMomentumNorm] = useState(0);
+  const [aboutTramCameraReversed, setAboutTramCameraReversed] = useState(false);
+  const [aboutTramCameraMode, setAboutTramCameraMode] =
+    useState<AboutTravelCameraMode>("forward");
   const aboutCrystalPathGroupRef = useRef<THREE.Group | null>(null);
   const aboutCrystalPathRef = useRef<THREE.CatmullRomCurve3 | null>(null);
   const aboutCrystalPanelMeshRef = useRef<THREE.InstancedMesh | null>(null);
@@ -5398,25 +5410,172 @@ export default function ResumeSpace3D({
     };
   }, []);
 
+  const recomputeAboutTramInput = useCallback(() => {
+    const upHeld =
+      aboutTramKeyUpHeldRef.current || aboutTramPointerUpHeldRef.current;
+    const downHeld =
+      aboutTramKeyDownHeldRef.current || aboutTramPointerDownHeldRef.current;
+    setAboutTramUpHeld((prev) => (prev === upHeld ? prev : upHeld));
+    setAboutTramDownHeld((prev) => (prev === downHeld ? prev : downHeld));
+
+    const journey = aboutJourneyRef.current;
+    if (!journey || journey.phase !== AboutJourneyPhase.PATH_TRAVEL) {
+      journey?.setTravelInputDirection(0);
+      return;
+    }
+
+    let nextDirection: -1 | 0 | 1 = 0;
+    if (upHeld !== downHeld) nextDirection = upHeld ? 1 : -1;
+    journey.setTravelInputDirection(nextDirection);
+  }, []);
+
+  const releaseAllAboutTramInput = useCallback(() => {
+    aboutTramKeyUpHeldRef.current = false;
+    aboutTramKeyDownHeldRef.current = false;
+    aboutTramPointerUpHeldRef.current = false;
+    aboutTramPointerDownHeldRef.current = false;
+    recomputeAboutTramInput();
+  }, [recomputeAboutTramInput]);
+
+  const setAboutTramPointerHold = useCallback(
+    (direction: -1 | 1, held: boolean) => {
+      if (direction > 0) {
+        aboutTramPointerUpHeldRef.current = held;
+      } else {
+        aboutTramPointerDownHeldRef.current = held;
+      }
+      recomputeAboutTramInput();
+    },
+    [recomputeAboutTramInput],
+  );
+
+  const toggleAboutTramCameraReverse = useCallback(() => {
+    setAboutTramCameraReversed((prev) => {
+      const next = !prev;
+      aboutJourneyRef.current?.setTravelCameraReversed(next);
+      return next;
+    });
+  }, []);
+
+  const setAboutTramCameraModeWithSync = useCallback(
+    (mode: AboutTravelCameraMode) => {
+      setAboutTramCameraMode(mode);
+      const journey = aboutJourneyRef.current;
+      journey?.setTravelCameraMode(mode);
+      if (mode === "free") {
+        setAboutTramCameraReversed(false);
+        journey?.setTravelCameraReversed(false);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
-    const onWheel = (event: WheelEvent) => {
+    const onKeyDown = (event: KeyboardEvent) => {
       const journey = aboutJourneyRef.current;
       if (!journey || journey.phase !== AboutJourneyPhase.PATH_TRAVEL) return;
-      if (Math.abs(event.deltaY) < 0.0001) return;
 
-      journey.nudgeTravelSpeedFromWheel(event.deltaY);
-      event.preventDefault();
-      event.stopPropagation();
+      if (event.code === "ArrowUp") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!aboutTramKeyUpHeldRef.current) {
+          aboutTramKeyUpHeldRef.current = true;
+          recomputeAboutTramInput();
+        }
+      } else if (event.code === "ArrowDown") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!aboutTramKeyDownHeldRef.current) {
+          aboutTramKeyDownHeldRef.current = true;
+          recomputeAboutTramInput();
+        }
+      }
     };
 
-    window.addEventListener("wheel", onWheel, {
-      passive: false,
-      capture: true,
-    });
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === "ArrowUp") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (aboutTramKeyUpHeldRef.current) {
+          aboutTramKeyUpHeldRef.current = false;
+          recomputeAboutTramInput();
+        }
+      } else if (event.code === "ArrowDown") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (aboutTramKeyDownHeldRef.current) {
+          aboutTramKeyDownHeldRef.current = false;
+          recomputeAboutTramInput();
+        }
+      }
+    };
+
+    const onPointerUp = () => {
+      if (
+        aboutTramPointerUpHeldRef.current ||
+        aboutTramPointerDownHeldRef.current
+      ) {
+        aboutTramPointerUpHeldRef.current = false;
+        aboutTramPointerDownHeldRef.current = false;
+        recomputeAboutTramInput();
+      }
+    };
+
+    const onWindowBlur = () => {
+      releaseAllAboutTramInput();
+    };
+
+    const phaseSyncInterval = window.setInterval(() => {
+      const journey = aboutJourneyRef.current;
+      const inPathTravel = journey?.phase === AboutJourneyPhase.PATH_TRAVEL;
+      setAboutTramHudVisible((prev) =>
+        prev === inPathTravel ? prev : inPathTravel,
+      );
+      if (inPathTravel && journey) {
+        const nextMomentum = journey.travelMomentumNormalized;
+        setAboutTramMomentumNorm((prev) =>
+          Math.abs(prev - nextMomentum) < 0.001 ? prev : nextMomentum,
+        );
+        const nextCamRev = journey.travelCameraReversed;
+        setAboutTramCameraReversed((prev) =>
+          prev === nextCamRev ? prev : nextCamRev,
+        );
+        const nextCamMode = journey.travelCameraMode;
+        setAboutTramCameraMode((prev) =>
+          prev === nextCamMode ? prev : nextCamMode,
+        );
+      } else {
+        setAboutTramMomentumNorm((prev) => (prev === 0 ? prev : 0));
+        setAboutTramCameraMode((prev) =>
+          prev === "forward" ? prev : "forward",
+        );
+        setAboutTramCameraReversed((prev) => {
+          if (!prev) return prev;
+          journey?.setTravelCameraReversed(false);
+          return false;
+        });
+        journey?.setTravelCameraMode("forward");
+        releaseAllAboutTramInput();
+      }
+    }, 120);
+
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener("keyup", onKeyUp, { capture: true });
+    window.addEventListener("pointerup", onPointerUp, { capture: true });
+    window.addEventListener("pointercancel", onPointerUp, { capture: true });
+    window.addEventListener("blur", onWindowBlur);
     return () => {
-      window.removeEventListener("wheel", onWheel, { capture: true });
+      window.clearInterval(phaseSyncInterval);
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
+      window.removeEventListener("keyup", onKeyUp, { capture: true });
+      window.removeEventListener("pointerup", onPointerUp, { capture: true });
+      window.removeEventListener("pointercancel", onPointerUp, {
+        capture: true,
+      });
+      window.removeEventListener("blur", onWindowBlur);
+      releaseAllAboutTramInput();
     };
-  }, []);
+  }, [recomputeAboutTramInput, releaseAllAboutTramInput]);
   const skillsSDPatrolStateRef = useRef<{ angle: number }>({
     angle: Math.PI * 0.25,
   });
@@ -32121,6 +32280,215 @@ export default function ResumeSpace3D({
             content={overlayContent}
             visible={moonHtmlVisible}
           />
+        </div>
+      )}
+      {aboutTramHudVisible && (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: 22,
+            transform: "translateX(-50%)",
+            zIndex: 1300,
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 10px",
+              borderRadius: 14,
+              border: "1px solid rgba(107, 228, 255, 0.48)",
+              background:
+                "linear-gradient(180deg, rgba(7, 20, 38, 0.88), rgba(4, 11, 24, 0.86))",
+              boxShadow: "0 8px 26px rgba(0, 0, 0, 0.35)",
+              backdropFilter: "blur(6px)",
+              fontFamily: "'IBM Plex Mono', 'Fira Code', Consolas, monospace",
+            }}
+          >
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setAboutTramPointerHold(1, true);
+              }}
+              onPointerUp={() => setAboutTramPointerHold(1, false)}
+              onPointerLeave={() => setAboutTramPointerHold(1, false)}
+              onPointerCancel={() => setAboutTramPointerHold(1, false)}
+              style={{
+                pointerEvents: "auto",
+                minWidth: 32,
+                height: 26,
+                borderRadius: 7,
+                border: aboutTramUpHeld
+                  ? "1px solid rgba(162, 255, 182, 0.92)"
+                  : "1px solid rgba(128, 219, 247, 0.55)",
+                background: aboutTramUpHeld
+                  ? "linear-gradient(180deg, rgba(56, 132, 82, 0.9), rgba(22, 80, 56, 0.85))"
+                  : "linear-gradient(180deg, rgba(11, 35, 59, 0.86), rgba(8, 24, 45, 0.82))",
+                color: "#e7f9ff",
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: "pointer",
+              }}
+              aria-label="Hold Arrow Up to move forward"
+              title="Hold Arrow Up to move forward"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setAboutTramPointerHold(-1, true);
+              }}
+              onPointerUp={() => setAboutTramPointerHold(-1, false)}
+              onPointerLeave={() => setAboutTramPointerHold(-1, false)}
+              onPointerCancel={() => setAboutTramPointerHold(-1, false)}
+              style={{
+                pointerEvents: "auto",
+                minWidth: 32,
+                height: 26,
+                borderRadius: 7,
+                border: aboutTramDownHeld
+                  ? "1px solid rgba(255, 184, 149, 0.94)"
+                  : "1px solid rgba(128, 219, 247, 0.55)",
+                background: aboutTramDownHeld
+                  ? "linear-gradient(180deg, rgba(154, 82, 47, 0.9), rgba(90, 46, 26, 0.85))"
+                  : "linear-gradient(180deg, rgba(11, 35, 59, 0.86), rgba(8, 24, 45, 0.82))",
+                color: "#e7f9ff",
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: "pointer",
+              }}
+              aria-label="Hold Arrow Down to reverse"
+              title="Hold Arrow Down to reverse"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleAboutTramCameraReverse()}
+              disabled={aboutTramCameraMode !== "forward"}
+              style={{
+                pointerEvents: "auto",
+                height: 26,
+                borderRadius: 7,
+                border: aboutTramCameraReversed
+                  ? "1px solid rgba(255, 212, 144, 0.95)"
+                  : "1px solid rgba(128, 219, 247, 0.55)",
+                background: aboutTramCameraReversed
+                  ? "linear-gradient(180deg, rgba(140, 97, 32, 0.9), rgba(84, 56, 18, 0.85))"
+                  : "linear-gradient(180deg, rgba(11, 35, 59, 0.86), rgba(8, 24, 45, 0.82))",
+                color: "#e7f9ff",
+                fontWeight: 600,
+                fontSize: 11,
+                letterSpacing: 0.1,
+                padding: "0 8px",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                opacity: aboutTramCameraMode === "forward" ? 1 : 0.5,
+              }}
+              aria-label="Toggle reverse camera orientation"
+              title="Toggle reverse camera orientation"
+            >
+              {aboutTramCameraReversed ? "Camera: Reverse" : "Camera: Forward"}
+            </button>
+            <div
+              style={{
+                pointerEvents: "auto",
+                display: "grid",
+                gap: 2,
+                padding: "2px 6px",
+                borderRadius: 7,
+                border: "1px solid rgba(128, 219, 247, 0.45)",
+                background: "rgba(8, 24, 45, 0.55)",
+                color: "#d9f5ff",
+                fontSize: 10,
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="about-tram-camera-mode"
+                  checked={aboutTramCameraMode === "forward"}
+                  onChange={() => setAboutTramCameraModeWithSync("forward")}
+                />
+                Forward camera
+              </label>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="about-tram-camera-mode"
+                  checked={aboutTramCameraMode === "free"}
+                  onChange={() => setAboutTramCameraModeWithSync("free")}
+                />
+                Free camera
+              </label>
+            </div>
+            <div
+              style={{
+                minWidth: 170,
+                display: "grid",
+                gap: 3,
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{ color: "#a7dce9", fontSize: 10, letterSpacing: 0.25 }}
+              >
+                Momentum
+              </div>
+              <div
+                style={{
+                  height: 10,
+                  borderRadius: 999,
+                  border: "1px solid rgba(128, 219, 247, 0.45)",
+                  background: "rgba(5, 16, 31, 0.9)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${Math.round(aboutTramMomentumNorm * 100)}%`,
+                    borderRadius: 999,
+                    background:
+                      "linear-gradient(90deg, rgba(84, 224, 133, 0.95) 0%, rgba(244, 227, 78, 0.95) 56%, rgba(255, 110, 74, 0.95) 100%)",
+                    transition: "width 100ms linear",
+                  }}
+                />
+              </div>
+            </div>
+            <div
+              style={{
+                color: "#a7dce9",
+                fontSize: 10,
+                letterSpacing: 0.15,
+                maxWidth: 190,
+              }}
+            >
+              Tap nudges. Hold ~3s for full throttle.
+            </div>
+          </div>
         </div>
       )}
       <AboutJourneyDebugPanel

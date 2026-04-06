@@ -96,8 +96,9 @@ const PATH_TRAVEL_BOARDING_DURATION_MS = 1350;
 const PATH_TRAVEL_SPEED_SCALE_MIN = -2.5;
 const PATH_TRAVEL_SPEED_SCALE_MAX = 2.5;
 const PATH_TRAVEL_STOP_EPSILON = 0.03;
-const PATH_TRAVEL_WHEEL_IMPULSE = 0.22;
-const PATH_TRAVEL_WHEEL_LOCK_STEPS = 20;
+const PATH_TRAVEL_INPUT_RAMP_SECONDS = 3;
+const PATH_TRAVEL_INPUT_MIN_SCALE = 0.2;
+const PATH_TRAVEL_BRAKE_INPUT_FLOOR = 0.9;
 const PATH_TRAVEL_TARGET_DRIFT_PER_SEC = 0.55;
 const PATH_TRAVEL_ACCEL_PER_SEC = 1.2;
 const PATH_TRAVEL_BRAKE_PER_SEC = 2.8;
@@ -165,6 +166,8 @@ export interface AboutJourneyState {
   phaseStartedAt: number;
 }
 
+export type AboutTravelCameraMode = "forward" | "free";
+
 // ---------------------------------------------------------------------------
 // Controller
 // ---------------------------------------------------------------------------
@@ -216,9 +219,10 @@ export class AboutJourneyController {
   private _pathCrystallizationDurationMs = PATH_CRYSTALLIZATION_MIN_MS;
   private _travelSpeedScale = 1;
   private _travelSpeedTarget = 0;
-  private _travelWheelStreakDir: -1 | 0 | 1 = 0;
-  private _travelWheelStreakCount = 0;
-  private _travelWheelLockedDir: -1 | 0 | 1 = 0;
+  private _travelInputDirection: -1 | 0 | 1 = 0;
+  private _travelInputDirectionSince = 0;
+  private _travelCameraReversed = false;
+  private _travelCameraMode: AboutTravelCameraMode = "forward";
 
   private readonly _tmpTravelPos = new THREE.Vector3();
   private readonly _tmpTravelVel = new THREE.Vector3();
@@ -310,12 +314,24 @@ export class AboutJourneyController {
     return this._travelSpeedScale;
   }
 
-  get travelThrottleLockedDirection(): -1 | 0 | 1 {
-    return this._travelWheelLockedDir;
+  get travelInputDirection(): -1 | 0 | 1 {
+    return this._travelInputDirection;
   }
 
-  get travelThrottleStreakCount(): number {
-    return this._travelWheelStreakCount;
+  get travelCameraReversed(): boolean {
+    return this._travelCameraReversed;
+  }
+
+  get travelCameraMode(): AboutTravelCameraMode {
+    return this._travelCameraMode;
+  }
+
+  get travelMomentumNormalized(): number {
+    return THREE.MathUtils.clamp(
+      Math.abs(this._travelSpeedScale) / PATH_TRAVEL_SPEED_SCALE_MAX,
+      0,
+      1,
+    );
   }
 
   setTravelSpeedScale(scale: number): void {
@@ -325,51 +341,27 @@ export class AboutJourneyController {
       PATH_TRAVEL_SPEED_SCALE_MAX,
     );
     this._travelSpeedTarget = this._travelSpeedScale;
-    this._travelWheelLockedDir = 0;
-    this._travelWheelStreakCount = 0;
-    this._travelWheelStreakDir = 0;
+    this._travelInputDirection = 0;
   }
 
-  nudgeTravelSpeedFromWheel(deltaY: number): void {
+  setTravelInputDirection(dir: -1 | 0 | 1): void {
     if (this._phase !== AboutJourneyPhase.PATH_TRAVEL || !this._travelRunning) {
+      this._travelInputDirection = 0;
+      this._travelInputDirectionSince = 0;
       return;
     }
-    if (Math.abs(deltaY) < 0.0001) return;
-
-    const dir: -1 | 1 = deltaY < 0 ? 1 : -1;
-
-    if (this._travelWheelLockedDir !== 0) {
-      if (dir === this._travelWheelLockedDir) {
-        this._travelSpeedTarget =
-          this._travelWheelLockedDir * PATH_TRAVEL_SPEED_SCALE_MAX;
-      } else {
-        // Opposite wheel direction disengages lock and starts a realistic brake.
-        this._travelWheelLockedDir = 0;
-        this._travelWheelStreakDir = dir;
-        this._travelWheelStreakCount = 1;
-        this._travelSpeedTarget *= 0.35;
-      }
-      return;
+    if (this._travelInputDirection !== dir) {
+      this._travelInputDirectionSince = dir === 0 ? 0 : performance.now();
     }
+    this._travelInputDirection = dir;
+  }
 
-    if (dir === this._travelWheelStreakDir) {
-      this._travelWheelStreakCount += 1;
-    } else {
-      this._travelWheelStreakDir = dir;
-      this._travelWheelStreakCount = 1;
-    }
+  setTravelCameraReversed(v: boolean): void {
+    this._travelCameraReversed = v;
+  }
 
-    if (this._travelWheelStreakCount >= PATH_TRAVEL_WHEEL_LOCK_STEPS) {
-      this._travelWheelLockedDir = dir;
-      this._travelSpeedTarget = dir * PATH_TRAVEL_SPEED_SCALE_MAX;
-      return;
-    }
-
-    this._travelSpeedTarget = THREE.MathUtils.clamp(
-      this._travelSpeedTarget + dir * PATH_TRAVEL_WHEEL_IMPULSE,
-      PATH_TRAVEL_SPEED_SCALE_MIN,
-      PATH_TRAVEL_SPEED_SCALE_MAX,
-    );
+  setTravelCameraMode(mode: AboutTravelCameraMode): void {
+    this._travelCameraMode = mode;
   }
 
   // --- Phase transitions ---
@@ -743,9 +735,10 @@ export class AboutJourneyController {
     this._travelDistanceAbs = 0;
     this._travelSpeedScale = 0;
     this._travelSpeedTarget = 0;
-    this._travelWheelLockedDir = 0;
-    this._travelWheelStreakDir = 0;
-    this._travelWheelStreakCount = 0;
+    this._travelInputDirection = 0;
+    this._travelInputDirectionSince = 0;
+    this._travelCameraReversed = false;
+    this._travelCameraMode = "forward";
     this._travelStartedAt = performance.now();
     this._travelLastTickAt = this._travelStartedAt;
     this._travelRunning = true;
@@ -850,9 +843,29 @@ export class AboutJourneyController {
 
       this._travelVehicle.update(dt);
 
-      if (this._travelWheelLockedDir !== 0) {
-        this._travelSpeedTarget =
-          this._travelWheelLockedDir * PATH_TRAVEL_SPEED_SCALE_MAX;
+      if (this._travelInputDirection !== 0) {
+        const heldSeconds = Math.max(
+          0,
+          (now - this._travelInputDirectionSince) / 1000,
+        );
+        const heldRamp = THREE.MathUtils.clamp(
+          heldSeconds / PATH_TRAVEL_INPUT_RAMP_SECONDS,
+          0,
+          1,
+        );
+        const rampedMagnitude = THREE.MathUtils.lerp(
+          PATH_TRAVEL_INPUT_MIN_SCALE,
+          PATH_TRAVEL_SPEED_SCALE_MAX,
+          heldRamp,
+        );
+        const isOppositeInputToVelocity =
+          Math.abs(this._travelSpeedScale) > 0.08 &&
+          Math.sign(this._travelSpeedScale) !== this._travelInputDirection;
+        const brakingMagnitude = isOppositeInputToVelocity
+          ? Math.max(PATH_TRAVEL_BRAKE_INPUT_FLOOR, rampedMagnitude)
+          : rampedMagnitude;
+
+        this._travelSpeedTarget = this._travelInputDirection * brakingMagnitude;
       } else {
         const decayAlpha = 1 - Math.exp(-PATH_TRAVEL_TARGET_DRIFT_PER_SEC * dt);
         this._travelSpeedTarget += (0 - this._travelSpeedTarget) * decayAlpha;
@@ -871,7 +884,7 @@ export class AboutJourneyController {
       );
 
       if (
-        this._travelWheelLockedDir === 0 &&
+        this._travelInputDirection === 0 &&
         Math.abs(this._travelSpeedTarget) <= 0.05
       ) {
         this._travelSpeedScale *= Math.exp(
@@ -954,11 +967,13 @@ export class AboutJourneyController {
           this._tmpTravelUserViewDir.copy(this._tmpTravelForward);
         }
 
-        const isStopped =
-          Math.abs(this._travelSpeedScale) <= PATH_TRAVEL_STOP_EPSILON;
-        if (!isStopped) {
-          // Moving: lock view directly to direction of travel.
-          this._tmpTravelUserViewDir.copy(this._tmpTravelForward);
+        if (this._travelCameraMode === "forward") {
+          // Keep camera orientation predictable: path-forward by default,
+          // and only invert when the user explicitly toggles reverse camera.
+          this._tmpTravelUserViewDir.copy(this._tmpTravelTangent);
+          if (this._travelCameraReversed) {
+            this._tmpTravelUserViewDir.multiplyScalar(-1);
+          }
         }
 
         this._tmpTravelLookPos
@@ -999,9 +1014,10 @@ export class AboutJourneyController {
     this._travelRunning = false;
     this._travelVehicle = null;
     this._cb.setAutopilotSuppressed(false);
-    this._travelWheelLockedDir = 0;
-    this._travelWheelStreakDir = 0;
-    this._travelWheelStreakCount = 0;
+    this._travelInputDirection = 0;
+    this._travelInputDirectionSince = 0;
+    this._travelCameraReversed = false;
+    this._travelCameraMode = "forward";
     this._cancelRaf();
 
     // Hand control back to standard ship flow after tram loop is done.
@@ -1020,9 +1036,10 @@ export class AboutJourneyController {
     this._travelRunning = false;
     this._travelVehicle = null;
     this._cb.setAutopilotSuppressed(false);
-    this._travelWheelLockedDir = 0;
-    this._travelWheelStreakDir = 0;
-    this._travelWheelStreakCount = 0;
+    this._travelInputDirection = 0;
+    this._travelInputDirectionSince = 0;
+    this._travelCameraReversed = false;
+    this._travelCameraMode = "forward";
     this._pathCrystallizationActive = false;
     if (!this._transition(AboutJourneyPhase.PATH_DISPERSING)) return;
     this._cb.enableControls();
@@ -1063,6 +1080,10 @@ export class AboutJourneyController {
     this._travelVehicle = null;
     this._pendingDispersalReason = null;
     this._pathCrystallizationActive = false;
+    this._travelInputDirection = 0;
+    this._travelInputDirectionSince = 0;
+    this._travelCameraReversed = false;
+    this._travelCameraMode = "forward";
     this._cb.setAutopilotSuppressed(false);
     this._phase = AboutJourneyPhase.IDLE;
     this._phaseStartedAt = performance.now();
