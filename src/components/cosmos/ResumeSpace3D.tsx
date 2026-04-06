@@ -1474,6 +1474,14 @@ type AboutFlowOverlaySnapshot = {
   cells: AboutFlowOverlayColumnSnapshot[];
 };
 
+type AboutExitConfirmIntent = {
+  source: "quick" | "cockpit" | "experience";
+  targetId: string;
+  targetType: "section" | "moon";
+};
+
+const ABOUT_RETARGET_SHATTER_MS = 1700;
+
 function AboutFlowDebugPanel({
   snapshot,
 }: {
@@ -5034,6 +5042,8 @@ export default function ResumeSpace3D({
     }>
   >([]);
   const aboutCrystalPanelMatricesRef = useRef<THREE.Matrix4[]>([]);
+  const aboutCrystalShatterUntilRef = useRef(0);
+  const aboutRetargetDispersalTimeoutRef = useRef<number | null>(null);
   const aboutCrystalSurgesRef = useRef<
     Array<{
       line: THREE.Line;
@@ -5088,6 +5098,8 @@ export default function ResumeSpace3D({
   const aboutTileContentFadeStartMsRef = useRef(0);
   const aboutPanelSpinStyleRef = useRef<number[]>([0, 1, 0, 1]);
   const [aboutNavHereActive, setAboutNavHereActive] = useState(false);
+  const [aboutExitConfirmIntent, setAboutExitConfirmIntent] =
+    useState<AboutExitConfirmIntent | null>(null);
   const [projectsNavHereActive, setProjectsNavHereActive] = useState(false);
   const [skillsNavHereActive, setSkillsNavHereActive] = useState(false);
   const [aboutSwarmTriggerVisible, setAboutSwarmTriggerVisible] =
@@ -5349,15 +5361,31 @@ export default function ResumeSpace3D({
       const crystalProgress = journey.pathCrystallizationActive
         ? journey.pathCrystallizationProgress
         : 1;
+      const shatterRemaining = Math.max(
+        0,
+        aboutCrystalShatterUntilRef.current - now,
+      );
+      const shatterActive = shatterRemaining > 0;
+      const shatterT = shatterActive
+        ? 1 - shatterRemaining / ABOUT_RETARGET_SHATTER_MS
+        : 0;
       const panelMaterial = panelMesh.material as THREE.MeshPhysicalMaterial;
-      panelMaterial.opacity = THREE.MathUtils.lerp(0.24, 0.58, crystalProgress);
+      const shatterTravelT = shatterActive ? Math.pow(shatterT, 0.82) : 0;
+      const shatterFadeT = shatterActive
+        ? THREE.MathUtils.clamp((shatterT - 0.42) / 0.58, 0, 1)
+        : 0;
+      panelMaterial.opacity = shatterActive
+        ? THREE.MathUtils.lerp(0.58, 0.02, shatterFadeT)
+        : THREE.MathUtils.lerp(0.24, 0.58, crystalProgress);
       panelMaterial.emissiveIntensity = THREE.MathUtils.lerp(
-        0.34,
-        0.62,
-        crystalProgress,
+        shatterActive ? 0.62 : 0.34,
+        shatterActive ? 1.35 : 0.62,
+        shatterActive ? Math.min(1, shatterTravelT * 1.1) : crystalProgress,
       );
 
       const tempScale = new THREE.Vector3();
+      const tempPos = new THREE.Vector3();
+      const burstDir = new THREE.Vector3();
       for (let i = 0; i < seeds.length; i++) {
         const seed = seeds[i];
         const w = THREE.MathUtils.clamp(
@@ -5366,14 +5394,30 @@ export default function ResumeSpace3D({
           1,
         );
         const alpha = w * w * (3 - 2 * w);
-        tempScale.copy(seed.scale).multiplyScalar(Math.max(0.02, alpha));
-        matrices[i].compose(seed.position, seed.quaternion, tempScale);
+        const shatterScale = shatterActive
+          ? Math.max(0.01, alpha * (1 - shatterFadeT * 0.94))
+          : Math.max(0.02, alpha);
+        tempScale.copy(seed.scale).multiplyScalar(shatterScale);
+        tempPos.copy(seed.position);
+        if (shatterActive) {
+          burstDir
+            .set(
+              Math.sin(i * 12.9898),
+              0.7 + Math.cos(i * 5.187),
+              Math.sin(i * 7.321 + 1.37),
+            )
+            .normalize();
+          const burstDist = THREE.MathUtils.lerp(0, 138, shatterTravelT);
+          tempPos.addScaledVector(burstDir, burstDist);
+        }
+        matrices[i].compose(tempPos, seed.quaternion, tempScale);
         panelMesh.setMatrixAt(i, matrices[i]);
       }
       panelMesh.instanceMatrix.needsUpdate = true;
 
       const surgeVisible =
-        crystalProgress >= 1 && phase === AboutJourneyPhase.PATH_TRAVEL;
+        (crystalProgress >= 1 && phase === AboutJourneyPhase.PATH_TRAVEL) ||
+        shatterActive;
       const surges = aboutCrystalSurgesRef.current;
       if (!surges.length) return;
 
@@ -5448,6 +5492,49 @@ export default function ResumeSpace3D({
     },
     [recomputeAboutTramInput],
   );
+
+  const triggerAboutRetargetDispersal = useCallback((reason: string) => {
+    const journey = aboutJourneyRef.current;
+    if (!journey) return;
+    const isPathPhase =
+      journey.phase === AboutJourneyPhase.PATH_READY ||
+      journey.phase === AboutJourneyPhase.PATH_TRAVEL;
+    if (!isPathPhase) {
+      journey.exit();
+      return;
+    }
+
+    if (aboutRetargetDispersalTimeoutRef.current !== null) {
+      window.clearTimeout(aboutRetargetDispersalTimeoutRef.current);
+      aboutRetargetDispersalTimeoutRef.current = null;
+    }
+
+    const crystalVisible =
+      !!aboutCrystalPanelMeshRef.current &&
+      !!aboutCrystalPathGroupRef.current &&
+      aboutCrystalPathGroupRef.current.visible;
+    if (!crystalVisible) {
+      journey.beginPathDispersal(reason);
+      return;
+    }
+
+    const shatterMs = ABOUT_RETARGET_SHATTER_MS;
+    aboutCrystalShatterUntilRef.current = performance.now() + shatterMs;
+    journey.setTravelInputDirection(0);
+    aboutRetargetDispersalTimeoutRef.current = window.setTimeout(() => {
+      aboutRetargetDispersalTimeoutRef.current = null;
+      journey.beginPathDispersal(reason);
+    }, shatterMs);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (aboutRetargetDispersalTimeoutRef.current !== null) {
+        window.clearTimeout(aboutRetargetDispersalTimeoutRef.current);
+        aboutRetargetDispersalTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const toggleAboutTramCameraReverse = useCallback(() => {
     setAboutTramCameraReversed((prev) => {
@@ -11328,8 +11415,24 @@ export default function ResumeSpace3D({
   );
 
   const handleExperienceCompanyNavigation = useCallback(
-    async (companyId: string) => {
+    async (companyId: string, skipAboutExitConfirm = false) => {
       if (!companyId) return;
+
+      if (!skipAboutExitConfirm) {
+        const aboutJourney = aboutJourneyRef.current;
+        if (
+          aboutJourney &&
+          aboutJourney.phase !== AboutJourneyPhase.IDLE &&
+          companyId !== "about"
+        ) {
+          setAboutExitConfirmIntent({
+            source: "experience",
+            targetId: companyId,
+            targetType: "moon",
+          });
+          return;
+        }
+      }
 
       // Universal handoff: cancel/exit any in-flight cinematic before moon travel.
       interruptTransientTravelFlows(companyId, "moon");
@@ -11389,11 +11492,28 @@ export default function ResumeSpace3D({
       captureMoonDepartureContext,
       startProjectShowcaseExitSequence,
       markMoonOrbitDepartureHandoff,
+      triggerAboutRetargetDispersal,
     ],
   );
 
   const handleQuickNav = useCallback(
-    (targetId: string, targetType: "section" | "moon") => {
+    (
+      targetId: string,
+      targetType: "section" | "moon",
+      skipAboutExitConfirm = false,
+    ) => {
+      if (!skipAboutExitConfirm) {
+        const aboutJourney = aboutJourneyRef.current;
+        if (
+          aboutJourney &&
+          aboutJourney.phase !== AboutJourneyPhase.IDLE &&
+          targetId !== "about"
+        ) {
+          setAboutExitConfirmIntent({ source: "quick", targetId, targetType });
+          return;
+        }
+      }
+
       interruptTransientTravelFlows(targetId, targetType);
       if (targetType === "section" && targetId === ABOUT_MEMORY_SQUARE_NAV_ID) {
         aboutMemorySquarePendingEntryRef.current = true;
@@ -12208,9 +12328,7 @@ export default function ResumeSpace3D({
           aboutJourney.phase === AboutJourneyPhase.PATH_TRAVEL;
 
         if (shouldDisperseOnRetarget) {
-          // Path ride now starts automatically after PATH_FORMING completes;
-          // retargeting only requests dispersal (queued if ride is active).
-          aboutJourney.beginPathDispersal("falcon-retarget");
+          triggerAboutRetargetDispersal("falcon-retarget");
           restoredShip = true;
           interrupted = true;
         } else {
@@ -12284,8 +12402,29 @@ export default function ResumeSpace3D({
 
   // ── Cockpit destination navigation ─────────────────
   const handleCockpitNavigate = useCallback(
-    (targetId: string, targetType: "section" | "moon") => {
+    (
+      targetId: string,
+      targetType: "section" | "moon",
+      skipAboutExitConfirm = false,
+    ) => {
       vlog(`🎯 Cockpit nav → ${targetType}: ${targetId}`);
+
+      if (!skipAboutExitConfirm) {
+        const aboutJourney = aboutJourneyRef.current;
+        if (
+          aboutJourney &&
+          aboutJourney.phase !== AboutJourneyPhase.IDLE &&
+          targetId !== "about"
+        ) {
+          setAboutExitConfirmIntent({
+            source: "cockpit",
+            targetId,
+            targetType,
+          });
+          return;
+        }
+      }
+
       interruptTransientTravelFlows(targetId, targetType);
       if (targetId === "skills" || targetId === SKILLS_LATTICE_NAV_ID) {
         setSkillsNavHereActive(true);
@@ -12309,7 +12448,7 @@ export default function ResumeSpace3D({
         if (atSkills) {
           enterSkillsLattice();
         } else {
-          handleQuickNav("skills", "section");
+          handleQuickNav("skills", "section", skipAboutExitConfirm);
           vlog("🧠 Routing to Skills — lattice will open on arrival");
         }
         return;
@@ -12336,7 +12475,11 @@ export default function ResumeSpace3D({
         if (alreadyNearAbout) {
           enterAboutMemorySquare();
         } else {
-          handleQuickNav(ABOUT_MEMORY_SQUARE_NAV_ID, "section");
+          handleQuickNav(
+            ABOUT_MEMORY_SQUARE_NAV_ID,
+            "section",
+            skipAboutExitConfirm,
+          );
           vlog("👨‍🚀 Routing to Memory Squares");
         }
         return;
@@ -12356,7 +12499,7 @@ export default function ResumeSpace3D({
         }
         aboutJourneyPendingEntryRef.current = true;
         aboutJourneyRef.current?.beginTransit();
-        handleQuickNav("about", "section");
+        handleQuickNav("about", "section", skipAboutExitConfirm);
         dlog(
           `[handleCockpitNavigate:about] after — pending=${aboutJourneyPendingEntryRef.current} phase=${aboutJourneyRef.current?.phase}`,
         );
@@ -12399,7 +12542,7 @@ export default function ResumeSpace3D({
           pendingProjectShowcaseEntryRef.current = true;
           projectShowcaseAwaitingProjectsArrivalRef.current = true;
           projectShowcaseSawProjectsTravelRef.current = false;
-          handleQuickNav("projects", "section");
+          handleQuickNav("projects", "section", skipAboutExitConfirm);
           vlog(
             "🛰️ Routing to Projects — Project Showcase will open on arrival",
           );
@@ -12451,7 +12594,7 @@ export default function ResumeSpace3D({
           pendingOrbitalPortfolioEntryRef.current = true;
           orbitalPortfolioAwaitingArrivalRef.current = true;
           orbitalPortfolioSawTravelRef.current = false;
-          handleQuickNav("portfolio", "section");
+          handleQuickNav("portfolio", "section", skipAboutExitConfirm);
           vlog(
             "✨ Routing to Portfolio — Orbital Registry will open on arrival",
           );
@@ -12460,11 +12603,11 @@ export default function ResumeSpace3D({
       }
 
       if (targetType === "moon") {
-        handleExperienceCompanyNavigation(targetId);
+        void handleExperienceCompanyNavigation(targetId, skipAboutExitConfirm);
       } else {
         // Route section nav through the unified quick-nav path so orbit-exit
         // clearance/deferred navigation is always honored.
-        handleQuickNav(targetId, "section");
+        handleQuickNav(targetId, "section", skipAboutExitConfirm);
       }
     },
     [
@@ -12482,6 +12625,34 @@ export default function ResumeSpace3D({
       vlog,
     ],
   );
+
+  const cancelAboutExitIntent = useCallback(() => {
+    setAboutExitConfirmIntent(null);
+  }, []);
+
+  const confirmAboutExitIntent = useCallback(() => {
+    const intent = aboutExitConfirmIntent;
+    if (!intent) return;
+    setAboutExitConfirmIntent(null);
+
+    // Let the overlay unmount first so the click feels instant.
+    window.requestAnimationFrame(() => {
+      if (intent.source === "experience") {
+        void handleExperienceCompanyNavigation(intent.targetId, true);
+        return;
+      }
+      if (intent.source === "cockpit") {
+        handleCockpitNavigate(intent.targetId, intent.targetType, true);
+        return;
+      }
+      handleQuickNav(intent.targetId, intent.targetType, true);
+    });
+  }, [
+    aboutExitConfirmIntent,
+    handleCockpitNavigate,
+    handleExperienceCompanyNavigation,
+    handleQuickNav,
+  ]);
 
   useEffect(() => {
     if (
@@ -32280,6 +32451,89 @@ export default function ResumeSpace3D({
             content={overlayContent}
             visible={moonHtmlVisible}
           />
+        </div>
+      )}
+      {aboutExitConfirmIntent && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1400,
+            background: "rgba(1, 7, 16, 0.62)",
+            backdropFilter: "blur(4px)",
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              width: "min(520px, 94vw)",
+              borderRadius: 14,
+              border: "1px solid rgba(126, 224, 255, 0.55)",
+              background:
+                "linear-gradient(180deg, rgba(5, 19, 37, 0.96), rgba(4, 11, 24, 0.94))",
+              boxShadow: "0 20px 42px rgba(0, 0, 0, 0.45)",
+              padding: "16px 16px 14px",
+              color: "#d9f5ff",
+              fontFamily: "'IBM Plex Mono', 'Fira Code', Consolas, monospace",
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
+              Exit About Journey?
+            </div>
+            <div
+              style={{
+                fontSize: 12,
+                lineHeight: 1.45,
+                color: "#a8d9e8",
+                marginBottom: 14,
+              }}
+            >
+              This will disengage the current About flow, shatter active path
+              crystals, and route to your selected destination.
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 8,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => cancelAboutExitIntent()}
+                style={{
+                  borderRadius: 8,
+                  border: "1px solid rgba(127, 203, 225, 0.45)",
+                  background: "rgba(9, 29, 48, 0.88)",
+                  color: "#cfeaf4",
+                  fontSize: 12,
+                  padding: "7px 10px",
+                  cursor: "pointer",
+                }}
+              >
+                Stay
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmAboutExitIntent()}
+                style={{
+                  borderRadius: 8,
+                  border: "1px solid rgba(255, 178, 132, 0.7)",
+                  background:
+                    "linear-gradient(180deg, rgba(157, 82, 45, 0.95), rgba(103, 49, 26, 0.9))",
+                  color: "#fff1e8",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  padding: "7px 10px",
+                  cursor: "pointer",
+                }}
+              >
+                Exit And Navigate
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {aboutTramHudVisible && (

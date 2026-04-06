@@ -654,16 +654,18 @@ export class AboutJourneyController {
       return;
     }
 
-    if (this._phase === AboutJourneyPhase.PATH_TRAVEL) {
-      this._pendingDispersalReason = reason;
-      this._cb.vlog(
-        `✨ [AboutJourney] Dispersal queued until path travel loop completes (${reason})`,
-      );
-      return;
-    }
-
     this._clearPathReadyTravelTimeout();
     this._pathCrystallizationActive = false;
+
+    if (this._phase === AboutJourneyPhase.PATH_TRAVEL) {
+      this._travelRunning = false;
+      this._travelVehicle = null;
+      this._travelInputDirection = 0;
+      this._travelInputDirectionSince = 0;
+      this._travelSpeedTarget = 0;
+      this._travelSpeedScale = 0;
+      this._cancelRaf();
+    }
 
     this._beginPathDispersing(reason);
   }

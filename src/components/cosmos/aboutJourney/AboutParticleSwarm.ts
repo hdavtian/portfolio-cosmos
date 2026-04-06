@@ -78,10 +78,10 @@ const PATH_HOLD_PROFILE_DWELL_MAX_MS = 16000;
 const PATH_HOLD_PROFILE_BLEND_MS = 1800;
 
 // Path dispersal (burst + fade)
-const DISPERSAL_SPEED_MIN = 220;
-const DISPERSAL_SPEED_MAX = 620;
-const DISPERSAL_SIZE_DECAY = 1.35;
-const DISPERSAL_MAX_DURATION_S = 5.5;
+const DISPERSAL_SPEED_MIN = 120;
+const DISPERSAL_SPEED_MAX = 360;
+const DISPERSAL_SIZE_DECAY = 0.68;
+const DISPERSAL_MAX_DURATION_S = 9.5;
 
 // ---------------------------------------------------------------------------
 // Public types
