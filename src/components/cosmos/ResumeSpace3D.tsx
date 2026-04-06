@@ -5007,8 +5007,30 @@ export default function ResumeSpace3D({
     min: number;
     max: number;
   } | null>(null);
+  const aboutJourneyAutopilotSuppressedRef = useRef(false);
   const aboutJourneyRef = useRef<AboutJourneyController | null>(null);
   const aboutJourneyPendingEntryRef = useRef(false);
+  const aboutCrystalPathGroupRef = useRef<THREE.Group | null>(null);
+  const aboutCrystalPathRef = useRef<THREE.CatmullRomCurve3 | null>(null);
+  const aboutCrystalPanelMeshRef = useRef<THREE.InstancedMesh | null>(null);
+  const aboutCrystalPanelSeedsRef = useRef<
+    Array<{
+      position: THREE.Vector3;
+      quaternion: THREE.Quaternion;
+      scale: THREE.Vector3;
+      reveal: number;
+    }>
+  >([]);
+  const aboutCrystalPanelMatricesRef = useRef<THREE.Matrix4[]>([]);
+  const aboutCrystalSurgesRef = useRef<
+    Array<{
+      line: THREE.Line;
+      positions: Float32Array;
+      headT: number;
+      speed: number;
+      length: number;
+    }>
+  >([]);
   const navigationDistanceRef = useRef<number | null>(null);
   const aboutMemorySquareLabelRef = useRef<THREE.Object3D | null>(null);
   const aboutMemorySquarePendingEntryRef = useRef(false);
@@ -5082,6 +5104,319 @@ export default function ResumeSpace3D({
     lastPrepared: -1,
     lastReady: false,
   });
+
+  useEffect(() => {
+    const disposeCrystalGroup = () => {
+      const group = aboutCrystalPathGroupRef.current;
+      if (!group) return;
+
+      group.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.geometry) mesh.geometry.dispose();
+        const material = (
+          mesh as { material?: THREE.Material | THREE.Material[] }
+        ).material;
+        if (Array.isArray(material)) {
+          material.forEach((mat) => mat.dispose());
+        } else if (material) {
+          material.dispose();
+        }
+      });
+
+      if (group.parent) group.parent.remove(group);
+      aboutCrystalPathGroupRef.current = null;
+      aboutCrystalPathRef.current = null;
+      aboutCrystalPanelMeshRef.current = null;
+      aboutCrystalPanelSeedsRef.current = [];
+      aboutCrystalPanelMatricesRef.current = [];
+      aboutCrystalSurgesRef.current = [];
+    };
+
+    const ensureCrystalGroup = () => {
+      if (aboutCrystalPathGroupRef.current)
+        return aboutCrystalPathGroupRef.current;
+      const scene = sceneRef.current.scene;
+      if (!scene) return null;
+      const group = new THREE.Group();
+      group.name = "AboutJourneyCrystalPathGroup";
+      scene.add(group);
+      aboutCrystalPathGroupRef.current = group;
+      return group;
+    };
+
+    const buildCrystalPath = (path: THREE.CatmullRomCurve3) => {
+      const group = ensureCrystalGroup();
+      if (!group) return;
+
+      while (group.children.length > 0) {
+        const child = group.children.pop();
+        if (!child) break;
+        group.remove(child);
+      }
+
+      aboutCrystalPathRef.current = path;
+      aboutCrystalPanelSeedsRef.current = [];
+      aboutCrystalPanelMatricesRef.current = [];
+      aboutCrystalSurgesRef.current = [];
+
+      const segmentCount = 440;
+      const panelGeom = new THREE.PlaneGeometry(1, 1, 1, 1);
+      const panelMat = new THREE.MeshPhysicalMaterial({
+        color: 0xb7eeff,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.32,
+        transparent: true,
+        opacity: 0.34,
+        roughness: 0.18,
+        metalness: 0.02,
+        transmission: 0.66,
+        ior: 1.34,
+        thickness: 1.1,
+        reflectivity: 0.72,
+        clearcoat: 1,
+        clearcoatRoughness: 0.08,
+        envMapIntensity: 1.2,
+        side: THREE.DoubleSide,
+        vertexColors: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      });
+      const panelMesh = new THREE.InstancedMesh(
+        panelGeom,
+        panelMat,
+        segmentCount,
+      );
+      panelMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      panelMesh.frustumCulled = false;
+      panelMesh.renderOrder = 10;
+
+      const up = new THREE.Vector3(0, 1, 0);
+      const altUp = new THREE.Vector3(0, 0, 1);
+      const tangent = new THREE.Vector3();
+      const lateral = new THREE.Vector3();
+      const normal = new THREE.Vector3();
+      const p0 = new THREE.Vector3();
+      const p1 = new THREE.Vector3();
+      const mid = new THREE.Vector3();
+      const basis = new THREE.Matrix4();
+      const quat = new THREE.Quaternion();
+      const color = new THREE.Color();
+      const crystalHuePalette = [
+        0.52, // cyan
+        0.58, // blue
+        0.64, // indigo
+        0.76, // magenta
+        0.32, // green
+        0.12, // amber
+      ];
+
+      for (let i = 0; i < segmentCount; i++) {
+        const t0 = i / segmentCount;
+        const t1 = (i + 1) / segmentCount;
+        path.getPointAt(t0, p0);
+        path.getPointAt(t1, p1);
+        tangent.subVectors(p1, p0).normalize();
+
+        lateral.crossVectors(tangent, up);
+        if (lateral.lengthSq() < 0.0001) {
+          lateral.crossVectors(tangent, altUp);
+        }
+        lateral.normalize();
+        normal.crossVectors(lateral, tangent).normalize();
+
+        mid.lerpVectors(p0, p1, 0.5);
+        basis.makeBasis(lateral, tangent, normal);
+        quat.setFromRotationMatrix(basis);
+
+        const segLen = Math.max(5, p0.distanceTo(p1));
+        const width = THREE.MathUtils.lerp(30, 56, Math.random());
+        aboutCrystalPanelSeedsRef.current.push({
+          position: mid.clone(),
+          quaternion: quat.clone(),
+          scale: new THREE.Vector3(width, segLen * 1.08, 1),
+          reveal: i / Math.max(1, segmentCount - 1),
+        });
+        aboutCrystalPanelMatricesRef.current.push(new THREE.Matrix4());
+
+        const paletteIndex =
+          (Math.floor(i / 16) + Math.floor(Math.random() * 2)) %
+          crystalHuePalette.length;
+        const baseHue = crystalHuePalette[paletteIndex] ?? 0.58;
+        color.setHSL(
+          THREE.MathUtils.euclideanModulo(
+            baseHue + THREE.MathUtils.randFloatSpread(0.035),
+            1,
+          ),
+          THREE.MathUtils.lerp(0.62, 0.9, Math.random()),
+          THREE.MathUtils.lerp(0.58, 0.84, Math.random()),
+        );
+        panelMesh.setColorAt(i, color);
+      }
+      panelMesh.instanceColor!.needsUpdate = true;
+      group.add(panelMesh);
+      aboutCrystalPanelMeshRef.current = panelMesh;
+
+      const surgeCount = 5;
+      const surgePointCount = 32;
+      for (let i = 0; i < surgeCount; i++) {
+        const positions = new Float32Array(surgePointCount * 3);
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        const lineColor = new THREE.Color().setHSL(
+          THREE.MathUtils.lerp(0.52, 0.74, Math.random()),
+          0.88,
+          THREE.MathUtils.lerp(0.56, 0.76, Math.random()),
+        );
+        const mat = new THREE.LineBasicMaterial({
+          color: lineColor,
+          transparent: true,
+          opacity: 0.9,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const line = new THREE.Line(geom, mat);
+        line.frustumCulled = false;
+        line.renderOrder = 12;
+        line.visible = false;
+        group.add(line);
+        aboutCrystalSurgesRef.current.push({
+          line,
+          positions,
+          headT: Math.random(),
+          speed: THREE.MathUtils.lerp(0.055, 0.14, Math.random()),
+          length: THREE.MathUtils.lerp(0.035, 0.082, Math.random()),
+        });
+      }
+    };
+
+    let raf = 0;
+    let prevNow = performance.now();
+    const tmp = new THREE.Vector3();
+    const tmpTan = new THREE.Vector3();
+
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - prevNow) / 1000);
+      prevNow = now;
+
+      const journey = aboutJourneyRef.current;
+      const scene = sceneRef.current.scene;
+      if (!journey || !scene) return;
+
+      const path = journey.cosmicPath;
+      const phase = journey.phase;
+      const shouldShowCrystal =
+        !!path &&
+        (phase === AboutJourneyPhase.PATH_READY ||
+          phase === AboutJourneyPhase.PATH_TRAVEL);
+
+      if (!shouldShowCrystal) {
+        const group = aboutCrystalPathGroupRef.current;
+        if (group) group.visible = false;
+        return;
+      }
+
+      const group = ensureCrystalGroup();
+      if (!group || !path) return;
+      group.visible = true;
+
+      if (
+        aboutCrystalPathRef.current !== path ||
+        !aboutCrystalPanelMeshRef.current
+      ) {
+        buildCrystalPath(path);
+      }
+
+      const panelMesh = aboutCrystalPanelMeshRef.current;
+      if (!panelMesh) return;
+      const seeds = aboutCrystalPanelSeedsRef.current;
+      const matrices = aboutCrystalPanelMatricesRef.current;
+
+      const crystalProgress = journey.pathCrystallizationActive
+        ? journey.pathCrystallizationProgress
+        : 1;
+      const panelMaterial = panelMesh.material as THREE.MeshPhysicalMaterial;
+      panelMaterial.opacity = THREE.MathUtils.lerp(0.24, 0.58, crystalProgress);
+      panelMaterial.emissiveIntensity = THREE.MathUtils.lerp(
+        0.34,
+        0.62,
+        crystalProgress,
+      );
+
+      const tempScale = new THREE.Vector3();
+      for (let i = 0; i < seeds.length; i++) {
+        const seed = seeds[i];
+        const w = THREE.MathUtils.clamp(
+          (crystalProgress - seed.reveal + 0.06) / 0.16,
+          0,
+          1,
+        );
+        const alpha = w * w * (3 - 2 * w);
+        tempScale.copy(seed.scale).multiplyScalar(Math.max(0.02, alpha));
+        matrices[i].compose(seed.position, seed.quaternion, tempScale);
+        panelMesh.setMatrixAt(i, matrices[i]);
+      }
+      panelMesh.instanceMatrix.needsUpdate = true;
+
+      const surgeVisible =
+        crystalProgress >= 1 && phase === AboutJourneyPhase.PATH_TRAVEL;
+      const surges = aboutCrystalSurgesRef.current;
+      if (!surges.length) return;
+
+      for (const surge of surges) {
+        surge.line.visible = surgeVisible;
+        if (!surgeVisible) continue;
+
+        surge.headT = (surge.headT + surge.speed * dt) % 1;
+        const pointCount = surge.positions.length / 3;
+        for (let p = 0; p < pointCount; p++) {
+          const trail = p / Math.max(1, pointCount - 1);
+          const t = THREE.MathUtils.euclideanModulo(
+            surge.headT - trail * surge.length,
+            1,
+          );
+          path.getPointAt(t, tmp);
+          path.getTangentAt(t, tmpTan).normalize();
+          surge.positions[p * 3] = tmp.x;
+          surge.positions[p * 3 + 1] =
+            tmp.y - 8 + Math.sin(now * 0.003 + p * 0.5) * 1.8;
+          surge.positions[p * 3 + 2] = tmp.z;
+        }
+
+        const geo = surge.line.geometry as THREE.BufferGeometry;
+        const attr = geo.attributes.position as THREE.BufferAttribute;
+        attr.needsUpdate = true;
+      }
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      disposeCrystalGroup();
+    };
+  }, []);
+
+  useEffect(() => {
+    const onWheel = (event: WheelEvent) => {
+      const journey = aboutJourneyRef.current;
+      if (!journey || journey.phase !== AboutJourneyPhase.PATH_TRAVEL) return;
+      if (Math.abs(event.deltaY) < 0.0001) return;
+
+      journey.nudgeTravelSpeedFromWheel(event.deltaY);
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    window.addEventListener("wheel", onWheel, {
+      passive: false,
+      capture: true,
+    });
+    return () => {
+      window.removeEventListener("wheel", onWheel, { capture: true });
+    };
+  }, []);
   const skillsSDPatrolStateRef = useRef<{ angle: number }>({
     angle: Math.PI * 0.25,
   });
@@ -6757,6 +7092,7 @@ export default function ResumeSpace3D({
       debugLog("nav", `Moon travel arrived: ${targetMoonId}`);
       stopFalconNavSfxImmediate();
     },
+    autopilotSuppressedRef: aboutJourneyAutopilotSuppressedRef,
     resolveSpecialSectionTarget: (targetId) => {
       if (targetId === "about") {
         const swarm = aboutParticleSwarmRef.current;
@@ -11713,9 +12049,8 @@ export default function ResumeSpace3D({
           aboutJourney.phase === AboutJourneyPhase.PATH_TRAVEL;
 
         if (shouldDisperseOnRetarget) {
-          // Keep the completed path visible until the Falcon is intentionally
-          // sent to another destination, then disperse as part of that handoff.
-          aboutJourney.beginPathTravel();
+          // Path ride now starts automatically after PATH_FORMING completes;
+          // retargeting only requests dispersal (queued if ride is active).
           aboutJourney.beginPathDispersal("falcon-retarget");
           restoredShip = true;
           interrupted = true;
@@ -18950,6 +19285,8 @@ export default function ResumeSpace3D({
     if (aboutJourneyRef.current) {
       aboutJourneyRef.current.dispose();
     }
+    const shipFlyForward = new THREE.Vector3();
+    const shipFlyLookAt = new THREE.Vector3();
     aboutJourneyRef.current = new AboutJourneyController({
       hideShip() {
         if (spaceshipRef.current) spaceshipRef.current.visible = false;
@@ -18957,9 +19294,24 @@ export default function ResumeSpace3D({
       showShip() {
         if (spaceshipRef.current) spaceshipRef.current.visible = true;
       },
+      setShipPose(position: THREE.Vector3, forward: THREE.Vector3) {
+        const ship = spaceshipRef.current;
+        if (!ship) return;
+        ship.visible = true;
+        ship.position.copy(position);
+        shipFlyForward.copy(forward);
+        if (shipFlyForward.lengthSq() > 0.0001) {
+          shipFlyForward.normalize();
+          shipFlyLookAt.copy(position).add(shipFlyForward);
+          ship.lookAt(shipFlyLookAt);
+        }
+      },
       setFollowingSpaceship(v: boolean) {
         followingSpaceshipRef.current = v;
         setFollowingSpaceship(v);
+      },
+      setAutopilotSuppressed(v: boolean) {
+        aboutJourneyAutopilotSuppressedRef.current = v;
       },
       disableControls() {
         const ctrl = sceneRef.current.controls;
@@ -31773,6 +32125,7 @@ export default function ResumeSpace3D({
       )}
       <AboutJourneyDebugPanel
         enabled={IS_DEBUG}
+        debugEnabled={IS_DEBUG}
         journeyRef={aboutJourneyRef}
         swarmRef={aboutParticleSwarmRef}
       />

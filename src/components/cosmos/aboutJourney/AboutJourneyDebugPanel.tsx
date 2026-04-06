@@ -11,6 +11,7 @@ import type {
 
 type Props = {
   enabled: boolean;
+  debugEnabled?: boolean;
   journeyRef: React.MutableRefObject<AboutJourneyController | null>;
   swarmRef: React.MutableRefObject<AboutParticleSwarmHandle | null>;
 };
@@ -18,6 +19,9 @@ type Props = {
 type PanelData = {
   journey: AboutJourneyState | null;
   swarm: AboutParticleSwarmDebugState | null;
+  travelSpeedScale: number;
+  throttleLockedDirection: -1 | 0 | 1;
+  throttleStreakCount: number;
   updatedAtMs: number;
 };
 
@@ -35,6 +39,7 @@ const clampPanelPosition = (x: number, y: number): { x: number; y: number } => {
 
 export default function AboutJourneyDebugPanel({
   enabled,
+  debugEnabled = false,
   journeyRef,
   swarmRef,
 }: Props): React.JSX.Element | null {
@@ -46,6 +51,9 @@ export default function AboutJourneyDebugPanel({
   const [panelData, setPanelData] = useState<PanelData>({
     journey: null,
     swarm: null,
+    travelSpeedScale: 1,
+    throttleLockedDirection: 0,
+    throttleStreakCount: 0,
     updatedAtMs: 0,
   });
 
@@ -67,9 +75,21 @@ export default function AboutJourneyDebugPanel({
       const now = performance.now();
       if (now - lastSyncMs >= 120) {
         lastSyncMs = now;
-        const journey = journeyRef.current?.state ?? null;
+        const journeyCtrl = journeyRef.current;
+        const journey = journeyCtrl?.state ?? null;
         const swarm = swarmRef.current?.getDebugState() ?? null;
-        setPanelData({ journey, swarm, updatedAtMs: now });
+        const travelSpeedScale = journeyCtrl?.travelSpeedScale ?? 1;
+        const throttleLockedDirection =
+          journeyCtrl?.travelThrottleLockedDirection ?? 0;
+        const throttleStreakCount = journeyCtrl?.travelThrottleStreakCount ?? 0;
+        setPanelData({
+          journey,
+          swarm,
+          travelSpeedScale,
+          throttleLockedDirection,
+          throttleStreakCount,
+          updatedAtMs: now,
+        });
       }
       raf = window.requestAnimationFrame(tick);
     };
@@ -126,7 +146,7 @@ export default function AboutJourneyDebugPanel({
     return `${Math.round(age)}ms`;
   }, [panelData.updatedAtMs]);
 
-  if (!enabled) return null;
+  if (!enabled || !debugEnabled) return null;
 
   return (
     <div
@@ -212,6 +232,27 @@ export default function AboutJourneyDebugPanel({
               {panelData.journey
                 ? `${Math.round((performance.now() - panelData.journey.phaseStartedAt) / 1000)}s`
                 : "-"}
+            </div>
+            <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
+              <div>
+                travel speed: {panelData.travelSpeedScale.toFixed(2)}x
+                {Math.abs(panelData.travelSpeedScale) <= 0.02
+                  ? " (stopped)"
+                  : panelData.travelSpeedScale < 0
+                    ? " (reverse)"
+                    : " (forward)"}
+              </div>
+              <div style={{ color: "#9fd6e5" }}>
+                Throttle lock:{" "}
+                {panelData.throttleLockedDirection === 0
+                  ? "none"
+                  : panelData.throttleLockedDirection > 0
+                    ? "forward"
+                    : "reverse"}
+                {panelData.throttleLockedDirection === 0
+                  ? ` (streak ${panelData.throttleStreakCount}/20)`
+                  : ""}
+              </div>
             </div>
           </div>
 

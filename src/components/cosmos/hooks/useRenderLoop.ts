@@ -2334,6 +2334,10 @@ export const useRenderLoop = () => {
               excitementProgress: number;
               ringAxis: { x: number; y: number; z: number };
               flyThroughPoint: { x: number; y: number; z: number };
+              flyThroughDirection: { x: number; y: number; z: number };
+              flyThroughProgress: number;
+              pathCrystallizationProgress: number;
+              pathCrystallizationActive: boolean;
               cosmicPath: unknown;
             } | null>
           | undefined;
@@ -2363,6 +2367,10 @@ export const useRenderLoop = () => {
                 excitementProgress: number,
                 ringAxis: any,
                 flyThroughPoint: any,
+                flyThroughDirection: any,
+                flyThroughProgress: number,
+                pathCrystallizationProgress: number,
+                pathCrystallizationActive: boolean,
                 cosmicPath: any,
               ) =>
                 | boolean
@@ -2382,6 +2390,10 @@ export const useRenderLoop = () => {
                 excitementProgress: number,
                 ringAxis: any,
                 flyThroughPoint: any,
+                flyThroughDirection: any,
+                flyThroughProgress: number,
+                pathCrystallizationProgress: number,
+                pathCrystallizationActive: boolean,
                 cosmicPath: any,
               ) =>
                 | boolean
@@ -2398,6 +2410,10 @@ export const useRenderLoop = () => {
           const excProg = jCtrl?.excitementProgress ?? 0;
           const rAxis = jCtrl?.ringAxis ?? { x: 0, y: 1, z: 0 };
           const ftPt = jCtrl?.flyThroughPoint ?? { x: 0, y: 0, z: 0 };
+          const ftDir = jCtrl?.flyThroughDirection ?? { x: 0, y: 0, z: 1 };
+          const ftProg = jCtrl?.flyThroughProgress ?? 0;
+          const crystalProg = jCtrl?.pathCrystallizationProgress ?? 0;
+          const crystalActive = jCtrl?.pathCrystallizationActive ?? false;
           const cPath = jCtrl?.cosmicPath ?? null;
           const frameSignals = aboutSwarmHandle.current.update(
             deltaSeconds,
@@ -2406,6 +2422,10 @@ export const useRenderLoop = () => {
             excProg,
             rAxis as any,
             ftPt as any,
+            ftDir as any,
+            ftProg,
+            crystalProg,
+            crystalActive,
             cPath as any,
           );
           const pathLoopCompleteEdge =
@@ -2439,6 +2459,10 @@ export const useRenderLoop = () => {
               0,
               rAxis as any,
               ftPt as any,
+              ftDir as any,
+              0,
+              0,
+              false,
               null,
             );
           }

@@ -60,6 +60,9 @@ const EXCITEMENT_SIZE_MULTIPLIER = 2.2;
 const EXCITEMENT_EXTRA_PARTICLES = 800;
 const RING_RADIUS = 250;
 const RING_CONVERGENCE_SPEED = 2.0;
+const FLY_PULL_RADIUS = 420;
+const FLY_PULL_FORWARD_DIST = 260;
+const FLY_PULL_INWARD_DIST = 95;
 
 // Path trail
 const PATH_HEAD_SPEED = 3500;
@@ -113,6 +116,10 @@ export interface AboutParticleSwarmHandle {
     excitementProgress: number,
     ringAxis: THREE.Vector3,
     flyThroughPoint: THREE.Vector3,
+    flyThroughDirection: THREE.Vector3,
+    flyThroughProgress: number,
+    pathCrystallizationProgress: number,
+    pathCrystallizationActive: boolean,
     cosmicPath: THREE.CatmullRomCurve3 | null,
   ): AboutSwarmFrameSignals;
   getDebugState(): AboutParticleSwarmDebugState;
@@ -519,6 +526,10 @@ export function createAboutParticleSwarm(
     excitementProgress: number,
     ringAxis: THREE.Vector3,
     flyThroughPoint: THREE.Vector3,
+    flyThroughDirection: THREE.Vector3,
+    flyThroughProgress: number,
+    pathCrystallizationProgress: number,
+    pathCrystallizationActive: boolean,
     cosmicPath: THREE.CatmullRomCurve3 | null,
   ): AboutSwarmFrameSignals {
     _updateLogCounter++;
@@ -552,19 +563,22 @@ export function createAboutParticleSwarm(
     let dispersalCompleteEdge = false;
 
     if (phase === AboutJourneyPhase.FLY_THROUGH) {
-      // Slightly agitated during fly-through
+      // Falcon pass-through wake: agitated swarm + directional drag.
       for (const v of vehicles) {
         v.maxSpeed = VEHICLE_MAX_SPEED * 1.5;
       }
       entityManager.update(clampedDelta);
       applyContainment();
-      updateNormalSwarm(
+      updateFlyThroughSwarm(
         positionArray,
         colorArray,
         sizeArray,
         TOTAL_PARTICLES,
         elapsedSeconds,
         1.0,
+        flyThroughPoint,
+        flyThroughDirection,
+        flyThroughProgress,
       );
     } else if (phase === AboutJourneyPhase.EXCITEMENT) {
       const extraParticles = Math.floor(
@@ -616,6 +630,8 @@ export function createAboutParticleSwarm(
         elapsedSeconds,
         cosmicPath,
         phase === AboutJourneyPhase.PATH_FORMING,
+        pathCrystallizationProgress,
+        pathCrystallizationActive,
       );
     } else if (phase === AboutJourneyPhase.PATH_DISPERSING) {
       const disperse = updatePathDispersal(
@@ -657,6 +673,56 @@ export function createAboutParticleSwarm(
     _prevPhase = phase;
 
     return { pathLoopCompleteEdge, dispersalCompleteEdge };
+  }
+
+  function updateFlyThroughSwarm(
+    posArr: Float32Array,
+    colArr: Float32Array,
+    szArr: Float32Array,
+    count: number,
+    elapsed: number,
+    sizeBase: number,
+    flyPoint: THREE.Vector3,
+    flyDir: THREE.Vector3,
+    flyProgress: number,
+  ) {
+    updateNormalSwarm(posArr, colArr, szArr, count, elapsed, sizeBase);
+
+    const cross = Math.exp(-Math.pow((flyProgress - 0.54) / 0.17, 2));
+    const dirLenSq = flyDir.lengthSq();
+    if (cross <= 0.001 || dirLenSq < 0.0001) return;
+
+    const groupPos = group.position;
+    const dirX = flyDir.x;
+    const dirY = flyDir.y;
+    const dirZ = flyDir.z;
+
+    for (let i = 0; i < count; i++) {
+      const i3 = i * 3;
+
+      const wx = posArr[i3] + groupPos.x;
+      const wy = posArr[i3 + 1] + groupPos.y;
+      const wz = posArr[i3 + 2] + groupPos.z;
+
+      const toPx = flyPoint.x - wx;
+      const toPy = flyPoint.y - wy;
+      const toPz = flyPoint.z - wz;
+      const dist = Math.sqrt(toPx * toPx + toPy * toPy + toPz * toPz);
+      if (dist >= FLY_PULL_RADIUS) continue;
+
+      const localWeight = Math.pow(1 - dist / FLY_PULL_RADIUS, 1.65) * cross;
+      const inwardScale =
+        (FLY_PULL_INWARD_DIST * localWeight) / Math.max(dist, 1e-5);
+
+      posArr[i3] +=
+        dirX * FLY_PULL_FORWARD_DIST * localWeight + toPx * inwardScale;
+      posArr[i3 + 1] +=
+        dirY * FLY_PULL_FORWARD_DIST * localWeight + toPy * inwardScale;
+      posArr[i3 + 2] +=
+        dirZ * FLY_PULL_FORWARD_DIST * localWeight + toPz * inwardScale;
+
+      szArr[i] *= 1 + localWeight * 1.25;
+    }
   }
 
   // --- Normal swarming ---
@@ -797,6 +863,8 @@ export function createAboutParticleSwarm(
     elapsed: number,
     cosmicPath: THREE.CatmullRomCurve3 | null,
     allowEmit: boolean,
+    crystallizationProgress: number,
+    crystallizationActive: boolean,
   ): number {
     if (!cosmicPath) return 0;
 
@@ -882,6 +950,7 @@ export function createAboutParticleSwarm(
       if (!pp.alive) continue;
 
       const holdMode = _pathComplete && !allowEmit;
+      const stableCrystalMode = holdMode;
 
       // During path-forming, particles stream from origin toward head.
       if (!holdMode) {
@@ -897,10 +966,26 @@ export function createAboutParticleSwarm(
       const pathPoint = cosmicPath.getPointAt(clampedT);
 
       // Perpendicular spread for trail width (rotating for electricity feel)
-      const spreadAngle = pp.radialAngle + elapsed * 1.5 + clampedT * 8;
-      const r =
-        pp.radialDist *
-        (0.3 + 0.7 * Math.sin(elapsed * 4 + pi * 0.3) * 0.5 + 0.5);
+      const spreadAngle = stableCrystalMode
+        ? pp.radialAngle + clampedT * 1.8
+        : pp.radialAngle + elapsed * 1.5 + clampedT * 8;
+
+      if (stableCrystalMode) {
+        const targetRadial = PATH_TRAIL_RADIUS * 0.12;
+        const crystalBlend = crystallizationActive
+          ? THREE.MathUtils.clamp(crystallizationProgress, 0, 1)
+          : 1;
+        pp.radialDist = THREE.MathUtils.lerp(
+          pp.radialDist,
+          targetRadial,
+          0.08 + crystalBlend * 0.28,
+        );
+      }
+
+      const r = stableCrystalMode
+        ? pp.radialDist
+        : pp.radialDist *
+          (0.3 + 0.7 * Math.sin(elapsed * 4 + pi * 0.3) * 0.5 + 0.5);
 
       const i3 = activeCount * 3;
       posArr[i3] = pathPoint.x - groupPos.x + Math.cos(spreadAngle) * r;
