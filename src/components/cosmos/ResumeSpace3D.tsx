@@ -2262,6 +2262,12 @@ const splitHtmlBreakLines = (text: string): string[] =>
     .flatMap((line) => line.split(/\r?\n/))
     .map((line) => line.trim());
 
+const normalizeRideMessageText = (text: string): string =>
+  text
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\/n/g, "\n");
+
 const resolveCanvasAlign = (
   align?: HallwayHorizontalAlign,
 ): CanvasTextAlign => {
@@ -33014,7 +33020,7 @@ export default function ResumeSpace3D({
             textAlign: "center",
             lineHeight: 1.14,
             letterSpacing: "0.15px",
-            whiteSpace: "normal",
+            whiteSpace: "pre-line",
             color:
               aboutRideMessageView.fontColor ?? "rgba(242, 251, 255, 0.99)",
             textShadow:
@@ -33036,7 +33042,7 @@ export default function ResumeSpace3D({
             fontWeight: 500,
           }}
         >
-          {aboutRideMessageView.textContent}
+          {normalizeRideMessageText(aboutRideMessageView.textContent)}
         </div>
       )}
       {aboutTramHudVisible && (

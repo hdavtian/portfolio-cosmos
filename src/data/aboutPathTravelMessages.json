@@ -1,7 +1,7 @@
 [
   {
     "id": "path-msg-01",
-    "textContent": "Signal acquired. You are inside the story lane.",
+    "textContent": "Building software has never just been about code.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "54px",
     "fontColor": "rgba(242, 251, 255, 0.99)",
@@ -9,7 +9,7 @@
   },
   {
     "id": "path-msg-02",
-    "textContent": "S1: Center monitor: core story stream.",
+    "textContent": "It's about bringing ideas to life.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "50px",
     "fontColor": "rgba(236, 248, 255, 0.99)",
@@ -17,7 +17,7 @@
   },
   {
     "id": "path-msg-03",
-    "textContent": "Built under pressure. Refined in motion.",
+    "textContent": "For me... it started early.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "52px",
     "fontColor": "rgba(255, 243, 227, 0.99)",
@@ -25,7 +25,7 @@
   },
   {
     "id": "path-msg-04",
-    "textContent": "S1: Left monitor: context lane.",
+    "textContent": "Over time... that curiosity became a craft.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "50px",
     "fontColor": "rgba(255, 240, 224, 0.99)",
@@ -33,7 +33,7 @@
   },
   {
     "id": "path-msg-05",
-    "textContent": "Angular to React. Monoliths to modular systems.",
+    "textContent": "Frontend. Backend. Data. Infrastructure",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "50px",
     "fontColor": "rgba(235, 255, 243, 0.99)",
@@ -41,7 +41,7 @@
   },
   {
     "id": "path-msg-06",
-    "textContent": "S2: React  •  TypeScript  •  Three.js",
+    "textContent": "I don't just build features. I build systems.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "48px",
     "fontColor": "rgba(227, 255, 241, 0.99)",
@@ -57,7 +57,7 @@
   },
   {
     "id": "path-msg-08",
-    "textContent": "Systems thinking over silver bullets.",
+    "textContent": "Clean. Scalable. Thoughtful./n/nNot over-engineered./nNot rushed./nBuilt with intent.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "52px",
     "fontColor": "rgba(242, 251, 255, 0.99)",
@@ -65,7 +65,7 @@
   },
   {
     "id": "path-msg-09",
-    "textContent": "Human systems first. Technology in service of people.",
+    "textContent": "Today, I'm still building./n/nRefining./nLearning./nPushing ideas further.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "50px",
     "fontColor": "rgba(255, 247, 236, 0.99)",
@@ -81,7 +81,7 @@
   },
   {
     "id": "path-msg-11",
-    "textContent": "Fast where it matters. Stable where it counts.",
+    "textContent": "Fast where it matters./nStable where it counts.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "50px",
     "fontColor": "rgba(230, 255, 241, 0.99)",
@@ -97,7 +97,7 @@
   },
   {
     "id": "path-msg-13",
-    "textContent": "Code that scales. Experiences that resonate.",
+    "textContent": "Code that scales./nExperiences that resonate.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "50px",
     "fontColor": "rgba(255, 244, 230, 0.99)",
@@ -105,7 +105,7 @@
   },
   {
     "id": "path-msg-14",
-    "textContent": "Frontend precision. Backend pragmatism.",
+    "textContent": "Frontend precision./nBackend pragmatism.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "50px",
     "fontColor": "rgba(241, 251, 255, 0.99)",
@@ -121,7 +121,7 @@
   },
   {
     "id": "path-msg-16",
-    "textContent": "The ride is the roadmap.",
+    "textContent": "The ride is the roadmap/n/nTechnology is just a means to an end.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "56px",
     "fontColor": "rgba(245, 252, 255, 0.99)",
@@ -129,18 +129,10 @@
   },
   {
     "id": "path-msg-17",
-    "textContent": "Thank you for traveling through the build.",
+    "textContent": "Thank you for traveling with me.",
     "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
     "fontSize": "50px",
     "fontColor": "rgba(255, 246, 234, 0.99)",
     "fontShadow": "0px 0px 30px rgba(255, 196, 133, 0.64)"
-  },
-  {
-    "id": "path-msg-18",
-    "textContent": "Loop complete. Next destination ready.",
-    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
-    "fontSize": "52px",
-    "fontColor": "rgba(235, 252, 255, 0.99)",
-    "fontShadow": "0px 0px 32px rgba(109, 208, 255, 0.7)"
   }
 ]
