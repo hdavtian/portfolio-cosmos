@@ -148,6 +148,8 @@ export interface AboutJourneyCallbacks {
   getSwarmWorldPosition(): THREE.Vector3 | null;
   setAutopilotSuppressed(v: boolean): void;
   vlog(msg: string): void;
+  /** Fired once when the particle frenzy / path-forming cinematic begins. */
+  onPathFormingStart?(): void;
   /** Spawn the secondary “hydrate” swarm at the about / memory-square anchor. */
   onPathDispersalStarted(): void;
   /** Swap hydrate swarm into the primary slot, dispose the old path swarm, restore camera limits. */
@@ -332,6 +334,15 @@ export class AboutJourneyController {
       0,
       1,
     );
+  }
+
+  get travelDistanceAbs(): number {
+    return this._travelDistanceAbs;
+  }
+
+  get travelPathDistance(): number {
+    const len = Math.max(1, this._travelPathLength);
+    return THREE.MathUtils.euclideanModulo(this._travelDistanceTraveled, len);
   }
 
   setTravelSpeedScale(scale: number): void {
@@ -559,6 +570,7 @@ export class AboutJourneyController {
 
     // Enable controls so user can look around, but we'll soft-guide the target
     this._cb.enableControls();
+    this._cb.onPathFormingStart?.();
 
     const _trackTarget = new THREE.Vector3();
     const _currentTarget = new THREE.Vector3();
@@ -643,6 +655,29 @@ export class AboutJourneyController {
     this._cb.vlog(
       "✨ [AboutJourney] Invisible tram engaged on completed cosmic path",
     );
+  }
+
+  /** Fast-forward the path-forming cinematic directly into tram boarding/travel. */
+  skipCinematicToPathTravel(): void {
+    if (this._phase !== AboutJourneyPhase.PATH_FORMING || !this._cosmicPath) {
+      return;
+    }
+
+    this._cancelRaf();
+    if (!this._transition(AboutJourneyPhase.PATH_READY)) return;
+    this._cb.enableControls();
+
+    // Mark crystallization as effectively complete so visuals are fully formed.
+    this._pathCrystallizationDurationMs = PATH_CRYSTALLIZATION_MIN_MS;
+    this._pathCrystallizationStartedAt =
+      performance.now() - this._pathCrystallizationDurationMs;
+    this._pathCrystallizationActive = true;
+
+    this._clearPathReadyTravelTimeout();
+    this._cb.vlog(
+      "⏭️ [AboutJourney] Skipping path-forming cinematic to tram boarding",
+    );
+    this.beginPathTravel();
   }
 
   /** Explicitly disperse the path, e.g. when retargeting Falcon to another destination. */

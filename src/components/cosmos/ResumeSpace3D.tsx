@@ -10,6 +10,7 @@ import aboutHallLevelsManifest from "../../data/aboutHallLevels.json";
 import aboutHallSlidesLegacy from "../../data/aboutHallSlides.json";
 import aboutHallSlidesLevel01 from "../../data/aboutHallSlides.level-01-signal-origins.json";
 import aboutHallSlidesLevel02 from "../../data/aboutHallSlides.level-02-human-systems.json";
+import aboutPathTravelMessages from "../../data/aboutPathTravelMessages.json";
 import { moonPortfolioMapping } from "../../data/moonPortfolioMapping";
 import portfolioCores from "../../data/portfolioCores.json";
 import resumeData from "../../data/resume.json";
@@ -1480,7 +1481,21 @@ type AboutExitConfirmIntent = {
   targetType: "section" | "moon";
 };
 
+type AboutPathTravelMessage = {
+  id: string;
+  textContent: string;
+  fontFamily?: string[];
+  fontSize?: string;
+  fontColor?: string;
+  fontShadow?: string;
+};
+
 const ABOUT_RETARGET_SHATTER_MS = 1700;
+const ABOUT_SKIP_CINEMATIC_PROMPT_MS = 5000;
+
+const ABOUT_PATH_RIDE_MESSAGES: AboutPathTravelMessage[] = (
+  aboutPathTravelMessages as AboutPathTravelMessage[]
+).slice(0, 18);
 
 function AboutFlowDebugPanel({
   snapshot,
@@ -5100,6 +5115,14 @@ export default function ResumeSpace3D({
   const [aboutNavHereActive, setAboutNavHereActive] = useState(false);
   const [aboutExitConfirmIntent, setAboutExitConfirmIntent] =
     useState<AboutExitConfirmIntent | null>(null);
+  const [aboutSkipCinematicPromptVisible, setAboutSkipCinematicPromptVisible] =
+    useState(false);
+  const [aboutSkipCinematicRemainingMs, setAboutSkipCinematicRemainingMs] =
+    useState(0);
+  const aboutSkipCinematicDeadlineRef = useRef(0);
+  const [aboutRideMessageView, setAboutRideMessageView] =
+    useState<AboutPathTravelMessage | null>(null);
+  const aboutRideMessageOverlayRef = useRef<HTMLDivElement | null>(null);
   const [projectsNavHereActive, setProjectsNavHereActive] = useState(false);
   const [skillsNavHereActive, setSkillsNavHereActive] = useState(false);
   const [aboutSwarmTriggerVisible, setAboutSwarmTriggerVisible] =
@@ -5130,6 +5153,22 @@ export default function ResumeSpace3D({
   });
 
   useEffect(() => {
+    type RideMessageRuntime = {
+      path: THREE.CatmullRomCurve3 | null;
+      pathLength: number;
+      triggerDistances: number[];
+      triggerStep: number;
+      activeIndex: number;
+    };
+
+    const rideMessageRuntime: RideMessageRuntime = {
+      path: null,
+      pathLength: 1,
+      triggerDistances: [],
+      triggerStep: 1,
+      activeIndex: -1,
+    };
+
     const disposeCrystalGroup = () => {
       const group = aboutCrystalPathGroupRef.current;
       if (!group) return;
@@ -5154,6 +5193,43 @@ export default function ResumeSpace3D({
       aboutCrystalPanelSeedsRef.current = [];
       aboutCrystalPanelMatricesRef.current = [];
       aboutCrystalSurgesRef.current = [];
+    };
+
+    const hideRideMessageOverlay = () => {
+      const overlay = aboutRideMessageOverlayRef.current;
+      if (overlay) {
+        overlay.style.opacity = "0";
+      }
+    };
+
+    const disposeRideMessages = () => {
+      rideMessageRuntime.path = null;
+      rideMessageRuntime.pathLength = 1;
+      rideMessageRuntime.triggerDistances = [];
+      rideMessageRuntime.triggerStep = 1;
+      rideMessageRuntime.activeIndex = -1;
+      hideRideMessageOverlay();
+      setAboutRideMessageView(null);
+    };
+
+    const buildRideMessages = (path: THREE.CatmullRomCurve3) => {
+      disposeRideMessages();
+      rideMessageRuntime.path = path;
+      rideMessageRuntime.pathLength = Math.max(1, path.getLength());
+
+      const count = ABOUT_PATH_RIDE_MESSAGES.length;
+      const step = rideMessageRuntime.pathLength / Math.max(1, count + 1);
+      rideMessageRuntime.triggerStep = step;
+      rideMessageRuntime.triggerDistances = Array.from(
+        { length: count },
+        (_, idx) => step * (idx + 1),
+      );
+    };
+
+    const activateRideMessage = (index: number) => {
+      if (rideMessageRuntime.activeIndex === index) return;
+      rideMessageRuntime.activeIndex = index;
+      setAboutRideMessageView(ABOUT_PATH_RIDE_MESSAGES[index] ?? null);
     };
 
     const ensureCrystalGroup = () => {
@@ -5339,6 +5415,9 @@ export default function ResumeSpace3D({
       if (!shouldShowCrystal) {
         const group = aboutCrystalPathGroupRef.current;
         if (group) group.visible = false;
+        if (rideMessageRuntime.activeIndex >= 0) {
+          disposeRideMessages();
+        }
         return;
       }
 
@@ -5351,6 +5430,9 @@ export default function ResumeSpace3D({
         !aboutCrystalPanelMeshRef.current
       ) {
         buildCrystalPath(path);
+      }
+      if (rideMessageRuntime.path !== path) {
+        buildRideMessages(path);
       }
 
       const panelMesh = aboutCrystalPanelMeshRef.current;
@@ -5415,6 +5497,64 @@ export default function ResumeSpace3D({
       }
       panelMesh.instanceMatrix.needsUpdate = true;
 
+      if (phase === AboutJourneyPhase.PATH_TRAVEL) {
+        const travelDist = journey.travelPathDistance;
+        const fadeDistance = Math.max(
+          40,
+          rideMessageRuntime.triggerStep * 0.72,
+        );
+        const plateauDistance = Math.max(
+          8,
+          rideMessageRuntime.triggerStep * 0.22,
+        );
+
+        let bestIndex = -1;
+        let bestOpacity = 0;
+        for (let i = 0; i < rideMessageRuntime.triggerDistances.length; i++) {
+          const trigger = rideMessageRuntime.triggerDistances[i] ?? 0;
+          const delta = Math.abs(travelDist - trigger);
+          if (delta > fadeDistance) continue;
+
+          const t =
+            delta <= plateauDistance
+              ? 0
+              : THREE.MathUtils.clamp(
+                  (delta - plateauDistance) /
+                    Math.max(0.001, fadeDistance - plateauDistance),
+                  0,
+                  1,
+                );
+          const opacity =
+            delta <= plateauDistance ? 1 : 1 - t * t * (3 - 2 * t);
+          if (opacity > bestOpacity) {
+            bestOpacity = opacity;
+            bestIndex = i;
+          }
+        }
+
+        if (bestIndex !== rideMessageRuntime.activeIndex) {
+          if (bestIndex >= 0) {
+            activateRideMessage(bestIndex);
+          } else if (rideMessageRuntime.activeIndex >= 0) {
+            hideRideMessageOverlay();
+            rideMessageRuntime.activeIndex = -1;
+            setAboutRideMessageView(null);
+          }
+        }
+
+        if (rideMessageRuntime.activeIndex >= 0) {
+          const opacity = bestOpacity;
+          const overlay = aboutRideMessageOverlayRef.current;
+          if (overlay) {
+            overlay.style.opacity = `${opacity}`;
+          }
+        }
+      } else if (rideMessageRuntime.activeIndex >= 0) {
+        hideRideMessageOverlay();
+        rideMessageRuntime.activeIndex = -1;
+        setAboutRideMessageView(null);
+      }
+
       const surgeVisible =
         (crystalProgress >= 1 && phase === AboutJourneyPhase.PATH_TRAVEL) ||
         shatterActive;
@@ -5450,6 +5590,7 @@ export default function ResumeSpace3D({
     raf = requestAnimationFrame(tick);
     return () => {
       if (raf) cancelAnimationFrame(raf);
+      disposeRideMessages();
       disposeCrystalGroup();
     };
   }, []);
@@ -5496,6 +5637,9 @@ export default function ResumeSpace3D({
   const triggerAboutRetargetDispersal = useCallback((reason: string) => {
     const journey = aboutJourneyRef.current;
     if (!journey) return;
+    aboutSkipCinematicDeadlineRef.current = 0;
+    setAboutSkipCinematicPromptVisible(false);
+    setAboutSkipCinematicRemainingMs(0);
     const isPathPhase =
       journey.phase === AboutJourneyPhase.PATH_READY ||
       journey.phase === AboutJourneyPhase.PATH_TRAVEL;
@@ -5526,6 +5670,43 @@ export default function ResumeSpace3D({
       journey.beginPathDispersal(reason);
     }, shatterMs);
   }, []);
+
+  const dismissAboutSkipCinematicPrompt = useCallback(() => {
+    aboutSkipCinematicDeadlineRef.current = 0;
+    setAboutSkipCinematicPromptVisible(false);
+    setAboutSkipCinematicRemainingMs(0);
+  }, []);
+
+  const chooseAboutSkipCinematic = useCallback(
+    (skip: boolean) => {
+      if (skip) {
+        aboutJourneyRef.current?.skipCinematicToPathTravel();
+      }
+      dismissAboutSkipCinematicPrompt();
+    },
+    [dismissAboutSkipCinematicPrompt],
+  );
+
+  useEffect(() => {
+    if (!aboutSkipCinematicPromptVisible) return;
+
+    const tick = () => {
+      const remain = Math.max(
+        0,
+        aboutSkipCinematicDeadlineRef.current - performance.now(),
+      );
+      setAboutSkipCinematicRemainingMs(remain);
+      if (remain <= 0) {
+        dismissAboutSkipCinematicPrompt();
+      }
+    };
+
+    tick();
+    const timer = window.setInterval(tick, 100);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [aboutSkipCinematicPromptVisible, dismissAboutSkipCinematicPrompt]);
 
   useEffect(() => {
     return () => {
@@ -5614,7 +5795,11 @@ export default function ResumeSpace3D({
 
     const phaseSyncInterval = window.setInterval(() => {
       const journey = aboutJourneyRef.current;
+      const inPathForming = journey?.phase === AboutJourneyPhase.PATH_FORMING;
       const inPathTravel = journey?.phase === AboutJourneyPhase.PATH_TRAVEL;
+      if (!inPathForming && aboutSkipCinematicDeadlineRef.current > 0) {
+        dismissAboutSkipCinematicPrompt();
+      }
       setAboutTramHudVisible((prev) =>
         prev === inPathTravel ? prev : inPathTravel,
       );
@@ -5662,7 +5847,11 @@ export default function ResumeSpace3D({
       window.removeEventListener("blur", onWindowBlur);
       releaseAllAboutTramInput();
     };
-  }, [recomputeAboutTramInput, releaseAllAboutTramInput]);
+  }, [
+    dismissAboutSkipCinematicPrompt,
+    recomputeAboutTramInput,
+    releaseAllAboutTramInput,
+  ]);
   const skillsSDPatrolStateRef = useRef<{ angle: number }>({
     angle: Math.PI * 0.25,
   });
@@ -12303,6 +12492,9 @@ export default function ResumeSpace3D({
     nextTargetId: string,
     nextTargetType: "section" | "moon",
   ): void {
+    aboutSkipCinematicDeadlineRef.current = 0;
+    setAboutSkipCinematicPromptVisible(false);
+    setAboutSkipCinematicRemainingMs(0);
     let restoredShip = false;
     let interrupted = false;
     if (nextTargetId !== ABOUT_MEMORY_SQUARE_NAV_ID) {
@@ -19643,6 +19835,12 @@ export default function ResumeSpace3D({
       setAutopilotSuppressed(v: boolean) {
         aboutJourneyAutopilotSuppressedRef.current = v;
       },
+      onPathFormingStart() {
+        aboutSkipCinematicDeadlineRef.current =
+          performance.now() + ABOUT_SKIP_CINEMATIC_PROMPT_MS;
+        setAboutSkipCinematicRemainingMs(ABOUT_SKIP_CINEMATIC_PROMPT_MS);
+        setAboutSkipCinematicPromptVisible(true);
+      },
       disableControls() {
         const ctrl = sceneRef.current.controls;
         if (ctrl) ctrl.enabled = false;
@@ -26689,11 +26887,14 @@ export default function ResumeSpace3D({
         aboutJourneyRef.current = null;
       }
       aboutJourneyPendingEntryRef.current = false;
+      aboutSkipCinematicDeadlineRef.current = 0;
       aboutMemorySquareWorldAnchorRef.current = null;
       aboutMemorySquarePendingEntryRef.current = false;
       aboutMemorySquareActiveRef.current = false;
       aboutMemorySquareNavIntentUntilRef.current = 0;
       setAboutNavHereActive(false);
+      setAboutSkipCinematicPromptVisible(false);
+      setAboutSkipCinematicRemainingMs(0);
       setProjectsNavHereActive(false);
       setOrbitalPortfolioReady(false);
       setOrbitalPortfolioActive(false);
@@ -32534,6 +32735,126 @@ export default function ResumeSpace3D({
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {aboutSkipCinematicPromptVisible && (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: "max(90px, calc(env(safe-area-inset-bottom) + 90px))",
+            transform: "translateX(-50%)",
+            zIndex: 1350,
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              pointerEvents: "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "8px 10px",
+              borderRadius: 12,
+              border: "1px solid rgba(132, 220, 255, 0.5)",
+              background:
+                "linear-gradient(180deg, rgba(6, 20, 38, 0.86), rgba(4, 11, 24, 0.84))",
+              boxShadow: "0 10px 28px rgba(0, 0, 0, 0.34)",
+              backdropFilter: "blur(4px)",
+              color: "#dcf7ff",
+              fontFamily: "'IBM Plex Mono', 'Fira Code', Consolas, monospace",
+              fontSize: 12,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <div style={{ fontWeight: 700, letterSpacing: 0.2 }}>
+              Skip cinematic?
+            </div>
+            <div
+              style={{
+                minWidth: 44,
+                textAlign: "center",
+                color: "#a9deeb",
+                fontWeight: 600,
+              }}
+            >
+              {Math.max(0, Math.ceil(aboutSkipCinematicRemainingMs / 1000))}s
+            </div>
+            <button
+              type="button"
+              onClick={() => chooseAboutSkipCinematic(true)}
+              style={{
+                borderRadius: 7,
+                border: "1px solid rgba(162, 255, 182, 0.78)",
+                background:
+                  "linear-gradient(180deg, rgba(50, 130, 80, 0.9), rgba(24, 80, 54, 0.84))",
+                color: "#e7fff0",
+                fontSize: 11,
+                fontWeight: 700,
+                padding: "5px 9px",
+                cursor: "pointer",
+              }}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              onClick={() => chooseAboutSkipCinematic(false)}
+              style={{
+                borderRadius: 7,
+                border: "1px solid rgba(132, 208, 255, 0.62)",
+                background: "rgba(9, 30, 52, 0.82)",
+                color: "#daf4ff",
+                fontSize: 11,
+                fontWeight: 700,
+                padding: "5px 9px",
+                cursor: "pointer",
+              }}
+            >
+              No
+            </button>
+          </div>
+        </div>
+      )}
+      {aboutRideMessageView && (
+        <div
+          ref={aboutRideMessageOverlayRef}
+          style={{
+            position: "fixed",
+            left: "50%",
+            top: "34%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 1340,
+            pointerEvents: "none",
+            opacity: 0,
+            transition: "opacity 220ms ease-out",
+            maxWidth: "min(72vw, 900px)",
+            textAlign: "center",
+            lineHeight: 1.14,
+            letterSpacing: "0.15px",
+            whiteSpace: "normal",
+            color:
+              aboutRideMessageView.fontColor ?? "rgba(242, 251, 255, 0.99)",
+            textShadow:
+              aboutRideMessageView.fontShadow ??
+              "0px 0px 24px rgba(96, 203, 255, 0.58)",
+            fontFamily:
+              aboutRideMessageView.fontFamily &&
+              aboutRideMessageView.fontFamily.length > 0
+                ? aboutRideMessageView.fontFamily.join(", ")
+                : "Oswald, Montserrat, Arial, sans-serif",
+            fontSize: (() => {
+              const declaredSizePx = Number.parseFloat(
+                aboutRideMessageView.fontSize ?? "50",
+              );
+              return Number.isFinite(declaredSizePx)
+                ? `${Math.round(declaredSizePx * 1.12)}px`
+                : "56px";
+            })(),
+            fontWeight: 500,
+          }}
+        >
+          {aboutRideMessageView.textContent}
         </div>
       )}
       {aboutTramHudVisible && (

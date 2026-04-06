@@ -1,0 +1,146 @@
+[
+  {
+    "id": "path-msg-01",
+    "textContent": "Signal acquired. You are inside the story lane.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "54px",
+    "fontColor": "rgba(242, 251, 255, 0.99)",
+    "fontShadow": "0px 0px 34px rgba(80, 198, 255, 0.75)"
+  },
+  {
+    "id": "path-msg-02",
+    "textContent": "S1: Center monitor: core story stream.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "50px",
+    "fontColor": "rgba(236, 248, 255, 0.99)",
+    "fontShadow": "0px 0px 28px rgba(96, 203, 255, 0.68)"
+  },
+  {
+    "id": "path-msg-03",
+    "textContent": "Built under pressure. Refined in motion.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "52px",
+    "fontColor": "rgba(255, 243, 227, 0.99)",
+    "fontShadow": "0px 0px 26px rgba(255, 181, 116, 0.62)"
+  },
+  {
+    "id": "path-msg-04",
+    "textContent": "S1: Left monitor: context lane.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "50px",
+    "fontColor": "rgba(255, 240, 224, 0.99)",
+    "fontShadow": "3px 4px 10px rgba(0, 0, 0, 0.72)"
+  },
+  {
+    "id": "path-msg-05",
+    "textContent": "Angular to React. Monoliths to modular systems.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "50px",
+    "fontColor": "rgba(235, 255, 243, 0.99)",
+    "fontShadow": "0px 0px 26px rgba(118, 255, 182, 0.63)"
+  },
+  {
+    "id": "path-msg-06",
+    "textContent": "S2: React  •  TypeScript  •  Three.js",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "48px",
+    "fontColor": "rgba(227, 255, 241, 0.99)",
+    "fontShadow": "0px 0px 18px rgba(145, 255, 196, 0.55)"
+  },
+  {
+    "id": "path-msg-07",
+    "textContent": "Design for wonder. Engineer for reliability.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "52px",
+    "fontColor": "rgba(245, 250, 255, 0.99)",
+    "fontShadow": "0px 0px 32px rgba(123, 211, 255, 0.72)"
+  },
+  {
+    "id": "path-msg-08",
+    "textContent": "Systems thinking over silver bullets.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "52px",
+    "fontColor": "rgba(242, 251, 255, 0.99)",
+    "fontShadow": "0px 0px 26px rgba(95, 196, 255, 0.66)"
+  },
+  {
+    "id": "path-msg-09",
+    "textContent": "Human systems first. Technology in service of people.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "50px",
+    "fontColor": "rgba(255, 247, 236, 0.99)",
+    "fontShadow": "0px 0px 28px rgba(255, 197, 136, 0.6)"
+  },
+  {
+    "id": "path-msg-10",
+    "textContent": "Complexity translated into clarity.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "52px",
+    "fontColor": "rgba(237, 250, 255, 0.99)",
+    "fontShadow": "0px 0px 28px rgba(95, 202, 255, 0.67)"
+  },
+  {
+    "id": "path-msg-11",
+    "textContent": "Fast where it matters. Stable where it counts.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "50px",
+    "fontColor": "rgba(230, 255, 241, 0.99)",
+    "fontShadow": "0px 0px 24px rgba(110, 250, 173, 0.61)"
+  },
+  {
+    "id": "path-msg-12",
+    "textContent": "Craft, cadence, and continuous learning.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "50px",
+    "fontColor": "rgba(247, 251, 255, 0.99)",
+    "fontShadow": "0px 0px 30px rgba(130, 214, 255, 0.68)"
+  },
+  {
+    "id": "path-msg-13",
+    "textContent": "Code that scales. Experiences that resonate.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "50px",
+    "fontColor": "rgba(255, 244, 230, 0.99)",
+    "fontShadow": "0px 0px 24px rgba(255, 191, 122, 0.6)"
+  },
+  {
+    "id": "path-msg-14",
+    "textContent": "Frontend precision. Backend pragmatism.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "50px",
+    "fontColor": "rgba(241, 251, 255, 0.99)",
+    "fontShadow": "0px 0px 28px rgba(98, 204, 255, 0.67)"
+  },
+  {
+    "id": "path-msg-15",
+    "textContent": "From concept to production, end-to-end ownership.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "48px",
+    "fontColor": "rgba(226, 255, 239, 0.99)",
+    "fontShadow": "0px 0px 24px rgba(120, 255, 188, 0.62)"
+  },
+  {
+    "id": "path-msg-16",
+    "textContent": "The ride is the roadmap.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "56px",
+    "fontColor": "rgba(245, 252, 255, 0.99)",
+    "fontShadow": "0px 0px 34px rgba(122, 216, 255, 0.74)"
+  },
+  {
+    "id": "path-msg-17",
+    "textContent": "Thank you for traveling through the build.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "50px",
+    "fontColor": "rgba(255, 246, 234, 0.99)",
+    "fontShadow": "0px 0px 30px rgba(255, 196, 133, 0.64)"
+  },
+  {
+    "id": "path-msg-18",
+    "textContent": "Loop complete. Next destination ready.",
+    "fontFamily": ["Oswald", "Montserrat", "Arial", "sans-serif"],
+    "fontSize": "52px",
+    "fontColor": "rgba(235, 252, 255, 0.99)",
+    "fontShadow": "0px 0px 32px rgba(109, 208, 255, 0.7)"
+  }
+]
