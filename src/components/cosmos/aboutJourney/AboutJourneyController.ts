@@ -80,7 +80,7 @@ const FLY_THROUGH_CAM_LAG = 180;
 const FLY_THROUGH_CAM_HEIGHT = 40;
 
 const EXCITEMENT_DURATION_MS = 3400;
-const PATH_HEAD_SPEED = 3500; // Must match AboutParticleSwarm.ts
+const PATH_HEAD_SPEED = 4725; // Must match AboutParticleSwarm.ts
 const PATH_TRAVEL_SAMPLE_COUNT = 220;
 const PATH_TRAVEL_SPEED = 980;
 const PATH_TRAVEL_MAX_FORCE = 1200;
@@ -103,6 +103,13 @@ const PATH_TRAVEL_TARGET_DRIFT_PER_SEC = 0.55;
 const PATH_TRAVEL_ACCEL_PER_SEC = 1.2;
 const PATH_TRAVEL_BRAKE_PER_SEC = 2.8;
 const PATH_TRAVEL_COAST_DRAG_PER_SEC = 0.95;
+const PATH_TRAVEL_CRUISE_MARKER_NORM = 0.7;
+const PATH_TRAVEL_CRUISE_ENGAGE_SPEED_SCALE =
+  PATH_TRAVEL_SPEED_SCALE_MAX * PATH_TRAVEL_CRUISE_MARKER_NORM;
+const PATH_TRAVEL_CRUISE_SPEED_SCALE =
+  PATH_TRAVEL_CRUISE_ENGAGE_SPEED_SCALE * 1.15;
+const PATH_TRAVEL_CRUISE_TOP_SPEED_SCALE = PATH_TRAVEL_SPEED_SCALE_MAX;
+const PATH_TRAVEL_CAMERA_TURN_DAMP_PER_SEC = 4.6;
 
 // ---------------------------------------------------------------------------
 // Cosmic path waypoints — a closed loop through universe landmarks
@@ -223,6 +230,7 @@ export class AboutJourneyController {
   private _travelSpeedTarget = 0;
   private _travelInputDirection: -1 | 0 | 1 = 0;
   private _travelInputDirectionSince = 0;
+  private _travelCruiseEnabled = false;
   private _travelCameraReversed = false;
   private _travelCameraMode: AboutTravelCameraMode = "forward";
 
@@ -238,6 +246,8 @@ export class AboutJourneyController {
   private readonly _tmpTravelUserTarget = new THREE.Vector3();
   private readonly _tmpTravelUserViewDir = new THREE.Vector3();
   private readonly _tmpTravelTangent = new THREE.Vector3();
+  private readonly _tmpTravelForwardLookDir = new THREE.Vector3(0, 0, 1);
+  private readonly _tmpTravelForwardTargetDir = new THREE.Vector3(0, 0, 1);
 
   constructor(callbacks: AboutJourneyCallbacks) {
     this._cb = callbacks;
@@ -336,6 +346,14 @@ export class AboutJourneyController {
     );
   }
 
+  get travelCruiseEnabled(): boolean {
+    return this._travelCruiseEnabled;
+  }
+
+  get travelCruiseThresholdNormalized(): number {
+    return PATH_TRAVEL_CRUISE_MARKER_NORM;
+  }
+
   get travelDistanceAbs(): number {
     return this._travelDistanceAbs;
   }
@@ -353,6 +371,7 @@ export class AboutJourneyController {
     );
     this._travelSpeedTarget = this._travelSpeedScale;
     this._travelInputDirection = 0;
+    this._travelCruiseEnabled = false;
   }
 
   setTravelInputDirection(dir: -1 | 0 | 1): void {
@@ -360,6 +379,9 @@ export class AboutJourneyController {
       this._travelInputDirection = 0;
       this._travelInputDirectionSince = 0;
       return;
+    }
+    if (this._travelCruiseEnabled && dir < 0) {
+      this._travelCruiseEnabled = false;
     }
     if (this._travelInputDirection !== dir) {
       this._travelInputDirectionSince = dir === 0 ? 0 : performance.now();
@@ -699,6 +721,7 @@ export class AboutJourneyController {
       this._travelInputDirectionSince = 0;
       this._travelSpeedTarget = 0;
       this._travelSpeedScale = 0;
+      this._travelCruiseEnabled = false;
       this._cancelRaf();
     }
 
@@ -774,6 +797,7 @@ export class AboutJourneyController {
     this._travelSpeedTarget = 0;
     this._travelInputDirection = 0;
     this._travelInputDirectionSince = 0;
+    this._travelCruiseEnabled = false;
     this._travelCameraReversed = false;
     this._travelCameraMode = "forward";
     this._travelStartedAt = performance.now();
@@ -785,6 +809,7 @@ export class AboutJourneyController {
     if (this._tmpTravelForward.lengthSq() < 0.0001) {
       this._tmpTravelForward.set(0, 0, 1);
     }
+    this._tmpTravelForwardLookDir.copy(this._tmpTravelForward);
 
     controls.getTarget(this._tmpTravelBoardStartTarget);
     this._tmpTravelBoardStartCam.copy(camera.position);
@@ -880,7 +905,9 @@ export class AboutJourneyController {
 
       this._travelVehicle.update(dt);
 
-      if (this._travelInputDirection !== 0) {
+      if (this._travelCruiseEnabled && this._travelInputDirection >= 0) {
+        this._travelSpeedTarget = PATH_TRAVEL_CRUISE_TOP_SPEED_SCALE;
+      } else if (this._travelInputDirection !== 0) {
         const heldSeconds = Math.max(
           0,
           (now - this._travelInputDirectionSince) / 1000,
@@ -933,6 +960,21 @@ export class AboutJourneyController {
         Math.abs(this._travelSpeedTarget) <= 0.05
       ) {
         this._travelSpeedScale = 0;
+      }
+
+      if (
+        !this._travelCruiseEnabled &&
+        this._travelInputDirection === 1 &&
+        this._travelSpeedScale >= PATH_TRAVEL_CRUISE_ENGAGE_SPEED_SCALE
+      ) {
+        this._travelCruiseEnabled = true;
+        this._travelSpeedScale = Math.max(
+          this._travelSpeedScale,
+          PATH_TRAVEL_CRUISE_SPEED_SCALE,
+        );
+        this._travelSpeedTarget = PATH_TRAVEL_CRUISE_TOP_SPEED_SCALE;
+        this._travelInputDirection = 0;
+        this._travelInputDirectionSince = 0;
       }
 
       this._tmpTravelVel.set(
@@ -1005,12 +1047,21 @@ export class AboutJourneyController {
         }
 
         if (this._travelCameraMode === "forward") {
-          // Keep camera orientation predictable: path-forward by default,
-          // and only invert when the user explicitly toggles reverse camera.
-          this._tmpTravelUserViewDir.copy(this._tmpTravelTangent);
+          // Keep camera orientation predictable, but smooth turn-in so sharp
+          // rail corners do not snap the rider's view.
+          this._tmpTravelForwardTargetDir.copy(this._tmpTravelTangent);
           if (this._travelCameraReversed) {
-            this._tmpTravelUserViewDir.multiplyScalar(-1);
+            this._tmpTravelForwardTargetDir.multiplyScalar(-1);
           }
+          if (this._tmpTravelForwardLookDir.lengthSq() < 0.0001) {
+            this._tmpTravelForwardLookDir.copy(this._tmpTravelForwardTargetDir);
+          }
+          const turnBlend =
+            1 - Math.exp(-PATH_TRAVEL_CAMERA_TURN_DAMP_PER_SEC * dt);
+          this._tmpTravelForwardLookDir
+            .lerp(this._tmpTravelForwardTargetDir, turnBlend)
+            .normalize();
+          this._tmpTravelUserViewDir.copy(this._tmpTravelForwardLookDir);
         }
 
         this._tmpTravelLookPos
@@ -1053,6 +1104,7 @@ export class AboutJourneyController {
     this._cb.setAutopilotSuppressed(false);
     this._travelInputDirection = 0;
     this._travelInputDirectionSince = 0;
+    this._travelCruiseEnabled = false;
     this._travelCameraReversed = false;
     this._travelCameraMode = "forward";
     this._cancelRaf();
@@ -1075,6 +1127,7 @@ export class AboutJourneyController {
     this._cb.setAutopilotSuppressed(false);
     this._travelInputDirection = 0;
     this._travelInputDirectionSince = 0;
+    this._travelCruiseEnabled = false;
     this._travelCameraReversed = false;
     this._travelCameraMode = "forward";
     this._pathCrystallizationActive = false;
@@ -1119,6 +1172,7 @@ export class AboutJourneyController {
     this._pathCrystallizationActive = false;
     this._travelInputDirection = 0;
     this._travelInputDirectionSince = 0;
+    this._travelCruiseEnabled = false;
     this._travelCameraReversed = false;
     this._travelCameraMode = "forward";
     this._cb.setAutopilotSuppressed(false);
