@@ -65,7 +65,7 @@ const FLY_PULL_FORWARD_DIST = 260;
 const FLY_PULL_INWARD_DIST = 95;
 
 // Path trail
-const PATH_HEAD_SPEED = 3500;
+const PATH_HEAD_SPEED = 4725;
 const PATH_TRAIL_RADIUS = 35;
 const PATH_EMISSION_RATE = 1200; // particles per second from origin (doubled for denser path)
 const PATH_PARTICLE_MIN_SPEED = 0.6;
@@ -123,6 +123,7 @@ export interface AboutParticleSwarmHandle {
     cosmicPath: THREE.CatmullRomCurve3 | null,
   ): AboutSwarmFrameSignals;
   getDebugState(): AboutParticleSwarmDebugState;
+  forcePathFormationComplete(): void;
   dispose(): void;
 }
 
@@ -1174,6 +1175,15 @@ export function createAboutParticleSwarm(
     };
   }
 
+  function forcePathFormationComplete() {
+    // Skip should jump to the formed crystal rail state without waiting for
+    // the streaming phase to finish naturally.
+    _pathHeadT = 1;
+    _pathComplete = true;
+    _pathEmitAccum = 0;
+    _pathHoldLatched = false;
+  }
+
   function dispose() {
     geometry.dispose();
     material.dispose();
@@ -1190,6 +1200,7 @@ export function createAboutParticleSwarm(
     vehicles,
     update,
     getDebugState,
+    forcePathFormationComplete,
     dispose,
   };
 }
