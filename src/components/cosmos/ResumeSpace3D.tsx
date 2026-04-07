@@ -1492,6 +1492,7 @@ type AboutPathTravelMessage = {
 
 const ABOUT_RETARGET_SHATTER_MS = 2600;
 const ABOUT_CRYSTAL_DISPERSING_FADE_MS = 2400;
+const ABOUT_DISPERSAL_SUN_PAN_MS = 2300;
 
 const ABOUT_PATH_RIDE_MESSAGES: AboutPathTravelMessage[] = (
   aboutPathTravelMessages as AboutPathTravelMessage[]
@@ -5186,12 +5187,32 @@ export default function ResumeSpace3D({
       activeIndex: number;
     };
 
+    type DispersalPanRuntime = {
+      active: boolean;
+      startedAt: number;
+      durationMs: number;
+      startCameraPos: THREE.Vector3;
+      targetCameraPos: THREE.Vector3;
+      startTarget: THREE.Vector3;
+      targetTarget: THREE.Vector3;
+    };
+
     const rideMessageRuntime: RideMessageRuntime = {
       path: null,
       pathLength: 1,
       triggerDistances: [],
       triggerStep: 1,
       activeIndex: -1,
+    };
+
+    const dispersalPanRuntime: DispersalPanRuntime = {
+      active: false,
+      startedAt: 0,
+      durationMs: ABOUT_DISPERSAL_SUN_PAN_MS,
+      startCameraPos: new THREE.Vector3(),
+      targetCameraPos: new THREE.Vector3(),
+      startTarget: new THREE.Vector3(),
+      targetTarget: new THREE.Vector3(),
     };
 
     const disposeCrystalGroup = () => {
@@ -5488,6 +5509,12 @@ export default function ResumeSpace3D({
     let prevNow = performance.now();
     const tmp = new THREE.Vector3();
     const tmpTan = new THREE.Vector3();
+    const tmpTarget = new THREE.Vector3();
+    const tmpCameraToSun = new THREE.Vector3();
+    const tmpLateral = new THREE.Vector3();
+    const tmpPosBlend = new THREE.Vector3();
+    const tmpTargetBlend = new THREE.Vector3();
+    const worldUp = new THREE.Vector3(0, 1, 0);
 
     const tick = () => {
       raf = requestAnimationFrame(tick);
@@ -5546,6 +5573,54 @@ export default function ResumeSpace3D({
       ) {
         aboutCrystalShatterUntilRef.current = now + ABOUT_RETARGET_SHATTER_MS;
         aboutCrystalDispersingStartedAtRef.current = now;
+
+        const controls = sceneRef.current.controls;
+        const camera = sceneRef.current.camera;
+        if (controls && camera) {
+          const controlsAny = controls as CameraControls & {
+            getTarget?: (out: THREE.Vector3, receiveEndValue?: boolean) => void;
+          };
+          if (controlsAny.getTarget) {
+            controlsAny.getTarget(dispersalPanRuntime.startTarget, false);
+          } else {
+            camera.getWorldDirection(tmpTarget);
+            dispersalPanRuntime.startTarget
+              .copy(camera.position)
+              .addScaledVector(tmpTarget, 220);
+          }
+          dispersalPanRuntime.startCameraPos.copy(camera.position);
+
+          const sunAnchor = sceneRef.current.sunLight;
+          if (sunAnchor) {
+            dispersalPanRuntime.targetTarget.copy(sunAnchor.position);
+          } else {
+            camera.getWorldDirection(tmpTarget);
+            dispersalPanRuntime.targetTarget
+              .copy(camera.position)
+              .addScaledVector(tmpTarget, 360);
+          }
+
+          tmpCameraToSun
+            .subVectors(
+              dispersalPanRuntime.targetTarget,
+              dispersalPanRuntime.startCameraPos,
+            )
+            .normalize();
+          tmpLateral.crossVectors(tmpCameraToSun, worldUp);
+          if (tmpLateral.lengthSq() < 1e-4) {
+            tmpLateral.set(1, 0, 0);
+          } else {
+            tmpLateral.normalize();
+          }
+          dispersalPanRuntime.targetCameraPos
+            .copy(dispersalPanRuntime.startCameraPos)
+            .addScaledVector(tmpLateral, 52)
+            .addScaledVector(worldUp, 14);
+          dispersalPanRuntime.startedAt = now;
+          dispersalPanRuntime.active = true;
+        } else {
+          dispersalPanRuntime.active = false;
+        }
       }
       if (
         phase !== AboutJourneyPhase.PATH_DISPERSING &&
@@ -5553,6 +5628,7 @@ export default function ResumeSpace3D({
           AboutJourneyPhase.PATH_DISPERSING
       ) {
         aboutCrystalDispersingStartedAtRef.current = 0;
+        dispersalPanRuntime.active = false;
       }
       aboutCrystalShatterPhaseRef.current = phase;
       const shatterRemaining = Math.max(
@@ -5572,6 +5648,41 @@ export default function ResumeSpace3D({
             1,
           )
         : 0;
+
+      if (dispersingActive && dispersalPanRuntime.active) {
+        const controls = sceneRef.current.controls;
+        if (!controls) {
+          dispersalPanRuntime.active = false;
+        } else {
+          const panT = THREE.MathUtils.clamp(
+            (now - dispersalPanRuntime.startedAt) /
+              Math.max(1, dispersalPanRuntime.durationMs),
+            0,
+            1,
+          );
+          const easedPan = panT * panT * (3 - 2 * panT);
+          tmpPosBlend.lerpVectors(
+            dispersalPanRuntime.startCameraPos,
+            dispersalPanRuntime.targetCameraPos,
+            easedPan,
+          );
+          tmpTargetBlend.lerpVectors(
+            dispersalPanRuntime.startTarget,
+            dispersalPanRuntime.targetTarget,
+            easedPan,
+          );
+
+          controls.setLookAt(
+            tmpPosBlend.x,
+            tmpPosBlend.y,
+            tmpPosBlend.z,
+            tmpTargetBlend.x,
+            tmpTargetBlend.y,
+            tmpTargetBlend.z,
+            false,
+          );
+        }
+      }
       const explosionActive = shatterActive || dispersingActive;
       const panelMaterial = panelMesh.material as THREE.MeshPhysicalMaterial;
       const shatterTravelT = shatterActive ? Math.pow(shatterT, 0.82) : 0;
