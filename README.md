@@ -38,6 +38,53 @@ npm run build
 npm run preview
 ```
 
+## 📊 PostHog Owner Mode
+
+Production analytics include an owner-mode toggle so your own visits can be filtered out from client traffic.
+
+### Manual activation in browser console
+
+Open your production site, then run:
+
+```js
+window.__so.enable();
+```
+
+Check status:
+
+```js
+window.__so.status();
+```
+
+Disable owner mode:
+
+```js
+window.__so.disable();
+```
+
+### URL activation
+
+Open the site with `?__so=1`, for example:
+
+```text
+https://harmadavtian.com/?__so=1
+```
+
+This enables owner mode and then removes the `__so` param from the URL.
+
+### Persistence behavior
+
+- Owner mode is stored in site localStorage and PostHog persistence (`localStorage+cookie`).
+- Clearing site data (cookies/localStorage) resets owner mode and future visits become anonymous until re-enabled.
+- Owner mode is per browser profile/device.
+
+### PostHog filtering
+
+Filter dashboards with either:
+
+- `person.properties.is_internal_owner != true`
+- `event.properties.traffic_type != "owner"`
+
 ## 🎨 Customization
 
 ### Colors & Theme
