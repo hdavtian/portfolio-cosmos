@@ -5,6 +5,8 @@ import { flattenPortfolioCores } from "../lib/portfolioTransform";
 import { useFavorites } from "../hooks/useFavorites";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { EmptyState } from "../components/EmptyState";
+import { PortfolioCompareTray } from "../components/PortfolioCompareTray";
+import { useCompareSelection } from "../hooks/useCompareSelection";
 import type { PortfolioItem } from "../types";
 
 type ViewMode = "grid" | "card";
@@ -56,6 +58,14 @@ export function PortfolioPage() {
 
   const portfolioQuery = usePortfolioCoresQuery();
   const { favoritesSet, toggleFavorite } = useFavorites();
+  const {
+    compareIds,
+    compareSet,
+    toggleCompare,
+    clearCompare,
+    canAddMore,
+    compareLimit,
+  } = useCompareSelection();
 
   const allItems = useMemo(
     () => flattenPortfolioCores(portfolioQuery.data?.payload ?? []),
@@ -112,6 +122,14 @@ export function PortfolioPage() {
     searchTerm,
     sortMode,
   ]);
+
+  const compareItems = useMemo(
+    () =>
+      compareIds
+        .map((id) => allItems.find((item) => item.id === id))
+        .filter((item): item is PortfolioItem => Boolean(item)),
+    [allItems, compareIds],
+  );
 
   useEffect(() => {
     if (subcategoryOptions.includes(subcategoryFilter)) return;
@@ -301,10 +319,25 @@ export function PortfolioPage() {
               >
                 {favoritesSet.has(item.id) ? "Unfavorite" : "Favorite"}
               </button>
+              <button
+                type="button"
+                aria-pressed={compareSet.has(item.id)}
+                disabled={!compareSet.has(item.id) && !canAddMore}
+                onClick={() => toggleCompare(item.id)}
+              >
+                {compareSet.has(item.id) ? "Remove Compare" : "Compare"}
+              </button>
             </div>
           </article>
         ))}
       </div>
+
+      <PortfolioCompareTray
+        items={compareItems}
+        maxItems={compareLimit}
+        onClear={clearCompare}
+        onRemove={toggleCompare}
+      />
 
       {quickViewItem ? (
         <div className="portfolio-quick-view" role="dialog" aria-modal="true" aria-labelledby="quick-view-title">

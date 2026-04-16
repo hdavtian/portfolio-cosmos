@@ -89,6 +89,15 @@
   gap: 0.4rem;
 }
 
+.fast-top-nav__menu-toggle {
+  display: none;
+  border: 1px solid var(--color-border);
+  border-radius: 0.45rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.35rem 0.6rem;
+}
+
 .fast-top-nav__link {
   color: var(--color-text-muted);
   text-decoration: none;
@@ -353,7 +362,7 @@
 
 .portfolio-card__actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 0.4rem;
   padding: 0 0.8rem 0.8rem;
 }
@@ -368,6 +377,90 @@
   background: var(--color-surface);
   color: var(--color-text);
   font-size: 0.77rem;
+}
+
+.portfolio-compare-tray {
+  position: sticky;
+  bottom: 0.7rem;
+  margin-top: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--color-surface) 85%, #000 15%);
+  padding: 0.8rem;
+}
+
+.portfolio-compare-tray__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.portfolio-compare-tray__header h2 {
+  margin: 0;
+  font: 700 1rem/1.2 var(--font-title);
+}
+
+.portfolio-compare-tray__header button {
+  border: 1px solid var(--color-border);
+  border-radius: 0.45rem;
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  padding: 0.3rem 0.55rem;
+}
+
+.portfolio-compare-tray__hint {
+  margin: 0.4rem 0 0.7rem;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.portfolio-compare-tray__grid {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.portfolio-compare-tray__card {
+  border: 1px solid var(--color-border);
+  border-radius: 0.55rem;
+  background: var(--color-surface-elevated);
+  padding: 0.6rem;
+}
+
+.portfolio-compare-tray__card h3 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.portfolio-compare-tray__card p {
+  margin: 0.2rem 0;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.portfolio-compare-tray__tags {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin: 0.35rem 0;
+}
+
+.portfolio-compare-tray__tags span {
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.68rem;
+}
+
+.portfolio-compare-tray__card button {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 0.4rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.35rem;
+  font-size: 0.76rem;
 }
 
 .portfolio-quick-view {
@@ -509,5 +602,27 @@
 
   .fast-top-nav__inner {
     flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .fast-top-nav__menu-toggle {
+    display: inline-flex;
+  }
+
+  .fast-top-nav__links,
+  .fast-top-nav__tools {
+    display: none;
+    width: 100%;
+  }
+
+  .fast-top-nav__links.is-open,
+  .fast-top-nav__tools.is-open {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .portfolio-card__actions {
+    grid-template-columns: 1fr;
   }
 }

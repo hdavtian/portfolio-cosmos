@@ -62,6 +62,14 @@
 - Improved detail-state handling:
   - unified unavailable/not-found states using reusable empty-state UI.
 
+### Iteration 4
+- Improved mobile navigation behavior:
+  - added a compact mobile top-nav menu toggle with expanded/collapsed states.
+- Added portfolio compare workflow:
+  - compare selection state persisted in localStorage (up to 3 items),
+  - compare/remove controls on portfolio cards,
+  - sticky compare tray with selected project snapshot and quick remove/clear actions.
+
 ## Verification Checklist
 - [ ] `/cinematic` loads and preserves existing intro/ThreeJS path.
 - [ ] `/fast` renders without importing/instantiating ThreeJS scene components at runtime.
@@ -72,3 +80,5 @@
 - [ ] Quick view supports keyboard close with `Escape` and has visible focus.
 - [ ] Subcategory and favorites-only filters persist and interact correctly with category selection.
 - [ ] Portfolio detail page shows metadata/technology chips and supports adjacent project navigation.
+- [ ] Mobile top-nav toggle works across breakpoints and keeps navigation/theme controls usable.
+- [ ] Compare selection persists, enforces max selection, and compare tray controls work reliably.

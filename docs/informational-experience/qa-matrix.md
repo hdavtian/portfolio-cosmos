@@ -10,6 +10,7 @@
 - [ ] Top nav links show pressed/down behavior.
 - [ ] Context nav appears for portfolio and resume sections.
 - [ ] Mobile layout stacks cleanly.
+- [ ] Mobile top-nav menu toggle opens/closes nav and tools correctly.
 
 ## Theming
 - [ ] Theme switch updates colors/fonts immediately.
@@ -30,6 +31,9 @@
 - [ ] Subcategory and favorites-only state persist after reload.
 - [ ] Empty state appears when filters return no matches.
 - [ ] Result count text updates as filters change.
+- [ ] Compare button allows max 3 selected projects.
+- [ ] Compare tray shows selected projects with remove/clear actions.
+- [ ] Compare selection persists after reload.
 
 ## Resume
 - [ ] Resume route renders summary and experience from API.

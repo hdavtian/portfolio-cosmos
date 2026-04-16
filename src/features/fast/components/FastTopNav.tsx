@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useTheme } from "../../../theme/ThemeProvider";
 
 export function FastTopNav() {
   const { themeId, setThemeId, themes } = useTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <header className="fast-top-nav">
@@ -11,7 +13,21 @@ export function FastTopNav() {
           Fast Experience
         </NavLink>
 
-        <nav className="fast-top-nav__links" aria-label="Primary navigation">
+        <button
+          type="button"
+          className="fast-top-nav__menu-toggle"
+          aria-expanded={menuOpen}
+          aria-controls="fast-primary-nav"
+          onClick={() => setMenuOpen((current) => !current)}
+        >
+          Menu
+        </button>
+
+        <nav
+          id="fast-primary-nav"
+          className={`fast-top-nav__links ${menuOpen ? "is-open" : ""}`}
+          aria-label="Primary navigation"
+        >
           <NavLink to="/fast" end className={({ isActive }) => navClass(isActive)}>
             Overview
           </NavLink>
@@ -20,7 +36,7 @@ export function FastTopNav() {
           </NavLink>
         </nav>
 
-        <div className="fast-top-nav__tools">
+        <div className={`fast-top-nav__tools ${menuOpen ? "is-open" : ""}`}>
           <label htmlFor="theme-picker" className="fast-top-nav__theme-label">
             Theme
           </label>
