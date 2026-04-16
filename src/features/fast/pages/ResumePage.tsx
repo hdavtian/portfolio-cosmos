@@ -1,4 +1,5 @@
 import { useResumeQuery } from "../../../lib/query/contentQueries";
+import { EmptyState } from "../components/EmptyState";
 
 export function ResumePage() {
   const resumeQuery = useResumeQuery();
@@ -8,12 +9,7 @@ export function ResumePage() {
   }
 
   if (resumeQuery.isError) {
-    return (
-      <div className="fast-panel">
-        <h2>Resume is currently unavailable.</h2>
-        <p>Please verify the API is running and seeded.</p>
-      </div>
-    );
+    return <EmptyState title="Resume unavailable" message="Please refresh to retry loading resume data." />;
   }
 
   const resume = resumeQuery.data.payload;

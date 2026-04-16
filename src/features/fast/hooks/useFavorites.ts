@@ -1,25 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { usePersistentState } from "./usePersistentState";
 
 const FAVORITES_KEY = "fast-experience:favorites";
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
 export function useFavorites() {
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    const raw = window.localStorage.getItem(FAVORITES_KEY);
-    if (!raw) return;
-
-    try {
-      const parsed = JSON.parse(raw) as string[];
-      setFavoriteIds(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setFavoriteIds([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteIds));
-  }, [favoriteIds]);
+  const [favoriteIds, setFavoriteIds] = usePersistentState<string[]>(
+    FAVORITES_KEY,
+    [],
+    isStringArray,
+  );
 
   const favoritesSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 

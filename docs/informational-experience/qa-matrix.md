@@ -22,8 +22,12 @@
 - [ ] Card size slider changes card density.
 - [ ] Favorite/unfavorite persists after reload.
 - [ ] Quick view opens and closes cleanly.
+- [ ] Quick view closes with `Escape` key and receives focus on open.
 - [ ] Detail view route loads expected project.
+- [ ] View/sort/category/search/card size persist after reload.
+- [ ] Empty state appears when filters return no matches.
 
 ## Resume
 - [ ] Resume route renders summary and experience from API.
 - [ ] Footer resume link opens resume page from any fast route.
+- [ ] Resume still renders if API is unavailable (fallback content path).

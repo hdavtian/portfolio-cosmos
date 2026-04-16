@@ -11,7 +11,7 @@ export function FastTopNav() {
           Fast Experience
         </NavLink>
 
-        <nav className="fast-top-nav__links" aria-label="Primary">
+        <nav className="fast-top-nav__links" aria-label="Primary navigation">
           <NavLink to="/fast" end className={({ isActive }) => navClass(isActive)}>
             Overview
           </NavLink>

@@ -41,9 +41,22 @@
 - Added portfolio listing with filtering, sorting, favorites, card sizing, quick view, and detail route.
 - Added text-forward resume page sourced from API.
 
+### Iteration 2
+- Added accessibility and interaction hardening in fast mode:
+  - focus-visible styles for nav/buttons/inputs,
+  - improved aria-pressed states,
+  - quick-view escape handling and dialog focus behavior.
+- Added persistent portfolio preferences:
+  - view mode, sort mode, category, search text, and card size now persist in localStorage.
+- Added API resilience:
+  - query layer now supports fallback to local JSON content when API fetch fails.
+- Added reusable empty-state component for no-results and unavailable-data scenarios.
+
 ## Verification Checklist
 - [ ] `/cinematic` loads and preserves existing intro/ThreeJS path.
 - [ ] `/fast` renders without importing/instantiating ThreeJS scene components at runtime.
 - [ ] API-backed pages handle loading/error gracefully.
 - [ ] Theme persistence survives page refresh.
 - [ ] Favorites persist via localStorage.
+- [ ] Portfolio filters/preferences persist after reload.
+- [ ] Quick view supports keyboard close with `Escape` and has visible focus.

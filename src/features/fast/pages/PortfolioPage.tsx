@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { usePortfolioCoresQuery } from "../../../lib/query/contentQueries";
 import { flattenPortfolioCores } from "../lib/portfolioTransform";
 import { useFavorites } from "../hooks/useFavorites";
+import { usePersistentState } from "../hooks/usePersistentState";
+import { EmptyState } from "../components/EmptyState";
 import type { PortfolioItem } from "../types";
 
 type ViewMode = "grid" | "card";
@@ -13,12 +15,34 @@ export function PortfolioPage() {
   const viewParam = searchParams.get("view");
   const initialView: ViewMode = viewParam === "card" ? "card" : "grid";
 
-  const [viewMode, setViewMode] = useState<ViewMode>(initialView);
-  const [sortMode, setSortMode] = useState<SortMode>("newest");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [cardScale, setCardScale] = useState(1);
+  const [viewMode, setViewMode] = usePersistentState<ViewMode>(
+    "fast-experience:portfolio:view",
+    initialView,
+    (value): value is ViewMode => value === "grid" || value === "card",
+  );
+  const [sortMode, setSortMode] = usePersistentState<SortMode>(
+    "fast-experience:portfolio:sort",
+    "newest",
+    (value): value is SortMode =>
+      value === "newest" || value === "oldest" || value === "title",
+  );
+  const [categoryFilter, setCategoryFilter] = usePersistentState<string>(
+    "fast-experience:portfolio:category",
+    "all",
+    (value): value is string => typeof value === "string",
+  );
+  const [searchTerm, setSearchTerm] = usePersistentState<string>(
+    "fast-experience:portfolio:search",
+    "",
+    (value): value is string => typeof value === "string",
+  );
+  const [cardScale, setCardScale] = usePersistentState<number>(
+    "fast-experience:portfolio:scale",
+    1,
+    (value): value is number => typeof value === "number" && value >= 0.75 && value <= 1.35,
+  );
   const [quickViewItem, setQuickViewItem] = useState<PortfolioItem | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const portfolioQuery = usePortfolioCoresQuery();
   const { favoritesSet, toggleFavorite } = useFavorites();
@@ -63,17 +87,31 @@ export function PortfolioPage() {
     setSearchParams(nextParams);
   };
 
+  useEffect(() => {
+    if (!quickViewItem) return;
+    closeButtonRef.current?.focus();
+
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setQuickViewItem(null);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onEscape);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [quickViewItem]);
+
   if (portfolioQuery.isPending) {
     return <div className="fast-panel">Loading portfolio content...</div>;
   }
 
   if (portfolioQuery.isError) {
-    return (
-      <div className="fast-panel">
-        <h2>Unable to load portfolio right now.</h2>
-        <p>Confirm the API is running and refresh this page.</p>
-      </div>
-    );
+    return <EmptyState title="Portfolio unavailable" message="Please refresh to retry loading portfolio data." />;
   }
 
   return (
@@ -135,6 +173,7 @@ export function PortfolioPage() {
             type="button"
             onClick={() => updateViewMode("grid")}
             className={viewMode === "grid" ? "is-active" : ""}
+            aria-pressed={viewMode === "grid"}
           >
             Grid View
           </button>
@@ -142,11 +181,25 @@ export function PortfolioPage() {
             type="button"
             onClick={() => updateViewMode("card")}
             className={viewMode === "card" ? "is-active" : ""}
+            aria-pressed={viewMode === "card"}
           >
             Card View
           </button>
         </div>
       </div>
+
+      {filteredItems.length === 0 ? (
+        <EmptyState
+          title="No projects match these filters"
+          message="Try a different category, clear search text, or switch sort mode."
+          actionLabel="Clear Filters"
+          onAction={() => {
+            setSearchTerm("");
+            setCategoryFilter("all");
+            setSortMode("newest");
+          }}
+        />
+      ) : null}
 
       <div
         className={`portfolio-results ${viewMode === "card" ? "portfolio-results--card" : ""}`}
@@ -174,7 +227,11 @@ export function PortfolioPage() {
                 Quick View
               </button>
               <Link to={`/fast/portfolio/${item.id}`}>Detail View</Link>
-              <button type="button" onClick={() => toggleFavorite(item.id)}>
+              <button
+                type="button"
+                aria-pressed={favoritesSet.has(item.id)}
+                onClick={() => toggleFavorite(item.id)}
+              >
                 {favoritesSet.has(item.id) ? "Unfavorite" : "Favorite"}
               </button>
             </div>
@@ -183,9 +240,9 @@ export function PortfolioPage() {
       </div>
 
       {quickViewItem ? (
-        <div className="portfolio-quick-view" role="dialog" aria-modal="true">
+        <div className="portfolio-quick-view" role="dialog" aria-modal="true" aria-labelledby="quick-view-title">
           <div className="portfolio-quick-view__card">
-            <h2>{quickViewItem.title}</h2>
+            <h2 id="quick-view-title">{quickViewItem.title}</h2>
             <p>{quickViewItem.description}</p>
             <p>
               <strong>Category:</strong> {quickViewItem.category}
@@ -193,7 +250,7 @@ export function PortfolioPage() {
             <p>
               <strong>Technologies:</strong> {quickViewItem.technologies.join(", ") || "N/A"}
             </p>
-            <button type="button" onClick={() => setQuickViewItem(null)}>
+            <button ref={closeButtonRef} type="button" onClick={() => setQuickViewItem(null)}>
               Close
             </button>
           </div>
