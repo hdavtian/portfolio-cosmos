@@ -17,7 +17,9 @@ export function usePortfolioCoresQuery() {
         fallbackPayload: portfolioCoresFallback as PortfolioCoreSeed[],
         fallbackCategory: "portfolio",
       }),
-    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 60 * 24,
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnMount: "always",
   });
 }
 

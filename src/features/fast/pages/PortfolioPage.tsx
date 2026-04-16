@@ -139,6 +139,39 @@ export function PortfolioPage() {
     setSubcategoryFilter("all");
   }, [subcategoryFilter, subcategoryOptions, setSubcategoryFilter]);
 
+  useEffect(() => {
+    if (filteredItems.length > 0) return;
+    if (allItems.length === 0) return;
+
+    // If persisted filters become overly restrictive after navigation history restores
+    // this page, reset to a safe baseline so content remains visible.
+    const hasNonDefaultFilters =
+      searchTerm.trim().length > 0 ||
+      categoryFilter !== "all" ||
+      subcategoryFilter !== "all" ||
+      favoritesOnly;
+
+    if (!hasNonDefaultFilters) return;
+
+    setSearchTerm("");
+    setCategoryFilter("all");
+    setSubcategoryFilter("all");
+    setFavoritesOnly(false);
+    setSortMode("newest");
+  }, [
+    filteredItems.length,
+    allItems.length,
+    searchTerm,
+    categoryFilter,
+    subcategoryFilter,
+    favoritesOnly,
+    setSearchTerm,
+    setCategoryFilter,
+    setSubcategoryFilter,
+    setFavoritesOnly,
+    setSortMode,
+  ]);
+
   const updateViewMode = (nextMode: ViewMode) => {
     setViewMode(nextMode);
     const nextParams = new URLSearchParams(searchParams);
@@ -192,7 +225,7 @@ export function PortfolioPage() {
     return () => window.clearTimeout(timer);
   }, [compareCapNotice]);
 
-  if (portfolioQuery.isPending) {
+  if (portfolioQuery.isPending || (portfolioQuery.isFetching && !portfolioQuery.data)) {
     return <div className="fast-panel">Loading portfolio content...</div>;
   }
 

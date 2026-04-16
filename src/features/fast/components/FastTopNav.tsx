@@ -5,6 +5,9 @@ import { useTheme } from "../../../theme/ThemeProvider";
 export function FastTopNav() {
   const { themeId, setThemeId, themes } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
+  const prefetchCinematic = () => {
+    void import("../../../App");
+  };
 
   return (
     <header className="fast-top-nav">
@@ -52,7 +55,12 @@ export function FastTopNav() {
               </option>
             ))}
           </select>
-          <NavLink to="/cinematic" className="fast-top-nav__cinematic-link">
+          <NavLink
+            to="/cinematic"
+            className="fast-top-nav__cinematic-link"
+            onMouseEnter={prefetchCinematic}
+            onFocus={prefetchCinematic}
+          >
             Cinematic
           </NavLink>
         </div>
