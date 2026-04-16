@@ -151,7 +151,7 @@
 }
 
 .fast-layout__body {
-  width: min(1200px, 100% - 2rem);
+  width: min(100%, 2560px);
   margin: 1rem auto 2rem;
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
@@ -578,7 +578,7 @@
 }
 
 .fast-footer {
-  width: min(1200px, 100% - 2rem);
+  width: min(100%, 2560px);
   margin: 0 auto 1.5rem;
   border: 1px solid var(--color-border);
   border-radius: 0.8rem;
