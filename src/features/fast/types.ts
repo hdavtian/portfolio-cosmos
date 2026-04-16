@@ -15,6 +15,17 @@ export interface PortfolioEntrySeed {
   year?: number;
   published?: boolean;
   galleryMedia?: PortfolioMedia[];
+  clientVariants?: PortfolioClientVariantSeed[];
+}
+
+export interface PortfolioClientVariantSeed {
+  id: string;
+  title: string;
+  image?: string;
+  description?: string;
+  technologies?: string[];
+  year?: number | null;
+  galleryMedia?: PortfolioMedia[];
 }
 
 export interface PortfolioRingSeed {
@@ -43,6 +54,7 @@ export interface PortfolioItem {
   category: string;
   subcategory: string;
   detailMedia: PortfolioMedia[];
+  isClientVariation: boolean;
 }
 
 export interface ResumePayload {

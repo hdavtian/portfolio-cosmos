@@ -1,13 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { usePortfolioCoresQuery } from "../../../lib/query/contentQueries";
 import { flattenPortfolioCores } from "../lib/portfolioTransform";
 import { useFavorites } from "../hooks/useFavorites";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { EmptyState } from "../components/EmptyState";
-import { PortfolioCompareTray } from "../components/PortfolioCompareTray";
-import { useCompareSelection } from "../hooks/useCompareSelection";
-import type { PortfolioItem } from "../types";
 
 type ViewMode = "grid" | "card";
 type SortMode = "newest" | "oldest" | "title";
@@ -53,22 +50,9 @@ export function PortfolioPage() {
     false,
     (value): value is boolean => typeof value === "boolean",
   );
-  const [quickViewItem, setQuickViewItem] = useState<PortfolioItem | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
-  const quickViewPanelRef = useRef<HTMLDivElement | null>(null);
-  const lastFocusedElementRef = useRef<HTMLElement | null>(null);
-  const [compareCapNotice, setCompareCapNotice] = useState<string>("");
 
   const portfolioQuery = usePortfolioCoresQuery();
   const { favoritesSet, toggleFavorite } = useFavorites();
-  const {
-    compareIds,
-    compareSet,
-    toggleCompare,
-    clearCompare,
-    canAddMore,
-    compareLimit,
-  } = useCompareSelection();
 
   const allItems = useMemo(
     () => flattenPortfolioCores(portfolioQuery.data?.payload ?? []),
@@ -126,14 +110,6 @@ export function PortfolioPage() {
     sortMode,
   ]);
 
-  const compareItems = useMemo(
-    () =>
-      compareIds
-        .map((id) => allItems.find((item) => item.id === id))
-        .filter((item): item is PortfolioItem => Boolean(item)),
-    [allItems, compareIds],
-  );
-
   useEffect(() => {
     if (subcategoryOptions.includes(subcategoryFilter)) return;
     setSubcategoryFilter("all");
@@ -179,52 +155,6 @@ export function PortfolioPage() {
     setSearchParams(nextParams);
   };
 
-  useEffect(() => {
-    if (!quickViewItem) return;
-    lastFocusedElementRef.current = document.activeElement as HTMLElement | null;
-    closeButtonRef.current?.focus();
-
-    const onKeydown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setQuickViewItem(null);
-        return;
-      }
-
-      if (event.key !== "Tab" || !quickViewPanelRef.current) return;
-
-      const focusable = quickViewPanelRef.current.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusable.length === 0) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKeydown);
-
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKeydown);
-      lastFocusedElementRef.current?.focus();
-    };
-  }, [quickViewItem]);
-
-  useEffect(() => {
-    if (!compareCapNotice) return;
-    const timer = window.setTimeout(() => setCompareCapNotice(""), 2500);
-    return () => window.clearTimeout(timer);
-  }, [compareCapNotice]);
-
   if (portfolioQuery.isPending || (portfolioQuery.isFetching && !portfolioQuery.data)) {
     return <div className="fast-panel">Loading portfolio content...</div>;
   }
@@ -238,7 +168,7 @@ export function PortfolioPage() {
       <header className="portfolio-page__header">
         <h1 className="portfolio-page__title">Portfolio</h1>
         <p className="portfolio-page__lead">
-          Filter by category, adjust card size, favorite items, and open quick previews.
+          Filter by category, subcategory, and favorites for fast project discovery.
         </p>
       </header>
 
@@ -353,99 +283,67 @@ export function PortfolioPage() {
         className={`portfolio-results ${viewMode === "card" ? "portfolio-results--card" : ""}`}
         style={{ ["--portfolio-scale" as string]: String(cardScale) }}
       >
-        {filteredItems.map((item) => (
-          <article key={item.id} className="portfolio-card">
-            {item.image ? (
+        {filteredItems.map((item) => {
+          const isFavorited = favoritesSet.has(item.id);
+          return (
+            <article key={item.id} className="portfolio-card">
               <Link
                 to={`/fast/portfolio/${item.id}`}
-                className="portfolio-card__image-link"
+                className="portfolio-card__surface"
                 aria-label={`Open details for ${item.title}`}
               >
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  className="portfolio-card__image"
-                  loading="lazy"
-                />
+                {item.image ? (
+                  <img
+                    src={item.image}
+                    alt=""
+                    className="portfolio-card__image"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="portfolio-card__image portfolio-card__image--placeholder" aria-hidden="true" />
+                )}
+
+                <div className="portfolio-card__header">
+                  <span className="portfolio-card__title-bar" title={item.title}>
+                    {item.title}
+                  </span>
+                </div>
+
+                <div className="portfolio-card__descriptions">
+                  <p className="portfolio-card__meta">
+                    {item.category} · {item.subcategory}
+                    {item.year ? ` · ${item.year}` : ""}
+                  </p>
+                  <p className="portfolio-card__description">{item.description}</p>
+                  {item.technologies.length > 0 ? (
+                    <div className="portfolio-card__tags">
+                      {item.technologies.slice(0, 5).map((tag) => (
+                        <span key={tag}>{tag}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <span className="portfolio-card__cta" aria-hidden="true">
+                    View Details →
+                  </span>
+                </div>
               </Link>
-            ) : null}
-            <div className="portfolio-card__content">
-              <p className="portfolio-card__meta">
-                {item.category} · {item.subcategory}
-              </p>
-              <h3 className="portfolio-card__title">{item.title}</h3>
-              <p className="portfolio-card__description">{item.description}</p>
-              <div className="portfolio-card__tags">
-                {item.technologies.slice(0, 5).map((tag) => (
-                  <span key={tag}>{tag}</span>
-                ))}
-              </div>
-            </div>
-            <div className="portfolio-card__actions">
-              <button type="button" onClick={() => setQuickViewItem(item)}>
-                Quick View
-              </button>
-              <Link to={`/fast/portfolio/${item.id}`}>Detail View</Link>
+
               <button
                 type="button"
-                aria-pressed={favoritesSet.has(item.id)}
+                aria-pressed={isFavorited}
+                className={`portfolio-card__favorite ${isFavorited ? "is-active" : ""}`}
+                aria-label={isFavorited ? `Unfavorite ${item.title}` : `Favorite ${item.title}`}
                 onClick={() => toggleFavorite(item.id)}
               >
-                {favoritesSet.has(item.id) ? "Unfavorite" : "Favorite"}
+                <i
+                  className={isFavorited ? "fas fa-heart" : "far fa-heart"}
+                  aria-hidden="true"
+                />
               </button>
-              <button
-                type="button"
-                aria-pressed={compareSet.has(item.id)}
-                disabled={!compareSet.has(item.id) && !canAddMore}
-                onClick={() => {
-                  if (!compareSet.has(item.id) && !canAddMore) {
-                    setCompareCapNotice(
-                      `Compare limit reached. Remove an item before adding another.`,
-                    );
-                    return;
-                  }
-                  setCompareCapNotice("");
-                  toggleCompare(item.id);
-                }}
-              >
-                {compareSet.has(item.id) ? "Remove Compare" : "Compare"}
-              </button>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
-
-      {compareCapNotice ? (
-        <p className="portfolio-compare-cap-notice" role="status" aria-live="polite">
-          {compareCapNotice}
-        </p>
-      ) : null}
-
-      <PortfolioCompareTray
-        items={compareItems}
-        maxItems={compareLimit}
-        onClear={clearCompare}
-        onRemove={toggleCompare}
-        statusMessage={compareCapNotice}
-      />
-
-      {quickViewItem ? (
-        <div className="portfolio-quick-view" role="dialog" aria-modal="true" aria-labelledby="quick-view-title">
-          <div ref={quickViewPanelRef} className="portfolio-quick-view__card">
-            <h2 id="quick-view-title">{quickViewItem.title}</h2>
-            <p>{quickViewItem.description}</p>
-            <p>
-              <strong>Category:</strong> {quickViewItem.category}
-            </p>
-            <p>
-              <strong>Technologies:</strong> {quickViewItem.technologies.join(", ") || "N/A"}
-            </p>
-            <button ref={closeButtonRef} type="button" onClick={() => setQuickViewItem(null)}>
-              Close
-            </button>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
