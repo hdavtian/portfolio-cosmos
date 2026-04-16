@@ -4,6 +4,7 @@
 - [ ] `/` landing renders split layout and both entry buttons.
 - [ ] `/cinematic` loads the existing cinematic flow.
 - [ ] `/fast` loads fast shell with top nav and footer resume link.
+- [ ] Route-level loading fallback appears briefly on lazy route transitions.
 
 ## Fast Navigation
 - [ ] Top nav active states reflect route.
@@ -11,6 +12,7 @@
 - [ ] Context nav appears for portfolio and resume sections.
 - [ ] Mobile layout stacks cleanly.
 - [ ] Mobile top-nav menu toggle opens/closes nav and tools correctly.
+- [ ] Lazy-loaded fast routes (`/fast`, `/fast/portfolio`, `/fast/resume`) resolve without visual break.
 
 ## Theming
 - [ ] Theme switch updates colors/fonts immediately.

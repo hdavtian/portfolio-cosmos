@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import type { ReactNode } from "react";
 import {
   Navigate,
   RouterProvider,
@@ -6,37 +7,64 @@ import {
   type RouteObject,
 } from "react-router-dom";
 import { RootLayout } from "./layouts/RootLayout";
-import { FastLayout } from "./layouts/FastLayout";
-import { LandingChoicePage } from "./pages/LandingChoicePage";
-import { FastHomePage } from "../features/fast/pages/FastHomePage";
-import { PortfolioPage } from "../features/fast/pages/PortfolioPage";
-import { PortfolioDetailPage } from "../features/fast/pages/PortfolioDetailPage";
-import { ResumePage } from "../features/fast/pages/ResumePage";
 
 const CinematicExperience = lazy(() => import("../App"));
+const FastLayout = lazy(() =>
+  import("./layouts/FastLayout").then((module) => ({
+    default: module.FastLayout,
+  })),
+);
+const LandingChoicePage = lazy(() =>
+  import("./pages/LandingChoicePage").then((module) => ({
+    default: module.LandingChoicePage,
+  })),
+);
+const FastHomePage = lazy(() =>
+  import("../features/fast/pages/FastHomePage").then((module) => ({
+    default: module.FastHomePage,
+  })),
+);
+const PortfolioPage = lazy(() =>
+  import("../features/fast/pages/PortfolioPage").then((module) => ({
+    default: module.PortfolioPage,
+  })),
+);
+const PortfolioDetailPage = lazy(() =>
+  import("../features/fast/pages/PortfolioDetailPage").then((module) => ({
+    default: module.PortfolioDetailPage,
+  })),
+);
+const ResumePage = lazy(() =>
+  import("../features/fast/pages/ResumePage").then((module) => ({
+    default: module.ResumePage,
+  })),
+);
 
 const routes: RouteObject[] = [
   {
     path: "/",
     element: <RootLayout />,
     children: [
-      { index: true, element: <LandingChoicePage /> },
+      { index: true, element: <LazyRoute><LandingChoicePage /></LazyRoute> },
       {
         path: "cinematic",
         element: (
-          <Suspense fallback={<div className="route-loading">Loading cinematic experience...</div>}>
+          <LazyRoute message="Loading cinematic experience...">
             <CinematicExperience />
-          </Suspense>
+          </LazyRoute>
         ),
       },
       {
         path: "fast",
-        element: <FastLayout />,
+        element: <LazyRoute><FastLayout /></LazyRoute>,
         children: [
-          { index: true, element: <FastHomePage /> },
-          { path: "portfolio", element: <PortfolioPage /> },
-          { path: "portfolio/:portfolioId", element: <PortfolioDetailPage /> },
-          { path: "resume", element: <ResumePage /> },
+          { index: true, element: <LazyRoute><FastHomePage /></LazyRoute> },
+          { path: "portfolio", element: <LazyRoute><PortfolioPage /></LazyRoute> },
+          {
+            path: "portfolio/:portfolioId",
+            element: <LazyRoute><PortfolioDetailPage /></LazyRoute>,
+          },
+          { path: "resume", element: <LazyRoute><ResumePage /></LazyRoute> },
           { path: "*", element: <Navigate to="/fast" replace /> },
         ],
       },
@@ -49,4 +77,14 @@ const router = createBrowserRouter(routes);
 
 export function AppRouter() {
   return <RouterProvider router={router} />;
+}
+
+function LazyRoute({
+  children,
+  message = "Loading...",
+}: {
+  children: ReactNode;
+  message?: string;
+}) {
+  return <Suspense fallback={<div className="route-loading">{message}</div>}>{children}</Suspense>;
 }

@@ -70,6 +70,14 @@
   - compare/remove controls on portfolio cards,
   - sticky compare tray with selected project snapshot and quick remove/clear actions.
 
+### Iteration 5
+- Improved route-level performance behavior:
+  - lazy-loaded landing, fast layout, and fast page routes behind suspense fallbacks.
+- Preserved cinematic separation:
+  - cinematic route remains isolated and lazy-loaded as its own path.
+- Tightened navigation loading UX:
+  - consistent loading fallback message handling for route transitions.
+
 ## Verification Checklist
 - [ ] `/cinematic` loads and preserves existing intro/ThreeJS path.
 - [ ] `/fast` renders without importing/instantiating ThreeJS scene components at runtime.
@@ -82,3 +90,5 @@
 - [ ] Portfolio detail page shows metadata/technology chips and supports adjacent project navigation.
 - [ ] Mobile top-nav toggle works across breakpoints and keeps navigation/theme controls usable.
 - [ ] Compare selection persists, enforces max selection, and compare tray controls work reliably.
+- [ ] Fast route transitions show stable loading fallbacks without breaking layout.
+- [ ] Lazy-loaded route boundaries do not regress `/cinematic` behavior.
