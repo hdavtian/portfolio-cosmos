@@ -52,6 +52,16 @@
   - query layer now supports fallback to local JSON content when API fetch fails.
 - Added reusable empty-state component for no-results and unavailable-data scenarios.
 
+### Iteration 3
+- Expanded portfolio filtering depth:
+  - added subcategory filtering and favorites-only toggle with persistence.
+- Enhanced result awareness:
+  - added live result count text for filtered portfolios.
+- Enhanced detail experience:
+  - added metadata facts (year/media count), technology chips, and adjacent project navigation.
+- Improved detail-state handling:
+  - unified unavailable/not-found states using reusable empty-state UI.
+
 ## Verification Checklist
 - [ ] `/cinematic` loads and preserves existing intro/ThreeJS path.
 - [ ] `/fast` renders without importing/instantiating ThreeJS scene components at runtime.
@@ -60,3 +70,5 @@
 - [ ] Favorites persist via localStorage.
 - [ ] Portfolio filters/preferences persist after reload.
 - [ ] Quick view supports keyboard close with `Escape` and has visible focus.
+- [ ] Subcategory and favorites-only filters persist and interact correctly with category selection.
+- [ ] Portfolio detail page shows metadata/technology chips and supports adjacent project navigation.

@@ -31,6 +31,11 @@ export function PortfolioPage() {
     "all",
     (value): value is string => typeof value === "string",
   );
+  const [subcategoryFilter, setSubcategoryFilter] = usePersistentState<string>(
+    "fast-experience:portfolio:subcategory",
+    "all",
+    (value): value is string => typeof value === "string",
+  );
   const [searchTerm, setSearchTerm] = usePersistentState<string>(
     "fast-experience:portfolio:search",
     "",
@@ -40,6 +45,11 @@ export function PortfolioPage() {
     "fast-experience:portfolio:scale",
     1,
     (value): value is number => typeof value === "number" && value >= 0.75 && value <= 1.35,
+  );
+  const [favoritesOnly, setFavoritesOnly] = usePersistentState<boolean>(
+    "fast-experience:portfolio:favorites-only",
+    false,
+    (value): value is boolean => typeof value === "boolean",
   );
   const [quickViewItem, setQuickViewItem] = useState<PortfolioItem | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -56,6 +66,13 @@ export function PortfolioPage() {
     () => ["all", ...new Set(allItems.map((item) => item.category))],
     [allItems],
   );
+  const subcategoryOptions = useMemo(() => {
+    const sourceItems =
+      categoryFilter === "all"
+        ? allItems
+        : allItems.filter((item) => item.category === categoryFilter);
+    return ["all", ...new Set(sourceItems.map((item) => item.subcategory))];
+  }, [allItems, categoryFilter]);
 
   const filteredItems = useMemo(() => {
     const lowered = searchTerm.trim().toLowerCase();
@@ -64,6 +81,9 @@ export function PortfolioPage() {
       .filter((item) => {
         const matchesCategory =
           categoryFilter === "all" ? true : item.category === categoryFilter;
+        const matchesSubcategory =
+          subcategoryFilter === "all" ? true : item.subcategory === subcategoryFilter;
+        const matchesFavorites = favoritesOnly ? favoritesSet.has(item.id) : true;
         const matchesSearch =
           lowered.length === 0
             ? true
@@ -71,14 +91,32 @@ export function PortfolioPage() {
                 .toLowerCase()
                 .includes(lowered);
 
-        return matchesCategory && matchesSearch;
+        return (
+          matchesCategory &&
+          matchesSubcategory &&
+          matchesFavorites &&
+          matchesSearch
+        );
       })
       .sort((a, b) => {
         if (sortMode === "title") return a.title.localeCompare(b.title);
         if (sortMode === "oldest") return (a.year ?? 0) - (b.year ?? 0);
         return (b.year ?? 0) - (a.year ?? 0);
       });
-  }, [allItems, categoryFilter, searchTerm, sortMode]);
+  }, [
+    allItems,
+    categoryFilter,
+    subcategoryFilter,
+    favoritesOnly,
+    favoritesSet,
+    searchTerm,
+    sortMode,
+  ]);
+
+  useEffect(() => {
+    if (subcategoryOptions.includes(subcategoryFilter)) return;
+    setSubcategoryFilter("all");
+  }, [subcategoryFilter, subcategoryOptions, setSubcategoryFilter]);
 
   const updateViewMode = (nextMode: ViewMode) => {
     setViewMode(nextMode);
@@ -148,6 +186,20 @@ export function PortfolioPage() {
         </label>
 
         <label>
+          Subcategory
+          <select
+            value={subcategoryFilter}
+            onChange={(event) => setSubcategoryFilter(event.target.value)}
+          >
+            {subcategoryOptions.map((subcategory) => (
+              <option key={subcategory} value={subcategory}>
+                {subcategory}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
           Sort
           <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
             <option value="newest">Newest</option>
@@ -165,6 +217,15 @@ export function PortfolioPage() {
             step="0.05"
             value={cardScale}
             onChange={(event) => setCardScale(Number(event.target.value))}
+          />
+        </label>
+
+        <label className="portfolio-toolbar__checkbox">
+          Favorites Only
+          <input
+            type="checkbox"
+            checked={favoritesOnly}
+            onChange={(event) => setFavoritesOnly(event.target.checked)}
           />
         </label>
 
@@ -196,10 +257,16 @@ export function PortfolioPage() {
           onAction={() => {
             setSearchTerm("");
             setCategoryFilter("all");
+            setSubcategoryFilter("all");
+            setFavoritesOnly(false);
             setSortMode("newest");
           }}
         />
       ) : null}
+
+      <p className="portfolio-results__count" aria-live="polite">
+        Showing {filteredItems.length} of {allItems.length} projects
+      </p>
 
       <div
         className={`portfolio-results ${viewMode === "card" ? "portfolio-results--card" : ""}`}

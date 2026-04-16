@@ -241,6 +241,19 @@
   color: var(--color-text-muted);
 }
 
+.portfolio-toolbar__checkbox {
+  display: flex;
+  flex-direction: row;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 1.35rem;
+}
+
+.portfolio-toolbar__checkbox input {
+  width: auto;
+}
+
 .portfolio-toolbar input,
 .portfolio-toolbar select,
 .portfolio-toolbar button {
@@ -271,6 +284,12 @@
     minmax(calc(18rem * var(--portfolio-scale)), 1fr)
   );
   gap: 0.85rem;
+}
+
+.portfolio-results__count {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
 }
 
 .portfolio-results--card {
@@ -399,6 +418,28 @@
   margin-top: 1rem;
 }
 
+.portfolio-detail__facts {
+  display: flex;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  margin: 0.5rem 0 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.portfolio-detail__tech {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+}
+
+.portfolio-detail__tech span {
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+}
+
 .portfolio-detail__media-item {
   margin: 0;
 }
@@ -408,6 +449,21 @@
   aspect-ratio: 16 / 9;
   object-fit: cover;
   border-radius: 0.5rem;
+}
+
+.portfolio-detail__adjacent {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.9rem;
+  margin-top: 0.85rem;
+}
+
+.portfolio-detail__adjacent a {
+  color: var(--color-accent);
+  text-decoration: none;
+  font-size: 0.9rem;
 }
 
 .resume-page__job {

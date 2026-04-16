@@ -19,15 +19,24 @@
 ## Portfolio
 - [ ] Grid and card views both render correctly.
 - [ ] Filtering and sorting update results.
+- [ ] Subcategory filtering behaves correctly and resets when category scope changes.
+- [ ] Favorites-only filter shows only saved projects.
 - [ ] Card size slider changes card density.
 - [ ] Favorite/unfavorite persists after reload.
 - [ ] Quick view opens and closes cleanly.
 - [ ] Quick view closes with `Escape` key and receives focus on open.
 - [ ] Detail view route loads expected project.
 - [ ] View/sort/category/search/card size persist after reload.
+- [ ] Subcategory and favorites-only state persist after reload.
 - [ ] Empty state appears when filters return no matches.
+- [ ] Result count text updates as filters change.
 
 ## Resume
 - [ ] Resume route renders summary and experience from API.
 - [ ] Footer resume link opens resume page from any fast route.
 - [ ] Resume still renders if API is unavailable (fallback content path).
+
+## Portfolio Detail
+- [ ] Detail page shows category/subcategory/year/media metadata.
+- [ ] Technology chips render for projects with technologies.
+- [ ] Adjacent previous/next project links navigate correctly.
