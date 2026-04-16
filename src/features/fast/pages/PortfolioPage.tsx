@@ -1,24 +1,14 @@
 import { useEffect, useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { usePortfolioCoresQuery } from "../../../lib/query/contentQueries";
 import { flattenPortfolioCores } from "../lib/portfolioTransform";
 import { useFavorites } from "../hooks/useFavorites";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { EmptyState } from "../components/EmptyState";
 
-type ViewMode = "grid" | "card";
 type SortMode = "newest" | "oldest" | "title";
 
 export function PortfolioPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const viewParam = searchParams.get("view");
-  const initialView: ViewMode = viewParam === "card" ? "card" : "grid";
-
-  const [viewMode, setViewMode] = usePersistentState<ViewMode>(
-    "fast-experience:portfolio:view",
-    initialView,
-    (value): value is ViewMode => value === "grid" || value === "card",
-  );
   const [sortMode, setSortMode] = usePersistentState<SortMode>(
     "fast-experience:portfolio:sort",
     "newest",
@@ -164,13 +154,6 @@ export function PortfolioPage() {
     setSortMode,
   ]);
 
-  const updateViewMode = (nextMode: ViewMode) => {
-    setViewMode(nextMode);
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set("view", nextMode);
-    setSearchParams(nextParams);
-  };
-
   if (portfolioQuery.isPending || (portfolioQuery.isFetching && !portfolioQuery.data)) {
     return <div className="fast-panel">Loading portfolio content...</div>;
   }
@@ -263,25 +246,6 @@ export function PortfolioPage() {
             onChange={(event) => setFavoritesOnly(event.target.checked)}
           />
         </label>
-
-        <div className="portfolio-toolbar__view-toggle" role="group" aria-label="View mode">
-          <button
-            type="button"
-            onClick={() => updateViewMode("grid")}
-            className={viewMode === "grid" ? "is-active" : ""}
-            aria-pressed={viewMode === "grid"}
-          >
-            Grid View
-          </button>
-          <button
-            type="button"
-            onClick={() => updateViewMode("card")}
-            className={viewMode === "card" ? "is-active" : ""}
-            aria-pressed={viewMode === "card"}
-          >
-            Card View
-          </button>
-        </div>
       </div>
 
       {filteredItems.length === 0 ? (
@@ -304,7 +268,7 @@ export function PortfolioPage() {
       </p>
 
       <div
-        className={`portfolio-results ${viewMode === "card" ? "portfolio-results--card" : ""}`}
+        className="portfolio-results"
         style={{ ["--portfolio-scale" as string]: String(cardScale) }}
       >
         {filteredItems.map((item) => {
@@ -347,7 +311,7 @@ export function PortfolioPage() {
                     </div>
                   ) : null}
                   <span className="portfolio-card__cta" aria-hidden="true">
-                    View Details →
+                    View →
                   </span>
                 </div>
               </Link>

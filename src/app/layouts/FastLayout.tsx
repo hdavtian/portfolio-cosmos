@@ -1,8 +1,4 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
-import {
-  FastContextNav,
-  type ContextNavItem,
-} from "../../features/fast/components/FastContextNav";
+import { NavLink, Outlet } from "react-router-dom";
 import { FastTopNav } from "../../features/fast/components/FastTopNav";
 
 const prefetchCinematic = () => {
@@ -10,9 +6,6 @@ const prefetchCinematic = () => {
 };
 
 export function FastLayout() {
-  const location = useLocation();
-  const context = getContextNav(location.pathname);
-
   return (
     <div className="fast-layout">
       <a href="#fast-main-content" className="skip-link">
@@ -20,7 +13,7 @@ export function FastLayout() {
       </a>
       <FastTopNav />
       <div className="fast-layout__body">
-        {context ? <FastContextNav title={context.title} items={context.items} /> : null}
+        <aside className="fast-layout__sidebar" aria-hidden="true" />
         <main id="fast-main-content" className="fast-layout__content">
           <Outlet />
         </main>
@@ -40,26 +33,4 @@ export function FastLayout() {
       </footer>
     </div>
   );
-}
-
-function getContextNav(pathname: string): { title: string; items: ContextNavItem[] } | null {
-  if (pathname.startsWith("/fast/portfolio")) {
-    return {
-      title: "Portfolio",
-      items: [
-        { to: "/fast/portfolio", label: "Browse", exact: true },
-        { to: "/fast/portfolio?view=grid", label: "Grid View" },
-        { to: "/fast/portfolio?view=card", label: "Card View" },
-      ],
-    };
-  }
-
-  if (pathname === "/fast/resume") {
-    return {
-      title: "Resume",
-      items: [{ to: "/fast/resume", label: "Text Resume", exact: true }],
-    };
-  }
-
-  return null;
 }
