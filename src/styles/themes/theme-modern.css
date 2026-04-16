@@ -1,0 +1,15 @@
+:root[data-theme="modern"] {
+  --font-body: "Inter", "Segoe UI", sans-serif;
+  --font-nav: "Inter", "Segoe UI", sans-serif;
+  --font-title: "Space Grotesk", "Segoe UI", sans-serif;
+  --color-bg: #0b0f19;
+  --color-surface: #131a2a;
+  --color-surface-elevated: #1b2438;
+  --color-text: #e9edf7;
+  --color-text-muted: #b8bfd1;
+  --color-border: #2a3652;
+  --color-accent: #4db6ff;
+  --color-accent-strong: #1ea7ff;
+  --color-accent-contrast: #07111f;
+  --color-focus: #9ee1ff;
+}

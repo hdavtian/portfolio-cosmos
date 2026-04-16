@@ -1,0 +1,15 @@
+:root[data-theme="matrix"] {
+  --font-body: "Courier New", monospace;
+  --font-nav: "Courier New", monospace;
+  --font-title: "Courier New", monospace;
+  --color-bg: #020b03;
+  --color-surface: #041607;
+  --color-surface-elevated: #08210e;
+  --color-text: #9effb2;
+  --color-text-muted: #66c578;
+  --color-border: #0d3b18;
+  --color-accent: #47ff67;
+  --color-accent-strong: #33f054;
+  --color-accent-contrast: #011b06;
+  --color-focus: #b6ffbf;
+}

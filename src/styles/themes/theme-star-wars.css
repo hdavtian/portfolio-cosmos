@@ -1,0 +1,15 @@
+:root[data-theme="star-wars"] {
+  --font-body: "Arial", sans-serif;
+  --font-nav: "Arial", sans-serif;
+  --font-title: "Impact", "Arial Black", sans-serif;
+  --color-bg: #06060b;
+  --color-surface: #111118;
+  --color-surface-elevated: #191925;
+  --color-text: #f3f0d0;
+  --color-text-muted: #d8cfa3;
+  --color-border: #363246;
+  --color-accent: #f6d730;
+  --color-accent-strong: #f3c606;
+  --color-accent-contrast: #1e1600;
+  --color-focus: #ffe88a;
+}

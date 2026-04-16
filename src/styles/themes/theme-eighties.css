@@ -1,0 +1,15 @@
+:root[data-theme="eighties"] {
+  --font-body: "Trebuchet MS", sans-serif;
+  --font-nav: "Trebuchet MS", sans-serif;
+  --font-title: "Verdana", sans-serif;
+  --color-bg: #13031e;
+  --color-surface: #1f0a2f;
+  --color-surface-elevated: #2b1241;
+  --color-text: #ffe8ff;
+  --color-text-muted: #e6b7ff;
+  --color-border: #5a2d78;
+  --color-accent: #ff4cf3;
+  --color-accent-strong: #48d4ff;
+  --color-accent-contrast: #260025;
+  --color-focus: #ffc5ff;
+}

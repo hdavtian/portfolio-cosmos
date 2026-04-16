@@ -1,0 +1,15 @@
+:root[data-theme="film-noir"] {
+  --font-body: "Georgia", serif;
+  --font-nav: "Georgia", serif;
+  --font-title: "Times New Roman", serif;
+  --color-bg: #111111;
+  --color-surface: #1d1d1d;
+  --color-surface-elevated: #2a2a2a;
+  --color-text: #f0f0f0;
+  --color-text-muted: #bebebe;
+  --color-border: #4d4d4d;
+  --color-accent: #f7f7f7;
+  --color-accent-strong: #d0d0d0;
+  --color-accent-contrast: #101010;
+  --color-focus: #ffffff;
+}

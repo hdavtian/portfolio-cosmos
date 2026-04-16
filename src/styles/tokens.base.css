@@ -1,0 +1,51 @@
+:root {
+  --font-body: "Inter", "Segoe UI", sans-serif;
+  --font-nav: "Inter", "Segoe UI", sans-serif;
+  --font-title: "Space Grotesk", "Segoe UI", sans-serif;
+
+  --color-bg: #0b0f19;
+  --color-surface: #131a2a;
+  --color-surface-elevated: #1b2438;
+  --color-text: #e9edf7;
+  --color-text-muted: #b8bfd1;
+  --color-border: #2a3652;
+  --color-accent: #4db6ff;
+  --color-accent-strong: #1ea7ff;
+  --color-accent-contrast: #07111f;
+  --color-focus: #9ee1ff;
+  --shadow-elevated: 0 14px 30px rgba(2, 6, 12, 0.35);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+a {
+  color: var(--color-accent);
+}
+
+.route-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--color-text);
+}
+
+.app-shell {
+  min-height: 100vh;
+}
