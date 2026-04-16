@@ -71,6 +71,13 @@ export function PortfolioPage() {
     return ["all", ...new Set(sourceItems.map((item) => item.subcategory))];
   }, [allItems, categoryFilter]);
 
+  const subcategoryDisabled = useMemo(() => {
+    const meaningful = subcategoryOptions.filter(
+      (option) => option !== "all" && option !== "General",
+    );
+    return meaningful.length === 0;
+  }, [subcategoryOptions]);
+
   const filteredItems = useMemo(() => {
     const lowered = searchTerm.trim().toLowerCase();
 
@@ -111,9 +118,18 @@ export function PortfolioPage() {
   ]);
 
   useEffect(() => {
+    if (subcategoryDisabled && subcategoryFilter !== "all") {
+      setSubcategoryFilter("all");
+      return;
+    }
     if (subcategoryOptions.includes(subcategoryFilter)) return;
     setSubcategoryFilter("all");
-  }, [subcategoryFilter, subcategoryOptions, setSubcategoryFilter]);
+  }, [
+    subcategoryFilter,
+    subcategoryOptions,
+    subcategoryDisabled,
+    setSubcategoryFilter,
+  ]);
 
   useEffect(() => {
     if (filteredItems.length > 0) return;
@@ -196,11 +212,19 @@ export function PortfolioPage() {
           </select>
         </label>
 
-        <label>
+        <label
+          className={subcategoryDisabled ? "portfolio-toolbar__label--disabled" : ""}
+        >
           Subcategory
           <select
             value={subcategoryFilter}
             onChange={(event) => setSubcategoryFilter(event.target.value)}
+            disabled={subcategoryDisabled}
+            title={
+              subcategoryDisabled
+                ? "No subcategories available for this selection"
+                : undefined
+            }
           >
             {subcategoryOptions.map((subcategory) => (
               <option key={subcategory} value={subcategory}>

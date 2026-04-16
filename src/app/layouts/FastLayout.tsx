@@ -1,9 +1,13 @@
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   FastContextNav,
   type ContextNavItem,
 } from "../../features/fast/components/FastContextNav";
 import { FastTopNav } from "../../features/fast/components/FastTopNav";
+
+const prefetchCinematic = () => {
+  void import("../../App");
+};
 
 export function FastLayout() {
   const location = useLocation();
@@ -23,11 +27,16 @@ export function FastLayout() {
       </div>
       <footer className="fast-footer">
         <p className="fast-footer__copy">
-          Looking for a text-forward version of experience history?
+          harmadavtian.com | {new Date().getFullYear()}
         </p>
-        <Link className="fast-footer__resume-link" to="/fast/resume">
-          Open Resume
-        </Link>
+        <NavLink
+          to="/cinematic"
+          className="fast-footer__cinematic-link"
+          onMouseEnter={prefetchCinematic}
+          onFocus={prefetchCinematic}
+        >
+          Cinematic Experience →
+        </NavLink>
       </footer>
     </div>
   );

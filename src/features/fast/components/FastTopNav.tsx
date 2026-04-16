@@ -5,15 +5,12 @@ import { useTheme } from "../../../theme/ThemeProvider";
 export function FastTopNav() {
   const { themeId, setThemeId, themes } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
-  const prefetchCinematic = () => {
-    void import("../../../App");
-  };
 
   return (
     <header className="fast-top-nav">
       <div className="fast-top-nav__inner">
         <NavLink to="/fast" className="fast-top-nav__brand">
-          Fast Experience
+          HarmaDavtian.com
         </NavLink>
 
         <button
@@ -31,9 +28,6 @@ export function FastTopNav() {
           className={`fast-top-nav__links ${menuOpen ? "is-open" : ""}`}
           aria-label="Primary navigation"
         >
-          <NavLink to="/fast" end className={({ isActive }) => navClass(isActive)}>
-            Overview
-          </NavLink>
           <NavLink to="/fast/portfolio" className={({ isActive }) => navClass(isActive)}>
             Portfolio
           </NavLink>
@@ -55,14 +49,6 @@ export function FastTopNav() {
               </option>
             ))}
           </select>
-          <NavLink
-            to="/cinematic"
-            className="fast-top-nav__cinematic-link"
-            onMouseEnter={prefetchCinematic}
-            onFocus={prefetchCinematic}
-          >
-            Cinematic
-          </NavLink>
         </div>
       </div>
     </header>

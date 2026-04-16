@@ -7,6 +7,7 @@ import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./styles/tailwind.css";
 import "./styles/tokens.base.css";
 import "./styles/themes/theme-modern.css";
+import "./styles/themes/theme-light.css";
 import "./styles/themes/theme-matrix.css";
 import "./styles/themes/theme-star-wars.css";
 import "./styles/themes/theme-eighties.css";

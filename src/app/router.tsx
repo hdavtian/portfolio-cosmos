@@ -19,11 +19,6 @@ const LandingChoicePage = lazy(() =>
     default: module.LandingChoicePage,
   })),
 );
-const FastHomePage = lazy(() =>
-  import("../features/fast/pages/FastHomePage").then((module) => ({
-    default: module.FastHomePage,
-  })),
-);
 const PortfolioPage = lazy(() =>
   import("../features/fast/pages/PortfolioPage").then((module) => ({
     default: module.PortfolioPage,
@@ -58,7 +53,7 @@ const routes: RouteObject[] = [
         path: "fast",
         element: <LazyRoute><FastLayout /></LazyRoute>,
         children: [
-          { index: true, element: <LazyRoute><FastHomePage /></LazyRoute> },
+          { index: true, element: <Navigate to="/fast/portfolio" replace /> },
           { path: "portfolio", element: <LazyRoute><PortfolioPage /></LazyRoute> },
           {
             path: "portfolio/:portfolioId",

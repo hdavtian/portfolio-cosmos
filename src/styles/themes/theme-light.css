@@ -1,0 +1,16 @@
+:root[data-theme="light"] {
+  --font-body: "Inter", "Segoe UI", sans-serif;
+  --font-nav: "Inter", "Segoe UI", sans-serif;
+  --font-title: "Space Grotesk", "Segoe UI", sans-serif;
+  --color-bg: #f7f8fb;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #eef1f7;
+  --color-text: #0e1726;
+  --color-text-muted: #56607a;
+  --color-border: #d6dbe6;
+  --color-accent: #1f6feb;
+  --color-accent-strong: #0b52c7;
+  --color-accent-contrast: #ffffff;
+  --color-focus: #2c82ff;
+  --shadow-elevated: 0 14px 30px rgba(15, 25, 45, 0.12);
+}

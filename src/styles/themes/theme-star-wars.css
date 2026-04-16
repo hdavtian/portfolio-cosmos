@@ -1,15 +1,16 @@
 :root[data-theme="star-wars"] {
-  --font-body: "Arial", sans-serif;
-  --font-nav: "Arial", sans-serif;
-  --font-title: "Impact", "Arial Black", sans-serif;
-  --color-bg: #06060b;
-  --color-surface: #111118;
-  --color-surface-elevated: #191925;
-  --color-text: #f3f0d0;
-  --color-text-muted: #d8cfa3;
-  --color-border: #363246;
-  --color-accent: #f6d730;
-  --color-accent-strong: #f3c606;
-  --color-accent-contrast: #1e1600;
-  --color-focus: #ffe88a;
+  --font-body: "Oswald", "Trebuchet MS", "Arial", sans-serif;
+  --font-nav: "Oswald", "Trebuchet MS", "Arial", sans-serif;
+  --font-title: "Oswald", "Trebuchet MS", "Arial Black", sans-serif;
+  --color-bg: #000000;
+  --color-surface: #0a0a12;
+  --color-surface-elevated: #15151f;
+  --color-text: #f4eccd;
+  --color-text-muted: #b8b08c;
+  --color-border: #2a2535;
+  --color-accent: #ffe81f;
+  --color-accent-strong: #ffd900;
+  --color-accent-contrast: #000000;
+  --color-focus: #fff48a;
+  --shadow-elevated: 0 14px 30px rgba(255, 232, 31, 0.08);
 }
