@@ -4,6 +4,7 @@ import { usePortfolioCoresQuery } from "../../../lib/query/contentQueries";
 import { flattenPortfolioCores } from "../lib/portfolioTransform";
 import { useFavorites } from "../hooks/useFavorites";
 import { usePersistentState } from "../hooks/usePersistentState";
+import { useVisited } from "../hooks/useVisited";
 import { EmptyState } from "../components/EmptyState";
 
 type SortMode = "newest" | "oldest" | "title";
@@ -43,6 +44,7 @@ export function PortfolioPage() {
 
   const portfolioQuery = usePortfolioCoresQuery();
   const { favoritesSet, toggleFavorite } = useFavorites();
+  const { visitedSet, markVisited, clearVisited } = useVisited();
 
   const allItems = useMemo(
     () => flattenPortfolioCores(portfolioQuery.data?.payload ?? []),
@@ -263,9 +265,22 @@ export function PortfolioPage() {
         />
       ) : null}
 
-      <p className="portfolio-results__count" aria-live="polite">
-        Showing {filteredItems.length} of {allItems.length} projects
-      </p>
+      <div className="portfolio-results__summary">
+        <p className="portfolio-results__count" aria-live="polite">
+          Showing {filteredItems.length} of {allItems.length} projects
+          {visitedSet.size > 0 ? ` · ${visitedSet.size} viewed` : ""}
+        </p>
+        {visitedSet.size > 0 ? (
+          <button
+            type="button"
+            className="portfolio-results__clear-visited"
+            onClick={clearVisited}
+            title="Clear viewed history"
+          >
+            Clear viewed
+          </button>
+        ) : null}
+      </div>
 
       <div
         className="portfolio-results"
@@ -273,12 +288,30 @@ export function PortfolioPage() {
       >
         {filteredItems.map((item) => {
           const isFavorited = favoritesSet.has(item.id);
+          const isVisited = visitedSet.has(item.id);
           return (
-            <article key={item.id} className="portfolio-card">
+            <article
+              key={item.id}
+              className={`portfolio-card ${isVisited ? "is-visited" : ""}`}
+            >
+              {isVisited ? (
+                <span
+                  className="portfolio-card__visited-badge"
+                  aria-label="Already viewed"
+                  title="You've viewed this project"
+                >
+                  <i className="fas fa-check" aria-hidden="true" /> Viewed
+                </span>
+              ) : null}
               <Link
                 to={`/fast/portfolio/${item.id}`}
                 className="portfolio-card__surface"
-                aria-label={`Open details for ${item.title}`}
+                aria-label={
+                  isVisited
+                    ? `Open details for ${item.title} (already viewed)`
+                    : `Open details for ${item.title}`
+                }
+                onClick={() => markVisited(item.id)}
               >
                 {item.image ? (
                   <img

@@ -1,12 +1,26 @@
+import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { usePortfolioCoresQuery } from "../../../lib/query/contentQueries";
 import { flattenPortfolioCores } from "../lib/portfolioTransform";
 import { EmptyState } from "../components/EmptyState";
+import { PortfolioMediaViewer } from "../components/PortfolioMediaViewer";
+import { useVisited } from "../hooks/useVisited";
 
 export function PortfolioDetailPage() {
   const { portfolioId } = useParams();
   const navigate = useNavigate();
   const portfolioQuery = usePortfolioCoresQuery();
+  const { markVisited } = useVisited();
+
+  useEffect(() => {
+    if (portfolioId) {
+      markVisited(portfolioId);
+    }
+  }, [portfolioId, markVisited]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [portfolioId]);
 
   if (portfolioQuery.isPending) {
     return <div className="fast-panel">Loading project details...</div>;
@@ -60,23 +74,28 @@ export function PortfolioDetailPage() {
         </Link>
       </header>
 
-      <section className="portfolio-detail__media-grid">
+      <section className="portfolio-detail__media" aria-label="Project imagery">
         {(item.detailMedia.length > 0
           ? item.detailMedia
           : [
               {
                 id: `${item.id}-cover`,
                 image: item.image,
-                title: item.title,
-                description: item.description,
+                title: "",
+                description: "",
               },
             ]
-        ).map((media) => (
-          <figure key={media.id ?? `${item.id}-${media.image}`} className="portfolio-detail__media-item">
-            {media.image ? <img src={media.image} alt={media.title ?? item.title} loading="lazy" /> : null}
-            <figcaption>{media.title ?? item.title}</figcaption>
-          </figure>
-        ))}
+        )
+          .filter((media) => Boolean(media.image))
+          .map((media, index) => (
+            <PortfolioMediaViewer
+              key={media.id ?? `${item.id}-${media.image}-${index}`}
+              image={media.image as string}
+              alt={media.title || item.title}
+              title={media.title?.trim() || undefined}
+              description={media.description?.trim() || undefined}
+            />
+          ))}
       </section>
 
       <nav className="portfolio-detail__adjacent" aria-label="Adjacent projects">
