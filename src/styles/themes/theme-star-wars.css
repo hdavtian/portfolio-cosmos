@@ -1,0 +1,16 @@
+:root[data-theme="star-wars"] {
+  --font-body: "Oswald", "Trebuchet MS", "Arial", sans-serif;
+  --font-nav: "Oswald", "Trebuchet MS", "Arial", sans-serif;
+  --font-title: "Oswald", "Trebuchet MS", "Arial Black", sans-serif;
+  --color-bg: #000000;
+  --color-surface: #0a0a12;
+  --color-surface-elevated: #15151f;
+  --color-text: #f4eccd;
+  --color-text-muted: #b8b08c;
+  --color-border: #2a2535;
+  --color-accent: #ffe81f;
+  --color-accent-strong: #ffd900;
+  --color-accent-contrast: #000000;
+  --color-focus: #fff48a;
+  --shadow-elevated: 0 14px 30px rgba(255, 232, 31, 0.08);
+}
