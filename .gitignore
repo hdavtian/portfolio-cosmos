@@ -29,3 +29,6 @@ dist-ssr
 *.sln
 *.sw?
 performance-trace/
+
+# Azure App Service / Kudu deployment artifacts
+appservice-logs/
