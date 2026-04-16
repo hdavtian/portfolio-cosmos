@@ -28,6 +28,7 @@ jobs:
         env:
           VITE_POSTHOG_KEY: ${{ vars.VITE_POSTHOG_KEY }}
           VITE_POSTHOG_HOST: ${{ vars.VITE_POSTHOG_HOST }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
 
       - name: Deploy dist to GoDaddy
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
