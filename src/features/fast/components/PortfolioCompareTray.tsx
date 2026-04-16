@@ -5,6 +5,7 @@ interface PortfolioCompareTrayProps {
   onRemove: (id: string) => void;
   onClear: () => void;
   maxItems: number;
+  statusMessage?: string;
 }
 
 export function PortfolioCompareTray({
@@ -12,6 +13,7 @@ export function PortfolioCompareTray({
   onRemove,
   onClear,
   maxItems,
+  statusMessage,
 }: PortfolioCompareTrayProps) {
   if (items.length === 0) return null;
 
@@ -26,6 +28,11 @@ export function PortfolioCompareTray({
       <p className="portfolio-compare-tray__hint">
         {items.length}/{maxItems} selected
       </p>
+      {statusMessage ? (
+        <p className="portfolio-compare-tray__status" role="status" aria-live="polite">
+          {statusMessage}
+        </p>
+      ) : null}
       <div className="portfolio-compare-tray__grid">
         {items.map((item) => (
           <article key={item.id} className="portfolio-compare-tray__card">

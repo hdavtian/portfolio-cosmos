@@ -36,6 +36,7 @@
 - [ ] Compare button allows max 3 selected projects.
 - [ ] Compare tray shows selected projects with remove/clear actions.
 - [ ] Compare selection persists after reload.
+- [ ] Compare-cap notice appears when adding beyond max and auto-clears.
 
 ## Resume
 - [ ] Resume route renders summary and experience from API.
@@ -46,3 +47,7 @@
 - [ ] Detail page shows category/subcategory/year/media metadata.
 - [ ] Technology chips render for projects with technologies.
 - [ ] Adjacent previous/next project links navigate correctly.
+
+## Quick View Accessibility
+- [ ] Tab/Shift+Tab stay within quick-view modal while open.
+- [ ] Focus returns to prior trigger after quick-view closes.

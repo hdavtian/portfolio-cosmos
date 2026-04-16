@@ -55,6 +55,9 @@ export function PortfolioPage() {
   );
   const [quickViewItem, setQuickViewItem] = useState<PortfolioItem | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const quickViewPanelRef = useRef<HTMLDivElement | null>(null);
+  const lastFocusedElementRef = useRef<HTMLElement | null>(null);
+  const [compareCapNotice, setCompareCapNotice] = useState<string>("");
 
   const portfolioQuery = usePortfolioCoresQuery();
   const { favoritesSet, toggleFavorite } = useFavorites();
@@ -145,22 +148,49 @@ export function PortfolioPage() {
 
   useEffect(() => {
     if (!quickViewItem) return;
+    lastFocusedElementRef.current = document.activeElement as HTMLElement | null;
     closeButtonRef.current?.focus();
 
-    const onEscape = (event: KeyboardEvent) => {
+    const onKeydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setQuickViewItem(null);
+        return;
+      }
+
+      if (event.key !== "Tab" || !quickViewPanelRef.current) return;
+
+      const focusable = quickViewPanelRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
     document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onEscape);
+    window.addEventListener("keydown", onKeydown);
 
     return () => {
       document.body.style.overflow = "";
-      window.removeEventListener("keydown", onEscape);
+      window.removeEventListener("keydown", onKeydown);
+      lastFocusedElementRef.current?.focus();
     };
   }, [quickViewItem]);
+
+  useEffect(() => {
+    if (!compareCapNotice) return;
+    const timer = window.setTimeout(() => setCompareCapNotice(""), 2500);
+    return () => window.clearTimeout(timer);
+  }, [compareCapNotice]);
 
   if (portfolioQuery.isPending) {
     return <div className="fast-panel">Loading portfolio content...</div>;
@@ -323,7 +353,16 @@ export function PortfolioPage() {
                 type="button"
                 aria-pressed={compareSet.has(item.id)}
                 disabled={!compareSet.has(item.id) && !canAddMore}
-                onClick={() => toggleCompare(item.id)}
+                onClick={() => {
+                  if (!compareSet.has(item.id) && !canAddMore) {
+                    setCompareCapNotice(
+                      `Compare limit reached. Remove an item before adding another.`,
+                    );
+                    return;
+                  }
+                  setCompareCapNotice("");
+                  toggleCompare(item.id);
+                }}
               >
                 {compareSet.has(item.id) ? "Remove Compare" : "Compare"}
               </button>
@@ -332,16 +371,23 @@ export function PortfolioPage() {
         ))}
       </div>
 
+      {compareCapNotice ? (
+        <p className="portfolio-compare-cap-notice" role="status" aria-live="polite">
+          {compareCapNotice}
+        </p>
+      ) : null}
+
       <PortfolioCompareTray
         items={compareItems}
         maxItems={compareLimit}
         onClear={clearCompare}
         onRemove={toggleCompare}
+        statusMessage={compareCapNotice}
       />
 
       {quickViewItem ? (
         <div className="portfolio-quick-view" role="dialog" aria-modal="true" aria-labelledby="quick-view-title">
-          <div className="portfolio-quick-view__card">
+          <div ref={quickViewPanelRef} className="portfolio-quick-view__card">
             <h2 id="quick-view-title">{quickViewItem.title}</h2>
             <p>{quickViewItem.description}</p>
             <p>

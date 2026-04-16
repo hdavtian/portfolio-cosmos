@@ -415,6 +415,12 @@
   font-size: 0.82rem;
 }
 
+.portfolio-compare-tray__status {
+  margin: 0 0 0.7rem;
+  color: var(--color-accent);
+  font-size: 0.78rem;
+}
+
 .portfolio-compare-tray__grid {
   display: grid;
   gap: 0.55rem;
@@ -478,6 +484,12 @@
   border-radius: 1rem;
   background: var(--color-surface);
   padding: 1rem;
+}
+
+.portfolio-compare-cap-notice {
+  margin: 0.7rem 0 0;
+  color: var(--color-accent);
+  font-size: 0.86rem;
 }
 
 .fast-empty-state {

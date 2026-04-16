@@ -78,6 +78,15 @@
 - Tightened navigation loading UX:
   - consistent loading fallback message handling for route transitions.
 
+### Iteration 6
+- Improved quick-view accessibility behavior:
+  - added focus trap while modal is open,
+  - restored focus to previously focused control on close.
+- Improved compare selection UX feedback:
+  - added user-facing notice when compare selection cap is reached.
+- Aligned compare tray messaging:
+  - compare status feedback also appears within the tray for consistency.
+
 ## Verification Checklist
 - [ ] `/cinematic` loads and preserves existing intro/ThreeJS path.
 - [ ] `/fast` renders without importing/instantiating ThreeJS scene components at runtime.
@@ -92,3 +101,5 @@
 - [ ] Compare selection persists, enforces max selection, and compare tray controls work reliably.
 - [ ] Fast route transitions show stable loading fallbacks without breaking layout.
 - [ ] Lazy-loaded route boundaries do not regress `/cinematic` behavior.
+- [ ] Quick-view modal traps tab focus and restores prior focus on close.
+- [ ] Compare cap feedback appears and clears appropriately during selection attempts.
