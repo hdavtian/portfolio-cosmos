@@ -323,7 +323,18 @@ export function PortfolioPage() {
         {filteredItems.map((item) => (
           <article key={item.id} className="portfolio-card">
             {item.image ? (
-              <img src={item.image} alt={item.title} className="portfolio-card__image" loading="lazy" />
+              <Link
+                to={`/fast/portfolio/${item.id}`}
+                className="portfolio-card__image-link"
+                aria-label={`Open details for ${item.title}`}
+              >
+                <img
+                  src={item.image}
+                  alt={item.title}
+                  className="portfolio-card__image"
+                  loading="lazy"
+                />
+              </Link>
             ) : null}
             <div className="portfolio-card__content">
               <p className="portfolio-card__meta">

@@ -311,18 +311,29 @@
   overflow: hidden;
   background: var(--color-surface-elevated);
   box-shadow: 0 0 0 rgba(0, 0, 0, 0);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease;
 }
 
 .portfolio-card:hover {
-  transform: translateY(-4px);
   box-shadow: var(--shadow-elevated);
+}
+
+.portfolio-card__image-link {
+  display: block;
+  cursor: pointer;
 }
 
 .portfolio-card__image {
   width: 100%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
+  transform: scale(1);
+  transition: transform 0.35s ease;
+}
+
+.portfolio-card:hover .portfolio-card__image,
+.portfolio-card:focus-within .portfolio-card__image {
+  transform: scale(1.03);
 }
 
 .portfolio-card__content {
