@@ -1,0 +1,16 @@
+:root[data-theme="usc"] {
+  --font-body: "Libre Caslon Text", "Times New Roman", Times, serif;
+  --font-nav: "Libre Caslon Text", "Times New Roman", Times, serif;
+  --font-title: "Libre Caslon Text", "Times New Roman", Times, serif;
+  --color-bg: #2b0000;
+  --color-surface: #990000;
+  --color-surface-elevated: #b30000;
+  --color-text: #fff4d8;
+  --color-text-muted: #e7c88d;
+  --color-border: #cc9f00;
+  --color-accent: #ffcc00;
+  --color-accent-strong: #e6b800;
+  --color-accent-contrast: #3d0000;
+  --color-focus: #ffe066;
+  --shadow-elevated: 0 14px 30px rgba(255, 204, 0, 0.2);
+}

@@ -8,6 +8,8 @@ export const themeRegistry: ThemeDefinition[] = [
   { id: "light", label: "Light" },
   { id: "matrix", label: "Matrix" },
   { id: "star-wars", label: "Star Wars" },
+  { id: "lakers", label: "LA Lakers" },
+  { id: "usc", label: "USC" },
   { id: "eighties", label: "80s" },
   { id: "film-noir", label: "Film Noir" },
 ];

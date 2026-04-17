@@ -33,11 +33,6 @@ export function PortfolioPage() {
     "",
     (value): value is string => typeof value === "string",
   );
-  const [cardScale, setCardScale] = usePersistentState<number>(
-    "fast-experience:portfolio:scale",
-    1,
-    (value): value is number => typeof value === "number" && value >= 0.75 && value <= 1.35,
-  );
   const [favoritesOnly, setFavoritesOnly] = usePersistentState<boolean>(
     "fast-experience:portfolio:favorites-only",
     false,
@@ -182,13 +177,15 @@ export function PortfolioPage() {
   }
 
   return (
-    <section className="portfolio-page">
-      <header className="portfolio-page__header">
+    <>
+    <header className="portfolio-page__header">
         <h1 className="portfolio-page__title">Portfolio</h1>
         <p className="portfolio-page__lead">
           Filter by category, subcategory, and favorites for fast project discovery.
         </p>
       </header>
+    <section className="portfolio-page">
+      
 
       <div className="portfolio-toolbar__mobile-toggle-wrap">
         <button
@@ -288,22 +285,6 @@ export function PortfolioPage() {
           </select>
         </label>
 
-        <label>
-          Card Size
-          <input
-            type="range"
-            min="0.75"
-            max="1.35"
-            step="0.05"
-            value={cardScale}
-            onChange={(event) => {
-              const next = Number(event.target.value);
-              setCardScale(next);
-              debouncedFilterTrack("card_size", next);
-            }}
-          />
-        </label>
-
         <label className="portfolio-toolbar__checkbox">
           Favorites Only
           <input
@@ -362,7 +343,6 @@ export function PortfolioPage() {
 
       <div
         className="portfolio-results"
-        style={{ ["--portfolio-scale" as string]: String(cardScale) }}
       >
         {filteredItems.map((item) => {
           const isFavorited = favoritesSet.has(item.id);
@@ -431,9 +411,6 @@ export function PortfolioPage() {
                       ))}
                     </div>
                   ) : null}
-                  <span className="portfolio-card__cta" aria-hidden="true">
-                    View →
-                  </span>
                 </div>
               </Link>
 
@@ -462,5 +439,6 @@ export function PortfolioPage() {
         })}
       </div>
     </section>
+    </>
   );
 }

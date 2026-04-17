@@ -1,0 +1,16 @@
+:root[data-theme="lakers"] {
+  --font-body: "Oswald", "Trebuchet MS", "Arial", sans-serif;
+  --font-nav: "Oswald", "Trebuchet MS", "Arial", sans-serif;
+  --font-title: "Oswald", "Trebuchet MS", "Arial Black", sans-serif;
+  --color-bg: #1b1034;
+  --color-surface: #2a1a4d;
+  --color-surface-elevated: #3a2467;
+  --color-text: #f7f0ff;
+  --color-text-muted: #d5baff;
+  --color-border: #5c3d95;
+  --color-accent: #f9bf3b;
+  --color-accent-strong: #f2aa1f;
+  --color-accent-contrast: #2a1a4d;
+  --color-focus: #ffd97a;
+  --shadow-elevated: 0 14px 30px rgba(249, 191, 59, 0.2);
+}

@@ -10,6 +10,8 @@ import "./styles/themes/theme-modern.css";
 import "./styles/themes/theme-light.css";
 import "./styles/themes/theme-matrix.css";
 import "./styles/themes/theme-star-wars.css";
+import "./styles/themes/theme-lakers.css";
+import "./styles/themes/theme-usc.css";
 import "./styles/themes/theme-eighties.css";
 import "./styles/themes/theme-film-noir.css";
 import "./styles/fast-experience.css";
