@@ -15,7 +15,7 @@
         "image": "/images/legacy-web/acecount-1.png",
         "description": "Equipment reseller storefront and product catalog presentation.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2004,
         "fit": "cover",
         "galleryMedia": [
           { "id": "equipment-acecount-02", "type": "image", "image": "/images/legacy-web/acecount-2.png", "title": "acecount.com - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -29,7 +29,7 @@
         "image": "/images/legacy-web/abm-jax-1.jpg",
         "description": "Placeholder description for ABM JAX.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2006,
         "fit": "cover",
         "galleryMedia": [
           { "id": "equipment-abm-jax-02", "type": "image", "image": "/images/legacy-web/abm-jax-2.jpg", "title": "ABM JAX - View 2", "description": "Placeholder description.", "fit": "cover" }
@@ -41,7 +41,7 @@
         "image": "/images/legacy-web/financial-equipment-1.jpg",
         "description": "Placeholder description for Financial Equipment.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2008,
         "fit": "cover",
         "galleryMedia": [
           { "id": "equipment-financial-equipment-02", "type": "image", "image": "/images/legacy-web/financial-equipment-2.jpg", "title": "Financial Equipment - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -67,7 +67,7 @@
         "image": "/images/legacy-web/agbuypla-1.jpg",
         "description": "Placeholder description for AGBU YPLA.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2003,
         "fit": "cover"
       },
       {
@@ -76,7 +76,7 @@
         "image": "/images/legacy-web/agbuypny-1.jpg",
         "description": "Placeholder description for AGBU YPNY.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2003,
         "fit": "cover",
         "galleryMedia": [
           { "id": "cultural-agbuypny-02", "type": "image", "image": "/images/legacy-web/agbuypny-2.jpg", "title": "AGBU YPNY - View 2", "description": "Placeholder description.", "fit": "cover" }
@@ -101,7 +101,7 @@
         "image": "/images/legacy-web/ardy-for-clerk-1.jpg",
         "description": "Placeholder description for Ardy for Clerk.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2005,
         "fit": "cover",
         "galleryMedia": [
           { "id": "political-ardy-for-clerk-02", "type": "image", "image": "/images/legacy-web/ardy-for-clerk-2.jpg", "title": "Ardy for Clerk - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -115,7 +115,7 @@
         "image": "/images/legacy-web/simmonsforgovernor-1.jpg",
         "description": "Placeholder description for Simmons for Governor.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2003,
         "fit": "cover"
       },
       {
@@ -124,7 +124,7 @@
         "image": "/images/legacy-web/paul-krekorian-1.jpg",
         "description": "Placeholder description for Paul Krekorian campaign site.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2006,
         "fit": "cover",
         "galleryMedia": [
           { "id": "political-paul-krekorian-02", "type": "image", "image": "/images/legacy-web/paul-krekorian-2.jpg", "title": "Paul Krekorian - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -137,7 +137,7 @@
         "image": "/images/legacy-web/judy-for-mayor-1.jpg",
         "description": "Placeholder description for Judy for Mayor.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2005,
         "fit": "cover"
       }
     ],
@@ -159,7 +159,7 @@
         "image": "/images/legacy-web/arroyo-chop-house-1.jpg",
         "description": "Placeholder description for Arroyo Chop House.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2005,
         "fit": "cover",
         "galleryMedia": [
           { "id": "restaurant-arroyo-chop-house-02", "type": "image", "image": "/images/legacy-web/arroyo-chop-house-2.jpg", "title": "Arroyo Chop House - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -173,7 +173,7 @@
         "image": "/images/legacy-web/parkway-grill-1.jpg",
         "description": "Placeholder description for Parkway Grill.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2005,
         "fit": "cover",
         "galleryMedia": [
           { "id": "restaurant-parkway-grill-02", "type": "image", "image": "/images/legacy-web/parkway-grill-2.jpg", "title": "Parkway Grill - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -186,7 +186,7 @@
         "image": "/images/legacy-web/smittys-grill-1.jpg",
         "description": "Placeholder description for Smitty's Grill.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2005,
         "fit": "cover",
         "galleryMedia": [
           { "id": "restaurant-smittys-grill-02", "type": "image", "image": "/images/legacy-web/smittys-grill-2.jpg", "title": "Smitty's Grill - View 2", "description": "Placeholder description.", "fit": "cover" }
@@ -198,7 +198,7 @@
         "image": "/images/legacy-web/smbr-1.jpg",
         "description": "Placeholder description for Smith Brothers Restaurants Corp.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2005,
         "fit": "cover",
         "galleryMedia": [
           { "id": "restaurant-smith-brothers-corp-02", "type": "image", "image": "/images/legacy-web/smbr-2.jpg", "title": "Smith Brothers Restaurants Corp - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -211,7 +211,7 @@
         "image": "/images/legacy-web/vibrato-grill-jazz-1.jpg",
         "description": "Placeholder description for Vibrato Grill Jazz.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2005,
         "fit": "cover",
         "galleryMedia": [
           { "id": "restaurant-vibrato-grill-jazz-02", "type": "image", "image": "/images/legacy-web/vibrato-grill-jazz-2.jpg", "title": "Vibrato Grill Jazz - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -226,7 +226,7 @@
         "image": "/images/legacy-web/brandview-collection-1.jpg",
         "description": "Placeholder description for Brandview Collection.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2006,
         "fit": "cover",
         "galleryMedia": [
           { "id": "restaurant-brandview-collection-02", "type": "image", "image": "/images/legacy-web/brandview-collection-2.jpg", "title": "Brandview Collection - View 2", "description": "Placeholder description.", "fit": "cover" }
@@ -238,7 +238,7 @@
         "image": "/images/legacy-web/caspers-hot-dogs-1.jpg",
         "description": "Placeholder description for Caspers Hot Dogs.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2006,
         "fit": "cover",
         "galleryMedia": [
           { "id": "restaurant-caspers-hot-dogs-02", "type": "image", "image": "/images/legacy-web/caspers-hot-dogs-2.jpg", "title": "Caspers Hot Dogs - View 2", "description": "Placeholder description.", "fit": "cover" }
@@ -262,8 +262,8 @@
         "title": "Ourfalian Law (A)",
         "image": "/images/legacy-web/ourfalian-law-1-1.jpg",
         "description": "Placeholder description for Ourfalian Law A.",
-        "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "technologies": ["html", "css", "javascript", "flash"],
+        "year": 2003,
         "fit": "cover",
         "galleryMedia": [
           { "id": "attorney-ourfalian-law-a-02", "type": "image", "image": "/images/legacy-web/ourfalian-law-1-2.jpg", "title": "Ourfalian Law A - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -276,7 +276,7 @@
         "image": "/images/legacy-web/ourfalian-law-2-1.jpg",
         "description": "Placeholder description for Ourfalian Law B.",
         "technologies": ["php", "mysql", "html", "css", "javascript"],
-        "year": null,
+        "year": 2011,
         "fit": "cover",
         "galleryMedia": [
           { "id": "attorney-ourfalian-law-b-02", "type": "image", "image": "/images/legacy-web/ourfalian-law-2-2.jpg", "title": "Ourfalian Law B - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -293,7 +293,7 @@
     "phone": "",
     "description": "Health and research-related website project examples.",
     "technologies": ["php", "mysql", "html", "css", "javascript"],
-    "year": null,
+    "year": 2005,
     "fit": "cover",
     "galleryMedia": [
       { "id": "health-ucla-researchcore-02", "type": "image", "image": "/images/legacy-web/ucla-researchcore-2.jpg", "title": "UCLA Research Core - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -308,7 +308,7 @@
     "phone": "",
     "description": "Placeholder description for BWVideo Productions.",
     "technologies": ["php", "mysql", "html", "css", "javascript"],
-    "year": null,
+    "year": 2004,
     "fit": "cover",
     "published": true
   },
@@ -319,7 +319,7 @@
     "phone": "",
     "description": "Placeholder description for Commerce Escrow Company.",
     "technologies": ["php", "mysql", "html", "css", "javascript"],
-    "year": null,
+    "year": 2003,
     "fit": "cover",
     "galleryMedia": [
       { "id": "commerce-escrow-company-02", "type": "image", "image": "/images/legacy-web/commerce-escrow-company-2.jpg", "title": "Commerce Escrow Company - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -349,7 +349,7 @@
     "phone": "",
     "description": "Placeholder description for Race with Honda.",
     "technologies": ["php", "mysql", "html", "css", "javascript"],
-    "year": null,
+    "year": 2016,
     "fit": "cover",
     "galleryMedia": [
       { "id": "race-with-honda-02", "type": "image", "image": "/images/rpa/racewithhonda-2.png", "title": "Race with Honda - View 2", "description": "Placeholder description.", "fit": "cover" },
@@ -366,7 +366,7 @@
     "phone": "",
     "description": "Placeholder description for UnitedLayer Inc.",
     "technologies": ["php", "mysql", "html", "css", "javascript"],
-    "year": null,
+    "year": 2002,
     "fit": "cover",
     "galleryMedia": [
       { "id": "unitedlayer-inc-02", "type": "image", "image": "/images/legacy-web/unitedlayer.com 2.png", "title": "UnitedLayer Inc. - View 2", "description": "Placeholder description.", "fit": "cover" }
