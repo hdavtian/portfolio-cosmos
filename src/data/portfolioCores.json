@@ -33,7 +33,7 @@
                     "type": "image",
                     "image": "/images/investcloud/tcc/tcc-2.jpg",
                     "title": "TCC",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Control Center, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -41,7 +41,7 @@
                     "type": "image",
                     "image": "/images/investcloud/tcc/tcc-3.jpg",
                     "title": "TCC",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Control Center, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -49,7 +49,7 @@
                     "type": "image",
                     "image": "/images/investcloud/tcc/tcc-10.jpg",
                     "title": "TCC",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Control Center, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -57,7 +57,7 @@
                     "type": "image",
                     "image": "/images/investcloud/tcc/tcc-11.jpg",
                     "title": "TCC",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Control Center, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -65,7 +65,7 @@
                     "type": "image",
                     "image": "/images/investcloud/tcc/tcc-12.jpg",
                     "title": "TCC",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Control Center, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -73,7 +73,7 @@
                     "type": "image",
                     "image": "/images/investcloud/tcc/tcc-13.jpg",
                     "title": "TCC",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Control Center, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -81,7 +81,7 @@
                     "type": "image",
                     "image": "/images/investcloud/tcc/tcc-14.jpg",
                     "title": "TCC",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Control Center, highlighting key interface and content details.",
                     "fit": "contain"
                   }
                 ]
@@ -91,7 +91,12 @@
                 "title": "V4 Analyzer",
                 "image": "/images/investcloud/v4-analyzer/v4a-1.jpg",
                 "description": "A JavaScript/TypeScript application to help analyze InvestCloud Portals",
-                "technologies": ["JavaScript", "TypeScript", "HTML", "CSS"],
+                "technologies": [
+                  "JavaScript",
+                  "TypeScript",
+                  "HTML",
+                  "CSS"
+                ],
                 "year": 2019,
                 "fit": "contain",
                 "galleryMedia": [
@@ -100,7 +105,7 @@
                     "type": "image",
                     "image": "/images/investcloud/v4-analyzer/v4a-2.jpg",
                     "title": "V4 Analyzer",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from V4 Analyzer, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -108,7 +113,7 @@
                     "type": "image",
                     "image": "/images/investcloud/v4-analyzer/v4a-3.jpg",
                     "title": "V4 Analyzer",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from V4 Analyzer, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -116,7 +121,7 @@
                     "type": "image",
                     "image": "/images/investcloud/v4-analyzer/v4a-4.jpg",
                     "title": "V4 Analyzer",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from V4 Analyzer, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -124,7 +129,7 @@
                     "type": "image",
                     "image": "/images/investcloud/v4-analyzer/v4a-5.jpg",
                     "title": "V4 Analyzer",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from V4 Analyzer, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -132,7 +137,7 @@
                     "type": "image",
                     "image": "/images/investcloud/v4-analyzer/v4a-6.jpg",
                     "title": "V4 Analyzer",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from V4 Analyzer, highlighting key interface and content details.",
                     "fit": "contain"
                   }
                 ]
@@ -160,7 +165,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-2.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -168,7 +173,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-3.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -176,7 +181,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-4.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -184,7 +189,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-5.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -192,7 +197,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-6.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -200,7 +205,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-7.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -208,7 +213,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-8.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -216,7 +221,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-9.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -224,7 +229,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-10.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -232,7 +237,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-11.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -240,7 +245,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-12.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -248,7 +253,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-13.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -256,7 +261,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-14.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   },
                   {
@@ -264,7 +269,7 @@
                     "type": "image",
                     "image": "/images/investcloud/taffie/taffie-50.jpg",
                     "title": "Taffie",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Test Automation Framework for InvestCloud Efficiency, highlighting key interface and content details.",
                     "fit": "contain"
                   }
                 ]
@@ -313,7 +318,7 @@
                   "Docker",
                   "CI/CD"
                 ],
-                "year": null,
+                "year": 2025,
                 "fit": "contain"
               },
               {
@@ -328,7 +333,7 @@
                   "Docker",
                   "CI/CD"
                 ],
-                "year": null,
+                "year": 2025,
                 "fit": "contain"
               },
               {
@@ -343,7 +348,7 @@
                   "Docker",
                   "CI/CD"
                 ],
-                "year": null,
+                "year": 2025,
                 "fit": "contain"
               },
               {
@@ -358,7 +363,7 @@
                   "Docker",
                   "CI/CD"
                 ],
-                "year": null,
+                "year": 2025,
                 "fit": "contain"
               },
               {
@@ -373,7 +378,7 @@
                   "Docker",
                   "CI/CD"
                 ],
-                "year": null,
+                "year": 2025,
                 "fit": "contain"
               },
               {
@@ -388,7 +393,7 @@
                   "Docker",
                   "CI/CD"
                 ],
-                "year": null,
+                "year": 2025,
                 "fit": "contain"
               },
               {
@@ -403,7 +408,7 @@
                   "Docker",
                   "CI/CD"
                 ],
-                "year": null,
+                "year": 2025,
                 "fit": "contain"
               },
               {
@@ -418,7 +423,7 @@
                   "Docker",
                   "CI/CD"
                 ],
-                "year": null,
+                "year": 2025,
                 "fit": "contain"
               },
               {
@@ -433,7 +438,7 @@
                   "Docker",
                   "CI/CD"
                 ],
-                "year": null,
+                "year": 2025,
                 "fit": "contain"
               },
               {
@@ -448,7 +453,7 @@
                   "Docker",
                   "CI/CD"
                 ],
-                "year": null,
+                "year": 2025,
                 "fit": "contain"
               },
               {
@@ -463,7 +468,7 @@
                   "Docker",
                   "CI/CD"
                 ],
-                "year": null,
+                "year": 2025,
                 "fit": "contain"
               }
             ]
@@ -503,8 +508,12 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-1.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
-                "year": null,
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
+                "year": 2006,
                 "fit": "cover"
               },
               {
@@ -512,7 +521,11 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-2.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -521,7 +534,11 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-3.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -530,7 +547,11 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-4.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -539,7 +560,11 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-5.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -548,7 +573,11 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-6.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -557,7 +586,11 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-7.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -566,7 +599,11 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-8.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -575,7 +612,11 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-9.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -584,7 +625,11 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-10.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -593,7 +638,11 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-11.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -602,7 +651,11 @@
                 "title": "Murad",
                 "image": "/images/murad/murad-12.jpg",
                 "description": "Landing pages and emails for Murad products.",
-                "technologies": ["HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               }
@@ -638,7 +691,7 @@
                 "id": "race-with-honda",
                 "title": "Race with Honda",
                 "image": "/images/rpa/racewithhonda-1.png",
-                "description": "Experiential marketing portal for Honda motorsports featuring race events, driver profiles, and multimedia content.",
+                "description": "Race with Honda website featuring drivers, calendar, tracks, race results, and more. Served as lead web developer.",
                 "technologies": [
                   "React",
                   "Redux",
@@ -648,7 +701,7 @@
                   "Java",
                   "Spring Boot"
                 ],
-                "year": null,
+                "year": 2016,
                 "fit": "cover",
                 "galleryMedia": [
                   {
@@ -656,7 +709,7 @@
                     "type": "image",
                     "image": "/images/rpa/racewithhonda-2.png",
                     "title": "Race with Honda - View 2",
-                    "description": "",
+                    "description": "Additional visual from Race with Honda, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -664,7 +717,7 @@
                     "type": "image",
                     "image": "/images/rpa/racewithhonda-3.png",
                     "title": "Race with Honda - View 3",
-                    "description": "",
+                    "description": "Additional visual from Race with Honda, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -672,7 +725,7 @@
                     "type": "image",
                     "image": "/images/rpa/racewithhonda-4.png",
                     "title": "Race with Honda - View 4",
-                    "description": "",
+                    "description": "Additional visual from Race with Honda, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -680,7 +733,7 @@
                     "type": "image",
                     "image": "/images/rpa/racewithhonda-5.png",
                     "title": "Race with Honda - View 5",
-                    "description": "",
+                    "description": "Additional visual from Race with Honda, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -688,7 +741,7 @@
                     "type": "image",
                     "image": "/images/rpa/racewithhonda-6.png",
                     "title": "Race with Honda - View 6",
-                    "description": "",
+                    "description": "Additional visual from Race with Honda, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -697,7 +750,7 @@
                 "id": "hall-of-claims",
                 "title": "Hall of Claims",
                 "image": "/images/rpa/hall-of-claims-1.png",
-                "description": "Interactive campaign portal for Farmers Insurance featuring animated storytelling and claims education.",
+                "description": "Interactive campaign portal for Farmers Insurance featuring animated storytelling and claims education. Worked alongside talented web and UX designers, and other lead web developers to create a an animated website.",
                 "technologies": [
                   "React",
                   "Redux",
@@ -707,7 +760,7 @@
                   "Java",
                   "Spring Boot"
                 ],
-                "year": null,
+                "year": 2016,
                 "fit": "cover",
                 "galleryMedia": [
                   {
@@ -715,7 +768,7 @@
                     "type": "image",
                     "image": "/images/rpa/hall-of-claims-2.png",
                     "title": "Hall of Claims - View 2",
-                    "description": "",
+                    "description": "Additional visual from Hall of Claims, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -723,7 +776,7 @@
                     "type": "image",
                     "image": "/images/rpa/hall-of-claims-3.png",
                     "title": "Hall of Claims - View 3",
-                    "description": "",
+                    "description": "Additional visual from Hall of Claims, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -731,7 +784,7 @@
                     "type": "image",
                     "image": "/images/rpa/hall-of-claims-4.png",
                     "title": "Hall of Claims - View 4",
-                    "description": "",
+                    "description": "Additional visual from Hall of Claims, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -740,7 +793,7 @@
                 "id": "honda-automobiles",
                 "title": "Honda Automobiles",
                 "image": "/images/rpa/honda-automobiles-1.png",
-                "description": "Marketing portal showcasing Honda automobile lineup with interactive features and responsive design.",
+                "description": "Marketing portal showcasing Honda automobile lineup with interactive features and responsive design.  Worked alongside talented web designers, UX designers, and web developers to create various Honda automobile landing pages, showcasing trims and features, calculators and other interactive features.",
                 "technologies": [
                   "React",
                   "Redux",
@@ -750,7 +803,7 @@
                   "Java",
                   "Spring Boot"
                 ],
-                "year": null,
+                "year": 2016,
                 "fit": "cover",
                 "galleryMedia": [
                   {
@@ -758,7 +811,7 @@
                     "type": "image",
                     "image": "/images/rpa/honda-automobiles-2.png",
                     "title": "Honda Automobiles - View 2",
-                    "description": "",
+                    "description": "Additional visual from Honda Automobiles, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -766,7 +819,7 @@
                     "type": "image",
                     "image": "/images/rpa/honda-automobiles-3.png",
                     "title": "Honda Automobiles - View 3",
-                    "description": "",
+                    "description": "Additional visual from Honda Automobiles, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -775,7 +828,7 @@
                 "id": "rpa-redesign",
                 "title": "RPA Agency Redesign",
                 "image": "/images/rpa/rpa-redesign-1.png",
-                "description": "Agency website redesign for RPA (Rubin Postaer and Associates) with modern responsive layout.",
+                "description": "Agency website redesign for RPA (Rubin Postaer and Associates) with modern responsive layout. Worked alongside talented web designers, UX designers, and developers to create a modern, responsive, and user-friendly website.",
                 "technologies": [
                   "React",
                   "Redux",
@@ -785,7 +838,7 @@
                   "Java",
                   "Spring Boot"
                 ],
-                "year": null,
+                "year": 2017,
                 "fit": "cover",
                 "galleryMedia": [
                   {
@@ -793,7 +846,7 @@
                     "type": "image",
                     "image": "/images/rpa/rpa-redesign-2.png",
                     "title": "RPA Redesign - View 2",
-                    "description": "",
+                    "description": "Additional visual from RPA Agency Redesign, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -801,7 +854,7 @@
                     "type": "image",
                     "image": "/images/rpa/rpa-redesign-3.png",
                     "title": "RPA Redesign - View 3",
-                    "description": "",
+                    "description": "Additional visual from RPA Agency Redesign, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -809,7 +862,7 @@
                     "type": "image",
                     "image": "/images/rpa/rpa-redesign-4.png",
                     "title": "RPA Redesign - View 4",
-                    "description": "",
+                    "description": "Additional visual from RPA Agency Redesign, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -854,7 +907,7 @@
                   "CSS",
                   "REST APIs"
                 ],
-                "year": null,
+                "year": 2011,
                 "fit": "cover",
                 "galleryMedia": [
                   {
@@ -862,7 +915,7 @@
                     "type": "image",
                     "image": "/images/boingo/wifinder-2.png",
                     "title": "WiFinder - View 2",
-                    "description": "",
+                    "description": "Additional visual from WiFinder, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -900,7 +953,13 @@
                 "title": "Equipment Resellers",
                 "image": "/images/legacy-web/acecount-1.png",
                 "description": "Equipment reseller websites grouped by client.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "clientVariants": [
@@ -916,7 +975,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2004,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -924,7 +983,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/acecount-2.png",
                         "title": "acecount.com - View 2",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from acecount.com, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -932,7 +991,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/acecount-3.png",
                         "title": "acecount.com - View 3",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from acecount.com, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -940,7 +999,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/acecount-4.png",
                         "title": "acecount.com - View 4",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from acecount.com, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -949,7 +1008,7 @@
                     "id": "equipment-abm-jax",
                     "title": "ABM JAX",
                     "image": "/images/legacy-web/abm-jax-1.jpg",
-                    "description": "Placeholder description for ABM JAX.",
+                    "description": "ABM JAX is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -957,7 +1016,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2006,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -965,7 +1024,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/abm-jax-2.jpg",
                         "title": "ABM JAX - View 2",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from ABM JAX, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -974,7 +1033,7 @@
                     "id": "equipment-financial-equipment",
                     "title": "Financial Equipment",
                     "image": "/images/legacy-web/financial-equipment-1.jpg",
-                    "description": "Placeholder description for Financial Equipment.",
+                    "description": "Financial Equipment is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -982,7 +1041,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2008,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -990,7 +1049,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/financial-equipment-2.jpg",
                         "title": "Financial Equipment - View 2",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from Financial Equipment, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -998,16 +1057,16 @@
                         "type": "image",
                         "image": "/images/legacy-web/financial-equipment-3.jpg",
                         "title": "Financial Equipment - View 3",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from Financial Equipment, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
                   },
                   {
-                    "id": "equipment-ammlock",
+                    "id": "ammlock",
                     "title": "Ammlock",
                     "image": "/images/legacy-web/ammlock-1.jpg",
-                    "description": "Equipment and security solutions website.",
+                    "description": "Real estate website for Ammlock.",
                     "technologies": [
                       "PHP",
                       "MySQL",
@@ -1015,23 +1074,23 @@
                       "CSS",
                       "JavaScript"
                     ],
-                    "year": null,
+                    "year": 2003,
                     "fit": "cover",
                     "galleryMedia": [
                       {
-                        "id": "equipment-ammlock-02",
+                        "id": "ammlock-02",
                         "type": "image",
                         "image": "/images/legacy-web/ammlock-2.jpg",
                         "title": "Ammlock - View 2",
-                        "description": "",
+                        "description": "Additional visual from Ammlock, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
-                        "id": "equipment-ammlock-03",
+                        "id": "ammlock-03",
                         "type": "image",
                         "image": "/images/legacy-web/ammlock-3.jpg",
                         "title": "Ammlock - View 3",
-                        "description": "",
+                        "description": "Additional visual from Ammlock, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1043,7 +1102,13 @@
                 "title": "Cultural Organizations",
                 "image": "/images/legacy-web/agbuypla-1.jpg",
                 "description": "Cultural organization websites grouped by chapter/location.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "clientVariants": [
@@ -1051,7 +1116,7 @@
                     "id": "cultural-agbuypla",
                     "title": "AGBU YPLA",
                     "image": "/images/legacy-web/agbuypla-1.jpg",
-                    "description": "Placeholder description for AGBU YPLA.",
+                    "description": "AGBU YPLA is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1059,7 +1124,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2003,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1067,7 +1132,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/agbuypla-demo-1.jpg",
                         "title": "AGBU YPLA Demo - View 1",
-                        "description": "",
+                        "description": "Additional visual from AGBU YPLA, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1075,7 +1140,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/agbuypla-demo-2.jpg",
                         "title": "AGBU YPLA Demo - View 2",
-                        "description": "",
+                        "description": "Additional visual from AGBU YPLA, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1084,7 +1149,7 @@
                     "id": "cultural-agbuypny",
                     "title": "AGBU YPNY",
                     "image": "/images/legacy-web/agbuypny-1.jpg",
-                    "description": "Placeholder description for AGBU YPNY.",
+                    "description": "AGBU YPNY is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1092,7 +1157,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2003,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1100,7 +1165,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/agbuypny-2.jpg",
                         "title": "AGBU YPNY - View 2",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from AGBU YPNY, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1117,7 +1182,7 @@
                       "CSS",
                       "JavaScript"
                     ],
-                    "year": null,
+                    "year": 2002,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1125,7 +1190,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/agbuyp-demo-2.jpg",
                         "title": "AGBU YP Demo - View 2",
-                        "description": "",
+                        "description": "Additional visual from AGBU YP Demos, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1133,7 +1198,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/agbuyp-demo-2-1.jpg",
                         "title": "AGBU YP Demo 2 - View 1",
-                        "description": "",
+                        "description": "Additional visual from AGBU YP Demos, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1141,7 +1206,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/agbuyp-demo-2-2.jpg",
                         "title": "AGBU YP Demo 2 - View 2",
-                        "description": "",
+                        "description": "Additional visual from AGBU YP Demos, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1149,7 +1214,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/agbuyp-demo-2-3.jpg",
                         "title": "AGBU YP Demo 2 - View 3",
-                        "description": "",
+                        "description": "Additional visual from AGBU YP Demos, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1157,7 +1222,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/agbuyp-demo-2-4.jpg",
                         "title": "AGBU YP Demo 2 - View 4",
-                        "description": "",
+                        "description": "Additional visual from AGBU YP Demos, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1165,7 +1230,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/agbuyp-demo-3-1.jpg",
                         "title": "AGBU YP Demo 3 - View 1",
-                        "description": "",
+                        "description": "Additional visual from AGBU YP Demos, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1173,7 +1238,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/agbuyp-demo-3-2.jpg",
                         "title": "AGBU YP Demo 3 - View 2",
-                        "description": "",
+                        "description": "Additional visual from AGBU YP Demos, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1181,7 +1246,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/agbuyp-demo-3-3.jpg",
                         "title": "AGBU YP Demo 3 - View 3",
-                        "description": "",
+                        "description": "Additional visual from AGBU YP Demos, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1198,7 +1263,7 @@
                       "CSS",
                       "JavaScript"
                     ],
-                    "year": null,
+                    "year": 2003,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1206,7 +1271,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/affma-2.jpg",
                         "title": "AFFMA - View 2",
-                        "description": "",
+                        "description": "Additional visual from AFFMA, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1214,7 +1279,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/affma-3.jpg",
                         "title": "AFFMA - View 3",
-                        "description": "",
+                        "description": "Additional visual from AFFMA, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1239,7 +1304,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/gennext-demo-2.jpg",
                         "title": "GenNext Demo - View 2",
-                        "description": "",
+                        "description": "Additional visual from GenNext Demo, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1247,24 +1312,23 @@
                         "type": "image",
                         "image": "/images/legacy-web/gennext-demo-3.jpg",
                         "title": "GenNext Demo - View 3",
-                        "description": "",
+                        "description": "Additional visual from GenNext Demo, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
                   },
                   {
-                    "id": "cultural-hacob",
-                    "title": "Hacob",
+                    "id": "hacob-photography",
+                    "title": "Hacob Photography",
                     "image": "/images/legacy-web/hacob-1.jpg",
-                    "description": "Website for Hacob.",
+                    "description": "Website for Hacob Photography.",
                     "technologies": [
-                      "PHP",
-                      "MySQL",
                       "HTML",
                       "CSS",
-                      "JavaScript"
+                      "JavaScript",
+                      "flash"
                     ],
-                    "year": null,
+                    "year": 2005,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1272,7 +1336,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/hacob-2.jpg",
                         "title": "Hacob - View 2",
-                        "description": "",
+                        "description": "Additional visual from Hacob Photography, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1284,7 +1348,13 @@
                 "title": "Political Websites",
                 "image": "/images/legacy-web/ardy-for-clerk-1.jpg",
                 "description": "Political campaign websites grouped by candidate.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "clientVariants": [
@@ -1292,7 +1362,7 @@
                     "id": "political-ardy-for-clerk",
                     "title": "Ardy for Clerk",
                     "image": "/images/legacy-web/ardy-for-clerk-1.jpg",
-                    "description": "Placeholder description for Ardy for Clerk.",
+                    "description": "Ardy for Clerk is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1300,7 +1370,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2005,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1308,7 +1378,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/ardy-for-clerk-2.jpg",
                         "title": "Ardy for Clerk - View 2",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from Ardy for Clerk, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1316,7 +1386,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/ardy-for-clerk-3.jpg",
                         "title": "Ardy for Clerk - View 3",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from Ardy for Clerk, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1324,7 +1394,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/ardy-for-clerk-4.jpg",
                         "title": "Ardy for Clerk - View 4",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from Ardy for Clerk, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1333,7 +1403,7 @@
                     "id": "political-simmons-for-governor",
                     "title": "Simmons for Governor",
                     "image": "/images/legacy-web/simmonsforgovernor-1.jpg",
-                    "description": "Placeholder description for Simmons for Governor.",
+                    "description": "Simmons for Governor is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1341,7 +1411,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2003,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1349,7 +1419,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/simmonsforgovernor-2.jpg",
                         "title": "Simmons for Governor - View 2",
-                        "description": "",
+                        "description": "Additional visual from Simmons for Governor, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1357,7 +1427,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/simmonsforgovernor-3.jpg",
                         "title": "Simmons for Governor - View 3",
-                        "description": "",
+                        "description": "Additional visual from Simmons for Governor, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1366,7 +1436,7 @@
                     "id": "political-paul-krekorian",
                     "title": "Paul Krekorian for Congress",
                     "image": "/images/legacy-web/paul-krekorian-1.jpg",
-                    "description": "Placeholder description for Paul Krekorian campaign site.",
+                    "description": "Paul Krekorian for Congress is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1374,7 +1444,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2006,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1382,7 +1452,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/paul-krekorian-2.jpg",
                         "title": "Paul Krekorian - View 2",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from Paul Krekorian for Congress, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1390,7 +1460,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/paul-krekorian-3.jpg",
                         "title": "Paul Krekorian - View 3",
-                        "description": "Placeholder description.",
+                        "description": "Additional visual from Paul Krekorian for Congress, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1399,7 +1469,7 @@
                     "id": "political-judy-for-mayor",
                     "title": "Judy for Mayor",
                     "image": "/images/legacy-web/judy-for-mayor-1.jpg",
-                    "description": "Placeholder description for Judy for Mayor.",
+                    "description": "Judy for Mayor is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1407,7 +1477,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2005,
                     "fit": "cover"
                   }
                 ]
@@ -1417,7 +1487,13 @@
                 "title": "Restaurant Websites",
                 "image": "/images/legacy-web/arroyo-chop-house-1.jpg",
                 "description": "Restaurant and hospitality websites grouped by client brand.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "clientVariants": [
@@ -1425,7 +1501,7 @@
                     "id": "restaurant-arroyo-chop-house",
                     "title": "Arroyo Chop House",
                     "image": "/images/legacy-web/arroyo-chop-house-1.jpg",
-                    "description": "Placeholder description for Arroyo Chop House.",
+                    "description": "Arroyo Chop House is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1433,7 +1509,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2005,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1441,7 +1517,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/arroyo-chop-house-2.jpg",
                         "title": "Arroyo Chop House - View 2",
-                        "description": "",
+                        "description": "Additional visual from Arroyo Chop House, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1449,7 +1525,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/arroyo-chop-house-3.jpg",
                         "title": "Arroyo Chop House - View 3",
-                        "description": "",
+                        "description": "Additional visual from Arroyo Chop House, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1457,7 +1533,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/arroyo-chop-house-4.jpg",
                         "title": "Arroyo Chop House - View 4",
-                        "description": "",
+                        "description": "Additional visual from Arroyo Chop House, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1465,7 +1541,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/arroyo-chop-house-demo-1.jpg",
                         "title": "Arroyo Chop House Demo - View 1",
-                        "description": "",
+                        "description": "Additional visual from Arroyo Chop House, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1473,7 +1549,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/arroyo-chop-house-demo-2.jpg",
                         "title": "Arroyo Chop House Demo - View 2",
-                        "description": "",
+                        "description": "Additional visual from Arroyo Chop House, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1481,7 +1557,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/arroyo-chop-house-demo-3.jpg",
                         "title": "Arroyo Chop House Demo - View 3",
-                        "description": "",
+                        "description": "Additional visual from Arroyo Chop House, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1490,7 +1566,7 @@
                     "id": "restaurant-parkway-grill",
                     "title": "Parkway Grill",
                     "image": "/images/legacy-web/parkway-grill-1.jpg",
-                    "description": "Placeholder description for Parkway Grill.",
+                    "description": "Parkway Grill is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1498,7 +1574,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2005,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1506,7 +1582,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/parkway-grill-2.jpg",
                         "title": "Parkway Grill - View 2",
-                        "description": "",
+                        "description": "Additional visual from Parkway Grill, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1514,7 +1590,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/parkway-grill-3.jpg",
                         "title": "Parkway Grill - View 3",
-                        "description": "",
+                        "description": "Additional visual from Parkway Grill, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1523,7 +1599,7 @@
                     "id": "restaurant-smittys-grill",
                     "title": "Smitty's Grill",
                     "image": "/images/legacy-web/smittys-grill-1.jpg",
-                    "description": "Placeholder description for Smitty's Grill.",
+                    "description": "Smitty's Grill is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1531,7 +1607,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2005,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1539,7 +1615,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/smittys-grill-2.jpg",
                         "title": "Smitty's Grill - View 2",
-                        "description": "",
+                        "description": "Additional visual from Smitty's Grill, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1548,7 +1624,7 @@
                     "id": "restaurant-smith-brothers-corp",
                     "title": "Smith Brothers Restaurants Corp",
                     "image": "/images/legacy-web/smbr-1.jpg",
-                    "description": "Placeholder description for Smith Brothers Restaurants Corp.",
+                    "description": "Smith Brothers Restaurants Corp is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1556,7 +1632,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2005,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1564,7 +1640,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/smbr-2.jpg",
                         "title": "Smith Brothers Restaurants Corp - View 2",
-                        "description": "",
+                        "description": "Additional visual from Smith Brothers Restaurants Corp, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1572,7 +1648,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/smbr3.jpg",
                         "title": "Smith Brothers Restaurants Corp - View 3",
-                        "description": "",
+                        "description": "Additional visual from Smith Brothers Restaurants Corp, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1581,7 +1657,7 @@
                     "id": "restaurant-vibrato-grill-jazz",
                     "title": "Vibrato Grill Jazz",
                     "image": "/images/legacy-web/vibrato-grill-jazz-1.jpg",
-                    "description": "Placeholder description for Vibrato Grill Jazz.",
+                    "description": "Vibrato Grill Jazz is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1589,7 +1665,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2005,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1597,7 +1673,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/vibrato-grill-jazz-2.jpg",
                         "title": "Vibrato Grill Jazz - View 2",
-                        "description": "",
+                        "description": "Additional visual from Vibrato Grill Jazz, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1605,7 +1681,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/vibrato-grill-jazz-3.jpg",
                         "title": "Vibrato Grill Jazz - View 3",
-                        "description": "",
+                        "description": "Additional visual from Vibrato Grill Jazz, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1613,7 +1689,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/vibrato-grill-jazz-4.jpg",
                         "title": "Vibrato Grill Jazz - View 4",
-                        "description": "",
+                        "description": "Additional visual from Vibrato Grill Jazz, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1621,7 +1697,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/vibrato-grill-jazz-5.jpg",
                         "title": "Vibrato Grill Jazz - View 5",
-                        "description": "",
+                        "description": "Additional visual from Vibrato Grill Jazz, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1630,7 +1706,7 @@
                     "id": "restaurant-brandview-collection",
                     "title": "Brandview Collection",
                     "image": "/images/legacy-web/brandview-collection-1.jpg",
-                    "description": "Placeholder description for Brandview Collection.",
+                    "description": "Brandview Collection is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1638,7 +1714,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2006,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1646,7 +1722,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/brandview-collection-2.jpg",
                         "title": "Brandview Collection - View 2",
-                        "description": "",
+                        "description": "Additional visual from Brandview Collection, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1655,7 +1731,7 @@
                     "id": "restaurant-caspers-hot-dogs",
                     "title": "Caspers Hot Dogs",
                     "image": "/images/legacy-web/caspers-hot-dogs-1.jpg",
-                    "description": "Placeholder description for Caspers Hot Dogs.",
+                    "description": "Caspers Hot Dogs is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1663,7 +1739,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2006,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1671,7 +1747,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/caspers-hot-dogs-2.jpg",
                         "title": "Caspers Hot Dogs - View 2",
-                        "description": "",
+                        "description": "Additional visual from Caspers Hot Dogs, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1683,7 +1759,13 @@
                 "title": "Attorney Websites",
                 "image": "/images/legacy-web/ourfalian-law-1-1.jpg",
                 "description": "Attorney website projects grouped by practice presentation.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "clientVariants": [
@@ -1691,7 +1773,7 @@
                     "id": "attorney-ourfalian-law-a",
                     "title": "Ourfalian Law (A)",
                     "image": "/images/legacy-web/ourfalian-law-1-1.jpg",
-                    "description": "Placeholder description for Ourfalian Law A.",
+                    "description": "Ourfalian Law (A) is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1699,7 +1781,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2003,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1707,7 +1789,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/ourfalian-law-1-2.jpg",
                         "title": "Ourfalian Law A - View 2",
-                        "description": "",
+                        "description": "Additional visual from Ourfalian Law (A), highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1715,7 +1797,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/ourfalian-law-1-3.jpg",
                         "title": "Ourfalian Law A - View 3",
-                        "description": "",
+                        "description": "Additional visual from Ourfalian Law (A), highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1724,7 +1806,7 @@
                     "id": "attorney-ourfalian-law-b",
                     "title": "Ourfalian Law (B)",
                     "image": "/images/legacy-web/ourfalian-law-2-1.jpg",
-                    "description": "Placeholder description for Ourfalian Law B.",
+                    "description": "Ourfalian Law (B) is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
                     "technologies": [
                       "php",
                       "mysql",
@@ -1732,7 +1814,7 @@
                       "css",
                       "javascript"
                     ],
-                    "year": null,
+                    "year": 2011,
                     "fit": "cover",
                     "galleryMedia": [
                       {
@@ -1740,7 +1822,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/ourfalian-law-2-2.jpg",
                         "title": "Ourfalian Law B - View 2",
-                        "description": "",
+                        "description": "Additional visual from Ourfalian Law (B), highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1748,7 +1830,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/ourfalian-law-2-3.jpg",
                         "title": "Ourfalian Law B - View 3",
-                        "description": "",
+                        "description": "Additional visual from Ourfalian Law (B), highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1773,7 +1855,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/dana-profili-2.jpg",
                         "title": "Dana Profili - View 2",
-                        "description": "",
+                        "description": "Additional visual from Dana Profili, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1781,7 +1863,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/dana-profili-3.jpg",
                         "title": "Dana Profili - View 3",
-                        "description": "",
+                        "description": "Additional visual from Dana Profili, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1789,7 +1871,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/dana-profili-4.jpg",
                         "title": "Dana Profili - View 4",
-                        "description": "",
+                        "description": "Additional visual from Dana Profili, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1801,8 +1883,14 @@
                 "title": "Health",
                 "image": "/images/legacy-web/ucla-researchcore-1.jpg",
                 "description": "Health and research-related website project examples.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
+                "year": 2005,
                 "fit": "cover",
                 "clientVariants": [
                   {
@@ -1825,7 +1913,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/ucla-researchcore-2.jpg",
                         "title": "UCLA Research Core - View 2",
-                        "description": "",
+                        "description": "Additional visual from UCLA Research Core, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1833,7 +1921,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/ucla-researchcore-3.jpg",
                         "title": "UCLA Research Core - View 3",
-                        "description": "",
+                        "description": "Additional visual from UCLA Research Core, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1858,7 +1946,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/central-valley-bariatrics-2.jpg",
                         "title": "Central Valley Bariatrics - View 2",
-                        "description": "",
+                        "description": "Additional visual from Central Valley Bariatrics, highlighting key interface and content details.",
                         "fit": "cover"
                       },
                       {
@@ -1866,7 +1954,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/central-valley-bariatrics-3.jpg",
                         "title": "Central Valley Bariatrics - View 3",
-                        "description": "",
+                        "description": "Additional visual from Central Valley Bariatrics, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1891,7 +1979,7 @@
                         "type": "image",
                         "image": "/images/legacy-web/ucla-digestive-diseases-demo-2.jpg",
                         "title": "UCLA Digestive Diseases - View 2",
-                        "description": "",
+                        "description": "Additional visual from UCLA Digestive Diseases Demo, highlighting key interface and content details.",
                         "fit": "cover"
                       }
                     ]
@@ -1924,9 +2012,15 @@
                 "id": "bwvideo-productions",
                 "title": "BWVideo Productions",
                 "image": "/images/legacy-web/bwvideoproductions-1.jpg",
-                "description": "Placeholder description for BWVideo Productions.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
+                "description": "BWVideo Productions is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
+                "year": 2004,
                 "fit": "cover",
                 "galleryMedia": [
                   {
@@ -1934,7 +2028,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/bwvideoproductions-2.jpg",
                     "title": "BWVideo Productions - View 2",
-                    "description": "",
+                    "description": "Additional visual from BWVideo Productions, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -1942,7 +2036,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/bwvideoproductions-3.jpg",
                     "title": "BWVideo Productions - View 3",
-                    "description": "",
+                    "description": "Additional visual from BWVideo Productions, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -1951,9 +2045,15 @@
                 "id": "commerce-escrow-company",
                 "title": "Commerce Escrow Company",
                 "image": "/images/legacy-web/commerce-escrow-company-1.jpg",
-                "description": "Placeholder description for Commerce Escrow Company.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
+                "description": "Commerce Escrow Company is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
+                "year": 2003,
                 "fit": "cover",
                 "galleryMedia": [
                   {
@@ -1961,7 +2061,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/commerce-escrow-company-2.jpg",
                     "title": "Commerce Escrow Company - View 2",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Commerce Escrow Company, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -1969,7 +2069,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/commerce-escrow-company-3.jpg",
                     "title": "Commerce Escrow Company - View 3",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Commerce Escrow Company, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -1977,7 +2077,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/commerce-escrow-company-4.jpg",
                     "title": "Commerce Escrow Company - View 4",
-                    "description": "",
+                    "description": "Additional visual from Commerce Escrow Company, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -1986,8 +2086,12 @@
                 "id": "haigmats-com",
                 "title": "Haigmats.com",
                 "image": "/images/legacy-web/haigmats-1-1999.jpg",
-                "description": "Placeholder description for Haigmats.com.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "description": "This is one of my very first websites, created in 1999. I did the photography and the design and scanned brochures for the client and created downloadable pdfs.",
+                "technologies": [
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": 1999,
                 "fit": "cover",
                 "galleryMedia": [
@@ -1996,7 +2100,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/haigmats-2-1999.jpg",
                     "title": "Haigmats.com - View 2",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Haigmats.com, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2004,7 +2108,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/haigmats-3-1999.jpg",
                     "title": "Haigmats.com - View 3",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from Haigmats.com, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -2013,9 +2117,15 @@
                 "id": "unitedlayer-inc",
                 "title": "UnitedLayer Inc.",
                 "image": "/images/legacy-web/unitedlayer.com 1.png",
-                "description": "Placeholder description for UnitedLayer Inc.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
-                "year": null,
+                "description": "UnitedLayer Inc. is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
+                "year": 2002,
                 "fit": "cover",
                 "galleryMedia": [
                   {
@@ -2023,7 +2133,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/unitedlayer.com 2.png",
                     "title": "UnitedLayer Inc. - View 2",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from UnitedLayer Inc., highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -2032,8 +2142,14 @@
                 "id": "stormscape-studios",
                 "title": "StormScape Studios",
                 "image": "/images/legacy-web/stormscape - demo sites.png",
-                "description": "Placeholder description for StormScape Studios.",
-                "technologies": ["php", "mysql", "html", "css", "javascript"],
+                "description": "StormScape Studios is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
+                "technologies": [
+                  "php",
+                  "mysql",
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "galleryMedia": [
@@ -2042,7 +2158,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/stormscape - live sites.png",
                     "title": "StormScape Studios - Live Sites",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2050,7 +2166,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/stormscape - under construction sites.png",
                     "title": "StormScape Studios - Under Construction",
-                    "description": "Placeholder description.",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2058,7 +2174,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-1.jpg",
                     "title": "StormScape Studios - Screenshot 1",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2066,7 +2182,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-2.jpg",
                     "title": "StormScape Studios - Screenshot 2",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2074,7 +2190,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-3.jpg",
                     "title": "StormScape Studios - Screenshot 3",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2082,7 +2198,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-4.jpg",
                     "title": "StormScape Studios - Screenshot 4",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2090,7 +2206,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-layout-1.jpg",
                     "title": "StormScape Studios - Layout 1",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2098,7 +2214,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-layout-2.jpg",
                     "title": "StormScape Studios - Layout 2",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2106,7 +2222,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-layout-3a.jpg",
                     "title": "StormScape Studios - Layout 3a",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2114,7 +2230,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-layout-3b.jpg",
                     "title": "StormScape Studios - Layout 3b",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2122,7 +2238,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-layout-4a.jpg",
                     "title": "StormScape Studios - Layout 4a",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2130,7 +2246,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-layout-4b.jpg",
                     "title": "StormScape Studios - Layout 4b",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2138,7 +2254,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-layout-5a.jpg",
                     "title": "StormScape Studios - Layout 5a",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2146,7 +2262,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-layout-5b.jpg",
                     "title": "StormScape Studios - Layout 5b",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2154,17 +2270,21 @@
                     "type": "image",
                     "image": "/images/legacy-web/sss-layout-7.jpg",
                     "title": "StormScape Studios - Layout 7",
-                    "description": "",
+                    "description": "Additional visual from StormScape Studios, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
               },
               {
                 "id": "sean-young",
-                "title": "Sean Young (1999)",
+                "title": "Sean Young",
                 "image": "/images/legacy-web/sean-young-1.png",
                 "description": "Promotional website created in 1999 for actress Sean Young.",
-                "technologies": ["html", "css", "javascript"],
+                "technologies": [
+                  "html",
+                  "css",
+                  "javascript"
+                ],
                 "year": 1999,
                 "fit": "cover",
                 "galleryMedia": [
@@ -2173,7 +2293,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sean-young-2.png",
                     "title": "Sean Young (1999) - View 2",
-                    "description": "",
+                    "description": "Additional visual from Sean Young, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2181,7 +2301,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sean-young-3.png",
                     "title": "Sean Young (1999) - View 3",
-                    "description": "",
+                    "description": "Additional visual from Sean Young, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2189,7 +2309,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sean-young-4.png",
                     "title": "Sean Young (1999) - View 4",
-                    "description": "",
+                    "description": "Additional visual from Sean Young, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -2199,7 +2319,13 @@
                 "title": "Pacobond Demo",
                 "image": "/images/legacy-web/pacobond-demo-1.jpg",
                 "description": "Demo website for Pacobond.",
-                "technologies": ["PHP", "MySQL", "HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "PHP",
+                  "MySQL",
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "galleryMedia": [
@@ -2208,7 +2334,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/pacobond-demo-2.jpg",
                     "title": "Pacobond Demo - View 2",
-                    "description": "",
+                    "description": "Additional visual from Pacobond Demo, highlighting key interface and content details.",
                     "fit": "cover"
                   },
                   {
@@ -2216,7 +2342,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/pacobond-demo-3.jpg",
                     "title": "Pacobond Demo - View 3",
-                    "description": "",
+                    "description": "Additional visual from Pacobond Demo, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -2226,7 +2352,13 @@
                 "title": "SDC Engineering",
                 "image": "/images/legacy-web/sdceng-1.jpg",
                 "description": "Website for SDC Engineering.",
-                "technologies": ["PHP", "MySQL", "HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "PHP",
+                  "MySQL",
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover",
                 "galleryMedia": [
@@ -2235,7 +2367,7 @@
                     "type": "image",
                     "image": "/images/legacy-web/sdceng-2.jpg",
                     "title": "SDC Engineering - View 2",
-                    "description": "",
+                    "description": "Additional visual from SDC Engineering, highlighting key interface and content details.",
                     "fit": "cover"
                   }
                 ]
@@ -2245,7 +2377,13 @@
                 "title": "GD Demo",
                 "image": "/images/legacy-web/gd-demo-1.jpg",
                 "description": "Demo website for GD.",
-                "technologies": ["PHP", "MySQL", "HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "PHP",
+                  "MySQL",
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               },
@@ -2254,7 +2392,13 @@
                 "title": "HD Portfolio",
                 "image": "/images/legacy-web/hd-portfolio-1.jpg",
                 "description": "Portfolio presentation demo.",
-                "technologies": ["PHP", "MySQL", "HTML", "CSS", "JavaScript"],
+                "technologies": [
+                  "PHP",
+                  "MySQL",
+                  "HTML",
+                  "CSS",
+                  "JavaScript"
+                ],
                 "year": null,
                 "fit": "cover"
               }

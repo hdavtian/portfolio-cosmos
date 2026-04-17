@@ -3,6 +3,7 @@ import type {
   PortfolioEntrySeed,
   PortfolioItem,
   PortfolioClientVariantSeed,
+  PortfolioMedia,
 } from "../types";
 
 export function flattenPortfolioCores(cores: PortfolioCoreSeed[]): PortfolioItem[] {
@@ -44,16 +45,23 @@ function toPortfolioItem(
   coreName: string,
   entry: PortfolioEntrySeed,
 ): PortfolioItem {
+  const primaryImage = entry.image ?? "";
   return {
     id: entry.id,
     title: entry.title,
     description: entry.description ?? "No description provided.",
-    image: entry.image ?? "",
+    image: primaryImage,
     technologies: entry.technologies ?? [],
     year: entry.year ?? null,
     category: coreName,
     subcategory: "General",
-    detailMedia: entry.galleryMedia ?? [],
+    detailMedia: buildDetailMedia({
+      itemId: entry.id,
+      title: entry.title,
+      description: entry.description,
+      primaryImage,
+      galleryMedia: entry.galleryMedia,
+    }),
     isClientVariation: false,
   };
 }
@@ -64,14 +72,16 @@ function toPortfolioVariantItem(
   parentEntry: PortfolioEntrySeed,
   variant: PortfolioClientVariantSeed,
 ): PortfolioItem {
+  const primaryImage = variant.image ?? parentEntry.image ?? "";
+  const description =
+    variant.description ??
+    parentEntry.description ??
+    "No description provided.";
   return {
     id: variant.id,
     title: variant.title,
-    description:
-      variant.description ??
-      parentEntry.description ??
-      "No description provided.",
-    image: variant.image ?? parentEntry.image ?? "",
+    description,
+    image: primaryImage,
     technologies: variant.technologies ?? parentEntry.technologies ?? [],
     year:
       typeof variant.year === "number"
@@ -79,7 +89,51 @@ function toPortfolioVariantItem(
         : (parentEntry.year ?? null),
     category: coreName,
     subcategory: parentTitle,
-    detailMedia: variant.galleryMedia ?? parentEntry.galleryMedia ?? [],
+    detailMedia: buildDetailMedia({
+      itemId: variant.id,
+      title: variant.title,
+      description,
+      primaryImage,
+      galleryMedia: variant.galleryMedia ?? parentEntry.galleryMedia,
+    }),
     isClientVariation: true,
   };
+}
+
+interface BuildDetailMediaInput {
+  itemId: string;
+  title: string;
+  description?: string;
+  primaryImage: string;
+  galleryMedia?: PortfolioMedia[];
+}
+
+function buildDetailMedia({
+  itemId,
+  title,
+  description,
+  primaryImage,
+  galleryMedia,
+}: BuildDetailMediaInput): PortfolioMedia[] {
+  const media = [...(galleryMedia ?? [])];
+
+  if (!primaryImage) {
+    return media;
+  }
+
+  const alreadyIncluded = media.some((entry) => entry.image === primaryImage);
+  if (alreadyIncluded) {
+    return media;
+  }
+
+  return [
+    {
+      id: `${itemId}-cover`,
+      type: "image",
+      image: primaryImage,
+      title,
+      description: description ?? "",
+    },
+    ...media,
+  ];
 }
