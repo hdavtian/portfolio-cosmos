@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { usePortfolioCoresQuery } from "../../../lib/query/contentQueries";
+import { trackEvent } from "../../../lib/analytics";
 import { flattenPortfolioCores } from "../lib/portfolioTransform";
 import { useFavorites } from "../hooks/useFavorites";
 import { usePersistentState } from "../hooks/usePersistentState";
@@ -10,6 +11,7 @@ import { EmptyState } from "../components/EmptyState";
 type SortMode = "newest" | "oldest" | "title";
 
 export function PortfolioPage() {
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortMode, setSortMode] = usePersistentState<SortMode>(
     "fast-experience:portfolio:sort",
     "newest",
@@ -109,6 +111,21 @@ export function PortfolioPage() {
     sortMode,
   ]);
 
+  const debouncedFilterTrack = useMemo(() => {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    return (field: string, value: string | number | boolean) => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      timeout = setTimeout(() => {
+        trackEvent("mainstream_portfolio_control_change", {
+          field,
+          value,
+        });
+      }, 280);
+    };
+  }, []);
+
   useEffect(() => {
     if (subcategoryDisabled && subcategoryFilter !== "all") {
       setSubcategoryFilter("all");
@@ -173,12 +190,31 @@ export function PortfolioPage() {
         </p>
       </header>
 
-      <div className="portfolio-toolbar">
+      <div className="portfolio-toolbar__mobile-toggle-wrap">
+        <button
+          type="button"
+          className="portfolio-toolbar__mobile-toggle"
+          aria-expanded={filtersOpen}
+          aria-controls="portfolio-toolbar"
+          onClick={() => setFiltersOpen((value) => !value)}
+        >
+          {filtersOpen ? "Hide Filters" : "Show Filters"}
+        </button>
+      </div>
+
+      <div
+        id="portfolio-toolbar"
+        className={`portfolio-toolbar ${filtersOpen ? "is-open" : ""}`}
+      >
         <label>
           Search
           <input
             value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
+            onChange={(event) => {
+              const next = event.target.value;
+              setSearchTerm(next);
+              debouncedFilterTrack("search", next);
+            }}
             placeholder="Search projects or technologies"
           />
         </label>
@@ -187,7 +223,14 @@ export function PortfolioPage() {
           Category
           <select
             value={categoryFilter}
-            onChange={(event) => setCategoryFilter(event.target.value)}
+            onChange={(event) => {
+              const next = event.target.value;
+              setCategoryFilter(next);
+              trackEvent("mainstream_portfolio_control_change", {
+                field: "category",
+                value: next,
+              });
+            }}
           >
             {categoryOptions.map((category) => (
               <option key={category} value={category}>
@@ -203,7 +246,14 @@ export function PortfolioPage() {
           Subcategory
           <select
             value={subcategoryFilter}
-            onChange={(event) => setSubcategoryFilter(event.target.value)}
+            onChange={(event) => {
+              const next = event.target.value;
+              setSubcategoryFilter(next);
+              trackEvent("mainstream_portfolio_control_change", {
+                field: "subcategory",
+                value: next,
+              });
+            }}
             disabled={subcategoryDisabled}
             title={
               subcategoryDisabled
@@ -221,7 +271,17 @@ export function PortfolioPage() {
 
         <label>
           Sort
-          <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
+          <select
+            value={sortMode}
+            onChange={(event) => {
+              const next = event.target.value as SortMode;
+              setSortMode(next);
+              trackEvent("mainstream_portfolio_control_change", {
+                field: "sort",
+                value: next,
+              });
+            }}
+          >
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
             <option value="title">Title</option>
@@ -236,7 +296,11 @@ export function PortfolioPage() {
             max="1.35"
             step="0.05"
             value={cardScale}
-            onChange={(event) => setCardScale(Number(event.target.value))}
+            onChange={(event) => {
+              const next = Number(event.target.value);
+              setCardScale(next);
+              debouncedFilterTrack("card_size", next);
+            }}
           />
         </label>
 
@@ -245,7 +309,14 @@ export function PortfolioPage() {
           <input
             type="checkbox"
             checked={favoritesOnly}
-            onChange={(event) => setFavoritesOnly(event.target.checked)}
+            onChange={(event) => {
+              const next = event.target.checked;
+              setFavoritesOnly(next);
+              trackEvent("mainstream_portfolio_control_change", {
+                field: "favorites_only",
+                value: next,
+              });
+            }}
           />
         </label>
       </div>
@@ -274,8 +345,15 @@ export function PortfolioPage() {
           <button
             type="button"
             className="portfolio-results__clear-visited"
-            onClick={clearVisited}
+            onClick={() => {
+              trackEvent("mainstream_portfolio_control_change", {
+                field: "clear_viewed",
+                value: visitedSet.size,
+              });
+              clearVisited();
+            }}
             title="Clear viewed history"
+            aria-label="Clear viewed history"
           >
             Clear viewed
           </button>
@@ -304,14 +382,24 @@ export function PortfolioPage() {
                 </span>
               ) : null}
               <Link
-                to={`/fast/portfolio/${item.id}`}
+                to={`/portfolio/${item.id}`}
                 className="portfolio-card__surface"
                 aria-label={
                   isVisited
                     ? `Open details for ${item.title} (already viewed)`
                     : `Open details for ${item.title}`
                 }
-                onClick={() => markVisited(item.id)}
+                onClick={() => {
+                  markVisited(item.id);
+                  trackEvent("mainstream_portfolio_card_click", {
+                    portfolio_id: item.id,
+                    title: item.title,
+                    category: item.category,
+                    subcategory: item.subcategory,
+                    is_visited: isVisited,
+                    is_favorited: isFavorited,
+                  });
+                }}
               >
                 {item.image ? (
                   <img
@@ -354,7 +442,15 @@ export function PortfolioPage() {
                 aria-pressed={isFavorited}
                 className={`portfolio-card__favorite ${isFavorited ? "is-active" : ""}`}
                 aria-label={isFavorited ? `Unfavorite ${item.title}` : `Favorite ${item.title}`}
-                onClick={() => toggleFavorite(item.id)}
+                onClick={() => {
+                  const nextState = !isFavorited;
+                  toggleFavorite(item.id);
+                  trackEvent("mainstream_portfolio_favorite_toggle", {
+                    portfolio_id: item.id,
+                    title: item.title,
+                    next_state: nextState ? "favorited" : "unfavorited",
+                  });
+                }}
               >
                 <i
                   className={isFavorited ? "fas fa-heart" : "far fa-heart"}

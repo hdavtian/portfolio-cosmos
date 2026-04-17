@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useTheme } from "../../../theme/ThemeProvider";
+import { trackEvent } from "../../../lib/analytics";
 
 export function FastTopNav() {
   const { themeId, setThemeId, themes } = useTheme();
@@ -9,7 +10,7 @@ export function FastTopNav() {
   return (
     <header className="fast-top-nav">
       <div className="fast-top-nav__inner">
-        <NavLink to="/fast" className="fast-top-nav__brand">
+        <NavLink to="/portfolio" className="fast-top-nav__brand">
           HarmaDavtian.com
         </NavLink>
 
@@ -28,7 +29,7 @@ export function FastTopNav() {
           className={`fast-top-nav__links ${menuOpen ? "is-open" : ""}`}
           aria-label="Primary navigation"
         >
-          <NavLink to="/fast/portfolio" className={({ isActive }) => navClass(isActive)}>
+          <NavLink to="/portfolio" className={({ isActive }) => navClass(isActive)}>
             Portfolio
           </NavLink>
         </nav>
@@ -41,7 +42,14 @@ export function FastTopNav() {
             id="theme-picker"
             className="fast-top-nav__theme-select"
             value={themeId}
-            onChange={(event) => setThemeId(event.target.value)}
+            onChange={(event) => {
+              const nextThemeId = event.target.value;
+              trackEvent("mainstream_theme_switch", {
+                previous_theme_id: themeId,
+                next_theme_id: nextThemeId,
+              });
+              setThemeId(nextThemeId);
+            }}
           >
             {themes.map((theme) => (
               <option key={theme.id} value={theme.id}>

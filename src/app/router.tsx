@@ -50,19 +50,31 @@ const routes: RouteObject[] = [
         ),
       },
       {
-        path: "fast",
+        path: "portfolio",
         element: <LazyRoute><FastLayout /></LazyRoute>,
         children: [
-          { index: true, element: <Navigate to="/fast/portfolio" replace /> },
-          { path: "portfolio", element: <LazyRoute><PortfolioPage /></LazyRoute> },
+          { index: true, element: <LazyRoute><PortfolioPage /></LazyRoute> },
           {
-            path: "portfolio/:portfolioId",
+            path: ":portfolioId",
             element: <LazyRoute><PortfolioDetailPage /></LazyRoute>,
           },
-          { path: "resume", element: <LazyRoute><ResumePage /></LazyRoute> },
-          { path: "*", element: <Navigate to="/fast" replace /> },
+          { path: "*", element: <Navigate to="/portfolio" replace /> },
         ],
       },
+      {
+        path: "fast",
+        children: [
+          { index: true, element: <Navigate to="/portfolio" replace /> },
+          { path: "portfolio", element: <Navigate to="/portfolio" replace /> },
+          {
+            path: "portfolio/:portfolioId",
+            element: <Navigate to="/portfolio" replace />,
+          },
+          { path: "resume", element: <Navigate to="/portfolio" replace /> },
+          { path: "*", element: <Navigate to="/portfolio" replace /> },
+        ],
+      },
+      { path: "resume", element: <LazyRoute><ResumePage /></LazyRoute> },
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },

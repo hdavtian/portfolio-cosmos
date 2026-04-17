@@ -11,10 +11,10 @@ export function FastHomePage() {
           cinematic route as a separate experience.
         </p>
         <div className="fast-home__actions">
-          <Link to="/fast/portfolio" className="fast-home__cta">
+          <Link to="/portfolio" className="fast-home__cta">
             Explore Portfolio
           </Link>
-          <Link to="/fast/resume" className="fast-home__cta fast-home__cta--secondary">
+          <Link to="/resume" className="fast-home__cta fast-home__cta--secondary">
             Open Resume
           </Link>
         </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import * as d3 from "d3";
 import resumeData from "./data/resume.json";
@@ -7,7 +7,6 @@ import DiagramSettings, {
   type DiagramStyle,
   type DiagramStyleOptions,
 } from "./components/DiagramSettings";
-import CosmosIntroGateway from "./components/CosmosIntroGateway";
 import { trackEvent } from "./lib/analytics";
 import "./styles/main.scss";
 
@@ -433,13 +432,7 @@ function App() {
   const totalSections = 2 + resumeData.experience.length + 1; // hero+summary, skills, jobs, footer
 
   // Diagram settings state
-  const fastTrackParam = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("fastTrack")
-    : null;
-  const [showIntro, setShowIntro] = useState(!fastTrackParam);
-  const [diagramStyle, setDiagramStyle] = useState<DiagramStyle>(
-    fastTrackParam ? "space" : "circles",
-  );
+  const [diagramStyle, setDiagramStyle] = useState<DiagramStyle>("space");
   const [diagramOptions, setDiagramOptions] = useState<DiagramStyleOptions>({
     nodeSpacing: 100,
     glowIntensity: 5,
@@ -638,16 +631,6 @@ function App() {
     if (index === totalSections - 1) return "Education";
     return "";
   };
-
-  const handleIntroEnter = useCallback(() => {
-    trackEvent("intro_entered");
-    setDiagramStyle("space");
-    setShowIntro(false);
-  }, []);
-
-  if (showIntro) {
-    return <CosmosIntroGateway onEnter={handleIntroEnter} />;
-  }
 
   return (
     <div className="app">

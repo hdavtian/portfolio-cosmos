@@ -11,6 +11,7 @@ interface PortfolioMediaViewerProps {
   alt: string;
   title?: string;
   description?: string;
+  onZoomButtonClick?: (direction: "in" | "out", zoomPercent: number) => void;
 }
 
 const ZOOM_MIN = 50;
@@ -22,10 +23,10 @@ export function PortfolioMediaViewer({
   alt,
   title,
   description,
+  onZoomButtonClick,
 }: PortfolioMediaViewerProps) {
   const [zoomPercent, setZoomPercent] = useState(100);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const panStartRef = useRef({ x: 0, y: 0, pan: { x: 0, y: 0 } });
   const isPanningRef = useRef(false);
@@ -131,10 +132,9 @@ export function PortfolioMediaViewer({
 
   const zoomedIn = zoomPercent > 100;
   const hasMeta = Boolean(title) || Boolean(description);
-  const headerLabel = title || alt;
 
   return (
-    <figure className={`portfolio-media ${isCollapsed ? "is-collapsed" : ""}`}>
+    <figure className="portfolio-media">
       <div className="portfolio-media__header">
         {hasMeta ? (
           <figcaption className="portfolio-media__caption">
@@ -145,92 +145,81 @@ export function PortfolioMediaViewer({
           </figcaption>
         ) : (
           <span className="portfolio-media__title portfolio-media__title--fallback">
-            {headerLabel}
+            {title || alt}
           </span>
         )}
-        <button
-          type="button"
-          className="portfolio-media__collapse"
-          onClick={() => setIsCollapsed((value) => !value)}
-          aria-expanded={!isCollapsed}
-          aria-label={
-            isCollapsed
-              ? `Expand image: ${headerLabel}`
-              : `Collapse image: ${headerLabel}`
-          }
-          title={isCollapsed ? "Expand" : "Minimize"}
-        >
-          <i
-            className={`fas ${isCollapsed ? "fa-window-maximize" : "fa-window-minimize"}`}
-            aria-hidden="true"
-          />
-        </button>
       </div>
 
-      {isCollapsed ? null : (
-        <div className="portfolio-media__frame">
-          <div
-            ref={viewportRef}
-            className={`portfolio-media__viewport ${
-              zoomedIn ? "is-zoomed" : ""
-            } ${isPanningRef.current ? "is-panning" : ""}`}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={endPan}
-            onPointerCancel={endPan}
-            onDoubleClick={reset}
-            role="img"
-            aria-label={alt}
-          >
-            <img
-              src={image}
-              alt={alt}
-              className="portfolio-media__image"
-              draggable={false}
-              loading="lazy"
-              style={{
-                transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${
-                  zoomPercent / 100
-                })`,
-              }}
-            />
-          </div>
-
-          <div className="portfolio-media__controls" role="group" aria-label="Image zoom controls">
-            <button
-              type="button"
-              onClick={() => applyZoom(zoomPercent - ZOOM_STEP)}
-              disabled={zoomPercent <= ZOOM_MIN}
-              aria-label="Zoom out"
-            >
-              <i className="fas fa-minus" aria-hidden="true" />
-            </button>
-            <span className="portfolio-media__zoom-level" aria-live="polite">
-              {zoomPercent}%
-            </span>
-            <button
-              type="button"
-              onClick={() => applyZoom(zoomPercent + ZOOM_STEP)}
-              disabled={zoomPercent >= ZOOM_MAX}
-              aria-label="Zoom in"
-            >
-              <i className="fas fa-plus" aria-hidden="true" />
-            </button>
-            <span className="portfolio-media__hint" aria-hidden="true">
-              <kbd>Shift</kbd> + scroll to zoom · drag to pan · double-click to reset
-            </span>
-            <button
-              type="button"
-              onClick={reset}
-              disabled={zoomPercent === 100 && pan.x === 0 && pan.y === 0}
-              className="portfolio-media__reset"
-              aria-label="Reset view"
-            >
-              Reset
-            </button>
-          </div>
+      <div className="portfolio-media__frame">
+        <div
+          ref={viewportRef}
+          className={`portfolio-media__viewport ${
+            zoomedIn ? "is-zoomed" : ""
+          } ${isPanningRef.current ? "is-panning" : ""}`}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endPan}
+          onPointerCancel={endPan}
+          onDoubleClick={reset}
+          role="img"
+          aria-label={alt}
+        >
+          <img
+            src={image}
+            alt={alt}
+            className="portfolio-media__image"
+            draggable={false}
+            loading="lazy"
+            style={{
+              transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${
+                zoomPercent / 100
+              })`,
+            }}
+          />
         </div>
-      )}
+
+        <div className="portfolio-media__controls" role="group" aria-label="Image zoom controls">
+          <button
+            type="button"
+            onClick={() => {
+              const nextZoom = Math.max(ZOOM_MIN, zoomPercent - ZOOM_STEP);
+              applyZoom(nextZoom);
+              onZoomButtonClick?.("out", nextZoom);
+            }}
+            disabled={zoomPercent <= ZOOM_MIN}
+            aria-label="Zoom out"
+          >
+            <i className="fas fa-minus" aria-hidden="true" />
+          </button>
+          <span className="portfolio-media__zoom-level" aria-live="polite">
+            {zoomPercent}%
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              const nextZoom = Math.min(ZOOM_MAX, zoomPercent + ZOOM_STEP);
+              applyZoom(nextZoom);
+              onZoomButtonClick?.("in", nextZoom);
+            }}
+            disabled={zoomPercent >= ZOOM_MAX}
+            aria-label="Zoom in"
+          >
+            <i className="fas fa-plus" aria-hidden="true" />
+          </button>
+          <span className="portfolio-media__hint" aria-hidden="true">
+            <kbd>Shift</kbd> + scroll to zoom · drag to pan · double-click to reset
+          </span>
+          <button
+            type="button"
+            onClick={reset}
+            disabled={zoomPercent === 100 && pan.x === 0 && pan.y === 0}
+            className="portfolio-media__reset"
+            aria-label="Reset view"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
     </figure>
   );
 }
