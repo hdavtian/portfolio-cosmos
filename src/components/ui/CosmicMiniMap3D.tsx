@@ -14,7 +14,6 @@ type Props = {
   itemsRef: React.MutableRefObject<OrbitItem[]>;
   skillsAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
   aboutAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
-  projectsAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
   portfolioAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
   currentNavigationTarget: string | null;
   onNavigateToTarget: (targetId: string, targetType: "section" | "moon") => void;
@@ -139,7 +138,6 @@ const CosmicMiniMap3D: React.FC<Props> = ({
   itemsRef,
   skillsAnchorRef,
   aboutAnchorRef,
-  projectsAnchorRef,
   portfolioAnchorRef,
   currentNavigationTarget,
   onNavigateToTarget,
@@ -477,16 +475,6 @@ const CosmicMiniMap3D: React.FC<Props> = ({
             targetType: "section",
           });
         }
-        if (projectsAnchorRef.current) {
-          entities.push({
-            id: "projects-anchor",
-            label: "Project Showcase",
-            kind: "anchor",
-            world: projectsAnchorRef.current.clone(),
-            targetId: "projects",
-            targetType: "section",
-          });
-        }
         if (portfolioAnchorRef.current) {
           entities.push({
             id: "portfolio-anchor",
@@ -662,7 +650,6 @@ const CosmicMiniMap3D: React.FC<Props> = ({
     itemsRef,
     skillsAnchorRef,
     aboutAnchorRef,
-    projectsAnchorRef,
     portfolioAnchorRef,
   ]);
 

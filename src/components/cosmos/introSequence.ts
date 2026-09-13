@@ -53,6 +53,9 @@ export const INTRO_SHIP_FINAL_QUAT = new THREE.Quaternion().setFromEuler(
 );
 
 const INTRO_CAMERA_DURATION_MS = 7000;
+// Longest time step one frame may advance the intro camera pan. Only a real
+// freeze exceeds this; ordinary slow frames still advance in real time.
+const INTRO_MAX_FRAME_STEP_MS = 250;
 const INTRO_SHIP_APPROACH_DURATION_MS = Math.round(5000 * INTRO_TIME_SCALE);
 export const INTRO_SHIP_PICKUP_DURATION_MS = 6200;
 const INTRO_CAMERA_RETREAT_START_PROGRESS = 0;
@@ -446,10 +449,15 @@ export const createIntroSequenceRunner = (
     };
 
     let _introFrameCount = 0;
+    // Advance by clamped frame steps rather than wall-clock time, so a
+    // main-thread stall pauses the pan instead of skipping ahead.
+    let elapsed = 0;
+    let lastFrameAt = startTime;
     const animateCamera = () => {
       const _iStart = performance.now();
       _introFrameCount++;
-      const elapsed = _iStart - startTime;
+      elapsed += Math.min(_iStart - lastFrameAt, INTRO_MAX_FRAME_STEP_MS);
+      lastFrameAt = _iStart;
       const progress = Math.min(elapsed / INTRO_CAMERA_DURATION_MS, 1);
       const eased = easeInOut(progress);
       const currentPos = startPos.clone().lerp(endPos, eased);

@@ -11,6 +11,10 @@ import "./MoonOrbitHtmlLayout.scss";
 interface Props {
   content: OverlayContent;
   visible: boolean;
+  /** Close the details view and return to the drone card and memories. */
+  onClose?: () => void;
+  /** Plays the close-out animation on the shell (unmount happens after). */
+  closing?: boolean;
 }
 
 type PanelKey = "portfolio" | "narrative" | "tech";
@@ -26,7 +30,12 @@ const DEFAULT_PANEL_MODES: Record<PanelKey, OverlayMode> = {
   tech: "static",
 };
 
-const MoonOrbitHtmlLayout: React.FC<Props> = ({ content, visible }) => {
+const MoonOrbitHtmlLayout: React.FC<Props> = ({
+  content,
+  visible,
+  onClose,
+  closing = false,
+}) => {
   const [hoveredTechIndex, setHoveredTechIndex] = useState<number | null>(null);
   const [lockedTechIndex, setLockedTechIndex] = useState<number | null>(null);
   const [portfolioExpanded, setPortfolioExpanded] = useState(false);
@@ -483,7 +492,7 @@ const MoonOrbitHtmlLayout: React.FC<Props> = ({ content, visible }) => {
   return (
     <div
       ref={rootRef}
-      className="moon-html-layout-shell"
+      className={`moon-html-layout-shell${closing ? " moon-html-layout-shell--closing" : ""}`}
       onClick={handleBackdropClick}
     >
       <div
@@ -491,6 +500,20 @@ const MoonOrbitHtmlLayout: React.FC<Props> = ({ content, visible }) => {
         className={`moon-html-layout-frame${panelsHidden ? " moon-html-layout-frame--hidden" : ""}${hasPortfolio ? "" : " moon-html-layout-frame--no-portfolio"}`}
       >
         <MatrixEffect visible={visible} color="#2a9968" className="moon-matrix-bg" />
+        {onClose && (
+          <button
+            type="button"
+            className="moon-html-layout__close"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            aria-label="Close details"
+            title="Close details"
+          >
+            <i className="fa-solid fa-xmark" aria-hidden="true" />
+          </button>
+        )}
         <button
           ref={toggleRef}
           className={`moon-html-layout__toggle${panelsHidden ? " moon-html-layout__toggle--hidden" : ""}`}

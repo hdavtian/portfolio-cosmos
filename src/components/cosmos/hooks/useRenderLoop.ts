@@ -100,10 +100,6 @@ export const useRenderLoop = () => {
         world: [number, number, number];
       }>;
       navTurnActiveRef: React.MutableRefObject<boolean>;
-      projectShowcaseActiveRef: React.MutableRefObject<boolean>;
-      projectShowcaseTrackRef?: React.MutableRefObject<{
-        axis: "x" | "z" | "y";
-      } | null>;
       settledViewTargetRef: React.MutableRefObject<THREE.Vector3 | null>;
       optionsRef: React.MutableRefObject<{
         spaceFollowDistance?: number;
@@ -191,8 +187,6 @@ export const useRenderLoop = () => {
         optionsRef,
         hologramDroneRef,
         navTurnActiveRef,
-        projectShowcaseActiveRef,
-        projectShowcaseTrackRef,
         gpuWarmupInProgressRef,
         loadingActiveRef,
         tvPreviewControllerRef,
@@ -220,6 +214,11 @@ export const useRenderLoop = () => {
 
       void physicsWorld.init();
       let lastFrameTime = performance.now();
+      // Longest time step one frame may advance a ship cinematic. Only a real
+      // freeze exceeds this; ordinary slow frames still advance in real time.
+      const CINEMATIC_MAX_FRAME_STEP_MS = 250;
+      const _engineForward = new THREE.Vector3();
+      const _engineVelocity = new THREE.Vector3();
       // Default cockpit/cabin positions ΓÇö from ship-labeling system.
       // Cockpit INTERIOR ΓÇö offset inward from the exterior surface label.
       // Exterior surface was (-6.2, 3.6, 7.1). Interior: ~0.8 inward (+X),
@@ -1011,6 +1010,26 @@ export const useRenderLoop = () => {
           Math.max((frameNow - lastFrameTime) / 1000, 0),
           0.1,
         );
+        // Ship cinematics are timed with performance.now(). Push their start
+        // times forward by any stall, so a long frame (texture upload, shader
+        // compile) pauses the fly-in instead of jumping to its end state.
+        const stallMs = frameNow - lastFrameTime - CINEMATIC_MAX_FRAME_STEP_MS;
+        const stalledCinematic = shipCinematicRef.current;
+        if (stallMs > 0 && stalledCinematic?.active) {
+          const shiftFrom = (start: number) =>
+            Math.min(stallMs, Math.max(0, frameNow - start));
+          stalledCinematic.startTime += shiftFrom(stalledCinematic.startTime);
+          if (stalledCinematic.hoverStartTime) {
+            stalledCinematic.hoverStartTime += shiftFrom(
+              stalledCinematic.hoverStartTime,
+            );
+          }
+          if (stalledCinematic.orbitStartTime) {
+            stalledCinematic.orbitStartTime += shiftFrom(
+              stalledCinematic.orbitStartTime,
+            );
+          }
+        }
         lastFrameTime = frameNow;
         const travelAnchor = travelAnchorRef.current;
         let activeShip: THREE.Object3D | null = null;
@@ -2087,8 +2106,13 @@ export const useRenderLoop = () => {
                     );
                     cc.minDistance = 0.5;
                     cc.maxDistance = CONTROLS_MAX_DIST;
+                    const vehicleCamera = ship.userData.followCamera as
+                      | { behind: number; height: number }
+                      | undefined;
                     const baseFollowDist =
-                      optionsRef.current.spaceFollowDistance ?? FOLLOW_DISTANCE;
+                      vehicleCamera?.behind ??
+                      optionsRef.current.spaceFollowDistance ??
+                      FOLLOW_DISTANCE;
                     // Keep ship visible during high-speed travel (especially
                     // long planet-to-planet lightspeed legs) by tightening
                     // chase distance while lightspeed is active.
@@ -2172,6 +2196,49 @@ export const useRenderLoop = () => {
             const dt = Math.max((now - prevTime) / 1000, 1 / 120);
             speedUnitsPerSec = ship.position.distanceTo(prevPos) / dt;
           }
+          // Engine glow while travelling forward under autopilot. The intro
+          // cinematic and manual flight drive the light themselves above.
+          const engineLight = spaceshipEngineLightRef.current;
+          if (
+            engineLight &&
+            prevPos &&
+            !shipCinematicRef.current?.active &&
+            !manualFlightModeRef.current
+          ) {
+            _engineForward.set(0, 0, -1).applyQuaternion(ship.quaternion);
+            const forwardSpeed =
+              _engineVelocity.copy(ship.position).sub(prevPos).dot(_engineForward) /
+              Math.max((now - (prevTime ?? now)) / 1000, 1 / 120);
+            const forwardNorm = THREE.MathUtils.clamp(forwardSpeed / 220, 0, 1.6);
+            const targetIntensity = forwardNorm > 0.02 ? 0.8 + forwardNorm * 3.2 : 0;
+            const ease = 1 - Math.exp(-6 * deltaSeconds);
+            engineLight.intensity +=
+              (targetIntensity - engineLight.intensity) * ease;
+            const distanceScale =
+              (engineLight.userData.distanceScale as number | undefined) ?? 1;
+            engineLight.distance =
+              (ENGINE_LIGHT_BASE_DIST + forwardNorm * ENGINE_LIGHT_RANGE) *
+              distanceScale;
+            const blueAmount = 0.3 + forwardNorm * 0.7;
+            engineLight.color.setRGB(
+              blueAmount * 0.3,
+              blueAmount * 0.6,
+              blueAmount * 1.0,
+            );
+            // A point light alone is invisible; vehicles without glowing
+            // engine panels get a sprite whose brightness follows the light.
+            const glowSprite = engineLight.userData.glowSprite as
+              | THREE.Sprite
+              | undefined;
+            if (glowSprite) {
+              const glowMat = glowSprite.material as THREE.SpriteMaterial;
+              glowMat.opacity = THREE.MathUtils.clamp(
+                engineLight.intensity / 4,
+                0,
+                1,
+              );
+            }
+          }
           ship.userData._enginePanelPrevPos = ship.position.clone();
           ship.userData._enginePanelPrevTime = now;
           const panelMaterials = ship.userData.enginePanelMaterials as
@@ -2243,61 +2310,6 @@ export const useRenderLoop = () => {
         }
 
         sunMesh.rotation.y += 0.002;
-
-        const bokehPass = sceneRef.current.bokehPass as
-          | {
-              enabled: boolean;
-              materialBokeh?: {
-                uniforms?: {
-                  focus?: { value: number };
-                  aperture?: { value: number };
-                  maxblur?: { value: number };
-                };
-              };
-            }
-          | undefined;
-        const droneActive = hologramDroneRef.current?.isActive();
-        const showcaseDofActive = projectShowcaseActiveRef.current;
-        const showcaseAxis = projectShowcaseTrackRef?.current?.axis;
-        const elevatorShaftMode = showcaseAxis === "y";
-        if (insideShipRef.current || droneActive || !showcaseDofActive) {
-          if (bokehPass?.enabled) {
-            bokehPass.enabled = false;
-          }
-        } else if (bokehPass) {
-          if (!bokehPass.enabled) bokehPass.enabled = true;
-          const focusTarget = new THREE.Vector3();
-          const fallbackFocusDistance = 52;
-          let focusDistance = fallbackFocusDistance;
-          try {
-            (
-              controls as unknown as {
-                getTarget: (out: THREE.Vector3) => THREE.Vector3;
-              }
-            ).getTarget(focusTarget);
-            const camToTarget = camera.position.distanceTo(focusTarget);
-            if (elevatorShaftMode) {
-              // In elevator mode we want opposite-window content crisp while
-              // retaining subtle blur elsewhere in the shaft.
-              focusDistance = THREE.MathUtils.clamp(camToTarget * 0.96, 28, 92);
-            } else {
-              // Keep near geometry in focus and let distant tunnel drift softly out.
-              focusDistance = THREE.MathUtils.clamp(camToTarget * 0.55, 36, 82);
-            }
-          } catch {
-            focusDistance = fallbackFocusDistance;
-          }
-          const uniforms = bokehPass.materialBokeh?.uniforms;
-          if (uniforms?.focus) {
-            uniforms.focus.value = focusDistance;
-          }
-          if (uniforms?.aperture) {
-            uniforms.aperture.value = elevatorShaftMode ? 0.00006 : 0.0001;
-          }
-          if (uniforms?.maxblur) {
-            uniforms.maxblur.value = elevatorShaftMode ? 0.0022 : 0.0045;
-          }
-        }
 
         const _p3 = performance.now();
 
@@ -2731,7 +2743,7 @@ export const useRenderLoop = () => {
             `[PERF] SLOW FRAME #${_perfFrameCount} (slow#${_perfSlowFrames}) total=${_pTotal.toFixed(1)}ms mode=${mode}${scaleTag}\n` +
               `  exitFocus=${(_p1 - _p0).toFixed(1)}ms` +
               ` | shipLogic=${((_p2 ?? _p1) - _p1).toFixed(1)}ms` +
-              ` | camFollow+bokeh=${(_p3 - (_p2 ?? _p1)).toFixed(1)}ms` +
+              ` | camFollow=${(_p3 - (_p2 ?? _p1)).toFixed(1)}ms` +
               ` | orbitSys+ctrl=${(_p4 - _p3).toFixed(1)}ms` +
               ` | droneUpdate=${(_p5 - _p4).toFixed(1)}ms` +
               ` | lightspeed+comets=${(_p6 - _p5).toFixed(1)}ms` +

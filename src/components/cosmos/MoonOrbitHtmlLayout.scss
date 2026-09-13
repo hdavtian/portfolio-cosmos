@@ -212,6 +212,58 @@ $section-bg: rgba(4, 14, 22, 0.72);
   }
 }
 
+// Close-out animation lives on the shell, which no GSAP timeline touches, so
+// the panels' own entrance animations can't override it mid-fade.
+@keyframes moon-html-layout-close {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(24px) scale(0.97);
+  }
+}
+
+.moon-html-layout-shell--closing {
+  animation: moon-html-layout-close 0.45s ease-in forwards;
+  pointer-events: none;
+}
+
+.moon-html-layout__close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(126, 160, 136, 0.38);
+  border-radius: 8px;
+  background: rgba(4, 12, 22, 0.86);
+  color: #9bc4d9;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 21;
+  box-shadow: 0 0 14px rgba(0, 0, 0, 0.35);
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+
+  i {
+    font-size: 15px;
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: #e6f7ff;
+    border-color: rgba(155, 220, 255, 0.7);
+    background: rgba(10, 28, 44, 0.95);
+  }
+}
+
 .moon-html-layout__toggle {
   top: 50%;
   min-height: 132px;

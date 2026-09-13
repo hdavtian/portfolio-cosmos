@@ -18,6 +18,7 @@ const HEADER_BG = "rgba(2, 4, 8, 0.82)";
 const SECTION_BG = "rgba(4, 10, 22, 0.78)";
 
 const FLY_IN_DURATION = 1.2;
+const SUPPRESS_FADE_DURATION = 0.45;
 const BORDER_DRAW_DURATION = 1.6;
 const CONTENT_FADE_DURATION = 0.5;
 const LASER_STAGGER = 0.2;
@@ -341,6 +342,10 @@ export class HologramDroneDisplay {
   private guideLines: GuideLineRecord[] = [];
 
   private introMode = false;
+  /** Temporarily hidden (e.g. behind the details view) without losing state. */
+  private suppressed = false;
+  /** 0 = fully faded out, 1 = fully visible; eases toward the suppress target. */
+  private suppressFade = 1;
   private onSeeDetailsCallback: (() => void) | null = null;
 
   private flyStartPos = new THREE.Vector3();
@@ -1206,6 +1211,8 @@ export class HologramDroneDisplay {
     const _scStart = performance.now();
     this.clearPanels();
     this.active = true;
+    this.suppressed = false;
+    this.suppressFade = 1;
     this.hiding = false;
     this.hideProgress = 0;
     this.flyInProgress = 0;
@@ -1328,6 +1335,8 @@ export class HologramDroneDisplay {
     this.clearIntroCard();
     this.active = true;
     this.introMode = true;
+    this.suppressed = false;
+    this.suppressFade = 1;
     this.hiding = false;
     this.hideProgress = 0;
     this.flyInProgress = 0;
@@ -1454,6 +1463,22 @@ export class HologramDroneDisplay {
     this.introMode = false;
   }
 
+  /**
+   * Fade the drone and its already-drawn card out (or back in) without
+   * resetting the draw sequence, so returning from the details view does not
+   * replay the fly-in and laser writing.
+   */
+  setContentSuppressed(suppressed: boolean): void {
+    if (!this.active) return;
+    this.suppressed = suppressed;
+    if (suppressed) {
+      this.stopAllDroneAudio();
+    } else {
+      this.rootGroup.visible = true;
+      this.panelGroup.visible = true;
+    }
+  }
+
   hideContent(): void {
     if (!this.active) return;
     this.hiding = true;
@@ -1464,6 +1489,8 @@ export class HologramDroneDisplay {
   hideContentImmediate(): void {
     if (!this.active) return;
     this.active = false;
+    this.suppressed = false;
+    this.suppressFade = 1;
     this.hiding = false;
     this.hideProgress = 0;
     this.droneExitingAfterDraw = false;
@@ -1494,6 +1521,8 @@ export class HologramDroneDisplay {
 
   getInteractivePanelMeshes(): THREE.Object3D[] {
     const result: THREE.Object3D[] = [];
+    // Hidden behind the details view (or fading): nothing is clickable.
+    if (this.suppressed || this.suppressFade < 1) return result;
     if (this.active && this.introMode && this.drawFinished) {
       for (const panel of this.panels) result.push(panel.mesh);
       return result;
@@ -1725,6 +1754,26 @@ export class HologramDroneDisplay {
     const dt = Math.min(delta, 0.05);
     this.ensureDroneAudio(camera);
     if (!this.droneGroup.visible) this.stopAllDroneAudio();
+
+    const suppressTarget = this.suppressed ? 0 : 1;
+    if (this.suppressFade !== suppressTarget) {
+      const step = dt / SUPPRESS_FADE_DURATION;
+      this.suppressFade = this.suppressed
+        ? Math.max(0, this.suppressFade - step)
+        : Math.min(1, this.suppressFade + step);
+    }
+    if (this.suppressed || this.suppressFade < 1) {
+      const s = 1 - Math.pow(1 - this.suppressFade, 3);
+      for (const panel of this.panels) panel.material.opacity = panel.targetOpacity * s;
+      this.droneGroup.scale.setScalar(s);
+      this.laserRigs.forEach((rig) => this.setLaserRigOpacity(rig, 0));
+      this.scannerLight.intensity = 0;
+      if (this.suppressed && this.suppressFade <= 0) {
+        this.rootGroup.visible = false;
+        this.panelGroup.visible = false;
+      }
+      return;
+    }
 
     if (this.hiding) {
       this.hideProgress += dt / 0.6;

@@ -6,10 +6,6 @@ import * as THREE from "three";
 import ThreeGlobe from "three-globe";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import aboutDeck from "../../data/aboutDeck.json";
-import aboutHallLevelsManifest from "../../data/aboutHallLevels.json";
-import aboutHallSlidesLegacy from "../../data/aboutHallSlides.json";
-import aboutHallSlidesLevel01 from "../../data/aboutHallSlides.level-01-signal-origins.json";
-import aboutHallSlidesLevel02 from "../../data/aboutHallSlides.level-02-human-systems.json";
 import aboutPathTravelMessages from "../../data/aboutPathTravelMessages.json";
 import { moonPortfolioMapping } from "../../data/moonPortfolioMapping";
 import portfolioCores from "../../data/portfolioCores.json";
@@ -136,7 +132,6 @@ import {
 } from "./portfolioData";
 import { createMoonFocusController } from "./ResumeSpace3D.focusController";
 import {
-  CAMERA_FAR,
   CINE_DURATION_DIVISOR,
   CONTROLS_MAX_DIST,
   EXPERIENCE_ORBIT,
@@ -159,7 +154,6 @@ import {
   SD_SCALE,
   SKILLS_FOCUS_DIST,
   SKILLS_WANDER_RADIUS,
-  SKYFIELD_RADIUS,
   SUN_GLOW_SPRITE_SIZE,
   SUN_WANDER_RADIUS,
   orbitDebug,
@@ -190,9 +184,7 @@ type ShipLabelMark = {
   localPoint: [number, number, number];
 };
 
-const PROJECT_SHOWCASE_NAV_ID = "project-showcase";
 const ABOUT_MEMORY_SQUARE_NAV_ID = "memory-squares";
-const PROJECT_SHOWCASE_LAYER = 2;
 const ORBITAL_PORTFOLIO_NAV_ID = "orbital-portfolio";
 const ORBITAL_PORTFOLIO_LAYER = 4;
 const ORBITAL_PORTFOLIO_DEBUG_LOGS = true;
@@ -219,215 +211,175 @@ const MOON_ORBIT_SIGN_DEBUG_LOGS = false;
 // Card layer stays on the overlay pass to avoid bloom/tonemapping washout.
 const PROJECT_SHOWCASE_CARD_LAYER = 1;
 const SKILLS_LATTICE_LAYER = 3;
-const PROJECT_SHOWCASE_MIN_ANGLE_PERCENT = 0;
-const PROJECT_SHOWCASE_MAX_ANGLE_PERCENT = 100;
-const PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT = 25;
-const PROJECT_SHOWCASE_NAV_STOP_BACK_OFFSET = 15;
-const PROJECT_SHOWCASE_WORLD_ANCHOR = new THREE.Vector3(-5200, 380, 4200);
-const PROJECT_SHOWCASE_NAV_APPROACH_LOOKAHEAD_MULT = 2.1;
-const PROJECT_SHOWCASE_USE_LONG_ENTRY_APPROACH = false;
-const PROJECT_SHOWCASE_ENTRY_DURATION_MS = 2300;
-const PROJECT_SHOWCASE_USE_SHIP_ENTRY_SEQUENCE = false;
-const PROJECT_SHOWCASE_FREE_LOOK_ENABLED = true;
-const PROJECT_SHOWCASE_FREE_LOOK_MIN_DISTANCE = 18;
-const PROJECT_SHOWCASE_FREE_LOOK_MAX_DISTANCE = 160;
-const PROJECT_SHOWCASE_ENTRY_FORWARD_LOCK_MS = 1200;
-const PROJECT_SHOWCASE_FORWARD_LOOK_SIGN = 1;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_MS = 1500;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_HOLD_MS = 540;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS = 1180;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS = 320;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS = 0.75;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_APPROACH_SPIN_RAD_PER_SEC = 0.75;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_TURNS = 0;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_RAD_PER_SEC = 0.9;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_SCALE_MULT = 4;
-const PROJECT_SHOWCASE_ABOUT_BEACON_CORE_SIZE = 280;
-const PROJECT_SHOWCASE_ABOUT_BEACON_HALO_SIZE = 760;
-const PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_FAR = 0.74;
-const PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_NEAR = 0.08;
-const PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_FAR = 0.2;
-const PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_NEAR = 0.02;
-const PROJECT_SHOWCASE_ABOUT_BEACON_FADE_NEAR_DIST = 380;
-const PROJECT_SHOWCASE_ABOUT_BEACON_FADE_FAR_DIST = 2200;
-const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MIN_INTERVAL_MS = 17000;
-const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MAX_INTERVAL_MS = 32000;
-const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_OUT_MS = 1150;
-const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_DARK_HOLD_MS = 50000;
-const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_IN_MS = 1300;
-const PROJECT_SHOWCASE_ELEVATOR_OUTAGE_TEXT_SWAP_POWER = 0.4;
-
-const PROJECT_SHOWCASE_VISIBLE_IN_SPACE = false;
-const PROJECT_SHOWCASE_USE_NEBULA_REALM = false;
 const EXPERIENCE_END_CAMERA_POSITION = new THREE.Vector3(
   11281.3,
   -534.0,
   1301.6,
 );
 const EXPERIENCE_END_CAMERA_TARGET = new THREE.Vector3(11970.8, -828.9, -116.5);
-const HALLWAY_DEFAULT_CONTENT_MODE = "about";
+const OBLIVION_DRONE_MODEL_PATH = "/models/oblivion-drone/oblivion_drone.glb";
 
-const ABOUT_HALL_LEVEL_DATA_MAP: Record<string, unknown> = {
-  "level-01": aboutHallSlidesLevel01,
-  "level-02": aboutHallSlidesLevel02,
-};
-const ABOUT_HALL_DEFAULT_LEVEL_ID =
-  aboutHallLevelsManifest.levels.find((l) => l.default)?.id ?? "level-01";
-
-const ABOUT_ELEVATOR_COOKIE_FIRST_VISIT = "aboutElevatorVisited";
-const ABOUT_ELEVATOR_COOKIE_VISITED_LEVELS = "aboutElevatorVisitedLevels";
-
-function getAboutElevatorHasVisited(): boolean {
+// Perf experiment: `?placeholders=true` swaps the Falcon and Oblivion drone
+// GLTFs for simple primitives, to isolate model cost from code cost.
+const PLACEHOLDER_MODELS: boolean = (() => {
+  if (typeof window === "undefined") return false;
   try {
-    return document.cookie
-      .split(";")
-      .some((c) =>
-        c.trim().startsWith(ABOUT_ELEVATOR_COOKIE_FIRST_VISIT + "="),
-      );
+    return (
+      new URLSearchParams(window.location.search).get("placeholders") ===
+      "true"
+    );
   } catch {
     return false;
   }
-}
-function setAboutElevatorHasVisited(): void {
+})();
+
+// Fun experiment: `?ship=bronco` flies a 1989 Ford Bronco instead of the Falcon.
+const SHIP_VARIANT: string | null = (() => {
+  if (typeof window === "undefined") return null;
   try {
-    document.cookie = `${ABOUT_ELEVATOR_COOKIE_FIRST_VISIT}=1;path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
+    return new URLSearchParams(window.location.search).get("ship");
   } catch {
-    /* noop */
+    return null;
   }
-}
-function getAboutElevatorVisitedLevels(): string[] {
-  try {
-    const match = document.cookie
-      .split(";")
-      .find((c) =>
-        c.trim().startsWith(ABOUT_ELEVATOR_COOKIE_VISITED_LEVELS + "="),
-      );
-    if (!match) return [];
-    return decodeURIComponent(match.split("=")[1] ?? "")
-      .split(",")
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-function markAboutElevatorLevelVisited(levelId: string): void {
-  try {
-    const visited = new Set(getAboutElevatorVisitedLevels());
-    visited.add(levelId);
-    document.cookie = `${ABOUT_ELEVATOR_COOKIE_VISITED_LEVELS}=${encodeURIComponent(Array.from(visited).join(","))};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
-  } catch {
-    /* noop */
-  }
+})();
+
+const SHIP_VARIANT_MODEL_PATHS: Record<string, string> = {
+  bronco: "/models/bronco/ford_bronco_1989.glb",
+  falcon2: "/models/falcon2/falcon2.glb",
+};
+
+const loadVehicleAsShip = async (loader: GLTFLoader, path: string) => {
+  const gltf = await loader.loadAsync(path);
+  // Fit the model to the Falcon's model-space footprint (~14 units) and center
+  // it so the Falcon's scale, cockpit offsets and follow camera still work.
+  const vehicle = gltf.scene;
+  const box = new THREE.Box3().setFromObject(vehicle);
+  const size = box.getSize(new THREE.Vector3());
+  vehicle.scale.setScalar(14 / Math.max(size.x, size.y, size.z, 0.0001));
+  box.setFromObject(vehicle);
+  vehicle.position.sub(box.getCenter(new THREE.Vector3()));
+  capEmissiveIntensity(vehicle);
+  // The ship is always in flight here; hide any modeled landing gear
+  // (e.g. the falcon2 model's "Landing Gear Legs" node). GLTFLoader
+  // sanitizes node names, turning spaces into underscores.
+  vehicle.traverse((obj) => {
+    if (/landing[\s_]*gear/i.test(obj.name)) obj.visible = false;
+  });
+  const scene = new THREE.Group();
+  scene.add(vehicle);
+  return { ...gltf, scene };
+};
+
+// Some exports author very high emissive strength (e.g. 8× via
+// KHR_materials_emissive_strength), which the scene's bloom turns into a
+// white-out. Cap it so glow details stay readable.
+const MAX_IMPORTED_EMISSIVE_INTENSITY = 1.2;
+function capEmissiveIntensity(root: THREE.Object3D) {
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.material) return;
+    const materials = Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material];
+    materials.forEach((material) => {
+      const mat = material as THREE.MeshStandardMaterial;
+      if (
+        typeof mat.emissiveIntensity === "number" &&
+        mat.emissiveIntensity > MAX_IMPORTED_EMISSIVE_INTENSITY
+      ) {
+        mat.emissiveIntensity = MAX_IMPORTED_EMISSIVE_INTENSITY;
+      }
+    });
+  });
 }
 
-const HALLWAY_OSWALD_FONT_STACK =
-  "'Oswald', 'Montserrat', 'Segoe UI', Arial, sans-serif";
-const HALLWAY_TEXT_DEFAULT_SHADOW = "0px 0px 10px rgba(0, 0, 0, 0.4)";
-type ProjectShowcaseModelKey = "legacy" | "spaceHallway" | "spaceHallwayBright";
-type ProjectShowcaseModelProfile = {
-  modelPath: string;
-  textureBasePath: string;
-  enableFloorPulses: boolean;
-  injectNamedDiffuseMaps: boolean;
-  applyLegacyMeshFilters: boolean;
-  applyLegacyMaterialNormalization: boolean;
-  disableEmbeddedModelLights: boolean;
-  enableSupplementalLighting: boolean;
-  ambientLightIntensity: number;
-  keyLightIntensity: number;
-  rimLightIntensity: number;
-  sunLightIntensity: number;
-  sunBeamIntensity: number;
+// Fun experiment: `?drone=deathstar` replaces the Oblivion drone model.
+// HologramDroneDisplay normalizes whatever model it gets to drone size.
+const DRONE_VARIANT: string | null = (() => {
+  if (typeof window === "undefined") return null;
+  try {
+    return new URLSearchParams(window.location.search).get("drone");
+  } catch {
+    return null;
+  }
+})();
+
+const DRONE_VARIANT_MODEL_PATHS: Record<string, string> = {
+  deathstar: "/models/deathstar/deathstar.glb",
 };
-const PROJECT_SHOWCASE_MODEL_PROFILES: Record<
-  ProjectShowcaseModelKey,
-  ProjectShowcaseModelProfile
-> = {
-  legacy: {
-    modelPath: "/models/projects-scene/spaceship_corridor.glb",
-    textureBasePath: "/models/projects-scene/textures",
-    enableFloorPulses: true,
-    injectNamedDiffuseMaps: true,
-    applyLegacyMeshFilters: true,
-    applyLegacyMaterialNormalization: true,
-    disableEmbeddedModelLights: true,
-    enableSupplementalLighting: true,
-    ambientLightIntensity: 0.38,
-    keyLightIntensity: 1.0,
-    rimLightIntensity: 0.32,
-    sunLightIntensity: 1.85,
-    sunBeamIntensity: 2.35,
-  },
-  spaceHallway: {
-    modelPath: "/models/space-hallway/space_corridor.glb",
-    textureBasePath: "/models/space-hallway/textures",
-    // Flip to false if hallway floor lanes do not align with this mesh.
-    enableFloorPulses: false,
-    // Preserve this asset's authored look from DCC/Sketchfab export.
-    injectNamedDiffuseMaps: false,
-    applyLegacyMeshFilters: false,
-    applyLegacyMaterialNormalization: false,
-    disableEmbeddedModelLights: false,
-    enableSupplementalLighting: false,
-    // Keep window transparency but reduce washout on wall/floor details.
-    ambientLightIntensity: 0.2,
-    keyLightIntensity: 0.46,
-    rimLightIntensity: 0.14,
-    sunLightIntensity: 0.62,
-    sunBeamIntensity: 0.78,
-  },
-  spaceHallwayBright: {
-    modelPath: "/models/space-hallway/space_corridor.glb",
-    textureBasePath: "/models/space-hallway/textures",
-    // Keep hallway floor effect disabled for this corridor mesh.
-    enableFloorPulses: false,
-    // Preserve imported material maps/values and push scene lights brighter.
-    injectNamedDiffuseMaps: false,
-    applyLegacyMeshFilters: false,
-    applyLegacyMaterialNormalization: false,
-    disableEmbeddedModelLights: false,
-    enableSupplementalLighting: true,
-    // Brighter white-forward pass to better match the Sketchfab presentation.
-    ambientLightIntensity: 0.5,
-    keyLightIntensity: 1.18,
-    rimLightIntensity: 0.38,
-    sunLightIntensity: 1.45,
-    sunBeamIntensity: 1.85,
-  },
+
+// Self-illumination for drone models that read too dark in moon orbit. A
+// real light attached to the drone would change the scene's light count each
+// visit and recompile every lit shader (a measured multi-hundred-ms stall), so
+// light the surface from its own color texture instead.
+const DRONE_SELF_ILLUMINATION = 0.6;
+
+const loadDroneVariant = async (loader: GLTFLoader, path: string) => {
+  const gltf = await loader.loadAsync(path);
+  capEmissiveIntensity(gltf.scene);
+  gltf.scene.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.material) return;
+    const materials = Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material];
+    materials.forEach((material) => {
+      const mat = material as THREE.MeshStandardMaterial;
+      // Replaces any authored glow mask too: the Death Star's hull material
+      // ships with a (mostly dark) emissive map, which kept it unlit.
+      if (!mat.isMeshStandardMaterial || !mat.map) return;
+      mat.emissive = new THREE.Color(0xffffff);
+      mat.emissiveMap = mat.map;
+      mat.emissiveIntensity = DRONE_SELF_ILLUMINATION;
+    });
+  });
+  return gltf;
 };
-// A/B switch for project hallway model comparisons.
-const ACTIVE_PROJECT_SHOWCASE_MODEL: ProjectShowcaseModelKey =
-  "spaceHallwayBright";
-const PROJECT_SHOWCASE_ACTIVE_PROFILE =
-  PROJECT_SHOWCASE_MODEL_PROFILES[ACTIVE_PROJECT_SHOWCASE_MODEL];
-const PROJECT_SHOWCASE_MODEL_PATH = PROJECT_SHOWCASE_ACTIVE_PROFILE.modelPath;
-const PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH =
-  "/models/space-station/lunar_gateway_space_station.glb";
-const PROJECT_SHOWCASE_TEXTURE_BASE_PATH =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.textureBasePath;
-const PROJECT_SHOWCASE_ENABLE_FLOOR_PULSES =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.enableFloorPulses;
-const PROJECT_SHOWCASE_INJECT_NAMED_DIFFUSE_MAPS =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.injectNamedDiffuseMaps;
-const PROJECT_SHOWCASE_APPLY_LEGACY_MESH_FILTERS =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.applyLegacyMeshFilters;
-const PROJECT_SHOWCASE_APPLY_LEGACY_MATERIAL_NORMALIZATION =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.applyLegacyMaterialNormalization;
-const PROJECT_SHOWCASE_DISABLE_EMBEDDED_MODEL_LIGHTS =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.disableEmbeddedModelLights;
-const PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.enableSupplementalLighting;
-const PROJECT_SHOWCASE_AMBIENT_LIGHT_INTENSITY =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.ambientLightIntensity;
-const PROJECT_SHOWCASE_KEY_LIGHT_INTENSITY =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.keyLightIntensity;
-const PROJECT_SHOWCASE_RIM_LIGHT_INTENSITY =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.rimLightIntensity;
-const PROJECT_SHOWCASE_SUN_LIGHT_INTENSITY =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.sunLightIntensity;
-const PROJECT_SHOWCASE_SUN_BEAM_INTENSITY =
-  PROJECT_SHOWCASE_ACTIVE_PROFILE.sunBeamIntensity;
-const OBLIVION_DRONE_MODEL_PATH = "/models/oblivion-drone/oblivion_drone.glb";
+
+const buildFalconPlaceholder = (): THREE.Group => {
+  // Roughly the Falcon's model-space footprint (x ±6.7, z ±7.3); front is +Z.
+  const scene = new THREE.Group();
+  const hullMat = new THREE.MeshStandardMaterial({
+    color: 0x9aa3ad,
+    metalness: 0.4,
+    roughness: 0.6,
+  });
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(13.4, 2.4, 13), hullMat);
+  const cockpit = new THREE.Mesh(new THREE.BoxGeometry(2, 1.6, 4), hullMat);
+  cockpit.position.set(-6.05, 1.2, 6.5);
+  const engineMat = new THREE.MeshStandardMaterial({
+    color: 0x1a2a44,
+    emissive: new THREE.Color(0x4aa8ff),
+    emissiveIntensity: 1.2,
+  });
+  const engine = new THREE.Mesh(new THREE.BoxGeometry(10, 1, 0.4), engineMat);
+  engine.position.set(0, 0, -6.7);
+  scene.add(hull, cockpit, engine);
+  return scene;
+};
+
+const buildDronePlaceholder = (): THREE.Group => {
+  const scene = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(0.5, 16, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0xd8dde3,
+      metalness: 0.3,
+      roughness: 0.5,
+    }),
+  );
+  const eye = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 0.3, 0.3),
+    new THREE.MeshStandardMaterial({
+      color: 0x220000,
+      emissive: new THREE.Color(0xff3322),
+      emissiveIntensity: 1.5,
+    }),
+  );
+  eye.position.set(0, 0, 0.45);
+  scene.add(body, eye);
+  return scene;
+};
 const OBLIVION_DRONE_AUDIO_PATHS = {
   activation: "/models/oblivion-drone/199938__drzhnn__01-activation.wav",
   transmission:
@@ -450,18 +402,10 @@ const FALCON_NAV_SFX_PATHS = {
 } as const;
 type FalconNavCueKind = keyof typeof FALCON_NAV_SFX_PATHS;
 const FALCON_MOON_TRAVEL_DEFAULT_VOLUME = 0.68;
-const PROJECT_SHOWCASE_NEBULA_JPG_PATH =
-  "/models/alternate-universe/starmap_16k.jpg";
-const PROJECT_SHOWCASE_NEAR_ANCHOR_DIST = 420;
 const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(
   1158.5,
   157.5,
   14760.375,
-);
-const PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR = new THREE.Vector3(
-  13723.38,
-  157.5,
-  5556.945,
 );
 const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 620;
 const ORBITAL_PORTFOLIO_NAV_STANDOFF_DIST = 560;
@@ -473,8 +417,11 @@ const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 // Recenter deep-space destinations so the universe extent remains sun-centered.
 const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(13600, 220, -12000);
 const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -13200);
-const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR =
-  PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR.clone();
+const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR = new THREE.Vector3(
+  13723.38,
+  157.5,
+  5556.945,
+);
 const ABOUT_MEMORY_SQUARE_NAV_STANDOFF_DIST = 4200;
 const ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST = 4550;
 /** Tighter CameraControls distance limits while the about journey allows free look (keeps points visible). */
@@ -1292,189 +1239,6 @@ const SKILLS_LATTICE_NAV_STANDOFF_DIST = 1200;
 const SKILLS_LATTICE_ENTRY_TRIGGER_DIST = 1800;
 const SKILLS_SD_PATROL_RADIUS = 150;
 const SKILLS_SD_PATROL_SPEED = 0.03;
-const getProjectShowcaseWorldAnchor = (mode: "about" | "projects") =>
-  mode === "about"
-    ? PROJECT_SHOWCASE_ABOUT_WORLD_ANCHOR.clone()
-    : PROJECT_SHOWCASE_WORLD_ANCHOR.clone();
-type RegistryPanelMode = "portfolio" | "projects" | "about";
-type RegistryPanelCapabilities = {
-  showStopOrbits: boolean;
-  showExit: boolean;
-  showAutoPlay: boolean;
-  showPlayPause: boolean;
-  alwaysShowArrows: boolean;
-};
-const REGISTRY_PANEL_CAPABILITIES: Record<
-  RegistryPanelMode,
-  RegistryPanelCapabilities
-> = {
-  portfolio: {
-    showStopOrbits: true,
-    showExit: true,
-    showAutoPlay: true,
-    showPlayPause: false,
-    alwaysShowArrows: false,
-  },
-  projects: {
-    showStopOrbits: false,
-    showExit: false,
-    showAutoPlay: false,
-    showPlayPause: true,
-    alwaysShowArrows: true,
-  },
-  about: {
-    showStopOrbits: false,
-    showExit: true,
-    showAutoPlay: false,
-    showPlayPause: true,
-    alwaysShowArrows: true,
-  },
-};
-const PROJECT_SHOWCASE_CTA_ENTRY_ID = "story-next-mission";
-const PROJECT_SHOWCASE_MAX_MEDIA_ITEMS = 12;
-const PROJECT_SHOWCASE_THUMBS_PER_PAGE = 4;
-type HallwayContentMode = "projects" | "about";
-type HallwayVerticalAlign = "top" | "middle" | "bottom";
-type HallwayHorizontalAlign = "left" | "center" | "right";
-type AboutHallColumnId = "left" | "center" | "right";
-type AboutHallContentType =
-  | "column1"
-  | "column2"
-  | "left"
-  | "center"
-  | "right"
-  | "row1"
-  | "row2"
-  | "r1c1"
-  | "r1c2"
-  | "r2c1"
-  | "r2c2";
-type AboutHallFlowDirection = "topToBottom" | "bottomToTop";
-type AboutContentImage = {
-  src: string;
-  title?: string;
-  description?: string;
-};
-type AboutHallSlideContent = {
-  id: string;
-  type: AboutHallContentType;
-  backgroundColor: string;
-  fontColor: string;
-  fontFamily: string[];
-  fontSize: string;
-  fontShadow?: string;
-  horizontalAlign?: HallwayHorizontalAlign;
-  verticalAlign?: HallwayVerticalAlign;
-  textContent: string;
-  flowDirection?: AboutHallFlowDirection;
-  flowUnitsPerDistance?: number;
-  flowOffsetUnits?: number;
-  widthRatio?: number;
-  heightRatio?: number;
-  columnAngleDeg?: number;
-  offsetX?: number;
-  offsetY?: number;
-  images?: AboutContentImage[];
-};
-type AboutHallColumnConfig = {
-  angleDeg?: number;
-  messages: AboutHallSlideContent[];
-};
-type AboutHallSlideTriggerMode = "default" | "centerTopThreshold";
-type AboutHallSlide = {
-  id: string;
-  registryBtnTitle: string;
-  width: number;
-  height: number;
-  horizontalAlign: HallwayHorizontalAlign;
-  verticalAlign: HallwayVerticalAlign;
-  border?: string;
-  flowFadeOutDistanceViewportHeights?: number;
-  autoSpeed?: number;
-  nextSlideTriggerMode?: AboutHallSlideTriggerMode;
-  nextSlideTriggerTopViewportPercent?: number;
-  configuration: {
-    contents: AboutHallSlideContent[];
-    columns?: Partial<Record<AboutHallColumnId, AboutHallColumnConfig>>;
-  };
-};
-type AboutLevelTransitionConfig = {
-  enabled?: boolean;
-  style?: "squares" | "fade";
-  colorFamily?: "blue" | "green" | "yellow" | "purple" | "custom";
-  colorFamilies?: string[];
-  gridSize?: number;
-  fillDurationMs?: number;
-  clearDurationMs?: number;
-  titleFadeDurationMs?: number;
-  titleText?: string;
-  palette?: string[];
-};
-type AboutHallSlidesFile = {
-  slides: AboutHallSlide[];
-  autoSpeed?: number;
-  startPosition?: number;
-  firstSlidePosition?: number;
-  levelTransition?: AboutLevelTransitionConfig;
-};
-type AboutSlideCellRuntime = {
-  mesh: THREE.Mesh;
-  material: THREE.MeshBasicMaterial;
-  normalTexture: THREE.Texture;
-  emergencyTexture: THREE.Texture;
-  basePosition: THREE.Vector3;
-  flowDirection: AboutHallFlowDirection;
-  flowUnitsPerDistance: number;
-  flowOffsetUnits: number;
-  baseYawRad: number;
-  homeY: number;
-  immersiveColumn?: AboutHallColumnId;
-};
-type AboutSlideRuntime = {
-  mode: "about";
-  slideId: string;
-  cells: AboutSlideCellRuntime[];
-  triggerDistance: number;
-  slideStartRun: number;
-  flowFadeOutDistanceViewportHeights: number;
-  autoSpeed: number;
-};
-
-export type ImmersiveColumnRigValues = {
-  width: number;
-  height: number;
-  posX: number;
-  posY: number;
-  depth: number;
-  angleDeg: number;
-  angleMultiplier: number;
-};
-export type ImmersiveColumnRig = {
-  left: ImmersiveColumnRigValues;
-  center: ImmersiveColumnRigValues;
-  right: ImmersiveColumnRigValues;
-  activeColumn: AboutHallColumnId;
-};
-export const immersiveColumnRigRef: { current: ImmersiveColumnRig | null } = {
-  current: null,
-};
-type AboutFlowOverlayColumnSnapshot = {
-  column: AboutHallColumnId;
-  direction: AboutHallFlowDirection;
-  speed: number;
-  y: number;
-  inViewport: boolean;
-  opacity: number;
-};
-type AboutFlowOverlaySnapshot = {
-  slideId: string;
-  run: number;
-  cameraY: number;
-  visibleHeight: number;
-  maxCellVisibility: number;
-  cells: AboutFlowOverlayColumnSnapshot[];
-};
-
 type AboutExitConfirmIntent = {
   source: "quick" | "cockpit" | "experience";
   targetId: string;
@@ -1498,84 +1262,6 @@ const ABOUT_PATH_RIDE_MESSAGES: AboutPathTravelMessage[] = (
   aboutPathTravelMessages as AboutPathTravelMessage[]
 ).slice(0, 18);
 
-function AboutFlowDebugPanel({
-  snapshot,
-}: {
-  snapshot: AboutFlowOverlaySnapshot | null;
-}) {
-  const [collapsed, setCollapsed] = useState(true);
-  return (
-    <div
-      style={{
-        position: "fixed",
-        left: 16,
-        top: 72,
-        zIndex: 1400,
-        width: collapsed ? 160 : 340,
-        borderRadius: 8,
-        border: "1px solid rgba(130, 220, 255, 0.45)",
-        background: "rgba(4, 12, 24, 0.86)",
-        color: "#d7efff",
-        fontFamily: "'Rajdhani', sans-serif",
-        fontSize: 12,
-        padding: collapsed ? "6px 10px" : "8px 10px",
-        pointerEvents: "auto",
-      }}
-    >
-      <div
-        onClick={() => setCollapsed((c) => !c)}
-        style={{
-          fontWeight: 700,
-          letterSpacing: 0.8,
-          color: "#9fdfff",
-          cursor: "pointer",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          userSelect: "none",
-        }}
-      >
-        <span>ABOUT FLOW DEBUG</span>
-        <span style={{ fontSize: 10, color: "#6dc8e8" }}>
-          {collapsed ? "\u25b6" : "\u25bc"}
-        </span>
-      </div>
-      {!collapsed &&
-        (snapshot ? (
-          <>
-            <div style={{ marginTop: 4 }}>
-              slide={snapshot.slideId} run={snapshot.run.toFixed(2)}
-            </div>
-            <div>
-              camY={snapshot.cameraY.toFixed(2)} visibleH=
-              {snapshot.visibleHeight.toFixed(2)} maxVis=
-              {(snapshot.maxCellVisibility * 100).toFixed(1)}%
-            </div>
-            <div
-              style={{
-                marginTop: 5,
-                borderTop: "1px solid rgba(130,220,255,0.25)",
-                paddingTop: 4,
-              }}
-            >
-              {snapshot.cells.map((c) => (
-                <div key={c.column}>
-                  {c.column}: {c.direction} speed={c.speed.toFixed(2)} y=
-                  {c.y.toFixed(2)} {c.inViewport ? "IN" : "OUT"} alpha=
-                  {c.opacity.toFixed(2)}
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <div style={{ marginTop: 4, opacity: 0.85 }}>
-            Waiting for about-elevator flow snapshot...
-          </div>
-        ))}
-    </div>
-  );
-}
-
 const DEFAULT_BACKGROUND_MUSIC_TRACK =
   Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
 const EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID: Record<string, string> = {
@@ -1597,117 +1283,6 @@ const EXPERIENCE_MOON_BASE_TEXTURES: string[] = [
   "/textures/custom-planet-textures/2k_venus_atmosphere.jpg",
   "/textures/custom-planet-textures/2k_venus_surface.jpg",
 ];
-
-type ShowcaseMediaEntry = {
-  id: string;
-  type?: "image" | "video" | "youtube";
-  image?: string;
-  videoUrl?: string;
-  thumbnail?: string;
-  youtubeUrl?: string;
-  title?: string;
-  description?: string;
-  fit?: "contain" | "cover";
-};
-
-type ShowcaseEntry = {
-  id: string;
-  title: string;
-  image: string;
-  description?: string;
-  technologies?: string[];
-  year?: number | null;
-  fit?: "contain" | "cover";
-  galleryMedia?: ShowcaseMediaEntry[];
-  clientVariants?: ShowcaseClientVariant[];
-};
-
-type ShowcaseClientVariant = {
-  id: string;
-  title: string;
-  image?: string;
-  description?: string;
-  technologies?: string[];
-  year?: number | null;
-  fit?: "contain" | "cover";
-  galleryMedia?: ShowcaseMediaEntry[];
-};
-
-type ShowcaseResolvedMediaItem = {
-  id: string;
-  type: "image" | "video" | "youtube";
-  title: string;
-  description?: string;
-  fit: "contain" | "cover";
-  textureUrl: string;
-  videoUrl?: string;
-  youtubeUrl?: string;
-  youtubeEmbedUrl?: string;
-  variantIndex?: number;
-  variantTitle?: string;
-  variantDescription?: string;
-  variantTechnologies?: string[];
-  variantYear?: number | null;
-};
-
-type ShowcaseThumbnailHitTarget = {
-  mesh: THREE.Mesh;
-  type: "media" | "prev" | "next" | "variant";
-  mediaIndex?: number;
-  variantIndex?: number;
-};
-
-type ShowcasePanelRecord = {
-  group: THREE.Group;
-  runPos: number;
-  entry: ShowcaseEntry;
-  displayTitle?: string;
-  fitMode: "contain" | "cover";
-  inwardRotationY: number;
-  frontFacingRotationY: number;
-  cantSign: -1 | 1;
-  focusBlend: number;
-  frameMat: THREE.MeshBasicMaterial;
-  imageMesh: THREE.Mesh;
-  imageMat: THREE.MeshBasicMaterial;
-  texture: THREE.Texture | null;
-  baseRepeat: THREE.Vector2;
-  baseOffset: THREE.Vector2;
-  zoom: number;
-  panX: number;
-  panY: number;
-  clientVariants: ShowcaseClientVariant[];
-  activeVariantIndex: number;
-  setActiveVariant: (variantIndex: number) => void;
-  mediaItems: ShowcaseResolvedMediaItem[];
-  activeMediaIndex: number;
-  setActiveMedia: (mediaIndex: number) => void;
-  mediaFadeStartMs: number;
-  mediaFadeDurationMs: number;
-  setThumbnailPageStart: (pageStart: number) => void;
-  triggerThumbnailNavPress: (direction: "prev" | "next") => void;
-  thumbnailPageStart: number;
-  thumbnailHitTargets: ShowcaseThumbnailHitTarget[];
-  thumbnailFrameMats: THREE.MeshBasicMaterial[];
-  thumbnailImageMats: Array<THREE.MeshBasicMaterial | undefined>;
-  detailMat: THREE.MeshBasicMaterial;
-  detailTexture: THREE.Texture | null;
-  detailMesh: THREE.Mesh | null;
-  detailScrollThumbMesh: THREE.Mesh | null;
-  detailAllLines: string[];
-  detailVisibleLines: number;
-  detailScrollOffset: number;
-  detailScrollMax: number;
-  updateDetailTexture: () => void;
-  techBadgeRoot: THREE.Group | null;
-  techBadgeFx: Array<{
-    mat: THREE.MeshBasicMaterial;
-    baseOpacity: number;
-    phase: number;
-    baseColor: THREE.Color;
-  }>;
-  aboutRuntime?: AboutSlideRuntime;
-};
 
 type OrbitalPortfolioStationRecord = {
   index: number;
@@ -2103,863 +1678,11 @@ const createMoonTravelSignTexture = (
   return tex;
 };
 
-const extractYouTubeVideoId = (input?: string): string | null => {
-  if (!input) return null;
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-  const patterns = [
-    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
-  ];
-  for (const pattern of patterns) {
-    const match = trimmed.match(pattern);
-    if (match?.[1]) return match[1];
-  }
-  return null;
-};
-
-const toYouTubeEmbedUrl = (videoId: string) =>
-  `https://www.youtube.com/embed/${videoId}`;
-
-const toYouTubeThumbnailUrl = (videoId: string) =>
-  `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-
-const resolveShowcaseMediaItems = (
-  entry: ShowcaseEntry,
-  opts?: { variant?: ShowcaseClientVariant; variantIndex?: number },
-): ShowcaseResolvedMediaItem[] => {
-  const variant = opts?.variant;
-  const variantIndex = opts?.variantIndex;
-  const baseId = variant?.id || entry.id;
-  const baseTitle = variant?.title || entry.title;
-  const baseDescription = variant?.description || entry.description;
-  const baseFit = variant?.fit ?? entry.fit;
-  const baseImage = variant?.image || entry.image;
-  const sourceGalleryMedia = variant?.galleryMedia ?? entry.galleryMedia ?? [];
-  const primary: ShowcaseMediaEntry = {
-    id: `${baseId}-main`,
-    type: "image",
-    image: baseImage,
-    title: baseTitle,
-    description: baseDescription,
-    fit: baseFit,
-  };
-  const candidates = [primary, ...sourceGalleryMedia].slice(
-    0,
-    PROJECT_SHOWCASE_MAX_MEDIA_ITEMS,
-  );
-  const resolved: ShowcaseResolvedMediaItem[] = [];
-  candidates.forEach((item, index) => {
-    const itemType =
-      item.type === "youtube" || item.youtubeUrl
-        ? "youtube"
-        : item.type === "video" || item.videoUrl
-          ? "video"
-          : "image";
-    if (itemType === "youtube") {
-      const videoId = extractYouTubeVideoId(item.youtubeUrl);
-      if (!videoId) return;
-      const textureUrl = item.thumbnail || toYouTubeThumbnailUrl(videoId);
-      resolved.push({
-        id: item.id || `${baseId}-youtube-${index}`,
-        type: "youtube",
-        title: item.title || "YouTube Video",
-        description: item.description,
-        fit: item.fit ?? "cover",
-        textureUrl,
-        youtubeUrl: item.youtubeUrl,
-        youtubeEmbedUrl: toYouTubeEmbedUrl(videoId),
-        variantIndex,
-        variantTitle: variant?.title,
-        variantDescription: variant?.description,
-        variantTechnologies: variant?.technologies,
-        variantYear: variant?.year,
-      });
-      return;
-    }
-    if (itemType === "video") {
-      if (!item.videoUrl) return;
-      resolved.push({
-        id: item.id || `${baseId}-video-${index}`,
-        type: "video",
-        title: item.title || "Video",
-        description: item.description,
-        fit: item.fit ?? "cover",
-        textureUrl: item.thumbnail || baseImage,
-        videoUrl: item.videoUrl,
-        variantIndex,
-        variantTitle: variant?.title,
-        variantDescription: variant?.description,
-        variantTechnologies: variant?.technologies,
-        variantYear: variant?.year,
-      });
-      return;
-    }
-    if (!item.image) return;
-    resolved.push({
-      id: item.id || `${baseId}-image-${index}`,
-      type: "image",
-      title: item.title || baseTitle,
-      description: item.description || baseDescription,
-      fit: item.fit ?? baseFit ?? "contain",
-      textureUrl: item.image,
-      variantIndex,
-      variantTitle: variant?.title,
-      variantDescription: variant?.description,
-      variantTechnologies: variant?.technologies,
-      variantYear: variant?.year,
-    });
-  });
-  if (resolved.length === 0) {
-    resolved.push({
-      id: `${baseId}-fallback`,
-      type: "image",
-      title: baseTitle,
-      description: baseDescription,
-      fit: baseFit ?? "contain",
-      textureUrl: baseImage,
-      variantIndex,
-      variantTitle: variant?.title,
-      variantDescription: variant?.description,
-      variantTechnologies: variant?.technologies,
-      variantYear: variant?.year,
-    });
-  }
-  return resolved;
-};
-
-const wrapTextLines = (input: string, maxCharsPerLine = 54): string[] => {
-  const text = (input || "").trim();
-  if (!text) return [];
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let line = "";
-  words.forEach((word) => {
-    const next = line ? `${line} ${word}` : word;
-    if (next.length <= maxCharsPerLine) {
-      line = next;
-      return;
-    }
-    if (line) lines.push(line);
-    line = word;
-  });
-  if (line) lines.push(line);
-  return lines;
-};
-
-const parsePixelSize = (value: string | undefined, fallback = 42): number => {
-  if (!value) return fallback;
-  const parsed = Number.parseFloat(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return parsed;
-};
-
-const splitHtmlBreakLines = (text: string): string[] =>
-  text
-    .split(/<br\s*\/?>/gi)
-    .flatMap((line) => line.split(/\r?\n/))
-    .map((line) => line.trim());
-
 const normalizeRideMessageText = (text: string): string =>
   text
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/\\n/g, "\n")
     .replace(/\/n/g, "\n");
-
-const resolveCanvasAlign = (
-  align?: HallwayHorizontalAlign,
-): CanvasTextAlign => {
-  if (align === "center") return "center";
-  if (align === "right") return "right";
-  return "left";
-};
-
-const resolveCanvasBaselineAnchor = (
-  align?: HallwayVerticalAlign,
-): "top" | "middle" | "bottom" => {
-  if (align === "top") return "top";
-  if (align === "bottom") return "bottom";
-  return "middle";
-};
-
-const parseBorderStyle = (
-  border?: string,
-): { width: number; color: string } => {
-  if (!border) return { width: 2, color: "rgba(130, 210, 255, 0.72)" };
-  const widthMatch = border.match(/(\d+(?:\.\d+)?)px/i);
-  const width = widthMatch ? Number.parseFloat(widthMatch[1]) : 2;
-  const colorCandidates = border.match(
-    /(rgba?\([^)]+\)|#[0-9a-f]{3,8}|[a-zA-Z]+)/g,
-  );
-  const disallowedTokens = new Set([
-    "solid",
-    "dashed",
-    "dotted",
-    "double",
-    "none",
-    "inherit",
-    "initial",
-    "unset",
-    "transparent",
-    "px",
-  ]);
-  const color =
-    colorCandidates?.find((candidate) => {
-      const normalized = candidate.trim().toLowerCase();
-      return !disallowedTokens.has(normalized);
-    }) ?? "rgba(130, 210, 255, 0.72)";
-  return {
-    width: Number.isFinite(width) && width > 0 ? width : 2,
-    color,
-  };
-};
-
-const toThreeColorStyle = (color: string): string => {
-  const rgbaMatch = color.match(
-    /^rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*[\d.]+\s*\)$/i,
-  );
-  if (!rgbaMatch) return color;
-  return `rgb(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]})`;
-};
-
-const normalizeAboutFlowDirection = (raw?: string): AboutHallFlowDirection => {
-  if (raw === "bottomToTop" || raw === "topToBottom") {
-    return raw;
-  }
-  return "topToBottom";
-};
-
-const resolveAboutContentText = (content: AboutHallSlideContent): string => {
-  return content.textContent || "";
-};
-
-const getAboutColumnMessages = (
-  slide: AboutHallSlide,
-): Record<AboutHallColumnId, AboutHallSlideContent[]> => {
-  const cols = slide.configuration.columns;
-  return {
-    left: cols?.left?.messages ?? [],
-    center: cols?.center?.messages ?? [],
-    right: cols?.right?.messages ?? [],
-  };
-};
-
-const THRESHOLD_MIN_HANDOFF_DISTANCE = 6;
-const THRESHOLD_PERCENT_MIN = 40;
-const THRESHOLD_PERCENT_MAX = 90;
-
-const TRANSITION_DEFAULTS = {
-  enabled: true,
-  style: "squares" as const,
-  colorFamily: "blue" as const,
-  gridSize: 24,
-  fillDurationMs: 1000,
-  clearDurationMs: 1000,
-  titleFadeDurationMs: 800,
-  palette: [] as string[],
-};
-
-const TRANSITION_SHAPE_OPACITY_MIN = 0.58;
-const TRANSITION_SHAPE_OPACITY_MAX = 1;
-
-type TransitionCellDescriptor = {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  color: string;
-  shapeOpacity: number;
-};
-
-function buildTransitionCellDescriptors(
-  rect: DOMRect,
-  gridSize: number,
-  palette: string[],
-): TransitionCellDescriptor[] {
-  const descriptors: TransitionCellDescriptor[] = [];
-  const safePalette = palette.length > 0 ? palette : ["#ffffff"];
-
-  const pushDescriptor = (x: number, y: number, w: number, h: number) => {
-    if (x > rect.width || y > rect.height || x + w < 0 || y + h < 0) return;
-    descriptors.push({
-      x,
-      y,
-      w,
-      h,
-      color:
-        safePalette[Math.floor(Math.random() * safePalette.length)] ??
-        "#ffffff",
-      shapeOpacity:
-        TRANSITION_SHAPE_OPACITY_MIN +
-        Math.random() *
-          (TRANSITION_SHAPE_OPACITY_MAX - TRANSITION_SHAPE_OPACITY_MIN),
-    });
-  };
-
-  const cols = Math.max(4, gridSize);
-  const cellW = rect.width / cols;
-  const rows = Math.ceil(rect.height / cellW);
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const x = col * cellW;
-      const y = row * cellW;
-      pushDescriptor(x, y, cellW, cellW);
-    }
-  }
-
-  return descriptors;
-}
-
-const TRANSITION_COLOR_FAMILIES: Record<string, string[]> = {
-  blue: [
-    "#0a1628",
-    "#102040",
-    "#1a3a6a",
-    "#2a5ca8",
-    "#3a7ce0",
-    "#5a9cf0",
-    "#7abcff",
-    "#a0d4ff",
-    "#c8e8ff",
-    "#e8f4ff",
-    "#ffffff",
-  ],
-  green: [
-    "#081810",
-    "#0c2818",
-    "#144028",
-    "#1c6038",
-    "#28884c",
-    "#38a860",
-    "#50c878",
-    "#78d898",
-    "#a0e8b8",
-    "#c8f0d8",
-    "#ffffff",
-  ],
-  yellow: [
-    "#181408",
-    "#28200c",
-    "#403414",
-    "#60501c",
-    "#887028",
-    "#a89038",
-    "#c8b050",
-    "#d8c878",
-    "#e8e0a0",
-    "#f0ecc8",
-    "#ffffff",
-  ],
-  purple: [
-    "#100828",
-    "#1c0c40",
-    "#2c1460",
-    "#3c1c88",
-    "#5028a8",
-    "#6838c8",
-    "#8050e0",
-    "#9870f0",
-    "#b898ff",
-    "#d0c0ff",
-    "#ffffff",
-  ],
-};
-
-function resolveTransitionPalette(
-  cfg: AboutLevelTransitionConfig | undefined,
-  colorFamily: string,
-): string[] {
-  const families = Array.isArray(cfg?.colorFamilies) ? cfg?.colorFamilies : [];
-  const familyPalette = families
-    .map((family) =>
-      family
-        ? TRANSITION_COLOR_FAMILIES[String(family).toLowerCase()]
-        : undefined,
-    )
-    .flatMap((colors) => colors ?? []);
-
-  const customPalette = Array.isArray(cfg?.palette)
-    ? cfg.palette.filter((c) => typeof c === "string" && c.trim().length > 0)
-    : [];
-  if (familyPalette.length > 0 && customPalette.length > 0) {
-    return [...familyPalette, ...customPalette];
-  }
-  if (familyPalette.length > 0) return familyPalette;
-  if (customPalette.length > 0) return customPalette;
-  return (
-    TRANSITION_COLOR_FAMILIES[colorFamily] ?? TRANSITION_COLOR_FAMILIES.blue
-  );
-}
-
-type ResolvedTransitionConfig = {
-  enabled: boolean;
-  style: "squares" | "fade";
-  colorFamily: string;
-  gridSize: number;
-  fillDurationMs: number;
-  clearDurationMs: number;
-  titleFadeDurationMs: number;
-  palette: string[];
-  titleText: string;
-};
-
-function resolveTransitionConfig(
-  cfg?: AboutLevelTransitionConfig,
-): ResolvedTransitionConfig {
-  const style = cfg?.style ?? TRANSITION_DEFAULTS.style;
-  const colorFamily = cfg?.colorFamily ?? TRANSITION_DEFAULTS.colorFamily;
-  const gridSize = Math.max(
-    4,
-    Math.min(80, cfg?.gridSize ?? TRANSITION_DEFAULTS.gridSize),
-  );
-  const fillDurationMs = Math.max(
-    200,
-    Math.min(5000, cfg?.fillDurationMs ?? TRANSITION_DEFAULTS.fillDurationMs),
-  );
-  const clearDurationMs = Math.max(
-    200,
-    Math.min(5000, cfg?.clearDurationMs ?? TRANSITION_DEFAULTS.clearDurationMs),
-  );
-  const titleFadeDurationMs = Math.max(
-    200,
-    Math.min(
-      3000,
-      cfg?.titleFadeDurationMs ?? TRANSITION_DEFAULTS.titleFadeDurationMs,
-    ),
-  );
-  const palette = resolveTransitionPalette(cfg, colorFamily);
-
-  return {
-    enabled: cfg?.enabled ?? TRANSITION_DEFAULTS.enabled,
-    style,
-    colorFamily,
-    gridSize,
-    fillDurationMs,
-    clearDurationMs,
-    titleFadeDurationMs,
-    palette,
-    titleText: cfg?.titleText ?? "",
-  };
-}
-
-/**
- * Computes a reduced slide-life distance for a previous slide when it opts into
- * `centerTopThreshold` mode. Returns `null` to signal fallback to legacy spacing.
- *
- * The idea: the next slide should start when the *top edge* of the current slide's
- * center-column content crosses a given viewport-percent line. A viewport percent of
- * 70 means "when the center content's top reaches 70% from the top of the screen."
- *
- * All measurements are in world-run units (same coordinate space as slideRunPositions).
- */
-const computeCenterTopThresholdDistance = (
-  prevSlide: AboutHallSlide,
-  estimatedVisibleHeight: number,
-  fixedTriggerDistance: number,
-  measureFn: (slide: AboutHallSlide) => number,
-): number | null => {
-  if (prevSlide.nextSlideTriggerMode !== "centerTopThreshold") return null;
-
-  const centerMsgs = prevSlide.configuration.columns?.center?.messages;
-  if (!centerMsgs?.length) return null;
-
-  const rawPercent = prevSlide.nextSlideTriggerTopViewportPercent;
-  if (rawPercent == null || !Number.isFinite(rawPercent)) return null;
-
-  const safePercent = THREE.MathUtils.clamp(
-    rawPercent,
-    THRESHOLD_PERCENT_MIN,
-    THRESHOLD_PERCENT_MAX,
-  );
-
-  const centerTallest = measureFn(prevSlide);
-  const halfVisible = estimatedVisibleHeight * 0.5;
-  const halfContent = centerTallest * 0.5;
-
-  const viewportFractionFromTop = safePercent / 100;
-  const crossingY =
-    halfVisible - estimatedVisibleHeight * viewportFractionFromTop;
-
-  const topEdgeHome = halfContent;
-  const distanceToTravel = topEdgeHome - crossingY;
-
-  const handoffDistance = fixedTriggerDistance + Math.max(0, distanceToTravel);
-  return Math.max(THRESHOLD_MIN_HANDOFF_DISTANCE, handoffDistance);
-};
-
-const normalizeAboutSlideColumns = (slide: AboutHallSlide): AboutHallSlide => {
-  if (slide.configuration.columns) return slide;
-  const source = slide.configuration.contents ?? [];
-  const left: AboutHallSlideContent[] = [];
-  const center: AboutHallSlideContent[] = [];
-  const right: AboutHallSlideContent[] = [];
-  source.forEach((content) => {
-    const type = content.type;
-    if (type === "left") {
-      left.push(content);
-      return;
-    }
-    if (
-      type === "right" ||
-      type === "column2" ||
-      type === "r1c2" ||
-      type === "r2c2"
-    ) {
-      right.push(content);
-      return;
-    }
-    center.push(content);
-  });
-  return {
-    ...slide,
-    configuration: {
-      ...slide.configuration,
-      contents: [],
-      columns: {
-        left: { messages: left },
-        center: { messages: center },
-        right: { messages: right },
-      },
-    },
-  };
-};
-
-const drawAboutSlideText = (
-  ctx: CanvasRenderingContext2D,
-  content: AboutHallSlideContent,
-  width: number,
-  height: number,
-  opts?: { creditsStyle?: boolean; emergencyMood?: boolean },
-): number => {
-  const creditsStyle = opts?.creditsStyle ?? false;
-  const emergencyMood = opts?.emergencyMood ?? false;
-  const contentText = resolveAboutContentText(content);
-  const fontSize = parsePixelSize(content.fontSize, 42);
-  const fontFamily =
-    content.fontFamily?.length > 0
-      ? content.fontFamily.map((font) => `'${font}'`).join(", ")
-      : HALLWAY_OSWALD_FONT_STACK;
-  const textAlign = resolveCanvasAlign(content.horizontalAlign);
-  const verticalAnchor = resolveCanvasBaselineAnchor(content.verticalAlign);
-  const lineHeight = Math.round(fontSize * (creditsStyle ? 1.15 : 1.24));
-  const padX = Math.max(24, width * (creditsStyle ? 0.045 : 0.09));
-  const padY = Math.max(20, height * (creditsStyle ? 0.08 : 0.11));
-  const maxLineWidth = Math.max(120, width - padX * 2);
-
-  ctx.font = `600 ${fontSize}px ${fontFamily}`;
-  const sourceLines = splitHtmlBreakLines(contentText);
-  const lines: string[] = [];
-  sourceLines.forEach((line) => {
-    if (line.length === 0) {
-      lines.push("");
-      return;
-    }
-    const words = line.split(/\s+/).filter(Boolean);
-    if (words.length === 0) {
-      lines.push("");
-      return;
-    }
-    let current = words[0];
-    for (let i = 1; i < words.length; i += 1) {
-      const candidate = `${current} ${words[i]}`;
-      if (ctx.measureText(candidate).width <= maxLineWidth) {
-        current = candidate;
-      } else {
-        lines.push(current);
-        current = words[i];
-      }
-    }
-    lines.push(current);
-  });
-  if (lines.length === 0) lines.push("");
-  const blockHeight = Math.max(lineHeight, lines.length * lineHeight);
-
-  let x = padX;
-  if (textAlign === "center") x = width * 0.5;
-  if (textAlign === "right") x = width - padX;
-
-  let baseY = height * 0.5 - blockHeight * 0.5 + lineHeight * 0.5;
-  if (verticalAnchor === "top") baseY = padY + lineHeight * 0.5;
-  if (verticalAnchor === "bottom")
-    baseY = height - padY - blockHeight + lineHeight * 0.5;
-
-  ctx.textAlign = textAlign;
-  ctx.textBaseline = "middle";
-  if (creditsStyle) {
-    ctx.fillStyle = emergencyMood
-      ? "rgba(248, 252, 255, 0.98)"
-      : "rgba(10, 10, 12, 0.98)";
-    ctx.shadowColor = emergencyMood
-      ? "rgba(96, 255, 172, 0.82)"
-      : "rgba(248, 252, 255, 0.95)";
-    ctx.shadowBlur = Math.max(14, fontSize * 0.34);
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-  } else {
-    ctx.fillStyle = content.fontColor || "rgba(240, 248, 255, 0.98)";
-    const rawShadow = content.fontShadow || HALLWAY_TEXT_DEFAULT_SHADOW;
-    const pxParts = rawShadow.match(/(-?\d+(?:\.\d+)?)\s*px/g);
-    const colorPart = rawShadow.match(/(rgba?\([^)]+\)|#[0-9a-fA-F]{3,8})/);
-    ctx.shadowColor = colorPart ? colorPart[1] : rawShadow;
-    ctx.shadowBlur =
-      pxParts && pxParts.length >= 3 ? parseFloat(pxParts[2]) : 8;
-    ctx.shadowOffsetX =
-      pxParts && pxParts.length >= 1 ? parseFloat(pxParts[0]) : 0;
-    ctx.shadowOffsetY =
-      pxParts && pxParts.length >= 2 ? parseFloat(pxParts[1]) : 0;
-  }
-
-  lines.forEach((line, index) => {
-    const y = baseY + lineHeight * index;
-    ctx.fillText(line, x, y);
-  });
-
-  ctx.shadowColor = "transparent";
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 0;
-
-  return baseY + lines.length * lineHeight;
-};
-
-const measureAboutImagesHeight = (
-  images: AboutContentImage[] | undefined,
-  maxDrawWidth: number,
-  fontSize: number,
-  loadedImages?: Map<string, HTMLImageElement>,
-  pixelAspect?: number,
-): number => {
-  if (!images || images.length === 0) return 0;
-  const pa = pixelAspect && pixelAspect > 0 ? pixelAspect : 1;
-  const titleFontSize = Math.round(fontSize * 0.42);
-  const descFontSize = Math.round(fontSize * 0.36);
-  const imgPad = Math.round(fontSize * 0.3);
-  const gapBetween = Math.round(fontSize * 0.5);
-  let total = 0;
-  images.forEach((entry, i) => {
-    if (i > 0) total += gapBetween;
-    const hasTitle = !!entry.title?.trim();
-    const hasDesc = !!entry.description?.trim();
-    if (hasTitle) total += Math.round(titleFontSize * 1.3) + imgPad;
-    const loaded = loadedImages?.get(entry.src);
-    if (loaded && loaded.naturalWidth > 0 && loaded.naturalHeight > 0) {
-      const aspect = loaded.naturalHeight / loaded.naturalWidth;
-      total += Math.round((maxDrawWidth * aspect) / pa);
-    } else {
-      total += Math.round((maxDrawWidth * 0.56) / pa);
-    }
-    if (hasDesc) total += imgPad + Math.round(descFontSize * 1.3);
-  });
-  return total;
-};
-
-const measureAboutTextHeight = (
-  content: AboutHallSlideContent,
-  canvasWidth: number,
-  canvasHeight: number,
-  opts?: {
-    creditsStyle?: boolean;
-    loadedImages?: Map<string, HTMLImageElement>;
-    pixelAspect?: number;
-  },
-): number => {
-  const creditsStyle = opts?.creditsStyle ?? false;
-  const contentText = resolveAboutContentText(content);
-  const fontSize = parsePixelSize(content.fontSize, 42);
-  const fontFamily =
-    content.fontFamily?.length > 0
-      ? content.fontFamily.map((font) => `'${font}'`).join(", ")
-      : HALLWAY_OSWALD_FONT_STACK;
-  const lineHeight = Math.round(fontSize * (creditsStyle ? 1.15 : 1.24));
-  const padX = Math.max(24, canvasWidth * (creditsStyle ? 0.045 : 0.09));
-  const padY = Math.max(20, canvasHeight * (creditsStyle ? 0.08 : 0.11));
-  const maxLineWidth = Math.max(120, canvasWidth - padX * 2);
-
-  const tempCanvas = document.createElement("canvas");
-  tempCanvas.width = 1;
-  tempCanvas.height = 1;
-  const ctx = tempCanvas.getContext("2d");
-  if (!ctx) return canvasHeight;
-
-  ctx.font = `600 ${fontSize}px ${fontFamily}`;
-  const sourceLines = splitHtmlBreakLines(contentText);
-  let lineCount = 0;
-  sourceLines.forEach((line) => {
-    if (line.length === 0) {
-      lineCount++;
-      return;
-    }
-    const words = line.split(/\s+/).filter(Boolean);
-    if (words.length === 0) {
-      lineCount++;
-      return;
-    }
-    let current = words[0];
-    for (let i = 1; i < words.length; i += 1) {
-      const candidate = `${current} ${words[i]}`;
-      if (ctx.measureText(candidate).width <= maxLineWidth) {
-        current = candidate;
-      } else {
-        lineCount++;
-        current = words[i];
-      }
-    }
-    lineCount++;
-  });
-  if (lineCount === 0) lineCount = 1;
-  const textHeight = lineCount * lineHeight + padY * 2;
-  const imagesHeight = measureAboutImagesHeight(
-    content.images,
-    maxLineWidth,
-    fontSize,
-    opts?.loadedImages,
-    opts?.pixelAspect,
-  );
-  const imagesGap = imagesHeight > 0 ? Math.round(fontSize * 0.5) : 0;
-  return Math.max(textHeight + imagesGap + imagesHeight, canvasHeight);
-};
-
-const drawAboutSlideImages = (
-  ctx: CanvasRenderingContext2D,
-  content: AboutHallSlideContent,
-  canvasWidth: number,
-  startY: number,
-  loadedImages?: Map<string, HTMLImageElement>,
-  pixelAspect?: number,
-): void => {
-  const images = content.images;
-  if (!images || images.length === 0) return;
-  const pa = pixelAspect && pixelAspect > 0 ? pixelAspect : 1;
-  const fontSize = parsePixelSize(content.fontSize, 42);
-  const padX = Math.max(24, canvasWidth * 0.09);
-  const maxDrawWidth = Math.max(120, canvasWidth - padX * 2);
-  const titleFontSize = Math.round(fontSize * 0.42);
-  const descFontSize = Math.round(fontSize * 0.36);
-  const imgPad = Math.round(fontSize * 0.3);
-  const gapBetween = Math.round(fontSize * 0.5);
-  const textGap = Math.round(fontSize * 0.5);
-
-  let curY = startY + textGap;
-
-  images.forEach((entry, i) => {
-    if (i > 0) curY += gapBetween;
-    const hasTitle = !!entry.title?.trim();
-    const hasDesc = !!entry.description?.trim();
-
-    if (hasTitle) {
-      ctx.save();
-      ctx.font = `500 ${titleFontSize}px 'Oswald', 'Montserrat', Arial, sans-serif`;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 1;
-      ctx.fillText(entry.title!.trim(), padX, curY);
-      ctx.shadowColor = "transparent";
-      ctx.shadowBlur = 0;
-      ctx.restore();
-      curY += Math.round(titleFontSize * 1.3) + imgPad;
-    }
-
-    const loaded = loadedImages?.get(entry.src);
-    if (loaded && loaded.naturalWidth > 0 && loaded.naturalHeight > 0) {
-      const aspect = loaded.naturalHeight / loaded.naturalWidth;
-      const drawW = maxDrawWidth;
-      const drawH = Math.round((drawW * aspect) / pa);
-      try {
-        ctx.drawImage(loaded, padX, curY, drawW, drawH);
-      } catch {
-        ctx.fillStyle = "rgba(40, 50, 70, 0.6)";
-        ctx.fillRect(padX, curY, drawW, drawH);
-      }
-      curY += drawH;
-    } else {
-      const placeholderH = Math.round((maxDrawWidth * 0.56) / pa);
-      ctx.fillStyle = "rgba(40, 50, 70, 0.4)";
-      ctx.fillRect(padX, curY, maxDrawWidth, placeholderH);
-      curY += placeholderH;
-    }
-
-    if (hasDesc) {
-      curY += imgPad;
-      ctx.save();
-      ctx.font = `400 ${descFontSize}px 'Oswald', 'Montserrat', Arial, sans-serif`;
-      ctx.fillStyle = "rgba(200, 220, 240, 0.75)";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      ctx.fillText(entry.description!.trim(), padX, curY);
-      ctx.restore();
-      curY += Math.round(descFontSize * 1.3);
-    }
-  });
-};
-
-const createAboutCellTexture = (
-  content: AboutHallSlideContent,
-  canvasWidth: number,
-  canvasHeight: number,
-  opts?: {
-    transparentBackground?: boolean;
-    creditsStyle?: boolean;
-    emergencyMood?: boolean;
-    loadedImages?: Map<string, HTMLImageElement>;
-    pixelAspect?: number;
-  },
-): THREE.CanvasTexture => {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvasWidth;
-  canvas.height = canvasHeight;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    const fallback = new THREE.CanvasTexture(canvas);
-    fallback.colorSpace = THREE.SRGBColorSpace;
-    fallback.needsUpdate = true;
-    return fallback;
-  }
-
-  const bgValue = content.backgroundColor?.trim() ?? "";
-  const isTransparentBg =
-    opts?.transparentBackground ||
-    bgValue === "" ||
-    bgValue === "transparent" ||
-    bgValue === "none";
-  if (!isTransparentBg) {
-    ctx.fillStyle = bgValue || "rgba(8, 16, 32, 0.9)";
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-  } else {
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-  }
-  const textBottomY = drawAboutSlideText(
-    ctx,
-    content,
-    canvasWidth,
-    canvasHeight,
-    {
-      creditsStyle: opts?.creditsStyle,
-      emergencyMood: opts?.emergencyMood,
-    },
-  );
-  drawAboutSlideImages(
-    ctx,
-    content,
-    canvasWidth,
-    textBottomY,
-    opts?.loadedImages,
-    opts?.pixelAspect,
-  );
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.minFilter = THREE.LinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
-  texture.needsUpdate = true;
-  return texture;
-};
 
 type SkillsLatticeNodeRecord = {
   mesh: THREE.Mesh;
@@ -3108,78 +1831,15 @@ type AboutCellAnimationRuntime = {
 export default function ResumeSpace3D({
   options,
   onOptionsChange,
-  aboutHallInitialLevelId,
-  aboutHallColumnAngleMultiplier = 1,
-  onHallwayContentModeChange,
-  onProjectShowcaseActiveChange,
   onReloadUniverse,
 }: ResumeSpace3DProps) {
   const aboutDeckData = aboutDeck as AboutDeckData;
   const aboutSlides = aboutDeckData.aboutDeck.slides;
 
-  const effectiveInitialLevel =
-    aboutHallInitialLevelId ?? ABOUT_HALL_DEFAULT_LEVEL_ID;
-  const [selectedAboutLevelId, setSelectedAboutLevelId] = useState<
-    string | null
-  >(effectiveInitialLevel);
-  const selectedAboutLevelIdRef = useRef<string | null>(effectiveInitialLevel);
-  const [aboutLevelGateActive, setAboutLevelGateActive] = useState(false);
-  const aboutLevelGateActiveRef = useRef(false);
-  const [visitedAboutLevels, setVisitedAboutLevels] = useState<string[]>(() =>
-    getAboutElevatorVisitedLevels(),
-  );
-
-  const [, setAboutTransitionActive] = useState(false);
-  const aboutTransitionActiveRef = useRef(false);
-  const aboutTransitionCleanupRef = useRef<(() => void) | null>(null);
-  const [aboutEntryFadeOpacity, setAboutEntryFadeOpacity] = useState(0);
-  const aboutEntryFadeRafRef = useRef<number>(0);
-
-  const resolveAboutHallData = useCallback(
-    (levelId: string | null): AboutHallSlidesFile => {
-      if (!levelId) return aboutHallSlidesLegacy as AboutHallSlidesFile;
-      const data = ABOUT_HALL_LEVEL_DATA_MAP[levelId];
-      return (data ?? aboutHallSlidesLegacy) as AboutHallSlidesFile;
-    },
-    [],
-  );
-
-  const aboutHallData = useMemo(
-    () => resolveAboutHallData(selectedAboutLevelId),
-    [selectedAboutLevelId, resolveAboutHallData],
-  );
-  const aboutHallwaySlides = useMemo<AboutHallSlide[]>(
-    () =>
-      (aboutHallData.slides || []).map((slide) =>
-        normalizeAboutSlideColumns({ ...slide }),
-      ),
-    [aboutHallData.slides],
-  );
-  const aboutHallDefaultAutoSpeedRef = useRef(aboutHallData.autoSpeed ?? 0.62);
-  useEffect(() => {
-    aboutHallDefaultAutoSpeedRef.current = aboutHallData.autoSpeed ?? 0.62;
-  }, [aboutHallData.autoSpeed]);
-  const aboutHallFirstSlidePositionRef = useRef(
-    aboutHallData.firstSlidePosition,
-  );
-  useEffect(() => {
-    aboutHallFirstSlidePositionRef.current = aboutHallData.firstSlidePosition;
-  }, [aboutHallData.firstSlidePosition]);
-  const aboutHallStartPositionRef = useRef(aboutHallData.startPosition);
-  useEffect(() => {
-    aboutHallStartPositionRef.current = aboutHallData.startPosition;
-  }, [aboutHallData.startPosition]);
   const portfolioCoreBuild = useMemo(
     () =>
-      buildPortfolioRegistryModel(
-        portfolioCores as PortfolioCoreSeed[],
-        PROJECT_SHOWCASE_MAX_MEDIA_ITEMS,
-      ),
+      buildPortfolioRegistryModel(portfolioCores as PortfolioCoreSeed[]),
     [],
-  );
-  const portfolioShowcaseEntries = useMemo<ShowcaseEntry[]>(
-    () => portfolioCoreBuild.hallwayEntries.map((entry) => ({ ...entry })),
-    [portfolioCoreBuild.hallwayEntries],
   );
   const moonPortfolioByCompanyId = useMemo(() => {
     const map = new Map<string, NonNullable<OverlayContent["moonPortfolio"]>>();
@@ -3204,45 +1864,6 @@ export default function ResumeSpace3D({
     },
     [moonPortfolioByCompanyId],
   );
-  const [hallwayContentMode, setHallwayContentMode] =
-    useState<HallwayContentMode>(
-      HALLWAY_DEFAULT_CONTENT_MODE as HallwayContentMode,
-    );
-  const hallwayContentModeRef = useRef<HallwayContentMode>(
-    HALLWAY_DEFAULT_CONTENT_MODE as HallwayContentMode,
-  );
-  const [hallwayFontsReady, setHallwayFontsReady] = useState(false);
-  const hallwayFontsReadyRef = useRef(false);
-  const aboutShowcaseEntries = useMemo<ShowcaseEntry[]>(
-    () =>
-      aboutHallwaySlides.map((slide) => {
-        const byColumn = getAboutColumnMessages(slide);
-        const messages = [
-          ...byColumn.left,
-          ...byColumn.center,
-          ...byColumn.right,
-        ];
-        return {
-          id: slide.id,
-          title: slide.registryBtnTitle,
-          image:
-            "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
-          description: messages
-            .map((cell) => resolveAboutContentText(cell))
-            .join(" "),
-          technologies: [],
-          year: 2026,
-          fit: "contain",
-          galleryMedia: [],
-          clientVariants: [],
-        };
-      }),
-    [aboutHallwaySlides],
-  );
-  const projectShowcaseEntries =
-    hallwayContentMode === "about"
-      ? aboutShowcaseEntries
-      : portfolioShowcaseEntries;
   // EXPORT SURFACE
   // Props: options, onOptionsChange
   // Emits: onOptionsChange (options sync)
@@ -3300,23 +1921,6 @@ export default function ResumeSpace3D({
     useState(IS_DEBUG);
   const [logDroneDebugEnabled, setLogDroneDebugEnabled] = useState(IS_DEBUG);
   const [logNavDebugEnabled, setLogNavDebugEnabled] = useState(IS_DEBUG);
-  const [aboutFlowOverlayEnabled, setAboutFlowOverlayEnabled] =
-    useState(IS_DEBUG);
-  const aboutFlowOverlayEnabledRef = useRef(IS_DEBUG);
-  const [aboutFlowOverlaySnapshot, setAboutFlowOverlaySnapshot] =
-    useState<AboutFlowOverlaySnapshot | null>(null);
-  const aboutFlowOverlayLastUpdateRef = useRef(0);
-  const emitFalconLocationLogsRef = useRef(false);
-  const emitSDLocationLogsRef = useRef(false);
-  useEffect(() => {
-    aboutFlowOverlayEnabledRef.current = aboutFlowOverlayEnabled;
-  }, [aboutFlowOverlayEnabled]);
-  useEffect(() => {
-    emitFalconLocationLogsRef.current = emitFalconLocationLogs;
-  }, [emitFalconLocationLogs]);
-  useEffect(() => {
-    emitSDLocationLogsRef.current = emitSDLocationLogs;
-  }, [emitSDLocationLogs]);
   const shipLog = useCallback(
     (
       message: string,
@@ -3385,6 +1989,9 @@ export default function ResumeSpace3D({
   const [moonIntroComplete, setMoonIntroComplete] = useState(false);
   const moonHtmlLayoutRef = useRef<HTMLDivElement | null>(null);
   const moonHtmlTimelineRef = useRef<gsap.core.Timeline | null>(null);
+  const [moonHtmlClosing, setMoonHtmlClosing] = useState(false);
+  const moonHtmlCloseTimerRef = useRef<number | null>(null);
+  const MOON_HTML_CLOSE_MS = 450;
   const [droneSoundEnabled, setDroneSoundEnabled] = useState(false);
   const [droneSoundVolume, setDroneSoundVolume] = useState(0.35);
   const [falconSoundEnabled, setFalconSoundEnabled] = useState(false);
@@ -3405,64 +2012,6 @@ export default function ResumeSpace3D({
     () => Object.keys(COSMIC_AUDIO_TRACKS),
     [],
   );
-
-  useEffect(() => {
-    hallwayContentModeRef.current = hallwayContentMode;
-    onHallwayContentModeChange?.(hallwayContentMode);
-  }, [hallwayContentMode, onHallwayContentModeChange]);
-
-  useEffect(() => {
-    const interior = projectShowcaseInteriorRootRef.current;
-    const exterior = projectShowcaseExteriorRootRef.current;
-    const aboutLabel = aboutMemorySquareLabelRef.current;
-    const aboutMode = hallwayContentMode === "about";
-    const active = projectShowcaseActiveRef.current;
-    if (aboutMode) {
-      if (interior) interior.visible = active;
-      if (exterior)
-        exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE && !active;
-      // Prevent CSS title overlay leaking through hallway walls.
-      if (aboutLabel) aboutLabel.visible = !active;
-    } else {
-      if (interior) interior.visible = true;
-      if (exterior) exterior.visible = false;
-      if (aboutLabel) aboutLabel.visible = true;
-    }
-  }, [hallwayContentMode]);
-
-  useEffect(() => {
-    hallwayFontsReadyRef.current = hallwayFontsReady;
-  }, [hallwayFontsReady]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const ensureHallwayFonts = async () => {
-      try {
-        if (typeof document === "undefined" || !("fonts" in document)) {
-          if (!cancelled) setHallwayFontsReady(true);
-          return;
-        }
-        await (
-          document as Document & {
-            fonts: FontFaceSet;
-          }
-        ).fonts.load(`600 32px ${HALLWAY_OSWALD_FONT_STACK}`);
-        await (
-          document as Document & {
-            fonts: FontFaceSet;
-          }
-        ).fonts.ready;
-      } catch {
-        // Keep hallway usable even if custom fonts fail to load.
-      } finally {
-        if (!cancelled) setHallwayFontsReady(true);
-      }
-    };
-    void ensureHallwayFonts();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Keep orbitActiveRef in sync for pointer handlers
   useEffect(() => {
@@ -3522,6 +2071,11 @@ export default function ResumeSpace3D({
         moonHtmlTimelineRef.current.kill();
         moonHtmlTimelineRef.current = null;
       }
+      if (moonHtmlCloseTimerRef.current !== null) {
+        window.clearTimeout(moonHtmlCloseTimerRef.current);
+        moonHtmlCloseTimerRef.current = null;
+      }
+      setMoonHtmlClosing(false);
       setMoonHtmlVisible(false);
       setMoonIntroComplete(false);
     }
@@ -3608,7 +2162,7 @@ export default function ResumeSpace3D({
   const gpuWarmupInProgressRef = useRef(false);
   const sceneModelsLoadedRef = useRef(0);
   const [allSceneModelsLoaded, setAllSceneModelsLoaded] = useState(false);
-  const SCENE_MODEL_COUNT = 4; // spaceship, star-destroyer, showcase, about-exterior
+  const SCENE_MODEL_COUNT = 2; // spaceship, star-destroyer
   const markSceneModelLoaded = useCallback(() => {
     sceneModelsLoadedRef.current += 1;
     if (sceneModelsLoadedRef.current >= SCENE_MODEL_COUNT) {
@@ -3793,18 +2347,36 @@ export default function ResumeSpace3D({
           `[PERF:warmup] initTexture: ${textureCount} textures in ${initTextureMs.toFixed(1)}ms`,
         );
 
-        // Step 2 — Compile all shader programs asynchronously
+        // Step 2 — Compile all shader programs asynchronously. Hidden objects
+        // (the Falcon before the intro reveal, etc.) are skipped by
+        // compileAsync, so their shaders would otherwise compile on the frame
+        // they first appear. Reveal them for this step only; lights stay as-is
+        // so the compiled programs match the real light count. They are hidden
+        // again before Step 3, so no textures upload for them here.
         const compileStart = performance.now();
         await yieldToMainThread();
+        const revealedForCompile: THREE.Object3D[] = [];
+        mainScene.traverse((obj) => {
+          if (!obj.visible && !(obj as THREE.Light).isLight) {
+            obj.visible = true;
+            revealedForCompile.push(obj);
+          }
+        });
         const COMPILE_TIMEOUT_MS = 8000;
-        await Promise.race([
-          renderer.compileAsync(mainScene, liveCamera).catch((err) => {
-            dwarn("[PERF:warmup] compileAsync error (non-fatal):", err);
-          }),
-          new Promise<void>((resolve) =>
-            setTimeout(resolve, COMPILE_TIMEOUT_MS),
-          ),
-        ]);
+        try {
+          await Promise.race([
+            renderer.compileAsync(mainScene, liveCamera).catch((err) => {
+              dwarn("[PERF:warmup] compileAsync error (non-fatal):", err);
+            }),
+            new Promise<void>((resolve) =>
+              setTimeout(resolve, COMPILE_TIMEOUT_MS),
+            ),
+          ]);
+        } finally {
+          revealedForCompile.forEach((obj) => {
+            obj.visible = false;
+          });
+        }
         const compileMs = performance.now() - compileStart;
         if (compileMs >= COMPILE_TIMEOUT_MS) {
           dwarn(
@@ -3819,8 +2391,8 @@ export default function ResumeSpace3D({
         renderer.render(mainScene, liveCamera);
         const renderMs = performance.now() - renderStart;
 
-        // Step 4 — Warm the EffectComposer at 1/4 resolution so bloom and
-        // bokeh shaders are compiled before the live render loop uses them.
+        // Step 4 — Warm the EffectComposer at 1/4 resolution so bloom
+        // shaders are compiled before the live render loop uses them.
         // Previous attempts at full-resolution composer warmup caused long
         // loader freezes; the reduced size keeps the cost manageable while
         // still triggering all shader compilation paths.
@@ -3940,6 +2512,17 @@ export default function ResumeSpace3D({
     const gltfPreloader = new GLTFLoader();
     const texturePreloader = new THREE.TextureLoader();
     const audioPreloader = new THREE.AudioLoader();
+    // Started synchronously so the scene-setup effect (which runs after this
+    // one) can reuse the same parse instead of loading the Falcon twice.
+    const falconGltfPromise =
+      SHIP_VARIANT && SHIP_VARIANT_MODEL_PATHS[SHIP_VARIANT]
+        ? loadVehicleAsShip(gltfPreloader, SHIP_VARIANT_MODEL_PATHS[SHIP_VARIANT])
+        : PLACEHOLDER_MODELS
+          ? (Promise.resolve({
+              scene: buildFalconPlaceholder(),
+            }) as unknown as ReturnType<GLTFLoader["loadAsync"]>)
+          : gltfPreloader.loadAsync("/models/spaceship/scene.gltf");
+    spaceshipGltfPromiseRef.current = falconGltfPromise;
 
     const loadTextureSafe = async (url: string) => {
       try {
@@ -3970,29 +2553,11 @@ export default function ResumeSpace3D({
         dwarn("[PERF:load] preloadCriticalAssets START");
         debugLog(
           "loader",
-          `[models] preload start hallway=${PROJECT_SHOWCASE_MODEL_PATH} aboutExterior=${PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH} falcon=/models/spaceship/scene.gltf sd=/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb drone=${OBLIVION_DRONE_MODEL_PATH}`,
+          `[models] preload start falcon=/models/spaceship/scene.gltf sd=/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb drone=${OBLIVION_DRONE_MODEL_PATH}`,
         );
-        if (
-          hallwayContentModeRef.current === "about" &&
-          !hallwayFontsReadyRef.current
-        ) {
-          try {
-            if (typeof document !== "undefined" && "fonts" in document) {
-              await (
-                document as Document & {
-                  fonts: FontFaceSet;
-                }
-              ).fonts.ready;
-            }
-          } catch {
-            // Keep loading resilient if browser blocks font status APIs.
-          }
-        }
         const [
-          trenchGltf,
           spaceshipGltf,
           starDestroyerGltf,
-          aboutExteriorGltf,
           oblivionDroneGltf,
           activationBuffer,
           transmissionBuffer,
@@ -4003,13 +2568,18 @@ export default function ResumeSpace3D({
           falconOverrideBuffer,
           ...movementBuffers
         ] = await Promise.all([
-          gltfPreloader.loadAsync(PROJECT_SHOWCASE_MODEL_PATH),
-          gltfPreloader.loadAsync("/models/spaceship/scene.gltf"),
+          falconGltfPromise,
           gltfPreloader.loadAsync(
             "/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb",
           ),
-          gltfPreloader.loadAsync(PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH),
-          gltfPreloader.loadAsync(OBLIVION_DRONE_MODEL_PATH),
+          DRONE_VARIANT && DRONE_VARIANT_MODEL_PATHS[DRONE_VARIANT]
+            ? loadDroneVariant(
+                gltfPreloader,
+                DRONE_VARIANT_MODEL_PATHS[DRONE_VARIANT],
+              )
+            : PLACEHOLDER_MODELS
+              ? Promise.resolve({ scene: buildDronePlaceholder() })
+              : gltfPreloader.loadAsync(OBLIVION_DRONE_MODEL_PATH),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.activation),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.transmission),
           loadAudioSafe(FALCON_NAV_SFX_PATHS.moonTravel[0]),
@@ -4065,77 +2635,14 @@ export default function ResumeSpace3D({
           starDestroyerPreloadedGltfRef.current = starDestroyerGltf as {
             scene: THREE.Group;
           };
-          projectShowcaseAboutExteriorPreloadedGltfRef.current =
-            aboutExteriorGltf as {
-              scene: THREE.Group;
-            };
           debugLog(
             "loader",
-            "[models] preloaded Falcon, Star Destroyer, Hallway, About Exterior, Drone",
+            "[models] preloaded Falcon, Star Destroyer, Drone",
           );
           setLoaderProgressHint((prev) => Math.max(prev, 70));
           setLoaderStageHint("Preparing scene...");
         }
 
-        if (!cancelled) {
-          projectShowcasePreloadedGltfRef.current = trenchGltf as {
-            scene: THREE.Group;
-          };
-        }
-
-        const trenchTextureKeys = new Set<string>();
-        trenchGltf.scene.traverse((obj) => {
-          const mesh = obj as THREE.Mesh;
-          if (!(mesh as any).isMesh || !mesh.material) return;
-          const mats = Array.isArray(mesh.material)
-            ? mesh.material
-            : [mesh.material];
-          mats.forEach((mat) => {
-            const m = mat as THREE.MeshStandardMaterial;
-            if (m.name) trenchTextureKeys.add(m.name);
-          });
-        });
-
-        const trenchTextureJobs: Promise<THREE.Texture | null>[] = [];
-        if (PROJECT_SHOWCASE_INJECT_NAMED_DIFFUSE_MAPS) {
-          trenchTextureKeys.forEach((key) => {
-            const basePath = `${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}/${key}_diffuse`;
-            trenchTextureJobs.push(
-              (async () => {
-                const exts = ["jpeg", "jpg", "png"];
-                for (const ext of exts) {
-                  const tex = await loadTextureSafe(`${basePath}.${ext}`);
-                  if (tex) return tex;
-                }
-                debugLog(
-                  "project-showcase",
-                  `[textures] missing optional diffuse for material "${key}" under ${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}`,
-                );
-                return null;
-              })(),
-            );
-          });
-        }
-
-        const showcaseImageJobs =
-          hallwayContentModeRef.current === "projects"
-            ? projectShowcaseEntries.flatMap((entry) => {
-                const variants =
-                  (entry.clientVariants ?? []).filter(
-                    (variant) => !!variant?.title,
-                  ) ?? [];
-                const items =
-                  variants.length > 0
-                    ? variants.flatMap((variant, variantIndex) =>
-                        resolveShowcaseMediaItems(entry, {
-                          variant,
-                          variantIndex,
-                        }),
-                      )
-                    : resolveShowcaseMediaItems(entry);
-                return items.map((item) => loadTextureSafe(item.textureUrl));
-              })
-            : [];
         const portfolioCoreImageJobs = (() => {
           const urls = new Set<string>();
           const visit = (value: unknown) => {
@@ -4212,8 +2719,6 @@ export default function ResumeSpace3D({
           });
 
         const deferredJobCount =
-          trenchTextureJobs.length +
-          showcaseImageJobs.length +
           portfolioCoreImageJobs.length +
           moonTextureWarmupJobs.length +
           musicTrackWarmupJobs.length;
@@ -4221,8 +2726,6 @@ export default function ResumeSpace3D({
           `[PERF:load] critical assets done; scheduling deferred preload jobs=${deferredJobCount}`,
         );
         void Promise.allSettled([
-          ...trenchTextureJobs,
-          ...showcaseImageJobs,
           ...portfolioCoreImageJobs,
           ...moonTextureWarmupJobs,
           ...musicTrackWarmupJobs,
@@ -4285,87 +2788,11 @@ export default function ResumeSpace3D({
   );
   const spaceshipRef = useRef<THREE.Group | null>(null);
   const sunLabelRef = useRef<THREE.Object3D | null>(null);
-  const projectShowcaseRootRef = useRef<THREE.Group | null>(null);
-  const [projectShowcaseReady, setProjectShowcaseReady] = useState(false);
-  const [projectShowcaseActive, setProjectShowcaseActive] = useState(false);
-  const [projectShowcasePlaying, setProjectShowcasePlaying] = useState(false);
-  const [aboutElevatorReachedEnd, setAboutElevatorReachedEnd] = useState(false);
   const [cosmosIntroOverlayOpacity, setCosmosIntroOverlayOpacity] = useState(1);
-  const [
-    projectShowcaseEntryOverlayOpacity,
-    setProjectShowcaseEntryOverlayOpacity,
-  ] = useState(0);
-  const [projectShowcaseLeverValue, setProjectShowcaseLeverValue] = useState(0);
-  const [projectShowcaseAnglePercent, setProjectShowcaseAnglePercentState] =
-    useState(PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT);
-  const [projectShowcaseFocusIndex, setProjectShowcaseFocusIndex] = useState(0);
-  const [, setProjectShowcaseViewportTick] = useState(0);
-  const projectShowcaseActiveRef = useRef(false);
-  const aboutHallAngleMultiplierRef = useRef(
-    THREE.MathUtils.clamp(aboutHallColumnAngleMultiplier, 0, 20),
-  );
-  useEffect(() => {
-    aboutHallAngleMultiplierRef.current = THREE.MathUtils.clamp(
-      aboutHallColumnAngleMultiplier,
-      0,
-      20,
-    );
-  }, [aboutHallColumnAngleMultiplier]);
-  useEffect(() => {
-    onProjectShowcaseActiveChange?.(projectShowcaseActive);
-  }, [projectShowcaseActive, onProjectShowcaseActiveChange]);
-  const projectShowcasePlayingRef = useRef(false);
-  const projectShowcaseLeverValueRef = useRef(0);
-  const projectShowcaseAnglePercentRef = useRef(
-    PROJECT_SHOWCASE_DEFAULT_ANGLE_PERCENT,
-  );
-  const projectShowcaseLeverDraggingRef = useRef(false);
-  const projectShowcaseLeverFlickRef = useRef(0);
-  const projectShowcaseVelocityRef = useRef(0);
-  const projectShowcaseJumpTargetRef = useRef<number | null>(null);
-  const projectShowcaseForcedFocusIndexRef = useRef<number | null>(null);
-  const projectShowcaseLeverRectRef = useRef<DOMRect | null>(null);
-  const projectShowcaseLeverLastSampleRef = useRef<{
-    value: number;
-    t: number;
-  } | null>(null);
-  const projectShowcaseWheelLastInputAtRef = useRef(0);
-  const projectShowcaseFocusIndexRef = useRef(0);
-  const projectShowcaseLastTickRef = useRef<number | null>(null);
-  const projectShowcasePanelsRef = useRef<ShowcasePanelRecord[]>([]);
-  const projectShowcaseInteriorRootRef = useRef<THREE.Group | null>(null);
-  const projectShowcaseExteriorRootRef = useRef<THREE.Group | null>(null);
-  const projectShowcaseAboutExteriorModelRef = useRef<THREE.Object3D | null>(
-    null,
-  );
-  const projectShowcaseAboutBeaconCoreMatRef =
-    useRef<THREE.SpriteMaterial | null>(null);
-  const projectShowcaseAboutBeaconHaloMatRef =
-    useRef<THREE.SpriteMaterial | null>(null);
-  const aboutTrenchContextRef = useRef<{
-    trenchWidth: number;
-    trenchSizeScaledY: number;
-    runAxis: "x" | "z" | "y";
-    panelSpacing: number;
-    panelY: number;
-    shaftBottomWorld: number;
-    wallOffset: number;
-    elevatorOppositeWall: number;
-    elevatorCreditsMode: boolean;
-    elevatorCreditsWall: number;
-    estimatedVisibleHeight: number;
-    fixedTriggerDistance: number;
-    immersiveWidths: Record<AboutHallColumnId, number>;
-    immersiveHeights: Record<AboutHallColumnId, number>;
-  } | null>(null);
-
-  const projectShowcasePreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(
-    null,
-  );
-  const projectShowcaseAboutExteriorPreloadedGltfRef = useRef<{
-    scene: THREE.Group;
-  } | null>(null);
   const spaceshipPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(null);
+  const spaceshipGltfPromiseRef = useRef<ReturnType<
+    GLTFLoader["loadAsync"]
+  > | null>(null);
   const starDestroyerPreloadedGltfRef = useRef<{ scene: THREE.Group } | null>(
     null,
   );
@@ -4388,78 +2815,9 @@ export default function ResumeSpace3D({
   const falconActiveCueKindRef = useRef<FalconNavCueKind | null>(null);
   const falconPendingCueKindRef = useRef<FalconNavCueKind | null>(null);
   const droneGpuWarmupDoneRef = useRef(false);
-  const projectShowcaseTrackRef = useRef<{
-    axis: "x" | "z" | "y";
-    minRun: number;
-    maxRun: number;
-    centerCross: number;
-    cameraHeight: number;
-    lookAhead: number;
-    speed: number;
-    cullHalfWindow: number;
-    startRun: number;
-  } | null>(null);
-  const projectShowcaseFloorPulseMatsRef = useRef<
-    Array<{ mat: THREE.MeshBasicMaterial; runT: number }>
-  >([]);
-  const projectShowcaseDebugRulerRef = useRef<{
-    group: THREE.Group;
-    trackingLine: THREE.Mesh;
-    label: THREE.Sprite;
-    labelCanvas: HTMLCanvasElement;
-    labelCtx: CanvasRenderingContext2D;
-    lastLabelText: string;
-    origin: number;
-  } | null>(null);
-  const projectShowcaseLookVectorRef = useRef<THREE.Vector3 | null>(null);
-  const projectShowcaseForwardLockUntilRef = useRef(0);
-  const projectShowcaseAboutEntryTimeoutRef = useRef<number | null>(null);
-  const projectShowcaseAboutEntryRafRef = useRef<number | null>(null);
-  const projectShowcaseInteriorLightBasesRef = useRef<
-    Array<{ light: THREE.Light; baseIntensity: number }>
-  >([]);
-  const projectShowcaseElevatorEmergencyLightsRef = useRef<{
-    ambient: THREE.AmbientLight;
-    point: THREE.PointLight;
-  } | null>(null);
-  const projectShowcaseElevatorPowerRef = useRef<{
-    phase: "normal" | "flickerOut" | "outage" | "flickerIn";
-    phaseStartedAt: number;
-    phaseEndsAt: number;
-    nextOutageAt: number;
-    powerLevel: number;
-    emergencyTextActive: boolean;
-    resumeAutoplayAfterEmergency: boolean;
-  }>({
-    phase: "normal",
-    phaseStartedAt: 0,
-    phaseEndsAt: 0,
-    nextOutageAt: 0,
-    powerLevel: 1,
-    emergencyTextActive: false,
-    resumeAutoplayAfterEmergency: false,
-  });
-  const projectShowcaseRunPosRef = useRef(0);
-  const projectShowcasePrevControlsEnabledRef = useRef(true);
-  const pendingProjectShowcaseEntryRef = useRef(false);
-  const projectShowcaseAwaitingProjectsArrivalRef = useRef(false);
-  const projectShowcaseSawProjectsTravelRef = useRef(false);
   const pendingOrbitalPortfolioEntryRef = useRef(false);
   const orbitalPortfolioAwaitingArrivalRef = useRef(false);
   const orbitalPortfolioSawTravelRef = useRef(false);
-  const projectShowcaseEntrySequenceRef = useRef<{
-    active: boolean;
-    raf: number | null;
-  }>({ active: false, raf: null });
-  const projectShowcaseExitSequenceRef = useRef<{
-    active: boolean;
-    raf: number | null;
-  }>({ active: false, raf: null });
-  const projectShowcaseQueuedNavRef = useRef<{
-    targetId: string;
-    targetType: "section" | "moon";
-  } | null>(null);
-  const projectShowcaseWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const orbitalPortfolioWorldAnchorRef = useRef<THREE.Vector3 | null>(null);
   const orbitalPortfolioRootRef = useRef<THREE.Group | null>(null);
   const orbitalPortfolioBeaconRef = useRef<THREE.Mesh | null>(null);
@@ -4517,8 +2875,6 @@ export default function ResumeSpace3D({
   const [moonMemoryControlsVisible, setMoonMemoryControlsVisible] =
     useState(false);
   const viewerMemoriesEnabledRef = useRef(false);
-  const moonMemoryUiWaitingForDroneExitRef = useRef(false);
-  const moonMemoryUiSawDroneRef = useRef(false);
   const [moonMemoryManualMode, setMoonMemoryManualMode] = useState(false);
   const moonMemoryManualModeRef = useRef(false);
   const [moonMemoryPlaybackPlaying, setMoonMemoryPlaybackPlaying] =
@@ -4971,42 +3327,14 @@ export default function ResumeSpace3D({
   }, [moonMemoryScrubValue]);
   useEffect(() => {
     if (orbitPhase !== "orbiting") {
-      moonMemoryUiWaitingForDroneExitRef.current = false;
-      moonMemoryUiSawDroneRef.current = false;
       setMoonMemoryControlsVisible(false);
       return;
     }
-    // Moon orbit entry behavior:
-    // - Hide memory controls immediately.
-    // - Keep memories off until drone draw sequence fully exits.
-    setMoonMemoryControlsVisible(false);
-    setViewerMemoriesEnabled(false);
-    moonMemoryUiWaitingForDroneExitRef.current = true;
-    moonMemoryUiSawDroneRef.current = false;
-  }, [orbitPhase]);
-  useEffect(() => {
-    if (orbitPhase !== "orbiting") return;
-    if (!moonMemoryUiWaitingForDroneExitRef.current) return;
-    let raf = 0;
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
-      if (!moonMemoryUiWaitingForDroneExitRef.current) return;
-      const drone = hologramDroneRef.current as {
-        isDroneVisible?: () => boolean;
-      } | null;
-      const droneVisible = !!drone?.isDroneVisible?.();
-      if (droneVisible) {
-        moonMemoryUiSawDroneRef.current = true;
-        return;
-      }
-      if (!moonMemoryUiSawDroneRef.current) return;
-      moonMemoryUiWaitingForDroneExitRef.current = false;
-      setMoonMemoryControlsVisible(true);
-      setViewerMemoriesEnabled(true);
-      shipLog("Moon memories unlocked — drone departed", "orbit");
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    // Memories fly as soon as the moon orbit starts, so they are already on
+    // screen while the drone arrives and laser-draws the overlay.
+    setMoonMemoryControlsVisible(true);
+    setViewerMemoriesEnabled(true);
+    shipLog("Moon memories started with orbit", "orbit");
   }, [orbitPhase, shipLog]);
   const exportOrbitSignTuning = useCallback(() => {
     const payload = {
@@ -5149,7 +3477,6 @@ export default function ResumeSpace3D({
   const [aboutRideMessageView, setAboutRideMessageView] =
     useState<AboutPathTravelMessage | null>(null);
   const aboutRideMessageOverlayRef = useRef<HTMLDivElement | null>(null);
-  const [projectsNavHereActive, setProjectsNavHereActive] = useState(false);
   const [skillsNavHereActive, setSkillsNavHereActive] = useState(false);
   const [aboutSwarmTriggerVisible, setAboutSwarmTriggerVisible] =
     useState(false);
@@ -6194,7 +4521,6 @@ export default function ResumeSpace3D({
     [moonTravelSignCatalog],
   );
   const skillsSDLockActiveRef = useRef(false);
-  const projectShowcaseNebulaRootRef = useRef<THREE.Object3D | null>(null);
   const skillsLatticeRootRef = useRef<THREE.Group | null>(null);
   const skillsLatticeNodesRef = useRef<SkillsLatticeNodeRecord[]>([]);
   const skillsLatticeLineMatsRef = useRef<THREE.LineBasicMaterial[]>([]);
@@ -6263,20 +4589,11 @@ export default function ResumeSpace3D({
     shipVisible: boolean;
     controlsEnabled: boolean;
   } | null>(null);
-  const projectShowcaseNebulaDebugLastLogMsRef = useRef(0);
-  const projectShowcaseNebulaDebugLastAlphaBucketRef = useRef(-1);
   const [skillsLatticeSelection, setSkillsLatticeSelection] = useState<{
     label: string;
     nodeType: "category" | "skill";
     category: string;
     detailItems: string[];
-  } | null>(null);
-  const projectShowcaseAngleIntroRef = useRef<{
-    raf: number | null;
-  }>({ raf: null });
-  const projectShowcasePrevStateRef = useRef<{
-    followingSpaceship: boolean;
-    shipVisible: boolean;
   } | null>(null);
   const spaceshipCameraOffsetRef = useRef(
     new THREE.Vector3(0, FOLLOW_HEIGHT, FOLLOW_DISTANCE),
@@ -6375,7 +4692,6 @@ export default function ResumeSpace3D({
   const starDestroyerCruiserRef = useRef<StarDestroyerCruiser | null>(null);
   const starDestroyerDebugLastLogMsRef = useRef(0);
   const starDestroyerSkillsSnapPendingRef = useRef(false);
-  const shipTelemetryLastLogMsRef = useRef(0);
   const navMessageStateRef = useRef<{
     activeTarget: string | null;
     targetLabel: string | null;
@@ -7815,56 +6131,6 @@ export default function ResumeSpace3D({
             .add(new THREE.Vector3(0, 20, 0));
         }
       }
-      if (targetId === "projects" || targetId === "about") {
-        const rootAnchor = projectShowcaseWorldAnchorRef.current;
-        const track = projectShowcaseTrackRef.current;
-        if (!rootAnchor || !track) {
-          return rootAnchor ? rootAnchor.clone() : null;
-        }
-        const run = track.startRun;
-        const sway = Math.sin(run * 0.025) * (track.axis === "y" ? 0.6 : 1.2);
-        const travelAxis =
-          track.axis === "y"
-            ? new THREE.Vector3(0, 1, 0)
-            : track.axis === "z"
-              ? new THREE.Vector3(0, 0, 1)
-              : new THREE.Vector3(1, 0, 0);
-        const crossAxis =
-          track.axis === "y"
-            ? new THREE.Vector3(1, 0, 0)
-            : track.axis === "z"
-              ? new THREE.Vector3(1, 0, 0)
-              : new THREE.Vector3(0, 0, -1);
-        const trenchCam =
-          track.axis === "y"
-            ? new THREE.Vector3(
-                rootAnchor.x + track.centerCross + sway,
-                rootAnchor.y + run,
-                rootAnchor.z + track.cameraHeight,
-              )
-            : track.axis === "z"
-              ? new THREE.Vector3(
-                  rootAnchor.x + track.centerCross + sway,
-                  rootAnchor.y + track.cameraHeight,
-                  rootAnchor.z + run,
-                )
-              : new THREE.Vector3(
-                  rootAnchor.x + run,
-                  rootAnchor.y + track.cameraHeight,
-                  rootAnchor.z + track.centerCross + sway,
-                );
-        const finalApproachDist =
-          track.lookAhead * PROJECT_SHOWCASE_NAV_APPROACH_LOOKAHEAD_MULT;
-        const navLift =
-          track.axis === "y"
-            ? new THREE.Vector3(0, 0, 14)
-            : new THREE.Vector3(0, 14, 0);
-        return trenchCam
-          .clone()
-          .addScaledVector(travelAxis, -finalApproachDist)
-          .addScaledVector(crossAxis, 1.1)
-          .add(navLift);
-      }
       if (targetId === "skills") {
         const anchor = skillsLatticeWorldAnchorRef.current;
         if (!anchor) return null;
@@ -7947,10 +6213,6 @@ export default function ResumeSpace3D({
           orbitalPortfolioWorldAnchorRef.current ??
           ORBITAL_PORTFOLIO_WORLD_ANCHOR;
         return { center: anchor.clone(), radius: 200 };
-      }
-      if (targetId === "projects") {
-        const anchor = projectShowcaseWorldAnchorRef.current;
-        if (anchor) return { center: anchor.clone(), radius: 180 };
       }
       return null;
     },
@@ -8296,1754 +6558,6 @@ export default function ResumeSpace3D({
     navigationTravelPhase,
     formatNavTargetLabel,
   ]);
-
-  const setProjectShowcaseFocus = useCallback(
-    (index: number) => {
-      const panels = projectShowcasePanelsRef.current;
-      if (panels.length === 0) return;
-      const safeIndex = THREE.MathUtils.clamp(index, 0, panels.length - 1);
-      const previousIndex = projectShowcaseFocusIndexRef.current;
-      projectShowcaseFocusIndexRef.current = safeIndex;
-      if (previousIndex !== safeIndex) {
-        panels[safeIndex]?.setActiveVariant(0);
-        if (projectShowcaseActiveRef.current) {
-          const title =
-            panels[safeIndex]?.displayTitle || panels[safeIndex]?.entry?.title;
-          if (title) {
-            onScreenMessage(`Hallway marker: ${title}`, { durationMs: 1600 });
-          }
-        }
-      }
-      setProjectShowcaseFocusIndex(safeIndex);
-    },
-    [onScreenMessage],
-  );
-
-  const setProjectShowcaseRunPosition = useCallback(
-    (runPos: number) => {
-      projectShowcaseRunPosRef.current = runPos;
-      const panels = projectShowcasePanelsRef.current;
-      if (panels.length === 0) return;
-      const track = projectShowcaseTrackRef.current;
-      const minRun = track ? track.minRun + 10 : -Infinity;
-      const maxRun = track ? track.maxRun - 10 : Infinity;
-
-      const forcedIndex = projectShowcaseForcedFocusIndexRef.current;
-      if (forcedIndex !== null) {
-        setProjectShowcaseFocus(forcedIndex);
-      } else {
-        // Find nearest panel by true panel centers for stable highlight timing.
-        let bestIndex = 0;
-        let bestDist = Infinity;
-        panels.forEach((panel, idx) => {
-          const panelCenter = THREE.MathUtils.clamp(
-            panel.runPos,
-            minRun,
-            maxRun,
-          );
-          const d = Math.abs(panelCenter - runPos);
-          if (d < bestDist) {
-            bestDist = d;
-            bestIndex = idx;
-          }
-        });
-        setProjectShowcaseFocus(bestIndex);
-      }
-
-      if (!track) return;
-      const halfWindow = track.cullHalfWindow;
-      panels.forEach((panel) => {
-        panel.group.visible = Math.abs(panel.runPos - runPos) <= halfWindow;
-      });
-    },
-    [setProjectShowcaseFocus],
-  );
-
-  const setProjectShowcaseLever = useCallback((value: number) => {
-    const clamped = THREE.MathUtils.clamp(value, -1, 1);
-    projectShowcaseLeverValueRef.current = clamped;
-    setProjectShowcaseLeverValue(clamped);
-  }, []);
-
-  const setProjectShowcaseAnglePercent = useCallback((value: number) => {
-    const clamped = THREE.MathUtils.clamp(
-      value,
-      PROJECT_SHOWCASE_MIN_ANGLE_PERCENT,
-      PROJECT_SHOWCASE_MAX_ANGLE_PERCENT,
-    );
-    projectShowcaseAnglePercentRef.current = clamped;
-    setProjectShowcaseAnglePercentState(clamped);
-  }, []);
-
-  function applyProjectShowcaseNebulaFade(alphaValue: number) {
-    const nebulaRoot = projectShowcaseNebulaRootRef.current;
-    if (!nebulaRoot) return;
-    const alpha = THREE.MathUtils.clamp(alphaValue, 0, 1);
-    nebulaRoot.visible = alpha > 0.001;
-    nebulaRoot.traverse((obj: THREE.Object3D) => {
-      const mesh = obj as THREE.Mesh;
-      if (!(mesh as any).isMesh || !mesh.material) return;
-      const mats = Array.isArray(mesh.material)
-        ? mesh.material
-        : [mesh.material];
-      mats.forEach((mat) => {
-        const m = mat as THREE.Material & {
-          transparent?: boolean;
-          opacity?: number;
-          userData?: Record<string, unknown>;
-        };
-        const base = Number((m.userData?.nebulaBaseOpacity as number) ?? 1);
-        m.transparent = true;
-        m.opacity = base * alpha;
-      });
-    });
-    const alphaBucket = Math.round(alpha * 10);
-    if (alphaBucket !== projectShowcaseNebulaDebugLastAlphaBucketRef.current) {
-      projectShowcaseNebulaDebugLastAlphaBucketRef.current = alphaBucket;
-      vlog(
-        `🌌 Nebula fade alpha=${alpha.toFixed(2)} visible=${nebulaRoot.visible ? "yes" : "no"}`,
-      );
-    }
-  }
-
-  const getFocusedProjectShowcasePanel = useCallback(() => {
-    const panels = projectShowcasePanelsRef.current;
-    if (panels.length === 0) return null;
-    const idx = THREE.MathUtils.clamp(
-      projectShowcaseFocusIndexRef.current,
-      0,
-      panels.length - 1,
-    );
-    return panels[idx];
-  }, []);
-
-  const bumpProjectShowcaseViewportTick = useCallback(() => {
-    setProjectShowcaseViewportTick((v) => v + 1);
-  }, []);
-
-  const applyProjectShowcasePanelViewport = useCallback(
-    (panel: ShowcasePanelRecord) => {
-      const texture = panel.texture;
-      if (!texture) return;
-
-      const baseRepeatX = panel.baseRepeat.x;
-      const baseRepeatY = panel.baseRepeat.y;
-      const zoom = THREE.MathUtils.clamp(panel.zoom, 1, 4);
-      panel.zoom = zoom;
-      const repX = baseRepeatX / zoom;
-      const repY = baseRepeatY / zoom;
-      const minPanX = -panel.baseOffset.x;
-      const maxPanX = 1 - repX - panel.baseOffset.x;
-      const minPanY = -panel.baseOffset.y;
-      const maxPanY = 1 - repY - panel.baseOffset.y;
-      panel.panX = THREE.MathUtils.clamp(panel.panX, minPanX, maxPanX);
-      panel.panY = THREE.MathUtils.clamp(panel.panY, minPanY, maxPanY);
-
-      texture.repeat.set(repX, repY);
-      texture.offset.set(
-        panel.baseOffset.x + panel.panX,
-        panel.baseOffset.y + panel.panY,
-      );
-      texture.needsUpdate = true;
-    },
-    [],
-  );
-
-  const setProjectShowcasePanelZoom = useCallback(
-    (zoom: number) => {
-      const panel = getFocusedProjectShowcasePanel();
-      if (!panel || !panel.texture) return;
-      if (projectShowcasePlayingRef.current) {
-        projectShowcasePlayingRef.current = false;
-        setProjectShowcasePlaying(false);
-      }
-      const prevZoom = THREE.MathUtils.clamp(panel.zoom, 1, 4);
-      const nextZoom = THREE.MathUtils.clamp(zoom, 1, 4);
-      const prevRepX = panel.baseRepeat.x / prevZoom;
-      const prevRepY = panel.baseRepeat.y / prevZoom;
-      const nextRepX = panel.baseRepeat.x / nextZoom;
-      const nextRepY = panel.baseRepeat.y / nextZoom;
-      // Keep zoom centered on the current viewport center.
-      panel.panX += (prevRepX - nextRepX) * 0.5;
-      panel.panY += (prevRepY - nextRepY) * 0.5;
-      panel.zoom = nextZoom;
-      applyProjectShowcasePanelViewport(panel);
-      bumpProjectShowcaseViewportTick();
-    },
-    [
-      getFocusedProjectShowcasePanel,
-      applyProjectShowcasePanelViewport,
-      bumpProjectShowcaseViewportTick,
-    ],
-  );
-
-  const updateProjectShowcaseLeverFromClientY = useCallback(
-    (clientY: number, rect: DOMRect) => {
-      const centerY = rect.top + rect.height * 0.5;
-      const normalized = (centerY - clientY) / Math.max(1, rect.height * 0.5);
-      setProjectShowcaseLever(normalized);
-      return THREE.MathUtils.clamp(normalized, -1, 1);
-    },
-    [setProjectShowcaseLever],
-  );
-
-  const startProjectShowcaseLeverDrag = useCallback(
-    (clientY: number, rect: DOMRect) => {
-      if (projectShowcasePlayingRef.current) {
-        projectShowcasePlayingRef.current = false;
-        setProjectShowcasePlaying(false);
-      }
-      projectShowcaseJumpTargetRef.current = null;
-      projectShowcaseForcedFocusIndexRef.current = null;
-      projectShowcaseLeverDraggingRef.current = true;
-      projectShowcaseLeverFlickRef.current = 0;
-      const value = updateProjectShowcaseLeverFromClientY(clientY, rect);
-      projectShowcaseLeverLastSampleRef.current = {
-        value,
-        t: performance.now(),
-      };
-    },
-    [updateProjectShowcaseLeverFromClientY],
-  );
-
-  const moveProjectShowcaseLeverDrag = useCallback(
-    (clientY: number, rect: DOMRect) => {
-      if (!projectShowcaseLeverDraggingRef.current) return;
-      const value = updateProjectShowcaseLeverFromClientY(clientY, rect);
-      const now = performance.now();
-      const sample = projectShowcaseLeverLastSampleRef.current;
-      if (sample) {
-        const dt = Math.max((now - sample.t) / 1000, 1 / 240);
-        const dv = value - sample.value;
-        projectShowcaseLeverFlickRef.current = THREE.MathUtils.clamp(
-          dv / dt,
-          -4,
-          4,
-        );
-      }
-      projectShowcaseLeverLastSampleRef.current = { value, t: now };
-    },
-    [updateProjectShowcaseLeverFromClientY],
-  );
-
-  const endProjectShowcaseLeverDrag = useCallback(() => {
-    if (!projectShowcaseLeverDraggingRef.current) return;
-    projectShowcaseLeverDraggingRef.current = false;
-    projectShowcaseLeverLastSampleRef.current = null;
-    const track = projectShowcaseTrackRef.current;
-    if (track) {
-      const maxManualSpeed = track.speed * 2.4;
-      const impulse = projectShowcaseLeverFlickRef.current * track.speed * 0.15;
-      projectShowcaseVelocityRef.current = THREE.MathUtils.clamp(
-        projectShowcaseVelocityRef.current + impulse,
-        -maxManualSpeed,
-        maxManualSpeed,
-      );
-    }
-    projectShowcaseLeverFlickRef.current = 0;
-    setProjectShowcaseLever(0);
-  }, [setProjectShowcaseLever]);
-
-  useEffect(() => {
-    const onPointerMove = (e: PointerEvent) => {
-      if (!projectShowcaseLeverDraggingRef.current) return;
-      const rect = projectShowcaseLeverRectRef.current;
-      if (!rect) return;
-      moveProjectShowcaseLeverDrag(e.clientY, rect);
-      e.preventDefault();
-    };
-    const onPointerUp = () => {
-      endProjectShowcaseLeverDrag();
-    };
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-    };
-  }, [endProjectShowcaseLeverDrag, moveProjectShowcaseLeverDrag]);
-
-  // ── Project showcase movement: wheel-first tunnel control ────────────────
-  useEffect(() => {
-    const onWheel = (e: WheelEvent) => {
-      // Preserve Shift+wheel image manipulation flow.
-      if (e.shiftKey) return;
-      if (!projectShowcaseActiveRef.current) return;
-      const track = projectShowcaseTrackRef.current;
-      if (!track) return;
-
-      // Wheel interaction takes over from autoplay immediately.
-      if (projectShowcasePlayingRef.current) {
-        projectShowcasePlayingRef.current = false;
-        setProjectShowcasePlaying(false);
-      }
-      projectShowcaseJumpTargetRef.current = null;
-      projectShowcaseForcedFocusIndexRef.current = null;
-      projectShowcaseLeverDraggingRef.current = false;
-      projectShowcaseLeverFlickRef.current = 0;
-      projectShowcaseLeverLastSampleRef.current = null;
-
-      // Reversed mapping per UX request:
-      // Wheel down => move backward, wheel up => move forward.
-      const direction = e.deltaY > 0 ? -1 : 1;
-      const notchStrength = THREE.MathUtils.clamp(
-        Math.abs(e.deltaY) / 120,
-        0.2,
-        4,
-      );
-      const aggressiveBoost = THREE.MathUtils.lerp(
-        1,
-        13.5,
-        THREE.MathUtils.clamp((notchStrength - 1) / 3, 0, 1),
-      );
-      // Single notch is ~50% gentler, while aggressive/rapid wheel input ramps harder.
-      const impulseFactor =
-        0.725 * Math.pow(notchStrength, 1.65) * aggressiveBoost;
-      const maxManualSpeed =
-        track.speed *
-        THREE.MathUtils.lerp(
-          11.4,
-          270,
-          THREE.MathUtils.clamp((notchStrength - 1) / 3, 0, 1),
-        );
-      const impulse = direction * track.speed * impulseFactor;
-      projectShowcaseVelocityRef.current = THREE.MathUtils.clamp(
-        projectShowcaseVelocityRef.current + impulse,
-        -maxManualSpeed,
-        maxManualSpeed,
-      );
-      projectShowcaseWheelLastInputAtRef.current = performance.now();
-
-      // Kick the throttle lever immediately; loop inertia will continue animating it.
-      const leverImpulse =
-        direction *
-        THREE.MathUtils.clamp(
-          0.22 + Math.pow(notchStrength, 0.85) * 0.3,
-          0.22,
-          1,
-        );
-      setProjectShowcaseLever(leverImpulse);
-
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    };
-
-    window.addEventListener("wheel", onWheel, {
-      passive: false,
-      capture: true,
-    });
-    return () => {
-      window.removeEventListener("wheel", onWheel, { capture: true });
-    };
-  }, [setProjectShowcaseLever]);
-
-  const exitProjectShowcase = useCallback(() => {
-    if (projectShowcaseAngleIntroRef.current.raf !== null) {
-      cancelAnimationFrame(projectShowcaseAngleIntroRef.current.raf);
-      projectShowcaseAngleIntroRef.current.raf = null;
-    }
-    if (projectShowcaseExitSequenceRef.current.raf !== null) {
-      cancelAnimationFrame(projectShowcaseExitSequenceRef.current.raf);
-      projectShowcaseExitSequenceRef.current.raf = null;
-    }
-    projectShowcaseExitSequenceRef.current.active = false;
-    projectShowcaseQueuedNavRef.current = null;
-    if (projectShowcaseEntrySequenceRef.current.raf !== null) {
-      cancelAnimationFrame(projectShowcaseEntrySequenceRef.current.raf);
-      projectShowcaseEntrySequenceRef.current.raf = null;
-    }
-    projectShowcaseEntrySequenceRef.current.active = false;
-    if (projectShowcaseAboutEntryTimeoutRef.current !== null) {
-      window.clearTimeout(projectShowcaseAboutEntryTimeoutRef.current);
-      projectShowcaseAboutEntryTimeoutRef.current = null;
-    }
-    if (projectShowcaseAboutEntryRafRef.current !== null) {
-      cancelAnimationFrame(projectShowcaseAboutEntryRafRef.current);
-      projectShowcaseAboutEntryRafRef.current = null;
-    }
-    setProjectShowcaseEntryOverlayOpacity(0);
-    const showcaseRoot = projectShowcaseRootRef.current;
-    if (showcaseRoot) {
-      showcaseRoot.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
-    }
-    projectShowcasePanelsRef.current.forEach((panel) => {
-      panel.group.visible = false;
-    });
-    if (sunLabelRef.current) {
-      sunLabelRef.current.visible = true;
-    }
-    if (sceneRef.current.camera) {
-      if (PROJECT_SHOWCASE_VISIBLE_IN_SPACE) {
-        sceneRef.current.camera.layers.enable(PROJECT_SHOWCASE_LAYER);
-      } else {
-        sceneRef.current.camera.layers.disable(PROJECT_SHOWCASE_LAYER);
-      }
-    }
-    if (sceneRef.current.controls) {
-      sceneRef.current.controls.enabled =
-        projectShowcasePrevControlsEnabledRef.current;
-    }
-
-    const prev = projectShowcasePrevStateRef.current;
-    if (prev) {
-      setFollowingSpaceship(prev.followingSpaceship);
-      followingSpaceshipRef.current = prev.followingSpaceship;
-      if (spaceshipRef.current) {
-        spaceshipRef.current.visible = prev.shipVisible;
-      }
-      projectShowcasePrevStateRef.current = null;
-    } else if (spaceshipRef.current) {
-      spaceshipRef.current.visible = true;
-    }
-
-    projectShowcaseActiveRef.current = false;
-    setProjectShowcaseActive(false);
-    setProjectsNavHereActive(false);
-    projectShowcasePlayingRef.current = true;
-    setProjectShowcasePlaying(true);
-    projectShowcaseVelocityRef.current = 0;
-    projectShowcaseJumpTargetRef.current = null;
-    projectShowcaseForcedFocusIndexRef.current = null;
-    projectShowcaseLeverDraggingRef.current = false;
-    projectShowcaseLeverFlickRef.current = 0;
-    projectShowcaseLeverLastSampleRef.current = null;
-    setProjectShowcaseLever(0);
-    projectShowcaseLookVectorRef.current = null;
-    projectShowcaseLastTickRef.current = null;
-    pendingProjectShowcaseEntryRef.current = false;
-    projectShowcaseAwaitingProjectsArrivalRef.current = false;
-    projectShowcaseSawProjectsTravelRef.current = false;
-    const outageRuntime = projectShowcaseElevatorPowerRef.current;
-    outageRuntime.phase = "normal";
-    outageRuntime.phaseStartedAt = 0;
-    outageRuntime.phaseEndsAt = 0;
-    outageRuntime.nextOutageAt = 0;
-    outageRuntime.powerLevel = 1;
-    outageRuntime.emergencyTextActive = false;
-    outageRuntime.resumeAutoplayAfterEmergency = false;
-    projectShowcaseInteriorLightBasesRef.current.forEach(
-      ({ light, baseIntensity }) => {
-        light.intensity = baseIntensity;
-      },
-    );
-    const emergencyLights = projectShowcaseElevatorEmergencyLightsRef.current;
-    if (emergencyLights) {
-      emergencyLights.ambient.intensity = 0;
-      emergencyLights.point.intensity = 0;
-    }
-    projectShowcasePanelsRef.current.forEach((panel) => {
-      if (panel.aboutRuntime?.mode !== "about") return;
-      panel.aboutRuntime.cells.forEach((cell) => {
-        if (cell.material.map !== cell.normalTexture) {
-          cell.material.map = cell.normalTexture;
-          cell.material.needsUpdate = true;
-        }
-      });
-    });
-    const aboutMode = hallwayContentModeRef.current === "about";
-    const interior = projectShowcaseInteriorRootRef.current;
-    const exterior = projectShowcaseExteriorRootRef.current;
-    const aboutLabel = aboutMemorySquareLabelRef.current;
-    if (aboutMode) {
-      if (interior) interior.visible = false;
-      if (exterior) exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
-      if (aboutLabel) aboutLabel.visible = true;
-    } else {
-      if (interior) interior.visible = true;
-      if (exterior) exterior.visible = false;
-      if (aboutLabel) aboutLabel.visible = true;
-    }
-    vlog("🛰️ Project Showcase exited");
-  }, [setProjectShowcaseLever, setProjectsNavHereActive, vlog]);
-
-  const enterProjectShowcase = useCallback(() => {
-    if (projectShowcaseAngleIntroRef.current.raf !== null) {
-      cancelAnimationFrame(projectShowcaseAngleIntroRef.current.raf);
-      projectShowcaseAngleIntroRef.current.raf = null;
-    }
-    if (projectShowcaseExitSequenceRef.current.raf !== null) {
-      cancelAnimationFrame(projectShowcaseExitSequenceRef.current.raf);
-      projectShowcaseExitSequenceRef.current.raf = null;
-    }
-    projectShowcaseExitSequenceRef.current.active = false;
-    projectShowcaseQueuedNavRef.current = null;
-    if (projectShowcaseEntrySequenceRef.current.raf !== null) {
-      cancelAnimationFrame(projectShowcaseEntrySequenceRef.current.raf);
-      projectShowcaseEntrySequenceRef.current.raf = null;
-    }
-    projectShowcaseEntrySequenceRef.current.active = false;
-    if (projectShowcaseAboutEntryTimeoutRef.current !== null) {
-      window.clearTimeout(projectShowcaseAboutEntryTimeoutRef.current);
-      projectShowcaseAboutEntryTimeoutRef.current = null;
-    }
-    const showcaseRoot = projectShowcaseRootRef.current;
-    const controls = sceneRef.current.controls;
-    const camera = sceneRef.current.camera;
-    if (!showcaseRoot || !controls || !camera) {
-      vlog("⚠️ Project Showcase is not ready yet");
-      return;
-    }
-
-    if (projectShowcaseActiveRef.current) return;
-
-    projectShowcasePrevStateRef.current = {
-      followingSpaceship: followingSpaceshipRef.current,
-      shipVisible: spaceshipRef.current?.visible ?? true,
-    };
-
-    setFollowingSpaceship(false);
-    followingSpaceshipRef.current = false;
-    setInsideShip(false);
-    insideShipRef.current = false;
-    setShipViewMode("exterior");
-    shipViewModeRef.current = "exterior";
-    if (spaceshipRef.current) spaceshipRef.current.visible = false;
-
-    showcaseRoot.visible = true;
-    if (sunLabelRef.current) {
-      sunLabelRef.current.visible = false;
-    }
-
-    projectShowcasePrevControlsEnabledRef.current = controls.enabled;
-    controls.enabled = true;
-    camera.layers.enable(PROJECT_SHOWCASE_LAYER);
-    const aboutMode = hallwayContentModeRef.current === "about";
-    const interior = projectShowcaseInteriorRootRef.current;
-    const exterior = projectShowcaseExteriorRootRef.current;
-    const finalizeInteriorEntry = () => {
-      projectShowcaseAboutEntryTimeoutRef.current = null;
-      const track = projectShowcaseTrackRef.current;
-      if (track) {
-        const startRun = track.startRun;
-        setProjectShowcaseRunPosition(startRun);
-        projectShowcaseLastTickRef.current = performance.now();
-        const rootPos = new THREE.Vector3();
-        showcaseRoot.getWorldPosition(rootPos);
-        const sway =
-          Math.sin(startRun * 0.025) * (track.axis === "y" ? 0.6 : 1.2);
-        const baseCam =
-          track.axis === "y"
-            ? new THREE.Vector3(
-                rootPos.x + track.centerCross + sway,
-                rootPos.y + startRun,
-                rootPos.z + track.cameraHeight,
-              )
-            : track.axis === "z"
-              ? new THREE.Vector3(
-                  rootPos.x + track.centerCross + sway,
-                  rootPos.y + track.cameraHeight,
-                  rootPos.z + startRun,
-                )
-              : new THREE.Vector3(
-                  rootPos.x + startRun,
-                  rootPos.y + track.cameraHeight,
-                  rootPos.z + track.centerCross + sway,
-                );
-        const baseTarget =
-          track.axis === "y"
-            ? new THREE.Vector3(
-                rootPos.x - track.centerCross * 0.9,
-                rootPos.y + startRun,
-                rootPos.z + track.cameraHeight + 0.2,
-              )
-            : track.axis === "z"
-              ? new THREE.Vector3(
-                  rootPos.x + track.centerCross + sway,
-                  rootPos.y + track.cameraHeight - 0.3,
-                  rootPos.z +
-                    startRun +
-                    track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
-                )
-              : new THREE.Vector3(
-                  rootPos.x +
-                    startRun +
-                    track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
-                  rootPos.y + track.cameraHeight - 0.3,
-                  rootPos.z + track.centerCross + sway,
-                );
-        projectShowcaseLookVectorRef.current = baseTarget.sub(baseCam);
-        projectShowcaseForwardLockUntilRef.current =
-          performance.now() + PROJECT_SHOWCASE_ENTRY_FORWARD_LOCK_MS;
-        controls.setLookAt(
-          baseCam.x,
-          baseCam.y,
-          baseCam.z,
-          baseTarget.x,
-          baseTarget.y,
-          baseTarget.z,
-          false,
-        );
-      } else {
-        projectShowcaseLookVectorRef.current = null;
-      }
-      projectShowcasePlayingRef.current = false;
-      setProjectShowcasePlaying(false);
-      projectShowcaseVelocityRef.current = 0;
-      projectShowcaseJumpTargetRef.current = null;
-      projectShowcaseForcedFocusIndexRef.current = null;
-      projectShowcaseLeverDraggingRef.current = false;
-      projectShowcaseLeverFlickRef.current = 0;
-      projectShowcaseLeverLastSampleRef.current = null;
-      setProjectShowcaseLever(0);
-
-      projectShowcaseActiveRef.current = true;
-      setProjectShowcaseActive(true);
-      setProjectsNavHereActive(true);
-      const powerStartNow = performance.now();
-      const outageRuntime = projectShowcaseElevatorPowerRef.current;
-      outageRuntime.phase = "normal";
-      outageRuntime.phaseStartedAt = powerStartNow;
-      outageRuntime.phaseEndsAt = 0;
-      outageRuntime.nextOutageAt =
-        powerStartNow +
-        THREE.MathUtils.randInt(
-          PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MIN_INTERVAL_MS,
-          PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MAX_INTERVAL_MS,
-        );
-      outageRuntime.powerLevel = 1;
-      outageRuntime.emergencyTextActive = false;
-      outageRuntime.resumeAutoplayAfterEmergency = false;
-      projectShowcasePanelsRef.current.forEach((panel) => {
-        panel.group.visible = true;
-      });
-      if (interior) interior.visible = true;
-      if (exterior) exterior.visible = false;
-      if (aboutMode && aboutMemorySquareLabelRef.current) {
-        aboutMemorySquareLabelRef.current.visible = false;
-      }
-      setProjectShowcaseRunPosition(projectShowcaseRunPosRef.current);
-      pendingProjectShowcaseEntryRef.current = false;
-      projectShowcaseAwaitingProjectsArrivalRef.current = false;
-      projectShowcaseSawProjectsTravelRef.current = false;
-
-      if (aboutMode) {
-        setAboutEntryFadeOpacity(1);
-        if (aboutEntryFadeRafRef.current)
-          cancelAnimationFrame(aboutEntryFadeRafRef.current);
-        const fadeStart = performance.now();
-        const fadeDur = 1200;
-        const tickFade = () => {
-          const elapsed = performance.now() - fadeStart;
-          const t = Math.min(elapsed / fadeDur, 1);
-          const eased = 1 - t * t;
-          setAboutEntryFadeOpacity(eased);
-          if (t < 1)
-            aboutEntryFadeRafRef.current = requestAnimationFrame(tickFade);
-          else aboutEntryFadeRafRef.current = 0;
-        };
-        aboutEntryFadeRafRef.current = requestAnimationFrame(tickFade);
-
-        const isFirstVisit = !getAboutElevatorHasVisited();
-        if (isFirstVisit) {
-          setAboutElevatorHasVisited();
-          if (!selectedAboutLevelIdRef.current) {
-            selectedAboutLevelIdRef.current = ABOUT_HALL_DEFAULT_LEVEL_ID;
-            setSelectedAboutLevelId(ABOUT_HALL_DEFAULT_LEVEL_ID);
-          }
-          markAboutElevatorLevelVisited(
-            selectedAboutLevelIdRef.current ?? ABOUT_HALL_DEFAULT_LEVEL_ID,
-          );
-          setVisitedAboutLevels(getAboutElevatorVisitedLevels());
-          startProjectShowcaseAngleIntroSequence();
-        } else {
-          aboutLevelGateActiveRef.current = true;
-          setAboutLevelGateActive(true);
-          projectShowcasePlayingRef.current = false;
-          setProjectShowcasePlaying(false);
-          onScreenMessage("Select a level to begin ascent", {
-            durationMs: 5000,
-          });
-        }
-      } else {
-        startProjectShowcaseAngleIntroSequence();
-      }
-      vlog("🛰️ Entered Project Showcase");
-    };
-
-    if (aboutMode && exterior) {
-      if (interior) interior.visible = false;
-      exterior.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
-      const exteriorModel = projectShowcaseAboutExteriorModelRef.current;
-      const stationBounds = exteriorModel
-        ? new THREE.Box3().setFromObject(exteriorModel)
-        : new THREE.Box3().setFromObject(exterior);
-      const stationWorld = stationBounds.getCenter(new THREE.Vector3());
-      const stationSize = stationBounds.getSize(new THREE.Vector3());
-      const startCam = camera.position.clone();
-      const approachTarget = stationWorld
-        .clone()
-        .add(new THREE.Vector3(0, Math.max(4.5, stationSize.y * 0.1), 0));
-      const approachDir = startCam.clone().sub(approachTarget);
-      if (approachDir.lengthSq() < 1e-5) {
-        approachDir.set(0, 0.04, 1);
-      } else {
-        approachDir.normalize();
-      }
-      // Keep this mostly on the current approach lane so we don't side-swing.
-      approachDir.y *= 0.42;
-      if (approachDir.lengthSq() < 1e-5) {
-        approachDir.set(0, 0.04, 1);
-      } else {
-        approachDir.normalize();
-      }
-      const maxStationDim = Math.max(
-        stationSize.x,
-        stationSize.y,
-        stationSize.z,
-      );
-      const stationSphere = stationBounds.getBoundingSphere(new THREE.Sphere());
-      const verticalFovRad =
-        camera instanceof THREE.PerspectiveCamera
-          ? THREE.MathUtils.degToRad(camera.fov)
-          : THREE.MathUtils.degToRad(52);
-      const fitDistanceFromFov =
-        stationSphere.radius / Math.tan(verticalFovRad * 0.5);
-      const showcaseDist = THREE.MathUtils.clamp(
-        Math.max(maxStationDim * 2.7, fitDistanceFromFov * 1.22),
-        68,
-        220,
-      );
-      const showcaseCam = approachTarget
-        .clone()
-        .addScaledVector(approachDir, showcaseDist);
-      const runDirectStage = (
-        fromCam: THREE.Vector3,
-        toCam: THREE.Vector3,
-        durationMs: number,
-        onDone: () => void,
-      ) => {
-        const stageStart = performance.now();
-        const spinRoot = projectShowcaseAboutExteriorModelRef.current;
-        const spinStartY = spinRoot?.rotation.y ?? 0;
-        const tick = () => {
-          const t = THREE.MathUtils.clamp(
-            (performance.now() - stageStart) / Math.max(1, durationMs),
-            0,
-            1,
-          );
-          const eased = t * t * (3 - 2 * t);
-          const camPos = fromCam.clone().lerp(toCam, eased);
-          if (spinRoot) {
-            spinRoot.rotation.y =
-              spinStartY +
-              PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS * Math.PI * 2 * t;
-          }
-          controls.setLookAt(
-            camPos.x,
-            camPos.y,
-            camPos.z,
-            approachTarget.x,
-            approachTarget.y,
-            approachTarget.z,
-            false,
-          );
-          if (t >= 1) {
-            projectShowcaseAboutEntryRafRef.current = null;
-            onDone();
-            return;
-          }
-          projectShowcaseAboutEntryRafRef.current = requestAnimationFrame(tick);
-        };
-        projectShowcaseAboutEntryRafRef.current = requestAnimationFrame(tick);
-      };
-      const runHoldStage = (
-        camPos: THREE.Vector3,
-        durationMs: number,
-        onDone: () => void,
-      ) => {
-        const stageStart = performance.now();
-        const spinRoot = projectShowcaseAboutExteriorModelRef.current;
-        const spinStartY = spinRoot?.rotation.y ?? 0;
-        const holdSpinTotalRad =
-          PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_TURNS * Math.PI * 2;
-        const tick = () => {
-          const elapsed = performance.now() - stageStart;
-          const t = THREE.MathUtils.clamp(
-            elapsed / Math.max(1, durationMs),
-            0,
-            1,
-          );
-          if (spinRoot) {
-            spinRoot.rotation.y = spinStartY + holdSpinTotalRad * t;
-          }
-          controls.setLookAt(
-            camPos.x,
-            camPos.y,
-            camPos.z,
-            approachTarget.x,
-            approachTarget.y,
-            approachTarget.z,
-            false,
-          );
-          if (t >= 1) {
-            projectShowcaseAboutEntryRafRef.current = null;
-            onDone();
-            return;
-          }
-          projectShowcaseAboutEntryRafRef.current = requestAnimationFrame(tick);
-        };
-        projectShowcaseAboutEntryRafRef.current = requestAnimationFrame(tick);
-      };
-
-      const baseApproachMs =
-        PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_MS +
-        PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_MS;
-      const approachSpinDurationMs =
-        (PROJECT_SHOWCASE_ABOUT_EXTERIOR_SPIN_TURNS * Math.PI * 2 * 1000) /
-        Math.max(
-          0.05,
-          PROJECT_SHOWCASE_ABOUT_EXTERIOR_APPROACH_SPIN_RAD_PER_SEC,
-        );
-      const totalApproachMs = Math.max(baseApproachMs, approachSpinDurationMs);
-      const holdSpinDurationMs =
-        (PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_TURNS * Math.PI * 2 * 1000) /
-        Math.max(0.05, PROJECT_SHOWCASE_ABOUT_EXTERIOR_HOLD_SPIN_RAD_PER_SEC);
-      const entryHoldMs = Math.max(
-        holdSpinDurationMs,
-        PROJECT_SHOWCASE_ABOUT_EXTERIOR_FULLVIEW_HOLD_MS +
-          PROJECT_SHOWCASE_ABOUT_EXTERIOR_CLOSE_HOLD_MS,
-      );
-      runDirectStage(startCam, showcaseCam, totalApproachMs, () => {
-        runHoldStage(showcaseCam, entryHoldMs, () => {
-          projectShowcaseAboutEntryTimeoutRef.current = window.setTimeout(
-            () => {
-              finalizeInteriorEntry();
-            },
-            80,
-          );
-        });
-      });
-      return;
-    }
-
-    finalizeInteriorEntry();
-  }, [
-    setProjectShowcaseLever,
-    setProjectShowcaseRunPosition,
-    setProjectsNavHereActive,
-    vlog,
-  ]);
-
-  const toggleProjectShowcasePlayback = useCallback(() => {
-    const next = !projectShowcasePlayingRef.current;
-    projectShowcasePlayingRef.current = next;
-    setProjectShowcasePlaying(next);
-    if (next) {
-      projectShowcaseVelocityRef.current = 0;
-      projectShowcaseJumpTargetRef.current = null;
-      projectShowcaseForcedFocusIndexRef.current = null;
-      setProjectShowcaseLever(0);
-      projectShowcasePanelsRef.current.forEach((panel) => {
-        if (panel.aboutRuntime) {
-          panel.aboutRuntime.cells.forEach((cell) => {
-            cell.mesh.visible = false;
-            cell.material.opacity = 0;
-          });
-        }
-      });
-    }
-  }, [setProjectShowcaseLever]);
-
-  const replayAboutElevator = useCallback(() => {
-    const track = projectShowcaseTrackRef.current;
-    if (!track) return;
-    const panels = projectShowcasePanelsRef.current;
-    const startRun = track.startRun;
-    panels.forEach((panel) => {
-      if (panel.aboutRuntime) {
-        panel.aboutRuntime.cells.forEach((cell) => {
-          cell.mesh.visible = false;
-          cell.material.opacity = 0;
-        });
-      }
-    });
-    setAboutElevatorReachedEnd(false);
-    projectShowcaseVelocityRef.current = 0;
-    projectShowcaseJumpTargetRef.current = null;
-    projectShowcaseForcedFocusIndexRef.current = null;
-    setProjectShowcaseRunPosition(startRun);
-    projectShowcasePlayingRef.current = true;
-    setProjectShowcasePlaying(true);
-    setProjectShowcaseLever(0);
-  }, [setProjectShowcaseRunPosition, setProjectShowcaseLever]);
-
-  const rebuildAboutElevatorPanels = useCallback(
-    async (slides: AboutHallSlide[], showcaseEntries: ShowcaseEntry[]) => {
-      const ctx = aboutTrenchContextRef.current;
-      const interiorRoot = projectShowcaseInteriorRootRef.current;
-      if (!ctx || !interiorRoot) return;
-
-      const oldPanels = projectShowcasePanelsRef.current;
-      oldPanels.forEach((panel) => {
-        if (panel.aboutRuntime) {
-          panel.aboutRuntime.cells.forEach((cell) => {
-            cell.mesh.geometry.dispose();
-            cell.material.dispose();
-            cell.normalTexture.dispose();
-            if (cell.emergencyTexture !== cell.normalTexture)
-              cell.emergencyTexture.dispose();
-          });
-        }
-        panel.group.removeFromParent();
-      });
-      projectShowcasePanelsRef.current = [];
-
-      const {
-        trenchWidth,
-        runAxis,
-        shaftBottomWorld,
-        elevatorOppositeWall,
-        elevatorCreditsMode,
-        elevatorCreditsWall,
-        estimatedVisibleHeight,
-        fixedTriggerDistance,
-        immersiveWidths,
-        immersiveHeights,
-        panelY,
-      } = ctx;
-
-      const firstSlidePos = aboutHallFirstSlidePositionRef.current ?? 190;
-      const slideRunPositions: number[] = [];
-      const estimateTallest = (s: AboutHallSlide): number => {
-        const cols = s.configuration.columns ?? {};
-        const pw = elevatorCreditsMode
-          ? THREE.MathUtils.clamp(s.width * 1.18, 9.2, 13.8)
-          : THREE.MathUtils.clamp(s.width, 8, 13.8);
-        const ph = elevatorCreditsMode
-          ? THREE.MathUtils.clamp(s.height * 1.02, 5.2, 8.4)
-          : THREE.MathUtils.clamp(s.height, 4.8, 8.8);
-        let tallest = 0;
-        (["left", "center", "right"] as AboutHallColumnId[]).forEach(
-          (colId) => {
-            const colCfg = cols[colId];
-            if (!colCfg?.messages?.length) return;
-            colCfg.messages.forEach((msg) => {
-              const wr = THREE.MathUtils.clamp(msg.widthRatio ?? 1, 0.35, 2.6);
-              const hr = THREE.MathUtils.clamp(msg.heightRatio ?? 1, 0.2, 2.4);
-              const cw = immersiveWidths[colId] * wr;
-              const ch = immersiveHeights[colId] * hr;
-              const sw = Math.max(
-                256,
-                Math.floor(1300 * (cw / Math.max(pw, 1))),
-              );
-              const sh = Math.max(
-                220,
-                Math.floor(1000 * (ch / Math.max(ph, 1))),
-              );
-              const pa = sw / cw / (sh / ch);
-              const resolved = {
-                ...msg,
-                textContent: resolveAboutContentText(msg),
-              };
-              const needed = measureAboutTextHeight(resolved, sw, sh, {
-                creditsStyle: false,
-                loadedImages: aboutImageCacheRef.current,
-                pixelAspect: pa,
-              });
-              const actual = needed > sh ? ch * (needed / sh) : ch;
-              tallest = Math.max(tallest, actual);
-            });
-          },
-        );
-        return tallest;
-      };
-
-      slides.forEach((_slide, index) => {
-        if (index === 0) {
-          slideRunPositions.push(shaftBottomWorld + firstSlidePos);
-        } else {
-          const prevSlide = slides[index - 1];
-
-          const thresholdDist = computeCenterTopThresholdDistance(
-            prevSlide,
-            estimatedVisibleHeight,
-            fixedTriggerDistance,
-            estimateTallest,
-          );
-
-          if (thresholdDist != null) {
-            slideRunPositions.push(
-              slideRunPositions[index - 1] + thresholdDist + 4,
-            );
-          } else {
-            const prevFadeVH = THREE.MathUtils.clamp(
-              prevSlide.flowFadeOutDistanceViewportHeights ?? 1.5,
-              0.1,
-              10,
-            );
-            const prevTallest = estimateTallest(prevSlide);
-            const heightExcess = Math.max(
-              0,
-              prevTallest - estimatedVisibleHeight,
-            );
-            const baseLife =
-              fixedTriggerDistance +
-              estimatedVisibleHeight * prevFadeVH +
-              estimatedVisibleHeight * 0.2;
-            const slideLifeDistance = baseLife + heightExcess;
-            slideRunPositions.push(
-              slideRunPositions[index - 1] + slideLifeDistance + 4,
-            );
-          }
-        }
-      });
-
-      const allImageSrcs = new Set<string>();
-      slides.forEach((s) => {
-        const cols = s.configuration.columns ?? {};
-        (["left", "center", "right"] as AboutHallColumnId[]).forEach(
-          (colId) => {
-            const colCfg = cols[colId];
-            if (!colCfg?.messages?.length) return;
-            colCfg.messages.forEach((msg) => {
-              msg.images?.forEach((img) => {
-                if (img.src) allImageSrcs.add(img.src);
-              });
-            });
-          },
-        );
-      });
-      if (allImageSrcs.size > 0) {
-        await Promise.all(
-          Array.from(allImageSrcs).map(async (src) => {
-            if (aboutImageCacheRef.current.has(src)) return;
-            const img = new Image();
-            img.src = src;
-            await new Promise<void>((resolve) => {
-              img.onload = () => resolve();
-              img.onerror = () => resolve();
-            });
-            aboutImageCacheRef.current.set(src, img);
-          }),
-        );
-      }
-
-      const panelRecords: ShowcasePanelRecord[] = [];
-      const useImmersiveColumnGrouping = runAxis === "y";
-
-      slides.forEach((slide, index) => {
-        const entry =
-          showcaseEntries[index] ??
-          ({
-            id: slide.id,
-            title: slide.registryBtnTitle,
-            image:
-              "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
-            fit: "contain",
-          } as ShowcaseEntry);
-        const panelGroup = new THREE.Group();
-        const runPos = slideRunPositions[index];
-        const slideHasColumnChoreo = true;
-        const useElevatorCreditsCard =
-          elevatorCreditsMode && !slideHasColumnChoreo;
-        if (runAxis === "y") {
-          if (useImmersiveColumnGrouping) {
-            panelGroup.position.set(elevatorCreditsWall, runPos, 0);
-          } else {
-            panelGroup.position.set(elevatorCreditsWall, runPos, 0);
-          }
-        }
-        const ySide = elevatorOppositeWall >= 0 ? 1 : -1;
-        let inwardRotationY = 0;
-        let frontFacingRotationY = 0;
-        let cantSign: -1 | 1 = 1;
-        if (runAxis === "y") {
-          if (ySide < 0) {
-            inwardRotationY = Math.PI / 2;
-            frontFacingRotationY = Math.PI / 2;
-            cantSign = 1;
-          } else if (ySide > 0) {
-            inwardRotationY = -Math.PI / 2;
-            frontFacingRotationY = -Math.PI / 2;
-            cantSign = -1;
-          } else {
-            inwardRotationY = Math.PI;
-            frontFacingRotationY = Math.PI;
-            cantSign = 1;
-          }
-        }
-        panelGroup.rotation.y = inwardRotationY;
-
-        const panelWidth = elevatorCreditsMode
-          ? THREE.MathUtils.clamp(slide.width * 1.18, 9.2, 13.8)
-          : THREE.MathUtils.clamp(slide.width, 8, 13.8);
-        const panelHeight = elevatorCreditsMode
-          ? THREE.MathUtils.clamp(slide.height * 1.02, 5.2, 8.4)
-          : THREE.MathUtils.clamp(slide.height, 4.8, 8.8);
-        const borderStyle = parseBorderStyle(slide.border);
-        const borderColor = new THREE.Color(0x74d2ff);
-        try {
-          borderColor.setStyle(toThreeColorStyle(borderStyle.color));
-        } catch {
-          borderColor.setHex(0x74d2ff);
-        }
-
-        const frame = new THREE.Mesh(
-          new THREE.PlaneGeometry(panelWidth * 1.02, panelHeight * 1.02),
-          new THREE.MeshBasicMaterial({
-            color: borderColor,
-            transparent: true,
-            opacity: useElevatorCreditsCard ? 0 : 0.28,
-            side: THREE.DoubleSide,
-            toneMapped: false,
-          }),
-        );
-        const frameMat = frame.material as THREE.MeshBasicMaterial;
-        frame.position.z = -0.04;
-        if (!useElevatorCreditsCard && !useImmersiveColumnGrouping)
-          panelGroup.add(frame);
-
-        const panelRecord: ShowcasePanelRecord = {
-          group: panelGroup,
-          runPos,
-          entry,
-          displayTitle: slide.registryBtnTitle,
-          fitMode: "contain",
-          inwardRotationY,
-          frontFacingRotationY,
-          cantSign,
-          focusBlend: 0,
-          frameMat,
-          imageMesh: new THREE.Mesh(
-            new THREE.PlaneGeometry(1, 1),
-            new THREE.MeshBasicMaterial({
-              color: 0xffffff,
-              transparent: true,
-              opacity: 1,
-              side: THREE.DoubleSide,
-              toneMapped: false,
-            }),
-          ),
-          imageMat: new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 1,
-            side: THREE.DoubleSide,
-            toneMapped: false,
-          }),
-          texture: null,
-          baseRepeat: new THREE.Vector2(1, 1),
-          baseOffset: new THREE.Vector2(0, 0),
-          zoom: 1,
-          panX: 0,
-          panY: 0,
-          clientVariants: [],
-          activeVariantIndex: 0,
-          setActiveVariant: () => {},
-          mediaItems: [],
-          activeMediaIndex: 0,
-          setActiveMedia: () => {},
-          mediaFadeStartMs: -Infinity,
-          mediaFadeDurationMs: 1,
-          setThumbnailPageStart: () => {},
-          triggerThumbnailNavPress: () => {},
-          thumbnailPageStart: 0,
-          thumbnailHitTargets: [],
-          thumbnailFrameMats: [],
-          thumbnailImageMats: [],
-          detailMat: new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0,
-          }),
-          detailTexture: null,
-          detailMesh: null,
-          detailScrollThumbMesh: null,
-          detailAllLines: [],
-          detailVisibleLines: 0,
-          detailScrollOffset: 0,
-          detailScrollMax: 0,
-          updateDetailTexture: () => {},
-          techBadgeRoot: null,
-          techBadgeFx: [],
-          aboutRuntime: {
-            mode: "about",
-            slideId: slide.id,
-            cells: [],
-            triggerDistance: fixedTriggerDistance,
-            slideStartRun: runPos - fixedTriggerDistance,
-            flowFadeOutDistanceViewportHeights: THREE.MathUtils.clamp(
-              slide.flowFadeOutDistanceViewportHeights ?? 1.5,
-              0.1,
-              10,
-            ),
-            autoSpeed: slide.autoSpeed ?? aboutHallDefaultAutoSpeedRef.current,
-          },
-        };
-
-        const columnMessages = getAboutColumnMessages(slide);
-        const createCell = (
-          content: AboutHallSlideContent,
-          cellWidth: number,
-          cellHeight: number,
-          cellX: number,
-          cellY: number,
-          opts?: {
-            transparentBackground?: boolean;
-            creditsStyle?: boolean;
-            columnDepth?: number;
-            parentGroup?: THREE.Group;
-          },
-        ) => {
-          const safeWidth = Math.max(
-            256,
-            Math.floor(1300 * (cellWidth / Math.max(panelWidth, 1))),
-          );
-          let safeHeight = Math.max(
-            220,
-            Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))),
-          );
-          const pixelAspect = safeWidth / cellWidth / (safeHeight / cellHeight);
-          const resolvedContent = {
-            ...content,
-            textContent: resolveAboutContentText(content),
-          };
-          const neededHeight = measureAboutTextHeight(
-            resolvedContent,
-            safeWidth,
-            safeHeight,
-            {
-              creditsStyle: opts?.creditsStyle ?? false,
-              loadedImages: aboutImageCacheRef.current,
-              pixelAspect,
-            },
-          );
-          let actualCellHeight = cellHeight;
-          if (neededHeight > safeHeight) {
-            const scale = neededHeight / safeHeight;
-            safeHeight = neededHeight;
-            actualCellHeight = cellHeight * scale;
-          }
-          const tex = createAboutCellTexture(
-            resolvedContent,
-            safeWidth,
-            safeHeight,
-            {
-              transparentBackground: opts?.transparentBackground ?? false,
-              creditsStyle: opts?.creditsStyle ?? false,
-              loadedImages: aboutImageCacheRef.current,
-              pixelAspect,
-            },
-          );
-          const emergencyTex = opts?.creditsStyle
-            ? createAboutCellTexture(resolvedContent, safeWidth, safeHeight, {
-                transparentBackground: opts?.transparentBackground ?? false,
-                creditsStyle: true,
-                emergencyMood: true,
-                loadedImages: aboutImageCacheRef.current,
-                pixelAspect,
-              })
-            : tex;
-          const material = new THREE.MeshBasicMaterial({
-            map: tex,
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0,
-            side: THREE.DoubleSide,
-            toneMapped: false,
-            depthWrite: false,
-          });
-          const mesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(cellWidth, actualCellHeight),
-            material,
-          );
-          mesh.position.set(cellX, cellY, opts?.columnDepth ?? 0.02);
-          (opts?.parentGroup ?? panelGroup).add(mesh);
-          const flowDir = normalizeAboutFlowDirection(content.flowDirection);
-          const flowOff = content.flowOffsetUnits ?? 0;
-          const halfVisible = estimatedVisibleHeight * 0.5;
-          const halfCell = actualCellHeight * 0.5;
-          const edgeGap = Math.max(1.0, estimatedVisibleHeight * 0.15);
-          const computedHomeY =
-            flowDir === "topToBottom"
-              ? -fixedTriggerDistance +
-                halfVisible +
-                halfCell +
-                edgeGap -
-                flowOff
-              : -fixedTriggerDistance -
-                halfVisible -
-                halfCell -
-                edgeGap -
-                flowOff;
-          panelRecord.aboutRuntime?.cells.push({
-            mesh,
-            material,
-            normalTexture: tex,
-            emergencyTexture: emergencyTex,
-            basePosition: mesh.position.clone(),
-            flowDirection: flowDir,
-            flowUnitsPerDistance: Math.max(
-              0,
-              content.flowUnitsPerDistance ?? 0,
-            ),
-            flowOffsetUnits: flowOff,
-            baseYawRad: mesh.rotation.y,
-            homeY: computedHomeY,
-          });
-        };
-
-        if (useElevatorCreditsCard) {
-          const allMsgs = [
-            ...columnMessages.left,
-            ...columnMessages.center,
-            ...columnMessages.right,
-          ];
-          const creditContent: AboutHallSlideContent = {
-            id: `${slide.id}-credit`,
-            type: "column1",
-            backgroundColor: "transparent",
-            fontColor: "rgba(8, 12, 18, 0.98)",
-            fontFamily: ["Oswald", "Montserrat"],
-            fontSize: "150px",
-            fontShadow: "0px 0px 14px rgba(0, 0, 0, 0.62)",
-            horizontalAlign: "center",
-            verticalAlign: "middle",
-            textContent: allMsgs
-              .map((c) => splitHtmlBreakLines(c.textContent).join("\n"))
-              .filter((t) => t.length > 0)
-              .join("\n\n"),
-          };
-          createCell(creditContent, panelWidth, panelHeight, 0, 0, {
-            transparentBackground: true,
-            creditsStyle: true,
-          });
-        } else {
-          const columnX: Record<AboutHallColumnId, number> =
-            useImmersiveColumnGrouping
-              ? { left: -9.56, center: 1.05, right: 10.65 }
-              : {
-                  left: -panelWidth * 0.34,
-                  center: 0,
-                  right: panelWidth * 0.34,
-                };
-          const columnZ: Record<AboutHallColumnId, number> =
-            useImmersiveColumnGrouping
-              ? { left: 3.35, center: 0, right: 6 }
-              : { left: 0, center: 0, right: 0 };
-          const columnDefaults: Record<AboutHallColumnId, number> =
-            useImmersiveColumnGrouping
-              ? { left: 34, center: 0, right: -34 }
-              : { left: 16, center: 0, right: -16 };
-          (["left", "center", "right"] as AboutHallColumnId[]).forEach(
-            (columnId) => {
-              const msgs = columnMessages[columnId];
-              if (msgs.length === 0) return;
-              const columnConfig = slide.configuration.columns?.[columnId];
-              const baseAngleDeg =
-                columnConfig?.angleDeg ?? columnDefaults[columnId];
-              const columnAnchor = new THREE.Group();
-              columnAnchor.position.set(
-                columnX[columnId],
-                0,
-                columnZ[columnId],
-              );
-              panelGroup.add(columnAnchor);
-              const verticalRange = useImmersiveColumnGrouping
-                ? panelHeight * 0.22
-                : panelHeight * 0.78;
-              const slotCount = Math.max(1, msgs.length);
-              const slotStep =
-                slotCount > 1 ? verticalRange / (slotCount - 1) : 0;
-              msgs.forEach((rawMessage, msgIndex) => {
-                const message = {
-                  ...rawMessage,
-                  horizontalAlign: rawMessage.horizontalAlign ?? "center",
-                  verticalAlign: rawMessage.verticalAlign ?? "middle",
-                  textContent: resolveAboutContentText(rawMessage),
-                };
-                const widthRatio = THREE.MathUtils.clamp(
-                  message.widthRatio ?? 1,
-                  0.35,
-                  2.6,
-                );
-                const heightRatio = THREE.MathUtils.clamp(
-                  message.heightRatio ?? 1,
-                  0.2,
-                  2.4,
-                );
-                const cellWidth = useImmersiveColumnGrouping
-                  ? immersiveWidths[columnId] * widthRatio
-                  : panelWidth * 0.26 * widthRatio;
-                const cellHeight = useImmersiveColumnGrouping
-                  ? immersiveHeights[columnId] * heightRatio
-                  : panelHeight * 0.24 * heightRatio;
-                const autoY =
-                  slotCount <= 1
-                    ? 0
-                    : verticalRange * 0.5 - slotStep * msgIndex;
-                const baseY = autoY + (message.offsetY ?? 0);
-                const baseX = message.offsetX ?? 0;
-                const cellCountBefore =
-                  panelRecord.aboutRuntime?.cells.length ?? 0;
-                createCell(message, cellWidth, cellHeight, baseX, baseY, {
-                  columnDepth: 0.03 + msgIndex * 0.002,
-                  parentGroup: columnAnchor,
-                  transparentBackground: false,
-                });
-                const runtimeCells = panelRecord.aboutRuntime?.cells;
-                if (!runtimeCells) return;
-                const newCells = runtimeCells.slice(cellCountBefore);
-                const angleDeg =
-                  (
-                    message as AboutHallSlideContent & {
-                      columnAngleDeg?: number;
-                    }
-                  ).columnAngleDeg ?? baseAngleDeg;
-                newCells.forEach((cell) => {
-                  cell.mesh.rotation.y = THREE.MathUtils.degToRad(angleDeg);
-                  cell.baseYawRad = cell.mesh.rotation.y;
-                  if (useImmersiveColumnGrouping)
-                    cell.immersiveColumn = columnId;
-                  if (cell.flowUnitsPerDistance <= 0)
-                    cell.flowUnitsPerDistance = 0.25;
-                });
-              });
-            },
-          );
-        }
-
-        const framePulse = new THREE.Mesh(
-          new THREE.PlaneGeometry(
-            panelWidth + borderStyle.width * 0.02,
-            panelHeight + borderStyle.width * 0.02,
-          ),
-          new THREE.MeshBasicMaterial({
-            color: borderColor,
-            transparent: true,
-            opacity: 0.09,
-            side: THREE.DoubleSide,
-            toneMapped: false,
-          }),
-        );
-        framePulse.position.z = -0.07;
-        if (!useElevatorCreditsCard && !useImmersiveColumnGrouping)
-          panelGroup.add(framePulse);
-
-        panelRecord.imageMesh =
-          panelRecord.aboutRuntime?.cells[0]?.mesh ?? panelRecord.imageMesh;
-        panelRecord.imageMat =
-          panelRecord.aboutRuntime?.cells[0]?.material ?? panelRecord.imageMat;
-
-        panelGroup.traverse((child) => {
-          child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
-        });
-        interiorRoot.add(panelGroup);
-        panelRecords.push(panelRecord);
-      });
-
-      projectShowcasePanelsRef.current = panelRecords;
-      panelRecords.forEach((panel) => {
-        panel.group.visible = true;
-      });
-
-      const edgeRunPadding = 14;
-      const startPosRun =
-        aboutHallStartPositionRef.current != null
-          ? shaftBottomWorld + aboutHallStartPositionRef.current
-          : null;
-      const firstSlideRun =
-        slideRunPositions.length > 0 ? slideRunPositions[0] : 0;
-      const lastSlideRun =
-        slideRunPositions.length > 0
-          ? slideRunPositions[slideRunPositions.length - 1]
-          : 0;
-      const minRun = Math.min(
-        firstSlideRun - edgeRunPadding,
-        startPosRun != null ? startPosRun - 5 : firstSlideRun - edgeRunPadding,
-      );
-      const maxRun = lastSlideRun + edgeRunPadding + 40;
-      const elevatorCameraWallOffset = Math.min(
-        trenchWidth * 0.36,
-        Math.max(2.8, trenchWidth * 0.5 - 1.05),
-      );
-      const elevatorCameraDepthOffset = -Math.min(
-        2.4,
-        Math.max(1.2, trenchWidth * 0.2),
-      );
-      const initialRun = startPosRun ?? minRun + 10;
-      projectShowcaseTrackRef.current = {
-        axis: runAxis,
-        minRun,
-        maxRun,
-        centerCross: runAxis === "y" ? elevatorCameraWallOffset : 0,
-        cameraHeight: runAxis === "y" ? elevatorCameraDepthOffset : panelY,
-        lookAhead: THREE.MathUtils.clamp(ctx.panelSpacing * 1.9, 22, 48),
-        speed: THREE.MathUtils.clamp(ctx.panelSpacing * 0.1625, 2.5, 5.5),
-        cullHalfWindow: ctx.panelSpacing * 3.2,
-        startRun: initialRun,
-      };
-
-      setProjectShowcaseRunPosition(initialRun);
-      setProjectShowcaseFocusIndex(0);
-      projectShowcaseFocusIndexRef.current = 0;
-      setAboutElevatorReachedEnd(false);
-      projectShowcaseVelocityRef.current = 0;
-      projectShowcaseJumpTargetRef.current = null;
-      projectShowcaseForcedFocusIndexRef.current = null;
-    },
-    [setProjectShowcaseRunPosition],
-  );
-
-  const runAboutLevelTransition = useCallback(
-    (
-      cfg: AboutLevelTransitionConfig | undefined,
-      titleOverride: string,
-      onMidpoint: () => void,
-    ): Promise<void> => {
-      const resolved = resolveTransitionConfig(cfg);
-      if (!resolved.enabled) {
-        onMidpoint();
-        return Promise.resolve();
-      }
-      const title = titleOverride || resolved.titleText || "";
-
-      if (aboutTransitionActiveRef.current) {
-        if (aboutTransitionCleanupRef.current)
-          aboutTransitionCleanupRef.current();
-      }
-      aboutTransitionActiveRef.current = true;
-      setAboutTransitionActive(true);
-
-      return new Promise<void>((resolve) => {
-        const overlayEl = document.getElementById(
-          "about-level-transition-overlay",
-        );
-        if (!overlayEl) {
-          onMidpoint();
-          aboutTransitionActiveRef.current = false;
-          setAboutTransitionActive(false);
-          resolve();
-          return;
-        }
-
-        const {
-          gridSize,
-          fillDurationMs,
-          clearDurationMs,
-          titleFadeDurationMs,
-          palette,
-          style,
-        } = resolved;
-        let cancelled = false;
-
-        const cleanup = () => {
-          cancelled = true;
-          overlayEl.innerHTML = "";
-          overlayEl.style.opacity = "0";
-          aboutTransitionActiveRef.current = false;
-          setAboutTransitionActive(false);
-          aboutTransitionCleanupRef.current = null;
-        };
-        aboutTransitionCleanupRef.current = cleanup;
-
-        if (style === "fade") {
-          overlayEl.innerHTML = "";
-          overlayEl.style.background = "rgba(2, 5, 12, 1)";
-          overlayEl.style.opacity = "0";
-          overlayEl.style.transition = `opacity ${fillDurationMs}ms ease-in`;
-          requestAnimationFrame(() => {
-            overlayEl.style.opacity = "1";
-          });
-          setTimeout(() => {
-            if (cancelled) return;
-            onMidpoint();
-            overlayEl.style.transition = `opacity ${clearDurationMs}ms ease-out`;
-            requestAnimationFrame(() => {
-              overlayEl.style.opacity = "0";
-            });
-            setTimeout(() => {
-              if (!cancelled) cleanup();
-              resolve();
-            }, clearDurationMs + 50);
-          }, fillDurationMs + 50);
-          return;
-        }
-
-        const rect = overlayEl.getBoundingClientRect();
-        const cellDescriptors = buildTransitionCellDescriptors(
-          rect,
-          gridSize,
-          palette,
-        );
-        const totalCells = Math.max(1, cellDescriptors.length);
-
-        overlayEl.style.opacity = "1";
-        overlayEl.style.transition = "none";
-        overlayEl.style.background = "transparent";
-        overlayEl.innerHTML = "";
-
-        const grid = document.createElement("div");
-        grid.style.cssText = "position:absolute;inset:0;overflow:hidden;";
-        overlayEl.appendChild(grid);
-
-        const titleEl = document.createElement("div");
-        titleEl.style.cssText =
-          "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none;";
-        titleEl.innerHTML = `<span style="
-        font-family:'Rajdhani','Oswald',sans-serif;font-weight:700;font-size:clamp(24px,4vw,56px);
-        letter-spacing:0.18em;text-transform:uppercase;color:rgba(220,235,255,0.95);
-        text-shadow:0 0 24px rgba(100,160,255,0.5),0 2px 8px rgba(0,0,0,0.7);
-        opacity:0;transition:opacity 400ms ease-in;
-      ">${title}</span>`;
-        overlayEl.appendChild(titleEl);
-
-        const cells: HTMLDivElement[] = [];
-        for (let i = 0; i < cellDescriptors.length; i++) {
-          const descriptor = cellDescriptors[i];
-          if (!descriptor) continue;
-          const cell = document.createElement("div");
-          cell.style.cssText = `position:absolute;left:${descriptor.x}px;top:${descriptor.y}px;width:${descriptor.w}px;height:${descriptor.h}px;opacity:0;transition:opacity ${60 + Math.random() * 120}ms ease-in;background:${descriptor.color};`;
-          const tint = document.createElement("div");
-          tint.style.cssText = `position:absolute;inset:0;background:${descriptor.color};opacity:${descriptor.shapeOpacity.toFixed(3)};`;
-          cell.appendChild(tint);
-
-          grid.appendChild(cell);
-          cells.push(cell);
-        }
-
-        const fillIndices = Array.from({ length: totalCells }, (_, i) => i);
-        for (let i = fillIndices.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [fillIndices[i], fillIndices[j]] = [fillIndices[j], fillIndices[i]];
-        }
-
-        const fillInterval = fillDurationMs / totalCells;
-        fillIndices.forEach((ci, idx) => {
-          setTimeout(() => {
-            if (!cancelled && cells[ci]) cells[ci].style.opacity = "1";
-          }, idx * fillInterval);
-        });
-
-        setTimeout(() => {
-          if (cancelled) return;
-          const titleSpan = titleEl.querySelector("span") as HTMLElement | null;
-          if (titleSpan) titleSpan.style.opacity = "1";
-        }, fillDurationMs * 0.4);
-
-        setTimeout(() => {
-          if (cancelled) return;
-          onMidpoint();
-
-          const clearIndices = Array.from({ length: totalCells }, (_, i) => i);
-          for (let i = clearIndices.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [clearIndices[i], clearIndices[j]] = [
-              clearIndices[j],
-              clearIndices[i],
-            ];
-          }
-          const clearInterval = clearDurationMs / totalCells;
-          clearIndices.forEach((ci, idx) => {
-            setTimeout(() => {
-              if (!cancelled && cells[ci]) cells[ci].style.opacity = "0";
-            }, idx * clearInterval);
-          });
-
-          const titleSpan = titleEl.querySelector("span") as HTMLElement | null;
-          if (titleSpan) {
-            titleSpan.style.transition = `opacity ${titleFadeDurationMs}ms ease-out`;
-            setTimeout(() => {
-              if (!cancelled && titleSpan) titleSpan.style.opacity = "0";
-            }, clearDurationMs * 0.5);
-          }
-
-          setTimeout(
-            () => {
-              if (!cancelled) cleanup();
-              resolve();
-            },
-            Math.max(clearDurationMs, titleFadeDurationMs) + 100,
-          );
-        }, fillDurationMs + 80);
-      });
-    },
-    [],
-  );
-
-  const selectAboutElevatorLevel = useCallback(
-    async (levelId: string) => {
-      if (aboutTransitionActiveRef.current) return;
-
-      const data = ABOUT_HALL_LEVEL_DATA_MAP[levelId] as
-        | AboutHallSlidesFile
-        | undefined;
-      if (!data) return;
-
-      const isManualSwitch =
-        selectedAboutLevelIdRef.current !== null &&
-        selectedAboutLevelIdRef.current !== levelId;
-
-      selectedAboutLevelIdRef.current = levelId;
-      setSelectedAboutLevelId(levelId);
-
-      aboutHallDefaultAutoSpeedRef.current = data.autoSpeed ?? 0.62;
-      aboutHallFirstSlidePositionRef.current = data.firstSlidePosition;
-      aboutHallStartPositionRef.current = data.startPosition;
-
-      const newSlides = (data.slides || []).map((slide) =>
-        normalizeAboutSlideColumns({ ...slide }),
-      );
-      const newEntries: ShowcaseEntry[] = newSlides.map((slide) => {
-        const byColumn = getAboutColumnMessages(slide);
-        const messages = [
-          ...byColumn.left,
-          ...byColumn.center,
-          ...byColumn.right,
-        ];
-        return {
-          id: slide.id,
-          title: slide.registryBtnTitle,
-          image:
-            "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
-          description: messages
-            .map((cell) => resolveAboutContentText(cell))
-            .join(" "),
-          technologies: [],
-          year: 2026,
-          fit: "contain",
-          galleryMedia: [],
-          clientVariants: [],
-        };
-      });
-
-      const levelMeta = (
-        aboutHallLevelsManifest as { levels: { id: string; label: string }[] }
-      ).levels.find((l) => l.id === levelId);
-      const transitionTitle = levelMeta?.label ?? levelId;
-
-      if (isManualSwitch && data.levelTransition?.enabled !== false) {
-        projectShowcasePlayingRef.current = false;
-        setProjectShowcasePlaying(false);
-
-        await runAboutLevelTransition(
-          data.levelTransition,
-          transitionTitle,
-          () => {
-            rebuildAboutElevatorPanels(newSlides, newEntries);
-          },
-        );
-      } else {
-        await rebuildAboutElevatorPanels(newSlides, newEntries);
-      }
-
-      markAboutElevatorLevelVisited(levelId);
-      setVisitedAboutLevels(getAboutElevatorVisitedLevels());
-
-      aboutLevelGateActiveRef.current = false;
-      setAboutLevelGateActive(false);
-
-      projectShowcasePlayingRef.current = true;
-      setProjectShowcasePlaying(true);
-      setProjectShowcaseLever(0);
-    },
-    [
-      rebuildAboutElevatorPanels,
-      setProjectShowcaseLever,
-      runAboutLevelTransition,
-    ],
-  );
 
   const stopOrbitalPortfolioToneSequence = useCallback(() => {
     const runtime = orbitalPortfolioToneRuntimeRef.current;
@@ -10747,468 +7261,6 @@ export default function ResumeSpace3D({
     ],
   );
 
-  function startProjectShowcaseAngleIntroSequence() {
-    if (projectShowcaseAngleIntroRef.current.raf !== null) {
-      cancelAnimationFrame(projectShowcaseAngleIntroRef.current.raf);
-      projectShowcaseAngleIntroRef.current.raf = null;
-    }
-    // Start immediately at wall-parallel and open angle while moving.
-    setProjectShowcaseAnglePercent(0);
-    projectShowcasePlayingRef.current = true;
-    setProjectShowcasePlaying(true);
-
-    const angleAnimMs = 1100;
-    const startedAt = performance.now();
-    const tick = () => {
-      if (!projectShowcaseActiveRef.current) {
-        projectShowcaseAngleIntroRef.current.raf = null;
-        return;
-      }
-      const elapsed = performance.now() - startedAt;
-      if (elapsed >= angleAnimMs) {
-        setProjectShowcaseAnglePercent(50);
-        projectShowcaseAngleIntroRef.current.raf = null;
-        return;
-      }
-      const t = THREE.MathUtils.clamp(elapsed / angleAnimMs, 0, 1);
-      const eased = t * t * (3 - 2 * t);
-      setProjectShowcaseAnglePercent(THREE.MathUtils.lerp(0, 50, eased));
-      projectShowcaseAngleIntroRef.current.raf = requestAnimationFrame(tick);
-    };
-    projectShowcaseAngleIntroRef.current.raf = requestAnimationFrame(tick);
-  }
-
-  const startProjectShowcaseEntrySequence = useCallback(() => {
-    if (projectShowcaseActiveRef.current) return;
-    if (projectShowcaseEntrySequenceRef.current.active) return;
-    const showcaseRoot = projectShowcaseRootRef.current;
-    const controls = sceneRef.current.controls;
-    const camera = sceneRef.current.camera;
-    const track = projectShowcaseTrackRef.current;
-    if (!showcaseRoot || !controls || !camera || !track) {
-      enterProjectShowcase();
-      return;
-    }
-
-    if (!PROJECT_SHOWCASE_USE_SHIP_ENTRY_SEQUENCE) {
-      pendingProjectShowcaseEntryRef.current = false;
-      projectShowcaseAwaitingProjectsArrivalRef.current = false;
-      projectShowcaseSawProjectsTravelRef.current = false;
-      setProjectShowcaseEntryOverlayOpacity(1);
-      enterProjectShowcase();
-      projectShowcaseEntrySequenceRef.current.active = true;
-      const fadeStart = performance.now();
-      const fadeMs = 700;
-      const fadeTick = () => {
-        if (!projectShowcaseEntrySequenceRef.current.active) return;
-        const t = THREE.MathUtils.clamp(
-          (performance.now() - fadeStart) / fadeMs,
-          0,
-          1,
-        );
-        const eased = t * t * (3 - 2 * t);
-        setProjectShowcaseEntryOverlayOpacity(1 - eased);
-        if (t >= 1) {
-          setProjectShowcaseEntryOverlayOpacity(0);
-          projectShowcaseEntrySequenceRef.current.active = false;
-          projectShowcaseEntrySequenceRef.current.raf = null;
-          return;
-        }
-        projectShowcaseEntrySequenceRef.current.raf =
-          requestAnimationFrame(fadeTick);
-      };
-      projectShowcaseEntrySequenceRef.current.raf =
-        requestAnimationFrame(fadeTick);
-      return;
-    }
-
-    pendingProjectShowcaseEntryRef.current = false;
-    projectShowcaseAwaitingProjectsArrivalRef.current = false;
-    projectShowcaseSawProjectsTravelRef.current = false;
-    projectShowcaseEntrySequenceRef.current.active = true;
-    setProjectShowcaseEntryOverlayOpacity(0);
-    showcaseRoot.visible = true;
-    camera.layers.enable(PROJECT_SHOWCASE_LAYER);
-    controls.enabled = false;
-    setFollowingSpaceship(false);
-    followingSpaceshipRef.current = false;
-    setFollowingStarDestroyer(false);
-    followingStarDestroyerRef.current = false;
-    setInsideShip(false);
-    insideShipRef.current = false;
-    setShipViewMode("exterior");
-    shipViewModeRef.current = "exterior";
-    if (shipCinematicRef.current) {
-      shipCinematicRef.current.active = false;
-    }
-
-    const rootPos = new THREE.Vector3();
-    showcaseRoot.getWorldPosition(rootPos);
-    const run = track.startRun;
-    const sway = Math.sin(run * 0.025) * (track.axis === "y" ? 0.6 : 1.2);
-    const travelAxis =
-      track.axis === "y"
-        ? new THREE.Vector3(0, 1, 0)
-        : track.axis === "z"
-          ? new THREE.Vector3(0, 0, 1)
-          : new THREE.Vector3(1, 0, 0);
-    const crossAxis =
-      track.axis === "y"
-        ? new THREE.Vector3(1, 0, 0)
-        : track.axis === "z"
-          ? new THREE.Vector3(1, 0, 0)
-          : new THREE.Vector3(0, 0, -1);
-    const trenchCam = new THREE.Vector3();
-    const trenchTarget = new THREE.Vector3();
-    if (track.axis === "y") {
-      trenchCam.set(
-        rootPos.x + track.centerCross + sway,
-        rootPos.y + run,
-        rootPos.z + track.cameraHeight,
-      );
-      trenchTarget.set(
-        rootPos.x - track.centerCross * 0.9,
-        rootPos.y + run,
-        rootPos.z + track.cameraHeight + 0.2,
-      );
-    } else if (track.axis === "z") {
-      trenchCam.set(
-        rootPos.x + track.centerCross + sway,
-        rootPos.y + track.cameraHeight,
-        rootPos.z + run,
-      );
-      trenchTarget.set(
-        rootPos.x + track.centerCross,
-        rootPos.y + track.cameraHeight - 0.3,
-        rootPos.z + run + track.lookAhead,
-      );
-    } else {
-      trenchCam.set(
-        rootPos.x + run,
-        rootPos.y + track.cameraHeight,
-        rootPos.z + track.centerCross + sway,
-      );
-      trenchTarget.set(
-        rootPos.x + run + track.lookAhead,
-        rootPos.y + track.cameraHeight - 0.3,
-        rootPos.z + track.centerCross,
-      );
-    }
-
-    const startCam = camera.position.clone();
-    const startTarget = new THREE.Vector3();
-    const controlsAny = controls as unknown as {
-      getTarget?: (out: THREE.Vector3) => void;
-    };
-    if (controlsAny.getTarget) {
-      controlsAny.getTarget(startTarget);
-    } else {
-      const fallbackDir = new THREE.Vector3();
-      camera.getWorldDirection(fallbackDir);
-      startTarget.copy(startCam).addScaledVector(fallbackDir, 24);
-    }
-
-    // Road-to-horizon style final: long, mostly level approach from behind.
-    const finalApproachDist = PROJECT_SHOWCASE_USE_LONG_ENTRY_APPROACH
-      ? track.lookAhead * 5.8
-      : track.lookAhead * 1.2;
-    const approachLift =
-      track.axis === "y"
-        ? new THREE.Vector3(0, 0, 14.0)
-        : new THREE.Vector3(0, 14.0, 0);
-    const approachTargetLift =
-      track.axis === "y"
-        ? new THREE.Vector3(0, 0, 8.2)
-        : new THREE.Vector3(0, 8.2, 0);
-    const approachCam = trenchCam
-      .clone()
-      .addScaledVector(travelAxis, -finalApproachDist)
-      .addScaledVector(crossAxis, 1.2)
-      .add(approachLift);
-    const approachTarget = trenchTarget
-      .clone()
-      .addScaledVector(travelAxis, -finalApproachDist * 0.26)
-      .addScaledVector(crossAxis, 0.45)
-      .add(approachTargetLift);
-    // Hold a higher approach line so entry can descend like a carrier landing.
-    if (track.axis !== "y") {
-      const horizonY = Math.max(startCam.y, trenchCam.y + 13.2);
-      approachCam.y = horizonY;
-      approachTarget.y = horizonY - 1.2;
-    }
-
-    const ship = spaceshipRef.current;
-    const isAboutElevatorSequence =
-      track.axis === "y" && hallwayContentModeRef.current === "about";
-    if (ship) ship.visible = true;
-
-    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
-    const smoothstep = (t: number) => t * t * (3 - 2 * t);
-    const durationMs = PROJECT_SHOWCASE_ENTRY_DURATION_MS;
-    const phaseSplit = PROJECT_SHOWCASE_USE_LONG_ENTRY_APPROACH ? 0.84 : 0.54;
-    const startedAt = performance.now();
-    const tempCam = new THREE.Vector3();
-    const tempTarget = new THREE.Vector3();
-    vlog("🎬 Project Showcase entry sequence start");
-    const tick = () => {
-      if (!projectShowcaseEntrySequenceRef.current.active) return;
-      const elapsed = performance.now() - startedAt;
-      const t = THREE.MathUtils.clamp(elapsed / durationMs, 0, 1);
-      if (t < phaseSplit) {
-        const p = easeOutCubic(t / phaseSplit);
-        tempCam.lerpVectors(startCam, approachCam, p);
-        tempTarget.lerpVectors(startTarget, approachTarget, p);
-      } else {
-        const p = smoothstep((t - phaseSplit) / (1 - phaseSplit));
-        tempCam.lerpVectors(approachCam, trenchCam, p);
-        tempTarget.lerpVectors(approachTarget, trenchTarget, p);
-      }
-      controls.setLookAt(
-        tempCam.x,
-        tempCam.y,
-        tempCam.z,
-        tempTarget.x,
-        tempTarget.y,
-        tempTarget.z,
-        false,
-      );
-
-      if (ship) {
-        const shipForward = tempTarget.clone().sub(tempCam).normalize();
-        const shipPos = tempCam
-          .clone()
-          .addScaledVector(shipForward, 8.4)
-          .add(new THREE.Vector3(0, -1.8, 0));
-        if (isAboutElevatorSequence) {
-          const outsideSign = tempCam.x >= rootPos.x ? 1 : -1;
-          shipPos.x =
-            rootPos.x + outsideSign * (Math.abs(track.centerCross) + 10.8);
-          shipPos.z = rootPos.z + track.cameraHeight + 1.1;
-          shipPos.y -= 0.6;
-        }
-        const glideNoseDown = THREE.MathUtils.lerp(-0.28, -0.06, t);
-        const shipAim = shipPos
-          .clone()
-          .addScaledVector(shipForward, 18)
-          .add(new THREE.Vector3(0, -glideNoseDown, 0));
-        ship.position.copy(shipPos);
-        const lookMat = new THREE.Matrix4();
-        lookMat.lookAt(shipPos, shipAim, new THREE.Vector3(0, 1, 0));
-        ship.quaternion.setFromRotationMatrix(lookMat);
-        const forwardOffset = ship.userData?.forwardOffset as
-          | THREE.Quaternion
-          | undefined;
-        if (forwardOffset) ship.quaternion.multiply(forwardOffset);
-      }
-
-      const nebulaFade = THREE.MathUtils.clamp((t - 0.06) / 0.58, 0, 1);
-      applyProjectShowcaseNebulaFade(nebulaFade);
-
-      if (t >= 1) {
-        vlog("🎬 Project Showcase entry sequence complete");
-        applyProjectShowcaseNebulaFade(1);
-        enterProjectShowcase();
-        setProjectShowcaseEntryOverlayOpacity(0);
-        projectShowcaseEntrySequenceRef.current.active = false;
-        projectShowcaseEntrySequenceRef.current.raf = null;
-        return;
-      }
-      projectShowcaseEntrySequenceRef.current.raf = requestAnimationFrame(tick);
-    };
-
-    projectShowcaseEntrySequenceRef.current.raf = requestAnimationFrame(tick);
-  }, [
-    enterProjectShowcase,
-    setFollowingStarDestroyer,
-    setProjectShowcaseEntryOverlayOpacity,
-  ]);
-
-  const startProjectShowcaseExitSequence = useCallback(
-    (targetId: string, targetType: "section" | "moon") => {
-      projectShowcaseQueuedNavRef.current = { targetId, targetType };
-      if (projectShowcaseExitSequenceRef.current.active) return true;
-      if (!projectShowcaseActiveRef.current) return false;
-
-      const showcaseRoot = projectShowcaseRootRef.current;
-      const controls = sceneRef.current.controls;
-      const camera = sceneRef.current.camera;
-      const track = projectShowcaseTrackRef.current;
-      if (!showcaseRoot || !controls || !camera || !track) {
-        exitProjectShowcase();
-        return false;
-      }
-
-      if (projectShowcaseEntrySequenceRef.current.raf !== null) {
-        cancelAnimationFrame(projectShowcaseEntrySequenceRef.current.raf);
-        projectShowcaseEntrySequenceRef.current.raf = null;
-      }
-      projectShowcaseEntrySequenceRef.current.active = false;
-      projectShowcaseExitSequenceRef.current.active = true;
-      setFollowingSpaceship(false);
-      followingSpaceshipRef.current = false;
-      setInsideShip(false);
-      insideShipRef.current = false;
-      setShipViewMode("exterior");
-      shipViewModeRef.current = "exterior";
-      if (shipCinematicRef.current) {
-        shipCinematicRef.current.active = false;
-      }
-
-      projectShowcasePlayingRef.current = false;
-      setProjectShowcasePlaying(false);
-      projectShowcaseVelocityRef.current = 0;
-      projectShowcaseJumpTargetRef.current = null;
-
-      const rootPos = new THREE.Vector3();
-      showcaseRoot.getWorldPosition(rootPos);
-      const startCam = camera.position.clone();
-      const startTarget = new THREE.Vector3();
-      const controlsAny = controls as unknown as {
-        getTarget?: (out: THREE.Vector3) => void;
-      };
-      if (controlsAny.getTarget) {
-        controlsAny.getTarget(startTarget);
-      } else {
-        startTarget
-          .copy(startCam)
-          .add(
-            track.axis === "y"
-              ? new THREE.Vector3(0, 1, 0)
-              : track.axis === "z"
-                ? new THREE.Vector3(0, 0, 1)
-                : new THREE.Vector3(1, 0, 0),
-          )
-          .add(new THREE.Vector3(0, -1.2, 0));
-      }
-      const flightDir = startTarget.clone().sub(startCam).normalize();
-      if (flightDir.lengthSq() < 1e-4) {
-        flightDir.copy(
-          track.axis === "y"
-            ? new THREE.Vector3(0, 1, 0)
-            : track.axis === "z"
-              ? new THREE.Vector3(0, 0, 1)
-              : new THREE.Vector3(1, 0, 0),
-        );
-      }
-
-      const pullUpCam = startCam
-        .clone()
-        .addScaledVector(flightDir, track.lookAhead * 0.95)
-        .add(new THREE.Vector3(0, 12, 0));
-      const pullUpTarget = startTarget
-        .clone()
-        .addScaledVector(flightDir, track.lookAhead * 1.8)
-        .add(new THREE.Vector3(0, 2, 0));
-      const jumpCam = pullUpCam
-        .clone()
-        .addScaledVector(flightDir, track.lookAhead * 2.35)
-        .add(new THREE.Vector3(0, 10, 0));
-      const jumpTarget = jumpCam
-        .clone()
-        .addScaledVector(flightDir, track.lookAhead * 2.5)
-        .add(new THREE.Vector3(0, 1, 0));
-      const ship = spaceshipRef.current;
-      const isAboutElevatorSequence =
-        track.axis === "y" && hallwayContentModeRef.current === "about";
-      if (ship) ship.visible = true;
-      applyProjectShowcaseNebulaFade(1);
-
-      const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
-      const smoothstep = (t: number) => t * t * (3 - 2 * t);
-      const durationMs = 2400;
-      const split = 0.62;
-      const startedAt = performance.now();
-      const tempCam = new THREE.Vector3();
-      const tempTarget = new THREE.Vector3();
-      vlog("🎬 Project Showcase exit sequence start");
-      const tick = () => {
-        if (!projectShowcaseExitSequenceRef.current.active) return;
-        const elapsed = performance.now() - startedAt;
-        const t = THREE.MathUtils.clamp(elapsed / durationMs, 0, 1);
-        if (t < split) {
-          const p = easeOutCubic(t / split);
-          tempCam.lerpVectors(startCam, pullUpCam, p);
-          tempTarget.lerpVectors(startTarget, pullUpTarget, p);
-        } else {
-          const p = smoothstep((t - split) / (1 - split));
-          tempCam.lerpVectors(pullUpCam, jumpCam, p);
-          tempTarget.lerpVectors(pullUpTarget, jumpTarget, p);
-        }
-        controls.setLookAt(
-          tempCam.x,
-          tempCam.y,
-          tempCam.z,
-          tempTarget.x,
-          tempTarget.y,
-          tempTarget.z,
-          false,
-        );
-        if (ship) {
-          const shipForward = tempTarget.clone().sub(tempCam).normalize();
-          const shipPos = tempCam
-            .clone()
-            .addScaledVector(shipForward, 8.8)
-            .add(new THREE.Vector3(0, -2.0, 0));
-          if (isAboutElevatorSequence) {
-            const outsideSign = tempCam.x >= rootPos.x ? 1 : -1;
-            shipPos.x =
-              rootPos.x + outsideSign * (Math.abs(track.centerCross) + 11.2);
-            shipPos.z = rootPos.z + track.cameraHeight + 1.25;
-            shipPos.y -= 0.75;
-          }
-          const climbNoseUp = THREE.MathUtils.lerp(1.4, 5.2, t);
-          const shipAim = shipPos
-            .clone()
-            .addScaledVector(shipForward, 18)
-            .add(new THREE.Vector3(0, climbNoseUp, 0));
-          ship.position.copy(shipPos);
-          const lookMat = new THREE.Matrix4();
-          lookMat.lookAt(shipPos, shipAim, new THREE.Vector3(0, 1, 0));
-          ship.quaternion.setFromRotationMatrix(lookMat);
-          const forwardOffset = ship.userData?.forwardOffset as
-            | THREE.Quaternion
-            | undefined;
-          if (forwardOffset) ship.quaternion.multiply(forwardOffset);
-        }
-
-        if (t >= 1) {
-          projectShowcaseExitSequenceRef.current.active = false;
-          projectShowcaseExitSequenceRef.current.raf = null;
-          const queued = projectShowcaseQueuedNavRef.current;
-          projectShowcaseQueuedNavRef.current = null;
-          exitProjectShowcase();
-          setProjectShowcaseEntryOverlayOpacity(0);
-          if (queued) {
-            setFollowingSpaceship(true);
-            followingSpaceshipRef.current = true;
-            if (!manualFlightModeRef.current) {
-              handleAutopilotNavigation(queued.targetId, queued.targetType);
-            } else {
-              const fallbackTarget =
-                queued.targetType === "moon"
-                  ? `experience-${queued.targetId}`
-                  : queued.targetId;
-              handleNavigationRef.current?.(fallbackTarget);
-            }
-          }
-          vlog("🎬 Project Showcase exit sequence complete");
-          return;
-        }
-        projectShowcaseExitSequenceRef.current.raf =
-          requestAnimationFrame(tick);
-      };
-
-      projectShowcaseExitSequenceRef.current.raf = requestAnimationFrame(tick);
-      return true;
-    },
-    [
-      exitProjectShowcase,
-      handleAutopilotNavigation,
-      setProjectShowcaseEntryOverlayOpacity,
-      vlog,
-    ],
-  );
-
   const focusSkillsLatticeNode = useCallback(
     (node: SkillsLatticeNodeRecord, animate = true) => {
       skillsLatticeSelectedNodeRef.current = node;
@@ -11803,71 +7855,6 @@ export default function ResumeSpace3D({
     seq.raf = requestAnimationFrame(tick);
   }, [setExternalCosmosLabelsHiddenForAbout, shipLog, vlog]);
 
-  const getProjectShowcaseStopRunForIndex = useCallback((index: number) => {
-    const panels = projectShowcasePanelsRef.current;
-    if (panels.length === 0) return 0;
-    const safeIndex = THREE.MathUtils.clamp(index, 0, panels.length - 1);
-    const track = projectShowcaseTrackRef.current;
-    const minRun = track ? track.minRun + 10 : -Infinity;
-    const maxRun = track ? track.maxRun - 10 : Infinity;
-    const current = panels[safeIndex].runPos;
-    const prev = safeIndex > 0 ? panels[safeIndex - 1].runPos : undefined;
-    const next =
-      safeIndex < panels.length - 1 ? panels[safeIndex + 1].runPos : undefined;
-    const lowerBound =
-      prev !== undefined ? (prev + current) * 0.5 + 0.02 : minRun;
-    const upperBound =
-      next !== undefined ? (current + next) * 0.5 - 0.02 : maxRun;
-    return THREE.MathUtils.clamp(
-      current - PROJECT_SHOWCASE_NAV_STOP_BACK_OFFSET,
-      Math.max(minRun, lowerBound),
-      Math.min(maxRun, upperBound),
-    );
-  }, []);
-
-  const stepProjectShowcaseFocus = useCallback(
-    (direction: -1 | 1) => {
-      const panels = projectShowcasePanelsRef.current;
-      if (panels.length === 0) return;
-      const current = projectShowcaseFocusIndexRef.current;
-      const next = (current + direction + panels.length) % panels.length;
-      projectShowcasePlayingRef.current = false;
-      setProjectShowcasePlaying(false);
-      projectShowcaseVelocityRef.current = 0;
-      projectShowcaseJumpTargetRef.current = null;
-      setProjectShowcaseLever(0);
-      projectShowcaseForcedFocusIndexRef.current = next;
-      setProjectShowcaseFocus(next);
-      projectShowcaseJumpTargetRef.current =
-        getProjectShowcaseStopRunForIndex(next);
-    },
-    [
-      getProjectShowcaseStopRunForIndex,
-      setProjectShowcaseLever,
-      setProjectShowcaseFocus,
-    ],
-  );
-
-  const jumpProjectShowcaseToIndex = useCallback(
-    (index: number) => {
-      const panels = projectShowcasePanelsRef.current;
-      if (panels.length === 0) return;
-      const safeIndex = THREE.MathUtils.clamp(index, 0, panels.length - 1);
-      projectShowcasePlayingRef.current = false;
-      setProjectShowcasePlaying(false);
-      projectShowcaseVelocityRef.current = 0;
-      projectShowcaseJumpTargetRef.current = null;
-      projectShowcaseLeverDraggingRef.current = false;
-      projectShowcaseLeverFlickRef.current = 0;
-      projectShowcaseLeverLastSampleRef.current = null;
-      setProjectShowcaseLever(0);
-      projectShowcaseForcedFocusIndexRef.current = safeIndex;
-      projectShowcaseJumpTargetRef.current =
-        getProjectShowcaseStopRunForIndex(safeIndex);
-    },
-    [getProjectShowcaseStopRunForIndex, setProjectShowcaseLever],
-  );
-
   const handleExperienceCompanyNavigation = useCallback(
     async (companyId: string, skipAboutExitConfirm = false) => {
       if (!companyId) return;
@@ -11890,10 +7877,6 @@ export default function ResumeSpace3D({
 
       // Universal handoff: cancel/exit any in-flight cinematic before moon travel.
       interruptTransientTravelFlows(companyId, "moon");
-
-      if (startProjectShowcaseExitSequence(companyId, "moon")) {
-        return;
-      }
 
       // If already orbiting this moon, ignore — don't re-trigger orbit.
       // Clicking the same moon you're hovering over should be a no-op.
@@ -11944,7 +7927,6 @@ export default function ResumeSpace3D({
       shipLog,
       debugLog,
       captureMoonDepartureContext,
-      startProjectShowcaseExitSequence,
       markMoonOrbitDepartureHandoff,
       triggerAboutRetargetDispersal,
     ],
@@ -11973,7 +7955,6 @@ export default function ResumeSpace3D({
         aboutMemorySquarePendingEntryRef.current = true;
         aboutMemorySquareActiveRef.current = false;
         aboutMemorySquareNavIntentUntilRef.current = performance.now() + 20000;
-        setProjectsNavHereActive(false);
         setSkillsNavHereActive(false);
       } else if (targetType === "section" && targetId === "about") {
         dlog(
@@ -11984,7 +7965,6 @@ export default function ResumeSpace3D({
         );
         setAboutNavHereActive(true);
         setSkillsNavHereActive(false);
-        setProjectsNavHereActive(false);
         setFollowingSpaceship(true);
         followingSpaceshipRef.current = true;
         if (spaceshipRef.current) spaceshipRef.current.visible = true;
@@ -11993,15 +7973,11 @@ export default function ResumeSpace3D({
         dlog(
           `[handleQuickNav:about] after beginTransit — pendingEntry=${aboutJourneyPendingEntryRef.current}, phase=${aboutJourneyRef.current?.phase}`,
         );
-      } else if (targetType === "section" && targetId === "projects") {
-        setProjectsNavHereActive(true);
-        setSkillsNavHereActive(false);
       } else if (
         targetType === "section" &&
         (targetId === "skills" || targetId === SKILLS_LATTICE_NAV_ID)
       ) {
         setSkillsNavHereActive(true);
-        setProjectsNavHereActive(false);
       } else if (
         targetType === "section" &&
         targetId !== ABOUT_MEMORY_SQUARE_NAV_ID
@@ -12010,17 +7986,11 @@ export default function ResumeSpace3D({
         aboutMemorySquareActiveRef.current = false;
         aboutMemorySquareNavIntentUntilRef.current = 0;
         setAboutNavHereActive(false);
-        if (targetId !== "projects" && targetId !== "about") {
-          setProjectsNavHereActive(false);
-        }
         if (targetId !== "skills" && targetId !== SKILLS_LATTICE_NAV_ID) {
           setSkillsNavHereActive(false);
         }
         setExternalCosmosLabelsHiddenForAbout(false);
         cancelAboutMemorySquareEntrySequence();
-      }
-      if (startProjectShowcaseExitSequence(targetId, targetType)) {
-        return;
       }
       // Exit orbit if currently orbiting
       if (isOrbiting()) {
@@ -12055,11 +8025,9 @@ export default function ResumeSpace3D({
       exitOrbit,
       shipLog,
       captureMoonDepartureContext,
-      startProjectShowcaseExitSequence,
       cancelAboutMemorySquareEntrySequence,
       setExternalCosmosLabelsHiddenForAbout,
       setAboutNavHereActive,
-      setProjectsNavHereActive,
       setSkillsNavHereActive,
       markMoonOrbitDepartureHandoff,
     ],
@@ -12530,64 +8498,6 @@ export default function ResumeSpace3D({
     vlog("🔺 Engaging Star Destroyer escort — matching course and speed");
   }, [vlog]);
 
-  const isAboutElevatorFlowContextActive = useCallback(() => {
-    return (
-      projectShowcaseActiveRef.current &&
-      hallwayContentModeRef.current === "about" &&
-      projectShowcaseTrackRef.current?.axis === "y"
-    );
-  }, []);
-
-  const setAboutFlowOverlayVisibility = useCallback(
-    (next: boolean) => {
-      if (!IS_DEBUG) {
-        shipLog("About flow overlay requires ?debug=true.", "error");
-        return false;
-      }
-      if (!isAboutElevatorFlowContextActive()) {
-        shipLog(
-          "About flow overlay is available only in About elevator mode.",
-          "error",
-        );
-        return false;
-      }
-      aboutFlowOverlayEnabledRef.current = next;
-      setAboutFlowOverlayEnabled(next);
-      shipLog(`About flow overlay ${next ? "shown" : "hidden"}`, "info");
-      return true;
-    },
-    [isAboutElevatorFlowContextActive, shipLog],
-  );
-
-  const runShipTerminalCommand = useCallback(
-    (rawCommand: string): boolean => {
-      const cmd = rawCommand.trim().toLowerCase();
-      if (!cmd) return false;
-      if (cmd === "aboutflow overlay on" || cmd === "aboutflowdbg on") {
-        setAboutFlowOverlayVisibility(true);
-        return true;
-      }
-      if (cmd === "aboutflow overlay off" || cmd === "aboutflowdbg off") {
-        setAboutFlowOverlayVisibility(false);
-        return true;
-      }
-      if (cmd === "aboutflow overlay toggle" || cmd === "aboutflowdbg toggle") {
-        const next = !aboutFlowOverlayEnabledRef.current;
-        setAboutFlowOverlayVisibility(next);
-        return true;
-      }
-      if (cmd === "help aboutflow") {
-        shipLog(
-          "Commands: aboutflow overlay on | off | toggle (alias: aboutflowdbg on|off|toggle)",
-          "info",
-        );
-        return true;
-      }
-      return false;
-    },
-    [setAboutFlowOverlayVisibility, shipLog],
-  );
-
   const terminalToolActions = useMemo<ShipTerminalToolAction[]>(() => {
     const invoke = (name: string, ...args: unknown[]) => {
       const registry = window as unknown as Record<string, unknown>;
@@ -12701,18 +8611,6 @@ export default function ResumeSpace3D({
         onRun: () => invoke("captureCameraSnapshot"),
       },
       {
-        id: "about-flow-overlay-on",
-        label: "aboutflow overlay on",
-        hint: "Show About flow debug overlay (About elevator only)",
-        onRun: () => runShipTerminalCommand("aboutflow overlay on"),
-      },
-      {
-        id: "about-flow-overlay-off",
-        label: "aboutflow overlay off",
-        hint: "Hide About flow debug overlay",
-        onRun: () => runShipTerminalCommand("aboutflow overlay off"),
-      },
-      {
         id: "summon-moon-drone",
         label: "summonMoonDrone()",
         hint: "Re-summon drone during moon visit",
@@ -12751,7 +8649,7 @@ export default function ResumeSpace3D({
         },
       },
     ];
-  }, [orbitPhase, overlayContent, runShipTerminalCommand, shipLog]);
+  }, [orbitPhase, overlayContent, shipLog]);
 
   const reattachCameraToFalcon = useCallback((smooth: boolean) => {
     const controls = sceneRef.current.controls;
@@ -12827,24 +8725,6 @@ export default function ResumeSpace3D({
       ) {
         interrupted = true;
         exitSkillsLattice({ restoreShip: true, clearSystem: true });
-        restoredShip = true;
-      }
-    }
-    if (
-      nextTargetId !== "projects" &&
-      nextTargetId !== "about" &&
-      nextTargetId !== PROJECT_SHOWCASE_NAV_ID
-    ) {
-      setProjectsNavHereActive(false);
-      pendingProjectShowcaseEntryRef.current = false;
-      projectShowcaseAwaitingProjectsArrivalRef.current = false;
-      projectShowcaseSawProjectsTravelRef.current = false;
-      if (
-        projectShowcaseEntrySequenceRef.current.active ||
-        projectShowcaseActiveRef.current
-      ) {
-        interrupted = true;
-        exitProjectShowcase();
         restoredShip = true;
       }
     }
@@ -12974,59 +8854,12 @@ export default function ResumeSpace3D({
         setShipViewMode("exterior");
         shipViewModeRef.current = "exterior";
         if (spaceshipRef.current) spaceshipRef.current.visible = true;
-        if (projectShowcaseActiveRef.current) {
-          exitProjectShowcase();
-        }
         aboutJourneyPendingEntryRef.current = true;
         aboutJourneyRef.current?.beginTransit();
         handleQuickNav("about", "section", skipAboutExitConfirm);
         dlog(
           `[handleCockpitNavigate:about] after — pending=${aboutJourneyPendingEntryRef.current} phase=${aboutJourneyRef.current?.phase}`,
         );
-        return;
-      }
-      if (targetId === "projects" || targetId === PROJECT_SHOWCASE_NAV_ID) {
-        setHallwayContentMode("projects");
-        setProjectsNavHereActive(true);
-        if (!projectShowcaseReady) {
-          vlog("⚠️ Project Showcase is loading");
-          return;
-        }
-        setFollowingSpaceship(true);
-        followingSpaceshipRef.current = true;
-        setInsideShip(false);
-        insideShipRef.current = false;
-        setShipViewMode("exterior");
-        shipViewModeRef.current = "exterior";
-        if (spaceshipRef.current) spaceshipRef.current.visible = true;
-        if (projectShowcaseActiveRef.current) {
-          exitProjectShowcase();
-          return;
-        }
-        const trenchAnchor = projectShowcaseWorldAnchorRef.current;
-        const shipPos = spaceshipRef.current?.position;
-        const nearTrenchAnchor =
-          !!trenchAnchor &&
-          !!shipPos &&
-          shipPos.distanceTo(trenchAnchor) <= PROJECT_SHOWCASE_NEAR_ANCHOR_DIST;
-        const atProjects =
-          currentNavigationTarget === "projects" &&
-          navigationDistance === null &&
-          nearTrenchAnchor;
-        if (atProjects) {
-          projectShowcaseAwaitingProjectsArrivalRef.current = false;
-          projectShowcaseSawProjectsTravelRef.current = false;
-          pendingProjectShowcaseEntryRef.current = true;
-          startProjectShowcaseEntrySequence();
-        } else {
-          pendingProjectShowcaseEntryRef.current = true;
-          projectShowcaseAwaitingProjectsArrivalRef.current = true;
-          projectShowcaseSawProjectsTravelRef.current = false;
-          handleQuickNav("projects", "section", skipAboutExitConfirm);
-          vlog(
-            "🛰️ Routing to Projects — Project Showcase will open on arrival",
-          );
-        }
         return;
       }
       if (targetId === "portfolio" || targetId === ORBITAL_PORTFOLIO_NAV_ID) {
@@ -13039,9 +8872,6 @@ export default function ResumeSpace3D({
         if (!orbitalPortfolioReady) {
           vlog("⚠️ Orbital Portfolio is loading");
           return;
-        }
-        if (projectShowcaseActiveRef.current) {
-          exitProjectShowcase();
         }
         setFollowingSpaceship(true);
         followingSpaceshipRef.current = true;
@@ -13093,13 +8923,11 @@ export default function ResumeSpace3D({
     [
       currentNavigationTarget,
       navigationDistance,
-      projectShowcaseReady,
       orbitalPortfolioReady,
       enterSkillsLattice,
       handleExperienceCompanyNavigation,
       handleQuickNav,
       placeStarDestroyerNearSkills,
-      startProjectShowcaseEntrySequence,
       enterOrbitalPortfolio,
       interruptTransientTravelFlows,
       vlog,
@@ -13132,42 +8960,6 @@ export default function ResumeSpace3D({
     handleCockpitNavigate,
     handleExperienceCompanyNavigation,
     handleQuickNav,
-  ]);
-
-  useEffect(() => {
-    if (
-      !pendingProjectShowcaseEntryRef.current ||
-      projectShowcaseActiveRef.current ||
-      projectShowcaseEntrySequenceRef.current.active
-    ) {
-      return;
-    }
-
-    if (projectShowcaseAwaitingProjectsArrivalRef.current) {
-      const hallwayNavTarget =
-        hallwayContentModeRef.current === "about" ? "about" : "projects";
-      if (
-        currentNavigationTarget === hallwayNavTarget &&
-        navigationDistance !== null
-      ) {
-        projectShowcaseSawProjectsTravelRef.current = true;
-      }
-      if (
-        projectShowcaseSawProjectsTravelRef.current &&
-        navigationDistance === null
-      ) {
-        startProjectShowcaseEntrySequence();
-      }
-      return;
-    }
-
-    if (navigationDistance === null) {
-      startProjectShowcaseEntrySequence();
-    }
-  }, [
-    currentNavigationTarget,
-    navigationDistance,
-    startProjectShowcaseEntrySequence,
   ]);
 
   useEffect(() => {
@@ -13396,25 +9188,10 @@ export default function ResumeSpace3D({
     if (!FAST_TRACK_TARGET || fastTrackConsumedRef.current) return;
     if (isLoading || !sceneReady) return;
     const target = FAST_TRACK_TARGET;
-    const isShowcaseTarget = target === "about" || target === "projects";
-    if (isShowcaseTarget && !projectShowcaseReady) return;
     fastTrackConsumedRef.current = true;
     dwarn(`[FAST_TRACK] Navigating directly to: ${target}`);
-    if (isShowcaseTarget) {
-      setHallwayContentMode(target === "about" ? "about" : "projects");
-      pendingProjectShowcaseEntryRef.current = true;
-      enterProjectShowcase();
-    } else {
-      handleCockpitNavigate(target, "section");
-    }
-  }, [
-    isLoading,
-    sceneReady,
-    projectShowcaseReady,
-    enterProjectShowcase,
-    handleCockpitNavigate,
-    setHallwayContentMode,
-  ]);
+    handleCockpitNavigate(target, "section");
+  }, [isLoading, sceneReady, handleCockpitNavigate]);
 
   const clearStartupUiRevealTimeline = useCallback(() => {
     if (startupUiRevealTlRef.current) {
@@ -13535,8 +9312,6 @@ export default function ResumeSpace3D({
         driver = "loader";
       } else if (!sceneReady) {
         driver = "scene-init";
-      } else if (projectShowcaseActiveRef.current) {
-        driver = "project-showcase-loop";
       } else if (orbitalPortfolioActiveRef.current) {
         driver = "orbital-portfolio-loop";
       } else if (
@@ -13920,7 +9695,6 @@ export default function ResumeSpace3D({
       const shouldShow =
         aboutMemorySquareActiveRef.current &&
         !aboutMemorySquareEntrySequenceRef.current.active &&
-        !projectShowcaseActiveRef.current &&
         !orbitalPortfolioActiveRef.current &&
         !skillsLatticeActiveRef.current;
       setAboutSwarmTriggerVisible((prev) =>
@@ -13979,45 +9753,6 @@ export default function ResumeSpace3D({
       }
     };
 
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [sceneReady]);
-
-  useEffect(() => {
-    if (!sceneReady) return;
-    let raf = 0;
-    const modelWorld = new THREE.Vector3();
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
-      const camera = sceneRef.current.camera;
-      const model = projectShowcaseAboutExteriorModelRef.current;
-      const coreMat = projectShowcaseAboutBeaconCoreMatRef.current;
-      const haloMat = projectShowcaseAboutBeaconHaloMatRef.current;
-      if (!camera || !model || !coreMat || !haloMat) return;
-
-      model.getWorldPosition(modelWorld);
-      const dist = camera.position.distanceTo(modelWorld);
-      const t = THREE.MathUtils.clamp(
-        (dist - PROJECT_SHOWCASE_ABOUT_BEACON_FADE_NEAR_DIST) /
-          Math.max(
-            1,
-            PROJECT_SHOWCASE_ABOUT_BEACON_FADE_FAR_DIST -
-              PROJECT_SHOWCASE_ABOUT_BEACON_FADE_NEAR_DIST,
-          ),
-        0,
-        1,
-      );
-      coreMat.opacity = THREE.MathUtils.lerp(
-        PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_NEAR,
-        PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_FAR,
-        t,
-      );
-      haloMat.opacity = THREE.MathUtils.lerp(
-        PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_NEAR,
-        PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_FAR,
-        t,
-      );
-    };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [sceneReady]);
@@ -14739,7 +10474,6 @@ export default function ResumeSpace3D({
       // Include interior/elevator surfaces so labels do not bleed through walls.
       addDescendantOccluders(spaceshipRef.current);
       addDescendantOccluders(aboutMemorySquareRootRef.current);
-      addDescendantOccluders(projectShowcaseInteriorRootRef.current);
       if (occluders.length === 0) return;
       scene.traverse((obj) => {
         const maybeObject = obj as THREE.Object3D & {
@@ -14771,15 +10505,6 @@ export default function ResumeSpace3D({
           !!maybeObject.userData?.orbitalPortfolioLabel;
         const tracksAboutLabel = !!maybeObject.userData?.aboutMemorySquareLabel;
         if (!tracksPortfolioLabel && !tracksAboutLabel) return;
-        // While riding the About elevator, external portfolio labels should not be visible.
-        if (
-          tracksPortfolioLabel &&
-          hallwayContentModeRef.current === "about" &&
-          projectShowcaseActiveRef.current
-        ) {
-          maybeObject.visible = false;
-          return;
-        }
         if (maybeObject.userData?.orbitalPortfolioStationLabel) {
           maybeObject.visible = false;
           return;
@@ -15582,135 +11307,7 @@ export default function ResumeSpace3D({
   }, [focusSkillsLatticeNode]);
 
   useEffect(() => {
-    if (!PROJECT_SHOWCASE_USE_NEBULA_REALM || isLoading || !sceneReady) return;
-    let raf = 0;
-    const tick = () => {
-      const sceneCtx = sceneRef.current;
-      const ship = spaceshipRef.current;
-      const camera = sceneCtx?.camera;
-      if (!sceneCtx || !ship || !camera) {
-        raf = requestAnimationFrame(tick);
-        return;
-      }
-      const nebulaRoot = projectShowcaseNebulaRootRef.current;
-      if (nebulaRoot?.visible) {
-        const nebulaCenterOffset = nebulaRoot.userData?.nebulaCenterOffset as
-          | THREE.Vector3
-          | undefined;
-        nebulaRoot.position.copy(camera.position);
-        if (nebulaCenterOffset) {
-          nebulaRoot.position.sub(nebulaCenterOffset);
-        }
-      }
-
-      const shouldFadeDuringOutboundTravel =
-        pendingProjectShowcaseEntryRef.current &&
-        !projectShowcaseActiveRef.current &&
-        !projectShowcaseEntrySequenceRef.current.active &&
-        !projectShowcaseExitSequenceRef.current.active;
-      const shouldFadeDuringReturnTravel =
-        !pendingProjectShowcaseEntryRef.current &&
-        !projectShowcaseActiveRef.current &&
-        !projectShowcaseEntrySequenceRef.current.active &&
-        !projectShowcaseExitSequenceRef.current.active &&
-        currentNavigationTarget === "projects" &&
-        navigationDistance !== null;
-
-      if (shouldFadeDuringOutboundTravel || shouldFadeDuringReturnTravel) {
-        const distFromKnownCenter = ship.position.length();
-        const fadeStart = SKYFIELD_RADIUS * 0.9;
-        const fadeEnd = SKYFIELD_RADIUS * 1.18;
-        const realmAlpha = THREE.MathUtils.clamp(
-          (distFromKnownCenter - fadeStart) / Math.max(1, fadeEnd - fadeStart),
-          0,
-          1,
-        );
-        applyProjectShowcaseNebulaFade(realmAlpha);
-        if (realmAlpha > 0.001) {
-          camera.layers.enable(PROJECT_SHOWCASE_LAYER);
-        }
-        const now = performance.now();
-        if (now - projectShowcaseNebulaDebugLastLogMsRef.current > 2600) {
-          projectShowcaseNebulaDebugLastLogMsRef.current = now;
-          const nebulaVisible =
-            projectShowcaseNebulaRootRef.current?.visible ?? false;
-          vlog(
-            `🌌 Nebula travel dbg: dist=${distFromKnownCenter.toFixed(0)} alpha=${realmAlpha.toFixed(
-              2,
-            )} camLayer=${camera.layers.isEnabled(PROJECT_SHOWCASE_LAYER) ? "on" : "off"} visible=${nebulaVisible ? "yes" : "no"}`,
-          );
-        }
-      } else if (
-        !projectShowcaseActiveRef.current &&
-        !projectShowcaseEntrySequenceRef.current.active
-      ) {
-        applyProjectShowcaseNebulaFade(0);
-        if (PROJECT_SHOWCASE_VISIBLE_IN_SPACE) {
-          camera.layers.enable(PROJECT_SHOWCASE_LAYER);
-        } else {
-          camera.layers.disable(PROJECT_SHOWCASE_LAYER);
-        }
-      }
-
-      const nowMs = performance.now();
-      if (nowMs - shipTelemetryLastLogMsRef.current >= 1000) {
-        shipTelemetryLastLogMsRef.current = nowMs;
-        const wantsFalcon = emitFalconLocationLogsRef.current;
-        const wantsSD = emitSDLocationLogsRef.current;
-        if (wantsFalcon || wantsSD) {
-          const sd = starDestroyerRef.current;
-          const shipPos = ship.position;
-          const sdPos = sd?.position;
-          const sdDist = sdPos ? shipPos.distanceTo(sdPos) : null;
-          const parts: string[] = [];
-          if (wantsFalcon) {
-            parts.push(
-              `Falcon [${shipPos.x.toFixed(0)}, ${shipPos.y.toFixed(0)}, ${shipPos.z.toFixed(0)}]`,
-            );
-          }
-          if (wantsSD) {
-            parts.push(
-              `SD ${
-                sdPos
-                  ? `[${sdPos.x.toFixed(0)}, ${sdPos.y.toFixed(0)}, ${sdPos.z.toFixed(0)}]`
-                  : "[not-loaded]"
-              }`,
-            );
-          }
-          if (wantsFalcon && wantsSD && sdDist !== null) {
-            parts.push(`d=${sdDist.toFixed(0)}`);
-          }
-          shipLog(`TELEM ${parts.join(" | ")}`, "info");
-        }
-      }
-
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
     return () => {
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [currentNavigationTarget, isLoading, navigationDistance, sceneReady]);
-
-  useEffect(() => {
-    return () => {
-      if (projectShowcaseEntrySequenceRef.current.raf !== null) {
-        cancelAnimationFrame(projectShowcaseEntrySequenceRef.current.raf);
-        projectShowcaseEntrySequenceRef.current.raf = null;
-      }
-      if (projectShowcaseExitSequenceRef.current.raf !== null) {
-        cancelAnimationFrame(projectShowcaseExitSequenceRef.current.raf);
-        projectShowcaseExitSequenceRef.current.raf = null;
-      }
-      if (projectShowcaseAngleIntroRef.current.raf !== null) {
-        cancelAnimationFrame(projectShowcaseAngleIntroRef.current.raf);
-        projectShowcaseAngleIntroRef.current.raf = null;
-      }
-      projectShowcaseEntrySequenceRef.current.active = false;
-      projectShowcaseExitSequenceRef.current.active = false;
-      projectShowcaseQueuedNavRef.current = null;
-      projectShowcaseAwaitingProjectsArrivalRef.current = false;
-      projectShowcaseSawProjectsTravelRef.current = false;
       skillsLatticePendingEntryRef.current = false;
       skillsLatticeActiveRef.current = false;
     };
@@ -15790,781 +11387,6 @@ export default function ResumeSpace3D({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [isLoading, sceneReady]);
-
-  useEffect(() => {
-    if (!projectShowcaseActive) return;
-    let raf = 0;
-
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
-      const controls = sceneRef.current.controls;
-      const camera = sceneRef.current.camera;
-      const track = projectShowcaseTrackRef.current;
-      const showcaseRoot = projectShowcaseRootRef.current;
-      if (!controls || !camera || !track || !showcaseRoot) return;
-      if (projectShowcaseExitSequenceRef.current.active) return;
-
-      const now = performance.now();
-      const last = projectShowcaseLastTickRef.current ?? now;
-      const dt = Math.min((now - last) / 1000, 0.08);
-      projectShowcaseLastTickRef.current = now;
-
-      const endPad = 10;
-      const minRun = track.minRun + endPad;
-      const maxRun = track.maxRun - endPad;
-      const loopLen = Math.max(1, maxRun - minRun);
-      const currentRun = projectShowcaseRunPosRef.current;
-      const jumpTarget = projectShowcaseJumpTargetRef.current;
-      const outageRuntime = projectShowcaseElevatorPowerRef.current;
-      const isAboutElevatorMode =
-        hallwayContentModeRef.current === "about" && track.axis === "y";
-      if (!isAboutElevatorMode) {
-        if (
-          outageRuntime.phase === "normal" &&
-          now >= outageRuntime.nextOutageAt
-        ) {
-          outageRuntime.phase = "flickerOut";
-          outageRuntime.phaseStartedAt = now;
-          outageRuntime.phaseEndsAt =
-            now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_OUT_MS;
-          outageRuntime.resumeAutoplayAfterEmergency =
-            projectShowcasePlayingRef.current;
-          if (projectShowcasePlayingRef.current) {
-            projectShowcasePlayingRef.current = false;
-            setProjectShowcasePlaying(false);
-            setProjectShowcaseLever(0);
-          }
-        } else if (
-          outageRuntime.phase !== "normal" &&
-          outageRuntime.phaseEndsAt > 0 &&
-          now >= outageRuntime.phaseEndsAt
-        ) {
-          if (outageRuntime.phase === "flickerOut") {
-            outageRuntime.phase = "outage";
-            outageRuntime.phaseStartedAt = now;
-            outageRuntime.phaseEndsAt =
-              now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_DARK_HOLD_MS;
-            if (
-              outageRuntime.resumeAutoplayAfterEmergency &&
-              !projectShowcasePlayingRef.current
-            ) {
-              projectShowcasePlayingRef.current = true;
-              setProjectShowcasePlaying(true);
-            }
-          } else if (outageRuntime.phase === "outage") {
-            outageRuntime.phase = "flickerIn";
-            outageRuntime.phaseStartedAt = now;
-            outageRuntime.phaseEndsAt =
-              now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_IN_MS;
-          } else {
-            outageRuntime.phase = "normal";
-            outageRuntime.phaseStartedAt = now;
-            outageRuntime.phaseEndsAt = 0;
-            outageRuntime.nextOutageAt =
-              now +
-              THREE.MathUtils.randInt(
-                PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MIN_INTERVAL_MS,
-                PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MAX_INTERVAL_MS,
-              );
-            outageRuntime.resumeAutoplayAfterEmergency = false;
-          }
-        }
-        let targetPower = 1;
-        if (outageRuntime.phase === "flickerOut") {
-          const tf = Math.max(0, now - outageRuntime.phaseStartedAt);
-          const phaseT = THREE.MathUtils.clamp(
-            tf / Math.max(1, PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_OUT_MS),
-            0,
-            1,
-          );
-          targetPower = THREE.MathUtils.lerp(1, 0.12, phaseT);
-        } else if (outageRuntime.phase === "outage") {
-          targetPower = 0.11 + (Math.sin(now * 0.005) * 0.5 + 0.5) * 0.02;
-        } else if (outageRuntime.phase === "flickerIn") {
-          const tf = Math.max(0, now - outageRuntime.phaseStartedAt);
-          const phaseT = THREE.MathUtils.clamp(
-            tf / Math.max(1, PROJECT_SHOWCASE_ELEVATOR_OUTAGE_FLICKER_IN_MS),
-            0,
-            1,
-          );
-          targetPower = THREE.MathUtils.lerp(0.16, 1, phaseT);
-        }
-        outageRuntime.powerLevel = THREE.MathUtils.damp(
-          outageRuntime.powerLevel,
-          targetPower,
-          10.5,
-          dt,
-        );
-      } else {
-        outageRuntime.phase = "normal";
-        outageRuntime.phaseStartedAt = now;
-        outageRuntime.phaseEndsAt = 0;
-        outageRuntime.nextOutageAt =
-          now + PROJECT_SHOWCASE_ELEVATOR_OUTAGE_MIN_INTERVAL_MS;
-        outageRuntime.powerLevel = THREE.MathUtils.damp(
-          outageRuntime.powerLevel,
-          1,
-          12,
-          dt,
-        );
-        outageRuntime.resumeAutoplayAfterEmergency = false;
-      }
-      const emergencyAutoplayScale =
-        outageRuntime.phase === "flickerOut"
-          ? 0
-          : outageRuntime.phase === "outage"
-            ? 1
-            : outageRuntime.phase === "flickerIn"
-              ? 1
-              : 1;
-
-      if (jumpTarget !== null) {
-        const normalizedCurrent =
-          THREE.MathUtils.euclideanModulo(currentRun - minRun, loopLen) +
-          minRun;
-        const normalizedTarget =
-          THREE.MathUtils.euclideanModulo(jumpTarget - minRun, loopLen) +
-          minRun;
-        const forwardDist =
-          normalizedTarget >= normalizedCurrent
-            ? normalizedTarget - normalizedCurrent
-            : normalizedTarget + loopLen - normalizedCurrent;
-        const backwardDist =
-          normalizedCurrent >= normalizedTarget
-            ? normalizedCurrent - normalizedTarget
-            : normalizedCurrent + loopLen - normalizedTarget;
-        const goForward = forwardDist <= backwardDist;
-        const remaining = Math.min(forwardDist, backwardDist);
-        // Two-phase profile: keep a fast clip while far, then brake near target.
-        const cruiseSpeed = track.speed * 25;
-        const minApproachSpeed = track.speed * 0.14;
-        const brakeDistance = 1.7;
-        let dynamicSpeed = cruiseSpeed;
-        if (remaining < brakeDistance) {
-          const t = THREE.MathUtils.clamp(remaining / brakeDistance, 0, 1);
-          const eased = t * t * (3 - 2 * t);
-          dynamicSpeed = THREE.MathUtils.lerp(
-            minApproachSpeed,
-            cruiseSpeed,
-            eased,
-          );
-        }
-        const step = Math.min(remaining, dynamicSpeed * dt);
-        let nextRun = normalizedCurrent + (goForward ? step : -step);
-        if (isAboutElevatorMode) {
-          nextRun = THREE.MathUtils.clamp(nextRun, minRun, maxRun);
-        } else {
-          if (nextRun > maxRun) nextRun -= loopLen;
-          if (nextRun < minRun) nextRun += loopLen;
-        }
-        setProjectShowcaseRunPosition(nextRun);
-        if (remaining < 0.18) {
-          const direction = goForward ? 1 : -1;
-          const edgeGuard = 0.28;
-          const nearEdge =
-            normalizedTarget <= minRun + edgeGuard ||
-            normalizedTarget >= maxRun - edgeGuard;
-          const settleRun = nearEdge
-            ? normalizedTarget
-            : THREE.MathUtils.clamp(
-                normalizedTarget + direction * 0.05,
-                minRun,
-                maxRun,
-              );
-          setProjectShowcaseRunPosition(settleRun);
-          projectShowcaseJumpTargetRef.current = null;
-          // Small opposite impulse gives a "heavy shuttle" settle bounce.
-          projectShowcaseVelocityRef.current = nearEdge
-            ? 0
-            : -direction * track.speed * 0.12;
-          setProjectShowcaseLever(0);
-        }
-      } else {
-        const maxManualSpeed = track.speed * 11.4;
-        const focusedPanel =
-          projectShowcasePanelsRef.current[
-            projectShowcaseFocusIndexRef.current
-          ];
-        let targetVelocity = 0;
-        if (projectShowcasePlayingRef.current) {
-          const autoSpeedMultiplier =
-            isAboutElevatorMode && focusedPanel?.aboutRuntime
-              ? focusedPanel.aboutRuntime.autoSpeed
-              : 0.62;
-          targetVelocity =
-            track.speed * autoSpeedMultiplier * emergencyAutoplayScale;
-        } else if (projectShowcaseLeverDraggingRef.current) {
-          const lever = projectShowcaseLeverValueRef.current;
-          // Non-linear response: fine near center, stronger at extremes.
-          const shapedLever =
-            Math.sign(lever) * Math.pow(Math.abs(lever), 1.35);
-          targetVelocity = shapedLever * maxManualSpeed;
-        }
-        const focusedIsCta =
-          focusedPanel?.entry?.id === PROJECT_SHOWCASE_CTA_ENTRY_ID;
-        if (focusedIsCta && !projectShowcaseLeverDraggingRef.current) {
-          targetVelocity *= projectShowcasePlayingRef.current ? 0.45 : 0.28;
-        }
-        const wheelRecent =
-          performance.now() - projectShowcaseWheelLastInputAtRef.current < 620;
-        const velocitySmooth = projectShowcaseLeverDraggingRef.current
-          ? 20
-          : wheelRecent
-            ? 1.8
-            : 7.5;
-        projectShowcaseVelocityRef.current = THREE.MathUtils.damp(
-          projectShowcaseVelocityRef.current,
-          targetVelocity,
-          velocitySmooth,
-          dt,
-        );
-
-        if (Math.abs(projectShowcaseVelocityRef.current) > 0.002) {
-          let nextRun =
-            projectShowcaseRunPosRef.current +
-            projectShowcaseVelocityRef.current * dt;
-          if (isAboutElevatorMode) {
-            const clamped = THREE.MathUtils.clamp(nextRun, minRun, maxRun);
-            if (clamped !== nextRun) {
-              projectShowcaseVelocityRef.current = 0;
-              if (clamped >= maxRun) {
-                if (projectShowcasePlayingRef.current) {
-                  projectShowcasePlayingRef.current = false;
-                  setProjectShowcasePlaying(false);
-                }
-                setAboutElevatorReachedEnd(true);
-              }
-            }
-            nextRun = clamped;
-          } else {
-            if (nextRun > maxRun) {
-              nextRun = minRun;
-            } else if (nextRun < minRun) {
-              nextRun = maxRun;
-            }
-          }
-          setProjectShowcaseRunPosition(nextRun);
-        } else if (
-          !projectShowcasePlayingRef.current &&
-          !projectShowcaseLeverDraggingRef.current
-        ) {
-          projectShowcaseForcedFocusIndexRef.current = null;
-        }
-
-        if (
-          isAboutElevatorMode &&
-          projectShowcaseRunPosRef.current < maxRun - 0.5
-        ) {
-          setAboutElevatorReachedEnd(false);
-        }
-
-        // Mirror current motion on the throttle UI while coasting/stopping.
-        if (!projectShowcaseLeverDraggingRef.current) {
-          const derivedLever = THREE.MathUtils.clamp(
-            projectShowcaseVelocityRef.current /
-              Math.max(track.speed * 6.5, 0.0001),
-            -1,
-            1,
-          );
-          if (
-            Math.abs(derivedLever - projectShowcaseLeverValueRef.current) > 0.02
-          ) {
-            setProjectShowcaseLever(derivedLever);
-          }
-        }
-      }
-
-      if (
-        !isAboutElevatorMode &&
-        outageRuntime.phase === "flickerOut" &&
-        jumpTarget === null
-      ) {
-        const glitchOffset =
-          (Math.sin(now * 0.082) + Math.sin(now * 0.167 + 1.7)) *
-          track.speed *
-          dt *
-          2.1;
-        let glitchedRun = projectShowcaseRunPosRef.current + glitchOffset;
-        if (glitchedRun > maxRun) glitchedRun = minRun;
-        if (glitchedRun < minRun) glitchedRun = maxRun;
-        setProjectShowcaseRunPosition(glitchedRun);
-      }
-      if (FAST_TRACK_TARGET && isAboutElevatorMode) {
-        const _now = performance.now();
-        const _lastLog =
-          (globalThis as unknown as Record<string, number>).__ftLog ?? 0;
-        if (_now - _lastLog > 500) {
-          (globalThis as unknown as Record<string, number>).__ftLog = _now;
-          const vel = projectShowcaseVelocityRef.current;
-          const run = projectShowcaseRunPosRef.current;
-          const phase = outageRuntime.phase;
-          const playing = projectShowcasePlayingRef.current;
-          dlog(
-            `[ELEVATOR] run=${run.toFixed(2)} vel=${vel.toFixed(4)} dt=${dt.toFixed(4)} phase=${phase} playing=${playing} jump=${jumpTarget !== null ? jumpTarget.toFixed(2) : "none"}`,
-          );
-        }
-      }
-      projectShowcaseInteriorLightBasesRef.current.forEach(
-        ({ light, baseIntensity }) => {
-          const p = outageRuntime.powerLevel;
-          light.intensity = baseIntensity * (0.05 + p * 0.95);
-        },
-      );
-      const emergencyLights = projectShowcaseElevatorEmergencyLightsRef.current;
-      if (emergencyLights) {
-        const emergencyLevel = 1 - outageRuntime.powerLevel;
-        const pulse = 0.94 + Math.sin(now * 0.0024) * 0.06;
-        const redMix =
-          outageRuntime.phase === "outage"
-            ? 0.22 + (Math.sin(now * 0.0018) * 0.5 + 0.5) * 0.18
-            : outageRuntime.phase === "flickerOut"
-              ? 0.14
-              : outageRuntime.phase === "flickerIn"
-                ? 0.16
-                : 0;
-        const greenColor = new THREE.Color(0x6dffb0);
-        const redColor = new THREE.Color(0xff4f5b);
-        const blendColor = greenColor.lerp(redColor, redMix);
-        emergencyLights.ambient.color.copy(blendColor);
-        emergencyLights.point.color.copy(blendColor);
-        emergencyLights.ambient.intensity = emergencyLevel * 1.08 * pulse;
-        emergencyLights.point.intensity = emergencyLevel * 2.25 * pulse;
-      }
-      const emergencyTextActive =
-        isAboutElevatorMode &&
-        outageRuntime.powerLevel <=
-          PROJECT_SHOWCASE_ELEVATOR_OUTAGE_TEXT_SWAP_POWER;
-      if (outageRuntime.emergencyTextActive !== emergencyTextActive) {
-        outageRuntime.emergencyTextActive = emergencyTextActive;
-        projectShowcasePanelsRef.current.forEach((panel) => {
-          if (panel.aboutRuntime?.mode !== "about") return;
-          panel.aboutRuntime.cells.forEach((cell) => {
-            const targetMap = emergencyTextActive
-              ? cell.emergencyTexture
-              : cell.normalTexture;
-            if (cell.material.map !== targetMap) {
-              cell.material.map = targetMap;
-              cell.material.needsUpdate = true;
-            }
-          });
-        });
-      }
-      if (isAboutElevatorMode && emergencyTextActive) {
-        projectShowcasePanelsRef.current.forEach((panel, panelIdx) => {
-          if (panel.aboutRuntime?.mode !== "about") return;
-          panel.aboutRuntime.cells.forEach((cell, cellIdx) => {
-            const hue = THREE.MathUtils.euclideanModulo(
-              now * 0.00013 +
-                panel.runPos * 0.00038 +
-                panelIdx * 0.09 +
-                cellIdx * 0.021,
-              1,
-            );
-            const light = 0.68 + Math.sin(now * 0.002 + cellIdx * 0.7) * 0.08;
-            cell.material.color.setHSL(
-              hue,
-              0.9,
-              THREE.MathUtils.clamp(light, 0.52, 0.82),
-            );
-          });
-        });
-      } else if (isAboutElevatorMode) {
-        projectShowcasePanelsRef.current.forEach((panel) => {
-          if (panel.aboutRuntime?.mode !== "about") return;
-          panel.aboutRuntime.cells.forEach((cell) => {
-            cell.material.color.set(0xffffff);
-          });
-        });
-      }
-
-      const focusIndex = THREE.MathUtils.clamp(
-        projectShowcaseFocusIndexRef.current,
-        0,
-        Math.max(0, projectShowcasePanelsRef.current.length - 1),
-      );
-      const angleT = THREE.MathUtils.clamp(
-        projectShowcaseAnglePercentRef.current /
-          (PROJECT_SHOWCASE_MAX_ANGLE_PERCENT -
-            PROJECT_SHOWCASE_MIN_ANGLE_PERCENT),
-        0,
-        1,
-      );
-      projectShowcasePanelsRef.current.forEach((panel, idx) => {
-        const target = idx === focusIndex ? 1 : 0;
-        const focusedCta =
-          idx === focusIndex &&
-          panel.entry.id === PROJECT_SHOWCASE_CTA_ENTRY_ID;
-        panel.focusBlend = THREE.MathUtils.damp(
-          panel.focusBlend,
-          target,
-          8,
-          dt,
-        );
-        const toFrontDelta = Math.atan2(
-          Math.sin(panel.frontFacingRotationY - panel.inwardRotationY),
-          Math.cos(panel.frontFacingRotationY - panel.inwardRotationY),
-        );
-        panel.group.rotation.y = panel.inwardRotationY + toFrontDelta * angleT;
-        panel.group.scale.setScalar(1);
-        panel.frameMat.opacity =
-          0.22 + panel.focusBlend * (focusedCta ? 0.4 : 0.26);
-        panel.frameMat.color.setHex(
-          focusedCta ? 0xbef4ff : idx === focusIndex ? 0x91ddff : 0x72c6ff,
-        );
-        if (panel.aboutRuntime?.mode === "about") {
-          const runNow = projectShowcaseRunPosRef.current;
-          const activeCamera = sceneRef.current.camera;
-          const cameraY = activeCamera?.position.y ?? 0;
-          const fovRad =
-            activeCamera instanceof THREE.PerspectiveCamera
-              ? THREE.MathUtils.degToRad(activeCamera.fov || 45)
-              : THREE.MathUtils.degToRad(45);
-          const tempCellWorldPos = new THREE.Vector3();
-          const tempCellWorldScale = new THREE.Vector3();
-          const getVisibleHeightAtCell = (
-            cell: AboutSlideCellRuntime,
-          ): number => {
-            if (!(activeCamera instanceof THREE.PerspectiveCamera)) return 12;
-            cell.mesh.getWorldPosition(tempCellWorldPos);
-            const wallDistance = Math.max(
-              0.1,
-              Math.abs(activeCamera.position.x - tempCellWorldPos.x),
-            );
-            return 2 * wallDistance * Math.tan(fovRad * 0.5);
-          };
-          const getCellWorldHeight = (cell: AboutSlideCellRuntime): number => {
-            const meshGeo = cell.mesh.geometry as THREE.BufferGeometry & {
-              parameters?: { height?: number };
-            };
-            let localHeight = meshGeo.parameters?.height;
-            if (!Number.isFinite(localHeight)) {
-              meshGeo.computeBoundingBox();
-              if (meshGeo.boundingBox) {
-                localHeight = Math.max(
-                  0.01,
-                  meshGeo.boundingBox.max.y - meshGeo.boundingBox.min.y,
-                );
-              } else {
-                localHeight = 1;
-              }
-            }
-            cell.mesh.getWorldScale(tempCellWorldScale);
-            return Math.max(
-              0.01,
-              Math.abs(tempCellWorldScale.y) * (localHeight ?? 1),
-            );
-          };
-          const distanceToTram = Math.abs(
-            panel.runPos - projectShowcaseRunPosRef.current,
-          );
-          const inRange = distanceToTram <= track.cullHalfWindow;
-          let maxCellVisibility = 1;
-          if (inRange) {
-            const cellFadeInfos: {
-              fadeInT: number;
-              visibleFraction: number;
-              ci: number;
-            }[] = [];
-            panel.aboutRuntime.cells.forEach((cell, ci) => {
-              cell.mesh.visible = true;
-              if (cell.immersiveColumn && immersiveColumnRigRef.current) {
-                const rig = immersiveColumnRigRef.current[cell.immersiveColumn];
-                const geo = cell.mesh.geometry as THREE.PlaneGeometry;
-                if (Math.abs(geo.parameters.width - rig.width) > 0.01) {
-                  const keepHeight = geo.parameters.height;
-                  cell.mesh.geometry.dispose();
-                  cell.mesh.geometry = new THREE.PlaneGeometry(
-                    rig.width,
-                    keepHeight,
-                  );
-                }
-                const parent = cell.mesh.parent;
-                if (parent) {
-                  parent.position.x = rig.posX;
-                  parent.position.y = rig.posY;
-                  parent.position.z = rig.depth;
-                }
-                cell.mesh.rotation.y =
-                  THREE.MathUtils.degToRad(rig.angleDeg) * rig.angleMultiplier;
-              } else {
-                cell.mesh.rotation.y =
-                  cell.baseYawRad * aboutHallAngleMultiplierRef.current;
-              }
-              if (cell.flowUnitsPerDistance <= 0) return;
-              const progress = runNow - panel.aboutRuntime!.slideStartRun;
-              const dir = cell.flowDirection === "bottomToTop" ? 1 : -1;
-              const travelRate = 1 + cell.flowUnitsPerDistance * dir;
-              cell.mesh.position.set(
-                cell.basePosition.x,
-                cell.homeY + cell.flowOffsetUnits + progress * travelRate,
-                cell.basePosition.z,
-              );
-              const visibleHeight = getVisibleHeightAtCell(cell);
-              const halfVisible = visibleHeight * 0.5;
-              cell.mesh.getWorldPosition(tempCellWorldPos);
-              const cellWorldHeight = getCellWorldHeight(cell);
-              const halfCell = cellWorldHeight * 0.5;
-              const cellTop = tempCellWorldPos.y + halfCell;
-              const cellBottom = tempCellWorldPos.y - halfCell;
-              const viewTop = cameraY + halfVisible;
-              const viewBottom = cameraY - halfVisible;
-              const visibleOverlap = Math.max(
-                0,
-                Math.min(cellTop, viewTop) - Math.max(cellBottom, viewBottom),
-              );
-              const visibleFraction =
-                cellWorldHeight > 0.01 ? visibleOverlap / cellWorldHeight : 0;
-              const fadeInT = THREE.MathUtils.clamp(
-                visibleFraction / 0.15,
-                0,
-                1,
-              );
-              cellFadeInfos.push({ fadeInT, visibleFraction, ci });
-            });
-            maxCellVisibility =
-              cellFadeInfos.length > 0
-                ? Math.max(...cellFadeInfos.map((d) => d.visibleFraction))
-                : 1;
-            const coordFadeOutT =
-              maxCellVisibility < 0.05
-                ? THREE.MathUtils.clamp((0.05 - maxCellVisibility) / 0.05, 0, 1)
-                : 0;
-            cellFadeInfos.forEach(({ fadeInT, ci }) => {
-              const cell = panel.aboutRuntime!.cells[ci];
-              cell.material.opacity = Math.min(fadeInT, 1 - coordFadeOutT);
-            });
-          } else {
-            panel.aboutRuntime.cells.forEach((cell) => {
-              cell.mesh.visible = false;
-              cell.material.opacity = 0;
-            });
-          }
-          if (
-            aboutFlowOverlayEnabledRef.current &&
-            idx === focusIndex &&
-            isAboutElevatorMode
-          ) {
-            const nowMs = performance.now();
-            if (nowMs - aboutFlowOverlayLastUpdateRef.current > 120) {
-              const sampleCells = panel.aboutRuntime.cells
-                .filter((cell) => !!cell.immersiveColumn)
-                .slice(0, 3)
-                .map((cell) => {
-                  cell.mesh.getWorldPosition(tempCellWorldPos);
-                  const vh = getVisibleHeightAtCell(cell);
-                  const halfVisible = vh * 0.5;
-                  return {
-                    column: cell.immersiveColumn as AboutHallColumnId,
-                    direction: cell.flowDirection,
-                    speed: cell.flowUnitsPerDistance,
-                    y: tempCellWorldPos.y,
-                    inViewport:
-                      tempCellWorldPos.y > cameraY - halfVisible &&
-                      tempCellWorldPos.y < cameraY + halfVisible,
-                    opacity: cell.material.opacity,
-                  };
-                });
-              const firstCell = panel.aboutRuntime.cells.find(
-                (cell) => !!cell.immersiveColumn,
-              );
-              const visibleHeight = firstCell
-                ? getVisibleHeightAtCell(firstCell)
-                : 0;
-              setAboutFlowOverlaySnapshot({
-                slideId: panel.aboutRuntime.slideId,
-                run: runNow,
-                cameraY,
-                visibleHeight,
-                maxCellVisibility: maxCellVisibility,
-                cells: sampleCells,
-              });
-              aboutFlowOverlayLastUpdateRef.current = nowMs;
-            }
-          }
-          panel.frameMat.opacity = 0.28 + panel.focusBlend * 0.34;
-          panel.frameMat.color.setHex(idx === focusIndex ? 0xbbefff : 0x74d2ff);
-          return;
-        }
-        const fadeElapsedMs = now - panel.mediaFadeStartMs;
-        if (fadeElapsedMs < panel.mediaFadeDurationMs) {
-          panel.imageMat.opacity = THREE.MathUtils.clamp(
-            fadeElapsedMs / Math.max(panel.mediaFadeDurationMs, 1),
-            0,
-            1,
-          );
-        } else if (panel.imageMat.opacity < 1) {
-          panel.imageMat.opacity = 1;
-        }
-        if (panel.techBadgeRoot) {
-          panel.techBadgeRoot.visible =
-            idx === focusIndex &&
-            panel.group.visible &&
-            panel.techBadgeFx.length > 0;
-        }
-        // Subtle vertical shimmer over tech badges (top-to-bottom feel via phase offsets).
-        panel.techBadgeFx.forEach((fx) => {
-          const shimmer = 0.5 + 0.5 * Math.sin(now * 0.00125 - fx.phase);
-          fx.mat.opacity = fx.baseOpacity * (0.8 + shimmer * 0.24);
-          fx.mat.color
-            .copy(fx.baseColor)
-            .lerp(new THREE.Color(0x8fe7ff), shimmer * 0.28);
-        });
-      });
-      // Floor lane pulses: travel from forward to aft, looped.
-      const floorPulseRecords = projectShowcaseFloorPulseMatsRef.current;
-      if (floorPulseRecords.length > 0) {
-        // Keep original travel speed, but introduce an idle gap between runs.
-        const pulseRunMs = 4445;
-        const pulseGapMs = 4200;
-        const pulseCycleMs = pulseRunMs + pulseGapMs;
-        const cycleMs = now % pulseCycleMs;
-        const pulseActive = cycleMs < pulseRunMs;
-        const pulseProgress = THREE.MathUtils.clamp(cycleMs / pulseRunMs, 0, 1);
-        const pulseCenter = 1 - pulseProgress;
-        const pulseTrailCenter = (pulseCenter + 0.42) % 1;
-        const pulseWidth = 0.09;
-        const pulseFalloff = pulseWidth * pulseWidth;
-        floorPulseRecords.forEach(({ mat, runT }) => {
-          if (!pulseActive) {
-            mat.opacity = 0.08;
-            mat.color.set(0x2ccfff);
-            return;
-          }
-          const d1 = Math.min(
-            Math.abs(runT - pulseCenter),
-            1 - Math.abs(runT - pulseCenter),
-          );
-          const d2 = Math.min(
-            Math.abs(runT - pulseTrailCenter),
-            1 - Math.abs(runT - pulseTrailCenter),
-          );
-          const i1 = Math.exp(-(d1 * d1) / pulseFalloff);
-          const i2 = Math.exp(-(d2 * d2) / pulseFalloff) * 0.74;
-          const intensity = Math.max(i1, i2);
-          mat.opacity = 0.12 + intensity * 0.72;
-          mat.color.set(intensity > 0.45 ? 0xbdf6ff : 0x38d8ff);
-        });
-      }
-
-      const run = projectShowcaseRunPosRef.current;
-
-      // Update debug ruler tracking line (zero-based from shaft bottom)
-      const debugRuler = projectShowcaseDebugRulerRef.current;
-      if (debugRuler) {
-        debugRuler.trackingLine.position.y = run;
-        debugRuler.label.position.y = run;
-        const displayRun = (run - debugRuler.origin).toFixed(1);
-        if (displayRun !== debugRuler.lastLabelText) {
-          debugRuler.lastLabelText = displayRun;
-          const ctx = debugRuler.labelCtx;
-          ctx.clearRect(0, 0, 256, 64);
-          ctx.font = "bold 64px Rajdhani, monospace";
-          ctx.fillStyle = "rgba(255,68,102,0.95)";
-          ctx.textAlign = "right";
-          ctx.textBaseline = "middle";
-          ctx.fillText(displayRun, 248, 32);
-          const spriteMat = debugRuler.label.material as THREE.SpriteMaterial;
-          if (spriteMat.map) spriteMat.map.needsUpdate = true;
-        }
-      }
-
-      const sway = Math.sin(run * 0.025) * (track.axis === "y" ? 0.6 : 1.2);
-      const rootPos = new THREE.Vector3();
-      showcaseRoot.getWorldPosition(rootPos);
-      const camPos =
-        track.axis === "y"
-          ? new THREE.Vector3(
-              rootPos.x + track.centerCross + sway,
-              rootPos.y + run,
-              rootPos.z + track.cameraHeight,
-            )
-          : track.axis === "z"
-            ? new THREE.Vector3(
-                rootPos.x + track.centerCross + sway,
-                rootPos.y + track.cameraHeight,
-                rootPos.z + run,
-              )
-            : new THREE.Vector3(
-                rootPos.x + run,
-                rootPos.y + track.cameraHeight,
-                rootPos.z + track.centerCross + sway,
-              );
-      const defaultTarget =
-        track.axis === "y"
-          ? new THREE.Vector3(
-              rootPos.x - track.centerCross * 0.9,
-              rootPos.y + run,
-              rootPos.z + track.cameraHeight + 0.2,
-            )
-          : track.axis === "z"
-            ? new THREE.Vector3(
-                rootPos.x + track.centerCross + sway,
-                rootPos.y + track.cameraHeight - 0.3,
-                rootPos.z +
-                  run +
-                  track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
-              )
-            : new THREE.Vector3(
-                rootPos.x +
-                  run +
-                  track.lookAhead * PROJECT_SHOWCASE_FORWARD_LOOK_SIGN,
-                rootPos.y + track.cameraHeight - 0.3,
-                rootPos.z + track.centerCross + sway,
-              );
-      let targetPos = defaultTarget;
-      if (PROJECT_SHOWCASE_FREE_LOOK_ENABLED) {
-        const lockForward =
-          performance.now() < projectShowcaseForwardLockUntilRef.current;
-        if (lockForward) {
-          targetPos = defaultTarget;
-          projectShowcaseLookVectorRef.current = targetPos.clone().sub(camPos);
-        } else {
-          const controlsAny = controls as unknown as {
-            getTarget?: (out: THREE.Vector3) => void;
-          };
-          const liveTarget = new THREE.Vector3();
-          if (controlsAny.getTarget) {
-            controlsAny.getTarget(liveTarget);
-          } else {
-            liveTarget.copy(defaultTarget);
-          }
-          let lookVec = liveTarget.sub(camera.position);
-          if (lookVec.lengthSq() < 1e-6) {
-            lookVec =
-              projectShowcaseLookVectorRef.current?.clone() ??
-              defaultTarget.clone().sub(camPos);
-          }
-          const lookDist = THREE.MathUtils.clamp(
-            lookVec.length(),
-            PROJECT_SHOWCASE_FREE_LOOK_MIN_DISTANCE,
-            PROJECT_SHOWCASE_FREE_LOOK_MAX_DISTANCE,
-          );
-          const lookDir = lookVec.normalize();
-          const lookYClamp = track.axis === "y" ? 0.94 : 0.72;
-          lookDir.y = THREE.MathUtils.clamp(lookDir.y, -lookYClamp, lookYClamp);
-          lookDir.normalize();
-          targetPos = camPos.clone().addScaledVector(lookDir, lookDist);
-          projectShowcaseLookVectorRef.current = targetPos.clone().sub(camPos);
-        }
-      } else {
-        projectShowcaseLookVectorRef.current = defaultTarget
-          .clone()
-          .sub(camPos);
-      }
-      controls.setLookAt(
-        camPos.x,
-        camPos.y,
-        camPos.z,
-        targetPos.x,
-        targetPos.y,
-        targetPos.z,
-        false,
-      );
-    };
-
-    tick();
-    return () => cancelAnimationFrame(raf);
-  }, [projectShowcaseActive, setProjectShowcaseRunPosition]);
 
   useEffect(() => {
     if (!orbitalPortfolioActive) return;
@@ -18333,7 +13155,6 @@ export default function ResumeSpace3D({
       const isOrbitSignageActive =
         orbitPhase === "orbiting" &&
         !!moonMesh &&
-        !projectShowcaseActiveRef.current &&
         !orbitalPortfolioActiveRef.current &&
         !skillsLatticeActiveRef.current &&
         !aboutMemorySquareActiveRef.current;
@@ -18929,269 +13750,6 @@ export default function ResumeSpace3D({
     stepOrbitalPortfolioSequence,
   ]);
 
-  // ── Project showcase thumbnail clicks (in-trench carousel) ───────────────
-  useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount) return;
-    const raycaster = new THREE.Raycaster();
-    raycaster.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
-    const pointer = new THREE.Vector2();
-
-    const onPointerDown = (e: PointerEvent) => {
-      if (!projectShowcaseActiveRef.current || e.shiftKey) return;
-      const target = e.target as HTMLElement | null;
-      if (target?.closest("button, input, select, textarea, a, iframe")) return;
-      const cam = sceneRef.current.camera;
-      if (!cam) return;
-      const isHierarchyVisible = (obj: THREE.Object3D | null | undefined) => {
-        let current: THREE.Object3D | null | undefined = obj;
-        while (current) {
-          if (!current.visible) return false;
-          current = current.parent;
-        }
-        return true;
-      };
-      const hitTargets = projectShowcasePanelsRef.current.flatMap((panel) =>
-        panel.group.visible
-          ? panel.thumbnailHitTargets
-              .filter((target) => isHierarchyVisible(target.mesh))
-              .map((target) => ({ panel, target }))
-          : [],
-      );
-      if (hitTargets.length === 0) return;
-      const rect = mount.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return;
-      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, cam);
-      const hits = raycaster.intersectObjects(
-        hitTargets.map((ht) => ht.target.mesh),
-        false,
-      );
-      if (hits.length === 0) return;
-      const hitMesh = hits[0].object as THREE.Mesh;
-      const hit = hitTargets.find((ht) => ht.target.mesh === hitMesh);
-      if (!hit) return;
-      const { panel, target: hitTarget } = hit;
-      if (projectShowcasePlayingRef.current) {
-        projectShowcasePlayingRef.current = false;
-        setProjectShowcasePlaying(false);
-      }
-      if (
-        hitTarget.type === "media" &&
-        typeof hitTarget.mediaIndex === "number"
-      ) {
-        panel.setActiveMedia(hitTarget.mediaIndex);
-      } else if (
-        hitTarget.type === "variant" &&
-        typeof hitTarget.variantIndex === "number"
-      ) {
-        panel.setActiveVariant(hitTarget.variantIndex);
-      } else if (hitTarget.type === "prev") {
-        panel.triggerThumbnailNavPress("prev");
-        panel.setThumbnailPageStart(
-          panel.thumbnailPageStart - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
-        );
-      } else if (hitTarget.type === "next") {
-        panel.triggerThumbnailNavPress("next");
-        panel.setThumbnailPageStart(
-          panel.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE,
-        );
-      }
-      bumpProjectShowcaseViewportTick();
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    };
-
-    mount.addEventListener("pointerdown", onPointerDown, { capture: true });
-    return () => {
-      mount.removeEventListener("pointerdown", onPointerDown, {
-        capture: true,
-      });
-    };
-  }, [bumpProjectShowcaseViewportTick]);
-
-  // ── Project showcase image controls: Shift+drag / Shift+wheel ─────────
-  useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount) return;
-
-    let dragging = false;
-    let activePanel: ShowcasePanelRecord | null = null;
-    let lastX = 0;
-    let lastY = 0;
-    const raycaster = new THREE.Raycaster();
-    raycaster.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
-    const pointer = new THREE.Vector2();
-
-    const getInteractivePanelAtPointer = (
-      clientX: number,
-      clientY: number,
-    ): ShowcasePanelRecord | null => {
-      if (!projectShowcaseActiveRef.current) return null;
-      const cam = sceneRef.current.camera;
-      if (!cam) return null;
-      const panels = projectShowcasePanelsRef.current.filter(
-        (panel) =>
-          panel.fitMode === "cover" && !!panel.texture && panel.group.visible,
-      );
-      if (panels.length === 0) return null;
-      const rect = mount.getBoundingClientRect();
-      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, cam);
-      const hits = raycaster.intersectObjects(
-        panels.map((panel) => panel.imageMesh),
-        false,
-      );
-      if (hits.length === 0) return null;
-      const hitObj = hits[0].object;
-      return panels.find((panel) => panel.imageMesh === hitObj) ?? null;
-    };
-
-    const pauseShowcasePlayback = () => {
-      if (!projectShowcasePlayingRef.current) return;
-      projectShowcasePlayingRef.current = false;
-      setProjectShowcasePlaying(false);
-      projectShowcaseJumpTargetRef.current = null;
-    };
-
-    const onPointerDown = (e: PointerEvent) => {
-      if (!e.shiftKey) return;
-      const target = e.target as HTMLElement | null;
-      if (target?.closest("button, input, select, textarea, a")) return;
-      const panel = getInteractivePanelAtPointer(e.clientX, e.clientY);
-      if (!panel) return;
-      pauseShowcasePlayback();
-      dragging = true;
-      activePanel = panel;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    };
-
-    const onPointerMove = (e: PointerEvent) => {
-      if (!dragging) return;
-      const panel = activePanel;
-      if (!panel) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      const zoom = THREE.MathUtils.clamp(panel.zoom, 1, 4);
-      const repX = panel.baseRepeat.x / zoom;
-      const repY = panel.baseRepeat.y / zoom;
-      const rangeX = Math.max(0, 1 - repX);
-      const rangeY = Math.max(0, 1 - repY);
-      const width = Math.max(mount.clientWidth, 1);
-      const height = Math.max(mount.clientHeight, 1);
-      panel.panX += (dx / width) * rangeX * 1.3;
-      panel.panY += (dy / height) * rangeY * 1.3;
-      applyProjectShowcasePanelViewport(panel);
-      bumpProjectShowcaseViewportTick();
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    };
-
-    const onPointerUp = () => {
-      dragging = false;
-      activePanel = null;
-    };
-
-    const onWheel = (e: WheelEvent) => {
-      if (!e.shiftKey) return;
-      const panel = getInteractivePanelAtPointer(e.clientX, e.clientY);
-      if (!panel) return;
-      pauseShowcasePlayback();
-      const zoomDir = e.deltaY < 0 ? 1 : -1;
-      setProjectShowcasePanelZoom(panel.zoom + zoomDir * 0.12);
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    };
-
-    mount.addEventListener("pointerdown", onPointerDown, { capture: true });
-    window.addEventListener("pointermove", onPointerMove, { capture: true });
-    window.addEventListener("pointerup", onPointerUp, { capture: true });
-    mount.addEventListener("wheel", onWheel, { passive: false, capture: true });
-
-    return () => {
-      mount.removeEventListener("pointerdown", onPointerDown, {
-        capture: true,
-      });
-      window.removeEventListener("pointermove", onPointerMove, {
-        capture: true,
-      });
-      window.removeEventListener("pointerup", onPointerUp, { capture: true });
-      mount.removeEventListener("wheel", onWheel, { capture: true });
-    };
-  }, [
-    applyProjectShowcasePanelViewport,
-    bumpProjectShowcaseViewportTick,
-    setProjectShowcasePanelZoom,
-  ]);
-
-  // ── Project showcase detail pane scroll (wheel on description) ─────────
-  useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount) return;
-    const raycaster = new THREE.Raycaster();
-    raycaster.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
-    const pointer = new THREE.Vector2();
-
-    const onWheel = (e: WheelEvent) => {
-      if (!projectShowcaseActiveRef.current || e.shiftKey) return;
-      // Wheel now primarily drives tunnel movement. Use Alt+wheel for
-      // explicit description scrolling when needed.
-      if (!e.altKey) return;
-      const cam = sceneRef.current.camera;
-      if (!cam) return;
-      const rect = mount.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return;
-      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, cam);
-      const details = projectShowcasePanelsRef.current
-        .filter((panel) => panel.group.visible && !!panel.detailMesh)
-        .map((panel) => ({
-          panel,
-          mesh: panel.detailMesh as THREE.Mesh,
-        }));
-      if (details.length === 0) return;
-      const hits = raycaster.intersectObjects(
-        details.map((d) => d.mesh),
-        false,
-      );
-      if (hits.length === 0) return;
-      const hitMesh = hits[0].object as THREE.Mesh;
-      const hit = details.find((d) => d.mesh === hitMesh);
-      if (!hit) return;
-      const panel = hit.panel;
-      if (panel.detailScrollMax <= 0) return;
-      const delta = e.deltaY > 0 ? 1 : -1;
-      const nextOffset = THREE.MathUtils.clamp(
-        panel.detailScrollOffset + delta,
-        0,
-        panel.detailScrollMax,
-      );
-      if (nextOffset === panel.detailScrollOffset) return;
-      panel.detailScrollOffset = nextOffset;
-      panel.updateDetailTexture();
-      bumpProjectShowcaseViewportTick();
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    mount.addEventListener("wheel", onWheel, { passive: false, capture: true });
-    return () => {
-      mount.removeEventListener("wheel", onWheel, { capture: true });
-    };
-  }, [bumpProjectShowcaseViewportTick]);
-
   // ── Skills lattice controls: Shift+drag to pan camera rig ────────────────
   useEffect(() => {
     const mount = mountRef.current;
@@ -19306,13 +13864,10 @@ export default function ResumeSpace3D({
     const targets: Array<{ pos: THREE.Vector3; radius: number }> = [];
     const exp = planetsDataRef.current.get("experience")?.position;
     const skills = planetsDataRef.current.get("skills")?.position;
-    const projects = planetsDataRef.current.get("projects")?.position;
     const portfolio = planetsDataRef.current.get("portfolio")?.position;
     if (exp) targets.push({ pos: exp.clone(), radius: EXP_WANDER_RADIUS });
     if (skills)
       targets.push({ pos: skills.clone(), radius: SKILLS_WANDER_RADIUS });
-    if (projects)
-      targets.push({ pos: projects.clone(), radius: PROJ_WANDER_RADIUS });
     if (portfolio)
       targets.push({ pos: portfolio.clone(), radius: PROJ_WANDER_RADIUS });
     // Sun is centered at origin; keep a tighter band so it's in view.
@@ -19437,9 +13992,6 @@ export default function ResumeSpace3D({
       handleContextLost,
       handleContextRestored,
     } = sceneSetup;
-    if (PROJECT_SHOWCASE_VISIBLE_IN_SPACE) {
-      camera.layers.enable(PROJECT_SHOWCASE_LAYER);
-    }
     composerRef.current = composer;
 
     // clickable overlay registry (planes that should be raycast-targeted)
@@ -19522,7 +14074,9 @@ export default function ResumeSpace3D({
       debugLog("drone", "See details clicked — transitioning to HTML layout");
       setMoonIntroComplete(true);
       setMoonHtmlVisible(true);
-      hologramDroneRef.current?.hideContent();
+      // Fade out but keep the drawn card, so closing details restores it
+      // without replaying the drone's fly-in and laser writing.
+      hologramDroneRef.current?.setContentSuppressed(true);
     });
 
     // --- OBJECTS ---
@@ -21819,8 +16373,10 @@ export default function ResumeSpace3D({
 
     // --- SPACESHIP LOADING ---
     const loader = new GLTFLoader();
-    loader.load(
-      "/models/spaceship/scene.gltf",
+    (
+      spaceshipGltfPromiseRef.current ??
+      loader.loadAsync("/models/spaceship/scene.gltf")
+    ).then(
       (gltf) => {
         const spaceship = gltf.scene;
 
@@ -21856,6 +16412,10 @@ export default function ResumeSpace3D({
         const seenMaterialUuids = new Set<string>();
         spaceship.traverse((obj) => {
           if (!(obj instanceof THREE.Mesh) || !obj.material) return;
+          // Swapped-in vehicles don't have the Falcon's separate engine-panel
+          // materials; don't let the speed boost pick up (and brighten) a
+          // material that covers their whole body.
+          if (SHIP_VARIANT && SHIP_VARIANT_MODEL_PATHS[SHIP_VARIANT]) return;
           const mesh = obj as THREE.Mesh;
           if (mesh.geometry && !mesh.geometry.boundingSphere) {
             mesh.geometry.computeBoundingSphere();
@@ -21946,6 +16506,73 @@ export default function ResumeSpace3D({
         spaceship.add(engineLight);
         spaceshipEngineLightRef.current = engineLight;
 
+        // Swapped-in vehicles: the Falcon's light rig (hull glow + 12 exterior
+        // point lights) washes them out, so turn it off and detach it from the
+        // exterior-lights toggle. Give them a pair of forward headlights and an
+        // engine glow behind that follows forward travel instead.
+        if (SHIP_VARIANT && SHIP_VARIANT_MODEL_PATHS[SHIP_VARIANT]) {
+          exteriorLights.forEach((light) => {
+            light.intensity = 0;
+          });
+          spaceshipLightsRef.current = [];
+          shipLight.intensity = 0;
+          engineLight.position.set(0, 0.5, -9);
+          engineLight.userData.distanceScale = 3;
+
+          // Model front is +Z; the vehicle is fitted to ~14 units long.
+          [-2.5, 2.5].forEach((x) => {
+            const headlight = new THREE.SpotLight(
+              0xfff2d6,
+              2,
+              12,
+              Math.PI / 7,
+              0.5,
+              1.5,
+            );
+            headlight.position.set(x, 0, 7);
+            const headlightTarget = new THREE.Object3D();
+            headlightTarget.position.set(x, -0.5, 30);
+            spaceship.add(headlight, headlightTarget);
+            headlight.target = headlightTarget;
+          });
+
+          const glowCanvas = document.createElement("canvas");
+          glowCanvas.width = 128;
+          glowCanvas.height = 128;
+          const glowCtx = glowCanvas.getContext("2d");
+          if (glowCtx) {
+            const grad = glowCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+            grad.addColorStop(0, "rgba(220, 240, 255, 1)");
+            grad.addColorStop(0.25, "rgba(120, 180, 255, 0.85)");
+            grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+            glowCtx.fillStyle = grad;
+            glowCtx.fillRect(0, 0, 128, 128);
+          }
+          const glowTexture = new THREE.CanvasTexture(glowCanvas);
+          glowTexture.colorSpace = THREE.SRGBColorSpace;
+          // Stays in the scene at opacity 0 so its shader compiles during the
+          // warmup rather than on the first frame of travel.
+          const glowSprite = new THREE.Sprite(
+            new THREE.SpriteMaterial({
+              map: glowTexture,
+              color: 0x88bbff,
+              opacity: 0,
+              transparent: true,
+              depthWrite: false,
+              blending: THREE.AdditiveBlending,
+            }),
+          );
+          glowSprite.position.copy(engineLight.position);
+          glowSprite.scale.set(6, 6, 1);
+          spaceship.add(glowSprite);
+          engineLight.userData.glowSprite = glowSprite;
+
+          if (SHIP_VARIANT === "bronco") {
+            // ~3 car lengths behind (car is ~0.7 world units long).
+            spaceship.userData.followCamera = { behind: 2, height: 0.35 };
+          }
+        }
+
         // Create interior lights (for cabin and cockpit)
         const interiorLights: THREE.PointLight[] = [];
         const interiorLightPositions = [
@@ -21992,7 +16619,6 @@ export default function ResumeSpace3D({
         // Initialize navigation system
         initializeNavigationSystem(spaceship, scene);
       },
-      undefined,
       () => {
         vlog("❌ Failed to load spaceship model");
         markSceneModelLoaded();
@@ -22207,15 +16833,6 @@ export default function ResumeSpace3D({
           cruiser.setEnabled(false);
           dlog("🔺 SD autonomy: OFF");
           shipLog("SD autonomy disabled", "system");
-        };
-        (window as any).aboutFlowOverlayOn = () => {
-          setAboutFlowOverlayVisibility(true);
-        };
-        (window as any).aboutFlowOverlayOff = () => {
-          setAboutFlowOverlayVisibility(false);
-        };
-        (window as any).aboutFlowOverlayToggle = () => {
-          setAboutFlowOverlayVisibility(!aboutFlowOverlayEnabledRef.current);
         };
 
         // ── Visual locate beacons ─────────────────────────────────
@@ -22671,3011 +17288,6 @@ export default function ResumeSpace3D({
       }
     };
 
-    // --- PROJECT SHOWCASE (Trench Run) ---
-    const onProjectShowcaseLoadError = () => {
-      projectShowcaseRootRef.current = null;
-      projectShowcaseInteriorRootRef.current = null;
-      projectShowcaseExteriorRootRef.current = null;
-      projectShowcaseAboutExteriorModelRef.current = null;
-      projectShowcaseAboutBeaconCoreMatRef.current = null;
-      projectShowcaseAboutBeaconHaloMatRef.current = null;
-      projectShowcaseInteriorLightBasesRef.current = [];
-      projectShowcaseElevatorEmergencyLightsRef.current = null;
-      projectShowcaseElevatorPowerRef.current.phase = "normal";
-      projectShowcaseElevatorPowerRef.current.powerLevel = 1;
-      projectShowcaseElevatorPowerRef.current.emergencyTextActive = false;
-      projectShowcaseElevatorPowerRef.current.resumeAutoplayAfterEmergency = false;
-      projectShowcasePreloadedGltfRef.current = null;
-      projectShowcaseAboutExteriorPreloadedGltfRef.current = null;
-      spaceshipPreloadedGltfRef.current = null;
-      starDestroyerPreloadedGltfRef.current = null;
-      oblivionDronePreloadedRef.current = null;
-      projectShowcaseWorldAnchorRef.current = null;
-      if (projectShowcaseNebulaRootRef.current) {
-        scene.remove(projectShowcaseNebulaRootRef.current);
-        projectShowcaseNebulaRootRef.current = null;
-      }
-      setProjectShowcaseReady(false);
-      vlog("⚠️ Failed to load Project Showcase trench model");
-      markSceneModelLoaded(); // showcase slot
-      markSceneModelLoaded(); // about-exterior slot (load never started)
-    };
-    const onProjectShowcaseLoaded = async (gltf: { scene: THREE.Group }) => {
-      if (
-        hallwayContentModeRef.current === "about" &&
-        !hallwayFontsReadyRef.current
-      ) {
-        try {
-          if (typeof document !== "undefined" && "fonts" in document) {
-            await (document as Document & { fonts: FontFaceSet }).fonts.ready;
-          }
-        } catch {
-          // Keep hallway initialization resilient.
-        }
-      }
-      const showcaseRoot = new THREE.Group();
-      showcaseRoot.name = "ProjectShowcaseRoot";
-      showcaseRoot.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
-      const showcaseInteriorRoot = new THREE.Group();
-      showcaseInteriorRoot.name = "ProjectShowcaseInteriorRoot";
-      showcaseRoot.add(showcaseInteriorRoot);
-      projectShowcaseInteriorRootRef.current = showcaseInteriorRoot;
-      projectShowcaseExteriorRootRef.current = null;
-      projectShowcaseAboutExteriorModelRef.current = null;
-      projectShowcaseAboutBeaconCoreMatRef.current = null;
-      projectShowcaseAboutBeaconHaloMatRef.current = null;
-      const trenchWorldAnchor = getProjectShowcaseWorldAnchor(
-        hallwayContentModeRef.current,
-      );
-      showcaseRoot.position
-        .copy(trenchWorldAnchor)
-        .add(new THREE.Vector3(0, -36, 0));
-
-      const trench = gltf.scene;
-      const trenchDiffuseCache = new Map<string, THREE.Texture>();
-      const trenchDiffusePending = new Map<
-        string,
-        THREE.MeshStandardMaterial[]
-      >();
-      const ensureTrenchDiffuseMap = (mat: THREE.MeshStandardMaterial) => {
-        if (!PROJECT_SHOWCASE_INJECT_NAMED_DIFFUSE_MAPS) return;
-        if (mat.map || !mat.name) return;
-        const key = mat.name;
-        const cached = trenchDiffuseCache.get(key);
-        if (cached) {
-          mat.map = cached;
-          mat.needsUpdate = true;
-          return;
-        }
-        const pending = trenchDiffusePending.get(key);
-        if (pending) {
-          pending.push(mat);
-          return;
-        }
-        trenchDiffusePending.set(key, [mat]);
-
-        const basePath = `${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}/${key}_diffuse`;
-        const exts = ["jpeg", "jpg", "png"];
-        const tryLoad = (idx: number) => {
-          if (idx >= exts.length) {
-            debugLog(
-              "project-showcase",
-              `[textures] failed to resolve optional diffuse for material "${key}" under ${PROJECT_SHOWCASE_TEXTURE_BASE_PATH}`,
-            );
-            trenchDiffusePending.delete(key);
-            return;
-          }
-          textureLoader.load(
-            `${basePath}.${exts[idx]}`,
-            (texture) => {
-              texture.colorSpace = THREE.SRGBColorSpace;
-              trenchDiffuseCache.set(key, texture);
-              const waiters = trenchDiffusePending.get(key) ?? [];
-              waiters.forEach((waitMat) => {
-                waitMat.map = texture;
-                waitMat.needsUpdate = true;
-              });
-              trenchDiffusePending.delete(key);
-            },
-            undefined,
-            () => tryLoad(idx + 1),
-          );
-        };
-        tryLoad(0);
-      };
-
-      trench.traverse((obj) => {
-        const o = obj as THREE.Object3D & {
-          isMesh?: boolean;
-          isLight?: boolean;
-          name?: string;
-          visible?: boolean;
-          material?: THREE.Material | THREE.Material[];
-        };
-        const name = (o.name || "").toLowerCase();
-
-        // Legacy trench hides embedded cinematic lights; hallway can keep authored lights.
-        if (o.isLight) {
-          if (PROJECT_SHOWCASE_DISABLE_EMBEDDED_MODEL_LIGHTS) o.visible = false;
-          return;
-        }
-
-        if (!o.isMesh) return;
-        if (
-          PROJECT_SHOWCASE_APPLY_LEGACY_MESH_FILTERS &&
-          (name.includes("xwing") ||
-            name.includes("tie") ||
-            name.includes("fighter") ||
-            name.includes("turret") ||
-            name.includes("laser") ||
-            name.includes("blaster") ||
-            name.includes("bolt") ||
-            name.includes("beam") ||
-            name.includes("explosion") ||
-            name.includes("sun"))
-        ) {
-          o.visible = false;
-          return;
-        }
-
-        // Legacy trench gets stronger normalization; hallway keeps authored material values.
-        const mats = Array.isArray(o.material) ? o.material : [o.material];
-        mats.forEach((mat) => {
-          const src = mat as THREE.MeshStandardMaterial & {
-            emissive?: THREE.Color;
-            emissiveMap?: THREE.Texture | null;
-            emissiveIntensity?: number;
-            map?: THREE.Texture | null;
-            metalness?: number;
-            roughness?: number;
-            color?: THREE.Color;
-            toneMapped?: boolean;
-            vertexColors?: boolean;
-          };
-          if (src.map) src.map.colorSpace = THREE.SRGBColorSpace;
-          if (src.emissiveMap)
-            src.emissiveMap.colorSpace = THREE.SRGBColorSpace;
-          if (PROJECT_SHOWCASE_APPLY_LEGACY_MATERIAL_NORMALIZATION) {
-            if (typeof src.metalness === "number") {
-              src.metalness = Math.min(src.metalness, 0.22);
-            }
-            if (typeof src.roughness === "number") {
-              src.roughness = Math.max(src.roughness, 0.62);
-            }
-            if (typeof src.emissiveIntensity === "number") {
-              src.emissiveIntensity = Math.min(src.emissiveIntensity, 0.35);
-            }
-            // Legacy asset carries vertex colors that tint surfaces cyan in our pipeline.
-            src.vertexColors = false;
-            if (src.color) src.color.set(0xffffff);
-            src.side = THREE.DoubleSide;
-          }
-          ensureTrenchDiffuseMap(src);
-          src.needsUpdate = true;
-        });
-      });
-
-      if (hallwayContentModeRef.current === "about") {
-        trench.rotation.x = -Math.PI / 2;
-        trench.updateMatrixWorld(true);
-      }
-
-      // Normalize model scale so first-pass placement is predictable.
-      const trenchBounds = new THREE.Box3().setFromObject(trench);
-      const trenchSize = trenchBounds.getSize(new THREE.Vector3());
-      const trenchMaxDim = Math.max(
-        trenchSize.x,
-        trenchSize.y,
-        trenchSize.z,
-        1,
-      );
-      const desiredMaxDim = 420;
-      const trenchScale = desiredMaxDim / trenchMaxDim;
-      trench.scale.setScalar(trenchScale);
-      trenchBounds.setFromObject(trench);
-      const trenchSizeScaled = trenchBounds.getSize(new THREE.Vector3());
-      const trenchCenter = trenchBounds.getCenter(new THREE.Vector3());
-      trench.position.sub(trenchCenter);
-      const publishedShowcase = projectShowcaseEntries;
-      const runAxis: "x" | "z" | "y" =
-        trenchSizeScaled.y >= trenchSizeScaled.x &&
-        trenchSizeScaled.y >= trenchSizeScaled.z
-          ? "y"
-          : trenchSizeScaled.z >= trenchSizeScaled.x
-            ? "z"
-            : "x";
-      const trenchForward =
-        runAxis === "y"
-          ? new THREE.Vector3(0, 1, 0)
-          : runAxis === "z"
-            ? new THREE.Vector3(0, 0, 1)
-            : new THREE.Vector3(1, 0, 0);
-      const trenchLateral =
-        runAxis === "y"
-          ? new THREE.Vector3(1, 0, 0)
-          : runAxis === "z"
-            ? new THREE.Vector3(1, 0, 0)
-            : new THREE.Vector3(0, 0, -1);
-      const baseRunLength =
-        runAxis === "y"
-          ? trenchSizeScaled.y
-          : runAxis === "z"
-            ? trenchSizeScaled.z
-            : trenchSizeScaled.x;
-      const trenchWidth =
-        runAxis === "y"
-          ? Math.max(trenchSizeScaled.x, trenchSizeScaled.z)
-          : runAxis === "z"
-            ? trenchSizeScaled.x
-            : trenchSizeScaled.z;
-      const spacingSeed = THREE.MathUtils.clamp(
-        baseRunLength / Math.max(6, publishedShowcase.length + 2),
-        24,
-        50,
-      );
-      const spacingPaddingSeed = Math.max(14, spacingSeed * 0.9);
-      const requiredRunLength =
-        Math.max(0, publishedShowcase.length - 1) * spacingSeed +
-        spacingPaddingSeed * 2 +
-        spacingSeed;
-      const segmentOverlap = Math.min(baseRunLength * 0.06, 8);
-      const effectiveSegmentLength = Math.max(
-        1,
-        baseRunLength - segmentOverlap,
-      );
-      const hallwaySegmentCount = Math.max(
-        1,
-        Math.ceil(requiredRunLength / effectiveSegmentLength),
-      );
-      const runLength =
-        baseRunLength +
-        Math.max(0, hallwaySegmentCount - 1) * effectiveSegmentLength;
-      const trenchSegmentsRoot = new THREE.Group();
-      trenchSegmentsRoot.name = "ProjectShowcaseHallwaySegments";
-      const segmentStartRun =
-        -((hallwaySegmentCount - 1) * effectiveSegmentLength) / 2;
-      for (
-        let segmentIndex = 0;
-        segmentIndex < hallwaySegmentCount;
-        segmentIndex += 1
-      ) {
-        const segment =
-          segmentIndex === 0 ? trench : (trench.clone(true) as THREE.Object3D);
-        const runOffset =
-          segmentStartRun + segmentIndex * effectiveSegmentLength;
-        if (runAxis === "y") {
-          segment.position.set(
-            segment.position.x,
-            runOffset,
-            segment.position.z,
-          );
-        } else if (runAxis === "z") {
-          segment.position.set(
-            segment.position.x,
-            segment.position.y,
-            runOffset,
-          );
-        } else {
-          segment.position.set(
-            runOffset,
-            segment.position.y,
-            segment.position.z,
-          );
-        }
-        trenchSegmentsRoot.add(segment);
-      }
-      showcaseInteriorRoot.add(trenchSegmentsRoot);
-
-      // Isolate trench rendering/lighting from the main cosmos sun.
-      trenchSegmentsRoot.traverse((obj) => {
-        obj.layers.set(PROJECT_SHOWCASE_LAYER);
-      });
-
-      // Add depth-only copies on the card layer so showcase cards are
-      // naturally occluded by tunnel walls from outside.
-      const trenchCardOccluder = trench.clone(true);
-      const trenchCardOccluderMat = new THREE.MeshBasicMaterial({
-        color: 0x000000,
-        side: THREE.DoubleSide,
-      });
-      trenchCardOccluderMat.colorWrite = false;
-      trenchCardOccluderMat.depthWrite = true;
-      trenchCardOccluderMat.depthTest = true;
-      trenchCardOccluder.traverse((obj) => {
-        const mesh = obj as THREE.Mesh;
-        if (!(mesh as any).isMesh) return;
-        mesh.material = trenchCardOccluderMat;
-        mesh.renderOrder = -250;
-        mesh.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
-      });
-      const trenchOccluderRoot = new THREE.Group();
-      trenchOccluderRoot.name = "ProjectShowcaseHallwayOccluders";
-      for (
-        let segmentIndex = 0;
-        segmentIndex < hallwaySegmentCount;
-        segmentIndex += 1
-      ) {
-        const segment =
-          segmentIndex === 0
-            ? trenchCardOccluder
-            : (trenchCardOccluder.clone(true) as THREE.Object3D);
-        const runOffset =
-          segmentStartRun + segmentIndex * effectiveSegmentLength;
-        if (runAxis === "y") {
-          segment.position.set(
-            segment.position.x,
-            runOffset,
-            segment.position.z,
-          );
-        } else if (runAxis === "z") {
-          segment.position.set(
-            segment.position.x,
-            segment.position.y,
-            runOffset,
-          );
-        } else {
-          segment.position.set(
-            runOffset,
-            segment.position.y,
-            segment.position.z,
-          );
-        }
-        trenchOccluderRoot.add(segment);
-      }
-      showcaseInteriorRoot.add(trenchOccluderRoot);
-
-      if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
-        const showcaseAmbient = new THREE.AmbientLight(
-          0xffffff,
-          PROJECT_SHOWCASE_AMBIENT_LIGHT_INTENSITY,
-        );
-        const showcaseKey = new THREE.DirectionalLight(
-          0xdde8ff,
-          PROJECT_SHOWCASE_KEY_LIGHT_INTENSITY,
-        );
-        showcaseKey.position.set(70, 110, 50);
-        const showcaseRim = new THREE.DirectionalLight(
-          0x8db8ff,
-          PROJECT_SHOWCASE_RIM_LIGHT_INTENSITY,
-        );
-        showcaseRim.position.set(-80, 30, -40);
-        showcaseAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseKey.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseRim.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseInteriorRoot.add(showcaseAmbient, showcaseKey, showcaseRim);
-      }
-
-      if (PROJECT_SHOWCASE_ENABLE_SUPPLEMENTAL_LIGHTING) {
-        // Trench-realm sun source: a strong angled key + beam into trench.
-        const showcaseSun = new THREE.DirectionalLight(
-          0xffe6c1,
-          PROJECT_SHOWCASE_SUN_LIGHT_INTENSITY,
-        );
-        const trenchLightVertical =
-          runAxis === "y"
-            ? new THREE.Vector3(0, 0, 220)
-            : new THREE.Vector3(0, 220, 0);
-        showcaseSun.position.copy(
-          trenchForward
-            .clone()
-            .multiplyScalar(-340)
-            .add(trenchLateral.clone().multiplyScalar(150))
-            .add(trenchLightVertical),
-        );
-        const showcaseSunTarget = new THREE.Object3D();
-        const trenchLightTargetLift =
-          runAxis === "y"
-            ? new THREE.Vector3(0, 0, 22)
-            : new THREE.Vector3(0, 22, 0);
-        showcaseSunTarget.position.copy(
-          trenchForward.clone().multiplyScalar(280).add(trenchLightTargetLift),
-        );
-        const showcaseSunBeam = new THREE.SpotLight(
-          0xfff1d8,
-          PROJECT_SHOWCASE_SUN_BEAM_INTENSITY,
-          2800,
-          Math.PI / 7.2,
-          0.58,
-          1.2,
-        );
-        const trenchBeamVertical =
-          runAxis === "y"
-            ? new THREE.Vector3(0, 0, 250)
-            : new THREE.Vector3(0, 250, 0);
-        showcaseSunBeam.position.copy(
-          trenchForward
-            .clone()
-            .multiplyScalar(-460)
-            .add(trenchLateral.clone().multiplyScalar(160))
-            .add(trenchBeamVertical),
-        );
-        const showcaseSunBeamTarget = new THREE.Object3D();
-        const trenchBeamTargetLift =
-          runAxis === "y"
-            ? new THREE.Vector3(0, 0, 4)
-            : new THREE.Vector3(0, 4, 0);
-        showcaseSunBeamTarget.position.copy(
-          trenchForward.clone().multiplyScalar(220).add(trenchBeamTargetLift),
-        );
-        showcaseSun.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseSunTarget.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseSunBeam.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseSunBeamTarget.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseSun.target = showcaseSunTarget;
-        showcaseSunBeam.target = showcaseSunBeamTarget;
-        showcaseInteriorRoot.add(
-          showcaseSunTarget,
-          showcaseSun,
-          showcaseSunBeamTarget,
-          showcaseSunBeam,
-        );
-      }
-      const interiorLightBases: Array<{
-        light: THREE.Light;
-        baseIntensity: number;
-      }> = [];
-      showcaseInteriorRoot.traverse((obj) => {
-        const light = obj as THREE.Light;
-        if (!(light as any).isLight) return;
-        interiorLightBases.push({ light, baseIntensity: light.intensity });
-      });
-      projectShowcaseInteriorLightBasesRef.current = interiorLightBases;
-      projectShowcaseElevatorEmergencyLightsRef.current = null;
-      if (runAxis === "y" && hallwayContentModeRef.current === "about") {
-        const emergencyAmbient = new THREE.AmbientLight(0x6dffb0, 0);
-        const emergencyPoint = new THREE.PointLight(0x59fca7, 0, 560, 1.7);
-        emergencyPoint.position.set(0, 24, -1.8);
-        emergencyAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
-        emergencyPoint.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseInteriorRoot.add(emergencyAmbient, emergencyPoint);
-        projectShowcaseElevatorEmergencyLightsRef.current = {
-          ambient: emergencyAmbient,
-          point: emergencyPoint,
-        };
-      }
-      // Keep trench well away from Projects planet so entry can be a true long final.
-      const showcaseForwardOffset = runAxis === "y" ? 320 : 860;
-      const showcaseWorldOffset =
-        runAxis === "y"
-          ? new THREE.Vector3(0, -120, -24)
-          : new THREE.Vector3(0, -36, 0);
-      showcaseRoot.position
-        .copy(trenchWorldAnchor)
-        .addScaledVector(trenchForward, showcaseForwardOffset)
-        .addScaledVector(trenchLateral, 95)
-        .add(showcaseWorldOffset);
-      if (PROJECT_SHOWCASE_USE_NEBULA_REALM) {
-        textureLoader.load(
-          PROJECT_SHOWCASE_NEBULA_JPG_PATH,
-          (nebulaTexture) => {
-            nebulaTexture.colorSpace = THREE.SRGBColorSpace;
-            nebulaTexture.mapping = THREE.EquirectangularReflectionMapping;
-            nebulaTexture.wrapS = THREE.RepeatWrapping;
-            nebulaTexture.wrapT = THREE.ClampToEdgeWrapping;
-            nebulaTexture.needsUpdate = true;
-
-            const domeRadius = CAMERA_FAR * 0.48;
-            const nebulaGeo = new THREE.SphereGeometry(domeRadius, 96, 64);
-            const nebulaMat = new THREE.MeshBasicMaterial({
-              map: nebulaTexture,
-              color: 0xffffff,
-              side: THREE.BackSide,
-              transparent: true,
-              opacity: 1,
-              depthWrite: false,
-            });
-            nebulaMat.toneMapped = false;
-            nebulaMat.userData = nebulaMat.userData || {};
-            nebulaMat.userData.nebulaBaseOpacity = 1;
-
-            const nebulaRoot = new THREE.Mesh(nebulaGeo, nebulaMat);
-            nebulaRoot.name = "ProjectShowcaseNebulaRealm";
-            nebulaRoot.layers.set(PROJECT_SHOWCASE_LAYER);
-            nebulaRoot.frustumCulled = false;
-            nebulaRoot.renderOrder = -1000;
-            nebulaRoot.rotation.y = Math.PI * 0.1;
-
-            scene.add(nebulaRoot);
-            projectShowcaseNebulaRootRef.current = nebulaRoot;
-            applyProjectShowcaseNebulaFade(0);
-            vlog(
-              `🌌 Project showcase JPG sky loaded radius=${domeRadius.toFixed(
-                0,
-              )} path=${PROJECT_SHOWCASE_NEBULA_JPG_PATH}`,
-            );
-          },
-          undefined,
-          () => {
-            vlog(
-              "⚠️ Project showcase JPG sky failed — using default cosmos outside trench",
-            );
-          },
-        );
-      }
-      if (PROJECT_SHOWCASE_ENABLE_FLOOR_PULSES) {
-        const floorPulseRecords: Array<{
-          mat: THREE.MeshBasicMaterial;
-          runT: number;
-        }> = [];
-        const floorPulseGroup = new THREE.Group();
-        const floorPulseSegments = 24;
-        const floorPulseStep = runLength / floorPulseSegments;
-        const floorPulseLength = floorPulseStep * 0.82;
-        const floorPulseWidth = THREE.MathUtils.clamp(
-          trenchWidth * 0.038,
-          0.95,
-          1.75,
-        );
-        // Lift above floor so pulses are visible and not buried by geometry.
-        const floorPulseYOffset = -trenchSizeScaled.y * 0.438;
-        const floorPulseLateral = trenchWidth * 0.286;
-        for (let lane = -1; lane <= 1; lane += 2) {
-          for (let i = 0; i < floorPulseSegments; i += 1) {
-            const seg = new THREE.Mesh(
-              new THREE.PlaneGeometry(floorPulseLength, floorPulseWidth),
-              new THREE.MeshBasicMaterial({
-                color: 0x22cfff,
-                transparent: true,
-                opacity: 0.18,
-                side: THREE.DoubleSide,
-                depthWrite: false,
-                toneMapped: false,
-                blending: THREE.AdditiveBlending,
-              }),
-            );
-            seg.rotation.x = -Math.PI * 0.5;
-            seg.renderOrder = 42;
-            const runPos = -runLength * 0.5 + floorPulseStep * (i + 0.5);
-            if (runAxis === "y") {
-              seg.position.set(
-                lane * floorPulseLateral,
-                runPos,
-                floorPulseYOffset,
-              );
-            } else if (runAxis === "z") {
-              seg.position.set(
-                lane * floorPulseLateral,
-                floorPulseYOffset,
-                runPos,
-              );
-            } else {
-              seg.position.set(
-                runPos,
-                floorPulseYOffset,
-                lane * floorPulseLateral,
-              );
-            }
-            floorPulseGroup.add(seg);
-            floorPulseRecords.push({
-              mat: seg.material as THREE.MeshBasicMaterial,
-              runT: (i + 0.5) / floorPulseSegments,
-            });
-          }
-        }
-        floorPulseGroup.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseInteriorRoot.add(floorPulseGroup);
-        projectShowcaseFloorPulseMatsRef.current = floorPulseRecords;
-      } else {
-        projectShowcaseFloorPulseMatsRef.current = [];
-      }
-      // Nudge the entire showcase module up slightly for better composition.
-      const panelY =
-        THREE.MathUtils.clamp(trenchSizeScaled.y * 0.015, 2.2, 5.4) + 0.35;
-      const panelWidth = THREE.MathUtils.clamp(
-        trenchWidth * 0.2304,
-        9.072,
-        13.536,
-      );
-      const panelHeight = panelWidth * (9 / 16) * 1.25;
-      const panelSpacing = THREE.MathUtils.clamp(
-        runLength / Math.max(6, publishedShowcase.length + 2),
-        24,
-        50,
-      );
-      const runStart = -((publishedShowcase.length - 1) * panelSpacing) / 2;
-      const shaftBottomWorld = -trenchSizeScaled.y / 2;
-      const panelRecords: ShowcasePanelRecord[] = [];
-      let slideRunPositions: number[] = [];
-      if (hallwayContentModeRef.current === "about") {
-        const wallOffset = trenchWidth * 0.34;
-        const elevatorOppositeWall = -Math.min(
-          trenchWidth * 0.34,
-          Math.max(2.6, trenchWidth * 0.5 - 1.15),
-        );
-        const elevatorCreditsMode = runAxis === "y";
-        const elevatorCreditsWall = elevatorOppositeWall * 0.32;
-
-        const setupFovRad = THREE.MathUtils.degToRad(45);
-        const setupCameraX = Math.min(
-          trenchWidth * 0.36,
-          Math.max(2.8, trenchWidth * 0.5 - 1.05),
-        );
-        const setupWallDistance = Math.abs(setupCameraX - elevatorCreditsWall);
-        const estimatedVisibleHeight =
-          2 * setupWallDistance * Math.tan(setupFovRad * 0.5);
-        const fixedTriggerDistance = 12;
-        const immersiveWidths: Record<AboutHallColumnId, number> = {
-          left: 12.1,
-          center: 14.3,
-          right: 12.1,
-        };
-        const immersiveHeights: Record<AboutHallColumnId, number> = {
-          left: 10.6,
-          center: 10.1,
-          right: 10.3,
-        };
-
-        aboutTrenchContextRef.current = {
-          trenchWidth,
-          trenchSizeScaledY: trenchSizeScaled.y,
-          runAxis,
-          panelSpacing,
-          panelY,
-          shaftBottomWorld,
-          wallOffset,
-          elevatorOppositeWall,
-          elevatorCreditsMode,
-          elevatorCreditsWall,
-          estimatedVisibleHeight,
-          fixedTriggerDistance,
-          immersiveWidths,
-          immersiveHeights,
-        };
-
-        const firstSlidePos = aboutHallFirstSlidePositionRef.current ?? 190;
-        const estimateTallestCellHeight = (s: AboutHallSlide): number => {
-          const cols = s.configuration.columns ?? {};
-          const pw = elevatorCreditsMode
-            ? THREE.MathUtils.clamp(s.width * 1.18, 9.2, 13.8)
-            : THREE.MathUtils.clamp(s.width, 8, 13.8);
-          const ph = elevatorCreditsMode
-            ? THREE.MathUtils.clamp(s.height * 1.02, 5.2, 8.4)
-            : THREE.MathUtils.clamp(s.height, 4.8, 8.8);
-          let tallest = 0;
-          (["left", "center", "right"] as AboutHallColumnId[]).forEach(
-            (colId) => {
-              const colCfg = cols[colId];
-              if (!colCfg?.messages?.length) return;
-              colCfg.messages.forEach((msg) => {
-                const wr = THREE.MathUtils.clamp(
-                  msg.widthRatio ?? 1,
-                  0.35,
-                  2.6,
-                );
-                const hr = THREE.MathUtils.clamp(
-                  msg.heightRatio ?? 1,
-                  0.2,
-                  2.4,
-                );
-                const cw = immersiveWidths[colId] * wr;
-                const ch = immersiveHeights[colId] * hr;
-                const sw = Math.max(
-                  256,
-                  Math.floor(1300 * (cw / Math.max(pw, 1))),
-                );
-                const sh = Math.max(
-                  220,
-                  Math.floor(1000 * (ch / Math.max(ph, 1))),
-                );
-                const pa = sw / cw / (sh / ch);
-                const resolved = {
-                  ...msg,
-                  textContent: resolveAboutContentText(msg),
-                };
-                const needed = measureAboutTextHeight(resolved, sw, sh, {
-                  creditsStyle: false,
-                  loadedImages: aboutImageCacheRef.current,
-                  pixelAspect: pa,
-                });
-                const actual = needed > sh ? ch * (needed / sh) : ch;
-                tallest = Math.max(tallest, actual);
-              });
-            },
-          );
-          return tallest;
-        };
-
-        aboutHallwaySlides.forEach((_slide, index) => {
-          if (index === 0) {
-            slideRunPositions.push(shaftBottomWorld + firstSlidePos);
-          } else {
-            const prevSlide = aboutHallwaySlides[index - 1];
-
-            const thresholdDist = computeCenterTopThresholdDistance(
-              prevSlide,
-              estimatedVisibleHeight,
-              fixedTriggerDistance,
-              estimateTallestCellHeight,
-            );
-
-            if (thresholdDist != null) {
-              slideRunPositions.push(
-                slideRunPositions[index - 1] + thresholdDist + 4,
-              );
-            } else {
-              const prevFadeVH = THREE.MathUtils.clamp(
-                prevSlide.flowFadeOutDistanceViewportHeights ?? 1.5,
-                0.1,
-                10,
-              );
-              const prevTallest = estimateTallestCellHeight(prevSlide);
-              const heightExcess = Math.max(
-                0,
-                prevTallest - estimatedVisibleHeight,
-              );
-              const baseLife =
-                fixedTriggerDistance +
-                estimatedVisibleHeight * prevFadeVH +
-                estimatedVisibleHeight * 0.2;
-              const slideLifeDistance = baseLife + heightExcess;
-              slideRunPositions.push(
-                slideRunPositions[index - 1] + slideLifeDistance + 4,
-              );
-            }
-          }
-        });
-
-        const allImageSrcs = new Set<string>();
-        aboutHallwaySlides.forEach((s) => {
-          const cols = s.configuration.columns ?? {};
-          (["left", "center", "right"] as AboutHallColumnId[]).forEach(
-            (colId) => {
-              const colCfg = cols[colId];
-              if (!colCfg?.messages?.length) return;
-              colCfg.messages.forEach((msg) => {
-                msg.images?.forEach((img) => {
-                  if (img.src) allImageSrcs.add(img.src);
-                });
-              });
-            },
-          );
-        });
-        if (allImageSrcs.size > 0) {
-          await Promise.all(
-            Array.from(allImageSrcs).map(async (src) => {
-              if (aboutImageCacheRef.current.has(src)) return;
-              const img = new Image();
-              img.src = src;
-              await new Promise<void>((resolve) => {
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-              });
-              aboutImageCacheRef.current.set(src, img);
-            }),
-          );
-        }
-
-        aboutHallwaySlides.forEach((slide, index) => {
-          const entry =
-            aboutShowcaseEntries[index] ??
-            ({
-              id: slide.id,
-              title: slide.registryBtnTitle,
-              image:
-                "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
-              fit: "contain",
-            } as ShowcaseEntry);
-          const panelGroup = new THREE.Group();
-          const runPos = slideRunPositions[index];
-          const horizontal = slide.horizontalAlign;
-          const vertical = slide.verticalAlign;
-          const slideHasColumnChoreo = true;
-          const useElevatorCreditsCard =
-            elevatorCreditsMode && !slideHasColumnChoreo;
-          const useImmersiveColumnGrouping =
-            slideHasColumnChoreo && runAxis === "y";
-          const side =
-            horizontal === "left" ? -1 : horizontal === "right" ? 1 : 0;
-          const lateralOffset = side === 0 ? 0 : side * wallOffset;
-          const verticalOffset =
-            vertical === "top" ? 2.2 : vertical === "bottom" ? -1.2 : 0.6;
-          const depthOffset =
-            vertical === "top" ? -1.3 : vertical === "bottom" ? 1.3 : 0;
-          const sideNudge =
-            horizontal === "left" ? -0.5 : horizontal === "right" ? 0.5 : 0;
-          if (runAxis === "y") {
-            if (useImmersiveColumnGrouping) {
-              panelGroup.position.set(elevatorCreditsWall, runPos, 0);
-            } else {
-              panelGroup.position.set(
-                (elevatorCreditsMode
-                  ? elevatorCreditsWall
-                  : elevatorOppositeWall) +
-                  sideNudge * 0.4,
-                runPos,
-                depthOffset,
-              );
-            }
-          } else if (runAxis === "z") {
-            panelGroup.position.set(
-              lateralOffset,
-              panelY + verticalOffset,
-              runPos,
-            );
-          } else {
-            panelGroup.position.set(
-              runPos,
-              panelY + verticalOffset,
-              -lateralOffset,
-            );
-          }
-          let inwardRotationY = 0;
-          let frontFacingRotationY = 0;
-          let cantSign: -1 | 1 = 1;
-          if (runAxis === "y") {
-            const ySide = elevatorOppositeWall >= 0 ? 1 : -1;
-            if (ySide < 0) {
-              inwardRotationY = Math.PI / 2;
-              frontFacingRotationY = Math.PI / 2;
-              cantSign = 1;
-            } else if (ySide > 0) {
-              inwardRotationY = -Math.PI / 2;
-              frontFacingRotationY = -Math.PI / 2;
-              cantSign = -1;
-            } else {
-              inwardRotationY = Math.PI;
-              frontFacingRotationY = Math.PI;
-              cantSign = 1;
-            }
-          } else if (runAxis === "z") {
-            if (side < 0) {
-              inwardRotationY = Math.PI / 2;
-              frontFacingRotationY = Math.PI;
-              cantSign = 1;
-            } else if (side > 0) {
-              inwardRotationY = -Math.PI / 2;
-              frontFacingRotationY = Math.PI;
-              cantSign = -1;
-            } else {
-              inwardRotationY = Math.PI;
-              frontFacingRotationY = Math.PI;
-              cantSign = 1;
-            }
-          } else {
-            if (side < 0) {
-              inwardRotationY = 0;
-              frontFacingRotationY = Math.PI / 2;
-              cantSign = -1;
-            } else if (side > 0) {
-              inwardRotationY = Math.PI;
-              frontFacingRotationY = Math.PI / 2;
-              cantSign = 1;
-            } else {
-              inwardRotationY = Math.PI / 2;
-              frontFacingRotationY = Math.PI / 2;
-              cantSign = 1;
-            }
-          }
-          panelGroup.rotation.y = inwardRotationY;
-
-          const panelWidth = elevatorCreditsMode
-            ? THREE.MathUtils.clamp(slide.width * 1.18, 9.2, 13.8)
-            : THREE.MathUtils.clamp(slide.width, 8, 13.8);
-          const panelHeight = elevatorCreditsMode
-            ? THREE.MathUtils.clamp(slide.height * 1.02, 5.2, 8.4)
-            : THREE.MathUtils.clamp(slide.height, 4.8, 8.8);
-          const borderStyle = parseBorderStyle(slide.border);
-          const borderColor = new THREE.Color(0x74d2ff);
-          try {
-            borderColor.setStyle(toThreeColorStyle(borderStyle.color));
-          } catch {
-            borderColor.setHex(0x74d2ff);
-          }
-
-          const frame = new THREE.Mesh(
-            new THREE.PlaneGeometry(panelWidth * 1.02, panelHeight * 1.02),
-            new THREE.MeshBasicMaterial({
-              color: borderColor,
-              transparent: true,
-              opacity: useElevatorCreditsCard ? 0 : 0.28,
-              side: THREE.DoubleSide,
-              toneMapped: false,
-            }),
-          );
-          const frameMat = frame.material as THREE.MeshBasicMaterial;
-          frame.position.z = -0.04;
-          if (!useElevatorCreditsCard && !useImmersiveColumnGrouping)
-            panelGroup.add(frame);
-
-          const panelRecord: ShowcasePanelRecord = {
-            group: panelGroup,
-            runPos,
-            entry,
-            displayTitle: slide.registryBtnTitle,
-            fitMode: "contain",
-            inwardRotationY,
-            frontFacingRotationY,
-            cantSign,
-            focusBlend: 0,
-            frameMat,
-            imageMesh: new THREE.Mesh(
-              new THREE.PlaneGeometry(1, 1),
-              new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                transparent: true,
-                opacity: 1,
-                side: THREE.DoubleSide,
-                toneMapped: false,
-              }),
-            ),
-            imageMat: new THREE.MeshBasicMaterial({
-              color: 0xffffff,
-              transparent: true,
-              opacity: 1,
-              side: THREE.DoubleSide,
-              toneMapped: false,
-            }),
-            texture: null,
-            baseRepeat: new THREE.Vector2(1, 1),
-            baseOffset: new THREE.Vector2(0, 0),
-            zoom: 1,
-            panX: 0,
-            panY: 0,
-            clientVariants: [],
-            activeVariantIndex: 0,
-            setActiveVariant: () => {},
-            mediaItems: [],
-            activeMediaIndex: 0,
-            setActiveMedia: () => {},
-            mediaFadeStartMs: -Infinity,
-            mediaFadeDurationMs: 1,
-            setThumbnailPageStart: () => {},
-            triggerThumbnailNavPress: () => {},
-            thumbnailPageStart: 0,
-            thumbnailHitTargets: [],
-            thumbnailFrameMats: [],
-            thumbnailImageMats: [],
-            detailMat: new THREE.MeshBasicMaterial({
-              color: 0xffffff,
-              transparent: true,
-              opacity: 0,
-            }),
-            detailTexture: null,
-            detailMesh: null,
-            detailScrollThumbMesh: null,
-            detailAllLines: [],
-            detailVisibleLines: 0,
-            detailScrollOffset: 0,
-            detailScrollMax: 0,
-            updateDetailTexture: () => {},
-            techBadgeRoot: null,
-            techBadgeFx: [],
-            aboutRuntime: {
-              mode: "about",
-              slideId: slide.id,
-              cells: [],
-              triggerDistance: fixedTriggerDistance,
-              slideStartRun: runPos - fixedTriggerDistance,
-              flowFadeOutDistanceViewportHeights: THREE.MathUtils.clamp(
-                slide.flowFadeOutDistanceViewportHeights ?? 1.5,
-                0.1,
-                10,
-              ),
-              autoSpeed:
-                slide.autoSpeed ?? aboutHallDefaultAutoSpeedRef.current,
-            },
-          };
-
-          const columnMessages = getAboutColumnMessages(slide);
-          const allMessages = [
-            ...columnMessages.left,
-            ...columnMessages.center,
-            ...columnMessages.right,
-          ];
-          const creditContent: AboutHallSlideContent = {
-            id: `${slide.id}-credit`,
-            type: "column1",
-            backgroundColor: "transparent",
-            fontColor: "rgba(8, 12, 18, 0.98)",
-            fontFamily: ["Oswald", "Montserrat"],
-            fontSize: "150px",
-            fontShadow: "0px 0px 14px rgba(0, 0, 0, 0.62)",
-            horizontalAlign: "center",
-            verticalAlign: "middle",
-            textContent: allMessages
-              .map((content) =>
-                splitHtmlBreakLines(content.textContent).join("\n"),
-              )
-              .filter((text) => text.length > 0)
-              .join("\n\n"),
-          };
-          const createAboutRuntimeCell = (
-            content: AboutHallSlideContent,
-            cellWidth: number,
-            cellHeight: number,
-            cellX: number,
-            cellY: number,
-            opts?: {
-              transparentBackground?: boolean;
-              creditsStyle?: boolean;
-              columnDepth?: number;
-              parentGroup?: THREE.Group;
-            },
-          ) => {
-            const safeWidth = Math.max(
-              256,
-              Math.floor(1300 * (cellWidth / Math.max(panelWidth, 1))),
-            );
-            let safeHeight = Math.max(
-              220,
-              Math.floor(1000 * (cellHeight / Math.max(panelHeight, 1))),
-            );
-            const pixelAspect =
-              safeWidth / cellWidth / (safeHeight / cellHeight);
-            const resolvedContent = {
-              ...content,
-              textContent: resolveAboutContentText(content),
-            };
-            const neededHeight = measureAboutTextHeight(
-              resolvedContent,
-              safeWidth,
-              safeHeight,
-              {
-                creditsStyle: opts?.creditsStyle ?? false,
-                loadedImages: aboutImageCacheRef.current,
-                pixelAspect,
-              },
-            );
-            let actualCellHeight = cellHeight;
-            if (neededHeight > safeHeight) {
-              const scale = neededHeight / safeHeight;
-              safeHeight = neededHeight;
-              actualCellHeight = cellHeight * scale;
-            }
-            const tex = createAboutCellTexture(
-              resolvedContent,
-              safeWidth,
-              safeHeight,
-              {
-                transparentBackground: opts?.transparentBackground ?? false,
-                creditsStyle: opts?.creditsStyle ?? false,
-                loadedImages: aboutImageCacheRef.current,
-                pixelAspect,
-              },
-            );
-            const emergencyTex = opts?.creditsStyle
-              ? createAboutCellTexture(resolvedContent, safeWidth, safeHeight, {
-                  transparentBackground: opts?.transparentBackground ?? false,
-                  creditsStyle: true,
-                  emergencyMood: true,
-                  loadedImages: aboutImageCacheRef.current,
-                  pixelAspect,
-                })
-              : tex;
-            const material = new THREE.MeshBasicMaterial({
-              map: tex,
-              color: 0xffffff,
-              transparent: true,
-              opacity: 0,
-              side: THREE.DoubleSide,
-              toneMapped: false,
-              depthWrite: false,
-            });
-            const mesh = new THREE.Mesh(
-              new THREE.PlaneGeometry(cellWidth, actualCellHeight),
-              material,
-            );
-            mesh.position.set(cellX, cellY, opts?.columnDepth ?? 0.02);
-            (opts?.parentGroup ?? panelGroup).add(mesh);
-            const flowDir = normalizeAboutFlowDirection(content.flowDirection);
-            const flowOff = content.flowOffsetUnits ?? 0;
-            const halfVisible = estimatedVisibleHeight * 0.5;
-            const halfCell = actualCellHeight * 0.5;
-            const edgeGap = Math.max(1.0, estimatedVisibleHeight * 0.15);
-            const computedHomeY =
-              flowDir === "topToBottom"
-                ? -fixedTriggerDistance +
-                  halfVisible +
-                  halfCell +
-                  edgeGap -
-                  flowOff
-                : -fixedTriggerDistance -
-                  halfVisible -
-                  halfCell -
-                  edgeGap -
-                  flowOff;
-            panelRecord.aboutRuntime?.cells.push({
-              mesh,
-              material,
-              normalTexture: tex,
-              emergencyTexture: emergencyTex,
-              basePosition: mesh.position.clone(),
-              flowDirection: flowDir,
-              flowUnitsPerDistance: Math.max(
-                0,
-                content.flowUnitsPerDistance ?? 0,
-              ),
-              flowOffsetUnits: flowOff,
-              baseYawRad: mesh.rotation.y,
-              homeY: computedHomeY,
-            });
-          };
-          if (useElevatorCreditsCard) {
-            createAboutRuntimeCell(
-              creditContent,
-              panelWidth,
-              panelHeight,
-              0,
-              0,
-              {
-                transparentBackground: true,
-                creditsStyle: true,
-              },
-            );
-          } else {
-            const columnX: Record<AboutHallColumnId, number> =
-              useImmersiveColumnGrouping
-                ? { left: -9.56, center: 1.05, right: 10.65 }
-                : {
-                    left: -panelWidth * 0.34,
-                    center: 0,
-                    right: panelWidth * 0.34,
-                  };
-            const columnZ: Record<AboutHallColumnId, number> =
-              useImmersiveColumnGrouping
-                ? { left: 3.35, center: 0, right: 6 }
-                : { left: 0, center: 0, right: 0 };
-            const columnDefaults: Record<AboutHallColumnId, number> =
-              useImmersiveColumnGrouping
-                ? { left: 34, center: 0, right: -34 }
-                : { left: 16, center: 0, right: -16 };
-            const columnAngleMultipliers: Record<AboutHallColumnId, number> =
-              useImmersiveColumnGrouping
-                ? { left: 1.9, center: 1, right: 2 }
-                : { left: 1, center: 1, right: 1 };
-            const columnOrder: AboutHallColumnId[] = [
-              "left",
-              "center",
-              "right",
-            ];
-            columnOrder.forEach((columnId) => {
-              const msgs = columnMessages[columnId];
-              if (msgs.length === 0) return;
-              const columnConfig = slide.configuration.columns?.[columnId];
-              const baseAngleDeg =
-                columnConfig?.angleDeg ?? columnDefaults[columnId];
-              const columnAnchor = new THREE.Group();
-              const columnY = useImmersiveColumnGrouping ? 0 : 0;
-              columnAnchor.position.set(
-                columnX[columnId],
-                columnY,
-                columnZ[columnId],
-              );
-              panelGroup.add(columnAnchor);
-              const verticalRange = useImmersiveColumnGrouping
-                ? panelHeight * 0.22
-                : panelHeight * 0.78;
-              const slotCount = Math.max(1, msgs.length);
-              const slotStep =
-                slotCount > 1 ? verticalRange / (slotCount - 1) : 0;
-              msgs.forEach((rawMessage, msgIndex) => {
-                const message = {
-                  ...rawMessage,
-                  horizontalAlign: rawMessage.horizontalAlign ?? "center",
-                  verticalAlign: rawMessage.verticalAlign ?? "middle",
-                  textContent: resolveAboutContentText(rawMessage),
-                };
-                const widthRatio = THREE.MathUtils.clamp(
-                  message.widthRatio ?? 1,
-                  0.35,
-                  2.6,
-                );
-                const heightRatio = THREE.MathUtils.clamp(
-                  message.heightRatio ?? 1,
-                  0.2,
-                  2.4,
-                );
-                const cellWidth = useImmersiveColumnGrouping
-                  ? immersiveWidths[columnId] * widthRatio
-                  : panelWidth * 0.26 * widthRatio;
-                const cellHeight = useImmersiveColumnGrouping
-                  ? immersiveHeights[columnId] * heightRatio
-                  : panelHeight * 0.24 * heightRatio;
-                const autoY =
-                  slotCount <= 1
-                    ? 0
-                    : verticalRange * 0.5 - slotStep * msgIndex;
-                const baseY =
-                  autoY +
-                  (useImmersiveColumnGrouping ? 0 : 0) +
-                  (message.offsetY ?? 0);
-                const baseX = message.offsetX ?? 0;
-                const cellCountBefore =
-                  panelRecord.aboutRuntime?.cells.length ?? 0;
-                createAboutRuntimeCell(
-                  message,
-                  cellWidth,
-                  cellHeight,
-                  baseX,
-                  baseY,
-                  {
-                    columnDepth: 0.03 + msgIndex * 0.002,
-                    parentGroup: columnAnchor,
-                    transparentBackground: false,
-                  },
-                );
-                const runtimeCells = panelRecord.aboutRuntime?.cells;
-                if (!runtimeCells) return;
-                const newCells = runtimeCells.slice(cellCountBefore);
-                const angleDeg = message.columnAngleDeg ?? baseAngleDeg;
-                newCells.forEach((cell) => {
-                  cell.mesh.rotation.y = THREE.MathUtils.degToRad(angleDeg);
-                  cell.baseYawRad = cell.mesh.rotation.y;
-                  if (useImmersiveColumnGrouping) {
-                    cell.immersiveColumn = columnId;
-                  }
-                  if (cell.flowUnitsPerDistance <= 0) {
-                    cell.flowUnitsPerDistance = 0.25;
-                  }
-                });
-              });
-            });
-            if (useImmersiveColumnGrouping && !immersiveColumnRigRef.current) {
-              const firstCell = (col: AboutHallColumnId) => {
-                const cells = panelRecord.aboutRuntime?.cells ?? [];
-                return cells.find((c) => c.immersiveColumn === col);
-              };
-              const makeVals = (
-                col: AboutHallColumnId,
-              ): ImmersiveColumnRigValues => {
-                const cell = firstCell(col);
-                return {
-                  width: immersiveWidths[col],
-                  height: immersiveHeights[col],
-                  posX: columnX[col],
-                  posY: 0,
-                  depth: columnZ[col],
-                  angleDeg: cell
-                    ? THREE.MathUtils.radToDeg(cell.baseYawRad)
-                    : columnDefaults[col],
-                  angleMultiplier: columnAngleMultipliers[col],
-                };
-              };
-              immersiveColumnRigRef.current = {
-                left: makeVals("left"),
-                center: makeVals("center"),
-                right: makeVals("right"),
-                activeColumn: "center",
-              };
-            }
-          }
-
-          const framePulse = new THREE.Mesh(
-            new THREE.PlaneGeometry(
-              panelWidth + borderStyle.width * 0.02,
-              panelHeight + borderStyle.width * 0.02,
-            ),
-            new THREE.MeshBasicMaterial({
-              color: borderColor,
-              transparent: true,
-              opacity: 0.09,
-              side: THREE.DoubleSide,
-              toneMapped: false,
-            }),
-          );
-          framePulse.position.z = -0.07;
-          if (!useElevatorCreditsCard && !useImmersiveColumnGrouping)
-            panelGroup.add(framePulse);
-
-          panelRecord.imageMesh =
-            panelRecord.aboutRuntime?.cells[0]?.mesh ?? panelRecord.imageMesh;
-          panelRecord.imageMat =
-            panelRecord.aboutRuntime?.cells[0]?.material ??
-            panelRecord.imageMat;
-
-          panelGroup.traverse((child) => {
-            child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
-          });
-          showcaseInteriorRoot.add(panelGroup);
-          panelRecords.push(panelRecord);
-        });
-      } else {
-        const shaftWallOffset = trenchWidth * 0.32;
-        publishedShowcase.forEach((entry, index) => {
-          const side = index % 2 === 0 ? -1 : 1;
-          const panelGroup = new THREE.Group();
-          const runPos = runStart + index * panelSpacing;
-          const clientVariants =
-            (entry.clientVariants ?? []).filter(
-              (variant) => !!variant?.title,
-            ) ?? [];
-          const mediaItems =
-            clientVariants.length > 0
-              ? clientVariants.flatMap((variant, variantIndex) =>
-                  resolveShowcaseMediaItems(entry, { variant, variantIndex }),
-                )
-              : resolveShowcaseMediaItems(entry);
-          const hasSingleMediaNoVariants =
-            clientVariants.length === 0 && mediaItems.length <= 1;
-          const panelHasAnyThumbStrip =
-            clientVariants.length > 0
-              ? clientVariants.some(
-                  (_, variantIndex) =>
-                    mediaItems.filter(
-                      (item) => item.variantIndex === variantIndex,
-                    ).length > 1,
-                )
-              : mediaItems.length > 1;
-          const initialVariantMediaCount =
-            clientVariants.length > 0
-              ? mediaItems.filter((item) => item.variantIndex === 0).length
-              : mediaItems.length;
-          const hasGalleryMedia =
-            !hasSingleMediaNoVariants && initialVariantMediaCount > 1;
-          const panelVerticalOffset = hasGalleryMedia ? 0.32 : 0.48;
-          if (runAxis === "y") {
-            panelGroup.position.set(
-              side * shaftWallOffset,
-              runPos,
-              0.35 + panelVerticalOffset * 0.35,
-            );
-          } else if (runAxis === "z") {
-            panelGroup.position.set(0, panelY + panelVerticalOffset, runPos);
-          } else {
-            panelGroup.position.set(runPos, panelY + panelVerticalOffset, 0);
-          }
-          // Keep inward-facing baseline; user controls extra readable cant via slider.
-          let inwardRotationY = 0;
-          let frontFacingRotationY = 0;
-          let cantSign: -1 | 1 = 1;
-          if (runAxis === "y") {
-            inwardRotationY = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-            frontFacingRotationY = inwardRotationY;
-            cantSign = side < 0 ? 1 : -1;
-          } else if (runAxis === "z") {
-            inwardRotationY = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-            // Plane front normal points toward -Z (toward incoming camera travel).
-            frontFacingRotationY = Math.PI;
-            cantSign = side < 0 ? 1 : -1;
-          } else {
-            inwardRotationY = side < 0 ? 0 : Math.PI;
-            // Plane front normal points toward -X when traveling +X.
-            frontFacingRotationY = Math.PI / 2;
-            cantSign = side < 0 ? -1 : 1;
-          }
-          panelGroup.rotation.y = inwardRotationY;
-
-          const frame = new THREE.Mesh(
-            new THREE.PlaneGeometry(panelWidth * 1.015, panelHeight * 1.015),
-            new THREE.MeshBasicMaterial({
-              color: 0x72c6ff,
-              transparent: true,
-              opacity: 0.22,
-              side: THREE.DoubleSide,
-            }),
-          );
-          const frameMat = frame.material as THREE.MeshBasicMaterial;
-          frame.position.z = -0.15;
-
-          const imageMat = new THREE.MeshBasicMaterial({
-            color: 0xb8b8b8,
-            transparent: true,
-            opacity: 1,
-            side: THREE.FrontSide,
-            toneMapped: false,
-          });
-          const imagePlane = new THREE.Mesh(
-            new THREE.PlaneGeometry(1, 1),
-            imageMat,
-          );
-          const fitMode = mediaItems[0]?.fit ?? entry.fit ?? "contain";
-          const panelRecord: ShowcasePanelRecord = {
-            group: panelGroup,
-            runPos,
-            entry,
-            fitMode,
-            inwardRotationY,
-            frontFacingRotationY,
-            cantSign,
-            focusBlend: 0,
-            frameMat,
-            imageMesh: imagePlane,
-            imageMat,
-            texture: null,
-            baseRepeat: new THREE.Vector2(1, 1),
-            baseOffset: new THREE.Vector2(0, 0),
-            zoom: 1,
-            panX: 0,
-            panY: 0,
-            clientVariants,
-            activeVariantIndex: 0,
-            setActiveVariant: () => {},
-            mediaItems,
-            activeMediaIndex: 0,
-            setActiveMedia: () => {},
-            mediaFadeStartMs: -Infinity,
-            mediaFadeDurationMs: 240,
-            setThumbnailPageStart: () => {},
-            triggerThumbnailNavPress: () => {},
-            thumbnailPageStart: 0,
-            thumbnailHitTargets: [],
-            thumbnailFrameMats: [],
-            thumbnailImageMats: [],
-            detailMat: new THREE.MeshBasicMaterial({
-              color: 0xffffff,
-              transparent: true,
-              opacity: 1,
-              toneMapped: false,
-              side: THREE.DoubleSide,
-            }),
-            detailTexture: null,
-            detailMesh: null,
-            detailScrollThumbMesh: null,
-            detailAllLines: [],
-            detailVisibleLines: 0,
-            detailScrollOffset: 0,
-            detailScrollMax: 0,
-            updateDetailTexture: () => {},
-            techBadgeRoot: null,
-            techBadgeFx: [],
-          };
-          const applyImageFit = (
-            imageAspect?: number,
-            texture?: THREE.Texture,
-            nextFitMode?: "contain" | "cover",
-          ) => {
-            const activeFitMode = nextFitMode ?? panelRecord.fitMode;
-            if (
-              !imageAspect ||
-              !Number.isFinite(imageAspect) ||
-              imageAspect <= 0
-            ) {
-              imagePlane.scale.set(panelWidth, panelHeight, 1);
-              if (texture) {
-                panelRecord.baseRepeat.set(1, 1);
-                panelRecord.baseOffset.set(0, 0);
-                texture.repeat.copy(panelRecord.baseRepeat);
-                texture.offset.copy(panelRecord.baseOffset);
-                texture.needsUpdate = true;
-              }
-              return;
-            }
-            const frameAspect = panelWidth / panelHeight;
-            let displayWidth = panelWidth;
-            let displayHeight = panelHeight;
-            if (activeFitMode === "cover") {
-              // Cover mode uses UV crop in a fixed viewport, which gives us
-              // CSS-like overflow:hidden behavior and a stable base for pan/zoom.
-              displayWidth = panelWidth;
-              displayHeight = panelHeight;
-              if (texture) {
-                texture.wrapS = THREE.ClampToEdgeWrapping;
-                texture.wrapT = THREE.ClampToEdgeWrapping;
-                if (imageAspect > frameAspect) {
-                  const visibleX = frameAspect / imageAspect;
-                  panelRecord.baseRepeat.set(visibleX, 1);
-                  panelRecord.baseOffset.set((1 - visibleX) * 0.5, 0);
-                } else {
-                  const visibleY = imageAspect / frameAspect;
-                  panelRecord.baseRepeat.set(1, visibleY);
-                  // Top-align cover images when vertical crop is applied.
-                  panelRecord.baseOffset.set(0, 1 - visibleY);
-                }
-                texture.repeat.copy(panelRecord.baseRepeat);
-                texture.offset.copy(panelRecord.baseOffset);
-                texture.needsUpdate = true;
-              }
-            } else {
-              if (texture) {
-                panelRecord.baseRepeat.set(1, 1);
-                panelRecord.baseOffset.set(0, 0);
-                texture.repeat.copy(panelRecord.baseRepeat);
-                texture.offset.copy(panelRecord.baseOffset);
-                texture.needsUpdate = true;
-              }
-              if (imageAspect > frameAspect) {
-                displayWidth = panelWidth;
-                displayHeight = panelWidth / imageAspect;
-              } else {
-                displayHeight = panelHeight;
-                displayWidth = panelHeight * imageAspect;
-              }
-            }
-            imagePlane.scale.set(displayWidth, displayHeight, 1);
-          };
-          applyImageFit();
-          const detailWidth = panelWidth * 0.44;
-          const stripWidth = panelWidth + detailWidth;
-          const detailHeight = panelHeight;
-          const imageLiftY = 0;
-          const detailCenterY = 0;
-          frame.position.y = imageLiftY;
-          imagePlane.position.y = imageLiftY;
-          const detailTextureOpts = {
-            // Match the narrower detail panel aspect to avoid stretched typography.
-            width: 800,
-            height: 1024,
-            bgColor: "rgba(8, 20, 34, 0.58)",
-            lineColor: "rgba(120, 180, 255, 0.75)",
-            textColor: "rgba(228, 240, 255, 0.96)",
-            showLine: true,
-            fontSize: 25,
-            lineSpacing: 33,
-            textAlign: "left" as const,
-            padding: 44,
-          };
-          const updateDetailTexture = () => {
-            panelRecord.detailVisibleLines = Math.max(
-              1,
-              Math.floor(
-                (detailTextureOpts.height - detailTextureOpts.padding * 2) /
-                  detailTextureOpts.lineSpacing,
-              ),
-            );
-            panelRecord.detailScrollMax = Math.max(
-              0,
-              panelRecord.detailAllLines.length -
-                panelRecord.detailVisibleLines,
-            );
-            panelRecord.detailScrollOffset = THREE.MathUtils.clamp(
-              panelRecord.detailScrollOffset,
-              0,
-              panelRecord.detailScrollMax,
-            );
-            const visibleLines = panelRecord.detailAllLines.slice(
-              panelRecord.detailScrollOffset,
-              panelRecord.detailScrollOffset + panelRecord.detailVisibleLines,
-            );
-            panelRecord.detailTexture?.dispose();
-            panelRecord.detailTexture = createDetailTexture(
-              visibleLines,
-              detailTextureOpts,
-            );
-            panelRecord.detailMat.map = panelRecord.detailTexture;
-            panelRecord.detailMat.needsUpdate = true;
-            const thumb = panelRecord.detailScrollThumbMesh;
-            if (!thumb) return;
-            const hasOverflow = panelRecord.detailScrollMax > 0;
-            detailScrollTrack.visible = hasOverflow;
-            thumb.visible = hasOverflow;
-            if (!hasOverflow) return;
-            const ratio =
-              panelRecord.detailVisibleLines /
-              Math.max(
-                panelRecord.detailAllLines.length,
-                panelRecord.detailVisibleLines,
-              );
-            const trackHeight = 0.78;
-            const thumbHeight = THREE.MathUtils.clamp(
-              trackHeight * ratio,
-              0.16,
-              0.78,
-            );
-            thumb.scale.y = thumbHeight;
-            const t =
-              panelRecord.detailScrollOffset /
-              Math.max(panelRecord.detailScrollMax, 1);
-            thumb.position.y = THREE.MathUtils.lerp(
-              trackHeight * 0.5 - thumbHeight * 0.5,
-              -trackHeight * 0.5 + thumbHeight * 0.5,
-              t,
-            );
-          };
-          panelRecord.updateDetailTexture = updateDetailTexture;
-          const setPanelDetailForMedia = (media: ShowcaseResolvedMediaItem) => {
-            const mediaLabel =
-              media.type === "youtube"
-                ? "▶ Video (YouTube)"
-                : media.type === "video"
-                  ? "▶ Video"
-                  : "▣ Image";
-            const detailDescription =
-              media.description ||
-              media.variantDescription ||
-              entry.description ||
-              "";
-            const detailTechs =
-              panelRecord.clientVariants.length > 0
-                ? panelRecord.clientVariants[panelRecord.activeVariantIndex]
-                    ?.technologies ||
-                  entry.technologies ||
-                  []
-                : entry.technologies || [];
-            const detailYear = media.variantYear ?? entry.year;
-            const descriptionLines = wrapTextLines(detailDescription, 34);
-            panelRecord.detailAllLines = [
-              media.variantTitle || media.title || entry.title,
-              mediaLabel,
-              "",
-              ...descriptionLines,
-              ...(detailYear ? ["", `Year: ${detailYear}`] : []),
-            ].filter((line) => line !== undefined);
-            panelRecord.detailScrollOffset = 0;
-            updateDetailTexture();
-            updateTechBadges(detailTechs);
-          };
-
-          const techBadgeRoot = new THREE.Group();
-          const imageSeamX = side < 0 ? -panelWidth * 0.5 : panelWidth * 0.5;
-          const imageInward = side < 0 ? 1 : -1;
-          techBadgeRoot.position.set(imageSeamX, imageLiftY, 0.16);
-          techBadgeRoot.visible = false;
-          techBadgeRoot.renderOrder = 160;
-          panelRecord.techBadgeRoot = techBadgeRoot;
-          const techBadgeMeshes: THREE.Mesh[] = [];
-          const clearTechBadges = () => {
-            panelRecord.techBadgeFx = [];
-            techBadgeMeshes.forEach((mesh) => {
-              if (mesh.material) {
-                const mat = mesh.material as THREE.MeshBasicMaterial;
-                if (mat.map) mat.map.dispose();
-                mat.dispose();
-              }
-              mesh.geometry.dispose();
-              techBadgeRoot.remove(mesh);
-            });
-            techBadgeMeshes.length = 0;
-          };
-          const updateTechBadges = (techs: string[]) => {
-            clearTechBadges();
-            const list = (techs || []).filter(Boolean).slice(0, 5);
-            techBadgeRoot.visible = list.length > 0;
-            if (list.length === 0) return;
-            const badgeWidth = panelWidth * 0.085;
-            const badgeHeight = panelHeight * 0.05;
-            const badgeGap = badgeHeight * 0.32;
-            const stackHeight =
-              list.length * badgeHeight +
-              Math.max(0, list.length - 1) * badgeGap;
-            const startY = stackHeight * 0.5 - badgeHeight * 0.5;
-            // Overlap 25% into description side; rest remains on image side.
-            const badgeX = imageInward * badgeWidth * 0.25;
-
-            list.forEach((tech, idx) => {
-              const y = startY - idx * (badgeHeight + badgeGap);
-              const badgeTex = createDetailTexture([tech.toUpperCase()], {
-                width: 1024,
-                height: 224,
-                bgColor: "rgba(0, 0, 0, 0.96)",
-                lineColor: "rgba(255, 255, 255, 0.92)",
-                textColor: "rgba(255, 255, 255, 0.98)",
-                showLine: false,
-                fontSize: 92,
-                fontFamily:
-                  "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
-                fontWeight: 700,
-                lineSpacing: 102,
-                textAlign: "center" as const,
-                padding: 18,
-                centerBlock: true,
-                crispUI: true,
-              });
-              const badge = new THREE.Mesh(
-                new THREE.PlaneGeometry(badgeWidth, badgeHeight),
-                new THREE.MeshBasicMaterial({
-                  map: badgeTex,
-                  transparent: true,
-                  opacity: 0.92,
-                  side: THREE.DoubleSide,
-                  toneMapped: false,
-                  depthWrite: false,
-                  depthTest: false,
-                }),
-              );
-              badge.position.set(badgeX, y, 0.02);
-              badge.renderOrder = 164;
-              const badgeFrame = new THREE.Mesh(
-                new THREE.PlaneGeometry(badgeWidth * 1.05, badgeHeight * 1.08),
-                new THREE.MeshBasicMaterial({
-                  color: 0xffffff,
-                  transparent: true,
-                  opacity: 0.62,
-                  side: THREE.DoubleSide,
-                  toneMapped: false,
-                  depthWrite: false,
-                  depthTest: false,
-                }),
-              );
-              badgeFrame.position.set(badgeX, y, 0.01);
-              badgeFrame.renderOrder = 163;
-              techBadgeRoot.add(badgeFrame);
-              techBadgeRoot.add(badge);
-              techBadgeMeshes.push(badgeFrame, badge);
-              panelRecord.techBadgeFx.push({
-                mat: badge.material as THREE.MeshBasicMaterial,
-                baseOpacity: 0.92,
-                phase: idx * 0.55,
-                baseColor: new THREE.Color(0xffffff),
-              });
-            });
-          };
-
-          const tabsRoot = new THREE.Group();
-          const showVariantTabs = panelRecord.clientVariants.length > 1;
-          const categoryBarHeight = panelHeight * 0.09;
-          const tabRowHeight = panelHeight * 0.098;
-          const tabAreaHeight = categoryBarHeight + tabRowHeight;
-          const tabAreaCenterX =
-            side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
-          tabsRoot.position.set(
-            tabAreaCenterX,
-            detailCenterY +
-              detailHeight * 0.5 +
-              tabAreaHeight * 0.5 +
-              panelHeight * 0.06,
-            0.03,
-          );
-          tabsRoot.renderOrder = 120;
-          tabsRoot.visible = showVariantTabs;
-          const categoryGlass = new THREE.Mesh(
-            new THREE.PlaneGeometry(stripWidth, categoryBarHeight),
-            new THREE.MeshBasicMaterial({
-              color: 0x214f7a,
-              transparent: true,
-              opacity: 0.88,
-              side: THREE.FrontSide,
-              depthWrite: false,
-              depthTest: true,
-              toneMapped: false,
-            }),
-          );
-          categoryGlass.position.y = tabRowHeight * 0.5;
-          categoryGlass.renderOrder = 120;
-          tabsRoot.add(categoryGlass);
-          const categoryFrame = new THREE.Mesh(
-            new THREE.PlaneGeometry(
-              stripWidth * 1.01,
-              categoryBarHeight * 1.04,
-            ),
-            new THREE.MeshBasicMaterial({
-              color: 0x39d7ff,
-              transparent: true,
-              opacity: 0.34,
-              side: THREE.FrontSide,
-              depthWrite: false,
-              depthTest: true,
-              toneMapped: false,
-            }),
-          );
-          categoryFrame.position.copy(categoryGlass.position);
-          categoryFrame.position.z = -0.01;
-          categoryFrame.renderOrder = 121;
-          tabsRoot.add(categoryFrame);
-          const categoryLabelTex = createDetailTexture(
-            [
-              `${entry.title.toUpperCase()}  •  ${panelRecord.clientVariants.length} PROJECTS`,
-            ],
-            {
-              // Match very wide title-bar aspect to avoid narrow/tall glyph distortion.
-              width: 4096,
-              height: 128,
-              bgColor: "rgba(0,0,0,0)",
-              lineColor: "rgba(0,0,0,0)",
-              textColor: "rgba(172, 229, 255, 0.96)",
-              showLine: false,
-              fontSize: 32,
-              fontFamily:
-                "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
-              fontWeight: 600,
-              lineSpacing: 40,
-              textAlign: "left" as const,
-              padding: 36,
-              centerBlock: true,
-              crispUI: true,
-            },
-          );
-          const categoryLabel = new THREE.Mesh(
-            new THREE.PlaneGeometry(
-              stripWidth * 0.965,
-              categoryBarHeight * 0.66,
-            ),
-            new THREE.MeshBasicMaterial({
-              map: categoryLabelTex,
-              transparent: true,
-              opacity: 0.98,
-              side: THREE.FrontSide,
-              depthWrite: false,
-              depthTest: true,
-              toneMapped: false,
-            }),
-          );
-          categoryLabel.position.copy(categoryGlass.position);
-          categoryLabel.position.z = 0.02;
-          categoryLabel.renderOrder = 122;
-          tabsRoot.add(categoryLabel);
-
-          const tabsGlass = new THREE.Mesh(
-            new THREE.PlaneGeometry(stripWidth, tabRowHeight),
-            new THREE.MeshBasicMaterial({
-              color: 0x1f3f64,
-              transparent: true,
-              opacity: 0.86,
-              side: THREE.FrontSide,
-              depthWrite: false,
-              depthTest: true,
-              toneMapped: false,
-            }),
-          );
-          tabsGlass.position.y = -categoryBarHeight * 0.5;
-          tabsGlass.renderOrder = 123;
-          tabsRoot.add(tabsGlass);
-
-          const tabPaddingX = stripWidth * 0.03;
-          const tabGap = stripWidth * 0.007;
-          const tabWidths = panelRecord.clientVariants.map((variant) =>
-            THREE.MathUtils.clamp(
-              panelWidth * 0.085 + variant.title.length * panelWidth * 0.0065,
-              panelWidth * 0.11,
-              panelWidth * 0.24,
-            ),
-          );
-          const tabStartX = -stripWidth * 0.5 + tabPaddingX;
-          const tabFrameMats: THREE.MeshBasicMaterial[] = [];
-          const tabFillMats: THREE.MeshBasicMaterial[] = [];
-          const tabLabelMats: THREE.MeshBasicMaterial[] = [];
-          const updateVariantTabVisualState = () => {
-            tabFrameMats.forEach((mat, tabIndex) => {
-              const active = tabIndex === panelRecord.activeVariantIndex;
-              mat.opacity = active ? 0.98 : 0.72;
-              mat.color.set(active ? 0xeaf7ff : 0x8fd3ff);
-            });
-            tabFillMats.forEach((mat, tabIndex) => {
-              const active = tabIndex === panelRecord.activeVariantIndex;
-              mat.opacity = active ? 0.94 : 0.86;
-              mat.color.set(active ? 0x3f668f : 0x2c4d70);
-            });
-            tabLabelMats.forEach((mat, tabIndex) => {
-              const active = tabIndex === panelRecord.activeVariantIndex;
-              mat.opacity = active ? 1 : 0.94;
-            });
-          };
-
-          panelRecord.clientVariants.forEach((variant, variantIndex) => {
-            const tabGroup = new THREE.Group();
-            const widthBefore = tabWidths
-              .slice(0, variantIndex)
-              .reduce((sum, w) => sum + w, 0);
-            const x =
-              tabStartX +
-              widthBefore +
-              variantIndex * tabGap +
-              tabWidths[variantIndex] * 0.5;
-            tabGroup.position.set(x, -categoryBarHeight * 0.5, 0.04);
-            const tabFill = new THREE.Mesh(
-              new THREE.PlaneGeometry(
-                tabWidths[variantIndex] * 0.982,
-                tabRowHeight * 0.72,
-              ),
-              new THREE.MeshBasicMaterial({
-                color: 0x2c4d70,
-                transparent: true,
-                opacity: 0.86,
-                side: THREE.FrontSide,
-                depthWrite: false,
-                depthTest: true,
-                toneMapped: false,
-              }),
-            );
-            tabFill.position.z = 0.004;
-            tabFill.renderOrder = 130 + variantIndex * 3;
-            const tabFrame = new THREE.Mesh(
-              new THREE.PlaneGeometry(
-                tabWidths[variantIndex] * 0.992,
-                tabRowHeight * 0.76,
-              ),
-              new THREE.MeshBasicMaterial({
-                color: 0x8fd3ff,
-                transparent: true,
-                opacity: 0.72,
-                side: THREE.FrontSide,
-                depthWrite: false,
-                depthTest: true,
-                toneMapped: false,
-              }),
-            );
-            tabFrame.position.z = 0.01;
-            tabFrame.renderOrder = 131 + variantIndex * 3;
-            tabFillMats.push(tabFill.material as THREE.MeshBasicMaterial);
-            tabFrameMats.push(tabFrame.material as THREE.MeshBasicMaterial);
-            const tabLabelTex = createDetailTexture([variant.title], {
-              // Keep texture ratio close to tab geometry ratio to prevent stretch.
-              width: 1536,
-              height: 320,
-              bgColor: "rgba(0,0,0,0)",
-              lineColor: "rgba(0,0,0,0)",
-              textColor: "rgba(235, 244, 255, 0.96)",
-              showLine: false,
-              fontSize: 108,
-              fontFamily:
-                "'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
-              fontWeight: 500,
-              lineSpacing: 120,
-              textAlign: "center" as const,
-              padding: 24,
-              centerBlock: true,
-              crispUI: true,
-            });
-            const tabLabel = new THREE.Mesh(
-              new THREE.PlaneGeometry(
-                tabWidths[variantIndex] * 0.93,
-                tabRowHeight * 0.44,
-              ),
-              new THREE.MeshBasicMaterial({
-                map: tabLabelTex,
-                transparent: true,
-                opacity: 0.98,
-                side: THREE.FrontSide,
-                depthWrite: false,
-                depthTest: true,
-                toneMapped: false,
-              }),
-            );
-            tabLabelMats.push(tabLabel.material as THREE.MeshBasicMaterial);
-            tabLabel.position.z = 0.012;
-            tabLabel.renderOrder = 132 + variantIndex * 3;
-            tabGroup.add(tabFill);
-            tabGroup.add(tabFrame);
-            tabGroup.add(tabLabel);
-            tabsRoot.add(tabGroup);
-            panelRecord.thumbnailHitTargets.push({
-              mesh: tabLabel,
-              type: "variant",
-              variantIndex,
-            });
-          });
-          updateVariantTabVisualState();
-
-          const thumbnailRoot = new THREE.Group();
-          const stripHeight = panelHeight * 0.28;
-          const stripCenterX =
-            side < 0 ? -detailWidth * 0.5 : detailWidth * 0.5;
-          thumbnailRoot.position.set(
-            stripCenterX,
-            detailCenterY -
-              detailHeight * 0.5 -
-              stripHeight * 0.5 -
-              panelHeight * 0.07,
-            0.02,
-          );
-          const stripGlass = new THREE.Mesh(
-            new THREE.PlaneGeometry(stripWidth, stripHeight),
-            new THREE.MeshBasicMaterial({
-              color: 0x0e223b,
-              transparent: true,
-              opacity: 0.72,
-              side: THREE.DoubleSide,
-            }),
-          );
-          thumbnailRoot.add(stripGlass);
-          thumbnailRoot.visible = hasGalleryMedia;
-          const stripFrame = new THREE.Mesh(
-            new THREE.PlaneGeometry(stripWidth * 1.015, stripHeight * 1.07),
-            new THREE.MeshBasicMaterial({
-              color: 0x39d7ff,
-              transparent: true,
-              opacity: 0.32,
-              side: THREE.DoubleSide,
-            }),
-          );
-          stripFrame.position.z = -0.02;
-          thumbnailRoot.add(stripFrame);
-
-          const arrowTextureOpts = {
-            width: 256,
-            height: 256,
-            bgColor: "rgba(10, 16, 28, 0.86)",
-            lineColor: "rgba(145, 205, 255, 0.55)",
-            textColor: "rgba(229, 241, 255, 0.96)",
-            showLine: false,
-            fontSize: 138,
-            lineSpacing: 140,
-            textAlign: "center" as const,
-            padding: 32,
-          };
-          const prevArrowTex = createDetailTexture(["‹"], arrowTextureOpts);
-          const nextArrowTex = createDetailTexture(["›"], arrowTextureOpts);
-          const createArrowButton = (
-            tex: THREE.Texture,
-            x: number,
-            action: "prev" | "next",
-          ) => {
-            const mesh = new THREE.Mesh(
-              new THREE.PlaneGeometry(stripHeight * 0.4, stripHeight * 0.56),
-              new THREE.MeshBasicMaterial({
-                map: tex,
-                transparent: true,
-                opacity: 0.94,
-                side: THREE.DoubleSide,
-              }),
-            );
-            mesh.position.set(x, 0, 0.05);
-            thumbnailRoot.add(mesh);
-            panelRecord.thumbnailHitTargets.push({ mesh, type: action });
-            return mesh;
-          };
-          const prevArrowMesh = createArrowButton(
-            prevArrowTex,
-            -stripWidth * 0.46,
-            "prev",
-          );
-          const nextArrowMesh = createArrowButton(
-            nextArrowTex,
-            stripWidth * 0.46,
-            "next",
-          );
-
-          const thumbSlotsWidthNarrow = stripWidth * 0.56;
-          const thumbWidth =
-            thumbSlotsWidthNarrow / PROJECT_SHOWCASE_THUMBS_PER_PAGE - 0.08;
-          const thumbHeight = stripHeight * 0.66;
-          const thumbGap = 0.08;
-          const thumbStep = thumbWidth + thumbGap;
-          const thumbSlideDuration = 0.34;
-          const thumbBaseY = 0;
-          const thumbBaseZ = 0.06;
-          const thumbOffsetStart =
-            -((PROJECT_SHOWCASE_THUMBS_PER_PAGE - 1) * thumbStep) / 2;
-          const thumbGroups: THREE.Group[] = [];
-          const thumbIndexByGroup = new Map<THREE.Group, number>();
-          const thumbFrameByMediaIndex = new Map<
-            number,
-            THREE.MeshBasicMaterial
-          >();
-          const thumbImageByMediaIndex = new Map<
-            number,
-            THREE.MeshBasicMaterial
-          >();
-          const activeArrowColor = new THREE.Color(0xdff4ff);
-          const disabledArrowColor = new THREE.Color(0x8caec9);
-          const getVariantMediaIndices = () => {
-            if (panelRecord.clientVariants.length === 0) {
-              return panelRecord.mediaItems.map((_, idx) => idx);
-            }
-            return panelRecord.mediaItems
-              .map((item, idx) =>
-                item.variantIndex === panelRecord.activeVariantIndex ? idx : -1,
-              )
-              .filter((idx) => idx >= 0);
-          };
-
-          mediaItems.forEach((mediaItem, mediaIndex) => {
-            const thumbGroup = new THREE.Group();
-            const thumbFrame = new THREE.Mesh(
-              new THREE.PlaneGeometry(thumbWidth + 0.05, thumbHeight + 0.05),
-              new THREE.MeshBasicMaterial({
-                color: 0x88cfff,
-                transparent: true,
-                opacity: 0.26,
-                side: THREE.DoubleSide,
-              }),
-            );
-            const thumbImageMat = new THREE.MeshBasicMaterial({
-              color: 0x95acc8,
-              transparent: true,
-              opacity: 0.88,
-              side: THREE.DoubleSide,
-            });
-            const thumbImage = new THREE.Mesh(
-              new THREE.PlaneGeometry(thumbWidth, thumbHeight),
-              thumbImageMat,
-            );
-            thumbImage.position.z = 0.01;
-            const applyThumbCoverTopLeftFit = (
-              imageAspect?: number,
-              texture?: THREE.Texture,
-            ) => {
-              if (
-                !imageAspect ||
-                !Number.isFinite(imageAspect) ||
-                imageAspect <= 0
-              ) {
-                if (texture) {
-                  texture.repeat.set(1, 1);
-                  texture.offset.set(0, 0);
-                  texture.needsUpdate = true;
-                }
-                return;
-              }
-              const frameAspect = thumbWidth / thumbHeight;
-              if (!texture) return;
-              texture.wrapS = THREE.ClampToEdgeWrapping;
-              texture.wrapT = THREE.ClampToEdgeWrapping;
-              if (imageAspect > frameAspect) {
-                const visibleX = frameAspect / imageAspect;
-                texture.repeat.set(visibleX, 1);
-                texture.offset.set(0, 0);
-              } else {
-                const visibleY = imageAspect / frameAspect;
-                texture.repeat.set(1, visibleY);
-                texture.offset.set(0, 1 - visibleY);
-              }
-              texture.needsUpdate = true;
-            };
-            textureLoader.load(
-              mediaItem.textureUrl,
-              (texture) => {
-                texture.colorSpace = THREE.SRGBColorSpace;
-                texture.wrapS = THREE.ClampToEdgeWrapping;
-                texture.wrapT = THREE.ClampToEdgeWrapping;
-                texture.minFilter = THREE.LinearMipmapLinearFilter;
-                texture.magFilter = THREE.LinearFilter;
-                texture.anisotropy = Math.min(
-                  8,
-                  rendererRef.current?.capabilities.getMaxAnisotropy?.() ?? 1,
-                );
-                thumbImageMat.map = texture;
-                thumbImageMat.color.set(0xffffff);
-                const img = texture.image as
-                  | { width?: number; height?: number }
-                  | undefined;
-                const imgAspect =
-                  img?.width && img?.height
-                    ? img.width / img.height
-                    : undefined;
-                applyThumbCoverTopLeftFit(imgAspect, texture);
-                thumbImageMat.needsUpdate = true;
-              },
-              undefined,
-              () => {
-                thumbImageMat.color.set(0x5c6a86);
-                thumbImageMat.needsUpdate = true;
-              },
-            );
-            thumbGroup.add(thumbFrame, thumbImage);
-            thumbnailRoot.add(thumbGroup);
-            thumbGroups.push(thumbGroup);
-            thumbIndexByGroup.set(thumbGroup, mediaIndex);
-            panelRecord.thumbnailFrameMats.push(
-              thumbFrame.material as THREE.MeshBasicMaterial,
-            );
-            panelRecord.thumbnailImageMats[mediaIndex] = thumbImageMat;
-            thumbFrameByMediaIndex.set(
-              mediaIndex,
-              thumbFrame.material as THREE.MeshBasicMaterial,
-            );
-            thumbImageByMediaIndex.set(mediaIndex, thumbImageMat);
-            panelRecord.thumbnailHitTargets.push({
-              mesh: thumbImage,
-              type: "media",
-              mediaIndex,
-            });
-          });
-
-          const updateThumbnailLayout = ({
-            animate = false,
-            previousPageStart,
-          }: {
-            animate?: boolean;
-            previousPageStart?: number;
-          } = {}) => {
-            const variantMediaIndices = getVariantMediaIndices();
-            const maxPageStart = Math.max(
-              0,
-              variantMediaIndices.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
-            );
-            const beforePageStart =
-              typeof previousPageStart === "number"
-                ? THREE.MathUtils.clamp(previousPageStart, 0, maxPageStart)
-                : panelRecord.thumbnailPageStart;
-            panelRecord.thumbnailPageStart = THREE.MathUtils.clamp(
-              panelRecord.thumbnailPageStart,
-              0,
-              maxPageStart,
-            );
-            const pageEnd =
-              panelRecord.thumbnailPageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE;
-            thumbGroups.forEach((group) => {
-              const mediaIndex = thumbIndexByGroup.get(group) ?? -1;
-              const filteredPosition = variantMediaIndices.indexOf(mediaIndex);
-              const wasVisible =
-                filteredPosition >= beforePageStart &&
-                filteredPosition <
-                  beforePageStart + PROJECT_SHOWCASE_THUMBS_PER_PAGE;
-              const willBeVisible =
-                filteredPosition >= panelRecord.thumbnailPageStart &&
-                filteredPosition < pageEnd;
-              const shouldAnimate =
-                animate && beforePageStart !== panelRecord.thumbnailPageStart;
-              const currentSlot = filteredPosition - beforePageStart;
-              const nextSlot =
-                filteredPosition - panelRecord.thumbnailPageStart;
-              const fromX = thumbOffsetStart + currentSlot * thumbStep;
-              const toX = thumbOffsetStart + nextSlot * thumbStep;
-              const frameMat = thumbFrameByMediaIndex.get(mediaIndex);
-              const imageMat = thumbImageByMediaIndex.get(mediaIndex);
-              if (filteredPosition < 0 || (!wasVisible && !willBeVisible)) {
-                group.visible = false;
-                return;
-              }
-              group.visible = true;
-              if (!shouldAnimate) {
-                group.position.set(toX, thumbBaseY, thumbBaseZ);
-                group.scale.set(1, 1, 1);
-                return;
-              }
-              gsap.killTweensOf(group.position);
-              gsap.killTweensOf(group.scale);
-              if (frameMat) gsap.killTweensOf(frameMat);
-              if (imageMat) gsap.killTweensOf(imageMat);
-              group.position.set(fromX, thumbBaseY, thumbBaseZ);
-              gsap.to(group.position, {
-                x: toX,
-                duration: thumbSlideDuration,
-                ease: "power3.out",
-              });
-              if (!wasVisible && willBeVisible) {
-                group.scale.set(0.92, 0.92, 1);
-                gsap.to(group.scale, {
-                  x: 1,
-                  y: 1,
-                  duration: thumbSlideDuration,
-                  ease: "power2.out",
-                });
-              } else if (wasVisible && !willBeVisible) {
-                gsap.to(group.scale, {
-                  x: 0.92,
-                  y: 0.92,
-                  duration: thumbSlideDuration,
-                  ease: "power2.out",
-                  onComplete: () => {
-                    if (!willBeVisible) group.visible = false;
-                    group.scale.set(1, 1, 1);
-                  },
-                });
-              }
-            });
-            const showNav =
-              variantMediaIndices.length > PROJECT_SHOWCASE_THUMBS_PER_PAGE;
-            prevArrowMesh.visible = showNav;
-            nextArrowMesh.visible = showNav;
-            const prevEnabled = panelRecord.thumbnailPageStart > 0;
-            const nextEnabled =
-              panelRecord.thumbnailPageStart +
-                PROJECT_SHOWCASE_THUMBS_PER_PAGE <
-              variantMediaIndices.length;
-            const prevMat = prevArrowMesh.material as THREE.MeshBasicMaterial;
-            const nextMat = nextArrowMesh.material as THREE.MeshBasicMaterial;
-            prevMat.opacity = prevEnabled ? 0.96 : 0.36;
-            nextMat.opacity = nextEnabled ? 0.96 : 0.36;
-            prevMat.color.copy(
-              prevEnabled ? activeArrowColor : disabledArrowColor,
-            );
-            nextMat.color.copy(
-              nextEnabled ? activeArrowColor : disabledArrowColor,
-            );
-          };
-
-          const updateThumbnailVisualState = () => {
-            panelRecord.thumbnailFrameMats.forEach((mat, mediaIndex) => {
-              const active = mediaIndex === panelRecord.activeMediaIndex;
-              mat.opacity = active ? 0.9 : 0.26;
-              mat.color.set(active ? 0xeaf7ff : 0x88cfff);
-              const imageMat = panelRecord.thumbnailImageMats[mediaIndex];
-              if (imageMat) {
-                imageMat.opacity = active ? 1 : 0.88;
-              }
-            });
-          };
-
-          let mediaLoadNonce = 0;
-          const videoCache = new Map<
-            number,
-            { video: HTMLVideoElement; texture: THREE.VideoTexture }
-          >();
-          const setActiveMedia = (mediaIndex: number) => {
-            const variantMediaIndices = getVariantMediaIndices();
-            if (variantMediaIndices.length === 0) return;
-            const safeMediaIndex = THREE.MathUtils.clamp(
-              variantMediaIndices.includes(mediaIndex)
-                ? mediaIndex
-                : variantMediaIndices[0],
-              variantMediaIndices[0],
-              variantMediaIndices[variantMediaIndices.length - 1],
-            );
-            const media = panelRecord.mediaItems[safeMediaIndex];
-            if (!media) return;
-            const mediaChanged =
-              safeMediaIndex !== panelRecord.activeMediaIndex;
-            panelRecord.activeMediaIndex = safeMediaIndex;
-            panelRecord.fitMode = media.fit;
-            panelRecord.zoom = 1;
-            panelRecord.panX = 0;
-            panelRecord.panY = 0;
-            if (
-              variantMediaIndices.indexOf(panelRecord.activeMediaIndex) <
-                panelRecord.thumbnailPageStart ||
-              variantMediaIndices.indexOf(panelRecord.activeMediaIndex) >=
-                panelRecord.thumbnailPageStart +
-                  PROJECT_SHOWCASE_THUMBS_PER_PAGE
-            ) {
-              panelRecord.thumbnailPageStart =
-                Math.floor(
-                  variantMediaIndices.indexOf(panelRecord.activeMediaIndex) /
-                    PROJECT_SHOWCASE_THUMBS_PER_PAGE,
-                ) * PROJECT_SHOWCASE_THUMBS_PER_PAGE;
-            }
-            updateThumbnailLayout();
-            updateThumbnailVisualState();
-            setPanelDetailForMedia(media);
-            const loadNonce = ++mediaLoadNonce;
-            const startMainMediaFade = () => {
-              if (!mediaChanged) return;
-              panelRecord.mediaFadeStartMs = performance.now();
-              imageMat.opacity = 0;
-              imageMat.needsUpdate = true;
-            };
-            videoCache.forEach(({ video }, idx) => {
-              if (idx !== safeMediaIndex) {
-                video.pause();
-              }
-            });
-            if (media.type === "video" && media.videoUrl) {
-              let record = videoCache.get(safeMediaIndex);
-              if (!record) {
-                const video = document.createElement("video");
-                video.src = media.videoUrl;
-                video.crossOrigin = "anonymous";
-                video.loop = true;
-                video.muted = true;
-                video.playsInline = true;
-                video.preload = "auto";
-                const texture = new THREE.VideoTexture(video);
-                texture.colorSpace = THREE.SRGBColorSpace;
-                texture.minFilter = THREE.LinearFilter;
-                texture.magFilter = THREE.LinearFilter;
-                record = { video, texture };
-                videoCache.set(safeMediaIndex, record);
-              }
-              imageMat.map = record.texture;
-              imageMat.color.set(0xffffff);
-              panelRecord.texture = record.texture;
-              const startPlayback = () => {
-                if (loadNonce !== mediaLoadNonce) return;
-                startMainMediaFade();
-                record?.video.play().catch(() => {});
-                const vw = record?.video.videoWidth || 16;
-                const vh = record?.video.videoHeight || 9;
-                applyImageFit(vw / Math.max(1, vh), record?.texture, media.fit);
-                imageMat.needsUpdate = true;
-              };
-              if (record.video.readyState >= 1) {
-                startPlayback();
-              } else {
-                record.video.onloadedmetadata = startPlayback;
-                record.video.load();
-              }
-              return;
-            }
-            textureLoader.load(
-              media.textureUrl,
-              (texture) => {
-                if (loadNonce !== mediaLoadNonce) return;
-                startMainMediaFade();
-                texture.colorSpace = THREE.SRGBColorSpace;
-                texture.minFilter = THREE.LinearMipmapLinearFilter;
-                texture.magFilter = THREE.LinearFilter;
-                texture.anisotropy = Math.min(
-                  8,
-                  rendererRef.current?.capabilities.getMaxAnisotropy?.() ?? 1,
-                );
-                imageMat.map = texture;
-                imageMat.color.set(0xffffff);
-                panelRecord.texture = texture;
-                const img = texture.image as
-                  | { width?: number; height?: number }
-                  | undefined;
-                const imgAspect =
-                  img?.width && img?.height
-                    ? img.width / img.height
-                    : undefined;
-                applyImageFit(imgAspect, texture, media.fit);
-                imageMat.needsUpdate = true;
-              },
-              undefined,
-              () => {
-                if (loadNonce !== mediaLoadNonce) return;
-                startMainMediaFade();
-                panelRecord.texture = null;
-                imageMat.map = null;
-                imageMat.color.set(0x5c6a86);
-                panelRecord.baseRepeat.set(1, 1);
-                panelRecord.baseOffset.set(0, 0);
-                imageMat.needsUpdate = true;
-              },
-            );
-          };
-          panelRecord.setActiveMedia = setActiveMedia;
-          panelRecord.setActiveVariant = (variantIndex: number) => {
-            if (panelRecord.clientVariants.length === 0) return;
-            const safeVariantIndex = THREE.MathUtils.clamp(
-              variantIndex,
-              0,
-              panelRecord.clientVariants.length - 1,
-            );
-            panelRecord.activeVariantIndex = safeVariantIndex;
-            updateVariantTabVisualState();
-            const variantMediaIndices = getVariantMediaIndices();
-            thumbnailRoot.visible = variantMediaIndices.length > 1;
-            panelRecord.thumbnailPageStart = 0;
-            if (variantMediaIndices.length > 0) {
-              panelRecord.setActiveMedia(variantMediaIndices[0]);
-            } else {
-              updateThumbnailLayout();
-              updateThumbnailVisualState();
-              bumpProjectShowcaseViewportTick();
-            }
-          };
-          panelRecord.setThumbnailPageStart = (pageStart: number) => {
-            const variantMediaIndices = getVariantMediaIndices();
-            const maxPageStart = Math.max(
-              0,
-              variantMediaIndices.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
-            );
-            const previousPageStart = panelRecord.thumbnailPageStart;
-            panelRecord.thumbnailPageStart = THREE.MathUtils.clamp(
-              pageStart,
-              0,
-              maxPageStart,
-            );
-            updateThumbnailLayout({ animate: true, previousPageStart });
-            updateThumbnailVisualState();
-            bumpProjectShowcaseViewportTick();
-          };
-          panelRecord.triggerThumbnailNavPress = (
-            direction: "prev" | "next",
-          ) => {
-            const variantMediaIndices = getVariantMediaIndices();
-            const maxPageStart = Math.max(
-              0,
-              variantMediaIndices.length - PROJECT_SHOWCASE_THUMBS_PER_PAGE,
-            );
-            const canPrev = panelRecord.thumbnailPageStart > 0;
-            const canNext = panelRecord.thumbnailPageStart < maxPageStart;
-            const isPrev = direction === "prev";
-            const mesh = isPrev ? prevArrowMesh : nextArrowMesh;
-            const mat = mesh.material as THREE.MeshBasicMaterial;
-            const canMove = isPrev ? canPrev : canNext;
-            gsap.killTweensOf(mesh.scale);
-            gsap.killTweensOf(mat);
-            gsap.fromTo(
-              mesh.scale,
-              { x: 1, y: 1, z: 1 },
-              {
-                x: canMove ? 0.9 : 0.96,
-                y: canMove ? 0.9 : 0.96,
-                z: 1,
-                duration: 0.11,
-                ease: "power2.out",
-                yoyo: true,
-                repeat: 1,
-              },
-            );
-            gsap.fromTo(
-              mat,
-              { opacity: canMove ? 1 : 0.42 },
-              {
-                opacity: canMove ? 0.86 : 0.3,
-                duration: 0.11,
-                ease: "power2.out",
-                yoyo: true,
-                repeat: 1,
-              },
-            );
-          };
-          updateThumbnailLayout();
-          updateThumbnailVisualState();
-
-          panelGroup.add(frame);
-          panelGroup.add(imagePlane);
-          panelGroup.add(techBadgeRoot);
-          const detailMat = panelRecord.detailMat;
-          const detailPlane = new THREE.Mesh(
-            new THREE.PlaneGeometry(detailWidth, detailHeight),
-            detailMat,
-          );
-          panelRecord.detailMesh = detailPlane;
-          detailPlane.position.set(0, detailCenterY, -0.02);
-          const detailScrollTrack = new THREE.Mesh(
-            new THREE.PlaneGeometry(0.032, 0.78),
-            new THREE.MeshBasicMaterial({
-              color: 0x2f5c82,
-              transparent: true,
-              opacity: 0.5,
-              side: THREE.DoubleSide,
-            }),
-          );
-          detailScrollTrack.position.set(
-            detailPlane.position.x + detailWidth * 0.476,
-            detailCenterY,
-            detailPlane.position.z + 0.012,
-          );
-          const detailScrollThumb = new THREE.Mesh(
-            new THREE.PlaneGeometry(0.034, 0.28),
-            new THREE.MeshBasicMaterial({
-              color: 0xb8e3ff,
-              transparent: true,
-              opacity: 0.9,
-              side: THREE.DoubleSide,
-            }),
-          );
-          detailScrollThumb.position.set(
-            detailScrollTrack.position.x,
-            detailScrollTrack.position.y,
-            detailScrollTrack.position.z + 0.01,
-          );
-          panelRecord.detailScrollThumbMesh = detailScrollThumb;
-          const detailFrame = new THREE.Mesh(
-            new THREE.PlaneGeometry(detailWidth * 1.015, detailHeight * 1.015),
-            new THREE.MeshBasicMaterial({
-              color: 0x8cd3ff,
-              transparent: true,
-              opacity: 0.2,
-              side: THREE.DoubleSide,
-            }),
-          );
-          detailFrame.position.copy(detailPlane.position);
-          detailFrame.position.z -= 0.04;
-          const detailTop = detailCenterY + detailHeight * 0.5;
-          const detailBottom = detailCenterY - detailHeight * 0.5;
-          const tabsTop = tabsRoot.position.y + tabAreaHeight * 0.5;
-          const stripBottom = thumbnailRoot.position.y - stripHeight * 0.5;
-          const moduleTop = showVariantTabs ? tabsTop : detailTop;
-          const moduleBottom = panelHasAnyThumbStrip
-            ? stripBottom
-            : detailBottom;
-          const moduleHeight = (moduleTop - moduleBottom) * 1.01;
-          const moduleCenterY = (moduleTop + moduleBottom) * 0.5;
-          const moduleFrame = new THREE.Mesh(
-            new THREE.PlaneGeometry(stripWidth * 1.015, moduleHeight),
-            new THREE.MeshBasicMaterial({
-              color: 0x39d7ff,
-              transparent: true,
-              opacity: 0.24,
-              side: THREE.DoubleSide,
-            }),
-          );
-          moduleFrame.position.set(stripCenterX, moduleCenterY, -0.06);
-          panelGroup.add(detailPlane);
-          panelGroup.add(detailFrame);
-          panelGroup.add(detailScrollTrack);
-          panelGroup.add(detailScrollThumb);
-          panelGroup.add(tabsRoot);
-          panelGroup.add(thumbnailRoot);
-          panelGroup.add(moduleFrame);
-          if (panelRecord.clientVariants.length > 0) {
-            panelRecord.setActiveVariant(0);
-          } else {
-            panelRecord.setActiveMedia(0);
-          }
-          // Render cards in the overlay layer so they bypass HDR bloom/tonemapping.
-          panelGroup.traverse((child) => {
-            child.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
-          });
-          showcaseInteriorRoot.add(panelGroup);
-          panelRecords.push(panelRecord);
-        });
-      }
-
-      projectShowcasePanelsRef.current = panelRecords;
-      panelRecords.forEach((panel) => {
-        panel.group.visible = false;
-      });
-      const edgeRunPadding = 14;
-      const startPosRun =
-        aboutHallStartPositionRef.current != null
-          ? shaftBottomWorld + aboutHallStartPositionRef.current
-          : null;
-      const firstSlideRun =
-        slideRunPositions.length > 0 ? slideRunPositions[0] : runStart;
-      const lastSlideRun =
-        slideRunPositions.length > 0
-          ? slideRunPositions[slideRunPositions.length - 1]
-          : runStart;
-      const minRun = Math.min(
-        firstSlideRun - edgeRunPadding,
-        startPosRun != null ? startPosRun - 5 : firstSlideRun - edgeRunPadding,
-      );
-      const maxRun = lastSlideRun + edgeRunPadding + 40;
-
-      const elevatorCameraWallOffset = Math.min(
-        trenchWidth * 0.36,
-        Math.max(2.8, trenchWidth * 0.5 - 1.05),
-      );
-      const elevatorCameraDepthOffset = -Math.min(
-        2.4,
-        Math.max(1.2, trenchWidth * 0.2),
-      );
-      const initialRun = startPosRun ?? minRun + 10;
-      projectShowcaseTrackRef.current = {
-        axis: runAxis,
-        minRun,
-        maxRun,
-        centerCross: runAxis === "y" ? elevatorCameraWallOffset : 0,
-        cameraHeight: runAxis === "y" ? elevatorCameraDepthOffset : panelY,
-        lookAhead: THREE.MathUtils.clamp(panelSpacing * 1.9, 22, 48),
-        speed: THREE.MathUtils.clamp(panelSpacing * 0.1625, 2.5, 5.5),
-        cullHalfWindow: THREE.MathUtils.clamp(panelSpacing * 4.4, 70, 130),
-        startRun: initialRun,
-      };
-      projectShowcaseRunPosRef.current = initialRun;
-      setProjectShowcaseRunPosition(initialRun);
-      setProjectShowcaseFocus(0);
-
-      // --- Debug ruler (only with ?debug=true) ---
-      // Zero-based: 0 = bottom of elevator shaft (minRun).
-      if (IS_DEBUG && runAxis === "y") {
-        const rulerGroup = new THREE.Group();
-        rulerGroup.name = "ElevatorDebugRuler";
-        const rulerX = -(trenchWidth * 0.48);
-        const rulerZ = -1.2;
-        const rulerOrigin = shaftBottomWorld;
-        const tickSpacing = 5;
-        const labelEvery = 10;
-        const rulerBottomWorld =
-          Math.floor(rulerOrigin / tickSpacing) * tickSpacing;
-        const rulerTopWorld = Math.ceil(maxRun / tickSpacing) * tickSpacing;
-
-        const backbonePts = [
-          new THREE.Vector3(rulerX, rulerBottomWorld, rulerZ),
-          new THREE.Vector3(rulerX, rulerTopWorld, rulerZ),
-        ];
-        const backboneGeo = new THREE.BufferGeometry().setFromPoints(
-          backbonePts,
-        );
-        const backboneMat = new THREE.LineBasicMaterial({
-          color: 0x55ddff,
-          opacity: 0.6,
-          transparent: true,
-          depthTest: false,
-        });
-        const backboneLine = new THREE.Line(backboneGeo, backboneMat);
-        backboneLine.renderOrder = 998;
-        rulerGroup.add(backboneLine);
-
-        const makeTextSprite = (text: string, size: number, color: string) => {
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d")!;
-          canvas.width = 256;
-          canvas.height = 64;
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.font = "bold 64px Rajdhani, monospace";
-          ctx.fillStyle = color;
-          ctx.textAlign = "right";
-          ctx.textBaseline = "middle";
-          ctx.fillText(text, canvas.width - 8, canvas.height / 2);
-          const tex = new THREE.CanvasTexture(canvas);
-          tex.minFilter = THREE.LinearFilter;
-          const mat = new THREE.SpriteMaterial({
-            map: tex,
-            transparent: true,
-            depthTest: false,
-          });
-          const sprite = new THREE.Sprite(mat);
-          sprite.scale.set(size * (canvas.width / canvas.height), size, 1);
-          return sprite;
-        };
-
-        for (
-          let worldY = rulerBottomWorld;
-          worldY <= rulerTopWorld;
-          worldY += tickSpacing
-        ) {
-          const displayVal = Math.round(worldY - rulerOrigin);
-          const isLabel = displayVal % labelEvery === 0;
-          const tickLen = isLabel ? 1.2 : 0.5;
-          const tickPts = [
-            new THREE.Vector3(rulerX, worldY, rulerZ),
-            new THREE.Vector3(rulerX + tickLen, worldY, rulerZ),
-          ];
-          const tickGeo = new THREE.BufferGeometry().setFromPoints(tickPts);
-          const tickMat = new THREE.LineBasicMaterial({
-            color: isLabel ? 0x88eeff : 0x44aacc,
-            opacity: isLabel ? 0.8 : 0.4,
-            transparent: true,
-            depthTest: false,
-          });
-          rulerGroup.add(new THREE.Line(tickGeo, tickMat));
-
-          if (isLabel) {
-            const label = makeTextSprite(
-              String(displayVal),
-              1.0,
-              "rgba(136,238,255,0.9)",
-            );
-            label.position.set(rulerX - 0.8, worldY, rulerZ);
-            rulerGroup.add(label);
-          }
-        }
-
-        // Panel position markers (display zero-based values)
-        panelRecords.forEach((panel, idx) => {
-          const markerLen = 2.0;
-          const markerPts = [
-            new THREE.Vector3(rulerX - 0.3, panel.runPos, rulerZ),
-            new THREE.Vector3(rulerX + markerLen, panel.runPos, rulerZ),
-          ];
-          const markerGeo = new THREE.BufferGeometry().setFromPoints(markerPts);
-          const markerMat = new THREE.LineBasicMaterial({
-            color: 0xffaa44,
-            opacity: 0.9,
-            transparent: true,
-            depthTest: false,
-          });
-          rulerGroup.add(new THREE.Line(markerGeo, markerMat));
-          const panelDisplayVal = (panel.runPos - rulerOrigin).toFixed(1);
-          const slideLabel = makeTextSprite(
-            `S${idx + 1} @${panelDisplayVal}`,
-            0.8,
-            "rgba(255,170,68,0.95)",
-          );
-          slideLabel.position.set(
-            rulerX + markerLen + 0.6,
-            panel.runPos,
-            rulerZ,
-          );
-          rulerGroup.add(slideLabel);
-        });
-
-        // Horizontal tracking line at camera center
-        const trackLineWidth = trenchWidth * 0.9;
-        const trackLineGeo = new THREE.PlaneGeometry(trackLineWidth, 0.06);
-        const trackLineMat = new THREE.MeshBasicMaterial({
-          color: 0xff4466,
-          opacity: 0.7,
-          transparent: true,
-          depthTest: false,
-          side: THREE.DoubleSide,
-        });
-        const trackLineMesh = new THREE.Mesh(trackLineGeo, trackLineMat);
-        trackLineMesh.position.set(0, initialRun, rulerZ);
-        trackLineMesh.renderOrder = 999;
-        rulerGroup.add(trackLineMesh);
-
-        // Current-position label — create with a shared canvas for per-frame updates
-        const rulerLabelCanvas = document.createElement("canvas");
-        rulerLabelCanvas.width = 256;
-        rulerLabelCanvas.height = 64;
-        const rulerLabelCtx = rulerLabelCanvas.getContext("2d")!;
-        const posLabelTex = new THREE.CanvasTexture(rulerLabelCanvas);
-        posLabelTex.minFilter = THREE.LinearFilter;
-        const posLabelMat = new THREE.SpriteMaterial({
-          map: posLabelTex,
-          transparent: true,
-          depthTest: false,
-        });
-        const posLabel = new THREE.Sprite(posLabelMat);
-        posLabel.scale.set(1.2 * (256 / 64), 1.2, 1);
-        posLabel.position.set(rulerX + 3.0, initialRun, rulerZ);
-        posLabel.renderOrder = 999;
-        rulerGroup.add(posLabel);
-
-        showcaseRoot.add(rulerGroup);
-        projectShowcaseDebugRulerRef.current = {
-          group: rulerGroup,
-          trackingLine: trackLineMesh,
-          label: posLabel,
-          labelCanvas: rulerLabelCanvas,
-          labelCtx: rulerLabelCtx,
-          lastLabelText: "",
-          origin: rulerOrigin,
-        };
-      }
-
-      if (hallwayContentModeRef.current === "about") {
-        const aboutExteriorRoot = new THREE.Group();
-        aboutExteriorRoot.name = "ProjectShowcaseAboutExteriorRoot";
-        aboutExteriorRoot.visible = PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
-        aboutExteriorRoot.layers.set(PROJECT_SHOWCASE_LAYER);
-        showcaseRoot.add(aboutExteriorRoot);
-        projectShowcaseExteriorRootRef.current = aboutExteriorRoot;
-        const aboutStationLabel = createLabel("About Orbital Station");
-        aboutStationLabel.userData.projectShowcaseAboutStationLabel = true;
-        aboutStationLabel.position.set(0, 74, 0);
-        const aboutStationLabelEl = (
-          aboutStationLabel as unknown as {
-            element?: HTMLElement;
-          }
-        ).element;
-        if (aboutStationLabelEl) {
-          aboutStationLabelEl.style.pointerEvents = "none";
-          aboutStationLabelEl.style.textShadow =
-            "0 0 12px rgba(140,210,255,0.85)";
-          const title =
-            aboutStationLabelEl.firstElementChild as HTMLElement | null;
-          if (title) {
-            title.style.fontSize = "20px";
-            title.style.letterSpacing = "1.3px";
-          }
-        }
-        aboutExteriorRoot.add(aboutStationLabel);
-
-        const handleAboutExteriorLoaded = (tardisGltf: {
-          scene: THREE.Group;
-        }) => {
-          const tardisRoot = tardisGltf.scene.clone(true);
-          const bounds = new THREE.Box3().setFromObject(tardisRoot);
-          const size = bounds.getSize(new THREE.Vector3());
-          const desiredHeight = 58 * PROJECT_SHOWCASE_ABOUT_EXTERIOR_SCALE_MULT;
-          const maxDim = Math.max(size.x, size.y, size.z, 1);
-          const scale = desiredHeight / maxDim;
-          tardisRoot.scale.setScalar(scale);
-          const scaledBounds = new THREE.Box3().setFromObject(tardisRoot);
-          const center = scaledBounds.getCenter(new THREE.Vector3());
-          tardisRoot.position.sub(center);
-          tardisRoot.position.y += 4;
-          tardisRoot.traverse((obj) => {
-            obj.layers.set(PROJECT_SHOWCASE_LAYER);
-            if (!(obj instanceof THREE.Mesh)) return;
-            const materials = Array.isArray(obj.material)
-              ? obj.material
-              : [obj.material];
-            materials.forEach((mat) => {
-              if (!mat) return;
-              if (
-                mat instanceof THREE.MeshStandardMaterial ||
-                mat instanceof THREE.MeshPhysicalMaterial
-              ) {
-                mat.envMapIntensity = Math.max(mat.envMapIntensity ?? 0, 1.35);
-                mat.emissiveIntensity = Math.max(
-                  mat.emissiveIntensity ?? 0,
-                  1.05,
-                );
-                mat.needsUpdate = true;
-              }
-            });
-          });
-          aboutExteriorRoot.add(tardisRoot);
-          projectShowcaseAboutExteriorModelRef.current = tardisRoot;
-
-          // Add a soft navigation beacon so the station remains readable
-          // from deep-space distances without changing close approach framing.
-          const beaconCanvas = document.createElement("canvas");
-          beaconCanvas.width = 256;
-          beaconCanvas.height = 256;
-          const beaconCtx = beaconCanvas.getContext("2d");
-          if (beaconCtx) {
-            const grad = beaconCtx.createRadialGradient(
-              128,
-              128,
-              0,
-              128,
-              128,
-              128,
-            );
-            grad.addColorStop(0, "rgba(206, 232, 255, 1.0)");
-            grad.addColorStop(0.16, "rgba(140, 198, 255, 0.95)");
-            grad.addColorStop(0.55, "rgba(70, 150, 255, 0.38)");
-            grad.addColorStop(1, "rgba(0, 0, 0, 0)");
-            beaconCtx.fillStyle = grad;
-            beaconCtx.fillRect(0, 0, 256, 256);
-          }
-          const beaconTexture = new THREE.CanvasTexture(beaconCanvas);
-          beaconTexture.minFilter = THREE.LinearFilter;
-          beaconTexture.magFilter = THREE.LinearFilter;
-          beaconTexture.colorSpace = THREE.SRGBColorSpace;
-          const beaconCoreMat = new THREE.SpriteMaterial({
-            map: beaconTexture,
-            color: 0xb9e0ff,
-            opacity: PROJECT_SHOWCASE_ABOUT_BEACON_CORE_OPACITY_FAR,
-            transparent: true,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending,
-          });
-          const beaconCore = new THREE.Sprite(beaconCoreMat);
-          beaconCore.scale.set(
-            PROJECT_SHOWCASE_ABOUT_BEACON_CORE_SIZE,
-            PROJECT_SHOWCASE_ABOUT_BEACON_CORE_SIZE,
-            1,
-          );
-          beaconCore.position.set(0, 36, 0);
-          beaconCore.layers.set(PROJECT_SHOWCASE_LAYER);
-          beaconCore.frustumCulled = false;
-          const beaconHaloMat = new THREE.SpriteMaterial({
-            map: beaconTexture,
-            color: 0x78bcff,
-            opacity: PROJECT_SHOWCASE_ABOUT_BEACON_HALO_OPACITY_FAR,
-            transparent: true,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending,
-          });
-          const beaconHalo = new THREE.Sprite(beaconHaloMat);
-          beaconHalo.scale.set(
-            PROJECT_SHOWCASE_ABOUT_BEACON_HALO_SIZE,
-            PROJECT_SHOWCASE_ABOUT_BEACON_HALO_SIZE,
-            1,
-          );
-          beaconHalo.position.copy(beaconCore.position);
-          beaconHalo.layers.set(PROJECT_SHOWCASE_LAYER);
-          beaconHalo.frustumCulled = false;
-          aboutExteriorRoot.add(beaconHalo, beaconCore);
-          projectShowcaseAboutBeaconCoreMatRef.current = beaconCoreMat;
-          projectShowcaseAboutBeaconHaloMatRef.current = beaconHaloMat;
-
-          const tardisKey = new THREE.SpotLight(
-            0xe8f4ff,
-            8.2,
-            460,
-            Math.PI / 4.8,
-            0.62,
-            1.05,
-          );
-          tardisKey.position.set(30, 36, 26);
-          const tardisFill = new THREE.PointLight(0xa8d4ff, 3.55, 320, 1.2);
-          tardisFill.position.set(-20, 16, -18);
-          const tardisRim = new THREE.PointLight(0x72aaff, 2.45, 240, 1.05);
-          tardisRim.position.set(0, 24, 30);
-          const tardisTopBloom = new THREE.PointLight(0xbfdcff, 2.8, 190, 1.3);
-          tardisTopBloom.position.set(0, 43, 0);
-          const tardisAmbient = new THREE.HemisphereLight(
-            0xdbe9ff,
-            0x25395a,
-            1.85,
-          );
-          const tardisLightTarget = new THREE.Object3D();
-          tardisLightTarget.position.set(0, 6, 0);
-          tardisKey.target = tardisLightTarget;
-          tardisKey.layers.set(PROJECT_SHOWCASE_LAYER);
-          tardisFill.layers.set(PROJECT_SHOWCASE_LAYER);
-          tardisRim.layers.set(PROJECT_SHOWCASE_LAYER);
-          tardisTopBloom.layers.set(PROJECT_SHOWCASE_LAYER);
-          tardisAmbient.layers.set(PROJECT_SHOWCASE_LAYER);
-          tardisLightTarget.layers.set(PROJECT_SHOWCASE_LAYER);
-          aboutExteriorRoot.add(
-            tardisLightTarget,
-            tardisKey,
-            tardisFill,
-            tardisRim,
-            tardisTopBloom,
-            tardisAmbient,
-          );
-          markSceneModelLoaded();
-        };
-        const preloadedAboutExterior =
-          projectShowcaseAboutExteriorPreloadedGltfRef.current;
-        if (preloadedAboutExterior) {
-          handleAboutExteriorLoaded(preloadedAboutExterior);
-          projectShowcaseAboutExteriorPreloadedGltfRef.current = null;
-        } else {
-          loader.load(
-            PROJECT_SHOWCASE_ABOUT_EXTERIOR_MODEL_PATH,
-            (gltf) => handleAboutExteriorLoaded(gltf as { scene: THREE.Group }),
-            undefined,
-            () => {
-              markSceneModelLoaded();
-              if (projectShowcaseInteriorRootRef.current) {
-                projectShowcaseInteriorRootRef.current.visible = true;
-              }
-            },
-          );
-        }
-      } else {
-        markSceneModelLoaded();
-      }
-
-      const aboutMode = hallwayContentModeRef.current === "about";
-      if (aboutMode) {
-        showcaseInteriorRoot.visible = false;
-        if (projectShowcaseExteriorRootRef.current) {
-          projectShowcaseExteriorRootRef.current.visible =
-            PROJECT_SHOWCASE_VISIBLE_IN_SPACE;
-        }
-      } else {
-        showcaseInteriorRoot.visible = true;
-      }
-
-      scene.add(showcaseRoot);
-      projectShowcaseRootRef.current = showcaseRoot;
-      projectShowcaseWorldAnchorRef.current = showcaseRoot.position.clone();
-      markSceneModelLoaded();
-
-      setProjectShowcaseReady(true);
-      vlog("🛰️ Project Showcase trench loaded");
-    };
-    const preloadedProjectShowcase = projectShowcasePreloadedGltfRef.current;
-    if (preloadedProjectShowcase) {
-      void onProjectShowcaseLoaded(preloadedProjectShowcase);
-      projectShowcasePreloadedGltfRef.current = null;
-    } else {
-      loader.load(
-        PROJECT_SHOWCASE_MODEL_PATH,
-        (gltf) => {
-          void onProjectShowcaseLoaded(gltf as { scene: THREE.Group });
-        },
-        undefined,
-        onProjectShowcaseLoadError,
-      );
-    }
-
     // ── Moon orbit arrival handler ─────────────────────────────────────────────
     // When the nav system reports arrival at a moon, we kick off the orbit
     // state machine instead of immediately entering the content overlay.
@@ -25830,14 +17442,6 @@ export default function ResumeSpace3D({
           data: (resumeData.skills as any)[category],
         })),
       };
-      const projectsAnchor =
-        projectShowcaseWorldAnchorRef.current ??
-        getProjectShowcaseWorldAnchor(hallwayContentModeRef.current);
-      const projectsPlanetData: PlanetData = {
-        name: "Projects",
-        position: projectsAnchor.clone(),
-        data: projectShowcaseEntries,
-      };
       const portfolioPlanetData: PlanetData = {
         name: "Portfolio",
         position: ORBITAL_PORTFOLIO_WORLD_ANCHOR.clone(),
@@ -25846,12 +17450,10 @@ export default function ResumeSpace3D({
 
       tourBuilderRef.current?.registerPlanet("experience", expPlanetData);
       tourBuilderRef.current?.registerPlanet("skills", skillsPlanetData);
-      tourBuilderRef.current?.registerPlanet("projects", projectsPlanetData);
       tourBuilderRef.current?.registerPlanet("portfolio", portfolioPlanetData);
 
       planetsDataRef.current.set("experience", expPlanetData);
       planetsDataRef.current.set("skills", skillsPlanetData);
-      planetsDataRef.current.set("projects", projectsPlanetData);
       planetsDataRef.current.set("portfolio", portfolioPlanetData);
     };
 
@@ -25936,13 +17538,11 @@ export default function ResumeSpace3D({
           followingSpaceship: followingSpaceshipRef.current,
           insideShip: insideShipRef.current,
           shipViewMode: shipViewModeRef.current,
-          projectShowcaseActive: projectShowcaseActiveRef.current,
           orbitalPortfolioActive: orbitalPortfolioActiveRef.current,
           orbitalPortfolioPlaying: orbitalPortfolioPlayingRef.current,
           skillsLatticeActive: skillsLatticeActiveRef.current,
           aboutMemorySquareActive: aboutMemorySquareActiveRef.current,
           navFlags: {
-            projectsNavHereActive,
             portfolioNavHereActive,
             skillsNavHereActive,
             aboutNavHereActive,
@@ -26178,9 +17778,6 @@ export default function ResumeSpace3D({
         setExternalCosmosLabelsHiddenForAbout(false);
         cancelAboutMemorySquareEntrySequence();
       }
-      if (target !== "projects") {
-        setProjectsNavHereActive(false);
-      }
       if (target !== "skills") {
         setSkillsNavHereActive(false);
       }
@@ -26277,11 +17874,7 @@ export default function ResumeSpace3D({
           break;
         case "experience":
         case "skills":
-        case "projects":
         case "portfolio": {
-          if (target === "projects") {
-            setProjectsNavHereActive(true);
-          }
           if (target === "portfolio") {
             setPortfolioNavHereActive(true);
           }
@@ -26293,15 +17886,11 @@ export default function ResumeSpace3D({
               ? "🌍 Experience"
               : target === "skills"
                 ? "⚡ Skills"
-                : target === "portfolio"
-                  ? "✨ Portfolio"
-                  : "💡 Projects";
+                : "✨ Portfolio";
           vlog(
-            target === "projects"
-              ? `${planetLabel} — Routing to trench destination...`
-              : target === "portfolio"
-                ? `${planetLabel} — Routing to orbital registry...`
-                : `${planetLabel} — Traveling to ${target} Planet...`,
+            target === "portfolio"
+              ? `${planetLabel} — Routing to orbital registry...`
+              : `${planetLabel} — Traveling to ${target} Planet...`,
           );
 
           // Always use autopilot — ship is always engaged
@@ -26311,13 +17900,6 @@ export default function ResumeSpace3D({
             break;
           }
 
-          if (target === "projects") {
-            pendingProjectShowcaseEntryRef.current = true;
-            projectShowcaseAwaitingProjectsArrivalRef.current = false;
-            projectShowcaseSawProjectsTravelRef.current = false;
-            startProjectShowcaseEntrySequence();
-            break;
-          }
           if (target === "portfolio") {
             enterOrbitalPortfolio();
             break;
@@ -26476,36 +18058,25 @@ export default function ResumeSpace3D({
     });
 
     const onPointerMoveGlobal = (event: PointerEvent) => {
-      if (
-        projectShowcaseActiveRef.current ||
-        orbitalPortfolioActiveRef.current ||
-        skillsLatticeActiveRef.current
-      )
+      if (orbitalPortfolioActiveRef.current || skillsLatticeActiveRef.current)
         return;
       onPointerMove(event);
     };
     const onClickGlobal = (event: MouseEvent) => {
-      if (
-        projectShowcaseActiveRef.current ||
-        orbitalPortfolioActiveRef.current ||
-        skillsLatticeActiveRef.current
-      )
+      if (orbitalPortfolioActiveRef.current || skillsLatticeActiveRef.current)
         return;
       onClick(event);
     };
     const onPointerDownRotateGlobal = (event: PointerEvent) => {
-      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current)
-        return;
+      if (orbitalPortfolioActiveRef.current) return;
       onPointerDownRotate(event);
     };
     const onPointerMoveRotateGlobal = (event: PointerEvent) => {
-      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current)
-        return;
+      if (orbitalPortfolioActiveRef.current) return;
       onPointerMoveRotate(event);
     };
     const onPointerUpRotateGlobal = (event: PointerEvent) => {
-      if (projectShowcaseActiveRef.current || orbitalPortfolioActiveRef.current)
-        return;
+      if (orbitalPortfolioActiveRef.current) return;
       onPointerUpRotate(event);
     };
 
@@ -26773,8 +18344,6 @@ export default function ResumeSpace3D({
       shipExploreCoordsRef,
       shipRollOffsetRef,
       navTurnActiveRef,
-      projectShowcaseActiveRef,
-      projectShowcaseTrackRef,
       settledViewTargetRef,
       optionsRef,
       hologramDroneRef,
@@ -27118,28 +18687,6 @@ export default function ResumeSpace3D({
         hologramDroneRef.current.dispose();
         hologramDroneRef.current = null;
       }
-      if (projectShowcaseAboutEntryTimeoutRef.current !== null) {
-        window.clearTimeout(projectShowcaseAboutEntryTimeoutRef.current);
-        projectShowcaseAboutEntryTimeoutRef.current = null;
-      }
-      if (projectShowcaseAboutEntryRafRef.current !== null) {
-        cancelAnimationFrame(projectShowcaseAboutEntryRafRef.current);
-        projectShowcaseAboutEntryRafRef.current = null;
-      }
-
-      projectShowcaseRootRef.current = null;
-      projectShowcaseInteriorRootRef.current = null;
-      projectShowcaseExteriorRootRef.current = null;
-      projectShowcaseAboutExteriorModelRef.current = null;
-      projectShowcaseAboutBeaconCoreMatRef.current = null;
-      projectShowcaseAboutBeaconHaloMatRef.current = null;
-      projectShowcaseInteriorLightBasesRef.current = [];
-      projectShowcaseElevatorEmergencyLightsRef.current = null;
-      projectShowcaseElevatorPowerRef.current.phase = "normal";
-      projectShowcaseElevatorPowerRef.current.powerLevel = 1;
-      projectShowcaseElevatorPowerRef.current.emergencyTextActive = false;
-      projectShowcaseElevatorPowerRef.current.resumeAutoplayAfterEmergency = false;
-      projectShowcaseWorldAnchorRef.current = null;
       orbitalPortfolioRootRef.current = null;
       orbitalPortfolioBeaconRef.current = null;
       orbitalPortfolioWorldAnchorRef.current = null;
@@ -27178,20 +18725,12 @@ export default function ResumeSpace3D({
       aboutMemorySquareNavIntentUntilRef.current = 0;
       setAboutNavHereActive(false);
       setAboutSkipCinematicPromptVisible(false);
-      setProjectsNavHereActive(false);
       setOrbitalPortfolioReady(false);
       setOrbitalPortfolioActive(false);
       setPortfolioNavHereActive(false);
       setSkillsNavHereActive(false);
       setExternalCosmosLabelsHiddenForAbout(false);
       cancelAboutMemorySquareEntrySequence();
-      if (aboutEntryFadeRafRef.current) {
-        cancelAnimationFrame(aboutEntryFadeRafRef.current);
-        aboutEntryFadeRafRef.current = 0;
-      }
-      if (aboutTransitionCleanupRef.current) {
-        aboutTransitionCleanupRef.current();
-      }
       if (aboutCellRafRef.current !== null) {
         cancelAnimationFrame(aboutCellRafRef.current);
         aboutCellRafRef.current = null;
@@ -27235,7 +18774,6 @@ export default function ResumeSpace3D({
       });
       aboutTileContentMatsRef.current = [];
       skillsLatticeWorldAnchorRef.current = null;
-      projectShowcaseNebulaRootRef.current = null;
       skillsLatticeRootRef.current = null;
       skillsLatticeNodesRef.current = [];
       skillsLatticeLineMatsRef.current = [];
@@ -27264,10 +18802,6 @@ export default function ResumeSpace3D({
       setSkillsLatticeSelection(null);
       setSkillsLatticeActive(false);
       skillsLegacyBodiesRef.current = [];
-      projectShowcasePanelsRef.current = [];
-      projectShowcaseFloorPulseMatsRef.current = [];
-      projectShowcaseDebugRulerRef.current = null;
-      projectShowcaseTrackRef.current = null;
 
       // Remove touch event listeners
       renderer.domElement.removeEventListener(
@@ -27345,15 +18879,11 @@ export default function ResumeSpace3D({
       : null;
   const navCurrentTargetResolved = aboutNavHereActive
     ? ABOUT_MEMORY_SQUARE_NAV_ID
-    : projectsNavHereActive
-      ? hallwayContentMode === "about"
-        ? "about"
-        : "projects"
-      : portfolioNavHereActive
-        ? "portfolio"
-        : skillsNavHereActive
-          ? "skills"
-          : (orbitingMoonNavTarget ?? currentNavigationTarget);
+    : portfolioNavHereActive
+      ? "portfolio"
+      : skillsNavHereActive
+        ? "skills"
+        : (orbitingMoonNavTarget ?? currentNavigationTarget);
   const activeMoonMemoryPool =
     orbitingMoonNavTarget && viewerMemoriesEnabled
       ? (moonTravelSignCatalog.get(orbitingMoonNavTarget)?.pool ?? [])
@@ -27393,411 +18923,38 @@ export default function ResumeSpace3D({
   const memoryPlaybackEngaged =
     viewerMemoriesEnabled &&
     (!moonMemoryManualMode || moonMemoryPlaybackPlaying);
-  const activeRegistryMode: RegistryPanelMode | null = projectShowcaseActive
-    ? hallwayContentMode === "about"
-      ? "about"
-      : "projects"
-    : orbitalPortfolioActive
-      ? "portfolio"
-      : null;
-  const registryCapabilities = activeRegistryMode
-    ? REGISTRY_PANEL_CAPABILITIES[activeRegistryMode]
-    : null;
   const renderUnifiedRegistryPanel = () => {
-    if (!activeRegistryMode || !registryCapabilities) return null;
-    if (activeRegistryMode === "about") {
-      const activeSlide =
-        aboutHallwaySlides[
-          THREE.MathUtils.clamp(
-            projectShowcaseFocusIndex,
-            0,
-            Math.max(0, aboutHallwaySlides.length - 1),
-          )
-        ];
-      return (
-        <>
-          <div
-            style={{
-              position: "fixed",
-              right: 18,
-              top: 78,
-              zIndex: 1110,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              width: "fit-content",
-              transform: orbitalRegistryPanelVisible
-                ? "translateX(0)"
-                : "translateX(calc(100% + 40px))",
-              opacity: orbitalRegistryPanelVisible ? 1 : 0,
-              pointerEvents: orbitalRegistryPanelVisible ? "auto" : "none",
-              transition: "transform 240ms ease, opacity 180ms ease",
-            }}
-          >
-            <div
-              style={{
-                position: "relative",
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid rgba(150, 230, 255, 0.55)",
-                background:
-                  "linear-gradient(180deg, rgba(8, 14, 28, 0.92) 0%, rgba(4, 9, 18, 0.94) 100%)",
-                color: "#eaf7ff",
-                fontFamily: "'Rajdhani', sans-serif",
-              }}
-            >
-              <button
-                onClick={() => setOrbitalRegistryPanelVisible(false)}
-                style={{
-                  position: "absolute",
-                  left: -28,
-                  top: 42,
-                  width: 28,
-                  height: 56,
-                  borderRadius: "10px 0 0 10px",
-                  border: "1px solid rgba(120, 220, 255, 0.5)",
-                  borderRight: "none",
-                  background:
-                    "linear-gradient(180deg, rgba(6, 16, 30, 0.9) 0%, rgba(4, 10, 22, 0.9) 100%)",
-                  color: "#dff5ff",
-                  fontSize: 16,
-                  cursor: "pointer",
-                  zIndex: 1,
-                }}
-                title="Hide Hallway Registry"
-              >
-                {">"}
-              </button>
-              <div
-                style={{ fontSize: 12, letterSpacing: 1.2, color: "#9fe3ff" }}
-              >
-                ELEVATOR LEVELS
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 10,
-                }}
-              >
-                <div
-                  style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}
-                >
-                  Story Selection
-                </div>
-                <button
-                  onClick={exitProjectShowcase}
-                  style={{
-                    padding: "4px 8px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(255, 195, 160, 0.45)",
-                    background: "rgba(28, 14, 10, 0.82)",
-                    color: "#ffe2d5",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 11,
-                    cursor: "pointer",
-                    flexShrink: 0,
-                  }}
-                >
-                  Exit
-                </button>
-              </div>
-              <div
-                style={{
-                  marginTop: 6,
-                  height: 1,
-                  background: "rgba(140, 220, 255, 0.28)",
-                }}
-              />
-              {aboutLevelGateActive && (
-                <div
-                  style={{
-                    marginTop: 8,
-                    padding: "8px 10px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(255, 200, 100, 0.6)",
-                    background: "rgba(40, 28, 8, 0.85)",
-                    color: "#ffe0a0",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    textAlign: "center",
-                    letterSpacing: 0.5,
-                    animation: "aboutReplayFadeIn 0.6s ease-out both",
-                  }}
-                >
-                  SELECT A LEVEL TO BEGIN ASCENT
-                </div>
-              )}
-              <div
-                style={{
-                  marginTop: 8,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 5,
-                }}
-              >
-                {aboutHallLevelsManifest.levels.map((level) => {
-                  const isActive = selectedAboutLevelId === level.id;
-                  const isVisited = visitedAboutLevels.includes(level.id);
-                  return (
-                    <button
-                      key={level.id}
-                      onClick={() => void selectAboutElevatorLevel(level.id)}
-                      style={{
-                        textAlign: "left",
-                        borderRadius: 8,
-                        border: isActive
-                          ? "1px solid rgba(145, 232, 255, 0.92)"
-                          : aboutLevelGateActive
-                            ? "1px solid rgba(255, 200, 100, 0.55)"
-                            : "1px solid rgba(145, 232, 255, 0.35)",
-                        background: isActive
-                          ? "rgba(20, 58, 92, 0.88)"
-                          : aboutLevelGateActive
-                            ? "rgba(30, 22, 8, 0.82)"
-                            : "rgba(8, 18, 34, 0.72)",
-                        color:
-                          isVisited && !isActive
-                            ? "#a0d8b0"
-                            : isActive
-                              ? "#e8f7ff"
-                              : "#dff3ff",
-                        cursor: "pointer",
-                        padding: "8px 12px",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        fontFamily: "'Rajdhani', sans-serif",
-                        letterSpacing: 0.4,
-                        transition: "background 0.2s, border-color 0.2s",
-                      }}
-                    >
-                      <span>{level.label}</span>
-                      {isVisited && !isActive && (
-                        <span
-                          style={{
-                            marginLeft: 6,
-                            fontSize: 10,
-                            opacity: 0.7,
-                            color: "#a0d8b0",
-                          }}
-                        >
-                          VISITED
-                        </span>
-                      )}
-                      {isActive && (
-                        <span
-                          style={{
-                            marginLeft: 6,
-                            fontSize: 10,
-                            opacity: 0.8,
-                            color: "#9fe3ff",
-                          }}
-                        >
-                          ACTIVE
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 10,
-                  height: 1,
-                  background: "rgba(140, 220, 255, 0.18)",
-                }}
-              />
-
-              {!aboutLevelGateActive && (
-                <>
-                  <div
-                    style={{
-                      marginTop: 7,
-                      display: "flex",
-                      gap: 4,
-                      alignItems: "center",
-                    }}
-                  >
-                    <button
-                      onClick={() => stepProjectShowcaseFocus(-1)}
-                      style={{
-                        padding: "4px 6px",
-                        borderRadius: 8,
-                        border: "1px solid rgba(170, 225, 255, 0.45)",
-                        background: "rgba(8, 18, 34, 0.82)",
-                        color: "#dff3ff",
-                        fontFamily: "'Rajdhani', sans-serif",
-                        fontSize: 11,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Reverse
-                    </button>
-                    <button
-                      onClick={() => stepProjectShowcaseFocus(1)}
-                      style={{
-                        padding: "4px 6px",
-                        borderRadius: 8,
-                        border: "1px solid rgba(170, 225, 255, 0.45)",
-                        background: "rgba(8, 18, 34, 0.82)",
-                        color: "#dff3ff",
-                        fontFamily: "'Rajdhani', sans-serif",
-                        fontSize: 11,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Forward
-                    </button>
-                    <button
-                      onClick={toggleProjectShowcasePlayback}
-                      style={{
-                        padding: "4px 6px",
-                        borderRadius: 8,
-                        border: "1px solid rgba(170, 225, 255, 0.45)",
-                        background: "rgba(8, 18, 34, 0.82)",
-                        color: "#dff3ff",
-                        fontFamily: "'Rajdhani', sans-serif",
-                        fontSize: 11,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {projectShowcasePlaying ? "Pause" : "Play"}
-                    </button>
-                  </div>
-                  <div style={{ marginTop: 8, fontSize: 13, color: "#e8f8ff" }}>
-                    {activeSlide?.registryBtnTitle ?? "About Slide"}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 8,
-                      maxHeight: 254,
-                      overflowY: "auto",
-                      borderRadius: 8,
-                      border: "1px solid rgba(145, 232, 255, 0.24)",
-                      background: "rgba(8, 18, 34, 0.58)",
-                      padding: 6,
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                  >
-                    {aboutHallwaySlides.map((slide, index) => {
-                      const isActive = index === projectShowcaseFocusIndex;
-                      return (
-                        <button
-                          key={slide.id}
-                          onClick={() => jumpProjectShowcaseToIndex(index)}
-                          style={{
-                            textAlign: "left",
-                            whiteSpace: "nowrap",
-                            borderRadius: 7,
-                            border: isActive
-                              ? "1px solid rgba(145, 232, 255, 0.92)"
-                              : "1px solid rgba(145, 232, 255, 0.24)",
-                            background: isActive
-                              ? "rgba(20, 58, 92, 0.84)"
-                              : "rgba(8, 18, 34, 0.68)",
-                            color: "#e8f7ff",
-                            cursor: "pointer",
-                            padding: "6px 12px",
-                            marginBottom: 5,
-                            fontSize: 12,
-                            fontWeight: 700,
-                          }}
-                        >
-                          {slide.registryBtnTitle}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-          {!orbitalRegistryPanelVisible && (
-            <button
-              onClick={() => setOrbitalRegistryPanelVisible(true)}
-              style={{
-                position: "fixed",
-                right: -1,
-                top: 120,
-                zIndex: 1102,
-                width: 28,
-                height: 56,
-                borderRadius: "10px 0 0 10px",
-                border: "1px solid rgba(120, 220, 255, 0.5)",
-                background:
-                  "linear-gradient(180deg, rgba(6, 16, 30, 0.9) 0%, rgba(4, 10, 22, 0.9) 100%)",
-                color: "#dff5ff",
-                fontSize: 16,
-                cursor: "pointer",
-              }}
-              title="Show Hallway Registry"
-            >
-              {"<"}
-            </button>
-          )}
-        </>
-      );
-    }
-    const isPortfolioMode = activeRegistryMode === "portfolio";
-    const isProjectsMode = !isPortfolioMode;
-    const groupsBase = isPortfolioMode
-      ? orbitalPortfolioGroupsRef.current
-      : portfolioCoreBuild.groups;
-    const projectIndexById = portfolioCoreBuild.hallwayIndexById;
-    const groups = isPortfolioMode
-      ? groupsBase
-      : groupsBase.filter((group) => projectIndexById.has(group.id));
-    const coreViewsBase = isPortfolioMode
-      ? orbitalPortfolioCoreViewsRef.current
-      : portfolioCoreBuild.cores;
-    const activeGroup = (() => {
-      if (isPortfolioMode) {
-        if (!orbitalPortfolioHasActiveFocus || groups.length === 0) return null;
-        return groups[
-          THREE.MathUtils.clamp(
-            orbitalPortfolioFocusIndex,
-            0,
-            Math.max(0, groups.length - 1),
-          )
-        ];
-      }
-      if (groups.length === 0 || projectShowcaseEntries.length === 0)
-        return null;
-      const focusedEntry =
-        projectShowcaseEntries[
-          THREE.MathUtils.clamp(
-            projectShowcaseFocusIndex,
-            0,
-            Math.max(0, projectShowcaseEntries.length - 1),
-          )
-        ];
-      if (!focusedEntry) return null;
-      return groups.find((group) => group.id === focusedEntry.id) ?? null;
-    })();
+    if (!orbitalPortfolioActive) return null;
+    const groups = orbitalPortfolioGroupsRef.current;
+    const coreViewsBase = orbitalPortfolioCoreViewsRef.current;
+    const activeGroup =
+      !orbitalPortfolioHasActiveFocus || groups.length === 0
+        ? null
+        : groups[
+            THREE.MathUtils.clamp(
+              orbitalPortfolioFocusIndex,
+              0,
+              Math.max(0, groups.length - 1),
+            )
+          ];
     const variants = activeGroup?.variants ?? [];
-    const activeVariant = isPortfolioMode
-      ? variants[
-          THREE.MathUtils.clamp(
-            orbitalPortfolioVariantIndex,
-            0,
-            Math.max(0, variants.length - 1),
-          )
-        ]
-      : variants[0];
+    const activeVariant =
+      variants[
+        THREE.MathUtils.clamp(
+          orbitalPortfolioVariantIndex,
+          0,
+          Math.max(0, variants.length - 1),
+        )
+      ];
     const mediaItems = activeVariant?.mediaItems ?? [];
-    const activeMedia = isPortfolioMode
-      ? mediaItems[
-          THREE.MathUtils.clamp(
-            orbitalPortfolioMediaIndex,
-            0,
-            Math.max(0, mediaItems.length - 1),
-          )
-        ]
-      : mediaItems[0];
+    const activeMedia =
+      mediaItems[
+        THREE.MathUtils.clamp(
+          orbitalPortfolioMediaIndex,
+          0,
+          Math.max(0, mediaItems.length - 1),
+        )
+      ];
     const query = orbitalPortfolioSearchQuery.trim().toLowerCase();
     const filteredGroups = groups.filter((group) => {
       if (
@@ -27832,29 +18989,11 @@ export default function ResumeSpace3D({
       (group) => group.coreId === selectedCoreId,
     );
     const orbitalRegistryPanelWidth = 430;
-    const arrowsVisible = isPortfolioMode
-      ? orbitalPortfolioInspectedStationIndexRef.current !== null
-      : registryCapabilities.alwaysShowArrows;
-    const titleTop = isPortfolioMode ? "PORTFOLIO" : "PROJECTS";
-    const titleMain = isPortfolioMode ? "Orbital Registry" : "Hallway Registry";
-    const prevActionLabel = isPortfolioMode ? "Prev" : "Reverse";
-    const nextActionLabel = isPortfolioMode ? "Next" : "Forward";
-    const nextChevron = isPortfolioMode ? "›" : "▲";
-    const prevChevron = isPortfolioMode ? "‹" : "▼";
-    const onPrev = () => {
-      if (isPortfolioMode) {
-        stepOrbitalPortfolioSequence(-1);
-      } else {
-        stepProjectShowcaseFocus(-1);
-      }
-    };
-    const onNext = () => {
-      if (isPortfolioMode) {
-        stepOrbitalPortfolioSequence(1);
-      } else {
-        stepProjectShowcaseFocus(1);
-      }
-    };
+    const arrowsVisible =
+      orbitalPortfolioInspectedStationIndexRef.current !== null;
+    const titleMain = "Orbital Registry";
+    const onPrev = () => stepOrbitalPortfolioSequence(-1);
+    const onNext = () => stepOrbitalPortfolioSequence(1);
 
     return (
       <>
@@ -27888,7 +19027,7 @@ export default function ResumeSpace3D({
             }}
           >
             <div style={{ fontSize: 12, letterSpacing: 1.2, color: "#92deff" }}>
-              {titleTop}
+              PORTFOLIO
             </div>
             <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}>
               {titleMain}
@@ -27909,23 +19048,21 @@ export default function ResumeSpace3D({
                 flexWrap: "wrap",
               }}
             >
-              {isPortfolioMode && (
-                <button
-                  onClick={goToOrbitalPortfolioSettledView}
-                  style={{
-                    padding: "4px 6px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(170, 225, 255, 0.45)",
-                    background: "rgba(8, 18, 34, 0.82)",
-                    color: "#dff3ff",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 11,
-                    cursor: "pointer",
-                  }}
-                >
-                  Home
-                </button>
-              )}
+              <button
+                onClick={goToOrbitalPortfolioSettledView}
+                style={{
+                  padding: "4px 6px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(170, 225, 255, 0.45)",
+                  background: "rgba(8, 18, 34, 0.82)",
+                  color: "#dff3ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                Home
+              </button>
               <button
                 onClick={onPrev}
                 style={{
@@ -27939,7 +19076,7 @@ export default function ResumeSpace3D({
                   cursor: "pointer",
                 }}
               >
-                {prevActionLabel}
+                Prev
               </button>
               <button
                 onClick={onNext}
@@ -27954,107 +19091,80 @@ export default function ResumeSpace3D({
                   cursor: "pointer",
                 }}
               >
-                {nextActionLabel}
+                Next
               </button>
-              {registryCapabilities.showPlayPause && (
-                <button
-                  onClick={toggleProjectShowcasePlayback}
-                  style={{
-                    padding: "4px 6px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(170, 225, 255, 0.45)",
-                    background: "rgba(8, 18, 34, 0.82)",
-                    color: "#dff3ff",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 11,
-                    cursor: "pointer",
-                  }}
-                >
-                  {projectShowcasePlaying ? "Pause" : "Play"}
-                </button>
-              )}
-              {registryCapabilities.showStopOrbits && (
-                <button
-                  onClick={() => {
-                    const next = !orbitalPortfolioOrbitsEnabledRef.current;
-                    orbitalPortfolioOrbitsEnabledRef.current = next;
-                    setOrbitalPortfolioOrbitsEnabled(next);
-                  }}
-                  style={{
-                    padding: "4px 6px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(170, 225, 255, 0.45)",
-                    background: "rgba(8, 18, 34, 0.82)",
-                    color: "#dff3ff",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 11,
-                    cursor: "pointer",
-                  }}
-                >
-                  {orbitalPortfolioOrbitsEnabled
-                    ? "Stop Orbits"
-                    : "Start Orbits"}
-                </button>
-              )}
-              {registryCapabilities.showAutoPlay && (
-                <button
-                  onClick={() => {
-                    const next = !orbitalPortfolioAutoplayEnabledRef.current;
-                    orbitalPortfolioAutoplayEnabledRef.current = next;
-                    setOrbitalPortfolioAutoplayEnabled(next);
-                    const now = performance.now();
-                    orbitalPortfolioAutoRef.current.lastAdvanceAt = now;
-                    if (next) {
-                      focusOrbitalPortfolioStation(
-                        orbitalPortfolioFocusIndexRef.current,
-                        orbitalPortfolioMediaIndex,
-                        {
-                          autoplay: true,
-                          variantIndex: orbitalPortfolioVariantIndexRef.current,
-                        },
-                      );
-                    }
-                  }}
-                  style={{
-                    padding: "4px 6px",
-                    borderRadius: 8,
-                    border: orbitalPortfolioAutoplayEnabled
-                      ? "1px solid rgba(145, 232, 255, 0.88)"
-                      : "1px solid rgba(170, 225, 255, 0.45)",
-                    background: "rgba(8, 18, 34, 0.76)",
-                    color: "#dff3ff",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 11,
-                    cursor: "pointer",
-                  }}
-                >
-                  {orbitalPortfolioAutoplayEnabled
-                    ? "Auto-play On"
-                    : "Auto-play Off"}
-                </button>
-              )}
-              {registryCapabilities.showExit && (
-                <button
-                  onClick={
-                    projectShowcaseActive
-                      ? exitProjectShowcase
-                      : exitOrbitalPortfolio
+              <button
+                onClick={() => {
+                  const next = !orbitalPortfolioOrbitsEnabledRef.current;
+                  orbitalPortfolioOrbitsEnabledRef.current = next;
+                  setOrbitalPortfolioOrbitsEnabled(next);
+                }}
+                style={{
+                  padding: "4px 6px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(170, 225, 255, 0.45)",
+                  background: "rgba(8, 18, 34, 0.82)",
+                  color: "#dff3ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                {orbitalPortfolioOrbitsEnabled
+                  ? "Stop Orbits"
+                  : "Start Orbits"}
+              </button>
+              <button
+                onClick={() => {
+                  const next = !orbitalPortfolioAutoplayEnabledRef.current;
+                  orbitalPortfolioAutoplayEnabledRef.current = next;
+                  setOrbitalPortfolioAutoplayEnabled(next);
+                  const now = performance.now();
+                  orbitalPortfolioAutoRef.current.lastAdvanceAt = now;
+                  if (next) {
+                    focusOrbitalPortfolioStation(
+                      orbitalPortfolioFocusIndexRef.current,
+                      orbitalPortfolioMediaIndex,
+                      {
+                        autoplay: true,
+                        variantIndex: orbitalPortfolioVariantIndexRef.current,
+                      },
+                    );
                   }
-                  style={{
-                    padding: "4px 6px",
-                    borderRadius: 8,
-                    border: "1px solid rgba(255, 195, 160, 0.45)",
-                    background: "rgba(28, 14, 10, 0.82)",
-                    color: "#ffe2d5",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 11,
-                    cursor: "pointer",
-                    marginLeft: "auto",
-                  }}
-                >
-                  Exit
-                </button>
-              )}
+                }}
+                style={{
+                  padding: "4px 6px",
+                  borderRadius: 8,
+                  border: orbitalPortfolioAutoplayEnabled
+                    ? "1px solid rgba(145, 232, 255, 0.88)"
+                    : "1px solid rgba(170, 225, 255, 0.45)",
+                  background: "rgba(8, 18, 34, 0.76)",
+                  color: "#dff3ff",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 11,
+                  cursor: "pointer",
+                }}
+              >
+                {orbitalPortfolioAutoplayEnabled
+                  ? "Auto-play On"
+                  : "Auto-play Off"}
+              </button>
+              <button
+                onClick={exitOrbitalPortfolio}
+                style={{
+                  padding: "4px 6px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255, 195, 160, 0.45)",
+                  background: "rgba(28, 14, 10, 0.82)",
+                  color: "#ffe2d5",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  marginLeft: "auto",
+                }}
+              >
+                Exit
+              </button>
             </div>
             <div
               style={{
@@ -28215,20 +19325,7 @@ export default function ResumeSpace3D({
                           key={core.id}
                           onClick={() => {
                             setOrbitalRegistrySelectedCoreId(core.id);
-                            if (isPortfolioMode) {
-                              focusOrbitalPortfolioCore(core.id);
-                            } else {
-                              const firstGroup = filteredGroups.find(
-                                (group) => group.coreId === core.id,
-                              );
-                              if (!firstGroup) return;
-                              const projectIndex = projectIndexById.get(
-                                firstGroup.id,
-                              );
-                              if (typeof projectIndex === "number") {
-                                jumpProjectShowcaseToIndex(projectIndex);
-                              }
-                            }
+                            focusOrbitalPortfolioCore(core.id);
                           }}
                           style={{
                             width: "100%",
@@ -28279,20 +19376,11 @@ export default function ResumeSpace3D({
                           <button
                             key={group.id}
                             onClick={() => {
-                              if (isPortfolioMode) {
-                                const groupIndex = groups.findIndex(
-                                  (item) => item.id === group.id,
-                                );
-                                if (groupIndex >= 0)
-                                  focusOrbitalPortfolioStation(groupIndex, 0);
-                                return;
-                              }
-                              const projectIndex = projectIndexById.get(
-                                group.id,
+                              const groupIndex = groups.findIndex(
+                                (item) => item.id === group.id,
                               );
-                              if (typeof projectIndex === "number") {
-                                jumpProjectShowcaseToIndex(projectIndex);
-                              }
+                              if (groupIndex >= 0)
+                                focusOrbitalPortfolioStation(groupIndex, 0);
                             }}
                             style={{
                               width: "100%",
@@ -28401,7 +19489,7 @@ export default function ResumeSpace3D({
                 lineHeight: "100%",
               }}
             >
-              {isPortfolioMode ? "Portfolio" : "Projects"}
+              Portfolio
             </span>
             <span style={{ fontSize: 10, fontWeight: 700, lineHeight: "auto" }}>
               {titleMain}
@@ -28465,13 +19553,9 @@ export default function ResumeSpace3D({
                 cursor: "pointer",
                 boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
               }}
-              title={
-                isPortfolioMode
-                  ? "Next portfolio slide"
-                  : "Forward in projects hallway"
-              }
+              title="Next portfolio slide"
             >
-              {nextChevron}
+              ›
             </button>
             <button
               onClick={onPrev}
@@ -28488,190 +19572,41 @@ export default function ResumeSpace3D({
                 cursor: "pointer",
                 boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
               }}
-              title={
-                isPortfolioMode
-                  ? "Previous portfolio slide"
-                  : "Reverse in projects hallway"
-              }
+              title="Previous portfolio slide"
             >
-              {prevChevron}
+              ‹
             </button>
           </div>
         )}
 
-        {isProjectsMode && (
-          <div
-            style={{
-              position: "fixed",
-              left: "50%",
-              bottom: 18,
-              transform: "translateX(-50%)",
-              zIndex: 1102,
-              pointerEvents: "auto",
-              display: "flex",
-              alignItems: "flex-end",
-              gap: 10,
-              padding: "8px 10px 10px",
-              borderRadius: 10,
-              border: "1px solid rgba(145, 225, 255, 0.4)",
-              background: "rgba(6, 14, 26, 0.84)",
-              color: "#d7ebfa",
-              fontFamily: "'Rajdhani', sans-serif",
-              boxShadow: "0 6px 18px rgba(2, 10, 18, 0.45)",
-            }}
-          >
-            <div
-              style={{
-                width: 24,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 4,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 9,
-                  letterSpacing: 0.6,
-                  color: "rgba(171, 214, 255, 0.88)",
-                }}
-              >
-                THR
-              </span>
-              <div
-                onPointerDown={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  projectShowcaseLeverRectRef.current = rect;
-                  startProjectShowcaseLeverDrag(e.clientY, rect);
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                style={{
-                  position: "relative",
-                  width: 16,
-                  height: 104,
-                  borderRadius: 12,
-                  border: "1px solid rgba(160, 205, 255, 0.42)",
-                  background:
-                    "linear-gradient(180deg, rgba(22,40,58,0.95) 0%, rgba(10,18,28,0.9) 100%)",
-                  cursor: "ns-resize",
-                }}
-              >
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 2,
-                    right: 2,
-                    top: "50%",
-                    height: 1,
-                    background: "rgba(160, 200, 255, 0.45)",
-                  }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    left: -3,
-                    right: -3,
-                    width: 22,
-                    height: 22,
-                    borderRadius: "50%",
-                    border: "1px solid rgba(220, 235, 255, 0.65)",
-                    background:
-                      "radial-gradient(circle at 30% 30%, rgba(180,220,255,0.95) 0%, rgba(96,154,210,0.95) 35%, rgba(30,64,94,0.98) 100%)",
-                    boxShadow: "0 2px 8px rgba(5, 10, 16, 0.5)",
-                    top: `${50 - projectShowcaseLeverValue * 40}%`,
-                    transform: "translateY(-50%)",
-                    pointerEvents: "none",
-                  }}
-                />
-              </div>
-            </div>
-            <div
-              style={{
-                minWidth: 156,
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 10,
-                  letterSpacing: 0.5,
-                }}
-              >
-                <span>SLIDE ANGLE</span>
-                <span>{projectShowcaseAnglePercent.toFixed(0)}%</span>
-              </div>
-              <input
-                type="range"
-                min={PROJECT_SHOWCASE_MIN_ANGLE_PERCENT}
-                max={PROJECT_SHOWCASE_MAX_ANGLE_PERCENT}
-                step={1}
-                value={projectShowcaseAnglePercent}
-                onChange={(e) =>
-                  setProjectShowcaseAnglePercent(Number(e.target.value))
-                }
-              />
-              <div
-                style={{
-                  fontSize: 9,
-                  color: "rgba(171, 214, 255, 0.88)",
-                  letterSpacing: 0.5,
-                }}
-              >
-                FWD/REV throttle + panel cant
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isPortfolioMode && (
-          <div
-            style={{
-              position: "fixed",
-              left: "50%",
-              bottom: 18,
-              transform: "translateX(-50%)",
-              zIndex: 1102,
-              pointerEvents: "none",
-              padding: "7px 12px",
-              borderRadius: 999,
-              border: "1px solid rgba(145, 225, 255, 0.45)",
-              background: "rgba(6, 14, 26, 0.78)",
-              color: "rgba(226, 244, 255, 0.96)",
-              fontFamily: "'Rajdhani', sans-serif",
-              fontSize: 12,
-              letterSpacing: 0.7,
-              textTransform: "uppercase",
-              boxShadow: "0 6px 18px rgba(2, 10, 18, 0.45)",
-            }}
-          >
-            Wheel: Zoom | Shift + Wheel: Scroll Screenshot
-          </div>
-        )}
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: 18,
+            transform: "translateX(-50%)",
+            zIndex: 1102,
+            pointerEvents: "none",
+            padding: "7px 12px",
+            borderRadius: 999,
+            border: "1px solid rgba(145, 225, 255, 0.45)",
+            background: "rgba(6, 14, 26, 0.78)",
+            color: "rgba(226, 244, 255, 0.96)",
+            fontFamily: "'Rajdhani', sans-serif",
+            fontSize: 12,
+            letterSpacing: 0.7,
+            textTransform: "uppercase",
+            boxShadow: "0 6px 18px rgba(2, 10, 18, 0.45)",
+          }}
+        >
+          Wheel: Zoom | Shift + Wheel: Scroll Screenshot
+        </div>
       </>
     );
   };
 
   return (
     <>
-      <style>{`
-        .project-showcase-nav-scroll::-webkit-scrollbar {
-          width: 8px;
-        }
-        .project-showcase-nav-scroll::-webkit-scrollbar-track {
-          background: rgba(10, 16, 28, 0.72);
-          border-radius: 6px;
-        }
-        .project-showcase-nav-scroll::-webkit-scrollbar-thumb {
-          background: rgba(110, 165, 230, 0.72);
-          border-radius: 6px;
-          border: 1px solid rgba(160, 200, 255, 0.25);
-        }
-      `}</style>
       {/* Show loader while scene is setting up */}
       {isLoading && (
         <CosmosLoader
@@ -28706,46 +19641,6 @@ export default function ResumeSpace3D({
               }}
             />
           )}
-          {projectShowcaseEntryOverlayOpacity > 0.001 && (
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                zIndex: 10040,
-                pointerEvents: "none",
-                background: `radial-gradient(ellipse at 50% 42%, rgba(8, 16, 30, ${(
-                  projectShowcaseEntryOverlayOpacity * 0.32
-                ).toFixed(
-                  3,
-                )}), rgba(2, 5, 12, ${projectShowcaseEntryOverlayOpacity.toFixed(
-                  3,
-                )}) 82%)`,
-                display: "flex",
-                alignItems: "flex-end",
-                justifyContent: "center",
-                paddingBottom: 72,
-              }}
-            >
-              <div
-                style={{
-                  color: "rgba(193, 215, 255, 0.9)",
-                  fontFamily: "'Rajdhani', sans-serif",
-                  fontWeight: 700,
-                  letterSpacing: "0.16em",
-                  fontSize: 13,
-                  textTransform: "uppercase",
-                  textShadow: "0 0 14px rgba(80, 130, 220, 0.42)",
-                  opacity: THREE.MathUtils.clamp(
-                    projectShowcaseEntryOverlayOpacity * 1.4,
-                    0,
-                    1,
-                  ),
-                }}
-              >
-                Entering Project Showcase
-              </div>
-            </div>
-          )}
           <div
             ref={mountRef}
             className="width-full height-full"
@@ -28757,28 +19652,6 @@ export default function ResumeSpace3D({
               left: 0,
             }}
           />
-          <div
-            id="about-level-transition-overlay"
-            style={{
-              position: "absolute",
-              inset: 0,
-              zIndex: 1050,
-              pointerEvents: "none",
-              opacity: 0,
-              overflow: "hidden",
-            }}
-          />
-          {aboutEntryFadeOpacity > 0.003 && (
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                zIndex: 1049,
-                pointerEvents: "none",
-                background: `rgba(2, 5, 12, ${aboutEntryFadeOpacity.toFixed(3)})`,
-              }}
-            />
-          )}
           {!isLoading && startupConsoleVisible && (
             <button
               ref={startupConsoleButtonRef}
@@ -29771,7 +20644,6 @@ export default function ResumeSpace3D({
             </div>
           )}
 
-          {/* Ship Control Bar — hidden while Project Showcase is active */}
           <UserOnScreenMessages hideTelemetry={orbitalPortfolioActive} />
           <CosmicMiniMap3D
             visible={!isLoading && sceneReady && startupMiniMapVisible}
@@ -29781,21 +20653,20 @@ export default function ResumeSpace3D({
               opacity: 0,
               transform: "translateX(200px)",
             }}
-            projectModeSignal={projectShowcaseActive || orbitalPortfolioActive}
+            projectModeSignal={orbitalPortfolioActive}
             spaceshipRef={spaceshipRef}
             starDestroyerRef={starDestroyerRef}
             itemsRef={itemsRef}
             skillsAnchorRef={skillsLatticeWorldAnchorRef}
             aboutAnchorRef={aboutMemorySquareWorldAnchorRef}
-            projectsAnchorRef={projectShowcaseWorldAnchorRef}
             portfolioAnchorRef={orbitalPortfolioWorldAnchorRef}
             currentNavigationTarget={currentNavigationTarget}
             onNavigateToTarget={handleCockpitNavigate}
             onCoordinatePing={(message) => shipLog(message, "info")}
           />
 
-          {/* Ship Control Bar — hidden while Project Showcase is active */}
-          {!projectShowcaseActive && !orbitalPortfolioActive && (
+          {/* Ship Control Bar — hidden while Orbital Portfolio is active */}
+          {!orbitalPortfolioActive && (
             <ShipControlBar
               phase={shipUIPhase}
               isFollowingSD={followingStarDestroyer}
@@ -29851,114 +20722,9 @@ export default function ResumeSpace3D({
             onClose={() => setConsoleVisible(false)}
             onCommand={(cmd) => {
               shipLog(`$ ${cmd}`, "cmd");
-              if (runShipTerminalCommand(cmd)) return;
-              shipLog("Unknown command. Try: help aboutflow", "error");
+              shipLog("Unknown command.", "error");
             }}
           />
-
-          {aboutElevatorReachedEnd &&
-            projectShowcaseActive &&
-            hallwayContentMode === "about" && (
-              <div
-                style={{
-                  position: "fixed",
-                  left: "50%",
-                  top: "50%",
-                  transform: "translate(-50%, -50%)",
-                  zIndex: 1350,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 12,
-                  animation: "aboutReplayFadeIn 0.6s ease-out both",
-                }}
-              >
-                <div
-                  style={{
-                    color: "rgba(180, 230, 255, 0.7)",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    letterSpacing: 1.2,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  End of elevator
-                </div>
-                <button
-                  type="button"
-                  onClick={replayAboutElevator}
-                  style={{
-                    padding: "12px 28px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(145, 232, 255, 0.6)",
-                    background: "rgba(8, 18, 34, 0.88)",
-                    color: "#def5ff",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 16,
-                    fontWeight: 700,
-                    letterSpacing: 1,
-                    cursor: "pointer",
-                    transition: "background 0.25s, border-color 0.25s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(20, 50, 80, 0.92)";
-                    e.currentTarget.style.borderColor =
-                      "rgba(145, 232, 255, 0.9)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "rgba(8, 18, 34, 0.88)";
-                    e.currentTarget.style.borderColor =
-                      "rgba(145, 232, 255, 0.6)";
-                  }}
-                >
-                  Replay
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAboutElevatorReachedEnd(false);
-                    aboutLevelGateActiveRef.current = true;
-                    setAboutLevelGateActive(true);
-                    projectShowcasePlayingRef.current = false;
-                    setProjectShowcasePlaying(false);
-                  }}
-                  style={{
-                    padding: "10px 22px",
-                    borderRadius: 10,
-                    border: "1px solid rgba(255, 200, 100, 0.5)",
-                    background: "rgba(30, 22, 8, 0.85)",
-                    color: "#ffe0a0",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    letterSpacing: 1,
-                    cursor: "pointer",
-                    transition: "background 0.25s, border-color 0.25s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(45, 35, 12, 0.92)";
-                    e.currentTarget.style.borderColor =
-                      "rgba(255, 200, 100, 0.8)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "rgba(30, 22, 8, 0.85)";
-                    e.currentTarget.style.borderColor =
-                      "rgba(255, 200, 100, 0.5)";
-                  }}
-                >
-                  Switch Level
-                </button>
-              </div>
-            )}
-
-          {IS_DEBUG &&
-            aboutFlowOverlayEnabled &&
-            projectShowcaseActive &&
-            hallwayContentMode === "about" &&
-            projectShowcaseTrackRef.current?.axis === "y" && (
-              <AboutFlowDebugPanel snapshot={aboutFlowOverlaySnapshot} />
-            )}
 
           {/* Ship destination nav panel — left side (all ship modes) */}
           {startupDestinationsVisible && (
@@ -31878,29 +22644,6 @@ export default function ResumeSpace3D({
                           );
                         })}
                       </div>
-                      <div
-                        style={{
-                          marginTop: 8,
-                          display: "flex",
-                          justifyContent: "flex-end",
-                        }}
-                      >
-                        <button
-                          onClick={exitProjectShowcase}
-                          style={{
-                            padding: "4px 8px",
-                            borderRadius: 8,
-                            border: "1px solid rgba(255, 195, 160, 0.45)",
-                            background: "rgba(28, 14, 10, 0.82)",
-                            color: "#ffe2d5",
-                            fontFamily: "'Rajdhani', sans-serif",
-                            fontSize: 11,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Exit
-                        </button>
-                      </div>
                     </div>
                   </div>
                   <div
@@ -32890,21 +23633,6 @@ export default function ResumeSpace3D({
                         });
                       }
                       break;
-                    case "projects":
-                      const projectsData =
-                        planetsDataRef.current.get("projects");
-                      if (projectsData) {
-                        cameraDirectorRef.current.flyTo({
-                          position: new THREE.Vector3(
-                            projectsData.position.x + 400,
-                            projectsData.position.y + 200,
-                            projectsData.position.z + 300,
-                          ),
-                          lookAt: projectsData.position,
-                          duration: 2,
-                        });
-                      }
-                      break;
                     case "portfolio":
                       const portfolioData =
                         planetsDataRef.current.get("portfolio");
@@ -32934,6 +23662,19 @@ export default function ResumeSpace3D({
           <MoonOrbitHtmlLayout
             content={overlayContent}
             visible={moonHtmlVisible}
+            closing={moonHtmlClosing}
+            onClose={() => {
+              if (moonHtmlCloseTimerRef.current !== null) return;
+              setMoonHtmlClosing(true);
+              // Bring the already-drawn drone card back as the details fade,
+              // so it's there when they're gone; memories keep playing.
+              hologramDroneRef.current?.setContentSuppressed(false);
+              moonHtmlCloseTimerRef.current = window.setTimeout(() => {
+                moonHtmlCloseTimerRef.current = null;
+                setMoonHtmlClosing(false);
+                setMoonHtmlVisible(false);
+              }, MOON_HTML_CLOSE_MS);
+            }}
           />
         </div>
       )}
