@@ -28,7 +28,14 @@ interface Props {
   panelRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-const PLANET_ORDER = ["experience", "skills", "projects", "portfolio", "about"];
+const PLANET_ORDER = [
+  "experience",
+  "skills",
+  "projects",
+  "portfolio",
+  "career-gallery",
+  "about",
+];
 
 const parseDateNumeric = (d: string): number => {
   const [m, y] = d.split("/");

@@ -9,6 +9,16 @@ import aboutDeck from "../../data/aboutDeck.json";
 import aboutPathTravelMessages from "../../data/aboutPathTravelMessages.json";
 import { moonPortfolioMapping } from "../../data/moonPortfolioMapping";
 import portfolioCores from "../../data/portfolioCores.json";
+import { CareerGallery } from "./careerGallery/CareerGallery";
+import {
+  applyGalleryInteriorControls,
+  attachGalleryFovZoom,
+  captureGalleryControls,
+  collectPortfolioImageUrls,
+  restoreGalleryControls,
+  runGalleryEntryGlide,
+  type GalleryControlsSnapshot,
+} from "./careerGallery/careerGalleryCamera";
 import resumeData from "../../data/resume.json";
 import { trackEvent } from "../../lib/analytics";
 import { IS_DEBUG, dlog, dwarn } from "../../lib/debugLog";
@@ -408,6 +418,18 @@ const CAMERA_TRACE_ENABLED = true;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 // Recenter deep-space destinations so the universe extent remains sun-centered.
 const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(13600, 220, -12000);
+// Career Gallery: hologram shell of portfolio screenshots. Placed in the open
+// (-x, +z) quadrant away from other destinations, ~15.8k from the sun (the
+// farthest destination, Skills, is ~18.1k).
+const CAREER_GALLERY_NAV_ID = "career-gallery";
+const CAREER_GALLERY_NAV_LABEL = "Career Gallery";
+const CAREER_GALLERY_WORLD_ANCHOR = new THREE.Vector3(-13200, 380, 8600);
+// Twice the Skills shell so there's room to zoom from the center.
+const CAREER_GALLERY_RADIUS = 792;
+const CAREER_GALLERY_NAV_STANDOFF_DIST = 2000;
+const CAREER_GALLERY_ARRIVAL_DIST = 1400;
+const CAREER_GALLERY_ENTRY_TRIGGER_DIST = 2600;
+const CAREER_GALLERY_ENTRY_GLIDE_MS = 3600;
 const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -13200);
 const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR = new THREE.Vector3(
   13723.38,
@@ -1861,6 +1883,17 @@ export default function ResumeSpace3D({
   // Emits: onOptionsChange (options sync)
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const careerGalleryRef = useRef<CareerGallery | null>(null);
+  const careerGalleryWorldAnchorRef = useRef<THREE.Vector3 | null>(
+    CAREER_GALLERY_WORLD_ANCHOR.clone(),
+  );
+  const careerGalleryPendingEntryRef = useRef(false);
+  const careerGalleryEnteringRef = useRef(false);
+  const careerGalleryActiveRef = useRef(false);
+  const careerGallerySnapshotRef = useRef<GalleryControlsSnapshot | null>(null);
+  const careerGalleryGlideCancelRef = useRef<(() => void) | null>(null);
+  const careerGalleryZoomDetachRef = useRef<(() => void) | null>(null);
+  const [careerGalleryActive, setCareerGalleryActive] = useState(false);
   const composerRef = useRef<EffectComposer | null>(null);
   const sceneRef = useRef<SceneRef>({});
 
@@ -4922,6 +4955,12 @@ export default function ResumeSpace3D({
       type: "section" as const,
       icon: "⊙",
     },
+    {
+      id: CAREER_GALLERY_NAV_ID,
+      label: CAREER_GALLERY_NAV_LABEL,
+      type: "section" as const,
+      icon: "⬡",
+    },
     ...resumeData.experience.map((exp) => ({
       id: exp.id,
       label: exp.navLabel || exp.company,
@@ -6149,6 +6188,20 @@ export default function ResumeSpace3D({
           )
           .add(new THREE.Vector3(0, 54, 0));
       }
+      if (targetId === CAREER_GALLERY_NAV_ID) {
+        const anchor = CAREER_GALLERY_WORLD_ANCHOR;
+        const ship = spaceshipRef.current;
+        const outward = ship
+          ? ship.position.clone().sub(anchor)
+          : new THREE.Vector3(0, 0.1, 1);
+        // Mostly horizontal approach.
+        outward.y *= 0.25;
+        if (outward.lengthSq() < 1e-5) outward.set(0, 0.1, 1);
+        outward.normalize();
+        return anchor
+          .clone()
+          .addScaledVector(outward, CAREER_GALLERY_NAV_STANDOFF_DIST);
+      }
       if (targetId === "portfolio") {
         const anchor =
           orbitalPortfolioWorldAnchorRef.current ??
@@ -6197,6 +6250,12 @@ export default function ResumeSpace3D({
           orbitalPortfolioWorldAnchorRef.current ??
           ORBITAL_PORTFOLIO_WORLD_ANCHOR;
         return { center: anchor.clone(), radius: 200 };
+      }
+      if (targetId === CAREER_GALLERY_NAV_ID) {
+        return {
+          center: CAREER_GALLERY_WORLD_ANCHOR.clone(),
+          radius: CAREER_GALLERY_RADIUS,
+        };
       }
       return null;
     },
@@ -7444,6 +7503,84 @@ export default function ResumeSpace3D({
       vlog,
     ],
   );
+
+  const exitCareerGallery = useCallback(
+    ({ restoreShip = true }: { restoreShip?: boolean } = {}) => {
+      careerGalleryGlideCancelRef.current?.();
+      careerGalleryGlideCancelRef.current = null;
+      careerGalleryZoomDetachRef.current?.();
+      careerGalleryZoomDetachRef.current = null;
+      careerGalleryPendingEntryRef.current = false;
+      const wasInside =
+        careerGalleryActiveRef.current || careerGalleryEnteringRef.current;
+      careerGalleryActiveRef.current = false;
+      careerGalleryEnteringRef.current = false;
+      setCareerGalleryActive(false);
+      careerGalleryRef.current?.setInteriorMode(false);
+      if (!wasInside) return;
+
+      const controls = sceneRef.current.controls;
+      const camera = sceneRef.current.camera as
+        | THREE.PerspectiveCamera
+        | undefined;
+      const snapshot = careerGallerySnapshotRef.current;
+      careerGallerySnapshotRef.current = null;
+      if (controls && camera && snapshot) {
+        restoreGalleryControls(controls, camera, snapshot);
+      }
+      if (restoreShip) {
+        setFollowingSpaceship(true);
+        followingSpaceshipRef.current = true;
+        if (spaceshipRef.current) spaceshipRef.current.visible = true;
+      }
+      vlog("🖼️ Career gallery exited");
+    },
+    [vlog],
+  );
+
+  const enterCareerGallery = useCallback(() => {
+    if (careerGalleryActiveRef.current || careerGalleryEnteringRef.current) {
+      return;
+    }
+    const gallery = careerGalleryRef.current;
+    const controls = sceneRef.current.controls;
+    const camera = sceneRef.current.camera as
+      | THREE.PerspectiveCamera
+      | undefined;
+    if (!gallery || !controls || !camera) return;
+
+    careerGalleryPendingEntryRef.current = false;
+    careerGalleryEnteringRef.current = true;
+    setFollowingSpaceship(false);
+    followingSpaceshipRef.current = false;
+    if (spaceshipRef.current) spaceshipRef.current.visible = false;
+    careerGallerySnapshotRef.current = captureGalleryControls(controls, camera);
+    gallery.setInteriorMode(true);
+
+    const center = gallery.root.getWorldPosition(new THREE.Vector3());
+    careerGalleryGlideCancelRef.current = runGalleryEntryGlide({
+      controls,
+      camera,
+      center,
+      durationMs: CAREER_GALLERY_ENTRY_GLIDE_MS,
+      onDone: () => {
+        careerGalleryGlideCancelRef.current = null;
+        careerGalleryEnteringRef.current = false;
+        careerGalleryActiveRef.current = true;
+        setCareerGalleryActive(true);
+        applyGalleryInteriorControls(controls);
+        const dom = rendererRef.current?.domElement;
+        if (dom) {
+          careerGalleryZoomDetachRef.current = attachGalleryFovZoom(dom, camera);
+        }
+        shipLog(
+          "Career Gallery — drag to look around, scroll to zoom",
+          "info",
+        );
+      },
+    });
+    vlog("🖼️ Entering career gallery");
+  }, [shipLog, vlog]);
 
   const enterSkillsLattice = useCallback(() => {
     if (skillsLatticeActiveRef.current) return;
@@ -8712,6 +8849,14 @@ export default function ResumeSpace3D({
         restoredShip = true;
       }
     }
+    if (nextTargetId !== CAREER_GALLERY_NAV_ID) {
+      careerGalleryPendingEntryRef.current = false;
+      if (careerGalleryActiveRef.current || careerGalleryEnteringRef.current) {
+        interrupted = true;
+        exitCareerGallery({ restoreShip: true });
+        restoredShip = true;
+      }
+    }
     if (
       nextTargetId !== "portfolio" &&
       nextTargetId !== ORBITAL_PORTFOLIO_NAV_ID
@@ -8770,6 +8915,28 @@ export default function ResumeSpace3D({
       }
 
       interruptTransientTravelFlows(targetId, targetType);
+      if (targetId === CAREER_GALLERY_NAV_ID) {
+        if (careerGalleryActiveRef.current || careerGalleryEnteringRef.current) {
+          vlog("🖼️ Career gallery already active");
+          return;
+        }
+        setFollowingSpaceship(true);
+        followingSpaceshipRef.current = true;
+        if (spaceshipRef.current) spaceshipRef.current.visible = true;
+        careerGalleryPendingEntryRef.current = true;
+        const ship = spaceshipRef.current;
+        const atGallery =
+          !!ship &&
+          ship.position.distanceTo(CAREER_GALLERY_WORLD_ANCHOR) <=
+            CAREER_GALLERY_ARRIVAL_DIST;
+        if (atGallery) {
+          enterCareerGallery();
+        } else {
+          handleQuickNav(CAREER_GALLERY_NAV_ID, "section", skipAboutExitConfirm);
+          vlog("🖼️ Routing to Career Gallery — it will open on arrival");
+        }
+        return;
+      }
       if (targetId === "skills" || targetId === SKILLS_LATTICE_NAV_ID) {
         setSkillsNavHereActive(true);
         if (skillsLatticeActiveRef.current) {
@@ -9048,6 +9215,54 @@ export default function ResumeSpace3D({
       enterSkillsLattice();
     }
   }, [currentNavigationTarget, navigationDistance, enterSkillsLattice]);
+
+  // Career Gallery arrival: glide inside once autopilot parks at the standoff.
+  useEffect(() => {
+    if (
+      !careerGalleryPendingEntryRef.current ||
+      careerGalleryActiveRef.current ||
+      careerGalleryEnteringRef.current
+    ) {
+      return;
+    }
+    const ship = spaceshipRef.current;
+    const arrived =
+      !!ship &&
+      ship.position.distanceTo(CAREER_GALLERY_WORLD_ANCHOR) <=
+        CAREER_GALLERY_ENTRY_TRIGGER_DIST &&
+      navigationDistance === null;
+    if (arrived) enterCareerGallery();
+  }, [currentNavigationTarget, navigationDistance, enterCareerGallery]);
+
+  // Career Gallery per-frame animation (face swaps, hologram shader time).
+  useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
+    let last = performance.now();
+    const cameraWorld = new THREE.Vector3();
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      const gallery = careerGalleryRef.current;
+      const camera = sceneRef.current.camera;
+      if (!gallery || !camera) return;
+      const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
+      last = now;
+      camera.getWorldPosition(cameraWorld);
+      gallery.update(dt, cameraWorld);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [sceneReady]);
+
+  useEffect(
+    () => () => {
+      careerGalleryGlideCancelRef.current?.();
+      careerGalleryZoomDetachRef.current?.();
+      careerGalleryRef.current?.dispose();
+      careerGalleryRef.current = null;
+    },
+    [],
+  );
 
   // Sync navigationDistance to a ref for render-loop access.
   navigationDistanceRef.current = navigationDistance;
@@ -16345,6 +16560,25 @@ export default function ResumeSpace3D({
     }
     scene.add(skillsLatticeRoot);
     skillsLatticeRootRef.current = skillsLatticeRoot;
+
+    // --- CAREER GALLERY ---
+    const careerGallery = new CareerGallery({
+      imageUrls: collectPortfolioImageUrls(portfolioCores),
+      radius: CAREER_GALLERY_RADIUS,
+    });
+    careerGallery.root.position.copy(CAREER_GALLERY_WORLD_ANCHOR);
+    const careerGalleryLabel = createLabel(
+      CAREER_GALLERY_NAV_LABEL,
+      "Hologram Archive",
+    );
+    careerGalleryLabel.position.set(0, CAREER_GALLERY_RADIUS + 70, 0);
+    careerGallery.root.add(careerGalleryLabel);
+    scene.add(careerGallery.root);
+    careerGalleryRef.current = careerGallery;
+    if (IS_DEBUG) {
+      (window as unknown as Record<string, unknown>).__careerGalleryStats = () =>
+        careerGallery.getStats();
+    }
     skillsLatticeNodesRef.current = latticeNodes;
     skillsLatticeLineMatsRef.current = latticeLineMats;
     skillsLatticeLineGroupsRef.current = latticeLineGroups;
@@ -20644,6 +20878,7 @@ export default function ResumeSpace3D({
             skillsAnchorRef={skillsLatticeWorldAnchorRef}
             aboutAnchorRef={aboutMemorySquareWorldAnchorRef}
             portfolioAnchorRef={orbitalPortfolioWorldAnchorRef}
+            careerGalleryAnchorRef={careerGalleryWorldAnchorRef}
             currentNavigationTarget={currentNavigationTarget}
             onNavigateToTarget={handleCockpitNavigate}
             onCoordinatePing={(message) => shipLog(message, "info")}
@@ -21421,6 +21656,28 @@ export default function ResumeSpace3D({
                 ))}
               </div>
             </div>
+          )}
+
+          {careerGalleryActive && (
+            <button
+              onClick={() => exitCareerGallery({ restoreShip: true })}
+              style={{
+                position: "fixed",
+                right: 18,
+                top: 72,
+                zIndex: 1121,
+                padding: "5px 8px",
+                borderRadius: 8,
+                border: "1px solid rgba(145, 232, 255, 0.55)",
+                background: "rgba(8, 18, 34, 0.82)",
+                color: "#dff3ff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 11,
+                cursor: "pointer",
+              }}
+            >
+              Exit Gallery
+            </button>
           )}
 
           {skillsLatticeActive && (

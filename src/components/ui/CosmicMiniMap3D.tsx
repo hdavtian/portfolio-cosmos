@@ -15,6 +15,7 @@ type Props = {
   skillsAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
   aboutAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
   portfolioAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
+  careerGalleryAnchorRef?: React.MutableRefObject<THREE.Vector3 | null>;
   currentNavigationTarget: string | null;
   onNavigateToTarget: (targetId: string, targetType: "section" | "moon") => void;
   onCoordinatePing?: (message: string) => void;
@@ -139,6 +140,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
   skillsAnchorRef,
   aboutAnchorRef,
   portfolioAnchorRef,
+  careerGalleryAnchorRef,
   currentNavigationTarget,
   onNavigateToTarget,
   onCoordinatePing,
@@ -485,6 +487,16 @@ const CosmicMiniMap3D: React.FC<Props> = ({
             targetType: "section",
           });
         }
+        if (careerGalleryAnchorRef?.current) {
+          entities.push({
+            id: "career-gallery-anchor",
+            label: "Career Gallery",
+            kind: "anchor",
+            world: careerGalleryAnchorRef.current.clone(),
+            targetId: "career-gallery",
+            targetType: "section",
+          });
+        }
 
         const idMap = new Map<string, { x: number; y: number; ent: DrawEntity }>();
         hoverTargetsRef.current = [];
@@ -651,6 +663,7 @@ const CosmicMiniMap3D: React.FC<Props> = ({
     skillsAnchorRef,
     aboutAnchorRef,
     portfolioAnchorRef,
+    careerGalleryAnchorRef,
   ]);
 
   if (!visible) return null;
