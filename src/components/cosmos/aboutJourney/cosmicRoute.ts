@@ -20,6 +20,10 @@ export interface RouteStop {
   passRadius: number;
   /** Shifts the pass line off the center (e.g. above a planet). */
   passOffset?: THREE.Vector3;
+  /** Ride slows while closer than this to the center (default: pass + margin). */
+  slowOuter?: number;
+  /** ...and farther than this, e.g. to slow outside a shape but not inside it. */
+  slowInner?: number;
 }
 
 export interface RouteTiming {
@@ -38,6 +42,8 @@ export interface RouteTiming {
    * higher between them, averaging out to the legacy loop's duration.
    */
   speedProfile: Float32Array;
+  /** Stop centers in ride order, for turning the rider's view toward them. */
+  stopCenters: THREE.Vector3[];
 }
 
 export type CosmicPathCurve = THREE.CatmullRomCurve3 & { timing: RouteTiming };
@@ -60,9 +66,11 @@ const SPEED_PROFILE_SAMPLES = 1024;
 /** Ride speed near a stop, relative to the legacy loop's speed. */
 const STOP_SPEED = 0.35;
 /** Extra distance past a stop's pass before the ride starts speeding up. */
-const STOP_SLOW_MARGIN = 150;
+const STOP_SLOW_MARGIN = 900;
 /** Distance over which the ride eases between stop speed and cruise speed. */
-const STOP_SPEED_RAMP = 900;
+const STOP_SPEED_RAMP = 1800;
+/** Ramp at a slow zone's inner edge (stops that slow outside but not inside). */
+const STOP_INNER_RAMP = 500;
 /**
  * Top cruise speed between stops. If matching the legacy loop time would need
  * more, the ride simply takes a little longer rather than racing past things.
@@ -255,18 +263,20 @@ const buildSpeedProfile = (
   const n = SPEED_PROFILE_SAMPLES;
   const weights = new Float32Array(n);
   const point = new THREE.Vector3();
-  const centers = stops.map(passCenter);
   for (let i = 0; i < n; i++) {
     curve.getPointAt(i / n, point);
-    let nearest = Infinity;
-    stops.forEach((stop, si) => {
-      nearest = Math.min(
-        nearest,
-        point.distanceTo(centers[si]) - stop.passRadius - STOP_SLOW_MARGIN,
-      );
-    });
+    let slow = 0;
+    for (const stop of stops) {
+      const d = point.distanceTo(stop.center);
+      const outer = stop.slowOuter ?? stop.passRadius + STOP_SLOW_MARGIN;
+      const inner = stop.slowInner ?? 0;
+      const insideOuter = 1 - THREE.MathUtils.smoothstep(d, outer, outer + STOP_SPEED_RAMP);
+      const outsideInner =
+        inner > 0 ? THREE.MathUtils.smoothstep(d, inner - STOP_INNER_RAMP, inner) : 1;
+      slow = Math.max(slow, insideOuter * outsideInner);
+    }
     // 0 inside a stop's slow zone, 1 at cruise.
-    weights[i] = THREE.MathUtils.smoothstep(nearest, 0, STOP_SPEED_RAMP);
+    weights[i] = 1 - slow;
   }
 
   // Time for the loop relative to the legacy loop, for a given cruise speed.
@@ -341,6 +351,7 @@ export const buildCosmicRoute = ({
     headSpeed: length / formSeconds,
     lengthScale: length / reference,
     speedProfile: buildSpeedProfile(curve, order, length, reference),
+    stopCenters: order.map((stop) => stop.center.clone()),
   };
   return curve;
 };

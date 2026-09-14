@@ -2693,6 +2693,49 @@ export const useNavigationSystem = (deps: {
     vlog,
   ]);
 
+  /**
+   * Ends the current trip as if it had arrived. Used when another flow (the
+   * About journey) takes over the ship, so the autopilot doesn't resume the
+   * old trip afterwards and the targeting monitor doesn't linger.
+   */
+  const completeActiveNavigation = useCallback(
+    (reason: string) => {
+      if (!navigationTargetRef.current.id) return;
+      if (
+        tvPreviewControllerRef.current &&
+        tvPreviewControllerRef.current.phase !== "hidden"
+      ) {
+        tvPreviewControllerRef.current.fadeOut();
+      }
+      if (
+        dashcamControllerRef.current &&
+        dashcamControllerRef.current.phase !== "hidden"
+      ) {
+        dashcamControllerRef.current.fadeOut();
+      }
+      setCurrentNavigationTarget(null);
+      setNavigationDistance(null);
+      setNavigationETA(null);
+      navTurnActiveRef.current = false;
+      sectionAvoidWaypoint.current = null;
+      navigationTargetRef.current = {
+        id: null,
+        type: null,
+        position: null,
+        startPosition: null,
+        startTime: 0,
+        useTurbo: false,
+        lastUpdateFrame: undefined,
+      };
+      manualFlightRef.current.acceleration = 0;
+      manualFlightRef.current.currentSpeed = 0;
+      manualFlightRef.current.isTurboActive = false;
+      manualFlightRef.current.isLightspeedActive = false;
+      resetNavigationPhase(reason);
+    },
+    [resetNavigationPhase],
+  );
+
   const disposeNavigationSystem = useCallback(() => {
     navTrace("disposeNavigationSystem()", "called");
     resetNavigationPhase("dispose-navigation-system");
@@ -2727,6 +2770,7 @@ export const useNavigationSystem = (deps: {
     initializeNavigationSystem,
     updateAutopilotNavigation,
     disposeNavigationSystem,
+    completeActiveNavigation,
     /** Set this to receive moon arrival events (triggers orbit) */
     onMoonOrbitArrivalRef,
     /** Render loop reads & clears this to pre-warm GPU near a moon */

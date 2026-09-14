@@ -446,6 +446,12 @@ const CAREER_GALLERY_ARRIVAL_DIST = CAREER_GALLERY_RADIUS + 600;
 const CAREER_GALLERY_ENTRY_TRIGGER_DIST = CAREER_GALLERY_RADIUS + 1900;
 const CAREER_GALLERY_ENTRY_GLIDE_MS = 5000;
 const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -13200);
+/**
+ * The About ride's bottom control panel (speed arrows, camera toggles,
+ * momentum bar, hints) and its arrow-key/pointer input. Off: the ride is
+ * started by grabbing Mjolnir and runs on its own to the end.
+ */
+const ABOUT_TRAM_HUD_ENABLED = false;
 /** Gap the About roller coaster keeps from Experience moons' surfaces. */
 const ABOUT_ROUTE_MOON_CLEARANCE = 110;
 const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR = new THREE.Vector3(
@@ -3399,6 +3405,10 @@ export default function ResumeSpace3D({
   const aboutParticleSwarmRef = useRef<AboutParticleSwarmHandle | null>(null);
   const aboutHydrateSwarmRef = useRef<AboutParticleSwarmHandle | null>(null);
   const aboutMjolnirRef = useRef<MjolnirRider | null>(null);
+  /** Ends the autopilot's current trip; set once the navigation hook is ready. */
+  const completeActiveNavigationRef = useRef<((reason: string) => void) | null>(
+    null,
+  );
   const aboutJourneyCameraDistSavedRef = useRef<{
     min: number;
     max: number;
@@ -4000,7 +4010,8 @@ export default function ResumeSpace3D({
             .addScaledVector(tmpLateral, 52)
             .addScaledVector(worldUp, 14);
           dispersalPanRuntime.startedAt = now;
-          dispersalPanRuntime.active = true;
+          // After a hammer strike the camera already faces the impact; no pan.
+          dispersalPanRuntime.active = !journey.dispersalImpactPoint;
         } else {
           dispersalPanRuntime.active = false;
         }
@@ -4381,6 +4392,7 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!ABOUT_TRAM_HUD_ENABLED) return;
       const journey = aboutJourneyRef.current;
       if (!journey || journey.phase !== AboutJourneyPhase.PATH_TRAVEL) return;
 
@@ -4402,6 +4414,7 @@ export default function ResumeSpace3D({
     };
 
     const onKeyUp = (event: KeyboardEvent) => {
+      if (!ABOUT_TRAM_HUD_ENABLED) return;
       if (event.code === "ArrowUp") {
         event.preventDefault();
         event.stopPropagation();
@@ -4441,10 +4454,11 @@ export default function ResumeSpace3D({
       if (!inPathForming && aboutSkipCinematicPromptVisible) {
         dismissAboutSkipCinematicPrompt();
       }
+      const hudVisible = ABOUT_TRAM_HUD_ENABLED && inPathTravel;
       setAboutTramHudVisible((prev) =>
-        prev === inPathTravel ? prev : inPathTravel,
+        prev === hudVisible ? prev : hudVisible,
       );
-      if (inPathTravel && journey) {
+      if (hudVisible && journey) {
         const nextMomentum = journey.travelMomentumNormalized;
         setAboutTramMomentumNorm((prev) =>
           Math.abs(prev - nextMomentum) < 0.001 ? prev : nextMomentum,
@@ -4505,6 +4519,59 @@ export default function ResumeSpace3D({
     recomputeAboutTramInput,
     releaseAllAboutTramInput,
   ]);
+  // About ride: hover and click Mjolnir while it hovers in front of the rider.
+  useEffect(() => {
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    let hovered = false;
+
+    const hitsMjolnir = (event: MouseEvent): boolean => {
+      const journey = aboutJourneyRef.current;
+      const mjolnir = aboutMjolnirRef.current;
+      const renderer = rendererRef.current;
+      const camera = sceneRef.current.camera;
+      if (!journey?.awaitingGrab || !mjolnir || !renderer || !camera) {
+        return false;
+      }
+      const rect = renderer.domElement.getBoundingClientRect();
+      ndc.set(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycaster.setFromCamera(ndc, camera);
+      return mjolnir.hitTest(raycaster);
+    };
+
+    const setHovered = (next: boolean) => {
+      if (next === hovered) return;
+      hovered = next;
+      aboutMjolnirRef.current?.setHovered(next);
+      const canvas = rendererRef.current?.domElement;
+      if (canvas) canvas.style.cursor = next ? "pointer" : "";
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      setHovered(hitsMjolnir(event));
+    };
+    const onClick = (event: MouseEvent) => {
+      if (!hitsMjolnir(event)) return;
+      // Keep the click from also selecting whatever is behind the hammer.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setHovered(false);
+      aboutJourneyRef.current?.grabCompanion();
+    };
+
+    window.addEventListener("pointermove", onPointerMove, { capture: true });
+    window.addEventListener("click", onClick, { capture: true });
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove, {
+        capture: true,
+      });
+      window.removeEventListener("click", onClick, { capture: true });
+    };
+  }, []);
+
   const skillsSDPatrolStateRef = useRef<{ angle: number }>({
     angle: Math.PI * 0.25,
   });
@@ -6132,6 +6199,7 @@ export default function ResumeSpace3D({
     initializeNavigationSystem,
     updateAutopilotNavigation,
     disposeNavigationSystem,
+    completeActiveNavigation,
     onMoonOrbitArrivalRef,
     moonPrewarmRequestRef,
     tvPreviewControllerRef,
@@ -6304,6 +6372,8 @@ export default function ResumeSpace3D({
       return null;
     },
   });
+
+  completeActiveNavigationRef.current = completeActiveNavigation;
 
   useEffect(() => {
     currentNavigationTargetRef.current = currentNavigationTarget;
@@ -8122,6 +8192,19 @@ export default function ResumeSpace3D({
         }
       }
 
+      // Already past the trip into the About journey itself: selecting About
+      // again does nothing (no new trip, no targeting monitor over the ride).
+      // TRANSIT must pass: the cockpit nav and menu call beginTransit() first
+      // and then route the trip through here.
+      if (
+        targetType === "section" &&
+        targetId === "about" &&
+        aboutJourneyRef.current &&
+        aboutJourneyRef.current.phase > AboutJourneyPhase.TRANSIT
+      ) {
+        return;
+      }
+
       interruptTransientTravelFlows(targetId, targetType);
       if (targetType === "section" && targetId === ABOUT_MEMORY_SQUARE_NAV_ID) {
         aboutMemorySquarePendingEntryRef.current = true;
@@ -9047,6 +9130,14 @@ export default function ResumeSpace3D({
         return;
       }
       if (targetId === "about") {
+        // Ignore only once the journey itself is underway; during TRANSIT a
+        // repeat click just re-sends the trip.
+        if (
+          aboutJourneyRef.current &&
+          aboutJourneyRef.current.phase > AboutJourneyPhase.TRANSIT
+        ) {
+          return;
+        }
         dlog(`[handleCockpitNavigate:about] setting up about journey`);
         setAboutNavHereActive(true);
         setFollowingSpaceship(true);
@@ -15031,12 +15122,19 @@ export default function ResumeSpace3D({
           ship.lookAt(shipFlyLookAt);
         }
       },
+      setShipScale(multiplier: number) {
+        spaceshipRef.current?.scale.setScalar(FALCON_SCALE * multiplier);
+      },
       setFollowingSpaceship(v: boolean) {
         followingSpaceshipRef.current = v;
         setFollowingSpaceship(v);
       },
       setAutopilotSuppressed(v: boolean) {
         aboutJourneyAutopilotSuppressedRef.current = v;
+        // The journey has taken the ship: finish the trip to About so the
+        // autopilot doesn't resume it after the ride (slowly flying back) and
+        // the targeting monitor doesn't stay up over the ride.
+        if (v) completeActiveNavigationRef.current?.("about-journey-takeover");
       },
       onPathFormingStart() {
         setAboutSkipCinematicPromptVisible(true);
@@ -15244,9 +15342,11 @@ export default function ResumeSpace3D({
         const portfolioColumns = Math.max(1, Math.ceil(Math.sqrt(cores.length)));
         const stops: RouteStop[] = [
           {
+            // Slow while inside the lattice; the view turns to the crystals.
             name: "Skills",
             center: skillsCenter.clone(),
             passRadius: 520,
+            slowOuter: 650,
           },
           {
             // Straight over the planet, above the moons' plane, so the whole
@@ -15268,9 +15368,13 @@ export default function ResumeSpace3D({
             passRadius: portfolioColumns * 1260 * 0.5 + 500,
           },
           {
+            // Slow outside, far enough that the whole shell fits in view
+            // (~R / sin(fov/2) ≈ 2.6R), then speed through the middle.
             name: "Career Gallery",
             center: CAREER_GALLERY_WORLD_ANCHOR.clone(),
             passRadius: CAREER_GALLERY_RADIUS * 1.4,
+            slowInner: CAREER_GALLERY_RADIUS * 2.65,
+            slowOuter: CAREER_GALLERY_RADIUS * 4.2,
           },
         ];
         const obstacles: RouteObstacle[] = [
@@ -18277,6 +18381,12 @@ export default function ResumeSpace3D({
           }
           break;
         case "about":
+          if (
+            aboutJourneyRef.current &&
+            aboutJourneyRef.current.phase > AboutJourneyPhase.TRANSIT
+          ) {
+            break;
+          }
           setAboutNavHereActive(true);
           vlog("✨ About — routing to particle swarm...");
           if (!manualFlightModeRef.current) {
@@ -24371,7 +24481,7 @@ export default function ResumeSpace3D({
           {normalizeRideMessageText(aboutRideMessageView.textContent)}
         </div>
       )}
-      {aboutTramHudVisible && (
+      {ABOUT_TRAM_HUD_ENABLED && aboutTramHudVisible && (
         <div
           style={{
             position: "fixed",

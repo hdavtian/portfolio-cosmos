@@ -2,42 +2,86 @@ import * as THREE from "three";
 import type { CosmicPathCurve } from "./cosmicRoute";
 
 /**
- * Mjolnir riding the About cosmic rail. It overtakes the rider from behind,
- * leads just ahead of the camera, and at the end of the loop climbs, dives
- * and smashes into the rail to set off the shatter.
+ * Mjolnir on the About cosmic rail.
  *
- * Motion is smooth and follows the rail: the hammer faces where it is going,
- * banks into curves and streams a glowing trail. Lit from its own textures
- * (no scene lights, so no shader recompiles).
+ * 1. arrive  — shoots in from far down the rail straight at the rider, dives
+ *              under the rail and swoops up to hover in front, upright like a
+ *              cross, facing the rider.
+ * 2. hover   — waits there, clickable.
+ * 3. dock    — on click it glides in close, as if the rider caught hold of the
+ *              handle, and settles back with a soft bounce.
+ * 4. ride    — leads just ahead, still upright as a "T", its head and the top
+ *              of the shaft in view, pulling the rider.
+ * 5. strike  — at the end of the loop it climbs, dives and smashes the rail.
+ *
+ * Lit from its own textures (no scene lights, so no shader recompiles).
  */
 
 const MODEL_SIZE = 36;
-/** Height above the rail centerline (the camera rides at 30). */
-const RIDE_HEIGHT = 22;
-const LEAD_DISTANCE = 170;
-const FLY_IN_DELAY_S = 0.5;
-const FLY_IN_START_DISTANCE = -110;
-const FLY_IN_SECONDS = 2.4;
+const SELF_ILLUMINATION = 0.75;
+
+const ARRIVE_SECONDS = 3.8;
+const ARRIVE_START_DISTANCE = 2600;
+const ARRIVE_START_LIFT = 90;
+/** Low point of the arc, well below the camera's view. */
+const ARRIVE_DIVE_LIFT = -260;
+/** How close it is (along the rail) when it pops back up. */
+const ARRIVE_DIVE_DISTANCE = 140;
+/** Share of the arrival spent racing in and arcing down out of view. */
+const ARRIVE_DIVE_AT = 0.55;
+/** Share of the arrival after which it turns upright into the cross pose. */
+const ARRIVE_UPRIGHT_FROM = 0.7;
+
+/** Hover pose: close in front of the camera, at eye level (camera rides at 30). */
+const HOVER_DISTANCE = 60;
+const HOVER_LIFT = 30;
+
+const DOCK_SECONDS = 2.4;
+/** Share of the dock after which it tilts from the "T" into the pulling pose. */
+const DOCK_TILT_FROM = 0.3;
+/** How much closer than its riding spot it comes (handle toward the rider). */
+const DOCK_OVERSHOOT = 22;
+
+/**
+ * Pulling pose, placed in the rider's own frame each ride tick so it can
+ * never lag: this far ahead along the travel direction, this far below eye
+ * level, nearly horizontal and tilted slightly up, head leading.
+ */
+const RIDE_AHEAD = 44;
+const RIDE_BELOW = 13;
+const RIDE_PITCH_UP = 0.2;
+const RIDE_TRAIL_STRENGTH = 0.3;
+/** Rail-space equivalents of the riding spot, where the strike takes over. */
+const RIDE_DISTANCE = RIDE_AHEAD;
+const RIDE_LIFT = HOVER_LIFT - RIDE_BELOW;
+
 const STRIKE_DISTANCE = 950;
 const STRIKE_SECONDS = 1.8;
 const STRIKE_PEAK = 520;
 /** Share of the strike spent climbing before the dive. */
 const STRIKE_RISE = 0.58;
 const RECOIL_SECONDS = 1.2;
-const SELF_ILLUMINATION = 0.75;
 
-/** How quickly the hammer's heading follows its direction of travel. */
-const HEADING_DAMP = 10;
+const HEADING_DAMP = 8;
+const POSE_DAMP = 6;
 /** Bank angle per rad/s of turn, and the cap. */
 const BANK_PER_TURN_RATE = 0.35;
-const BANK_MAX = 0.9;
+const BANK_MAX = 0.6;
 const BANK_DAMP = 4;
-const BOB_AMPLITUDE = 1.6;
+const BOB_AMPLITUDE = 1.2;
 
 const TRAIL_POINTS = 40;
 const TRAIL_WIDTH = MODEL_SIZE * 0.6;
 /** Pale lavender-white, so the vapor doesn't read like the cyan path below. */
 const TRAIL_COLOR = new THREE.Color(0.82, 0.78, 1);
+
+const UP = new THREE.Vector3(0, 1, 0);
+/** Rolls the upright hammer about its handle so its head reads as a "T". */
+const T_ROLL = new THREE.Quaternion().setFromAxisAngle(
+  new THREE.Vector3(0, 0, 1),
+  Math.PI / 2,
+);
+const ORIGIN = new THREE.Vector3();
 
 // Soft, wispy vapor: feathered edges, flowing noise, billowing toward the tail.
 const trailVertexShader = /* glsl */ `
@@ -98,11 +142,19 @@ const trailFragmentShader = /* glsl */ `
   }
 `;
 
-type Mode = "hidden" | "warm" | "flyIn" | "ride" | "strike" | "recoil";
+type Mode = "hidden" | "warm" | "arrive" | "hover" | "dock" | "ride" | "strike" | "recoil";
 
 type GltfLoaderLike = {
   loadAsync(url: string): Promise<{ scene: THREE.Object3D }>;
 };
+
+const easeOutBack = (v: number) => {
+  const c = 1.1;
+  return 1 + (c + 1) * Math.pow(v - 1, 3) + c * Math.pow(v - 1, 2);
+};
+
+const easeInOutCubic = (v: number) =>
+  v < 0.5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2;
 
 const createGlowTexture = (): THREE.Texture | null => {
   const canvas = document.createElement("canvas");
@@ -128,9 +180,10 @@ export class MjolnirRider {
   readonly position = new THREE.Vector3();
   private readonly model = new THREE.Group();
   private readonly glow: THREE.Sprite;
+  private readonly pickSphere: THREE.Mesh;
   private readonly trail: THREE.Mesh;
-  private readonly trailPositions: Float32Array;
   private readonly trailMaterial: THREE.ShaderMaterial;
+  private readonly trailPositions: Float32Array;
   private readonly trailHistory: THREE.Vector3[] = [];
   private loaded = false;
   private mode: Mode = "hidden";
@@ -139,26 +192,42 @@ export class MjolnirRider {
   private warmCamera: (() => THREE.Camera | null | undefined) | null = null;
   private path: CosmicPathCurve | null = null;
   private riderT = 0;
-  private sign = 1;
-  private currentDistance = LEAD_DISTANCE;
-  private strikeFromDistance = LEAD_DISTANCE;
+  private sign: 1 | -1 = 1;
+  private hovered = false;
+  private onReady: (() => void) | null = null;
+  private onDocked: (() => void) | null = null;
   private onImpact: ((impactT: number, point: THREE.Vector3) => void) | null = null;
   private hasHeading = false;
   private bank = 0;
+  private currentDistance = RIDE_DISTANCE;
+  private strikeFromDistance = RIDE_DISTANCE;
   private readonly heading = new THREE.Vector3(0, 0, 1);
+  private readonly prevHeading = new THREE.Vector3();
   private readonly prevPosition = new THREE.Vector3();
   private readonly railPoint = new THREE.Vector3();
   private readonly tangent = new THREE.Vector3();
   private readonly motion = new THREE.Vector3();
-  private readonly prevHeading = new THREE.Vector3();
-  private readonly lookTarget = new THREE.Vector3();
   private readonly tmp = new THREE.Vector3();
   private readonly side = new THREE.Vector3();
+  private readonly basisX = new THREE.Vector3();
+  private readonly basisY = new THREE.Vector3();
+  private readonly matrix = new THREE.Matrix4();
+  private readonly crossQuat = new THREE.Quaternion();
+  private readonly poseQuat = new THREE.Quaternion();
+  /** Rider's camera position and smoothed travel direction, set by the ride. */
+  private readonly riderCameraPosition = new THREE.Vector3();
+  private readonly riderForward = new THREE.Vector3(0, 0, 1);
+  /** While riding, the ride tick updates the hammer in the same frame as the camera. */
+  private driven = false;
+  private readonly dockStartPosition = new THREE.Vector3();
+  private readonly ridePosition = new THREE.Vector3();
+  private readonly rideQuat = new THREE.Quaternion();
 
   constructor() {
     this.root.name = "AboutMjolnir";
     this.root.visible = false;
     this.root.add(this.model);
+
     this.glow = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: createGlowTexture(),
@@ -171,6 +240,14 @@ export class MjolnirRider {
     );
     this.glow.scale.setScalar(45);
     this.root.add(this.glow);
+
+    // Invisible, generous click target (raycasts ignore visibility).
+    this.pickSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(MODEL_SIZE * 0.75, 12, 8),
+      new THREE.MeshBasicMaterial(),
+    );
+    this.pickSphere.visible = false;
+    this.root.add(this.pickSphere);
 
     // Camera-facing ribbon of recent positions, rebuilt each frame in world space.
     this.trailPositions = new Float32Array(TRAIL_POINTS * 2 * 3);
@@ -258,7 +335,7 @@ export class MjolnirRider {
       axis.negate();
     }
 
-    // Pivot: centered, scaled, head pointing along +Z (the flight direction).
+    // Pivot: centered, scaled, head pointing along +Z.
     const pivot = new THREE.Group();
     source.position.sub(center);
     pivot.add(source);
@@ -281,20 +358,48 @@ export class MjolnirRider {
     this.mode = "warm";
   }
 
-  startRide(path: CosmicPathCurve, riderT: number, sign: 1 | -1): void {
-    if (!this.loaded) return;
+  /** Flies in from far down the rail and hovers in front of the rider. */
+  arrive(path: CosmicPathCurve, riderT: number, onReady: () => void): boolean {
+    if (!this.loaded) return false;
     this.path = path;
     this.riderT = riderT;
-    this.sign = sign;
-    this.mode = "flyIn";
+    this.sign = 1;
+    this.mode = "arrive";
     this.time = 0;
-    this.currentDistance = FLY_IN_START_DISTANCE;
+    this.onReady = onReady;
     this.hasHeading = false;
     this.bank = 0;
+    this.hovered = false;
     this.model.scale.setScalar(1);
     this.model.rotation.set(0, 0, 0);
     this.root.visible = false;
     this.trail.visible = false;
+    return true;
+  }
+
+  /** True while it hovers in front of the rider, waiting to be clicked. */
+  get awaitingGrab(): boolean {
+    return this.mode === "hover";
+  }
+
+  hitTest(raycaster: THREE.Raycaster): boolean {
+    if (this.mode !== "hover") return false;
+    return raycaster.intersectObject(this.pickSphere, false).length > 0;
+  }
+
+  setHovered(hovered: boolean): void {
+    this.hovered = hovered && this.mode === "hover";
+  }
+
+  /** Rider grabbed it: dock, then call `onDocked` to start pulling. */
+  dock(onDocked: () => void): boolean {
+    if (this.mode !== "hover") return false;
+    this.mode = "dock";
+    this.time = 0;
+    this.dockStartPosition.copy(this.root.position);
+    this.hovered = false;
+    this.onDocked = onDocked;
+    return true;
   }
 
   setRider(riderT: number, sign: 1 | -1): void {
@@ -302,12 +407,25 @@ export class MjolnirRider {
     this.sign = sign;
   }
 
+  /** The rider's camera position and (smoothed) travel direction. */
+  setRiderFrame(cameraPosition: THREE.Vector3, forward: THREE.Vector3): void {
+    this.riderCameraPosition.copy(cameraPosition);
+    if (forward.lengthSq() > 1e-6) this.riderForward.copy(forward).normalize();
+  }
+
+  /** True while the ride tick drives updates (the scene loop then skips it). */
+  setDriven(driven: boolean): void {
+    this.driven = driven;
+  }
+
   /** Returns false if the hammer isn't riding, so the caller ends the ride itself. */
   startStrike(onImpact: (impactT: number, point: THREE.Vector3) => void): boolean {
-    if (!this.path || (this.mode !== "ride" && this.mode !== "flyIn")) return false;
+    if (!this.path || this.mode !== "ride") return false;
     this.mode = "strike";
     this.time = 0;
-    this.strikeFromDistance = this.currentDistance;
+    // Lets go of the rider: the strike runs on its own along the rail.
+    this.driven = false;
+    this.strikeFromDistance = RIDE_DISTANCE;
     this.onImpact = onImpact;
     this.root.visible = true;
     return true;
@@ -315,13 +433,24 @@ export class MjolnirRider {
 
   hide(): void {
     this.mode = "hidden";
+    this.driven = false;
     this.path = null;
+    this.onReady = null;
+    this.onDocked = null;
     this.onImpact = null;
+    this.hovered = false;
     this.root.visible = false;
     this.trail.visible = false;
   }
 
-  update(dt: number, elapsed: number, cameraPosition?: THREE.Vector3): void {
+  update(
+    dt: number,
+    elapsed: number,
+    cameraPosition?: THREE.Vector3,
+    source: "scene" | "ride" = "scene",
+  ): void {
+    // While riding, only the ride tick may move it (same frame as the camera).
+    if (this.driven && source !== "ride") return;
     if (this.mode === "warm") {
       this.runWarmFrame();
       return;
@@ -332,25 +461,115 @@ export class MjolnirRider {
     const length = path.timing.length;
 
     let distance = this.currentDistance;
-    let lift = RIDE_HEIGHT + Math.sin(elapsed * 1.3) * BOB_AMPLITUDE;
+    let lift = RIDE_LIFT;
     let glowOpacity = 0.22;
     let glowScale = 45;
     let modelScale = 1;
     let tumble = 0;
     let trailStrength = 1;
+    /** "motion": face where it's moving; "rail": face down the rail; "pose": use poseQuat. */
+    let facing: "motion" | "rail" | "pose" = "motion";
+    let banking = true;
+    /** Set when the mode positions the hammer itself (rider frame, not the rail). */
+    let placed = false;
 
-    if (this.mode === "flyIn") {
-      if (this.time < FLY_IN_DELAY_S) return;
-      const u = THREE.MathUtils.clamp((this.time - FLY_IN_DELAY_S) / FLY_IN_SECONDS, 0, 1);
-      const eased = 1 - Math.pow(1 - u, 3);
-      distance = THREE.MathUtils.lerp(FLY_IN_START_DISTANCE, LEAD_DISTANCE, eased);
-      lift += (1 - eased) * 16;
+    if (this.mode === "arrive") {
+      const u = THREE.MathUtils.clamp(this.time / ARRIVE_SECONDS, 0, 1);
+      if (u < ARRIVE_DIVE_AT) {
+        // Races in and arcs down, dropping out of view below the rail.
+        const a = u / ARRIVE_DIVE_AT;
+        distance = THREE.MathUtils.lerp(
+          ARRIVE_START_DISTANCE,
+          ARRIVE_DIVE_DISTANCE,
+          1 - Math.pow(1 - a, 2),
+        );
+        lift = THREE.MathUtils.lerp(ARRIVE_START_LIFT, ARRIVE_DIVE_LIFT, a * a);
+      } else {
+        // Pops up close in front and settles gently.
+        const b = (u - ARRIVE_DIVE_AT) / (1 - ARRIVE_DIVE_AT);
+        distance = THREE.MathUtils.lerp(
+          ARRIVE_DIVE_DISTANCE,
+          HOVER_DISTANCE,
+          THREE.MathUtils.smoothstep(b, 0, 1),
+        );
+        lift = THREE.MathUtils.lerp(ARRIVE_DIVE_LIFT, HOVER_LIFT, easeOutBack(b));
+      }
+      glowOpacity = 0.3;
+      if (u >= ARRIVE_UPRIGHT_FROM) {
+        this.computeCrossQuat(path, length);
+        facing = "pose";
+        this.poseQuat.copy(this.root.quaternion).slerp(
+          this.crossQuat,
+          THREE.MathUtils.smoothstep(u, ARRIVE_UPRIGHT_FROM, 1),
+        );
+        banking = false;
+      }
+      trailStrength = 1 - THREE.MathUtils.smoothstep(u, 0.85, 1);
+      if (u >= 1) {
+        this.mode = "hover";
+        this.time = 0;
+        const onReady = this.onReady;
+        this.onReady = null;
+        onReady?.();
+      }
+    } else if (this.mode === "hover") {
+      distance = HOVER_DISTANCE;
+      lift = HOVER_LIFT + Math.sin(elapsed * 1.4) * BOB_AMPLITUDE * 1.5;
+      this.computeCrossQuat(path, length);
+      facing = "pose";
+      this.poseQuat.copy(this.root.quaternion).slerp(
+        this.crossQuat,
+        1 - Math.exp(-POSE_DAMP * dt),
+      );
+      banking = false;
+      // A slow pulse invites a click; brighter while hovered.
+      glowOpacity = (this.hovered ? 0.55 : 0.3) + 0.12 * Math.sin(elapsed * 2.6);
+      glowScale = this.hovered ? 70 : 55;
+      trailStrength = 0;
+    } else if (this.mode === "dock") {
+      const u = THREE.MathUtils.clamp(this.time / DOCK_SECONDS, 0, 1);
+      // Comes in closer than its riding spot (the rider takes the handle),
+      // then settles back with a soft bounce.
+      let ahead: number;
+      if (u < 0.55) {
+        ahead = RIDE_AHEAD - DOCK_OVERSHOOT * easeInOutCubic(u / 0.55);
+      } else {
+        const v = (u - 0.55) / 0.45;
+        ahead =
+          RIDE_AHEAD - DOCK_OVERSHOOT * Math.cos(v * Math.PI * 1.5) * Math.exp(-3.5 * v);
+      }
+      this.computeRideFrame(ahead);
+      this.root.position.lerpVectors(
+        this.dockStartPosition,
+        this.ridePosition,
+        easeInOutCubic(Math.min(1, u / 0.55)),
+      );
+      placed = true;
+      // Tilts from the upright "T" into the pulling pose, ready to go.
+      this.computeCrossQuat(path, length);
+      facing = "pose";
+      this.poseQuat
+        .copy(this.crossQuat)
+        .slerp(this.rideQuat, THREE.MathUtils.smoothstep(u, DOCK_TILT_FROM, 1));
+      banking = false;
+      trailStrength = 0;
       if (u >= 1) {
         this.mode = "ride";
         this.time = 0;
+        const onDocked = this.onDocked;
+        this.onDocked = null;
+        onDocked?.();
       }
     } else if (this.mode === "ride") {
-      distance = LEAD_DISTANCE;
+      // Locked to the rider's frame: steady, no bob, never behind the rider.
+      distance = RIDE_DISTANCE;
+      this.computeRideFrame(RIDE_AHEAD);
+      this.root.position.copy(this.ridePosition);
+      placed = true;
+      facing = "pose";
+      this.poseQuat.copy(this.rideQuat);
+      banking = false;
+      trailStrength = RIDE_TRAIL_STRENGTH;
     } else if (this.mode === "strike") {
       const u = THREE.MathUtils.clamp(this.time / STRIKE_SECONDS, 0, 1);
       distance = THREE.MathUtils.lerp(
@@ -360,10 +579,10 @@ export class MjolnirRider {
       );
       if (u < STRIKE_RISE) {
         const r = u / STRIKE_RISE;
-        lift = RIDE_HEIGHT + STRIKE_PEAK * (1 - Math.pow(1 - r, 2));
+        lift = RIDE_LIFT + STRIKE_PEAK * (1 - Math.pow(1 - r, 2));
       } else {
         const d = (u - STRIKE_RISE) / (1 - STRIKE_RISE);
-        lift = (RIDE_HEIGHT + STRIKE_PEAK) * (1 - Math.pow(d, 2.4));
+        lift = (RIDE_LIFT + STRIKE_PEAK) * (1 - Math.pow(d, 2.4));
       }
       glowOpacity = 0.3 + 0.5 * u;
       glowScale = 45 + 70 * u;
@@ -398,13 +617,18 @@ export class MjolnirRider {
     }
 
     this.currentDistance = distance;
-    this.placeOnRail(path, length, distance, lift);
+    if (!placed) {
+      this.placeOnRail(path, length, distance, lift);
+    } else {
+      this.tangent.copy(this.riderForward);
+    }
 
-    // Heading follows the actual direction of travel (rail travel, climb and
-    // dive alike); falls back to the rail tangent while the rider is stopped.
+    // Heading follows the actual direction of travel; falls back to the rail
+    // tangent while barely moving.
     this.motion.subVectors(this.root.position, this.prevPosition);
     const moved = this.hasHeading ? this.motion.length() : 0;
-    const wanted = moved > 0.5 ? this.motion.divideScalar(moved) : this.tangent;
+    const wanted =
+      facing === "motion" && moved > 0.5 ? this.motion.divideScalar(moved) : this.tangent;
     if (!this.hasHeading) {
       this.heading.copy(wanted);
       this.hasHeading = true;
@@ -414,18 +638,25 @@ export class MjolnirRider {
     this.heading.lerp(wanted, 1 - Math.exp(-HEADING_DAMP * dt)).normalize();
     this.prevPosition.copy(this.root.position);
 
+    if (facing === "pose") {
+      this.root.quaternion.copy(this.poseQuat);
+    } else {
+      this.headingToQuat(this.heading, this.root.quaternion);
+    }
+
     // Bank into turns: roll against the yaw rate around world up.
-    const yawRate =
-      Math.atan2(
-        this.tmp.crossVectors(this.prevHeading, this.heading).dot(THREE.Object3D.DEFAULT_UP),
-        this.prevHeading.dot(this.heading),
-      ) / dt;
-    const bankTarget = THREE.MathUtils.clamp(-yawRate * BANK_PER_TURN_RATE, -BANK_MAX, BANK_MAX);
+    let bankTarget = 0;
+    if (banking) {
+      const yawRate =
+        Math.atan2(
+          this.tmp.crossVectors(this.prevHeading, this.heading).dot(UP),
+          this.prevHeading.dot(this.heading),
+        ) / dt;
+      bankTarget = THREE.MathUtils.clamp(-yawRate * BANK_PER_TURN_RATE, -BANK_MAX, BANK_MAX);
+    }
     this.bank += (bankTarget - this.bank) * (1 - Math.exp(-BANK_DAMP * dt));
 
     this.position.copy(this.root.position);
-    this.lookTarget.copy(this.position).add(this.heading);
-    this.root.lookAt(this.lookTarget);
     this.model.rotation.set(tumble, 0, this.bank);
     this.model.scale.setScalar(Math.max(0.001, modelScale));
 
@@ -436,6 +667,42 @@ export class MjolnirRider {
 
     this.trailMaterial.uniforms.uTime.value = elapsed;
     this.updateTrail(cameraPosition, trailStrength * modelScale);
+  }
+
+  /** Upright (head up), broad side facing back down the rail toward the rider. */
+  private computeCrossQuat(path: CosmicPathCurve, length: number) {
+    path.getTangentAt(
+      THREE.MathUtils.euclideanModulo(this.riderT + (this.sign * HOVER_DISTANCE) / length, 1),
+      this.tmp,
+    );
+    this.basisY.copy(this.tmp).multiplyScalar(-this.sign);
+    this.basisY.y = 0;
+    if (this.basisY.lengthSq() < 1e-6) this.basisY.set(0, 0, 1);
+    this.basisY.normalize();
+    this.basisX.crossVectors(this.basisY, UP).normalize();
+    this.matrix.makeBasis(this.basisX, this.basisY, UP);
+    this.crossQuat.setFromRotationMatrix(this.matrix).multiply(T_ROLL);
+  }
+
+  /** Pulling pose in the rider's frame, `ahead` units along the travel direction. */
+  private computeRideFrame(ahead: number) {
+    this.ridePosition
+      .copy(this.riderCameraPosition)
+      .addScaledVector(this.riderForward, ahead)
+      .addScaledVector(UP, -RIDE_BELOW);
+    this.tmp
+      .copy(this.riderForward)
+      .addScaledVector(UP, Math.tan(RIDE_PITCH_UP))
+      .normalize();
+    this.headingToQuat(this.tmp, this.rideQuat);
+    this.rideQuat.multiply(T_ROLL);
+  }
+
+  /** Quaternion that points local +Z (the head) along `dir`, keeping world up. */
+  private headingToQuat(dir: THREE.Vector3, out: THREE.Quaternion) {
+    const up = Math.abs(dir.y) > 0.999 ? this.side.set(0, 0, 1) : UP;
+    this.matrix.lookAt(dir, ORIGIN, up);
+    out.setFromRotationMatrix(this.matrix);
   }
 
   private runWarmFrame(): void {
@@ -476,7 +743,7 @@ export class MjolnirRider {
       if (cameraPosition) {
         this.side.subVectors(cameraPosition, point).cross(this.tmp);
       } else {
-        this.side.crossVectors(this.tmp, THREE.Object3D.DEFAULT_UP);
+        this.side.crossVectors(this.tmp, UP);
       }
       if (this.side.lengthSq() < 1e-6) this.side.set(1, 0, 0);
       const fade = 1 - i / (TRAIL_POINTS - 1);
@@ -499,7 +766,7 @@ export class MjolnirRider {
     const t = THREE.MathUtils.euclideanModulo(this.riderT + (this.sign * distance) / length, 1);
     path.getPointAt(t, this.railPoint);
     path.getTangentAt(t, this.tangent).multiplyScalar(this.sign).normalize();
-    this.root.position.copy(this.railPoint).addScaledVector(THREE.Object3D.DEFAULT_UP, lift);
+    this.root.position.copy(this.railPoint).addScaledVector(UP, lift);
   }
 
   dispose(): void {
