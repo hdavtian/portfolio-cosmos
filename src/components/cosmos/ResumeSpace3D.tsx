@@ -9,16 +9,21 @@ import aboutDeck from "../../data/aboutDeck.json";
 import aboutPathTravelMessages from "../../data/aboutPathTravelMessages.json";
 import { moonPortfolioMapping } from "../../data/moonPortfolioMapping";
 import portfolioCores from "../../data/portfolioCores.json";
-import { CareerGallery } from "./careerGallery/CareerGallery";
+import {
+  CareerGallery,
+  type CareerGalleryFocusInfo,
+} from "./careerGallery/CareerGallery";
 import {
   applyGalleryInteriorControls,
   attachGalleryFovZoom,
   captureGalleryControls,
-  collectPortfolioImageUrls,
+  collectPortfolioGalleryItems,
+  lookFromCenterToward,
   restoreGalleryControls,
   runGalleryEntryGlide,
   type GalleryControlsSnapshot,
 } from "./careerGallery/careerGalleryCamera";
+import CareerGalleryTitleCard from "./careerGallery/CareerGalleryTitleCard";
 import resumeData from "../../data/resume.json";
 import { trackEvent } from "../../lib/analytics";
 import { IS_DEBUG, dlog, dwarn } from "../../lib/debugLog";
@@ -418,18 +423,19 @@ const CAMERA_TRACE_ENABLED = true;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
 // Recenter deep-space destinations so the universe extent remains sun-centered.
 const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(13600, 220, -12000);
-// Career Gallery: hologram shell of portfolio screenshots. Placed in the open
-// (-x, +z) quadrant away from other destinations, ~15.8k from the sun (the
-// farthest destination, Skills, is ~18.1k).
+// Career Gallery: hologram shell of portfolio screenshots. Placed out in the
+// open (-x, +z) quadrant away from other destinations, ~17.5k from the sun
+// (the farthest destination, Skills, is ~18.1k).
 const CAREER_GALLERY_NAV_ID = "career-gallery";
 const CAREER_GALLERY_NAV_LABEL = "Career Gallery";
-const CAREER_GALLERY_WORLD_ANCHOR = new THREE.Vector3(-13200, 380, 8600);
-// Twice the Skills shell so there's room to zoom from the center.
+const CAREER_GALLERY_WORLD_ANCHOR = new THREE.Vector3(-14660, 420, 9550);
+// Twice the Skills shell (396). The interior's density comes from its 320
+// faces (see CareerGallery.ts), not from the radius.
 const CAREER_GALLERY_RADIUS = 792;
-const CAREER_GALLERY_NAV_STANDOFF_DIST = 2000;
-const CAREER_GALLERY_ARRIVAL_DIST = 1400;
-const CAREER_GALLERY_ENTRY_TRIGGER_DIST = 2600;
-const CAREER_GALLERY_ENTRY_GLIDE_MS = 3600;
+const CAREER_GALLERY_NAV_STANDOFF_DIST = CAREER_GALLERY_RADIUS + 1300;
+const CAREER_GALLERY_ARRIVAL_DIST = CAREER_GALLERY_RADIUS + 600;
+const CAREER_GALLERY_ENTRY_TRIGGER_DIST = CAREER_GALLERY_RADIUS + 1900;
+const CAREER_GALLERY_ENTRY_GLIDE_MS = 5000;
 const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -13200);
 const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR = new THREE.Vector3(
   13723.38,
@@ -1894,6 +1900,8 @@ export default function ResumeSpace3D({
   const careerGalleryGlideCancelRef = useRef<(() => void) | null>(null);
   const careerGalleryZoomDetachRef = useRef<(() => void) | null>(null);
   const [careerGalleryActive, setCareerGalleryActive] = useState(false);
+  const [careerGallerySelection, setCareerGallerySelection] =
+    useState<CareerGalleryFocusInfo | null>(null);
   const composerRef = useRef<EffectComposer | null>(null);
   const sceneRef = useRef<SceneRef>({});
 
@@ -7516,6 +7524,7 @@ export default function ResumeSpace3D({
       careerGalleryActiveRef.current = false;
       careerGalleryEnteringRef.current = false;
       setCareerGalleryActive(false);
+      setCareerGallerySelection(null);
       careerGalleryRef.current?.setInteriorMode(false);
       if (!wasInside) return;
 
@@ -7574,7 +7583,7 @@ export default function ResumeSpace3D({
           careerGalleryZoomDetachRef.current = attachGalleryFovZoom(dom, camera);
         }
         shipLog(
-          "Career Gallery — drag to look around, scroll to zoom",
+          "Career Gallery — drag to look around, scroll to zoom, click a tile",
           "info",
         );
       },
@@ -9239,20 +9248,116 @@ export default function ResumeSpace3D({
     if (!sceneReady) return;
     let raf = 0;
     let last = performance.now();
-    const cameraWorld = new THREE.Vector3();
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
       const gallery = careerGalleryRef.current;
-      const camera = sceneRef.current.camera;
+      const camera = sceneRef.current.camera as
+        | THREE.PerspectiveCamera
+        | undefined;
       if (!gallery || !camera) return;
       const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
       last = now;
-      camera.getWorldPosition(cameraWorld);
-      gallery.update(dt, cameraWorld);
+      gallery.update(dt, camera);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [sceneReady]);
+
+  // Career Gallery tiles: hover highlights edges; a click (not a drag) turns
+  // toward the tile and reveals its full screenshot; Esc or clicking empty
+  // space / the same tile closes it.
+  useEffect(() => {
+    if (!careerGalleryActive) return;
+    const dom = rendererRef.current?.domElement;
+    const camera = sceneRef.current.camera as THREE.PerspectiveCamera | undefined;
+    const gallery = careerGalleryRef.current;
+    if (!dom || !camera || !gallery) return;
+
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    let pendingMove: PointerEvent | null = null;
+    let hoverRaf = 0;
+    let lastHover: number | null = null;
+    let pressed: { x: number; y: number; t: number } | null = null;
+
+    const pickAt = (clientX: number, clientY: number) => {
+      const rect = dom.getBoundingClientRect();
+      ndc.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycaster.setFromCamera(ndc, camera);
+      return gallery.pickFace(raycaster);
+    };
+    const closeFocus = () => {
+      gallery.clearFocus();
+      setCareerGallerySelection(null);
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      pendingMove = event;
+      if (hoverRaf) return;
+      hoverRaf = requestAnimationFrame(() => {
+        hoverRaf = 0;
+        if (!pendingMove) return;
+        const index = pickAt(pendingMove.clientX, pendingMove.clientY);
+        if (index === lastHover) return;
+        lastHover = index;
+        gallery.setHovered(index);
+        dom.style.cursor = index === null ? "" : "pointer";
+      });
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      pressed = { x: event.clientX, y: event.clientY, t: performance.now() };
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      if (!pressed) return;
+      const moved = Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y);
+      const quick = performance.now() - pressed.t < 400;
+      pressed = null;
+      if (moved > 6 || !quick) return; // a look-around drag, not a click
+
+      const index = pickAt(event.clientX, event.clientY);
+      if (index === null || index === gallery.getFocusedIndex()) {
+        closeFocus();
+        return;
+      }
+      const info = gallery.focusFace(index);
+      if (!info) return;
+      setCareerGallerySelection(info);
+      const controls = sceneRef.current.controls;
+      if (controls) {
+        const center = gallery.root.getWorldPosition(new THREE.Vector3());
+        const tile = gallery.getFaceWorldCentroid(index, new THREE.Vector3());
+        lookFromCenterToward(controls, center, tile);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeFocus();
+    };
+    // Keep canvas clicks from reaching the scene's planet click handler
+    // (which could navigate away) while inside the gallery.
+    const blockSceneClick = (event: MouseEvent) => {
+      if (event.target === dom) event.stopPropagation();
+    };
+
+    dom.addEventListener("pointermove", onPointerMove);
+    dom.addEventListener("pointerdown", onPointerDown);
+    dom.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("click", blockSceneClick, true);
+    return () => {
+      dom.removeEventListener("pointermove", onPointerMove);
+      dom.removeEventListener("pointerdown", onPointerDown);
+      dom.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("click", blockSceneClick, true);
+      if (hoverRaf) cancelAnimationFrame(hoverRaf);
+      dom.style.cursor = "";
+      gallery.setHovered(null);
+      closeFocus();
+    };
+  }, [careerGalleryActive]);
 
   useEffect(
     () => () => {
@@ -16563,7 +16668,7 @@ export default function ResumeSpace3D({
 
     // --- CAREER GALLERY ---
     const careerGallery = new CareerGallery({
-      imageUrls: collectPortfolioImageUrls(portfolioCores),
+      items: collectPortfolioGalleryItems(portfolioCores),
       radius: CAREER_GALLERY_RADIUS,
     });
     careerGallery.root.position.copy(CAREER_GALLERY_WORLD_ANCHOR);
@@ -16578,6 +16683,8 @@ export default function ResumeSpace3D({
     if (IS_DEBUG) {
       (window as unknown as Record<string, unknown>).__careerGalleryStats = () =>
         careerGallery.getStats();
+      (window as unknown as Record<string, unknown>).__careerGalleryTestPattern =
+        () => careerGallery.applyOrientationTestPattern();
     }
     skillsLatticeNodesRef.current = latticeNodes;
     skillsLatticeLineMatsRef.current = latticeLineMats;
@@ -21678,6 +21785,15 @@ export default function ResumeSpace3D({
             >
               Exit Gallery
             </button>
+          )}
+          {careerGalleryActive && (
+            <CareerGalleryTitleCard
+              selection={careerGallerySelection}
+              onClose={() => {
+                careerGalleryRef.current?.clearFocus();
+                setCareerGallerySelection(null);
+              }}
+            />
           )}
 
           {skillsLatticeActive && (

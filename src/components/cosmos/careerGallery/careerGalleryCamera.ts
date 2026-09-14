@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import CameraControls from "camera-controls";
+import type { CareerGalleryItem } from "./CareerGallery";
 
 /**
  * Camera helpers for the Career Gallery interior: glide to the shell's
@@ -24,8 +25,9 @@ export type GalleryControlsSnapshot = {
 // Camera sits at the center; the orbit target is this far in front of it, so
 // "orbiting" the target is effectively turning the head.
 const LOOK_TARGET_OFFSET = 0.01;
-const MIN_ZOOM_FOV = 26;
-const MAX_ZOOM_FOV = 82;
+const MIN_ZOOM_FOV = 22;
+// A wide zoom-out range shows much more of the mosaic at once.
+const MAX_ZOOM_FOV = 105;
 
 export const captureGalleryControls = (
   controls: CameraControls,
@@ -79,6 +81,27 @@ export const applyGalleryInteriorControls = (controls: CameraControls): void => 
   controls.polarRotateSpeed = -0.35;
   controls.smoothTime = 0.35;
   controls.enabled = true;
+};
+
+/** Smoothly turn the head (camera at `center`) toward a world point. */
+export const lookFromCenterToward = (
+  controls: CameraControls,
+  center: THREE.Vector3,
+  worldPoint: THREE.Vector3,
+): void => {
+  const dir = worldPoint.clone().sub(center);
+  if (dir.lengthSq() < 1e-6) return;
+  dir.normalize();
+  const target = center.clone().addScaledVector(dir, LOOK_TARGET_OFFSET);
+  controls.setLookAt(
+    center.x,
+    center.y,
+    center.z,
+    target.x,
+    target.y,
+    target.z,
+    true,
+  );
 };
 
 /** Glides the camera into the shell's center. Returns a cancel function. */
@@ -140,7 +163,7 @@ export const attachGalleryFovZoom = (
   const onWheel = (event: WheelEvent) => {
     event.preventDefault();
     camera.fov = THREE.MathUtils.clamp(
-      camera.fov + event.deltaY * 0.03,
+      camera.fov + event.deltaY * 0.04,
       MIN_ZOOM_FOV,
       MAX_ZOOM_FOV,
     );
@@ -150,28 +173,54 @@ export const attachGalleryFovZoom = (
   return () => dom.removeEventListener("wheel", onWheel);
 };
 
-/** Every screenshot URL referenced anywhere in the portfolio data. */
-export const collectPortfolioImageUrls = (value: unknown): string[] => {
-  const urls = new Set<string>();
-  const visit = (node: unknown) => {
+const IMAGE_URL_RE = /\.(jpe?g|png|gif|webp)$/i;
+
+/**
+ * Every screenshot referenced in the portfolio data, with the project title,
+ * company (the portfolio core) and year it belongs to.
+ */
+export const collectPortfolioGalleryItems = (cores: unknown): CareerGalleryItem[] => {
+  const byUrl = new Map<string, CareerGalleryItem>();
+  type Context = { company?: string; title?: string; year?: number | null };
+
+  const add = (url: string, title: string, context: Context) => {
+    if (!IMAGE_URL_RE.test(url) || byUrl.has(url)) return;
+    const year = context.year ?? null;
+    // Some projects are titled after their company; don't repeat it.
+    const company =
+      context.company && context.company.trim().toLowerCase() !== title.trim().toLowerCase()
+        ? context.company
+        : undefined;
+    byUrl.set(url, {
+      url,
+      title,
+      subtitle: [company, year].filter(Boolean).join(" · "),
+      year,
+    });
+  };
+
+  const visit = (node: unknown, context: Context) => {
     if (!node) return;
     if (Array.isArray(node)) {
-      node.forEach(visit);
+      node.forEach((child) => visit(child, context));
       return;
     }
     if (typeof node !== "object") return;
-    for (const [key, child] of Object.entries(node as Record<string, unknown>)) {
-      if (
-        key === "image" &&
-        typeof child === "string" &&
-        /\.(jpe?g|png|gif|webp)$/i.test(child)
-      ) {
-        urls.add(child);
-      } else {
-        visit(child);
-      }
+    const record = node as Record<string, unknown>;
+    const next: Context = { ...context };
+    if (typeof record.core === "string") next.company = record.core;
+    if (typeof record.year === "number") next.year = record.year;
+    // Gallery media items carry short captions; keep the project title.
+    const isMediaItem = record.type === "image";
+    if (typeof record.title === "string" && !isMediaItem) next.title = record.title;
+    if (typeof record.image === "string") {
+      add(record.image, next.title ?? "Untitled project", next);
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== "image" && child && typeof child === "object") visit(child, next);
     }
   };
-  visit(value);
-  return Array.from(urls);
+
+  visit(cores, {});
+  return Array.from(byUrl.values());
 };
