@@ -217,10 +217,9 @@ const EXPERIENCE_END_CAMERA_POSITION = new THREE.Vector3(
   1301.6,
 );
 const EXPERIENCE_END_CAMERA_TARGET = new THREE.Vector3(11970.8, -828.9, -116.5);
-const OBLIVION_DRONE_MODEL_PATH = "/models/oblivion-drone/oblivion_drone.glb";
 
-// Perf experiment: `?placeholders=true` swaps the Falcon and Oblivion drone
-// GLTFs for simple primitives, to isolate model cost from code cost.
+// Perf experiment: `?placeholders=true` swaps the ship and drone GLTFs for
+// simple primitives, to isolate model cost from code cost.
 const PLACEHOLDER_MODELS: boolean = (() => {
   if (typeof window === "undefined") return false;
   try {
@@ -233,7 +232,8 @@ const PLACEHOLDER_MODELS: boolean = (() => {
   }
 })();
 
-// Fun experiment: `?ship=bronco` flies a 1989 Ford Bronco instead of the Falcon.
+// The Millennium Falcon (falcon2) is the default ship; `?ship=bronco` flies a
+// 1989 Ford Bronco instead.
 const SHIP_VARIANT: string | null = (() => {
   if (typeof window === "undefined") return null;
   try {
@@ -247,6 +247,9 @@ const SHIP_VARIANT_MODEL_PATHS: Record<string, string> = {
   bronco: "/models/bronco/ford_bronco_1989.glb",
   falcon2: "/models/falcon2/falcon2.glb",
 };
+const SHIP_MODEL_PATH =
+  (SHIP_VARIANT && SHIP_VARIANT_MODEL_PATHS[SHIP_VARIANT]) ||
+  SHIP_VARIANT_MODEL_PATHS.falcon2;
 
 const loadVehicleAsShip = async (loader: GLTFLoader, path: string) => {
   const gltf = await loader.loadAsync(path);
@@ -293,20 +296,9 @@ function capEmissiveIntensity(root: THREE.Object3D) {
   });
 }
 
-// Fun experiment: `?drone=deathstar` replaces the Oblivion drone model.
-// HologramDroneDisplay normalizes whatever model it gets to drone size.
-const DRONE_VARIANT: string | null = (() => {
-  if (typeof window === "undefined") return null;
-  try {
-    return new URLSearchParams(window.location.search).get("drone");
-  } catch {
-    return null;
-  }
-})();
-
-const DRONE_VARIANT_MODEL_PATHS: Record<string, string> = {
-  deathstar: "/models/deathstar/deathstar.glb",
-};
+// Moon-visit drone model (the Death Star). HologramDroneDisplay normalizes
+// whatever model it gets to drone size.
+const DRONE_MODEL_PATH = "/models/deathstar/deathstar.glb";
 
 // Self-illumination for drone models that read too dark in moon orbit. A
 // real light attached to the drone would change the scene's light count each
@@ -2514,14 +2506,11 @@ export default function ResumeSpace3D({
     const audioPreloader = new THREE.AudioLoader();
     // Started synchronously so the scene-setup effect (which runs after this
     // one) can reuse the same parse instead of loading the Falcon twice.
-    const falconGltfPromise =
-      SHIP_VARIANT && SHIP_VARIANT_MODEL_PATHS[SHIP_VARIANT]
-        ? loadVehicleAsShip(gltfPreloader, SHIP_VARIANT_MODEL_PATHS[SHIP_VARIANT])
-        : PLACEHOLDER_MODELS
-          ? (Promise.resolve({
-              scene: buildFalconPlaceholder(),
-            }) as unknown as ReturnType<GLTFLoader["loadAsync"]>)
-          : gltfPreloader.loadAsync("/models/spaceship/scene.gltf");
+    const falconGltfPromise = PLACEHOLDER_MODELS
+      ? (Promise.resolve({
+          scene: buildFalconPlaceholder(),
+        }) as unknown as ReturnType<GLTFLoader["loadAsync"]>)
+      : loadVehicleAsShip(gltfPreloader, SHIP_MODEL_PATH);
     spaceshipGltfPromiseRef.current = falconGltfPromise;
 
     const loadTextureSafe = async (url: string) => {
@@ -2553,7 +2542,7 @@ export default function ResumeSpace3D({
         dwarn("[PERF:load] preloadCriticalAssets START");
         debugLog(
           "loader",
-          `[models] preload start falcon=/models/spaceship/scene.gltf sd=/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb drone=${OBLIVION_DRONE_MODEL_PATH}`,
+          `[models] preload start ship=${SHIP_MODEL_PATH} sd=/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb drone=${DRONE_MODEL_PATH}`,
         );
         const [
           spaceshipGltf,
@@ -2572,14 +2561,9 @@ export default function ResumeSpace3D({
           gltfPreloader.loadAsync(
             "/models/star-destroyer-2/star_wars_imperial_ii_star_destroyer.glb",
           ),
-          DRONE_VARIANT && DRONE_VARIANT_MODEL_PATHS[DRONE_VARIANT]
-            ? loadDroneVariant(
-                gltfPreloader,
-                DRONE_VARIANT_MODEL_PATHS[DRONE_VARIANT],
-              )
-            : PLACEHOLDER_MODELS
-              ? Promise.resolve({ scene: buildDronePlaceholder() })
-              : gltfPreloader.loadAsync(OBLIVION_DRONE_MODEL_PATH),
+          PLACEHOLDER_MODELS
+            ? Promise.resolve({ scene: buildDronePlaceholder() })
+            : loadDroneVariant(gltfPreloader, DRONE_MODEL_PATH),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.activation),
           loadAudioSafe(OBLIVION_DRONE_AUDIO_PATHS.transmission),
           loadAudioSafe(FALCON_NAV_SFX_PATHS.moonTravel[0]),
@@ -16375,7 +16359,7 @@ export default function ResumeSpace3D({
     const loader = new GLTFLoader();
     (
       spaceshipGltfPromiseRef.current ??
-      loader.loadAsync("/models/spaceship/scene.gltf")
+      loadVehicleAsShip(loader, SHIP_MODEL_PATH)
     ).then(
       (gltf) => {
         const spaceship = gltf.scene;
@@ -16415,7 +16399,7 @@ export default function ResumeSpace3D({
           // Swapped-in vehicles don't have the Falcon's separate engine-panel
           // materials; don't let the speed boost pick up (and brighten) a
           // material that covers their whole body.
-          if (SHIP_VARIANT && SHIP_VARIANT_MODEL_PATHS[SHIP_VARIANT]) return;
+          if (!PLACEHOLDER_MODELS) return;
           const mesh = obj as THREE.Mesh;
           if (mesh.geometry && !mesh.geometry.boundingSphere) {
             mesh.geometry.computeBoundingSphere();
@@ -16510,7 +16494,7 @@ export default function ResumeSpace3D({
         // point lights) washes them out, so turn it off and detach it from the
         // exterior-lights toggle. Give them a pair of forward headlights and an
         // engine glow behind that follows forward travel instead.
-        if (SHIP_VARIANT && SHIP_VARIANT_MODEL_PATHS[SHIP_VARIANT]) {
+        if (!PLACEHOLDER_MODELS) {
           exteriorLights.forEach((light) => {
             light.intensity = 0;
           });

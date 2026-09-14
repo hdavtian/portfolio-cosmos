@@ -101,7 +101,9 @@ const REFERENCE_DISTANCE = HOLO_REF_DISTANCE;
 const MIN_SCALE = 0.85;
 const MAX_SCALE = 1.6;
 const SCALE_POWER = 0.6;
-const OBLIVION_DRONE_MODEL_PATH = "/models/oblivion-drone/oblivion_drone.glb";
+// Fallback self-load if no template was injected; the scene preload normally
+// supplies this model (with its lighting tweaks) first.
+const OBLIVION_DRONE_MODEL_PATH = "/models/deathstar/deathstar.glb";
 
 export type DroneVisualVariant = "classic" | "oblivion";
 export type DroneAudioBuffers = {
