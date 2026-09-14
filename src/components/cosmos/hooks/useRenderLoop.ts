@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { dinfo, dwarn } from "../../../lib/debugLog";
 import { emitCosmosEvent } from "../cosmosEventBus";
 import type { DashcamController } from "../dashcamTV";
+import { applyEngineGlow } from "../engineGlow";
 import { computeFalconFollowCameraPose } from "../falconFollowCameraPose";
 import { getCosmosPerfFlags } from "../perfConfig";
 import { PhysicsTravelAnchor } from "../PhysicsTravelAnchor";
@@ -1536,6 +1537,13 @@ export const useRenderLoop = () => {
                 blueAmount * 0.6,
                 blueAmount * 1.0,
               );
+              applyEngineGlow(
+                ship,
+                engineLight,
+                engineLight.intensity / 4,
+                speed,
+                now / 1000,
+              );
             }
             _p2 = performance.now();
           } else if (manualFlightModeRef.current) {
@@ -2205,10 +2213,13 @@ export const useRenderLoop = () => {
             !shipCinematicRef.current?.active &&
             !manualFlightModeRef.current
           ) {
+            // Either way along the ship's axis: autopilot flies it -Z-first,
+            // scripted flights (e.g. the About fly-by) point the model's +Z.
             _engineForward.set(0, 0, -1).applyQuaternion(ship.quaternion);
-            const forwardSpeed =
+            const forwardSpeed = Math.abs(
               _engineVelocity.copy(ship.position).sub(prevPos).dot(_engineForward) /
-              Math.max((now - (prevTime ?? now)) / 1000, 1 / 120);
+                Math.max((now - (prevTime ?? now)) / 1000, 1 / 120),
+            );
             const forwardNorm = THREE.MathUtils.clamp(forwardSpeed / 220, 0, 1.6);
             const targetIntensity = forwardNorm > 0.02 ? 0.8 + forwardNorm * 3.2 : 0;
             const ease = 1 - Math.exp(-6 * deltaSeconds);
@@ -2225,19 +2236,15 @@ export const useRenderLoop = () => {
               blueAmount * 0.6,
               blueAmount * 1.0,
             );
-            // A point light alone is invisible; vehicles without glowing
-            // engine panels get a sprite whose brightness follows the light.
-            const glowSprite = engineLight.userData.glowSprite as
-              | THREE.Sprite
-              | undefined;
-            if (glowSprite) {
-              const glowMat = glowSprite.material as THREE.SpriteMaterial;
-              glowMat.opacity = THREE.MathUtils.clamp(
-                engineLight.intensity / 4,
-                0,
-                1,
-              );
-            }
+            // A point light alone is invisible: brighten the hull's engine
+            // grille and the glow sprites along it, swelling at punch speeds.
+            applyEngineGlow(
+              ship,
+              engineLight,
+              engineLight.intensity / 4,
+              forwardSpeed,
+              now / 1000,
+            );
           }
           ship.userData._enginePanelPrevPos = ship.position.clone();
           ship.userData._enginePanelPrevTime = now;

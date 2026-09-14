@@ -47,7 +47,7 @@ const MAP_ZOOM_MIN = 0.4;
 const MAP_ZOOM_MAX = 4.5;
 const HOVER_PICK_RADIUS_PX = 22;
 const MAP_INNER_RANGE = 2600;
-const MAP_OUTER_RANGE = 36000;
+const MAP_OUTER_RANGE = 50000;
 const PING_TTL_MS = 7000;
 
 const toDisplayLabel = (value: string): string =>

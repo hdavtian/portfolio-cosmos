@@ -290,10 +290,61 @@ const loadVehicleAsShip = async (loader: GLTFLoader, path: string) => {
   vehicle.traverse((obj) => {
     if (/landing[\s_]*gear/i.test(obj.name)) obj.visible = false;
   });
+
+  // The falcon2 hull's emissive map is black except the rear engine grille, so
+  // the material's emissive intensity brightens just the engines. Find where
+  // the grille is too (vertices whose UVs fall in its texture rectangle) so
+  // glow sprites can sit right on it.
+  const engineGlowMaterials = new Set<THREE.MeshStandardMaterial>();
+  const enginePoints: THREE.Vector3[] = [];
+  vehicle.updateMatrixWorld(true);
+  vehicle.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.visible) return;
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    materials.forEach((material) => {
+      const mat = material as THREE.MeshStandardMaterial;
+      if (mat.isMeshStandardMaterial && mat.emissiveMap) engineGlowMaterials.add(mat);
+    });
+    const uv = mesh.geometry.getAttribute("uv");
+    const position = mesh.geometry.getAttribute("position");
+    if (!uv || !position) return;
+    for (let i = 0; i < uv.count; i++) {
+      const u = uv.getX(i);
+      const v = uv.getY(i);
+      if (
+        u >= ENGINE_GRILLE_UV.minU &&
+        u <= ENGINE_GRILLE_UV.maxU &&
+        v >= ENGINE_GRILLE_UV.minV &&
+        v <= ENGINE_GRILLE_UV.maxV
+      ) {
+        enginePoints.push(
+          new THREE.Vector3().fromBufferAttribute(position, i).applyMatrix4(mesh.matrixWorld),
+        );
+      }
+    }
+  });
+
   const scene = new THREE.Group();
   scene.add(vehicle);
+  scene.userData.engineGlowMaterials = Array.from(engineGlowMaterials).map((material) => ({
+    material,
+    baseIntensity: material.emissiveIntensity,
+  }));
+  // Evenly spaced samples across the grille, left to right.
+  enginePoints.sort((a, b) => a.x - b.x);
+  const sampleCount = Math.min(ENGINE_GLOW_SPRITE_COUNT, enginePoints.length);
+  scene.userData.engineGlowPoints = Array.from({ length: sampleCount }, (_, i) =>
+    enginePoints[
+      Math.round((i * (enginePoints.length - 1)) / Math.max(1, sampleCount - 1))
+    ].clone(),
+  );
   return { ...gltf, scene };
 };
+
+/** Texture rectangle of the falcon2 engine grille (and the strips below it). */
+const ENGINE_GRILLE_UV = { minU: 0.465, maxU: 0.87, minV: 0.805, maxV: 0.885 };
+const ENGINE_GLOW_SPRITE_COUNT = 9;
 
 // Some exports author very high emissive strength (e.g. 8× via
 // KHR_materials_emissive_strength), which the scene's bloom turns into a
@@ -327,8 +378,41 @@ const MJOLNIR_MODEL_PATH = "/models/mjolnir/mjolnir.glb";
 // Self-illumination for drone models that read too dark in moon orbit. A
 // real light attached to the drone would change the scene's light count each
 // visit and recompile every lit shader (a measured multi-hundred-ms stall), so
-// light the surface from its own color texture instead.
-const DRONE_SELF_ILLUMINATION = 0.6;
+// light the surface from its own color texture instead. Kept low: at 0.6 it
+// washed out all shading and the Death Star looked flat.
+const DRONE_SELF_ILLUMINATION = 0.18;
+
+/**
+ * Shading for the drone model, injected into its standard material: a fixed
+ * key light from the upper front right (in view space), a tight specular
+ * shine and a cool rim, so the sphere reads as a lit, round, metallic object.
+ * No scene light is added (that would recompile every lit shader).
+ */
+const applyDroneShine = (material: THREE.MeshStandardMaterial) => {
+  material.metalness = Math.max(material.metalness, 0.35);
+  material.roughness = Math.min(material.roughness, 0.55);
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <opaque_fragment>",
+      /* glsl */ `
+        vec3 dsNormal = normalize( normal );
+        vec3 dsView = normalize( vViewPosition );
+        vec3 dsLight = normalize( vec3( 0.55, 0.65, 0.52 ) );
+        float dsDiffuse = max( dot( dsNormal, dsLight ), 0.0 );
+        vec3 dsHalf = normalize( dsLight + dsView );
+        float dsSpecular = pow( max( dot( dsNormal, dsHalf ), 0.0 ), 48.0 );
+        float dsRim = pow( 1.0 - max( dot( dsNormal, dsView ), 0.0 ), 3.0 );
+        outgoingLight = outgoingLight * ( 0.45 + 0.95 * dsDiffuse )
+          + diffuseColor.rgb * dsDiffuse * 0.35
+          + vec3( dsSpecular * 0.6 )
+          + vec3( 0.55, 0.7, 1.0 ) * dsRim * 0.3;
+        #include <opaque_fragment>
+      `,
+    );
+  };
+  material.customProgramCacheKey = () => "drone-shine-v1";
+  material.needsUpdate = true;
+};
 
 const loadDroneVariant = async (loader: GLTFLoader, path: string) => {
   const gltf = await loader.loadAsync(path);
@@ -343,7 +427,9 @@ const loadDroneVariant = async (loader: GLTFLoader, path: string) => {
       const mat = material as THREE.MeshStandardMaterial;
       // Replaces any authored glow mask too: the Death Star's hull material
       // ships with a (mostly dark) emissive map, which kept it unlit.
-      if (!mat.isMeshStandardMaterial || !mat.map) return;
+      if (!mat.isMeshStandardMaterial) return;
+      applyDroneShine(mat);
+      if (!mat.map) return;
       mat.emissive = new THREE.Color(0xffffff);
       mat.emissiveMap = mat.map;
       mat.emissiveIntensity = DRONE_SELF_ILLUMINATION;
@@ -418,11 +504,11 @@ const FALCON_NAV_SFX_PATHS = {
 } as const;
 type FalconNavCueKind = keyof typeof FALCON_NAV_SFX_PATHS;
 const FALCON_MOON_TRAVEL_DEFAULT_VOLUME = 0.68;
-// Destinations are spread far apart and at different heights (Y is up) so
-// travel between them is long and climbs and dives. Experience stays on its
+// Destinations are spread far apart and at very different heights (Y is up)
+// so travel between them is long and climbs and dives. Experience stays on its
 // orbit near the sun (the intro is framed on it); About is the farthest out
-// and lowest. All stay within ~24k of the sun (skybox radius 30k).
-const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(-2500, -4200, 20000);
+// and lowest. All stay within ~34k of the sun (skybox radius 45k).
+const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(-3500, -7600, 28000);
 const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 620;
 const ORBITAL_PORTFOLIO_NAV_STANDOFF_DIST = 560;
 const ORBITAL_PORTFOLIO_NAV_VERTICAL_OFFSET = 90;
@@ -430,13 +516,13 @@ const ORBITAL_PORTFOLIO_CORE_LABEL_MAX_DISTANCE = 7600;
 const ENABLE_POST_LOAD_COSMOS_MICRO_INTRO = false;
 const CAMERA_TRACE_ENABLED = true;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
-// High above the sun's plane, ~20.7k out.
-const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(15000, 4800, -13500);
+// High above the sun's plane, ~29.5k out.
+const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(21000, 8600, -18900);
 // Career Gallery: hologram shell of portfolio screenshots. High up in the open
-// (-x) side of the universe, ~20.3k from the sun.
+// (-x) side of the universe, ~28.6k from the sun.
 const CAREER_GALLERY_NAV_ID = "career-gallery";
 const CAREER_GALLERY_NAV_LABEL = "Career Gallery";
-const CAREER_GALLERY_WORLD_ANCHOR = new THREE.Vector3(-19000, 3600, 6000);
+const CAREER_GALLERY_WORLD_ANCHOR = new THREE.Vector3(-26600, 6500, 8400);
 // Twice the Skills shell (396). The interior's density comes from its 320
 // faces (see CareerGallery.ts), not from the radius.
 const CAREER_GALLERY_RADIUS = 792;
@@ -453,8 +539,8 @@ const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -13200);
 const ABOUT_TRAM_HUD_ENABLED = false;
 /** Gap the About roller coaster keeps from Experience moons' surfaces. */
 const ABOUT_ROUTE_MOON_CLEARANCE = 110;
-// About: the farthest destination from the sun (~23.6k) and well below it.
-const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR = new THREE.Vector3(17500, -6500, 14500);
+// About: the farthest destination from the sun (~33.9k) and well below it.
+const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR = new THREE.Vector3(24500, -11700, 20300);
 const ABOUT_MEMORY_SQUARE_NAV_STANDOFF_DIST = 4200;
 const ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST = 4550;
 /** Tighter CameraControls distance limits while the about journey allows free look (keeps points visible). */
@@ -17095,20 +17181,37 @@ export default function ResumeSpace3D({
           glowTexture.colorSpace = THREE.SRGBColorSpace;
           // Stays in the scene at opacity 0 so its shader compiles during the
           // warmup rather than on the first frame of travel.
-          const glowSprite = new THREE.Sprite(
-            new THREE.SpriteMaterial({
-              map: glowTexture,
-              color: 0x88bbff,
-              opacity: 0,
-              transparent: true,
-              depthWrite: false,
-              blending: THREE.AdditiveBlending,
-            }),
-          );
-          glowSprite.position.copy(engineLight.position);
-          glowSprite.scale.set(6, 6, 1);
-          spaceship.add(glowSprite);
-          engineLight.userData.glowSprite = glowSprite;
+          // Soft glow sprites along the engine grille (found from its texture
+          // rectangle at load), just behind the hull; a single sprite behind
+          // the ship for vehicles without one. applyEngineGlow drives them.
+          const grillePoints =
+            (spaceship.userData.engineGlowPoints as THREE.Vector3[] | undefined) ?? [];
+          const hasGrille = grillePoints.length > 0;
+          const glowMaterial = new THREE.SpriteMaterial({
+            map: glowTexture,
+            color: 0x88bbff,
+            opacity: 0,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+          });
+          const glowSprites = (
+            hasGrille
+              ? grillePoints.map((point) => point.clone().add(new THREE.Vector3(0, 0, -0.35)))
+              : [engineLight.position.clone()]
+          ).map((position) => {
+            const sprite = new THREE.Sprite(glowMaterial);
+            const baseScale = hasGrille ? 2.6 : 6;
+            sprite.position.copy(position);
+            sprite.scale.setScalar(baseScale);
+            sprite.userData.baseScale = baseScale;
+            sprite.userData.baseOpacity = hasGrille ? 0.75 : 1;
+            spaceship.add(sprite);
+            return sprite;
+          });
+          engineLight.userData.glowSprites = glowSprites;
+          engineLight.userData.glowSprite = glowSprites[0];
+          vlog(`🔥 Engine glow: ${glowSprites.length} sprite(s) on ${hasGrille ? "grille" : "fallback"}`);
 
           if (SHIP_VARIANT === "bronco") {
             // ~3 car lengths behind (car is ~0.7 world units long).
