@@ -94,6 +94,11 @@ import {
   type AboutParticleSwarmHandle,
 } from "./aboutJourney/AboutParticleSwarm";
 import {
+  legacyLoopLength,
+  type RouteObstacle,
+  type RouteStop,
+} from "./aboutJourney/cosmicRoute";
+import {
   COSMOS_SOUND_EVENT_IDS,
   DEFAULT_KEYBOARD_STUDIO_SOUND_DESIGN,
   KEYBOARD_STUDIO_ENABLED_KEY,
@@ -170,6 +175,7 @@ import {
   SKILLS_FOCUS_DIST,
   SKILLS_WANDER_RADIUS,
   SUN_GLOW_SPRITE_SIZE,
+  SUN_OBSTACLE_RADIUS,
   SUN_WANDER_RADIUS,
   orbitDebug,
 } from "./scaleConfig";
@@ -437,6 +443,8 @@ const CAREER_GALLERY_ARRIVAL_DIST = CAREER_GALLERY_RADIUS + 600;
 const CAREER_GALLERY_ENTRY_TRIGGER_DIST = CAREER_GALLERY_RADIUS + 1900;
 const CAREER_GALLERY_ENTRY_GLIDE_MS = 5000;
 const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -13200);
+/** Gap the About roller coaster keeps from Experience moons' surfaces. */
+const ABOUT_ROUTE_MOON_CLEARANCE = 110;
 const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR = new THREE.Vector3(
   13723.38,
   157.5,
@@ -3631,6 +3639,14 @@ export default function ResumeSpace3D({
       setAboutRideMessageView(ABOUT_PATH_RIDE_MESSAGES[index] ?? null);
     };
 
+    // Once fully crystallized and not exploding, panel matrices don't change.
+    let crystalMatricesStatic = false;
+    const tempScale = new THREE.Vector3();
+    const tempPos = new THREE.Vector3();
+    const tempQuat = new THREE.Quaternion();
+    const deltaQuat = new THREE.Quaternion();
+    const deltaQuatB = new THREE.Quaternion();
+
     const ensureCrystalGroup = () => {
       if (aboutCrystalPathGroupRef.current)
         return aboutCrystalPathGroupRef.current;
@@ -3659,7 +3675,15 @@ export default function ResumeSpace3D({
       aboutCrystalPanelMatricesRef.current = [];
       aboutCrystalSurgesRef.current = [];
 
-      const segmentCount = 440;
+      // Keep panel spacing close to the legacy loop's on longer routes.
+      const segmentCount = THREE.MathUtils.clamp(
+        Math.round(
+          440 * ((path as { timing?: { lengthScale: number } }).timing?.lengthScale ?? 1),
+        ),
+        440,
+        1400,
+      );
+      crystalMatricesStatic = false;
       const panelGeom = new THREE.PlaneGeometry(1, 1, 1, 1);
       const panelMat = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
@@ -4056,12 +4080,12 @@ export default function ResumeSpace3D({
         explosionActive ? Math.min(1, explosionTravelT * 1.1) : crystalProgress,
       );
 
-      const tempScale = new THREE.Vector3();
-      const tempPos = new THREE.Vector3();
-      const tempQuat = new THREE.Quaternion();
-      const deltaQuat = new THREE.Quaternion();
-      const deltaQuatB = new THREE.Quaternion();
-      for (let i = 0; i < seeds.length; i++) {
+      const staticPose = !explosionActive && crystalProgress >= 1;
+      for (
+        let i = 0;
+        i < seeds.length && !(staticPose && crystalMatricesStatic);
+        i++
+      ) {
         const seed = seeds[i];
         const shatterSeed = shatterSeeds[i];
         if (!seed || !shatterSeed) continue;
@@ -4120,7 +4144,10 @@ export default function ResumeSpace3D({
         matrices[i].compose(tempPos, tempQuat, tempScale);
         panelMesh.setMatrixAt(i, matrices[i]);
       }
-      panelMesh.instanceMatrix.needsUpdate = true;
+      if (!(staticPose && crystalMatricesStatic)) {
+        panelMesh.instanceMatrix.needsUpdate = true;
+        crystalMatricesStatic = staticPose;
+      }
 
       if (phase === AboutJourneyPhase.PATH_TRAVEL) {
         const travelDist = journey.travelPathDistance;
@@ -14953,6 +14980,9 @@ export default function ResumeSpace3D({
     const swarm = createAboutParticleSwarm(ABOUT_PARTICLE_SWARM_WORLD_ANCHOR);
     scene.add(swarm.group);
     aboutParticleSwarmRef.current = swarm;
+    if (rendererRef.current && sceneRef.current.camera) {
+      swarm.compile(rendererRef.current, scene, sceneRef.current.camera);
+    }
 
     // 3c. ABOUT JOURNEY CONTROLLER
     if (aboutJourneyRef.current) {
@@ -15010,14 +15040,8 @@ export default function ResumeSpace3D({
         }
       },
       onPathDispersalStarted() {
-        if (aboutHydrateSwarmRef.current) return;
-        const sc = sceneRef.current.scene;
-        if (!sc) return;
-        const h = createAboutParticleSwarm(
-          ABOUT_MEMORY_SQUARE_WORLD_ANCHOR.clone(),
-        );
-        sc.add(h.group);
-        aboutHydrateSwarmRef.current = h;
+        // The same swarm fades back in at the About anchor while the path
+        // bursts, so nothing is built at the end of the ride.
       },
       onPathDispersalComplete() {
         const ctrl = sceneRef.current.controls;
@@ -15026,16 +15050,6 @@ export default function ResumeSpace3D({
           ctrl.minDistance = saved.min;
           ctrl.maxDistance = saved.max;
           aboutJourneyCameraDistSavedRef.current = null;
-        }
-        const old = aboutParticleSwarmRef.current;
-        const next = aboutHydrateSwarmRef.current;
-        aboutHydrateSwarmRef.current = null;
-        if (old && next) {
-          old.dispose();
-          aboutParticleSwarmRef.current = next;
-        } else if (old && !next) {
-          old.dispose();
-          aboutParticleSwarmRef.current = null;
         }
       },
       onAboutJourneyExit() {
@@ -15067,6 +15081,13 @@ export default function ResumeSpace3D({
       },
       vlog,
     });
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__aboutDebug = {
+        journey: () => aboutJourneyRef.current,
+        swarm: () => aboutParticleSwarmRef.current,
+        hydrate: () => aboutHydrateSwarmRef.current,
+      };
+    }
 
     // 4. MOONS
     const experienceJobs = Object.values(resumeData.experience).flat();
@@ -15153,33 +15174,92 @@ export default function ResumeSpace3D({
       // moon.rotation.x = Math.PI / 2;
     });
 
-    // Register universe landmarks for the cosmic loop path.
-    // Moons are at fixed positions (orbits paused), so we grab world positions now.
+    // Route inputs for the About roller coaster. Nothing orbits, so world
+    // positions captured here stay valid; Portfolio cores are built later and
+    // are read when a path starts forming.
     {
-      // Force a matrix update so getWorldPosition returns correct values
       scene.updateMatrixWorld(true);
-      const landmarks: Array<{ name: string; position: THREE.Vector3 }> = [
-        { name: "Skills", position: SKILLS_LATTICE_WORLD_ANCHOR.clone() },
-        { name: "Portfolio", position: ORBITAL_PORTFOLIO_WORLD_ANCHOR.clone() },
-        {
-          name: "Memory Squares",
-          position: ABOUT_MEMORY_SQUARE_WORLD_ANCHOR.clone(),
-        },
-      ];
-      // Pick 2-3 experience moons to fly between (evenly spaced through the list)
-      const moonCount = experienceMoonMeshes.length;
-      if (moonCount > 0) {
-        const pickCount = Math.min(3, moonCount);
-        const step = moonCount / pickCount;
-        for (let mi = 0; mi < pickCount; mi++) {
-          const idx = Math.floor(mi * step);
-          const mesh = experienceMoonMeshes[idx];
-          const wp = new THREE.Vector3();
-          mesh.getWorldPosition(wp);
-          landmarks.push({ name: `Moon ${idx}`, position: wp });
-        }
+      const worldOf = (obj: THREE.Object3D) =>
+        obj.getWorldPosition(new THREE.Vector3());
+      const expPlanetCenter = worldOf(expPlanet);
+      const moonBodies = experienceMoonMeshes.map((mesh) => ({
+        center: worldOf(mesh),
+        radius: EXP_MOON_RADIUS + ABOUT_ROUTE_MOON_CLEARANCE,
+      }));
+
+      // The legacy loop (Skills, Portfolio, Memory Squares and up to three
+      // moons) sets the formation and ride durations the new route keeps.
+      const legacyMoons: THREE.Vector3[] = [];
+      const legacyPickCount = Math.min(3, moonBodies.length);
+      for (let mi = 0; mi < legacyPickCount; mi++) {
+        const idx = Math.floor((mi * moonBodies.length) / legacyPickCount);
+        legacyMoons.push(moonBodies[idx].center);
       }
-      aboutJourneyRef.current?.setLandmarks(landmarks);
+      const referenceLength = legacyLoopLength(
+        ABOUT_PARTICLE_SWARM_WORLD_ANCHOR,
+        [
+          SKILLS_LATTICE_WORLD_ANCHOR,
+          ORBITAL_PORTFOLIO_WORLD_ANCHOR,
+          ABOUT_MEMORY_SQUARE_WORLD_ANCHOR,
+          ...legacyMoons,
+        ],
+      );
+
+      const skillsCenter = SKILLS_LATTICE_WORLD_ANCHOR.clone().add(
+        new THREE.Vector3(0, 8, 0),
+      );
+      aboutJourneyRef.current?.setRouteConfigProvider(() => {
+        const portfolioAnchor =
+          orbitalPortfolioWorldAnchorRef.current ??
+          ORBITAL_PORTFOLIO_WORLD_ANCHOR;
+        const cores = orbitalPortfolioCoresRef.current ?? [];
+        const portfolioColumns = Math.max(1, Math.ceil(Math.sqrt(cores.length)));
+        const stops: RouteStop[] = [
+          {
+            name: "Skills",
+            center: skillsCenter.clone(),
+            passRadius: 520,
+          },
+          {
+            // Straight over the planet, above the moons' plane, so the whole
+            // system sweeps past beneath the rider.
+            name: "Experience",
+            center: expPlanetCenter.clone(),
+            passRadius:
+              EXP_MOON_ORBIT_BASE +
+              EXP_MOON_ORBIT_STEP * moonBodies.length +
+              600,
+            passOffset: new THREE.Vector3(0, 480, 0),
+          },
+          {
+            // Level pass just above the cluster grid: clusters slide by
+            // beneath instead of forcing detours through the pass.
+            name: "Portfolio",
+            center: portfolioAnchor.clone(),
+            passOffset: new THREE.Vector3(0, 420, 0),
+            passRadius: portfolioColumns * 1260 * 0.5 + 500,
+          },
+          {
+            name: "Career Gallery",
+            center: CAREER_GALLERY_WORLD_ANCHOR.clone(),
+            passRadius: CAREER_GALLERY_RADIUS * 1.4,
+          },
+        ];
+        const obstacles: RouteObstacle[] = [
+          {
+            center: new THREE.Vector3(0, 0, 0),
+            radius: SUN_OBSTACLE_RADIUS + 900,
+          },
+          { center: expPlanetCenter, radius: EXPERIENCE_RADIUS + 220 },
+          ...moonBodies,
+          { center: ABOUT_MEMORY_SQUARE_WORLD_ANCHOR.clone(), radius: 820 },
+          ...cores.map((core) => ({
+            center: portfolioAnchor.clone().add(core.centerLocal),
+            radius: 260,
+          })),
+        ];
+        return { stops, obstacles, referenceLength };
+      });
     }
 
     // Skills constellation lattice (unique skills representation)

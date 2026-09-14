@@ -7,6 +7,13 @@ import {
   Vector3 as YukaVector3,
   Vehicle as YukaVehicle,
 } from "yuka";
+import {
+  buildCosmicRoute,
+  routeSpeedAt,
+  type CosmicPathCurve,
+  type RouteObstacle,
+  type RouteStop,
+} from "./cosmicRoute";
 
 // ---------------------------------------------------------------------------
 // Phase definitions — strict linear progression for the About experience
@@ -80,8 +87,7 @@ const FLY_THROUGH_CAM_LAG = 180;
 const FLY_THROUGH_CAM_HEIGHT = 40;
 
 const EXCITEMENT_DURATION_MS = 3400;
-const PATH_HEAD_SPEED = 4725; // Must match AboutParticleSwarm.ts
-const PATH_TRAVEL_SAMPLE_COUNT = 220;
+const PATH_TRAVEL_SAMPLE_COUNT = 900;
 const PATH_TRAVEL_SPEED = 980;
 const PATH_TRAVEL_MAX_FORCE = 1200;
 const PATH_TRAVEL_PREDICTION = 0.8;
@@ -112,30 +118,14 @@ const PATH_TRAVEL_CRUISE_TOP_SPEED_SCALE = PATH_TRAVEL_SPEED_SCALE_MAX;
 const PATH_TRAVEL_CAMERA_TURN_DAMP_PER_SEC = 4.6;
 
 // ---------------------------------------------------------------------------
-// Cosmic path waypoints — a closed loop through universe landmarks
+// Cosmic route — a random closed loop through the universe's destinations
 // ---------------------------------------------------------------------------
 
-export interface UniverseLandmark {
-  name: string;
-  position: THREE.Vector3;
-}
-
-function buildCosmicLoopPath(
-  origin: THREE.Vector3,
-  landmarks: UniverseLandmark[],
-): THREE.CatmullRomCurve3 {
-  const waypoints: THREE.Vector3[] = [origin.clone()];
-
-  for (const lm of landmarks) {
-    const toward = lm.position.clone().sub(origin).normalize();
-    const passPoint = lm.position.clone().addScaledVector(toward, -500);
-    passPoint.y += 200 + Math.random() * 300;
-    waypoints.push(passPoint);
-  }
-
-  waypoints.push(origin.clone());
-
-  return new THREE.CatmullRomCurve3(waypoints, true, "catmullrom", 0.3);
+export interface CosmicRouteConfig {
+  stops: RouteStop[];
+  obstacles: RouteObstacle[];
+  /** Length of the legacy loop; formation and ride times are matched to it. */
+  referenceLength: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,15 +193,16 @@ export class AboutJourneyController {
   private _ringAxis = new THREE.Vector3(0, 1, 0);
 
   // PATH_FORMING state
-  private _cosmicPath: THREE.CatmullRomCurve3 | null = null;
+  private _cosmicPath: CosmicPathCurve | null = null;
   private _pathFormStartedAt = 0;
+  private _dispersalOriginT = 0;
 
   // Reusable temp vectors
   private readonly _tmpCam = new THREE.Vector3();
   private readonly _tmpTarget = new THREE.Vector3();
   private readonly _tmpFlyShipPos = new THREE.Vector3();
 
-  private _landmarks: UniverseLandmark[] = [];
+  private _routeConfigProvider: (() => CosmicRouteConfig | null) | null = null;
   private _travelVehicle: YukaVehicle | null = null;
   private _travelStartedAt = 0;
   private _travelLastTickAt = 0;
@@ -253,8 +244,9 @@ export class AboutJourneyController {
     this._cb = callbacks;
   }
 
-  setLandmarks(landmarks: UniverseLandmark[]): void {
-    this._landmarks = landmarks;
+  /** Route inputs are read when a path starts forming, so positions are current. */
+  setRouteConfigProvider(provider: () => CosmicRouteConfig | null): void {
+    this._routeConfigProvider = provider;
   }
 
   // --- Public read-only state ---
@@ -304,8 +296,13 @@ export class AboutJourneyController {
     return this._ringAxis;
   }
 
-  get cosmicPath(): THREE.CatmullRomCurve3 | null {
+  get cosmicPath(): CosmicPathCurve | null {
     return this._cosmicPath;
+  }
+
+  /** Where along the route (0..1) the rider was when the path burst. */
+  get dispersalOriginT(): number {
+    return this._dispersalOriginT;
   }
 
   get pathCrystallizationActive(): boolean {
@@ -488,7 +485,10 @@ export class AboutJourneyController {
       )
       .normalize();
 
-    // Stop following ship, disable user controls
+    // Stop following ship, disable user controls. The autopilot must let go
+    // too, or it keeps steering the ship to its standoff point beside the
+    // swarm instead of through it.
+    this._cb.setAutopilotSuppressed(true);
     this._cb.setFollowingSpaceship(false);
     this._cb.disableControls();
     this._cb.showShip();
@@ -586,9 +586,20 @@ export class AboutJourneyController {
       return;
     }
 
-    // Build the cosmic loop path through universe landmarks
-    this._cosmicPath = buildCosmicLoopPath(swarmPos, this._landmarks);
+    const routeConfig = this._routeConfigProvider?.();
+    if (!routeConfig || routeConfig.stops.length === 0) {
+      this._transition(AboutJourneyPhase.IDLE);
+      return;
+    }
+    this._cosmicPath = buildCosmicRoute({ origin: swarmPos, ...routeConfig });
+    this._dispersalOriginT = 0;
     this._pathFormStartedAt = performance.now();
+    const { timing } = this._cosmicPath;
+    this._cb.vlog(
+      `✨ [AboutJourney] Route ${Math.round(timing.length)} units ` +
+        `(legacy ${Math.round(timing.referenceLength)}), forms in ` +
+        `${timing.formSeconds.toFixed(1)}s`,
+    );
 
     // Enable controls so user can look around, but we'll soft-guide the target
     this._cb.enableControls();
@@ -596,6 +607,7 @@ export class AboutJourneyController {
 
     const _trackTarget = new THREE.Vector3();
     const _currentTarget = new THREE.Vector3();
+    const _headPos = new THREE.Vector3();
     const TRACK_LERP = 0.015; // Gentle tracking — not locked, just guided
 
     const tick = () => {
@@ -605,12 +617,10 @@ export class AboutJourneyController {
       if (ctrl && this._cosmicPath) {
         // Calculate where the spear head currently is on the path
         const elapsed = performance.now() - this._pathFormStartedAt;
-        const pathLength = this._cosmicPath.getLength();
-        const headT = Math.min(
-          1,
-          ((elapsed / 1000) * PATH_HEAD_SPEED) / pathLength,
-        );
-        const headPos = this._cosmicPath.getPointAt(headT);
+        const { length, headSpeed } = this._cosmicPath.timing;
+        const headT = Math.min(1, ((elapsed / 1000) * headSpeed) / length);
+        this._cosmicPath.getPointAt(headT, _headPos);
+        const headPos = _headPos;
 
         // Soft-track: gently nudge the camera's look-at target toward the spear head
         ctrl.getTarget(_currentTarget);
@@ -983,12 +993,24 @@ export class AboutJourneyController {
         this._travelVehicle.velocity.z,
       );
 
+      // Slow through stops, faster between them; a full loop still takes as
+      // long as the legacy loop.
+      const routeSpeed = this._cosmicPath
+        ? routeSpeedAt(
+            this._cosmicPath.timing,
+            this._travelStartT +
+              this._travelDistanceTraveled /
+                Math.max(1, this._travelPathLength),
+          )
+        : 1;
       const guideSpeed =
         THREE.MathUtils.clamp(
           this._tmpTravelVel.length(),
           PATH_TRAVEL_SPEED * 0.55,
           PATH_TRAVEL_SPEED,
-        ) * this._travelSpeedScale;
+        ) *
+        this._travelSpeedScale *
+        routeSpeed;
       this._travelDistanceTraveled += guideSpeed * dt;
       this._travelDistanceAbs += Math.abs(guideSpeed) * dt;
 
@@ -1121,6 +1143,15 @@ export class AboutJourneyController {
   }
 
   private _beginPathDispersing(reason: string): void {
+    // The burst radiates from wherever the rider is on the rail.
+    this._dispersalOriginT =
+      this._travelPathLength > 1
+        ? THREE.MathUtils.euclideanModulo(
+            this._travelStartT +
+              this._travelDistanceTraveled / this._travelPathLength,
+            1,
+          )
+        : 0;
     this._clearPathReadyTravelTimeout();
     this._travelRunning = false;
     this._travelVehicle = null;

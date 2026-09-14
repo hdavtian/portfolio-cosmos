@@ -2384,6 +2384,7 @@ export const useRenderLoop = () => {
                 pathCrystallizationProgress: number,
                 pathCrystallizationActive: boolean,
                 cosmicPath: any,
+                dispersalOriginT?: number,
               ) =>
                 | boolean
                 | {
@@ -2407,6 +2408,7 @@ export const useRenderLoop = () => {
                 pathCrystallizationProgress: number,
                 pathCrystallizationActive: boolean,
                 cosmicPath: any,
+                dispersalOriginT?: number,
               ) =>
                 | boolean
                 | {
@@ -2427,6 +2429,9 @@ export const useRenderLoop = () => {
           const crystalProg = jCtrl?.pathCrystallizationProgress ?? 0;
           const crystalActive = jCtrl?.pathCrystallizationActive ?? false;
           const cPath = jCtrl?.cosmicPath ?? null;
+          const dispersalOriginT =
+            (jCtrl as { dispersalOriginT?: number } | null | undefined)
+              ?.dispersalOriginT ?? 0;
           const frameSignals = aboutSwarmHandle.current.update(
             deltaSeconds,
             elapsed,
@@ -2439,6 +2444,7 @@ export const useRenderLoop = () => {
             crystalProg,
             crystalActive,
             cPath as any,
+            dispersalOriginT,
           );
           const pathLoopCompleteEdge =
             typeof frameSignals === "boolean"
