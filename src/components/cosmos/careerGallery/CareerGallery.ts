@@ -3,14 +3,15 @@ import * as THREE from "three";
 /**
  * Career Gallery: a 320-face icosahedral hologram shell whose faces show the
  * career's portfolio screenshots. Each face periodically glitches and
- * cross-fades to another random screenshot, so the shell keeps changing like a
- * screensaver. Viewed from its center once the visitor enters.
+ * cross-fades to another screenshot (never one already showing), or to a
+ * randomly colored blank, so the shell keeps changing like a screensaver.
+ * Viewed from its center once the visitor enters.
  *
  * Hovering a face highlights its edges; clicking it dims the rest of the
  * shell and reveals the full, uncropped screenshot bleeding out of the tile.
  *
  * Images are decoded and downscaled off the main thread (createImageBitmap)
- * and only a couple load at a time, so filling the shell never stalls a frame.
+ * and only a few load at a time, so filling the shell never stalls a frame.
  */
 
 export type CareerGalleryItem = {
@@ -60,6 +61,12 @@ const MAX_CONCURRENT_LOADS = 3;
 const TRANSITION_SECONDS = 1.6;
 const MIN_HOLD_SECONDS = 4;
 const MAX_HOLD_SECONDS = 11;
+/** Chance a filled tile goes blank at its next swap (frees its screenshot). */
+const BLANK_CHANCE = 0.12;
+const MIN_BLANK_SECONDS = 3;
+const MAX_BLANK_SECONDS = 9;
+/** Marks a face transitioning to blank rather than to another image. */
+const BLANK = "__blank__";
 const TEXTURE_POOL_LIMIT = 90;
 /** Beyond this camera distance the faces stop swapping images (saves work). */
 const ACTIVE_CYCLE_DISTANCE = 4000;
@@ -104,6 +111,7 @@ const faceFragmentShader = /* glsl */ `
   uniform float uFocus;
   uniform vec3 uTint;
   uniform vec3 uHoverEdge;
+  uniform vec3 uBlankColor;
   varying vec2 vUv;
   varying vec3 vBary;
 
@@ -120,8 +128,8 @@ const faceFragmentShader = /* glsl */ `
     } else {
       s.y = imgAspect / uFaceAspect;
     }
-    // The face UV basis is already built for viewing from the center (an
-    // orientation test pattern confirmed mirroring here reverses text).
+    // The face UV basis is built for viewing from the center (verified with
+    // an orientation test pattern).
     float u = (uv.x - 0.5) * s.x + 0.5;
     // Textures are uploaded with flipY = false, so t = 0 is the image top.
     float t = (1.0 - uv.y) * s.y;
@@ -152,6 +160,9 @@ const faceFragmentShader = /* glsl */ `
     vec3 b = sampleHolo(uTexB, uv, uAspectB, shift) * uHasB;
     float presence = mix(uHasA, uHasB, uMix);
     vec3 col = mix(a, b, uMix);
+    // Blank tiles are a colored hologram panel with a soft vertical shimmer.
+    float shimmer = 0.85 + 0.15 * sin(vUv.y * 90.0 - time * 1.6);
+    col += uBlankColor * shimmer * (1.0 - presence);
 
     // Hologram treatment: subtle at rest (images stay readable), stronger
     // while a face is glitching, and off entirely for the focused tile.
@@ -161,24 +172,28 @@ const faceFragmentShader = /* glsl */ `
     float flicker = 1.0 - (0.03 * hash(vec2(floor(time * 12.0), uSeed))) * calm;
     col *= flicker;
 
-    // Static noise: strong on empty faces and during transitions.
+    // Static noise: faint on blank faces, stronger during transitions.
     float n = hash(vUv * vec2(420.0, 260.0) + floor(time * 30.0));
-    float staticAmt = ((1.0 - presence) * 0.22 + glitch * 0.18) * calm;
+    float staticAmt = ((1.0 - presence) * 0.1 + glitch * 0.18) * calm;
     col += uTint * n * staticAmt;
 
-    // Glowing triangle edges; gold and thicker while hovered.
+    // Thin glowing triangle edges; gold and a bit thicker while hovered.
     float edge = min(vBary.x, min(vBary.y, vBary.z));
-    float edgeWidth = 0.03 + 0.035 * uHover;
+    float edgeWidth = 0.005 + 0.012 * uHover;
     float edgeGlow = 1.0 - smoothstep(0.0, edgeWidth, edge);
     vec3 edgeColor = mix(uTint, uHoverEdge, uHover);
-    col += edgeColor * edgeGlow * (0.55 + 0.35 * glitch + 1.1 * uHover);
+    col += edgeColor * edgeGlow * (0.26 + 0.25 * glitch + 0.9 * uHover);
 
     // Everything except the focused tile fades back.
     col *= 1.0 - 0.72 * uDim;
 
-    float alpha = uOpacity * mix(0.35, 0.95, max(presence, edgeGlow));
+    // Tiles are opaque, so bright things outside the shell (the sun, glowing
+    // space) can't show through and wash out whites.
+    float alpha = uOpacity * mix(0.82, 1.0, max(presence, edgeGlow));
     alpha *= 1.0 - 0.45 * uDim;
-    gl_FragColor = vec4(min(col, vec3(0.98)), alpha);
+    // Cap brightness just under the bloom threshold so white pages stay
+    // legible instead of flaring.
+    gl_FragColor = vec4(min(col, vec3(0.84)), alpha);
   }
 `;
 
@@ -248,6 +263,10 @@ const getPlaceholderTexture = () => {
 
 const randomBetween = (min: number, max: number) =>
   min + Math.random() * (max - min);
+
+/** A muted random hologram color for blank tiles (dim, so it never blooms). */
+const randomBlankColor = (out: THREE.Color = new THREE.Color()) =>
+  out.setHSL(Math.random(), randomBetween(0.45, 0.7), randomBetween(0.2, 0.32));
 
 const shuffle = <T,>(items: T[]): T[] => {
   const out = items.slice();
@@ -359,11 +378,12 @@ export class CareerGallery {
   private revealTarget = 0;
   private revealImage: { texture: THREE.Texture; bitmap: ImageBitmap; aspect: number } | null =
     null;
+  private lastRevealIndex: number | null = null;
+  private lastCamera: THREE.PerspectiveCamera | null = null;
+  private revealLoadError: string | null = null;
 
   private readonly tmpWorld = new THREE.Vector3();
   private readonly tmpVec = new THREE.Vector3();
-  private lastCamera: THREE.PerspectiveCamera | null = null;
-  private revealLoadError: string | null = null;
 
   constructor({ items, radius = 396 }: CareerGalleryOptions) {
     this.radius = radius;
@@ -404,6 +424,7 @@ export class CareerGallery {
         uFocus: { value: 0 },
         uTint: { value: HOLO_TINT.clone() },
         uHoverEdge: { value: HOVER_EDGE.clone() },
+        uBlankColor: { value: new THREE.Color() },
       },
     });
 
@@ -418,6 +439,7 @@ export class CareerGallery {
       material.uniforms.uSeed.value = Math.random();
       material.uniforms.uTint.value = HOLO_TINT.clone();
       material.uniforms.uHoverEdge.value = HOVER_EDGE.clone();
+      material.uniforms.uBlankColor.value = randomBlankColor();
       const index = i / 3;
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = `CareerGalleryFace_${index}`;
@@ -445,7 +467,7 @@ export class CareerGallery {
       new THREE.LineBasicMaterial({
         color: 0x9fe4ff,
         transparent: true,
-        opacity: 0.35,
+        opacity: 0.28,
         depthWrite: false,
         toneMapped: false,
       }),
@@ -491,6 +513,9 @@ export class CareerGallery {
       revealDistance = Math.round(toReveal.length());
       revealInFront = Number(forward.dot(toReveal.normalize()).toFixed(2));
     }
+    const urls = this.faces
+      .map((face) => face.currentUrl)
+      .filter((url): url is string => !!url);
     return {
       reveal: {
         target: this.revealTarget,
@@ -500,14 +525,15 @@ export class CareerGallery {
         scale: [Math.round(this.reveal.scale.x), Math.round(this.reveal.scale.y)],
         distance: revealDistance,
         facingDot: revealInFront,
-        visible: this.reveal.visible,
       },
       imageUrls: this.imageUrls.length,
       inFlight: this.inFlight,
       texturesReady: this.pool.size,
       failed: this.failedUrls.size,
       failedSample: Array.from(this.failedUrls).slice(0, 5),
-      facesWithImage: this.faces.filter((face) => face.currentUrl !== null).length,
+      facesWithImage: urls.length,
+      facesBlank: this.faces.length - urls.length,
+      duplicateImages: urls.length - new Set(urls).size,
       facesTransitioning: this.faces.filter((face) => face.transitioning).length,
       hovered: this.hoveredIndex,
       focused: this.focusedIndex,
@@ -519,7 +545,7 @@ export class CareerGallery {
   /** Setting interior mode tones the outer wireframe down for the inside view. */
   setInteriorMode(inside: boolean): void {
     this.interior = inside;
-    (this.edges.material as THREE.LineBasicMaterial).opacity = inside ? 0.18 : 0.35;
+    (this.edges.material as THREE.LineBasicMaterial).opacity = inside ? 0.06 : 0.28;
     if (!inside) {
       this.setHovered(null);
       this.clearFocus();
@@ -551,7 +577,7 @@ export class CareerGallery {
   /**
    * Focus a face: dim the rest, hold its current image, and reveal the full
    * screenshot. Returns the image's project info, or null if the face is
-   * still empty.
+   * still blank.
    */
   focusFace(index: number): CareerGalleryFocusInfo | null {
     const face = this.faces[index];
@@ -563,6 +589,7 @@ export class CareerGallery {
     const token = this.focusToken;
     this.revealTarget = 0;
     this.revealProgress = 0;
+    this.revealLoadError = null;
     this.releaseRevealImage();
 
     loadBitmapTexture(url, FOCUS_IMAGE_MAX_EDGE)
@@ -682,8 +709,7 @@ export class CareerGallery {
       // The focused tile keeps its image until focus clears.
       if (!cycling || face.index === focused || this.imageUrls.length === 0) continue;
       face.holdRemaining -= step;
-      // Empty faces fill first; filled faces wait out their hold time.
-      const due = face.currentUrl === null || face.holdRemaining <= 0;
+      const due = face.holdRemaining <= 0;
       if (due && face.nextUrl === null && this.inFlight < MAX_CONCURRENT_LOADS) {
         this.requestNextImage(face);
       }
@@ -734,8 +760,6 @@ export class CareerGallery {
     this.reveal.scale.set(width, height, 1);
   }
 
-  private lastRevealIndex: number | null = null;
-
   private releaseRevealImage(): void {
     if (!this.revealImage) return;
     this.reveal.material.uniforms.uTex.value = getPlaceholderTexture();
@@ -744,18 +768,38 @@ export class CareerGallery {
     this.revealImage = null;
   }
 
+  /** Next screenshot that isn't already on (or heading to) another tile. */
   private nextFromBag(): string | null {
+    const shown = new Set<string>();
+    for (const face of this.faces) {
+      if (face.currentUrl) shown.add(face.currentUrl);
+      if (face.nextUrl && face.nextUrl !== BLANK) shown.add(face.nextUrl);
+    }
     for (let guard = 0; guard < this.imageUrls.length * 2; guard += 1) {
       if (this.bag.length === 0) this.bag = shuffle(this.imageUrls);
       const url = this.bag.pop() ?? null;
-      if (url && !this.failedUrls.has(url)) return url;
+      if (url && !this.failedUrls.has(url) && !shown.has(url)) return url;
     }
     return null;
   }
 
   private requestNextImage(face: FaceState): void {
+    // Occasionally let a filled tile go blank, freeing its screenshot for
+    // another tile. With more tiles than screenshots, blanks are what keep
+    // the mosaic from repeating images.
+    if (face.currentUrl !== null && Math.random() < BLANK_CHANCE) {
+      this.beginBlankTransition(face);
+      return;
+    }
     const url = this.nextFromBag();
-    if (!url) return;
+    if (!url) {
+      if (face.currentUrl !== null) {
+        this.beginBlankTransition(face);
+      } else {
+        face.holdRemaining = randomBetween(MIN_BLANK_SECONDS, MAX_BLANK_SECONDS);
+      }
+      return;
+    }
     face.nextUrl = url;
 
     const ready = this.pool.get(url);
@@ -797,20 +841,35 @@ export class CareerGallery {
     face.transitioning = true;
   }
 
+  private beginBlankTransition(face: FaceState): void {
+    const u = face.mesh.material.uniforms;
+    // Each time a tile goes blank it picks a fresh color.
+    randomBlankColor(u.uBlankColor.value as THREE.Color);
+    u.uTexB.value = getPlaceholderTexture();
+    u.uHasB.value = 0;
+    u.uMix.value = 0;
+    face.nextUrl = BLANK;
+    face.transitionT = 0;
+    face.transitioning = true;
+  }
+
   private finishTransition(face: FaceState): void {
     const u = face.mesh.material.uniforms;
     const previousUrl = face.currentUrl;
+    const goingBlank = face.nextUrl === BLANK;
     u.uTexA.value = u.uTexB.value;
     u.uAspectA.value = u.uAspectB.value;
-    u.uHasA.value = 1;
+    u.uHasA.value = goingBlank ? 0 : 1;
     u.uTexB.value = getPlaceholderTexture();
     u.uHasB.value = 0;
     u.uMix.value = 0;
     u.uGlitch.value = 0;
-    face.currentUrl = face.nextUrl;
+    face.currentUrl = goingBlank ? null : face.nextUrl;
     face.nextUrl = null;
     face.transitioning = false;
-    face.holdRemaining = randomBetween(MIN_HOLD_SECONDS, MAX_HOLD_SECONDS);
+    face.holdRemaining = goingBlank
+      ? randomBetween(MIN_BLANK_SECONDS, MAX_BLANK_SECONDS)
+      : randomBetween(MIN_HOLD_SECONDS, MAX_HOLD_SECONDS);
     if (previousUrl) this.releaseImage(previousUrl);
   }
 

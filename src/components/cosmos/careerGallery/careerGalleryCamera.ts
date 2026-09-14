@@ -25,9 +25,8 @@ export type GalleryControlsSnapshot = {
 // Camera sits at the center; the orbit target is this far in front of it, so
 // "orbiting" the target is effectively turning the head.
 const LOOK_TARGET_OFFSET = 0.01;
-const MIN_ZOOM_FOV = 22;
-// A wide zoom-out range shows much more of the mosaic at once.
-const MAX_ZOOM_FOV = 105;
+/** Wheel travel per unit of wheel delta, as a fraction of the shell radius. */
+const DOLLY_SPEED = 0.0011;
 
 export const captureGalleryControls = (
   controls: CameraControls,
@@ -83,20 +82,20 @@ export const applyGalleryInteriorControls = (controls: CameraControls): void => 
   controls.enabled = true;
 };
 
-/** Smoothly turn the head (camera at `center`) toward a world point. */
-export const lookFromCenterToward = (
+/** Smoothly turn the head (camera stays where it is) toward a world point. */
+export const lookFromToward = (
   controls: CameraControls,
-  center: THREE.Vector3,
   worldPoint: THREE.Vector3,
 ): void => {
-  const dir = worldPoint.clone().sub(center);
+  const origin = controls.getPosition(new THREE.Vector3());
+  const dir = worldPoint.clone().sub(origin);
   if (dir.lengthSq() < 1e-6) return;
   dir.normalize();
-  const target = center.clone().addScaledVector(dir, LOOK_TARGET_OFFSET);
+  const target = origin.clone().addScaledVector(dir, LOOK_TARGET_OFFSET);
   controls.setLookAt(
-    center.x,
-    center.y,
-    center.z,
+    origin.x,
+    origin.y,
+    origin.z,
     target.x,
     target.y,
     target.z,
@@ -155,19 +154,44 @@ export const runGalleryEntryGlide = ({
   };
 };
 
-/** Wheel zooms by narrowing/widening the field of view. Returns a detach fn. */
-export const attachGalleryFovZoom = (
+/**
+ * Wheel moves the viewer forward/backward along the look direction, staying
+ * within `maxOffset` of the shell's center, which gives a sense of scale.
+ * Returns a detach function.
+ */
+export const attachGalleryDolly = (
   dom: HTMLElement,
-  camera: THREE.PerspectiveCamera,
+  controls: CameraControls,
+  center: THREE.Vector3,
+  radius: number,
+  maxOffset: number,
 ): (() => void) => {
+  const position = new THREE.Vector3();
+  const target = new THREE.Vector3();
+  const direction = new THREE.Vector3();
   const onWheel = (event: WheelEvent) => {
     event.preventDefault();
-    camera.fov = THREE.MathUtils.clamp(
-      camera.fov + event.deltaY * 0.04,
-      MIN_ZOOM_FOV,
-      MAX_ZOOM_FOV,
+    controls.getPosition(position);
+    controls.getTarget(target);
+    direction.subVectors(target, position);
+    if (direction.lengthSq() < 1e-12) return;
+    direction.normalize();
+    // Scroll up (negative delta) moves forward.
+    position.addScaledVector(direction, -event.deltaY * radius * DOLLY_SPEED);
+    const offset = position.clone().sub(center);
+    if (offset.length() > maxOffset) {
+      position.copy(center).addScaledVector(offset.normalize(), maxOffset);
+    }
+    target.copy(position).addScaledVector(direction, LOOK_TARGET_OFFSET);
+    controls.setLookAt(
+      position.x,
+      position.y,
+      position.z,
+      target.x,
+      target.y,
+      target.z,
+      true,
     );
-    camera.updateProjectionMatrix();
   };
   dom.addEventListener("wheel", onWheel, { passive: false });
   return () => dom.removeEventListener("wheel", onWheel);

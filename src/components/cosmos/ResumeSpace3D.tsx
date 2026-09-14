@@ -15,10 +15,10 @@ import {
 } from "./careerGallery/CareerGallery";
 import {
   applyGalleryInteriorControls,
-  attachGalleryFovZoom,
+  attachGalleryDolly,
   captureGalleryControls,
   collectPortfolioGalleryItems,
-  lookFromCenterToward,
+  lookFromToward,
   restoreGalleryControls,
   runGalleryEntryGlide,
   type GalleryControlsSnapshot,
@@ -7580,10 +7580,16 @@ export default function ResumeSpace3D({
         applyGalleryInteriorControls(controls);
         const dom = rendererRef.current?.domElement;
         if (dom) {
-          careerGalleryZoomDetachRef.current = attachGalleryFovZoom(dom, camera);
+          careerGalleryZoomDetachRef.current = attachGalleryDolly(
+            dom,
+            controls,
+            center,
+            gallery.radius,
+            gallery.radius * 0.6,
+          );
         }
         shipLog(
-          "Career Gallery — drag to look around, scroll to zoom, click a tile",
+          "Career Gallery — drag to look around, scroll to move, click a tile",
           "info",
         );
       },
@@ -9327,9 +9333,8 @@ export default function ResumeSpace3D({
       setCareerGallerySelection(info);
       const controls = sceneRef.current.controls;
       if (controls) {
-        const center = gallery.root.getWorldPosition(new THREE.Vector3());
         const tile = gallery.getFaceWorldCentroid(index, new THREE.Vector3());
-        lookFromCenterToward(controls, center, tile);
+        lookFromToward(controls, tile);
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
