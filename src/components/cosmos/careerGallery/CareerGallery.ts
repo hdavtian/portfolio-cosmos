@@ -26,6 +26,8 @@ export type CareerGalleryFocusInfo = CareerGalleryItem & { faceIndex: number };
 export type CareerGalleryOptions = {
   items: CareerGalleryItem[];
   radius?: number;
+  /** Photo shown across the globe on arrival before tiles turn to screenshots. */
+  skinUrl?: string;
 };
 
 type LoadedImage = {
@@ -48,6 +50,13 @@ type FaceState = {
   hover: number;
   dim: number;
   focus: number;
+  /** Shattered from the outside view: stays a blank color until reset. */
+  retired: boolean;
+  /** 0..1 how much of the arrival photo this tile shows. */
+  skin: number;
+  /** Seconds after showSkin() this tile turns to the photo, and back. */
+  skinInAt: number;
+  skinOutAt: number;
 };
 
 // IcosahedronGeometry detail 2 → 320 triangular faces: from the center you
@@ -125,6 +134,15 @@ const faceFragmentShader = /* glsl */ `
   uniform vec3 uHazeColor;
   uniform float uHazeNear;
   uniform float uHazeFar;
+  // Arrival photo, projected across the front of the globe.
+  uniform sampler2D uSkinTex;
+  uniform float uSkinMix;
+  uniform vec3 uSkinCenter;
+  uniform vec3 uSkinRight;
+  uniform vec3 uSkinUp;
+  uniform vec3 uSkinForward;
+  uniform vec2 uSkinScale;
+  uniform float uSkinShift;
   varying vec2 vUv;
   varying vec3 vBary;
   varying float vViewDistance;
@@ -178,6 +196,23 @@ const faceFragmentShader = /* glsl */ `
     // Blank tiles are a colored hologram panel with a soft vertical shimmer.
     float shimmer = 0.85 + 0.15 * sin(vUv.y * 90.0 - time * 1.6);
     col += uBlankColor * shimmer * (1.0 - presence);
+
+    // Arrival photo: one image projected across the side facing the viewer,
+    // so all the tiles together show it. Fades out toward the back so the far
+    // side doesn't show a mirrored copy.
+    if (uSkinMix > 0.001) {
+      vec3 rel = vWorldPosition - uSkinCenter;
+      vec2 skinUv = vec2(
+        dot(rel, uSkinRight) * uSkinScale.x + 0.5,
+        dot(rel, uSkinUp) * uSkinScale.y + 0.5 + uSkinShift
+      );
+      float front = smoothstep(-0.1, 0.35, dot(normalize(rel), uSkinForward));
+      float skinAmount = uSkinMix * front;
+      // Textures use flipY = false, so t = 0 is the image top.
+      vec3 skin = texture2D(uSkinTex, vec2(clamp(skinUv.x, 0.0, 1.0), 1.0 - clamp(skinUv.y, 0.0, 1.0))).rgb;
+      col = mix(col, skin, skinAmount);
+      presence = max(presence, skinAmount);
+    }
 
     // Hologram treatment: subtle at rest (images stay readable), stronger
     // while a face is glitching, and off entirely for the focused tile.
@@ -406,9 +441,26 @@ export class CareerGallery {
   private lastRevealIndex: number | null = null;
   private lastCamera: THREE.PerspectiveCamera | null = null;
   private revealLoadError: string | null = null;
-  /** Outside view: the reveal folds back on its own after a short hold. */
+  /**
+   * Outside flash sequence: reveal, then drift outward at an angle, then
+   * shatter into glass shards carrying the image. The tile is left a blank
+   * color until restoreRetiredFaces().
+   */
   private flashActive = false;
-  private flashHoldUntil: number | null = null;
+  private flashPhase: "none" | "reveal" | "drift" | "shatter" = "none";
+  private flashPhaseTime = 0;
+  private readonly driftDirection = new THREE.Vector3();
+  private driftDistance = 0;
+  private driftTilt = 1;
+  private readonly driftScale = new THREE.Vector2();
+  /** All shards in one mesh, animated entirely in the vertex shader. */
+  private readonly shatter: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  /** Arrival photo projected across the globe (see showSkin). */
+  private skinImage: { texture: THREE.Texture; bitmap: ImageBitmap; aspect: number } | null =
+    null;
+  private skinActive = false;
+  private skinTime = 0;
+  private skinPendingCamera: THREE.PerspectiveCamera | null = null;
   /** Dark dome just outside the shell that makes the inside feel enclosed. */
   private readonly interiorDome: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
   private interiorLevel = 0;
@@ -418,8 +470,29 @@ export class CareerGallery {
   private readonly tmpWorld = new THREE.Vector3();
   private readonly tmpVec = new THREE.Vector3();
 
-  constructor({ items, radius = 396 }: CareerGalleryOptions) {
+  constructor({ items, radius = 396, skinUrl }: CareerGalleryOptions) {
     this.radius = radius;
+    // Load the arrival photo in the background so it's ready on arrival.
+    if (skinUrl) {
+      loadBitmapTexture(skinUrl, SKIN_IMAGE_MAX_EDGE)
+        .then((image) => {
+          if (this.disposed) {
+            image.texture.dispose();
+            image.bitmap.close();
+            return;
+          }
+          this.skinImage = image;
+          for (const face of this.faces) {
+            face.mesh.material.uniforms.uSkinTex.value = image.texture;
+          }
+          const pending = this.skinPendingCamera;
+          this.skinPendingCamera = null;
+          if (pending) this.showSkin(pending);
+        })
+        .catch(() => {
+          // No photo: arrival simply shows the portfolio screenshots.
+        });
+    }
     for (const item of items) {
       if (item.url && !this.items.has(item.url)) this.items.set(item.url, item);
     }
@@ -466,6 +539,14 @@ export class CareerGallery {
         // From the drifting viewpoint tiles are ~0.7R to ~1.3R away.
         uHazeNear: { value: radius * 0.75 },
         uHazeFar: { value: radius * 1.45 },
+        uSkinTex: { value: getPlaceholderTexture() },
+        uSkinMix: { value: 0 },
+        uSkinCenter: { value: new THREE.Vector3() },
+        uSkinRight: { value: new THREE.Vector3(1, 0, 0) },
+        uSkinUp: { value: new THREE.Vector3(0, 1, 0) },
+        uSkinForward: { value: new THREE.Vector3(0, 0, 1) },
+        uSkinScale: { value: new THREE.Vector2(1, 1) },
+        uSkinShift: { value: SKIN_V_SHIFT },
       },
     });
 
@@ -499,6 +580,10 @@ export class CareerGallery {
         hover: 0,
         dim: 0,
         focus: 0,
+        retired: false,
+        skin: 0,
+        skinInAt: 0,
+        skinOutAt: 0,
       });
     }
     baseMaterial.dispose();
@@ -608,6 +693,35 @@ export class CareerGallery {
       dustMaterial.uniforms.uPointScale.value = drawSize.y * 0.5;
     };
     this.root.add(this.interiorDust);
+
+    // Glass shards for the outside flash. Built once; hidden until needed
+    // (the loader warmup compiles hidden objects, so the first shatter
+    // doesn't stall).
+    this.shatter = new THREE.Mesh(
+      buildShatterGeometry(),
+      new THREE.ShaderMaterial({
+        vertexShader: shatterVertexShader,
+        fragmentShader: shatterFragmentShader,
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+        uniforms: {
+          uTex: { value: getPlaceholderTexture() },
+          uTime: { value: 0 },
+          uDuration: { value: SHATTER_SECONDS },
+          uSize: { value: new THREE.Vector2(1, 1) },
+          uMomentum: { value: new THREE.Vector3() },
+          uTint: { value: HOLO_TINT.clone() },
+        },
+      }),
+    );
+    this.shatter.name = "CareerGalleryShatter";
+    this.shatter.renderOrder = 21;
+    this.shatter.frustumCulled = false;
+    this.shatter.visible = false;
+    this.root.add(this.shatter);
   }
 
   /** Snapshot of loading/cycling state, for debugging. */
@@ -693,10 +807,12 @@ export class CareerGallery {
     const url = face?.currentUrl;
     if (!face || !url) return null;
 
+    // A new click while shards are still flying: let that shatter finish now.
+    this.finishShatter();
     this.focusedIndex = index;
     this.focusToken += 1;
     this.flashActive = false;
-    this.flashHoldUntil = null;
+    this.flashPhase = "none";
     const token = this.focusToken;
     this.revealTarget = 0;
     this.revealProgress = 0;
@@ -737,17 +853,156 @@ export class CareerGallery {
     this.focusToken += 1;
     this.revealTarget = 0;
     this.flashActive = false;
-    this.flashHoldUntil = null;
+    if (this.flashPhase === "shatter") this.finishShatter();
+    this.flashPhase = "none";
   }
 
   /**
-   * Outside view: fly the tile's screenshot out toward the viewer, hold it for
-   * a few seconds, then fold it back on its own (no buttons).
+   * Outside view: fly the tile's screenshot out toward the viewer, let it
+   * drift away at an angle, then shatter it like painted glass. The tile it
+   * came from is left a blank color (no buttons).
    */
   flashFace(index: number): CareerGalleryFocusInfo | null {
     const info = this.focusFace(index);
-    if (info) this.flashActive = true;
+    if (info) {
+      this.flashActive = true;
+      this.flashPhase = "reveal";
+    }
     return info;
+  }
+
+  /** Shattered tiles start cycling screenshots again (call when the visit ends). */
+  restoreRetiredFaces(): void {
+    for (const face of this.faces) {
+      if (!face.retired) continue;
+      face.retired = false;
+      face.holdRemaining = randomBetween(0.5, 3);
+    }
+  }
+
+  /**
+   * On arrival: the photo loads onto the tiles (hologram flicker, a tile at a
+   * time) as one picture facing the viewer; after a few seconds random tiles
+   * turn back into portfolio screenshots.
+   */
+  showSkin(camera: THREE.PerspectiveCamera): void {
+    const image = this.skinImage;
+    if (!image) {
+      this.skinPendingCamera = camera;
+      return;
+    }
+    const center = this.root.getWorldPosition(new THREE.Vector3());
+    const forward = camera.position.clone().sub(center);
+    if (forward.lengthSq() < 1e-6) forward.set(0, 0, 1);
+    forward.normalize();
+    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), forward);
+    if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+    right.normalize();
+    const up = new THREE.Vector3().crossVectors(forward, right).normalize();
+    // Fill the globe's width; the portrait photo's top and bottom crop.
+    const scaleX = 1 / (2 * this.radius);
+    const scaleY = image.aspect / (2 * this.radius);
+    for (const face of this.faces) {
+      const u = face.mesh.material.uniforms;
+      (u.uSkinCenter.value as THREE.Vector3).copy(center);
+      (u.uSkinRight.value as THREE.Vector3).copy(right);
+      (u.uSkinUp.value as THREE.Vector3).copy(up);
+      (u.uSkinForward.value as THREE.Vector3).copy(forward);
+      (u.uSkinScale.value as THREE.Vector2).set(scaleX, scaleY);
+      face.skinInAt = Math.random() * SKIN_IN_SPREAD;
+      face.skinOutAt = SKIN_HOLD_SECONDS + Math.random() * SKIN_OUT_SPREAD;
+    }
+    this.skinActive = true;
+    this.skinTime = 0;
+  }
+
+  /** Drop the arrival photo immediately (entering or leaving the gallery). */
+  clearSkin(): void {
+    this.skinPendingCamera = null;
+    this.skinActive = false;
+    for (const face of this.faces) {
+      face.skin = 0;
+      face.mesh.material.uniforms.uSkinMix.value = 0;
+    }
+  }
+
+  private beginDrift(camera: THREE.PerspectiveCamera): void {
+    this.flashPhase = "drift";
+    this.flashPhaseTime = 0;
+    this.driftTilt = Math.random() < 0.5 ? -1 : 1;
+    const planeWorld = this.reveal.getWorldPosition(new THREE.Vector3());
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+    const toward = camera.position.clone().sub(planeWorld).normalize();
+    // Out to one side and up, a little toward the viewer.
+    this.driftDirection
+      .copy(right)
+      .multiplyScalar(0.8 * this.driftTilt)
+      .addScaledVector(up, 0.45)
+      .addScaledVector(toward, 0.2)
+      .normalize();
+    this.driftDistance = camera.position.distanceTo(planeWorld) * FLASH_DRIFT_DISTANCE;
+    this.driftScale.set(this.reveal.scale.x, this.reveal.scale.y);
+  }
+
+  private beginShatter(): void {
+    const index = this.focusedIndex;
+    this.flashPhase = "shatter";
+    this.flashPhaseTime = 0;
+    const u = this.shatter.material.uniforms;
+    u.uTex.value = this.reveal.material.uniforms.uTex.value;
+    u.uTime.value = 0;
+    (u.uSize.value as THREE.Vector2).set(this.reveal.scale.x, this.reveal.scale.y);
+    // Shards keep the drift's final speed, expressed in the plane's own frame.
+    const endSpeed = (2 * this.driftDistance) / FLASH_DRIFT_SECONDS;
+    const toPlaneFrame = this.reveal.getWorldQuaternion(new THREE.Quaternion()).invert();
+    (u.uMomentum.value as THREE.Vector3)
+      .copy(this.driftDirection)
+      .applyQuaternion(toPlaneFrame)
+      .multiplyScalar(endSpeed);
+    this.shatter.position.copy(this.reveal.position);
+    this.shatter.quaternion.copy(this.reveal.quaternion);
+    this.shatter.visible = true;
+    this.reveal.visible = false;
+    if (index !== null) this.retireFace(index);
+  }
+
+  /** Ends a shatter: hide the shards and drop the image without folding back. */
+  private finishShatter(): void {
+    if (this.flashPhase !== "shatter") return;
+    this.flashPhase = "none";
+    this.flashActive = false;
+    this.shatter.visible = false;
+    this.shatter.material.uniforms.uTex.value = getPlaceholderTexture();
+    this.reveal.visible = true;
+    this.focusedIndex = null;
+    this.focusToken += 1;
+    this.revealTarget = 0;
+    this.revealProgress = 0;
+    this.reveal.material.uniforms.uReveal.value = 0;
+    this.releaseRevealImage();
+  }
+
+  /** The shattered tile's spot becomes a blank random color and stops cycling. */
+  private retireFace(index: number): void {
+    const face = this.faces[index];
+    if (!face) return;
+    const u = face.mesh.material.uniforms;
+    const previous = face.currentUrl;
+    const pending = face.nextUrl;
+    randomBlankColor(u.uBlankColor.value as THREE.Color);
+    u.uTexA.value = getPlaceholderTexture();
+    u.uTexB.value = getPlaceholderTexture();
+    u.uHasA.value = 0;
+    u.uHasB.value = 0;
+    u.uMix.value = 0;
+    u.uGlitch.value = 0;
+    face.currentUrl = null;
+    face.nextUrl = null;
+    face.transitioning = false;
+    face.retired = true;
+    if (previous) this.releaseImage(previous);
+    if (pending && pending !== BLANK && pending !== previous) this.releaseImage(pending);
   }
 
   /**
@@ -808,8 +1063,13 @@ export class CareerGallery {
 
     // Slow spin about the vertical axis only (tilting would gradually turn
     // the tiles sideways/upside down); hold still while a tile is focused.
-    if (focused === null) {
+    // ...and while the arrival photo is up, so the picture holds still.
+    if (focused === null && !this.skinActive) {
       this.shell.rotation.y += step * (this.interior ? 0.012 : 0.02);
+    }
+    if (this.skinActive) {
+      this.skinTime += step;
+      if (this.skinTime > SKIN_HOLD_SECONDS + SKIN_OUT_SPREAD + 2) this.skinActive = false;
     }
 
     this.root.getWorldPosition(this.tmpWorld);
@@ -831,17 +1091,38 @@ export class CareerGallery {
       u.uInterior.value = this.interiorLevel;
       (u.uCenter.value as THREE.Vector3).copy(this.tmpWorld);
 
+      // Arrival photo: each tile turns to it at its own moment, then back.
+      const skinTarget =
+        this.skinActive &&
+        this.skinTime >= face.skinInAt &&
+        this.skinTime < face.skinOutAt
+          ? 1
+          : 0;
+      face.skin += (skinTarget - face.skin) * (1 - Math.exp(-SKIN_EASE * step));
+      if (face.skin < 0.001 && skinTarget === 0) face.skin = 0;
+      u.uSkinMix.value = face.skin;
+      // Hologram flicker while a tile switches to or from the photo.
+      const skinGlitch = Math.min(1, 4 * face.skin * (1 - face.skin));
+      if (!face.transitioning) u.uGlitch.value = skinGlitch;
+
       if (face.transitioning) {
         face.transitionT = Math.min(1, face.transitionT + step / TRANSITION_SECONDS);
         const t = face.transitionT;
         u.uMix.value = THREE.MathUtils.smoothstep(t, 0.25, 0.85);
-        u.uGlitch.value = Math.pow(Math.sin(Math.PI * t), 0.6);
+        u.uGlitch.value = Math.max(Math.pow(Math.sin(Math.PI * t), 0.6), skinGlitch);
         if (t >= 1) this.finishTransition(face);
         continue;
       }
 
       // The focused tile keeps its image until focus clears.
-      if (!cycling || face.index === focused || this.imageUrls.length === 0) continue;
+      if (
+        !cycling ||
+        face.retired ||
+        face.index === focused ||
+        this.imageUrls.length === 0
+      ) {
+        continue;
+      }
       face.holdRemaining -= step;
       const due = face.holdRemaining <= 0;
       if (due && face.nextUrl === null && this.inFlight < MAX_CONCURRENT_LOADS) {
@@ -865,13 +1146,20 @@ export class CareerGallery {
     if (this.revealProgress <= 0 && this.revealTarget === 0) {
       this.releaseRevealImage();
     }
-    // Outside flash: hold the fully revealed image, then fold it back.
-    if (this.flashActive && this.focusedIndex !== null && this.revealProgress >= 1) {
-      if (this.flashHoldUntil === null) {
-        this.flashHoldUntil = this.time + FLASH_HOLD_SECONDS;
-      } else if (this.time >= this.flashHoldUntil) {
-        this.clearFocus();
+    // Outside flash sequence: once revealed, drift away; then shatter.
+    if (this.flashActive && this.focusedIndex !== null) {
+      if (this.flashPhase === "reveal" && this.revealProgress >= 1) {
+        this.beginDrift(camera);
+      } else if (this.flashPhase === "drift") {
+        this.flashPhaseTime += step;
+        if (this.flashPhaseTime >= FLASH_DRIFT_SECONDS) this.beginShatter();
       }
+    }
+    if (this.flashPhase === "shatter") {
+      this.flashPhaseTime += step;
+      this.shatter.material.uniforms.uTime.value = this.flashPhaseTime;
+      if (this.flashPhaseTime >= SHATTER_SECONDS) this.finishShatter();
+      return;
     }
 
     const focused = this.focusedIndex;
@@ -892,9 +1180,23 @@ export class CareerGallery {
     } else {
       // Outside: the image flies out of its tile toward the viewer.
       worldPos = centroid.clone().lerp(camera.position, EXTERIOR_REVEAL_TRAVEL * eased);
+      if (this.flashPhase === "drift") {
+        // Then gently accelerates away at an angle.
+        const k = Math.min(1, this.flashPhaseTime / FLASH_DRIFT_SECONDS);
+        worldPos.addScaledVector(this.driftDirection, this.driftDistance * k * k);
+      }
     }
     this.reveal.position.copy(this.root.worldToLocal(worldPos.clone()));
     this.reveal.lookAt(camera.position);
+
+    if (this.flashPhase === "drift") {
+      // Keep the size it had when it started drifting, and tilt as it goes.
+      const k = Math.min(1, this.flashPhaseTime / FLASH_DRIFT_SECONDS);
+      this.reveal.rotateY(0.45 * k * this.driftTilt);
+      this.reveal.rotateZ(0.12 * k * this.driftTilt);
+      this.reveal.scale.set(this.driftScale.x, this.driftScale.y, 1);
+      return;
+    }
 
     const distance = Math.max(1, camera.position.distanceTo(worldPos));
     const viewHeight = 2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
@@ -1047,6 +1349,13 @@ export class CareerGallery {
     this.interiorDome.material.dispose();
     this.interiorDust.geometry.dispose();
     this.interiorDust.material.dispose();
+    this.shatter.geometry.dispose();
+    this.shatter.material.dispose();
+    if (this.skinImage) {
+      this.skinImage.texture.dispose();
+      this.skinImage.bitmap.close();
+      this.skinImage = null;
+    }
     this.releaseRevealImage();
     this.pool.forEach((entry) => {
       entry.texture.dispose();
@@ -1057,8 +1366,174 @@ export class CareerGallery {
   }
 }
 
-/** Outside flash: seconds the revealed image holds before folding back. */
-const FLASH_HOLD_SECONDS = 3.5;
+/** Outside flash: seconds the revealed image drifts away before shattering. */
+const FLASH_DRIFT_SECONDS = 2.8;
+/** How far it drifts, as a share of its distance from the camera. */
+const FLASH_DRIFT_DISTANCE = 0.35;
+/** Seconds the shards fly apart and fade. */
+const SHATTER_SECONDS = 2.4;
+/** Shard grid: two jittered triangles per cell (140 shards). */
+const SHATTER_COLUMNS = 10;
+const SHATTER_ROWS = 7;
+
+/** Arrival photo: longest edge it's loaded at. */
+const SKIN_IMAGE_MAX_EDGE = 1536;
+/** Seconds over which tiles pick up the photo. */
+const SKIN_IN_SPREAD = 1.4;
+/** Seconds before tiles start turning back into screenshots. */
+const SKIN_HOLD_SECONDS = 4;
+/** Seconds over which tiles turn back, one at a time. */
+const SKIN_OUT_SPREAD = 7;
+/** How quickly a tile blends to or from the photo. */
+const SKIN_EASE = 5;
+/** Shifts the portrait photo up on the globe so faces (upper half) stay centered. */
+const SKIN_V_SHIFT = 0.06;
+
+/**
+ * One geometry holding every shard of a unit plane (-0.5..0.5). Each vertex
+ * carries its shard's center, spin axis and random speed/spin/delay, so the
+ * whole shatter animates in the vertex shader from a single time uniform.
+ */
+const buildShatterGeometry = (): THREE.BufferGeometry => {
+  const cols = SHATTER_COLUMNS;
+  const rows = SHATTER_ROWS;
+  const grid: THREE.Vector2[] = [];
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      const jitterX = c === 0 || c === cols ? 0 : ((Math.random() - 0.5) * 0.7) / cols;
+      const jitterY = r === 0 || r === rows ? 0 : ((Math.random() - 0.5) * 0.7) / rows;
+      grid.push(new THREE.Vector2(c / cols - 0.5 + jitterX, r / rows - 0.5 + jitterY));
+    }
+  }
+  const at = (c: number, r: number) => grid[r * (cols + 1) + c];
+  const triangles: Array<[THREE.Vector2, THREE.Vector2, THREE.Vector2]> = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const a = at(c, r);
+      const b = at(c + 1, r);
+      const d = at(c, r + 1);
+      const e = at(c + 1, r + 1);
+      if (Math.random() < 0.5) {
+        triangles.push([a, b, e], [a, e, d]);
+      } else {
+        triangles.push([a, b, d], [b, e, d]);
+      }
+    }
+  }
+
+  const vertexCount = triangles.length * 3;
+  const position = new Float32Array(vertexCount * 3);
+  const uv = new Float32Array(vertexCount * 2);
+  const center = new Float32Array(vertexCount * 3);
+  const spinAxis = new Float32Array(vertexCount * 3);
+  const random = new Float32Array(vertexCount * 4);
+  const bary = new Float32Array(vertexCount * 3);
+  const axis = new THREE.Vector3();
+  triangles.forEach((triangle, t) => {
+    const cx = (triangle[0].x + triangle[1].x + triangle[2].x) / 3;
+    const cy = (triangle[0].y + triangle[1].y + triangle[2].y) / 3;
+    axis.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
+    const lift = Math.random();
+    const speed = 0.35 + Math.random() * 0.65;
+    const spin = (Math.random() < 0.5 ? -1 : 1) * (1.5 + Math.random() * 4.5);
+    // Cracks spread from the middle: outer shards break loose a moment later.
+    const delay = Math.min(1, Math.hypot(cx, cy) * 1.4);
+    triangle.forEach((point, k) => {
+      const v = t * 3 + k;
+      position.set([point.x, point.y, 0], v * 3);
+      uv.set([point.x + 0.5, point.y + 0.5], v * 2);
+      center.set([cx, cy, 0], v * 3);
+      spinAxis.set([axis.x, axis.y, axis.z], v * 3);
+      random.set([lift, speed, spin, delay], v * 4);
+      bary.set([k === 0 ? 1 : 0, k === 1 ? 1 : 0, k === 2 ? 1 : 0], v * 3);
+    });
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
+  geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  geometry.setAttribute("aCenter", new THREE.BufferAttribute(center, 3));
+  geometry.setAttribute("aSpinAxis", new THREE.BufferAttribute(spinAxis, 3));
+  geometry.setAttribute("aRandom", new THREE.BufferAttribute(random, 4));
+  geometry.setAttribute("aBary", new THREE.BufferAttribute(bary, 3));
+  return geometry;
+};
+
+const shatterVertexShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  uniform vec2 uSize;
+  uniform float uTime;
+  uniform float uDuration;
+  uniform vec3 uMomentum;
+  attribute vec3 aCenter;
+  attribute vec3 aSpinAxis;
+  attribute vec4 aRandom; // lift, speed, spin, delay
+  attribute vec3 aBary;
+  varying vec2 vUv;
+  varying vec3 vBary;
+  varying float vFade;
+  varying float vGlint;
+
+  mat3 axisRotation(vec3 a, float angle) {
+    float s = sin(angle);
+    float c = cos(angle);
+    float oc = 1.0 - c;
+    return mat3(
+      oc * a.x * a.x + c,       oc * a.x * a.y + a.z * s, oc * a.z * a.x - a.y * s,
+      oc * a.x * a.y - a.z * s, oc * a.y * a.y + c,       oc * a.y * a.z + a.x * s,
+      oc * a.z * a.x + a.y * s, oc * a.y * a.z - a.x * s, oc * a.z * a.z + c
+    );
+  }
+
+  void main() {
+    vUv = uv;
+    vBary = aBary;
+    float span = max(uSize.x, uSize.y);
+    float t = max(0.0, uTime - aRandom.w * 0.22);
+    vec3 center = vec3(aCenter.xy * uSize, 0.0);
+    vec3 local = vec3(position.xy * uSize, 0.0) - center;
+    mat3 spin = axisRotation(aSpinAxis, aRandom.z * t);
+    vec2 away = aCenter.xy / max(length(aCenter.xy), 0.02);
+    // Burst outward in the plane and toward the viewer, carrying the drift.
+    vec3 velocity = vec3(away * aRandom.y * span * 0.55, (0.25 + aRandom.x) * span * 0.35);
+    float life = clamp(uTime / uDuration, 0.0, 1.0);
+    float shrink = 1.0 - 0.55 * smoothstep(0.5, 1.0, life);
+    vec3 p = center + (velocity + uMomentum) * t + spin * local * shrink;
+    vFade = 1.0 - smoothstep(0.55, 1.0, life);
+    // Glass catches the light as a shard turns toward it.
+    vec3 normalView = normalize(normalMatrix * (spin * vec3(0.0, 0.0, 1.0)));
+    vGlint = pow(abs(dot(normalView, normalize(vec3(0.35, 0.55, 0.76)))), 28.0);
+    vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    #include <logdepthbuf_vertex>
+  }
+`;
+
+const shatterFragmentShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  uniform sampler2D uTex;
+  uniform float uTime;
+  uniform vec3 uTint;
+  varying vec2 vUv;
+  varying vec3 vBary;
+  varying float vFade;
+  varying float vGlint;
+  void main() {
+    #include <logdepthbuf_fragment>
+    // Same image orientation as the reveal plane.
+    vec3 image = texture2D(uTex, vec2(vUv.x, 1.0 - vUv.y)).rgb * 0.78;
+    // Bright crack lines that flash as the glass breaks, then glassy edges.
+    float edge = min(vBary.x, min(vBary.y, vBary.z));
+    float crack = 1.0 - smoothstep(0.0, 0.04, edge);
+    float crackFlash = exp(-uTime * 6.0);
+    vec3 color = image
+      + mix(uTint, vec3(0.9, 0.97, 1.0), 0.6) * crack * (0.3 + 1.4 * crackFlash)
+      + vec3(1.0) * vGlint * 0.6;
+    gl_FragColor = vec4(min(color, vec3(0.95)), vFade);
+  }
+`;
 /** Outside flash: share of the way from its tile to the camera the image flies. */
 const EXTERIOR_REVEAL_TRAVEL = 0.55;
 /** Interior dome radius, in shell radii (just beyond the tiles and edges). */

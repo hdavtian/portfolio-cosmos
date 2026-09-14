@@ -7734,6 +7734,9 @@ export default function ResumeSpace3D({
       setCareerGalleryOutside(false);
       setCareerGallerySelection(null);
       careerGalleryRef.current?.setInteriorMode(false);
+      // Shattered tiles come back for the next visit.
+      careerGalleryRef.current?.restoreRetiredFaces();
+      careerGalleryRef.current?.clearSkin();
       if (!wasInside) return;
 
       const controls = sceneRef.current.controls;
@@ -7779,6 +7782,7 @@ export default function ResumeSpace3D({
     careerGalleryOutsideRef.current = false;
     setCareerGalleryOutside(false);
     gallery.clearFocus();
+    gallery.clearSkin();
     gallery.setInteriorMode(true);
 
     const center = gallery.root.getWorldPosition(new THREE.Vector3());
@@ -7844,6 +7848,9 @@ export default function ResumeSpace3D({
       gallery.root.getWorldPosition(new THREE.Vector3()),
       gallery.radius,
     );
+    // The family photo loads across the globe first, then tiles turn into
+    // portfolio screenshots one by one.
+    gallery.showSkin(camera);
     shipLog(
       "Career Gallery — drag to spin around it, click a tile, or enter the gallery",
       "info",
@@ -17199,6 +17206,8 @@ export default function ResumeSpace3D({
     const careerGallery = new CareerGallery({
       items: collectPortfolioGalleryItems(portfolioCores),
       radius: CAREER_GALLERY_RADIUS,
+      // Shown across the globe on arrival, then tiles turn into screenshots.
+      skinUrl: "/images/career-gallery/family-skin.jpg",
     });
     careerGallery.root.position.copy(CAREER_GALLERY_WORLD_ANCHOR);
     const careerGalleryLabel = createLabel(
