@@ -26,7 +26,7 @@ import {
 import CareerGalleryTitleCard from "./careerGallery/CareerGalleryTitleCard";
 import resumeData from "../../data/resume.json";
 import { trackEvent } from "../../lib/analytics";
-import { IS_DEBUG, dlog, dwarn } from "../../lib/debugLog";
+import { IS_DEBUG, IS_DEBUG_OVERLAYS, dlog, dwarn } from "../../lib/debugLog";
 import CosmosLoader from "../CosmosLoader";
 import {
   DEFAULT_CONTROL_SENSITIVITY,
@@ -24481,12 +24481,12 @@ export default function ResumeSpace3D({
         </div>
       )}
       <AboutJourneyDebugPanel
-        enabled={IS_DEBUG}
-        debugEnabled={IS_DEBUG}
+        enabled={IS_DEBUG_OVERLAYS}
+        debugEnabled={IS_DEBUG_OVERLAYS}
         journeyRef={aboutJourneyRef}
         swarmRef={aboutParticleSwarmRef}
       />
-      <DebugZoneOverlay enabled={IS_DEBUG} />
+      <DebugZoneOverlay enabled={IS_DEBUG_OVERLAYS} />
     </>
   );
 }
