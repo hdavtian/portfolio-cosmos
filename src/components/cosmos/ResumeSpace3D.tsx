@@ -25,6 +25,11 @@ import {
   type GalleryControlsSnapshot,
 } from "./careerGallery/careerGalleryCamera";
 import CareerGalleryTitleCard from "./careerGallery/CareerGalleryTitleCard";
+import { FalconLaserBursts } from "./careerGallery/falconLaserBursts";
+import {
+  createHeatHazePass,
+  ShipRimLight,
+} from "./careerGallery/falconHeatAndRim";
 import resumeData from "../../data/resume.json";
 import { trackEvent } from "../../lib/analytics";
 import { IS_DEBUG, IS_DEBUG_OVERLAYS, dlog, dwarn } from "../../lib/debugLog";
@@ -542,6 +547,19 @@ const CAREER_GALLERY_ENTRY_GLIDE_MS = 5000;
  */
 const CAREER_GALLERY_DRIFT_RADII = 0.3;
 const CAREER_GALLERY_DRIFT_RAMP_S = 4;
+/**
+ * Outside the gallery the Falcon sits bottom-left, close to the camera, rear
+ * toward us: offset in the camera's frame (x right, y up, z ahead).
+ */
+// Close enough that most of the ship runs off the bottom-left corner.
+const CAREER_GALLERY_SHIP_OFFSET = new THREE.Vector3(-0.64, -0.38, 1.1);
+/** Heat haze strength behind the parked Falcon's engines. */
+const CAREER_GALLERY_HEAT_STRENGTH = 0.22;
+/** Its two cannons, in ship model space (front is +Z; fitted to ~14 long). */
+const CAREER_GALLERY_SHIP_MUZZLES = [
+  new THREE.Vector3(0, 0.9, 7.5),
+  new THREE.Vector3(0, -0.9, 7.5),
+];
 const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -13200);
 /**
  * The About ride's bottom control panel (speed arrows, camera toggles,
@@ -2014,6 +2032,12 @@ export default function ResumeSpace3D({
   /** Parked outside the gallery, camera locked on the globe. */
   const careerGalleryOutsideRef = useRef(false);
   const [careerGalleryOutside, setCareerGalleryOutside] = useState(false);
+  /** Ship pose before it parked in front of the camera outside the gallery. */
+  const careerGalleryShipPoseRef = useRef<{
+    position: THREE.Vector3;
+    quaternion: THREE.Quaternion;
+  } | null>(null);
+  const careerGalleryLasersRef = useRef<FalconLaserBursts | null>(null);
   const [careerGallerySelection, setCareerGallerySelection] =
     useState<CareerGalleryFocusInfo | null>(null);
   const composerRef = useRef<EffectComposer | null>(null);
@@ -7748,6 +7772,15 @@ export default function ResumeSpace3D({
       if (controls && camera && snapshot) {
         restoreGalleryControls(controls, camera, snapshot);
       }
+      careerGalleryRef.current?.setShatterAttack(null);
+      careerGalleryLasersRef.current?.clear();
+      // Put the Falcon back where it was before parking in front of the camera.
+      const savedShipPose = careerGalleryShipPoseRef.current;
+      careerGalleryShipPoseRef.current = null;
+      if (savedShipPose && spaceshipRef.current) {
+        spaceshipRef.current.position.copy(savedShipPose.position);
+        spaceshipRef.current.quaternion.copy(savedShipPose.quaternion);
+      }
       if (restoreShip) {
         setFollowingSpaceship(true);
         followingSpaceshipRef.current = true;
@@ -7783,6 +7816,8 @@ export default function ResumeSpace3D({
     setCareerGalleryOutside(false);
     gallery.clearFocus();
     gallery.clearSkin();
+    gallery.setShatterAttack(null);
+    careerGalleryLasersRef.current?.clear();
     gallery.setInteriorMode(true);
 
     const center = gallery.root.getWorldPosition(new THREE.Vector3());
@@ -7839,7 +7874,29 @@ export default function ResumeSpace3D({
     setCareerGalleryOutside(true);
     setFollowingSpaceship(false);
     followingSpaceshipRef.current = false;
-    if (spaceshipRef.current) spaceshipRef.current.visible = false;
+    // The Falcon parks bottom-left in front of the camera (placed every frame
+    // in the gallery effect) and shoots the images that fly out.
+    const ship = spaceshipRef.current;
+    if (ship) {
+      careerGalleryShipPoseRef.current = {
+        position: ship.position.clone(),
+        quaternion: ship.quaternion.clone(),
+      };
+      ship.visible = true;
+    }
+    gallery.setShatterAttack((target, arriveInSeconds) => {
+      const falcon = spaceshipRef.current;
+      const lasers = careerGalleryLasersRef.current;
+      if (!falcon || !lasers) return;
+      falcon.updateMatrixWorld(true);
+      lasers.fire(
+        CAREER_GALLERY_SHIP_MUZZLES.map((muzzle) =>
+          falcon.localToWorld(muzzle.clone()),
+        ),
+        target,
+        arriveInSeconds,
+      );
+    });
     careerGallerySnapshotRef.current = captureGalleryControls(controls, camera);
     gallery.setInteriorMode(false);
     applyGalleryExteriorControls(
@@ -9541,6 +9598,104 @@ export default function ResumeSpace3D({
     if (!sceneReady) return;
     let raf = 0;
     let last = performance.now();
+
+    // Outside the gallery: the Falcon is placed in the camera's frame right
+    // before each render (after the camera has moved), so it never lags or
+    // jitters while the user spins around the globe.
+    const scene = sceneRef.current.scene;
+    const lasers = scene ? new FalconLaserBursts(scene) : null;
+    careerGalleryLasersRef.current = lasers;
+    const shipOffset = new THREE.Vector3();
+    const shipFlip = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      Math.PI,
+    );
+    // Hot air behind the engines (screen pass right after the scene render,
+    // before bloom) and a rim light so the hull stands off the globe.
+    const composer = composerRef.current;
+    const heatPass = composer ? createHeatHazePass() : null;
+    if (composer && heatPass) composer.insertPass(heatPass, 1);
+    let rimLight: ShipRimLight | null = null;
+    let rimShip: THREE.Object3D | null = null;
+    let rimShown = false;
+    const engineCenter = new THREE.Vector3();
+    const engineLeft = new THREE.Vector3();
+    const engineRight = new THREE.Vector3();
+    const previousSceneBeforeRender = scene?.onBeforeRender;
+    if (scene && previousSceneBeforeRender) {
+      scene.onBeforeRender = function (...args) {
+        const renderCamera = args[2] as THREE.PerspectiveCamera;
+        const ship = spaceshipRef.current;
+        const parked =
+          careerGalleryOutsideRef.current &&
+          !!ship &&
+          renderCamera?.isPerspectiveCamera === true;
+        if (ship && parked && rimShip !== ship) {
+          rimLight?.dispose();
+          rimLight = new ShipRimLight(ship);
+          rimShip = ship;
+          rimShown = false;
+        }
+        if (rimLight && rimShown !== parked) {
+          rimLight.setVisible(parked);
+          rimLight.setOnTop(parked);
+          rimShown = parked;
+        }
+        if (heatPass) heatPass.enabled = parked;
+        if (
+          careerGalleryOutsideRef.current &&
+          ship &&
+          renderCamera?.isPerspectiveCamera
+        ) {
+          const t = performance.now() / 1000;
+          // Rear toward us (model front is +Z, the camera looks down -Z).
+          shipOffset
+            .set(
+              CAREER_GALLERY_SHIP_OFFSET.x + Math.sin(t * 0.6) * 0.02,
+              CAREER_GALLERY_SHIP_OFFSET.y + Math.sin(t * 0.9) * 0.025,
+              -CAREER_GALLERY_SHIP_OFFSET.z,
+            )
+            .applyQuaternion(renderCamera.quaternion);
+          ship.position.copy(renderCamera.position).add(shipOffset);
+          ship.quaternion.copy(renderCamera.quaternion).multiply(shipFlip);
+          ship.updateMatrixWorld(true);
+
+          // Center the haze on the engine grille, sized to its width on screen.
+          if (heatPass) {
+            const grille =
+              (ship.userData.engineGlowPoints as THREE.Vector3[] | undefined) ?? [];
+            if (grille.length > 0) {
+              engineCenter.set(0, 0, 0);
+              for (const point of grille) engineCenter.add(point);
+              engineCenter.divideScalar(grille.length);
+              engineLeft.copy(grille[0]);
+              engineRight.copy(grille[grille.length - 1]);
+            } else {
+              engineCenter.set(0, 0, -6);
+              engineLeft.set(-4, 0, -6);
+              engineRight.set(4, 0, -6);
+            }
+            ship.localToWorld(engineCenter).project(renderCamera);
+            ship.localToWorld(engineLeft).project(renderCamera);
+            ship.localToWorld(engineRight).project(renderCamera);
+            const width = Math.max(0.05, Math.abs(engineRight.x - engineLeft.x) * 0.5);
+            const u = heatPass.uniforms;
+            (u.uCenter.value as THREE.Vector2).set(
+              engineCenter.x * 0.5 + 0.5,
+              engineCenter.y * 0.5 + 0.5,
+            );
+            (u.uRadius.value as THREE.Vector2).set(
+              width * 0.85,
+              width * 0.85 * renderCamera.aspect * 0.7,
+            );
+            u.uStrength.value = CAREER_GALLERY_HEAT_STRENGTH;
+            u.uTime.value = t;
+          }
+        }
+        previousSceneBeforeRender.apply(this, args);
+      };
+    }
+
     // Interior drift state (see CAREER_GALLERY_DRIFT_RADII).
     let driftTime = 0;
     let driftRamp = 0;
@@ -9558,6 +9713,7 @@ export default function ResumeSpace3D({
       const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
       last = now;
       gallery.update(dt, camera);
+      lasers?.update(dt, camera);
 
       // Drift the interior viewpoint on a slow loop by moving the orbit target
       // (the camera rides 0.01 behind it), applying only the change each frame
@@ -9589,7 +9745,19 @@ export default function ResumeSpace3D({
       driftPrevious.copy(driftNext);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (scene && previousSceneBeforeRender) {
+        scene.onBeforeRender = previousSceneBeforeRender;
+      }
+      lasers?.dispose();
+      careerGalleryLasersRef.current = null;
+      if (composer && heatPass) {
+        composer.removePass(heatPass);
+        heatPass.dispose();
+      }
+      rimLight?.dispose();
+    };
   }, [sceneReady]);
 
   // Career Gallery from outside: drag orbits the globe (camera-controls);
@@ -22376,6 +22544,30 @@ export default function ResumeSpace3D({
             >
               Exit Gallery
             </button>
+          )}
+          {careerGalleryOutside && (
+            <div
+              style={{
+                position: "fixed",
+                left: "50%",
+                bottom: 96,
+                transform: "translateX(-50%)",
+                zIndex: 1121,
+                padding: "6px 16px",
+                borderRadius: 8,
+                background: "rgba(8, 18, 34, 0.6)",
+                color: "#bfe6ff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 15,
+                fontWeight: 600,
+                letterSpacing: 1,
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
+                textShadow: "0 0 10px rgba(120, 210, 255, 0.45)",
+              }}
+            >
+              Click a tile to enlarge it — or enter the gallery
+            </div>
           )}
           {careerGalleryOutside && (
             <button

@@ -26,15 +26,19 @@ const ARRIVE_START_LIFT = 90;
 /** Low point of the arc, well below the camera's view. */
 const ARRIVE_DIVE_LIFT = -260;
 /** How close it is (along the rail) when it pops back up. */
-const ARRIVE_DIVE_DISTANCE = 140;
+const ARRIVE_DIVE_DISTANCE = 200;
 /** Share of the arrival spent racing in and arcing down out of view. */
 const ARRIVE_DIVE_AT = 0.55;
 /** Share of the arrival after which it turns upright into the cross pose. */
 const ARRIVE_UPRIGHT_FROM = 0.7;
 
-/** Hover pose: close in front of the camera, at eye level (camera rides at 30). */
-const HOVER_DISTANCE = 60;
-const HOVER_LIFT = 30;
+/**
+ * Hover pose: in front of the camera and a little below eye level (camera
+ * rides at 30, looking slightly down), far enough that the whole upright
+ * hammer fits in view with room above it.
+ */
+const HOVER_DISTANCE = 110;
+const HOVER_LIFT = 24;
 
 const DOCK_SECONDS = 2.4;
 /** Share of the dock after which it tilts from the "T" into the pulling pose. */

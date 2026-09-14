@@ -452,6 +452,10 @@ export class CareerGallery {
   private readonly driftDirection = new THREE.Vector3();
   private driftDistance = 0;
   private driftTilt = 1;
+  /** Called shortly before a drifting image shatters, to shoot it (e.g. the Falcon). */
+  private shatterAttack: ((target: THREE.Vector3, arriveInSeconds: number) => void) | null =
+    null;
+  private laserFired = false;
   private readonly driftScale = new THREE.Vector2();
   /** All shards in one mesh, animated entirely in the vertex shader. */
   private readonly shatter: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
@@ -461,6 +465,12 @@ export class CareerGallery {
   private skinActive = false;
   private skinTime = 0;
   private skinPendingCamera: THREE.PerspectiveCamera | null = null;
+  /** True from arrival (showSkin) until clearSkin; otherwise the globe rests on the photo. */
+  private skinVisit = false;
+  /** Thin green lattice inside the shell, so the enclosing shape reads. */
+  private readonly interiorGrid: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  /** Particles streaking outward from the middle through the lattice. */
+  private readonly interiorStreaks: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
   /** Dark dome just outside the shell that makes the inside feel enclosed. */
   private readonly interiorDome: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
   private interiorLevel = 0;
@@ -694,6 +704,100 @@ export class CareerGallery {
     };
     this.root.add(this.interiorDust);
 
+    // Thin green lat/long lattice just inside the tiles.
+    const gridRadius = radius * INTERIOR_GRID_RADII;
+    const gridPoints: number[] = [];
+    const pushArc = (at: (s: number) => THREE.Vector3, segments: number) => {
+      for (let s = 0; s < segments; s++) {
+        const a = at(s / segments);
+        const b = at((s + 1) / segments);
+        gridPoints.push(a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+    };
+    for (let m = 0; m < INTERIOR_GRID_MERIDIANS; m++) {
+      const theta = (m / INTERIOR_GRID_MERIDIANS) * Math.PI * 2;
+      pushArc((s) => {
+        const phi = s * Math.PI;
+        return new THREE.Vector3(
+          Math.sin(phi) * Math.cos(theta),
+          Math.cos(phi),
+          Math.sin(phi) * Math.sin(theta),
+        ).multiplyScalar(gridRadius);
+      }, 32);
+    }
+    for (let p = 1; p < INTERIOR_GRID_PARALLELS; p++) {
+      const phi = (p / INTERIOR_GRID_PARALLELS) * Math.PI;
+      pushArc((s) => {
+        const theta = s * Math.PI * 2;
+        return new THREE.Vector3(
+          Math.sin(phi) * Math.cos(theta),
+          Math.cos(phi),
+          Math.sin(phi) * Math.sin(theta),
+        ).multiplyScalar(gridRadius);
+      }, 64);
+    }
+    const gridGeometry = new THREE.BufferGeometry();
+    gridGeometry.setAttribute("position", new THREE.Float32BufferAttribute(gridPoints, 3));
+    this.interiorGrid = new THREE.LineSegments(
+      gridGeometry,
+      new THREE.LineBasicMaterial({
+        color: new THREE.Color(0.25, 1.0, 0.45),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      }),
+    );
+    this.interiorGrid.name = "CareerGalleryInteriorGrid";
+    this.interiorGrid.renderOrder = -3;
+    this.interiorGrid.frustumCulled = false;
+    this.interiorGrid.visible = false;
+    // Part of the spinning shell, so the inner globe turns with the tiles.
+    this.shell.add(this.interiorGrid);
+
+    // Streaks: two vertices each (head and tail) along a random outward ray;
+    // the vertex shader moves them, so there's no per-frame CPU work.
+    const streakDirections = new Float32Array(INTERIOR_STREAK_COUNT * 2 * 3);
+    const streakData = new Float32Array(INTERIOR_STREAK_COUNT * 2 * 3);
+    const streakPosition = new Float32Array(INTERIOR_STREAK_COUNT * 2 * 3);
+    const direction = new THREE.Vector3();
+    for (let i = 0; i < INTERIOR_STREAK_COUNT; i++) {
+      direction.randomDirection();
+      const seed = Math.random();
+      const speed = 0.6 + Math.random() * 0.8;
+      for (let k = 0; k < 2; k++) {
+        const v = (i * 2 + k) * 3;
+        streakDirections.set([direction.x, direction.y, direction.z], v);
+        streakData.set([seed, speed, k], v);
+      }
+    }
+    const streakGeometry = new THREE.BufferGeometry();
+    streakGeometry.setAttribute("position", new THREE.BufferAttribute(streakPosition, 3));
+    streakGeometry.setAttribute("aDirection", new THREE.BufferAttribute(streakDirections, 3));
+    streakGeometry.setAttribute("aData", new THREE.BufferAttribute(streakData, 3));
+    this.interiorStreaks = new THREE.LineSegments(
+      streakGeometry,
+      new THREE.ShaderMaterial({
+        vertexShader: interiorStreakVertexShader,
+        fragmentShader: interiorStreakFragmentShader,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+        uniforms: {
+          uTime: { value: 0 },
+          uLevel: { value: 0 },
+          uRadius: { value: radius },
+        },
+      }),
+    );
+    this.interiorStreaks.name = "CareerGalleryInteriorStreaks";
+    this.interiorStreaks.renderOrder = -2;
+    this.interiorStreaks.frustumCulled = false;
+    this.interiorStreaks.visible = false;
+    this.shell.add(this.interiorStreaks);
+
     // Glass shards for the outside flash. Built once; hidden until needed
     // (the loader warmup compiles hidden objects, so the first shatter
     // doesn't stall).
@@ -769,6 +873,10 @@ export class CareerGallery {
   setInteriorMode(inside: boolean): void {
     this.interior = inside;
     (this.edges.material as THREE.LineBasicMaterial).opacity = inside ? 0.06 : 0.28;
+    // Outside, flying images and shards stay behind nearer things (the parked
+    // Falcon); inside they draw over everything as before.
+    this.reveal.material.depthTest = inside;
+    this.shatter.material.depthTest = inside;
     if (!inside) {
       this.setHovered(null);
       this.clearFocus();
@@ -886,11 +994,27 @@ export class CareerGallery {
    * turn back into portfolio screenshots.
    */
   showSkin(camera: THREE.PerspectiveCamera): void {
+    // A visit starts: from now the photo holds, then gives way to screenshots.
+    this.skinVisit = true;
     const image = this.skinImage;
     if (!image) {
       this.skinPendingCamera = camera;
       return;
     }
+    this.applySkinProjection(camera);
+    for (const face of this.faces) {
+      // Tiles already show the photo from the approach; no fade in again.
+      face.skinInAt = face.skin > 0.5 ? 0 : Math.random() * SKIN_IN_SPREAD;
+      face.skinOutAt = SKIN_HOLD_SECONDS + Math.random() * SKIN_OUT_SPREAD;
+    }
+    this.skinActive = true;
+    this.skinTime = 0;
+  }
+
+  /** Points the photo projection at the viewer (one picture facing the camera). */
+  private applySkinProjection(camera: THREE.PerspectiveCamera): void {
+    const image = this.skinImage;
+    if (!image) return;
     const center = this.root.getWorldPosition(new THREE.Vector3());
     const forward = camera.position.clone().sub(center);
     if (forward.lengthSq() < 1e-6) forward.set(0, 0, 1);
@@ -909,15 +1033,15 @@ export class CareerGallery {
       (u.uSkinUp.value as THREE.Vector3).copy(up);
       (u.uSkinForward.value as THREE.Vector3).copy(forward);
       (u.uSkinScale.value as THREE.Vector2).set(scaleX, scaleY);
-      face.skinInAt = Math.random() * SKIN_IN_SPREAD;
-      face.skinOutAt = SKIN_HOLD_SECONDS + Math.random() * SKIN_OUT_SPREAD;
     }
-    this.skinActive = true;
-    this.skinTime = 0;
   }
 
-  /** Drop the arrival photo immediately (entering or leaving the gallery). */
+  /**
+   * Drop the arrival photo immediately (entering or leaving the gallery).
+   * After leaving, the globe goes back to showing the photo until next visit.
+   */
   clearSkin(): void {
+    this.skinVisit = false;
     this.skinPendingCamera = null;
     this.skinActive = false;
     for (const face of this.faces) {
@@ -926,10 +1050,26 @@ export class CareerGallery {
     }
   }
 
+  /** Something that shoots the drifting image just before it shatters (or null). */
+  setShatterAttack(
+    handler: ((target: THREE.Vector3, arriveInSeconds: number) => void) | null,
+  ): void {
+    this.shatterAttack = handler;
+  }
+
+  /** Where the drifting image will be (world space) when it shatters. */
+  private predictDriftEnd(camera: THREE.PerspectiveCamera): THREE.Vector3 {
+    const index = this.focusedIndex ?? this.lastRevealIndex ?? 0;
+    return this.getFaceWorldCentroid(index, new THREE.Vector3())
+      .lerp(camera.position, EXTERIOR_REVEAL_TRAVEL)
+      .addScaledVector(this.driftDirection, this.driftDistance);
+  }
+
   private beginDrift(camera: THREE.PerspectiveCamera): void {
     this.flashPhase = "drift";
     this.flashPhaseTime = 0;
-    this.driftTilt = Math.random() < 0.5 ? -1 : 1;
+    this.laserFired = false;
+    this.driftTilt =Math.random() < 0.5 ? -1 : 1;
     const planeWorld = this.reveal.getWorldPosition(new THREE.Vector3());
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
@@ -1060,11 +1200,21 @@ export class CareerGallery {
     this.interiorDust.material.uniforms.uLevel.value = this.interiorLevel;
     this.interiorDust.material.uniforms.uTime.value = this.time;
     this.interiorDust.visible = this.interiorDome.visible;
+    this.interiorGrid.visible = this.interiorDome.visible;
+    this.interiorGrid.material.opacity = this.interiorLevel * INTERIOR_GRID_OPACITY;
+    this.interiorStreaks.visible = this.interiorDome.visible;
+    this.interiorStreaks.material.uniforms.uLevel.value = this.interiorLevel;
+    this.interiorStreaks.material.uniforms.uTime.value = this.time;
+
+    // Between visits the globe shows the family photo, facing whoever looks
+    // at it, so arriving starts on the photo rather than screenshots.
+    const skinResting = this.skinImage !== null && !this.interior && !this.skinVisit;
+    if (skinResting) this.applySkinProjection(camera);
 
     // Slow spin about the vertical axis only (tilting would gradually turn
     // the tiles sideways/upside down); hold still while a tile is focused.
     // ...and while the arrival photo is up, so the picture holds still.
-    if (focused === null && !this.skinActive) {
+    if (focused === null && !this.skinActive && !skinResting) {
       this.shell.rotation.y += step * (this.interior ? 0.012 : 0.02);
     }
     if (this.skinActive) {
@@ -1093,9 +1243,10 @@ export class CareerGallery {
 
       // Arrival photo: each tile turns to it at its own moment, then back.
       const skinTarget =
-        this.skinActive &&
-        this.skinTime >= face.skinInAt &&
-        this.skinTime < face.skinOutAt
+        skinResting ||
+        (this.skinActive &&
+          this.skinTime >= face.skinInAt &&
+          this.skinTime < face.skinOutAt)
           ? 1
           : 0;
       face.skin += (skinTarget - face.skin) * (1 - Math.exp(-SKIN_EASE * step));
@@ -1137,7 +1288,7 @@ export class CareerGallery {
     const u = this.reveal.material.uniforms;
     const dir = this.revealTarget > this.revealProgress ? 1 : -1;
     this.revealProgress = THREE.MathUtils.clamp(
-      this.revealProgress + (dir * step) / REVEAL_SECONDS,
+      this.revealProgress + (dir * step) / (this.flashActive ? FLASH_REVEAL_SECONDS : REVEAL_SECONDS),
       0,
       1,
     );
@@ -1152,6 +1303,18 @@ export class CareerGallery {
         this.beginDrift(camera);
       } else if (this.flashPhase === "drift") {
         this.flashPhaseTime += step;
+        // Shoot it: the shots are timed to land as it shatters.
+        if (
+          !this.laserFired &&
+          this.shatterAttack &&
+          this.flashPhaseTime >= FLASH_DRIFT_SECONDS - LASER_TRAVEL_SECONDS
+        ) {
+          this.laserFired = true;
+          this.shatterAttack(
+            this.predictDriftEnd(camera),
+            Math.max(0.05, FLASH_DRIFT_SECONDS - this.flashPhaseTime),
+          );
+        }
         if (this.flashPhaseTime >= FLASH_DRIFT_SECONDS) this.beginShatter();
       }
     }
@@ -1349,6 +1512,10 @@ export class CareerGallery {
     this.interiorDome.material.dispose();
     this.interiorDust.geometry.dispose();
     this.interiorDust.material.dispose();
+    this.interiorGrid.geometry.dispose();
+    this.interiorGrid.material.dispose();
+    this.interiorStreaks.geometry.dispose();
+    this.interiorStreaks.material.dispose();
     this.shatter.geometry.dispose();
     this.shatter.material.dispose();
     if (this.skinImage) {
@@ -1367,9 +1534,13 @@ export class CareerGallery {
 }
 
 /** Outside flash: seconds the revealed image drifts away before shattering. */
-const FLASH_DRIFT_SECONDS = 2.8;
+const FLASH_DRIFT_SECONDS = 5;
 /** How far it drifts, as a share of its distance from the camera. */
-const FLASH_DRIFT_DISTANCE = 0.35;
+const FLASH_DRIFT_DISTANCE = 0.2;
+/** Outside flash: seconds the image takes to fly out of its tile. */
+const FLASH_REVEAL_SECONDS = 2.4;
+/** Seconds the shots fly before hitting (they're fired this long before the shatter). */
+const LASER_TRAVEL_SECONDS = 0.45;
 /** Seconds the shards fly apart and fade. */
 const SHATTER_SECONDS = 2.4;
 /** Shard grid: two jittered triangles per cell (140 shards). */
@@ -1542,6 +1713,50 @@ const INTERIOR_DOME_RADII = 1.35;
 const INTERIOR_DUST_COUNT = 2000;
 const INTERIOR_DUST_RADII = 0.92;
 
+/** Interior lattice: radius in shell radii (inside the tiles), line counts, brightness. */
+const INTERIOR_GRID_RADII = 0.62;
+const INTERIOR_GRID_MERIDIANS = 24;
+const INTERIOR_GRID_PARALLELS = 12;
+const INTERIOR_GRID_OPACITY = 0.5;
+/** Particles streaking outward through the lattice. */
+const INTERIOR_STREAK_COUNT = 420;
+
+const interiorStreakVertexShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  uniform float uTime;
+  uniform float uLevel;
+  uniform float uRadius;
+  attribute vec3 aDirection;
+  attribute vec3 aData; // seed, speed, 0 = tail / 1 = head
+  varying float vAlpha;
+  void main() {
+    // Loops from near the middle out through the inner lattice, speeding up,
+    // and fades before reaching the tiles.
+    float life = fract(uTime * 0.16 * aData.y + aData.x);
+    float travel = life * life;
+    float headRadius = uRadius * mix(0.08, 0.92, travel);
+    float streakLength = uRadius * (0.02 + 0.1 * travel);
+    float r = aData.z > 0.5 ? headRadius : max(uRadius * 0.06, headRadius - streakLength);
+    vec4 mvPosition = modelViewMatrix * vec4(aDirection * r, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    // Fade in and out along the loop; the tail end is dim.
+    float envelope = smoothstep(0.0, 0.15, life) * (1.0 - smoothstep(0.8, 1.0, life));
+    vAlpha = uLevel * envelope * (aData.z > 0.5 ? 1.0 : 0.0);
+    #include <logdepthbuf_vertex>
+  }
+`;
+
+const interiorStreakFragmentShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  varying float vAlpha;
+  void main() {
+    #include <logdepthbuf_fragment>
+    gl_FragColor = vec4(vec3(0.45, 1.0, 0.6) * vAlpha * 0.9, 1.0);
+  }
+`;
+
 const interiorDustVertexShader = /* glsl */ `
   #include <common>
   #include <logdepthbuf_pars_vertex>
@@ -1618,7 +1833,8 @@ const interiorDomeFragmentShader = /* glsl */ `
       1.0 - smoothstep(0.0, 0.035, lineDistance(longitude)),
       1.0 - smoothstep(0.0, 0.035, lineDistance(latitude))
     );
-    color += vec3(0.04, 0.09, 0.15) * grid * 0.3;
+    // (The lattice now lives inside the tiles; the dome is just a soft tint.)
+    color += vec3(0.04, 0.09, 0.15) * grid * 0.0;
     // A subtle tint, not blackout: depth comes from parallax, haze and light.
     gl_FragColor = vec4(color, uLevel * 0.6);
   }

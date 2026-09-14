@@ -138,12 +138,11 @@ const FLY_BY_MIN_REMAINING = 12000;
 /** ~14-unit model × FALCON_SCALE 0.05 × this ≈ 460 units long, dwarfing Mjolnir. */
 const FLY_BY_SHIP_SCALE = 660;
 /**
- * Alongside spot relative to the rider: ahead on the rail and well off to the
- * side, so the big ship stays fully in view (~35° off center) without
- * crowding the rail or Mjolnir.
+ * "Alongside" spot relative to the rider: always well ahead and off to the
+ * side (~25° off center), so we see the ship's side as well as its rear.
  */
-const FLY_BY_ALONG = 620;
-const FLY_BY_LATERAL = 430;
+const FLY_BY_ALONG = 1100;
+const FLY_BY_LATERAL = 520;
 /** During the punch it cuts across in front of the rider to this side. */
 const FLY_BY_CUT_ACROSS_LATERAL = -520;
 const FLY_BY_HEIGHT = 20;
