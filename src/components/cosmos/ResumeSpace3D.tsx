@@ -30,6 +30,11 @@ import {
   createHeatHazePass,
   ShipRimLight,
 } from "./careerGallery/falconHeatAndRim";
+import {
+  LabelVisibilityManager,
+  type BoxOccluder,
+  type SphereOccluder,
+} from "./labelVisibility";
 import resumeData from "../../data/resume.json";
 import { trackEvent } from "../../lib/analytics";
 import { IS_DEBUG, IS_DEBUG_OVERLAYS, dlog, dwarn } from "../../lib/debugLog";
@@ -9197,7 +9202,13 @@ export default function ResumeSpace3D({
     }
     if (nextTargetId !== CAREER_GALLERY_NAV_ID) {
       careerGalleryPendingEntryRef.current = false;
-      if (careerGalleryActiveRef.current || careerGalleryEnteringRef.current) {
+      // Includes the outside view: its parked Falcon (bottom-left, locked to
+      // the camera) must be released before the ship travels anywhere else.
+      if (
+        careerGalleryActiveRef.current ||
+        careerGalleryEnteringRef.current ||
+        careerGalleryOutsideRef.current
+      ) {
         interrupted = true;
         exitCareerGallery({ restoreShip: true });
         restoredShip = true;
@@ -11258,13 +11269,109 @@ export default function ResumeSpace3D({
     ensureAboutSlidePrepared,
   ]);
 
+  // Every CSS2D label in the universe: fades out while something is in the
+  // way (planets, moons, gallery, lattice shell, ships), and moon names only
+  // show near their planet. See labelVisibility.ts.
+  useEffect(() => {
+    if (!sceneReady) return;
+    const scene = sceneRef.current.scene;
+    if (!scene) return;
+    const manager = new LabelVisibilityManager(scene);
+    const spheres: SphereOccluder[] = [];
+    const spherePool: SphereOccluder[] = [];
+    const boxes: BoxOccluder[] = [];
+    const systemCenter = new THREE.Vector3();
+    const moonPosition = new THREE.Vector3();
+    const worldScale = new THREE.Vector3();
+    const nextSphere = (): SphereOccluder => {
+      let sphere = spherePool[spheres.length];
+      if (!sphere) {
+        sphere = { center: new THREE.Vector3(), radius: 0 };
+        spherePool.push(sphere);
+      }
+      sphere.owner = undefined;
+      spheres.push(sphere);
+      return sphere;
+    };
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      const camera = sceneRef.current.camera;
+      if (!camera) return;
+      const dt = Math.max(0, (now - last) / 1000);
+      last = now;
+
+      spheres.length = 0;
+      let planetRadius = 0;
+      let hasPlanet = false;
+      for (const item of itemsRef.current) {
+        const mesh = item.mesh;
+        if (!mesh?.parent || !mesh.visible || !mesh.geometry) continue;
+        if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+        const sphere = nextSphere();
+        mesh.getWorldPosition(sphere.center);
+        mesh.getWorldScale(worldScale);
+        sphere.radius =
+          (mesh.geometry.boundingSphere?.radius ?? 0) *
+          Math.max(worldScale.x, worldScale.y, worldScale.z);
+        sphere.owner = mesh;
+        if (mesh.userData?.isMainPlanet) {
+          hasPlanet = true;
+          planetRadius = sphere.radius;
+          systemCenter.copy(sphere.center);
+        }
+      }
+      let systemRadius = planetRadius;
+      if (hasPlanet) {
+        for (const item of itemsRef.current) {
+          if (!item.mesh?.userData?.isMoon) continue;
+          item.mesh.getWorldPosition(moonPosition);
+          systemRadius = Math.max(systemRadius, moonPosition.distanceTo(systemCenter));
+        }
+      }
+      const gallery = careerGalleryRef.current;
+      if (gallery?.root.parent && gallery.root.visible) {
+        const sphere = nextSphere();
+        gallery.root.getWorldPosition(sphere.center);
+        sphere.radius = gallery.radius;
+        sphere.owner = gallery.root;
+      }
+      const envelope = skillsLatticeEnvelopeRef.current;
+      if (
+        envelope?.parent &&
+        skillsLatticeSystemActiveRef.current &&
+        !skillsLatticeActiveRef.current
+      ) {
+        const sphere = nextSphere();
+        envelope.getWorldPosition(sphere.center);
+        sphere.radius = Math.max(1, skillsLatticeEnvelopeRadiusRef.current);
+      }
+
+      boxes.length = 0;
+      if (spaceshipRef.current) boxes.push({ object: spaceshipRef.current });
+      if (starDestroyerRef.current) boxes.push({ object: starDestroyerRef.current });
+
+      manager.update(dt, {
+        camera,
+        spheres,
+        boxes,
+        hideAll: insideShipRef.current,
+        moonSystem: hasPlanet ? { center: systemCenter, radius: systemRadius } : null,
+        focusedMoon: focusedMoonRef.current,
+      });
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      manager.dispose();
+    };
+  }, [sceneReady]);
+
   useEffect(() => {
     if (!sceneReady) return;
     let raf = 0;
     const shellCenter = new THREE.Vector3();
-    const labelWorld = new THREE.Vector3();
-    const toLabel = new THREE.Vector3();
-    const raycaster = new THREE.Raycaster();
     const tick = () => {
       raf = requestAnimationFrame(tick);
       if (
@@ -11279,31 +11386,7 @@ export default function ResumeSpace3D({
       shell.getWorldPosition(shellCenter);
       const shellRadius = Math.max(1, skillsLatticeEnvelopeRadiusRef.current);
       const distance = camera.position.distanceTo(shellCenter);
-      // Occlude external CSS2D labels only when the shell blocks line-of-sight.
-      if (externalCosmosLabelsHiddenForLatticeRef.current) {
-        scene.traverse((obj) => {
-          const maybeCss = obj as THREE.Object3D & {
-            isCSS2DObject?: boolean;
-            userData: Record<string, unknown>;
-          };
-          if (!maybeCss.isCSS2DObject) return;
-          if (maybeCss.userData?.skillsLatticeLabel) return;
-          maybeCss.getWorldPosition(labelWorld);
-          toLabel.subVectors(labelWorld, camera.position);
-          const labelDist = toLabel.length();
-          if (labelDist < 0.001) {
-            maybeCss.visible = true;
-            return;
-          }
-          toLabel.multiplyScalar(1 / labelDist);
-          raycaster.set(camera.position, toLabel);
-          raycaster.near = 0.01;
-          raycaster.far = labelDist;
-          const hits = raycaster.intersectObject(shell, true);
-          const blocked = hits.some((h) => h.distance < labelDist - 0.25);
-          maybeCss.visible = !blocked;
-        });
-      }
+      // (Labels behind the shell are hidden by the label visibility manager.)
       // Hysteresis: exit happens farther out; re-enter only once clearly back in.
       if (distance <= shellRadius * 1.03) {
         resumeSkillsLatticeInPlace();
@@ -11383,8 +11466,7 @@ export default function ResumeSpace3D({
           return;
         }
         maybeObject.getWorldPosition(labelWorld);
-        toLabel.subVectors(labelWorld, camera.position);
-        const labelDist = toLabel.length();
+        const labelDist = labelWorld.distanceTo(camera.position);
         if (
           maybeObject.userData?.orbitalPortfolioCoreLabel &&
           labelDist > ORBITAL_PORTFOLIO_CORE_LABEL_MAX_DISTANCE
@@ -11392,17 +11474,8 @@ export default function ResumeSpace3D({
           maybeObject.visible = false;
           return;
         }
-        if (labelDist < 0.001) {
-          maybeObject.visible = true;
-          return;
-        }
-        toLabel.multiplyScalar(1 / labelDist);
-        raycaster.set(camera.position, toLabel);
-        raycaster.near = 0.05;
-        raycaster.far = Math.max(0.05, labelDist - 0.15);
-        const hits = raycaster.intersectObjects(occluders, false);
-        const blocked = hits.some((h) => h.distance < labelDist - 0.25);
-        maybeObject.visible = !blocked;
+        // Line of sight is handled by the label visibility manager.
+        maybeObject.visible = true;
       });
     };
     raf = requestAnimationFrame(tick);

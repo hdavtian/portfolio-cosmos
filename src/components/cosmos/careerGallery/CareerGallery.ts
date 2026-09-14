@@ -467,6 +467,22 @@ export class CareerGallery {
   private skinPendingCamera: THREE.PerspectiveCamera | null = null;
   /** True from arrival (showSkin) until clearSkin; otherwise the globe rests on the photo. */
   private skinVisit = false;
+  /** Between visits: the photo re-aims at whichever camera draws the globe. */
+  private skinRestingNow = false;
+  private skinAimCamera: THREE.Camera | null = null;
+  private readonly skinAimPosition = new THREE.Vector3();
+  private readonly skinAimScratch = new THREE.Vector3();
+  /**
+   * Photo projection shared by every tile (the same uniform objects), so
+   * aiming it is one update rather than one per tile.
+   */
+  private readonly skinUniforms = {
+    uSkinCenter: { value: new THREE.Vector3() },
+    uSkinRight: { value: new THREE.Vector3(1, 0, 0) },
+    uSkinUp: { value: new THREE.Vector3(0, 1, 0) },
+    uSkinForward: { value: new THREE.Vector3(0, 0, 1) },
+    uSkinScale: { value: new THREE.Vector2(1, 1) },
+  };
   /** Thin green lattice inside the shell, so the enclosing shape reads. */
   private readonly interiorGrid: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   /** Particles streaking outward from the middle through the lattice. */
@@ -572,10 +588,13 @@ export class CareerGallery {
       material.uniforms.uTint.value = HOLO_TINT.clone();
       material.uniforms.uHoverEdge.value = HOVER_EDGE.clone();
       material.uniforms.uBlankColor.value = randomBlankColor();
+      Object.assign(material.uniforms, this.skinUniforms);
       const index = i / 3;
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = `CareerGalleryFace_${index}`;
       mesh.userData.careerGalleryFaceIndex = index;
+      // Other cameras (the targeting computer's preview) see the photo too.
+      mesh.onBeforeRender = (_renderer, _scene, camera) => this.aimRestingSkin(camera);
       this.shell.add(mesh);
       this.faceMeshes.push(mesh);
       this.faces.push({
@@ -1012,11 +1031,11 @@ export class CareerGallery {
   }
 
   /** Points the photo projection at the viewer (one picture facing the camera). */
-  private applySkinProjection(camera: THREE.PerspectiveCamera): void {
+  private applySkinProjection(camera: THREE.Camera): void {
     const image = this.skinImage;
     if (!image) return;
     const center = this.root.getWorldPosition(new THREE.Vector3());
-    const forward = camera.position.clone().sub(center);
+    const forward = camera.getWorldPosition(new THREE.Vector3()).sub(center);
     if (forward.lengthSq() < 1e-6) forward.set(0, 0, 1);
     forward.normalize();
     const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), forward);
@@ -1026,14 +1045,27 @@ export class CareerGallery {
     // Fill the globe's width; the portrait photo's top and bottom crop.
     const scaleX = 1 / (2 * this.radius);
     const scaleY = image.aspect / (2 * this.radius);
-    for (const face of this.faces) {
-      const u = face.mesh.material.uniforms;
-      (u.uSkinCenter.value as THREE.Vector3).copy(center);
-      (u.uSkinRight.value as THREE.Vector3).copy(right);
-      (u.uSkinUp.value as THREE.Vector3).copy(up);
-      (u.uSkinForward.value as THREE.Vector3).copy(forward);
-      (u.uSkinScale.value as THREE.Vector2).set(scaleX, scaleY);
+    const u = this.skinUniforms;
+    u.uSkinCenter.value.copy(center);
+    u.uSkinRight.value.copy(right);
+    u.uSkinUp.value.copy(up);
+    u.uSkinForward.value.copy(forward);
+    u.uSkinScale.value.set(scaleX, scaleY);
+  }
+
+  /** Before a tile draws: point the resting photo at this camera (once per camera move). */
+  private aimRestingSkin(camera: THREE.Camera): void {
+    if (!this.skinRestingNow) return;
+    camera.getWorldPosition(this.skinAimScratch);
+    if (
+      camera === this.skinAimCamera &&
+      this.skinAimScratch.distanceToSquared(this.skinAimPosition) < 1e-4
+    ) {
+      return;
     }
+    this.skinAimCamera = camera;
+    this.skinAimPosition.copy(this.skinAimScratch);
+    this.applySkinProjection(camera);
   }
 
   /**
@@ -1209,7 +1241,9 @@ export class CareerGallery {
     // Between visits the globe shows the family photo, facing whoever looks
     // at it, so arriving starts on the photo rather than screenshots.
     const skinResting = this.skinImage !== null && !this.interior && !this.skinVisit;
-    if (skinResting) this.applySkinProjection(camera);
+    // Aimed per camera just before the tiles draw (see aimRestingSkin).
+    this.skinRestingNow = skinResting;
+    if (!skinResting) this.skinAimCamera = null;
 
     // Slow spin about the vertical axis only (tilting would gradually turn
     // the tiles sideways/upside down); hold still while a tile is focused.

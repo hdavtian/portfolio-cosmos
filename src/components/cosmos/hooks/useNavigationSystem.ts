@@ -62,6 +62,12 @@ const NAV_CINEMATIC_HANDOFF_MS = 680;
 const NAV_MOON_ARRIVAL_DISTANCE = 36;
 const NAV_MOON_FREEZE_DISTANCE = 42;
 const NAV_MOON_APPROACH_MIN_DISTANCE = 65;
+/**
+ * Moon trips longer than this always go to lightspeed, wherever they start
+ * (e.g. from the Career Gallery), so long hops never crawl. Well above the
+ * lightspeed braking distance so there is room to accelerate and brake.
+ */
+const NAV_MOON_LIGHTSPEED_MIN_DISTANCE = 9_000;
 const NAV_MOON_APPROACH_MAX_DISTANCE = 220;
 const NAV_MOON_APPROACH_RATIO = 0.25;
 const NAV_SECTION_APPROACH_MIN_DISTANCE = 120;
@@ -933,7 +939,13 @@ export const useNavigationSystem = (deps: {
           !!portfolioAnchor &&
           !!spaceshipRef.current &&
           spaceshipRef.current.position.distanceTo(portfolioAnchor) <= 4200;
+        const isLongMoonJump =
+          !!currentPos &&
+          !!spaceshipRef.current &&
+          spaceshipRef.current.position.distanceTo(currentPos.worldPosition) >
+            NAV_MOON_LIGHTSPEED_MIN_DISTANCE;
         const isInterSystemMoonJump =
+          isLongMoonJump ||
           isSystemMismatchMoonJump ||
           isLeavingProjectsArea ||
           isLeavingAboutArea ||
