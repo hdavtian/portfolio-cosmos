@@ -119,20 +119,33 @@ const STOP_LOOK_DAMP_PER_SEC = 0.9;
 // comes up alongside, matches speed, then punches ahead and peels away.
 const FLY_BY_EARLIEST_S = 8;
 /** Route speed that counts as cruising (away from stops). */
-const FLY_BY_MIN_ROUTE_SPEED = 1.3;
+const FLY_BY_MIN_ROUTE_SPEED = 1;
 /** Seconds of steady cruising before the fly-by starts. */
 const FLY_BY_CRUISE_HOLD_S = 1;
+/**
+ * The fly-by starts on the straightest stretch early in the loop: every
+ * cruise-speed stretch long enough for the approach and side-by-side flight
+ * is scored by how far it bends, and one within this many degrees of the
+ * straightest is picked at random when the ride starts.
+ */
+const FLY_BY_STRAIGHTNESS_TOLERANCE_DEG = 3;
+/** Only the first part of the loop counts as "early on". */
+const FLY_BY_EARLY_FRACTION = 0.6;
+/** Samples of the loop used to find straight stretches. */
+const FLY_BY_SCAN_SAMPLES = 1200;
 /** Rail distance that must remain so it doesn't run into the finale. */
 const FLY_BY_MIN_REMAINING = 12000;
-/** ~14-unit model × FALCON_SCALE 0.05 × this ≈ 230 units long, dwarfing Mjolnir. */
-const FLY_BY_SHIP_SCALE = 330;
+/** ~14-unit model × FALCON_SCALE 0.05 × this ≈ 460 units long, dwarfing Mjolnir. */
+const FLY_BY_SHIP_SCALE = 660;
 /**
  * Alongside spot relative to the rider: ahead on the rail and well off to the
- * side, so the big ship stays fully in view (~34° off center) without
+ * side, so the big ship stays fully in view (~35° off center) without
  * crowding the rail or Mjolnir.
  */
-const FLY_BY_ALONG = 380;
-const FLY_BY_LATERAL = 260;
+const FLY_BY_ALONG = 620;
+const FLY_BY_LATERAL = 430;
+/** During the punch it cuts across in front of the rider to this side. */
+const FLY_BY_CUT_ACROSS_LATERAL = -520;
 const FLY_BY_HEIGHT = 20;
 /** Peak of the single up-and-down arc while flying alongside. */
 const FLY_BY_ARC_HEIGHT = 70;
@@ -276,6 +289,8 @@ export class AboutJourneyController {
   private _flyByState: "pending" | "active" | "done" = "done";
   private _flyByTime = 0;
   private _cruiseSince = 0;
+  /** Rider distance (from ride start) where the fly-by begins; null = no straight found. */
+  private _flyByStartDistance: number | null = null;
   private _flyByHasPrev = false;
   private readonly _flyByPos = new THREE.Vector3();
   private readonly _flyByPrevPos = new THREE.Vector3();
@@ -1038,6 +1053,7 @@ export class AboutJourneyController {
     this._rideLookDir.set(0, 0, 0);
     this._flyByState = "pending";
     this._cruiseSince = 0;
+    this._flyByStartDistance = this._pickFlyByStart();
     this._hasRideEnd = false;
 
     const tick = () => {
@@ -1300,6 +1316,75 @@ export class AboutJourneyController {
     this._rafId = requestAnimationFrame(tick);
   }
 
+  /**
+   * Picks, at random, the start of a long, nearly straight cruise stretch early
+   * in the loop for the fly-by. Returns the rider distance from the ride start
+   * to begin at, or null if the route has no such stretch.
+   */
+  private _pickFlyByStart(): number | null {
+    const path = this._cosmicPath;
+    if (!path) return null;
+    const length = Math.max(1, this._travelPathLength);
+    const n = FLY_BY_SCAN_SAMPLES;
+    const ds = length / n;
+    const tangents: THREE.Vector3[] = [];
+    const speeds: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const t = THREE.MathUtils.euclideanModulo(this._travelStartT + i / n, 1);
+      tangents.push(path.getTangentAt(t, new THREE.Vector3()).normalize());
+      speeds.push(routeSpeedAt(path.timing, t));
+    }
+
+    // Samples the rider covers while the Falcon is in view: the second half
+    // of the approach and the side-by-side flight (early in the approach it's
+    // still behind the rider, and the punch races ahead on its own).
+    const flyBySeconds = FLY_BY_APPROACH_S * 0.5 + FLY_BY_ALONGSIDE_S;
+    const riderSpeedAt = (i: number) =>
+      PATH_TRAVEL_SPEED * PATH_TRAVEL_AUTO_SPEED_SCALE * Math.max(0.05, speeds[i % n]);
+    const earliest = Math.ceil(
+      (FLY_BY_EARLIEST_S * riderSpeedAt(0)) / ds,
+    );
+    const latest = Math.floor(n * FLY_BY_EARLY_FRACTION);
+
+    // Score every cruise-speed window by its worst bend (min tangent dot).
+    const windows: Array<{ start: number; straightness: number }> = [];
+    for (let start = earliest; start < latest; start++) {
+      if (length - start * ds <= FLY_BY_MIN_REMAINING) break;
+      let time = 0;
+      let straightness = 1;
+      let cruising = true;
+      let i = start;
+      while (time < flyBySeconds && i - start < n) {
+        if (speeds[i % n] < FLY_BY_MIN_ROUTE_SPEED) {
+          cruising = false;
+          break;
+        }
+        straightness = Math.min(straightness, tangents[i % n].dot(tangents[start]));
+        time += ds / riderSpeedAt(i);
+        i++;
+      }
+      if (cruising && time >= flyBySeconds) windows.push({ start, straightness });
+    }
+    if (windows.length === 0) {
+      this._cb.vlog("✈️ [AboutJourney] No cruise stretch for the fly-by; using cruise trigger");
+      return null;
+    }
+
+    const bestBendDeg = THREE.MathUtils.radToDeg(
+      Math.acos(THREE.MathUtils.clamp(Math.max(...windows.map((w) => w.straightness)), -1, 1)),
+    );
+    const acceptCos = Math.cos(
+      THREE.MathUtils.degToRad(bestBendDeg + FLY_BY_STRAIGHTNESS_TOLERANCE_DEG),
+    );
+    const candidates = windows.filter((w) => w.straightness >= acceptCos);
+    const pick = candidates[Math.floor(Math.random() * candidates.length)].start;
+    this._cb.vlog(
+      `✈️ [AboutJourney] Fly-by planned at ${Math.round(pick * ds)} units ` +
+        `(straightest bend ${bestBendDeg.toFixed(1)}°, ${candidates.length} starts)`,
+    );
+    return pick * ds;
+  }
+
   private _updateFlyBy(
     dt: number,
     now: number,
@@ -1310,12 +1395,18 @@ export class AboutJourneyController {
     const length = Math.max(1, this._travelPathLength);
 
     if (this._flyByState === "pending") {
-      const cruising =
-        routeSpeed >= FLY_BY_MIN_ROUTE_SPEED &&
-        (now - this._travelStartedAt) / 1000 > FLY_BY_EARLIEST_S &&
-        length - this._travelDistanceAbs > FLY_BY_MIN_REMAINING;
-      this._cruiseSince = cruising ? this._cruiseSince + dt : 0;
-      if (this._cruiseSince < FLY_BY_CRUISE_HOLD_S) return;
+      if (this._flyByStartDistance !== null) {
+        // Planned: begin when the rider reaches the chosen straight stretch.
+        if (this._travelDistanceAbs < this._flyByStartDistance) return;
+      } else {
+        // No straight stretch on this route: fall back to steady cruising.
+        const cruising =
+          routeSpeed >= FLY_BY_MIN_ROUTE_SPEED &&
+          (now - this._travelStartedAt) / 1000 > FLY_BY_EARLIEST_S &&
+          length - this._travelDistanceAbs > FLY_BY_MIN_REMAINING;
+        this._cruiseSince = cruising ? this._cruiseSince + dt : 0;
+        if (this._cruiseSince < FLY_BY_CRUISE_HOLD_S) return;
+      }
       this._flyByState = "active";
       this._flyByTime = 0;
       this._flyByHasPrev = false;
@@ -1352,16 +1443,23 @@ export class AboutJourneyController {
         FLY_BY_ARC_HEIGHT *
         Math.sin((Math.PI * (t - approachEnd)) / FLY_BY_ALONGSIDE_S);
     } else if (t < punchEnd) {
-      // Punches it.
+      // Punches it and cuts across in front of the rider once it's clear
+      // ahead (so the big ship never sweeps through the camera or Mjolnir).
       const u = (t - alongsideEnd) / FLY_BY_PUNCH_S;
       along += FLY_BY_PUNCH_DISTANCE * u * u * u;
+      lateral = THREE.MathUtils.lerp(
+        FLY_BY_LATERAL,
+        FLY_BY_CUT_ACROSS_LATERAL,
+        THREE.MathUtils.smoothstep(u, 0.3, 1),
+      );
     } else if (t < veerEnd) {
-      // Keeps its punch speed (never slows) while peeling off and climbing.
+      // Keeps its punch speed (never slows) while veering off on the far side
+      // and climbing away.
       const punchExitSpeed = (3 * FLY_BY_PUNCH_DISTANCE) / FLY_BY_PUNCH_S;
       const s = t - punchEnd;
       const u = s / FLY_BY_VEER_S;
       along += FLY_BY_PUNCH_DISTANCE + punchExitSpeed * s;
-      lateral += 2600 * u * u;
+      lateral = FLY_BY_CUT_ACROSS_LATERAL - 2600 * u * u;
       height += 1000 * u * u;
     } else {
       this._endFlyBy();

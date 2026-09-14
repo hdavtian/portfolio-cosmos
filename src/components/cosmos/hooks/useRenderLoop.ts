@@ -7,6 +7,7 @@ import { emitCosmosEvent } from "../cosmosEventBus";
 import type { DashcamController } from "../dashcamTV";
 import { applyEngineGlow } from "../engineGlow";
 import { computeFalconFollowCameraPose } from "../falconFollowCameraPose";
+import { applyIdleCameraSway, updateIdleShipHover } from "../idleShipHover";
 import { getCosmosPerfFlags } from "../perfConfig";
 import { PhysicsTravelAnchor } from "../PhysicsTravelAnchor";
 import { physicsWorld } from "../PhysicsWorld";
@@ -2088,6 +2089,21 @@ export const useRenderLoop = () => {
                   const cc = sceneRef.current.controls;
                   const focusedMoon = focusedMoonRef.current;
                   const settledTarget = settledViewTargetRef.current;
+                  // Parked and followed: float the ship gently and sway the
+                  // camera very slowly so the view doesn't look frozen. The
+                  // hover resets itself whenever anything else moves the ship.
+                  const hoverBase = updateIdleShipHover(
+                    ship,
+                    deltaSeconds,
+                    ship.visible &&
+                      !focusedMoon &&
+                      !manualFlightModeRef.current &&
+                      !shipCinematicRef.current?.active &&
+                      !manualFlightRef.current?.isLightspeedActive,
+                  );
+                  if (hoverBase) {
+                    applyIdleCameraSway(cc, deltaSeconds, performance.now() / 1000);
+                  }
                   if (focusedMoon) {
                     const moonWorld = new THREE.Vector3();
                     focusedMoon.getWorldPosition(moonWorld);
@@ -2106,10 +2122,13 @@ export const useRenderLoop = () => {
                   } else {
                     const lightspeedActive =
                       !!manualFlightRef.current?.isLightspeedActive;
+                    // While hovering, aim at the hover's base point so the
+                    // ship floats on screen without bobbing the camera.
+                    const followTarget = hoverBase ?? ship.position;
                     cc.moveTo(
-                      ship.position.x,
-                      ship.position.y,
-                      ship.position.z,
+                      followTarget.x,
+                      followTarget.y,
+                      followTarget.z,
                       !lightspeedActive,
                     );
                     cc.minDistance = 0.5;

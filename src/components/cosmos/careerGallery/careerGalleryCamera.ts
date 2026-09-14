@@ -197,6 +197,51 @@ export const attachGalleryDolly = (
   return () => dom.removeEventListener("wheel", onWheel);
 };
 
+/** Outside view distance, in shell radii (the whole globe fits in view). */
+const EXTERIOR_VIEW_RADII = 2.9;
+const EXTERIOR_MIN_RADII = 1.6;
+const EXTERIOR_MAX_RADII = 4.6;
+
+/**
+ * Outside the gallery: the camera orbits the globe's center, so dragging
+ * spins around it and scrolling zooms within limits. Glides to a viewpoint
+ * where the whole shape is in view.
+ */
+export const applyGalleryExteriorControls = (
+  controls: CameraControls,
+  camera: THREE.PerspectiveCamera,
+  center: THREE.Vector3,
+  radius: number,
+): void => {
+  const outward = camera.position.clone().sub(center);
+  if (outward.lengthSq() < 1e-6) outward.set(0, 0.2, 1);
+  outward.normalize();
+  const viewpoint = center.clone().addScaledVector(outward, radius * EXTERIOR_VIEW_RADII);
+
+  controls.minDistance = radius * EXTERIOR_MIN_RADII;
+  controls.maxDistance = radius * EXTERIOR_MAX_RADII;
+  controls.mouseButtons.left = CameraControls.ACTION.ROTATE;
+  controls.mouseButtons.middle = CameraControls.ACTION.NONE;
+  controls.mouseButtons.right = CameraControls.ACTION.NONE;
+  controls.mouseButtons.wheel = CameraControls.ACTION.DOLLY;
+  controls.touches.one = CameraControls.ACTION.TOUCH_ROTATE;
+  controls.touches.two = CameraControls.ACTION.TOUCH_DOLLY;
+  controls.touches.three = CameraControls.ACTION.NONE;
+  controls.azimuthRotateSpeed = 0.6;
+  controls.polarRotateSpeed = 0.6;
+  controls.smoothTime = 0.5;
+  controls.enabled = true;
+  controls.setLookAt(
+    viewpoint.x,
+    viewpoint.y,
+    viewpoint.z,
+    center.x,
+    center.y,
+    center.z,
+    true,
+  );
+};
+
 const IMAGE_URL_RE = /\.(jpe?g|png|gif|webp)$/i;
 
 /**

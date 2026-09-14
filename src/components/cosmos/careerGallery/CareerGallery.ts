@@ -84,10 +84,16 @@ const faceVertexShader = /* glsl */ `
   attribute vec3 bary;
   varying vec2 vUv;
   varying vec3 vBary;
+  varying float vViewDistance;
+  varying vec3 vWorldPosition;
   void main() {
     vUv = uv;
     vBary = bary;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+    vWorldPosition = worldPosition.xyz;
+    vec4 mvPosition = viewMatrix * worldPosition;
+    vViewDistance = length(mvPosition.xyz);
+    gl_Position = projectionMatrix * mvPosition;
     #include <logdepthbuf_vertex>
   }
 `;
@@ -112,8 +118,17 @@ const faceFragmentShader = /* glsl */ `
   uniform vec3 uTint;
   uniform vec3 uHoverEdge;
   uniform vec3 uBlankColor;
+  // Inside-only depth cues (uInterior eases 0 -> 1 on entering).
+  uniform float uInterior;
+  uniform vec3 uCenter;
+  uniform vec3 uLightDir;
+  uniform vec3 uHazeColor;
+  uniform float uHazeNear;
+  uniform float uHazeFar;
   varying vec2 vUv;
   varying vec3 vBary;
+  varying float vViewDistance;
+  varying vec3 vWorldPosition;
 
   float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -183,6 +198,16 @@ const faceFragmentShader = /* glsl */ `
     float edgeGlow = 1.0 - smoothstep(0.0, edgeWidth, edge);
     vec3 edgeColor = mix(uTint, uHoverEdge, uHover);
     col += edgeColor * edgeGlow * (0.26 + 0.25 * glitch + 0.9 * uHover);
+
+    // Inside the shell: a soft directional light across its curve (brighter on
+    // one side, dimmer on the other) and atmospheric falloff, so farther tiles
+    // sink into a faint haze. Both show the viewer they're inside a round space.
+    vec3 outward = normalize(vWorldPosition - uCenter);
+    float lit = 0.62 + 0.38 * smoothstep(-0.9, 0.9, dot(outward, uLightDir));
+    float haze = smoothstep(uHazeNear, uHazeFar, vViewDistance) * 0.6;
+    float focusKeep = 1.0 - uFocus;
+    col = mix(col, col * lit, uInterior * focusKeep);
+    col = mix(col, uHazeColor, haze * uInterior * focusKeep);
 
     // Everything except the focused tile fades back.
     col *= 1.0 - 0.72 * uDim;
@@ -381,6 +406,14 @@ export class CareerGallery {
   private lastRevealIndex: number | null = null;
   private lastCamera: THREE.PerspectiveCamera | null = null;
   private revealLoadError: string | null = null;
+  /** Outside view: the reveal folds back on its own after a short hold. */
+  private flashActive = false;
+  private flashHoldUntil: number | null = null;
+  /** Dark dome just outside the shell that makes the inside feel enclosed. */
+  private readonly interiorDome: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial>;
+  private interiorLevel = 0;
+  /** Faint dust drifting inside the shell: parallax gives the space depth. */
+  private readonly interiorDust: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
 
   private readonly tmpWorld = new THREE.Vector3();
   private readonly tmpVec = new THREE.Vector3();
@@ -425,6 +458,14 @@ export class CareerGallery {
         uTint: { value: HOLO_TINT.clone() },
         uHoverEdge: { value: HOVER_EDGE.clone() },
         uBlankColor: { value: new THREE.Color() },
+        uInterior: { value: 0 },
+        uCenter: { value: new THREE.Vector3() },
+        // Light from above and slightly to one side of the shell.
+        uLightDir: { value: new THREE.Vector3(0.35, 0.85, 0.4).normalize() },
+        uHazeColor: { value: new THREE.Color(0.03, 0.05, 0.1) },
+        // From the drifting viewpoint tiles are ~0.7R to ~1.3R away.
+        uHazeNear: { value: radius * 0.75 },
+        uHazeFar: { value: radius * 1.45 },
       },
     });
 
@@ -499,6 +540,74 @@ export class CareerGallery {
     // Stays in the scene (fully transparent) so its shader compiles during
     // the loader warmup rather than on the first click.
     this.root.add(this.reveal);
+
+    // Inside, the universe behind the tiles is hidden by a dark dome with a
+    // faint lat/long grid, so the shell reads as an enclosed, curved space
+    // while the screenshots stay bright. Not part of the spinning shell.
+    this.interiorDome = new THREE.Mesh(
+      new THREE.SphereGeometry(radius * INTERIOR_DOME_RADII, 64, 40),
+      new THREE.ShaderMaterial({
+        vertexShader: interiorDomeVertexShader,
+        fragmentShader: interiorDomeFragmentShader,
+        transparent: true,
+        // Writes depth so the starfield, sun and planets behind it are hidden
+        // no matter what order they draw in; the tiles are closer and pass.
+        depthWrite: true,
+        side: THREE.BackSide,
+        toneMapped: false,
+        uniforms: { uLevel: { value: 0 } },
+      }),
+    );
+    this.interiorDome.name = "CareerGalleryInteriorDome";
+    this.interiorDome.renderOrder = -5;
+    this.interiorDome.frustumCulled = false;
+    this.interiorDome.visible = false;
+    this.root.add(this.interiorDome);
+
+    // Dust specks filling the inside of the shell. Near ones sweep past faster
+    // than far ones as the viewer turns or moves, which reads as depth.
+    const dustPositions = new Float32Array(INTERIOR_DUST_COUNT * 3);
+    const dustSeeds = new Float32Array(INTERIOR_DUST_COUNT);
+    const dustRadius = radius * INTERIOR_DUST_RADII;
+    for (let i = 0; i < INTERIOR_DUST_COUNT; i++) {
+      // Uniform in the sphere's volume.
+      const r = dustRadius * Math.cbrt(Math.random());
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      dustPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      dustPositions[i * 3 + 1] = r * Math.cos(phi);
+      dustPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+      dustSeeds[i] = Math.random();
+    }
+    const dustGeometry = new THREE.BufferGeometry();
+    dustGeometry.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
+    dustGeometry.setAttribute("aSeed", new THREE.BufferAttribute(dustSeeds, 1));
+    const dustMaterial = new THREE.ShaderMaterial({
+      vertexShader: interiorDustVertexShader,
+      fragmentShader: interiorDustFragmentShader,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+      uniforms: {
+        uTime: { value: 0 },
+        uLevel: { value: 0 },
+        uDrift: { value: radius * 0.03 },
+        uSize: { value: radius * 0.006 },
+        uPointScale: { value: 1 },
+      },
+    });
+    this.interiorDust = new THREE.Points(dustGeometry, dustMaterial);
+    this.interiorDust.name = "CareerGalleryInteriorDust";
+    this.interiorDust.renderOrder = -4;
+    this.interiorDust.frustumCulled = false;
+    this.interiorDust.visible = false;
+    const drawSize = new THREE.Vector2();
+    this.interiorDust.onBeforeRender = (renderer) => {
+      renderer.getDrawingBufferSize(drawSize);
+      dustMaterial.uniforms.uPointScale.value = drawSize.y * 0.5;
+    };
+    this.root.add(this.interiorDust);
   }
 
   /** Snapshot of loading/cycling state, for debugging. */
@@ -586,6 +695,8 @@ export class CareerGallery {
 
     this.focusedIndex = index;
     this.focusToken += 1;
+    this.flashActive = false;
+    this.flashHoldUntil = null;
     const token = this.focusToken;
     this.revealTarget = 0;
     this.revealProgress = 0;
@@ -625,6 +736,18 @@ export class CareerGallery {
     this.focusedIndex = null;
     this.focusToken += 1;
     this.revealTarget = 0;
+    this.flashActive = false;
+    this.flashHoldUntil = null;
+  }
+
+  /**
+   * Outside view: fly the tile's screenshot out toward the viewer, hold it for
+   * a few seconds, then fold it back on its own (no buttons).
+   */
+  flashFace(index: number): CareerGalleryFocusInfo | null {
+    const info = this.focusFace(index);
+    if (info) this.flashActive = true;
+    return info;
   }
 
   /**
@@ -674,6 +797,15 @@ export class CareerGallery {
     this.time += step;
     const focused = this.focusedIndex;
 
+    // The dark interior dome fades in while inside, out on leaving.
+    this.interiorLevel +=
+      ((this.interior ? 1 : 0) - this.interiorLevel) * (1 - Math.exp(-2.5 * step));
+    this.interiorDome.material.uniforms.uLevel.value = this.interiorLevel;
+    this.interiorDome.visible = this.interiorLevel > 0.005;
+    this.interiorDust.material.uniforms.uLevel.value = this.interiorLevel;
+    this.interiorDust.material.uniforms.uTime.value = this.time;
+    this.interiorDust.visible = this.interiorDome.visible;
+
     // Slow spin about the vertical axis only (tilting would gradually turn
     // the tiles sideways/upside down); hold still while a tile is focused.
     if (focused === null) {
@@ -696,6 +828,8 @@ export class CareerGallery {
       u.uHover.value = face.hover;
       u.uDim.value = face.dim;
       u.uFocus.value = face.focus;
+      u.uInterior.value = this.interiorLevel;
+      (u.uCenter.value as THREE.Vector3).copy(this.tmpWorld);
 
       if (face.transitioning) {
         face.transitionT = Math.min(1, face.transitionT + step / TRANSITION_SECONDS);
@@ -731,6 +865,14 @@ export class CareerGallery {
     if (this.revealProgress <= 0 && this.revealTarget === 0) {
       this.releaseRevealImage();
     }
+    // Outside flash: hold the fully revealed image, then fold it back.
+    if (this.flashActive && this.focusedIndex !== null && this.revealProgress >= 1) {
+      if (this.flashHoldUntil === null) {
+        this.flashHoldUntil = this.time + FLASH_HOLD_SECONDS;
+      } else if (this.time >= this.flashHoldUntil) {
+        this.clearFocus();
+      }
+    }
 
     const focused = this.focusedIndex;
     if (focused === null && this.revealProgress <= 0) return;
@@ -738,19 +880,27 @@ export class CareerGallery {
     if (anchorIndex === null) return;
     this.lastRevealIndex = anchorIndex;
 
-    // Float the full image just inside its tile, facing the viewer, sized to
-    // fit comfortably in the view.
     const centroid = this.getFaceWorldCentroid(anchorIndex, this.tmpVec);
     this.root.getWorldPosition(this.tmpWorld);
-    const toTile = centroid.sub(this.tmpWorld);
-    const worldPos = this.tmpWorld.clone().addScaledVector(toTile, 0.9);
+    const eased = u.uReveal.value as number;
+    let worldPos: THREE.Vector3;
+    if (this.interior) {
+      // Float the full image just inside its tile, facing the viewer, sized
+      // to fit comfortably in the view.
+      const toTile = centroid.sub(this.tmpWorld);
+      worldPos = this.tmpWorld.clone().addScaledVector(toTile, 0.9);
+    } else {
+      // Outside: the image flies out of its tile toward the viewer.
+      worldPos = centroid.clone().lerp(camera.position, EXTERIOR_REVEAL_TRAVEL * eased);
+    }
     this.reveal.position.copy(this.root.worldToLocal(worldPos.clone()));
     this.reveal.lookAt(camera.position);
 
     const distance = Math.max(1, camera.position.distanceTo(worldPos));
     const viewHeight = 2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
     const aspect = u.uPlaneAspect.value as number;
-    let height = viewHeight * 0.72;
+    // Outside it grows as it flies out; inside it's shown at full size.
+    let height = viewHeight * (this.interior ? 0.72 : 0.22 + 0.5 * eased);
     let width = height * aspect;
     const maxWidth = viewHeight * camera.aspect * 0.62;
     if (width > maxWidth) {
@@ -893,6 +1043,10 @@ export class CareerGallery {
     (this.edges.material as THREE.Material).dispose();
     this.reveal.geometry.dispose();
     this.reveal.material.dispose();
+    this.interiorDome.geometry.dispose();
+    this.interiorDome.material.dispose();
+    this.interiorDust.geometry.dispose();
+    this.interiorDust.material.dispose();
     this.releaseRevealImage();
     this.pool.forEach((entry) => {
       entry.texture.dispose();
@@ -902,3 +1056,95 @@ export class CareerGallery {
     this.root.removeFromParent();
   }
 }
+
+/** Outside flash: seconds the revealed image holds before folding back. */
+const FLASH_HOLD_SECONDS = 3.5;
+/** Outside flash: share of the way from its tile to the camera the image flies. */
+const EXTERIOR_REVEAL_TRAVEL = 0.55;
+/** Interior dome radius, in shell radii (just beyond the tiles and edges). */
+const INTERIOR_DOME_RADII = 1.35;
+/** Dust specks inside the shell, filling this share of its radius. */
+const INTERIOR_DUST_COUNT = 2000;
+const INTERIOR_DUST_RADII = 0.92;
+
+const interiorDustVertexShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  uniform float uTime;
+  uniform float uDrift;
+  uniform float uSize;
+  uniform float uPointScale;
+  uniform float uLevel;
+  attribute float aSeed;
+  varying float vAlpha;
+  void main() {
+    // Each speck drifts slowly on its own small loop.
+    float phase = aSeed * 6.2831853;
+    vec3 drift = vec3(
+      sin(uTime * 0.07 + phase),
+      sin(uTime * 0.05 + phase * 1.7),
+      cos(uTime * 0.06 + phase * 2.3)
+    ) * uDrift;
+    vec4 mvPosition = modelViewMatrix * vec4(position + drift, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    float depth = max(-mvPosition.z, 1.0);
+    gl_PointSize = clamp(uSize * uPointScale / depth, 1.0, 9.0);
+    // Gentle twinkle; closer specks a little brighter.
+    float twinkle = 0.55 + 0.45 * sin(uTime * (0.6 + aSeed) + phase * 3.0);
+    vAlpha = uLevel * twinkle * clamp(1.8 - depth / (uDrift * 40.0), 0.25, 1.0);
+    #include <logdepthbuf_vertex>
+  }
+`;
+
+const interiorDustFragmentShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  varying float vAlpha;
+  void main() {
+    #include <logdepthbuf_fragment>
+    vec2 c = gl_PointCoord - 0.5;
+    float soft = 1.0 - smoothstep(0.1, 0.5, length(c));
+    gl_FragColor = vec4(vec3(0.62, 0.78, 1.0) * soft * vAlpha * 0.35, 1.0);
+  }
+`;
+
+const interiorDomeVertexShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  varying vec3 vDirection;
+  void main() {
+    vDirection = normalize(position);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #include <logdepthbuf_vertex>
+  }
+`;
+
+const interiorDomeFragmentShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  uniform float uLevel;
+  varying vec3 vDirection;
+
+  // Distance to the nearest grid line (0 on a line, 0.5 halfway between).
+  float lineDistance(float value) {
+    return abs(fract(value + 0.5) - 0.5);
+  }
+
+  void main() {
+    #include <logdepthbuf_fragment>
+    vec3 d = normalize(vDirection);
+    // Deep blue-black, a touch lighter overhead, darkest below.
+    float height = d.y * 0.5 + 0.5;
+    vec3 color = mix(vec3(0.003, 0.006, 0.014), vec3(0.018, 0.03, 0.06), smoothstep(0.1, 1.0, height));
+    // Faint latitude / longitude lines give the enclosure a sense of curvature.
+    float longitude = atan(d.z, d.x) / 6.2831853 * 24.0;
+    float latitude = asin(clamp(d.y, -1.0, 1.0)) / 3.14159265 * 12.0;
+    float grid = max(
+      1.0 - smoothstep(0.0, 0.035, lineDistance(longitude)),
+      1.0 - smoothstep(0.0, 0.035, lineDistance(latitude))
+    );
+    color += vec3(0.04, 0.09, 0.15) * grid * 0.3;
+    // A subtle tint, not blackout: depth comes from parallax, haze and light.
+    gl_FragColor = vec4(color, uLevel * 0.6);
+  }
+`;

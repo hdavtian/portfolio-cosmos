@@ -14,6 +14,7 @@ import {
   type CareerGalleryFocusInfo,
 } from "./careerGallery/CareerGallery";
 import {
+  applyGalleryExteriorControls,
   applyGalleryInteriorControls,
   attachGalleryDolly,
   captureGalleryControls,
@@ -229,6 +230,10 @@ const ORBITAL_PORTFOLIO_INSPECT_EXIT_TARGET_DRIFT = 220;
 const ORBITAL_PORTFOLIO_INSPECT_EXIT_GRACE_MS = 900;
 const ORBITAL_PORTFOLIO_STATE_DEBUG_LOGS = true;
 const MOON_TRAVEL_SIGN_MAX_ACTIVE = 28;
+/** Memory text textures kept for reuse; oldest unused ones are freed beyond this. */
+const MOON_TRAVEL_SIGN_TEXTURE_CACHE_MAX = 48;
+/** A memory closer than this to the camera plane (in front or behind) has passed the viewer. */
+const MOON_TRAVEL_SIGN_PASSED_VIEWER_DIST = 4;
 const MOON_ORBIT_SIGN_DEBUG_LOGS = false;
 // Card layer stays on the overlay pass to avoid bloom/tonemapping washout.
 const PROJECT_SHOWCASE_CARD_LAYER = 1;
@@ -530,6 +535,13 @@ const CAREER_GALLERY_NAV_STANDOFF_DIST = CAREER_GALLERY_RADIUS + 1300;
 const CAREER_GALLERY_ARRIVAL_DIST = CAREER_GALLERY_RADIUS + 600;
 const CAREER_GALLERY_ENTRY_TRIGGER_DIST = CAREER_GALLERY_RADIUS + 1900;
 const CAREER_GALLERY_ENTRY_GLIDE_MS = 5000;
+/**
+ * Inside the gallery the viewpoint drifts slowly off-center on a gentle loop
+ * (this share of the radius), so tiles at different distances shift against
+ * each other: motion parallax is what makes the space feel deep.
+ */
+const CAREER_GALLERY_DRIFT_RADII = 0.3;
+const CAREER_GALLERY_DRIFT_RAMP_S = 4;
 const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -13200);
 /**
  * The About ride's bottom control panel (speed arrows, camera toggles,
@@ -1999,6 +2011,9 @@ export default function ResumeSpace3D({
   const careerGalleryGlideCancelRef = useRef<(() => void) | null>(null);
   const careerGalleryZoomDetachRef = useRef<(() => void) | null>(null);
   const [careerGalleryActive, setCareerGalleryActive] = useState(false);
+  /** Parked outside the gallery, camera locked on the globe. */
+  const careerGalleryOutsideRef = useRef(false);
+  const [careerGalleryOutside, setCareerGalleryOutside] = useState(false);
   const [careerGallerySelection, setCareerGallerySelection] =
     useState<CareerGalleryFocusInfo | null>(null);
   const composerRef = useRef<EffectComposer | null>(null);
@@ -2986,7 +3001,8 @@ export default function ResumeSpace3D({
   const [orbitSignTuning, setOrbitSignTuning] = useState<OrbitSignTuning>({
     timeBetweenMessagesSec: 1.8,
     continuousLoop: true,
-    waitAfterStreamSec: 60,
+    // Replay shortly after the last memory flies past.
+    waitAfterStreamSec: 3,
     travelSpeed: 0.9,
     lightIntensity: 1.7,
     startFontScale: 0.1,
@@ -7708,10 +7724,14 @@ export default function ResumeSpace3D({
       careerGalleryZoomDetachRef.current = null;
       careerGalleryPendingEntryRef.current = false;
       const wasInside =
-        careerGalleryActiveRef.current || careerGalleryEnteringRef.current;
+        careerGalleryActiveRef.current ||
+        careerGalleryEnteringRef.current ||
+        careerGalleryOutsideRef.current;
       careerGalleryActiveRef.current = false;
       careerGalleryEnteringRef.current = false;
+      careerGalleryOutsideRef.current = false;
       setCareerGalleryActive(false);
+      setCareerGalleryOutside(false);
       setCareerGallerySelection(null);
       careerGalleryRef.current?.setInteriorMode(false);
       if (!wasInside) return;
@@ -7751,7 +7771,14 @@ export default function ResumeSpace3D({
     setFollowingSpaceship(false);
     followingSpaceshipRef.current = false;
     if (spaceshipRef.current) spaceshipRef.current.visible = false;
-    careerGallerySnapshotRef.current = captureGalleryControls(controls, camera);
+    // Coming from the outside view: keep the controls snapshot taken on
+    // arrival, so exiting restores the pre-gallery camera.
+    if (!careerGallerySnapshotRef.current) {
+      careerGallerySnapshotRef.current = captureGalleryControls(controls, camera);
+    }
+    careerGalleryOutsideRef.current = false;
+    setCareerGalleryOutside(false);
+    gallery.clearFocus();
     gallery.setInteriorMode(true);
 
     const center = gallery.root.getWorldPosition(new THREE.Vector3());
@@ -7783,6 +7810,45 @@ export default function ResumeSpace3D({
       },
     });
     vlog("🖼️ Entering career gallery");
+  }, [shipLog, vlog]);
+
+  // Career Gallery arrival: stop outside with the camera locked on the globe
+  // (drag spins around it, click a tile for a quick reveal). "Enter Gallery"
+  // glides inside.
+  const arriveOutsideCareerGallery = useCallback(() => {
+    if (
+      careerGalleryActiveRef.current ||
+      careerGalleryEnteringRef.current ||
+      careerGalleryOutsideRef.current
+    ) {
+      return;
+    }
+    const gallery = careerGalleryRef.current;
+    const controls = sceneRef.current.controls;
+    const camera = sceneRef.current.camera as
+      | THREE.PerspectiveCamera
+      | undefined;
+    if (!gallery || !controls || !camera) return;
+
+    careerGalleryPendingEntryRef.current = false;
+    careerGalleryOutsideRef.current = true;
+    setCareerGalleryOutside(true);
+    setFollowingSpaceship(false);
+    followingSpaceshipRef.current = false;
+    if (spaceshipRef.current) spaceshipRef.current.visible = false;
+    careerGallerySnapshotRef.current = captureGalleryControls(controls, camera);
+    gallery.setInteriorMode(false);
+    applyGalleryExteriorControls(
+      controls,
+      camera,
+      gallery.root.getWorldPosition(new THREE.Vector3()),
+      gallery.radius,
+    );
+    shipLog(
+      "Career Gallery — drag to spin around it, click a tile, or enter the gallery",
+      "info",
+    );
+    vlog("🖼️ Arrived outside career gallery");
   }, [shipLog, vlog]);
 
   const enterSkillsLattice = useCallback(() => {
@@ -9132,7 +9198,11 @@ export default function ResumeSpace3D({
 
       interruptTransientTravelFlows(targetId, targetType);
       if (targetId === CAREER_GALLERY_NAV_ID) {
-        if (careerGalleryActiveRef.current || careerGalleryEnteringRef.current) {
+        if (
+          careerGalleryActiveRef.current ||
+          careerGalleryEnteringRef.current ||
+          careerGalleryOutsideRef.current
+        ) {
           vlog("🖼️ Career gallery already active");
           return;
         }
@@ -9146,7 +9216,7 @@ export default function ResumeSpace3D({
           ship.position.distanceTo(CAREER_GALLERY_WORLD_ANCHOR) <=
             CAREER_GALLERY_ARRIVAL_DIST;
         if (atGallery) {
-          enterCareerGallery();
+          arriveOutsideCareerGallery();
         } else {
           handleQuickNav(CAREER_GALLERY_NAV_ID, "section", skipAboutExitConfirm);
           vlog("🖼️ Routing to Career Gallery — it will open on arrival");
@@ -9440,12 +9510,13 @@ export default function ResumeSpace3D({
     }
   }, [currentNavigationTarget, navigationDistance, enterSkillsLattice]);
 
-  // Career Gallery arrival: glide inside once autopilot parks at the standoff.
+  // Career Gallery arrival: stop outside once autopilot parks at the standoff.
   useEffect(() => {
     if (
       !careerGalleryPendingEntryRef.current ||
       careerGalleryActiveRef.current ||
-      careerGalleryEnteringRef.current
+      careerGalleryEnteringRef.current ||
+      careerGalleryOutsideRef.current
     ) {
       return;
     }
@@ -9455,14 +9526,21 @@ export default function ResumeSpace3D({
       ship.position.distanceTo(CAREER_GALLERY_WORLD_ANCHOR) <=
         CAREER_GALLERY_ENTRY_TRIGGER_DIST &&
       navigationDistance === null;
-    if (arrived) enterCareerGallery();
-  }, [currentNavigationTarget, navigationDistance, enterCareerGallery]);
+    if (arrived) arriveOutsideCareerGallery();
+  }, [currentNavigationTarget, navigationDistance, arriveOutsideCareerGallery]);
 
   // Career Gallery per-frame animation (face swaps, hologram shader time).
   useEffect(() => {
     if (!sceneReady) return;
     let raf = 0;
     let last = performance.now();
+    // Interior drift state (see CAREER_GALLERY_DRIFT_RADII).
+    let driftTime = 0;
+    let driftRamp = 0;
+    const driftPrevious = new THREE.Vector3();
+    const driftNext = new THREE.Vector3();
+    const driftTarget = new THREE.Vector3();
+    const tau = Math.PI * 2;
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
       const gallery = careerGalleryRef.current;
@@ -9473,10 +9551,112 @@ export default function ResumeSpace3D({
       const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
       last = now;
       gallery.update(dt, camera);
+
+      // Drift the interior viewpoint on a slow loop by moving the orbit target
+      // (the camera rides 0.01 behind it), applying only the change each frame
+      // so scroll-dolly and look-around keep working. Pauses while the user
+      // drags (camera-controls action 0 = none) or a tile is open.
+      const controls = sceneRef.current.controls;
+      if (!careerGalleryActiveRef.current || !controls) {
+        driftTime = 0;
+        driftRamp = 0;
+        driftPrevious.set(0, 0, 0);
+        return;
+      }
+      if (controls.currentAction !== 0 || gallery.getFocusedIndex() !== null) {
+        return;
+      }
+      driftTime += dt;
+      driftRamp = Math.min(1, driftRamp + dt / CAREER_GALLERY_DRIFT_RAMP_S);
+      const amplitude =
+        gallery.radius *
+        CAREER_GALLERY_DRIFT_RADII *
+        THREE.MathUtils.smoothstep(driftRamp, 0, 1);
+      driftNext.set(
+        Math.sin((driftTime * tau) / 47) * amplitude,
+        Math.sin((driftTime * tau) / 61) * amplitude * 0.35,
+        Math.sin((driftTime * tau) / 53 + 1) * amplitude,
+      );
+      controls.getTarget(driftTarget).add(driftNext).sub(driftPrevious);
+      controls.moveTo(driftTarget.x, driftTarget.y, driftTarget.z, false);
+      driftPrevious.copy(driftNext);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [sceneReady]);
+
+  // Career Gallery from outside: drag orbits the globe (camera-controls);
+  // hover highlights a tile; a click (not a drag) flies its screenshot out,
+  // holds it, and folds it back on its own.
+  useEffect(() => {
+    if (!careerGalleryOutside) return;
+    const dom = rendererRef.current?.domElement;
+    const camera = sceneRef.current.camera as THREE.PerspectiveCamera | undefined;
+    const gallery = careerGalleryRef.current;
+    if (!dom || !camera || !gallery) return;
+
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    let pendingMove: PointerEvent | null = null;
+    let hoverRaf = 0;
+    let lastHover: number | null = null;
+    let pressed: { x: number; y: number; t: number } | null = null;
+
+    const pickAt = (clientX: number, clientY: number) => {
+      const rect = dom.getBoundingClientRect();
+      ndc.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycaster.setFromCamera(ndc, camera);
+      return gallery.pickFace(raycaster);
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      pendingMove = event;
+      if (hoverRaf) return;
+      hoverRaf = requestAnimationFrame(() => {
+        hoverRaf = 0;
+        if (!pendingMove) return;
+        const index = pickAt(pendingMove.clientX, pendingMove.clientY);
+        if (index === lastHover) return;
+        lastHover = index;
+        gallery.setHovered(index);
+        dom.style.cursor = index === null ? "" : "pointer";
+      });
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      pressed = { x: event.clientX, y: event.clientY, t: performance.now() };
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      if (!pressed) return;
+      const moved = Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y);
+      const quick = performance.now() - pressed.t < 400;
+      pressed = null;
+      if (moved > 6 || !quick) return; // a spin-around drag, not a click
+      const index = pickAt(event.clientX, event.clientY);
+      if (index === null) return;
+      gallery.flashFace(index);
+    };
+    // Keep canvas clicks from reaching the scene's planet click handler.
+    const blockSceneClick = (event: MouseEvent) => {
+      if (event.target === dom) event.stopPropagation();
+    };
+
+    dom.addEventListener("pointermove", onPointerMove);
+    dom.addEventListener("pointerdown", onPointerDown);
+    dom.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("click", blockSceneClick, true);
+    return () => {
+      dom.removeEventListener("pointermove", onPointerMove);
+      dom.removeEventListener("pointerdown", onPointerDown);
+      dom.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("click", blockSceneClick, true);
+      if (hoverRaf) cancelAnimationFrame(hoverRaf);
+      dom.style.cursor = "";
+      gallery.setHovered(null);
+      gallery.clearFocus();
+    };
+  }, [careerGalleryOutside]);
 
   // Career Gallery tiles: hover highlights edges; a click (not a drag) turns
   // toward the tile and reveals its full screenshot; Esc or clicking empty
@@ -13410,6 +13590,8 @@ export default function ResumeSpace3D({
     const bestPos = new THREE.Vector3();
     const surfaceNormal = new THREE.Vector3();
     const arcMid = new THREE.Vector3();
+    const signFromCamera = new THREE.Vector3();
+    const cameraForwardTick = new THREE.Vector3();
     let spawnedSinceLastLog = 0;
     const detachAndClearSigns = () => {
       const records = moonTravelSignsRef.current;
@@ -13486,10 +13668,30 @@ export default function ResumeSpace3D({
       const group = ensureSignGroup();
       if (!group) return null;
       const textureKey = `${memory.type}::${text}`;
-      let tex = moonTravelSignTextureCacheRef.current.get(textureKey) ?? null;
-      if (!tex) {
+      const textureCache = moonTravelSignTextureCacheRef.current;
+      let tex = textureCache.get(textureKey) ?? null;
+      if (tex) {
+        // Most recently used goes last (Map keeps insertion order).
+        textureCache.delete(textureKey);
+        textureCache.set(textureKey, tex);
+      } else {
         tex = createMoonTravelSignTexture(memory);
-        moonTravelSignTextureCacheRef.current.set(textureKey, tex);
+        textureCache.set(textureKey, tex);
+        // Cap the cache as memories are added: free the oldest textures that
+        // no memory on screen is using.
+        if (textureCache.size > MOON_TRAVEL_SIGN_TEXTURE_CACHE_MAX) {
+          const inUse = new Set(
+            moonTravelSignsRef.current.map(
+              (sign) => (sign.material as THREE.SpriteMaterial).map,
+            ),
+          );
+          for (const [key, cached] of textureCache) {
+            if (textureCache.size <= MOON_TRAVEL_SIGN_TEXTURE_CACHE_MAX) break;
+            if (cached === tex || inUse.has(cached)) continue;
+            cached.dispose();
+            textureCache.delete(key);
+          }
+        }
       }
       const w = THREE.MathUtils.clamp(20 + text.length * 0.48, 20, 48);
       const baseScale = new THREE.Vector3(w, 6.2, 1);
@@ -13736,6 +13938,8 @@ export default function ResumeSpace3D({
           moonTravelSignPauseUntilRef.current = 0;
           detachAndClearSigns();
         }
+        // Leaving the planet: never leave memories behind in the universe.
+        if (moonTravelSignsRef.current.length > 0) detachAndClearSigns();
         return;
       }
       const moonIdRaw =
@@ -13947,7 +14151,8 @@ export default function ResumeSpace3D({
           record.object.scale.copy(record.baseScale).multiplyScalar(riseScale);
         }
         const fadeIn = THREE.MathUtils.clamp(t / 0.15, 0, 1);
-        const fadeOut = THREE.MathUtils.clamp((1 - t) / 0.1, 0, 1);
+        // Fade over the last quarter so memories are gone as they pass by.
+        const fadeOut = THREE.MathUtils.clamp((1 - t) / 0.25, 0, 1);
         if (typeof mat.opacity === "number") {
           if (memoryManualMode && !memoryPlaybackPlaying) {
             // Keep scrub previews readable while users drag gently through the flight path.
@@ -13957,15 +14162,27 @@ export default function ResumeSpace3D({
           }
         }
         let offscreenPast = false;
+        let passedViewer = false;
         if (camTick) {
           activeSignNdc.copy(record.object.position).project(camTick);
           offscreenPast =
             activeSignNdc.z > 1.02 ||
             Math.abs(activeSignNdc.x) > 1.35 ||
             Math.abs(activeSignNdc.y) > 1.35;
+          // Once it reaches the viewer it's done: don't let it linger huge
+          // and slow right at the camera until its timer runs out.
+          camTick.getWorldDirection(cameraForwardTick);
+          passedViewer =
+            t > 0.5 &&
+            signFromCamera
+              .subVectors(record.object.position, camTick.position)
+              .dot(cameraForwardTick) < MOON_TRAVEL_SIGN_PASSED_VIEWER_DIST;
         }
         const shouldCull = !memoryManualMode;
-        if (shouldCull && (record.ageMs >= record.ttlMs || offscreenPast)) {
+        if (
+          shouldCull &&
+          (record.ageMs >= record.ttlMs || offscreenPast || passedViewer)
+        ) {
           const parent = record.object.parent;
           if (parent) parent.remove(record.object);
           record.material.dispose();
@@ -14004,6 +14221,15 @@ export default function ResumeSpace3D({
       moonTravelSignGroupRef.current = null;
     };
   }, [buildMoonTravelSignText, moonTravelSignCatalog, orbitPhase, sceneReady]);
+
+  // Free every cached memory texture when the scene goes away.
+  useEffect(() => {
+    const cache = moonTravelSignTextureCacheRef.current;
+    return () => {
+      cache.forEach((texture) => texture.dispose());
+      cache.clear();
+    };
+  }, []);
 
   // ── Orbital portfolio screenshot inspect clicks ───────────────────────────
   useEffect(() => {
@@ -22121,7 +22347,7 @@ export default function ResumeSpace3D({
             </div>
           )}
 
-          {careerGalleryActive && (
+          {(careerGalleryActive || careerGalleryOutside) && (
             <button
               onClick={() => exitCareerGallery({ restoreShip: true })}
               style={{
@@ -22140,6 +22366,32 @@ export default function ResumeSpace3D({
               }}
             >
               Exit Gallery
+            </button>
+          )}
+          {careerGalleryOutside && (
+            <button
+              onClick={() => enterCareerGallery()}
+              style={{
+                position: "fixed",
+                left: "50%",
+                bottom: 42,
+                transform: "translateX(-50%)",
+                zIndex: 1121,
+                padding: "10px 22px",
+                borderRadius: 10,
+                border: "1px solid rgba(145, 232, 255, 0.7)",
+                background: "rgba(8, 18, 34, 0.85)",
+                color: "#dff3ff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 15,
+                fontWeight: 700,
+                letterSpacing: 1.2,
+                textTransform: "uppercase",
+                cursor: "pointer",
+                boxShadow: "0 0 18px rgba(120, 210, 255, 0.35)",
+              }}
+            >
+              Enter Gallery
             </button>
           )}
           {careerGalleryActive && (
