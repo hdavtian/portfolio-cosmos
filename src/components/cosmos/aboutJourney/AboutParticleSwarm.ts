@@ -296,6 +296,7 @@ export function createAboutParticleSwarm(
   }
 
   let _prevPhase: AboutJourneyPhase = AboutJourneyPhase.IDLE;
+  let _begunPath: THREE.CatmullRomCurve3 | null = null;
   let _reformElapsed = 0;
 
   // --- Update ---
@@ -332,13 +333,20 @@ export function createAboutParticleSwarm(
     }
     const clampedDelta = Math.min(deltaSeconds, 0.05);
 
+    // Start on a new route, not on the PATH_FORMING edge: a skip can jump
+    // past PATH_FORMING before this update ever sees it.
     if (
-      phase === AboutJourneyPhase.PATH_FORMING &&
-      _prevPhase !== AboutJourneyPhase.PATH_FORMING &&
       cosmicPath &&
-      (cosmicPath as CosmicPathCurve).timing
+      cosmicPath !== _begunPath &&
+      (cosmicPath as CosmicPathCurve).timing &&
+      phase >= AboutJourneyPhase.PATH_FORMING &&
+      phase <= AboutJourneyPhase.PATH_TRAVEL
     ) {
+      _begunPath = cosmicPath;
       pathParticles.begin(cosmicPath as CosmicPathCurve, group.position);
+      if (phase !== AboutJourneyPhase.PATH_FORMING) {
+        pathParticles.forceComplete();
+      }
     }
     if (
       phase === AboutJourneyPhase.PATH_DISPERSING &&

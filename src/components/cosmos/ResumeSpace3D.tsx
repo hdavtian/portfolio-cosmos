@@ -93,6 +93,7 @@ import {
   createAboutParticleSwarm,
   type AboutParticleSwarmHandle,
 } from "./aboutJourney/AboutParticleSwarm";
+import { MjolnirRider } from "./aboutJourney/MjolnirRider";
 import {
   legacyLoopLength,
   type RouteObstacle,
@@ -320,6 +321,8 @@ function capEmissiveIntensity(root: THREE.Object3D) {
 // Moon-visit drone model (the Death Star). HologramDroneDisplay normalizes
 // whatever model it gets to drone size.
 const DRONE_MODEL_PATH = "/models/deathstar/deathstar.glb";
+/** Rides the About cosmic rail and smashes it at the end of the ride. */
+const MJOLNIR_MODEL_PATH = "/models/mjolnir/mjolnir.glb";
 
 // Self-illumination for drone models that read too dark in moon orbit. A
 // real light attached to the drone would change the scene's light count each
@@ -3395,6 +3398,7 @@ export default function ResumeSpace3D({
   const aboutMemorySquareRootRef = useRef<THREE.Group | null>(null);
   const aboutParticleSwarmRef = useRef<AboutParticleSwarmHandle | null>(null);
   const aboutHydrateSwarmRef = useRef<AboutParticleSwarmHandle | null>(null);
+  const aboutMjolnirRef = useRef<MjolnirRider | null>(null);
   const aboutJourneyCameraDistSavedRef = useRef<{
     min: number;
     max: number;
@@ -3685,21 +3689,15 @@ export default function ResumeSpace3D({
       );
       crystalMatricesStatic = false;
       const panelGeom = new THREE.PlaneGeometry(1, 1, 1, 1);
-      const panelMat = new THREE.MeshPhysicalMaterial({
+      // Unlit on purpose. The old physical glass material (transmission +
+      // clearcoat) re-rendered the scene into a transmission buffer every
+      // frame and, lit by every light in the scene, took a measured 2.7 s to
+      // build its shader on the first ride frame. The panels read as flat
+      // glowing glass anyway; brightness is driven through `color` below.
+      const panelMat = new THREE.MeshBasicMaterial({
         color: 0xffffff,
-        emissive: 0xffffff,
-        emissiveIntensity: 0.12,
         transparent: true,
         opacity: 0.52,
-        roughness: 0.1,
-        metalness: 0.04,
-        transmission: 0.42,
-        ior: 1.34,
-        thickness: 2.4,
-        reflectivity: 0.92,
-        clearcoat: 1,
-        clearcoatRoughness: 0.03,
-        envMapIntensity: 1.45,
         side: THREE.DoubleSide,
         vertexColors: true,
         depthWrite: false,
@@ -3898,6 +3896,12 @@ export default function ResumeSpace3D({
       const dt = Math.min(0.05, (now - prevNow) / 1000);
       prevNow = now;
 
+      aboutMjolnirRef.current?.update(
+        dt,
+        now / 1000,
+        sceneRef.current.camera?.position,
+      );
+
       const journey = aboutJourneyRef.current;
       const scene = sceneRef.current.scene;
       if (!journey || !scene) return;
@@ -3968,7 +3972,10 @@ export default function ResumeSpace3D({
 
           const sunAnchor = sceneRef.current.sunLight;
           if (sunAnchor) {
-            dispersalPanRuntime.targetTarget.copy(sunAnchor.position);
+            // After a hammer strike, keep watching the impact instead.
+            dispersalPanRuntime.targetTarget.copy(
+              journey.dispersalImpactPoint ?? sunAnchor.position,
+            );
           } else {
             camera.getWorldDirection(tmpTarget);
             dispersalPanRuntime.targetTarget
@@ -4060,7 +4067,7 @@ export default function ResumeSpace3D({
         }
       }
       const explosionActive = shatterActive || dispersingActive;
-      const panelMaterial = panelMesh.material as THREE.MeshPhysicalMaterial;
+      const panelMaterial = panelMesh.material as THREE.MeshBasicMaterial;
       const shatterTravelT = shatterActive ? Math.pow(shatterT, 0.82) : 0;
       const shatterFadeT = shatterActive
         ? THREE.MathUtils.clamp((shatterT - 0.66) / 0.34, 0, 1)
@@ -4074,11 +4081,13 @@ export default function ResumeSpace3D({
       panelMaterial.opacity = explosionActive
         ? THREE.MathUtils.lerp(0.84, 0.0, explosionFadeT)
         : THREE.MathUtils.lerp(0.36, 0.74, crystalProgress);
-      panelMaterial.emissiveIntensity = THREE.MathUtils.lerp(
+      // Same glow ramp the emissive intensity used to follow, as a brightness.
+      const panelGlow = THREE.MathUtils.lerp(
         explosionActive ? 0.7 : 0.26,
         explosionActive ? 1.45 : 0.84,
         explosionActive ? Math.min(1, explosionTravelT * 1.1) : crystalProgress,
       );
+      panelMaterial.color.setScalar(0.55 + panelGlow * 0.45);
 
       const staticPose = !explosionActive && crystalProgress >= 1;
       for (
@@ -14977,6 +14986,19 @@ export default function ResumeSpace3D({
     if (aboutParticleSwarmRef.current) {
       aboutParticleSwarmRef.current.dispose();
     }
+    if (aboutMjolnirRef.current) {
+      aboutMjolnirRef.current.dispose();
+    }
+    const mjolnir = new MjolnirRider();
+    mjolnir.addTo(scene);
+    aboutMjolnirRef.current = mjolnir;
+    void mjolnir
+      .load(new GLTFLoader(), MJOLNIR_MODEL_PATH)
+      .then(() => mjolnir.warmUp(() => sceneRef.current.camera))
+      .catch((err) => {
+        console.warn("[About] Mjolnir failed to load; ride ends without it", err);
+      });
+
     const swarm = createAboutParticleSwarm(ABOUT_PARTICLE_SWARM_WORLD_ANCHOR);
     scene.add(swarm.group);
     aboutParticleSwarmRef.current = swarm;
@@ -15018,6 +15040,9 @@ export default function ResumeSpace3D({
       },
       onPathFormingStart() {
         setAboutSkipCinematicPromptVisible(true);
+      },
+      getRideCompanion() {
+        return aboutMjolnirRef.current;
       },
       disableControls() {
         const ctrl = sceneRef.current.controls;
@@ -15086,6 +15111,9 @@ export default function ResumeSpace3D({
         journey: () => aboutJourneyRef.current,
         swarm: () => aboutParticleSwarmRef.current,
         hydrate: () => aboutHydrateSwarmRef.current,
+        mjolnir: () => aboutMjolnirRef.current,
+        camera: () => sceneRef.current.camera,
+        renderer: () => rendererRef.current,
       };
     }
 
@@ -16941,6 +16969,7 @@ export default function ResumeSpace3D({
             );
             headlight.position.set(x, 0, 7);
             const headlightTarget = new THREE.Object3D();
+            headlightTarget.userData.isShipLightTarget = true;
             headlightTarget.position.set(x, -0.5, 30);
             spaceship.add(headlight, headlightTarget);
             headlight.target = headlightTarget;
@@ -17001,6 +17030,31 @@ export default function ResumeSpace3D({
         });
 
         spaceshipInteriorLightsRef.current = interiorLights;
+
+        // The ship's lights live in their own always-visible rig that copies
+        // the ship's transform every render. Many flows hide the ship; when
+        // the lights were children, hiding it removed ~16 lights from the
+        // scene and every lit shader recompiled (measured 0.3–1.8 s freezes
+        // each time the ship hid or reappeared, e.g. the About ride).
+        const shipLightRig = new THREE.Group();
+        shipLightRig.name = "ShipLightRig";
+        spaceship.children
+          .filter(
+            (child) =>
+              (child as THREE.Light).isLight || child.userData.isShipLightTarget,
+          )
+          .forEach((child) => shipLightRig.add(child));
+        scene.add(shipLightRig);
+        const previousSceneBeforeRender = scene.onBeforeRender;
+        scene.onBeforeRender = function (...args) {
+          previousSceneBeforeRender.apply(this, args);
+          spaceship.matrixWorld.decompose(
+            shipLightRig.position,
+            shipLightRig.quaternion,
+            shipLightRig.scale,
+          );
+          shipLightRig.updateMatrixWorld(true);
+        };
 
         scene.add(spaceship);
         spaceshipRef.current = spaceship;
@@ -19127,6 +19181,10 @@ export default function ResumeSpace3D({
       if (aboutJourneyRef.current) {
         aboutJourneyRef.current.dispose();
         aboutJourneyRef.current = null;
+      }
+      if (aboutMjolnirRef.current) {
+        aboutMjolnirRef.current.dispose();
+        aboutMjolnirRef.current = null;
       }
       aboutJourneyPendingEntryRef.current = false;
       aboutMemorySquareWorldAnchorRef.current = null;

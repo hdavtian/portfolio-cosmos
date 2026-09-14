@@ -153,6 +153,17 @@ export interface AboutJourneyCallbacks {
   onPathDispersalComplete(): void;
   /** Any non-IDLE exit: restore camera limits and drop the hydrate swarm if still present. */
   onAboutJourneyExit(): void;
+  /** Optional object that rides the rail ahead of the rider and ends the ride. */
+  getRideCompanion?(): RideCompanion | null;
+}
+
+export interface RideCompanion {
+  readonly position: THREE.Vector3;
+  startRide(path: CosmicPathCurve, riderT: number, sign: 1 | -1): void;
+  setRider(riderT: number, sign: 1 | -1): void;
+  /** Returns false if it can't strike, in which case the ride ends normally. */
+  startStrike(onImpact: (impactT: number, point: THREE.Vector3) => void): boolean;
+  hide(): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +207,10 @@ export class AboutJourneyController {
   private _cosmicPath: CosmicPathCurve | null = null;
   private _pathFormStartedAt = 0;
   private _dispersalOriginT = 0;
+  private _dispersalOriginOverride: number | null = null;
+  private _dispersalImpactPoint = new THREE.Vector3();
+  private _hasDispersalImpactPoint = false;
+  private _finaleActive = false;
 
   // Reusable temp vectors
   private readonly _tmpCam = new THREE.Vector3();
@@ -303,6 +318,11 @@ export class AboutJourneyController {
   /** Where along the route (0..1) the rider was when the path burst. */
   get dispersalOriginT(): number {
     return this._dispersalOriginT;
+  }
+
+  /** Where the ride companion struck the rail, if the ride ended that way. */
+  get dispersalImpactPoint(): THREE.Vector3 | null {
+    return this._hasDispersalImpactPoint ? this._dispersalImpactPoint : null;
   }
 
   get pathCrystallizationActive(): boolean {
@@ -593,6 +613,8 @@ export class AboutJourneyController {
     }
     this._cosmicPath = buildCosmicRoute({ origin: swarmPos, ...routeConfig });
     this._dispersalOriginT = 0;
+    this._dispersalOriginOverride = null;
+    this._hasDispersalImpactPoint = false;
     this._pathFormStartedAt = performance.now();
     const { timing } = this._cosmicPath;
     this._cb.vlog(
@@ -723,6 +745,9 @@ export class AboutJourneyController {
 
     this._clearPathReadyTravelTimeout();
     this._pathCrystallizationActive = false;
+    // Retargeting away mid-ride: no hammer finale.
+    this._cb.getRideCompanion?.()?.hide();
+    this._finaleActive = false;
 
     if (this._phase === AboutJourneyPhase.PATH_TRAVEL) {
       this._travelRunning = false;
@@ -889,6 +914,20 @@ export class AboutJourneyController {
   }
 
   private _runPathTravelTick(): void {
+    if (this._cosmicPath) {
+      this._cb
+        .getRideCompanion?.()
+        ?.startRide(
+          this._cosmicPath,
+          THREE.MathUtils.euclideanModulo(
+            this._travelStartT +
+              this._travelDistanceTraveled / Math.max(1, this._travelPathLength),
+            1,
+          ),
+          1,
+        );
+    }
+
     // Let the rider look around while the tram remains rail-locked.
     this._cb.enableControls();
 
@@ -1027,6 +1066,7 @@ export class AboutJourneyController {
       this._tmpTravelPos.copy(path.getPointAt(railT));
       this._tmpTravelTangent.copy(path.getTangentAt(railT)).normalize();
       const travelSign = this._travelSpeedScale >= 0 ? 1 : -1;
+      this._cb.getRideCompanion?.()?.setRider(railT, travelSign);
       this._tmpTravelForward
         .copy(this._tmpTravelTangent)
         .multiplyScalar(travelSign)
@@ -1109,13 +1149,55 @@ export class AboutJourneyController {
       const minElapsed = elapsedMs >= PATH_TRAVEL_MIN_DURATION_MS;
 
       if (loopCompleted && minElapsed) {
-        this._completePathTravelRun();
+        // The companion smashes the rail; the shatter starts where it lands.
+        const companion = this._cb.getRideCompanion?.();
+        const striking = companion?.startStrike((impactT, point) => {
+          this._finaleActive = false;
+          this._dispersalOriginOverride = impactT;
+          this._dispersalImpactPoint.copy(point);
+          this._hasDispersalImpactPoint = true;
+          this._completePathTravelRun();
+        });
+        if (companion && striking) {
+          this._runFinaleCamera(companion);
+        } else {
+          this._completePathTravelRun();
+        }
         return;
       }
 
       this._rafId = requestAnimationFrame(tick);
     };
 
+    this._cancelRaf();
+    this._rafId = requestAnimationFrame(tick);
+  }
+
+  /** Rider stops on the rail and watches the companion climb and dive. */
+  private _runFinaleCamera(companion: RideCompanion): void {
+    this._finaleActive = true;
+    const camPos = this._tmpTravelCamPos.clone();
+    const lookDir = this._tmpTravelUserViewDir.clone();
+    const wantDir = new THREE.Vector3();
+    const look = new THREE.Vector3();
+    let last = performance.now();
+    const tick = () => {
+      if (!this._finaleActive || this._phase !== AboutJourneyPhase.PATH_TRAVEL) {
+        return;
+      }
+      const now = performance.now();
+      const dt = THREE.MathUtils.clamp((now - last) / 1000, 1 / 240, 1 / 30);
+      last = now;
+      wantDir.subVectors(companion.position, camPos);
+      if (wantDir.lengthSq() > 1e-4) {
+        lookDir.lerp(wantDir.normalize(), 1 - Math.exp(-5 * dt)).normalize();
+      }
+      look.copy(camPos).addScaledVector(lookDir, PATH_TRAVEL_CAM_LOOK_AHEAD);
+      this._cb
+        .getControls()
+        ?.setLookAt(camPos.x, camPos.y, camPos.z, look.x, look.y, look.z, false);
+      this._rafId = requestAnimationFrame(tick);
+    };
     this._cancelRaf();
     this._rafId = requestAnimationFrame(tick);
   }
@@ -1145,13 +1227,16 @@ export class AboutJourneyController {
   private _beginPathDispersing(reason: string): void {
     // The burst radiates from wherever the rider is on the rail.
     this._dispersalOriginT =
-      this._travelPathLength > 1
+      this._dispersalOriginOverride ??
+      (this._travelPathLength > 1
         ? THREE.MathUtils.euclideanModulo(
             this._travelStartT +
               this._travelDistanceTraveled / this._travelPathLength,
             1,
           )
-        : 0;
+        : 0);
+    this._dispersalOriginOverride = null;
+    this._finaleActive = false;
     this._clearPathReadyTravelTimeout();
     this._travelRunning = false;
     this._travelVehicle = null;
@@ -1196,6 +1281,10 @@ export class AboutJourneyController {
 
     const prevPhase = this._phase;
     this._cb.onAboutJourneyExit();
+    this._cb.getRideCompanion?.()?.hide();
+    this._finaleActive = false;
+    this._hasDispersalImpactPoint = false;
+    this._dispersalOriginOverride = null;
     this._clearPathReadyTravelTimeout();
     this._travelRunning = false;
     this._travelVehicle = null;
