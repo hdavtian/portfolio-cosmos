@@ -142,6 +142,96 @@ const trailFragmentShader = /* glsl */ `
   }
 `;
 
+// Bow-shock haze: a thin paraboloid shell just ahead of the head, opening back
+// around it like an umbrella. It only glows at grazing angles (rim), so the
+// part in front of the head stays clear and the head keeps its real colors.
+const HAZE_APEX = MODEL_SIZE * 0.64;
+const HAZE_LENGTH = MODEL_SIZE * 0.55;
+const HAZE_RADIUS = MODEL_SIZE * 0.5;
+const HAZE_COLOR = new THREE.Color(0.86, 0.84, 1);
+
+const hazeVertexShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  uniform float uTime;
+  uniform float uWobble;
+  varying vec3 vNormalView;
+  varying vec3 vViewPosition;
+  varying vec2 vUv;
+  varying float vAngle;
+  void main() {
+    vUv = uv;
+    vAngle = atan(position.y, position.x);
+    // Ripple the shell so it never reads as a clean geometric dome.
+    float ripple =
+      sin(position.z * 0.35 + uTime * 3.1 + vAngle * 3.0) * 0.6 +
+      sin(position.z * 0.9 - uTime * 2.3 + vAngle * 5.0) * 0.4;
+    vec3 displaced = position + normal * ripple * uWobble;
+    vNormalView = normalMatrix * normal;
+    vec4 mvPosition = modelViewMatrix * vec4(displaced, 1.0);
+    vViewPosition = mvPosition.xyz;
+    gl_Position = projectionMatrix * mvPosition;
+    #include <logdepthbuf_vertex>
+  }
+`;
+
+const hazeFragmentShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  uniform float uTime;
+  uniform float uStrength;
+  uniform vec3 uColor;
+  varying vec3 vNormalView;
+  varying vec3 vViewPosition;
+  varying vec2 vUv;
+  varying float vAngle;
+
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+      mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
+      f.y
+    );
+  }
+  float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    for (int k = 0; k < 3; k++) {
+      v += a * noise(p);
+      p *= 2.07;
+      a *= 0.5;
+    }
+    return v;
+  }
+
+  void main() {
+    #include <logdepthbuf_fragment>
+    vec3 viewDir = normalize(-vViewPosition);
+    float edge = 1.0 - abs(dot(normalize(vNormalView), viewDir));
+    // Glow toward grazing angles but fade out right at the silhouette, so
+    // there's no crisp outline.
+    float rim = pow(edge, 1.6) * (1.0 - smoothstep(0.78, 1.0, edge));
+    float along = vUv.y;               // 0 at the apex, 1 at the open end
+    // Seamless around the shell (angle as a circle), drifting backward.
+    vec2 flow = vec2(
+      cos(vAngle) * 2.5 + along * 2.0 - uTime * 2.4,
+      sin(vAngle) * 2.5 + along * 1.3 + uTime * 0.4
+    );
+    float dust = smoothstep(0.45, 0.9, fbm(flow));
+    float fade =
+      smoothstep(0.05, 0.35, along) * (1.0 - smoothstep(0.5, 1.0, along));
+    float alpha = rim * dust * fade * uStrength * 1.1;
+    gl_FragColor = vec4(uColor * alpha, 1.0);
+    #include <colorspace_fragment>
+  }
+`;
+
 type Mode = "hidden" | "warm" | "arrive" | "hover" | "dock" | "ride" | "strike" | "recoil";
 
 type GltfLoaderLike = {
@@ -181,6 +271,9 @@ export class MjolnirRider {
   private readonly model = new THREE.Group();
   private readonly glow: THREE.Sprite;
   private readonly pickSphere: THREE.Mesh;
+  private readonly haze: THREE.Mesh;
+  private readonly hazeMaterial: THREE.ShaderMaterial;
+  private hazeLevel = 0;
   private readonly trail: THREE.Mesh;
   private readonly trailMaterial: THREE.ShaderMaterial;
   private readonly trailPositions: Float32Array;
@@ -240,6 +333,37 @@ export class MjolnirRider {
     );
     this.glow.scale.setScalar(45);
     this.root.add(this.glow);
+
+    // Paraboloid shell: apex ahead of the head (+Z), opening back around it.
+    const hazeProfile: THREE.Vector2[] = [];
+    const hazeSteps = 16;
+    for (let i = 0; i <= hazeSteps; i++) {
+      const s = i / hazeSteps;
+      hazeProfile.push(new THREE.Vector2(HAZE_RADIUS * Math.sqrt(s), -s * HAZE_LENGTH));
+    }
+    const hazeGeometry = new THREE.LatheGeometry(hazeProfile, 40);
+    hazeGeometry.rotateX(Math.PI / 2);
+    hazeGeometry.translate(0, 0, HAZE_APEX);
+    this.hazeMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uStrength: { value: 0 },
+        uColor: { value: HAZE_COLOR.clone() },
+        uWobble: { value: HAZE_RADIUS * 0.12 },
+      },
+      vertexShader: hazeVertexShader,
+      fragmentShader: hazeFragmentShader,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+    this.haze = new THREE.Mesh(hazeGeometry, this.hazeMaterial);
+    this.haze.name = "AboutMjolnirHaze";
+    this.haze.frustumCulled = false;
+    this.haze.visible = false;
+    this.model.add(this.haze);
 
     // Invisible, generous click target (raycasts ignore visibility).
     this.pickSphere = new THREE.Mesh(
@@ -467,6 +591,7 @@ export class MjolnirRider {
     let modelScale = 1;
     let tumble = 0;
     let trailStrength = 1;
+    let hazeStrength = 0;
     /** "motion": face where it's moving; "rail": face down the rail; "pose": use poseQuat. */
     let facing: "motion" | "rail" | "pose" = "motion";
     let banking = true;
@@ -553,6 +678,8 @@ export class MjolnirRider {
         .slerp(this.rideQuat, THREE.MathUtils.smoothstep(u, DOCK_TILT_FROM, 1));
       banking = false;
       trailStrength = 0;
+      // The hover glow fades out as the rider takes hold.
+      glowOpacity = 0.3 * (1 - THREE.MathUtils.smoothstep(u, 0, 0.5));
       if (u >= 1) {
         this.mode = "ride";
         this.time = 0;
@@ -570,6 +697,10 @@ export class MjolnirRider {
       this.poseQuat.copy(this.rideQuat);
       banking = false;
       trailStrength = RIDE_TRAIL_STRENGTH;
+      // No halo while pulling: the sprite sits at the model's center, inside
+      // the head, and tinted the head blue while the shaft stayed natural.
+      glowOpacity = 0;
+      hazeStrength = 1;
     } else if (this.mode === "strike") {
       const u = THREE.MathUtils.clamp(this.time / STRIKE_SECONDS, 0, 1);
       distance = THREE.MathUtils.lerp(
@@ -587,6 +718,7 @@ export class MjolnirRider {
       glowOpacity = 0.3 + 0.5 * u;
       glowScale = 45 + 70 * u;
       trailStrength = 1.3;
+      hazeStrength = 1 - THREE.MathUtils.smoothstep(u, 0.5, 0.9);
       if (u >= 1) {
         this.placeOnRail(path, length, STRIKE_DISTANCE, 0);
         const impactT = THREE.MathUtils.euclideanModulo(
@@ -663,6 +795,11 @@ export class MjolnirRider {
     const glowMaterial = this.glow.material as THREE.SpriteMaterial;
     glowMaterial.opacity = THREE.MathUtils.clamp(glowOpacity, 0, 1);
     this.glow.scale.setScalar(glowScale);
+    // Eases in as it starts pulling, out as it lets go.
+    this.hazeLevel += (hazeStrength - this.hazeLevel) * (1 - Math.exp(-4 * dt));
+    this.hazeMaterial.uniforms.uStrength.value = this.hazeLevel;
+    this.hazeMaterial.uniforms.uTime.value = elapsed;
+    this.haze.visible = this.hazeLevel > 0.01;
     this.root.visible = true;
 
     this.trailMaterial.uniforms.uTime.value = elapsed;
@@ -712,6 +849,7 @@ export class MjolnirRider {
       this.root.position.copy(camera.position).addScaledVector(this.tmp, 60);
       this.model.scale.setScalar(0.02);
       this.glow.scale.setScalar(0.5);
+      this.haze.visible = true;
       this.root.visible = true;
       for (const point of this.trailHistory) point.copy(this.root.position);
       this.updateTrail(camera.position, 0.01);
@@ -722,6 +860,7 @@ export class MjolnirRider {
     this.warmCamera = null;
     this.model.scale.setScalar(1);
     this.glow.scale.setScalar(45);
+    this.haze.visible = false;
     this.root.visible = false;
     this.trail.visible = false;
   }

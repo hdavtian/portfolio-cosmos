@@ -15340,14 +15340,9 @@ export default function ResumeSpace3D({
           ORBITAL_PORTFOLIO_WORLD_ANCHOR;
         const cores = orbitalPortfolioCoresRef.current ?? [];
         const portfolioColumns = Math.max(1, Math.ceil(Math.sqrt(cores.length)));
+        // Ride order: the sun-and-planets (Experience) system, Skills,
+        // Portfolio, Career Gallery, then back to About.
         const stops: RouteStop[] = [
-          {
-            // Slow while inside the lattice; the view turns to the crystals.
-            name: "Skills",
-            center: skillsCenter.clone(),
-            passRadius: 520,
-            slowOuter: 650,
-          },
           {
             // Straight over the planet, above the moons' plane, so the whole
             // system sweeps past beneath the rider.
@@ -15358,6 +15353,13 @@ export default function ResumeSpace3D({
               EXP_MOON_ORBIT_STEP * moonBodies.length +
               600,
             passOffset: new THREE.Vector3(0, 480, 0),
+          },
+          {
+            // Slow while inside the lattice; the view turns to the crystals.
+            name: "Skills",
+            center: skillsCenter.clone(),
+            passRadius: 520,
+            slowOuter: 650,
           },
           {
             // Level pass just above the cluster grid: clusters slide by

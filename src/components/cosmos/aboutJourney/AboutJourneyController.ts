@@ -124,12 +124,22 @@ const FLY_BY_MIN_ROUTE_SPEED = 1.3;
 const FLY_BY_CRUISE_HOLD_S = 1;
 /** Rail distance that must remain so it doesn't run into the finale. */
 const FLY_BY_MIN_REMAINING = 12000;
-/** ~14-unit model × FALCON_SCALE 0.05 × this ≈ 77 units long. */
-const FLY_BY_SHIP_SCALE = 110;
-/** Alongside spot relative to the rider: ahead on the rail, off to the side. */
-const FLY_BY_ALONG = 150;
-const FLY_BY_LATERAL = 95;
-const FLY_BY_HEIGHT = 5;
+/** ~14-unit model × FALCON_SCALE 0.05 × this ≈ 230 units long, dwarfing Mjolnir. */
+const FLY_BY_SHIP_SCALE = 330;
+/**
+ * Alongside spot relative to the rider: ahead on the rail and well off to the
+ * side, so the big ship stays fully in view (~34° off center) without
+ * crowding the rail or Mjolnir.
+ */
+const FLY_BY_ALONG = 380;
+const FLY_BY_LATERAL = 260;
+const FLY_BY_HEIGHT = 20;
+/** Peak of the single up-and-down arc while flying alongside. */
+const FLY_BY_ARC_HEIGHT = 70;
+/** Where the approach starts (behind the rider) and how far the punch covers. */
+const FLY_BY_START_ALONG = -1400;
+const FLY_BY_START_HEIGHT = -120;
+const FLY_BY_PUNCH_DISTANCE = 3200;
 const FLY_BY_APPROACH_S = 3;
 const FLY_BY_ALONGSIDE_S = 4.5;
 const FLY_BY_PUNCH_S = 1.5;
@@ -1322,26 +1332,37 @@ export class AboutJourneyController {
     let lateral = FLY_BY_LATERAL;
     let height = FLY_BY_HEIGHT;
     if (t < approachEnd) {
-      // Comes up from behind and settles alongside.
+      // Blows in from behind and settles alongside, easing to our speed.
       const u = t / FLY_BY_APPROACH_S;
-      along = THREE.MathUtils.lerp(-700, FLY_BY_ALONG, 1 - Math.pow(1 - u, 3));
-      height = THREE.MathUtils.lerp(-60, FLY_BY_HEIGHT, THREE.MathUtils.smoothstep(u, 0, 1));
+      along = THREE.MathUtils.lerp(
+        FLY_BY_START_ALONG,
+        FLY_BY_ALONG,
+        1 - Math.pow(1 - u, 3),
+      );
+      height = THREE.MathUtils.lerp(
+        FLY_BY_START_HEIGHT,
+        FLY_BY_HEIGHT,
+        THREE.MathUtils.smoothstep(u, 0, 1),
+      );
     } else if (t < alongsideEnd) {
-      // Matches speed with a gentle drift.
-      const s = t - approachEnd;
-      along += Math.sin(s * 1.1) * 12;
-      lateral += Math.sin(s * 0.8) * 10;
-      height += Math.sin(s * 1.6) * 5;
+      // Locked alongside (no fore/aft drift, which read as falling behind),
+      // rising in one gentle arc and settling back, like real flight; the
+      // nose follows the motion so it pitches into the climb and out of it.
+      height +=
+        FLY_BY_ARC_HEIGHT *
+        Math.sin((Math.PI * (t - approachEnd)) / FLY_BY_ALONGSIDE_S);
     } else if (t < punchEnd) {
       // Punches it.
       const u = (t - alongsideEnd) / FLY_BY_PUNCH_S;
-      along += 1500 * u * u * u;
+      along += FLY_BY_PUNCH_DISTANCE * u * u * u;
     } else if (t < veerEnd) {
-      // Races ahead, peeling off and climbing away.
-      const u = (t - punchEnd) / FLY_BY_VEER_S;
-      along += 1500 + 2600 * u;
-      lateral += 1500 * u * u;
-      height += 600 * u * u;
+      // Keeps its punch speed (never slows) while peeling off and climbing.
+      const punchExitSpeed = (3 * FLY_BY_PUNCH_DISTANCE) / FLY_BY_PUNCH_S;
+      const s = t - punchEnd;
+      const u = s / FLY_BY_VEER_S;
+      along += FLY_BY_PUNCH_DISTANCE + punchExitSpeed * s;
+      lateral += 2600 * u * u;
+      height += 1000 * u * u;
     } else {
       this._endFlyBy();
       return;

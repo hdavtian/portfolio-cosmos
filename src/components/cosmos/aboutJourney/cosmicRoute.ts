@@ -50,9 +50,20 @@ export type CosmicPathCurve = THREE.CatmullRomCurve3 & { timing: RouteTiming };
 
 /** Head speed the original loop was tuned for. */
 export const LEGACY_PATH_HEAD_SPEED = 4725;
+/** The path forms this many times faster than the legacy loop did. */
+const PATH_FORM_SPEEDUP = 3;
 
-const WANDER_LATERAL_FRACTION = 0.18;
-const WANDER_VERTICAL_FRACTION = 0.08;
+// Small bends only: the route should read as long lines and gentle curves.
+const WANDER_LATERAL_FRACTION = 0.06;
+const WANDER_VERTICAL_FRACTION = 0.03;
+/** Passes relaxing bend points toward their neighbors (removes zig-zags). */
+const SMOOTH_ITERATIONS = 6;
+/** Corners sharper than this (radians) sweep through the stop on an arc. */
+const STRAIGHT_PASS_MAX_TURN = 0.6;
+/** Arc length the turn is spread over at a sharp stop (radius = this / angle). */
+const TURN_ARC_LENGTH = 5000;
+/** Angular spacing of arc waypoints (radians). */
+const TURN_ARC_STEP = 0.18;
 const WANDER_VERTICAL_MAX = 2200;
 /** Keeps passes close to level so they read as straight lines. */
 const PASS_VERTICAL_DAMPING = 0.3;
@@ -81,13 +92,26 @@ const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 const randRange = (min: number, max: number) => min + Math.random() * (max - min);
 
-const shuffle = <T>(items: T[]): T[] => {
-  const out = items.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
+/**
+ * Relaxes free bend points toward the midpoint of their neighbors so legs
+ * straighten into long lines and turns spread into gentle curves. The origin
+ * and the stops' straight passes (`locked`) don't move.
+ */
+const smoothPolyline = (points: THREE.Vector3[], locked: Set<THREE.Vector3>) => {
+  const relaxed = points.map((point) => point.clone());
+  const midpoint = new THREE.Vector3();
+  for (let k = 0; k < SMOOTH_ITERATIONS; k++) {
+    for (let i = 1; i < points.length; i++) {
+      if (locked.has(points[i])) continue;
+      const prev = points[i - 1];
+      const next = points[(i + 1) % points.length];
+      midpoint.addVectors(prev, next).multiplyScalar(0.5);
+      relaxed[i].copy(points[i]).lerp(midpoint, 0.5);
+    }
+    for (let i = 1; i < points.length; i++) {
+      if (!locked.has(points[i])) points[i].copy(relaxed[i]);
+    }
   }
-  return out;
 };
 
 const horizontalPerpendicular = (dir: THREE.Vector3): THREE.Vector3 => {
@@ -119,22 +143,57 @@ const wanderPoint = (from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3 => {
 const passCenter = (stop: RouteStop): THREE.Vector3 =>
   stop.center.clone().add(stop.passOffset ?? new THREE.Vector3());
 
-/** Five collinear points so the spline runs dead straight through the stop. */
+/**
+ * The pass through a stop. Gentle corners get five collinear points so the
+ * spline runs dead straight through it. Sharp corners (e.g. the near U-turn at
+ * Skills) sweep through the stop on a wide circular arc tangent to both legs,
+ * instead of squeezing the whole turn into the two ends of a short straight.
+ */
 const stopWaypoints = (
   stop: RouteStop,
   previous: THREE.Vector3,
   next: THREE.Vector3,
 ): THREE.Vector3[] => {
   const center = passCenter(stop);
-  const inDir = new THREE.Vector3().subVectors(center, previous).normalize();
-  const outDir = new THREE.Vector3().subVectors(next, center).normalize();
-  const passDir = inDir.clone().add(outDir);
-  if (passDir.lengthSq() < 1e-4) passDir.copy(inDir);
-  passDir.y *= PASS_VERTICAL_DAMPING;
-  passDir.normalize();
-  return [-1, -0.5, 0, 0.5, 1].map((f) =>
-    center.clone().addScaledVector(passDir, f * stop.passRadius),
+  const inDir = new THREE.Vector3().subVectors(center, previous);
+  inDir.y *= PASS_VERTICAL_DAMPING;
+  inDir.normalize();
+  const outDir = new THREE.Vector3().subVectors(next, center);
+  outDir.y *= PASS_VERTICAL_DAMPING;
+  outDir.normalize();
+  const turn = inDir.angleTo(outDir);
+
+  if (turn < STRAIGHT_PASS_MAX_TURN) {
+    const passDir = inDir.clone().add(outDir);
+    if (passDir.lengthSq() < 1e-4) passDir.copy(inDir);
+    passDir.normalize();
+    return [-1, -0.5, 0, 0.5, 1].map((f) =>
+      center.clone().addScaledVector(passDir, f * stop.passRadius),
+    );
+  }
+
+  const axis = new THREE.Vector3().crossVectors(inDir, outDir);
+  if (axis.lengthSq() < 1e-6) axis.set(0, 1, 0);
+  axis.normalize();
+  const radius = THREE.MathUtils.clamp(
+    TURN_ARC_LENGTH / turn,
+    stop.passRadius,
+    stop.passRadius * 3,
   );
+  // Circle center lies on the inside of the turn; the arc's midpoint is the stop.
+  const inward = new THREE.Vector3().subVectors(outDir, inDir);
+  if (inward.lengthSq() < 1e-6) inward.crossVectors(axis, inDir);
+  inward.normalize();
+  const arcCenter = center.clone().addScaledVector(inward, radius);
+  const spoke = center.clone().sub(arcCenter);
+  const steps = Math.max(4, Math.ceil(turn / TURN_ARC_STEP));
+  const rotation = new THREE.Quaternion();
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const phi = -turn / 2 + (turn * i) / steps;
+    return arcCenter
+      .clone()
+      .add(spoke.clone().applyQuaternion(rotation.setFromAxisAngle(axis, phi)));
+  });
 };
 
 /** Point on `obstacle`'s keep-out shell, pushed out along `from - center`. */
@@ -326,7 +385,8 @@ export const buildCosmicRoute = ({
   obstacles: RouteObstacle[];
   referenceLength: number;
 }): CosmicPathCurve => {
-  const order = shuffle(stops);
+  // Fixed narrative order, as given by the caller.
+  const order = stops;
   const points: THREE.Vector3[] = [origin.clone()];
   const locked = new Set<THREE.Vector3>();
   let previous = origin.clone();
@@ -339,11 +399,12 @@ export const buildCosmicRoute = ({
     previous = waypoints[waypoints.length - 1];
   });
   points.push(wanderPoint(previous, origin));
+  smoothPolyline(points, locked);
 
   const curve = resolveObstacles(points, locked, obstacles) as CosmicPathCurve;
   const length = curve.getLength();
   const reference = Math.max(1, referenceLength);
-  const formSeconds = reference / LEGACY_PATH_HEAD_SPEED;
+  const formSeconds = reference / LEGACY_PATH_HEAD_SPEED / PATH_FORM_SPEEDUP;
   curve.timing = {
     length,
     referenceLength: reference,
