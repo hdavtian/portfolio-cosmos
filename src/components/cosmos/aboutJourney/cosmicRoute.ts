@@ -58,6 +58,13 @@ const WANDER_LATERAL_FRACTION = 0.06;
 const WANDER_VERTICAL_FRACTION = 0.03;
 /** Passes relaxing bend points toward their neighbors (removes zig-zags). */
 const SMOOTH_ITERATIONS = 6;
+/** Legs longer than this get gentle vertical arcs (a rise or a dip). */
+const VERTICAL_ARC_MIN_LEG = 4000;
+/** Roughly one inserted arc point per this many units of leg. */
+const VERTICAL_ARC_SPACING = 6000;
+/** Arc height as a share of leg length, capped. */
+const VERTICAL_ARC_FRACTION = 0.05;
+const VERTICAL_ARC_MAX = 1400;
 /** Corners sharper than this (radians) sweep through the stop on an arc. */
 const STRAIGHT_PASS_MAX_TURN = 0.6;
 /** Arc length the turn is spread over at a sharp stop (radius = this / angle). */
@@ -194,6 +201,35 @@ const stopWaypoints = (
       .clone()
       .add(spoke.clone().applyQuaternion(rotation.setFromAxisAngle(axis, phi)));
   });
+};
+
+/**
+ * Gives each long leg between stops one gentle rise or dip (a half sine wave),
+ * so the glass path curves up and down instead of running dead flat. Stop
+ * passes (`locked` pairs) are left straight.
+ */
+const addVerticalArcs = (points: THREE.Vector3[], locked: Set<THREE.Vector3>) => {
+  const result: THREE.Vector3[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    result.push(a);
+    if (locked.has(a) && locked.has(b)) continue;
+    const legLength = a.distanceTo(b);
+    if (legLength < VERTICAL_ARC_MIN_LEG) continue;
+    const inserts = Math.max(1, Math.floor(legLength / VERTICAL_ARC_SPACING));
+    const height =
+      Math.min(legLength * VERTICAL_ARC_FRACTION, VERTICAL_ARC_MAX) *
+      (Math.random() < 0.5 ? -1 : 1) *
+      randRange(0.6, 1);
+    for (let j = 1; j <= inserts; j++) {
+      const t = j / (inserts + 1);
+      const point = a.clone().lerp(b, t);
+      point.y += height * Math.sin(Math.PI * t);
+      result.push(point);
+    }
+  }
+  points.splice(0, points.length, ...result);
 };
 
 /** Point on `obstacle`'s keep-out shell, pushed out along `from - center`. */
@@ -400,6 +436,7 @@ export const buildCosmicRoute = ({
   });
   points.push(wanderPoint(previous, origin));
   smoothPolyline(points, locked);
+  addVerticalArcs(points, locked);
 
   const curve = resolveObstacles(points, locked, obstacles) as CosmicPathCurve;
   const length = curve.getLength();

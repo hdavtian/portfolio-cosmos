@@ -418,11 +418,11 @@ const FALCON_NAV_SFX_PATHS = {
 } as const;
 type FalconNavCueKind = keyof typeof FALCON_NAV_SFX_PATHS;
 const FALCON_MOON_TRAVEL_DEFAULT_VOLUME = 0.68;
-const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(
-  1158.5,
-  157.5,
-  14760.375,
-);
+// Destinations are spread far apart and at different heights (Y is up) so
+// travel between them is long and climbs and dives. Experience stays on its
+// orbit near the sun (the intro is framed on it); About is the farthest out
+// and lowest. All stay within ~24k of the sun (skybox radius 30k).
+const ORBITAL_PORTFOLIO_WORLD_ANCHOR = new THREE.Vector3(-2500, -4200, 20000);
 const ORBITAL_PORTFOLIO_NEAR_ANCHOR_DIST = 620;
 const ORBITAL_PORTFOLIO_NAV_STANDOFF_DIST = 560;
 const ORBITAL_PORTFOLIO_NAV_VERTICAL_OFFSET = 90;
@@ -430,14 +430,13 @@ const ORBITAL_PORTFOLIO_CORE_LABEL_MAX_DISTANCE = 7600;
 const ENABLE_POST_LOAD_COSMOS_MICRO_INTRO = false;
 const CAMERA_TRACE_ENABLED = true;
 const SKILLS_LATTICE_NAV_ID = "skills-lattice";
-// Recenter deep-space destinations so the universe extent remains sun-centered.
-const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(13600, 220, -12000);
-// Career Gallery: hologram shell of portfolio screenshots. Placed out in the
-// open (-x, +z) quadrant away from other destinations, ~17.5k from the sun
-// (the farthest destination, Skills, is ~18.1k).
+// High above the sun's plane, ~20.7k out.
+const SKILLS_LATTICE_WORLD_ANCHOR = new THREE.Vector3(15000, 4800, -13500);
+// Career Gallery: hologram shell of portfolio screenshots. High up in the open
+// (-x) side of the universe, ~20.3k from the sun.
 const CAREER_GALLERY_NAV_ID = "career-gallery";
 const CAREER_GALLERY_NAV_LABEL = "Career Gallery";
-const CAREER_GALLERY_WORLD_ANCHOR = new THREE.Vector3(-14660, 420, 9550);
+const CAREER_GALLERY_WORLD_ANCHOR = new THREE.Vector3(-19000, 3600, 6000);
 // Twice the Skills shell (396). The interior's density comes from its 320
 // faces (see CareerGallery.ts), not from the radius.
 const CAREER_GALLERY_RADIUS = 792;
@@ -454,11 +453,8 @@ const ABOUT_MEMORY_SQUARE_WORLD_ANCHOR = new THREE.Vector3(-12000, 520, -13200);
 const ABOUT_TRAM_HUD_ENABLED = false;
 /** Gap the About roller coaster keeps from Experience moons' surfaces. */
 const ABOUT_ROUTE_MOON_CLEARANCE = 110;
-const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR = new THREE.Vector3(
-  13723.38,
-  157.5,
-  5556.945,
-);
+// About: the farthest destination from the sun (~23.6k) and well below it.
+const ABOUT_PARTICLE_SWARM_WORLD_ANCHOR = new THREE.Vector3(17500, -6500, 14500);
 const ABOUT_MEMORY_SQUARE_NAV_STANDOFF_DIST = 4200;
 const ABOUT_MEMORY_SQUARE_ENTRY_TRIGGER_DIST = 4550;
 /** Tighter CameraControls distance limits while the about journey allows free look (keeps points visible). */
@@ -15321,12 +15317,14 @@ export default function ResumeSpace3D({
         const idx = Math.floor((mi * moonBodies.length) / legacyPickCount);
         legacyMoons.push(moonBodies[idx].center);
       }
+      // Measured on the original layout's coordinates, so formation and ride
+      // pacing stay the same after destinations were spread farther apart.
       const referenceLength = legacyLoopLength(
-        ABOUT_PARTICLE_SWARM_WORLD_ANCHOR,
+        new THREE.Vector3(13723.38, 157.5, 5556.945),
         [
-          SKILLS_LATTICE_WORLD_ANCHOR,
-          ORBITAL_PORTFOLIO_WORLD_ANCHOR,
-          ABOUT_MEMORY_SQUARE_WORLD_ANCHOR,
+          new THREE.Vector3(13600, 220, -12000),
+          new THREE.Vector3(1158.5, 157.5, 14760.375),
+          new THREE.Vector3(-12000, 520, -13200),
           ...legacyMoons,
         ],
       );
