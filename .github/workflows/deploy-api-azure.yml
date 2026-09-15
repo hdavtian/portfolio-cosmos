@@ -75,13 +75,15 @@ jobs:
             --name "$AZURE_WEBAPP_NAME" \
             --linux-fx-version "NODE|20-lts"
 
+      # `az webapp config set` has no --health-check-path flag; the health
+      # check path is a site config property set via --generic-configurations.
       - name: Configure startup and health check
         run: |
           az webapp config set \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$AZURE_WEBAPP_NAME" \
-            --startup-file "npm start" \
-            --health-check-path "/healthz"
+            --startup-file "node dist/server.js" \
+            --generic-configurations '{"healthCheckPath": "/healthz"}'
 
       - name: Deploy API package
         uses: azure/webapps-deploy@v3
