@@ -37,6 +37,7 @@ import {
   type SphereOccluder,
 } from "./labelVisibility";
 import { StarDestroyerMoments } from "./starDestroyerMoments";
+import { SunEnhancements, type SunOccluder } from "./celestial/SunEnhancements";
 // SD configurator (removable: delete sdConfigurator/ and lines marked "SD configurator")
 import {
   SdFlyoverConfigurator,
@@ -2394,6 +2395,8 @@ export default function ResumeSpace3D({
   const skyfieldMeshRef = useRef<THREE.Mesh | null>(null);
   // Universe backdrop: "lightbox" (photo spheres), "realism" or "vivid" 3D universe.
   const universeBackdropRef = useRef<UniverseBackdrop | null>(null);
+  /** Boiling surface, corona, solar flares and lens flare for the sun. */
+  const sunEnhancementsRef = useRef<SunEnhancements | null>(null);
   const [universeStyle, setUniverseStyle] = useState<UniverseStyle>(() =>
     readStoredUniverseStyle(),
   );
@@ -3022,6 +3025,58 @@ export default function ResumeSpace3D({
       composer.removePass(pass);
       pass.dispose();
     };
+  }, [sceneReady]);
+
+  // Cinematic sun: animate corona/flares and aim the lens flare (fades when a
+  // planet, moon or the Falcon passes in front of the sun).
+  useEffect(() => {
+    if (!sceneReady) return;
+    let raf = 0;
+    let last = performance.now();
+    const occluders: SunOccluder[] = [];
+    const pool: SunOccluder[] = [];
+    const worldScale = new THREE.Vector3();
+    const nextOccluder = () => {
+      let entry = pool[occluders.length];
+      if (!entry) {
+        entry = { center: new THREE.Vector3(), radius: 0 };
+        pool.push(entry);
+      }
+      occluders.push(entry);
+      return entry;
+    };
+    const getOccluders = () => {
+      occluders.length = 0;
+      for (const item of itemsRef.current) {
+        const mesh = item.mesh;
+        if (!mesh?.parent || !mesh.visible || !mesh.geometry) continue;
+        if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+        const entry = nextOccluder();
+        mesh.getWorldPosition(entry.center);
+        mesh.getWorldScale(worldScale);
+        entry.radius =
+          (mesh.geometry.boundingSphere?.radius ?? 0) *
+          Math.max(worldScale.x, worldScale.y, worldScale.z);
+      }
+      const ship = spaceshipRef.current;
+      if (ship?.visible) {
+        const entry = nextOccluder();
+        ship.getWorldPosition(entry.center);
+        entry.radius = 0.5;
+      }
+      return occluders;
+    };
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      const sun = sunEnhancementsRef.current;
+      const camera = sceneRef.current.camera;
+      if (!sun || !camera) return;
+      const dt = Math.max(0, (now - last) / 1000);
+      last = now;
+      sun.update(dt, camera, getOccluders);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [sceneReady]);
 
   // Universe backdrop: switcher (also listed in Console → Tools).
@@ -15513,6 +15568,8 @@ export default function ResumeSpace3D({
     );
     sunMesh.add(outerHaloSprite);
     sceneRef.current.sunGlowMaterial = spriteMaterial;
+    sunEnhancementsRef.current?.dispose();
+    sunEnhancementsRef.current = new SunEnhancements(sunMesh, scene);
 
     // Keep the sun label-free; identity is already shown in the main HUD/nav.
     sunLabelRef.current = null;
@@ -20250,6 +20307,8 @@ export default function ResumeSpace3D({
       skyfieldMeshRef.current = null;
       universeBackdropRef.current?.dispose(); // Universe backdrop
       universeBackdropRef.current = null;
+      sunEnhancementsRef.current?.dispose();
+      sunEnhancementsRef.current = null;
       orbitalPortfolioActiveRef.current = false;
       orbitalPortfolioPlayingRef.current = true;
       aboutMemorySquareRootRef.current = null;
