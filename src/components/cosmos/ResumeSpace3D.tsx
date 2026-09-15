@@ -16138,7 +16138,8 @@ export default function ResumeSpace3D({
         if (v) completeActiveNavigationRef.current?.("about-journey-takeover");
       },
       onPathFormingStart() {
-        setAboutSkipCinematicPromptVisible(true);
+        // The skip-the-particle-path prompt is no longer offered: formation
+        // is fast now, so the cinematic always plays.
       },
       getRideCompanion() {
         return aboutMjolnirRef.current;
