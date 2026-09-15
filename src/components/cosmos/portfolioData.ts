@@ -126,11 +126,6 @@ export type PortfolioCoreBuildResult = {
   cores: PortfolioCoreView[];
 };
 
-export type PortfolioRegistryModel = PortfolioCoreBuildResult & {
-  hallwayEntries: PortfolioEntry[];
-  hallwayIndexById: Map<string, number>;
-};
-
 const extractYouTubeVideoId = (input?: string): string | null => {
   if (!input) return null;
   const trimmed = input.trim();
@@ -460,23 +455,4 @@ export const buildPortfolioCoreViews = (
 export const buildPortfolioRegistryModel = (
   coreSeeds: PortfolioCoreSeed[],
   maxMediaItems = 12,
-): PortfolioRegistryModel => {
-  const { groups, cores } = buildPortfolioCoreViews(coreSeeds, maxMediaItems);
-  const hallwayEntries = groups
-    .map((group) => group.sourceEntry)
-    .filter(
-      (entry): entry is PortfolioEntry =>
-        !!entry && (entry as { published?: boolean }).published !== false,
-    )
-    .map((entry) => ({ ...entry }));
-  const hallwayIndexById = new Map<string, number>();
-  hallwayEntries.forEach((entry, index) => {
-    hallwayIndexById.set(entry.id, index);
-  });
-  return {
-    groups,
-    cores,
-    hallwayEntries,
-    hallwayIndexById,
-  };
-};
+): PortfolioCoreBuildResult => buildPortfolioCoreViews(coreSeeds, maxMediaItems);

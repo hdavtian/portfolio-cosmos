@@ -18,7 +18,6 @@ CameraControls.install({ THREE });
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
 import type { MutableRefObject, RefObject } from "react";
 import type { SceneRef } from "../ResumeSpace3D.types";
 
@@ -92,6 +91,9 @@ export const useThreeScene = (params: {
       globalRenderer ||
       new THREE.WebGLRenderer({ antialias: true, alpha: true, logarithmicDepthBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    // Error checking forces a synchronous wait on every shader link, which
+    // defeats parallel compilation; measured ~120ms per new program.
+    renderer.debug.checkShaderErrors = import.meta.env.DEV;
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.domElement.style.position = "absolute";
     container.appendChild(renderer.domElement);
@@ -149,17 +151,6 @@ export const useThreeScene = (params: {
     const composer = new EffectComposer(renderer);
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
-
-    // Subtle depth-of-field pass for the hallway sequence.
-    // Keep disabled by default; render loop enables it only in showcase mode.
-    const bokehPass = new BokehPass(scene, camera, {
-      focus: 54,
-      aperture: 0.0001,
-      maxblur: 0.0045,
-    });
-    bokehPass.enabled = false;
-    composer.addPass(bokehPass);
-    sceneRef.current.bokehPass = bokehPass;
 
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(container.clientWidth, container.clientHeight),

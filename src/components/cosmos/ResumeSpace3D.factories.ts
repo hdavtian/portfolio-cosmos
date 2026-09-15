@@ -643,45 +643,84 @@ export const createPlanetFactory = (deps: {
         sphereSegments,
         sphereSegments,
       );
-      const atmosphereMaterial = new THREE.ShaderMaterial({
-        uniforms: {
-          rimColor: { value: new THREE.Color(atmosphereOptions?.rimColor ?? 0xb8c8ff) },
-          rimStrength: { value: atmosphereOptions?.rimStrength ?? 0.105 },
-          rimPower: { value: atmosphereOptions?.rimPower ?? 2.25 },
-        },
-        vertexShader: `
-          varying vec3 vNormal;
-          varying vec3 vViewPosition;
-          void main() {
-            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-            vViewPosition = -mvPosition.xyz;
-            vNormal = normalize(normalMatrix * normal);
-            gl_Position = projectionMatrix * mvPosition;
-          }
-        `,
-        fragmentShader: `
-          uniform vec3 rimColor;
-          uniform float rimStrength;
-          uniform float rimPower;
-          varying vec3 vNormal;
-          varying vec3 vViewPosition;
-          void main() {
-            float ndv = max(dot(normalize(vNormal), normalize(vViewPosition)), 0.0);
-            float fresnel = pow(1.0 - ndv, rimPower);
-            float alpha = smoothstep(0.0, 1.0, fresnel) * rimStrength;
-            gl_FragColor = vec4(rimColor, alpha);
-          }
-        `,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        side: THREE.BackSide,
-        depthWrite: false,
-      });
-      const atmosphereShell = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+      // Sun-lit atmosphere (the sun sits at the world origin): the rim glows
+      // on the day side, with a warm tint at the terminator and only a faint
+      // glow on the night side. Two layers share one shader: an outer halo
+      // beyond the limb (BackSide) and a thin haze over the disk near the
+      // edge (FrontSide). Log-depth chunks keep it matched to the scene depth.
+      const makeAtmosphereMaterial = (side: THREE.Side, strengthScale: number) =>
+        new THREE.ShaderMaterial({
+          uniforms: {
+            rimColor: { value: new THREE.Color(atmosphereOptions?.rimColor ?? 0xb8c8ff) },
+            rimStrength: { value: (atmosphereOptions?.rimStrength ?? 0.105) * strengthScale },
+            rimPower: { value: atmosphereOptions?.rimPower ?? 2.25 },
+            isHalo: { value: side === THREE.BackSide ? 1 : 0 },
+          },
+          vertexShader: `
+            #include <common>
+            #include <logdepthbuf_pars_vertex>
+            varying vec3 vNormal;
+            varying vec3 vViewPosition;
+            varying vec3 vWorldNormal;
+            varying vec3 vWorldPosition;
+            void main() {
+              vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+              vWorldPosition = worldPosition.xyz;
+              vWorldNormal = normalize(mat3(modelMatrix) * normal);
+              vec4 mvPosition = viewMatrix * worldPosition;
+              vViewPosition = -mvPosition.xyz;
+              vNormal = normalize(normalMatrix * normal);
+              gl_Position = projectionMatrix * mvPosition;
+              #include <logdepthbuf_vertex>
+            }
+          `,
+          fragmentShader: `
+            #include <common>
+            #include <logdepthbuf_pars_fragment>
+            uniform vec3 rimColor;
+            uniform float rimStrength;
+            uniform float rimPower;
+            uniform float isHalo;
+            varying vec3 vNormal;
+            varying vec3 vViewPosition;
+            varying vec3 vWorldNormal;
+            varying vec3 vWorldPosition;
+            void main() {
+              #include <logdepthbuf_fragment>
+              vec3 viewDir = normalize(vViewPosition);
+              float ndv = abs(dot(normalize(vNormal), viewDir));
+              float fresnel = pow(1.0 - ndv, rimPower);
+              vec3 sunDir = normalize(-vWorldPosition);
+              float sunFacing = dot(normalize(vWorldNormal), sunDir);
+              float day = smoothstep(-0.25, 0.6, sunFacing);
+              float terminator = exp(-pow(sunFacing / 0.22, 2.0));
+              vec3 color = rimColor * (0.12 + 0.88 * day) + vec3(1.0, 0.45, 0.18) * terminator * 0.55;
+              float halo = mix(smoothstep(0.0, 1.0, fresnel), fresnel * fresnel, isHalo);
+              float alpha = halo * rimStrength * (0.2 + 0.8 * day + terminator * 0.4);
+              gl_FragColor = vec4(color * alpha, alpha);
+            }
+          `,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          side,
+          depthWrite: false,
+        });
+      const atmosphereShell = new THREE.Mesh(
+        atmosphereGeometry,
+        makeAtmosphereMaterial(THREE.BackSide, 1),
+      );
       atmosphereShell.name = `${name}-atmosphere-shell`;
       atmosphereShell.castShadow = false;
       atmosphereShell.receiveShadow = false;
       planetMesh.add(atmosphereShell);
+      const atmosphereHaze = new THREE.Mesh(
+        new THREE.SphereGeometry(size * 1.008, sphereSegments, sphereSegments),
+        makeAtmosphereMaterial(THREE.FrontSide, 0.55),
+      );
+      atmosphereHaze.name = `${name}-atmosphere-haze`;
+      atmosphereHaze.castShadow = false;
+      atmosphereHaze.receiveShadow = false;
+      planetMesh.add(atmosphereHaze);
       planetMesh.userData.atmosphereShell = atmosphereShell;
     }
 

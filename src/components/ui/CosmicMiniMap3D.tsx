@@ -14,8 +14,8 @@ type Props = {
   itemsRef: React.MutableRefObject<OrbitItem[]>;
   skillsAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
   aboutAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
-  projectsAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
   portfolioAnchorRef: React.MutableRefObject<THREE.Vector3 | null>;
+  careerGalleryAnchorRef?: React.MutableRefObject<THREE.Vector3 | null>;
   currentNavigationTarget: string | null;
   onNavigateToTarget: (targetId: string, targetType: "section" | "moon") => void;
   onCoordinatePing?: (message: string) => void;
@@ -47,7 +47,7 @@ const MAP_ZOOM_MIN = 0.4;
 const MAP_ZOOM_MAX = 4.5;
 const HOVER_PICK_RADIUS_PX = 22;
 const MAP_INNER_RANGE = 2600;
-const MAP_OUTER_RANGE = 36000;
+const MAP_OUTER_RANGE = 50000;
 const PING_TTL_MS = 7000;
 
 const toDisplayLabel = (value: string): string =>
@@ -139,8 +139,8 @@ const CosmicMiniMap3D: React.FC<Props> = ({
   itemsRef,
   skillsAnchorRef,
   aboutAnchorRef,
-  projectsAnchorRef,
   portfolioAnchorRef,
+  careerGalleryAnchorRef,
   currentNavigationTarget,
   onNavigateToTarget,
   onCoordinatePing,
@@ -477,16 +477,6 @@ const CosmicMiniMap3D: React.FC<Props> = ({
             targetType: "section",
           });
         }
-        if (projectsAnchorRef.current) {
-          entities.push({
-            id: "projects-anchor",
-            label: "Project Showcase",
-            kind: "anchor",
-            world: projectsAnchorRef.current.clone(),
-            targetId: "projects",
-            targetType: "section",
-          });
-        }
         if (portfolioAnchorRef.current) {
           entities.push({
             id: "portfolio-anchor",
@@ -494,6 +484,16 @@ const CosmicMiniMap3D: React.FC<Props> = ({
             kind: "anchor",
             world: portfolioAnchorRef.current.clone(),
             targetId: "portfolio",
+            targetType: "section",
+          });
+        }
+        if (careerGalleryAnchorRef?.current) {
+          entities.push({
+            id: "career-gallery-anchor",
+            label: "Career Gallery",
+            kind: "anchor",
+            world: careerGalleryAnchorRef.current.clone(),
+            targetId: "career-gallery",
             targetType: "section",
           });
         }
@@ -662,8 +662,8 @@ const CosmicMiniMap3D: React.FC<Props> = ({
     itemsRef,
     skillsAnchorRef,
     aboutAnchorRef,
-    projectsAnchorRef,
     portfolioAnchorRef,
+    careerGalleryAnchorRef,
   ]);
 
   if (!visible) return null;

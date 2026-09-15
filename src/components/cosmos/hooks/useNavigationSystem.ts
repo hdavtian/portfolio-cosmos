@@ -62,6 +62,17 @@ const NAV_CINEMATIC_HANDOFF_MS = 680;
 const NAV_MOON_ARRIVAL_DISTANCE = 36;
 const NAV_MOON_FREEZE_DISTANCE = 42;
 const NAV_MOON_APPROACH_MIN_DISTANCE = 65;
+/**
+ * Moon trips longer than this always go to lightspeed, wherever they start
+ * (e.g. from the Career Gallery), so long hops never crawl. Well above the
+ * lightspeed braking distance so there is room to accelerate and brake.
+ */
+const NAV_MOON_LIGHTSPEED_MIN_DISTANCE = 9_000;
+/**
+ * Section braking starts from at least this speed (units/frame). The old
+ * fixed 4 u/frame made the braking zone crawl once it grew with lightspeed.
+ */
+const NAV_SECTION_DECEL_MIN_TOP_SPEED = 12;
 const NAV_MOON_APPROACH_MAX_DISTANCE = 220;
 const NAV_MOON_APPROACH_RATIO = 0.25;
 const NAV_SECTION_APPROACH_MIN_DISTANCE = 120;
@@ -445,6 +456,8 @@ export const useNavigationSystem = (deps: {
     phaseApproachDistance?: number;
     isDirectSectionApproach?: boolean;
     lightspeedLockedOut?: boolean;
+    /** Speed when section deceleration began (braking scales down from it). */
+    decelStartSpeed?: number;
     // Pending moon navigation — delayed until turn completes
     pendingMoonId?: string;
     pendingMoonTurbo?: boolean;
@@ -933,7 +946,13 @@ export const useNavigationSystem = (deps: {
           !!portfolioAnchor &&
           !!spaceshipRef.current &&
           spaceshipRef.current.position.distanceTo(portfolioAnchor) <= 4200;
+        const isLongMoonJump =
+          !!currentPos &&
+          !!spaceshipRef.current &&
+          spaceshipRef.current.position.distanceTo(currentPos.worldPosition) >
+            NAV_MOON_LIGHTSPEED_MIN_DISTANCE;
         const isInterSystemMoonJump =
+          isLongMoonJump ||
           isSystemMismatchMoonJump ||
           isLeavingProjectsArea ||
           isLeavingAboutArea ||
@@ -2422,9 +2441,21 @@ export const useNavigationSystem = (deps: {
         }
       } else {
         // ── DECELERATION: smooth stop ──
-        const progress = distance / decelDist;
-        targetSpeed = Math.max(0.1, progress * 4.0);
-        lerpAlpha = 0.06; // slightly faster lerp for responsive decel
+        // Speed scales with the remaining distance, starting from the speed
+        // the ship had when braking began (lightspeed brakes from lightspeed
+        // instead of crawling the whole braking zone at 4 u/frame). A floor
+        // keeps short, slower trips from dragging.
+        if (target.decelStartSpeed === undefined) {
+          target.decelStartSpeed = Math.max(pathData.speed, NAV_SECTION_DECEL_MIN_TOP_SPEED);
+        }
+        // Measured to the arrival point, so speed eases to ~0 as it arrives.
+        const progress = THREE.MathUtils.clamp(
+          (distance - arrivalDistance) / Math.max(1, decelDist - arrivalDistance),
+          0,
+          1,
+        );
+        targetSpeed = Math.max(0.1, progress * target.decelStartSpeed);
+        lerpAlpha = 0.12; // track the falling target closely
         manualFlightRef.current.acceleration = progress * 0.6;
         manualFlightRef.current.isTurboActive = false;
         manualFlightRef.current.isLightspeedActive = false;
@@ -2693,6 +2724,49 @@ export const useNavigationSystem = (deps: {
     vlog,
   ]);
 
+  /**
+   * Ends the current trip as if it had arrived. Used when another flow (the
+   * About journey) takes over the ship, so the autopilot doesn't resume the
+   * old trip afterwards and the targeting monitor doesn't linger.
+   */
+  const completeActiveNavigation = useCallback(
+    (reason: string) => {
+      if (!navigationTargetRef.current.id) return;
+      if (
+        tvPreviewControllerRef.current &&
+        tvPreviewControllerRef.current.phase !== "hidden"
+      ) {
+        tvPreviewControllerRef.current.fadeOut();
+      }
+      if (
+        dashcamControllerRef.current &&
+        dashcamControllerRef.current.phase !== "hidden"
+      ) {
+        dashcamControllerRef.current.fadeOut();
+      }
+      setCurrentNavigationTarget(null);
+      setNavigationDistance(null);
+      setNavigationETA(null);
+      navTurnActiveRef.current = false;
+      sectionAvoidWaypoint.current = null;
+      navigationTargetRef.current = {
+        id: null,
+        type: null,
+        position: null,
+        startPosition: null,
+        startTime: 0,
+        useTurbo: false,
+        lastUpdateFrame: undefined,
+      };
+      manualFlightRef.current.acceleration = 0;
+      manualFlightRef.current.currentSpeed = 0;
+      manualFlightRef.current.isTurboActive = false;
+      manualFlightRef.current.isLightspeedActive = false;
+      resetNavigationPhase(reason);
+    },
+    [resetNavigationPhase],
+  );
+
   const disposeNavigationSystem = useCallback(() => {
     navTrace("disposeNavigationSystem()", "called");
     resetNavigationPhase("dispose-navigation-system");
@@ -2727,6 +2801,7 @@ export const useNavigationSystem = (deps: {
     initializeNavigationSystem,
     updateAutopilotNavigation,
     disposeNavigationSystem,
+    completeActiveNavigation,
     /** Set this to receive moon arrival events (triggers orbit) */
     onMoonOrbitArrivalRef,
     /** Render loop reads & clears this to pre-warm GPU near a moon */

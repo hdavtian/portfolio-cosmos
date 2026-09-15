@@ -84,13 +84,14 @@ export const MAIN_ORBIT_TUBE_RADIUS = 1.2;
 export const MOON_ORBIT_TUBE_RADIUS = 0.8;
 
 // Starfield / skyfield background spheres — must surround entire system (14,000+)
-export const STARFIELD_RADIUS = 30_000;
-export const SKYFIELD_RADIUS = 29_000;
+// Grown with the destination spread (farthest, About, is ~34k from the sun).
+export const STARFIELD_RADIUS = 45_000;
+export const SKYFIELD_RADIUS = 44_000;
 
 // ─── LIGHTING ─────────────────────────────────────────────────────────────────
 
 // Sun point light distance — must reach farthest planet (~14,000)
-export const SUN_LIGHT_DISTANCE = 30_000;
+export const SUN_LIGHT_DISTANCE = 45_000;
 
 // Fill light position — proportional to new system size
 export const FILL_LIGHT_POS = {
@@ -125,7 +126,7 @@ export const SD_INITIAL_POS = {
 // Camera creation — far plane must reach farthest planet + margin
 export const CAMERA_FOV = 45;
 export const CAMERA_NEAR = 0.1;
-export const CAMERA_FAR = 50_000;
+export const CAMERA_FAR = 90_000;
 
 // Initial camera position — slightly behind the final spot for a gentle zoom-in.
 // The intro animates from here to the final position near the Experience planet.
@@ -137,7 +138,7 @@ export const CAMERA_INITIAL_POS = {
 
 // Camera controls distance limits
 export const CONTROLS_MIN_DIST = 0.01;
-export const CONTROLS_MAX_DIST = 30_000;
+export const CONTROLS_MAX_DIST = 45_000;
 
 // Near-plane values used in various view modes (originals shown)
 export const NEAR_DEFAULT = 0.1; // restored when leaving ship
@@ -389,10 +390,10 @@ export const NAV_DECEL_EXTRA = 200;
 export const NAV_FALLBACK_PLANET_R = 140;  // use largest planet as fallback
 
 // ─── LIGHTSPEED TRAVEL ──────────────────────────────────────────────────────
-// For inter-planet journeys: covers 12,000 units in ~5 seconds.
-export const NAV_LIGHTSPEED = 87.5;             // +75% faster long-range travel
+// For inter-planet journeys: twice the earlier speed (it is lightspeed).
+export const NAV_LIGHTSPEED = 175;              // 2× the previous 87.5
 export const NAV_LIGHTSPEED_ENGAGE_DIST = 2_000; // only engage for long distances
-export const NAV_LIGHTSPEED_DECEL_DIST = 2_625;  // scaled with lightspeed for stable braking
+export const NAV_LIGHTSPEED_DECEL_DIST = 5_250;  // scaled with lightspeed (2×) for stable braking
 export const NAV_LIGHTSPEED_LERP = 0.08;         // faster lerp for lightspeed accel
 
 // ─── MOON ORBIT (Stationary Hover) ──────────────────────────────────────────

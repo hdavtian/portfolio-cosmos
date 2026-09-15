@@ -378,8 +378,9 @@ export const createPointerInteractionHandlers = (deps: {
       );
       if (sdHits.length > 0) {
         trackEvent("star_destroyer_click");
-        vlog("🔺 Star Destroyer clicked — initiating escort");
-        exitFocusedMoon();          // leave moon view if active
+        vlog("🔺 Star Destroyer clicked");
+        // Only a friendly on-screen message; the click is consumed so it
+        // doesn't fall through to whatever is behind the ship.
         onStarDestroyerClick();
         return;
       }

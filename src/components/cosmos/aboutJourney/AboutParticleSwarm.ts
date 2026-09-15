@@ -10,6 +10,8 @@ import {
 } from "yuka";
 import { dlog } from "../../../lib/debugLog";
 import { AboutJourneyPhase } from "./AboutJourneyController";
+import { AboutPathParticles, PULSE_PROFILE_NAMES } from "./AboutPathParticles";
+import type { CosmicPathCurve } from "./cosmicRoute";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -20,9 +22,17 @@ const FOLLOWERS_PER_LEADER = 32;
 const TOTAL_PARTICLES = LEADER_COUNT * FOLLOWERS_PER_LEADER; // 2560
 const SWARM_RADIUS = 200;
 
-// Path trail needs many more particles for density + continuous emission
-const PATH_POOL_SIZE = 12_000;
-const MAX_PARTICLES = Math.max(TOTAL_PARTICLES + 800, PATH_POOL_SIZE);
+// Excitement phase
+const EXCITEMENT_SPEED_MULTIPLIER = 2.5;
+const EXCITEMENT_SIZE_MULTIPLIER = 2.2;
+const EXCITEMENT_EXTRA_PARTICLES = 800;
+const RING_RADIUS = 250;
+const RING_CONVERGENCE_SPEED = 2.0;
+const FLY_PULL_RADIUS = 420;
+const FLY_PULL_FORWARD_DIST = 260;
+const FLY_PULL_INWARD_DIST = 95;
+
+const MAX_PARTICLES = TOTAL_PARTICLES + EXCITEMENT_EXTRA_PARTICLES;
 
 const PALETTE = [
   0x9beaff, 0xa7b6ff, 0xb8ffd9, 0xffb8ef, 0xffe2b3, 0xc8b8ff, 0xffa8c8,
@@ -54,34 +64,8 @@ const FOLLOWER_SPEED_MIN = 0.6;
 const FOLLOWER_SPEED_MAX = 2.8;
 const FOLLOWER_DRIFT_SPEED = 0.15;
 
-// Excitement phase
-const EXCITEMENT_SPEED_MULTIPLIER = 2.5;
-const EXCITEMENT_SIZE_MULTIPLIER = 2.2;
-const EXCITEMENT_EXTRA_PARTICLES = 800;
-const RING_RADIUS = 250;
-const RING_CONVERGENCE_SPEED = 2.0;
-const FLY_PULL_RADIUS = 420;
-const FLY_PULL_FORWARD_DIST = 260;
-const FLY_PULL_INWARD_DIST = 95;
-
-// Path trail
-const PATH_HEAD_SPEED = 4725;
-const PATH_TRAIL_RADIUS = 35;
-const PATH_EMISSION_RATE = 1200; // particles per second from origin (doubled for denser path)
-const PATH_PARTICLE_MIN_SPEED = 0.6;
-const PATH_PARTICLE_MAX_SPEED = 1.4;
-const PATH_PARTICLE_SIZE_MIN = 0.4;
-const PATH_PARTICLE_SIZE_MAX = 2.8;
-const PATH_HOLD_PARTICLE_COUNT = 10_400;
-const PATH_HOLD_PROFILE_DWELL_MIN_MS = 7000;
-const PATH_HOLD_PROFILE_DWELL_MAX_MS = 16000;
-const PATH_HOLD_PROFILE_BLEND_MS = 1800;
-
-// Path dispersal (burst + fade)
-const DISPERSAL_SPEED_MIN = 260;
-const DISPERSAL_SPEED_MAX = 760;
-const DISPERSAL_SIZE_DECAY = 0.34;
-const DISPERSAL_MAX_DURATION_S = 13.5;
+/** Seconds for the swarm to fade back in at the anchor while the path bursts. */
+const REFORM_FADE_SECONDS = 3;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -121,9 +105,12 @@ export interface AboutParticleSwarmHandle {
     pathCrystallizationProgress: number,
     pathCrystallizationActive: boolean,
     cosmicPath: THREE.CatmullRomCurve3 | null,
+    dispersalOriginT?: number,
   ): AboutSwarmFrameSignals;
   getDebugState(): AboutParticleSwarmDebugState;
   forcePathFormationComplete(): void;
+  /** Links the path particle shader ahead of time so the first path doesn't stall. */
+  compile(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void;
   dispose(): void;
 }
 
@@ -142,163 +129,6 @@ interface FollowerMeta {
   driftAmplitude: number;
   hueDriftSpeed: number;
   baseHue: number;
-}
-
-// ---------------------------------------------------------------------------
-// Per-path-particle metadata (for electricity flow)
-// ---------------------------------------------------------------------------
-
-interface PathParticle {
-  alive: boolean;
-  pathT: number; // current position along path [0, 1]
-  speed: number; // flow speed multiplier
-  size: number; // particle size
-  hue: number; // color hue
-  radialAngle: number; // angle for trail spread
-  radialDist: number; // distance from path center
-  /** Local-space velocity during PATH_DISPERSING (units / sec). */
-  vx: number;
-  vy: number;
-  vz: number;
-}
-
-interface HoldPulseProfile {
-  mode: "max" | "avg";
-  timeA: number;
-  spatialA: number;
-  phaseA: number;
-  timeB: number;
-  spatialB: number;
-  phaseB: number;
-  surgeTime: number;
-  surgeSpatial: number;
-  surgePhase: number;
-  surgePow: number;
-  surgeWeight: number;
-  sizeBase: number;
-  sizeAmp: number;
-  brightnessBase: number;
-  brightnessAmp: number;
-  saturationBase: number;
-  saturationAmp: number;
-}
-
-const HOLD_PULSE_PROFILES: HoldPulseProfile[] = [
-  // 1) Slower majestic pulse.
-  {
-    mode: "avg",
-    timeA: 2.1,
-    spatialA: 34,
-    phaseA: 0.1,
-    timeB: 2.9,
-    spatialB: 47,
-    phaseB: 1.7,
-    surgeTime: 0.22,
-    surgeSpatial: 12,
-    surgePhase: 0,
-    surgePow: 6,
-    surgeWeight: 0.1,
-    sizeBase: 0.98,
-    sizeAmp: 0.56,
-    brightnessBase: 0.5,
-    brightnessAmp: 0.22,
-    saturationBase: 0.7,
-    saturationAmp: 0.14,
-  },
-  // 2) Faster conduit energy.
-  {
-    mode: "max",
-    timeA: 5.8,
-    spatialA: 86,
-    phaseA: 0.5,
-    timeB: 7.4,
-    spatialB: 126,
-    phaseB: 2.3,
-    surgeTime: 0.5,
-    surgeSpatial: 26,
-    surgePhase: 1.2,
-    surgePow: 3.2,
-    surgeWeight: 0.22,
-    sizeBase: 0.92,
-    sizeAmp: 0.92,
-    brightnessBase: 0.5,
-    brightnessAmp: 0.32,
-    saturationBase: 0.72,
-    saturationAmp: 0.2,
-  },
-  // 3) Subtle glow with occasional surges.
-  {
-    mode: "avg",
-    timeA: 1.35,
-    spatialA: 28,
-    phaseA: 0.2,
-    timeB: 1.9,
-    spatialB: 42,
-    phaseB: 2.9,
-    surgeTime: 0.16,
-    surgeSpatial: 8,
-    surgePhase: 0.7,
-    surgePow: 9,
-    surgeWeight: 0.35,
-    sizeBase: 0.95,
-    sizeAmp: 0.48,
-    brightnessBase: 0.48,
-    brightnessAmp: 0.2,
-    saturationBase: 0.68,
-    saturationAmp: 0.12,
-  },
-];
-
-const HOLD_PULSE_PROFILE_NAMES = [
-  "Majestic Wave",
-  "Conduit Surge",
-  "Subtle Glow",
-] as const;
-
-function randomHoldProfileIndex(exclude: number): number {
-  if (HOLD_PULSE_PROFILES.length <= 1) return 0;
-  let idx = Math.floor(Math.random() * HOLD_PULSE_PROFILES.length);
-  if (idx === exclude) {
-    idx =
-      (idx + 1 + Math.floor(Math.random() * (HOLD_PULSE_PROFILES.length - 1))) %
-      HOLD_PULSE_PROFILES.length;
-  }
-  return idx;
-}
-
-function randomHoldProfileDwellMs(): number {
-  return (
-    PATH_HOLD_PROFILE_DWELL_MIN_MS +
-    Math.random() *
-      (PATH_HOLD_PROFILE_DWELL_MAX_MS - PATH_HOLD_PROFILE_DWELL_MIN_MS)
-  );
-}
-
-function sampleHoldPulse(
-  profile: HoldPulseProfile,
-  elapsed: number,
-  t: number,
-): number {
-  const waveA =
-    Math.sin(elapsed * profile.timeA - t * profile.spatialA + profile.phaseA) *
-      0.5 +
-    0.5;
-  const waveB =
-    Math.sin(elapsed * profile.timeB - t * profile.spatialB + profile.phaseB) *
-      0.5 +
-    0.5;
-  const base =
-    profile.mode === "max" ? Math.max(waveA, waveB) : (waveA + waveB) * 0.5;
-  const surgeRaw =
-    Math.sin(
-      elapsed * profile.surgeTime -
-        t * profile.surgeSpatial +
-        profile.surgePhase,
-    ) *
-      0.5 +
-    0.5;
-  const surge = Math.pow(surgeRaw, profile.surgePow) * profile.surgeWeight;
-  return THREE.MathUtils.clamp(base + surge, 0, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -359,6 +189,11 @@ export function createAboutParticleSwarm(
   points.frustumCulled = false;
   points.renderOrder = 8;
   group.add(points);
+
+  // The cosmic path stream is a separate GPU-driven points object. The route
+  // starts at the swarm, so the group origin is also the route origin.
+  const pathParticles = new AboutPathParticles();
+  group.add(pathParticles.points);
 
   // --- Yuka leaders with flocking behaviors ---
   const entityManager = new EntityManager();
@@ -460,65 +295,12 @@ export function createAboutParticleSwarm(
     }
   }
 
-  // --- Path particle pool ---
-  const pathParticles: PathParticle[] = [];
-  for (let i = 0; i < PATH_POOL_SIZE; i++) {
-    pathParticles.push({
-      alive: false,
-      pathT: 0,
-      speed:
-        PATH_PARTICLE_MIN_SPEED +
-        Math.random() * (PATH_PARTICLE_MAX_SPEED - PATH_PARTICLE_MIN_SPEED),
-      size:
-        PATH_PARTICLE_SIZE_MIN +
-        Math.random() * (PATH_PARTICLE_SIZE_MAX - PATH_PARTICLE_SIZE_MIN),
-      hue: Math.random(),
-      radialAngle: Math.random() * Math.PI * 2,
-      radialDist: Math.random() * PATH_TRAIL_RADIUS,
-      vx: 0,
-      vy: 0,
-      vz: 0,
-    });
-  }
-  let _pathHeadT = 0;
-  let _pathEmitAccum = 0;
-  let _pathComplete = false;
-  let _pathHoldLatched = false;
-  let _pathActiveCount = 0;
-  let _holdPulseProfileIndex = 0;
-  let _holdPulsePrevProfileIndex = 0;
-  let _holdPulseBlendStartedAtMs = 0;
-  let _holdPulseBlendUntilMs = 0;
-  let _holdPulseSwitchAtMs = 0;
   let _prevPhase: AboutJourneyPhase = AboutJourneyPhase.IDLE;
-  let _dispersalStartedAtMs = 0;
-  let _dispersalSeeded = false;
-  let _dispersalEndSignaled = false;
+  let _begunPath: THREE.CatmullRomCurve3 | null = null;
+  let _reformElapsed = 0;
 
   // --- Update ---
   let _updateLogCounter = 0;
-
-  function resetPathTrailState() {
-    _pathHeadT = 0;
-    _pathComplete = false;
-    _pathEmitAccum = 0;
-    _pathHoldLatched = false;
-    _holdPulseProfileIndex = Math.floor(
-      Math.random() * HOLD_PULSE_PROFILES.length,
-    );
-    _holdPulsePrevProfileIndex = _holdPulseProfileIndex;
-    _holdPulseBlendStartedAtMs = 0;
-    _holdPulseBlendUntilMs = 0;
-    _holdPulseSwitchAtMs = performance.now() + randomHoldProfileDwellMs();
-    _dispersalSeeded = false;
-    _dispersalEndSignaled = false;
-    for (const pp of pathParticles) {
-      pp.alive = false;
-      pp.vx = 0;
-      pp.vy = 0;
-      pp.vz = 0;
-    }
-  }
 
   function update(
     deltaSeconds: number,
@@ -530,8 +312,9 @@ export function createAboutParticleSwarm(
     flyThroughDirection: THREE.Vector3,
     flyThroughProgress: number,
     pathCrystallizationProgress: number,
-    pathCrystallizationActive: boolean,
+    _pathCrystallizationActive: boolean,
     cosmicPath: THREE.CatmullRomCurve3 | null,
+    dispersalOriginT = 0,
   ): AboutSwarmFrameSignals {
     _updateLogCounter++;
     if (_updateLogCounter % 300 === 1) {
@@ -550,17 +333,38 @@ export function createAboutParticleSwarm(
     }
     const clampedDelta = Math.min(deltaSeconds, 0.05);
 
+    // Start on a new route, not on the PATH_FORMING edge: a skip can jump
+    // past PATH_FORMING before this update ever sees it.
     if (
-      phase === AboutJourneyPhase.PATH_FORMING &&
-      _prevPhase !== AboutJourneyPhase.PATH_FORMING
+      cosmicPath &&
+      cosmicPath !== _begunPath &&
+      (cosmicPath as CosmicPathCurve).timing &&
+      phase >= AboutJourneyPhase.PATH_FORMING &&
+      phase <= AboutJourneyPhase.PATH_TRAVEL
     ) {
-      resetPathTrailState();
+      _begunPath = cosmicPath;
+      pathParticles.begin(cosmicPath as CosmicPathCurve, group.position);
+      if (phase !== AboutJourneyPhase.PATH_FORMING) {
+        pathParticles.forceComplete();
+      }
+    }
+    if (
+      phase === AboutJourneyPhase.PATH_DISPERSING &&
+      _prevPhase !== AboutJourneyPhase.PATH_DISPERSING
+    ) {
+      pathParticles.burst(dispersalOriginT);
+      _reformElapsed = 0;
+    }
+    if (
+      phase === AboutJourneyPhase.IDLE &&
+      _prevPhase !== AboutJourneyPhase.IDLE
+    ) {
+      pathParticles.reset();
+      material.opacity = 1;
     }
 
-    const wasPathIncomplete = !_pathComplete;
-
     let activeCount = TOTAL_PARTICLES;
-    let sizeBase = 1.0;
+    let pathLoopCompleteEdge = false;
     let dispersalCompleteEdge = false;
 
     if (phase === AboutJourneyPhase.FLY_THROUGH) {
@@ -586,7 +390,8 @@ export function createAboutParticleSwarm(
         excitementProgress * EXCITEMENT_EXTRA_PARTICLES,
       );
       activeCount = TOTAL_PARTICLES + extraParticles;
-      sizeBase = 1.0 + excitementProgress * (EXCITEMENT_SIZE_MULTIPLIER - 1.0);
+      const sizeBase =
+        1.0 + excitementProgress * (EXCITEMENT_SIZE_MULTIPLIER - 1.0);
       const speedMult =
         1.0 + excitementProgress * (EXCITEMENT_SPEED_MULTIPLIER - 1.0);
       for (const v of vehicles) {
@@ -622,28 +427,45 @@ export function createAboutParticleSwarm(
       phase === AboutJourneyPhase.PATH_READY ||
       phase === AboutJourneyPhase.PATH_TRAVEL
     ) {
-      // PATH_FORMING: emit stream; PATH_READY/PATH_TRAVEL: hold completed path (no new particles)
-      activeCount = updatePathTrail(
-        positionArray,
-        colorArray,
-        sizeArray,
+      // The swarm has become the path; only the GPU stream is drawn.
+      activeCount = 0;
+      const frame = pathParticles.update(
         clampedDelta,
         elapsedSeconds,
-        cosmicPath,
-        phase === AboutJourneyPhase.PATH_FORMING,
+        phase !== AboutJourneyPhase.PATH_FORMING,
         pathCrystallizationProgress,
-        pathCrystallizationActive,
       );
+      pathLoopCompleteEdge =
+        frame.loopCompleteEdge && phase === AboutJourneyPhase.PATH_FORMING;
     } else if (phase === AboutJourneyPhase.PATH_DISPERSING) {
-      const disperse = updatePathDispersal(
+      if (pathParticles.active) {
+        const frame = pathParticles.update(
+          clampedDelta,
+          elapsedSeconds,
+          true,
+          1,
+        );
+        dispersalCompleteEdge = frame.burstCompleteEdge;
+      } else {
+        dispersalCompleteEdge = true;
+      }
+      // The swarm fades back in at its anchor while the path bursts.
+      _reformElapsed += clampedDelta;
+      material.opacity = THREE.MathUtils.smoothstep(
+        _reformElapsed / REFORM_FADE_SECONDS,
+        0,
+        1,
+      );
+      entityManager.update(clampedDelta);
+      applyContainment();
+      updateNormalSwarm(
         positionArray,
         colorArray,
         sizeArray,
-        clampedDelta,
-        cosmicPath,
+        TOTAL_PARTICLES,
+        elapsedSeconds,
+        1.0,
       );
-      activeCount = disperse.activeCount;
-      dispersalCompleteEdge = disperse.dispersalCompleteEdge;
     } else {
       // IDLE / TRANSIT — normal swarming
       entityManager.update(clampedDelta);
@@ -659,17 +481,13 @@ export function createAboutParticleSwarm(
     }
 
     geometry.setDrawRange(0, activeCount);
-    (geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-    (geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
-    (geometry.attributes.particleSize as THREE.BufferAttribute).needsUpdate =
-      true;
-
-    const pathLoopCompleteEdge =
-      wasPathIncomplete &&
-      _pathComplete &&
-      phase === AboutJourneyPhase.PATH_FORMING;
-
-    _pathActiveCount = activeCount;
+    if (activeCount > 0) {
+      (geometry.attributes.position as THREE.BufferAttribute).needsUpdate =
+        true;
+      (geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;
+      (geometry.attributes.particleSize as THREE.BufferAttribute).needsUpdate =
+        true;
+    }
 
     _prevPhase = phase;
 
@@ -782,6 +600,11 @@ export function createAboutParticleSwarm(
   }
 
   // --- Ring formation (EXCITEMENT) ---
+  const _ringRight = new THREE.Vector3();
+  const _ringTangent = new THREE.Vector3();
+  const _ringBitangent = new THREE.Vector3();
+  const _ringCenter = new THREE.Vector3();
+
   function updateRingFormation(
     posArr: Float32Array,
     colArr: Float32Array,
@@ -798,11 +621,11 @@ export function createAboutParticleSwarm(
       ((excProg - 0.33) / 0.67) * RING_CONVERGENCE_SPEED,
     );
     const up = ringAxis;
-    const right = new THREE.Vector3(1, 0, 0);
+    const right = _ringRight.set(1, 0, 0);
     if (Math.abs(up.dot(right)) > 0.95) right.set(0, 0, 1);
-    const tangent = new THREE.Vector3().crossVectors(up, right).normalize();
-    const bitangent = new THREE.Vector3().crossVectors(tangent, up).normalize();
-    const localFTP = flyThroughPoint.clone().sub(group.position);
+    const tangent = _ringTangent.crossVectors(up, right).normalize();
+    const bitangent = _ringBitangent.crossVectors(tangent, up).normalize();
+    const localFTP = _ringCenter.copy(flyThroughPoint).sub(group.position);
     const rotSpeed = 0.3 + excProg * 0.5;
 
     for (let i = 0; i < count; i++) {
@@ -855,336 +678,38 @@ export function createAboutParticleSwarm(
     }
   }
 
-  // --- Path trail: continuous emission with electricity flow ---
-  function updatePathTrail(
-    posArr: Float32Array,
-    colArr: Float32Array,
-    szArr: Float32Array,
-    dt: number,
-    elapsed: number,
-    cosmicPath: THREE.CatmullRomCurve3 | null,
-    allowEmit: boolean,
-    crystallizationProgress: number,
-    crystallizationActive: boolean,
-  ): number {
-    if (!cosmicPath) return 0;
-
-    const pathLength = cosmicPath.getLength();
-
-    // Advance head along the path
-    if (!_pathComplete) {
-      _pathHeadT += (PATH_HEAD_SPEED * dt) / pathLength;
-      if (_pathHeadT >= 1.0) {
-        _pathHeadT = 1.0;
-        _pathComplete = true;
-      }
-    }
-
-    // Emit new particles from origin (only while the path is still forming)
-    if (allowEmit) {
-      _pathEmitAccum += PATH_EMISSION_RATE * dt;
-      while (_pathEmitAccum >= 1) {
-        _pathEmitAccum -= 1;
-        for (let pi = 0; pi < pathParticles.length; pi++) {
-          const pp = pathParticles[pi];
-          if (!pp.alive) {
-            pp.alive = true;
-            pp.pathT = 0;
-            pp.speed =
-              PATH_PARTICLE_MIN_SPEED +
-              Math.random() *
-                (PATH_PARTICLE_MAX_SPEED - PATH_PARTICLE_MIN_SPEED);
-            pp.size =
-              PATH_PARTICLE_SIZE_MIN +
-              Math.random() * (PATH_PARTICLE_SIZE_MAX - PATH_PARTICLE_SIZE_MIN);
-            pp.hue = Math.random();
-            pp.radialAngle = Math.random() * Math.PI * 2;
-            pp.radialDist = Math.pow(Math.random(), 0.5) * PATH_TRAIL_RADIUS;
-            pp.vx = 0;
-            pp.vy = 0;
-            pp.vz = 0;
-            break;
-          }
-        }
-      }
-    }
-
-    // Once the loop is complete, lock into a stable closed path so the beam
-    // persists while light pulses travel through it.
-    if (_pathComplete && !allowEmit && !_pathHoldLatched) {
-      const holdCount = Math.min(
-        PATH_HOLD_PARTICLE_COUNT,
-        pathParticles.length,
-      );
-      for (let pi = 0; pi < holdCount; pi++) {
-        const pp = pathParticles[pi];
-        pp.alive = true;
-        pp.pathT = (pi + Math.random() * 0.35) / holdCount;
-        pp.speed = 1;
-        pp.size =
-          PATH_PARTICLE_SIZE_MIN +
-          Math.random() * (PATH_PARTICLE_SIZE_MAX - PATH_PARTICLE_SIZE_MIN);
-        pp.hue = Math.random();
-        pp.radialAngle = Math.random() * Math.PI * 2;
-        pp.radialDist = Math.pow(Math.random(), 0.6) * PATH_TRAIL_RADIUS;
-      }
-      for (let pi = holdCount; pi < pathParticles.length; pi++) {
-        pathParticles[pi].alive = false;
-      }
-      const now = performance.now();
-      _holdPulseProfileIndex = Math.floor(
-        Math.random() * HOLD_PULSE_PROFILES.length,
-      );
-      _holdPulsePrevProfileIndex = _holdPulseProfileIndex;
-      _holdPulseBlendStartedAtMs = now;
-      _holdPulseBlendUntilMs = now;
-      _holdPulseSwitchAtMs = now + randomHoldProfileDwellMs();
-      _pathHoldLatched = true;
-    }
-
-    // Update alive particles: flow along path toward the head
-    let activeCount = 0;
-    const groupPos = group.position;
-
-    for (let pi = 0; pi < pathParticles.length; pi++) {
-      const pp = pathParticles[pi];
-      if (!pp.alive) continue;
-
-      const holdMode = _pathComplete && !allowEmit;
-      const stableCrystalMode = holdMode;
-
-      // During path-forming, particles stream from origin toward head.
-      if (!holdMode) {
-        pp.pathT += (pp.speed * PATH_HEAD_SPEED * dt) / pathLength;
-      }
-
-      // If particle passes head during forming, recycle from origin.
-      if (!holdMode && pp.pathT > _pathHeadT) {
-        pp.pathT = 0;
-      }
-
-      const clampedT = Math.max(0, Math.min(1, pp.pathT));
-      const pathPoint = cosmicPath.getPointAt(clampedT);
-
-      // Perpendicular spread for trail width (rotating for electricity feel)
-      const spreadAngle = stableCrystalMode
-        ? pp.radialAngle + clampedT * 1.8
-        : pp.radialAngle + elapsed * 1.5 + clampedT * 8;
-
-      if (stableCrystalMode) {
-        const targetRadial = PATH_TRAIL_RADIUS * 0.12;
-        const crystalBlend = crystallizationActive
-          ? THREE.MathUtils.clamp(crystallizationProgress, 0, 1)
-          : 1;
-        pp.radialDist = THREE.MathUtils.lerp(
-          pp.radialDist,
-          targetRadial,
-          0.08 + crystalBlend * 0.28,
-        );
-      }
-
-      const r = stableCrystalMode
-        ? pp.radialDist
-        : pp.radialDist *
-          (0.3 + 0.7 * Math.sin(elapsed * 4 + pi * 0.3) * 0.5 + 0.5);
-
-      const i3 = activeCount * 3;
-      posArr[i3] = pathPoint.x - groupPos.x + Math.cos(spreadAngle) * r;
-      posArr[i3 + 1] = pathPoint.y - groupPos.y + Math.sin(spreadAngle) * r;
-      posArr[i3 + 2] =
-        pathPoint.z - groupPos.z + Math.cos(spreadAngle + 1.57) * r;
-
-      // Size + color: forming mode highlights the spear head, hold mode keeps
-      // a stable beam with pulse waves running around the loop.
-      const headProximity = holdMode
-        ? 0
-        : 1.0 - Math.min(1.0, Math.abs(clampedT - _pathHeadT) * 15);
-      let pulse = Math.sin(elapsed * 3.2 - clampedT * 58) * 0.5 + 0.5;
-
-      if (holdMode) {
-        const now = performance.now();
-        if (now >= _holdPulseSwitchAtMs) {
-          _holdPulsePrevProfileIndex = _holdPulseProfileIndex;
-          _holdPulseProfileIndex = randomHoldProfileIndex(
-            _holdPulseProfileIndex,
-          );
-          _holdPulseBlendStartedAtMs = now;
-          _holdPulseBlendUntilMs = now + PATH_HOLD_PROFILE_BLEND_MS;
-          _holdPulseSwitchAtMs = now + randomHoldProfileDwellMs();
-        }
-
-        const activeProfile = HOLD_PULSE_PROFILES[_holdPulseProfileIndex];
-        const activePulse = sampleHoldPulse(activeProfile, elapsed, clampedT);
-        if (
-          now < _holdPulseBlendUntilMs &&
-          _holdPulsePrevProfileIndex !== _holdPulseProfileIndex
-        ) {
-          const prevProfile = HOLD_PULSE_PROFILES[_holdPulsePrevProfileIndex];
-          const prevPulse = sampleHoldPulse(prevProfile, elapsed, clampedT);
-          const blendT = THREE.MathUtils.smootherstep(
-            (now - _holdPulseBlendStartedAtMs) /
-              Math.max(1, _holdPulseBlendUntilMs - _holdPulseBlendStartedAtMs),
-            0,
-            1,
-          );
-          pulse = THREE.MathUtils.lerp(prevPulse, activePulse, blendT);
-        } else {
-          pulse = activePulse;
-        }
-
-        szArr[activeCount] =
-          pp.size * (activeProfile.sizeBase + pulse * activeProfile.sizeAmp);
-      } else {
-        szArr[activeCount] = pp.size * (1.0 + headProximity * 1.5);
-      }
-
-      const shimmer = Math.sin(elapsed * 6 + clampedT * 40) * 0.5 + 0.5;
-      const activeProfile = holdMode
-        ? HOLD_PULSE_PROFILES[_holdPulseProfileIndex]
-        : null;
-      const brightness = holdMode
-        ? activeProfile!.brightnessBase +
-          pulse * activeProfile!.brightnessAmp +
-          shimmer * 0.08
-        : 0.55 + headProximity * 0.35 + shimmer * 0.1;
-      const saturation = holdMode
-        ? activeProfile!.saturationBase + pulse * activeProfile!.saturationAmp
-        : 0.7 + headProximity * 0.25;
-      const hue = (pp.hue + clampedT * 0.15 + elapsed * 0.01) % 1.0;
-      tmpColor.setHSL(hue, saturation, brightness);
-      colArr[i3] = tmpColor.r;
-      colArr[i3 + 1] = tmpColor.g;
-      colArr[i3 + 2] = tmpColor.b;
-
-      activeCount++;
-    }
-
-    return activeCount;
-  }
-
-  function updatePathDispersal(
-    posArr: Float32Array,
-    colArr: Float32Array,
-    szArr: Float32Array,
-    dt: number,
-    cosmicPath: THREE.CatmullRomCurve3 | null,
-  ): { activeCount: number; dispersalCompleteEdge: boolean } {
-    if (!_dispersalSeeded) {
-      _dispersalSeeded = true;
-      _dispersalStartedAtMs = performance.now();
-      _dispersalEndSignaled = false;
-      for (const pp of pathParticles) {
-        if (!pp.alive) continue;
-        let dirX = Math.random() - 0.5;
-        let dirY = Math.random() - 0.5;
-        let dirZ = Math.random() - 0.5;
-        if (cosmicPath) {
-          const t = Math.max(0, Math.min(1, pp.pathT));
-          const tan = cosmicPath.getTangentAt(t);
-          dirX += tan.x * 0.9;
-          dirY += tan.y * 0.9;
-          dirZ += tan.z * 0.9;
-        }
-        const mag = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ) + 1e-5;
-        const sp =
-          DISPERSAL_SPEED_MIN +
-          Math.random() * (DISPERSAL_SPEED_MAX - DISPERSAL_SPEED_MIN);
-        pp.vx = (dirX / mag) * sp;
-        pp.vy = (dirY / mag) * sp;
-        pp.vz = (dirZ / mag) * sp;
-      }
-    }
-
-    const dispersalElapsedS =
-      (performance.now() - _dispersalStartedAtMs) / 1000;
-    let activeCount = 0;
-
-    for (let pi = 0; pi < pathParticles.length; pi++) {
-      const pp = pathParticles[pi];
-      if (!pp.alive) continue;
-
-      const i3 = activeCount * 3;
-      const ox = posArr[i3];
-      const oy = posArr[i3 + 1];
-      const oz = posArr[i3 + 2];
-
-      pp.vx *= 1 - dt * 0.055;
-      pp.vy *= 1 - dt * 0.055;
-      pp.vz *= 1 - dt * 0.055;
-
-      posArr[i3] = ox + pp.vx * dt;
-      posArr[i3 + 1] = oy + pp.vy * dt;
-      posArr[i3 + 2] = oz + pp.vz * dt;
-
-      pp.size *= Math.exp(-dt * DISPERSAL_SIZE_DECAY);
-      szArr[activeCount] = pp.size;
-
-      const hue = (pp.hue + dt * 0.04) % 1.0;
-      tmpColor.setHSL(hue, 0.78, 0.42 + pp.size * 0.12);
-      colArr[i3] = tmpColor.r;
-      colArr[i3 + 1] = tmpColor.g;
-      colArr[i3 + 2] = tmpColor.b;
-
-      if (pp.size < 0.05) {
-        pp.alive = false;
-        pp.vx = 0;
-        pp.vy = 0;
-        pp.vz = 0;
-        continue;
-      }
-
-      activeCount++;
-    }
-
-    let dispersalCompleteEdge = false;
-    let outCount = activeCount;
-    if (
-      !_dispersalEndSignaled &&
-      (activeCount === 0 || dispersalElapsedS >= DISPERSAL_MAX_DURATION_S)
-    ) {
-      _dispersalEndSignaled = true;
-      dispersalCompleteEdge = true;
-      for (const pp of pathParticles) {
-        pp.alive = false;
-        pp.vx = 0;
-        pp.vy = 0;
-        pp.vz = 0;
-      }
-      outCount = 0;
-    }
-
-    return { activeCount: outCount, dispersalCompleteEdge };
-  }
-
   // --- Cleanup ---
   function getDebugState(): AboutParticleSwarmDebugState {
-    const now = performance.now();
-    const nextProfileSwitchInMs = Math.max(0, _holdPulseSwitchAtMs - now);
-    const holdPulseProfileName =
-      HOLD_PULSE_PROFILE_NAMES[_holdPulseProfileIndex] ??
-      `Profile ${_holdPulseProfileIndex + 1}`;
-
+    const path = pathParticles.getDebugState();
     return {
-      activeParticles: _pathActiveCount,
-      pathHeadT: _pathHeadT,
-      pathComplete: _pathComplete,
-      holdMode: _pathComplete,
-      holdPulseProfileIndex: _holdPulseProfileIndex,
-      holdPulseProfileName,
-      nextProfileSwitchInMs,
+      activeParticles: path.particleCount,
+      pathHeadT: path.headT,
+      pathComplete: path.complete,
+      holdMode: path.hold,
+      holdPulseProfileIndex: path.profileIndex,
+      holdPulseProfileName:
+        PULSE_PROFILE_NAMES[path.profileIndex] ??
+        `Profile ${path.profileIndex + 1}`,
+      nextProfileSwitchInMs: path.nextProfileSwitchInMs,
     };
   }
 
   function forcePathFormationComplete() {
     // Skip should jump to the formed crystal rail state without waiting for
     // the streaming phase to finish naturally.
-    _pathHeadT = 1;
-    _pathComplete = true;
-    _pathEmitAccum = 0;
-    _pathHoldLatched = false;
+    pathParticles.forceComplete();
+  }
+
+  function compile(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    camera: THREE.Camera,
+  ) {
+    pathParticles.compile(renderer, scene, camera);
   }
 
   function dispose() {
+    pathParticles.dispose();
     geometry.dispose();
     material.dispose();
     entityManager.clear();
@@ -1201,6 +726,7 @@ export function createAboutParticleSwarm(
     update,
     getDebugState,
     forcePathFormationComplete,
+    compile,
     dispose,
   };
 }

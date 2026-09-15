@@ -7,6 +7,13 @@ import {
   Vector3 as YukaVector3,
   Vehicle as YukaVehicle,
 } from "yuka";
+import {
+  buildCosmicRoute,
+  routeSpeedAt,
+  type CosmicPathCurve,
+  type RouteObstacle,
+  type RouteStop,
+} from "./cosmicRoute";
 
 // ---------------------------------------------------------------------------
 // Phase definitions — strict linear progression for the About experience
@@ -80,8 +87,7 @@ const FLY_THROUGH_CAM_LAG = 180;
 const FLY_THROUGH_CAM_HEIGHT = 40;
 
 const EXCITEMENT_DURATION_MS = 3400;
-const PATH_HEAD_SPEED = 4725; // Must match AboutParticleSwarm.ts
-const PATH_TRAVEL_SAMPLE_COUNT = 220;
+const PATH_TRAVEL_SAMPLE_COUNT = 900;
 const PATH_TRAVEL_SPEED = 980;
 const PATH_TRAVEL_MAX_FORCE = 1200;
 const PATH_TRAVEL_PREDICTION = 0.8;
@@ -99,7 +105,59 @@ const PATH_TRAVEL_STOP_EPSILON = 0.03;
 const PATH_TRAVEL_INPUT_RAMP_SECONDS = 3;
 const PATH_TRAVEL_INPUT_MIN_SCALE = 0.2;
 const PATH_TRAVEL_BRAKE_INPUT_FLOOR = 0.9;
-const PATH_TRAVEL_TARGET_DRIFT_PER_SEC = 0.55;
+/** The ride runs on its own at this speed scale (no rider speed input). */
+const PATH_TRAVEL_AUTO_SPEED_SCALE = 2;
+/** Route speed (from the speed profile) at or below which the view fully turns to a stop. */
+const STOP_LOOK_FULL_SPEED = 0.45;
+/** Route speed at or above which the view looks straight down the rail. */
+const STOP_LOOK_NONE_SPEED = 1;
+const STOP_LOOK_MAX_WEIGHT = 0.85;
+/** Slow, so the turn toward a stop and back reads as a gentle head turn. */
+const STOP_LOOK_DAMP_PER_SEC = 0.9;
+
+// Falcon fly-by: once per ride, on an open stretch, the Falcon (scaled up)
+// comes up alongside, matches speed, then punches ahead and peels away.
+const FLY_BY_EARLIEST_S = 8;
+/** Route speed that counts as cruising (away from stops). */
+const FLY_BY_MIN_ROUTE_SPEED = 1;
+/** Seconds of steady cruising before the fly-by starts. */
+const FLY_BY_CRUISE_HOLD_S = 1;
+/**
+ * The fly-by starts on the straightest stretch early in the loop: every
+ * cruise-speed stretch long enough for the approach and side-by-side flight
+ * is scored by how far it bends, and one within this many degrees of the
+ * straightest is picked at random when the ride starts.
+ */
+const FLY_BY_STRAIGHTNESS_TOLERANCE_DEG = 3;
+/** Only the first part of the loop counts as "early on". */
+const FLY_BY_EARLY_FRACTION = 0.6;
+/** Samples of the loop used to find straight stretches. */
+const FLY_BY_SCAN_SAMPLES = 1200;
+/** Rail distance that must remain so it doesn't run into the finale. */
+const FLY_BY_MIN_REMAINING = 12000;
+/** ~14-unit model × FALCON_SCALE 0.05 × this ≈ 460 units long, dwarfing Mjolnir. */
+const FLY_BY_SHIP_SCALE = 660;
+/**
+ * "Alongside" spot relative to the rider: always well ahead and off to the
+ * side (~25° off center), so we see the ship's side as well as its rear.
+ */
+const FLY_BY_ALONG = 1100;
+const FLY_BY_LATERAL = 520;
+/** During the punch it cuts across in front of the rider to this side. */
+const FLY_BY_CUT_ACROSS_LATERAL = -520;
+const FLY_BY_HEIGHT = 20;
+/** Peak of the single up-and-down arc while flying alongside. */
+const FLY_BY_ARC_HEIGHT = 70;
+/** Where the approach starts (behind the rider) and how far the punch covers. */
+const FLY_BY_START_ALONG = -1400;
+const FLY_BY_START_HEIGHT = -120;
+const FLY_BY_PUNCH_DISTANCE = 3200;
+const FLY_BY_APPROACH_S = 3;
+const FLY_BY_ALONGSIDE_S = 4.5;
+const FLY_BY_PUNCH_S = 1.5;
+const FLY_BY_VEER_S = 2;
+/** After the ride, the ship is parked this far ahead of where the rider stopped. */
+const SHIP_PARK_AHEAD = 12;
 const PATH_TRAVEL_ACCEL_PER_SEC = 1.2;
 const PATH_TRAVEL_BRAKE_PER_SEC = 2.8;
 const PATH_TRAVEL_COAST_DRAG_PER_SEC = 0.95;
@@ -112,40 +170,37 @@ const PATH_TRAVEL_CRUISE_TOP_SPEED_SCALE = PATH_TRAVEL_SPEED_SCALE_MAX;
 const PATH_TRAVEL_CAMERA_TURN_DAMP_PER_SEC = 4.6;
 
 // ---------------------------------------------------------------------------
-// Cosmic path waypoints — a closed loop through universe landmarks
+// Cosmic route — a random closed loop through the universe's destinations
 // ---------------------------------------------------------------------------
 
-export interface UniverseLandmark {
-  name: string;
-  position: THREE.Vector3;
-}
-
-function buildCosmicLoopPath(
-  origin: THREE.Vector3,
-  landmarks: UniverseLandmark[],
-): THREE.CatmullRomCurve3 {
-  const waypoints: THREE.Vector3[] = [origin.clone()];
-
-  for (const lm of landmarks) {
-    const toward = lm.position.clone().sub(origin).normalize();
-    const passPoint = lm.position.clone().addScaledVector(toward, -500);
-    passPoint.y += 200 + Math.random() * 300;
-    waypoints.push(passPoint);
-  }
-
-  waypoints.push(origin.clone());
-
-  return new THREE.CatmullRomCurve3(waypoints, true, "catmullrom", 0.3);
+export interface CosmicRouteConfig {
+  stops: RouteStop[];
+  obstacles: RouteObstacle[];
+  /** Length of the legacy loop; formation and ride times are matched to it. */
+  referenceLength: number;
 }
 
 // ---------------------------------------------------------------------------
 // Controller callbacks
 // ---------------------------------------------------------------------------
 
+/**
+ * Mjolnir finale camera: aim this far below the hammer (and later the impact
+ * point) so the point of impact and space under the path are in view; how
+ * quickly it turns while following the dive and after impact; and how long it
+ * holds on the impact while the rail explodes.
+ */
+const FINALE_LOOK_BELOW = 70;
+const FINALE_LOOK_RATE = 7;
+const FINALE_IMPACT_LOOK_RATE = 9;
+const FINALE_HOLD_AFTER_IMPACT_MS = 1400;
+
 export interface AboutJourneyCallbacks {
   hideShip(): void;
   showShip(): void;
   setShipPose(position: THREE.Vector3, forward: THREE.Vector3): void;
+  /** Multiplies the ship's normal scale (1 restores it). */
+  setShipScale?(multiplier: number): void;
   setFollowingSpaceship(v: boolean): void;
   disableControls(): void;
   enableControls(): void;
@@ -163,6 +218,32 @@ export interface AboutJourneyCallbacks {
   onPathDispersalComplete(): void;
   /** Any non-IDLE exit: restore camera limits and drop the hydrate swarm if still present. */
   onAboutJourneyExit(): void;
+  /** Optional object that rides the rail ahead of the rider and ends the ride. */
+  getRideCompanion?(): RideCompanion | null;
+  /** The companion just smashed into the rail at this point (impact effects). */
+  onRailImpact?(point: THREE.Vector3): void;
+}
+
+export interface RideCompanion {
+  readonly position: THREE.Vector3;
+  /** Flies in and hovers in front of the rider; `onReady` once it waits to be grabbed. */
+  arrive(path: CosmicPathCurve, riderT: number, onReady: () => void): boolean;
+  /** Docks with the rider; `onDocked` once it's ready to pull. */
+  dock(onDocked: () => void): boolean;
+  /** Rider's camera position and smoothed travel direction. */
+  setRiderFrame(cameraPosition: THREE.Vector3, forward: THREE.Vector3): void;
+  /** While true, only `update(..., "ride")` from the ride tick moves it. */
+  setDriven(driven: boolean): void;
+  update(
+    dt: number,
+    elapsed: number,
+    cameraPosition?: THREE.Vector3,
+    source?: "scene" | "ride",
+  ): void;
+  setRider(riderT: number, sign: 1 | -1): void;
+  /** Returns false if it can't strike, in which case the ride ends normally. */
+  startStrike(onImpact: (impactT: number, point: THREE.Vector3) => void): boolean;
+  hide(): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,15 +284,50 @@ export class AboutJourneyController {
   private _ringAxis = new THREE.Vector3(0, 1, 0);
 
   // PATH_FORMING state
-  private _cosmicPath: THREE.CatmullRomCurve3 | null = null;
+  private _cosmicPath: CosmicPathCurve | null = null;
   private _pathFormStartedAt = 0;
+  private _dispersalOriginT = 0;
+  private _dispersalOriginOverride: number | null = null;
+  private _dispersalImpactPoint = new THREE.Vector3();
+  private _hasDispersalImpactPoint = false;
+  private _finaleActive = false;
+  /** Finale camera runs on its own frame loop so ending the ride can't cut it off. */
+  private _finaleRafId = 0;
+  private _finaleHasImpact = false;
+  private _finaleHoldUntil = 0;
+  private readonly _finaleImpactPoint = new THREE.Vector3();
+  private _followDeferredUntilDispersalEnds = false;
+  /** Camera is boarding the rail / Mjolnir is arriving or waiting (PATH_READY). */
+  private _boarding = false;
+  private _awaitingGrab = false;
+  /** 0 = looking down the rail, up to STOP_LOOK_MAX_WEIGHT = turned toward a stop. */
+  private _stopLookWeight = 0;
+  private readonly _rideLookDir = new THREE.Vector3();
+  private _flyByState: "pending" | "active" | "done" = "done";
+  private _flyByTime = 0;
+  private _cruiseSince = 0;
+  /** Rider distance (from ride start) where the fly-by begins; null = no straight found. */
+  private _flyByStartDistance: number | null = null;
+  private _flyByHasPrev = false;
+  private readonly _flyByPos = new THREE.Vector3();
+  private readonly _flyByPrevPos = new THREE.Vector3();
+  private readonly _flyByTangent = new THREE.Vector3();
+  private readonly _flyByRight = new THREE.Vector3();
+  private readonly _flyByForward = new THREE.Vector3(0, 0, 1);
+  private readonly _flyByMotion = new THREE.Vector3();
+  private readonly _flyByUp = new THREE.Vector3(0, 1, 0);
+  /** Where the rider stopped at the end of the loop (near the About origin). */
+  private _hasRideEnd = false;
+  private readonly _rideEndPosition = new THREE.Vector3();
+  private readonly _rideEndForward = new THREE.Vector3(0, 0, 1);
+  private readonly _shipParkPosition = new THREE.Vector3();
 
   // Reusable temp vectors
   private readonly _tmpCam = new THREE.Vector3();
   private readonly _tmpTarget = new THREE.Vector3();
   private readonly _tmpFlyShipPos = new THREE.Vector3();
 
-  private _landmarks: UniverseLandmark[] = [];
+  private _routeConfigProvider: (() => CosmicRouteConfig | null) | null = null;
   private _travelVehicle: YukaVehicle | null = null;
   private _travelStartedAt = 0;
   private _travelLastTickAt = 0;
@@ -253,8 +369,9 @@ export class AboutJourneyController {
     this._cb = callbacks;
   }
 
-  setLandmarks(landmarks: UniverseLandmark[]): void {
-    this._landmarks = landmarks;
+  /** Route inputs are read when a path starts forming, so positions are current. */
+  setRouteConfigProvider(provider: () => CosmicRouteConfig | null): void {
+    this._routeConfigProvider = provider;
   }
 
   // --- Public read-only state ---
@@ -304,8 +421,18 @@ export class AboutJourneyController {
     return this._ringAxis;
   }
 
-  get cosmicPath(): THREE.CatmullRomCurve3 | null {
+  get cosmicPath(): CosmicPathCurve | null {
     return this._cosmicPath;
+  }
+
+  /** Where along the route (0..1) the rider was when the path burst. */
+  get dispersalOriginT(): number {
+    return this._dispersalOriginT;
+  }
+
+  /** Where the ride companion struck the rail, if the ride ended that way. */
+  get dispersalImpactPoint(): THREE.Vector3 | null {
+    return this._hasDispersalImpactPoint ? this._dispersalImpactPoint : null;
   }
 
   get pathCrystallizationActive(): boolean {
@@ -488,7 +615,10 @@ export class AboutJourneyController {
       )
       .normalize();
 
-    // Stop following ship, disable user controls
+    // Stop following ship, disable user controls. The autopilot must let go
+    // too, or it keeps steering the ship to its standoff point beside the
+    // swarm instead of through it.
+    this._cb.setAutopilotSuppressed(true);
     this._cb.setFollowingSpaceship(false);
     this._cb.disableControls();
     this._cb.showShip();
@@ -586,9 +716,22 @@ export class AboutJourneyController {
       return;
     }
 
-    // Build the cosmic loop path through universe landmarks
-    this._cosmicPath = buildCosmicLoopPath(swarmPos, this._landmarks);
+    const routeConfig = this._routeConfigProvider?.();
+    if (!routeConfig || routeConfig.stops.length === 0) {
+      this._transition(AboutJourneyPhase.IDLE);
+      return;
+    }
+    this._cosmicPath = buildCosmicRoute({ origin: swarmPos, ...routeConfig });
+    this._dispersalOriginT = 0;
+    this._dispersalOriginOverride = null;
+    this._hasDispersalImpactPoint = false;
     this._pathFormStartedAt = performance.now();
+    const { timing } = this._cosmicPath;
+    this._cb.vlog(
+      `✨ [AboutJourney] Route ${Math.round(timing.length)} units ` +
+        `(legacy ${Math.round(timing.referenceLength)}), forms in ` +
+        `${timing.formSeconds.toFixed(1)}s`,
+    );
 
     // Enable controls so user can look around, but we'll soft-guide the target
     this._cb.enableControls();
@@ -596,6 +739,7 @@ export class AboutJourneyController {
 
     const _trackTarget = new THREE.Vector3();
     const _currentTarget = new THREE.Vector3();
+    const _headPos = new THREE.Vector3();
     const TRACK_LERP = 0.015; // Gentle tracking — not locked, just guided
 
     const tick = () => {
@@ -605,12 +749,10 @@ export class AboutJourneyController {
       if (ctrl && this._cosmicPath) {
         // Calculate where the spear head currently is on the path
         const elapsed = performance.now() - this._pathFormStartedAt;
-        const pathLength = this._cosmicPath.getLength();
-        const headT = Math.min(
-          1,
-          ((elapsed / 1000) * PATH_HEAD_SPEED) / pathLength,
-        );
-        const headPos = this._cosmicPath.getPointAt(headT);
+        const { length, headSpeed } = this._cosmicPath.timing;
+        const headT = Math.min(1, ((elapsed / 1000) * headSpeed) / length);
+        this._cosmicPath.getPointAt(headT, _headPos);
+        const headPos = _headPos;
 
         // Soft-track: gently nudge the camera's look-at target toward the spear head
         ctrl.getTarget(_currentTarget);
@@ -652,31 +794,53 @@ export class AboutJourneyController {
     this._pathReadyTravelTimeoutId = window.setTimeout(() => {
       this._pathReadyTravelTimeoutId = null;
       if (this._phase === AboutJourneyPhase.PATH_READY) {
-        this.beginPathTravel();
+        this._boardRail();
       }
     }, PATH_READY_TRAVEL_DELAY_MS);
   }
 
-  /** Enter travel mode on the completed cosmic path as an "invisible tram" ride. */
-  beginPathTravel(): void {
-    if (
-      this._phase !== AboutJourneyPhase.PATH_READY &&
-      this._phase !== AboutJourneyPhase.PATH_TRAVEL
-    ) {
+  /**
+   * Boards the rider onto the rail (still PATH_READY) and calls Mjolnir in.
+   * The ride itself starts only when the rider grabs the hammer.
+   */
+  private _boardRail(): void {
+    if (this._phase !== AboutJourneyPhase.PATH_READY || this._boarding) return;
+    this._boarding = true;
+    this._awaitingGrab = false;
+    this._clearPathReadyTravelTimeout();
+    // Ride is camera-only; the ship stays hidden while riding the rail.
+    this._cb.hideShip();
+    this._cb.setFollowingSpaceship(false);
+    this._cb.disableControls();
+    this._startPathTravelRun();
+    this._cb.vlog("✨ [AboutJourney] Boarding the rail — calling Mjolnir");
+  }
+
+  /** True while Mjolnir hovers in front of the rider, waiting to be clicked. */
+  get awaitingGrab(): boolean {
+    return this._awaitingGrab;
+  }
+
+  /** Rider clicked Mjolnir: it docks, then pulls the rider down the rail. */
+  grabCompanion(): void {
+    if (this._phase !== AboutJourneyPhase.PATH_READY || !this._awaitingGrab) {
       return;
     }
-    if (this._phase === AboutJourneyPhase.PATH_READY) {
-      if (!this._transition(AboutJourneyPhase.PATH_TRAVEL)) return;
-      this._clearPathReadyTravelTimeout();
-      // Ride is camera-only; Falcon stays hidden while the tram traverses the loop.
-      this._cb.hideShip();
-      this._cb.setFollowingSpaceship(false);
-      this._cb.disableControls();
-      this._startPathTravelRun();
-    }
-    this._cb.vlog(
-      "✨ [AboutJourney] Invisible tram engaged on completed cosmic path",
-    );
+    const companion = this._cb.getRideCompanion?.();
+    if (!companion) return;
+    this._awaitingGrab = false;
+    companion.dock(() => this._beginRide());
+  }
+
+  private _beginRide(): void {
+    if (this._phase !== AboutJourneyPhase.PATH_READY) return;
+    if (!this._transition(AboutJourneyPhase.PATH_TRAVEL)) return;
+    this._boarding = false;
+    this._cb.getRideCompanion?.()?.setDriven(true);
+    this._travelStartedAt = performance.now();
+    this._travelLastTickAt = this._travelStartedAt;
+    this._runPathTravelTick();
+    this._cb.vlog("✨ [AboutJourney] Mjolnir docked — ride underway");
   }
 
   /** Fast-forward the path-forming cinematic directly into tram boarding/travel. */
@@ -699,7 +863,7 @@ export class AboutJourneyController {
     this._cb.vlog(
       "⏭️ [AboutJourney] Skipping path-forming cinematic to tram boarding",
     );
-    this.beginPathTravel();
+    this._boardRail();
   }
 
   /** Explicitly disperse the path, e.g. when retargeting Falcon to another destination. */
@@ -713,8 +877,16 @@ export class AboutJourneyController {
 
     this._clearPathReadyTravelTimeout();
     this._pathCrystallizationActive = false;
+    // Retargeting away mid-ride: no hammer finale.
+    this._cb.getRideCompanion?.()?.hide();
+    this._finaleActive = false;
+    this._boarding = false;
+    this._awaitingGrab = false;
 
-    if (this._phase === AboutJourneyPhase.PATH_TRAVEL) {
+    if (
+      this._phase === AboutJourneyPhase.PATH_TRAVEL ||
+      this._phase === AboutJourneyPhase.PATH_READY
+    ) {
       this._travelRunning = false;
       this._travelVehicle = null;
       this._travelInputDirection = 0;
@@ -823,10 +995,7 @@ export class AboutJourneyController {
 
     const boardingStartedAt = performance.now();
     const boardTick = () => {
-      if (
-        this._phase !== AboutJourneyPhase.PATH_TRAVEL ||
-        !this._travelRunning
-      ) {
+      if (this._phase !== AboutJourneyPhase.PATH_READY || !this._boarding) {
         return;
       }
 
@@ -866,8 +1035,24 @@ export class AboutJourneyController {
       );
 
       if (t >= 1) {
-        this._travelLastTickAt = performance.now();
-        this._runPathTravelTick();
+        this._rafId = null;
+        const companion = this._cb.getRideCompanion?.();
+        const path = this._cosmicPath;
+        companion?.setRiderFrame(this._tmpTravelBoardEndCam, this._tmpTravelForward);
+        const arriving =
+          !!companion &&
+          !!path &&
+          companion.arrive(
+            path,
+            THREE.MathUtils.euclideanModulo(this._travelStartT, 1),
+            () => {
+              if (this._phase === AboutJourneyPhase.PATH_READY && this._boarding) {
+                this._awaitingGrab = true;
+              }
+            },
+          );
+        // Without the hammer (e.g. it failed to load) the ride starts on its own.
+        if (!arriving) this._beginRide();
         return;
       }
 
@@ -879,8 +1064,14 @@ export class AboutJourneyController {
   }
 
   private _runPathTravelTick(): void {
-    // Let the rider look around while the tram remains rail-locked.
-    this._cb.enableControls();
+    // The ride steers the camera (down the rail, and toward stops).
+    this._cb.disableControls();
+    this._stopLookWeight = 0;
+    this._rideLookDir.set(0, 0, 0);
+    this._flyByState = "pending";
+    this._cruiseSince = 0;
+    this._flyByStartDistance = this._pickFlyByStart();
+    this._hasRideEnd = false;
 
     const tick = () => {
       if (
@@ -931,8 +1122,8 @@ export class AboutJourneyController {
 
         this._travelSpeedTarget = this._travelInputDirection * brakingMagnitude;
       } else {
-        const decayAlpha = 1 - Math.exp(-PATH_TRAVEL_TARGET_DRIFT_PER_SEC * dt);
-        this._travelSpeedTarget += (0 - this._travelSpeedTarget) * decayAlpha;
+        // No rider input: Mjolnir pulls at a steady pace to the end.
+        this._travelSpeedTarget = PATH_TRAVEL_AUTO_SPEED_SCALE;
       }
 
       const speedError = this._travelSpeedTarget - this._travelSpeedScale;
@@ -983,12 +1174,17 @@ export class AboutJourneyController {
         this._travelVehicle.velocity.z,
       );
 
-      const guideSpeed =
-        THREE.MathUtils.clamp(
-          this._tmpTravelVel.length(),
-          PATH_TRAVEL_SPEED * 0.55,
-          PATH_TRAVEL_SPEED,
-        ) * this._travelSpeedScale;
+      // Slow through stops, faster between them; a full loop still takes as
+      // long as the legacy loop.
+      const routeSpeed = this._cosmicPath
+        ? routeSpeedAt(
+            this._cosmicPath.timing,
+            this._travelStartT +
+              this._travelDistanceTraveled /
+                Math.max(1, this._travelPathLength),
+          )
+        : 1;
+      const guideSpeed = PATH_TRAVEL_SPEED * this._travelSpeedScale * routeSpeed;
       this._travelDistanceTraveled += guideSpeed * dt;
       this._travelDistanceAbs += Math.abs(guideSpeed) * dt;
 
@@ -1005,6 +1201,7 @@ export class AboutJourneyController {
       this._tmpTravelPos.copy(path.getPointAt(railT));
       this._tmpTravelTangent.copy(path.getTangentAt(railT)).normalize();
       const travelSign = this._travelSpeedScale >= 0 ? 1 : -1;
+      this._cb.getRideCompanion?.()?.setRider(railT, travelSign);
       this._tmpTravelForward
         .copy(this._tmpTravelTangent)
         .multiplyScalar(travelSign)
@@ -1025,44 +1222,55 @@ export class AboutJourneyController {
 
       const ctrl = this._cb.getControls();
       if (ctrl) {
-        const cam = this._cb.getCamera();
         // "Invisible tram" feel: keep camera on the rail centerline and only
         // raise slightly for readability.
         this._tmpTravelCamPos
           .copy(this._tmpTravelPos)
           .add(new THREE.Vector3(0, PATH_TRAVEL_CAM_HEIGHT, 0));
 
-        // Preserve rider-chosen look direction while moving camera along rail.
-        if (cam) {
-          ctrl.getTarget(this._tmpTravelUserTarget);
-          this._tmpTravelUserViewDir
-            .subVectors(this._tmpTravelUserTarget, cam.position)
-            .normalize();
-        } else {
-          this._tmpTravelUserViewDir.copy(this._tmpTravelForward);
+        // Look down the rail; while the ride slows past a stop, slowly turn
+        // toward it, then back as it speeds up again.
+        // Travel heading, smoothed through bends. Mjolnir rides along it.
+        if (this._rideLookDir.lengthSq() < 1e-4) {
+          this._rideLookDir.copy(this._tmpTravelForward);
         }
-
-        if (this._tmpTravelUserViewDir.lengthSq() < 0.0001) {
-          this._tmpTravelUserViewDir.copy(this._tmpTravelForward);
-        }
-
-        if (this._travelCameraMode === "forward") {
-          // Keep camera orientation predictable, but smooth turn-in so sharp
-          // rail corners do not snap the rider's view.
-          this._tmpTravelForwardTargetDir.copy(this._tmpTravelTangent);
-          if (this._travelCameraReversed) {
-            this._tmpTravelForwardTargetDir.multiplyScalar(-1);
+        this._rideLookDir
+          .lerp(
+            this._tmpTravelForward,
+            1 - Math.exp(-PATH_TRAVEL_CAMERA_TURN_DAMP_PER_SEC * dt),
+          )
+          .normalize();
+        this._tmpTravelForwardTargetDir.copy(this._rideLookDir);
+        let nearestStop: THREE.Vector3 | null = null;
+        let nearestStopDistSq = Number.POSITIVE_INFINITY;
+        for (const center of path.timing.stopCenters) {
+          const d2 = center.distanceToSquared(this._tmpTravelPos);
+          if (d2 < nearestStopDistSq) {
+            nearestStopDistSq = d2;
+            nearestStop = center;
           }
-          if (this._tmpTravelForwardLookDir.lengthSq() < 0.0001) {
-            this._tmpTravelForwardLookDir.copy(this._tmpTravelForwardTargetDir);
-          }
-          const turnBlend =
-            1 - Math.exp(-PATH_TRAVEL_CAMERA_TURN_DAMP_PER_SEC * dt);
-          this._tmpTravelForwardLookDir
-            .lerp(this._tmpTravelForwardTargetDir, turnBlend)
-            .normalize();
-          this._tmpTravelUserViewDir.copy(this._tmpTravelForwardLookDir);
         }
+        const slowness =
+          1 -
+          THREE.MathUtils.smoothstep(
+            routeSpeed,
+            STOP_LOOK_FULL_SPEED,
+            STOP_LOOK_NONE_SPEED,
+          );
+        const lookWeightTarget = nearestStop ? slowness * STOP_LOOK_MAX_WEIGHT : 0;
+        this._stopLookWeight +=
+          (lookWeightTarget - this._stopLookWeight) *
+          (1 - Math.exp(-STOP_LOOK_DAMP_PER_SEC * dt));
+        if (nearestStop && this._stopLookWeight > 1e-3) {
+          this._tmpTravelUserTarget
+            .subVectors(nearestStop, this._tmpTravelCamPos)
+            .normalize();
+          this._tmpTravelForwardTargetDir
+            .lerp(this._tmpTravelUserTarget, this._stopLookWeight)
+            .normalize();
+        }
+        // The stop weight itself eases slowly, so the view turns gently.
+        this._tmpTravelUserViewDir.copy(this._tmpTravelForwardTargetDir);
 
         this._tmpTravelLookPos
           .copy(this._tmpTravelCamPos)
@@ -1082,12 +1290,45 @@ export class AboutJourneyController {
         );
       }
 
+      // Move Mjolnir in this same tick, from this frame's camera position, so
+      // it can't lag a frame behind (at ride speed that read as jitter and as
+      // the rider overtaking it).
+      const rideCompanion = this._cb.getRideCompanion?.();
+      if (rideCompanion) {
+        rideCompanion.setRiderFrame(this._tmpTravelCamPos, this._rideLookDir);
+        rideCompanion.update(dt, now / 1000, this._tmpTravelCamPos, "ride");
+      }
+
+      this._updateFlyBy(dt, now, routeSpeed, path);
+
       const elapsedMs = now - this._travelStartedAt;
       const loopCompleted = this._travelDistanceAbs >= this._travelPathLength;
       const minElapsed = elapsedMs >= PATH_TRAVEL_MIN_DURATION_MS;
 
       if (loopCompleted && minElapsed) {
-        this._completePathTravelRun();
+        this._rideEndPosition.copy(this._tmpTravelCamPos);
+        this._rideEndForward.copy(this._rideLookDir);
+        this._hasRideEnd = this._rideEndForward.lengthSq() > 1e-6;
+        // The companion smashes the rail; the shatter starts where it lands.
+        const companion = this._cb.getRideCompanion?.();
+        const striking = companion?.startStrike((impactT, point) => {
+          this._finaleActive = false;
+          // Keep looking at the point of impact (and just below it) while the
+          // rail explodes, and let the scene add its impact flash.
+          this._finaleImpactPoint.copy(point);
+          this._finaleHasImpact = true;
+          this._finaleHoldUntil = performance.now() + FINALE_HOLD_AFTER_IMPACT_MS;
+          this._cb.onRailImpact?.(point);
+          this._dispersalOriginOverride = impactT;
+          this._dispersalImpactPoint.copy(point);
+          this._hasDispersalImpactPoint = true;
+          this._completePathTravelRun();
+        });
+        if (companion && striking) {
+          this._runFinaleCamera(companion);
+        } else {
+          this._completePathTravelRun();
+        }
         return;
       }
 
@@ -1096,6 +1337,248 @@ export class AboutJourneyController {
 
     this._cancelRaf();
     this._rafId = requestAnimationFrame(tick);
+  }
+
+  /**
+   * Picks, at random, the start of a long, nearly straight cruise stretch early
+   * in the loop for the fly-by. Returns the rider distance from the ride start
+   * to begin at, or null if the route has no such stretch.
+   */
+  private _pickFlyByStart(): number | null {
+    const path = this._cosmicPath;
+    if (!path) return null;
+    const length = Math.max(1, this._travelPathLength);
+    const n = FLY_BY_SCAN_SAMPLES;
+    const ds = length / n;
+    const tangents: THREE.Vector3[] = [];
+    const speeds: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const t = THREE.MathUtils.euclideanModulo(this._travelStartT + i / n, 1);
+      tangents.push(path.getTangentAt(t, new THREE.Vector3()).normalize());
+      speeds.push(routeSpeedAt(path.timing, t));
+    }
+
+    // Samples the rider covers while the Falcon is in view: the second half
+    // of the approach and the side-by-side flight (early in the approach it's
+    // still behind the rider, and the punch races ahead on its own).
+    const flyBySeconds = FLY_BY_APPROACH_S * 0.5 + FLY_BY_ALONGSIDE_S;
+    const riderSpeedAt = (i: number) =>
+      PATH_TRAVEL_SPEED * PATH_TRAVEL_AUTO_SPEED_SCALE * Math.max(0.05, speeds[i % n]);
+    const earliest = Math.ceil(
+      (FLY_BY_EARLIEST_S * riderSpeedAt(0)) / ds,
+    );
+    const latest = Math.floor(n * FLY_BY_EARLY_FRACTION);
+
+    // Score every cruise-speed window by its worst bend (min tangent dot).
+    const windows: Array<{ start: number; straightness: number }> = [];
+    for (let start = earliest; start < latest; start++) {
+      if (length - start * ds <= FLY_BY_MIN_REMAINING) break;
+      let time = 0;
+      let straightness = 1;
+      let cruising = true;
+      let i = start;
+      while (time < flyBySeconds && i - start < n) {
+        if (speeds[i % n] < FLY_BY_MIN_ROUTE_SPEED) {
+          cruising = false;
+          break;
+        }
+        straightness = Math.min(straightness, tangents[i % n].dot(tangents[start]));
+        time += ds / riderSpeedAt(i);
+        i++;
+      }
+      if (cruising && time >= flyBySeconds) windows.push({ start, straightness });
+    }
+    if (windows.length === 0) {
+      this._cb.vlog("✈️ [AboutJourney] No cruise stretch for the fly-by; using cruise trigger");
+      return null;
+    }
+
+    const bestBendDeg = THREE.MathUtils.radToDeg(
+      Math.acos(THREE.MathUtils.clamp(Math.max(...windows.map((w) => w.straightness)), -1, 1)),
+    );
+    const acceptCos = Math.cos(
+      THREE.MathUtils.degToRad(bestBendDeg + FLY_BY_STRAIGHTNESS_TOLERANCE_DEG),
+    );
+    const candidates = windows.filter((w) => w.straightness >= acceptCos);
+    const pick = candidates[Math.floor(Math.random() * candidates.length)].start;
+    this._cb.vlog(
+      `✈️ [AboutJourney] Fly-by planned at ${Math.round(pick * ds)} units ` +
+        `(straightest bend ${bestBendDeg.toFixed(1)}°, ${candidates.length} starts)`,
+    );
+    return pick * ds;
+  }
+
+  private _updateFlyBy(
+    dt: number,
+    now: number,
+    routeSpeed: number,
+    path: CosmicPathCurve,
+  ): void {
+    if (this._flyByState === "done") return;
+    const length = Math.max(1, this._travelPathLength);
+
+    if (this._flyByState === "pending") {
+      if (this._flyByStartDistance !== null) {
+        // Planned: begin when the rider reaches the chosen straight stretch.
+        if (this._travelDistanceAbs < this._flyByStartDistance) return;
+      } else {
+        // No straight stretch on this route: fall back to steady cruising.
+        const cruising =
+          routeSpeed >= FLY_BY_MIN_ROUTE_SPEED &&
+          (now - this._travelStartedAt) / 1000 > FLY_BY_EARLIEST_S &&
+          length - this._travelDistanceAbs > FLY_BY_MIN_REMAINING;
+        this._cruiseSince = cruising ? this._cruiseSince + dt : 0;
+        if (this._cruiseSince < FLY_BY_CRUISE_HOLD_S) return;
+      }
+      this._flyByState = "active";
+      this._flyByTime = 0;
+      this._flyByHasPrev = false;
+      this._cb.setShipScale?.(FLY_BY_SHIP_SCALE);
+    }
+
+    this._flyByTime += dt;
+    const t = this._flyByTime;
+    const approachEnd = FLY_BY_APPROACH_S;
+    const alongsideEnd = approachEnd + FLY_BY_ALONGSIDE_S;
+    const punchEnd = alongsideEnd + FLY_BY_PUNCH_S;
+    const veerEnd = punchEnd + FLY_BY_VEER_S;
+    let along = FLY_BY_ALONG;
+    let lateral = FLY_BY_LATERAL;
+    let height = FLY_BY_HEIGHT;
+    if (t < approachEnd) {
+      // Blows in from behind and settles alongside, easing to our speed.
+      const u = t / FLY_BY_APPROACH_S;
+      along = THREE.MathUtils.lerp(
+        FLY_BY_START_ALONG,
+        FLY_BY_ALONG,
+        1 - Math.pow(1 - u, 3),
+      );
+      height = THREE.MathUtils.lerp(
+        FLY_BY_START_HEIGHT,
+        FLY_BY_HEIGHT,
+        THREE.MathUtils.smoothstep(u, 0, 1),
+      );
+    } else if (t < alongsideEnd) {
+      // Locked alongside (no fore/aft drift, which read as falling behind),
+      // rising in one gentle arc and settling back, like real flight; the
+      // nose follows the motion so it pitches into the climb and out of it.
+      height +=
+        FLY_BY_ARC_HEIGHT *
+        Math.sin((Math.PI * (t - approachEnd)) / FLY_BY_ALONGSIDE_S);
+    } else if (t < punchEnd) {
+      // Punches it and cuts across in front of the rider once it's clear
+      // ahead (so the big ship never sweeps through the camera or Mjolnir).
+      const u = (t - alongsideEnd) / FLY_BY_PUNCH_S;
+      along += FLY_BY_PUNCH_DISTANCE * u * u * u;
+      lateral = THREE.MathUtils.lerp(
+        FLY_BY_LATERAL,
+        FLY_BY_CUT_ACROSS_LATERAL,
+        THREE.MathUtils.smoothstep(u, 0.3, 1),
+      );
+    } else if (t < veerEnd) {
+      // Keeps its punch speed (never slows) while veering off on the far side
+      // and climbing away.
+      const punchExitSpeed = (3 * FLY_BY_PUNCH_DISTANCE) / FLY_BY_PUNCH_S;
+      const s = t - punchEnd;
+      const u = s / FLY_BY_VEER_S;
+      along += FLY_BY_PUNCH_DISTANCE + punchExitSpeed * s;
+      lateral = FLY_BY_CUT_ACROSS_LATERAL - 2600 * u * u;
+      height += 1000 * u * u;
+    } else {
+      this._endFlyBy();
+      return;
+    }
+
+    const riderDistance = this._travelStartT * length + this._travelDistanceTraveled;
+    const s = THREE.MathUtils.euclideanModulo((riderDistance + along) / length, 1);
+    path.getPointAt(s, this._flyByPos);
+    path.getTangentAt(s, this._flyByTangent).normalize();
+    this._flyByRight.crossVectors(this._flyByTangent, this._flyByUp).normalize();
+    this._flyByPos
+      .addScaledVector(this._flyByRight, lateral)
+      .addScaledVector(this._flyByUp, height);
+
+    // Nose follows its actual motion, smoothed.
+    if (this._flyByHasPrev) {
+      this._flyByMotion.subVectors(this._flyByPos, this._flyByPrevPos);
+    }
+    const wanted =
+      this._flyByHasPrev && this._flyByMotion.lengthSq() > 1e-4
+        ? this._flyByMotion.normalize()
+        : this._flyByTangent;
+    if (!this._flyByHasPrev) this._flyByForward.copy(wanted);
+    this._flyByForward.lerp(wanted, 1 - Math.exp(-6 * dt)).normalize();
+    this._flyByPrevPos.copy(this._flyByPos);
+    this._flyByHasPrev = true;
+    this._cb.setShipPose(this._flyByPos, this._flyByForward);
+  }
+
+  /**
+   * Parks the ship just ahead of where the rider stopped (the loop ends back
+   * at the About origin), so following it resumes right there instead of
+   * wherever the ship was left, e.g. far down the rail after the fly-by.
+   */
+  private _placeShipAtRideEnd(): void {
+    if (!this._hasRideEnd) return;
+    this._hasRideEnd = false;
+    this._shipParkPosition
+      .copy(this._rideEndPosition)
+      .addScaledVector(this._rideEndForward, SHIP_PARK_AHEAD);
+    this._cb.setShipPose(this._shipParkPosition, this._rideEndForward);
+  }
+
+  private _endFlyBy(): void {
+    if (this._flyByState === "active") {
+      this._cb.hideShip();
+      this._cb.setShipScale?.(1);
+    }
+    this._flyByState = "done";
+  }
+
+  /** Rider stops on the rail and watches the companion climb and dive. */
+  private _runFinaleCamera(companion: RideCompanion): void {
+    this._finaleActive = true;
+    this._finaleHasImpact = false;
+    this._finaleHoldUntil = 0;
+    const camPos = this._tmpTravelCamPos.clone();
+    const lookDir = this._tmpTravelUserViewDir.clone();
+    const wantDir = new THREE.Vector3();
+    const target = new THREE.Vector3();
+    const look = new THREE.Vector3();
+    let last = performance.now();
+    const tick = () => {
+      const now = performance.now();
+      const following =
+        this._finaleActive && this._phase === AboutJourneyPhase.PATH_TRAVEL;
+      // After impact, hold on the point of impact for a moment (unless the
+      // journey was left altogether).
+      const holding =
+        this._finaleHasImpact &&
+        now < this._finaleHoldUntil &&
+        this._phase !== AboutJourneyPhase.IDLE;
+      if (!following && !holding) {
+        this._finaleRafId = 0;
+        return;
+      }
+      const dt = THREE.MathUtils.clamp((now - last) / 1000, 1 / 240, 1 / 30);
+      last = now;
+      target.copy(this._finaleHasImpact ? this._finaleImpactPoint : companion.position);
+      // Aim a little below, so the impact point and space under the path show.
+      target.y -= FINALE_LOOK_BELOW;
+      wantDir.subVectors(target, camPos);
+      if (wantDir.lengthSq() > 1e-4) {
+        const rate = this._finaleHasImpact ? FINALE_IMPACT_LOOK_RATE : FINALE_LOOK_RATE;
+        lookDir.lerp(wantDir.normalize(), 1 - Math.exp(-rate * dt)).normalize();
+      }
+      look.copy(camPos).addScaledVector(lookDir, PATH_TRAVEL_CAM_LOOK_AHEAD);
+      this._cb
+        .getControls()
+        ?.setLookAt(camPos.x, camPos.y, camPos.z, look.x, look.y, look.z, false);
+      this._finaleRafId = requestAnimationFrame(tick);
+    };
+    this._cancelRaf();
+    if (this._finaleRafId) cancelAnimationFrame(this._finaleRafId);
+    this._finaleRafId = requestAnimationFrame(tick);
   }
 
   private _completePathTravelRun(): void {
@@ -1109,9 +1592,16 @@ export class AboutJourneyController {
     this._travelCameraMode = "forward";
     this._cancelRaf();
 
-    // Hand control back to standard ship flow after tram loop is done.
-    this._cb.showShip();
-    this._cb.setFollowingSpaceship(true);
+    // Hand control back to standard ship flow after tram loop is done. After
+    // a hammer strike the camera holds on the impact until the burst ends;
+    // following the ship now would fight it and shake the view.
+    if (this._hasDispersalImpactPoint) {
+      this._followDeferredUntilDispersalEnds = true;
+    } else {
+      this._placeShipAtRideEnd();
+      this._cb.showShip();
+      this._cb.setFollowingSpaceship(true);
+    }
     this._cb.enableControls();
 
     const reason = this._pendingDispersalReason ?? "travel-loop-complete";
@@ -1121,6 +1611,21 @@ export class AboutJourneyController {
   }
 
   private _beginPathDispersing(reason: string): void {
+    // The burst radiates from wherever the rider is on the rail.
+    this._dispersalOriginT =
+      this._dispersalOriginOverride ??
+      (this._travelPathLength > 1
+        ? THREE.MathUtils.euclideanModulo(
+            this._travelStartT +
+              this._travelDistanceTraveled / this._travelPathLength,
+            1,
+          )
+        : 0);
+    this._dispersalOriginOverride = null;
+    this._finaleActive = false;
+    this._boarding = false;
+    this._awaitingGrab = false;
+    this._endFlyBy();
     this._clearPathReadyTravelTimeout();
     this._travelRunning = false;
     this._travelVehicle = null;
@@ -1143,6 +1648,12 @@ export class AboutJourneyController {
   notifyDispersalComplete(): void {
     if (this._phase !== AboutJourneyPhase.PATH_DISPERSING) return;
     this._cb.onPathDispersalComplete();
+    if (this._followDeferredUntilDispersalEnds) {
+      this._followDeferredUntilDispersalEnds = false;
+      this._placeShipAtRideEnd();
+      this._cb.showShip();
+      this._cb.setFollowingSpaceship(true);
+    }
     this._cosmicPath = null;
     this._transition(AboutJourneyPhase.IDLE);
     this._cb.vlog(
@@ -1165,6 +1676,14 @@ export class AboutJourneyController {
 
     const prevPhase = this._phase;
     this._cb.onAboutJourneyExit();
+    this._cb.getRideCompanion?.()?.hide();
+    this._finaleActive = false;
+    this._followDeferredUntilDispersalEnds = false;
+    this._hasDispersalImpactPoint = false;
+    this._dispersalOriginOverride = null;
+    this._boarding = false;
+    this._awaitingGrab = false;
+    this._endFlyBy();
     this._clearPathReadyTravelTimeout();
     this._travelRunning = false;
     this._travelVehicle = null;

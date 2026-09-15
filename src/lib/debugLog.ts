@@ -15,6 +15,22 @@ export const IS_DEBUG: boolean = (() => {
   }
 })();
 
+/**
+ * On-screen debug panels (loader debug, zone debugger, about-journey panel)
+ * need their own opt-in `?debugOverlays=true`, so `?debug=true` can be used
+ * for console logging without cluttering the screen.
+ */
+export const IS_DEBUG_OVERLAYS: boolean = (() => {
+  if (typeof window === "undefined") return false;
+  try {
+    return (
+      new URLSearchParams(window.location.search).get("debugOverlays") === "true"
+    );
+  } catch {
+    return false;
+  }
+})();
+
 const noop = () => {};
 
 export const dlog: typeof console.log = IS_DEBUG
