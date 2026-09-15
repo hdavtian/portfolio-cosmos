@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { config as loadDotEnv } from "dotenv";
 import { BlobServiceClient, type ContainerClient } from "@azure/storage-blob";
 import { imageSize } from "image-size";
 import { MongoClient, ObjectId, type Db, type Document } from "mongodb";
@@ -32,6 +33,10 @@ import {
   type MediaAsset,
 } from "@hd/content-schema";
 import { moonPortfolioMapping } from "../../../src/data/moonPortfolioMapping";
+
+// api/.env holds the local Docker targets; injected variables (npm run
+// db:import) still win, since dotenv never overrides what is already set.
+loadDotEnv();
 
 const APP_MEDIA_PREFIX = "scrolling-resume";
 const IMPORTED_BY = "import";

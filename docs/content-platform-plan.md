@@ -61,7 +61,13 @@ Status: **Phase 1 complete** on `feature/content-platform-phase-1` (2026-09-15).
   `npm run db:import` reads everything back from MongoDB and diffs it against
   `src/data`: 0 differences. Re-running the import changes nothing.
 - **Import safety:** the importer refuses any MongoDB or storage target that is
-  not local Docker. `api/.env` points at production Atlas, so this matters.
+  not local Docker.
+- **`api/.env` targets local Docker** (MongoDB `resume_cosmos_local` + Azurite),
+  so running any API script directly cannot touch production. Production values
+  live in Azure app settings; a local copy may sit in the git-ignored
+  `api/.env.production.local`, which only `db:pull` reads. `db:pull` resolves the
+  production URI from `MONGODB_URI`, then that file, then Azure app settings
+  (behind the az guard).
 - **Media:** blob names are URL-safe (spaces → hyphens, five legacy-web files);
   records keep the original `sourcePath`.
 - **Backups:** `npm run db:pull` dumps Atlas via the `mongo:8.0` Docker image

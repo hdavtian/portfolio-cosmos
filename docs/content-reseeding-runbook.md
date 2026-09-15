@@ -34,8 +34,14 @@ The seed process upserts by document key (for example: `resume`, `portfolio-core
 
 ## Production reseed workflow
 
+> `api/.env` targets local Docker MongoDB, so `npm run api:seed` seeds the local
+> database. A production reseed must pass the production connection explicitly,
+> for example by setting `MONGODB_URI` and `MONGODB_DB_NAME` in the shell for
+> that one command (values live in the `harma-api` Azure app settings, or in the
+> git-ignored `api/.env.production.local`).
+
 1. Ensure source data changes are committed and deployed.
-2. Run the seed script against the production API environment (same `api/src/scripts/seedContent.ts` process, pointed at production Mongo connection settings).
+2. Run the seed script against the production API environment (same `api/src/scripts/seedContent.ts` process, with production Mongo connection settings passed in the environment).
 3. Verify production API returns updated values:
    - `https://api.harmadavtian.com/api/v1/content/portfolio-cores`
 4. If frontend depends on API base URL, ensure deploy variable is correct:

@@ -1,16 +1,23 @@
 // Dumps the production Atlas database to db-backups/ (read-only on Atlas).
 //   npm run db:pull
 //
-// Uses mongodump from the mongo:8 Docker image, so no local install is needed.
-// The connection string comes from MONGODB_URI (environment or api/.env) and is
-// passed to the container through an environment variable, never printed.
+// Uses mongodump from the mongo:8.0 Docker image, so no local install is needed.
+// api/.env targets local Docker, so the production URI is resolved in this order:
+//   1. MONGODB_URI in the environment
+//   2. api/.env.production.local (git-ignored)
+//   3. the harma-api app settings in Azure (after the subscription guard)
+// The URI is passed to the container through an environment variable, never printed.
 // Dumps are kept; retention is managed by hand.
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const rootDir = path.resolve(import.meta.dirname, "..");
 const backupDir = path.join(rootDir, "db-backups");
+
+const AZURE_SUBSCRIPTION = "0aebe465-2471-45ac-a357-6f84975876ed";
+const AZURE_RESOURCE_GROUP = "rg-portfolio-prod";
+const AZURE_WEBAPP = "harma-api";
 
 const readDotEnv = (file) => {
   if (!existsSync(file)) return {};
@@ -25,14 +32,55 @@ const readDotEnv = (file) => {
   );
 };
 
-const apiEnv = readDotEnv(path.join(rootDir, "api", ".env"));
-const uri = process.env.MONGODB_URI ?? apiEnv.MONGODB_URI;
-const dbName = process.env.MONGODB_DB_NAME ?? apiEnv.MONGODB_DB_NAME ?? "resume_cosmos";
+const fromAzure = () => {
+  const guard = spawnSync(
+    "pwsh",
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(rootDir, "scripts", "az-guard.ps1")],
+    { stdio: "inherit" },
+  );
+  if (guard.status !== 0) process.exit(guard.status ?? 1);
+
+  const read = (name) =>
+    execFileSync(
+      "az",
+      [
+        "webapp",
+        "config",
+        "appsettings",
+        "list",
+        "--subscription",
+        AZURE_SUBSCRIPTION,
+        "-g",
+        AZURE_RESOURCE_GROUP,
+        "-n",
+        AZURE_WEBAPP,
+        "--query",
+        `[?name=='${name}'].value | [0]`,
+        "-o",
+        "tsv",
+      ],
+      { encoding: "utf8" },
+    ).trim();
+
+  console.log("[db:pull] Reading production connection details from Azure app settings...");
+  return { uri: read("MONGODB_URI"), dbName: read("MONGODB_DB_NAME") };
+};
+
+const productionEnv = readDotEnv(path.join(rootDir, "api", ".env.production.local"));
+let uri = process.env.MONGODB_URI ?? productionEnv.MONGODB_URI;
+let dbName = process.env.MONGODB_DB_NAME ?? productionEnv.MONGODB_DB_NAME;
 
 if (!uri || !uri.startsWith("mongodb+srv://")) {
-  console.error("[db:pull] MONGODB_URI must be the production Atlas URI (mongodb+srv://...), set in api/.env or the environment.");
+  ({ uri, dbName } = fromAzure());
+}
+
+if (!uri || !uri.startsWith("mongodb+srv://")) {
+  console.error(
+    "[db:pull] No production Atlas URI found. Set MONGODB_URI, add it to api/.env.production.local, or sign in with `az login`.",
+  );
   process.exit(1);
 }
+dbName ||= "resume_cosmos";
 
 const host = new URL(uri.replace(/^mongodb\+srv:\/\//, "http://")).hostname;
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
