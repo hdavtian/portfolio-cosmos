@@ -32,3 +32,7 @@ performance-trace/
 
 # Azure App Service / Kudu deployment artifacts
 appservice-logs/
+api-deploy/
+
+# Local database dumps (npm run db:pull); retention is managed by hand
+db-backups/

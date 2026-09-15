@@ -1,0 +1,39 @@
+# Local development services for the content platform.
+# Production uses MongoDB Atlas and Azure Blob Storage; these never touch it.
+#   npm run dev:full   starts these services, the API and Vite together
+#   npm run services:down   stops them (data volumes are kept)
+name: scrolling-resume
+
+services:
+  mongo:
+    image: mongo:8
+    container_name: scrolling-resume-mongo
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    container_name: scrolling-resume-azurite
+    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --location /data --skipApiVersionCheck
+    ports:
+      - "127.0.0.1:10000:10000"
+    volumes:
+      - azurite-data:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "10000"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  azurite-data:

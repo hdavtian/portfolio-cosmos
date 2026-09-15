@@ -6,9 +6,21 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'api/dist', 'packages/*/dist']),
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ['api/**/*.ts', 'packages/**/*.ts', 'scripts/**/*.{js,mjs}'],
+    extends: [js.configs.recommended, tseslint.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: globals.node,
+    },
+    rules: {
+      // Express error handlers must declare all four arguments.
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}', '*.{ts,tsx}'],
     extends: [
       js.configs.recommended,
       tseslint.configs.recommended,
