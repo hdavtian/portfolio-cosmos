@@ -106,6 +106,13 @@ const STAR_MIN_RADIUS = 6_000;
 const STAR_MAX_RADIUS = 50_000;
 /** Share of stars concentrated toward the galactic plane (matches the sky band). */
 const STAR_PLANE_SHARE = 0.45;
+/**
+ * Stars and anomalies travel with the camera by this share of its movement:
+ * trips shift them a little (depth) but they can never be reached or passed.
+ * Max relative shift = (1 - follow) × ~35k universe extent ≈ 3.5k < the
+ * nearest star distance (STAR_MIN_RADIUS).
+ */
+const FAR_FIELD_CAMERA_FOLLOW = 0.9;
 const DUST_COUNT = 1_400;
 const DUST_BOX = 700;
 /** Sky cubemap face size: one-time bake cost scales with this squared. */
@@ -255,10 +262,14 @@ const starVertexShader = /* glsl */ `
   uniform float uPixelRatio;
   uniform float uSaturation;
   uniform float uBrightness;
+  uniform vec3 uCamera;
+  uniform float uFollow;
   varying vec3 vColor;
   varying float vIntensity;
   void main() {
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    // The field travels with the camera by uFollow, so trips shift the stars
+    // only slightly and they can never be reached or passed.
+    vec4 mvPosition = viewMatrix * (modelMatrix * vec4(position + uCamera * uFollow, 1.0));
     gl_Position = projectionMatrix * mvPosition;
     float dist = max(1.0, -mvPosition.z);
     // Nearer stars read a little larger and brighter (parallax cue).
@@ -635,13 +646,16 @@ export class UniverseBackdrop {
         uPixelRatio: { value: 1 },
         uSaturation: { value: 0.35 },
         uBrightness: { value: 1 },
+        uCamera: { value: new THREE.Vector3() },
+        uFollow: { value: FAR_FIELD_CAMERA_FOLLOW },
       },
     });
     const stars = new THREE.Points(geometry, material);
     stars.name = "UniverseStars";
     stars.frustumCulled = false;
     stars.renderOrder = -900;
-    stars.onBeforeRender = (renderer) => {
+    stars.onBeforeRender = (renderer, _scene, camera) => {
+      camera.getWorldPosition(material.uniforms.uCamera.value as THREE.Vector3);
       material.uniforms.uTime.value = performance.now() / 1000;
       material.uniforms.uPixelRatio.value = renderer.getPixelRatio();
     };
@@ -704,11 +718,16 @@ export class UniverseBackdrop {
       });
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(def.size, def.size), material);
       mesh.name = `UniverseAnomaly_${def.kind}`;
-      mesh.position.copy(def.direction.clone().normalize().multiplyScalar(def.distance));
+      const basePosition = def.direction.clone().normalize().multiplyScalar(def.distance);
+      mesh.position.copy(basePosition);
       mesh.frustumCulled = false;
       mesh.renderOrder = -850;
-      // Always face the viewer.
+      const cameraPosition = new THREE.Vector3();
+      // Always face the viewer; travel with the camera like the star field so
+      // it stays far away and only shifts slightly.
       mesh.onBeforeRender = (_renderer, _scene, camera) => {
+        camera.getWorldPosition(cameraPosition);
+        mesh.position.copy(basePosition).addScaledVector(cameraPosition, FAR_FIELD_CAMERA_FOLLOW);
         mesh.quaternion.copy(camera.quaternion);
         mesh.updateMatrixWorld();
         material.uniforms.uTime.value = performance.now() / 1000;
