@@ -184,6 +184,17 @@ export interface CosmicRouteConfig {
 // Controller callbacks
 // ---------------------------------------------------------------------------
 
+/**
+ * Mjolnir finale camera: aim this far below the hammer (and later the impact
+ * point) so the point of impact and space under the path are in view; how
+ * quickly it turns while following the dive and after impact; and how long it
+ * holds on the impact while the rail explodes.
+ */
+const FINALE_LOOK_BELOW = 70;
+const FINALE_LOOK_RATE = 7;
+const FINALE_IMPACT_LOOK_RATE = 9;
+const FINALE_HOLD_AFTER_IMPACT_MS = 1400;
+
 export interface AboutJourneyCallbacks {
   hideShip(): void;
   showShip(): void;
@@ -209,6 +220,8 @@ export interface AboutJourneyCallbacks {
   onAboutJourneyExit(): void;
   /** Optional object that rides the rail ahead of the rider and ends the ride. */
   getRideCompanion?(): RideCompanion | null;
+  /** The companion just smashed into the rail at this point (impact effects). */
+  onRailImpact?(point: THREE.Vector3): void;
 }
 
 export interface RideCompanion {
@@ -278,6 +291,11 @@ export class AboutJourneyController {
   private _dispersalImpactPoint = new THREE.Vector3();
   private _hasDispersalImpactPoint = false;
   private _finaleActive = false;
+  /** Finale camera runs on its own frame loop so ending the ride can't cut it off. */
+  private _finaleRafId = 0;
+  private _finaleHasImpact = false;
+  private _finaleHoldUntil = 0;
+  private readonly _finaleImpactPoint = new THREE.Vector3();
   private _followDeferredUntilDispersalEnds = false;
   /** Camera is boarding the rail / Mjolnir is arriving or waiting (PATH_READY). */
   private _boarding = false;
@@ -1295,6 +1313,12 @@ export class AboutJourneyController {
         const companion = this._cb.getRideCompanion?.();
         const striking = companion?.startStrike((impactT, point) => {
           this._finaleActive = false;
+          // Keep looking at the point of impact (and just below it) while the
+          // rail explodes, and let the scene add its impact flash.
+          this._finaleImpactPoint.copy(point);
+          this._finaleHasImpact = true;
+          this._finaleHoldUntil = performance.now() + FINALE_HOLD_AFTER_IMPACT_MS;
+          this._cb.onRailImpact?.(point);
           this._dispersalOriginOverride = impactT;
           this._dispersalImpactPoint.copy(point);
           this._hasDispersalImpactPoint = true;
@@ -1514,30 +1538,47 @@ export class AboutJourneyController {
   /** Rider stops on the rail and watches the companion climb and dive. */
   private _runFinaleCamera(companion: RideCompanion): void {
     this._finaleActive = true;
+    this._finaleHasImpact = false;
+    this._finaleHoldUntil = 0;
     const camPos = this._tmpTravelCamPos.clone();
     const lookDir = this._tmpTravelUserViewDir.clone();
     const wantDir = new THREE.Vector3();
+    const target = new THREE.Vector3();
     const look = new THREE.Vector3();
     let last = performance.now();
     const tick = () => {
-      if (!this._finaleActive || this._phase !== AboutJourneyPhase.PATH_TRAVEL) {
+      const now = performance.now();
+      const following =
+        this._finaleActive && this._phase === AboutJourneyPhase.PATH_TRAVEL;
+      // After impact, hold on the point of impact for a moment (unless the
+      // journey was left altogether).
+      const holding =
+        this._finaleHasImpact &&
+        now < this._finaleHoldUntil &&
+        this._phase !== AboutJourneyPhase.IDLE;
+      if (!following && !holding) {
+        this._finaleRafId = 0;
         return;
       }
-      const now = performance.now();
       const dt = THREE.MathUtils.clamp((now - last) / 1000, 1 / 240, 1 / 30);
       last = now;
-      wantDir.subVectors(companion.position, camPos);
+      target.copy(this._finaleHasImpact ? this._finaleImpactPoint : companion.position);
+      // Aim a little below, so the impact point and space under the path show.
+      target.y -= FINALE_LOOK_BELOW;
+      wantDir.subVectors(target, camPos);
       if (wantDir.lengthSq() > 1e-4) {
-        lookDir.lerp(wantDir.normalize(), 1 - Math.exp(-5 * dt)).normalize();
+        const rate = this._finaleHasImpact ? FINALE_IMPACT_LOOK_RATE : FINALE_LOOK_RATE;
+        lookDir.lerp(wantDir.normalize(), 1 - Math.exp(-rate * dt)).normalize();
       }
       look.copy(camPos).addScaledVector(lookDir, PATH_TRAVEL_CAM_LOOK_AHEAD);
       this._cb
         .getControls()
         ?.setLookAt(camPos.x, camPos.y, camPos.z, look.x, look.y, look.z, false);
-      this._rafId = requestAnimationFrame(tick);
+      this._finaleRafId = requestAnimationFrame(tick);
     };
     this._cancelRaf();
-    this._rafId = requestAnimationFrame(tick);
+    if (this._finaleRafId) cancelAnimationFrame(this._finaleRafId);
+    this._finaleRafId = requestAnimationFrame(tick);
   }
 
   private _completePathTravelRun(): void {

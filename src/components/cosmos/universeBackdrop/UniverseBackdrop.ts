@@ -284,17 +284,17 @@ const starVertexShader = /* glsl */ `
     // Most stars shimmer gently; ~10% clearly twinkle, and the brightest of
     // those catch an occasional sparkle.
     float gentle = 0.86 + 0.14 * sin(uTime * (0.6 + aPhase * 1.4) + aPhase * 40.0);
-    float twinkler = step(0.75, fract(aPhase * 7.31));
-    float wave = 0.5 + 0.5 * sin(uTime * (1.4 + aPhase * 3.0) + aPhase * 91.0);
-    float strong = 0.15 + 1.45 * wave * wave;
-    float sparkleClock = fract(uTime * (0.1 + aPhase * 0.08) + aPhase * 13.0);
-    float sparkle = smoothstep(0.0, 0.02, sparkleClock) * (1.0 - smoothstep(0.02, 0.09, sparkleClock));
-    float twinkle = mix(gentle, strong + sparkle * 2.2 * step(0.35, aMagnitude), twinkler);
+    float twinkler = step(0.85, fract(aPhase * 7.31));
+    float wave = 0.5 + 0.5 * sin(uTime * (1.2 + aPhase * 2.4) + aPhase * 91.0);
+    float strong = 0.3 + 1.1 * wave * wave;
+    float sparkleClock = fract(uTime * (0.08 + aPhase * 0.06) + aPhase * 13.0);
+    float sparkle = smoothstep(0.0, 0.02, sparkleClock) * (1.0 - smoothstep(0.02, 0.08, sparkleClock));
+    float twinkle = mix(gentle, strong + sparkle * 1.5 * step(0.5, aMagnitude), twinkler);
     vIntensity = aMagnitude * twinkle * uBrightness * clamp(nearBoost, 0.8, 1.6)
       // At lightspeed the streaks take over; punch brighter on entry/exit.
       * (1.0 - 0.55 * uWarp) * (1.0 + uFlash * 1.8);
     // Twinkling stars also swell a little when bright, so it reads on tiny stars.
-    float twinkleSize = mix(1.0, 0.75 + 0.55 * twinkle, twinkler);
+    float twinkleSize = mix(1.0, 0.85 + 0.35 * twinkle, twinkler);
     gl_PointSize = clamp((0.9 + aMagnitude * 2.6) * nearBoost * twinkleSize, 1.0, 6.0) * uPixelRatio;
     float grey = dot(aColor, vec3(0.299, 0.587, 0.114));
     vColor = mix(vec3(grey), aColor, uSaturation);
@@ -548,6 +548,34 @@ export const createBlackHoleLensPass = (): ShaderPass => {
 /** Share of the black hole card's half-size that is the dark core (see anomaly shader). */
 const BLACK_HOLE_CORE_SHARE = 0.17;
 
+// ── The Big Dipper (with Alcor, the Fist of the North Star "death omen") ──
+/** Real right ascension / declination (degrees) and apparent magnitude. */
+const BIG_DIPPER: Array<{ name: string; ra: number; dec: number; mag: number }> = [
+  { name: "Dubhe", ra: 165.93, dec: 61.75, mag: 1.79 },
+  { name: "Merak", ra: 165.46, dec: 56.38, mag: 2.37 },
+  { name: "Phecda", ra: 178.46, dec: 53.69, mag: 2.44 },
+  { name: "Megrez", ra: 183.86, dec: 57.03, mag: 3.3 },
+  { name: "Alioth", ra: 193.51, dec: 55.96, mag: 1.77 },
+  { name: "Mizar", ra: 200.98, dec: 54.93, mag: 2.04 },
+  { name: "Alkaid", ra: 206.89, dec: 49.31, mag: 1.86 },
+  { name: "Alcor", ra: 201.31, dec: 54.99, mag: 3.99 },
+];
+/** The dipper's outline: bowl (Dubhe-Merak-Phecda-Megrez) and handle to Alkaid. */
+const BIG_DIPPER_LINES: Array<[string, string]> = [
+  ["Dubhe", "Merak"],
+  ["Merak", "Phecda"],
+  ["Phecda", "Megrez"],
+  ["Megrez", "Dubhe"],
+  ["Megrez", "Alioth"],
+  ["Alioth", "Mizar"],
+  ["Mizar", "Alkaid"],
+];
+/** Where in the sky it sits (up high), how far, and how wide it spans. */
+const BIG_DIPPER_DIRECTION = new THREE.Vector3(0.3, 0.82, -0.48).normalize();
+const BIG_DIPPER_DISTANCE = 42_000;
+/** Stretch the real angular size (~25°) a little so it reads at a glance. */
+const BIG_DIPPER_ANGULAR_SCALE = 1.25;
+
 type AnomalyDef = {
   kind: 0 | 1 | 2;
   direction: THREE.Vector3;
@@ -598,6 +626,9 @@ export class UniverseBackdrop {
   private flash = 0;
   private warpUpdatedAt = 0;
   private readonly travelDirection = new THREE.Vector3(0, 0, -1);
+  /** The Big Dipper: bright named stars plus a faint outline; follows the far field. */
+  private readonly dipper = new THREE.Group();
+  private readonly dipperDisposables: Array<{ dispose(): void }> = [];
   private readonly lensWorld = new THREE.Vector3();
   private readonly lensProjected = new THREE.Vector3();
   private readonly dust: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
@@ -660,6 +691,7 @@ export class UniverseBackdrop {
     this.dust = this.buildDust();
     this.group.add(this.stars, this.streaks, this.dust);
     this.buildAnomalies();
+    this.buildBigDipper();
 
     this.group.visible = false;
     scene.add(this.group);
@@ -767,6 +799,10 @@ export class UniverseBackdrop {
     w.uFlash.value = this.flash;
     (w.uDir.value as THREE.Vector3).copy(this.travelDirection);
     camera.getWorldPosition(w.uCamera.value as THREE.Vector3);
+    // The Big Dipper travels with the far field (drawn after the stars, so
+    // updating its transform here applies this frame).
+    this.dipper.position.copy(w.uCamera.value as THREE.Vector3).multiplyScalar(FAR_FIELD_CAMERA_FOLLOW);
+    this.dipper.updateMatrixWorld(true);
     // Takes effect next frame (this frame's draw list is already built).
     this.streaks.visible = this.warp > 0.01;
   }
@@ -788,6 +824,7 @@ export class UniverseBackdrop {
     this.stars.material.dispose();
     this.streaks.geometry.dispose();
     this.streaks.material.dispose();
+    for (const item of this.dipperDisposables) item.dispose();
     this.dust.geometry.dispose();
     this.dust.material.dispose();
     for (const { mesh } of this.anomalies) {
@@ -982,6 +1019,93 @@ export class UniverseBackdrop {
       material.uniforms.uPixelRatio.value = renderer.getPixelRatio();
     };
     return dust;
+  }
+
+  /** Places the Big Dipper from real sky coordinates, rotated to sit up high. */
+  private buildBigDipper(): void {
+    const toDirection = (ra: number, dec: number) => {
+      const a = THREE.MathUtils.degToRad(ra);
+      const d = THREE.MathUtils.degToRad(dec);
+      return new THREE.Vector3(Math.cos(d) * Math.cos(a), Math.sin(d), Math.cos(d) * Math.sin(a));
+    };
+    const raw = BIG_DIPPER.map((star) => ({ star, direction: toDirection(star.ra, star.dec) }));
+    const center = new THREE.Vector3();
+    for (const { direction } of raw) center.add(direction);
+    center.normalize();
+    // Rotate the pattern so its center points at BIG_DIPPER_DIRECTION, and
+    // widen the angular spread a touch.
+    const rotation = new THREE.Quaternion().setFromUnitVectors(center, BIG_DIPPER_DIRECTION);
+    const positions = new Map<string, THREE.Vector3>();
+    for (const { star, direction } of raw) {
+      const offset = direction.clone().sub(center).multiplyScalar(BIG_DIPPER_ANGULAR_SCALE);
+      const spread = center.clone().add(offset).normalize().applyQuaternion(rotation);
+      positions.set(star.name, spread.multiplyScalar(BIG_DIPPER_DISTANCE));
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, "rgba(255,255,255,1)");
+      g.addColorStop(0.18, "rgba(225,235,255,0.85)");
+      g.addColorStop(0.5, "rgba(170,200,255,0.18)");
+      g.addColorStop(1, "rgba(150,180,255,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 64, 64);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    this.dipperDisposables.push(texture);
+
+    for (const star of BIG_DIPPER) {
+      // Brighter (lower magnitude) stars are larger and more intense.
+      const brightness = Math.pow(2.512, 2 - star.mag);
+      const material = new THREE.SpriteMaterial({
+        map: texture,
+        color: new THREE.Color(0.9, 0.95, 1.0).multiplyScalar(0.9 + 0.6 * Math.min(1.5, brightness)),
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      });
+      this.dipperDisposables.push(material);
+      const sprite = new THREE.Sprite(material);
+      sprite.name = `BigDipper_${star.name}`;
+      sprite.position.copy(positions.get(star.name) ?? new THREE.Vector3());
+      sprite.scale.setScalar(BIG_DIPPER_DISTANCE * 0.012 * THREE.MathUtils.clamp(Math.sqrt(brightness), 0.35, 1.3));
+      sprite.frustumCulled = false;
+      sprite.renderOrder = -870;
+      this.dipper.add(sprite);
+    }
+
+    const linePoints: number[] = [];
+    for (const [from, to] of BIG_DIPPER_LINES) {
+      const a = positions.get(from);
+      const b = positions.get(to);
+      if (!a || !b) continue;
+      linePoints.push(a.x, a.y, a.z, b.x, b.y, b.z);
+    }
+    const lineGeometry = new THREE.BufferGeometry();
+    lineGeometry.setAttribute("position", new THREE.Float32BufferAttribute(linePoints, 3));
+    const lineMaterial = new THREE.LineBasicMaterial({
+      color: new THREE.Color(0.55, 0.7, 1.0),
+      transparent: true,
+      opacity: 0.12,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    });
+    this.dipperDisposables.push(lineGeometry, lineMaterial);
+    const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+    lines.name = "BigDipperOutline";
+    lines.frustumCulled = false;
+    lines.renderOrder = -871;
+    this.dipper.add(lines);
+
+    this.dipper.name = "BigDipper";
+    this.group.add(this.dipper);
   }
 
   private buildAnomalies(): void {

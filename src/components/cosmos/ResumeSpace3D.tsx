@@ -38,6 +38,7 @@ import {
 } from "./labelVisibility";
 import { StarDestroyerMoments } from "./starDestroyerMoments";
 import { SunEnhancements, type SunOccluder } from "./celestial/SunEnhancements";
+import { ImpactFlash } from "./aboutJourney/impactFlash";
 // SD configurator (removable: delete sdConfigurator/ and lines marked "SD configurator")
 import {
   SdFlyoverConfigurator,
@@ -16098,7 +16099,12 @@ export default function ResumeSpace3D({
     }
     const shipFlyForward = new THREE.Vector3();
     const shipFlyLookAt = new THREE.Vector3();
+    // Mjolnir's point-of-impact flash when it smashes the rail.
+    const aboutImpactFlash = new ImpactFlash(scene);
     aboutJourneyRef.current = new AboutJourneyController({
+      onRailImpact(point: THREE.Vector3) {
+        aboutImpactFlash.trigger(point);
+      },
       hideShip() {
         if (spaceshipRef.current) spaceshipRef.current.visible = false;
       },
