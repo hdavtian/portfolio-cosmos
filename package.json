@@ -8,10 +8,16 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "api:dev": "npm --prefix api run dev",
-    "api:build": "npm --prefix api run build",
-    "api:start": "npm --prefix api run start",
-    "api:seed": "npm --prefix api run seed"
+    "api:dev": "npm run dev -w api",
+    "api:build": "npm run build -w api",
+    "api:start": "npm run start -w api",
+    "api:seed": "npm run seed -w api",
+    "dev:full": "node scripts/dev-full.mjs",
+    "services:up": "docker compose up -d --wait",
+    "services:down": "docker compose stop",
+    "az:guard": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/az-guard.ps1",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.14.0",
@@ -44,6 +50,7 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^10.0.5",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
@@ -51,5 +58,14 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4"
+  },
+  "workspaces": [
+    "api",
+    "packages/*"
+  ],
+  "overrides": {
+    "tsx": {
+      "esbuild": "0.27.2"
+    }
   }
 }
