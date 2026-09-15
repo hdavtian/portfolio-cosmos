@@ -42,6 +42,13 @@ import {
   recordSdIntroView,
   writeSdConfiguratorOpen,
 } from "./sdConfigurator/SdFlyoverConfigurator";
+// Universe backdrop (removable: delete universeBackdrop/ and lines marked "Universe backdrop")
+import {
+  UniverseBackdrop,
+  readStoredUniverseStyle,
+  writeStoredUniverseStyle,
+  type UniverseStyle,
+} from "./universeBackdrop/UniverseBackdrop";
 import resumeData from "../../data/resume.json";
 import { trackEvent } from "../../lib/analytics";
 import { IS_DEBUG, IS_DEBUG_OVERLAYS, dlog, dwarn } from "../../lib/debugLog";
@@ -2381,6 +2388,13 @@ export default function ResumeSpace3D({
   const [spaceBackgroundVisible, setSpaceBackgroundVisible] = useState(true);
   const starfieldMeshRef = useRef<THREE.Mesh | null>(null);
   const skyfieldMeshRef = useRef<THREE.Mesh | null>(null);
+  // Universe backdrop: "lightbox" (photo spheres), "realism" or "vivid" 3D universe.
+  const universeBackdropRef = useRef<UniverseBackdrop | null>(null);
+  const [universeStyle, setUniverseStyle] = useState<UniverseStyle>(() =>
+    readStoredUniverseStyle(),
+  );
+  const universeStyleRef = useRef<UniverseStyle>(universeStyle);
+  universeStyleRef.current = universeStyle;
 
   // Tour state
   const [tourActive, setTourActive] = useState(false);
@@ -2955,13 +2969,40 @@ export default function ResumeSpace3D({
   }, []);
 
   useEffect(() => {
+    // Universe backdrop: the photo lightbox only shows in "lightbox" style.
+    const lightbox = spaceBackgroundVisible && universeStyle === "lightbox";
     if (starfieldMeshRef.current) {
-      starfieldMeshRef.current.visible = spaceBackgroundVisible;
+      starfieldMeshRef.current.visible = lightbox;
     }
     if (skyfieldMeshRef.current) {
-      skyfieldMeshRef.current.visible = spaceBackgroundVisible;
+      skyfieldMeshRef.current.visible = lightbox;
     }
-  }, [spaceBackgroundVisible]);
+    const backdrop = universeBackdropRef.current;
+    if (backdrop) {
+      if (spaceBackgroundVisible && universeStyle !== "lightbox") {
+        backdrop.setStyle(universeStyle);
+      } else {
+        backdrop.hide();
+      }
+    }
+  }, [spaceBackgroundVisible, universeStyle]);
+
+  // Universe backdrop: switcher (also listed in Console → Tools).
+  useEffect(() => {
+    const win = window as unknown as Record<string, unknown>;
+    const choose = (style: UniverseStyle) => () => {
+      writeStoredUniverseStyle(style);
+      setUniverseStyle(style);
+    };
+    win.universeLightbox = choose("lightbox");
+    win.universeRealism = choose("realism");
+    win.universeVivid = choose("vivid");
+    return () => {
+      delete win.universeLightbox;
+      delete win.universeRealism;
+      delete win.universeVivid;
+    };
+  }, []);
 
   useEffect(() => {
     if (loaderVisualComplete && criticalAssetsReady && droneGpuWarmupReady) {
@@ -9121,6 +9162,25 @@ export default function ResumeSpace3D({
         onRun: () => invoke("sdFlyover"),
       },
       {
+        // Universe backdrop
+        id: "universe-realism",
+        label: "universeRealism()",
+        hint: "3D universe — cinematic realism",
+        onRun: () => invoke("universeRealism"),
+      },
+      {
+        id: "universe-vivid",
+        label: "universeVivid()",
+        hint: "3D universe — vivid sci-fi",
+        onRun: () => invoke("universeVivid"),
+      },
+      {
+        id: "universe-lightbox",
+        label: "universeLightbox()",
+        hint: "Old photo lightbox background",
+        onRun: () => invoke("universeLightbox"),
+      },
+      {
         // SD configurator
         id: "sd-configurator",
         label: "sdConfigurator()",
@@ -15278,12 +15338,20 @@ export default function ResumeSpace3D({
     };
 
     const { starfield, skyfield } = createStarfieldMeshes(rawTextureLoader);
-    starfield.visible = spaceBackgroundVisible;
-    skyfield.visible = spaceBackgroundVisible;
+    // Universe backdrop: lightbox only in "lightbox" style; otherwise the 3D universe.
+    const useLightbox = universeStyleRef.current === "lightbox";
+    starfield.visible = spaceBackgroundVisible && useLightbox;
+    skyfield.visible = spaceBackgroundVisible && useLightbox;
     starfieldMeshRef.current = starfield;
     skyfieldMeshRef.current = skyfield;
     scene.add(starfield);
     scene.add(skyfield);
+    const universeBackdrop = new UniverseBackdrop(renderer, scene);
+    universeBackdropRef.current = universeBackdrop;
+    const initialUniverseStyle = universeStyleRef.current;
+    if (spaceBackgroundVisible && initialUniverseStyle !== "lightbox") {
+      universeBackdrop.setStyle(initialUniverseStyle);
+    }
 
     // --- LIGHTING ---
     const { ambientLight, sunLight, fillLight, hemisphereLight } =
@@ -20117,6 +20185,8 @@ export default function ResumeSpace3D({
       orbitalPortfolioOuterRingsRef.current = [];
       starfieldMeshRef.current = null;
       skyfieldMeshRef.current = null;
+      universeBackdropRef.current?.dispose(); // Universe backdrop
+      universeBackdropRef.current = null;
       orbitalPortfolioActiveRef.current = false;
       orbitalPortfolioPlayingRef.current = true;
       aboutMemorySquareRootRef.current = null;
