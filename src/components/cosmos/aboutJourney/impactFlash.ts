@@ -155,6 +155,22 @@ export class ImpactFlash {
     scene.add(this.group);
   }
 
+  /**
+   * Compile the explosion shader ahead of time (in the background), so the
+   * first impact doesn't stall while the GPU builds it.
+   */
+  warmUp(renderer: THREE.WebGLRenderer, camera: THREE.Camera, scene: THREE.Scene): void {
+    const wasVisible = this.group.visible;
+    // compile only gathers visible objects; it doesn't draw anything.
+    this.group.visible = true;
+    try {
+      renderer.compileAsync(this.group, camera, scene).catch(() => undefined);
+    } catch {
+      // Compiling early is only an optimization.
+    }
+    this.group.visible = wasVisible;
+  }
+
   trigger(point: THREE.Vector3): void {
     this.group.position.copy(point);
     this.card.material.uniforms.uSeed.value = Math.random();

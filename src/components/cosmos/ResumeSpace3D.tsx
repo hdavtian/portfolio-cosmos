@@ -16101,6 +16101,13 @@ export default function ResumeSpace3D({
     const shipFlyLookAt = new THREE.Vector3();
     // Mjolnir's point-of-impact flash when it smashes the rail.
     const aboutImpactFlash = new ImpactFlash(scene);
+    {
+      const warmRenderer = rendererRef.current;
+      const warmCamera = sceneRef.current.camera;
+      if (warmRenderer && warmCamera) {
+        aboutImpactFlash.warmUp(warmRenderer, warmCamera, scene);
+      }
+    }
     aboutJourneyRef.current = new AboutJourneyController({
       onRailImpact(point: THREE.Vector3) {
         aboutImpactFlash.trigger(point);
