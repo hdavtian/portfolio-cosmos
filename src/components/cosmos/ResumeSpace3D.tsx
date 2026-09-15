@@ -2391,7 +2391,8 @@ export default function ResumeSpace3D({
       setAllSceneModelsLoaded(true);
     }
   }, []);
-  const [spaceBackgroundVisible, setSpaceBackgroundVisible] = useState(true);
+  // The space background is always on (the user-facing toggle was removed).
+  const [spaceBackgroundVisible] = useState(true);
   const starfieldMeshRef = useRef<THREE.Mesh | null>(null);
   const skyfieldMeshRef = useRef<THREE.Mesh | null>(null);
   // Universe backdrop: "lightbox" (photo spheres), "realism" or "vivid" 3D universe.
@@ -22397,66 +22398,6 @@ export default function ResumeSpace3D({
             >
               ⚙
             </button>
-          )}
-
-          {sceneReady && (
-            <div
-              style={{
-                position: "fixed",
-                left: 48,
-                bottom: 14,
-                zIndex: 1110,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                borderRadius: 9,
-                border: "1px solid rgba(135, 188, 246, 0.4)",
-                background: "rgba(6, 14, 26, 0.78)",
-                color: "#d8ecff",
-                padding: "7px 10px",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontSize: 12,
-              }}
-            >
-              <label
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={spaceBackgroundVisible}
-                  onChange={(event) => {
-                    const checked = event.currentTarget.checked;
-                    trackEvent("space_background_toggle", { enabled: checked });
-                    setSpaceBackgroundVisible(checked);
-                  }}
-                />
-                Space Background
-              </label>
-              <span
-                title="Helps reduce motion discomfort by hiding moving/parallax star imagery and using a plain black background."
-                style={{
-                  width: 18,
-                  height: 18,
-                  borderRadius: "50%",
-                  border: "1px solid rgba(160, 215, 255, 0.65)",
-                  color: "#c7eaff",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  cursor: "help",
-                  userSelect: "none",
-                }}
-              >
-                ?
-              </span>
-            </div>
           )}
 
           {sceneReady && showSoundSettingsModal && (
