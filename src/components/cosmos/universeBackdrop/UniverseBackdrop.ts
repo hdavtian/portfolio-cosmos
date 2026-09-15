@@ -113,6 +113,10 @@ const STAR_PLANE_SHARE = 0.45;
  * nearest star distance (STAR_MIN_RADIUS).
  */
 const FAR_FIELD_CAMERA_FOLLOW = 0.9;
+/** Warp tunnel: streak length (world units, scaled by warp) and ease rates (1/s). */
+const WARP_STREAK_LENGTH = 3_600;
+const WARP_IN_RATE = 3.2;
+const WARP_OUT_RATE = 2.2;
 const DUST_COUNT = 1_400;
 const DUST_BOX = 700;
 /** Sky cubemap face size: one-time bake cost scales with this squared. */
@@ -264,6 +268,8 @@ const starVertexShader = /* glsl */ `
   uniform float uBrightness;
   uniform vec3 uCamera;
   uniform float uFollow;
+  uniform float uWarp;
+  uniform float uFlash;
   varying vec3 vColor;
   varying float vIntensity;
   void main() {
@@ -275,7 +281,9 @@ const starVertexShader = /* glsl */ `
     // Nearer stars read a little larger and brighter (parallax cue).
     float nearBoost = clamp(9000.0 / dist, 0.7, 2.2);
     float twinkle = 0.86 + 0.14 * sin(uTime * (0.6 + aPhase * 1.4) + aPhase * 40.0);
-    vIntensity = aMagnitude * twinkle * uBrightness * clamp(nearBoost, 0.8, 1.6);
+    vIntensity = aMagnitude * twinkle * uBrightness * clamp(nearBoost, 0.8, 1.6)
+      // At lightspeed the streaks take over; punch brighter on entry/exit.
+      * (1.0 - 0.55 * uWarp) * (1.0 + uFlash * 1.8);
     gl_PointSize = clamp((0.9 + aMagnitude * 2.6) * nearBoost, 1.0, 5.0) * uPixelRatio;
     float grey = dot(aColor, vec3(0.299, 0.587, 0.114));
     vColor = mix(vec3(grey), aColor, uSaturation);
@@ -296,6 +304,56 @@ const starFragmentShader = /* glsl */ `
     float falloff = core * core;
     // Kept just under the bloom threshold except the brightest few.
     gl_FragColor = vec4(vColor * falloff * vIntensity * 0.85, 1.0);
+  }
+`;
+
+// ── Warp tunnel (lightspeed star streaks) ─────────────────────────────────
+const streakVertexShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
+  attribute vec3 aColor;
+  attribute float aMagnitude;
+  attribute float aEnd; // 0 = head (star), 1 = tail
+  uniform vec3 uCamera;
+  uniform float uFollow;
+  uniform vec3 uDir;
+  uniform float uWarp;
+  uniform float uFlash;
+  uniform float uLength;
+  uniform float uSaturation;
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    vec3 base = position + uCamera * uFollow;
+    vec3 rel = base - uCamera;
+    vec3 toStar = normalize(rel);
+    float ahead = dot(toStar, uDir);
+    // Stars off to the side streak longest: reads as a tunnel around the heading.
+    float side = sqrt(max(0.0, 1.0 - ahead * ahead));
+    float len = uLength * uWarp * (0.3 + 0.7 * side) * (0.6 + aMagnitude);
+    vec3 p = base - uDir * len * aEnd;
+    vec4 mvPosition = viewMatrix * (modelMatrix * vec4(p, 1.0));
+    gl_Position = projectionMatrix * mvPosition;
+    // Doppler tint: blue-shifted ahead, red-shifted behind.
+    vec3 doppler = mix(vec3(1.0, 0.42, 0.32), vec3(0.55, 0.78, 1.0), ahead * 0.5 + 0.5);
+    float grey = dot(aColor, vec3(0.299, 0.587, 0.114));
+    vec3 starColor = mix(vec3(grey), aColor, uSaturation);
+    vColor = mix(starColor, doppler, 0.6);
+    // Bright head fading to a dark tail.
+    vAlpha = uWarp * (0.3 + aMagnitude) * (1.0 - aEnd) * (1.0 + uFlash * 1.5);
+    #include <logdepthbuf_vertex>
+  }
+`;
+
+const streakFragmentShader = /* glsl */ `
+  #include <common>
+  #include <logdepthbuf_pars_fragment>
+  uniform float uBrightness;
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    #include <logdepthbuf_fragment>
+    gl_FragColor = vec4(vColor * vAlpha * uBrightness * 0.8, 1.0);
   }
 `;
 
@@ -446,6 +504,13 @@ export class UniverseBackdrop {
   private readonly skyCamera: THREE.CubeCamera;
 
   private readonly stars: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  /** Warp tunnel: the same stars as line segments, stretched at lightspeed. */
+  private readonly streaks: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  private travelSource: (() => { active: boolean; direction: THREE.Vector3 } | null) | null = null;
+  private warp = 0;
+  private flash = 0;
+  private warpUpdatedAt = 0;
+  private readonly travelDirection = new THREE.Vector3(0, 0, -1);
   private readonly dust: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private readonly anomalies: Array<{
     mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
@@ -502,8 +567,9 @@ export class UniverseBackdrop {
     this.group.add(this.skyDome);
 
     this.stars = this.buildStars();
+    this.streaks = this.buildStreaks();
     this.dust = this.buildDust();
-    this.group.add(this.stars, this.dust);
+    this.group.add(this.stars, this.streaks, this.dust);
     this.buildAnomalies();
 
     this.group.visible = false;
@@ -531,6 +597,10 @@ export class UniverseBackdrop {
       s.uSaturation.value = settings.starSaturation;
       s.uBrightness.value = settings.starBrightness;
       this.stars.geometry.setDrawRange(0, Math.min(MAX_STARS, settings.starCount));
+      const w = this.streaks.material.uniforms;
+      w.uSaturation.value = settings.starSaturation;
+      w.uBrightness.value = settings.starBrightness;
+      this.streaks.geometry.setDrawRange(0, Math.min(MAX_STARS, settings.starCount) * 2);
 
       for (const { mesh, def } of this.anomalies) {
         const a = mesh.material.uniforms;
@@ -542,6 +612,43 @@ export class UniverseBackdrop {
       }
     }
     this.group.visible = true;
+  }
+
+  /** Where lightspeed state and heading come from (read once per frame). */
+  setTravelSource(source: (() => { active: boolean; direction: THREE.Vector3 } | null) | null): void {
+    this.travelSource = source;
+  }
+
+  /** Ease the warp in/out, flash on entry and exit, and feed the shaders. */
+  private updateWarp(camera: THREE.Camera): void {
+    const now = performance.now();
+    const dt = this.warpUpdatedAt === 0 ? 0 : Math.min(0.1, (now - this.warpUpdatedAt) / 1000);
+    this.warpUpdatedAt = now;
+    const travel = this.travelSource?.() ?? null;
+    const active = !!travel?.active;
+    if (travel && active) {
+      if (this.warp < 0.01) this.travelDirection.copy(travel.direction);
+      else this.travelDirection.lerp(travel.direction, 1 - Math.exp(-6 * dt));
+      this.travelDirection.normalize();
+    }
+    const target = active ? 1 : 0;
+    const previous = this.warp;
+    const rate = target > this.warp ? WARP_IN_RATE : WARP_OUT_RATE;
+    this.warp += (target - this.warp) * (1 - Math.exp(-rate * dt));
+    if (Math.abs(this.warp - target) < 0.002) this.warp = target;
+    if (previous < 0.5 !== this.warp < 0.5) this.flash = 1;
+    this.flash *= Math.exp(-5 * dt);
+
+    const s = this.stars.material.uniforms;
+    s.uWarp.value = this.warp;
+    s.uFlash.value = this.flash;
+    const w = this.streaks.material.uniforms;
+    w.uWarp.value = this.warp;
+    w.uFlash.value = this.flash;
+    (w.uDir.value as THREE.Vector3).copy(this.travelDirection);
+    camera.getWorldPosition(w.uCamera.value as THREE.Vector3);
+    // Takes effect next frame (this frame's draw list is already built).
+    this.streaks.visible = this.warp > 0.01;
   }
 
   /** Hide everything (the lightbox is in use, or the background is off). */
@@ -559,6 +666,8 @@ export class UniverseBackdrop {
     this.skyDome.material.dispose();
     this.stars.geometry.dispose();
     this.stars.material.dispose();
+    this.streaks.geometry.dispose();
+    this.streaks.material.dispose();
     this.dust.geometry.dispose();
     this.dust.material.dispose();
     for (const { mesh } of this.anomalies) {
@@ -648,6 +757,8 @@ export class UniverseBackdrop {
         uBrightness: { value: 1 },
         uCamera: { value: new THREE.Vector3() },
         uFollow: { value: FAR_FIELD_CAMERA_FOLLOW },
+        uWarp: { value: 0 },
+        uFlash: { value: 0 },
       },
     });
     const stars = new THREE.Points(geometry, material);
@@ -657,9 +768,65 @@ export class UniverseBackdrop {
     stars.onBeforeRender = (renderer, _scene, camera) => {
       camera.getWorldPosition(material.uniforms.uCamera.value as THREE.Vector3);
       material.uniforms.uTime.value = performance.now() / 1000;
+      this.updateWarp(camera);
       material.uniforms.uPixelRatio.value = renderer.getPixelRatio();
     };
     return stars;
+  }
+
+  /** Line-segment copy of the star field (head + tail per star) for the warp tunnel. */
+  private buildStreaks(): THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial> {
+    const source = this.stars.geometry;
+    const starPositions = source.getAttribute("position") as THREE.BufferAttribute;
+    const starColors = source.getAttribute("aColor") as THREE.BufferAttribute;
+    const starMagnitudes = source.getAttribute("aMagnitude") as THREE.BufferAttribute;
+    const positions = new Float32Array(MAX_STARS * 2 * 3);
+    const colors = new Float32Array(MAX_STARS * 2 * 3);
+    const magnitudes = new Float32Array(MAX_STARS * 2);
+    const ends = new Float32Array(MAX_STARS * 2);
+    for (let i = 0; i < MAX_STARS; i++) {
+      for (let k = 0; k < 2; k++) {
+        const v = i * 2 + k;
+        positions[v * 3] = starPositions.getX(i);
+        positions[v * 3 + 1] = starPositions.getY(i);
+        positions[v * 3 + 2] = starPositions.getZ(i);
+        colors[v * 3] = starColors.getX(i);
+        colors[v * 3 + 1] = starColors.getY(i);
+        colors[v * 3 + 2] = starColors.getZ(i);
+        magnitudes[v] = starMagnitudes.getX(i);
+        ends[v] = k;
+      }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute("aMagnitude", new THREE.BufferAttribute(magnitudes, 1));
+    geometry.setAttribute("aEnd", new THREE.BufferAttribute(ends, 1));
+    geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), STAR_MAX_RADIUS * 2);
+    const material = new THREE.ShaderMaterial({
+      vertexShader: streakVertexShader,
+      fragmentShader: streakFragmentShader,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+      uniforms: {
+        uCamera: { value: new THREE.Vector3() },
+        uFollow: { value: FAR_FIELD_CAMERA_FOLLOW },
+        uDir: { value: new THREE.Vector3(0, 0, -1) },
+        uWarp: { value: 0 },
+        uFlash: { value: 0 },
+        uLength: { value: WARP_STREAK_LENGTH },
+        uSaturation: { value: 0.35 },
+        uBrightness: { value: 1 },
+      },
+    });
+    const streaks = new THREE.LineSegments(geometry, material);
+    streaks.name = "UniverseWarpStreaks";
+    streaks.frustumCulled = false;
+    streaks.renderOrder = -880;
+    streaks.visible = false;
+    return streaks;
   }
 
   private buildDust(): THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial> {

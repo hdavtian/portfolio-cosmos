@@ -2977,6 +2977,12 @@ export default function ResumeSpace3D({
     if (skyfieldMeshRef.current) {
       skyfieldMeshRef.current.visible = lightbox;
     }
+    const backdropScene = sceneRef.current.scene;
+    if (backdropScene) {
+      // The 3D universe draws its own warp tunnel instead of the old streaks.
+      backdropScene.userData.suppressLegacyLightspeedStreaks =
+        spaceBackgroundVisible && universeStyle !== "lightbox";
+    }
     const backdrop = universeBackdropRef.current;
     if (backdrop) {
       if (spaceBackgroundVisible && universeStyle !== "lightbox") {
@@ -15348,6 +15354,23 @@ export default function ResumeSpace3D({
     scene.add(skyfield);
     const universeBackdrop = new UniverseBackdrop(renderer, scene);
     universeBackdropRef.current = universeBackdrop;
+    // Warp tunnel: same "at lightspeed" test as the legacy streaks, along the
+    // Falcon's heading (its +Z).
+    const universeTravelDirection = new THREE.Vector3();
+    universeBackdrop.setTravelSource(() => {
+      const ship = spaceshipRef.current;
+      if (!ship) return null;
+      return {
+        active:
+          !!manualFlightRef.current?.isLightspeedActive &&
+          followingSpaceshipRef.current &&
+          !insideShipRef.current &&
+          shipViewModeRef.current === "exterior",
+        direction: universeTravelDirection.set(0, 0, 1).applyQuaternion(ship.quaternion).normalize(),
+      };
+    });
+    scene.userData.suppressLegacyLightspeedStreaks =
+      spaceBackgroundVisible && universeStyleRef.current !== "lightbox";
     const initialUniverseStyle = universeStyleRef.current;
     if (spaceBackgroundVisible && initialUniverseStyle !== "lightbox") {
       universeBackdrop.setStyle(initialUniverseStyle);

@@ -2553,7 +2553,10 @@ export const useRenderLoop = () => {
             lightspeedActive &&
             (currentNavigationTargetRef?.current === "skills" ||
               currentNavigationTargetRef?.current === "skills-lattice");
-          lightspeedStreakGroup.visible = lightspeedVisualIntensity > 0.02;
+          // The 3D universe backdrop draws its own warp tunnel.
+          lightspeedStreakGroup.visible =
+            lightspeedVisualIntensity > 0.02 &&
+            !scene.userData.suppressLegacyLightspeedStreaks;
           const mat = lightspeedStreakGroup.material as THREE.LineBasicMaterial;
           mat.opacity = 0.12 + 0.38 * lightspeedVisualIntensity;
           const colorAttr = lightspeedStreakGroup.geometry.getAttribute(
@@ -2619,7 +2622,9 @@ export const useRenderLoop = () => {
           lightspeedThickPositions &&
           lightspeedThickMeta
         ) {
-          lightspeedThickGroup.visible = lightspeedVisualIntensity > 0.08;
+          lightspeedThickGroup.visible =
+            lightspeedVisualIntensity > 0.08 &&
+            !scene.userData.suppressLegacyLightspeedStreaks;
           const thickMat =
             lightspeedThickGroup.material as THREE.LineBasicMaterial;
           const isSkillsLightspeedTravel =
