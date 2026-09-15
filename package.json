@@ -17,7 +17,10 @@
     "services:down": "docker compose stop",
     "az:guard": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/az-guard.ps1",
     "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:import": "node scripts/with-local-env.mjs npm run import -w api --",
+    "db:pull": "node scripts/db-pull.mjs",
+    "db:restore-local": "node scripts/db-restore-local.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.14.0",

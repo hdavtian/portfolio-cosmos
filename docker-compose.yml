@@ -6,7 +6,8 @@ name: scrolling-resume
 
 services:
   mongo:
-    image: mongo:8
+    # Pinned to the production Atlas major.minor (8.0) so dumps restore cleanly.
+    image: mongo:8.0
     container_name: scrolling-resume-mongo
     ports:
       - "127.0.0.1:27017:27017"
