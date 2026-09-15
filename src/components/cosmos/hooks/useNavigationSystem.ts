@@ -68,6 +68,11 @@ const NAV_MOON_APPROACH_MIN_DISTANCE = 65;
  * lightspeed braking distance so there is room to accelerate and brake.
  */
 const NAV_MOON_LIGHTSPEED_MIN_DISTANCE = 9_000;
+/**
+ * Section braking starts from at least this speed (units/frame). The old
+ * fixed 4 u/frame made the braking zone crawl once it grew with lightspeed.
+ */
+const NAV_SECTION_DECEL_MIN_TOP_SPEED = 12;
 const NAV_MOON_APPROACH_MAX_DISTANCE = 220;
 const NAV_MOON_APPROACH_RATIO = 0.25;
 const NAV_SECTION_APPROACH_MIN_DISTANCE = 120;
@@ -451,6 +456,8 @@ export const useNavigationSystem = (deps: {
     phaseApproachDistance?: number;
     isDirectSectionApproach?: boolean;
     lightspeedLockedOut?: boolean;
+    /** Speed when section deceleration began (braking scales down from it). */
+    decelStartSpeed?: number;
     // Pending moon navigation — delayed until turn completes
     pendingMoonId?: string;
     pendingMoonTurbo?: boolean;
@@ -2434,9 +2441,21 @@ export const useNavigationSystem = (deps: {
         }
       } else {
         // ── DECELERATION: smooth stop ──
-        const progress = distance / decelDist;
-        targetSpeed = Math.max(0.1, progress * 4.0);
-        lerpAlpha = 0.06; // slightly faster lerp for responsive decel
+        // Speed scales with the remaining distance, starting from the speed
+        // the ship had when braking began (lightspeed brakes from lightspeed
+        // instead of crawling the whole braking zone at 4 u/frame). A floor
+        // keeps short, slower trips from dragging.
+        if (target.decelStartSpeed === undefined) {
+          target.decelStartSpeed = Math.max(pathData.speed, NAV_SECTION_DECEL_MIN_TOP_SPEED);
+        }
+        // Measured to the arrival point, so speed eases to ~0 as it arrives.
+        const progress = THREE.MathUtils.clamp(
+          (distance - arrivalDistance) / Math.max(1, decelDist - arrivalDistance),
+          0,
+          1,
+        );
+        targetSpeed = Math.max(0.1, progress * target.decelStartSpeed);
+        lerpAlpha = 0.12; // track the falling target closely
         manualFlightRef.current.acceleration = progress * 0.6;
         manualFlightRef.current.isTurboActive = false;
         manualFlightRef.current.isLightspeedActive = false;

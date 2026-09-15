@@ -132,9 +132,12 @@ const ESCORT_MAX_HOLD_SECONDS = 6;
 const ESCORT_OUT_SECONDS = 0.9;
 const ESCORT_OUT_DISTANCE = 3200;
 
-/** Engine glow sprites across the rear of the hull. */
-const ENGINE_GLOW_COUNT = 3;
+/** Engine glow: the model's nozzle material, and sprite size per nozzle radius. */
+const ENGINE_GLOW_MATERIAL_NAME = "BlueEngineGlow";
+const ENGINE_GLOW_SIZE = 3.2;
 const ENGINE_GLOW_COLOR = 0x9cc8ff;
+/** Nozzle material brightness while shown (its own color sits below the bloom threshold). */
+const ENGINE_MATERIAL_GLOW = 4;
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 
@@ -227,6 +230,7 @@ export class StarDestroyerMoments {
   private readonly glowTexture = createGlowTexture();
   private readonly glowMaterial: THREE.SpriteMaterial;
   private readonly glowSprites: THREE.Sprite[] = [];
+  private readonly engineMaterials: THREE.MeshStandardMaterial[] = [];
 
   private readonly shipForward = new THREE.Vector3();
   private readonly shipUp = new THREE.Vector3();
@@ -251,8 +255,9 @@ export class StarDestroyerMoments {
     // Outline so the dark hull reads against space (no lights involved).
     this.rim = new ShipRimLight(sd);
 
-    // Soft blue engine glow across the rear. The pose convention (lookAt,
-    // then forwardOffset) puts the nose at local +Z, so the rear is min Z.
+    // Engine glow: the model has a "BlueEngineGlow" material on its nozzles.
+    // Find those vertices, group them into nozzles, and put a glow sprite on
+    // each one; the material itself is brightened while the ship is shown.
     this.glowMaterial = new THREE.SpriteMaterial({
       map: this.glowTexture,
       color: ENGINE_GLOW_COLOR,
@@ -262,20 +267,78 @@ export class StarDestroyerMoments {
       blending: THREE.AdditiveBlending,
       toneMapped: false,
     });
-    const glowSize = this.localSize.x * 0.16;
-    for (let i = 0; i < ENGINE_GLOW_COUNT; i++) {
+    for (const nozzle of this.findEngineNozzles()) {
       const sprite = new THREE.Sprite(this.glowMaterial);
-      const across = i / Math.max(1, ENGINE_GLOW_COUNT - 1) - 0.5;
-      sprite.position.set(
-        this.localCenter.x + across * this.localSize.x * 0.32,
-        this.localCenter.y + this.localSize.y * 0.05,
-        this.localMin.z - this.localSize.z * 0.01,
-      );
-      sprite.scale.setScalar(glowSize * (i === 1 ? 1.25 : 1));
+      // Just behind the nozzle face, a bit larger than the nozzle.
+      sprite.position.copy(nozzle.center);
+      sprite.position.z -= nozzle.radius * 0.35;
+      sprite.scale.setScalar(nozzle.radius * ENGINE_GLOW_SIZE);
       sprite.name = "StarDestroyerEngineGlow";
       sd.add(sprite);
       this.glowSprites.push(sprite);
     }
+  }
+
+  /**
+   * Nozzles in the group's own space: vertices of the "BlueEngineGlow"
+   * material, clustered on the rear face (x/y), each with a center and radius.
+   */
+  private findEngineNozzles(): Array<{ center: THREE.Vector3; radius: number }> {
+    this.sd.updateMatrixWorld(true);
+    const toLocal = new THREE.Matrix4().copy(this.sd.matrixWorld).invert();
+    const meshToLocal = new THREE.Matrix4();
+    const points: THREE.Vector3[] = [];
+    this.sd.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const engine = materials.find((m) => m?.name === ENGINE_GLOW_MATERIAL_NAME) as
+        | THREE.MeshStandardMaterial
+        | undefined;
+      if (!engine) return;
+      this.engineMaterials.push(engine);
+      const position = mesh.geometry.getAttribute("position");
+      if (!position) return;
+      meshToLocal.multiplyMatrices(toLocal, mesh.matrixWorld);
+      for (let i = 0; i < position.count; i++) {
+        points.push(new THREE.Vector3().fromBufferAttribute(position, i).applyMatrix4(meshToLocal));
+      }
+    });
+    if (points.length === 0) return [];
+
+    // Single-link clustering on the rear face; link distance relative to hull width.
+    const link = this.localSize.x * 0.015;
+    const assigned = new Array(points.length).fill(false);
+    const nozzles: Array<{ center: THREE.Vector3; radius: number }> = [];
+    for (let i = 0; i < points.length; i++) {
+      if (assigned[i]) continue;
+      assigned[i] = true;
+      const stack = [i];
+      const members: THREE.Vector3[] = [];
+      while (stack.length) {
+        const j = stack.pop()!;
+        members.push(points[j]);
+        for (let k = 0; k < points.length; k++) {
+          if (assigned[k]) continue;
+          if (Math.hypot(points[k].x - points[j].x, points[k].y - points[j].y) < link) {
+            assigned[k] = true;
+            stack.push(k);
+          }
+        }
+      }
+      const center = new THREE.Vector3();
+      for (const p of members) center.add(p);
+      center.divideScalar(members.length);
+      let radius = 0;
+      let rearZ = Infinity;
+      for (const p of members) {
+        radius = Math.max(radius, Math.hypot(p.x - center.x, p.y - center.y));
+        rearZ = Math.min(rearZ, p.z);
+      }
+      center.z = rearZ;
+      nozzles.push({ center, radius: Math.max(radius, this.localSize.x * 0.01) });
+    }
+    return nozzles;
   }
 
   isActive(): boolean {
@@ -566,6 +629,9 @@ export class StarDestroyerMoments {
     if (key) key.intensity = 0.22 + amount * 1.6;
     if (rim) rim.intensity = 0.2 + amount * 1.3;
     this.glowMaterial.opacity = amount * 0.9;
+    for (const material of this.engineMaterials) {
+      material.emissiveIntensity = 1 + amount * (ENGINE_MATERIAL_GLOW - 1);
+    }
     this.rim.setVisible(shown);
   }
 }

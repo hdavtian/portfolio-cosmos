@@ -37,6 +37,26 @@ type LoadedImage = {
   users: number;
 };
 
+/** Shoots a flying image: where it will be, when to land, and how many bolts. */
+type ShatterAttack = (target: THREE.Vector3, arriveInSeconds: number, bolts?: number) => void;
+
+/** One outside-view tile flight: image flies out, drifts, gets shot, shatters. */
+type TileFlight = {
+  plane: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
+  shards: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  index: number | null;
+  image: { texture: THREE.Texture; bitmap: ImageBitmap; aspect: number } | null;
+  phase: "idle" | "loading" | "reveal" | "drift" | "shatter";
+  time: number;
+  progress: number;
+  driftDirection: THREE.Vector3;
+  driftDistance: number;
+  driftTilt: number;
+  driftScale: THREE.Vector2;
+  laserFired: boolean;
+  token: number;
+};
+
 type FaceState = {
   index: number;
   mesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
@@ -52,6 +72,8 @@ type FaceState = {
   focus: number;
   /** Shattered from the outside view: stays a blank color until reset. */
   retired: boolean;
+  /** Launched from the outside view (flying or shattered): ignores clicks. */
+  launched: boolean;
   /** 0..1 how much of the arrival photo this tile shows. */
   skin: number;
   /** Seconds after showSkin() this tile turns to the photo, and back. */
@@ -453,8 +475,9 @@ export class CareerGallery {
   private driftDistance = 0;
   private driftTilt = 1;
   /** Called shortly before a drifting image shatters, to shoot it (e.g. the Falcon). */
-  private shatterAttack: ((target: THREE.Vector3, arriveInSeconds: number) => void) | null =
-    null;
+  private shatterAttack: ShatterAttack | null = null;
+  /** Outside view: independent tile flights (several can be in the air at once). */
+  private readonly flights: TileFlight[] = [];
   private laserFired = false;
   private readonly driftScale = new THREE.Vector2();
   /** All shards in one mesh, animated entirely in the vertex shader. */
@@ -610,6 +633,7 @@ export class CareerGallery {
         dim: 0,
         focus: 0,
         retired: false,
+        launched: false,
         skin: 0,
         skinInAt: 0,
         skinOutAt: 0,
@@ -845,6 +869,45 @@ export class CareerGallery {
     this.shatter.frustumCulled = false;
     this.shatter.visible = false;
     this.root.add(this.shatter);
+
+    // Pool of outside-view flights. Material clones share the compiled
+    // programs; geometry is shared. Depth-tested so nearer things (the parked
+    // Falcon) stay in front.
+    for (let i = 0; i < FLIGHT_POOL_SIZE; i++) {
+      const planeMaterial = this.reveal.material.clone();
+      planeMaterial.depthTest = true;
+      planeMaterial.uniforms.uTex.value = getPlaceholderTexture();
+      const plane = new THREE.Mesh(this.reveal.geometry, planeMaterial);
+      plane.name = `CareerGalleryFlight_${i}`;
+      plane.renderOrder = 20;
+      plane.frustumCulled = false;
+      plane.visible = false;
+      this.root.add(plane);
+      const shardMaterial = this.shatter.material.clone();
+      shardMaterial.depthTest = true;
+      shardMaterial.uniforms.uTex.value = getPlaceholderTexture();
+      const shards = new THREE.Mesh(this.shatter.geometry, shardMaterial);
+      shards.name = `CareerGalleryFlightShards_${i}`;
+      shards.renderOrder = 21;
+      shards.frustumCulled = false;
+      shards.visible = false;
+      this.root.add(shards);
+      this.flights.push({
+        plane,
+        shards,
+        index: null,
+        image: null,
+        phase: "idle",
+        time: 0,
+        progress: 0,
+        driftDirection: new THREE.Vector3(),
+        driftDistance: 0,
+        driftTilt: 1,
+        driftScale: new THREE.Vector2(1, 1),
+        laserFired: false,
+        token: 0,
+      });
+    }
   }
 
   /** Snapshot of loading/cycling state, for debugging. */
@@ -990,17 +1053,191 @@ export class CareerGallery {
    * came from is left a blank color (no buttons).
    */
   flashFace(index: number): CareerGalleryFocusInfo | null {
-    const info = this.focusFace(index);
-    if (info) {
-      this.flashActive = true;
-      this.flashPhase = "reveal";
+    // Each click launches its own flight; a tile already launched (flying or
+    // shattered) ignores further clicks until the visit ends.
+    const face = this.faces[index];
+    const url = face?.currentUrl;
+    if (!face || !url || face.retired || face.launched) return null;
+    const flight = this.flights.find((candidate) => candidate.phase === "idle");
+    if (!flight) return null;
+
+    face.launched = true;
+    flight.index = index;
+    flight.phase = "loading";
+    flight.time = 0;
+    flight.progress = 0;
+    flight.laserFired = false;
+    flight.token += 1;
+    const token = flight.token;
+    loadBitmapTexture(url, FOCUS_IMAGE_MAX_EDGE)
+      .then((image) => {
+        if (this.disposed || token !== flight.token || flight.phase !== "loading") {
+          image.texture.dispose();
+          image.bitmap.close();
+          return;
+        }
+        flight.image = image;
+        const u = flight.plane.material.uniforms;
+        u.uTex.value = image.texture;
+        u.uPlaneAspect.value = image.aspect;
+        u.uReveal.value = 0;
+        flight.phase = "reveal";
+        flight.plane.visible = true;
+      })
+      .catch(() => {
+        if (token !== flight.token) return;
+        face.launched = false;
+        this.resetFlight(flight);
+      });
+
+    const item = this.items.get(url);
+    return {
+      url,
+      title: item?.title ?? "Untitled project",
+      subtitle: item?.subtitle ?? "",
+      year: item?.year ?? null,
+      faceIndex: index,
+    };
+  }
+
+  /** Advance every outside-view flight. */
+  private updateFlights(step: number, camera: THREE.PerspectiveCamera): void {
+    for (const flight of this.flights) {
+      if (flight.phase === "idle" || flight.phase === "loading" || flight.index === null) continue;
+      const planeUniforms = flight.plane.material.uniforms;
+      planeUniforms.uTime.value = this.time;
+
+      if (flight.phase === "shatter") {
+        flight.time += step;
+        flight.shards.material.uniforms.uTime.value = flight.time;
+        if (flight.time >= SHATTER_SECONDS) this.resetFlight(flight);
+        continue;
+      }
+
+      if (flight.phase === "reveal") {
+        flight.progress = Math.min(1, flight.progress + step / FLASH_REVEAL_SECONDS);
+        planeUniforms.uReveal.value = THREE.MathUtils.smoothstep(flight.progress, 0, 1);
+        const worldPos = this.poseFlight(flight, camera);
+        if (flight.progress >= 1) {
+          // Drift away: out to one side and up, a little toward the viewer.
+          flight.phase = "drift";
+          flight.time = 0;
+          flight.driftTilt = Math.random() < 0.5 ? -1 : 1;
+          const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+          const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+          const toward = camera.position.clone().sub(worldPos).normalize();
+          flight.driftDirection
+            .copy(right)
+            .multiplyScalar(0.8 * flight.driftTilt)
+            .addScaledVector(up, 0.45)
+            .addScaledVector(toward, 0.2)
+            .normalize();
+          flight.driftDistance = camera.position.distanceTo(worldPos) * FLASH_DRIFT_DISTANCE;
+          flight.driftScale.set(flight.plane.scale.x, flight.plane.scale.y);
+        }
+        continue;
+      }
+
+      // Drift: the Falcon's burst is timed to land as it shatters.
+      flight.time += step;
+      if (!flight.laserFired && this.shatterAttack && flight.time >= FLASH_DRIFT_SECONDS - LASER_TRAVEL_SECONDS) {
+        flight.laserFired = true;
+        const target = this.getFaceWorldCentroid(flight.index, new THREE.Vector3())
+          .lerp(camera.position, EXTERIOR_REVEAL_TRAVEL)
+          .addScaledVector(flight.driftDirection, flight.driftDistance);
+        const bolts =
+          FLIGHT_MIN_BOLTS + Math.floor(Math.random() * (FLIGHT_MAX_BOLTS - FLIGHT_MIN_BOLTS + 1));
+        this.shatterAttack(target, Math.max(0.05, FLASH_DRIFT_SECONDS - flight.time), bolts);
+      }
+      this.poseFlight(flight, camera);
+      if (flight.time >= FLASH_DRIFT_SECONDS) this.shatterFlight(flight);
     }
-    return info;
+  }
+
+  /** Places a flight's image plane (world position returned). */
+  private poseFlight(flight: TileFlight, camera: THREE.PerspectiveCamera): THREE.Vector3 {
+    const plane = flight.plane;
+    const eased = plane.material.uniforms.uReveal.value as number;
+    const worldPos = this.getFaceWorldCentroid(flight.index ?? 0, new THREE.Vector3()).lerp(
+      camera.position,
+      EXTERIOR_REVEAL_TRAVEL * eased,
+    );
+    const drifting = flight.phase === "drift";
+    const k = drifting ? Math.min(1, flight.time / FLASH_DRIFT_SECONDS) : 0;
+    if (drifting) worldPos.addScaledVector(flight.driftDirection, flight.driftDistance * k * k);
+    plane.position.copy(this.root.worldToLocal(worldPos.clone()));
+    plane.lookAt(camera.position);
+    if (drifting) {
+      plane.rotateY(0.45 * k * flight.driftTilt);
+      plane.rotateZ(0.12 * k * flight.driftTilt);
+      plane.scale.set(flight.driftScale.x, flight.driftScale.y, 1);
+      return worldPos;
+    }
+    const distance = Math.max(1, camera.position.distanceTo(worldPos));
+    const viewHeight = 2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+    const aspect = plane.material.uniforms.uPlaneAspect.value as number;
+    let height = viewHeight * (0.22 + 0.5 * eased);
+    let width = height * aspect;
+    const maxWidth = viewHeight * camera.aspect * 0.62;
+    if (width > maxWidth) {
+      width = maxWidth;
+      height = width / aspect;
+    }
+    plane.scale.set(width, height, 1);
+    return worldPos;
+  }
+
+  /** Swap a flight's image for its glass shards and blank the tile it came from. */
+  private shatterFlight(flight: TileFlight): void {
+    const plane = flight.plane;
+    const u = flight.shards.material.uniforms;
+    u.uTex.value = plane.material.uniforms.uTex.value;
+    u.uTime.value = 0;
+    (u.uSize.value as THREE.Vector2).set(plane.scale.x, plane.scale.y);
+    const endSpeed = (2 * flight.driftDistance) / FLASH_DRIFT_SECONDS;
+    const toPlaneFrame = plane.getWorldQuaternion(new THREE.Quaternion()).invert();
+    (u.uMomentum.value as THREE.Vector3)
+      .copy(flight.driftDirection)
+      .applyQuaternion(toPlaneFrame)
+      .multiplyScalar(endSpeed);
+    flight.shards.position.copy(plane.position);
+    flight.shards.quaternion.copy(plane.quaternion);
+    flight.shards.visible = true;
+    plane.visible = false;
+    flight.phase = "shatter";
+    flight.time = 0;
+    if (flight.index !== null) this.retireFace(flight.index);
+  }
+
+  /** Return a flight to the pool (its tile's launched/retired state is kept). */
+  private resetFlight(flight: TileFlight): void {
+    flight.token += 1;
+    flight.phase = "idle";
+    flight.index = null;
+    flight.plane.visible = false;
+    flight.shards.visible = false;
+    flight.plane.material.uniforms.uTex.value = getPlaceholderTexture();
+    flight.plane.material.uniforms.uReveal.value = 0;
+    flight.shards.material.uniforms.uTex.value = getPlaceholderTexture();
+    if (flight.image) {
+      flight.image.texture.dispose();
+      flight.image.bitmap.close();
+      flight.image = null;
+    }
+  }
+
+  /** Stop all flights (leaving the gallery). */
+  private clearFlights(): void {
+    for (const flight of this.flights) {
+      if (flight.phase !== "idle") this.resetFlight(flight);
+    }
   }
 
   /** Shattered tiles start cycling screenshots again (call when the visit ends). */
   restoreRetiredFaces(): void {
+    this.clearFlights();
     for (const face of this.faces) {
+      face.launched = false;
       if (!face.retired) continue;
       face.retired = false;
       face.holdRemaining = randomBetween(0.5, 3);
@@ -1084,7 +1321,7 @@ export class CareerGallery {
 
   /** Something that shoots the drifting image just before it shatters (or null). */
   setShatterAttack(
-    handler: ((target: THREE.Vector3, arriveInSeconds: number) => void) | null,
+    handler: ShatterAttack | null,
   ): void {
     this.shatterAttack = handler;
   }
@@ -1316,6 +1553,7 @@ export class CareerGallery {
     }
 
     this.updateReveal(step, camera);
+    this.updateFlights(step, camera);
   }
 
   private updateReveal(step: number, camera: THREE.PerspectiveCamera): void {
@@ -1552,6 +1790,15 @@ export class CareerGallery {
     this.interiorStreaks.material.dispose();
     this.shatter.geometry.dispose();
     this.shatter.material.dispose();
+    for (const flight of this.flights) {
+      if (flight.image) {
+        flight.image.texture.dispose();
+        flight.image.bitmap.close();
+        flight.image = null;
+      }
+      flight.plane.material.dispose();
+      flight.shards.material.dispose();
+    }
     if (this.skinImage) {
       this.skinImage.texture.dispose();
       this.skinImage.bitmap.close();
@@ -1573,6 +1820,11 @@ const FLASH_DRIFT_SECONDS = 5;
 const FLASH_DRIFT_DISTANCE = 0.2;
 /** Outside flash: seconds the image takes to fly out of its tile. */
 const FLASH_REVEAL_SECONDS = 2.4;
+/** Outside view: how many tile flights can be in the air at once. */
+const FLIGHT_POOL_SIZE = 8;
+/** Bolts per laser burst at a flying tile (random, inclusive). */
+const FLIGHT_MIN_BOLTS = 2;
+const FLIGHT_MAX_BOLTS = 4;
 /** Seconds the shots fly before hitting (they're fired this long before the shatter). */
 const LASER_TRAVEL_SECONDS = 0.45;
 /** Seconds the shards fly apart and fade. */

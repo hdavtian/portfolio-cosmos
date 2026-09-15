@@ -109,9 +109,14 @@ export class FalconLaserBursts {
   }
 
   /** Fires a burst from the muzzles; the first bolt lands after `arriveInSeconds`. */
-  fire(muzzles: THREE.Vector3[], target: THREE.Vector3, arriveInSeconds: number): void {
+  fire(
+    muzzles: THREE.Vector3[],
+    target: THREE.Vector3,
+    arriveInSeconds: number,
+    bolts: number = BURST_BOLTS,
+  ): void {
     if (muzzles.length === 0) return;
-    for (let i = 0; i < BURST_BOLTS; i++) {
+    for (let i = 0; i < bolts; i++) {
       const bolt = this.bolts.find((candidate) => !candidate.active);
       if (!bolt) return;
       bolt.start.copy(muzzles[i % muzzles.length]);

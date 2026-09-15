@@ -563,6 +563,11 @@ const CAREER_GALLERY_DRIFT_RAMP_S = 4;
  * Outside the gallery the Falcon sits bottom-left, close to the camera, rear
  * toward us: offset in the camera's frame (x right, y up, z ahead).
  */
+/**
+ * The Career Gallery interior (glide inside, look around) is kept but turned
+ * off: the outside view is the experience. Flip to bring back "Enter Gallery".
+ */
+const CAREER_GALLERY_INTERIOR_ENABLED = false;
 // Close enough that most of the ship runs off the bottom-left corner.
 const CAREER_GALLERY_SHIP_OFFSET = new THREE.Vector3(-0.64, -0.38, 1.1);
 /** Heat haze strength behind the parked Falcon's engines. */
@@ -7962,7 +7967,7 @@ export default function ResumeSpace3D({
       };
       ship.visible = true;
     }
-    gallery.setShatterAttack((target, arriveInSeconds) => {
+    gallery.setShatterAttack((target, arriveInSeconds, bolts) => {
       const falcon = spaceshipRef.current;
       const lasers = careerGalleryLasersRef.current;
       if (!falcon || !lasers) return;
@@ -7973,6 +7978,7 @@ export default function ResumeSpace3D({
         ),
         target,
         arriveInSeconds,
+        bolts,
       );
     });
     careerGallerySnapshotRef.current = captureGalleryControls(controls, camera);
@@ -9027,6 +9033,25 @@ export default function ResumeSpace3D({
 
   // Clicking the Star Destroyer just shows a friendly message (restarts on
   // each click; fades out on its own).
+  // About: while Mjolnir hovers in its cross pose waiting to be grabbed, show
+  // an on-screen hint to click it.
+  const [mjolnirPromptVisible, setMjolnirPromptVisible] = useState(false);
+  useEffect(() => {
+    if (!sceneReady) return;
+    let shown = false;
+    const id = window.setInterval(() => {
+      const waiting = !!aboutJourneyRef.current?.awaitingGrab;
+      if (waiting !== shown) {
+        shown = waiting;
+        setMjolnirPromptVisible(waiting);
+      }
+    }, 200);
+    return () => {
+      window.clearInterval(id);
+      setMjolnirPromptVisible(false);
+    };
+  }, [sceneReady]);
+
   const [sdFriendlyMessageKey, setSdFriendlyMessageKey] = useState(0);
   const sdFriendlyMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleStarDestroyerFriendlyClick = useCallback(() => {
@@ -22855,6 +22880,36 @@ export default function ResumeSpace3D({
               Exit Gallery
             </button>
           )}
+          {mjolnirPromptVisible && (
+            <div
+              style={{
+                position: "fixed",
+                left: "50%",
+                bottom: 90,
+                transform: "translateX(-50%)",
+                zIndex: 1250,
+                padding: "10px 22px",
+                borderRadius: 10,
+                background: "rgba(8, 18, 34, 0.7)",
+                border: "1px solid rgba(145, 232, 255, 0.45)",
+                color: "#e6f6ff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 20,
+                fontWeight: 600,
+                letterSpacing: 0.8,
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
+                textShadow: "0 0 12px rgba(120, 210, 255, 0.55)",
+                animation: "mjolnirPromptPulse 2.2s ease-in-out infinite",
+              }}
+            >
+              Click Mjolnir for a cosmic ride
+              <style>{`@keyframes mjolnirPromptPulse {
+                0%, 100% { opacity: 0.75; }
+                50% { opacity: 1; }
+              }`}</style>
+            </div>
+          )}
           {sdFriendlyMessageKey > 0 && (
             <div
               key={sdFriendlyMessageKey}
@@ -22922,10 +22977,10 @@ export default function ResumeSpace3D({
                 textShadow: "0 0 10px rgba(120, 210, 255, 0.45)",
               }}
             >
-              Click a tile to enlarge it — or enter the gallery
+              Click tiles to launch them
             </div>
           )}
-          {careerGalleryOutside && (
+          {careerGalleryOutside && CAREER_GALLERY_INTERIOR_ENABLED && (
             <button
               onClick={() => enterCareerGallery()}
               style={{
