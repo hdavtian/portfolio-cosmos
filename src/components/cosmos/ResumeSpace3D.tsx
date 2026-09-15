@@ -35,6 +35,13 @@ import {
   type BoxOccluder,
   type SphereOccluder,
 } from "./labelVisibility";
+import { StarDestroyerMoments } from "./starDestroyerMoments";
+// SD configurator (removable: delete sdConfigurator/ and lines marked "SD configurator")
+import {
+  SdFlyoverConfigurator,
+  recordSdIntroView,
+  writeSdConfiguratorOpen,
+} from "./sdConfigurator/SdFlyoverConfigurator";
 import resumeData from "../../data/resume.json";
 import { trackEvent } from "../../lib/analytics";
 import { IS_DEBUG, IS_DEBUG_OVERLAYS, dlog, dwarn } from "../../lib/debugLog";
@@ -1393,6 +1400,26 @@ const SKILLS_LATTICE_NAV_STANDOFF_DIST = 1200;
 const SKILLS_LATTICE_ENTRY_TRIGGER_DIST = 1800;
 const SKILLS_SD_PATROL_RADIUS = 150;
 const SKILLS_SD_PATROL_SPEED = 0.03;
+/**
+ * The Star Destroyer used to be parked circling Skills. It now only appears
+ * in scripted moments (starDestroyerMoments.ts); flip to bring the hold back.
+ */
+const STAR_DESTROYER_SKILLS_HOLD = false;
+/** Escort: the first lightspeed trip always gets one; later ones by chance. */
+const STAR_DESTROYER_ESCORT_CHANCE = 0.3;
+const STAR_DESTROYER_ESCORT_COOLDOWN_MS = 180_000;
+/**
+ * Fly-over start: after the intro Falcon reaches its hover, wait at least
+ * this long, then until the camera has stopped turning (the intro keeps
+ * panning while the ship settles) so the path is built from the final view.
+ */
+const STAR_DESTROYER_FLYOVER_MIN_DELAY_MS = 500;
+/** Camera counts as settled below this turn rate (rad/s)… */
+const STAR_DESTROYER_FLYOVER_SETTLED_TURN_RATE = 0.03;
+/** …held for this long. */
+const STAR_DESTROYER_FLYOVER_SETTLED_MS = 600;
+/** Start anyway after this long, even if the camera never settles. */
+const STAR_DESTROYER_FLYOVER_MAX_WAIT_MS = 15000;
 type AboutExitConfirmIntent = {
   source: "quick" | "cockpit" | "experience";
   targetId: string;
@@ -4945,6 +4972,48 @@ export default function ResumeSpace3D({
   // --- STAR DESTROYER refs ---
   const starDestroyerRef = useRef<THREE.Group | null>(null);
   const starDestroyerCruiserRef = useRef<StarDestroyerCruiser | null>(null);
+  const starDestroyerMomentsRef = useRef<StarDestroyerMoments | null>(null);
+  // SD configurator: always starts closed (open it from Console → Tools);
+  // stable accessors for the panel.
+  const [sdConfiguratorOpen, setSdConfiguratorOpen] = useState<boolean>(false);
+  const openSdConfigurator = useCallback((open: boolean) => {
+    writeSdConfiguratorOpen(open);
+    setSdConfiguratorOpen(open);
+  }, []);
+  const getSdConfiguratorCamera = useCallback(
+    () => sceneRef.current.camera as THREE.Camera | undefined,
+    [],
+  );
+  const getSdConfiguratorMoments = useCallback(
+    () => starDestroyerMomentsRef.current,
+    [],
+  );
+  const getSdConfiguratorControls = useCallback(() => sceneRef.current.controls, []);
+  const getSdConfiguratorDom = useCallback(
+    () => rendererRef.current?.domElement,
+    [],
+  );
+  // While the configurator is open the follow camera (and its idle sway) is
+  // paused so the view holds still; restored on close.
+  const sdConfiguratorFollowWasOnRef = useRef(false);
+  /** Set once the intro camera has settled (and its view was recorded). */
+  const sdIntroViewSettledRef = useRef(false);
+  const freezeSdConfiguratorCamera = useCallback(() => {
+    // Let the intro camera reach its real final pose before freezing, so the
+    // recorded intro view is correct even if the configurator was left open.
+    if (!sdIntroViewSettledRef.current) return;
+    if (!followingSpaceshipRef.current) return;
+    sdConfiguratorFollowWasOnRef.current = true;
+    followingSpaceshipRef.current = false;
+    setFollowingSpaceship(false);
+  }, []);
+  const releaseSdConfiguratorCamera = useCallback(() => {
+    if (sdConfiguratorFollowWasOnRef.current) {
+      followingSpaceshipRef.current = true;
+      setFollowingSpaceship(true);
+    }
+    sdConfiguratorFollowWasOnRef.current = false;
+  }, []);
   const starDestroyerDebugLastLogMsRef = useRef(0);
   const starDestroyerSkillsSnapPendingRef = useRef(false);
   const navMessageStateRef = useRef<{
@@ -7582,6 +7651,10 @@ export default function ResumeSpace3D({
   );
 
   const placeStarDestroyerNearSkills = useCallback(() => {
+    if (!STAR_DESTROYER_SKILLS_HOLD) {
+      starDestroyerSkillsSnapPendingRef.current = false;
+      return;
+    }
     const sd = starDestroyerRef.current;
     const anchor = skillsLatticeWorldAnchorRef.current;
     if (!sd || !anchor) {
@@ -8952,23 +9025,18 @@ export default function ResumeSpace3D({
     [setFollowingSpaceship, setInsideShip, shipLog],
   );
 
-  const handleStarDestroyerClick = useCallback(() => {
-    // Only allow when aboard the Falcon
-    if (!followingSpaceshipRef.current && !insideShipRef.current) {
-      vlog("🔺 Must be aboard the Falcon to escort the Star Destroyer");
-      return;
-    }
-    if (!starDestroyerRef.current || !spaceshipRef.current) return;
-
-    // Cancel any active cinematic or navigation
-    if (shipCinematicRef.current) {
-      shipCinematicRef.current.active = false;
-    }
-
-    setFollowingStarDestroyer(true);
-    followingStarDestroyerRef.current = true;
-    vlog("🔺 Engaging Star Destroyer escort — matching course and speed");
-  }, [vlog]);
+  // Clicking the Star Destroyer just shows a friendly message (restarts on
+  // each click; fades out on its own).
+  const [sdFriendlyMessageKey, setSdFriendlyMessageKey] = useState(0);
+  const sdFriendlyMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleStarDestroyerFriendlyClick = useCallback(() => {
+    setSdFriendlyMessageKey((key) => key + 1);
+    if (sdFriendlyMessageTimerRef.current) clearTimeout(sdFriendlyMessageTimerRef.current);
+    sdFriendlyMessageTimerRef.current = setTimeout(() => {
+      sdFriendlyMessageTimerRef.current = null;
+      setSdFriendlyMessageKey(0);
+    }, 3600);
+  }, []);
 
   const terminalToolActions = useMemo<ShipTerminalToolAction[]>(() => {
     const invoke = (name: string, ...args: unknown[]) => {
@@ -9020,6 +9088,25 @@ export default function ResumeSpace3D({
         label: "unShadowSD()",
         hint: "Release SD camera lock",
         onRun: () => invoke("unShadowSD"),
+      },
+      {
+        id: "sd-flyover",
+        label: "sdFlyover()",
+        hint: "Star Destroyer passes overhead from behind the view",
+        onRun: () => invoke("sdFlyover"),
+      },
+      {
+        // SD configurator
+        id: "sd-configurator",
+        label: "sdConfigurator()",
+        hint: "On-screen editor for the Star Destroyer fly-over path",
+        onRun: () => invoke("sdConfigurator"),
+      },
+      {
+        id: "sd-escort",
+        label: "sdEscort()",
+        hint: "Star Destroyer drops in beside the Falcon (best at lightspeed)",
+        onRun: () => invoke("sdEscort"),
       },
       {
         id: "sd-status",
@@ -12083,7 +12170,8 @@ export default function ResumeSpace3D({
       const anchor = skillsLatticeWorldAnchorRef.current;
       const skillsRouteActive = currentNavigationTargetRef.current === "skills";
       const holdNearSkills =
-        skillsLatticeActiveRef.current || skillsRouteActive;
+        STAR_DESTROYER_SKILLS_HOLD &&
+        (skillsLatticeActiveRef.current || skillsRouteActive);
       if (sd && anchor && holdNearSkills) {
         if (!skillsSDLockActiveRef.current) {
           skillsSDLockActiveRef.current = true;
@@ -12157,11 +12245,155 @@ export default function ResumeSpace3D({
       // While Skills mode is actively pinning the SD to its scripted patrol,
       // skip cruiser autonomy updates to avoid two systems fighting over pose.
       if (skillsSDLockActiveRef.current) return;
+      // Scripted moments own the pose while they run.
+      if (starDestroyerMomentsRef.current?.isActive()) return;
 
       cruiser.update(dt);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
+  }, [sceneReady]);
+
+  // Mirrors the travel phase for per-frame code (escort trigger).
+  const navigationTravelPhaseRef = useRef(navigationTravelPhase);
+  useEffect(() => {
+    navigationTravelPhaseRef.current = navigationTravelPhase;
+  }, [navigationTravelPhase]);
+
+  // Star Destroyer moments: fly-over after the intro, and an escort on some
+  // lightspeed trips. Posed right before the main render so it stays locked
+  // to the moving Falcon without a frame of lag.
+  useEffect(() => {
+    if (!sceneReady) return;
+    const scene = sceneRef.current.scene;
+    if (!scene) return;
+    let last = performance.now();
+    let wasLightspeed = false;
+    let escortCount = 0;
+    let lastEscortAt = -Infinity;
+    let flyoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const previousBeforeRender = scene.onBeforeRender;
+    scene.onBeforeRender = function (...args) {
+      const renderCamera = args[2] as THREE.Camera;
+      const moments = starDestroyerMomentsRef.current;
+      // Only on the main view (the targeting preview renders the scene too).
+      if (moments && renderCamera === sceneRef.current.camera) {
+        const now = performance.now();
+        const dt = Math.max(0, (now - last) / 1000);
+        last = now;
+        const lightspeed = navigationTravelPhaseRef.current === "lightspeed_engaged";
+        if (lightspeed && !wasLightspeed && !moments.isActive()) {
+          const offCooldown = now - lastEscortAt > STAR_DESTROYER_ESCORT_COOLDOWN_MS;
+          if (
+            escortCount === 0 ||
+            (offCooldown && Math.random() < STAR_DESTROYER_ESCORT_CHANCE)
+          ) {
+            moments.startEscort();
+            escortCount += 1;
+            lastEscortAt = now;
+          }
+        }
+        wasLightspeed = lightspeed;
+        moments.update(dt, {
+          camera: renderCamera,
+          ship: spaceshipRef.current,
+          lightspeed,
+        });
+      }
+      previousBeforeRender.apply(this, args);
+    };
+
+    const startFlyover = () => {
+      const moments = starDestroyerMomentsRef.current;
+      const camera = sceneRef.current.camera;
+      if (!moments || !camera || moments.isActive()) return false;
+      const info = moments.startFlyover(camera);
+      shipLog(
+        `SD fly-over: hull ${info.hullLength.toFixed(1)} long, start (${info.spec.startRight}, ${info.spec.startUp}, ${info.spec.startForward}), angle left ${info.spec.yawLeftDeg}° down ${info.spec.pitchDownDeg}°`,
+        "info",
+      );
+      return true;
+    };
+    // The Falcon comes in first and stops (its hover); once the intro camera
+    // has also finished turning, the Destroyer comes in.
+    let flyoverScheduled = false;
+    let settleRaf = 0;
+    const waitForCameraToSettle = () => {
+      const waitStart = performance.now();
+      const lastForward = new THREE.Vector3();
+      const forward = new THREE.Vector3();
+      let hasLast = false;
+      let lastAt = waitStart;
+      let settledFor = 0;
+      const check = (now: number) => {
+        settleRaf = 0;
+        // Skip if the visitor already set off somewhere.
+        if (currentNavigationTargetRef.current) return;
+        const camera = sceneRef.current.camera;
+        if (camera) {
+          camera.getWorldDirection(forward);
+          const dt = Math.max(1e-3, (now - lastAt) / 1000);
+          if (hasLast) {
+            const turnRate = forward.angleTo(lastForward) / dt;
+            settledFor =
+              turnRate < STAR_DESTROYER_FLYOVER_SETTLED_TURN_RATE
+                ? settledFor + dt * 1000
+                : 0;
+          }
+          lastForward.copy(forward);
+          hasLast = true;
+        }
+        lastAt = now;
+        const waited = now - waitStart;
+        if (waited > STAR_DESTROYER_FLYOVER_MAX_WAIT_MS || settledFor >= STAR_DESTROYER_FLYOVER_SETTLED_MS) {
+          // SD configurator: remember the real intro view it starts from.
+          sdIntroViewSettledRef.current = true;
+          const introCamera = sceneRef.current.camera;
+          const introControls = sceneRef.current.controls;
+          if (introCamera && introControls) {
+            recordSdIntroView(
+              introCamera.getWorldPosition(new THREE.Vector3()),
+              introControls.getTarget(new THREE.Vector3()),
+            );
+          }
+          startFlyover();
+          return;
+        }
+        settleRaf = requestAnimationFrame(check);
+      };
+      settleRaf = requestAnimationFrame(check);
+    };
+    const unsubscribeIntro = subscribeCosmosEvent("ship:cinematic-hover", () => {
+      if (flyoverScheduled) return;
+      flyoverScheduled = true;
+      flyoverTimer = setTimeout(() => {
+        flyoverTimer = null;
+        waitForCameraToSettle();
+      }, STAR_DESTROYER_FLYOVER_MIN_DELAY_MS);
+    });
+
+    // Console helpers for trying the moments on demand.
+    const win = window as unknown as Record<string, unknown>;
+    win.sdFlyover = () => startFlyover();
+    // SD configurator
+    win.sdConfigurator = () => openSdConfigurator(true);
+    win.sdEscort = () => {
+      const moments = starDestroyerMomentsRef.current;
+      if (!moments || moments.isActive()) return false;
+      moments.startEscort();
+      return true;
+    };
+
+    return () => {
+      unsubscribeIntro();
+      if (flyoverTimer) clearTimeout(flyoverTimer);
+      if (settleRaf) cancelAnimationFrame(settleRaf);
+      scene.onBeforeRender = previousBeforeRender;
+      delete win.sdFlyover;
+      delete win.sdEscort;
+      delete win.sdConfigurator; // SD configurator
+    };
   }, [sceneReady]);
 
   useEffect(() => {
@@ -17849,9 +18081,14 @@ export default function ResumeSpace3D({
         // Initialize the cruiser AI
         const cruiser = new StarDestroyerCruiser(starDestroyer);
         starDestroyerCruiserRef.current = cruiser;
-        // SD autonomy is enabled by default on universe startup.
-        // Scripted systems (e.g. Skills lock) temporarily override pose.
-        cruiser.setEnabled(true);
+        // No random patrolling: the Destroyer only shows up in scripted
+        // moments (fly-over after the intro, lightspeed escort) and is
+        // parked out of view otherwise. sdAutonomyOn() in the console
+        // still turns the old cruiser on for debugging.
+        cruiser.setEnabled(false);
+        const moments = new StarDestroyerMoments(starDestroyer);
+        moments.park();
+        starDestroyerMomentsRef.current = moments;
         if (starDestroyerSkillsSnapPendingRef.current) {
           placeStarDestroyerNearSkills();
         }
@@ -19191,7 +19428,7 @@ export default function ResumeSpace3D({
       exitFocusedMoon: exitMoonView,
       vlog,
       starDestroyerRef,
-      onStarDestroyerClick: handleStarDestroyerClick,
+      onStarDestroyerClick: handleStarDestroyerFriendlyClick,
       insideShipRef,
       getHologramPanelClickables: () =>
         hologramDroneRef.current?.getInteractivePanelMeshes() ?? [],
@@ -22617,6 +22854,52 @@ export default function ResumeSpace3D({
             >
               Exit Gallery
             </button>
+          )}
+          {sdFriendlyMessageKey > 0 && (
+            <div
+              key={sdFriendlyMessageKey}
+              style={{
+                position: "fixed",
+                left: "50%",
+                top: "38%",
+                transform: "translate(-50%, -50%)",
+                zIndex: 1250,
+                padding: "12px 22px",
+                borderRadius: 10,
+                background: "rgba(8, 18, 34, 0.72)",
+                border: "1px solid rgba(145, 232, 255, 0.45)",
+                color: "#e6f6ff",
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: 22,
+                fontWeight: 600,
+                letterSpacing: 0.6,
+                textAlign: "center",
+                pointerEvents: "none",
+                textShadow: "0 0 12px rgba(120, 210, 255, 0.5)",
+                animation: "sdFriendlyMessage 3.6s ease forwards",
+              }}
+            >
+              Don't worry… he's friendly… but be careful!
+              <style>{`@keyframes sdFriendlyMessage {
+                0% { opacity: 0; transform: translate(-50%, -40%); }
+                10% { opacity: 1; transform: translate(-50%, -50%); }
+                80% { opacity: 1; transform: translate(-50%, -50%); }
+                100% { opacity: 0; transform: translate(-50%, -56%); }
+              }`}</style>
+            </div>
+          )}
+          {/* SD configurator */}
+          {sdConfiguratorOpen && sceneReady && sceneRef.current.scene && (
+            <SdFlyoverConfigurator
+              scene={sceneRef.current.scene}
+              getCamera={getSdConfiguratorCamera}
+              getControls={getSdConfiguratorControls}
+              getDomElement={getSdConfiguratorDom}
+              getMoments={getSdConfiguratorMoments}
+              freezeCamera={freezeSdConfiguratorCamera}
+              releaseCamera={releaseSdConfiguratorCamera}
+              onClose={() => openSdConfigurator(false)}
+            />
           )}
           {careerGalleryOutside && (
             <div
