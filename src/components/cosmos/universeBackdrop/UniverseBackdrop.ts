@@ -281,11 +281,21 @@ const starVertexShader = /* glsl */ `
     float dist = max(1.0, -mvPosition.z);
     // Nearer stars read a little larger and brighter (parallax cue).
     float nearBoost = clamp(9000.0 / dist, 0.7, 2.2);
-    float twinkle = 0.86 + 0.14 * sin(uTime * (0.6 + aPhase * 1.4) + aPhase * 40.0);
+    // Most stars shimmer gently; ~10% clearly twinkle, and the brightest of
+    // those catch an occasional sparkle.
+    float gentle = 0.86 + 0.14 * sin(uTime * (0.6 + aPhase * 1.4) + aPhase * 40.0);
+    float twinkler = step(0.75, fract(aPhase * 7.31));
+    float wave = 0.5 + 0.5 * sin(uTime * (1.4 + aPhase * 3.0) + aPhase * 91.0);
+    float strong = 0.15 + 1.45 * wave * wave;
+    float sparkleClock = fract(uTime * (0.1 + aPhase * 0.08) + aPhase * 13.0);
+    float sparkle = smoothstep(0.0, 0.02, sparkleClock) * (1.0 - smoothstep(0.02, 0.09, sparkleClock));
+    float twinkle = mix(gentle, strong + sparkle * 2.2 * step(0.35, aMagnitude), twinkler);
     vIntensity = aMagnitude * twinkle * uBrightness * clamp(nearBoost, 0.8, 1.6)
       // At lightspeed the streaks take over; punch brighter on entry/exit.
       * (1.0 - 0.55 * uWarp) * (1.0 + uFlash * 1.8);
-    gl_PointSize = clamp((0.9 + aMagnitude * 2.6) * nearBoost, 1.0, 5.0) * uPixelRatio;
+    // Twinkling stars also swell a little when bright, so it reads on tiny stars.
+    float twinkleSize = mix(1.0, 0.75 + 0.55 * twinkle, twinkler);
+    gl_PointSize = clamp((0.9 + aMagnitude * 2.6) * nearBoost * twinkleSize, 1.0, 6.0) * uPixelRatio;
     float grey = dot(aColor, vec3(0.299, 0.587, 0.114));
     vColor = mix(vec3(grey), aColor, uSaturation);
     #include <logdepthbuf_vertex>

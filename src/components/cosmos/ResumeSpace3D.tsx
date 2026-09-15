@@ -26,6 +26,7 @@ import {
 } from "./careerGallery/careerGalleryCamera";
 import CareerGalleryTitleCard from "./careerGallery/CareerGalleryTitleCard";
 import { FalconLaserBursts } from "./careerGallery/falconLaserBursts";
+import { GalleryShroud } from "./careerGallery/galleryShroud";
 import {
   createHeatHazePass,
   ShipRimLight,
@@ -2083,6 +2084,8 @@ export default function ResumeSpace3D({
     quaternion: THREE.Quaternion;
   } | null>(null);
   const careerGalleryLasersRef = useRef<FalconLaserBursts | null>(null);
+  /** Nebula cocoon with ion-storm pulses; thins as you approach the gallery. */
+  const careerGalleryShroudRef = useRef<GalleryShroud | null>(null);
   const [careerGallerySelection, setCareerGallerySelection] =
     useState<CareerGalleryFocusInfo | null>(null);
   const composerRef = useRef<EffectComposer | null>(null);
@@ -9931,6 +9934,7 @@ export default function ResumeSpace3D({
       last = now;
       gallery.update(dt, camera);
       lasers?.update(dt, camera);
+      careerGalleryShroudRef.current?.update(dt, camera);
 
       // Drift the interior viewpoint on a slow loop by moving the orbit target
       // (the camera rides 0.01 behind it), applying only the change each frame
@@ -10151,6 +10155,8 @@ export default function ResumeSpace3D({
       careerGalleryZoomDetachRef.current?.();
       careerGalleryRef.current?.dispose();
       careerGalleryRef.current = null;
+      careerGalleryShroudRef.current?.dispose();
+      careerGalleryShroudRef.current = null;
     },
     [],
   );
@@ -17835,6 +17841,12 @@ export default function ResumeSpace3D({
     careerGallery.root.add(careerGalleryLabel);
     scene.add(careerGallery.root);
     careerGalleryRef.current = careerGallery;
+    const careerGalleryShroud = new GalleryShroud(
+      careerGallery.root.position,
+      CAREER_GALLERY_RADIUS,
+    );
+    scene.add(careerGalleryShroud.group);
+    careerGalleryShroudRef.current = careerGalleryShroud;
     if (IS_DEBUG) {
       (window as unknown as Record<string, unknown>).__careerGalleryStats = () =>
         careerGallery.getStats();
