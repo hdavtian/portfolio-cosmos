@@ -45,6 +45,7 @@ import {
 // Universe backdrop (removable: delete universeBackdrop/ and lines marked "Universe backdrop")
 import {
   UniverseBackdrop,
+  createBlackHoleLensPass,
   readStoredUniverseStyle,
   writeStoredUniverseStyle,
   type UniverseStyle,
@@ -2992,6 +2993,33 @@ export default function ResumeSpace3D({
       }
     }
   }, [spaceBackgroundVisible, universeStyle]);
+
+  // Universe backdrop: black hole lensing pass (right after the scene render,
+  // enabled only while the black hole is on screen).
+  useEffect(() => {
+    if (!sceneReady) return;
+    const composer = composerRef.current;
+    if (!composer) return;
+    const pass = createBlackHoleLensPass();
+    composer.insertPass(pass, 1);
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const backdrop = universeBackdropRef.current;
+      const camera = sceneRef.current.camera;
+      if (!backdrop || !camera) {
+        pass.enabled = false;
+        return;
+      }
+      backdrop.updateLensPass(pass, camera);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      composer.removePass(pass);
+      pass.dispose();
+    };
+  }, [sceneReady]);
 
   // Universe backdrop: switcher (also listed in Console → Tools).
   useEffect(() => {

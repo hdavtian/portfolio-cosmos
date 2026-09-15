@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 
 /**
  * A truly 3D universe backdrop, replacing the photo "lightbox" spheres.
@@ -423,9 +424,12 @@ const anomalyFragmentShader = /* glsl */ `
       // Spiral galaxy seen at a tilt.
       vec2 q = vec2(p.x, p.y / uTilt);
       float r = length(q);
-      float angle = atan(q.y, q.x);
+      // Slow rotation (inner parts a little faster, like a real disk).
+      float spin = uTime * (0.012 + 0.02 * exp(-r * 3.0)) * (uSeed > 0.5 ? -1.0 : 1.0);
+      float angle = atan(q.y, q.x) + spin;
       float arms = pow(0.5 + 0.5 * cos(2.0 * angle - log(r + 0.02) * 4.2 + uSeed * 6.28), 3.0);
-      float noise = fbm(vec3(q * 4.0, uSeed * 10.0));
+      vec2 rq = vec2(cos(spin) * q.x - sin(spin) * q.y, sin(spin) * q.x + cos(spin) * q.y);
+      float noise = fbm(vec3(rq * 4.0, uSeed * 10.0));
       float disk = exp(-r * 3.2) * (0.35 + 0.9 * arms * (0.5 + noise));
       float bulge = exp(-r * 14.0);
       color = mix(uColorB, uColorA, clamp(bulge * 2.0 + (1.0 - r), 0.0, 1.0)) * (disk + bulge * 1.4);
@@ -433,12 +437,22 @@ const anomalyFragmentShader = /* glsl */ `
     } else if (uKind == 1) {
       // Nebula: layered noise with a soft, irregular edge.
       float r = length(p);
-      vec3 s = vec3(p * 1.6, uSeed * 13.0);
-      float cloud = fbm(s + fbm(s * 1.5) * 1.2);
+      // Slow internal swirl: the noise field drifts and folds over time.
+      float t = uTime * 0.02;
+      vec2 swirl = vec2(sin(t + uSeed * 6.0), cos(t * 0.8 + uSeed * 4.0)) * 0.12;
+      vec3 s = vec3(p * 1.6 + swirl, uSeed * 13.0 + t * 0.6);
+      float cloud = fbm(s + fbm(s * 1.5 + t * 0.4) * 1.2);
       float edge = smoothstep(1.0, 0.25, r + (cloud - 0.5) * 0.6);
       float density = smoothstep(0.35, 0.8, cloud) * edge;
       color = mix(uColorA, uColorB, smoothstep(0.4, 0.75, fbm(s * 2.3 + 5.0))) * density;
-      alpha = density;
+      // Young stars embedded in the densest parts, gently twinkling.
+      vec2 cell = floor(p * 38.0);
+      float starSeed = hash13(vec3(cell, uSeed * 50.0));
+      vec2 starPos = (cell + 0.5 + (vec2(hash13(vec3(cell, 7.0)), hash13(vec3(cell, 9.0))) - 0.5) * 0.6) / 38.0;
+      float star = step(0.93, starSeed) * smoothstep(0.02, 0.0, length(p - starPos))
+        * (0.7 + 0.3 * sin(uTime * (1.0 + starSeed * 2.0) + starSeed * 30.0));
+      color += vec3(0.95, 0.97, 1.0) * star * smoothstep(0.15, 0.5, density) * 1.4;
+      alpha = max(density, star * edge);
     } else {
       // Black hole: dark core, tilted accretion disk brighter on one side,
       // thin photon ring.
@@ -447,7 +461,9 @@ const anomalyFragmentShader = /* glsl */ `
       float rd = length(q);
       float angle = atan(q.y, q.x);
       float doppler = 1.0 + 0.7 * cos(angle - 0.4);
-      float swirl = fbm(vec3(rd * 6.0 - uTime * 0.05, angle * 2.0, uSeed));
+      // The disk visibly orbits: its turbulence rotates, faster near the hole.
+      float orbit = uTime * (0.18 + 0.25 / max(rd, 0.25));
+      float swirl = fbm(vec3(rd * 6.0 - uTime * 0.05, (angle - orbit) * 2.0, uSeed));
       float disk = exp(-pow((rd - 0.55) / 0.22, 2.0)) * doppler * (0.5 + swirl);
       float ring = exp(-pow((r - 0.2) / 0.018, 2.0)) * 1.4;
       float halo = exp(-r * 5.0) * 0.25;
@@ -460,6 +476,67 @@ const anomalyFragmentShader = /* glsl */ `
     gl_FragColor = vec4(color * uStrength, alpha * uStrength);
   }
 `;
+
+// ── Black hole gravitational lensing (screen pass) ────────────────────────
+/**
+ * Bends the image around the black hole's on-screen position: pixels near it
+ * sample from further out (a pinch), with a faint Einstein ring. Enabled only
+ * while the black hole is on screen, so it costs nothing otherwise.
+ */
+const lensShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    uCenter: { value: new THREE.Vector2(0.5, 0.5) },
+    uRadius: { value: 0.05 },
+    uAspect: { value: 1 },
+    uStrength: { value: 0 },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform vec2 uCenter;
+    uniform float uRadius;
+    uniform float uAspect;
+    uniform float uStrength;
+    varying vec2 vUv;
+    void main() {
+      vec2 d = vUv - uCenter;
+      d.x *= uAspect;
+      float r = length(d);
+      float reach = uRadius * 5.0;
+      if (uStrength <= 0.0 || r > reach || r < 1e-5) {
+        gl_FragColor = texture2D(tDiffuse, vUv);
+        return;
+      }
+      // Deflection ~ R^2 / r, faded out toward the edge of its reach.
+      float deflect = min(uRadius * uRadius * 1.6 / r, r * 0.95);
+      deflect *= (1.0 - smoothstep(reach * 0.55, reach, r)) * uStrength;
+      vec2 dir = d / r;
+      vec2 offset = dir * deflect;
+      offset.x /= uAspect;
+      vec4 color = texture2D(tDiffuse, vUv + offset);
+      // Einstein ring: a thin brightening just outside the shadow.
+      float ring = exp(-pow((r - uRadius * 1.35) / (uRadius * 0.08), 2.0));
+      color.rgb += color.rgb * ring * 0.9 * uStrength + vec3(0.06, 0.05, 0.04) * ring * uStrength;
+      gl_FragColor = color;
+    }
+  `,
+};
+
+export const createBlackHoleLensPass = (): ShaderPass => {
+  const pass = new ShaderPass(lensShader);
+  pass.enabled = false;
+  return pass;
+};
+
+/** Share of the black hole card's half-size that is the dark core (see anomaly shader). */
+const BLACK_HOLE_CORE_SHARE = 0.17;
 
 type AnomalyDef = {
   kind: 0 | 1 | 2;
@@ -511,6 +588,8 @@ export class UniverseBackdrop {
   private flash = 0;
   private warpUpdatedAt = 0;
   private readonly travelDirection = new THREE.Vector3(0, 0, -1);
+  private readonly lensWorld = new THREE.Vector3();
+  private readonly lensProjected = new THREE.Vector3();
   private readonly dust: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private readonly anomalies: Array<{
     mesh: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>;
@@ -612,6 +691,37 @@ export class UniverseBackdrop {
       }
     }
     this.group.visible = true;
+  }
+
+  /**
+   * Point the lensing pass at the black hole: on-screen center and core
+   * radius; disabled when the backdrop is hidden or the hole is off screen.
+   */
+  updateLensPass(pass: ShaderPass, camera: THREE.PerspectiveCamera): void {
+    const hole = this.anomalies.find((entry) => entry.def.kind === 2);
+    if (!hole || !this.group.visible) {
+      pass.enabled = false;
+      return;
+    }
+    const world = hole.mesh.getWorldPosition(this.lensWorld);
+    const distance = camera.position.distanceTo(world);
+    this.lensProjected.copy(world).project(camera);
+    const inFront = this.lensProjected.z > -1 && this.lensProjected.z < 1;
+    const coreWorld = hole.def.size * 0.5 * BLACK_HOLE_CORE_SHARE;
+    const halfHeight = distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+    const radius = (coreWorld / Math.max(1, halfHeight)) * 0.5;
+    const u = this.lensProjected.x * 0.5 + 0.5;
+    const v = this.lensProjected.y * 0.5 + 0.5;
+    const margin = radius * 6;
+    const onScreen =
+      inFront && u > -margin && u < 1 + margin && v > -margin && v < 1 + margin && radius > 0.0015;
+    pass.enabled = onScreen;
+    if (!onScreen) return;
+    const uniforms = pass.uniforms;
+    (uniforms.uCenter.value as THREE.Vector2).set(u, v);
+    uniforms.uRadius.value = radius;
+    uniforms.uAspect.value = camera.aspect;
+    uniforms.uStrength.value = this.style === "vivid" ? 1 : 0.8;
   }
 
   /** Where lightspeed state and heading come from (read once per frame). */
