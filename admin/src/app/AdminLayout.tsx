@@ -32,7 +32,7 @@ const NAV_GROUPS: Array<{
     label: "Library",
     links: [
       { to: "/media", text: "Media" },
-      { to: "/releases", text: "Publishing" },
+      { to: "/releases", text: "Publishing", ready: true },
     ],
   },
 ];
