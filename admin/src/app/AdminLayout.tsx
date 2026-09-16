@@ -3,11 +3,16 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useLogoutMutation } from "../lib/session";
 
 // Grouped so the sidebar mirrors how the content is actually organised.
-const NAV_GROUPS: Array<{ label: string; links: Array<{ to: string; text: string }> }> = [
+// `ready: false` marks pages that are not built yet: they render as plainly
+// unavailable rather than as links that bounce back to the dashboard.
+const NAV_GROUPS: Array<{
+  label: string;
+  links: Array<{ to: string; text: string; ready?: boolean }>;
+}> = [
   {
     label: "Resume",
     links: [
-      { to: "/experiences", text: "Experience" },
+      { to: "/experiences", text: "Experience", ready: true },
       { to: "/skills", text: "Skills" },
       { to: "/education", text: "Education" },
       { to: "/certifications", text: "Certifications" },
@@ -52,15 +57,22 @@ export function AdminLayout() {
         {NAV_GROUPS.map((group) => (
           <div key={group.label}>
             <div className="admin-sidebar__group-label">{group.label}</div>
-            {group.links.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                className={({ isActive }) => `admin-sidebar__link ${isActive ? "is-active" : ""}`}
-              >
-                {link.text}
-              </NavLink>
-            ))}
+            {group.links.map((link) =>
+              link.ready ? (
+                <NavLink
+                  key={link.to}
+                  to={link.to}
+                  className={({ isActive }) => `admin-sidebar__link ${isActive ? "is-active" : ""}`}
+                >
+                  {link.text}
+                </NavLink>
+              ) : (
+                <span key={link.to} className="admin-sidebar__link is-pending" title="Not built yet">
+                  {link.text}
+                  <span className="admin-sidebar__soon">soon</span>
+                </span>
+              ),
+            )}
           </div>
         ))}
 

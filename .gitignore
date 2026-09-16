@@ -37,3 +37,6 @@ api-deploy/
 
 # Local database dumps (npm run db:pull); retention is managed by hand
 db-backups/
+
+# Agent worktrees are separate checkouts, never part of this repo
+.claude/worktrees/

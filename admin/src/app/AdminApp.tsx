@@ -4,6 +4,8 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AdminLayout } from "./AdminLayout";
 import { RequireSession } from "./RequireSession";
 import { DashboardPage } from "../pages/DashboardPage";
+import { ExperienceDetailPage } from "../pages/ExperienceDetailPage";
+import { ExperiencesPage } from "../pages/ExperiencesPage";
 import { LoginPage } from "../pages/LoginPage";
 
 export function AdminApp() {
@@ -35,6 +37,8 @@ export function AdminApp() {
             }
           >
             <Route index element={<DashboardPage />} />
+            <Route path="experiences" element={<ExperiencesPage />} />
+            <Route path="experiences/:slug" element={<ExperienceDetailPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
