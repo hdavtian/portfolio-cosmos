@@ -1,0 +1,16 @@
+{
+  // Type-checks one-off scripts (run with tsx, never built). Bundler resolution
+  // lets them import the workspace schema package's TypeScript source.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node"]
+  },
+  "include": ["src/scripts/**/*.ts"]
+}

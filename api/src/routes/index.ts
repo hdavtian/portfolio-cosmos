@@ -59,45 +59,9 @@ apiRouter.use(
   }),
 );
 
-apiRouter.get("/api/v1/content", contentController.getAll);
+// v1 is reduced to the only route the site actually calls
+// (src/lib/api/contentClient.ts requests /api/v1/content/{key}), and only for
+// the keys still in use. The listing route and the ten per-key routes were
+// never requested by either experience. v1 is replaced by v2 in plan phase 2
+// and removed once the Three.js retrofit lands.
 apiRouter.get("/api/v1/content/:key", contentController.getByKey);
-apiRouter.get(
-  "/api/v1/content/resume",
-  contentController.getByKnownKey("resume"),
-);
-apiRouter.get(
-  "/api/v1/content/portfolio-cores",
-  contentController.getByKnownKey("portfolio-cores"),
-);
-apiRouter.get(
-  "/api/v1/content/about-deck",
-  contentController.getByKnownKey("about-deck"),
-);
-apiRouter.get(
-  "/api/v1/content/about-hall-levels",
-  contentController.getByKnownKey("about-hall-levels"),
-);
-apiRouter.get(
-  "/api/v1/content/about-hall-slides",
-  contentController.getByKnownKey("about-hall-slides"),
-);
-apiRouter.get(
-  "/api/v1/content/about-path-travel-messages",
-  contentController.getByKnownKey("about-path-travel-messages"),
-);
-apiRouter.get(
-  "/api/v1/content/cosmic-narrative",
-  contentController.getByKnownKey("cosmic-narrative"),
-);
-apiRouter.get(
-  "/api/v1/content/about-content",
-  contentController.getByKnownKey("about-content"),
-);
-apiRouter.get(
-  "/api/v1/content/legacy-websites",
-  contentController.getByKnownKey("legacy-websites"),
-);
-apiRouter.get(
-  "/api/v1/content/moon-portfolio-mapping",
-  contentController.getByKnownKey("moon-portfolio-mapping"),
-);

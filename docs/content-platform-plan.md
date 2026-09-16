@@ -4,7 +4,7 @@ Admin-managed content for both experiences (portfolio site and Three.js cosmos),
 so content changes never require a code deploy. Code deploys are reserved for
 new features, experiences, and templates.
 
-Status: **Phase 0 complete** on `feature/content-platform-phase-0` (2026-09-15)
+Status: **Phase 1 complete** on `feature/content-platform-phase-1` (2026-09-15). Phase 0 merged and deployed.
 
 ### Phase 0 notes
 
@@ -30,6 +30,72 @@ Status: **Phase 0 complete** on `feature/content-platform-phase-0` (2026-09-15)
 - Syncfusion rules: `.claude/skills/syncfusion-list-pages` and
   `.claude/skills/syncfusion-edit-dialogs`, adapted from Hydrodent. A central
   reference copy for future apps is still to be decided (no central folder exists yet).
+- The API deploy workflow's "Configure startup and health check" step had failed
+  on every run since April (`az webapp config set` has no `--health-check-path`).
+  Fixed; the first successful workflow deploy ran on 2026-09-15.
+
+### Phase 1 notes
+
+- **Scope decision (Harma, 2026-09-15):** content no longer read by either
+  experience is not modeled: `aboutHallLevels.json`, `aboutHallSlides*.json`,
+  `aboutContent.json` (removed from code in `bd47ff5`) and `legacyWebsites.json`.
+  The legacy sites are modeled from their copy inside `portfolioCores.json`,
+  which is what both experiences render.
+- **Not modeled from `cosmic-narrative.json`** (never read): planet
+  `cameraPositions`, `visualEffects`, `moons`, and `navigationModes`,
+  `ambientElements`. Listed in `LEGACY_EXCLUDED_PATHS`.
+- **Model:** singletons `profile`, `cosmosIntroduction`; collections
+  `education` (1), `certifications` (1), `links` (5), `skillCategories` (5),
+  `skills` (18), `experiences` (7), `portfolioCores` (6), `portfolioEntries` (47),
+  `moonPortfolioMappings` (6), `aboutDeckSlides` (3), `pathTravelMessages` (17),
+  `guidedTours` (3), `cosmosPlanets` (3); `media` (202 images).
+- **Deviations from section 3:**
+  - Owned children are embedded (positions, projects, job memories, gallery
+    items, client variants, deck blocks), not separate collections.
+  - `jobTech` stays a list of labels with `highlightMatches`, not references to
+    `skills`: labels such as "React + Redux" are not skill names.
+  - Entities reference each other by slug; media by id (stored as ObjectId).
+  - Portfolio orbit layout: planes and rings live on the core; each entry has a
+    `placement { plane, ring }`.
+- **Proof of completeness:** `fromLegacy` → `toLegacy` round-trip test, and
+  `npm run db:import` reads everything back from MongoDB and diffs it against
+  `src/data`: 0 differences. Re-running the import changes nothing.
+- **Import safety:** the importer refuses any MongoDB or storage target that is
+  not local Docker.
+- **`api/.env` targets local Docker** (MongoDB `resume_cosmos_local` + Azurite),
+  so running any API script directly cannot touch production. Production values
+  live in Azure app settings; a local copy may sit in the git-ignored
+  `api/.env.production.local`, which only `db:pull` reads. `db:pull` resolves the
+  production URI from `MONGODB_URI`, then that file, then Azure app settings
+  (behind the az guard).
+- **Media:** blob names are URL-safe (spaces → hyphens, five legacy-web files);
+  records keep the original `sourcePath`.
+- **Backups:** `npm run db:pull` dumps Atlas via the `mongo:8.0` Docker image
+  (verified: 12 documents); `npm run db:restore-local` restores into
+  `resume_cosmos_prodcopy`. Local MongoDB is pinned to 8.0 to match Atlas.
+- **Found, not fixed (Three.js, gated):** `TourDefinitionBuilder` looks up
+  `guidedTours` by key and a `narrative` field that does not exist, so tour
+  narratives are always empty.
+
+### v1 API pruned (2026-09-15)
+
+Harma: the unused endpoints were "just confusing". v1 is now reduced to what the
+site actually calls:
+
+- Kept: `GET /api/v1/content/{key}` for `resume` and `portfolio-cores` only —
+  these are what `src/lib/api/contentClient.ts` requests.
+- Removed: `GET /api/v1/content` (listing) and all ten per-key routes, which no
+  experience ever called; plus `getAllContent`/`getByKnownKey`/`findAllActive`.
+- Retired keys return **404 without a database round trip**. Their documents are
+  left in Atlas untouched (no automatic deletion).
+- `seedContent.ts` now seeds only those two keys.
+
+**Direction for v2 (Harma, 2026-09-15):** both experiences will read **one
+shared data source** — v2 replaces this surface for the Three.js site and the
+mainstream portfolio alike. Harma also intends to **redo the fast/mainstream
+portfolio**, so phase 6 is likely a rebuild on v2 rather than a retrofit of the
+current pages; scope that when phase 6 starts. Data changes he wants are folded
+into the phase 2/4 work rather than patched into v1.
 
 ---
 

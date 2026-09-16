@@ -11,14 +11,19 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seedContent.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
+    "test": "vitest run",
+    "import": "tsx src/scripts/importContent.ts"
   },
   "dependencies": {
+    "@azure/storage-blob": "^12.33.0",
+    "@hd/content-schema": "*",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
+    "image-size": "^2.0.4",
+    "mongodb": "^6.20.0",
     "mongoose": "^8.19.3",
     "morgan": "^1.10.1",
     "swagger-ui-express": "^5.0.1",
