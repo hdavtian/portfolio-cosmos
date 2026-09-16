@@ -6,6 +6,8 @@ import morgan from "morgan";
 import { createAuthRoutes, type AuthConfig } from "./auth/authRoutes.js";
 import { env } from "./config/env.js";
 import { apiRouter } from "./routes/index.js";
+import { createAdminRouter } from "./v2/adminRouter.js";
+import { errorHandler } from "./v2/http.js";
 
 // Credentialed requests come from the admin (same origin as the API once
 // portfolio-admin.harmadavtian.com serves it) and from local development.
@@ -52,22 +54,15 @@ export const createApp = () => {
 
   app.use(createAuthRoutes({ auth: authConfig() }));
   app.use(apiRouter);
+  app.use("/api/v2/admin", createAdminRouter({ cookieSecret: env.AUTH_COOKIE_SECRET ?? "" }));
 
   app.use((_req, res) => {
     res.status(404).json({ message: "Route not found" });
   });
 
-  app.use(
-    (
-      err: unknown,
-      _req: express.Request,
-      res: express.Response,
-      _next: express.NextFunction,
-    ) => {
-      const message = err instanceof Error ? err.message : "Unexpected error";
-      res.status(500).json({ message });
-    },
-  );
+  // Renders ApiError as the shared { error: { code, message, details, requestId } }
+  // envelope; anything else becomes a 500 with the request id for log lookup.
+  app.use(errorHandler);
 
   return app;
 };
