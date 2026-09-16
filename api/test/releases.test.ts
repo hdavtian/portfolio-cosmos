@@ -96,7 +96,8 @@ describe.skipIf(!dockerMongo)(`v2 releases (${dockerMongo ? "docker" : SKIP_MESS
     expect(served.status).toBe(200);
     expect(served.body.draft).toBe(false);
     expect(served.body.content.singletons.profile.name).toBe("Harma Davtian");
-    expect(served.headers["cache-control"]).toContain("max-age=60");
+    // Revalidate every load, so a new publish is visible immediately.
+    expect(served.headers["cache-control"]).toBe("public, no-cache");
 
     const revalidated = await request(app)
       .get("/api/v2/content/release")
@@ -201,6 +202,56 @@ describe.skipIf(!dockerMongo)(`v2 releases (${dockerMongo ? "docker" : SKIP_MESS
       .post("/api/v2/admin/releases/99/rollback")
       .set("Cookie", authCookie());
     expect(missing.status).toBe(404);
+  });
+
+  it("serves image URLs for media the release references, even if the record changes later", async () => {
+    await saveSingletons();
+
+    const sharp = (await import("sharp")).default;
+    const png = await sharp({ create: { width: 20, height: 10, channels: 3, background: "#123456" } })
+      .png()
+      .toBuffer();
+    const uploaded = await request(app)
+      .post("/api/v2/admin/media")
+      .set("Cookie", authCookie())
+      .attach("file", png, "portrait.png")
+      .field("altText", "Portrait");
+
+    await request(app)
+      .post("/api/v2/admin/aboutDeckSlides")
+      .set("Cookie", authCookie())
+      .send({
+        slug: "who-i-am",
+        sortOrder: 0,
+        holdMs: 9800,
+        explodeAfter: false,
+        reveal: { pattern: "scanline", blockStaggerMs: 340, cellRevealMs: 1600 },
+        blocks: [{ type: "image", title: "Portrait", mediaId: uploaded.body.id }],
+      })
+      .expect(201);
+
+    await publish().expect(201);
+
+    // Changing the image record after publishing must not alter the release.
+    await request(app)
+      .patch(`/api/v2/admin/media/${uploaded.body.id}`)
+      .set("Cookie", authCookie())
+      .send({ altText: "Changed later", version: 1 })
+      .expect(200);
+
+    const full = await request(app).get("/api/v2/content/release");
+    expect(full.body.media[uploaded.body.id]).toMatchObject({
+      url: expect.stringContaining(uploaded.body.blobPath),
+      altText: "Portrait",
+      width: 20,
+      height: 10,
+    });
+
+    // Area responses include only the media that area references.
+    const about = await request(app).get("/api/v2/content/about");
+    expect(Object.keys(about.body.media)).toEqual([uploaded.body.id]);
+    const resume = await request(app).get("/api/v2/content/resume");
+    expect(resume.body.media).toEqual({});
   });
 
   it("refuses to publish content that points at missing media", async () => {

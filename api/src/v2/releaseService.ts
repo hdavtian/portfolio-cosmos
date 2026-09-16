@@ -25,9 +25,32 @@ export interface ReleaseSummary {
   rolledBackFrom?: number;
 }
 
+/** Stored details of an image referenced by a release; the URL is derived when served. */
+export interface ReleaseMedia {
+  blobPath: string;
+  altText: string;
+  width?: number;
+  height?: number;
+}
+
 export interface Release extends ReleaseSummary {
   content: ContentBundle;
+  media: Record<string, ReleaseMedia>;
 }
+
+/** Every media id referenced anywhere in a bundle (or part of one). */
+export const collectMediaIds = (value: unknown): string[] => {
+  const ids = new Set<string>();
+  const walk = (node: unknown, key?: string): void => {
+    if (key === "mediaId" && typeof node === "string") ids.add(node);
+    else if (Array.isArray(node)) node.forEach((item) => walk(item));
+    else if (node && typeof node === "object") {
+      Object.entries(node as Record<string, unknown>).forEach(([k, v]) => walk(v, k));
+    }
+  };
+  walk(value);
+  return [...ids];
+};
 
 const toSummary = (doc: Document): ReleaseSummary => ({
   id: doc.id as number,
@@ -83,46 +106,54 @@ export class ReleaseService {
     return result.data;
   }
 
-  /** Every media id referenced by the bundle must still exist. */
-  private async assertMediaExists(bundle: ContentBundle): Promise<void> {
-    const ids = new Set<string>();
-    const walk = (value: unknown, key?: string): void => {
-      if (key === "mediaId" && typeof value === "string") ids.add(value);
-      else if (Array.isArray(value)) value.forEach((item) => walk(item));
-      else if (value && typeof value === "object") {
-        Object.entries(value as Record<string, unknown>).forEach(([k, v]) => walk(v, k));
-      }
-    };
-    walk(bundle);
-
-    if (ids.size === 0) return;
+  /**
+   * Details of every image the bundle references. Snapshotted into the release,
+   * so a published release keeps working even if an image record changes later.
+   * Throws if a reference points at media that no longer exists.
+   */
+  public async mediaSnapshot(bundle: ContentBundle): Promise<Record<string, ReleaseMedia>> {
+    const ids = collectMediaIds(bundle);
+    if (ids.length === 0) return {};
 
     const { ObjectId } = await import("mongodb");
-    const found = await this.db
+    const docs = await this.db
       .collection("media")
-      .find({ _id: { $in: [...ids].map((id) => new ObjectId(id)) } }, { projection: { _id: 1 } })
+      .find(
+        { _id: { $in: ids.map((id) => new ObjectId(id)) } },
+        { projection: { blobPath: 1, altText: 1, width: 1, height: 1 } },
+      )
       .toArray();
 
-    const foundIds = new Set(found.map((doc) => doc._id.toHexString()));
-    const dangling = [...ids].filter((id) => !foundIds.has(id));
+    const snapshot: Record<string, ReleaseMedia> = {};
+    for (const doc of docs) {
+      snapshot[doc._id.toHexString()] = {
+        blobPath: String(doc.blobPath),
+        altText: (doc.altText as string | undefined) ?? "",
+        ...(typeof doc.width === "number" ? { width: doc.width } : {}),
+        ...(typeof doc.height === "number" ? { height: doc.height } : {}),
+      };
+    }
 
+    const dangling = ids.filter((id) => !(id in snapshot));
     if (dangling.length > 0) {
       throw ApiError.badRequest(
         `Cannot publish: ${dangling.length} image reference${dangling.length === 1 ? "" : "s"} point to media that no longer exists.`,
       );
     }
+
+    return snapshot;
   }
 
   public async publish(notes: string, publishedBy: string): Promise<ReleaseSummary> {
     const content = await this.buildDraftBundle();
-    await this.assertMediaExists(content);
+    const media = await this.mediaSnapshot(content);
 
     const collection = this.db.collection(RELEASES_COLLECTION);
     const [latest] = await collection.find({}).sort({ id: -1 }).limit(1).toArray();
     const id = ((latest?.id as number | undefined) ?? 0) + 1;
 
     const etag = createHash("sha256")
-      .update(JSON.stringify(content))
+      .update(JSON.stringify({ content, media }))
       .digest("hex")
       .slice(0, 32);
 
@@ -130,6 +161,7 @@ export class ReleaseService {
       id,
       notes,
       content,
+      media,
       etag,
       publishedAt: new Date(),
       publishedBy,
@@ -157,6 +189,7 @@ export class ReleaseService {
       id: newId,
       notes: `Rolled back to release ${id}`,
       content: target.content,
+      media: (target.media as Record<string, ReleaseMedia> | undefined) ?? {},
       etag: target.etag as string,
       publishedAt: new Date(),
       publishedBy,
@@ -184,7 +217,11 @@ export class ReleaseService {
   public async current(): Promise<Release | null> {
     const doc = await this.db.collection(RELEASES_COLLECTION).findOne({ current: true });
     if (!doc) return null;
-    return { ...toSummary(doc), content: doc.content as ContentBundle };
+    return {
+      ...toSummary(doc),
+      content: doc.content as ContentBundle,
+      media: (doc.media as Record<string, ReleaseMedia> | undefined) ?? {},
+    };
   }
 
   /** Counts drafts changed since the current release was published. */
