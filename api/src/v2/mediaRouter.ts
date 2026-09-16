@@ -160,6 +160,50 @@ export function createMediaRouter(): Router {
     }),
   );
 
+  /**
+   * Thumbnails for many images in one request: grid rows reference media by id,
+   * so a page of 25 rows needs one lookup instead of 25. Declared before /:id so
+   * "lookup" is not read as an id.
+   */
+  router.get(
+    "/lookup",
+    asyncHandler(async (req, res) => {
+      const raw = typeof req.query.ids === "string" ? req.query.ids : "";
+      const ids = [
+        ...new Set(
+          raw
+            .split(",")
+            .map((id) => id.trim())
+            .filter((id) => /^[a-f0-9]{24}$/.test(id)),
+        ),
+      ].slice(0, 200);
+
+      if (ids.length === 0) {
+        res.json({ items: [] });
+        return;
+      }
+
+      const { ObjectId } = await import("mongodb");
+      const docs = await getDb()
+        .collection("media")
+        .find(
+          { _id: { $in: ids.map((id) => new ObjectId(id)) } },
+          { projection: { blobPath: 1, altText: 1, width: 1, height: 1 } },
+        )
+        .toArray();
+
+      res.json({
+        items: docs.map((doc) => ({
+          id: doc._id.toHexString(),
+          url: mediaUrl(String(doc.blobPath)),
+          altText: (doc.altText as string | undefined) ?? "",
+          width: doc.width as number | undefined,
+          height: doc.height as number | undefined,
+        })),
+      });
+    }),
+  );
+
   /** One image, with how many records use it (so the admin can warn before deleting). */
   router.get(
     "/:id",

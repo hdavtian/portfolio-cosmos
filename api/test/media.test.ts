@@ -103,6 +103,29 @@ describe.skipIf(!dockerMongo)(`v2 media (${dockerMongo ? "docker" : SKIP_MESSAGE
     expect(response.body.items[0].url).toContain("/media/scrolling-resume/uploads/");
   });
 
+  it("looks up many images at once and ignores invalid ids", async () => {
+    const first = await request(app)
+      .post("/api/v2/admin/media")
+      .set("Cookie", authCookie())
+      .attach("file", await samplePng(), "one.png");
+    const second = await request(app)
+      .post("/api/v2/admin/media")
+      .set("Cookie", authCookie())
+      .attach("file", await samplePng(), "two.png");
+
+    const response = await request(app)
+      .get(`/api/v2/admin/media/lookup?ids=${first.body.id},${second.body.id},not-an-id,0123456789abcdef01234567`)
+      .set("Cookie", authCookie());
+
+    expect(response.status).toBe(200);
+    const ids = response.body.items.map((item: { id: string }) => item.id).sort();
+    expect(ids).toEqual([first.body.id, second.body.id].sort());
+    expect(response.body.items[0].url).toContain("/media/scrolling-resume/uploads/");
+
+    const empty = await request(app).get("/api/v2/admin/media/lookup").set("Cookie", authCookie());
+    expect(empty.body).toEqual({ items: [] });
+  });
+
   it("reads one image with its usage count", async () => {
     const created = await request(app)
       .post("/api/v2/admin/media")
