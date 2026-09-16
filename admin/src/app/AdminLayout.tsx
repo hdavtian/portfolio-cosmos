@@ -2,6 +2,7 @@ import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { StatusLine } from "../components/StatusLine";
 import { StatusProvider } from "../components/StatusProvider";
+import { usePendingChanges } from "../lib/pendingChanges";
 import { useLogoutMutation } from "../lib/session";
 
 // Grouped so the sidebar mirrors how the content is actually organised.
@@ -46,6 +47,8 @@ const NAV_GROUPS: Array<{
 export function AdminLayout() {
   const navigate = useNavigate();
   const logout = useLogoutMutation();
+  const pending = usePendingChanges();
+  const pendingCount = pending.data?.neverPublished ? 0 : (pending.data?.lines.length ?? 0);
 
   return (
     <div className="admin-shell">
@@ -72,6 +75,14 @@ export function AdminLayout() {
                   className={({ isActive }) => `admin-sidebar__link ${isActive ? "is-active" : ""}`}
                 >
                   {link.text}
+                  {link.to === "/releases" && pendingCount > 0 ? (
+                    <span
+                      className="admin-sidebar__badge"
+                      title={`${pendingCount} change${pendingCount === 1 ? "" : "s"} waiting to be published`}
+                    >
+                      {pendingCount}
+                    </span>
+                  ) : null}
                 </NavLink>
               ) : (
                 <span key={link.to} className="admin-sidebar__link is-pending" title="Not built yet">

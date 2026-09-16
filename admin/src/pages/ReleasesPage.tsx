@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import { useStatus } from "../lib/status";
 import { api } from "../lib/apiClient";
 import { confirmAction } from "../lib/confirm";
+import { usePendingChanges } from "../lib/pendingChanges";
 
 interface ReleaseSummary {
   id: number;
@@ -29,11 +30,6 @@ interface ReleaseStatus {
   current: { id: number; notes: string; publishedAt: string; publishedBy: string } | null;
   unpublishedChanges: number;
   neverPublished: boolean;
-}
-
-interface PendingChanges {
-  neverPublished: boolean;
-  lines: string[];
 }
 
 // Passed to the grid as a constant: a new object on each render makes
@@ -85,10 +81,7 @@ export function ReleasesPage() {
   });
 
   // Recomputed from the drafts each time the page is shown or refocused.
-  const pending = useQuery({
-    queryKey: ["releases", "pending-changes"],
-    queryFn: () => api.get<PendingChanges>("/api/v2/admin/releases/pending-changes"),
-  });
+  const pending = usePendingChanges();
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["releases"] });
 

@@ -1,8 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AdminLayout } from "./AdminLayout";
 import { RequireSession } from "./RequireSession";
+import { PENDING_CHANGES_KEY } from "../lib/pendingChanges";
 import { ENTITY_DEFINITIONS } from "../entities/definitions";
 import { DashboardPage } from "../pages/DashboardPage";
 import { EntityEditPage } from "../pages/EntityEditPage";
@@ -23,18 +24,24 @@ import { PathMessageEditPage } from "../pages/PathMessageEditPage";
 export function AdminApp() {
   // Admin data is never persisted to localStorage and never served stale: an
   // editor must always see what is actually in the database.
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 0,
-            refetchOnWindowFocus: true,
-            retry: false,
-          },
-        },
+  const [queryClient] = useState(() => {
+    const client: QueryClient = new QueryClient({
+      // Any successful save, delete, reorder, upload or publish may change what
+      // is waiting to be published, so the sidebar badge and the Publishing
+      // page's change list are recomputed after every one.
+      mutationCache: new MutationCache({
+        onSuccess: () => void client.invalidateQueries({ queryKey: PENDING_CHANGES_KEY }),
       }),
-  );
+      defaultOptions: {
+        queries: {
+          staleTime: 0,
+          refetchOnWindowFocus: true,
+          retry: false,
+        },
+      },
+    });
+    return client;
+  });
 
   return (
     <QueryClientProvider client={queryClient}>
