@@ -12,12 +12,13 @@ const NAV_GROUPS: Array<{
   {
     label: "Resume",
     links: [
+      { to: "/profile", text: "Profile", ready: true },
       { to: "/experiences", text: "Experience", ready: true },
-      { to: "/skills", text: "Skills" },
-      { to: "/education", text: "Education" },
-      { to: "/certifications", text: "Certifications" },
-      { to: "/links", text: "Links" },
-      { to: "/profile", text: "Profile" },
+      { to: "/skills", text: "Skills", ready: true },
+      { to: "/skillCategories", text: "Skill categories", ready: true },
+      { to: "/education", text: "Education", ready: true },
+      { to: "/certifications", text: "Certifications", ready: true },
+      { to: "/links", text: "Links", ready: true },
     ],
   },
   {

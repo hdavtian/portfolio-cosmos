@@ -10,6 +10,14 @@ user-invocable: true
 Adapted from the Hydrodent project's proven rules. Plan context:
 `docs/content-platform-plan.md` (sections 3 and 6).
 
+> **Harma's preference (2026-09-16): add/edit forms are full pages, not
+> pop-ups.** Build a list page plus a `/:entity/:slug` editor page with Back and
+> Save (see `admin/src/pages/EntityEditPage.tsx` and
+> `ExperienceDetailPage.tsx`). The `DialogComponent`/`FormValidator` rules below
+> now apply only to small confirmations; destructive confirms and blocking
+> alerts still use `DialogUtility`. Editor pages show the API's field-level
+> errors beside each field, and keep rules 3, 5, 7, 8, 10 and 11.
+
 ## Locked baseline
 
 - Modal: Syncfusion `DialogComponent`.
