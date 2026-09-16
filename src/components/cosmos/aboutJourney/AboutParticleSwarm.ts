@@ -64,6 +64,18 @@ const FOLLOWER_SPEED_MIN = 0.6;
 const FOLLOWER_SPEED_MAX = 2.8;
 const FOLLOWER_DRIFT_SPEED = 0.15;
 
+// Word formation: at rest the swarm spells this word instead of a clump.
+const WORD_TEXT = "AMELIA";
+const WORD_WIDTH = 400;
+const WORD_DEPTH = 14;
+/** Follower orbits shrink inside the letters so the glyphs stay legible. */
+const WORD_ORBIT_SCALE = 0.22;
+const WORD_HOVER_AMPLITUDE = 9;
+const WORD_HOVER_SPEED = 0.55;
+const WORD_WAVE_AMPLITUDE = 6;
+/** How quickly the word turns to face the camera (per second). */
+const WORD_FACE_RATE = 2.5;
+
 /** Seconds for the swarm to fade back in at the anchor while the path bursts. */
 const REFORM_FADE_SECONDS = 3;
 
@@ -131,6 +143,60 @@ interface FollowerMeta {
   baseHue: number;
 }
 
+/**
+ * Samples points inside the rendered glyphs of `text`, centred on the origin
+ * in the XY plane. Returns a flat [x, y, z, ...] array of `count` points.
+ */
+function sampleWordPoints(text: string, count: number): Float32Array {
+  const out = new Float32Array(count * 3);
+  if (typeof document === "undefined") return out;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return out;
+
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  let fontSize = 200;
+  ctx.font = `900 ${fontSize}px "Arial Black", Arial, sans-serif`;
+  const measured = ctx.measureText(text).width;
+  if (measured > canvas.width * 0.94) {
+    fontSize = Math.floor((fontSize * canvas.width * 0.94) / measured);
+    ctx.font = `900 ${fontSize}px "Arial Black", Arial, sans-serif`;
+  }
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const filled: number[] = [];
+  let minX = canvas.width;
+  let maxX = 0;
+  for (let y = 0; y < canvas.height; y += 2) {
+    for (let x = 0; x < canvas.width; x += 2) {
+      if (data[(y * canvas.width + x) * 4 + 3] > 128) {
+        filled.push(x, y);
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+      }
+    }
+  }
+  if (filled.length === 0) return out;
+
+  const scale = WORD_WIDTH / Math.max(1, maxX - minX);
+  const centerX = (minX + maxX) / 2;
+  const pixelCount = filled.length / 2;
+  for (let i = 0; i < count; i++) {
+    const p = Math.floor(Math.random() * pixelCount) * 2;
+    out[i * 3] = (filled[p] + Math.random() * 2 - centerX) * scale;
+    out[i * 3 + 1] =
+      -(filled[p + 1] + Math.random() * 2 - canvas.height / 2) * scale;
+    out[i * 3 + 2] = (Math.random() - 0.5) * WORD_DEPTH;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -189,6 +255,16 @@ export function createAboutParticleSwarm(
   points.frustumCulled = false;
   points.renderOrder = 8;
   group.add(points);
+
+  // Word targets, turned each frame (yaw only) to face the last camera seen.
+  const wordPoints = sampleWordPoints(WORD_TEXT, MAX_PARTICLES);
+  const _cameraWorld = new THREE.Vector3();
+  let _hasCamera = false;
+  let _wordYaw = 0;
+  points.onBeforeRender = (_renderer, _scene, camera) => {
+    camera.getWorldPosition(_cameraWorld);
+    _hasCamera = true;
+  };
 
   // The cosmic path stream is a separate GPU-driven points object. The route
   // starts at the swarm, so the group origin is also the route origin.
@@ -332,6 +408,7 @@ export function createAboutParticleSwarm(
       );
     }
     const clampedDelta = Math.min(deltaSeconds, 0.05);
+    faceCamera(clampedDelta);
 
     // Start on a new route, not on the PATH_FORMING edge: a skip can jump
     // past PATH_FORMING before this update ever sees it.
@@ -544,6 +621,39 @@ export function createAboutParticleSwarm(
     }
   }
 
+  // --- Word formation ---
+  const _home = new THREE.Vector3();
+
+  /** Eases the word's yaw toward the camera, keeping the letters upright. */
+  function faceCamera(delta: number) {
+    if (!_hasCamera) return;
+    const dx = _cameraWorld.x - group.position.x;
+    const dz = _cameraWorld.z - group.position.z;
+    if (dx * dx + dz * dz < 1) return;
+    const target = Math.atan2(dx, dz);
+    let diff = target - _wordYaw;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    _wordYaw += diff * Math.min(1, delta * WORD_FACE_RATE);
+  }
+
+  /** Writes particle i's hovering spot inside the word into `_home`. */
+  function wordHome(i: number, elapsed: number, scale: number) {
+    const f = followers[i];
+    const i3 = i * 3;
+    const wx = wordPoints[i3];
+    const hover =
+      Math.sin(elapsed * WORD_HOVER_SPEED) * WORD_HOVER_AMPLITUDE +
+      Math.sin(elapsed * 1.3 + wx * 0.02) * WORD_WAVE_AMPLITUDE;
+    const x = wx * scale;
+    const y = wordPoints[i3 + 1] * scale + hover;
+    const z =
+      wordPoints[i3 + 2] * scale +
+      Math.sin(elapsed * 0.7 + f.driftPhase) * f.driftAmplitude;
+    const cosY = Math.cos(_wordYaw);
+    const sinY = Math.sin(_wordYaw);
+    _home.set(x * cosY + z * sinY, y, -x * sinY + z * cosY);
+  }
+
   // --- Normal swarming ---
   function updateNormalSwarm(
     posArr: Float32Array,
@@ -558,7 +668,6 @@ export function createAboutParticleSwarm(
 
     for (let i = 0; i < count; i++) {
       const f = followers[i];
-      const leader = vehicles[f.leaderIndex];
       const i3 = i * 3;
 
       const angle = f.orbitPhase + elapsed * f.orbitSpeed;
@@ -581,9 +690,10 @@ export function createAboutParticleSwarm(
       const ox1 = ox * cosTZ - oy1 * sinTZ;
       const oy2 = ox * sinTZ + oy1 * cosTZ;
 
-      posArr[i3] = (leader.position.x + ox1) * breathScale;
-      posArr[i3 + 1] = (leader.position.y + oy2) * breathScale;
-      posArr[i3 + 2] = (leader.position.z + oz1) * breathScale;
+      wordHome(i, elapsed, breathScale);
+      posArr[i3] = _home.x + ox1 * WORD_ORBIT_SCALE;
+      posArr[i3 + 1] = _home.y + oy2 * WORD_ORBIT_SCALE;
+      posArr[i3 + 2] = _home.z + oz1 * WORD_ORBIT_SCALE;
 
       szArr[i] = sizeBase * (0.5 + Math.random() * 0.5);
 
@@ -630,7 +740,6 @@ export function createAboutParticleSwarm(
 
     for (let i = 0; i < count; i++) {
       const f = followers[i];
-      const leader = vehicles[f.leaderIndex];
       const i3 = i * 3;
 
       const angle = f.orbitPhase + elapsed * f.orbitSpeed;
@@ -638,10 +747,11 @@ export function createAboutParticleSwarm(
         Math.sin(elapsed * FOLLOWER_DRIFT_SPEED + f.driftPhase) *
         f.driftAmplitude;
       const r = f.orbitRadius + drift;
-      const swarmX = leader.position.x + Math.cos(angle) * r;
-      const swarmY = leader.position.y + Math.sin(angle) * r;
-      const swarmZ =
-        leader.position.z + Math.sin(angle) * Math.cos(angle) * r * 0.3;
+      wordHome(i, elapsed, 1);
+      const orbitR = r * WORD_ORBIT_SCALE;
+      const swarmX = _home.x + Math.cos(angle) * orbitR;
+      const swarmY = _home.y + Math.sin(angle) * orbitR;
+      const swarmZ = _home.z + Math.sin(angle) * Math.cos(angle) * orbitR * 0.3;
 
       const ringAngle = (i / count) * Math.PI * 2 + elapsed * rotSpeed;
       const ringR = RING_RADIUS + Math.sin(i * 0.1 + elapsed) * 15;
