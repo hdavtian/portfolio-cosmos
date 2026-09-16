@@ -7,6 +7,7 @@ import { createAuthRoutes, type AuthConfig } from "./auth/authRoutes.js";
 import { env } from "./config/env.js";
 import { apiRouter } from "./routes/index.js";
 import { createAdminRouter } from "./v2/adminRouter.js";
+import { createContentRouter } from "./v2/contentRouter.js";
 import { errorHandler } from "./v2/http.js";
 
 // Credentialed requests come from the admin (same origin as the API once
@@ -54,6 +55,8 @@ export const createApp = () => {
 
   app.use(createAuthRoutes({ auth: authConfig() }));
   app.use(apiRouter);
+  // Public content (current release), with draft preview for a signed-in admin.
+  app.use("/api/v2/content", createContentRouter({ cookieSecret: env.AUTH_COOKIE_SECRET ?? "" }));
   app.use("/api/v2/admin", createAdminRouter({ cookieSecret: env.AUTH_COOKIE_SECRET ?? "" }));
 
   app.use((_req, res) => {

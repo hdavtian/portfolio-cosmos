@@ -13,6 +13,7 @@ import { getDb } from "./db.js";
 import { EntityRepository } from "./entityRepository.js";
 import { ApiError, asyncHandler, parseOrThrow } from "./http.js";
 import { createMediaRouter } from "./mediaRouter.js";
+import { createReleaseRouter } from "./releaseRouter.js";
 import { fromDb, toDb } from "./storageCodec.js";
 
 // Which fields each entity can be searched on in the admin grid. Everything
@@ -62,6 +63,9 @@ export function createAdminRouter({ cookieSecret }: { cookieSecret: string }): R
   // rest of the admin surface. Mounted before the generated collection routes
   // because "media" is not one of them.
   router.use("/media", createMediaRouter());
+
+  // Publishing, history and rollback. Also not a content collection.
+  router.use("/releases", createReleaseRouter());
 
   // ---- singletons (profile, cosmos introduction) ----
 
