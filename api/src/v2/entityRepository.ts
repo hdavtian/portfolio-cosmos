@@ -25,6 +25,11 @@ export class EntityRepository {
     private readonly collectionName: CollectionName | "media",
     /** Fields the admin grid may sort, filter or search on. */
     private readonly searchableFields: readonly string[] = ["slug"],
+    /**
+     * Natural key for lookups. Content entities are keyed by `slug`; media has
+     * no slug and is keyed by its unique `blobPath`.
+     */
+    private readonly keyField: string = "slug",
   ) {}
 
   private get collection() {
@@ -68,7 +73,7 @@ export class EntityRepository {
   }
 
   public async findBySlug(slug: string): Promise<Record<string, unknown> | null> {
-    const doc = await this.collection.findOne({ slug });
+    const doc = await this.collection.findOne({ [this.keyField]: slug });
     return doc ? withMeta(doc) : null;
   }
 
@@ -91,9 +96,10 @@ export class EntityRepository {
       return withMeta(doc!);
     } catch (error) {
       if (isDuplicateKeyError(error)) {
-        throw ApiError.badRequest(`A record with slug "${String(content.slug)}" already exists`, [
-          { path: "slug", message: "Must be unique" },
-        ]);
+        throw ApiError.badRequest(
+          `A record with ${this.keyField} "${String(content[this.keyField])}" already exists`,
+          [{ path: this.keyField, message: "Must be unique" }],
+        );
       }
       throw error;
     }
@@ -109,8 +115,8 @@ export class EntityRepository {
     expectedVersion: number,
     updatedBy: string,
   ): Promise<Record<string, unknown>> {
-    const current = await this.collection.findOne({ slug });
-    if (!current) throw ApiError.notFound(`No record with slug "${slug}"`);
+    const current = await this.collection.findOne({ [this.keyField]: slug });
+    if (!current) throw ApiError.notFound(`No record with ${this.keyField} "${slug}"`);
 
     if (current.version !== expectedVersion) {
       throw ApiError.conflict(
@@ -134,9 +140,10 @@ export class EntityRepository {
       );
     } catch (error) {
       if (isDuplicateKeyError(error)) {
-        throw ApiError.badRequest(`A record with slug "${String(content.slug)}" already exists`, [
-          { path: "slug", message: "Must be unique" },
-        ]);
+        throw ApiError.badRequest(
+          `A record with ${this.keyField} "${String(content[this.keyField])}" already exists`,
+          [{ path: this.keyField, message: "Must be unique" }],
+        );
       }
       throw error;
     }
@@ -146,9 +153,9 @@ export class EntityRepository {
   }
 
   public async deleteBySlug(slug: string): Promise<void> {
-    const result = await this.collection.deleteOne({ slug });
+    const result = await this.collection.deleteOne({ [this.keyField]: slug });
     if (result.deletedCount === 0) {
-      throw ApiError.notFound(`No record with slug "${slug}"`);
+      throw ApiError.notFound(`No record with ${this.keyField} "${slug}"`);
     }
   }
 

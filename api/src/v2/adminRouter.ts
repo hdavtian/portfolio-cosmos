@@ -12,6 +12,7 @@ import { createRequireAuth } from "../auth/requireAuth.js";
 import { getDb } from "./db.js";
 import { EntityRepository } from "./entityRepository.js";
 import { ApiError, asyncHandler, parseOrThrow } from "./http.js";
+import { createMediaRouter } from "./mediaRouter.js";
 import { fromDb, toDb } from "./storageCodec.js";
 
 // Which fields each entity can be searched on in the admin grid. Everything
@@ -56,6 +57,11 @@ export function createAdminRouter({ cookieSecret }: { cookieSecret: string }): R
 
   const repositoryFor = (name: CollectionName) =>
     new EntityRepository(getDb(), name, SEARCHABLE_FIELDS[name] ?? ["slug"]);
+
+  // Media library: uploads, alt text, deletes. Behind the same auth as the
+  // rest of the admin surface. Mounted before the generated collection routes
+  // because "media" is not one of them.
+  router.use("/media", createMediaRouter());
 
   // ---- singletons (profile, cosmos introduction) ----
 
