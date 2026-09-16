@@ -5,6 +5,7 @@ import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useNavigate } from "react-router-dom";
 import { EntityGrid } from "../components/EntityGrid";
 import { ApiError } from "../lib/apiClient";
+import { confirmAction } from "../lib/confirm";
 import {
   useAllEntities,
   useDeleteEntity,
@@ -21,25 +22,19 @@ export function ExperiencesPage() {
   const reorder = useReorderEntity(ENTITY);
 
   const confirmDelete = (record: EntityRecord<Experience>) => {
-    DialogUtility.confirm({
+    confirmAction({
       title: "Delete this job?",
       content: `"${record.company}" and everything inside it (positions, projects, memories) will be removed. This cannot be undone.`,
-      okButton: {
-        text: "Delete",
-        cssClass: "e-danger e-outline",
-        click: () => {
-          remove.mutate(record.slug, {
-            onError: (error) =>
-              DialogUtility.alert({
-                title: "Could not delete",
-                content: error instanceof ApiError ? error.message : "Unexpected error.",
-              }),
-          });
-        },
-      },
-      cancelButton: { text: "Cancel", cssClass: "e-flat e-outline" },
-      showCloseIcon: true,
-      closeOnEscape: true,
+      confirmText: "Delete",
+      confirmClass: "e-danger e-outline",
+      onConfirm: () =>
+        remove.mutate(record.slug, {
+          onError: (error) =>
+            DialogUtility.alert({
+              title: "Could not delete",
+              content: error instanceof ApiError ? error.message : "Unexpected error.",
+            }),
+        }),
     });
   };
 

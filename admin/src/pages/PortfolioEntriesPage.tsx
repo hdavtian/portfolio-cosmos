@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { EntityGrid } from "../components/EntityGrid";
 import { ApiError } from "../lib/apiClient";
+import { confirmAction } from "../lib/confirm";
 import { useAllEntities, useDeleteEntity, useReorderEntity, type EntityRecord } from "../lib/entityApi";
 import { useMediaLookup } from "../lib/mediaLookup";
 
@@ -28,24 +29,19 @@ export function PortfolioEntriesPage() {
   }, [list.items, cores.items]);
 
   const confirmDelete = (record: Row) => {
-    DialogUtility.confirm({
+    confirmAction({
       title: "Delete this project?",
       content: `"${record.title}", with its gallery and client sites, will be removed. Published sites keep showing it until the next publish.`,
-      okButton: {
-        text: "Delete",
-        cssClass: "e-danger e-outline",
-        click: () =>
-          remove.mutate(record.slug, {
-            onError: (error) =>
-              DialogUtility.alert({
-                title: "Could not delete",
-                content: error instanceof ApiError ? error.message : "Unexpected error.",
-              }),
-          }),
-      },
-      cancelButton: { text: "Cancel", cssClass: "e-flat e-outline" },
-      showCloseIcon: true,
-      closeOnEscape: true,
+      confirmText: "Delete",
+      confirmClass: "e-danger e-outline",
+      onConfirm: () =>
+        remove.mutate(record.slug, {
+          onError: (error) =>
+            DialogUtility.alert({
+              title: "Could not delete",
+              content: error instanceof ApiError ? error.message : "Unexpected error.",
+            }),
+        }),
     });
   };
 

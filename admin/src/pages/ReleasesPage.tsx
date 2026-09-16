@@ -13,6 +13,7 @@ import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, ApiError } from "../lib/apiClient";
+import { confirmAction } from "../lib/confirm";
 
 interface ReleaseSummary {
   id: number;
@@ -96,25 +97,24 @@ export function ReleasesPage() {
   });
 
   const confirmPublish = () => {
-    DialogUtility.confirm({
+    if (publish.isPending) return;
+    confirmAction({
       title: "Publish all drafts?",
       content: "Both sites will switch to the current drafts. You can roll back afterwards.",
-      okButton: { text: "Publish", cssClass: "e-primary e-outline", click: () => publish.mutate() },
-      cancelButton: { text: "Cancel", cssClass: "e-flat e-outline" },
-      showCloseIcon: true,
-      closeOnEscape: true,
+      confirmText: "Publish",
+      onConfirm: () => publish.mutate(),
     });
   };
 
   const confirmRollback = (release: ReleaseSummary) => {
-    DialogUtility.confirm({
+    if (rollback.isPending) return;
+    confirmAction({
       title: `Roll back to release #${release.id}?`,
       content:
         "Its content is republished as a new release, so the sites show it again. History is kept, and your drafts are not changed.",
-      okButton: { text: "Roll back", cssClass: "e-danger e-outline", click: () => rollback.mutate(release.id) },
-      cancelButton: { text: "Cancel", cssClass: "e-flat e-outline" },
-      showCloseIcon: true,
-      closeOnEscape: true,
+      confirmText: "Roll back",
+      confirmClass: "e-danger e-outline",
+      onConfirm: () => rollback.mutate(release.id),
     });
   };
 

@@ -1,6 +1,6 @@
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import type { ReactNode } from "react";
+import { confirmAction } from "../lib/confirm";
 
 interface ListEditorProps<T> {
   title: string;
@@ -42,17 +42,12 @@ export function ListEditor<T>({
   };
 
   const remove = (index: number) => {
-    DialogUtility.confirm({
+    confirmAction({
       title: "Remove this item?",
       content: `"${describeItem(items[index], index)}" will be removed when you save.`,
-      okButton: {
-        text: "Remove",
-        cssClass: "e-danger e-outline",
-        click: () => onChange(items.filter((_, i) => i !== index)),
-      },
-      cancelButton: { text: "Cancel", cssClass: "e-flat e-outline" },
-      showCloseIcon: true,
-      closeOnEscape: true,
+      confirmText: "Remove",
+      confirmClass: "e-danger e-outline",
+      onConfirm: () => onChange(items.filter((_, i) => i !== index)),
     });
   };
 

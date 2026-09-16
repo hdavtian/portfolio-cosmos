@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FormField } from "../components/FormField";
 import { api, ApiError } from "../lib/apiClient";
+import { confirmAction } from "../lib/confirm";
 import type { MediaRecord } from "./MediaPage";
 
 type MediaDetail = MediaRecord & { usedBy: number };
@@ -79,13 +80,12 @@ function MediaEditor({ record }: { record: MediaDetail }) {
       });
       return;
     }
-    DialogUtility.confirm({
+    confirmAction({
       title: "Delete this image?",
       content: "The file is removed from storage. This cannot be undone.",
-      okButton: { text: "Delete", cssClass: "e-danger e-outline", click: () => remove.mutate() },
-      cancelButton: { text: "Cancel", cssClass: "e-flat e-outline" },
-      showCloseIcon: true,
-      closeOnEscape: true,
+      confirmText: "Delete",
+      confirmClass: "e-danger e-outline",
+      onConfirm: () => remove.mutate(),
     });
   };
 

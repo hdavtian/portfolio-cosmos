@@ -5,6 +5,7 @@ import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useNavigate } from "react-router-dom";
 import { EntityGrid } from "../components/EntityGrid";
 import { ApiError } from "../lib/apiClient";
+import { confirmAction } from "../lib/confirm";
 import { useAllEntities, useDeleteEntity, useReorderEntity, type EntityRecord } from "../lib/entityApi";
 
 const ENTITY = "portfolioCores";
@@ -17,24 +18,19 @@ export function PortfolioCoresPage() {
   const reorder = useReorderEntity(ENTITY);
 
   const confirmDelete = (record: Row) => {
-    DialogUtility.confirm({
+    confirmAction({
       title: "Delete this core?",
       content: `"${record.name}" will be removed. Projects placed on it will fail validation until moved to another core.`,
-      okButton: {
-        text: "Delete",
-        cssClass: "e-danger e-outline",
-        click: () =>
-          remove.mutate(record.slug, {
-            onError: (error) =>
-              DialogUtility.alert({
-                title: "Could not delete",
-                content: error instanceof ApiError ? error.message : "Unexpected error.",
-              }),
-          }),
-      },
-      cancelButton: { text: "Cancel", cssClass: "e-flat e-outline" },
-      showCloseIcon: true,
-      closeOnEscape: true,
+      confirmText: "Delete",
+      confirmClass: "e-danger e-outline",
+      onConfirm: () =>
+        remove.mutate(record.slug, {
+          onError: (error) =>
+            DialogUtility.alert({
+              title: "Could not delete",
+              content: error instanceof ApiError ? error.message : "Unexpected error.",
+            }),
+        }),
     });
   };
 

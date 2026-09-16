@@ -7,6 +7,7 @@ import { EntityGrid } from "../components/EntityGrid";
 import type { EntityDefinition } from "../entities/definitions";
 import { useReferenceOptions } from "../entities/references";
 import { ApiError } from "../lib/apiClient";
+import { confirmAction } from "../lib/confirm";
 import { useAllEntities, useDeleteEntity, useReorderEntity, type EntityRecord } from "../lib/entityApi";
 
 type Row = EntityRecord<Record<string, unknown>>;
@@ -41,25 +42,19 @@ export function EntityListPage({ definition }: { definition: EntityDefinition })
   }, [list.items, referenceKeys, labelsReady]);
 
   const confirmDelete = (record: Row) => {
-    DialogUtility.confirm({
+    confirmAction({
       title: `Delete this ${definition.singular}?`,
       content: `"${definition.describe(record) || record.slug}" will be removed. Published sites keep showing it until the next publish.`,
-      okButton: {
-        text: "Delete",
-        cssClass: "e-danger e-outline",
-        click: () => {
-          remove.mutate(record.slug, {
-            onError: (error) =>
-              DialogUtility.alert({
-                title: "Could not delete",
-                content: error instanceof ApiError ? error.message : "Unexpected error.",
-              }),
-          });
-        },
-      },
-      cancelButton: { text: "Cancel", cssClass: "e-flat e-outline" },
-      showCloseIcon: true,
-      closeOnEscape: true,
+      confirmText: "Delete",
+      confirmClass: "e-danger e-outline",
+      onConfirm: () =>
+        remove.mutate(record.slug, {
+          onError: (error) =>
+            DialogUtility.alert({
+              title: "Could not delete",
+              content: error instanceof ApiError ? error.message : "Unexpected error.",
+            }),
+        }),
     });
   };
 
