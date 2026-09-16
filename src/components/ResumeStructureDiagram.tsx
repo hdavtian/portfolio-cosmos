@@ -3,6 +3,8 @@ import * as d3 from "d3";
 import resumeData from "../data/resume.json";
 import { type DiagramStyle, type DiagramStyleOptions } from "./DiagramSettings";
 import ResumeSpace3D from "./cosmos/ResumeSpace3D";
+import type { PortfolioCoreSeed as CosmosPortfolioCoreSeed } from "./cosmos/portfolioData";
+import { useCosmosPortfolioQuery } from "../lib/query/contentQueries";
 
 interface ResumeStructureDiagramProps {
   onNavigate: (section: number) => void;
@@ -64,7 +66,7 @@ function ResumeStructureDiagram({
   if (style === "space") {
     return (
       <div style={{ position: "relative", width: "100%", height: "100%" }}>
-        <ResumeSpace3D
+        <PortfolioSpace
           key={`space-reload-${spaceReloadKey}`}
           onNavigate={onNavigate}
           options={options}
@@ -79,6 +81,31 @@ function ResumeStructureDiagram({
     <div className="hero__diagram-container">
       <svg ref={svgRef} className="hero__diagram-svg"></svg>
     </div>
+  );
+}
+
+type PortfolioSpaceProps = Omit<
+  React.ComponentProps<typeof ResumeSpace3D>,
+  "portfolioCores" | "moonPortfolioMapping"
+>;
+
+/**
+ * Mounts the 3D scene once the published portfolio has loaded. The scene builds
+ * its orbits a single time, so it must start with the final data rather than
+ * swap it in later. The query falls back to the bundled copy and never errors,
+ * and a cached copy from a previous visit renders immediately.
+ */
+function PortfolioSpace(props: PortfolioSpaceProps) {
+  const portfolio = useCosmosPortfolioQuery();
+  if (!portfolio.data) return null;
+  return (
+    <ResumeSpace3D
+      {...props}
+      // Same data as the bundled JSON the scene was written against; the fast
+      // site's seed type just marks every level optional.
+      portfolioCores={portfolio.data.portfolioCores as CosmosPortfolioCoreSeed[]}
+      moonPortfolioMapping={portfolio.data.moonPortfolioMapping}
+    />
   );
 }
 

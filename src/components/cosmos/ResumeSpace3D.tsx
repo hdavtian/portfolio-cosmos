@@ -7,8 +7,6 @@ import ThreeGlobe from "three-globe";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import aboutDeck from "../../data/aboutDeck.json";
 import aboutPathTravelMessages from "../../data/aboutPathTravelMessages.json";
-import { moonPortfolioMapping } from "../../data/moonPortfolioMapping";
-import portfolioCores from "../../data/portfolioCores.json";
 import {
   CareerGallery,
   type CareerGalleryFocusInfo,
@@ -176,7 +174,6 @@ import MoonOrbitHtmlLayout from "./MoonOrbitHtmlLayout";
 import { buildMoonPortfolioPayload } from "./moonPortfolioSelector";
 import {
   buildPortfolioRegistryModel,
-  type PortfolioCoreSeed,
   type PortfolioCoreView,
   type PortfolioGroupView,
 } from "./portfolioData";
@@ -2029,14 +2026,16 @@ export default function ResumeSpace3D({
   options,
   onOptionsChange,
   onReloadUniverse,
+  portfolioCores,
+  moonPortfolioMapping,
 }: ResumeSpace3DProps) {
   const aboutDeckData = aboutDeck as AboutDeckData;
   const aboutSlides = aboutDeckData.aboutDeck.slides;
 
   const portfolioCoreBuild = useMemo(
     () =>
-      buildPortfolioRegistryModel(portfolioCores as PortfolioCoreSeed[]),
-    [],
+      buildPortfolioRegistryModel(portfolioCores),
+    [portfolioCores],
   );
   const moonPortfolioByCompanyId = useMemo(() => {
     const map = new Map<string, NonNullable<OverlayContent["moonPortfolio"]>>();
@@ -2046,13 +2045,13 @@ export default function ResumeSpace3D({
       const payload = buildMoonPortfolioPayload({
         companyId,
         companyName: String(company?.company ?? companyId),
-        coreSeeds: portfolioCores as PortfolioCoreSeed[],
+        coreSeeds: portfolioCores,
         mappings: moonPortfolioMapping,
       });
       if (payload) map.set(companyId, payload);
     });
     return map;
-  }, []);
+  }, [portfolioCores, moonPortfolioMapping]);
   const getMoonPortfolio = useCallback(
     (company: any): OverlayContent["moonPortfolio"] => {
       const companyId = String(company?.id ?? "").trim();

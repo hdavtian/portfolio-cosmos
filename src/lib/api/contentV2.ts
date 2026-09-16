@@ -3,6 +3,7 @@ import type { ContentBundle } from "@hd/content-schema";
 // and every schema just to read published content.
 import { toLegacy } from "@hd/content-schema/to-legacy";
 import type { PortfolioCoreSeed, ResumePayload } from "../../features/fast/types";
+import { moonPortfolioMapping as moonPortfolioMappingFallback, type MoonPortfolioCompanyMapping } from "../../data/moonPortfolioMapping";
 import portfolioCoresFallback from "../../data/portfolioCores.json";
 import resumeFallback from "../../data/resume.json";
 import { API_BASE_URL, shouldSkipApiRequest } from "./contentClient";
@@ -17,6 +18,8 @@ interface ReleaseResponse {
 export interface SiteContent {
   resume: ResumePayload;
   portfolioCores: PortfolioCoreSeed[];
+  /** Which projects each job moon shows in the 3D site. */
+  moonPortfolioMapping: MoonPortfolioCompanyMapping[];
   /** "api" when served from the published release, "fallback" when bundled JSON was used. */
   source: "api" | "fallback";
   etag?: string;
@@ -25,6 +28,7 @@ export interface SiteContent {
 const FALLBACK: SiteContent = {
   resume: resumeFallback as ResumePayload,
   portfolioCores: portfolioCoresFallback as PortfolioCoreSeed[],
+  moonPortfolioMapping: moonPortfolioMappingFallback,
   source: "fallback",
 };
 
@@ -52,6 +56,7 @@ export async function fetchSiteContent(): Promise<SiteContent> {
     return {
       resume: legacy.resume as unknown as ResumePayload,
       portfolioCores: legacy.portfolioCores as unknown as PortfolioCoreSeed[],
+      moonPortfolioMapping: legacy.moonPortfolioMapping as MoonPortfolioCompanyMapping[],
       source: "api",
       etag: release.etag,
     };

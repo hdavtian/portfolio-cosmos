@@ -30,3 +30,15 @@ export function useResumeQuery() {
     select: (content) => ({ payload: content.resume, source: content.source }),
   });
 }
+
+/** Portfolio data for the 3D site: cores with their projects, plus the moon filters. */
+export function useCosmosPortfolioQuery() {
+  return useQuery({
+    ...releaseQuery,
+    select: (content) => ({
+      portfolioCores: content.portfolioCores,
+      moonPortfolioMapping: content.moonPortfolioMapping,
+      source: content.source,
+    }),
+  });
+}
