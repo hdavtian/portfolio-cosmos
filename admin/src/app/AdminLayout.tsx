@@ -24,8 +24,8 @@ const NAV_GROUPS: Array<{
   {
     label: "Portfolio",
     links: [
-      { to: "/portfolioEntries", text: "Projects" },
-      { to: "/portfolioCores", text: "Cores" },
+      { to: "/portfolioEntries", text: "Projects", ready: true },
+      { to: "/portfolioCores", text: "Cores", ready: true },
     ],
   },
   {

@@ -47,7 +47,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     entity: "skills",
     title: "Skills",
     singular: "skill",
-    description: "Technologies listed on the resume, grouped by category. Drag rows to reorder.",
+    description: "Technologies listed on the resume, grouped by category. Use Reorder rows to change their order.",
     slugSource: "name",
     columns: [
       { field: "name", header: "Skill", width: 220 },
@@ -70,7 +70,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     entity: "skillCategories",
     title: "Skill categories",
     singular: "category",
-    description: "Groups for skills, such as Frontend or Cloud & DevOps. Drag rows to reorder.",
+    description: "Groups for skills, such as Frontend or Cloud & DevOps. Use Reorder rows to change their order.",
     slugSource: "name",
     columns: [{ field: "name", header: "Category", width: 260 }],
     fields: [slugField, { key: "name", label: "Name", kind: "text" }],
@@ -128,7 +128,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     entity: "links",
     title: "Links",
     singular: "link",
-    description: "Profile and demo links (LinkedIn, GitHub, live demos). Drag rows to reorder.",
+    description: "Profile and demo links (LinkedIn, GitHub, live demos). Use Reorder rows to change their order.",
     slugSource: "title",
     columns: [
       { field: "title", header: "Title", width: 260 },
@@ -152,7 +152,7 @@ export const definitionFor = (entity: string) =>
 export const suggestSlug = (value: string): string =>
   value
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/#/g, "-sharp")
     .replace(/\+/g, "-plus")
     .replace(/&/g, "-and-")

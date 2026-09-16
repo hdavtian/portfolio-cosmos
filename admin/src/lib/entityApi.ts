@@ -58,6 +58,20 @@ export function useEntityList<T>(entity: string, state: ListState) {
   });
 }
 
+/**
+ * Every record of a small entity, in saved order, for grids in local mode.
+ * `truncated` is true when more exist than one API page (100) can return.
+ */
+export function useAllEntities<T>(entity: string) {
+  const query = useEntityList<T>(entity, { page: 1, pageSize: 100, sort: "sortOrder" });
+  const items = query.data?.items;
+  return {
+    ...query,
+    items,
+    truncated: Boolean(query.data && query.data.total > query.data.items.length),
+  };
+}
+
 export function useEntity<T>(entity: string, slug: string | undefined) {
   return useQuery({
     queryKey: entityKeys.detail(entity, slug ?? ""),

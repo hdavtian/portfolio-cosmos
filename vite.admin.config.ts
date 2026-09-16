@@ -14,6 +14,9 @@ export default defineConfig({
   // node_modules/.vite let one server's re-optimisation invalidate the other's
   // pre-bundled deps, which broke /cinematic with 504 "Outdated Optimize Dep".
   cacheDir: "../node_modules/.vite-admin",
+  // envDir defaults to `root`, which would look for admin/.env and miss the
+  // repo-root .env that holds VITE_SYNCFUSION_LICENSE_KEY (licence banner).
+  envDir: "..",
   plugins: [react()],
   server: {
     port: 5174,

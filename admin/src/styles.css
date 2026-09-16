@@ -144,6 +144,14 @@ body {
   gap: 14px;
 }
 
+.admin-grid-mode {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
 .admin-grid-wrap {
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);

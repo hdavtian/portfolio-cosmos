@@ -128,7 +128,13 @@ export function MediaPage() {
       {list.isError ? <p className="admin-error">Could not load media.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid page={list.data} state={state} onStateChange={setState} isLoading={list.isLoading}>
+        <EntityGrid
+          rows={list.data?.items}
+          total={list.data?.total}
+          mode="server"
+          state={state}
+          onStateChange={setState}
+        >
           {[
             <ColumnDirective key="preview" headerText="" width={90} template={previewTemplate} allowSorting={false} />,
             <ColumnDirective key="blobPath" field="blobPath" headerText="File" width={300} clipMode="EllipsisWithTooltip" />,

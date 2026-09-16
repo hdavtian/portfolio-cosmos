@@ -1,31 +1,44 @@
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { ColumnDirective } from "@syncfusion/ej2-react-grids";
 import { DialogUtility } from "@syncfusion/ej2-popups";
-import { useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { EntityGrid } from "../components/EntityGrid";
 import type { EntityDefinition } from "../entities/definitions";
 import { useReferenceOptions } from "../entities/references";
 import { ApiError } from "../lib/apiClient";
-import {
-  DEFAULT_LIST_STATE,
-  useDeleteEntity,
-  useEntityList,
-  useReorderEntity,
-  type EntityRecord,
-  type ListState,
-} from "../lib/entityApi";
+import { useAllEntities, useDeleteEntity, useReorderEntity, type EntityRecord } from "../lib/entityApi";
 
 type Row = EntityRecord<Record<string, unknown>>;
+
+/** Reference columns get a real text field so the grid can sort, filter and group on it. */
+const labelField = (key: string) => `${key}__label`;
 
 /** Grid page for any entity described in entities/definitions.ts. */
 export function EntityListPage({ definition }: { definition: EntityDefinition }) {
   const navigate = useNavigate();
-  const [state, setState] = useState<ListState>(DEFAULT_LIST_STATE);
-  const list = useEntityList<Record<string, unknown>>(definition.entity, state);
+  const list = useAllEntities<Record<string, unknown>>(definition.entity);
   const remove = useDeleteEntity(definition.entity);
   const reorder = useReorderEntity(definition.entity);
   const references = useReferenceOptions(definition);
+
+  const referenceKeys = useMemo(
+    () => new Set(definition.fields.filter((field) => field.kind === "reference").map((field) => field.key)),
+    [definition],
+  );
+
+  const labelsReady = !references.isLoading;
+  const rows = useMemo(() => {
+    if (!list.items) return undefined;
+    if (referenceKeys.size === 0) return list.items as Row[];
+    return (list.items as Row[]).map((item) => {
+      const withLabels: Record<string, unknown> = { ...item };
+      for (const key of referenceKeys) withLabels[labelField(key)] = references.labelFor(key, item[key]);
+      return withLabels as Row;
+    });
+    // labelsReady marks when reference options arrive, so labels are recomputed once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list.items, referenceKeys, labelsReady]);
 
   const confirmDelete = (record: Row) => {
     DialogUtility.confirm({
@@ -64,30 +77,15 @@ export function EntityListPage({ definition }: { definition: EntityDefinition })
     </div>
   );
 
-  const referenceKeys = new Set(
-    definition.fields.filter((field) => field.kind === "reference").map((field) => field.key),
-  );
-
-  // Reference columns show the referenced record's label, not its slug.
-  const columns = definition.columns.map((column) =>
-    referenceKeys.has(column.field) ? (
-      <ColumnDirective
-        key={column.field}
-        headerText={column.header}
-        width={column.width}
-        allowSorting={false}
-        template={(record: Row) => <span>{references.labelFor(column.field, record[column.field])}</span>}
-      />
-    ) : (
-      <ColumnDirective
-        key={column.field}
-        field={column.field}
-        headerText={column.header}
-        width={column.width}
-        clipMode="EllipsisWithTooltip"
-      />
-    ),
-  );
+  const columns = definition.columns.map((column) => (
+    <ColumnDirective
+      key={column.field}
+      field={referenceKeys.has(column.field) ? labelField(column.field) : column.field}
+      headerText={column.header}
+      width={column.width}
+      clipMode="EllipsisWithTooltip"
+    />
+  ));
 
   return (
     <>
@@ -96,10 +94,7 @@ export function EntityListPage({ definition }: { definition: EntityDefinition })
           <h1>{definition.title}</h1>
           <p>{definition.description}</p>
         </div>
-        <ButtonComponent
-          cssClass="e-primary e-outline"
-          onClick={() => navigate(`/${definition.entity}/new`)}
-        >
+        <ButtonComponent cssClass="e-primary e-outline" onClick={() => navigate(`/${definition.entity}/new`)}>
           Add {definition.singular}
         </ButtonComponent>
       </div>
@@ -109,25 +104,13 @@ export function EntityListPage({ definition }: { definition: EntityDefinition })
           {list.error instanceof ApiError ? list.error.message : `Could not load ${definition.title.toLowerCase()}.`}
         </p>
       ) : null}
+      {list.truncated ? <p className="admin-error">Showing the first 100 records only.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid
-          page={list.data}
-          state={state}
-          onStateChange={setState}
-          isLoading={list.isLoading}
-          onReorder={(slugs) => reorder.mutate(slugs)}
-        >
+        <EntityGrid rows={rows} mode="local" onReorder={(slugs) => reorder.mutate(slugs)}>
           {[
             ...columns,
-            <ColumnDirective
-              key="updatedAt"
-              field="updatedAt"
-              headerText="Updated"
-              width={140}
-              type="date"
-              format="yMd"
-            />,
+            <ColumnDirective key="updatedAt" field="updatedAt" headerText="Updated" width={140} type="date" format="yMd" />,
             <ColumnDirective
               key="actions"
               headerText=""
@@ -135,6 +118,7 @@ export function EntityListPage({ definition }: { definition: EntityDefinition })
               template={actionsTemplate}
               allowSorting={false}
               allowFiltering={false}
+              allowGrouping={false}
             />,
           ]}
         </EntityGrid>
