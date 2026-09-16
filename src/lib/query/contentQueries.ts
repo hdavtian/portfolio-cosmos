@@ -31,13 +31,14 @@ export function useResumeQuery() {
   });
 }
 
-/** Portfolio data for the 3D site: cores with their projects, plus the moon filters. */
-export function useCosmosPortfolioQuery() {
+/** Published content the 3D site reads: portfolio, moon filters and ride messages. */
+export function useCosmosContentQuery() {
   return useQuery({
     ...releaseQuery,
     select: (content) => ({
       portfolioCores: content.portfolioCores,
       moonPortfolioMapping: content.moonPortfolioMapping,
+      aboutPathTravelMessages: content.aboutPathTravelMessages,
       source: content.source,
     }),
   });

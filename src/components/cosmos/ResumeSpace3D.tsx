@@ -6,7 +6,7 @@ import * as THREE from "three";
 import ThreeGlobe from "three-globe";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import aboutDeck from "../../data/aboutDeck.json";
-import aboutPathTravelMessages from "../../data/aboutPathTravelMessages.json";
+import type { AboutPathTravelMessage } from "../../lib/api/contentV2";
 import {
   CareerGallery,
   type CareerGalleryFocusInfo,
@@ -1439,22 +1439,13 @@ type AboutExitConfirmIntent = {
   targetType: "section" | "moon";
 };
 
-type AboutPathTravelMessage = {
-  id: string;
-  textContent: string;
-  fontFamily?: string[];
-  fontSize?: string;
-  fontColor?: string;
-  fontShadow?: string;
-};
 
 const ABOUT_RETARGET_SHATTER_MS = 2600;
 const ABOUT_CRYSTAL_DISPERSING_FADE_MS = 2400;
 const ABOUT_DISPERSAL_SUN_PAN_MS = 2300;
 
-const ABOUT_PATH_RIDE_MESSAGES: AboutPathTravelMessage[] = (
-  aboutPathTravelMessages as AboutPathTravelMessage[]
-).slice(0, 18);
+// The ride paces messages evenly along the path; beyond this many they crowd.
+const ABOUT_PATH_RIDE_MESSAGE_LIMIT = 18;
 
 const DEFAULT_BACKGROUND_MUSIC_TRACK =
   Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
@@ -2028,7 +2019,13 @@ export default function ResumeSpace3D({
   onReloadUniverse,
   portfolioCores,
   moonPortfolioMapping,
+  aboutPathTravelMessages,
 }: ResumeSpace3DProps) {
+  // Published (or bundled) before mount, so a plain slice is stable for the scene's lifetime.
+  const aboutPathRideMessages = useMemo(
+    () => aboutPathTravelMessages.slice(0, ABOUT_PATH_RIDE_MESSAGE_LIMIT),
+    [aboutPathTravelMessages],
+  );
   const aboutDeckData = aboutDeck as AboutDeckData;
   const aboutSlides = aboutDeckData.aboutDeck.slides;
 
@@ -3931,7 +3928,7 @@ export default function ResumeSpace3D({
       rideMessageRuntime.path = path;
       rideMessageRuntime.pathLength = Math.max(1, path.getLength());
 
-      const count = ABOUT_PATH_RIDE_MESSAGES.length;
+      const count = aboutPathRideMessages.length;
       const step = rideMessageRuntime.pathLength / Math.max(1, count + 1);
       rideMessageRuntime.triggerStep = step;
       rideMessageRuntime.triggerDistances = Array.from(
@@ -3943,7 +3940,7 @@ export default function ResumeSpace3D({
     const activateRideMessage = (index: number) => {
       if (rideMessageRuntime.activeIndex === index) return;
       rideMessageRuntime.activeIndex = index;
-      setAboutRideMessageView(ABOUT_PATH_RIDE_MESSAGES[index] ?? null);
+      setAboutRideMessageView(aboutPathRideMessages[index] ?? null);
     };
 
     // Once fully crystallized and not exploding, panel matrices don't change.
@@ -4558,7 +4555,8 @@ export default function ResumeSpace3D({
       disposeRideMessages();
       disposeCrystalGroup();
     };
-  }, []);
+    // Stable for the scene's lifetime (content loads before mount), so this still runs once.
+  }, [aboutPathRideMessages]);
 
   const recomputeAboutTramInput = useCallback(() => {
     const upHeld =

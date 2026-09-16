@@ -31,6 +31,8 @@ export interface EntityDefinition {
   fields: FieldDefinition[];
   empty: () => Record<string, unknown>;
   describe: (record: Record<string, unknown>) => string;
+  /** The list page is shared, but editing uses a bespoke page (see AdminApp). */
+  customEditor?: boolean;
 }
 
 const slugField: FieldDefinition = {
@@ -141,6 +143,30 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     ],
     empty: () => ({ slug: "", sortOrder: 0, title: "", url: "" }),
     describe: (record) => text(record.title),
+  },
+  {
+    entity: "pathTravelMessages",
+    title: "Ride messages",
+    singular: "ride message",
+    description:
+      "Only used in the Three.js app. Messages shown one after another while Mjolnir pulls you along the About path, in this order. Use Reorder rows to change it.",
+    slugSource: "textContent",
+    columns: [
+      { field: "textContent", header: "Message", width: 420 },
+      { field: "fontSize", header: "Size", width: 90 },
+    ],
+    fields: [],
+    empty: () => ({
+      slug: "",
+      sortOrder: 0,
+      textContent: "",
+      fontFamily: ["Oswald", "Montserrat", "Arial", "sans-serif"],
+      fontSize: "54px",
+      fontColor: "rgba(242, 251, 255, 0.99)",
+      fontShadow: "0px 0px 34px rgba(80, 198, 255, 0.75)",
+    }),
+    describe: (record) => text(record.textContent).split("\n")[0].slice(0, 60),
+    customEditor: true,
   },
 ];
 

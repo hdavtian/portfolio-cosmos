@@ -4,9 +4,19 @@ import type { ContentBundle } from "@hd/content-schema";
 import { toLegacy } from "@hd/content-schema/to-legacy";
 import type { PortfolioCoreSeed, ResumePayload } from "../../features/fast/types";
 import { moonPortfolioMapping as moonPortfolioMappingFallback, type MoonPortfolioCompanyMapping } from "../../data/moonPortfolioMapping";
+import aboutPathTravelMessagesFallback from "../../data/aboutPathTravelMessages.json";
 import portfolioCoresFallback from "../../data/portfolioCores.json";
 import resumeFallback from "../../data/resume.json";
 import { API_BASE_URL, shouldSkipApiRequest } from "./contentClient";
+
+export interface AboutPathTravelMessage {
+  id: string;
+  textContent: string;
+  fontFamily?: string[];
+  fontSize?: string;
+  fontColor?: string;
+  fontShadow?: string;
+}
 
 interface ReleaseResponse {
   etag: string;
@@ -20,6 +30,8 @@ export interface SiteContent {
   portfolioCores: PortfolioCoreSeed[];
   /** Which projects each job moon shows in the 3D site. */
   moonPortfolioMapping: MoonPortfolioCompanyMapping[];
+  /** Messages shown during the Mjolnir ride in the 3D site's About section. */
+  aboutPathTravelMessages: AboutPathTravelMessage[];
   /** "api" when served from the published release, "fallback" when bundled JSON was used. */
   source: "api" | "fallback";
   etag?: string;
@@ -29,6 +41,7 @@ const FALLBACK: SiteContent = {
   resume: resumeFallback as ResumePayload,
   portfolioCores: portfolioCoresFallback as PortfolioCoreSeed[],
   moonPortfolioMapping: moonPortfolioMappingFallback,
+  aboutPathTravelMessages: aboutPathTravelMessagesFallback as AboutPathTravelMessage[],
   source: "fallback",
 };
 
@@ -57,6 +70,7 @@ export async function fetchSiteContent(): Promise<SiteContent> {
       resume: legacy.resume as unknown as ResumePayload,
       portfolioCores: legacy.portfolioCores as unknown as PortfolioCoreSeed[],
       moonPortfolioMapping: legacy.moonPortfolioMapping as MoonPortfolioCompanyMapping[],
+      aboutPathTravelMessages: legacy.aboutPathTravelMessages as AboutPathTravelMessage[],
       source: "api",
       etag: release.etag,
     };

@@ -31,6 +31,10 @@ const NAV_GROUPS: Array<{
     ],
   },
   {
+    label: "Cinematic",
+    links: [{ to: "/pathTravelMessages", text: "Ride messages", ready: true }],
+  },
+  {
     label: "Library",
     links: [
       { to: "/media", text: "Media", ready: true },

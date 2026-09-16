@@ -18,6 +18,7 @@ import { PortfolioCoreEditPage } from "../pages/PortfolioCoreEditPage";
 import { PortfolioCoresPage } from "../pages/PortfolioCoresPage";
 import { PortfolioEntriesPage } from "../pages/PortfolioEntriesPage";
 import { PortfolioEntryEditPage } from "../pages/PortfolioEntryEditPage";
+import { PathMessageEditPage } from "../pages/PathMessageEditPage";
 
 export function AdminApp() {
   // Admin data is never persisted to localStorage and never served stale: an
@@ -58,6 +59,7 @@ export function AdminApp() {
             <Route path="portfolioEntries/:slug" element={<PortfolioEntryEditPage />} />
             <Route path="portfolioCores" element={<PortfolioCoresPage />} />
             <Route path="portfolioCores/:slug" element={<PortfolioCoreEditPage />} />
+            <Route path="pathTravelMessages/:slug" element={<PathMessageEditPage />} />
             {/* Config-driven sections; keyed so switching entity resets grid state. */}
             {ENTITY_DEFINITIONS.flatMap((definition) => [
               <Route
@@ -65,11 +67,15 @@ export function AdminApp() {
                 path={definition.entity}
                 element={<EntityListPage key={definition.entity} definition={definition} />}
               />,
-              <Route
-                key={`${definition.entity}-edit`}
-                path={`${definition.entity}/:slug`}
-                element={<EntityEditPage key={definition.entity} definition={definition} />}
-              />,
+              ...(definition.customEditor
+                ? []
+                : [
+                    <Route
+                      key={`${definition.entity}-edit`}
+                      path={`${definition.entity}/:slug`}
+                      element={<EntityEditPage key={definition.entity} definition={definition} />}
+                    />,
+                  ]),
             ])}
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

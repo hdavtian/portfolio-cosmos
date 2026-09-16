@@ -4,7 +4,7 @@ import resumeData from "../data/resume.json";
 import { type DiagramStyle, type DiagramStyleOptions } from "./DiagramSettings";
 import ResumeSpace3D from "./cosmos/ResumeSpace3D";
 import type { PortfolioCoreSeed as CosmosPortfolioCoreSeed } from "./cosmos/portfolioData";
-import { useCosmosPortfolioQuery } from "../lib/query/contentQueries";
+import { useCosmosContentQuery } from "../lib/query/contentQueries";
 
 interface ResumeStructureDiagramProps {
   onNavigate: (section: number) => void;
@@ -86,17 +86,17 @@ function ResumeStructureDiagram({
 
 type PortfolioSpaceProps = Omit<
   React.ComponentProps<typeof ResumeSpace3D>,
-  "portfolioCores" | "moonPortfolioMapping"
+  "portfolioCores" | "moonPortfolioMapping" | "aboutPathTravelMessages"
 >;
 
 /**
- * Mounts the 3D scene once the published portfolio has loaded. The scene builds
+ * Mounts the 3D scene once the published content has loaded. The scene builds
  * its orbits a single time, so it must start with the final data rather than
  * swap it in later. The query falls back to the bundled copy and never errors,
  * and a cached copy from a previous visit renders immediately.
  */
 function PortfolioSpace(props: PortfolioSpaceProps) {
-  const portfolio = useCosmosPortfolioQuery();
+  const portfolio = useCosmosContentQuery();
   if (!portfolio.data) return null;
   return (
     <ResumeSpace3D
@@ -105,6 +105,7 @@ function PortfolioSpace(props: PortfolioSpaceProps) {
       // site's seed type just marks every level optional.
       portfolioCores={portfolio.data.portfolioCores as CosmosPortfolioCoreSeed[]}
       moonPortfolioMapping={portfolio.data.moonPortfolioMapping}
+      aboutPathTravelMessages={portfolio.data.aboutPathTravelMessages}
     />
   );
 }
