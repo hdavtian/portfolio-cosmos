@@ -2,10 +2,10 @@ import type { Experience } from "@hd/content-schema";
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { DropDownListComponent } from "@syncfusion/ej2-react-dropdowns";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ListEditor } from "../components/ListEditor";
+import { useStatus } from "../lib/status";
 import { ApiError } from "../lib/apiClient";
 import {
   useCreateEntity,
@@ -115,6 +115,7 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
   const navigate = useNavigate();
   const create = useCreateEntity<Experience>(ENTITY);
   const update = useUpdateEntity<Experience>(ENTITY);
+  const status = useStatus();
 
   const [draft, setDraft] = useState<Experience>(initial);
   const [version, setVersion] = useState(initialVersion);
@@ -131,21 +132,8 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
       .map(([path, message]) => `${path.replace(`${prefix}.`, "item ")}: ${message}`);
 
   const handleError = (error: unknown) => {
-    if (!(error instanceof ApiError)) {
-      DialogUtility.alert({ title: "Could not save", content: "Unexpected error." });
-      return;
-    }
-
-    setFieldErrors(error.fieldErrors);
-
-    if (error.isConflict) {
-      DialogUtility.alert({
-        title: "Someone else saved first",
-        content: `${error.message} Your changes are still on screen: reload to see the current version, then reapply them.`,
-      });
-    } else if (error.details.length === 0) {
-      DialogUtility.alert({ title: "Could not save", content: error.message });
-    }
+    if (error instanceof ApiError) setFieldErrors(error.fieldErrors);
+    status.error(error, "Could not save.");
   };
 
   const save = () => {
@@ -154,7 +142,10 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
 
     if (isNew) {
       create.mutate(content, {
-        onSuccess: (record) => navigate(`/experiences/${record.slug}`, { replace: true }),
+        onSuccess: (record) => {
+          status.success("Created job. Publish to show it on the sites.");
+          navigate(`/experiences/${record.slug}`, { replace: true });
+        },
         onError: handleError,
       });
       return;
@@ -164,6 +155,7 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
       { slug: initial.slug, content, version },
       {
         onSuccess: (record) => {
+          status.success(`Saved (version ${record.version}). Publish to show changes on the sites.`);
           setVersion(record.version);
           setDraft(withoutMeta(record));
         },

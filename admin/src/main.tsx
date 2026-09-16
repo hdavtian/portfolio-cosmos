@@ -11,6 +11,7 @@ import "@syncfusion/ej2-navigations/styles/material.css";
 import "@syncfusion/ej2-dropdowns/styles/material.css";
 import "@syncfusion/ej2-calendars/styles/material.css";
 import "@syncfusion/ej2-grids/styles/material.css";
+import "@syncfusion/ej2-notifications/styles/material.css";
 import "./styles.css";
 
 // No StrictMode here, deliberately: its development-only mount → unmount →

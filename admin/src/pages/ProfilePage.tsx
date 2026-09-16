@@ -1,10 +1,10 @@
 import type { Profile } from "@hd/content-schema";
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { FormField } from "../components/FormField";
+import { useStatus } from "../lib/status";
 import { api, ApiError } from "../lib/apiClient";
 
 interface SingletonResponse<T> {
@@ -70,6 +70,7 @@ function ProfileEditor({
   updatedBy?: string;
 }) {
   const queryClient = useQueryClient();
+  const status = useStatus();
   const [draft, setDraft] = useState<Profile>(initial);
   const [version, setVersion] = useState(initialVersion);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -78,23 +79,13 @@ function ProfileEditor({
     mutationFn: (data: Profile) =>
       api.put<SingletonResponse<Profile>>("/api/v2/admin/singletons/profile", { data, version }),
     onSuccess: (response) => {
+      status.success(`Saved (version ${response.version}). Publish to show changes on the sites.`);
       setVersion(response.version);
       void queryClient.invalidateQueries({ queryKey });
     },
     onError: (error) => {
-      if (!(error instanceof ApiError)) {
-        DialogUtility.alert({ title: "Could not save", content: "Unexpected error." });
-        return;
-      }
-      setFieldErrors(error.fieldErrors);
-      if (error.isConflict) {
-        DialogUtility.alert({
-          title: "Someone else saved first",
-          content: `${error.message} Your changes are still on screen: reload to see the current version, then reapply them.`,
-        });
-      } else if (error.details.length === 0) {
-        DialogUtility.alert({ title: "Could not save", content: error.message });
-      }
+      if (error instanceof ApiError) setFieldErrors(error.fieldErrors);
+      status.error(error, "Could not save.");
     },
   });
 

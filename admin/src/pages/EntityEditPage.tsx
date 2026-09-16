@@ -1,11 +1,11 @@
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { DropDownListComponent } from "@syncfusion/ej2-react-dropdowns";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FormField } from "../components/FormField";
+import { useStatus } from "../lib/status";
 import { suggestSlug, type EntityDefinition } from "../entities/definitions";
 import { useReferenceOptions } from "../entities/references";
 import { api, ApiError } from "../lib/apiClient";
@@ -87,6 +87,7 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
   const create = useCreateEntity<Content>(definition.entity);
   const update = useUpdateEntity<Content>(definition.entity);
   const references = useReferenceOptions(definition);
+  const status = useStatus();
 
   const [draft, setDraft] = useState<Content>(initial);
   const [version, setVersion] = useState(initialVersion);
@@ -107,19 +108,8 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
   };
 
   const handleError = (error: unknown) => {
-    if (!(error instanceof ApiError)) {
-      DialogUtility.alert({ title: "Could not save", content: "Unexpected error." });
-      return;
-    }
-    setFieldErrors(error.fieldErrors);
-    if (error.isConflict) {
-      DialogUtility.alert({
-        title: "Someone else saved first",
-        content: `${error.message} Your changes are still on screen: reload to see the current version, then reapply them.`,
-      });
-    } else if (error.details.length === 0) {
-      DialogUtility.alert({ title: "Could not save", content: error.message });
-    }
+    if (error instanceof ApiError) setFieldErrors(error.fieldErrors);
+    status.error(error, "Could not save.");
   };
 
   const save = () => {
@@ -131,7 +121,10 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
 
     if (isNew) {
       create.mutate(content, {
-        onSuccess: (record) => navigate(`${listPath}/${record.slug}`, { replace: true }),
+        onSuccess: (record) => {
+          status.success(`Created ${definition.singular}. Publish to show it on the sites.`);
+          navigate(`${listPath}/${record.slug}`, { replace: true });
+        },
         onError: handleError,
       });
       return;
@@ -141,6 +134,7 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
       { slug: String(initial.slug), content, version },
       {
         onSuccess: (record) => {
+          status.success(`Saved (version ${record.version}). Publish to show changes on the sites.`);
           setVersion(record.version);
           setDraft(withoutMeta(record));
           // The slug is part of the URL; follow it if it was changed.

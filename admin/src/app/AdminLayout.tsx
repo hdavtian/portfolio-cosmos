@@ -1,5 +1,7 @@
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { StatusLine } from "../components/StatusLine";
+import { StatusProvider } from "../components/StatusProvider";
 import { useLogoutMutation } from "../lib/session";
 
 // Grouped so the sidebar mirrors how the content is actually organised.
@@ -91,7 +93,10 @@ export function AdminLayout() {
       </nav>
 
       <main className="admin-main">
-        <Outlet />
+        <StatusProvider>
+          <StatusLine />
+          <Outlet />
+        </StatusProvider>
       </main>
     </div>
   );

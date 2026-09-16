@@ -144,6 +144,19 @@ body {
   gap: 14px;
 }
 
+.admin-status-line {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin-bottom: 14px;
+}
+
+.admin-status-line__details {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
 .admin-grid-mode {
   display: flex;
   align-items: center;

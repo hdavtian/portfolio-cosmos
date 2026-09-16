@@ -1,9 +1,9 @@
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { ColumnDirective } from "@syncfusion/ej2-react-grids";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { EntityGrid } from "../components/EntityGrid";
+import { useStatus } from "../lib/status";
 import type { EntityDefinition } from "../entities/definitions";
 import { useReferenceOptions } from "../entities/references";
 import { ApiError } from "../lib/apiClient";
@@ -22,6 +22,12 @@ export function EntityListPage({ definition }: { definition: EntityDefinition })
   const remove = useDeleteEntity(definition.entity);
   const reorder = useReorderEntity(definition.entity);
   const references = useReferenceOptions(definition);
+  const status = useStatus();
+  const saveOrder = (slugs: string[]) =>
+    reorder.mutate(slugs, {
+      onSuccess: () => status.success("Order saved. Publish to show it on the sites."),
+      onError: (error) => status.error(error, "Could not save the order."),
+    });
 
   const referenceKeys = useMemo(
     () => new Set(definition.fields.filter((field) => field.kind === "reference").map((field) => field.key)),
@@ -49,11 +55,11 @@ export function EntityListPage({ definition }: { definition: EntityDefinition })
       confirmClass: "e-danger e-outline",
       onConfirm: () =>
         remove.mutate(record.slug, {
-          onError: (error) =>
-            DialogUtility.alert({
-              title: "Could not delete",
-              content: error instanceof ApiError ? error.message : "Unexpected error.",
-            }),
+          onSuccess: () =>
+            status.success(
+              `Deleted "${definition.describe(record) || record.slug}". Publish to remove it from the sites.`,
+            ),
+          onError: (error) => status.error(error, "Could not delete."),
         }),
     });
   };
@@ -102,7 +108,7 @@ export function EntityListPage({ definition }: { definition: EntityDefinition })
       {list.truncated ? <p className="admin-error">Showing the first 100 records only.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid rows={rows} mode="local" onReorder={(slugs) => reorder.mutate(slugs)}>
+        <EntityGrid rows={rows} mode="local" onReorder={saveOrder}>
           {[
             ...columns,
             <ColumnDirective key="updatedAt" field="updatedAt" headerText="Updated" width={140} type="date" format="yMd" />,

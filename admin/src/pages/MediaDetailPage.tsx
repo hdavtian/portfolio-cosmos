@@ -1,10 +1,10 @@
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FormField } from "../components/FormField";
+import { useStatus } from "../lib/status";
 import { api, ApiError } from "../lib/apiClient";
 import { confirmAction } from "../lib/confirm";
 import type { MediaRecord } from "./MediaPage";
@@ -35,6 +35,7 @@ export function MediaDetailPage() {
 function MediaEditor({ record }: { record: MediaDetail }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const status = useStatus();
   const [altText, setAltText] = useState(record.altText);
 
   const save = useMutation({
@@ -43,41 +44,28 @@ function MediaEditor({ record }: { record: MediaDetail }) {
         altText: altText.trim(),
         version: record.version,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["media"] }),
-    onError: (error) => {
-      if (error instanceof ApiError && error.isConflict) {
-        DialogUtility.alert({
-          title: "Someone else saved first",
-          content: `${error.message} Reload to see the current version.`,
-        });
-        return;
-      }
-      DialogUtility.alert({
-        title: "Could not save",
-        content: error instanceof ApiError ? error.message : "Unexpected error.",
-      });
+    onSuccess: () => {
+      status.success("Saved. Publish to show the new alt text on the sites.");
+      void queryClient.invalidateQueries({ queryKey: ["media"] });
     },
+    onError: (error) => status.error(error, "Could not save."),
   });
 
   const remove = useMutation({
     mutationFn: () => api.delete<void>(`/api/v2/admin/media/${record.id}`),
     onSuccess: () => {
+      status.success("Image deleted.");
       void queryClient.invalidateQueries({ queryKey: ["media"] });
       navigate("/media", { replace: true });
     },
-    onError: (error) =>
-      DialogUtility.alert({
-        title: "Could not delete",
-        content: error instanceof ApiError ? error.message : "Unexpected error.",
-      }),
+    onError: (error) => status.error(error, "Could not delete."),
   });
 
   const confirmDelete = () => {
     if (record.usedBy > 0) {
-      DialogUtility.alert({
-        title: "This image is in use",
-        content: `It is used by ${record.usedBy} record${record.usedBy === 1 ? "" : "s"}. Replace it there before deleting it.`,
-      });
+      status.failure(
+        `This image is used by ${record.usedBy} record${record.usedBy === 1 ? "" : "s"}. Replace it there before deleting it.`,
+      );
       return;
     }
     confirmAction({

@@ -1,9 +1,9 @@
 import type { Experience } from "@hd/content-schema";
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { ColumnDirective } from "@syncfusion/ej2-react-grids";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useNavigate } from "react-router-dom";
 import { EntityGrid } from "../components/EntityGrid";
+import { useStatus } from "../lib/status";
 import { ApiError } from "../lib/apiClient";
 import { confirmAction } from "../lib/confirm";
 import {
@@ -20,6 +20,12 @@ export function ExperiencesPage() {
   const list = useAllEntities<Experience>(ENTITY);
   const remove = useDeleteEntity(ENTITY);
   const reorder = useReorderEntity(ENTITY);
+  const status = useStatus();
+  const saveOrder = (slugs: string[]) =>
+    reorder.mutate(slugs, {
+      onSuccess: () => status.success("Order saved. Publish to show it on the sites."),
+      onError: (error) => status.error(error, "Could not save the order."),
+    });
 
   const confirmDelete = (record: EntityRecord<Experience>) => {
     confirmAction({
@@ -29,11 +35,8 @@ export function ExperiencesPage() {
       confirmClass: "e-danger e-outline",
       onConfirm: () =>
         remove.mutate(record.slug, {
-          onError: (error) =>
-            DialogUtility.alert({
-              title: "Could not delete",
-              content: error instanceof ApiError ? error.message : "Unexpected error.",
-            }),
+          onSuccess: () => status.success(`Deleted "${record.company}". Publish to remove it from the sites.`),
+          onError: (error) => status.error(error, "Could not delete."),
         }),
     });
   };
@@ -85,7 +88,7 @@ export function ExperiencesPage() {
       {list.truncated ? <p className="admin-error">Showing the first 100 records only.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid rows={list.items} mode="local" onReorder={(slugs) => reorder.mutate(slugs)}>
+        <EntityGrid rows={list.items} mode="local" onReorder={saveOrder}>
           {[
             <ColumnDirective key="company" field="company" headerText="Company" width="220" clipMode="EllipsisWithTooltip" />,
             <ColumnDirective key="navLabel" field="navLabel" headerText="Short name" width="130" />,

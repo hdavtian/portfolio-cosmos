@@ -1,10 +1,9 @@
 import type { PortfolioCore } from "@hd/content-schema";
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { ColumnDirective } from "@syncfusion/ej2-react-grids";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useNavigate } from "react-router-dom";
 import { EntityGrid } from "../components/EntityGrid";
-import { ApiError } from "../lib/apiClient";
+import { useStatus } from "../lib/status";
 import { confirmAction } from "../lib/confirm";
 import { useAllEntities, useDeleteEntity, useReorderEntity, type EntityRecord } from "../lib/entityApi";
 
@@ -16,6 +15,12 @@ export function PortfolioCoresPage() {
   const list = useAllEntities<PortfolioCore>(ENTITY);
   const remove = useDeleteEntity(ENTITY);
   const reorder = useReorderEntity(ENTITY);
+  const status = useStatus();
+  const saveOrder = (slugs: string[]) =>
+    reorder.mutate(slugs, {
+      onSuccess: () => status.success("Order saved. Publish to show it on the sites."),
+      onError: (error) => status.error(error, "Could not save the order."),
+    });
 
   const confirmDelete = (record: Row) => {
     confirmAction({
@@ -25,11 +30,8 @@ export function PortfolioCoresPage() {
       confirmClass: "e-danger e-outline",
       onConfirm: () =>
         remove.mutate(record.slug, {
-          onError: (error) =>
-            DialogUtility.alert({
-              title: "Could not delete",
-              content: error instanceof ApiError ? error.message : "Unexpected error.",
-            }),
+          onSuccess: () => status.success(`Deleted "${record.name}". Publish to remove it from the sites.`),
+          onError: (error) => status.error(error, "Could not delete."),
         }),
     });
   };
@@ -79,7 +81,7 @@ export function PortfolioCoresPage() {
       {list.isError ? <p className="admin-error">Could not load cores.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid rows={list.items} mode="local" onReorder={(slugs) => reorder.mutate(slugs)}>
+        <EntityGrid rows={list.items} mode="local" onReorder={saveOrder}>
           {[
             <ColumnDirective key="name" field="name" headerText="Core" width={220} />,
             <ColumnDirective key="color" headerText="Color" width={160} template={colorTemplate} allowSorting={false} allowFiltering={false} allowGrouping={false} />,

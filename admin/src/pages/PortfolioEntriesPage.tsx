@@ -1,11 +1,10 @@
 import type { PortfolioCore, PortfolioEntry } from "@hd/content-schema";
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { ColumnDirective } from "@syncfusion/ej2-react-grids";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { EntityGrid } from "../components/EntityGrid";
-import { ApiError } from "../lib/apiClient";
+import { useStatus } from "../lib/status";
 import { confirmAction } from "../lib/confirm";
 import { useAllEntities, useDeleteEntity, useReorderEntity, type EntityRecord } from "../lib/entityApi";
 import { useMediaLookup } from "../lib/mediaLookup";
@@ -19,6 +18,12 @@ export function PortfolioEntriesPage() {
   const cores = useAllEntities<PortfolioCore>("portfolioCores");
   const remove = useDeleteEntity(ENTITY);
   const reorder = useReorderEntity(ENTITY);
+  const status = useStatus();
+  const saveOrder = (slugs: string[]) =>
+    reorder.mutate(slugs, {
+      onSuccess: () => status.success("Order saved. Publish to show it on the sites."),
+      onError: (error) => status.error(error, "Could not save the order."),
+    });
   const thumbs = useMediaLookup((list.items ?? []).map((item) => item.mediaId));
 
   // coreName is a real field so the grid can sort, filter and group by core.
@@ -36,11 +41,8 @@ export function PortfolioEntriesPage() {
       confirmClass: "e-danger e-outline",
       onConfirm: () =>
         remove.mutate(record.slug, {
-          onError: (error) =>
-            DialogUtility.alert({
-              title: "Could not delete",
-              content: error instanceof ApiError ? error.message : "Unexpected error.",
-            }),
+          onSuccess: () => status.success(`Deleted "${record.title}". Publish to remove it from the sites.`),
+          onError: (error) => status.error(error, "Could not delete."),
         }),
     });
   };
@@ -98,7 +100,7 @@ export function PortfolioEntriesPage() {
       {list.truncated ? <p className="admin-error">Showing the first 100 projects only.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid rows={rows} mode="local" onReorder={(slugs) => reorder.mutate(slugs)}>
+        <EntityGrid rows={rows} mode="local" onReorder={saveOrder}>
           {[
             <ColumnDirective key="title" field="title" headerText="Project" width={240} clipMode="EllipsisWithTooltip" />,
             <ColumnDirective key="preview" headerText="Image" width={100} template={previewTemplate} allowSorting={false} allowFiltering={false} allowGrouping={false} />,

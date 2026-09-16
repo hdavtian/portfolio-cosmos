@@ -9,10 +9,10 @@ import {
   Sort,
 } from "@syncfusion/ej2-react-grids";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { api, ApiError } from "../lib/apiClient";
+import { useStatus } from "../lib/status";
+import { api } from "../lib/apiClient";
 import { confirmAction } from "../lib/confirm";
 
 interface ReleaseSummary {
@@ -31,22 +31,9 @@ interface ReleaseStatus {
   neverPublished: boolean;
 }
 
-const alertApiError = (title: string, error: unknown) => {
-  if (error instanceof ApiError && error.details.length > 0) {
-    // Draft validation failures list every invalid field path.
-    const list = error.details
-      .slice(0, 12)
-      .map((detail) => `<li><code>${detail.path}</code>: ${detail.message}</li>`)
-      .join("");
-    const more = error.details.length > 12 ? `<p>…and ${error.details.length - 12} more.</p>` : "";
-    DialogUtility.alert({ title, content: `<p>${error.message}</p><ul>${list}</ul>${more}` });
-    return;
-  }
-  DialogUtility.alert({ title, content: error instanceof ApiError ? error.message : "Unexpected error." });
-};
-
 export function ReleasesPage() {
   const queryClient = useQueryClient();
+  const statusLine = useStatus();
   const [notes, setNotes] = useState("");
 
   const status = useQuery({
@@ -63,12 +50,8 @@ export function ReleasesPage() {
 
   const check = useMutation({
     mutationFn: () => api.get<{ ok: boolean }>("/api/v2/admin/releases/draft-check"),
-    onSuccess: () =>
-      DialogUtility.alert({
-        title: "Drafts are valid",
-        content: "Everything passes validation and can be published.",
-      }),
-    onError: (error) => alertApiError("Drafts need fixing before publishing", error),
+    onSuccess: () => statusLine.success("Drafts are valid: everything passes validation and can be published."),
+    onError: (error) => statusLine.error(error, "Drafts need fixing before publishing."),
   });
 
   const publish = useMutation({
@@ -76,24 +59,20 @@ export function ReleasesPage() {
     onSuccess: (release) => {
       setNotes("");
       void refresh();
-      DialogUtility.alert({
-        title: `Release #${release.id} is live`,
-        content: "Both sites now serve this content.",
-      });
+      statusLine.success(`Release #${release.id} is live on both sites.`);
     },
-    onError: (error) => alertApiError("Could not publish", error),
+    onError: (error) => statusLine.error(error, "Could not publish."),
   });
 
   const rollback = useMutation({
     mutationFn: (id: number) => api.post<ReleaseSummary>(`/api/v2/admin/releases/${id}/rollback`),
     onSuccess: (release) => {
       void refresh();
-      DialogUtility.alert({
-        title: `Rolled back to release #${release.rolledBackFrom}`,
-        content: `Published as release #${release.id}. Your drafts are unchanged.`,
-      });
+      statusLine.success(
+        `Rolled back to release #${release.rolledBackFrom}, published as release #${release.id}. Your drafts are unchanged.`,
+      );
     },
-    onError: (error) => alertApiError("Could not roll back", error),
+    onError: (error) => statusLine.error(error, "Could not roll back."),
   });
 
   const confirmPublish = () => {

@@ -1,11 +1,11 @@
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { ColumnDirective } from "@syncfusion/ej2-react-grids";
 import { UploaderComponent, type SelectedEventArgs } from "@syncfusion/ej2-react-inputs";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { EntityGrid } from "../components/EntityGrid";
+import { useStatus } from "../lib/status";
 import { api, ApiError } from "../lib/apiClient";
 import { DEFAULT_LIST_STATE, useEntityList, type ListState } from "../lib/entityApi";
 
@@ -36,6 +36,7 @@ export function MediaPage() {
   const [state, setState] = useState<ListState>(DEFAULT_LIST_STATE);
   const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null);
   const list = useEntityList<MediaRecord>(ENTITY, state);
+  const status = useStatus();
 
   // The uploader is only a file picker here: files are sent one at a time to the
   // API, which checks each file's type by content and strips EXIF data.
@@ -63,10 +64,9 @@ export function MediaPage() {
     void queryClient.invalidateQueries({ queryKey: [ENTITY] });
 
     if (failures.length > 0) {
-      DialogUtility.alert({
-        title: `${failures.length} of ${files.length} uploads failed`,
-        content: `<ul>${failures.map((failure) => `<li>${failure}</li>`).join("")}</ul>`,
-      });
+      status.failure(`${failures.length} of ${files.length} uploads failed.`, failures);
+    } else {
+      status.success(`Uploaded ${files.length} file${files.length === 1 ? "" : "s"}.`);
     }
   };
 

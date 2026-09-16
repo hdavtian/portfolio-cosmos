@@ -2,13 +2,13 @@ import type { ClientVariant, GalleryItem, PortfolioCore, PortfolioEntry } from "
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { DropDownListComponent } from "@syncfusion/ej2-react-dropdowns";
 import { NumericTextBoxComponent, TextBoxComponent } from "@syncfusion/ej2-react-inputs";
-import { DialogUtility } from "@syncfusion/ej2-popups";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FormField } from "../components/FormField";
 import { ListEditor } from "../components/ListEditor";
 import { MediaPicker } from "../components/MediaPicker";
+import { useStatus } from "../lib/status";
 import { suggestSlug } from "../entities/definitions";
 import { api, ApiError } from "../lib/apiClient";
 import {
@@ -132,6 +132,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
   const create = useCreateEntity<PortfolioEntry>(ENTITY);
   const update = useUpdateEntity<PortfolioEntry>(ENTITY);
   const cores = useEntityList<PortfolioCore>("portfolioCores", { page: 1, pageSize: 100, sort: "sortOrder" });
+  const status = useStatus();
 
   const [draft, setDraft] = useState<PortfolioEntry>(initial);
   const [version, setVersion] = useState(initialVersion);
@@ -158,19 +159,8 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
       .map(([path, message]) => `${path.replace(`${prefix}.`, "item ")}: ${message}`);
 
   const handleError = (error: unknown) => {
-    if (!(error instanceof ApiError)) {
-      DialogUtility.alert({ title: "Could not save", content: "Unexpected error." });
-      return;
-    }
-    setFieldErrors(error.fieldErrors);
-    if (error.isConflict) {
-      DialogUtility.alert({
-        title: "Someone else saved first",
-        content: `${error.message} Your changes are still on screen: reload to see the current version, then reapply them.`,
-      });
-    } else if (error.details.length === 0) {
-      DialogUtility.alert({ title: "Could not save", content: error.message });
-    }
+    if (error instanceof ApiError) setFieldErrors(error.fieldErrors);
+    status.error(error, "Could not save.");
   };
 
   const save = () => {
@@ -179,7 +169,10 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
 
     if (isNew) {
       create.mutate(content, {
-        onSuccess: (record) => navigate(`/portfolioEntries/${record.slug}`, { replace: true }),
+        onSuccess: (record) => {
+          status.success("Created project. Publish to show it on the sites.");
+          navigate(`/portfolioEntries/${record.slug}`, { replace: true });
+        },
         onError: handleError,
       });
       return;
@@ -189,6 +182,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
       { slug: initial.slug, content, version },
       {
         onSuccess: (record) => {
+          status.success(`Saved (version ${record.version}). Publish to show changes on the sites.`);
           setVersion(record.version);
           setDraft(withoutMeta(record));
           if (record.slug !== initial.slug) navigate(`/portfolioEntries/${record.slug}`, { replace: true });
