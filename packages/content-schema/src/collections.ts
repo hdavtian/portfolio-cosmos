@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { aboutDeckSlideSchema, pathTravelMessageSchema } from "./about";
-import { cosmosIntroductionSchema, cosmosPlanetSchema, guidedTourSchema } from "./cosmos";
-import { mediaAssetSchema } from "./media";
+import { aboutDeckSlideSchema, pathTravelMessageSchema } from "./about.js";
+import { cosmosIntroductionSchema, cosmosPlanetSchema, guidedTourSchema } from "./cosmos.js";
+import { mediaAssetSchema } from "./media.js";
 import {
   moonPortfolioMappingSchema,
   portfolioCoreSchema,
   portfolioEntrySchema,
-} from "./portfolio";
+} from "./portfolio.js";
 import {
   certificationSchema,
   educationSchema,
@@ -15,7 +15,7 @@ import {
   profileSchema,
   skillCategorySchema,
   skillSchema,
-} from "./resume";
+} from "./resume.js";
 
 // One document each, stored in the `singletons` collection under `key`.
 export const singletonSchemas = {

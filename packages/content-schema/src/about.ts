@@ -7,8 +7,8 @@ import {
   mediaRefSchema,
   slugSchema,
   sortOrderSchema,
-} from "./primitives";
-import { defineTemplate, templateKeys } from "./templates";
+} from "./primitives.js";
+import { defineTemplate, templateKeys } from "./templates.js";
 
 const text = (max = 500) => z.string().trim().min(1).max(max);
 

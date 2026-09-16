@@ -1,11 +1,11 @@
-import { contentBundleSchema, type ContentBundle } from "../collections";
-import { slugify } from "../primitives";
+import { contentBundleSchema, type ContentBundle } from "../collections.js";
+import { slugify } from "../primitives.js";
 import type {
   LegacyClientVariant,
   LegacyContent,
   LegacyGalleryMedia,
   LegacyPortfolioEntry,
-} from "./types";
+} from "./types.js";
 
 export type MediaResolver = (sourcePath: string) => string;
 

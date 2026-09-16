@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { documentMetaSchema } from "./primitives";
+import { documentMetaSchema } from "./primitives.js";
 
 export const mediaContentTypeSchema = z.enum([
   "image/jpeg",

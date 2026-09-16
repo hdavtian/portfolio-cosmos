@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { httpUrlSchema, slugSchema, sortOrderSchema, yearMonthSchema } from "./primitives";
+import { httpUrlSchema, slugSchema, sortOrderSchema, yearMonthSchema } from "./primitives.js";
 
 const text = (max = 500) => z.string().trim().min(1).max(max);
 
