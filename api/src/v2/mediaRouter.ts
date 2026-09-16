@@ -160,6 +160,21 @@ export function createMediaRouter(): Router {
     }),
   );
 
+  /** One image, with how many records use it (so the admin can warn before deleting). */
+  router.get(
+    "/:id",
+    asyncHandler(async (req, res) => {
+      const current = await repository().findById(param(req.params.id));
+      if (!current) throw ApiError.notFound("No such media");
+
+      res.json({
+        ...current,
+        url: mediaUrl(String(current.blobPath)),
+        usedBy: await countReferences(String(current.id)),
+      });
+    }),
+  );
+
   router.patch(
     "/:id",
     asyncHandler(async (req, res) => {

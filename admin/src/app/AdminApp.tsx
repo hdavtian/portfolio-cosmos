@@ -12,6 +12,8 @@ import { ExperiencesPage } from "../pages/ExperiencesPage";
 import { LoginPage } from "../pages/LoginPage";
 import { ProfilePage } from "../pages/ProfilePage";
 import { ReleasesPage } from "../pages/ReleasesPage";
+import { MediaDetailPage } from "../pages/MediaDetailPage";
+import { MediaPage } from "../pages/MediaPage";
 
 export function AdminApp() {
   // Admin data is never persisted to localStorage and never served stale: an
@@ -46,6 +48,8 @@ export function AdminApp() {
             <Route path="experiences/:slug" element={<ExperienceDetailPage />} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="releases" element={<ReleasesPage />} />
+            <Route path="media" element={<MediaPage />} />
+            <Route path="media/:id" element={<MediaDetailPage />} />
             {/* Config-driven sections; keyed so switching entity resets grid state. */}
             {ENTITY_DEFINITIONS.flatMap((definition) => [
               <Route

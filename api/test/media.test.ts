@@ -103,6 +103,26 @@ describe.skipIf(!dockerMongo)(`v2 media (${dockerMongo ? "docker" : SKIP_MESSAGE
     expect(response.body.items[0].url).toContain("/media/scrolling-resume/uploads/");
   });
 
+  it("reads one image with its usage count", async () => {
+    const created = await request(app)
+      .post("/api/v2/admin/media")
+      .set("Cookie", authCookie())
+      .attach("file", await samplePng(), "single.png");
+
+    const response = await request(app)
+      .get(`/api/v2/admin/media/${created.body.id}`)
+      .set("Cookie", authCookie());
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ id: created.body.id, usedBy: 0, width: 40 });
+    expect(response.body.url).toContain(created.body.blobPath);
+
+    const missing = await request(app)
+      .get("/api/v2/admin/media/0123456789abcdef01234567")
+      .set("Cookie", authCookie());
+    expect(missing.status).toBe(404);
+  });
+
   it("updates alt text and enforces the version check", async () => {
     const created = await request(app)
       .post("/api/v2/admin/media")
