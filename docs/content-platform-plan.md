@@ -311,8 +311,12 @@ Keep the existing layering (controller → service → repository) and add:
 
 ## 6. Admin (`/admin`)
 
-- Lazy route chunk; `syncfusion-license.ts` registers `VITE_SYNCFUSION_LICENSE_KEY`
-  (GitHub Actions secret, own key).
+- `syncfusion-license.ts` registers `VITE_SYNCFUSION_LICENSE_KEY` (Harma's own
+  key, never Hydrodent's). The variable belongs in the **repo-root `.env`** —
+  Vite does not read `api/.env` — and in the GitHub Actions secret
+  `SYNCFUSION_LICENSE_KEY` for production builds. See the root `.env.example`.
+  **Open item:** the current key is a 7-day trial expiring ~2026-09-23; swap in
+  the permanent Community Licence key when it arrives.
 - Copy Hydrodent's two Syncfusion skills into this repo (`.claude/skills/`), and
   a reference copy to a central folder for future apps.
 - **Login** page using the shared auth endpoints; route guard via
