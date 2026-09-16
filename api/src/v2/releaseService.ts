@@ -10,6 +10,7 @@ import {
 import { createHash } from "node:crypto";
 import type { Db, Document } from "mongodb";
 import { ApiError } from "./http.js";
+import { summarizeChanges, type ContentSide } from "./changeSummary.js";
 import { fromDb, stripMeta } from "./storageCodec.js";
 
 export const RELEASES_COLLECTION = "releases";
@@ -222,6 +223,61 @@ export class ReleaseService {
       content: doc.content as ContentBundle,
       media: (doc.media as Record<string, ReleaseMedia> | undefined) ?? {},
     };
+  }
+
+  /**
+   * Plain-language list of what publishing now would change, for the release
+   * notes. Drafts are read without failing on invalid records, so the list is
+   * available even while something still needs fixing.
+   */
+  public async pendingChanges(): Promise<{ neverPublished: boolean; lines: string[] }> {
+    const release = await this.current();
+    if (!release) return { neverPublished: true, lines: ["First publish"] };
+
+    const draft = await this.readDraftsLeniently();
+    const lines = summarizeChanges(release.content as unknown as ContentSide, draft);
+
+    // Alt text lives on the media record and is snapshotted at publish.
+    const ids = Object.keys(release.media);
+    if (ids.length > 0) {
+      const { ObjectId } = await import("mongodb");
+      const docs = await this.db
+        .collection("media")
+        .find({ _id: { $in: ids.map((id) => new ObjectId(id)) } }, { projection: { altText: 1 } })
+        .toArray();
+      const changed = docs.filter(
+        (doc) => ((doc.altText as string | undefined) ?? "") !== release.media[doc._id.toHexString()]?.altText,
+      ).length;
+      if (changed > 0) lines.push(`Updated alt text on ${changed} image${changed === 1 ? "" : "s"}`);
+    }
+
+    return { neverPublished: false, lines };
+  }
+
+  /** Drafts shaped like a release; records that fail validation are kept as stored. */
+  private async readDraftsLeniently(): Promise<ContentSide> {
+    const singletonDocs = await this.db.collection(SINGLETONS_COLLECTION).find({}).toArray();
+    const singletons: Record<string, unknown> = {};
+    for (const doc of singletonDocs) {
+      const key = doc.key as SingletonName;
+      const raw = fromDb(doc.data);
+      const parsed = singletonSchemas[key]?.safeParse(raw);
+      singletons[key] = parsed?.success ? parsed.data : raw;
+    }
+
+    const collections: Record<string, Record<string, unknown>[]> = {};
+    for (const name of Object.keys(collectionSchemas) as CollectionName[]) {
+      const docs = await this.db.collection(name).find({}).sort({ sortOrder: 1 }).toArray();
+      collections[name] = docs.map((doc) => {
+        const raw = fromDb(stripMeta(doc));
+        // Parsing applies the same defaults the published snapshot received,
+        // so an omitted empty list does not read as a change.
+        const parsed = collectionSchemas[name].safeParse(raw);
+        return (parsed.success ? parsed.data : raw) as Record<string, unknown>;
+      });
+    }
+
+    return { singletons, collections };
   }
 
   /** Counts drafts changed since the current release was published. */

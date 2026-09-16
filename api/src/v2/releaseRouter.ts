@@ -59,6 +59,14 @@ export function createReleaseRouter(): Router {
     }),
   );
 
+  /** What publishing now would change, as short lines for the release notes. */
+  router.get(
+    "/pending-changes",
+    asyncHandler(async (_req, res) => {
+      res.json(await service().pendingChanges());
+    }),
+  );
+
   /** Validates the drafts without publishing, for a pre-publish check. */
   router.get(
     "/draft-check",
