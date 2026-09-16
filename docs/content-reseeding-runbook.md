@@ -9,11 +9,17 @@ Use this runbook whenever JSON/TS source content is updated and the database mus
 - Seed script: `api/src/scripts/seedContent.ts`
 - Seed command from repo root: `npm run api:seed`
 - Target collection: `content_documents`
-- Primary sources:
-  - `src/data/*.json` (resume, portfolio, about, etc.)
-  - `src/data/moonPortfolioMapping.ts` (TypeScript payload)
+- Primary sources (since 2026-09-15, only the keys the API still serves):
+  - `src/data/resume.json` → key `resume`
+  - `src/data/portfolioCores.json` → key `portfolio-cores`
 
-The seed process upserts by document key (for example: `resume`, `portfolio-cores`, `legacy-websites`).
+The seed process upserts by document key. The previously seeded keys
+(`about-*`, `cosmic-narrative`, `legacy-websites`, `moon-portfolio-mapping`)
+are retired: the API returns 404 for them and the seed no longer refreshes them.
+Their old documents remain in the database, untouched and unread.
+
+This runbook covers the legacy v1 flow. New content work goes through
+`npm run db:import` and the v2 API — see `docs/content-platform-plan.md`.
 
 ## Local reseed workflow
 

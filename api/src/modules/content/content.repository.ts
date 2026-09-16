@@ -12,10 +12,6 @@ export type UpsertContentInput = {
 };
 
 export class ContentRepository {
-  public async findAllActive(): Promise<ContentDocument[]> {
-    return ContentModel.find({ isActive: true }).sort({ key: 1 }).lean();
-  }
-
   public async findByKey(key: string): Promise<ContentDocument | null> {
     return ContentModel.findOne({ key, isActive: true }).lean();
   }

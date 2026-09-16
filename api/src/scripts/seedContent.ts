@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { moonPortfolioMapping } from "../../../src/data/moonPortfolioMapping";
 import { connectMongo } from "../db/connectMongo.js";
 import {
   ContentRepository,
@@ -24,6 +23,8 @@ const loadJson = async (relativePath: string): Promise<unknown> => {
   return JSON.parse(content);
 };
 
+// Seeds only the keys the API still serves. The retired documents stay in the
+// database untouched; they are simply no longer refreshed or reachable.
 const buildSeedItems = async (): Promise<UpsertContentInput[]> => {
   const sources: Array<{ key: string; category: string; sourcePath: string }> =
     [
@@ -32,51 +33,6 @@ const buildSeedItems = async (): Promise<UpsertContentInput[]> => {
         key: "portfolio-cores",
         category: "portfolio",
         sourcePath: "src/data/portfolioCores.json",
-      },
-      {
-        key: "about-deck",
-        category: "about",
-        sourcePath: "src/data/aboutDeck.json",
-      },
-      {
-        key: "about-hall-levels",
-        category: "about",
-        sourcePath: "src/data/aboutHallLevels.json",
-      },
-      {
-        key: "about-hall-slides",
-        category: "about",
-        sourcePath: "src/data/aboutHallSlides.json",
-      },
-      {
-        key: "about-hall-slides-level-01",
-        category: "about",
-        sourcePath: "src/data/aboutHallSlides.level-01-signal-origins.json",
-      },
-      {
-        key: "about-hall-slides-level-02",
-        category: "about",
-        sourcePath: "src/data/aboutHallSlides.level-02-human-systems.json",
-      },
-      {
-        key: "about-path-travel-messages",
-        category: "about",
-        sourcePath: "src/data/aboutPathTravelMessages.json",
-      },
-      {
-        key: "cosmic-narrative",
-        category: "cosmos",
-        sourcePath: "src/data/cosmic-narrative.json",
-      },
-      {
-        key: "about-content",
-        category: "about",
-        sourcePath: "src/data/aboutContent.json",
-      },
-      {
-        key: "legacy-websites",
-        category: "portfolio",
-        sourcePath: "src/data/legacyWebsites.json",
       },
     ];
 
@@ -93,15 +49,6 @@ const buildSeedItems = async (): Promise<UpsertContentInput[]> => {
       } satisfies UpsertContentInput;
     }),
   );
-
-  mapped.push({
-    key: "moon-portfolio-mapping",
-    category: "portfolio",
-    payload: moonPortfolioMapping,
-    sourceType: "file-ts",
-    sourcePath: "src/data/moonPortfolioMapping.ts",
-    checksum: checksum(moonPortfolioMapping),
-  });
 
   return mapped;
 };

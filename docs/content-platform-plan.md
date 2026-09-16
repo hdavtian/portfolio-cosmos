@@ -77,6 +77,26 @@ Status: **Phase 1 complete** on `feature/content-platform-phase-1` (2026-09-15).
   `guidedTours` by key and a `narrative` field that does not exist, so tour
   narratives are always empty.
 
+### v1 API pruned (2026-09-15)
+
+Harma: the unused endpoints were "just confusing". v1 is now reduced to what the
+site actually calls:
+
+- Kept: `GET /api/v1/content/{key}` for `resume` and `portfolio-cores` only —
+  these are what `src/lib/api/contentClient.ts` requests.
+- Removed: `GET /api/v1/content` (listing) and all ten per-key routes, which no
+  experience ever called; plus `getAllContent`/`getByKnownKey`/`findAllActive`.
+- Retired keys return **404 without a database round trip**. Their documents are
+  left in Atlas untouched (no automatic deletion).
+- `seedContent.ts` now seeds only those two keys.
+
+**Direction for v2 (Harma, 2026-09-15):** both experiences will read **one
+shared data source** — v2 replaces this surface for the Three.js site and the
+mainstream portfolio alike. Harma also intends to **redo the fast/mainstream
+portfolio**, so phase 6 is likely a rebuild on v2 rather than a retrofit of the
+current pages; scope that when phase 6 starts. Data changes he wants are folded
+into the phase 2/4 work rather than patched into v1.
+
 ---
 
 ## 1. Decisions
