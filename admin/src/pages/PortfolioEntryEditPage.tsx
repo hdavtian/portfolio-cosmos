@@ -10,6 +10,7 @@ import { ListEditor } from "../components/ListEditor";
 import { MediaPicker } from "../components/MediaPicker";
 import { useStatus } from "../lib/status";
 import { suggestSlug } from "../entities/definitions";
+import { fieldLabel } from "../lib/validationMessages";
 import { api, ApiError } from "../lib/apiClient";
 import {
   useCreateEntity,
@@ -47,14 +48,29 @@ const toCommaList = (values: string[]) => values.join(", ");
 const fromCommaList = (text: string) => text.split(",").map((value) => value.trimStart());
 const clean = (values: string[]) => values.map((value) => value.trim()).filter(Boolean);
 
-const trimGallery = (items: GalleryItem[]): GalleryItem[] =>
-  items.map((item) => ({
-    ...item,
-    type: "image",
-    slug: item.slug.trim(),
-    title: item.title.trim(),
-    description: item.description.trim(),
-  }));
+/**
+ * Gallery images only need an image: the slug is generated, and a blank title
+ * or description falls back to the project's (or client site's) own.
+ */
+const trimGallery = (
+  items: GalleryItem[],
+  owner: { slug: string; title: string; description: string },
+): GalleryItem[] => {
+  const used = new Set<string>();
+  const ownerSlug = suggestSlug(owner.slug) || "image";
+  return items.map((item, index) => {
+    let slug = item.slug.trim() || `${ownerSlug}-image-${index + 1}`;
+    for (let n = 2; used.has(slug); n++) slug = `${ownerSlug}-image-${index + 1}-${n}`;
+    used.add(slug);
+    return {
+      ...item,
+      type: "image",
+      slug,
+      title: item.title.trim() || `${owner.title.trim()} ${index + 1}`.trim(),
+      description: item.description.trim() || owner.description.trim(),
+    };
+  });
+};
 
 /** Normalises editable text back into the shape the API validates. */
 const normalise = (draft: PortfolioEntry): PortfolioEntry => ({
@@ -63,15 +79,18 @@ const normalise = (draft: PortfolioEntry): PortfolioEntry => ({
   title: draft.title.trim(),
   description: draft.description.trim(),
   technologies: clean(draft.technologies),
-  galleryMedia: trimGallery(draft.galleryMedia),
-  clientVariants: draft.clientVariants.map((variant) => ({
-    ...variant,
-    slug: variant.slug.trim(),
-    title: variant.title.trim(),
-    description: variant.description.trim(),
-    technologies: clean(variant.technologies),
-    galleryMedia: trimGallery(variant.galleryMedia),
-  })),
+  galleryMedia: trimGallery(draft.galleryMedia, draft),
+  clientVariants: draft.clientVariants.map((variant) => {
+    const slug = variant.slug.trim() || suggestSlug(variant.title);
+    return {
+      ...variant,
+      slug,
+      title: variant.title.trim(),
+      description: variant.description.trim(),
+      technologies: clean(variant.technologies),
+      galleryMedia: trimGallery(variant.galleryMedia, { ...variant, slug }),
+    };
+  }),
 });
 
 export function PortfolioEntryEditPage() {
@@ -153,10 +172,11 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
     text: `Ring ${index + 1} (${ring.orbitColor})`,
   }));
 
+  // Item fields show their own errors; the section lists only list-level ones.
   const sectionErrors = (prefix: string) =>
-    Object.entries(fieldErrors)
-      .filter(([path]) => path === prefix || path.startsWith(`${prefix}.`))
-      .map(([path, message]) => `${path.replace(`${prefix}.`, "item ")}: ${message}`);
+    fieldErrors[prefix] ? [`${fieldLabel(prefix)} ${fieldErrors[prefix]}`] : [];
+  const itemError = (prefix: string, index: number, field: string) =>
+    fieldErrors[`${prefix}.${index}.${field}`];
 
   const handleError = (error: unknown) => {
     if (error instanceof ApiError) setFieldErrors(error.fieldErrors);
@@ -202,18 +222,19 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
       describeItem={(item, index) => item.title || `Image ${index + 1}`}
       addLabel="Add image"
       errors={sectionErrors(prefix)}
-      renderItem={(item, updateItem) => (
+      renderItem={(item, updateItem, index) => (
         <>
-          <FormField label="Image">
+          <FormField label="Image" error={itemError(prefix, index, "mediaId")}>
             <MediaPicker value={item.mediaId} onChange={(mediaId) => updateItem({ ...item, mediaId })} />
           </FormField>
-          <FormField label="Slug">
-            <TextBoxComponent value={item.slug} input={(e: { value: string }) => updateItem({ ...item, slug: e.value })} />
-          </FormField>
-          <FormField label="Title">
+          <FormField label="Title" hint="Leave empty to number it after the project" error={itemError(prefix, index, "title")}>
             <TextBoxComponent value={item.title} input={(e: { value: string }) => updateItem({ ...item, title: e.value })} />
           </FormField>
-          <FormField label="Description">
+          <FormField
+            label="Description"
+            hint="Leave empty to use the project's description"
+            error={itemError(prefix, index, "description")}
+          >
             <TextBoxComponent
               multiline
               value={item.description}
@@ -379,29 +400,29 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
         errors={sectionErrors("clientVariants")}
         renderItem={(item, updateItem, index) => (
           <>
-            <FormField label="Title">
+            <FormField label="Title" error={itemError("clientVariants", index, "title")}>
               <TextBoxComponent value={item.title} input={(e: { value: string }) => updateItem({ ...item, title: e.value })} />
             </FormField>
-            <FormField label="Slug">
+            <FormField label="Slug" hint="Leave empty to generate it from the title" error={itemError("clientVariants", index, "slug")}>
               <TextBoxComponent value={item.slug} input={(e: { value: string }) => updateItem({ ...item, slug: e.value })} />
             </FormField>
-            <FormField label="Image">
+            <FormField label="Image" error={itemError("clientVariants", index, "mediaId")}>
               <MediaPicker value={item.mediaId} onChange={(mediaId) => updateItem({ ...item, mediaId })} />
             </FormField>
-            <FormField label="Description">
+            <FormField label="Description" error={itemError("clientVariants", index, "description")}>
               <TextBoxComponent
                 multiline
                 value={item.description}
                 input={(e: { value: string }) => updateItem({ ...item, description: e.value })}
               />
             </FormField>
-            <FormField label="Technologies" hint="Comma-separated">
+            <FormField label="Technologies" hint="Comma-separated" error={itemError("clientVariants", index, "technologies")}>
               <TextBoxComponent
                 value={toCommaList(item.technologies)}
                 input={(e: { value: string }) => updateItem({ ...item, technologies: fromCommaList(e.value) })}
               />
             </FormField>
-            <FormField label="Year">
+            <FormField label="Year" error={itemError("clientVariants", index, "year")}>
               <NumericTextBoxComponent
                 format="####"
                 min={1990}

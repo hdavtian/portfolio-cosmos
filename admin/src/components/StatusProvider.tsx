@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type PropsWithChildren } from "react";
 import { useLocation } from "react-router-dom";
 import { ApiError } from "../lib/apiClient";
+import { friendlyDetailLines } from "../lib/validationMessages";
 import { StatusContext, type StatusApi, type StatusMessage, type StatusSeverity } from "../lib/status";
 
 const SUCCESS_TIMEOUT_MS = 6000;
@@ -44,10 +45,12 @@ export function StatusProvider({ children }: PropsWithChildren) {
       failure: (message, details = []) => show("Error", message, details),
       error: (error, fallback = "Something went wrong.") => {
         if (error instanceof ApiError) {
-          const details = error.details.map((detail) => `${detail.path}: ${detail.message}`);
+          const details = friendlyDetailLines(error.details);
           const message = error.isConflict
             ? `${error.message} Your changes are still on screen: reload to see the current version, then reapply them.`
-            : error.message || fallback;
+            : details.length > 0
+              ? `${fallback} ${details.length === 1 ? "One field needs" : `${details.length} fields need`} fixing; each is marked on the form.`
+              : error.message || fallback;
           show("Error", message, details);
           return;
         }

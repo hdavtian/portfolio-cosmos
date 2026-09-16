@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ListEditor } from "../components/ListEditor";
 import { useStatus } from "../lib/status";
+import { fieldLabel } from "../lib/validationMessages";
 import { ApiError } from "../lib/apiClient";
 import {
   useCreateEntity,
@@ -129,7 +130,7 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
   const sectionErrors = (prefix: string) =>
     Object.entries(fieldErrors)
       .filter(([path]) => path === prefix || path.startsWith(`${prefix}.`))
-      .map(([path, message]) => `${path.replace(`${prefix}.`, "item ")}: ${message}`);
+      .map(([path, message]) => `${fieldLabel(path)} ${message}`);
 
   const handleError = (error: unknown) => {
     if (error instanceof ApiError) setFieldErrors(error.fieldErrors);

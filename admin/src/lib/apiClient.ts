@@ -1,6 +1,8 @@
 // The admin is served from the same origin as the API (portfolio-admin
 // hostname in production, the Vite proxy in development), so requests use
 // relative paths and the hd_session cookie travels as a first-party cookie.
+import { friendlyFieldErrors } from "./validationMessages";
+
 export interface ApiErrorDetail {
   path: string;
   message: string;
@@ -30,9 +32,9 @@ export class ApiError extends Error {
     this.requestId = requestId;
   }
 
-  /** Field errors keyed by form field, for the dialog validators. */
+  /** One readable message per field path, shown next to the matching field. */
   public get fieldErrors(): Record<string, string> {
-    return Object.fromEntries(this.details.map((detail) => [detail.path, detail.message]));
+    return friendlyFieldErrors(this.details);
   }
 
   public get isUnauthorized(): boolean {

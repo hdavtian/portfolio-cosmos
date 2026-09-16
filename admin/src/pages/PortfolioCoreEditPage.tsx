@@ -12,6 +12,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { FormField } from "../components/FormField";
 import { ListEditor } from "../components/ListEditor";
 import { useStatus } from "../lib/status";
+import { fieldLabel } from "../lib/validationMessages";
 import { suggestSlug } from "../entities/definitions";
 import { api, ApiError } from "../lib/apiClient";
 import {
@@ -99,7 +100,7 @@ function CoreEditor({
 
   const planeErrors = Object.entries(fieldErrors)
     .filter(([path]) => path.startsWith("planes"))
-    .map(([path, message]) => `${path}: ${message}`);
+    .map(([path, message]) => `${fieldLabel(path)} ${message}`);
 
   const handleError = (error: unknown) => {
     if (error instanceof ApiError) setFieldErrors(error.fieldErrors);
