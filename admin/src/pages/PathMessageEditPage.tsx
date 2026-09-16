@@ -32,8 +32,13 @@ interface PathMessage {
 const toCommaList = (values: string[]) => values.join(", ");
 const fromCommaList = (text: string) => text.split(",").map((value) => value.trimStart());
 
-// The 3D site renders <br> and newlines as line breaks (normalizeRideMessageText).
-const previewText = (text: string) => text.replace(/<br\s*\/?>/gi, "\n");
+// Same line-break rules as the ride (normalizeRideMessageText in ResumeSpace3D):
+// <br>, a literal \n and the "/n" shorthand used in the imported messages.
+const previewText = (text: string) =>
+  text
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\/n/g, "\n");
 
 /** Loads the message (or the count, for a new one), then mounts the editor. */
 export function PathMessageEditPage() {
@@ -181,7 +186,7 @@ function MessageEditor({
       <section className="admin-card">
         <FormField
           label="Message"
-          hint="Press Enter for a line break"
+          hint="Press Enter (or type /n) for a line break"
           error={fieldErrors.textContent}
         >
           <TextBoxComponent
