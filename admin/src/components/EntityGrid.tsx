@@ -164,7 +164,11 @@ export function EntityGrid<T extends GridRow>({
         </div>
       ) : null}
 
+      {/* Keyed on the mode: Syncfusion only builds the drag-handle column when
+          the grid is created, so toggling allowRowDragAndDrop on a live grid
+          showed no handles. Remounting is cheap here (rows are already loaded). */}
       <GridComponent
+        key={reordering ? "reorder" : "browse"}
         ref={gridRef}
         dataSource={dataSource}
         dataStateChange={isServer ? handleDataStateChange : undefined}
