@@ -97,6 +97,57 @@ portfolio**, so phase 6 is likely a rebuild on v2 rather than a retrofit of the
 current pages; scope that when phase 6 starts. Data changes he wants are folded
 into the phase 2/4 work rather than patched into v1.
 
+### Phase 2 notes (API v2)
+
+Branch `feature/content-platform-phase-2`. Landed so far, each with tests:
+
+- **Shared sign-on** ported from `shared-login-for-personal-apps`
+  (`api/src/auth/`): scrypt hashes and HMAC tokens kept byte-compatible, so one
+  login still covers learn/jobs/portfolio-admin. `requireAuth` denies by
+  default; `/healthz` and the auth endpoints are public.
+- **Admin CRUD** (`/api/v2/admin/...`) generated from `collectionSchemas`, so
+  every entity gets list/create/read/update/delete/reorder from one
+  implementation: server-side paging, sorting, escaped search, optimistic
+  concurrency (409), unique-slug violations as field-level 400s, singleton
+  get/put with the same version check.
+- **Media library** (`/api/v2/admin/media`): type checked by magic bytes, not
+  the client's content type; re-encoded through sharp, which strips EXIF;
+  deletes refused while any record still references the image (checked across
+  nested gallery items, client variants and deck blocks).
+- **Releases**: publish freezes a validated snapshot; the public API serves only
+  the release marked `current`; rollback republishes old content as a new
+  release so history stays append-only (partial unique index guarantees one
+  current release). Publishing is refused on unsaved singletons, invalid drafts
+  (with field paths) or dangling media references.
+- **Public content API** (`/api/v2/content/...`): whole bundle or one area, with
+  ETag/304 revalidation and short caching; `?preview=draft` serves drafts to a
+  signed-in admin only, never cached.
+- **OpenAPI generated from the Zod schemas** (`api/src/swagger/buildOpenApi.ts`),
+  replacing the hand-written document; served at `/openapi.json` and `/swagger`.
+
+**Deviations worth remembering:**
+
+- **Integration tests run against Docker MongoDB**, not `mongodb-memory-server`:
+  MongoDB publishes no Windows ARM64 build, so its downloader cannot work on
+  this machine. Tests use a throwaway database and skip (not fail) when Docker
+  is down — so check for "skipped" before trusting a green run.
+- **Media is keyed by `blobPath`**, not `slug`; `EntityRepository` takes the
+  natural key field for that reason.
+- **Entity schemas are inlined in the OpenAPI document, not named components.**
+  `extendZodWithOpenApi` patches zod's factory functions, so only schemas
+  created after that call gain `.openapi()`. Schemas imported from
+  `@hd/content-schema` are created when that module loads, which ESM always
+  evaluates first, so they can never be registered by name. Do not "fix" this
+  with import-order tricks; it breaks as soon as another module imports the
+  package first.
+- **`@hd/content-schema` uses explicit `.js` extensions** on relative imports:
+  the API compiles with NodeNext, which requires them. Without them the package
+  fails to load and surfaces as phantom "no exported member" errors.
+
+**Still to do in phase 2:** rate limiting on write routes, structured logging
+(pino, replacing morgan), and wiring `AUTH_COOKIE_DOMAIN` plus the production
+CORS allowlist — the last two belong with the phase 3 infrastructure step.
+
 ---
 
 ## 1. Decisions
