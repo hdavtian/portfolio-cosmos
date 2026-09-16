@@ -110,7 +110,7 @@ into the phase 2/4 work rather than patched into v1.
 | Media auth | `harma-api` system-assigned managed identity, role *Storage Blob Data Contributor* on that account only | No storage keys anywhere |
 | API | Existing `api/` (Express 5 + TypeScript + Mongoose + Zod), extended | Keep the stack, add write paths properly |
 | Auth | Shared `hd_session` single sign-on (`C:\sites\shared-login-for-personal-apps`) | One login across `*.harmadavtian.com` |
-| Admin location | `/admin` in this SPA, lazy-loaded | One deploy; Syncfusion never ships to public visitors |
+| Admin location | **`https://portfolio-admin.harmadavtian.com`** — a second hostname on the existing `harma-api` app (decided 2026-09-16, replaces the earlier `/admin`-on-the-public-site plan) | Reuses the app, B1 plan, pipeline and managed-cert pattern: no new Azure resources. Admin and API share one origin, so no CORS and a first-party session cookie. Admin code stays off the public site |
 | Admin UI | Syncfusion (own Community License key), following Hydrodent's `list-pages-syncfusion` and `add-edit-overlays-syncfusion` rules | Licensed, full control suite (grid, uploader, RTE, color picker, dialogs) |
 | Content model | Fully structured entities (no raw JSON editing) | Admin must cover nearly all content |
 | Publishing | Draft → Preview → Publish, immutable release snapshots, one-click rollback | Protects production; previewing 3D layout values is essential |
