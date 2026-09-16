@@ -3,15 +3,51 @@ import { z } from "zod";
 
 config();
 
-const envSchema = z.object({
-  PORT: z.coerce.number().int().positive().default(8080),
-  NODE_ENV: z
-    .enum(["development", "test", "production"])
-    .default("development"),
-  MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
-  MONGODB_DB_NAME: z.string().min(1).default("resume_cosmos"),
-  FRONTEND_ORIGIN: z.string().url().optional(),
-});
+const envSchema = z
+  .object({
+    PORT: z.coerce.number().int().positive().default(8080),
+    NODE_ENV: z
+      .enum(["development", "test", "production"])
+      .default("development"),
+    MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
+    MONGODB_DB_NAME: z.string().min(1).default("resume_cosmos"),
+    FRONTEND_ORIGIN: z.string().url().optional(),
+    // Comma-separated allowlist for credentialed admin requests.
+    CORS_ORIGINS: z.string().optional(),
+
+    // Shared sign-on (hd_session). Generated centrally by
+    // C:\sites\shared-login-for-personal-apps (`npm run creds:set`) for
+    // production; local development uses its own throwaway values.
+    AUTH_PASSWORD_HASH: z.string().min(1).optional(),
+    AUTH_COOKIE_SECRET: z.string().min(32).optional(),
+    AUTH_COOKIE_DOMAIN: z.string().min(1).optional(),
+    AUTH_SESSION_TTL_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60 * 60 * 24 * 30),
+
+    // Media storage: Azurite connection string locally; account name plus
+    // managed identity in Azure (plan phase 3).
+    AZURE_STORAGE_CONNECTION_STRING: z.string().optional(),
+    AZURE_STORAGE_ACCOUNT: z.string().optional(),
+    AZURE_STORAGE_CONTAINER: z.string().min(1).default("media"),
+    MEDIA_PUBLIC_BASE_URL: z.string().url().optional(),
+  })
+  // Never fall back to a default secret in production: fail to start instead.
+  .superRefine((value, ctx) => {
+    if (value.NODE_ENV !== "production") return;
+
+    for (const key of ["AUTH_PASSWORD_HASH", "AUTH_COOKIE_SECRET"] as const) {
+      if (!value[key]) {
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message: `${key} is required in production`,
+        });
+      }
+    }
+  });
 
 const parsed = envSchema.safeParse(process.env);
 
