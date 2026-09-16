@@ -1,4 +1,5 @@
-// Starts local Docker services (MongoDB + Azurite), then the API and Vite.
+// Starts local Docker services (MongoDB + Azurite), then the API, the site
+// (:5173) and the admin (:5174).
 //   npm run dev:full
 //   npm run dev:full -- --seed    also seeds local MongoDB from src/data first
 import { execSync, spawnSync } from "node:child_process";
@@ -39,6 +40,12 @@ const { result } = concurrently(
       name: "web",
       command: "npm run dev",
       prefixColor: "magenta",
+      env: localWebEnv,
+    },
+    {
+      name: "admin",
+      command: "npm run admin:dev",
+      prefixColor: "green",
       env: localWebEnv,
     },
   ],
