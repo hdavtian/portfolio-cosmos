@@ -10,6 +10,10 @@ import react from "@vitejs/plugin-react";
 // app serves both the admin and the API on that hostname.
 export default defineConfig({
   root: "admin",
+  // Separate dependency cache from the site's dev server. Sharing
+  // node_modules/.vite let one server's re-optimisation invalidate the other's
+  // pre-bundled deps, which broke /cinematic with 504 "Outdated Optimize Dep".
+  cacheDir: "../node_modules/.vite-admin",
   plugins: [react()],
   server: {
     port: 5174,
