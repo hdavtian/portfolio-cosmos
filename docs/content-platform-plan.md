@@ -395,7 +395,7 @@ label; forceLink, forceManyBody, forceCollide, forceCenter; drag that settles
 in place; zoom controls). Since 2026-09-16 it reads skills from the published
 release via `useResumeQuery`. Reuse or extract it rather than rewriting. More
 D3 styles (circles, constellation, circuit, rings, tree, neural) are in
-`src/components/ResumeStructureDiagram.tsx`.
+`src/components/ResumeStructureDiagram.tsx`. Full write-up: `docs/d3-skills-graph.md`.
 
 ## 8. Infrastructure
 
