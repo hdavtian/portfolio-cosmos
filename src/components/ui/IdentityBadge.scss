@@ -1,9 +1,43 @@
 @use '../../styles/hud-mixins' as hud;
 
-.id-badge {
+// Badge and the exit link below it, anchored together.
+.id-badge-stack {
   @include hud.screen-anchor('top-left');
-  @include hud.glass-panel;
   z-index: var(--z-hud);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+
+.id-badge-exit {
+  @include hud.hud-label;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--space-xs);
+  text-decoration: none;
+  opacity: 0.8;
+  transition: opacity var(--duration-normal) var(--ease-appear), color var(--duration-normal) var(--ease-appear);
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    color: var(--hud-primary);
+  }
+
+  &__arrow {
+    display: inline-block;
+    transition: transform var(--duration-normal) var(--ease-appear);
+  }
+
+  &:hover &__arrow {
+    transform: translateX(-3px);
+  }
+}
+
+.id-badge {
+  @include hud.glass-panel;
   padding: var(--space-sm) var(--space-md);
   max-width: 180px;
   overflow: hidden;
