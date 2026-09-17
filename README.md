@@ -22,6 +22,18 @@ A stunning, movie-inspired scrolling resume built with React, TypeScript, GSAP, 
 - Smooth parallax effects on background elements
 - Movie credits-style experience list scrolling
 
+## 🌐 Production
+
+| What | URL | Notes |
+| --- | --- | --- |
+| Site (portfolio) | https://harmadavtian.com | Static SPA on GoDaddy, deployed by `.github/workflows/deploy.yml` on push to `main` |
+| Cinematic experience | https://harmadavtian.com/cinematic | Three.js experience, same build |
+| Resume | https://harmadavtian.com/resume | |
+| API | https://api.harmadavtian.com | `harma-api` App Service; health at `/healthz`, docs at `/swagger` |
+| Admin | https://portfolio-admin.harmadavtian.com | Second hostname on `harma-api`; serves the admin once phase 3 ships (until then it answers as the API) |
+
+Status and rollout: `docs/content-platform-plan.md`.
+
 ## 🚀 Quick Start
 
 ```bash
@@ -37,7 +49,7 @@ npm run dev:full-restart   # stop leftovers from a crashed run, then start every
 | MongoDB 8.0 | `127.0.0.1:27017` | Docker; database `resume_cosmos_local` |
 | Azurite (blob storage) | `127.0.0.1:10000` | Docker; media files |
 | API | http://localhost:8080 | Swagger at http://localhost:8080/swagger |
-| Site | http://localhost:5173 | `/resume`, `/portfolio`, `/cinematic` |
+| Site | http://localhost:5173 | `/` (portfolio), `/portfolio/:id`, `/resume`, `/cinematic`, `/portfolio-classic` |
 | Admin | http://localhost:5174 | Password `local-dev` |
 
 Stop with **Ctrl+C**; `npm run services:down` also stops the Docker containers (data is kept).

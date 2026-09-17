@@ -4,7 +4,55 @@ Admin-managed content for both experiences (portfolio site and Three.js cosmos),
 so content changes never require a code deploy. Code deploys are reserved for
 new features, experiences, and templates.
 
-Status: **Phase 1 complete** on `feature/content-platform-phase-1` (2026-09-15). Phase 0 merged and deployed.
+Status (2026-09-17): **phases 0–1 live**. Phases 2 (API v2) and 4 (admin), plus
+the portfolio redesign, are complete on `feature/content-platform-phase-4`
+(pushed, not merged). **Phase 3 (infrastructure) in progress.** See
+"Current rollout" below.
+
+## Current rollout (2026-09-17)
+
+Production today runs phases 0–1: the old site build on GoDaddy and the v1 API on
+`harma-api`. Everything after that lives on `feature/content-platform-phase-4`,
+and merging it to `main` deploys **both** the public site (GoDaddy FTP) and the
+API, so the order below matters.
+
+Also on that branch, beyond the original phases:
+
+- **Portfolio redesign** (`src/features/showcase`) at `/`, projects at
+  `/portfolio/:id`, resume at `/resume`; the previous pages stay at
+  `/portfolio-classic` until retired. Background scenes are fragments of the
+  cinematic universe.
+- **Three.js changes, approved by Harma ahead of the phase 7 gate:** the cinematic
+  pause flag and keep-alive host (`src/lib/cinematicSuspend.ts`,
+  `src/app/cinematic/`), a "Back to main site" link, and removal of the hidden
+  arrow-key resume sections. The cinematic app already reads v2 content.
+
+Next steps, in order:
+
+1. **Phase 3 — infrastructure** (no merge needed; existing resources only):
+   1. Storage account in `rg-portfolio-prod`, container `media`, CORS for
+      `https://harmadavtian.com` and `https://portfolio-admin.harmadavtian.com`
+      (the WebGL background scenes read screenshots cross-origin). *Approval.*
+   2. System-assigned managed identity on `harma-api`, *Storage Blob Data
+      Contributor* on that account only.
+   3. Register the API in the shared sign-on group, run `creds:set` centrally,
+      set auth/cookie app settings. *Approval (rotates shared credentials).*
+   4. Serve the admin build on `portfolio-admin.harmadavtian.com` from
+      `harma-api` (host-based routing, admin bundled into the API deploy);
+      permanent Syncfusion key as GitHub secret `SYNCFUSION_LICENSE_KEY`
+      (trial key expires 2026-09-23).
+   5. Phase 2 leftovers: rate limiting on admin writes, request logging,
+      production CORS allowlist. Watch B1 plan memory.
+2. **Merge `feature/content-platform-phase-4` to `main`.** Deploys API v2, admin
+   and the redesigned site together. Until release 1 exists the site renders
+   its bundled content snapshot, so nothing breaks in between.
+3. **Phase 5 — production data.** `db:pull` backup of Atlas, import, upload the
+   202 images, publish release 1, confirm the live site reads the API (not the
+   fallback). *Approval.*
+4. **Phase 6b — stabilize.** Real admin use; decide when to retire
+   `/portfolio-classic`, the v1 routes and bundled JSON.
+5. **Phase 7/8 — Three.js admin + retrofit**, partly done (the cinematic app
+   already reads v2 content).
 
 ### Phase 0 notes
 
