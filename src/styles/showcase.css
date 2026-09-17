@@ -811,8 +811,13 @@ html.is-scene-dragging * {
   content: "";
   position: absolute;
   inset: calc(-1 * clamp(12px, 1.6vh, 20px)) calc(-1 * clamp(12px, 1.2vw, 22px));
+  z-index: -1;
   border: 1px solid rgba(214, 244, 255, 0.55);
   border-radius: 4px;
+  /* Frosted glass: 40% see-through, the scene blurred behind it. */
+  background: rgba(10, 16, 24, 0.6);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
   pointer-events: none;
   box-shadow: 0 0 0 1px rgba(214, 244, 255, 0.06), inset 0 0 40px rgba(160, 232, 255, 0.06);
   animation: showcase-border-draw 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -824,7 +829,21 @@ html.is-scene-dragging * {
   100% { clip-path: inset(0 0 0 0); opacity: 1; }
 }
 
+/* The open project is as wide as its title; the preview fits under it. A floor
+   keeps short titles from squeezing the preview. */
+.showcase-list__item.is-open,
+.showcase-list__item.is-closing {
+  isolation: isolate;
+  width: var(--title-width, fit-content);
+  min-width: min(100%, 560px);
+  max-width: 100%;
+}
+
 .showcase-preview {
+  /* Never widens the item: its width comes from the title. */
+  contain: inline-size;
+  container-type: inline-size;
+  width: 100%;
   display: grid;
   grid-template-rows: 0fr;
   animation: showcase-preview-open 460ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
@@ -834,7 +853,7 @@ html.is-scene-dragging * {
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(200px, 26vw) minmax(0, 52ch);
+  grid-template-columns: minmax(180px, 40%) minmax(0, 1fr);
   gap: clamp(16px, 2vw, 32px);
   align-items: start;
   padding-top: clamp(14px, 2vh, 22px);
@@ -843,6 +862,17 @@ html.is-scene-dragging * {
 
 .showcase-preview__image {
   aspect-ratio: 16 / 10;
+}
+
+/* Narrow titles: image above the text. */
+@container (max-width: 620px) {
+  .showcase-preview__inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .showcase-preview__image {
+    max-width: 360px;
+  }
 }
 
 .showcase-preview__body {

@@ -129,6 +129,31 @@ export function ShowcaseIndexPage() {
     clearIndexReturnState();
   }, [returning, projects.length]);
 
+  // Size the open project to its title's longest line. A wrapped title's box
+  // spans the whole column, so measure the rendered lines instead.
+  useLayoutEffect(() => {
+    const id = openId ?? closingId;
+    const item = id ? itemRefs.current.get(id) : undefined;
+    const title = item?.querySelector<HTMLElement>(".showcase-list__title");
+    if (!item || !title) return;
+    const measure = () => {
+      item.style.removeProperty("--title-width");
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      let widest = 0;
+      for (const rect of range.getClientRects()) widest = Math.max(widest, rect.right - title.getBoundingClientRect().left);
+      // Plus the italic overhang padding and a pixel of slack so it never rewraps.
+      const overhang = parseFloat(getComputedStyle(title).paddingRight) || 0;
+      if (widest > 0) item.style.setProperty("--title-width", `${Math.ceil(widest + overhang) + 2}px`);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      item.style.removeProperty("--title-width");
+    };
+  }, [openId, closingId, visible]);
+
   // Bring a newly opened preview fully into view once it has expanded (not the
   // one restored on return, which is already where the visitor left it).
   useEffect(() => {
