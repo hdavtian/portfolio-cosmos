@@ -158,7 +158,13 @@ function ShotViewer({
   onClose: () => void;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const currentThumbRef = useRef<HTMLButtonElement>(null);
   const shot = shots[index];
+
+  // Keep the current thumbnail in view in the strip.
+  useEffect(() => {
+    currentThumbRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [index]);
   const step = useCallback(
     (delta: number) => onIndex((index + delta + shots.length) % shots.length),
     [index, onIndex, shots.length],
@@ -195,28 +201,56 @@ function ShotViewer({
           </span>
           <span>{shot.title}</span>
         </p>
-        <div className="showcase-viewer__controls">
-          {shots.length > 1 ? (
-            <>
-              <button type="button" className="showcase-back" onClick={() => step(-1)} aria-label="Previous screenshot">
-                <span className="showcase-back__arrow" aria-hidden="true" />
-                Prev
-              </button>
-              <button type="button" className="showcase-back showcase-back--next" onClick={() => step(1)} aria-label="Next screenshot">
-                Next
-                <span className="showcase-back__arrow" aria-hidden="true" />
-              </button>
-            </>
-          ) : null}
-          <button ref={closeRef} type="button" className="showcase-back" onClick={onClose}>
-            Close
-          </button>
-        </div>
+        <button ref={closeRef} type="button" className="showcase-back" onClick={onClose}>
+          Close
+        </button>
       </div>
-      <div className="showcase-viewer__stage" key={shot.key}>
-        <img src={shot.src} alt={shot.title} />
+
+      <div className="showcase-viewer__stage">
+        {/* The whole screenshot, scaled to fit the screen. */}
+        <img key={shot.key} src={shot.src} alt={shot.title} />
+        {shots.length > 1 ? (
+          <>
+            <button
+              type="button"
+              className="showcase-viewer__step showcase-viewer__step--prev"
+              onClick={() => step(-1)}
+              aria-label="Previous screenshot"
+            >
+              <span aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="showcase-viewer__step showcase-viewer__step--next"
+              onClick={() => step(1)}
+              aria-label="Next screenshot"
+            >
+              <span aria-hidden="true" />
+            </button>
+          </>
+        ) : null}
       </div>
+
+      {shots.length > 1 ? (
+        <ol className="showcase-viewer__thumbs" aria-label="All screenshots">
+          {shots.map((item, thumbIndex) => (
+            <li key={item.key}>
+              <button
+                type="button"
+                ref={thumbIndex === index ? currentThumbRef : undefined}
+                className={`showcase-viewer__thumb${thumbIndex === index ? " is-current" : ""}`}
+                onClick={() => onIndex(thumbIndex)}
+                aria-label={`Screenshot ${thumbIndex + 1}: ${item.title}`}
+                aria-current={thumbIndex === index ? "true" : undefined}
+              >
+                <img src={item.src} alt="" loading="lazy" decoding="async" />
+              </button>
+            </li>
+          ))}
+        </ol>
+      ) : null}
     </div>,
-    document.body,
+    // Inside the portfolio shell, so the viewer inherits the site's type and colour tokens.
+    document.querySelector(".showcase") ?? document.body,
   );
 }
