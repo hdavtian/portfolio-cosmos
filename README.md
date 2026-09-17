@@ -26,7 +26,8 @@ A stunning, movie-inspired scrolling resume built with React, TypeScript, GSAP, 
 
 ```bash
 npm install
-npm run dev:full
+npm run dev:full           # start everything
+npm run dev:full-restart   # stop leftovers from a crashed run, then start everything
 ```
 
 `dev:full` needs Docker Desktop running. It starts everything for local development in one terminal:
@@ -41,7 +42,16 @@ npm run dev:full
 
 Stop with **Ctrl+C**; `npm run services:down` also stops the Docker containers (data is kept).
 
-If a previous run crashed or the machine ran low on memory, parts of it can keep holding their ports. `npm run dev:full` checks the ports first and names what is holding them; `npm run dev:full-restart` stops this project's old API, site and admin (only processes started from this repo) and then starts everything fresh.
+### When something is already running
+
+If a previous run crashed or the machine ran low on memory, parts of it (often the API) can keep holding their ports, and a new run cannot start them.
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev:full` | Checks ports 8080, 5173 and 5174 first. If any is taken it starts nothing and prints which process holds it, and whether it belongs to this project. |
+| `npm run dev:full-restart` | Stops this project's old API, site and admin (including the API's file watcher), then starts everything fresh. Only processes started from this repo are stopped; other projects are never touched. |
+
+If `dev:full` reports a port held by **another program**, stop that program yourself; the restart will not.
 
 Local commands always use the local Docker services, never production Atlas or Azure Storage.
 
@@ -53,6 +63,7 @@ Useful when one process crashed or a port is stuck.
 
 | Command | What it starts |
 | --- | --- |
+| `npm run dev:full-restart` | Everything, after stopping this project's leftover processes |
 | `npm run services:up` | MongoDB and Azurite in Docker (waits until healthy) |
 | `npm run api:local` | The API on :8080, against the Docker services (starts them if needed) |
 | `npm run dev` | The site on :5173 |
