@@ -12,6 +12,13 @@ const IdentityBadge: React.FC<Props> = ({ name, title }) => {
 
   return (
     <div className="id-badge-stack">
+      {/* Leaves the experience for the main site. Above the badge, so the title reveal (which grows downward) never moves it. */}
+      <Link to="/" className="id-badge-exit">
+        <span className="id-badge-exit__arrow" aria-hidden="true">
+          ←
+        </span>
+        Back to main site
+      </Link>
       <div
         className={`id-badge ${expanded ? "id-badge--expanded" : ""}`}
         onMouseEnter={() => setExpanded(true)}
@@ -22,13 +29,6 @@ const IdentityBadge: React.FC<Props> = ({ name, title }) => {
           <div className="id-badge__title">{title}</div>
         </div>
       </div>
-      {/* Leaves the experience for the main site; sits below the badge, so the title reveal pushes it down. */}
-      <Link to="/" className="id-badge-exit">
-        <span className="id-badge-exit__arrow" aria-hidden="true">
-          ←
-        </span>
-        Back to main site
-      </Link>
     </div>
   );
 };
