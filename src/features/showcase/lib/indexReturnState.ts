@@ -1,5 +1,5 @@
 // Where the visitor was on the work index when they opened a project, so coming
-// back (browser Back or "Return to index") lands on the same filters, open
+// back (browser Back or the Back button) lands on the same filters, open
 // preview and scroll position. Per tab, via sessionStorage.
 const KEY = "showcase:index-return";
 

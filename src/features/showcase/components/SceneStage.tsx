@@ -17,6 +17,8 @@ interface SceneStageProps {
   focusProjectId: string | null;
   /** True where the wheel and drag over empty space control the scene (the index). */
   interactive: boolean;
+  /** Hidden behind the cinematic experience: no updates, loading or rendering. */
+  paused: boolean;
   /** Called once any scene is on screen (the terrain can pause). */
   onShowing: (showing: boolean) => void;
 }
@@ -88,7 +90,7 @@ const prefetchCinematic = () => {
  * Fragments of the cinematic universe behind the portfolio: one renderer, one
  * visible scene at a time, glitch transitions, a switcher and an auto-tour.
  */
-export function SceneStage({ projects, techStack, highlights, portfolioCores, jobs, focusProjectId, interactive, onShowing }: SceneStageProps) {
+export function SceneStage({ projects, techStack, highlights, portfolioCores, jobs, focusProjectId, interactive, paused, onShowing }: SceneStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [statuses, setStatuses] = useState<Record<string, SceneStatus>>(() =>
     Object.fromEntries(SCENE_DEFINITIONS.map((scene) => [scene.id, { phase: "waiting", progress: 0 }])),
@@ -105,6 +107,7 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
   const highlightsRef = useRef(highlights);
   const focusRef = useRef(focusProjectId);
   const interactiveRef = useRef(interactive);
+  const pausedRef = useRef(paused);
   const onShowingRef = useRef(onShowing);
   const lastInteractionRef = useRef(performance.now());
   const activeSinceRef = useRef(performance.now());
@@ -113,6 +116,7 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
     highlightsRef.current = highlights;
     focusRef.current = focusProjectId;
     interactiveRef.current = interactive;
+    pausedRef.current = paused;
     onShowingRef.current = onShowing;
   });
 
@@ -148,6 +152,11 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
   useEffect(() => {
     for (const scene of scenesRef.current.values()) scene.setFocusProject?.(focusProjectId);
   }, [focusProjectId]);
+
+  // Back from the cinematic experience: give the current scene a full tour interval.
+  useEffect(() => {
+    if (!paused) activeSinceRef.current = performance.now();
+  }, [paused]);
 
   useEffect(() => {
     try {
@@ -249,6 +258,11 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
       let last = performance.now();
       let preloadAccumulator = 0;
       const render = (now: number) => {
+        if (pausedRef.current) {
+          last = now;
+          frame = requestAnimationFrame(render);
+          return;
+        }
         const dt = Math.min(0.1, (now - last) / 1000);
         last = now;
         smoothed.x += (pointer.x - smoothed.x) * (1 - Math.exp(-4 * dt));

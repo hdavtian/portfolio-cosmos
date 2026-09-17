@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { CINEMATIC_PATH, canKeepAlive } from "../../app/cinematic/keepAlive";
 import { AtmosphereBackdrop } from "./components/AtmosphereBackdrop";
 import { SceneStage } from "./components/SceneStage";
 import { usePortfolioCoresQuery, useResumeQuery, useTechStackQuery } from "../../lib/query/contentQueries";
@@ -51,8 +52,17 @@ export function ShowcaseLayout() {
       }),
     [experience],
   );
+  const { pathname } = useLocation();
   // Only the index lets the scene take the wheel; project pages scroll.
-  const onIndex = useLocation().pathname === "/";
+  const onIndex = pathname === "/";
+  // While the cinematic experience is open the scenes pause underneath it where
+  // both can stay alive; elsewhere they unload and rebuild on return. A visit
+  // that starts on the experience doesn't start them at all.
+  const onCinematic = pathname === CINEMATIC_PATH;
+  const [keepScenes] = useState(canKeepAlive);
+  const [scenesStarted, setScenesStarted] = useState(false);
+  if (!onCinematic && !scenesStarted) setScenesStarted(true);
+  const runScenes = scenesStarted && (!onCinematic || keepScenes);
   const [focusProjectId, setFocusProject] = useState<string | null>(null);
   const [sceneEnabled] = useState(canShowCinematicScene);
   const [sceneShowing, setSceneShowing] = useState(false);
@@ -66,8 +76,8 @@ export function ShowcaseLayout() {
   return (
     <BackdropTintContext.Provider value={context}>
       <div className="showcase">
-        <AtmosphereBackdrop tint={tint} paused={sceneShowing} />
-        {sceneEnabled ? (
+        <AtmosphereBackdrop tint={tint} paused={sceneShowing || onCinematic} />
+        {sceneEnabled && runScenes ? (
           <SceneStage
             projects={projects}
             techStack={techStack}
@@ -75,6 +85,7 @@ export function ShowcaseLayout() {
             portfolioCores={portfolioCores}
             jobs={jobs}
             interactive={onIndex}
+            paused={onCinematic}
             focusProjectId={focusProjectId}
             onShowing={setSceneShowing}
           />

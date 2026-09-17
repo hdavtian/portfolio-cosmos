@@ -57,6 +57,10 @@ const routes: RouteObject[] = [
         children: [
           { index: true, element: <LazyRoute><ShowcaseIndexPage /></LazyRoute> },
           { path: "resume", element: <LazyRoute><ShowcaseResumePage /></LazyRoute> },
+          // Rendered by CinematicHost in RootLayout, which can keep it alive.
+          // It sits in this layout so the portfolio's scenes can wait, paused,
+          // underneath it.
+          { path: "cinematic", element: null },
           {
             path: "portfolio",
             children: [
@@ -70,8 +74,6 @@ const routes: RouteObject[] = [
           },
         ],
       },
-      // Rendered by CinematicHost in RootLayout, which can keep it alive.
-      { path: "cinematic", element: null },
       {
         // Previous portfolio, kept for comparison until the redesign is approved.
         path: "portfolio-classic",
