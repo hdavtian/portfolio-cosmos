@@ -2,12 +2,19 @@ import type { ContentBundle } from "@hd/content-schema";
 // Only the projection back to the legacy shapes: the site must not bundle zod
 // and every schema just to read published content.
 import { toLegacy } from "@hd/content-schema/to-legacy";
+import {
+  buildTechStackTree,
+  techStackTreeFromSkills,
+  type TechStackTreeNode,
+} from "@hd/content-schema/tech-stack-tree";
 import type { PortfolioCoreSeed, ResumePayload } from "../../features/fast/types";
 import { moonPortfolioMapping as moonPortfolioMappingFallback, type MoonPortfolioCompanyMapping } from "../../data/moonPortfolioMapping";
 import aboutPathTravelMessagesFallback from "../../data/aboutPathTravelMessages.json";
 import portfolioCoresFallback from "../../data/portfolioCores.json";
 import resumeFallback from "../../data/resume.json";
 import { API_BASE_URL, shouldSkipApiRequest } from "./contentClient";
+
+export type { TechStackTreeNode };
 
 export interface AboutPathTravelMessage {
   id: string;
@@ -32,6 +39,12 @@ export interface SiteContent {
   moonPortfolioMapping: MoonPortfolioCompanyMapping[];
   /** Messages shown during the Mjolnir ride in the 3D site's About section. */
   aboutPathTravelMessages: AboutPathTravelMessage[];
+  /**
+   * Nested tech stack (portfolio site, D3 skills graph). Separate from the
+   * resume's one-level skills; built from those skills until a tech stack has
+   * been published.
+   */
+  techStack: TechStackTreeNode[];
   /** "api" when served from the published release, "fallback" when bundled JSON was used. */
   source: "api" | "fallback";
   etag?: string;
@@ -42,6 +55,7 @@ const FALLBACK: SiteContent = {
   portfolioCores: portfolioCoresFallback as PortfolioCoreSeed[],
   moonPortfolioMapping: moonPortfolioMappingFallback,
   aboutPathTravelMessages: aboutPathTravelMessagesFallback as AboutPathTravelMessage[],
+  techStack: techStackTreeFromSkills((resumeFallback as ResumePayload).skills),
   source: "fallback",
 };
 
@@ -71,6 +85,11 @@ export async function fetchSiteContent(): Promise<SiteContent> {
       portfolioCores: legacy.portfolioCores as unknown as PortfolioCoreSeed[],
       moonPortfolioMapping: legacy.moonPortfolioMapping as MoonPortfolioCompanyMapping[],
       aboutPathTravelMessages: legacy.aboutPathTravelMessages as AboutPathTravelMessage[],
+      // Releases published before the tech stack existed have no nodes.
+      techStack:
+        (release.content.collections.techStackNodes ?? []).length > 0
+          ? buildTechStackTree(release.content.collections.techStackNodes)
+          : techStackTreeFromSkills((legacy.resume as unknown as ResumePayload).skills),
       source: "api",
       etag: release.etag,
     };

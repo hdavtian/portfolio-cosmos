@@ -24,6 +24,14 @@ export function usePortfolioCoresQuery() {
   });
 }
 
+/** Nested tech stack for the D3 skills graph (and the portfolio site redesign). */
+export function useTechStackQuery() {
+  return useQuery({
+    ...releaseQuery,
+    select: (content) => ({ payload: content.techStack, source: content.source }),
+  });
+}
+
 export function useResumeQuery() {
   return useQuery({
     ...releaseQuery,

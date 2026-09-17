@@ -6,5 +6,7 @@ export * from "./resume.js";
 export * from "./portfolio.js";
 export * from "./about.js";
 export * from "./cosmos.js";
+export * from "./techStack.js";
+export * from "./techStackTree.js";
 export * from "./collections.js";
 export * from "./legacy/index.js";

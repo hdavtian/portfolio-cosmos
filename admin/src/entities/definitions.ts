@@ -12,6 +12,12 @@ export interface FieldDefinition {
   kind: FieldKind;
   /** For `reference` fields: the entity whose slug is stored, and its label field. */
   reference?: { entity: string; labelField: string };
+  /**
+   * For `reference` fields: an empty choice with this label is offered and
+   * stored as "". For a self-reference (a tree), the record itself and its
+   * descendants are left out, so a loop cannot be chosen.
+   */
+  emptyOption?: string;
 }
 
 export interface ColumnDefinition {
@@ -33,6 +39,8 @@ export interface EntityDefinition {
   describe: (record: Record<string, unknown>) => string;
   /** The list page is shared, but editing uses a bespoke page (see AdminApp). */
   customEditor?: boolean;
+  /** Editing is shared, but the list is a bespoke page (see AdminApp). */
+  customList?: boolean;
 }
 
 const slugField: FieldDefinition = {
@@ -143,6 +151,30 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     ],
     empty: () => ({ slug: "", sortOrder: 0, title: "", url: "" }),
     describe: (record) => text(record.title),
+  },
+  {
+    entity: "techStackNodes",
+    title: "Tech stack",
+    singular: "tech stack node",
+    description:
+      "Nested tech stack for the portfolio site and the D3 skills graph, any depth (e.g. Frontend › Frameworks › React). Separate from the resume's Skills, which stay one level deep. Order within a level follows Reorder rows.",
+    slugSource: "name",
+    columns: [],
+    fields: [
+      slugField,
+      { key: "name", label: "Name", kind: "text" },
+      {
+        key: "parentSlug",
+        label: "Parent",
+        hint: "Leave at top level for a main branch",
+        kind: "reference",
+        reference: { entity: "techStackNodes", labelField: "name" },
+        emptyOption: "— Top level —",
+      },
+    ],
+    empty: () => ({ slug: "", sortOrder: 0, name: "", parentSlug: "" }),
+    describe: (record) => text(record.name),
+    customList: true,
   },
   {
     entity: "pathTravelMessages",

@@ -8,6 +8,8 @@ import type { EntityDefinition } from "./definitions";
 export type ReferenceOption = {
   slug: string;
   label: string;
+  /** Present when the referenced entity is a tree (it has parentSlug). */
+  parentSlug?: string;
 };
 
 /**
@@ -34,6 +36,7 @@ export function useReferenceOptions(definition: EntityDefinition) {
     options[field.key] = items.map((item) => ({
       slug: String(item.slug),
       label: String(item[field.reference!.labelField] ?? item.slug),
+      ...(typeof item.parentSlug === "string" ? { parentSlug: item.parentSlug } : {}),
     }));
   });
 
@@ -42,6 +45,6 @@ export function useReferenceOptions(definition: EntityDefinition) {
     isLoading: results.some((result) => result.isLoading),
     /** Display label for a stored slug, falling back to the slug itself. */
     labelFor: (fieldKey: string, slug: unknown) =>
-      options[fieldKey]?.find((option) => option.slug === slug)?.label ?? String(slug ?? ""),
+      slug === "" ? "" : (options[fieldKey]?.find((option) => option.slug === slug)?.label ?? String(slug ?? "")),
   };
 }

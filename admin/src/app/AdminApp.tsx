@@ -20,6 +20,7 @@ import { PortfolioCoresPage } from "../pages/PortfolioCoresPage";
 import { PortfolioEntriesPage } from "../pages/PortfolioEntriesPage";
 import { PortfolioEntryEditPage } from "../pages/PortfolioEntryEditPage";
 import { PathMessageEditPage } from "../pages/PathMessageEditPage";
+import { TechStackPage } from "../pages/TechStackPage";
 
 export function AdminApp() {
   // Admin data is never persisted to localStorage and never served stale: an
@@ -67,13 +68,18 @@ export function AdminApp() {
             <Route path="portfolioCores" element={<PortfolioCoresPage />} />
             <Route path="portfolioCores/:slug" element={<PortfolioCoreEditPage />} />
             <Route path="pathTravelMessages/:slug" element={<PathMessageEditPage />} />
+            <Route path="techStackNodes" element={<TechStackPage />} />
             {/* Config-driven sections; keyed so switching entity resets grid state. */}
             {ENTITY_DEFINITIONS.flatMap((definition) => [
-              <Route
-                key={`${definition.entity}-list`}
-                path={definition.entity}
-                element={<EntityListPage key={definition.entity} definition={definition} />}
-              />,
+              ...(definition.customList
+                ? []
+                : [
+                    <Route
+                      key={`${definition.entity}-list`}
+                      path={definition.entity}
+                      element={<EntityListPage key={definition.entity} definition={definition} />}
+                    />,
+                  ]),
               ...(definition.customEditor
                 ? []
                 : [

@@ -24,6 +24,7 @@ const SEARCHABLE_FIELDS: Partial<Record<CollectionName, readonly string[]>> = {
   portfolioCores: ["slug", "name"],
   skills: ["slug", "name", "categorySlug"],
   skillCategories: ["slug", "name"],
+  techStackNodes: ["slug", "name", "parentSlug"],
   links: ["slug", "title", "url"],
   certifications: ["slug", "name"],
   education: ["slug", "institution", "degree", "major"],
@@ -200,6 +201,17 @@ export function createAdminRouter({ cookieSecret }: { cookieSecret: string }): R
     router.delete(
       `${base}/:slug`,
       asyncHandler(async (req, res) => {
+        // Deleting a tech stack node would orphan its children.
+        if (name === "techStackNodes") {
+          const children = await getDb()
+            .collection("techStackNodes")
+            .countDocuments({ parentSlug: param(req.params.slug) });
+          if (children > 0) {
+            throw ApiError.conflict(
+              `This node has ${children} child node${children === 1 ? "" : "s"}. Move or delete them first.`,
+            );
+          }
+        }
         await repositoryFor(name).deleteBySlug(param(req.params.slug));
         res.status(204).end();
       }),

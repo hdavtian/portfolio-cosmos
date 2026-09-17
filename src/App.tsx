@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { techStackTreeFromSkills } from "@hd/content-schema/tech-stack-tree";
 import gsap from "gsap";
 import * as d3 from "d3";
 import resumeData from "./data/resume.json";
@@ -8,11 +9,14 @@ import DiagramSettings, {
   type DiagramStyleOptions,
 } from "./components/DiagramSettings";
 import { trackEvent } from "./lib/analytics";
-import { useResumeQuery } from "./lib/query/contentQueries";
+import type { TechStackTreeNode } from "./lib/api/contentV2";
+import { useTechStackQuery } from "./lib/query/contentQueries";
 import "./styles/main.scss";
 
-// Skills Diagram Component using D3.js force-directed graph
-function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
+// Tech stack graph using a D3 force-directed layout. Renders a tree of any
+// depth (see docs/d3-skills-graph.md); top-level nodes look like the original
+// categories and deeper nodes like skills.
+function SkillsDiagram({ tree }: { tree: TechStackTreeNode[] }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -44,7 +48,8 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
     interface Node extends d3.SimulationNodeDatum {
       id: string;
       type: "center" | "category" | "skill";
-      category?: string;
+      /** 0 for the centre, 1 for top-level nodes, and so on. */
+      depth: number;
       label: string;
       radius: number;
     }
@@ -58,6 +63,7 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
       {
         id: "center",
         type: "center",
+        depth: 0,
         label: "TECH STACK",
         radius: 50,
         x: width / 2,
@@ -69,44 +75,30 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
 
     const links: Link[] = [];
 
-    // Add category and skill nodes
-    Object.entries(skills).forEach(([category, items]) => {
-      const categoryId = `cat-${category}`;
-      nodes.push({
-        id: categoryId,
-        type: "category",
-        label: category,
-        radius: 45,
-      });
+    // Skill-style circles are sized so their label fits; deeper levels use a
+    // smaller font and minimum size so large trees stay readable.
+    const labelRadius = (label: string, depth: number) => {
+      const fontSize = depth >= 3 ? 7 : 8;
+      const baseRadius = depth >= 3 ? 20 : 25;
+      const textWidth = label.length * 0.6 * fontSize;
+      return Math.max(baseRadius, textWidth / 2 + 8);
+    };
 
-      links.push({
-        source: "center",
-        target: categoryId,
-      });
-
-      items.forEach((skill) => {
-        const skillId = `skill-${category}-${skill}`;
-        // Calculate radius based on text length to ensure text fits
-        const baseRadius = 25;
-        const charWidth = 0.6; // approximate character width in pixels per font size
-        const fontSize = 8;
-        const textWidth = skill.length * charWidth * fontSize;
-        const calculatedRadius = Math.max(baseRadius, textWidth / 2 + 8);
-
+    const addNodes = (items: TechStackTreeNode[], parentId: string, depth: number) => {
+      items.forEach((item) => {
+        const id = `${parentId}/${item.slug}`;
         nodes.push({
-          id: skillId,
-          type: "skill",
-          category,
-          label: skill,
-          radius: calculatedRadius,
+          id,
+          type: depth === 1 ? "category" : "skill",
+          depth,
+          label: item.name,
+          radius: depth === 1 ? 45 : labelRadius(item.name, depth),
         });
-
-        links.push({
-          source: categoryId,
-          target: skillId,
-        });
+        links.push({ source: parentId, target: id });
+        addNodes(item.children, id, depth + 1);
       });
-    });
+    };
+    addNodes(tree, "center", 1);
 
     // Create force simulation
     const simulation = d3
@@ -118,9 +110,9 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
           .id((d) => d.id)
           .distance((d) => {
             const source = d.source as Node;
-            if (source.type === "center") return 180;
-            if (source.type === "category") return 100;
-            return 50;
+            if (source.depth === 0) return 180;
+            if (source.depth === 1) return 100;
+            return 70;
           })
           .strength(0.8),
       )
@@ -128,9 +120,10 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
         "charge",
         d3.forceManyBody().strength((d) => {
           const node = d as Node;
-          if (node.type === "center") return -1000;
-          if (node.type === "category") return -400;
-          return -150;
+          if (node.depth === 0) return -1000;
+          if (node.depth === 1) return -400;
+          if (node.depth === 2) return -150;
+          return -100;
         }),
       )
       .force("center", d3.forceCenter(width / 2, height / 2))
@@ -236,7 +229,7 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
       .attr("font-size", (d) => {
         if (d.type === "center") return "11px";
         if (d.type === "category") return "10px";
-        return "8px";
+        return d.depth >= 3 ? "7px" : "8px";
       })
       .attr("fill", (d) => (d.type === "skill" ? "#ffffff" : "#d4af37"))
       .attr("font-weight", (d) =>
@@ -336,7 +329,7 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
     return () => {
       simulation.stop();
     };
-  }, [skills]);
+  }, [tree]);
 
   const handleZoomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newZoom = parseFloat(e.target.value);
@@ -428,11 +421,14 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
 }
 
 function App() {
-  // Skills come from the published release (edited in the admin), falling back
-  // to the bundled resume. The rest of this page still reads resume.json.
-  const publishedResume = useResumeQuery();
-  const skills: Record<string, string[]> =
-    publishedResume.data?.payload.skills ?? resumeData.skills;
+  // The graph shows the published tech stack (Admin → Tech stack), which may
+  // nest deeper than the resume's skills. Before it loads, the bundled resume
+  // skills stand in. The rest of this page still reads resume.json.
+  const publishedTechStack = useTechStackQuery();
+  const techStack = useMemo(
+    () => publishedTechStack.data?.payload ?? techStackTreeFromSkills(resumeData.skills),
+    [publishedTechStack.data],
+  );
   const [currentSection, setCurrentSection] = useState(0);
   const isNavigating = useRef(false);
   const totalSections = 2 + resumeData.experience.length + 1; // hero+summary, skills, jobs, footer
@@ -730,7 +726,7 @@ function App() {
         <div className="skills__overlay"></div>
         <div className="skills__content">
           <h2 className="skills__title">Technical Expertise</h2>
-          <SkillsDiagram skills={skills} />
+          <SkillsDiagram tree={techStack} />
         </div>
       </section>
 

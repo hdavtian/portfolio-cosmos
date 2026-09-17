@@ -39,6 +39,7 @@
     "@syncfusion/ej2-react-navigations": "^34.2.8",
     "@syncfusion/ej2-react-notifications": "^34.2.8",
     "@syncfusion/ej2-react-popups": "^34.2.8",
+    "@syncfusion/ej2-react-treegrid": "^34.2.8",
     "@tailwindcss/vite": "^4.2.2",
     "@tanstack/query-sync-storage-persister": "^5.99.0",
     "@tanstack/react-query": "^5.99.0",

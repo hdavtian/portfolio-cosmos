@@ -40,6 +40,7 @@ const COLLECTIONS: Record<string, CollectionWording> = {
   experiences: { singular: "job", plural: "jobs", label: field("company") },
   skills: { singular: "skill", plural: "skills", label: field("name") },
   skillCategories: { singular: "skill category", plural: "skill categories", label: field("name") },
+  techStackNodes: { singular: "tech stack node", plural: "tech stack nodes", label: field("name") },
   education: { singular: "education entry", plural: "education entries", label: field("institution") },
   certifications: { singular: "certification", plural: "certifications", label: field("name") },
   links: { singular: "link", plural: "links", label: field("title") },
@@ -63,6 +64,7 @@ const FIELD_NAMES: Record<string, string> = {
   mediaId: "image",
   coreSlug: "core",
   categorySlug: "category",
+  parentSlug: "parent",
   placement: "orbit",
   textContent: "text",
   fontFamily: "font",
@@ -102,6 +104,10 @@ const withFields = (fields: string[]) => {
   return ` (${fields.length > 4 ? `${shown} and ${fields.length - 4} more` : shown})`;
 };
 
+// Beyond this many adds or deletes in one collection, list a count instead
+// (e.g. seeding a whole tech stack), so the notes stay readable.
+const LIST_LIMIT = 5;
+
 const bySortOrder = (records: Record_[]) =>
   [...records].sort((a, b) => Number(a.sortOrder ?? 0) - Number(b.sortOrder ?? 0));
 
@@ -123,19 +129,21 @@ export function summarizeChanges(live: ContentSide, draft: ContentSide): string[
     const afterBySlug = new Map(after.map((record) => [String(record.slug), record]));
     const quote = (record: Record_) => `${wording.singular} "${wording.label(record)}"`;
 
+    const added = after.filter((record) => !beforeBySlug.has(String(record.slug)));
+    const deleted = before.filter((record) => !afterBySlug.has(String(record.slug)));
+    const listOrCount = (verb: string, records: Record_[]) => {
+      if (records.length > LIST_LIMIT) lines.push(`${verb} ${records.length} ${wording.plural}`);
+      else records.forEach((record) => lines.push(`${verb} ${quote(record)}`));
+    };
+
+    listOrCount("Added", added);
     for (const record of after) {
       const previous = beforeBySlug.get(String(record.slug));
-      if (!previous) {
-        lines.push(`Added ${quote(record)}`);
-        continue;
-      }
+      if (!previous) continue;
       const fields = changedFields(previous, record);
       if (fields.length > 0) lines.push(`Updated ${quote(record)}${withFields(fields)}`);
     }
-
-    for (const record of before) {
-      if (!afterBySlug.has(String(record.slug))) lines.push(`Deleted ${quote(record)}`);
-    }
+    listOrCount("Deleted", deleted);
 
     // Order only matters among records on both sides; adding or deleting one
     // is already reported and shifts the others without a real reorder.

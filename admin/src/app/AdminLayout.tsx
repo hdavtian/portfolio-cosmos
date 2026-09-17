@@ -29,6 +29,7 @@ const NAV_GROUPS: Array<{
     links: [
       { to: "/portfolioEntries", text: "Projects", ready: true },
       { to: "/portfolioCores", text: "Cores", ready: true },
+      { to: "/techStackNodes", text: "Tech stack", ready: true },
     ],
   },
   {

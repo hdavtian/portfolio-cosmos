@@ -21,7 +21,7 @@ const AREA_CONTENTS: Record<Area, { singletons: string[]; collections: string[] 
   },
   portfolio: {
     singletons: [],
-    collections: ["portfolioCores", "portfolioEntries", "moonPortfolioMappings"],
+    collections: ["portfolioCores", "portfolioEntries", "moonPortfolioMappings", "techStackNodes"],
   },
   about: { singletons: [], collections: ["aboutDeckSlides", "pathTravelMessages"] },
   cosmos: {

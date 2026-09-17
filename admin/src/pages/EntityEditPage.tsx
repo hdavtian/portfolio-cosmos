@@ -3,7 +3,7 @@ import { DropDownListComponent } from "@syncfusion/ej2-react-dropdowns";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { FormField } from "../components/FormField";
 import { useStatus } from "../lib/status";
 import { suggestSlug, type EntityDefinition } from "../entities/definitions";
@@ -25,6 +25,11 @@ export function EntityEditPage({ definition }: { definition: EntityDefinition })
   const { slug } = useParams<{ slug: string }>();
   const isNew = slug === "new";
   const existing = useEntity<Content>(definition.entity, isNew ? undefined : slug);
+  // New records can be prefilled from the URL, e.g. "Add child" passes ?parentSlug=.
+  const [searchParams] = useSearchParams();
+  const prefill = Object.fromEntries(
+    definition.fields.filter((field) => searchParams.has(field.key)).map((field) => [field.key, searchParams.get(field.key)]),
+  );
 
   // New records are appended: sortOrder starts at the current count.
   const count = useQuery({
@@ -40,7 +45,7 @@ export function EntityEditPage({ definition }: { definition: EntityDefinition })
       <EntityEditor
         key="new"
         definition={definition}
-        initial={{ ...definition.empty(), sortOrder: count.data?.total ?? 0 }}
+        initial={{ ...definition.empty(), sortOrder: count.data?.total ?? 0, ...prefill }}
         initialVersion={0}
         isNew
       />
@@ -145,6 +150,27 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
     );
   };
 
+  // Choices for a reference field: an optional "none" entry, and for a
+  // self-reference, never the record itself or anything beneath it.
+  const choicesFor = (key: string, emptyOption?: string, selfReference?: boolean) => {
+    let choices = references.options[key] ?? [];
+    if (selfReference && !isNew) {
+      const excluded = new Set([String(initial.slug)]);
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (const option of choices) {
+          if (option.parentSlug && excluded.has(option.parentSlug) && !excluded.has(option.slug)) {
+            excluded.add(option.slug);
+            grew = true;
+          }
+        }
+      }
+      choices = choices.filter((option) => !excluded.has(option.slug));
+    }
+    return emptyOption ? [{ slug: "", label: emptyOption }, ...choices] : choices;
+  };
+
   const heading = definition.describe(draft) || (isNew ? `New ${definition.singular}` : String(draft.slug));
 
   return (
@@ -173,7 +199,11 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
           <FormField key={field.key} label={field.label} hint={field.hint} error={fieldErrors[field.key]}>
             {field.kind === "reference" ? (
               <DropDownListComponent
-                dataSource={references.options[field.key] ?? []}
+                dataSource={choicesFor(
+                  field.key,
+                  field.emptyOption,
+                  field.reference?.entity === definition.entity,
+                )}
                 fields={{ text: "label", value: "slug" }}
                 value={String(draft[field.key] ?? "")}
                 placeholder={references.isLoading ? "Loading…" : `Choose a ${field.label.toLowerCase()}`}

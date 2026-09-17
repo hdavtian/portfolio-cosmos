@@ -31,8 +31,8 @@ describe("summarizeChanges", () => {
     });
 
     expect(summarizeChanges(live, draft)).toEqual([
-      'Updated project "KEEP" (gallery, description)',
       'Added project "FRESH"',
+      'Updated project "KEEP" (gallery, description)',
       'Deleted project "GONE"',
     ]);
   });
@@ -58,6 +58,13 @@ describe("summarizeChanges", () => {
       ],
     });
     expect(summarizeChanges(live, draft)).toEqual(['Added ride message "Clean. Scalable. Not over-engineered, n…"']);
+  });
+
+  it("counts adds instead of listing them when there are many", () => {
+    const nodes = Array.from({ length: 6 }, (_, i) => ({ slug: `n${i}`, sortOrder: i, name: `Node ${i}` }));
+    expect(summarizeChanges(side({ techStackNodes: [] }), side({ techStackNodes: nodes }))).toEqual([
+      "Added 6 tech stack nodes",
+    ]);
   });
 
   it("summarises singleton edits", () => {

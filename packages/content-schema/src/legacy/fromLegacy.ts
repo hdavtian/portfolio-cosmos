@@ -119,6 +119,24 @@ export const fromLegacy = (content: LegacyContent, resolveMedia: MediaResolver):
     })),
   );
 
+  // Tech stack starts as a copy of the resume skills, then diverges in the
+  // admin (it may nest deeper; the resume skills never do).
+  const usedNodeSlugs = new Set<string>();
+  const techStackNodes: Array<{ slug: string; sortOrder: number; name: string; parentSlug: string }> = [];
+  let nodeOrder = 0;
+  for (const [category, names] of Object.entries(resume.skills)) {
+    const categorySlug = uniqueSlug(slugify(category), usedNodeSlugs);
+    techStackNodes.push({ slug: categorySlug, sortOrder: nodeOrder++, name: category, parentSlug: "" });
+    for (const name of names) {
+      techStackNodes.push({
+        slug: uniqueSlug(slugify(name), usedNodeSlugs),
+        sortOrder: nodeOrder++,
+        name,
+        parentSlug: categorySlug,
+      });
+    }
+  }
+
   const bundle = {
     singletons: {
       profile: { ...resume.personal, summary: resume.summary },
@@ -185,6 +203,7 @@ export const fromLegacy = (content: LegacyContent, resolveMedia: MediaResolver):
             : { type: b.type, title: b.title, body: b.body },
         ),
       })),
+      techStackNodes,
       pathTravelMessages: aboutPathTravelMessages.map((m, index) => ({
         slug: m.id,
         sortOrder: index,

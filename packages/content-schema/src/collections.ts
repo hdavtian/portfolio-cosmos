@@ -2,6 +2,7 @@ import { z } from "zod";
 import { aboutDeckSlideSchema, pathTravelMessageSchema } from "./about.js";
 import { cosmosIntroductionSchema, cosmosPlanetSchema, guidedTourSchema } from "./cosmos.js";
 import { mediaAssetSchema } from "./media.js";
+import { techStackNodeSchema } from "./techStack.js";
 import {
   moonPortfolioMappingSchema,
   portfolioCoreSchema,
@@ -30,6 +31,7 @@ export const collectionSchemas = {
   links: linkSchema,
   skillCategories: skillCategorySchema,
   skills: skillSchema,
+  techStackNodes: techStackNodeSchema,
   experiences: experienceSchema,
   portfolioCores: portfolioCoreSchema,
   portfolioEntries: portfolioEntrySchema,

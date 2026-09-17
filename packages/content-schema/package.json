@@ -6,7 +6,8 @@
   "description": "Zod schemas shared by the API, the admin and both site experiences.",
   "exports": {
     ".": "./src/index.ts",
-    "./to-legacy": "./src/legacy/toLegacy.ts"
+    "./to-legacy": "./src/legacy/toLegacy.ts",
+    "./tech-stack-tree": "./src/techStackTree.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

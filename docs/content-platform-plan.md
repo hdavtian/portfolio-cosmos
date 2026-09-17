@@ -392,8 +392,9 @@ Expertise" diagram from the old scrolling resume (press Down arrow from the
 cinematic 3D hero to reach it). It is `SkillsDiagram` in `src/App.tsx`: a D3
 force-directed graph (centre → category circles → skill circles sized to their
 label; forceLink, forceManyBody, forceCollide, forceCenter; drag that settles
-in place; zoom controls). Since 2026-09-16 it reads skills from the published
-release via `useResumeQuery`. Reuse or extract it rather than rewriting. More
+in place; zoom controls). Since 2026-09-16 it reads the separate, nestable tech
+stack (`techStackNodes`, Admin → Portfolio → Tech stack) via `useTechStackQuery`;
+the resume's skills stay one level deep. Reuse or extract it rather than rewriting. More
 D3 styles (circles, constellation, circuit, rings, tree, neural) are in
 `src/components/ResumeStructureDiagram.tsx`. Full write-up: `docs/d3-skills-graph.md`.
 

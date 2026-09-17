@@ -6,6 +6,7 @@ import {
   type CollectionName,
   type ContentBundle,
   type SingletonName,
+  techStackIssues,
 } from "@hd/content-schema";
 import { createHash } from "node:crypto";
 import type { Db, Document } from "mongodb";
@@ -100,6 +101,18 @@ export class ReleaseService {
         result.error.issues.map((issue) => ({
           path: issue.path.join("."),
           message: issue.message,
+        })),
+      );
+    }
+
+    // The tech stack must form a tree; the schemas check each node on its own.
+    const treeIssues = techStackIssues(result.data.collections.techStackNodes);
+    if (treeIssues.length > 0) {
+      throw ApiError.badRequest(
+        "Cannot publish: the tech stack has nodes with a broken parent. Fix the listed nodes and try again.",
+        treeIssues.map((issue) => ({
+          path: `techStackNodes.${issue.index}.parentSlug`,
+          message: `"${result.data.collections.techStackNodes[issue.index]?.name}" ${issue.message}`,
         })),
       );
     }
