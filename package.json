@@ -15,6 +15,7 @@
     "api:start": "npm run start -w api",
     "api:seed": "npm run seed -w api",
     "dev:full": "node scripts/dev-full.mjs",
+    "dev:full-restart": "node scripts/dev-full.mjs --restart",
     "services:up": "docker compose up -d --wait",
     "services:down": "docker compose stop",
     "az:guard": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/az-guard.ps1",

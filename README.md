@@ -41,6 +41,8 @@ npm run dev:full
 
 Stop with **Ctrl+C**; `npm run services:down` also stops the Docker containers (data is kept).
 
+If a previous run crashed or the machine ran low on memory, parts of it can keep holding their ports. `npm run dev:full` checks the ports first and names what is holding them; `npm run dev:full-restart` stops this project's old API, site and admin (only processes started from this repo) and then starts everything fresh.
+
 Local commands always use the local Docker services, never production Atlas or Azure Storage.
 
 ## 🧰 Local Development Commands
@@ -57,7 +59,7 @@ Useful when one process crashed or a port is stuck.
 | `npm run admin:dev` | The admin on :5174 |
 | `npm run services:down` | Stops the Docker containers |
 
-If the admin shows "Internal server error" at login and the terminal logs `ECONNREFUSED`, the API is not running: start it with `npm run api:local`. If the API fails with `EADDRINUSE`, another API is still on port 8080; stop it first.
+If the admin shows "Internal server error" at login and the terminal keeps logging `ECONNREFUSED`, the API is not running: start it with `npm run api:local`, or restart everything with `npm run dev:full-restart`. (One `ECONNREFUSED` in the first seconds is normal while the API boots.)
 
 ### Content and media
 
