@@ -385,6 +385,18 @@ Consequences while the gate is closed:
 - **Verification**: hard-refresh before/after load timing on both experiences
   (performance must not regress).
 
+### Redesign reference: D3 skills graph
+
+For the mainstream portfolio redesign, Harma wants to consider the "Technical
+Expertise" diagram from the old scrolling resume (press Down arrow from the
+cinematic 3D hero to reach it). It is `SkillsDiagram` in `src/App.tsx`: a D3
+force-directed graph (centre → category circles → skill circles sized to their
+label; forceLink, forceManyBody, forceCollide, forceCenter; drag that settles
+in place; zoom controls). Since 2026-09-16 it reads skills from the published
+release via `useResumeQuery`. Reuse or extract it rather than rewriting. More
+D3 styles (circles, constellation, circuit, rings, tree, neural) are in
+`src/components/ResumeStructureDiagram.tsx`.
+
 ## 8. Infrastructure
 
 ### Azure identity guard (mandatory)

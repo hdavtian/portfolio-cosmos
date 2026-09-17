@@ -8,6 +8,7 @@ import DiagramSettings, {
   type DiagramStyleOptions,
 } from "./components/DiagramSettings";
 import { trackEvent } from "./lib/analytics";
+import { useResumeQuery } from "./lib/query/contentQueries";
 import "./styles/main.scss";
 
 // Skills Diagram Component using D3.js force-directed graph
@@ -427,6 +428,11 @@ function SkillsDiagram({ skills }: { skills: Record<string, string[]> }) {
 }
 
 function App() {
+  // Skills come from the published release (edited in the admin), falling back
+  // to the bundled resume. The rest of this page still reads resume.json.
+  const publishedResume = useResumeQuery();
+  const skills: Record<string, string[]> =
+    publishedResume.data?.payload.skills ?? resumeData.skills;
   const [currentSection, setCurrentSection] = useState(0);
   const isNavigating = useRef(false);
   const totalSections = 2 + resumeData.experience.length + 1; // hero+summary, skills, jobs, footer
@@ -724,7 +730,7 @@ function App() {
         <div className="skills__overlay"></div>
         <div className="skills__content">
           <h2 className="skills__title">Technical Expertise</h2>
-          <SkillsDiagram skills={resumeData.skills} />
+          <SkillsDiagram skills={skills} />
         </div>
       </section>
 
