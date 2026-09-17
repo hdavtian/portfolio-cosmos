@@ -69,8 +69,10 @@ Next steps, in order:
       production dependencies, ran it with `NODE_ENV=production` — admin pages
       and assets 200 on the admin host, API routes 200 on it, admin 404 on other
       hosts, login page renders with no CSP errors.
-   5. Phase 2 leftovers: rate limiting on admin writes, request logging,
-      production CORS allowlist. Watch B1 plan memory.
+   5. **Deferred to phase 6b (Harma, 2026-09-17):** rate limiting on admin writes
+      (login is already throttled; writes are behind the single-owner login) and
+      structured logging (App Insights records requests; errors carry request
+      ids). CORS allowlist done in step 3. B1 memory ~75% on 2026-09-17, unchanged.
 2. **Merge `feature/content-platform-phase-4` to `main`.** Deploys API v2, admin
    and the redesigned site together. Until release 1 exists the site renders
    its bundled content snapshot, so nothing breaks in between.

@@ -619,13 +619,13 @@ html.is-scene-dragging * {
 }
 
 /* Title ink as an RGB triplet so the watermark light can use it too. Visited
-   projects take the nav's gold, in every state including resting. */
+   projects turn light blue, in every state including resting. */
 .showcase-list__item {
   --title-rgb: 244, 241, 236;
 }
 
 .showcase-list__item.is-visited {
-  --title-rgb: 212, 175, 55;
+  --title-rgb: 150, 208, 255;
 }
 
 .showcase-list__title {
