@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
+import { ProjectGallery } from "../components/ProjectGallery";
 import { useBackdropTint } from "../lib/backdropTint";
 import { readIndexReturnState } from "../lib/indexReturnState";
 import { useShowcaseProjects } from "../lib/useShowcaseProjects";
@@ -89,19 +90,17 @@ export function ShowcaseProjectPage() {
 
       <div className="showcase-project__media">
         {media.length === 0 ? <p className="showcase-label">No images for this project yet.</p> : null}
-        {media.map((item, mediaIndex) => (
-          <figure key={item.id ?? `${project.id}-${mediaIndex}`} className="showcase-shot">
-            <img
-              src={item.image}
-              alt={item.title ?? project.title}
-              loading={mediaIndex === 0 ? "eager" : "lazy"}
-              decoding="async"
-            />
-            {item.title && item.title !== project.title ? (
-              <figcaption className="showcase-label">{item.title}</figcaption>
-            ) : null}
-          </figure>
-        ))}
+        {media.length > 0 ? (
+          <ProjectGallery
+            key={project.id}
+            projectTitle={project.title}
+            shots={media.map((item, mediaIndex) => ({
+              key: item.id ?? `${project.id}-${mediaIndex}`,
+              src: item.image!,
+              title: item.title && item.title !== project.title ? item.title : `${project.title}, view ${mediaIndex + 1}`,
+            }))}
+          />
+        ) : null}
 
         <nav className="showcase-project__pager" aria-label="More projects">
           {previous ? (

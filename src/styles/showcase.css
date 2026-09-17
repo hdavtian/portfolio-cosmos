@@ -1373,6 +1373,8 @@ html.is-scene-dragging * {
   grid-template-columns: minmax(280px, 34vw) minmax(0, 1fr);
   gap: clamp(20px, 3vw, 56px);
   padding-inline: var(--showcase-gutter);
+  /* Clear of the scene switcher in the bottom-right corner. */
+  padding-inline-end: calc(var(--showcase-gutter) + 260px);
   padding-block: calc(var(--showcase-gutter) + 36px) 10vh;
 }
 
@@ -1533,19 +1535,299 @@ html.is-scene-dragging * {
   align-content: start;
 }
 
-.showcase-shot {
-  margin: 0;
-  display: grid;
-  gap: 8px;
+/* ---------- Project screenshots ----------
+ * Smaller tiles, one shape, cropped from the top. Each is framed into the
+ * page's mood: toned down, vignetted, edges feathered into the dark so white
+ * or coloured borders don't shout. Hover brings the real colours up. Tiles
+ * reveal as they scroll in with a CSS take on the Career Gallery hologram: a
+ * stepping radial front from the centre with a cyan band and border glow.
+ */
+@property --shot-reveal {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 0%;
 }
 
-.showcase-shot img {
-  display: block;
+.showcase-gallery {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+  max-width: 1500px;
+  gap: clamp(20px, 2.4vw, 36px) clamp(16px, 2vw, 28px);
+}
+
+.showcase-shot {
+  --shot-reveal: 0%;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.showcase-shot__frame {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: #07090d;
+  outline: 1px solid rgba(214, 244, 255, 0.14);
+  outline-offset: 6px;
+  /* Hidden until revealed. */
+  -webkit-mask-image: radial-gradient(
+    ellipse 75% 75% at 50% 50%,
+    #000 calc(var(--shot-reveal) - 8%),
+    transparent var(--shot-reveal)
+  );
+  mask-image: radial-gradient(
+    ellipse 75% 75% at 50% 50%,
+    #000 calc(var(--shot-reveal) - 8%),
+    transparent var(--shot-reveal)
+  );
+}
+
+/* Registration ticks on the outer frame line. */
+.showcase-shot::before {
+  content: "";
+  grid-area: 1 / 1;
+  margin: -6px;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(rgba(214, 244, 255, 0.7), rgba(214, 244, 255, 0.7)) top left / 12px 1px,
+    linear-gradient(rgba(214, 244, 255, 0.7), rgba(214, 244, 255, 0.7)) top left / 1px 12px,
+    linear-gradient(rgba(214, 244, 255, 0.7), rgba(214, 244, 255, 0.7)) bottom right / 12px 1px,
+    linear-gradient(rgba(214, 244, 255, 0.7), rgba(214, 244, 255, 0.7)) bottom right / 1px 12px;
+  background-repeat: no-repeat;
+  transition: opacity 600ms ease 500ms;
+}
+
+.showcase-shot.is-revealed::before {
+  opacity: 1;
+}
+
+.showcase-shot__frame img {
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  filter: saturate(0.72) contrast(1.04) brightness(0.84);
+  transform: scale(1.02);
+  transition: filter 500ms ease, transform 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Mood: vignette, a cool tint and fine scanlines; feathered edges melt hard borders. */
+.showcase-shot__veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at 50% 40%, transparent 45%, rgba(5, 8, 12, 0.78) 100%),
+    linear-gradient(180deg, rgba(20, 40, 60, 0.18), rgba(5, 8, 12, 0.35));
+  box-shadow: inset 0 0 0 1px rgba(5, 8, 12, 0.9), inset 0 0 38px 14px rgba(5, 8, 12, 0.85);
+  transition: opacity 500ms ease;
+}
+
+/* The reveal front: a cyan band riding the edge of the mask, then the border glow. */
+.showcase-shot__front {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 75% 75% at 50% 50%,
+    transparent calc(var(--shot-reveal) - 16%),
+    rgba(120, 230, 255, 0.55) calc(var(--shot-reveal) - 9%),
+    rgba(220, 250, 255, 0.85) calc(var(--shot-reveal) - 8.5%),
+    transparent calc(var(--shot-reveal) - 7%)
+  );
+  mix-blend-mode: screen;
+  box-shadow: inset 0 0 0 1px rgba(120, 230, 255, 0);
+  opacity: 0;
+}
+
+.showcase-shot.is-revealed {
+  animation: showcase-shot-reveal 1100ms steps(22, end) var(--shot-delay, 0ms) both;
+}
+
+.showcase-shot.is-revealed .showcase-shot__front {
+  animation: showcase-shot-front 1500ms ease var(--shot-delay, 0ms) both;
+}
+
+@keyframes showcase-shot-reveal {
+  from { --shot-reveal: 0%; }
+  to { --shot-reveal: 160%; }
+}
+
+@keyframes showcase-shot-front {
+  0% { opacity: 1; box-shadow: inset 0 0 0 1px rgba(120, 230, 255, 0); }
+  70% { opacity: 1; box-shadow: inset 0 0 0 1px rgba(120, 230, 255, 0.7); }
+  100% { opacity: 0; box-shadow: inset 0 0 0 1px rgba(120, 230, 255, 0); }
+}
+
+.showcase-shot.is-revealed {
+  --shot-reveal: 160%;
+}
+
+.showcase-shot:hover .showcase-shot__frame img {
+  filter: none;
+  transform: scale(1);
+}
+
+.showcase-shot:hover .showcase-shot__veil {
+  opacity: 0.35;
+}
+
+/* Maximize: a square control with corner marks, top right. */
+.showcase-shot__maximize {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--showcase-ink);
+  background: rgba(8, 10, 14, 0.62);
+  border: 1px solid rgba(244, 241, 236, 0.4);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 180ms ease, background 140ms steps(2), color 140ms steps(2);
+}
+
+.showcase-shot__maximize > span {
+  width: 14px;
+  height: 14px;
+  background:
+    linear-gradient(currentColor, currentColor) top left / 6px 1px,
+    linear-gradient(currentColor, currentColor) top left / 1px 6px,
+    linear-gradient(currentColor, currentColor) top right / 6px 1px,
+    linear-gradient(currentColor, currentColor) top right / 1px 6px,
+    linear-gradient(currentColor, currentColor) bottom left / 6px 1px,
+    linear-gradient(currentColor, currentColor) bottom left / 1px 6px,
+    linear-gradient(currentColor, currentColor) bottom right / 6px 1px,
+    linear-gradient(currentColor, currentColor) bottom right / 1px 6px;
+  background-repeat: no-repeat;
+  transition: transform 180ms steps(3);
+}
+
+.showcase-shot:hover .showcase-shot__maximize,
+.showcase-shot__maximize:focus-visible {
+  opacity: 1;
+}
+
+.showcase-shot__maximize:hover,
+.showcase-shot__maximize:focus-visible {
+  color: #15161a;
+  background: var(--showcase-ink);
+}
+
+.showcase-shot__maximize:hover > span {
+  transform: scale(1.25);
+}
+
+.showcase-shot__maximize:focus-visible {
+  outline: 2px solid var(--showcase-ink);
+  outline-offset: 3px;
+}
+
+.showcase-shot__caption {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-shot__index {
+  color: var(--showcase-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Full-size viewer. */
+.showcase-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  padding: var(--showcase-gutter);
+  animation: showcase-viewer-in 260ms ease both;
+}
+
+.showcase-viewer__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 0;
+  padding: 0;
+  background: rgba(5, 7, 10, 0.86);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: zoom-out;
+}
+
+.showcase-viewer__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.showcase-viewer__controls {
+  display: flex;
+  gap: 12px;
+}
+
+.showcase-back--next .showcase-back__arrow {
+  transform: scaleX(-1);
+}
+
+.showcase-viewer__stage {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  justify-items: center;
+  align-items: start;
+  animation: showcase-viewer-shot 420ms steps(8, end) both;
+}
+
+.showcase-viewer__stage img {
+  display: block;
+  max-width: min(100%, 1600px);
   height: auto;
-  border-radius: 4px;
-  background: rgba(10, 11, 14, 0.35);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes showcase-viewer-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes showcase-viewer-shot {
+  from { opacity: 0; clip-path: inset(0 0 100% 0); }
+  to { opacity: 1; clip-path: inset(0 0 0 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-shot.is-revealed,
+  .showcase-shot.is-revealed .showcase-shot__front,
+  .showcase-viewer,
+  .showcase-viewer__stage {
+    animation: none;
+  }
+
+  .showcase-shot__front {
+    display: none;
+  }
 }
 
 .showcase-project__pager {
@@ -1844,6 +2126,7 @@ html.is-scene-dragging * {
 
   .showcase-project {
     grid-template-columns: 1fr;
+    padding-inline-end: var(--showcase-gutter);
     padding-block-start: calc(var(--showcase-gutter) + 56px);
   }
 
