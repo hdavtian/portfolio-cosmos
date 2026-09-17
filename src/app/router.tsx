@@ -39,9 +39,9 @@ const PortfolioDetailPage = lazy(() =>
     default: module.PortfolioDetailPage,
   })),
 );
-const ResumePage = lazy(() =>
-  import("../features/fast/pages/ResumePage").then((module) => ({
-    default: module.ResumePage,
+const ShowcaseResumePage = lazy(() =>
+  import("../features/showcase/pages/ShowcaseResumePage").then((module) => ({
+    default: module.ShowcaseResumePage,
   })),
 );
 
@@ -57,6 +57,7 @@ const routes: RouteObject[] = [
         element: <LazyRoute><ShowcaseLayout /></LazyRoute>,
         children: [
           { index: true, element: <LazyRoute><ShowcaseIndexPage /></LazyRoute> },
+          { path: "resume", element: <LazyRoute><ShowcaseResumePage /></LazyRoute> },
           {
             path: "portfolio",
             children: [
@@ -104,7 +105,6 @@ const routes: RouteObject[] = [
           { path: "*", element: <Navigate to="/" replace /> },
         ],
       },
-      { path: "resume", element: <LazyRoute><ResumePage /></LazyRoute> },
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },

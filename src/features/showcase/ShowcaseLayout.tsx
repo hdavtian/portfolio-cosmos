@@ -99,7 +99,7 @@ export function ShowcaseLayout() {
           </NavLink>
           {personal?.email ? (
             <a href={`mailto:${personal.email}`} className="showcase-pill">
-              Email
+              Contact
             </a>
           ) : null}
         </nav>
