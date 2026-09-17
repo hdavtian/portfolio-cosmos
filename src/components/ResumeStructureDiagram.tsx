@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import resumeData from "../data/resume.json";
 import { type DiagramStyle, type DiagramStyleOptions } from "./DiagramSettings";
@@ -89,15 +89,28 @@ type PortfolioSpaceProps = Omit<
   "portfolioCores" | "moonPortfolioMapping" | "aboutPathTravelMessages" | "techStack"
 >;
 
+// How long the scene waits for fresh content before using the copy saved from
+// a previous visit, so a slow API never holds the page back.
+const FRESH_CONTENT_WAIT_MS = 2500;
+
 /**
  * Mounts the 3D scene once the published content has loaded. The scene builds
- * its orbits a single time, so it must start with the final data rather than
- * swap it in later. The query falls back to the bundled copy and never errors,
- * and a cached copy from a previous visit renders immediately.
+ * its lattice, orbits and ride messages a single time, so it must start with
+ * the current release rather than swap it in later. The browser keeps a copy
+ * of the last release; mounting on that copy showed the previous publish until
+ * a second reload, so the scene waits for this visit's fetch (which falls back
+ * to bundled content on error), or the saved copy after a short timeout.
  */
 function PortfolioSpace(props: PortfolioSpaceProps) {
   const portfolio = useCosmosContentQuery();
-  if (!portfolio.data) return null;
+  const [waitedLongEnough, setWaitedLongEnough] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setWaitedLongEnough(true), FRESH_CONTENT_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const fresh = portfolio.isFetchedAfterMount;
+  if (!portfolio.data || (!fresh && !waitedLongEnough)) return null;
   return (
     <ResumeSpace3D
       {...props}
