@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { AtmosphereBackdrop } from "./components/AtmosphereBackdrop";
-import { GalleryBackdrop, type SceneLoadState } from "./components/GalleryBackdrop";
-import { SceneLoader } from "./components/SceneLoader";
+import { SceneStage } from "./components/SceneStage";
+import { useTechStackQuery } from "../../lib/query/contentQueries";
 import { BackdropTintContext } from "./lib/backdropTint";
 import { useShowcaseProjects } from "./lib/useShowcaseProjects";
 
@@ -23,23 +23,29 @@ const prefetchCinematic = () => {
 export function ShowcaseLayout() {
   const [tint, setTintState] = useState(DEFAULT_TINT);
   const setTint = useCallback((color: string | null) => setTintState(color ?? DEFAULT_TINT), []);
-  const context = useMemo(() => ({ setTint }), [setTint]);
   const { personal, projects } = useShowcaseProjects();
+  const techStack = useTechStackQuery().data?.payload;
   const [sceneEnabled] = useState(canShowCinematicScene);
-  const [sceneState, setSceneState] = useState<SceneLoadState>({ phase: "idle" });
-  const sceneReady = sceneState.phase === "ready";
+  const [sceneShowing, setSceneShowing] = useState(false);
+  const [highlights, setHighlightsState] = useState<string[]>([]);
+  const setHighlights = useCallback((technologies: string[]) => setHighlightsState(technologies), []);
+  const context = useMemo(
+    () => ({ setTint, setHighlights, sceneShowing }),
+    [setTint, setHighlights, sceneShowing],
+  );
 
   return (
     <BackdropTintContext.Provider value={context}>
       <div className="showcase">
-        <AtmosphereBackdrop tint={tint} paused={sceneReady} />
+        <AtmosphereBackdrop tint={tint} paused={sceneShowing} />
         {sceneEnabled ? (
-          <div className={`showcase-gallery${sceneReady ? " is-ready" : ""}`}>
-            <GalleryBackdrop projects={projects} onState={setSceneState} />
-            <div className="showcase-gallery__shade" />
-          </div>
+          <SceneStage
+            projects={projects}
+            techStack={techStack}
+            highlights={highlights}
+            onShowing={setSceneShowing}
+          />
         ) : null}
-        {sceneEnabled ? <SceneLoader state={sceneState} /> : null}
         <a href="#showcase-main" className="skip-link">
           Skip to main content
         </a>

@@ -25,7 +25,7 @@ const excerpt = (text: string) => {
  */
 export function ShowcaseIndexPage() {
   const { projects, cores, topTech, personal, isLoading } = useShowcaseProjects();
-  const { setTint } = useBackdropTint();
+  const { setTint, setHighlights, sceneShowing } = useBackdropTint();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -64,6 +64,13 @@ export function ShowcaseIndexPage() {
   useEffect(() => {
     setTint(hovered?.coreColor ?? opened?.coreColor ?? filterCore?.color ?? null);
   }, [hovered, opened, filterCore, setTint]);
+
+  // The open project's technologies light up in the 3D Skills Lattice.
+  const openedTech = opened?.technologies;
+  useEffect(() => {
+    setHighlights(openedTech ?? []);
+  }, [openedTech, setHighlights]);
+  useEffect(() => () => setHighlights([]), [setHighlights]);
 
   useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
@@ -134,7 +141,10 @@ export function ShowcaseIndexPage() {
     <div
       className={`showcase-index${hovered ? " showcase-index--has-hover" : ""}${opened ? " showcase-index--has-open" : ""}`}
     >
-      <TechConstellation highlights={opened?.technologies ?? []} visible={Boolean(opened)} />
+      {/* Where the 3D scenes don't run (phones, reduced motion) the D3 constellation stands in. */}
+      {sceneShowing ? null : (
+        <TechConstellation highlights={opened?.technologies ?? []} visible={Boolean(opened)} />
+      )}
 
       <section className="showcase-index__work" aria-label="Projects">
         <div className="showcase-filters" role="group" aria-label="Filter projects">

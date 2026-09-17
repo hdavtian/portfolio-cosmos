@@ -62,9 +62,9 @@
   100% { transform: translate(0, 0); }
 }
 
-/* ---------- Cinematic fragment: Career Gallery ---------- */
+/* ---------- Cinematic fragments: scene stage ---------- */
 
-.showcase-gallery {
+.showcase-scenes {
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -74,15 +74,24 @@
   transition: opacity 1400ms ease, visibility 0s linear 1400ms;
 }
 
-/* Glitches in over the terrain once enough tiles have loaded. */
-.showcase-gallery.is-ready {
+/* The first scene glitches in over the terrain. */
+.showcase-scenes.is-showing {
   opacity: 1;
   visibility: visible;
   transition: opacity 1400ms ease;
-  animation: showcase-gallery-glitch-in 900ms steps(1) both;
+  animation: showcase-scene-glitch-in 900ms steps(1) both;
 }
 
-@keyframes showcase-gallery-glitch-in {
+/* Switching: the old scene tears away, the new one resolves through static. */
+.showcase-scenes.is-leaving .showcase-scenes__canvas {
+  animation: showcase-scene-glitch-out 420ms steps(1) forwards;
+}
+
+.showcase-scenes.is-entering .showcase-scenes__canvas {
+  animation: showcase-scene-glitch-in 900ms steps(1) both;
+}
+
+@keyframes showcase-scene-glitch-in {
   0% { opacity: 0; }
   10% { opacity: 0.5; transform: translateX(-6px); filter: hue-rotate(40deg); }
   16% { opacity: 0.1; transform: none; filter: none; }
@@ -92,8 +101,18 @@
   100% { opacity: 1; transform: none; filter: none; }
 }
 
-.showcase-gallery__canvas,
-.showcase-gallery__canvas canvas {
+@keyframes showcase-scene-glitch-out {
+  0% { opacity: 1; }
+  15% { opacity: 0.6; transform: translateX(8px) skewX(-3deg); filter: hue-rotate(-40deg) contrast(1.4); }
+  30% { opacity: 0.9; transform: translateX(-5px); filter: none; }
+  45% { opacity: 0.3; clip-path: inset(30% 0 40% 0); transform: translateX(14px); }
+  60% { opacity: 0.5; clip-path: none; transform: none; }
+  80% { opacity: 0.1; filter: blur(6px); }
+  100% { opacity: 0; filter: blur(10px); }
+}
+
+.showcase-scenes__canvas,
+.showcase-scenes__canvas canvas {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -101,69 +120,117 @@
   display: block;
 }
 
-.showcase-gallery__canvas canvas {
-  filter: brightness(0.62) saturate(0.95);
+.showcase-scenes__canvas canvas {
+  filter: brightness(0.66) saturate(0.95);
 }
 
-/* Keeps the big type legible over bright screenshots. */
-.showcase-gallery__shade {
+/* Keeps the big type legible over bright scenes. */
+.showcase-scenes__shade {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(4, 6, 10, 0.72) 0%, rgba(4, 6, 10, 0.35) 55%, rgba(4, 6, 10, 0.5) 100%),
-    radial-gradient(ellipse at 60% 50%, transparent 30%, rgba(4, 6, 10, 0.55) 100%);
+    linear-gradient(90deg, rgba(4, 6, 10, 0.72) 0%, rgba(4, 6, 10, 0.3) 55%, rgba(4, 6, 10, 0.45) 100%),
+    radial-gradient(ellipse at 60% 50%, transparent 30%, rgba(4, 6, 10, 0.5) 100%);
 }
 
-/* Racy, jittery loader bar. */
-/* Loader and gateway sit at the foot of the right-hand column, clear of the
-   project names. */
-.showcase-scene-loader {
+/* Switcher, tour toggle and gateway: foot of the right-hand column. */
+.showcase-scene-panel {
   position: fixed;
   right: var(--showcase-gutter);
   bottom: var(--showcase-gutter);
   z-index: 6;
   width: min(300px, calc(22vw - var(--showcase-gutter)));
-  pointer-events: none;
+  display: grid;
+  gap: 12px;
   font-family: var(--showcase-mono);
   color: #bdefff;
-  text-shadow: 0 0 8px rgba(110, 215, 255, 0.6);
+}
+
+.showcase-scene-switcher {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.showcase-scene-switcher__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 10px;
+  width: 100%;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: left;
+  color: rgba(189, 239, 255, 0.55);
+  background: none;
+  border: 0;
+  cursor: default;
+}
+
+.showcase-scene-switcher__item.is-ready:not(.is-active) {
+  color: rgba(189, 239, 255, 0.85);
+  cursor: pointer;
+}
+
+.showcase-scene-switcher__item.is-ready:not(.is-active):hover .showcase-scene-switcher__label {
+  color: #eafbff;
+  text-shadow: 0 0 10px rgba(110, 215, 255, 0.7);
+}
+
+.showcase-scene-switcher__item.is-active {
+  color: #eafbff;
+  text-shadow: 0 0 10px rgba(110, 215, 255, 0.7);
+}
+
+.showcase-scene-switcher__item.is-active .showcase-scene-switcher__index::before {
+  content: "▸ ";
+}
+
+.showcase-scene-switcher__item:focus-visible,
+.showcase-scene-panel__tour:focus-visible {
+  outline: 1px solid #bdefff;
+  outline-offset: 3px;
+}
+
+.showcase-scene-switcher__index {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+/* Racy, jittery loading bar per scene. */
+.showcase-scene-switcher__loading {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   animation: showcase-loader-jitter 0.28s steps(1) infinite;
 }
 
-.showcase-scene-loader__label {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 6px;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.showcase-scene-loader__percent {
-  font-variant-numeric: tabular-nums;
-  animation: showcase-holo-flicker 1.1s steps(1) infinite;
-}
-
-.showcase-scene-loader__track {
+.showcase-scene-switcher__bar {
   position: relative;
-  height: 6px;
+  flex: 1;
+  height: 4px;
   overflow: hidden;
-  background: repeating-linear-gradient(90deg, rgba(110, 215, 255, 0.16) 0 6px, transparent 6px 8px);
-  box-shadow: inset 0 0 0 1px rgba(140, 230, 255, 0.35);
+  background: repeating-linear-gradient(90deg, rgba(110, 215, 255, 0.16) 0 5px, transparent 5px 7px);
+  box-shadow: inset 0 0 0 1px rgba(140, 230, 255, 0.3);
 }
 
-.showcase-scene-loader__fill {
+.showcase-scene-switcher__bar > span {
   position: absolute;
   inset: 0;
   transform-origin: left center;
-  background: repeating-linear-gradient(90deg, #cff6ff 0 6px, rgba(207, 246, 255, 0.35) 6px 8px);
-  box-shadow: 0 0 12px rgba(110, 215, 255, 0.8);
+  background: repeating-linear-gradient(90deg, #cff6ff 0 5px, rgba(207, 246, 255, 0.35) 5px 7px);
+  box-shadow: 0 0 10px rgba(110, 215, 255, 0.8);
   transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* A streak racing across the track. */
-.showcase-scene-loader__ghost {
+.showcase-scene-switcher__bar::after {
+  content: "";
   position: absolute;
   top: 0;
   bottom: 0;
@@ -171,6 +238,11 @@
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
   mix-blend-mode: screen;
   animation: showcase-loader-race 0.7s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+}
+
+.showcase-scene-switcher__percent {
+  font-variant-numeric: tabular-nums;
+  animation: showcase-holo-flicker 1.1s steps(1) infinite;
 }
 
 @keyframes showcase-loader-race {
@@ -188,16 +260,32 @@
   80% { transform: translate(1px, 0); }
 }
 
+.showcase-scene-panel__tour {
+  justify-self: start;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(189, 239, 255, 0.8);
+  background: transparent;
+  border: 1px solid rgba(140, 230, 255, 0.35);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.showcase-scene-panel__tour[aria-pressed="true"] {
+  color: #06161d;
+  background: #bdefff;
+  border-color: #bdefff;
+}
+
 /* Gateway into the full Three.js experience. */
 .showcase-gateway {
-  position: fixed;
-  right: var(--showcase-gutter);
-  bottom: var(--showcase-gutter);
-  z-index: 6;
   display: grid;
   gap: 4px;
-  max-width: 320px;
-  font-family: var(--showcase-mono);
+  padding-top: 10px;
+  border-top: 1px solid rgba(140, 230, 255, 0.2);
   animation: showcase-gateway-in 700ms steps(1) both;
 }
 
@@ -967,7 +1055,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding-block: calc(var(--showcase-gutter) + 36px) calc(var(--showcase-gutter) + 96px);
+  padding-block: calc(var(--showcase-gutter) + 36px) calc(var(--showcase-gutter) + 200px);
   margin-top: calc(-1 * (var(--showcase-gutter) + 36px));
 }
 
@@ -1173,11 +1261,13 @@
   .showcase-preview__inner,
   .showcase-list__item.is-closing .showcase-preview,
   .showcase-list__item.is-closing .showcase-preview__inner,
-  .showcase-scene-loader,
-  .showcase-scene-loader__percent,
-  .showcase-scene-loader__ghost,
+  .showcase-scene-switcher__loading,
+  .showcase-scene-switcher__percent,
+  .showcase-scene-switcher__bar::after,
   .showcase-gateway,
-  .showcase-gallery.is-ready {
+  .showcase-scenes.is-showing,
+  .showcase-scenes.is-leaving .showcase-scenes__canvas,
+  .showcase-scenes.is-entering .showcase-scenes__canvas {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
   }
