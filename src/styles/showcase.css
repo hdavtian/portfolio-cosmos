@@ -1536,60 +1536,54 @@ html.is-scene-dragging * {
 }
 
 /* ---------- Project screenshots ----------
- * Smaller tiles, one shape, cropped from the top. Each is framed into the
- * page's mood: toned down, vignetted, edges feathered into the dark so white
- * or coloured borders don't shout. Hover brings the real colours up. Tiles
- * reveal as they scroll in with a CSS take on the Career Gallery hologram: a
- * stepping radial front from the centre with a cyan band and border glow.
+ * One column, so it always fits beside the story. Tiles alternate width and
+ * side for an editorial rhythm, and keep each screenshot's own shape up to a
+ * height cap (tall captures crop from the top). Mood: toned down and washed
+ * with the project's core colour, soft linear shading at the edges, a thin
+ * frame with corner ticks; hover brings the real colours up. Each tile gets
+ * its own reveal (slice wipe, blinds or glitch tear, with varied direction
+ * and timing) so the page never reveals in lockstep.
  */
-@property --shot-reveal {
-  syntax: "<percentage>";
-  inherits: true;
-  initial-value: 0%;
-}
-
 .showcase-gallery {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
-  max-width: 1500px;
-  gap: clamp(20px, 2.4vw, 36px) clamp(16px, 2vw, 28px);
+  gap: clamp(28px, 6vh, 72px);
+  max-width: 1100px;
 }
 
 .showcase-shot {
-  --shot-reveal: 0%;
   display: grid;
   gap: 10px;
   align-content: start;
+  width: 100%;
+}
+
+.showcase-shot:nth-child(3n + 2) {
+  width: 78%;
+  justify-self: end;
+}
+
+.showcase-shot:nth-child(3n) {
+  width: 88%;
+  justify-self: start;
 }
 
 .showcase-shot__frame {
   position: relative;
-  aspect-ratio: 16 / 10;
+  max-height: 72vh;
   overflow: hidden;
   background: #07090d;
-  outline: 1px solid rgba(214, 244, 255, 0.14);
-  outline-offset: 6px;
-  /* Hidden until revealed. */
-  -webkit-mask-image: radial-gradient(
-    ellipse 75% 75% at 50% 50%,
-    #000 calc(var(--shot-reveal) - 8%),
-    transparent var(--shot-reveal)
-  );
-  mask-image: radial-gradient(
-    ellipse 75% 75% at 50% 50%,
-    #000 calc(var(--shot-reveal) - 8%),
-    transparent var(--shot-reveal)
-  );
+  border: 1px solid rgba(214, 244, 255, 0.14);
+  visibility: hidden;
 }
 
-/* Registration ticks on the outer frame line. */
+/* Registration ticks just outside the frame. */
 .showcase-shot::before {
   content: "";
   grid-area: 1 / 1;
-  margin: -6px;
+  margin: -7px;
   pointer-events: none;
   opacity: 0;
   background:
@@ -1598,7 +1592,7 @@ html.is-scene-dragging * {
     linear-gradient(rgba(214, 244, 255, 0.7), rgba(214, 244, 255, 0.7)) bottom right / 12px 1px,
     linear-gradient(rgba(214, 244, 255, 0.7), rgba(214, 244, 255, 0.7)) bottom right / 1px 12px;
   background-repeat: no-repeat;
-  transition: opacity 600ms ease 500ms;
+  transition: opacity 500ms steps(3) calc(var(--shot-delay, 0ms) + var(--shot-duration, 900ms));
 }
 
 .showcase-shot.is-revealed::before {
@@ -1606,77 +1600,139 @@ html.is-scene-dragging * {
 }
 
 .showcase-shot__frame img {
-  position: absolute;
-  inset: 0;
+  display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top center;
-  filter: saturate(0.72) contrast(1.04) brightness(0.84);
-  transform: scale(1.02);
-  transition: filter 500ms ease, transform 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  height: auto;
+  filter: saturate(0.7) contrast(1.05) brightness(0.86);
+  transition: filter 500ms ease;
 }
 
-/* Mood: vignette, a cool tint and fine scanlines; feathered edges melt hard borders. */
+/* Mood wash in the project's colour, fine scanlines, soft linear edge shading. */
 .showcase-shot__veil {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
-    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px),
-    radial-gradient(ellipse at 50% 40%, transparent 45%, rgba(5, 8, 12, 0.78) 100%),
-    linear-gradient(180deg, rgba(20, 40, 60, 0.18), rgba(5, 8, 12, 0.35));
-  box-shadow: inset 0 0 0 1px rgba(5, 8, 12, 0.9), inset 0 0 38px 14px rgba(5, 8, 12, 0.85);
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, rgba(5, 8, 12, 0.35) 0%, transparent 18%, transparent 70%, rgba(5, 8, 12, 0.7) 100%),
+    linear-gradient(90deg, rgba(5, 8, 12, 0.45) 0%, transparent 10%, transparent 90%, rgba(5, 8, 12, 0.45) 100%);
+  box-shadow: inset 0 0 0 1px rgba(5, 8, 12, 0.85);
   transition: opacity 500ms ease;
 }
 
-/* The reveal front: a cyan band riding the edge of the mask, then the border glow. */
-.showcase-shot__front {
+.showcase-shot__veil::after {
+  content: "";
   position: absolute;
   inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse 75% 75% at 50% 50%,
-    transparent calc(var(--shot-reveal) - 16%),
-    rgba(120, 230, 255, 0.55) calc(var(--shot-reveal) - 9%),
-    rgba(220, 250, 255, 0.85) calc(var(--shot-reveal) - 8.5%),
-    transparent calc(var(--shot-reveal) - 7%)
-  );
-  mix-blend-mode: screen;
-  box-shadow: inset 0 0 0 1px rgba(120, 230, 255, 0);
-  opacity: 0;
-}
-
-.showcase-shot.is-revealed {
-  animation: showcase-shot-reveal 1100ms steps(22, end) var(--shot-delay, 0ms) both;
-}
-
-.showcase-shot.is-revealed .showcase-shot__front {
-  animation: showcase-shot-front 1500ms ease var(--shot-delay, 0ms) both;
-}
-
-@keyframes showcase-shot-reveal {
-  from { --shot-reveal: 0%; }
-  to { --shot-reveal: 160%; }
-}
-
-@keyframes showcase-shot-front {
-  0% { opacity: 1; box-shadow: inset 0 0 0 1px rgba(120, 230, 255, 0); }
-  70% { opacity: 1; box-shadow: inset 0 0 0 1px rgba(120, 230, 255, 0.7); }
-  100% { opacity: 0; box-shadow: inset 0 0 0 1px rgba(120, 230, 255, 0); }
-}
-
-.showcase-shot.is-revealed {
-  --shot-reveal: 160%;
+  background: var(--shot-tint, #6f8aa0);
+  mix-blend-mode: color;
+  opacity: 0.16;
+  transition: opacity 500ms ease;
 }
 
 .showcase-shot:hover .showcase-shot__frame img {
   filter: none;
-  transform: scale(1);
 }
 
 .showcase-shot:hover .showcase-shot__veil {
-  opacity: 0.35;
+  opacity: 0.25;
+}
+
+/* A one-off scan line that rides the reveal. */
+.showcase-shot__front {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  background: rgba(200, 245, 255, 0.95);
+  box-shadow: 0 0 14px 2px rgba(120, 230, 255, 0.8);
+}
+
+/* ----- Reveals ----- */
+
+.showcase-shot.is-revealed .showcase-shot__frame {
+  visibility: visible;
+  animation: var(--shot-reveal-name, showcase-reveal-wipe) var(--shot-duration, 900ms) var(--shot-easing, steps(10, end))
+    var(--shot-delay, 0ms) both;
+}
+
+/* Slice wipe: stepped edge crossing from one side, with a scan line on the edge. */
+.showcase-shot--wipe {
+  --shot-reveal-name: showcase-reveal-wipe;
+}
+
+.showcase-shot--wipe.is-revealed .showcase-shot__front {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  animation: showcase-reveal-scan var(--shot-duration, 900ms) var(--shot-easing, steps(10, end)) var(--shot-delay, 0ms) both;
+}
+
+.showcase-shot--from-right {
+  --wipe-from: inset(0 0 0 100%);
+  --scan-from: 100%;
+  --scan-to: 0%;
+}
+
+.showcase-shot--from-left {
+  --wipe-from: inset(0 100% 0 0);
+  --scan-from: 0%;
+  --scan-to: 100%;
+}
+
+@keyframes showcase-reveal-wipe {
+  from { clip-path: var(--wipe-from, inset(0 100% 0 0)); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes showcase-reveal-scan {
+  0% { left: var(--scan-from, 0%); opacity: 1; }
+  92% { opacity: 1; }
+  100% { left: var(--scan-to, 100%); opacity: 0; }
+}
+
+/* Blinds: horizontal slats open from thin lines. */
+.showcase-shot--blinds {
+  --shot-reveal-name: showcase-reveal-blinds;
+}
+
+@property --blind {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.showcase-shot--blinds .showcase-shot__frame {
+  -webkit-mask-image: repeating-linear-gradient(180deg, #000 0 var(--blind), transparent var(--blind) 22px);
+  mask-image: repeating-linear-gradient(180deg, #000 0 var(--blind), transparent var(--blind) 22px);
+}
+
+.showcase-shot--blinds.is-revealed .showcase-shot__frame {
+  --blind: 23px;
+}
+
+@keyframes showcase-reveal-blinds {
+  from { --blind: 0px; }
+  to { --blind: 23px; }
+}
+
+/* Glitch tear: bands of the image flash in out of place, then lock. */
+.showcase-shot--tear {
+  --shot-reveal-name: showcase-reveal-tear;
+  --shot-easing: steps(1, end);
+}
+
+@keyframes showcase-reveal-tear {
+  0% { clip-path: inset(0 0 100% 0); transform: none; opacity: 0; }
+  8% { clip-path: inset(12% 0 70% 0); transform: translateX(-14px); opacity: 1; }
+  16% { clip-path: inset(55% 0 25% 0); transform: translateX(10px); }
+  24% { clip-path: inset(30% 0 48% 0); transform: translateX(-6px); }
+  32% { clip-path: inset(0 0 62% 0); transform: translateX(8px); }
+  42% { clip-path: inset(20% 0 20% 0); transform: translateX(-4px); opacity: 0.6; }
+  52% { clip-path: inset(0 0 35% 0); transform: translateX(3px); opacity: 1; }
+  64% { clip-path: inset(8% 0 8% 0); transform: translateX(-2px); }
+  78% { clip-path: inset(0 0 12% 0); transform: none; }
+  100% { clip-path: inset(0 0 0 0); transform: none; opacity: 1; }
 }
 
 /* Maximize: a square control with corner marks, top right. */
@@ -1818,7 +1874,7 @@ html.is-scene-dragging * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .showcase-shot.is-revealed,
+  .showcase-shot.is-revealed .showcase-shot__frame,
   .showcase-shot.is-revealed .showcase-shot__front,
   .showcase-viewer,
   .showcase-viewer__stage {

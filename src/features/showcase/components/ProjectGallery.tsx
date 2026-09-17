@@ -13,12 +13,21 @@ export interface GalleryShot {
  * on the Career Gallery's hologram reveal), each with a button to view it
  * full size.
  */
-export function ProjectGallery({ shots, projectTitle }: { shots: GalleryShot[]; projectTitle: string }) {
+export function ProjectGallery({
+  shots,
+  projectTitle,
+  tint,
+}: {
+  shots: GalleryShot[];
+  projectTitle: string;
+  /** The project's core colour, washed over the screenshots. */
+  tint?: string;
+}) {
   const [viewing, setViewing] = useState<number | null>(null);
 
   return (
     <>
-      <ol className="showcase-gallery">
+      <ol className="showcase-gallery" style={tint ? ({ "--shot-tint": tint } as React.CSSProperties) : undefined}>
         {shots.map((shot, index) => (
           <ShotTile
             key={shot.key}
@@ -44,6 +53,26 @@ export function ProjectGallery({ shots, projectTitle }: { shots: GalleryShot[]; 
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");
+
+/** A stable pseudo-random number in [0, 1) per screenshot, so each gets its own reveal. */
+const seeded = (key: string, salt: number) => {
+  let hash = 2166136261 ^ salt;
+  for (let i = 0; i < key.length; i += 1) hash = Math.imul(hash ^ key.charCodeAt(i), 16777619);
+  return ((hash >>> 0) % 1000) / 1000;
+};
+
+const REVEALS = ["wipe", "blinds", "tear"] as const;
+
+const revealFor = (key: string, index: number) => {
+  // Never the same reveal twice in a row.
+  const offset = Math.floor(seeded(key, 1) * 2) + 1;
+  const kind = REVEALS[(index * 2 + offset) % REVEALS.length];
+  return {
+    className: `showcase-shot--${kind} showcase-shot--from-${seeded(key, 2) < 0.5 ? "left" : "right"}`,
+    duration: Math.round(650 + seeded(key, 3) * 700),
+    delay: Math.round(seeded(key, 4) * 260),
+  };
+};
 
 function ShotTile({
   shot,
@@ -81,11 +110,13 @@ function ShotTile({
     return () => observer.disconnect();
   }, []);
 
+  const reveal = revealFor(shot.key, index);
+
   return (
     <li
       ref={ref}
-      className={`showcase-shot${revealed && loaded ? " is-revealed" : ""}`}
-      style={{ "--shot-delay": `${Math.min(index, 3) * 90}ms` } as React.CSSProperties}
+      className={`showcase-shot ${reveal.className}${revealed && loaded ? " is-revealed" : ""}`}
+      style={{ "--shot-delay": `${reveal.delay}ms`, "--shot-duration": `${reveal.duration}ms` } as React.CSSProperties}
     >
       <div className="showcase-shot__frame">
         <img

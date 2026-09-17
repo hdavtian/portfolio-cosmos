@@ -94,6 +94,7 @@ export function ShowcaseProjectPage() {
           <ProjectGallery
             key={project.id}
             projectTitle={project.title}
+            tint={project.coreColor}
             shots={media.map((item, mediaIndex) => ({
               key: item.id ?? `${project.id}-${mediaIndex}`,
               src: item.image!,
