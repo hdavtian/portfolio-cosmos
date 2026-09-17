@@ -1130,15 +1130,47 @@ html.is-scene-dragging * {
   fill: rgba(236, 250, 255, 0.92);
 }
 
-.showcase-index__aside {
-  position: sticky;
-  top: 0;
-  height: 100vh;
+/* Name and role on the same line as the pills, mirroring them on the left. */
+.showcase-masthead {
+  position: absolute;
+  top: var(--showcase-gutter);
+  left: var(--showcase-gutter);
+  z-index: 2;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding-block: calc(var(--showcase-gutter) + 36px) calc(var(--showcase-gutter) + 200px);
-  margin-top: calc(-1 * (var(--showcase-gutter) + 36px));
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  min-height: 29px;
+  align-content: center;
+}
+
+.showcase-masthead__name {
+  margin: 0;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--showcase-ink);
+}
+
+.showcase-masthead__role {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-masthead__role::before,
+.showcase-masthead__place::before {
+  content: "/";
+  margin-right: 14px;
+  color: var(--showcase-ink-dim);
 }
 
 /* ---------- Project ---------- */
@@ -1292,16 +1324,10 @@ html.is-scene-dragging * {
     padding-block-start: calc(var(--showcase-gutter) + 56px);
   }
 
-  .showcase-index__aside {
-    order: -1;
+  .showcase-masthead {
     position: static;
-    height: auto;
-    margin: 0;
-    padding: 0;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 16px 28px;
-    justify-content: flex-start;
+    grid-row: 1;
+    min-height: 0;
   }
 
   .showcase-list__thumb {

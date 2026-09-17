@@ -151,6 +151,15 @@ export function ShowcaseIndexPage() {
         <TechConstellation highlights={opened?.technologies ?? []} visible={Boolean(opened)} />
       )}
 
+      {/* Masthead: on the pills' line, top left. */}
+      <header className="showcase-masthead">
+        <h1 className="showcase-masthead__name">{personal?.name ?? "Harma Davtian"}</h1>
+        <p className="showcase-masthead__role">
+          {personal?.title ?? "Full Stack Engineer"}
+          {personal?.location ? <span className="showcase-masthead__place">{personal.location}</span> : null}
+        </p>
+      </header>
+
       <section className="showcase-index__work" aria-label="Projects">
         <div className="showcase-filters" role="group" aria-label="Filter projects">
           <div className="showcase-filters__row">
@@ -299,22 +308,6 @@ export function ShowcaseIndexPage() {
         </ul>
       </section>
 
-      <aside className="showcase-index__aside" aria-label="About">
-        <p className="showcase-label">
-          Portfolio of
-          <br />
-          <strong>{personal?.name ?? "Harma Davtian"}</strong>
-        </p>
-        <p className="showcase-label">
-          <strong>{personal?.title ?? "Full Stack Engineer"}</strong>
-          {personal?.location ? (
-            <>
-              <br />
-              {personal.location}
-            </>
-          ) : null}
-        </p>
-      </aside>
     </div>
   );
 }
