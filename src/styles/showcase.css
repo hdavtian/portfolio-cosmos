@@ -1386,6 +1386,77 @@ html.is-scene-dragging * {
   justify-self: start;
 }
 
+/* Back: a mechanical control, square hairline frame with registration ticks,
+   a drawn arrow that retracts on hover. Deliberately unlike the gold nav. */
+.showcase-back {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px 7px 10px;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--showcase-ink);
+  background: rgba(12, 14, 18, 0.35);
+  border: 1px solid rgba(244, 241, 236, 0.4);
+  transition: color 140ms steps(2), background 140ms steps(2), border-color 140ms steps(2);
+}
+
+/* Registration ticks at the corners. */
+.showcase-back::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) top left / 6px 1px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) top left / 1px 6px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) bottom right / 6px 1px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) bottom right / 1px 6px;
+  background-repeat: no-repeat;
+}
+
+.showcase-back__arrow {
+  position: relative;
+  width: 16px;
+  height: 1px;
+  background: currentColor;
+  transition: width 180ms steps(3);
+}
+
+.showcase-back__arrow::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-left: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg);
+  transform-origin: center;
+}
+
+.showcase-back:hover,
+.showcase-back:focus-visible {
+  color: #15161a;
+  background: var(--showcase-ink);
+  border-color: var(--showcase-ink);
+}
+
+.showcase-back:hover .showcase-back__arrow {
+  width: 22px;
+}
+
+.showcase-back:focus-visible {
+  outline: 2px solid var(--showcase-ink);
+  outline-offset: 5px;
+}
+
 .showcase-project__title {
   margin: 0;
   font-family: var(--showcase-display);

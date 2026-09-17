@@ -28,7 +28,8 @@ export function ShowcaseProjectPage() {
     return (
       <div className="showcase-project showcase-project--missing">
         <p className="showcase-label">{isLoading ? "Loading project…" : "That project could not be found."}</p>
-        <Link to="/" className="showcase-pill">
+        <Link to="/" className="showcase-back">
+          <span className="showcase-back__arrow" aria-hidden="true" />
           Back
         </Link>
       </div>
@@ -40,7 +41,8 @@ export function ShowcaseProjectPage() {
   return (
     <article className="showcase-project">
       <header className="showcase-project__story">
-        <Link to={indexHref} className="showcase-pill showcase-project__back">
+        <Link to={indexHref} className="showcase-back showcase-project__back">
+          <span className="showcase-back__arrow" aria-hidden="true" />
           Back
         </Link>
         <h1 className="showcase-project__title">{project.title}</h1>
