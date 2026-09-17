@@ -270,10 +270,8 @@ export function ShowcaseIndexPage() {
                             onClick={() => openProject(project)}
                             tabIndex={isOpen ? 0 : -1}
                           >
-                            View project
-                            <span className="showcase-more__arrow" aria-hidden="true">
-                              →
-                            </span>
+                            <span className="showcase-more__label">View project</span>
+                            <span className="showcase-more__arrow" aria-hidden="true" />
                           </button>
                         </div>
                       </div>
