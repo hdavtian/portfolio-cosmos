@@ -22,21 +22,89 @@ A stunning, movie-inspired scrolling resume built with React, TypeScript, GSAP, 
 - Smooth parallax effects on background elements
 - Movie credits-style experience list scrolling
 
+## 🌐 Production
+
+| What | URL | Notes |
+| --- | --- | --- |
+| Site (portfolio) | https://harmadavtian.com | Static SPA on GoDaddy, deployed by `.github/workflows/deploy.yml` on push to `main` |
+| Cinematic experience | https://harmadavtian.com/cinematic | Three.js experience, same build |
+| Resume | https://harmadavtian.com/resume | |
+| API | https://api.harmadavtian.com | `harma-api` App Service; health at `/healthz`, docs at `/swagger` |
+| Admin | https://portfolio-admin.harmadavtian.com | Second hostname on `harma-api`; serves the admin once phase 3 ships (until then it answers as the API) |
+
+Status and rollout: `docs/content-platform-plan.md`.
+
 ## 🚀 Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
+npm run dev:full           # start everything
+npm run dev:full-restart   # stop leftovers from a crashed run, then start everything
 ```
+
+`dev:full` needs Docker Desktop running. It starts everything for local development in one terminal:
+
+| Service | Address | Notes |
+| --- | --- | --- |
+| MongoDB 8.0 | `127.0.0.1:27017` | Docker; database `resume_cosmos_local` |
+| Azurite (blob storage) | `127.0.0.1:10000` | Docker; media files |
+| API | http://localhost:8080 | Swagger at http://localhost:8080/swagger |
+| Site | http://localhost:5173 | `/` (portfolio), `/portfolio/:id`, `/resume`, `/cinematic`, `/portfolio-classic` |
+| Admin | http://localhost:5174 | Password `local-dev` |
+
+Stop with **Ctrl+C**; `npm run services:down` also stops the Docker containers (data is kept).
+
+### When something is already running
+
+If a previous run crashed or the machine ran low on memory, parts of it (often the API) can keep holding their ports, and a new run cannot start them.
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev:full` | Checks ports 8080, 5173 and 5174 first. If any is taken it starts nothing and prints which process holds it, and whether it belongs to this project. |
+| `npm run dev:full-restart` | Stops this project's old API, site and admin (including the API's file watcher), then starts everything fresh. Only processes started from this repo are stopped; other projects are never touched. |
+
+If `dev:full` reports a port held by **another program**, stop that program yourself; the restart will not.
+
+Local commands always use the local Docker services, never production Atlas or Azure Storage.
+
+## 🧰 Local Development Commands
+
+### Start pieces individually
+
+Useful when one process crashed or a port is stuck.
+
+| Command | What it starts |
+| --- | --- |
+| `npm run dev:full-restart` | Everything, after stopping this project's leftover processes |
+| `npm run services:up` | MongoDB and Azurite in Docker (waits until healthy) |
+| `npm run api:local` | The API on :8080, against the Docker services (starts them if needed) |
+| `npm run dev` | The site on :5173 |
+| `npm run admin:dev` | The admin on :5174 |
+| `npm run services:down` | Stops the Docker containers |
+
+If the admin shows "Internal server error" at login and the terminal keeps logging `ECONNREFUSED`, the API is not running: start it with `npm run api:local`, or restart everything with `npm run dev:full-restart`. (One `ECONNREFUSED` in the first seconds is normal while the API boots.)
+
+### Content and media
+
+| Command | What it does |
+| --- | --- |
+| `npm run db:pull` | Dumps the production database to `db-backups/` (read-only on production) |
+| `npm run db:restore-local` | Restores the newest dump into local Docker as a separate database |
+| `npm run storage:cors` | Lets the 3D site load textures from Azurite; run once after resetting Azurite data |
+
+Content changes made in the admin only show on the sites after **Publishing → Publish**.
+
+### Checks and builds
+
+| Command | What it does |
+| --- | --- |
+| `npm run typecheck` | Type-checks the workspaces (API, schema package) |
+| `npm run typecheck:admin` | Type-checks the admin |
+| `npm test` | Runs workspace tests (API tests need Docker running) |
+| `npm run lint` | Lints the repository |
+| `npm run build` | Builds the site |
+| `npm run build:admin` | Builds the admin into `dist-admin/` |
+| `npm run preview` | Serves the built site |
 
 ## 📊 PostHog Owner Mode
 

@@ -1,6 +1,7 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { useEffect } from "react";
 
+import { isCinematicSuspended } from "../../../lib/cinematicSuspend";
 export const useKeyboardControls = (params: {
   enabled: boolean;
   keyboardStateRef: MutableRefObject<Record<string, boolean>>;
@@ -17,6 +18,7 @@ export const useKeyboardControls = (params: {
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (e.code in keyboardStateRef.current) {
         e.preventDefault();
         e.stopPropagation();
@@ -26,6 +28,7 @@ export const useKeyboardControls = (params: {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (e.code in keyboardStateRef.current) {
         e.preventDefault();
         e.stopPropagation();

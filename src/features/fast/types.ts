@@ -65,6 +65,8 @@ export interface ResumePayload {
     location: string;
   };
   summary: string;
+  /** Skill names by category name, in admin order. */
+  skills: Record<string, string[]>;
   experience: Array<{
     id: string;
     company: string;

@@ -1,11 +1,11 @@
-import type { ContentBundle } from "../collections";
-import type { ClientVariant, GalleryItem } from "../portfolio";
+import type { ContentBundle } from "../collections.js";
+import type { ClientVariant, GalleryItem } from "../portfolio.js";
 import type {
   LegacyClientVariant,
   LegacyContent,
   LegacyGalleryMedia,
   LegacyPortfolioEntry,
-} from "./types";
+} from "./types.js";
 
 export type MediaPathResolver = (mediaId: string) => string;
 

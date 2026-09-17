@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 
+import { isCinematicSuspended } from "../../lib/cinematicSuspend";
 // ============================================================
 // CockpitHints — Contextual keyboard/mouse hints when inside ship
 // ============================================================
@@ -33,6 +34,7 @@ const CockpitHints: React.FC<Props> = ({ insideShip, shipViewMode }) => {
   // H key to toggle
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (!insideShip) return;
       if (
         e.target instanceof HTMLInputElement ||

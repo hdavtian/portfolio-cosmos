@@ -2,6 +2,7 @@ import type CameraControls from "camera-controls";
 import type React from "react";
 import { useCallback, useRef } from "react";
 import * as THREE from "three";
+import { isCinematicSuspended } from "../../../lib/cinematicSuspend";
 import { dinfo, dwarn } from "../../../lib/debugLog";
 import { emitCosmosEvent } from "../cosmosEventBus";
 import type { DashcamController } from "../dashcamTV";
@@ -997,7 +998,7 @@ export const useRenderLoop = () => {
       const animate = () => {
         animationFrameRef.current = requestAnimationFrame(animate);
 
-        if (gpuWarmupInProgressRef?.current) {
+        if (gpuWarmupInProgressRef?.current || isCinematicSuspended()) {
           lastFrameTime = performance.now();
           return;
         }

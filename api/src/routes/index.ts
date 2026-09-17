@@ -4,7 +4,11 @@ import swaggerUi from "swagger-ui-express";
 import { ContentController } from "../modules/content/content.controller.js";
 import { ContentRepository } from "../modules/content/content.repository.js";
 import { ContentService } from "../modules/content/content.service.js";
-import { openApiDocument } from "../swagger/openapi.js";
+import { buildOpenApiDocument } from "../swagger/buildOpenApi.js";
+
+// Generated from the Zod schemas that validate the requests, so the docs
+// cannot drift from the implementation. Built once at startup.
+const openApiDocument = buildOpenApiDocument();
 
 const contentRepository = new ContentRepository();
 const contentService = new ContentService(contentRepository);

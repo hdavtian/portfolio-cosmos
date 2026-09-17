@@ -3,6 +3,7 @@
 // The local environment overrides api/.env, so the command cannot reach
 // production Atlas or Azure Storage.
 import { execSync, spawnSync } from "node:child_process";
+import { localApiCommand, localApiCwd } from "./local-api-command.mjs";
 import { localApiEnv } from "./local-env.mjs";
 
 const command = process.argv.slice(2);
@@ -20,9 +21,12 @@ try {
 
 execSync("docker compose up -d --wait", { stdio: "inherit" });
 
-const result = spawnSync(command.join(" "), {
+// "--api" runs the API exactly as dev:full does.
+const isApi = command.length === 1 && command[0] === "--api";
+const result = spawnSync(isApi ? localApiCommand : command.join(" "), {
   stdio: "inherit",
   shell: true,
+  cwd: isApi ? localApiCwd : undefined,
   env: { ...process.env, ...localApiEnv },
 });
 process.exit(result.status ?? 1);

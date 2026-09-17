@@ -1,0 +1,2396 @@
+/* Redesigned portfolio (/portfolio). One committed look: very large condensed
+   type over a tinted WebGL atmosphere, with small mono labels. Inspired by
+   glenncatteeuw.com, adapted to published portfolio data. */
+
+.showcase {
+  --showcase-ink: #f4f1ec;
+  --showcase-ink-dim: rgba(244, 241, 236, 0.34);
+  --showcase-ink-quiet: rgba(244, 241, 236, 0.62);
+  --showcase-ground: #1a1c21;
+  --showcase-display: "Barlow Condensed", "Oswald", Impact, "Arial Narrow", sans-serif;
+  --showcase-mono: "JetBrains Mono", Menlo, Consolas, "Courier New", monospace;
+  --showcase-gutter: clamp(16px, 2.2vw, 40px);
+
+  position: relative;
+  min-height: 100vh;
+  color: var(--showcase-ink);
+  background: var(--showcase-ground);
+  font-family: var(--showcase-mono);
+  overflow-x: clip;
+}
+
+/* ---------- Backdrop ---------- */
+
+.showcase-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.showcase-backdrop__canvas,
+.showcase-backdrop__canvas canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.showcase-backdrop__grain {
+  position: absolute;
+  inset: -50%;
+  opacity: 0.16;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: showcase-grain 1.2s steps(6) infinite;
+}
+
+/* Keeps text legible over bright tints. */
+.showcase-backdrop__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(10, 11, 14, 0.45) 0%, rgba(10, 11, 14, 0.12) 55%, rgba(10, 11, 14, 0.25) 100%);
+}
+
+@keyframes showcase-grain {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-3%, 2%); }
+  40% { transform: translate(2%, -3%); }
+  60% { transform: translate(-2%, -1%); }
+  80% { transform: translate(3%, 3%); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ---------- Cinematic fragments: scene stage ---------- */
+
+.showcase-scenes {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 1400ms ease, visibility 0s linear 1400ms;
+}
+
+/* The first scene glitches in over the terrain. */
+.showcase-scenes.is-showing {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 1400ms ease;
+  animation: showcase-scene-glitch-in 900ms steps(1) both;
+}
+
+/* Switching: the old scene tears away, the new one resolves through static. */
+.showcase-scenes.is-leaving .showcase-scenes__canvas {
+  animation: showcase-scene-glitch-out 420ms steps(1) forwards;
+}
+
+.showcase-scenes.is-entering .showcase-scenes__canvas {
+  animation: showcase-scene-glitch-in 900ms steps(1) both;
+}
+
+@keyframes showcase-scene-glitch-in {
+  0% { opacity: 0; }
+  10% { opacity: 0.5; transform: translateX(-6px); filter: hue-rotate(40deg); }
+  16% { opacity: 0.1; transform: none; filter: none; }
+  30% { opacity: 0.7; transform: translateX(4px); }
+  36% { opacity: 0.35; transform: none; }
+  55% { opacity: 0.85; }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+
+@keyframes showcase-scene-glitch-out {
+  0% { opacity: 1; }
+  15% { opacity: 0.6; transform: translateX(8px) skewX(-3deg); filter: hue-rotate(-40deg) contrast(1.4); }
+  30% { opacity: 0.9; transform: translateX(-5px); filter: none; }
+  45% { opacity: 0.3; clip-path: inset(30% 0 40% 0); transform: translateX(14px); }
+  60% { opacity: 0.5; clip-path: none; transform: none; }
+  80% { opacity: 0.1; filter: blur(6px); }
+  100% { opacity: 0; filter: blur(10px); }
+}
+
+.showcase-scenes__canvas,
+.showcase-scenes__canvas canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.showcase-scenes__canvas canvas {
+  filter: brightness(calc(0.62 + var(--mood-lift) * 0.5)) saturate(0.95);
+}
+
+/*
+ * Mood: over a few minutes the scenes drift through colour and light, from
+ * deep night through dusk and amber to a pale dawn and back.
+ */
+@property --mood-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0b1a3a;
+}
+
+@property --mood-lift {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.showcase-scenes {
+  --mood-color: #0b1a3a;
+  --mood-lift: 0;
+  animation: showcase-mood 240s ease-in-out infinite;
+}
+
+.showcase-scenes.is-showing {
+  animation: showcase-scene-glitch-in 900ms steps(1) both, showcase-mood 240s ease-in-out infinite;
+}
+
+@keyframes showcase-mood {
+  0%, 100% { --mood-color: #0b1a3a; --mood-lift: 0; }
+  18% { --mood-color: #0f5a63; --mood-lift: 0.22; }
+  34% { --mood-color: #b86a2c; --mood-lift: 0.5; }
+  50% { --mood-color: #c9b8e8; --mood-lift: 0.85; }
+  66% { --mood-color: #7fb7c9; --mood-lift: 0.6; }
+  82% { --mood-color: #5a1f5c; --mood-lift: 0.15; }
+}
+
+/* Tints the hue of the scene. */
+.showcase-scenes__mood {
+  position: absolute;
+  inset: 0;
+  background: var(--mood-color);
+  mix-blend-mode: color;
+  opacity: 0.4;
+}
+
+/* Washes light in during the brighter moods. */
+.showcase-scenes__mood--lift {
+  mix-blend-mode: screen;
+  opacity: calc(var(--mood-lift) * 0.32);
+}
+
+/* Keeps the big type legible over bright scenes. */
+.showcase-scenes__shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgb(4 6 10 / calc(0.72 - var(--mood-lift) * 0.14)) 0%,
+      rgb(4 6 10 / calc(0.3 - var(--mood-lift) * 0.22)) 55%,
+      rgb(4 6 10 / calc(0.45 - var(--mood-lift) * 0.3)) 100%
+    ),
+    radial-gradient(ellipse at 60% 50%, transparent 30%, rgb(4 6 10 / calc(0.5 - var(--mood-lift) * 0.35)) 100%);
+}
+
+/* Empty space over a scene can be dragged to look around. */
+html.is-scene-grab body {
+  cursor: grab;
+}
+
+html.is-scene-dragging,
+html.is-scene-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+/* Switcher, tour toggle and gateway: foot of the right-hand column. */
+.showcase-scene-panel {
+  position: fixed;
+  right: var(--showcase-gutter);
+  bottom: var(--showcase-gutter);
+  z-index: 6;
+  width: min(300px, calc(22vw - var(--showcase-gutter)));
+  display: grid;
+  gap: 12px;
+  font-family: var(--showcase-mono);
+  color: #bdefff;
+}
+
+.showcase-scene-switcher {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.showcase-scene-switcher__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 10px;
+  width: 100%;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: left;
+  color: rgba(189, 239, 255, 0.55);
+  background: none;
+  border: 0;
+  cursor: default;
+}
+
+.showcase-scene-switcher__item.is-ready:not(.is-active) {
+  color: rgba(189, 239, 255, 0.85);
+  cursor: pointer;
+}
+
+.showcase-scene-switcher__item.is-ready:not(.is-active):hover .showcase-scene-switcher__label {
+  color: #eafbff;
+  text-shadow: 0 0 10px rgba(110, 215, 255, 0.7);
+}
+
+.showcase-scene-switcher__item.is-active {
+  color: #eafbff;
+  text-shadow: 0 0 10px rgba(110, 215, 255, 0.7);
+}
+
+.showcase-scene-switcher__item.is-active .showcase-scene-switcher__index::before {
+  content: "▸ ";
+}
+
+.showcase-scene-switcher__item:focus-visible,
+.showcase-scene-panel__tour:focus-visible {
+  outline: 1px solid #bdefff;
+  outline-offset: 3px;
+}
+
+.showcase-scene-switcher__index {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+/* Auto-tour timer: a hairline under the active scene fills until the next. */
+.showcase-scene-switcher__timer {
+  grid-column: 2;
+  display: block;
+  height: 1px;
+  background: rgba(189, 239, 255, 0.18);
+}
+
+.showcase-scene-switcher__timer > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(207, 246, 255, 0.95), #eafbff);
+  box-shadow: 0 0 6px rgba(110, 215, 255, 0.8);
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: showcase-tour-timer linear forwards;
+}
+
+@keyframes showcase-tour-timer {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* Racy, jittery loading bar per scene. */
+.showcase-scene-switcher__loading {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: showcase-loader-jitter 0.28s steps(1) infinite;
+}
+
+.showcase-scene-switcher__bar {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  overflow: hidden;
+  background: repeating-linear-gradient(90deg, rgba(110, 215, 255, 0.16) 0 5px, transparent 5px 7px);
+  box-shadow: inset 0 0 0 1px rgba(140, 230, 255, 0.3);
+}
+
+.showcase-scene-switcher__bar > span {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  background: repeating-linear-gradient(90deg, #cff6ff 0 5px, rgba(207, 246, 255, 0.35) 5px 7px);
+  box-shadow: 0 0 10px rgba(110, 215, 255, 0.8);
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.showcase-scene-switcher__bar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+  mix-blend-mode: screen;
+  animation: showcase-loader-race 0.7s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+}
+
+.showcase-scene-switcher__percent {
+  font-variant-numeric: tabular-nums;
+  animation: showcase-holo-flicker 1.1s steps(1) infinite;
+}
+
+@keyframes showcase-loader-race {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(360%); }
+}
+
+@keyframes showcase-loader-jitter {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-1px, 0); }
+  35% { transform: translate(2px, -1px); }
+  50% { transform: translate(0, 1px); }
+  65% { transform: translate(-2px, 0); clip-path: inset(0 0 40% 0); }
+  67% { clip-path: none; }
+  80% { transform: translate(1px, 0); }
+}
+
+.showcase-scene-panel__tour {
+  justify-self: start;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(189, 239, 255, 0.8);
+  background: transparent;
+  border: 1px solid rgba(140, 230, 255, 0.35);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.showcase-scene-panel__tour[aria-pressed="true"] {
+  color: #06161d;
+  background: #bdefff;
+  border-color: #bdefff;
+}
+
+/* Gateway into the full Three.js experience. */
+.showcase-gateway {
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(140, 230, 255, 0.2);
+  animation: showcase-gateway-in 700ms steps(1) both;
+}
+
+@keyframes showcase-gateway-in {
+  0% { opacity: 0; }
+  20% { opacity: 1; transform: translateX(-4px); }
+  30% { opacity: 0.2; }
+  45% { opacity: 1; transform: none; }
+  100% { opacity: 1; }
+}
+
+.showcase-gateway__eyebrow,
+.showcase-gateway__note {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(189, 239, 255, 0.7);
+}
+
+.showcase-gateway__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  font-family: var(--showcase-display);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: #dff8ff;
+  text-shadow: 0 0 12px rgba(110, 215, 255, 0.55);
+}
+
+.showcase-gateway__arrow {
+  position: relative;
+  width: 26px;
+  height: 1px;
+  background: currentColor;
+  transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.showcase-gateway__arrow::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border-top: 1px solid currentColor;
+  border-right: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.showcase-gateway__link:hover .showcase-gateway__arrow,
+.showcase-gateway__link:focus-visible .showcase-gateway__arrow {
+  width: 42px;
+}
+
+.showcase-gateway__link:focus-visible {
+  outline: 2px solid #dff8ff;
+  outline-offset: 4px;
+}
+
+/* ---------- Shared pieces ---------- */
+
+.showcase__main {
+  position: relative;
+  z-index: 1;
+}
+
+.showcase-label {
+  margin: 0;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-label strong {
+  color: var(--showcase-ink);
+  font-weight: 500;
+}
+
+.showcase-pills {
+  position: fixed;
+  top: var(--showcase-gutter);
+  right: var(--showcase-gutter);
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.showcase-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  position: relative;
+  isolation: isolate;
+  color: #15161a;
+  background: none;
+  border: 0;
+  transition: color 160ms ease;
+}
+
+/* A slanted gold plate behind the label (same gold as the page scrollbar);
+   the label itself stays upright. */
+.showcase-pill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: #d4af37;
+  border: 1px solid #d4af37;
+  transform: skewX(-16deg);
+  transition: background 160ms ease;
+}
+
+.showcase-pill:hover,
+.showcase-pill.active {
+  color: #f0d98d;
+}
+
+.showcase-pill:hover::before,
+.showcase-pill.active::before {
+  background: transparent;
+}
+
+.showcase-pill:focus-visible,
+.showcase-chip:focus-visible,
+.showcase-list__link:focus-visible,
+.showcase-pager:focus-visible {
+  outline: 2px solid var(--showcase-ink);
+  outline-offset: 3px;
+}
+
+/* ---------- Index ---------- */
+
+.showcase-index {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 22vw);
+  gap: var(--showcase-gutter);
+  padding-inline: var(--showcase-gutter);
+  padding-block: calc(var(--showcase-gutter) + 36px) 12vh;
+}
+
+.showcase-filters {
+  display: grid;
+  gap: 8px;
+  margin-bottom: clamp(20px, 4vh, 44px);
+  max-width: 980px;
+}
+
+.showcase-filters__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.showcase-filters__row > .showcase-label {
+  min-width: 44px;
+}
+
+.showcase-chip {
+  --chip-color: var(--showcase-ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--showcase-ink);
+  background: rgba(12, 13, 16, 0.28);
+  border: 1px solid rgba(244, 241, 236, 0.28);
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.showcase-chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--chip-color);
+}
+
+.showcase-chip:hover {
+  border-color: var(--showcase-ink);
+}
+
+.showcase-chip[aria-pressed="true"] {
+  color: #15161a;
+  background: var(--showcase-ink);
+  border-color: var(--showcase-ink);
+}
+
+.showcase-chip__count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+
+.showcase-chip--clear::before {
+  display: none;
+}
+
+.showcase-empty {
+  font-family: var(--showcase-display);
+  font-weight: 800;
+  font-size: clamp(2rem, 6vw, 5rem);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.showcase-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.showcase-list__link {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  text-decoration: none;
+  color: var(--showcase-ink);
+}
+
+/* Title ink as an RGB triplet so the watermark light can use it too. Visited
+   projects turn light blue, in every state including resting. */
+.showcase-list__item {
+  --title-rgb: 244, 241, 236;
+}
+
+.showcase-list__item.is-visited {
+  --title-rgb: 150, 208, 255;
+}
+
+.showcase-list__title {
+  display: block;
+  color: rgb(var(--title-rgb));
+  font-family: var(--showcase-display);
+  font-weight: 900;
+  font-size: clamp(1.43rem, 4.62vw, 5.225rem);
+  line-height: 0.86;
+  letter-spacing: -0.005em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  transition: color 220ms ease, transform 260ms ease;
+}
+
+/* ---------- Hover: holographic teaser ---------- */
+
+.showcase-index__work {
+  position: relative;
+  z-index: 1;
+}
+
+.showcase-list__title {
+  position: relative;
+  padding-right: 0.08em; /* room for the italic overhang */
+}
+
+.showcase-index--has-hover .showcase-list__title,
+.showcase-index--has-open .showcase-list__title {
+  color: rgba(var(--title-rgb), 0.34);
+}
+
+.showcase-list__item.is-hover .showcase-list__title,
+.showcase-list__item.is-open .showcase-list__title {
+  font-style: italic;
+  color: transparent;
+  /* Cyan hologram with scanlines running through the letters. */
+  background-image:
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.32) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #e8fbff 0%, #9fe4ff 55%, #6fd0ff 100%);
+  background-size: 100% 3px, 100% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 10px rgba(110, 215, 255, 0.55)) drop-shadow(0 0 2px rgba(190, 240, 255, 0.8));
+  animation:
+    showcase-holo-scan 0.9s linear infinite,
+    showcase-holo-flicker 1.7s steps(1) infinite,
+    showcase-holo-jitter 0.42s steps(1) infinite;
+}
+
+/* RGB split echoes that jump around, and slices that tear sideways. */
+.showcase-list__title::before,
+.showcase-list__title::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  padding-right: inherit;
+  pointer-events: none;
+  opacity: 0;
+  -webkit-text-fill-color: currentColor;
+}
+
+.showcase-list__item.is-hover .showcase-list__title::before,
+.showcase-list__item.is-open .showcase-list__title::before {
+  color: rgba(255, 60, 120, 0.55);
+  opacity: 1;
+  mix-blend-mode: screen;
+  animation: showcase-holo-red 0.36s steps(1) infinite, showcase-holo-tear-a 1.3s steps(1) infinite;
+}
+
+.showcase-list__item.is-hover .showcase-list__title::after,
+.showcase-list__item.is-open .showcase-list__title::after {
+  color: rgba(60, 200, 255, 0.6);
+  opacity: 1;
+  mix-blend-mode: screen;
+  animation: showcase-holo-blue 0.29s steps(1) infinite, showcase-holo-tear-b 1.7s steps(1) infinite;
+}
+
+@keyframes showcase-holo-scan {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 0 3px, 0 0; }
+}
+
+@keyframes showcase-holo-flicker {
+  0%, 100% { opacity: 1; }
+  12% { opacity: 0.86; }
+  13% { opacity: 1; }
+  41% { opacity: 0.55; }
+  42% { opacity: 1; }
+  43% { opacity: 0.8; }
+  44% { opacity: 1; }
+  77% { opacity: 0.9; }
+  78% { opacity: 1; }
+}
+
+@keyframes showcase-holo-jitter {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-1px, 0); }
+  40% { transform: translate(1px, 0.5px); }
+  60% { transform: translate(0, -0.5px); }
+  80% { transform: translate(1.5px, 0); }
+}
+
+@keyframes showcase-holo-red {
+  0% { transform: translate(-0.04em, 0.01em); }
+  25% { transform: translate(-0.02em, 0); }
+  50% { transform: translate(-0.06em, -0.01em); }
+  75% { transform: translate(-0.03em, 0.015em); }
+}
+
+@keyframes showcase-holo-blue {
+  0% { transform: translate(0.04em, -0.01em); }
+  33% { transform: translate(0.02em, 0.01em); }
+  66% { transform: translate(0.06em, 0); }
+}
+
+/* Horizontal bands of the echo tear sideways for a frame or two. */
+@keyframes showcase-holo-tear-a {
+  0%, 100% { clip-path: inset(0 0 0 0); }
+  18% { clip-path: inset(22% 0 58% 0); translate: 0.12em 0; }
+  20% { clip-path: inset(0 0 0 0); translate: 0 0; }
+  61% { clip-path: inset(64% 0 12% 0); translate: -0.16em 0; }
+  63% { clip-path: inset(0 0 0 0); translate: 0 0; }
+}
+
+@keyframes showcase-holo-tear-b {
+  0%, 100% { clip-path: inset(0 0 0 0); }
+  33% { clip-path: inset(40% 0 38% 0); translate: -0.14em 0; }
+  35% { clip-path: inset(0 0 0 0); translate: 0 0; }
+  82% { clip-path: inset(8% 0 72% 0); translate: 0.1em 0; }
+  84% { clip-path: inset(0 0 0 0); translate: 0 0; }
+}
+
+/* Hologram images: a WebGL canvas (HoloImage.tsx) draws tint, jitter and
+   reveal; the CSS sheen is only the fallback when WebGL is unavailable. */
+.showcase-holo-image {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 2px;
+  filter: drop-shadow(0 0 18px rgba(110, 215, 255, 0.28));
+}
+
+.showcase-holo-image__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.showcase-holo-image--fallback img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  filter: saturate(0.8) sepia(0.3) hue-rotate(160deg) brightness(1.05);
+}
+
+.showcase-holo-image--fallback::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(140, 230, 255, 0.12) 0 1px, transparent 1px 3px);
+  box-shadow: inset 0 0 0 1px rgba(140, 230, 255, 0.5);
+}
+
+/* Hover preview beside the name: wipes in from the left. */
+.showcase-list__thumb {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + clamp(12px, 1.6vw, 26px));
+  width: clamp(190px, 20vw, 340px);
+  aspect-ratio: 16 / 10;
+  z-index: 3;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.showcase-list__meta {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% - 0.4em);
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--showcase-ink);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+.showcase-list__item.is-hover:not(.is-open) .showcase-list__meta {
+  opacity: 0.9;
+}
+
+/* ---------- Click: inline preview ---------- */
+
+.showcase-list__item {
+  position: relative;
+  transition: margin 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.showcase-list__item.is-open {
+  margin-block: clamp(22px, 4vh, 44px);
+}
+
+/* A border that draws itself around the open project. */
+.showcase-list__item.is-open::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * clamp(12px, 1.6vh, 20px)) calc(-1 * clamp(12px, 1.2vw, 22px));
+  z-index: -1;
+  border: 1px solid rgba(214, 244, 255, 0.55);
+  border-radius: 4px;
+  /* Frosted glass: 40% see-through, the scene blurred behind it. */
+  background: rgba(10, 16, 24, 0.6);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(214, 244, 255, 0.06), inset 0 0 40px rgba(160, 232, 255, 0.06);
+  animation: showcase-border-draw 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes showcase-border-draw {
+  0% { clip-path: inset(0 100% 100% 0); opacity: 0.4; }
+  55% { clip-path: inset(0 0 100% 0); opacity: 1; }
+  100% { clip-path: inset(0 0 0 0); opacity: 1; }
+}
+
+/* The open project sizes to its content, inline: as wide as its title's
+   longest line or the image-and-info row, whichever is wider. */
+.showcase-list__item.is-open,
+.showcase-list__item.is-closing {
+  --preview-image-width: clamp(220px, 18vw, 320px);
+  --preview-gap: clamp(16px, 2vw, 32px);
+  --preview-info-width: 380px;
+  isolation: isolate;
+  width: max(
+    var(--title-width, 0px),
+    calc(var(--preview-image-width) + var(--preview-gap) + var(--preview-info-width))
+  );
+  max-width: 100%;
+}
+
+.showcase-preview {
+  /* Never widens the item: its width comes from the title. */
+  contain: inline-size;
+  width: 100%;
+  display: grid;
+  grid-template-rows: 0fr;
+  animation: showcase-preview-open 460ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.showcase-preview__inner {
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: var(--preview-image-width) minmax(0, 1fr);
+  gap: var(--preview-gap);
+  align-items: start;
+  padding-top: clamp(14px, 2vh, 22px);
+  animation: showcase-preview-content 520ms ease 120ms both;
+}
+
+.showcase-preview__image {
+  aspect-ratio: 16 / 10;
+}
+
+.showcase-preview__body {
+  display: grid;
+  gap: 12px;
+}
+
+.showcase-preview__lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--showcase-ink);
+}
+
+.showcase-preview__tech {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.showcase-preview__tech li {
+  padding: 3px 8px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid rgba(214, 244, 255, 0.3);
+  border-radius: 999px;
+}
+
+.showcase-preview__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.showcase-pill {
+  cursor: pointer;
+}
+
+/* Close: an X in the top-right corner of the open project's border. */
+.showcase-preview__close {
+  position: absolute;
+  top: calc(-1 * clamp(12px, 1.6vh, 20px) + 8px);
+  right: calc(-1 * clamp(12px, 1.2vw, 22px) + 8px);
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--showcase-ink);
+  background: rgba(12, 13, 16, 0.4);
+  border: 1px solid rgba(214, 244, 255, 0.35);
+  border-radius: 50%;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 160ms ease, color 160ms ease, transform 200ms ease;
+}
+
+.showcase-preview__close:hover {
+  color: #0d1a20;
+  background: #d6f4ff;
+  transform: rotate(90deg);
+}
+
+.showcase-preview__close:focus-visible,
+.showcase-more:focus-visible {
+  outline: 2px solid #d6f4ff;
+  outline-offset: 3px;
+}
+
+/* The one call to action in the preview, in the site's own type: condensed
+   caps, a hairline frame with brighter corner brackets, and an ink fill that
+   sweeps in on hover. */
+.showcase-more {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+  padding: 11px 18px 10px;
+  font-family: var(--showcase-display);
+  font-weight: 800;
+  font-size: clamp(20px, 1.7vw, 26px);
+  line-height: 1;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--showcase-ink);
+  background: rgba(12, 13, 16, 0.3);
+  border: 1px solid rgba(244, 241, 236, 0.28);
+  border-radius: 0;
+  cursor: pointer;
+  isolation: isolate;
+  overflow: hidden;
+  transition: color 260ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 260ms ease;
+}
+
+/* Corner brackets. */
+.showcase-more::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  --tick: 9px;
+  background:
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) top left / var(--tick) 1px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) top left / 1px var(--tick),
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) top right / var(--tick) 1px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) top right / 1px var(--tick),
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) bottom left / var(--tick) 1px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) bottom left / 1px var(--tick),
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) bottom right / var(--tick) 1px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) bottom right / 1px var(--tick);
+  background-repeat: no-repeat;
+}
+
+/* Ink fill sweeping in from the left. */
+.showcase-more::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--showcase-ink);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.showcase-more:hover,
+.showcase-more:focus-visible {
+  color: #121317;
+  border-color: var(--showcase-ink);
+}
+
+.showcase-more:hover::before,
+.showcase-more:focus-visible::before {
+  transform: scaleX(1);
+}
+
+/* A drawn line with a small head that extends on hover. */
+.showcase-more__arrow {
+  position: relative;
+  display: block;
+  width: 30px;
+  height: 1px;
+  background: currentColor;
+  transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.showcase-more__arrow::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border-top: 1px solid currentColor;
+  border-right: 1px solid currentColor;
+  transform: rotate(45deg);
+  transform-origin: center;
+}
+
+.showcase-more:hover .showcase-more__arrow,
+.showcase-more:focus-visible .showcase-more__arrow {
+  width: 46px;
+}
+
+/* Restored on return from a project: already open, nothing replays. */
+.showcase-list__item.is-restored,
+.showcase-list__item.is-restored::before,
+.showcase-list__item.is-restored .showcase-preview,
+.showcase-list__item.is-restored .showcase-preview__inner {
+  animation: none;
+  transition: none;
+}
+
+.showcase-list__item.is-restored .showcase-preview {
+  grid-template-rows: 1fr;
+}
+
+/* Switching projects: the old preview blurs and slides away quickly. */
+.showcase-list__item.is-closing .showcase-preview {
+  animation: showcase-preview-close 240ms ease-in forwards;
+}
+
+.showcase-list__item.is-closing .showcase-preview__inner {
+  animation: showcase-preview-blur-out 200ms ease-in forwards;
+}
+
+@keyframes showcase-preview-open {
+  from { grid-template-rows: 0fr; }
+  to { grid-template-rows: 1fr; }
+}
+
+@keyframes showcase-preview-close {
+  from { grid-template-rows: 1fr; }
+  to { grid-template-rows: 0fr; }
+}
+
+@keyframes showcase-preview-content {
+  from { opacity: 0; filter: blur(8px); transform: translateY(8px); }
+  to { opacity: 1; filter: blur(0); transform: none; }
+}
+
+@keyframes showcase-preview-blur-out {
+  to { opacity: 0; filter: blur(10px); transform: translateX(28px); }
+}
+
+/* ---------- Tech stack constellation ---------- */
+
+.showcase-constellation {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  filter: blur(4px);
+  transition: opacity 700ms ease, filter 700ms ease;
+}
+
+.showcase-constellation.is-visible {
+  opacity: 1;
+  filter: blur(0);
+}
+
+.showcase-constellation svg {
+  display: block;
+  overflow: visible;
+}
+
+/* A slow float rather than a spin, so labels always stay upright. */
+.showcase-constellation__drift {
+  transform-box: view-box;
+  transform-origin: 62% 50%;
+  animation: showcase-drift 38s ease-in-out infinite alternate;
+}
+
+@keyframes showcase-drift {
+  0% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-1.6%, 1.2%) scale(1.02); }
+  66% { transform: translate(1.2%, -1.4%) scale(0.99); }
+  100% { transform: translate(-0.8%, -0.6%) scale(1.03); }
+}
+
+.showcase-constellation__link {
+  stroke: rgba(214, 244, 255, 0.1);
+  stroke-width: 1;
+}
+
+.showcase-constellation__node circle {
+  fill: rgba(214, 244, 255, 0.28);
+  transition: fill 300ms ease, r 300ms ease;
+}
+
+.showcase-constellation__node text {
+  font-family: var(--showcase-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  fill: rgba(214, 244, 255, 0);
+  transition: fill 400ms ease;
+}
+
+.showcase-constellation__node[data-depth="1"] text {
+  fill: rgba(214, 244, 255, 0.22);
+}
+
+.showcase-constellation__node.is-lit circle {
+  fill: #d6f4ff;
+  r: 5;
+  filter: drop-shadow(0 0 8px rgba(160, 232, 255, 0.9));
+}
+
+.showcase-constellation__node.is-lit text {
+  fill: rgba(236, 250, 255, 0.92);
+}
+
+/* Name and role on the same line as the pills, mirroring them on the left. */
+.showcase-masthead {
+  position: absolute;
+  top: var(--showcase-gutter);
+  left: var(--showcase-gutter);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  min-height: 29px;
+  align-content: center;
+}
+
+.showcase-masthead__name {
+  margin: 0;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--showcase-ink);
+}
+
+.showcase-masthead__role {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-masthead__role::before,
+.showcase-masthead__place::before {
+  content: "/";
+  margin-right: 14px;
+  color: var(--showcase-ink-dim);
+}
+
+/* ---------- Resting: the list as a watermark over the scene ----------
+ * After the visitor goes still, titles let go (blur and fade), then live on as
+ * a watermark: a sheet of light, fixed to the viewport, sweeps across every
+ * title at once while the titles drift the other way, so the names surface
+ * through the scene and sink back as the motion settles. Overlay blending
+ * keeps whatever scene is behind them in the letters. Any movement wakes the
+ * list, name by name. The open project stays as it is.
+ */
+.showcase-index.is-fading .showcase-masthead,
+.showcase-index.is-fading .showcase-filters,
+.showcase-index.is-resting .showcase-masthead,
+.showcase-index.is-resting .showcase-filters {
+  opacity: 0.1;
+  transition: opacity 1400ms ease;
+}
+
+.showcase-masthead,
+.showcase-filters {
+  transition: opacity 700ms ease;
+}
+
+.showcase-index.is-fading .showcase-list__item:not(.is-open) .showcase-list__link {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translateX(-10px);
+  transition:
+    opacity 1300ms ease calc(min(var(--item-index), 16) * 28ms),
+    filter 1300ms ease calc(min(var(--item-index), 16) * 28ms),
+    transform 1500ms cubic-bezier(0.4, 0, 0.2, 1) calc(min(var(--item-index), 16) * 28ms);
+}
+
+.showcase-index.is-resting .showcase-list__item:not(.is-open) .showcase-list__link {
+  animation: showcase-watermark-drift 18s ease-in-out infinite;
+}
+
+.showcase-index.is-resting .showcase-list__item:not(.is-open) .showcase-list__title {
+  color: transparent;
+  background-image: linear-gradient(
+    105deg,
+    rgba(var(--title-rgb), 0.07) 0%,
+    rgba(var(--title-rgb), 0.07) 34%,
+    rgba(var(--title-rgb), 0.5) 44%,
+    rgba(var(--title-rgb), 0.95) 50%,
+    rgba(var(--title-rgb), 0.5) 56%,
+    rgba(var(--title-rgb), 0.07) 66%,
+    rgba(var(--title-rgb), 0.07) 100%
+  );
+  background-size: 260vw 100vh;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  mix-blend-mode: overlay;
+  animation:
+    showcase-watermark-in 2400ms ease both,
+    showcase-watermark-sweep 18s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+.showcase-index.is-resting .showcase-list__item:not(.is-open) .showcase-list__meta,
+.showcase-index.is-fading .showcase-list__item:not(.is-open) .showcase-list__meta {
+  opacity: 0;
+}
+
+/*
+ * Image cycles: a project screenshot, fixed to the viewport like the light,
+ * shows through every title at once and pans the opposite way to the drift,
+ * with the light sheet still crossing over it.
+ */
+.showcase-index.is-resting.has-watermark-image .showcase-list__item:not(.is-open) .showcase-list__title {
+  background-image:
+    linear-gradient(
+      105deg,
+      rgba(var(--title-rgb), 0) 0%,
+      rgba(var(--title-rgb), 0) 38%,
+      rgba(var(--title-rgb), 0.55) 50%,
+      rgba(var(--title-rgb), 0) 62%,
+      rgba(var(--title-rgb), 0) 100%
+    ),
+    var(--watermark-image);
+  background-size: 260vw 100vh, cover;
+  background-position: 100% 0, 0% 50%;
+  mix-blend-mode: normal;
+  opacity: 0.55;
+  animation: showcase-watermark-image 18s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+/* Starts and ends invisible, so the image fades in inside the letters and out again before the swap. */
+@keyframes showcase-watermark-image {
+  0% { background-position: 100% 0, 0% 40%; opacity: 0; }
+  22% { opacity: 0.4; }
+  38% { background-position: 0% 0, 100% 60%; opacity: 0.55; }
+  72% { opacity: 0.2; }
+  100% { background-position: 0% 0, 100% 60%; opacity: 0; }
+}
+
+/* The sheet of light crosses right to left early in each cycle, then rests off screen. */
+@keyframes showcase-watermark-sweep {
+  0% { background-position: 100% 0; }
+  38% { background-position: 0% 0; }
+  100% { background-position: 0% 0; }
+}
+
+/* Titles glide the opposite way while the light crosses, then settle. */
+@keyframes showcase-watermark-drift {
+  0% { transform: translateX(-14px); }
+  38% { transform: translateX(10px); }
+  60%, 100% { transform: translateX(-14px); }
+}
+
+@keyframes showcase-watermark-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Waking: names come back one after another, sharpening as they arrive. */
+.showcase-index.is-waking .showcase-list__item:not(.is-open) .showcase-list__link {
+  animation: showcase-wake 700ms steps(14, end) both;
+  animation-delay: calc(min(var(--item-index), 16) * 22ms);
+}
+
+/* A quick electric buzz: flicker on, shake with a red/blue split, then settle. */
+@keyframes showcase-wake {
+  0% { opacity: 0; filter: blur(8px); transform: translateX(12px); }
+  12% { opacity: 1; filter: blur(2px); transform: translate(-5px, 1px) skewX(-8deg); text-shadow: 4px 0 rgba(255, 60, 120, 0.7), -4px 0 rgba(60, 200, 255, 0.7); }
+  18% { opacity: 0.3; transform: translate(4px, -1px) skewX(6deg); }
+  24% { opacity: 1; filter: blur(0); transform: translate(-3px, 0) skewX(-4deg); text-shadow: -3px 0 rgba(255, 60, 120, 0.6), 3px 0 rgba(60, 200, 255, 0.6); }
+  30% { opacity: 0.6; transform: translate(3px, 1px); }
+  36% { opacity: 1; transform: translate(-2px, -1px) skewX(3deg); text-shadow: 2px 0 rgba(255, 60, 120, 0.5), -2px 0 rgba(60, 200, 255, 0.5); }
+  44% { transform: translate(2px, 0); }
+  52% { opacity: 0.85; transform: translate(-1px, 0); text-shadow: none; }
+  60% { opacity: 1; transform: translate(1px, 0); }
+  to { opacity: 1; filter: blur(0); transform: none; text-shadow: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-index.is-resting .showcase-list__item:not(.is-open) .showcase-list__link,
+  .showcase-index.is-resting .showcase-list__item:not(.is-open) .showcase-list__title,
+  .showcase-index.is-waking .showcase-list__item:not(.is-open) .showcase-list__link {
+    animation: none;
+  }
+
+  .showcase-index.is-fading .showcase-list__item:not(.is-open) .showcase-list__link {
+    filter: none;
+    transform: none;
+  }
+}
+
+/* ---------- Project ---------- */
+
+.showcase-project {
+  display: grid;
+  grid-template-columns: minmax(280px, 34vw) minmax(0, 1fr);
+  gap: clamp(20px, 3vw, 56px);
+  padding-inline: var(--showcase-gutter);
+  /* Clear of the scene switcher in the bottom-right corner. */
+  padding-inline-end: calc(var(--showcase-gutter) + 260px);
+  padding-block: calc(var(--showcase-gutter) + 36px) 10vh;
+}
+
+.showcase-project--missing {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+}
+
+.showcase-project__story {
+  position: sticky;
+  top: calc(var(--showcase-gutter) + 36px);
+  align-self: start;
+  display: grid;
+  gap: 18px;
+  max-height: calc(100vh - 2 * var(--showcase-gutter) - 36px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.showcase-project__back {
+  justify-self: start;
+}
+
+/* Back: a mechanical control, square hairline frame with registration ticks,
+   a drawn arrow that retracts on hover. Deliberately unlike the gold nav. */
+.showcase-back {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px 7px 10px;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--showcase-ink);
+  background: rgba(12, 14, 18, 0.35);
+  border: 1px solid rgba(244, 241, 236, 0.4);
+  transition: color 140ms steps(2), background 140ms steps(2), border-color 140ms steps(2);
+}
+
+/* Registration ticks at the corners. */
+.showcase-back::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) top left / 6px 1px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) top left / 1px 6px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) bottom right / 6px 1px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) bottom right / 1px 6px;
+  background-repeat: no-repeat;
+}
+
+.showcase-back__arrow {
+  position: relative;
+  width: 16px;
+  height: 1px;
+  background: currentColor;
+  transition: width 180ms steps(3);
+}
+
+.showcase-back__arrow::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-left: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg);
+  transform-origin: center;
+}
+
+.showcase-back:hover,
+.showcase-back:focus-visible {
+  color: #15161a;
+  background: var(--showcase-ink);
+  border-color: var(--showcase-ink);
+}
+
+.showcase-back:hover .showcase-back__arrow {
+  width: 22px;
+}
+
+.showcase-back:focus-visible {
+  outline: 2px solid var(--showcase-ink);
+  outline-offset: 5px;
+}
+
+.showcase-project__title {
+  margin: 0;
+  font-family: var(--showcase-display);
+  font-weight: 900;
+  font-size: clamp(1.43rem, 3.08vw, 3.41rem);
+  line-height: 0.86;
+  text-transform: uppercase;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.showcase-project__lead {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--showcase-ink);
+}
+
+.showcase-spec {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.showcase-spec dt {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-spec dd {
+  margin: 3px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.showcase-spec__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.showcase-spec__list a {
+  color: var(--showcase-ink);
+  text-decoration: underline;
+  text-decoration-color: rgba(244, 241, 236, 0.35);
+  text-underline-offset: 3px;
+}
+
+.showcase-spec__list a:hover {
+  text-decoration-color: currentColor;
+}
+
+.showcase-project__media {
+  display: grid;
+  gap: clamp(16px, 2.4vw, 36px);
+  align-content: start;
+}
+
+/* ---------- Project screenshots ----------
+ * One column, so it always fits beside the story. Tiles alternate width and
+ * side for an editorial rhythm, and keep each screenshot's own shape up to a
+ * height cap (tall captures crop from the top). Mood: toned down and washed
+ * with the project's core colour, soft linear shading at the edges, a thin
+ * frame with corner ticks; hover brings the real colours up. Each tile gets
+ * its own reveal (slice wipe, blinds or glitch tear, with varied direction
+ * and timing) so the page never reveals in lockstep.
+ */
+.showcase-gallery {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: clamp(28px, 6vh, 72px);
+  max-width: 1100px;
+}
+
+.showcase-shot {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  width: 100%;
+}
+
+.showcase-shot:nth-child(3n + 2) {
+  width: 78%;
+  justify-self: end;
+}
+
+.showcase-shot:nth-child(3n) {
+  width: 88%;
+  justify-self: start;
+}
+
+.showcase-shot__frame {
+  position: relative;
+  max-height: 72vh;
+  overflow: hidden;
+  background: #07090d;
+  border: 1px solid rgba(214, 244, 255, 0.14);
+  visibility: hidden;
+}
+
+/* Registration ticks just outside the frame. */
+.showcase-shot::before {
+  content: "";
+  grid-area: 1 / 1;
+  margin: -7px;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    linear-gradient(rgba(214, 244, 255, 0.7), rgba(214, 244, 255, 0.7)) top left / 12px 1px,
+    linear-gradient(rgba(214, 244, 255, 0.7), rgba(214, 244, 255, 0.7)) top left / 1px 12px,
+    linear-gradient(rgba(214, 244, 255, 0.7), rgba(214, 244, 255, 0.7)) bottom right / 12px 1px,
+    linear-gradient(rgba(214, 244, 255, 0.7), rgba(214, 244, 255, 0.7)) bottom right / 1px 12px;
+  background-repeat: no-repeat;
+  transition: opacity 500ms steps(3) calc(var(--shot-delay, 0ms) + var(--shot-duration, 900ms));
+}
+
+.showcase-shot.is-revealed::before {
+  opacity: 1;
+}
+
+.showcase-shot__frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: saturate(0.7) contrast(1.05) brightness(0.86);
+  transition: filter 500ms ease;
+}
+
+/* Mood wash in the project's colour, fine scanlines, soft linear edge shading. */
+.showcase-shot__veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, rgba(5, 8, 12, 0.35) 0%, transparent 18%, transparent 70%, rgba(5, 8, 12, 0.7) 100%),
+    linear-gradient(90deg, rgba(5, 8, 12, 0.45) 0%, transparent 10%, transparent 90%, rgba(5, 8, 12, 0.45) 100%);
+  box-shadow: inset 0 0 0 1px rgba(5, 8, 12, 0.85);
+  transition: opacity 500ms ease;
+}
+
+.showcase-shot__veil::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--shot-tint, #6f8aa0);
+  mix-blend-mode: color;
+  opacity: 0.16;
+  transition: opacity 500ms ease;
+}
+
+.showcase-shot:hover .showcase-shot__frame img {
+  filter: none;
+}
+
+.showcase-shot:hover .showcase-shot__veil {
+  opacity: 0.25;
+}
+
+/* A one-off scan line that rides the reveal. */
+.showcase-shot__front {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  background: rgba(200, 245, 255, 0.95);
+  box-shadow: 0 0 14px 2px rgba(120, 230, 255, 0.8);
+}
+
+/* ----- Reveals ----- */
+
+.showcase-shot.is-revealed .showcase-shot__frame {
+  visibility: visible;
+  animation: var(--shot-reveal-name, showcase-reveal-wipe) var(--shot-duration, 900ms) var(--shot-easing, steps(10, end))
+    var(--shot-delay, 0ms) both;
+}
+
+/* Slice wipe: stepped edge crossing from one side, with a scan line on the edge. */
+.showcase-shot--wipe {
+  --shot-reveal-name: showcase-reveal-wipe;
+}
+
+.showcase-shot--wipe.is-revealed .showcase-shot__front {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  animation: showcase-reveal-scan var(--shot-duration, 900ms) var(--shot-easing, steps(10, end)) var(--shot-delay, 0ms) both;
+}
+
+.showcase-shot--from-right {
+  --wipe-from: inset(0 0 0 100%);
+  --scan-from: 100%;
+  --scan-to: 0%;
+}
+
+.showcase-shot--from-left {
+  --wipe-from: inset(0 100% 0 0);
+  --scan-from: 0%;
+  --scan-to: 100%;
+}
+
+@keyframes showcase-reveal-wipe {
+  from { clip-path: var(--wipe-from, inset(0 100% 0 0)); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes showcase-reveal-scan {
+  0% { left: var(--scan-from, 0%); opacity: 1; }
+  92% { opacity: 1; }
+  100% { left: var(--scan-to, 100%); opacity: 0; }
+}
+
+/* Blinds: horizontal slats open from thin lines. */
+.showcase-shot--blinds {
+  --shot-reveal-name: showcase-reveal-blinds;
+}
+
+@property --blind {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.showcase-shot--blinds .showcase-shot__frame {
+  -webkit-mask-image: repeating-linear-gradient(180deg, #000 0 var(--blind), transparent var(--blind) 22px);
+  mask-image: repeating-linear-gradient(180deg, #000 0 var(--blind), transparent var(--blind) 22px);
+}
+
+.showcase-shot--blinds.is-revealed .showcase-shot__frame {
+  --blind: 23px;
+}
+
+@keyframes showcase-reveal-blinds {
+  from { --blind: 0px; }
+  to { --blind: 23px; }
+}
+
+/* Glitch tear: bands of the image flash in out of place, then lock. */
+.showcase-shot--tear {
+  --shot-reveal-name: showcase-reveal-tear;
+  --shot-easing: steps(1, end);
+}
+
+@keyframes showcase-reveal-tear {
+  0% { clip-path: inset(0 0 100% 0); transform: none; opacity: 0; }
+  8% { clip-path: inset(12% 0 70% 0); transform: translateX(-14px); opacity: 1; }
+  16% { clip-path: inset(55% 0 25% 0); transform: translateX(10px); }
+  24% { clip-path: inset(30% 0 48% 0); transform: translateX(-6px); }
+  32% { clip-path: inset(0 0 62% 0); transform: translateX(8px); }
+  42% { clip-path: inset(20% 0 20% 0); transform: translateX(-4px); opacity: 0.6; }
+  52% { clip-path: inset(0 0 35% 0); transform: translateX(3px); opacity: 1; }
+  64% { clip-path: inset(8% 0 8% 0); transform: translateX(-2px); }
+  78% { clip-path: inset(0 0 12% 0); transform: none; }
+  100% { clip-path: inset(0 0 0 0); transform: none; opacity: 1; }
+}
+
+/* Maximize: a square control with corner marks, top right. */
+.showcase-shot__maximize {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--showcase-ink);
+  background: rgba(8, 10, 14, 0.62);
+  border: 1px solid rgba(244, 241, 236, 0.4);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 180ms ease, background 140ms steps(2), color 140ms steps(2);
+}
+
+.showcase-shot__maximize > span {
+  width: 14px;
+  height: 14px;
+  background:
+    linear-gradient(currentColor, currentColor) top left / 6px 1px,
+    linear-gradient(currentColor, currentColor) top left / 1px 6px,
+    linear-gradient(currentColor, currentColor) top right / 6px 1px,
+    linear-gradient(currentColor, currentColor) top right / 1px 6px,
+    linear-gradient(currentColor, currentColor) bottom left / 6px 1px,
+    linear-gradient(currentColor, currentColor) bottom left / 1px 6px,
+    linear-gradient(currentColor, currentColor) bottom right / 6px 1px,
+    linear-gradient(currentColor, currentColor) bottom right / 1px 6px;
+  background-repeat: no-repeat;
+  transition: transform 180ms steps(3);
+}
+
+.showcase-shot:hover .showcase-shot__maximize,
+.showcase-shot__maximize:focus-visible {
+  opacity: 1;
+}
+
+.showcase-shot__maximize:hover,
+.showcase-shot__maximize:focus-visible {
+  color: #15161a;
+  background: var(--showcase-ink);
+}
+
+.showcase-shot__maximize:hover > span {
+  transform: scale(1.25);
+}
+
+.showcase-shot__maximize:focus-visible {
+  outline: 2px solid var(--showcase-ink);
+  outline-offset: 3px;
+}
+
+.showcase-shot__caption {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-shot__index {
+  color: var(--showcase-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Full-size viewer: caption and Close on top, the screenshot fitted to the
+   screen with square step controls at its sides, thumbnails along the bottom. */
+.showcase-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  box-sizing: border-box;
+  height: 100dvh;
+  padding: var(--showcase-gutter);
+  animation: showcase-viewer-in 260ms ease both;
+}
+
+.showcase-viewer__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 0;
+  padding: 0;
+  background: rgba(5, 7, 10, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: zoom-out;
+}
+
+.showcase-viewer__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.showcase-viewer__stage {
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  /* Flex, so the image's max-height resolves against this row's height. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Room for the step controls beside the image. */
+  padding-inline: 72px;
+}
+
+.showcase-viewer__stage img {
+  display: block;
+  box-sizing: border-box;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  object-fit: contain;
+  border: 1px solid rgba(214, 244, 255, 0.16);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  animation: showcase-viewer-shot 420ms steps(8, end) both;
+}
+
+/* Previous / next: square mechanical controls with a drawn chevron. */
+.showcase-viewer__step {
+  position: absolute;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--showcase-ink);
+  background: rgba(8, 10, 14, 0.7);
+  border: 1px solid rgba(244, 241, 236, 0.4);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: color 140ms steps(2), background 140ms steps(2), border-color 140ms steps(2);
+}
+
+.showcase-viewer__step--prev {
+  left: 6px;
+}
+
+.showcase-viewer__step--next {
+  right: 6px;
+}
+
+/* Corner ticks, like the Back control. */
+.showcase-viewer__step::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) top left / 7px 1px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) top left / 1px 7px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) bottom right / 7px 1px,
+    linear-gradient(var(--showcase-ink), var(--showcase-ink)) bottom right / 1px 7px;
+  background-repeat: no-repeat;
+}
+
+.showcase-viewer__step > span {
+  width: 12px;
+  height: 12px;
+  border-left: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transition: transform 160ms steps(3);
+}
+
+.showcase-viewer__step--prev > span {
+  transform: translateX(3px) rotate(45deg);
+}
+
+.showcase-viewer__step--next > span {
+  transform: translateX(-3px) rotate(-135deg);
+}
+
+.showcase-viewer__step:hover,
+.showcase-viewer__step:focus-visible {
+  color: #15161a;
+  background: var(--showcase-ink);
+  border-color: var(--showcase-ink);
+}
+
+.showcase-viewer__step--prev:hover > span {
+  transform: translateX(0) rotate(45deg);
+}
+
+.showcase-viewer__step--next:hover > span {
+  transform: translateX(0) rotate(-135deg);
+}
+
+.showcase-viewer__step:focus-visible {
+  outline: 2px solid var(--showcase-ink);
+  outline-offset: 6px;
+}
+
+/* Thumbnail strip. */
+.showcase-viewer__thumbs {
+  list-style: none;
+  margin: 0;
+  padding: 8px 4px;
+  display: flex;
+  justify-content: safe center;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.showcase-viewer__thumb {
+  position: relative;
+  display: block;
+  width: 104px;
+  aspect-ratio: 16 / 10;
+  padding: 0;
+  overflow: hidden;
+  background: #07090d;
+  border: 1px solid rgba(214, 244, 255, 0.16);
+  cursor: pointer;
+  opacity: 0.45;
+  filter: saturate(0.6);
+  transition: opacity 180ms ease, filter 180ms ease, border-color 180ms ease;
+}
+
+.showcase-viewer__thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.showcase-viewer__thumb:hover,
+.showcase-viewer__thumb:focus-visible {
+  opacity: 0.85;
+  filter: none;
+}
+
+.showcase-viewer__thumb.is-current {
+  opacity: 1;
+  filter: none;
+  border-color: rgba(200, 245, 255, 0.95);
+  box-shadow: 0 0 0 1px rgba(200, 245, 255, 0.5), 0 0 16px rgba(120, 230, 255, 0.45);
+}
+
+/* A bar along the bottom of the current thumbnail. */
+.showcase-viewer__thumb.is-current::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(200, 245, 255, 0.95);
+}
+
+.showcase-viewer__thumb:focus-visible {
+  outline: 2px solid var(--showcase-ink);
+  outline-offset: 3px;
+}
+
+@media (max-width: 700px) {
+  .showcase-viewer__stage {
+    padding-inline: 0;
+  }
+
+  .showcase-viewer__step {
+    top: auto;
+    bottom: 8px;
+    transform: none;
+  }
+
+  .showcase-viewer__step--prev {
+    left: 8px;
+  }
+
+  .showcase-viewer__step--next {
+    right: 8px;
+  }
+
+  .showcase-viewer__thumb {
+    width: 76px;
+  }
+}
+
+@keyframes showcase-viewer-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes showcase-viewer-shot {
+  from { opacity: 0; clip-path: inset(0 0 100% 0); }
+  to { opacity: 1; clip-path: inset(0 0 0 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-shot.is-revealed .showcase-shot__frame,
+  .showcase-shot.is-revealed .showcase-shot__front,
+  .showcase-viewer,
+  .showcase-viewer__stage img {
+    animation: none;
+  }
+
+  .showcase-shot__front {
+    display: none;
+  }
+}
+
+.showcase-project__pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: clamp(24px, 6vh, 80px);
+}
+
+.showcase-pager {
+  display: grid;
+  gap: 4px;
+  text-decoration: none;
+  color: var(--showcase-ink);
+  max-width: 48%;
+}
+
+.showcase-pager--next {
+  text-align: right;
+  justify-items: end;
+}
+
+.showcase-pager__title {
+  font-family: var(--showcase-display);
+  font-weight: 900;
+  font-size: clamp(1.05rem, 1.6vw, 1.6rem);
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.showcase-pager:hover .showcase-pager__title {
+  font-style: italic;
+}
+
+/* ---------- Resume ---------- */
+
+.showcase-resume {
+  display: grid;
+  grid-template-columns: minmax(280px, 34vw) minmax(0, 1fr);
+  gap: clamp(20px, 3vw, 56px);
+  padding-inline: var(--showcase-gutter);
+  /* Clear of the scene switcher in the bottom-right corner. */
+  padding-inline-end: calc(var(--showcase-gutter) + 260px);
+  padding-block: calc(var(--showcase-gutter) + 36px) 12vh;
+}
+
+.showcase-resume__intro {
+  position: sticky;
+  top: calc(var(--showcase-gutter) + 36px);
+  align-self: start;
+  display: grid;
+  gap: 18px;
+  max-height: calc(100vh - 2 * var(--showcase-gutter) - 36px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.showcase-resume__name {
+  margin: 0;
+  font-family: var(--showcase-display);
+  font-weight: 900;
+  font-size: clamp(2.2rem, 5vw, 5.4rem);
+  line-height: 0.86;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.showcase-resume__role {
+  margin: -8px 0 0;
+  font-family: var(--showcase-display);
+  font-weight: 500;
+  font-size: clamp(1.1rem, 1.6vw, 1.6rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-resume__summary {
+  margin: 0;
+  max-width: 48ch;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.showcase-resume__link {
+  color: var(--showcase-ink);
+  text-decoration: underline;
+  text-decoration-color: rgba(244, 241, 236, 0.35);
+  text-underline-offset: 3px;
+  text-transform: none;
+}
+
+.showcase-resume__link:hover {
+  text-decoration-color: currentColor;
+}
+
+.showcase-resume__jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.showcase-resume__jump a {
+  padding: 5px 9px;
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--showcase-ink);
+  border: 1px solid rgba(244, 241, 236, 0.35);
+  border-radius: 3px;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.showcase-resume__jump a:hover,
+.showcase-resume__jump a:focus-visible {
+  color: #15161a;
+  background: var(--showcase-ink);
+}
+
+/* The record sits on a soft veil so long text stays readable over the scenes. */
+.showcase-resume__record {
+  display: grid;
+  gap: clamp(40px, 8vh, 96px);
+  align-content: start;
+  max-width: 880px;
+  padding: clamp(20px, 3vw, 44px);
+  background: rgba(10, 12, 16, 0.58);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(244, 241, 236, 0.1);
+}
+
+.showcase-resume__heading {
+  margin-bottom: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(244, 241, 236, 0.22);
+}
+
+.showcase-resume__jobs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.showcase-resume__job {
+  display: grid;
+  gap: 18px;
+  padding-block: clamp(20px, 3.5vh, 36px);
+  border-bottom: 1px solid rgba(244, 241, 236, 0.1);
+}
+
+.showcase-resume__job:first-child {
+  padding-top: 4px;
+}
+
+.showcase-resume__job:last-child {
+  border-bottom: 0;
+}
+
+.showcase-resume__job-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 20px;
+}
+
+.showcase-resume__company {
+  margin: 0;
+  font-family: var(--showcase-display);
+  font-weight: 900;
+  font-size: clamp(1.6rem, 2.6vw, 2.6rem);
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.showcase-resume__position {
+  display: grid;
+  gap: 10px;
+}
+
+.showcase-resume__position-title {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  font-family: var(--showcase-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.showcase-resume__position-dates {
+  font-weight: 400;
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-resume__bullets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-width: 72ch;
+}
+
+.showcase-resume__bullets li {
+  position: relative;
+  padding-left: 22px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(244, 241, 236, 0.86);
+}
+
+.showcase-resume__bullets li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.8em;
+  width: 10px;
+  height: 1px;
+  background: var(--showcase-ink-quiet);
+}
+
+.showcase-resume__detail {
+  margin: 10px 0 6px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.showcase-resume__certs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.showcase-resume__certs li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding-block: 10px;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(244, 241, 236, 0.1);
+}
+
+.showcase-resume__certs li:last-child {
+  border-bottom: 0;
+}
+
+/* ---------- Narrow screens ---------- */
+
+@media (max-width: 900px) {
+  .showcase-index {
+    grid-template-columns: 1fr;
+    padding-block-start: calc(var(--showcase-gutter) + 56px);
+  }
+
+  .showcase-resume {
+    grid-template-columns: 1fr;
+    padding-inline-end: var(--showcase-gutter);
+    padding-block-start: calc(var(--showcase-gutter) + 56px);
+  }
+
+  .showcase-resume__intro {
+    position: static;
+    max-height: none;
+  }
+
+  .showcase-masthead {
+    position: static;
+    grid-row: 1;
+    min-height: 0;
+  }
+
+  .showcase-list__thumb {
+    display: none;
+  }
+
+  .showcase-preview__inner {
+    grid-template-columns: 1fr;
+  }
+
+  .showcase-list__meta {
+    position: static;
+    display: none;
+  }
+
+  .showcase-project {
+    grid-template-columns: 1fr;
+    padding-inline-end: var(--showcase-gutter);
+    padding-block-start: calc(var(--showcase-gutter) + 56px);
+  }
+
+  .showcase-project__story {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-backdrop__grain {
+    animation: none;
+  }
+
+  .showcase-list__title,
+  .showcase-list__title::before,
+  .showcase-list__title::after,
+  .showcase-constellation__drift,
+  .showcase-list__item.is-open::before,
+  .showcase-preview,
+  .showcase-preview__inner,
+  .showcase-list__item.is-closing .showcase-preview,
+  .showcase-list__item.is-closing .showcase-preview__inner,
+  .showcase-scene-switcher__loading,
+  .showcase-scene-switcher__percent,
+  .showcase-scene-switcher__bar::after,
+  .showcase-gateway,
+  .showcase-scenes.is-showing,
+  .showcase-scenes.is-leaving .showcase-scenes__canvas,
+  .showcase-scenes.is-entering .showcase-scenes__canvas {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .showcase-list__item,
+  .showcase-list__thumb,
+  .showcase-list__meta,
+  .showcase-constellation {
+    transition: none;
+  }
+}

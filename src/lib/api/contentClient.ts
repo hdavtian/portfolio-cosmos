@@ -6,7 +6,7 @@ export interface ContentEnvelope<TPayload> {
   updatedAt: string;
 }
 
-const API_BASE_URL =
+export const API_BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:8080";
 
 interface FetchByKeyOptions<TPayload> {
@@ -38,7 +38,7 @@ function isPrivateHost(host: string): boolean {
  * VITE_API_BASE_URL injected and the page is being served from a public host,
  * skip the network call entirely and use the bundled fallback content.
  */
-function shouldSkipApiRequest(): boolean {
+export function shouldSkipApiRequest(): boolean {
   try {
     const apiUrl = new URL(API_BASE_URL, window.location.href);
     const pageHost = window.location.hostname;

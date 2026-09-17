@@ -4,7 +4,85 @@ Admin-managed content for both experiences (portfolio site and Three.js cosmos),
 so content changes never require a code deploy. Code deploys are reserved for
 new features, experiences, and templates.
 
-Status: **Phase 1 complete** on `feature/content-platform-phase-1` (2026-09-15). Phase 0 merged and deployed.
+Status (2026-09-17): **phases 0–1 live**. Phases 2 (API v2) and 4 (admin), plus
+the portfolio redesign, are complete on `feature/content-platform-phase-4`
+(pushed, not merged). **Phase 3 (infrastructure) in progress.** See
+"Current rollout" below.
+
+## Current rollout (2026-09-17)
+
+Production today runs phases 0–1: the old site build on GoDaddy and the v1 API on
+`harma-api`. Everything after that lives on `feature/content-platform-phase-4`,
+and merging it to `main` deploys **both** the public site (GoDaddy FTP) and the
+API, so the order below matters.
+
+Also on that branch, beyond the original phases:
+
+- **Portfolio redesign** (`src/features/showcase`) at `/`, projects at
+  `/portfolio/:id`, resume at `/resume`; the previous pages stay at
+  `/portfolio-classic` until retired. Background scenes are fragments of the
+  cinematic universe.
+- **Three.js changes, approved by Harma ahead of the phase 7 gate:** the cinematic
+  pause flag and keep-alive host (`src/lib/cinematicSuspend.ts`,
+  `src/app/cinematic/`), a "Back to main site" link, and removal of the hidden
+  arrow-key resume sections. The cinematic app already reads v2 content.
+
+Next steps, in order:
+
+1. **Phase 3 — infrastructure** (no merge needed; existing resources only):
+   1. ✅ **Done 2026-09-17.** Storage account `sthdsharedprod` (`rg-portfolio-prod`,
+      West US 2, Standard_LRS, Hot, TLS 1.2, HTTPS only), blob soft delete 7 days,
+      container `media` with anonymous blob read, CORS GET/HEAD/OPTIONS for
+      `https://harmadavtian.com`, `https://www.harmadavtian.com` and
+      `https://portfolio-admin.harmadavtian.com` (the WebGL background scenes
+      read screenshots cross-origin). Created through the management plane; no
+      storage keys used or stored.
+   2. ✅ **Done 2026-09-17.** System-assigned managed identity on `harma-api`
+      (principal `7cde9497-7517-4b08-b3a1-c21f8005ce43`), *Storage Blob Data
+      Contributor* scoped to `sthdsharedprod` only. The API picks it up through
+      `AZURE_STORAGE_ACCOUNT=sthdsharedprod` (`DefaultAzureCredential`), set with
+      the other app settings in step 3 so `harma-api` restarts once.
+   3. ✅ **Done 2026-09-17.** `harma-api` app settings: the **current** shared
+      `AUTH_PASSWORD_HASH` / `AUTH_COOKIE_SECRET` (copied from the group apps by
+      script, never printed; no rotation), `AUTH_COOKIE_DOMAIN=.harmadavtian.com`,
+      `AZURE_STORAGE_ACCOUNT=sthdsharedprod`, `AZURE_STORAGE_CONTAINER=media`,
+      `MEDIA_PUBLIC_BASE_URL=https://sthdsharedprod.blob.core.windows.net/media`,
+      `CORS_ORIGINS` (site apex, www, admin). `scrolling-resume` added to the
+      shared-login `apps.json` (env path `api/.env.production.local`), so a
+      future `creds:set` updates it; Azure must then be updated as for the other
+      apps. v1 still serving after the restart (`/healthz`, `/api/v1/content/resume` 200).
+   4. ✅ **Built 2026-09-17, ships with the merge.** `api/src/adminSite.ts` serves
+      the admin SPA when the request host is `ADMIN_HOST`
+      (default `portfolio-admin.harmadavtian.com`): hashed assets immutable,
+      `index.html` no-cache, SPA fallback, CSP allowing images from the media
+      origin; API paths (`/api/*`, `/healthz`, `/swagger`, `/openapi.json`) on
+      that host fall through to the API, other hosts never see the admin. The
+      deploy workflow builds the admin (`npm run build:admin` with secret
+      `SYNCFUSION_LICENSE_KEY`, set 2026-09-17 from the root `.env`) and
+      `make-api-deploy` ships it as `admin/` next to `dist/`.
+      **Fixed a deploy blocker found here:** `tsc` output imported
+      `@hd/content-schema` as TypeScript source, which the deploy package omits,
+      so the v2 API would have crashed on start in Azure. The API now builds
+      with esbuild into one `dist/server.js` (`scripts/build-api.mjs`, workspace
+      packages inlined, npm dependencies external) after a `tsc --noEmit`
+      typecheck. Verified: assembled the real deploy package, installed
+      production dependencies, ran it with `NODE_ENV=production` — admin pages
+      and assets 200 on the admin host, API routes 200 on it, admin 404 on other
+      hosts, login page renders with no CSP errors.
+   5. **Deferred to phase 6b (Harma, 2026-09-17):** rate limiting on admin writes
+      (login is already throttled; writes are behind the single-owner login) and
+      structured logging (App Insights records requests; errors carry request
+      ids). CORS allowlist done in step 3. B1 memory ~75% on 2026-09-17, unchanged.
+2. **Merge `feature/content-platform-phase-4` to `main`.** Deploys API v2, admin
+   and the redesigned site together. Until release 1 exists the site renders
+   its bundled content snapshot, so nothing breaks in between.
+3. **Phase 5 — production data.** `db:pull` backup of Atlas, import, upload the
+   202 images, publish release 1, confirm the live site reads the API (not the
+   fallback). *Approval.*
+4. **Phase 6b — stabilize.** Real admin use; decide when to retire
+   `/portfolio-classic`, the v1 routes and bundled JSON.
+5. **Phase 7/8 — Three.js admin + retrofit**, partly done (the cinematic app
+   already reads v2 content).
 
 ### Phase 0 notes
 
@@ -96,6 +174,57 @@ mainstream portfolio alike. Harma also intends to **redo the fast/mainstream
 portfolio**, so phase 6 is likely a rebuild on v2 rather than a retrofit of the
 current pages; scope that when phase 6 starts. Data changes he wants are folded
 into the phase 2/4 work rather than patched into v1.
+
+### Phase 2 notes (API v2)
+
+Branch `feature/content-platform-phase-2`. Landed so far, each with tests:
+
+- **Shared sign-on** ported from `shared-login-for-personal-apps`
+  (`api/src/auth/`): scrypt hashes and HMAC tokens kept byte-compatible, so one
+  login still covers learn/jobs/portfolio-admin. `requireAuth` denies by
+  default; `/healthz` and the auth endpoints are public.
+- **Admin CRUD** (`/api/v2/admin/...`) generated from `collectionSchemas`, so
+  every entity gets list/create/read/update/delete/reorder from one
+  implementation: server-side paging, sorting, escaped search, optimistic
+  concurrency (409), unique-slug violations as field-level 400s, singleton
+  get/put with the same version check.
+- **Media library** (`/api/v2/admin/media`): type checked by magic bytes, not
+  the client's content type; re-encoded through sharp, which strips EXIF;
+  deletes refused while any record still references the image (checked across
+  nested gallery items, client variants and deck blocks).
+- **Releases**: publish freezes a validated snapshot; the public API serves only
+  the release marked `current`; rollback republishes old content as a new
+  release so history stays append-only (partial unique index guarantees one
+  current release). Publishing is refused on unsaved singletons, invalid drafts
+  (with field paths) or dangling media references.
+- **Public content API** (`/api/v2/content/...`): whole bundle or one area, with
+  ETag/304 revalidation and short caching; `?preview=draft` serves drafts to a
+  signed-in admin only, never cached.
+- **OpenAPI generated from the Zod schemas** (`api/src/swagger/buildOpenApi.ts`),
+  replacing the hand-written document; served at `/openapi.json` and `/swagger`.
+
+**Deviations worth remembering:**
+
+- **Integration tests run against Docker MongoDB**, not `mongodb-memory-server`:
+  MongoDB publishes no Windows ARM64 build, so its downloader cannot work on
+  this machine. Tests use a throwaway database and skip (not fail) when Docker
+  is down — so check for "skipped" before trusting a green run.
+- **Media is keyed by `blobPath`**, not `slug`; `EntityRepository` takes the
+  natural key field for that reason.
+- **Entity schemas are inlined in the OpenAPI document, not named components.**
+  `extendZodWithOpenApi` patches zod's factory functions, so only schemas
+  created after that call gain `.openapi()`. Schemas imported from
+  `@hd/content-schema` are created when that module loads, which ESM always
+  evaluates first, so they can never be registered by name. Do not "fix" this
+  with import-order tricks; it breaks as soon as another module imports the
+  package first.
+- **`@hd/content-schema` uses explicit `.js` extensions** on relative imports:
+  the API compiles with NodeNext, which requires them. Without them the package
+  fails to load and surfaces as phantom "no exported member" errors.
+
+**Still to do in phase 2:** rate limiting on write routes, structured logging
+(pino, replacing morgan), and wiring `AUTH_COOKIE_DOMAIN` plus the production
+CORS allowlist — the last two belong with the phase 3 infrastructure step.
 
 ---
 
@@ -260,8 +389,12 @@ Keep the existing layering (controller → service → repository) and add:
 
 ## 6. Admin (`/admin`)
 
-- Lazy route chunk; `syncfusion-license.ts` registers `VITE_SYNCFUSION_LICENSE_KEY`
-  (GitHub Actions secret, own key).
+- `syncfusion-license.ts` registers `VITE_SYNCFUSION_LICENSE_KEY` (Harma's own
+  key, never Hydrodent's). The variable belongs in the **repo-root `.env`** —
+  Vite does not read `api/.env` — and in the GitHub Actions secret
+  `SYNCFUSION_LICENSE_KEY` for production builds. See the root `.env.example`.
+  **Open item:** the current key is a 7-day trial expiring ~2026-09-23; swap in
+  the permanent Community Licence key when it arrives.
 - Copy Hydrodent's two Syncfusion skills into this repo (`.claude/skills/`), and
   a reference copy to a central folder for future apps.
 - **Login** page using the shared auth endpoints; route guard via
@@ -329,6 +462,19 @@ Consequences while the gate is closed:
 - **Preview mode** wired through the content client.
 - **Verification**: hard-refresh before/after load timing on both experiences
   (performance must not regress).
+
+### Redesign reference: D3 skills graph
+
+For the mainstream portfolio redesign, Harma wants to consider the "Technical
+Expertise" diagram from the old scrolling resume (press Down arrow from the
+cinematic 3D hero to reach it). It is `SkillsDiagram` in `src/App.tsx`: a D3
+force-directed graph (centre → category circles → skill circles sized to their
+label; forceLink, forceManyBody, forceCollide, forceCenter; drag that settles
+in place; zoom controls). Since 2026-09-16 it reads the separate, nestable tech
+stack (`techStackNodes`, Admin → Portfolio → Tech stack) via `useTechStackQuery`;
+the resume's skills stay one level deep. Reuse or extract it rather than rewriting. More
+D3 styles (circles, constellation, circuit, rings, tree, neural) are in
+`src/components/ResumeStructureDiagram.tsx`. Full write-up: `docs/d3-skills-graph.md`.
 
 ## 8. Infrastructure
 

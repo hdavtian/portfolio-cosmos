@@ -1,7 +1,7 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { openApiDocument } from "../src/swagger/openapi.js";
+import { buildOpenApiDocument } from "../src/swagger/buildOpenApi.js";
 
 describe("app", () => {
   const app = createApp();
@@ -43,16 +43,19 @@ describe("app", () => {
     expect(response.status).toBe(404);
   });
 
-  it("documents only the keys still served", () => {
-    const keyPath = openApiDocument.paths["/api/v1/content/{key}"];
+  it("documents only the v1 keys still served", () => {
+    const doc = buildOpenApiDocument();
+    const parameters = doc.paths["/api/v1/content/{key}"]?.get?.parameters as Array<{
+      name: string;
+      schema: { enum?: string[] };
+    }>;
+    const keyParam = parameters.find((parameter) => parameter.name === "key");
 
-    expect(keyPath.get.parameters[0].schema.enum).toEqual([
-      "resume",
-      "portfolio-cores",
-    ]);
-    expect(Object.keys(openApiDocument.paths)).toEqual([
-      "/healthz",
-      "/api/v1/content/{key}",
-    ]);
+    expect(keyParam?.schema.enum).toEqual(["resume", "portfolio-cores"]);
+
+    // The retired v1 routes stay undocumented.
+    for (const retired of ["/api/v1/content", "/api/v1/content/about-deck"]) {
+      expect(Object.keys(doc.paths)).not.toContain(retired);
+    }
   });
 });

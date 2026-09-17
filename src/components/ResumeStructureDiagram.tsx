@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import resumeData from "../data/resume.json";
 import { type DiagramStyle, type DiagramStyleOptions } from "./DiagramSettings";
 import ResumeSpace3D from "./cosmos/ResumeSpace3D";
+import type { PortfolioCoreSeed as CosmosPortfolioCoreSeed } from "./cosmos/portfolioData";
+import { useCosmosContentQuery } from "../lib/query/contentQueries";
 
 interface ResumeStructureDiagramProps {
   onNavigate: (section: number) => void;
@@ -64,7 +66,7 @@ function ResumeStructureDiagram({
   if (style === "space") {
     return (
       <div style={{ position: "relative", width: "100%", height: "100%" }}>
-        <ResumeSpace3D
+        <PortfolioSpace
           key={`space-reload-${spaceReloadKey}`}
           onNavigate={onNavigate}
           options={options}
@@ -79,6 +81,47 @@ function ResumeStructureDiagram({
     <div className="hero__diagram-container">
       <svg ref={svgRef} className="hero__diagram-svg"></svg>
     </div>
+  );
+}
+
+type PortfolioSpaceProps = Omit<
+  React.ComponentProps<typeof ResumeSpace3D>,
+  "portfolioCores" | "moonPortfolioMapping" | "aboutPathTravelMessages" | "techStack" | "profile"
+>;
+
+// How long the scene waits for fresh content before using the copy saved from
+// a previous visit, so a slow API never holds the page back.
+const FRESH_CONTENT_WAIT_MS = 2500;
+
+/**
+ * Mounts the 3D scene once the published content has loaded. The scene builds
+ * its lattice, orbits and ride messages a single time, so it must start with
+ * the current release rather than swap it in later. The browser keeps a copy
+ * of the last release; mounting on that copy showed the previous publish until
+ * a second reload, so the scene waits for this visit's fetch (which falls back
+ * to bundled content on error), or the saved copy after a short timeout.
+ */
+function PortfolioSpace(props: PortfolioSpaceProps) {
+  const portfolio = useCosmosContentQuery();
+  const [waitedLongEnough, setWaitedLongEnough] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setWaitedLongEnough(true), FRESH_CONTENT_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const fresh = portfolio.isFetchedAfterMount;
+  if (!portfolio.data || (!fresh && !waitedLongEnough)) return null;
+  return (
+    <ResumeSpace3D
+      {...props}
+      // Same data as the bundled JSON the scene was written against; the fast
+      // site's seed type just marks every level optional.
+      portfolioCores={portfolio.data.portfolioCores as CosmosPortfolioCoreSeed[]}
+      moonPortfolioMapping={portfolio.data.moonPortfolioMapping}
+      aboutPathTravelMessages={portfolio.data.aboutPathTravelMessages}
+      techStack={portfolio.data.techStack}
+      profile={portfolio.data.personal}
+    />
   );
 }
 

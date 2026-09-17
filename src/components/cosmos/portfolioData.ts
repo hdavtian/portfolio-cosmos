@@ -159,7 +159,10 @@ export const resolvePortfolioMediaItems = (
 ): PortfolioResolvedMediaItem[] => {
   const variant = opts?.variant;
   const variantIndex = opts?.variantIndex;
-  const maxMediaItems = Math.max(1, opts?.maxMediaItems ?? 12);
+  // No cap by default: the card's thumbnail row pages 6 at a time, and every
+  // gallery image is already downloaded during loading. (The old cap of 12
+  // predated the thumbnail slider and hid images without saving anything.)
+  const maxMediaItems = Math.max(1, opts?.maxMediaItems ?? Number.POSITIVE_INFINITY);
   const baseId = variant?.id || entry.id;
   const baseTitle = variant?.title || entry.title;
   const baseDescription = variant?.description || entry.description;
@@ -258,7 +261,7 @@ export const resolvePortfolioMediaItems = (
 
 export const buildPortfolioGroups = (
   entries: PortfolioEntry[],
-  maxMediaItems = 12,
+  maxMediaItems = Number.POSITIVE_INFINITY,
 ): PortfolioGroupView[] =>
   entries
     .filter((entry) => (entry as { published?: boolean }).published !== false)
@@ -340,7 +343,7 @@ const cloneEntryForInstance = (
 
 export const buildPortfolioCoreViews = (
   coreSeeds: PortfolioCoreSeed[],
-  maxMediaItems = 12,
+  maxMediaItems = Number.POSITIVE_INFINITY,
 ): PortfolioCoreBuildResult => {
   const colorFallbacks = [
     0x7c3aed,
@@ -454,5 +457,5 @@ export const buildPortfolioCoreViews = (
 
 export const buildPortfolioRegistryModel = (
   coreSeeds: PortfolioCoreSeed[],
-  maxMediaItems = 12,
+  maxMediaItems = Number.POSITIVE_INFINITY,
 ): PortfolioCoreBuildResult => buildPortfolioCoreViews(coreSeeds, maxMediaItems);

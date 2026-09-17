@@ -10,7 +10,7 @@ export function FastTopNav() {
   return (
     <header className="fast-top-nav">
       <div className="fast-top-nav__inner">
-        <NavLink to="/portfolio" className="fast-top-nav__brand">
+        <NavLink to="/portfolio-classic" className="fast-top-nav__brand">
           HarmaDavtian.com
         </NavLink>
 
@@ -29,7 +29,7 @@ export function FastTopNav() {
           className={`fast-top-nav__links ${menuOpen ? "is-open" : ""}`}
           aria-label="Primary navigation"
         >
-          <NavLink to="/portfolio" className={({ isActive }) => navClass(isActive)}>
+          <NavLink to="/portfolio-classic" className={({ isActive }) => navClass(isActive)}>
             Portfolio
           </NavLink>
         </nav>

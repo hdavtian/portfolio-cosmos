@@ -116,7 +116,6 @@ const toCards = (entries: PortfolioEntry[]): MoonPortfolioCard[] =>
             mediaItems: resolvePortfolioMediaItems(entry, {
               variant,
               variantIndex: vi,
-              maxMediaItems: 12,
             }),
           }))
         : undefined;
@@ -125,7 +124,7 @@ const toCards = (entries: PortfolioEntry[]): MoonPortfolioCard[] =>
       title: entry.title,
       description: entry.description,
       technologies: entry.technologies ?? [],
-      mediaItems: resolvePortfolioMediaItems(entry, { maxMediaItems: 12 }),
+      mediaItems: resolvePortfolioMediaItems(entry),
       subcategories,
     };
   });

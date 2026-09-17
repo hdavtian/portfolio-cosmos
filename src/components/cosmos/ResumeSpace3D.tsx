@@ -6,9 +6,7 @@ import * as THREE from "three";
 import ThreeGlobe from "three-globe";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import aboutDeck from "../../data/aboutDeck.json";
-import aboutPathTravelMessages from "../../data/aboutPathTravelMessages.json";
-import { moonPortfolioMapping } from "../../data/moonPortfolioMapping";
-import portfolioCores from "../../data/portfolioCores.json";
+import type { AboutPathTravelMessage, TechStackTreeNode } from "../../lib/api/contentV2";
 import {
   CareerGallery,
   type CareerGalleryFocusInfo,
@@ -147,7 +145,7 @@ import {
   type KeyboardStudioPreset,
   type KeyboardStudioSoundDesign,
 } from "./audio/keyboardStudioBindings";
-import { createKeyboardStudioEngine } from "./audio/keyboardStudioEngine";
+import { createKeyboardStudioEngine, getToneRawContext } from "./audio/keyboardStudioEngine";
 import {
   attachAudioListenerToCamera,
   createPositionalAudio,
@@ -176,7 +174,6 @@ import MoonOrbitHtmlLayout from "./MoonOrbitHtmlLayout";
 import { buildMoonPortfolioPayload } from "./moonPortfolioSelector";
 import {
   buildPortfolioRegistryModel,
-  type PortfolioCoreSeed,
   type PortfolioCoreView,
   type PortfolioGroupView,
 } from "./portfolioData";
@@ -211,6 +208,7 @@ import {
 } from "./scaleConfig";
 import { TargetPreviewTVPanel } from "./TargetPreviewTVPanel";
 
+import { isCinematicSuspended, subscribeCinematicSuspended } from "../../lib/cinematicSuspend";
 // Extend window for logging timestamps
 declare global {
   interface Window {
@@ -1442,22 +1440,13 @@ type AboutExitConfirmIntent = {
   targetType: "section" | "moon";
 };
 
-type AboutPathTravelMessage = {
-  id: string;
-  textContent: string;
-  fontFamily?: string[];
-  fontSize?: string;
-  fontColor?: string;
-  fontShadow?: string;
-};
 
 const ABOUT_RETARGET_SHATTER_MS = 2600;
 const ABOUT_CRYSTAL_DISPERSING_FADE_MS = 2400;
 const ABOUT_DISPERSAL_SUN_PAN_MS = 2300;
 
-const ABOUT_PATH_RIDE_MESSAGES: AboutPathTravelMessage[] = (
-  aboutPathTravelMessages as AboutPathTravelMessage[]
-).slice(0, 18);
+// The ride paces messages evenly along the path; beyond this many they crowd.
+const ABOUT_PATH_RIDE_MESSAGE_LIMIT = 18;
 
 const DEFAULT_BACKGROUND_MUSIC_TRACK =
   Object.keys(COSMIC_AUDIO_TRACKS)[0] ?? "";
@@ -1522,6 +1511,14 @@ type OrbitalPortfolioStationRecord = {
     frame: THREE.Mesh;
     variantIndex: number;
   }>;
+  /** Arrows beside the tab row when a project has more client sites than tab slots. */
+  cardVariantTabNavMeshes: Array<{
+    mesh: THREE.Mesh;
+    frame: THREE.Mesh;
+    direction: "prev" | "next";
+  }>;
+  /** Index of the client site shown in the first tab slot. */
+  variantTabPageStart: number;
   cardThumbMeshes: Array<{
     mesh: THREE.Mesh;
     frame: THREE.Mesh;
@@ -1886,8 +1883,14 @@ type SkillsLatticeNodeRecord = {
   baseScale: number;
   phase: number;
   label: string;
+  // "category" = a top-level tech stack node (a core); "skill" = any deeper node.
   nodeType: "category" | "skill";
+  /** Name of the top-level node this belongs to (its branch). */
   category: string;
+  /** 1 for cores, 2 for their children, and so on. */
+  depth: number;
+  /** Names from the core down to this node, e.g. ["Frontend", "Frameworks", "React"]. */
+  path: string[];
   detailItems: string[];
   halo?: THREE.Sprite;
   lineInfluence: number;
@@ -2029,14 +2032,24 @@ export default function ResumeSpace3D({
   options,
   onOptionsChange,
   onReloadUniverse,
+  portfolioCores,
+  moonPortfolioMapping,
+  aboutPathTravelMessages,
+  techStack,
+  profile,
 }: ResumeSpace3DProps) {
+  // Published (or bundled) before mount, so a plain slice is stable for the scene's lifetime.
+  const aboutPathRideMessages = useMemo(
+    () => aboutPathTravelMessages.slice(0, ABOUT_PATH_RIDE_MESSAGE_LIMIT),
+    [aboutPathTravelMessages],
+  );
   const aboutDeckData = aboutDeck as AboutDeckData;
   const aboutSlides = aboutDeckData.aboutDeck.slides;
 
   const portfolioCoreBuild = useMemo(
     () =>
-      buildPortfolioRegistryModel(portfolioCores as PortfolioCoreSeed[]),
-    [],
+      buildPortfolioRegistryModel(portfolioCores),
+    [portfolioCores],
   );
   const moonPortfolioByCompanyId = useMemo(() => {
     const map = new Map<string, NonNullable<OverlayContent["moonPortfolio"]>>();
@@ -2046,13 +2059,13 @@ export default function ResumeSpace3D({
       const payload = buildMoonPortfolioPayload({
         companyId,
         companyName: String(company?.company ?? companyId),
-        coreSeeds: portfolioCores as PortfolioCoreSeed[],
+        coreSeeds: portfolioCores,
         mappings: moonPortfolioMapping,
       });
       if (payload) map.set(companyId, payload);
     });
     return map;
-  }, []);
+  }, [portfolioCores, moonPortfolioMapping]);
   const getMoonPortfolio = useCallback(
     (company: any): OverlayContent["moonPortfolio"] => {
       const companyId = String(company?.id ?? "").trim();
@@ -2310,6 +2323,7 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     const onWheel = (event: WheelEvent) => {
+      if (isCinematicSuspended()) return;
       if (
         orbitPhase !== "orbiting" ||
         !overlayContent ||
@@ -2458,12 +2472,49 @@ export default function ResumeSpace3D({
   }, [overallVolume]);
 
   useEffect(() => {
+    if (isCinematicSuspended()) return;
     window.dispatchEvent(
       new CustomEvent("cosmicAudioChange", {
         detail: { track: musicEnabled ? musicTrack : "" },
       }),
     );
   }, [musicEnabled, musicTrack]);
+
+  // Cinematic pause flag: while hidden behind the portfolio, silence the
+  // music and suspend the Web Audio contexts (three.js sounds and Tone.js);
+  // restore both when the experience is shown again.
+  const musicSelectionRef = useRef({ musicEnabled, musicTrack });
+  useEffect(() => {
+    musicSelectionRef.current = { musicEnabled, musicTrack };
+  }, [musicEnabled, musicTrack]);
+  useEffect(() => {
+    const resumedContexts = new Set<BaseAudioContext>();
+    return subscribeCinematicSuspended((suspended) => {
+      const contexts: BaseAudioContext[] = [THREE.AudioContext.getContext()];
+      const toneContext = keyboardStudioEngineRef.current ? getToneRawContext() : null;
+      if (toneContext) contexts.push(toneContext);
+      if (suspended) {
+        resumedContexts.clear();
+        for (const context of contexts) {
+          if (context.state === "running" && context instanceof AudioContext) {
+            resumedContexts.add(context);
+            void context.suspend().catch(() => {});
+          }
+        }
+      } else {
+        for (const context of resumedContexts) {
+          if (context instanceof AudioContext) void context.resume().catch(() => {});
+        }
+        resumedContexts.clear();
+      }
+      const { musicEnabled: enabled, musicTrack: track } = musicSelectionRef.current;
+      window.dispatchEvent(
+        new CustomEvent("cosmicAudioChange", {
+          detail: { track: !suspended && enabled ? track : "" },
+        }),
+      );
+    });
+  }, []);
 
   useEffect(() => {
     if (!oblivionDroneAudioBuffersRef.current) return;
@@ -2662,6 +2713,7 @@ export default function ResumeSpace3D({
   useEffect(() => {
     if (!sceneReady) return;
     const unlockAudio = () => {
+      if (isCinematicSuspended()) return;
       void hologramDroneRef.current?.resumeAudioContext();
       const camera = sceneRef.current.camera;
       if (camera) {
@@ -3072,7 +3124,10 @@ export default function ResumeSpace3D({
       raf = requestAnimationFrame(tick);
       const sun = sunEnhancementsRef.current;
       const camera = sceneRef.current.camera;
-      if (!sun || !camera) return;
+      if (!sun || !camera || isCinematicSuspended()) {
+        last = now;
+        return;
+      }
       const dt = Math.max(0, (now - last) / 1000);
       last = now;
       sun.update(dt, camera, getOccluders);
@@ -3932,7 +3987,7 @@ export default function ResumeSpace3D({
       rideMessageRuntime.path = path;
       rideMessageRuntime.pathLength = Math.max(1, path.getLength());
 
-      const count = ABOUT_PATH_RIDE_MESSAGES.length;
+      const count = aboutPathRideMessages.length;
       const step = rideMessageRuntime.pathLength / Math.max(1, count + 1);
       rideMessageRuntime.triggerStep = step;
       rideMessageRuntime.triggerDistances = Array.from(
@@ -3944,7 +3999,7 @@ export default function ResumeSpace3D({
     const activateRideMessage = (index: number) => {
       if (rideMessageRuntime.activeIndex === index) return;
       rideMessageRuntime.activeIndex = index;
-      setAboutRideMessageView(ABOUT_PATH_RIDE_MESSAGES[index] ?? null);
+      setAboutRideMessageView(aboutPathRideMessages[index] ?? null);
     };
 
     // Once fully crystallized and not exploding, panel matrices don't change.
@@ -4559,7 +4614,8 @@ export default function ResumeSpace3D({
       disposeRideMessages();
       disposeCrystalGroup();
     };
-  }, []);
+    // Stable for the scene's lifetime (content loads before mount), so this still runs once.
+  }, [aboutPathRideMessages]);
 
   const recomputeAboutTramInput = useCallback(() => {
     const upHeld =
@@ -4686,6 +4742,7 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (!ABOUT_TRAM_HUD_ENABLED) return;
       const journey = aboutJourneyRef.current;
       if (!journey || journey.phase !== AboutJourneyPhase.PATH_TRAVEL) return;
@@ -4708,6 +4765,7 @@ export default function ResumeSpace3D({
     };
 
     const onKeyUp = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (!ABOUT_TRAM_HUD_ENABLED) return;
       if (event.code === "ArrowUp") {
         event.preventDefault();
@@ -4845,9 +4903,11 @@ export default function ResumeSpace3D({
     };
 
     const onPointerMove = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       setHovered(hitsMjolnir(event));
     };
     const onClick = (event: MouseEvent) => {
+      if (isCinematicSuspended()) return;
       if (!hitsMjolnir(event)) return;
       // Keep the click from also selecting whatever is behind the hammer.
       event.preventDefault();
@@ -5015,6 +5075,7 @@ export default function ResumeSpace3D({
     label: string;
     nodeType: "category" | "skill";
     category: string;
+    path: string[];
     detailItems: string[];
   } | null>(null);
   const spaceshipCameraOffsetRef = useRef(
@@ -6268,6 +6329,7 @@ export default function ResumeSpace3D({
       return () => {};
     }
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       const note = keyboardStudioKeyCodeToNoteMap.get(event.code);
       if (!note) return;
       event.preventDefault();
@@ -6277,6 +6339,7 @@ export default function ResumeSpace3D({
       void pressOnscreenKeyboardNote(note);
     };
     const onKeyUp = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       const note = keyboardStudioKeyCodeToNoteMap.get(event.code);
       if (!note) return;
       event.preventDefault();
@@ -6368,6 +6431,7 @@ export default function ResumeSpace3D({
   );
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       const drag = onscreenKeyboardPanelDragRef.current;
       if (!drag?.active) return;
       if (event.buttons === 0) {
@@ -6386,6 +6450,7 @@ export default function ResumeSpace3D({
       }));
     };
     const onResizeMove = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       const resize = keyboardStudioMainColumnResizeRef.current;
       if (!resize?.active) return;
       const nextWidth = resize.startWidth + (event.clientX - resize.startX);
@@ -7761,6 +7826,7 @@ export default function ResumeSpace3D({
         label: node.label,
         nodeType: node.nodeType,
         category: node.category,
+        path: node.path,
         detailItems: node.detailItems,
       });
       const controls = sceneRef.current.controls;
@@ -8753,6 +8819,7 @@ export default function ResumeSpace3D({
     };
 
     const handleKey = (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (e.key === "F8") {
         e.preventDefault();
         active = !active;
@@ -9820,7 +9887,7 @@ export default function ResumeSpace3D({
         thumb.mesh.visible = false;
         thumb.frame.visible = false;
       });
-      station.cardThumbNavMeshes.forEach((nav) => {
+      [...station.cardThumbNavMeshes, ...station.cardVariantTabNavMeshes].forEach((nav) => {
         nav.mesh.visible = false;
         nav.frame.visible = false;
       });
@@ -10092,6 +10159,7 @@ export default function ResumeSpace3D({
     };
     // Keep canvas clicks from reaching the scene's planet click handler.
     const blockSceneClick = (event: MouseEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.target === dom) event.stopPropagation();
     };
 
@@ -10180,11 +10248,13 @@ export default function ResumeSpace3D({
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.key === "Escape") closeFocus();
     };
     // Keep canvas clicks from reaching the scene's planet click handler
     // (which could navigate away) while inside the gallery.
     const blockSceneClick = (event: MouseEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.target === dom) event.stopPropagation();
     };
 
@@ -13096,7 +13166,9 @@ export default function ResumeSpace3D({
           const hasVariant = tab.mesh.userData.hasVariant !== false;
           tab.mesh.visible = isFocused && hasVariant;
           tab.frame.visible = isFocused && hasVariant;
-          const isActiveTab = tab.variantIndex === orbitalPortfolioVariantIndex;
+          const isActiveTab =
+            Number(tab.mesh.userData.orbitalVariantIndex ?? tab.variantIndex) ===
+            orbitalPortfolioVariantIndex;
           const hoverPulse =
             0.985 +
             0.015 *
@@ -13201,7 +13273,7 @@ export default function ResumeSpace3D({
             thumb.frame.position.z,
           );
         });
-        station.cardThumbNavMeshes.forEach((nav) => {
+        [...station.cardThumbNavMeshes, ...station.cardVariantTabNavMeshes].forEach((nav) => {
           const navMat = nav.mesh.material as THREE.MeshBasicMaterial;
           const navFrameMat = nav.frame.material as THREE.MeshBasicMaterial;
           const canMove = nav.mesh.userData.orbitalNavCanMove === true;
@@ -13969,9 +14041,52 @@ export default function ResumeSpace3D({
     }
 
     const variantsForStation = group?.variants ?? [];
+    // More client sites than tab slots page one tab row at a time, and the
+    // page always contains the active client site.
+    const maxTabPageStart = Math.max(
+      0,
+      variantsForStation.length - ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS,
+    );
+    let tabPageStart = THREE.MathUtils.clamp(
+      station.variantTabPageStart,
+      0,
+      maxTabPageStart,
+    );
+    if (
+      variantIndex < tabPageStart ||
+      variantIndex >= tabPageStart + ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS
+    ) {
+      tabPageStart = THREE.MathUtils.clamp(
+        Math.floor(variantIndex / ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS) * ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS,
+        0,
+        maxTabPageStart,
+      );
+    }
+    station.variantTabPageStart = tabPageStart;
+    const showTabNav = variantsForStation.length > ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS;
+    station.cardVariantTabNavMeshes.forEach((nav) => {
+      const navMat = nav.mesh.material as THREE.MeshBasicMaterial;
+      const navFrameMat = nav.frame.material as THREE.MeshBasicMaterial;
+      const canMove =
+        nav.direction === "prev"
+          ? tabPageStart > 0
+          : tabPageStart + ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS < variantsForStation.length;
+      nav.mesh.visible = showTabNav;
+      nav.frame.visible = showTabNav;
+      nav.mesh.userData.orbitalStationIndex = focusIndex;
+      nav.mesh.userData.orbitalPickKind = "tab-nav";
+      nav.mesh.userData.orbitalTabNavDirection = nav.direction;
+      nav.mesh.userData.orbitalShowNav = showTabNav;
+      nav.mesh.userData.orbitalNavCanMove = canMove;
+      navMat.opacity = canMove ? 0.94 : 0.34;
+      navMat.color.setHex(canMove ? 0xe8f7ff : 0x80a4c3);
+      navFrameMat.opacity = canMove ? 0.84 : 0.24;
+      navFrameMat.color.setHex(canMove ? 0xa8deff : 0x587a96);
+    });
     station.cardVariantTabs.forEach((tab) => {
       const tabMat = tab.mesh.material as THREE.MeshBasicMaterial;
-      const variantAtTab = variantsForStation[tab.variantIndex];
+      const mappedVariantIndex = tabPageStart + tab.variantIndex;
+      const variantAtTab = variantsForStation[mappedVariantIndex];
       tab.mesh.userData.hasVariant = Boolean(variantAtTab);
       if (!variantAtTab) {
         assignGeneratedTextTexture(tabMat, null);
@@ -14002,7 +14117,7 @@ export default function ResumeSpace3D({
       tab.frame.visible = true;
       tab.mesh.userData.orbitalStationIndex = focusIndex;
       tab.mesh.userData.orbitalPickKind = "variant";
-      tab.mesh.userData.orbitalVariantIndex = tab.variantIndex;
+      tab.mesh.userData.orbitalVariantIndex = mappedVariantIndex;
     });
 
     const thumbLoader = new THREE.TextureLoader();
@@ -14128,8 +14243,12 @@ export default function ResumeSpace3D({
       if (orbitalPortfolioEntrySequenceRef.current.active) return;
       setOrbitalPortfolioManualLock(true, "pointer-or-wheel");
     };
-    const onPointerDown = () => noteManualIntent();
+    const onPointerDown = () => {
+      if (isCinematicSuspended()) return;
+      noteManualIntent();
+    };
     const onWheel = (event: WheelEvent) => {
+      if (isCinematicSuspended()) return;
       noteManualIntent();
       if (!event.shiftKey) {
         if (orbitalPortfolioInspectedStationIndexRef.current !== null) {
@@ -14910,8 +15029,16 @@ export default function ResumeSpace3D({
       mediaIndex?: number;
       variantIndex?: number;
       thumbNavDirection?: "prev" | "next";
+      tabNavDirection?: "prev" | "next";
       slideNavDirection?: "prev" | "next";
-      kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav" | "slide-nav";
+      kind:
+        | "plate"
+        | "thumb"
+        | "variant"
+        | "core"
+        | "thumb-nav"
+        | "tab-nav"
+        | "slide-nav";
     } | null = null;
 
     const pickPortfolioTarget = (
@@ -14923,8 +15050,16 @@ export default function ResumeSpace3D({
       mediaIndex?: number;
       variantIndex?: number;
       thumbNavDirection?: "prev" | "next";
+      tabNavDirection?: "prev" | "next";
       slideNavDirection?: "prev" | "next";
-      kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav" | "slide-nav";
+      kind:
+        | "plate"
+        | "thumb"
+        | "variant"
+        | "core"
+        | "thumb-nav"
+        | "tab-nav"
+        | "slide-nav";
     } | null => {
       if (!orbitalPortfolioActiveRef.current) return null;
       const cam = sceneRef.current.camera;
@@ -14948,7 +15083,10 @@ export default function ResumeSpace3D({
         station.cardVariantTabs.forEach((tab) => {
           tab.mesh.userData.orbitalStationIndex = stationIndex;
           tab.mesh.userData.orbitalPickKind = "variant";
-          tab.mesh.userData.orbitalVariantIndex = tab.variantIndex;
+          // The card update stores which client site the slot shows (tabs page).
+          if (!Number.isFinite(Number(tab.mesh.userData.orbitalVariantIndex))) {
+            tab.mesh.userData.orbitalVariantIndex = tab.variantIndex;
+          }
           if (tab.mesh.visible) pickables.push(tab.mesh);
         });
         station.cardThumbMeshes.forEach((thumb) => {
@@ -14963,6 +15101,12 @@ export default function ResumeSpace3D({
           nav.mesh.userData.orbitalStationIndex = stationIndex;
           nav.mesh.userData.orbitalPickKind = "thumb-nav";
           nav.mesh.userData.orbitalThumbNavDirection = nav.direction;
+          if (nav.mesh.visible) pickables.push(nav.mesh);
+        });
+        station.cardVariantTabNavMeshes.forEach((nav) => {
+          nav.mesh.userData.orbitalStationIndex = stationIndex;
+          nav.mesh.userData.orbitalPickKind = "tab-nav";
+          nav.mesh.userData.orbitalTabNavDirection = nav.direction;
           if (nav.mesh.visible) pickables.push(nav.mesh);
         });
         station.cardSlideNavMeshes.forEach((nav) => {
@@ -14984,6 +15128,7 @@ export default function ResumeSpace3D({
           | "variant"
           | "core"
           | "thumb-nav"
+          | "tab-nav"
           | "slide-nav"
           | undefined) ?? "plate";
       if (kind === "core") {
@@ -15008,6 +15153,11 @@ export default function ResumeSpace3D({
         const thumbNavDirection =
           hit.userData?.orbitalThumbNavDirection === "next" ? "next" : "prev";
         return { stationIndex, thumbNavDirection, kind: "thumb-nav" };
+      }
+      if (kind === "tab-nav") {
+        const tabNavDirection =
+          hit.userData?.orbitalTabNavDirection === "next" ? "next" : "prev";
+        return { stationIndex, tabNavDirection, kind: "tab-nav" };
       }
       if (kind === "slide-nav") {
         const slideNavDirection =
@@ -15111,6 +15261,37 @@ export default function ResumeSpace3D({
             }
           });
         } else if (
+          pending.kind === "tab-nav" &&
+          typeof pending.stationIndex === "number"
+        ) {
+          const station = orbitalPortfolioStationsRef.current[pending.stationIndex];
+          const variantCount =
+            orbitalPortfolioGroupsRef.current[pending.stationIndex]?.variants
+              ?.length ?? 0;
+          if (station && variantCount > ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS) {
+            const delta =
+              pending.tabNavDirection === "next"
+                ? ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS
+                : -ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS;
+            const nextPageStart = THREE.MathUtils.clamp(
+              station.variantTabPageStart + delta,
+              0,
+              Math.max(0, variantCount - ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS),
+            );
+            if (nextPageStart !== station.variantTabPageStart) {
+              station.variantTabPageStart = nextPageStart;
+              setOrbitalPortfolioVariantIndex(nextPageStart);
+              setOrbitalPortfolioMediaIndex(0);
+              setOrbitalPortfolioThumbPageStart(0);
+            }
+            const activeDirection = pending.tabNavDirection;
+            station.cardVariantTabNavMeshes.forEach((nav) => {
+              if (nav.direction === activeDirection) {
+                nav.mesh.userData.orbitalPressedUntil = performance.now() + 140;
+              }
+            });
+          }
+        } else if (
           pending.kind === "slide-nav" &&
           typeof pending.stationIndex === "number"
         ) {
@@ -15183,6 +15364,7 @@ export default function ResumeSpace3D({
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (!dragging || !skillsLatticeActiveRef.current) return;
       const controls = sceneRef.current.controls;
       const camera = sceneRef.current.camera;
@@ -16415,9 +16597,8 @@ export default function ResumeSpace3D({
       .copy(skillsAnchor)
       .add(new THREE.Vector3(0, 8, 0));
     skillsLatticeRoot.visible = true;
-    const categoryEntries = Object.entries(resumeData.skills) as Array<
-      [string, string[]]
-    >;
+    // Cores are the top-level tech stack nodes (Admin → Portfolio → Tech stack).
+    const categoryEntries = techStack;
     const categoryNodeRadius = 3.2;
     const skillNodeRadius = 1.25;
     const latticeRadius = 58;
@@ -17108,6 +17289,7 @@ export default function ResumeSpace3D({
       const createThumbNav = (
         direction: "prev" | "next",
         x: number,
+        y = -23.8,
       ): {
         mesh: THREE.Mesh;
         frame: THREE.Mesh;
@@ -17154,8 +17336,8 @@ export default function ResumeSpace3D({
           },
         );
         navMesh.material.map = arrowTexture;
-        navFrame.position.set(x, -23.8, 1.16);
-        navMesh.position.set(x, -23.8, 1.2);
+        navFrame.position.set(x, y, 1.16);
+        navMesh.position.set(x, y, 1.2);
         navFrame.visible = false;
         navMesh.visible = false;
         stationGroup.add(navFrame, navMesh);
@@ -17164,6 +17346,11 @@ export default function ResumeSpace3D({
       const cardThumbNavMeshes = [
         createThumbNav("prev", -31.2),
         createThumbNav("next", 31.2),
+      ];
+      // Same height as the tab row (y 23.2), just outside the first and last tab.
+      const cardVariantTabNavMeshes = [
+        createThumbNav("prev", -31.2, 23.2),
+        createThumbNav("next", 31.2, 23.2),
       ];
       const createSlideNav = (
         direction: "prev" | "next",
@@ -17384,6 +17571,8 @@ export default function ResumeSpace3D({
         textureFitMode: media?.fit ?? "cover",
         cardTitleMesh,
         cardVariantTabs,
+        cardVariantTabNavMeshes,
+        variantTabPageStart: 0,
         cardThumbMeshes,
         cardThumbNavMeshes,
         cardSlideNavMeshes,
@@ -17435,7 +17624,7 @@ export default function ResumeSpace3D({
         thumb.mesh.layers.enable(0);
         thumb.mesh.layers.enable(ORBITAL_PORTFOLIO_LAYER);
       });
-      station.cardThumbNavMeshes.forEach((nav) => {
+      [...station.cardThumbNavMeshes, ...station.cardVariantTabNavMeshes].forEach((nav) => {
         nav.frame.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
         nav.frame.layers.enable(0);
         nav.frame.layers.enable(ORBITAL_PORTFOLIO_LAYER);
@@ -17667,7 +17856,13 @@ export default function ResumeSpace3D({
       skillsLatticeRoot.add(lines);
     }
 
-    categoryEntries.forEach(([category, skills], idx) => {
+    // Every name beneath a node, for evidence lookups and counts.
+    const descendantNames = (node: TechStackTreeNode): string[] =>
+      node.children.flatMap((child) => [child.name, ...descendantNames(child)]);
+
+    categoryEntries.forEach((root, idx) => {
+      const category = root.name;
+      const branchNames = descendantNames(root);
       const cPos = categoryPositions[idx];
       const categoryNode = new THREE.Mesh(
         new THREE.IcosahedronGeometry(categoryNodeRadius, 1),
@@ -17703,84 +17898,150 @@ export default function ResumeSpace3D({
         label: category,
         nodeType: "category",
         category,
-        detailItems: [...skills.slice(0, 8), ...findCategoryEvidence(skills)],
+        depth: 1,
+        path: [category],
+        detailItems: [
+          ...root.children.map((child) => child.name).slice(0, 8),
+          ...findCategoryEvidence(branchNames),
+        ],
         halo: catHalo ?? undefined,
         lineInfluence: idx,
       });
 
-      const catLabel = createLabel(category, `${skills.length} skills`);
+      const catLabel = createLabel(category, `${branchNames.length} skills`);
       catLabel.userData.skillsLatticeLabel = true;
       catLabel.position.set(cPos.x, cPos.y + 6.6, cPos.z);
       catLabel.visible = false;
       skillsLatticeRoot.add(catLabel);
       skillsLatticeNodeLabelsRef.current.push(catLabel);
 
+      // All links in this branch share one line group, so selecting any node
+      // in the branch lights the whole branch (as categories did before).
       const skillLinePoints: number[] = [];
-      const skillOrbitR = 11 + Math.min(7, skills.length * 0.7);
-      skills.forEach((skill, sIdx) => {
-        const sa =
-          (sIdx / Math.max(1, skills.length)) * Math.PI * 2 + idx * 0.35;
-        const sPos = new THREE.Vector3(
-          cPos.x + Math.cos(sa) * skillOrbitR,
-          cPos.y + Math.sin(sa * 1.4) * 2.2,
-          cPos.z + Math.sin(sa) * skillOrbitR,
-        );
-        const skillNode = new THREE.Mesh(
-          new THREE.OctahedronGeometry(skillNodeRadius, 0),
-          skillMat.clone(),
-        );
-        const skillEdges = new THREE.LineSegments(
-          new THREE.EdgesGeometry(skillNode.geometry),
-          new THREE.LineBasicMaterial({
-            color: 0xf4fbff,
-            transparent: true,
-            opacity: 0.75,
-            depthWrite: false,
-          }),
-        );
-        skillEdges.scale.setScalar(1.018);
-        skillNode.add(skillEdges);
-        skillNode.position.copy(sPos);
-        skillNode.userData.skillsNode = {
-          label: skill,
-          nodeType: "skill",
-          category,
-        };
-        skillsLatticeRoot.add(skillNode);
-        const skillHalo = makeNodeHalo(skillNodeRadius, 0xdaf1ff);
-        if (skillHalo) {
-          skillHalo.position.copy(sPos);
-          skillsLatticeRoot.add(skillHalo);
+
+      // Children orbit their parent. Depth 2 keeps the original ring around the
+      // core; deeper levels use smaller rings tilted to face away from the
+      // grandparent, so a branch fans outward instead of colliding with the
+      // ring it hangs from.
+      const placeChildren = (
+        parent: TechStackTreeNode,
+        parentPos: THREE.Vector3,
+        grandparentPos: THREE.Vector3 | null,
+        depth: number,
+        parentPath: string[],
+        orderSeed: number,
+      ) => {
+        const children = parent.children;
+        if (children.length === 0) return;
+        const orbitR =
+          depth === 2
+            ? 11 + Math.min(7, children.length * 0.7)
+            : Math.max(3.2, 6.2 - (depth - 3) * 1.2) +
+              Math.min(3, children.length * 0.35);
+        // Plane for this ring: depth 2 is the lattice's horizontal plane;
+        // deeper rings are perpendicular to the grandparent → parent direction
+        // and pushed a little further out along it.
+        const outward = grandparentPos
+          ? parentPos.clone().sub(grandparentPos).normalize()
+          : new THREE.Vector3(0, 1, 0);
+        const axisA = new THREE.Vector3();
+        const axisB = new THREE.Vector3();
+        let ringCenter = parentPos.clone();
+        if (depth === 2) {
+          axisA.set(1, 0, 0);
+          axisB.set(0, 0, 1);
+        } else {
+          const helper =
+            Math.abs(outward.y) < 0.9
+              ? new THREE.Vector3(0, 1, 0)
+              : new THREE.Vector3(1, 0, 0);
+          axisA.crossVectors(outward, helper).normalize();
+          axisB.crossVectors(outward, axisA).normalize();
+          ringCenter = parentPos.clone().addScaledVector(outward, orbitR * 0.55);
         }
-        const skillEvidence = findSkillEvidence(skill);
-        latticeNodes.push({
-          mesh: skillNode,
-          baseScale: 1,
-          phase: idx * 2.13 + sIdx * 0.77,
-          label: skill,
-          nodeType: "skill",
-          category,
-          detailItems: skillEvidence.length
-            ? [category, ...skillEvidence]
-            : [
-                category,
-                "No mapped evidence yet (add responsibilities with this skill term).",
-              ],
-          halo: skillHalo ?? undefined,
-          lineInfluence: idx + sIdx * 0.15,
+
+        children.forEach((child, sIdx) => {
+          const sa =
+            (sIdx / Math.max(1, children.length)) * Math.PI * 2 + orderSeed * 0.35;
+          const sPos =
+            depth === 2
+              ? new THREE.Vector3(
+                  parentPos.x + Math.cos(sa) * orbitR,
+                  parentPos.y + Math.sin(sa * 1.4) * 2.2,
+                  parentPos.z + Math.sin(sa) * orbitR,
+                )
+              : ringCenter
+                  .clone()
+                  .addScaledVector(axisA, Math.cos(sa) * orbitR)
+                  .addScaledVector(axisB, Math.sin(sa) * orbitR);
+          const radius = skillNodeRadius * Math.pow(0.78, depth - 2);
+          const skillNode = new THREE.Mesh(
+            new THREE.OctahedronGeometry(radius, 0),
+            skillMat.clone(),
+          );
+          const skillEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(skillNode.geometry),
+            new THREE.LineBasicMaterial({
+              color: 0xf4fbff,
+              transparent: true,
+              opacity: 0.75,
+              depthWrite: false,
+            }),
+          );
+          skillEdges.scale.setScalar(1.018);
+          skillNode.add(skillEdges);
+          skillNode.position.copy(sPos);
+          skillNode.userData.skillsNode = {
+            label: child.name,
+            nodeType: "skill",
+            category,
+          };
+          skillsLatticeRoot.add(skillNode);
+          const skillHalo = makeNodeHalo(radius, 0xdaf1ff);
+          if (skillHalo) {
+            skillHalo.position.copy(sPos);
+            skillsLatticeRoot.add(skillHalo);
+          }
+          const path = [...parentPath, child.name];
+          const childNames = child.children.map((grandchild) => grandchild.name);
+          const skillEvidence = findSkillEvidence(child.name);
+          latticeNodes.push({
+            mesh: skillNode,
+            baseScale: 1,
+            phase: idx * 2.13 + sIdx * 0.77 + depth * 0.31,
+            label: child.name,
+            nodeType: "skill",
+            category,
+            depth,
+            path,
+            detailItems: [
+              path.slice(0, -1).join(" › "),
+              ...(childNames.length ? [`Includes: ${childNames.join(", ")}`] : []),
+              ...(skillEvidence.length
+                ? skillEvidence
+                : childNames.length
+                  ? []
+                  : ["No mapped evidence yet (add responsibilities with this skill term)."]),
+            ],
+            halo: skillHalo ?? undefined,
+            lineInfluence: idx + sIdx * 0.15 + (depth - 2) * 0.05,
+          });
+          const skillLabel = createLabel(child.name);
+          skillLabel.userData.skillsLatticeLabel = true;
+          skillLabel.position.set(sPos.x, sPos.y + radius + 1.15, sPos.z);
+          skillLabel.visible = false;
+          skillsLatticeRoot.add(skillLabel);
+          skillsLatticeNodeLabelsRef.current.push(skillLabel);
+          skillLinePoints.push(parentPos.x, parentPos.y, parentPos.z, sPos.x, sPos.y, sPos.z);
+          latticeLinkSegments.push({
+            from: parentPos.clone(),
+            to: sPos.clone(),
+          });
+          placeChildren(child, sPos, parentPos, depth + 1, path, orderSeed + sIdx + 1);
         });
-        const skillLabel = createLabel(skill);
-        skillLabel.userData.skillsLatticeLabel = true;
-        skillLabel.position.set(sPos.x, sPos.y + 2.4, sPos.z);
-        skillLabel.visible = false;
-        skillsLatticeRoot.add(skillLabel);
-        skillsLatticeNodeLabelsRef.current.push(skillLabel);
-        skillLinePoints.push(cPos.x, cPos.y, cPos.z, sPos.x, sPos.y, sPos.z);
-        latticeLinkSegments.push({
-          from: cPos.clone(),
-          to: sPos.clone(),
-        });
-      });
+      };
+      placeChildren(root, cPos, null, 2, [category], idx);
+
       const skillGeom = new THREE.BufferGeometry();
       skillGeom.setAttribute(
         "position",
@@ -18619,6 +18880,7 @@ export default function ResumeSpace3D({
         const DEBUG_BASE_SPEED = 200; // units/sec — tune for universe scale
 
         const debugKeyDown = (e: KeyboardEvent) => {
+          if (isCinematicSuspended()) return;
           debugKeys[e.key.toLowerCase()] = true;
           if (e.key === "F9") {
             e.preventDefault();
@@ -18655,6 +18917,7 @@ export default function ResumeSpace3D({
           }
         };
         const debugKeyUp = (e: KeyboardEvent) => {
+          if (isCinematicSuspended()) return;
           debugKeys[e.key.toLowerCase()] = false;
         };
 
@@ -19304,6 +19567,7 @@ export default function ResumeSpace3D({
 
     // Keyboard shortcut: Shift+F8 to capture viewpoint
     const handleDebugKey = (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (e.key === "F8" && e.shiftKey) {
         e.preventDefault();
         (window as any).captureCameraSnapshot();
@@ -19676,20 +19940,24 @@ export default function ResumeSpace3D({
     });
 
     const onPointerMoveGlobal = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (orbitalPortfolioActiveRef.current || skillsLatticeActiveRef.current)
         return;
       onPointerMove(event);
     };
     const onClickGlobal = (event: MouseEvent) => {
+      if (isCinematicSuspended()) return;
       if (orbitalPortfolioActiveRef.current || skillsLatticeActiveRef.current)
         return;
       onClick(event);
     };
     const onPointerDownRotateGlobal = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (orbitalPortfolioActiveRef.current) return;
       onPointerDownRotate(event);
     };
     const onPointerMoveRotateGlobal = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (orbitalPortfolioActiveRef.current) return;
       onPointerMoveRotate(event);
     };
@@ -19706,6 +19974,7 @@ export default function ResumeSpace3D({
     window.addEventListener("pointerup", onPointerUpRotateGlobal);
 
     const onDebugPointerMove = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (!debugShipLabelModeRef.current || !spaceshipRef.current) {
         if (debugHitMarkerRef.current) {
           debugHitMarkerRef.current.visible = false;
@@ -19818,6 +20087,7 @@ export default function ResumeSpace3D({
     };
 
     const onDebugPointerDown = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (!debugShipLabelModeRef.current) return;
       debugPointerDownRef.current = {
         x: event.clientX,
@@ -19876,6 +20146,7 @@ export default function ResumeSpace3D({
     window.addEventListener("pointerup", onDebugPointerUp, true);
 
     const onDebugLabelKey = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.code === "KeyJ" && event.shiftKey) {
         event.preventDefault();
         event.stopPropagation();
@@ -20096,6 +20367,7 @@ export default function ResumeSpace3D({
     };
 
     const handleSnapshotKey = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.code === "KeyL" && event.shiftKey) {
         handleCameraSnapshot();
       }
@@ -20135,6 +20407,7 @@ export default function ResumeSpace3D({
     };
 
     const handleShipStagingKeyDown = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.code === "KeyM" && event.shiftKey) {
         event.preventDefault();
         event.stopPropagation();
@@ -20178,6 +20451,7 @@ export default function ResumeSpace3D({
     };
 
     const handleShipStagingKeyUp = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (
         shipStagingModeRef.current &&
         event.code in shipStagingKeysRef.current
@@ -20196,6 +20470,7 @@ export default function ResumeSpace3D({
     // ─── SHIP EXPLORE MODE ─────────────────────────────────────
     // Ctrl+Shift+` (backtick) toggles explore mode for cockpit identification.
     const handleExploreKeyDown = (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       // Toggle with Ctrl+Shift+`
       if (e.ctrlKey && e.shiftKey && e.code === "Backquote") {
         e.preventDefault();
@@ -20244,6 +20519,7 @@ export default function ResumeSpace3D({
     };
 
     const handleExploreKeyUp = (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (shipExploreModeRef.current) {
         if (e.code in shipExploreKeysRef.current) {
           shipExploreKeysRef.current[e.code] = false;
@@ -21236,6 +21512,7 @@ export default function ResumeSpace3D({
       {/* Show loader while scene is setting up */}
       {isLoading && (
         <CosmosLoader
+          wordmark={profile.name.toUpperCase()}
           isSceneReady={criticalAssetsReady && droneGpuWarmupReady}
           loadingProgressHint={loaderProgressHint}
           loadingStageHint={loaderStageHint}
@@ -22954,7 +23231,7 @@ export default function ResumeSpace3D({
               >
                 {skillsLatticeSelection.nodeType === "category"
                   ? "Category"
-                  : `Skill in ${skillsLatticeSelection.category}`}
+                  : `In ${skillsLatticeSelection.path.slice(0, -1).join(" › ")}`}
               </div>
               <div
                 style={{
@@ -24701,8 +24978,8 @@ export default function ResumeSpace3D({
 
           {/* Spaceship HUD Interface */}
           <SpaceshipHUD
-            userName="HARMA DAVTIAN"
-            userTitle="Lead Full Stack Engineer"
+            userName={profile.name.toUpperCase()}
+            userTitle={profile.title}
             shipMovementDebug={shipMovementDebug}
             onShipMovementDebugChange={setShipMovementDebug}
             shipMovementDebugPanel={

@@ -362,7 +362,7 @@ export function PortfolioPage() {
                 </span>
               ) : null}
               <Link
-                to={`/portfolio/${item.id}`}
+                to={`/portfolio-classic/${item.id}`}
                 className="portfolio-card__surface"
                 aria-label={
                   isVisited

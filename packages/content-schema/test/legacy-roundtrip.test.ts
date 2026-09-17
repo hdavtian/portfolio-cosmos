@@ -78,6 +78,8 @@ describe("legacy content round trip", () => {
       links: 5,
       skillCategories: 5,
       skills: 18,
+      // A copy of the skills to start from: 5 categories + 18 skills.
+      techStackNodes: 23,
       experiences: 7,
       portfolioCores: 6,
       portfolioEntries: 47,
