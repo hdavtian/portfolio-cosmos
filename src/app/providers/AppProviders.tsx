@@ -3,6 +3,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { useState, type PropsWithChildren } from "react";
 import { ThemeProvider } from "../../theme/ThemeProvider";
+import { ProfileDocumentTitle } from "./ProfileDocumentTitle";
 
 export function AppProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(() =>
@@ -31,6 +32,7 @@ export function AppProviders({ children }: PropsWithChildren) {
         maxAge: 1000 * 60 * 60 * 24,
       }}
     >
+      <ProfileDocumentTitle />
       <ThemeProvider>{children}</ThemeProvider>
     </PersistQueryClientProvider>
   );
