@@ -3,6 +3,8 @@ import { useEffect, useRef } from "react";
 interface AtmosphereBackdropProps {
   /** Hex colour the terrain and fog drift towards (the active project's core). */
   tint: string;
+  /** Stop drawing while another scene covers it (saves the GPU). */
+  paused?: boolean;
 }
 
 // Rolling terrain in fog, drawn with one shader on one plane. It stays cheap on
@@ -77,13 +79,20 @@ const toLinearRgb = (hex: string): [number, number, number] => {
  * demand, animation pauses while the tab is hidden, and reduced-motion users get
  * a single still frame.
  */
-export function AtmosphereBackdrop({ tint }: AtmosphereBackdropProps) {
+export function AtmosphereBackdrop({ tint, paused = false }: AtmosphereBackdropProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const targetTintRef = useRef(toLinearRgb(tint));
+  const pausedRef = useRef(paused);
+  const resumeRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     targetTintRef.current = toLinearRgb(tint);
   }, [tint]);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+    if (!paused) resumeRef.current();
+  }, [paused]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -140,12 +149,17 @@ export function AtmosphereBackdrop({ tint }: AtmosphereBackdropProps) {
         uniforms.uFog.value.lerp(new THREE.Vector3(...target.map((c) => c * 0.55 + 0.08)), ease);
         renderer.setClearColor(new THREE.Color(uniforms.uFog.value.x, uniforms.uFog.value.y, uniforms.uFog.value.z));
         renderer.render(scene, camera);
-        if (!reduceMotion) frame = requestAnimationFrame(render);
+        if (!reduceMotion && !pausedRef.current) frame = requestAnimationFrame(render);
+      };
+      resumeRef.current = () => {
+        cancelAnimationFrame(frame);
+        last = performance.now();
+        frame = requestAnimationFrame(render);
       };
 
       const onVisibility = () => {
         cancelAnimationFrame(frame);
-        if (!document.hidden) {
+        if (!document.hidden && !pausedRef.current) {
           last = performance.now();
           frame = requestAnimationFrame(render);
         }
