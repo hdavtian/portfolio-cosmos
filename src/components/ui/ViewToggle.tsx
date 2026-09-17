@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback } from "react";
 import "./ViewToggle.scss";
 
+import { isCinematicSuspended } from "../../lib/cinematicSuspend";
 type ViewMode = "exterior" | "interior" | "cockpit";
 
 interface Props {
@@ -73,6 +74,7 @@ const ViewToggle: React.FC<Props> = ({
   // V key hotkey
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       // Don't capture if user is typing in an input
       if (
         e.target instanceof HTMLInputElement ||

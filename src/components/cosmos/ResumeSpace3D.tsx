@@ -145,7 +145,7 @@ import {
   type KeyboardStudioPreset,
   type KeyboardStudioSoundDesign,
 } from "./audio/keyboardStudioBindings";
-import { createKeyboardStudioEngine } from "./audio/keyboardStudioEngine";
+import { createKeyboardStudioEngine, getToneRawContext } from "./audio/keyboardStudioEngine";
 import {
   attachAudioListenerToCamera,
   createPositionalAudio,
@@ -208,6 +208,7 @@ import {
 } from "./scaleConfig";
 import { TargetPreviewTVPanel } from "./TargetPreviewTVPanel";
 
+import { isCinematicSuspended, subscribeCinematicSuspended } from "../../lib/cinematicSuspend";
 // Extend window for logging timestamps
 declare global {
   interface Window {
@@ -2322,6 +2323,7 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     const onWheel = (event: WheelEvent) => {
+      if (isCinematicSuspended()) return;
       if (
         orbitPhase !== "orbiting" ||
         !overlayContent ||
@@ -2470,12 +2472,49 @@ export default function ResumeSpace3D({
   }, [overallVolume]);
 
   useEffect(() => {
+    if (isCinematicSuspended()) return;
     window.dispatchEvent(
       new CustomEvent("cosmicAudioChange", {
         detail: { track: musicEnabled ? musicTrack : "" },
       }),
     );
   }, [musicEnabled, musicTrack]);
+
+  // Cinematic pause flag: while hidden behind the portfolio, silence the
+  // music and suspend the Web Audio contexts (three.js sounds and Tone.js);
+  // restore both when the experience is shown again.
+  const musicSelectionRef = useRef({ musicEnabled, musicTrack });
+  useEffect(() => {
+    musicSelectionRef.current = { musicEnabled, musicTrack };
+  }, [musicEnabled, musicTrack]);
+  useEffect(() => {
+    const resumedContexts = new Set<BaseAudioContext>();
+    return subscribeCinematicSuspended((suspended) => {
+      const contexts: BaseAudioContext[] = [THREE.AudioContext.getContext()];
+      const toneContext = keyboardStudioEngineRef.current ? getToneRawContext() : null;
+      if (toneContext) contexts.push(toneContext);
+      if (suspended) {
+        resumedContexts.clear();
+        for (const context of contexts) {
+          if (context.state === "running" && context instanceof AudioContext) {
+            resumedContexts.add(context);
+            void context.suspend().catch(() => {});
+          }
+        }
+      } else {
+        for (const context of resumedContexts) {
+          if (context instanceof AudioContext) void context.resume().catch(() => {});
+        }
+        resumedContexts.clear();
+      }
+      const { musicEnabled: enabled, musicTrack: track } = musicSelectionRef.current;
+      window.dispatchEvent(
+        new CustomEvent("cosmicAudioChange", {
+          detail: { track: !suspended && enabled ? track : "" },
+        }),
+      );
+    });
+  }, []);
 
   useEffect(() => {
     if (!oblivionDroneAudioBuffersRef.current) return;
@@ -2674,6 +2713,7 @@ export default function ResumeSpace3D({
   useEffect(() => {
     if (!sceneReady) return;
     const unlockAudio = () => {
+      if (isCinematicSuspended()) return;
       void hologramDroneRef.current?.resumeAudioContext();
       const camera = sceneRef.current.camera;
       if (camera) {
@@ -3084,7 +3124,10 @@ export default function ResumeSpace3D({
       raf = requestAnimationFrame(tick);
       const sun = sunEnhancementsRef.current;
       const camera = sceneRef.current.camera;
-      if (!sun || !camera) return;
+      if (!sun || !camera || isCinematicSuspended()) {
+        last = now;
+        return;
+      }
       const dt = Math.max(0, (now - last) / 1000);
       last = now;
       sun.update(dt, camera, getOccluders);
@@ -4699,6 +4742,7 @@ export default function ResumeSpace3D({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (!ABOUT_TRAM_HUD_ENABLED) return;
       const journey = aboutJourneyRef.current;
       if (!journey || journey.phase !== AboutJourneyPhase.PATH_TRAVEL) return;
@@ -4721,6 +4765,7 @@ export default function ResumeSpace3D({
     };
 
     const onKeyUp = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (!ABOUT_TRAM_HUD_ENABLED) return;
       if (event.code === "ArrowUp") {
         event.preventDefault();
@@ -4858,9 +4903,11 @@ export default function ResumeSpace3D({
     };
 
     const onPointerMove = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       setHovered(hitsMjolnir(event));
     };
     const onClick = (event: MouseEvent) => {
+      if (isCinematicSuspended()) return;
       if (!hitsMjolnir(event)) return;
       // Keep the click from also selecting whatever is behind the hammer.
       event.preventDefault();
@@ -6282,6 +6329,7 @@ export default function ResumeSpace3D({
       return () => {};
     }
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       const note = keyboardStudioKeyCodeToNoteMap.get(event.code);
       if (!note) return;
       event.preventDefault();
@@ -6291,6 +6339,7 @@ export default function ResumeSpace3D({
       void pressOnscreenKeyboardNote(note);
     };
     const onKeyUp = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       const note = keyboardStudioKeyCodeToNoteMap.get(event.code);
       if (!note) return;
       event.preventDefault();
@@ -6382,6 +6431,7 @@ export default function ResumeSpace3D({
   );
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       const drag = onscreenKeyboardPanelDragRef.current;
       if (!drag?.active) return;
       if (event.buttons === 0) {
@@ -6400,6 +6450,7 @@ export default function ResumeSpace3D({
       }));
     };
     const onResizeMove = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       const resize = keyboardStudioMainColumnResizeRef.current;
       if (!resize?.active) return;
       const nextWidth = resize.startWidth + (event.clientX - resize.startX);
@@ -8768,6 +8819,7 @@ export default function ResumeSpace3D({
     };
 
     const handleKey = (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (e.key === "F8") {
         e.preventDefault();
         active = !active;
@@ -10107,6 +10159,7 @@ export default function ResumeSpace3D({
     };
     // Keep canvas clicks from reaching the scene's planet click handler.
     const blockSceneClick = (event: MouseEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.target === dom) event.stopPropagation();
     };
 
@@ -10195,11 +10248,13 @@ export default function ResumeSpace3D({
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.key === "Escape") closeFocus();
     };
     // Keep canvas clicks from reaching the scene's planet click handler
     // (which could navigate away) while inside the gallery.
     const blockSceneClick = (event: MouseEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.target === dom) event.stopPropagation();
     };
 
@@ -14188,8 +14243,12 @@ export default function ResumeSpace3D({
       if (orbitalPortfolioEntrySequenceRef.current.active) return;
       setOrbitalPortfolioManualLock(true, "pointer-or-wheel");
     };
-    const onPointerDown = () => noteManualIntent();
+    const onPointerDown = () => {
+      if (isCinematicSuspended()) return;
+      noteManualIntent();
+    };
     const onWheel = (event: WheelEvent) => {
+      if (isCinematicSuspended()) return;
       noteManualIntent();
       if (!event.shiftKey) {
         if (orbitalPortfolioInspectedStationIndexRef.current !== null) {
@@ -15305,6 +15364,7 @@ export default function ResumeSpace3D({
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (!dragging || !skillsLatticeActiveRef.current) return;
       const controls = sceneRef.current.controls;
       const camera = sceneRef.current.camera;
@@ -18820,6 +18880,7 @@ export default function ResumeSpace3D({
         const DEBUG_BASE_SPEED = 200; // units/sec — tune for universe scale
 
         const debugKeyDown = (e: KeyboardEvent) => {
+          if (isCinematicSuspended()) return;
           debugKeys[e.key.toLowerCase()] = true;
           if (e.key === "F9") {
             e.preventDefault();
@@ -18856,6 +18917,7 @@ export default function ResumeSpace3D({
           }
         };
         const debugKeyUp = (e: KeyboardEvent) => {
+          if (isCinematicSuspended()) return;
           debugKeys[e.key.toLowerCase()] = false;
         };
 
@@ -19505,6 +19567,7 @@ export default function ResumeSpace3D({
 
     // Keyboard shortcut: Shift+F8 to capture viewpoint
     const handleDebugKey = (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (e.key === "F8" && e.shiftKey) {
         e.preventDefault();
         (window as any).captureCameraSnapshot();
@@ -19877,20 +19940,24 @@ export default function ResumeSpace3D({
     });
 
     const onPointerMoveGlobal = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (orbitalPortfolioActiveRef.current || skillsLatticeActiveRef.current)
         return;
       onPointerMove(event);
     };
     const onClickGlobal = (event: MouseEvent) => {
+      if (isCinematicSuspended()) return;
       if (orbitalPortfolioActiveRef.current || skillsLatticeActiveRef.current)
         return;
       onClick(event);
     };
     const onPointerDownRotateGlobal = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (orbitalPortfolioActiveRef.current) return;
       onPointerDownRotate(event);
     };
     const onPointerMoveRotateGlobal = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (orbitalPortfolioActiveRef.current) return;
       onPointerMoveRotate(event);
     };
@@ -19907,6 +19974,7 @@ export default function ResumeSpace3D({
     window.addEventListener("pointerup", onPointerUpRotateGlobal);
 
     const onDebugPointerMove = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (!debugShipLabelModeRef.current || !spaceshipRef.current) {
         if (debugHitMarkerRef.current) {
           debugHitMarkerRef.current.visible = false;
@@ -20019,6 +20087,7 @@ export default function ResumeSpace3D({
     };
 
     const onDebugPointerDown = (event: PointerEvent) => {
+      if (isCinematicSuspended()) return;
       if (!debugShipLabelModeRef.current) return;
       debugPointerDownRef.current = {
         x: event.clientX,
@@ -20077,6 +20146,7 @@ export default function ResumeSpace3D({
     window.addEventListener("pointerup", onDebugPointerUp, true);
 
     const onDebugLabelKey = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.code === "KeyJ" && event.shiftKey) {
         event.preventDefault();
         event.stopPropagation();
@@ -20297,6 +20367,7 @@ export default function ResumeSpace3D({
     };
 
     const handleSnapshotKey = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.code === "KeyL" && event.shiftKey) {
         handleCameraSnapshot();
       }
@@ -20336,6 +20407,7 @@ export default function ResumeSpace3D({
     };
 
     const handleShipStagingKeyDown = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (event.code === "KeyM" && event.shiftKey) {
         event.preventDefault();
         event.stopPropagation();
@@ -20379,6 +20451,7 @@ export default function ResumeSpace3D({
     };
 
     const handleShipStagingKeyUp = (event: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (
         shipStagingModeRef.current &&
         event.code in shipStagingKeysRef.current
@@ -20397,6 +20470,7 @@ export default function ResumeSpace3D({
     // ─── SHIP EXPLORE MODE ─────────────────────────────────────
     // Ctrl+Shift+` (backtick) toggles explore mode for cockpit identification.
     const handleExploreKeyDown = (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       // Toggle with Ctrl+Shift+`
       if (e.ctrlKey && e.shiftKey && e.code === "Backquote") {
         e.preventDefault();
@@ -20445,6 +20519,7 @@ export default function ResumeSpace3D({
     };
 
     const handleExploreKeyUp = (e: KeyboardEvent) => {
+      if (isCinematicSuspended()) return;
       if (shipExploreModeRef.current) {
         if (e.code in shipExploreKeysRef.current) {
           shipExploreKeysRef.current[e.code] = false;

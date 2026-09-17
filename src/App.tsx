@@ -9,6 +9,7 @@ import DiagramSettings, {
   type DiagramStyleOptions,
 } from "./components/DiagramSettings";
 import { trackEvent } from "./lib/analytics";
+import { isCinematicSuspended, subscribeCinematicSuspended } from "./lib/cinematicSuspend";
 import type { TechStackTreeNode } from "./lib/api/contentV2";
 import { useResumeQuery, useTechStackQuery } from "./lib/query/contentQueries";
 import "./styles/main.scss";
@@ -422,10 +423,17 @@ function SkillsDiagram({ tree }: { tree: TechStackTreeNode[] }) {
 
 function App() {
   // The cinematic body styles (scroll lock, fonts) apply only while this page is
-  // mounted; see body.cinematic-experience in styles/main.scss.
+  // showing (mounted and not paused behind the portfolio); see
+  // body.cinematic-experience in styles/main.scss.
   useEffect(() => {
-    document.body.classList.add("cinematic-experience");
-    return () => document.body.classList.remove("cinematic-experience");
+    const apply = (suspended: boolean) =>
+      document.body.classList.toggle("cinematic-experience", !suspended);
+    apply(isCinematicSuspended());
+    const unsubscribe = subscribeCinematicSuspended(apply);
+    return () => {
+      unsubscribe();
+      document.body.classList.remove("cinematic-experience");
+    };
   }, []);
 
   // The graph shows the published tech stack (Admin → Tech stack), which may

@@ -35,6 +35,12 @@ const normalizeEvents = (events: KeyboardRecordedNoteEvent[]) =>
     }))
     .sort((a, b) => a.startMs - b.startMs);
 
+/** The Tone.js audio context, for pausing sound while the experience is hidden. */
+export const getToneRawContext = (): BaseAudioContext | null => {
+  const raw = Tone.getContext().rawContext as unknown;
+  return raw instanceof BaseAudioContext ? raw : null;
+};
+
 export const createKeyboardStudioEngine = () => {
   let synth: Tone.PolySynth | null = null;
   let filter: Tone.Filter | null = null;

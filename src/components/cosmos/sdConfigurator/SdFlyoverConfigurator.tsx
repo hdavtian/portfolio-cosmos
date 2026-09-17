@@ -13,6 +13,7 @@ import {
   type StarDestroyerMoments,
 } from "../starDestroyerMoments";
 
+import { isCinematicSuspended } from "../../../lib/cinematicSuspend";
 /**
  * On-screen configurator for the Star Destroyer fly-over.
  *
@@ -200,6 +201,7 @@ export function SdFlyoverConfigurator({
 
     // A click right after a drag must not reach the scene (navigation).
     const swallowClick = (event: MouseEvent) => {
+      if (isCinematicSuspended()) return;
       if (performance.now() < suppressClicksUntil) {
         event.stopPropagation();
         event.preventDefault();

@@ -8,7 +8,6 @@ import {
 } from "react-router-dom";
 import { RootLayout } from "./layouts/RootLayout";
 
-const CinematicExperience = lazy(() => import("../App"));
 const FastLayout = lazy(() =>
   import("./layouts/FastLayout").then((module) => ({
     default: module.FastLayout,
@@ -71,14 +70,8 @@ const routes: RouteObject[] = [
           },
         ],
       },
-      {
-        path: "cinematic",
-        element: (
-          <LazyRoute message="Loading cinematic experience...">
-            <CinematicExperience />
-          </LazyRoute>
-        ),
-      },
+      // Rendered by CinematicHost in RootLayout, which can keep it alive.
+      { path: "cinematic", element: null },
       {
         // Previous portfolio, kept for comparison until the redesign is approved.
         path: "portfolio-classic",

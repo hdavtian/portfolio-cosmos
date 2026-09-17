@@ -370,6 +370,9 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
         for (const scene of scenesRef.current.values()) scene.dispose();
         scenesRef.current.clear();
         renderer.dispose();
+        // Hand the GPU memory back now, not whenever the browser gets to it
+        // (the cinematic experience may be taking over).
+        renderer.forceContextLoss();
         renderer.domElement.remove();
       };
 
