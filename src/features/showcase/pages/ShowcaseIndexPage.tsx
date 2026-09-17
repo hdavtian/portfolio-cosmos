@@ -5,6 +5,7 @@ import { TechConstellation } from "../components/TechConstellation";
 import { useBackdropTint } from "../lib/backdropTint";
 import { clearIndexReturnState, readIndexReturnState, saveIndexReturnState } from "../lib/indexReturnState";
 import { useRestState } from "../lib/useRestState";
+import { readVisitedProjects } from "../lib/visitedProjects";
 import { useShowcaseProjects, type ShowcaseProject } from "../lib/useShowcaseProjects";
 
 // Matches the collapse animation in showcase.css.
@@ -62,6 +63,8 @@ export function ShowcaseIndexPage() {
 
   const hovered = visible.find((project) => project.id === hoverId) ?? null;
   const restState = useRestState(REST_AFTER_MS);
+  // Read when the list mounts, i.e. on coming back from a project page.
+  const [visitedIds] = useState(readVisitedProjects);
 
   // While resting, every other sweep fills the watermark with a project's
   // screenshot, swapped in while the names are at their faintest.
@@ -296,6 +299,7 @@ export function ShowcaseIndexPage() {
                   isOpen ? "is-open" : "",
                   isClosing ? "is-closing" : "",
                   isOpen && project.id === restoredOpenId ? "is-restored" : "",
+                  visitedIds.has(project.id) ? "is-visited" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}

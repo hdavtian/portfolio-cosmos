@@ -618,8 +618,19 @@ html.is-scene-dragging * {
   color: var(--showcase-ink);
 }
 
+/* Title ink as an RGB triplet so the watermark light can use it too. Visited
+   projects take the nav's gold, in every state including resting. */
+.showcase-list__item {
+  --title-rgb: 244, 241, 236;
+}
+
+.showcase-list__item.is-visited {
+  --title-rgb: 212, 175, 55;
+}
+
 .showcase-list__title {
   display: block;
+  color: rgb(var(--title-rgb));
   font-family: var(--showcase-display);
   font-weight: 900;
   font-size: clamp(1.43rem, 4.62vw, 5.225rem);
@@ -644,7 +655,7 @@ html.is-scene-dragging * {
 
 .showcase-index--has-hover .showcase-list__title,
 .showcase-index--has-open .showcase-list__title {
-  color: var(--showcase-ink-dim);
+  color: rgba(var(--title-rgb), 0.34);
 }
 
 .showcase-list__item.is-hover .showcase-list__title,
@@ -1246,13 +1257,13 @@ html.is-scene-dragging * {
   color: transparent;
   background-image: linear-gradient(
     105deg,
-    rgba(255, 255, 255, 0.07) 0%,
-    rgba(255, 255, 255, 0.07) 34%,
-    rgba(255, 255, 255, 0.5) 44%,
-    rgba(255, 255, 255, 0.95) 50%,
-    rgba(255, 255, 255, 0.5) 56%,
-    rgba(255, 255, 255, 0.07) 66%,
-    rgba(255, 255, 255, 0.07) 100%
+    rgba(var(--title-rgb), 0.07) 0%,
+    rgba(var(--title-rgb), 0.07) 34%,
+    rgba(var(--title-rgb), 0.5) 44%,
+    rgba(var(--title-rgb), 0.95) 50%,
+    rgba(var(--title-rgb), 0.5) 56%,
+    rgba(var(--title-rgb), 0.07) 66%,
+    rgba(var(--title-rgb), 0.07) 100%
   );
   background-size: 260vw 100vh;
   background-attachment: fixed;
@@ -1280,11 +1291,11 @@ html.is-scene-dragging * {
   background-image:
     linear-gradient(
       105deg,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0) 38%,
-      rgba(255, 255, 255, 0.55) 50%,
-      rgba(255, 255, 255, 0) 62%,
-      rgba(255, 255, 255, 0) 100%
+      rgba(var(--title-rgb), 0) 0%,
+      rgba(var(--title-rgb), 0) 38%,
+      rgba(var(--title-rgb), 0.55) 50%,
+      rgba(var(--title-rgb), 0) 62%,
+      rgba(var(--title-rgb), 0) 100%
     ),
     var(--watermark-image);
   background-size: 260vw 100vh, cover;

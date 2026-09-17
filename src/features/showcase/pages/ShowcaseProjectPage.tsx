@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useBackdropTint } from "../lib/backdropTint";
 import { readIndexReturnState } from "../lib/indexReturnState";
 import { useShowcaseProjects } from "../lib/useShowcaseProjects";
+import { markProjectVisited } from "../lib/visitedProjects";
 
 /** One project: story and spec sheet on the left, large images on the right. */
 export function ShowcaseProjectPage() {
@@ -23,6 +24,10 @@ export function ShowcaseProjectPage() {
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [portfolioId]);
+
+  useEffect(() => {
+    if (project) markProjectVisited(project.id);
+  }, [project]);
 
   if (!project) {
     return (
