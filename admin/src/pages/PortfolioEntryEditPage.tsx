@@ -382,7 +382,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
 
       <ListEditor<ClientVariant>
         title="Client sites"
-        description="Effectively multiple galleries for one project. Three.js app: each client site becomes a tab above the image, and its tab shows that site's own image and gallery; the project's own image and gallery are then not shown in the card (a client site with an empty gallery borrows the project's). Only the first 5 client sites get tabs. HTML portfolio: each client site is a separate card."
+        description="Effectively multiple galleries for one project. Three.js app: each client site becomes a tab above the image, and its tab shows that site's own image and gallery; the project's own image and gallery are then not shown in the card (a client site with an empty gallery borrows the project's). Tabs show 5 at a time, with arrows for more. HTML portfolio: each client site is a separate card."
         items={draft.clientVariants}
         onChange={(items) => set("clientVariants", items)}
         createItem={() => ({

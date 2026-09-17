@@ -1510,6 +1510,14 @@ type OrbitalPortfolioStationRecord = {
     frame: THREE.Mesh;
     variantIndex: number;
   }>;
+  /** Arrows beside the tab row when a project has more client sites than tab slots. */
+  cardVariantTabNavMeshes: Array<{
+    mesh: THREE.Mesh;
+    frame: THREE.Mesh;
+    direction: "prev" | "next";
+  }>;
+  /** Index of the client site shown in the first tab slot. */
+  variantTabPageStart: number;
   cardThumbMeshes: Array<{
     mesh: THREE.Mesh;
     frame: THREE.Mesh;
@@ -9817,7 +9825,7 @@ export default function ResumeSpace3D({
         thumb.mesh.visible = false;
         thumb.frame.visible = false;
       });
-      station.cardThumbNavMeshes.forEach((nav) => {
+      [...station.cardThumbNavMeshes, ...station.cardVariantTabNavMeshes].forEach((nav) => {
         nav.mesh.visible = false;
         nav.frame.visible = false;
       });
@@ -13093,7 +13101,9 @@ export default function ResumeSpace3D({
           const hasVariant = tab.mesh.userData.hasVariant !== false;
           tab.mesh.visible = isFocused && hasVariant;
           tab.frame.visible = isFocused && hasVariant;
-          const isActiveTab = tab.variantIndex === orbitalPortfolioVariantIndex;
+          const isActiveTab =
+            Number(tab.mesh.userData.orbitalVariantIndex ?? tab.variantIndex) ===
+            orbitalPortfolioVariantIndex;
           const hoverPulse =
             0.985 +
             0.015 *
@@ -13198,7 +13208,7 @@ export default function ResumeSpace3D({
             thumb.frame.position.z,
           );
         });
-        station.cardThumbNavMeshes.forEach((nav) => {
+        [...station.cardThumbNavMeshes, ...station.cardVariantTabNavMeshes].forEach((nav) => {
           const navMat = nav.mesh.material as THREE.MeshBasicMaterial;
           const navFrameMat = nav.frame.material as THREE.MeshBasicMaterial;
           const canMove = nav.mesh.userData.orbitalNavCanMove === true;
@@ -13966,9 +13976,52 @@ export default function ResumeSpace3D({
     }
 
     const variantsForStation = group?.variants ?? [];
+    // More client sites than tab slots page one tab row at a time, and the
+    // page always contains the active client site.
+    const maxTabPageStart = Math.max(
+      0,
+      variantsForStation.length - ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS,
+    );
+    let tabPageStart = THREE.MathUtils.clamp(
+      station.variantTabPageStart,
+      0,
+      maxTabPageStart,
+    );
+    if (
+      variantIndex < tabPageStart ||
+      variantIndex >= tabPageStart + ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS
+    ) {
+      tabPageStart = THREE.MathUtils.clamp(
+        Math.floor(variantIndex / ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS) * ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS,
+        0,
+        maxTabPageStart,
+      );
+    }
+    station.variantTabPageStart = tabPageStart;
+    const showTabNav = variantsForStation.length > ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS;
+    station.cardVariantTabNavMeshes.forEach((nav) => {
+      const navMat = nav.mesh.material as THREE.MeshBasicMaterial;
+      const navFrameMat = nav.frame.material as THREE.MeshBasicMaterial;
+      const canMove =
+        nav.direction === "prev"
+          ? tabPageStart > 0
+          : tabPageStart + ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS < variantsForStation.length;
+      nav.mesh.visible = showTabNav;
+      nav.frame.visible = showTabNav;
+      nav.mesh.userData.orbitalStationIndex = focusIndex;
+      nav.mesh.userData.orbitalPickKind = "tab-nav";
+      nav.mesh.userData.orbitalTabNavDirection = nav.direction;
+      nav.mesh.userData.orbitalShowNav = showTabNav;
+      nav.mesh.userData.orbitalNavCanMove = canMove;
+      navMat.opacity = canMove ? 0.94 : 0.34;
+      navMat.color.setHex(canMove ? 0xe8f7ff : 0x80a4c3);
+      navFrameMat.opacity = canMove ? 0.84 : 0.24;
+      navFrameMat.color.setHex(canMove ? 0xa8deff : 0x587a96);
+    });
     station.cardVariantTabs.forEach((tab) => {
       const tabMat = tab.mesh.material as THREE.MeshBasicMaterial;
-      const variantAtTab = variantsForStation[tab.variantIndex];
+      const mappedVariantIndex = tabPageStart + tab.variantIndex;
+      const variantAtTab = variantsForStation[mappedVariantIndex];
       tab.mesh.userData.hasVariant = Boolean(variantAtTab);
       if (!variantAtTab) {
         assignGeneratedTextTexture(tabMat, null);
@@ -13999,7 +14052,7 @@ export default function ResumeSpace3D({
       tab.frame.visible = true;
       tab.mesh.userData.orbitalStationIndex = focusIndex;
       tab.mesh.userData.orbitalPickKind = "variant";
-      tab.mesh.userData.orbitalVariantIndex = tab.variantIndex;
+      tab.mesh.userData.orbitalVariantIndex = mappedVariantIndex;
     });
 
     const thumbLoader = new THREE.TextureLoader();
@@ -14907,8 +14960,16 @@ export default function ResumeSpace3D({
       mediaIndex?: number;
       variantIndex?: number;
       thumbNavDirection?: "prev" | "next";
+      tabNavDirection?: "prev" | "next";
       slideNavDirection?: "prev" | "next";
-      kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav" | "slide-nav";
+      kind:
+        | "plate"
+        | "thumb"
+        | "variant"
+        | "core"
+        | "thumb-nav"
+        | "tab-nav"
+        | "slide-nav";
     } | null = null;
 
     const pickPortfolioTarget = (
@@ -14920,8 +14981,16 @@ export default function ResumeSpace3D({
       mediaIndex?: number;
       variantIndex?: number;
       thumbNavDirection?: "prev" | "next";
+      tabNavDirection?: "prev" | "next";
       slideNavDirection?: "prev" | "next";
-      kind: "plate" | "thumb" | "variant" | "core" | "thumb-nav" | "slide-nav";
+      kind:
+        | "plate"
+        | "thumb"
+        | "variant"
+        | "core"
+        | "thumb-nav"
+        | "tab-nav"
+        | "slide-nav";
     } | null => {
       if (!orbitalPortfolioActiveRef.current) return null;
       const cam = sceneRef.current.camera;
@@ -14945,7 +15014,10 @@ export default function ResumeSpace3D({
         station.cardVariantTabs.forEach((tab) => {
           tab.mesh.userData.orbitalStationIndex = stationIndex;
           tab.mesh.userData.orbitalPickKind = "variant";
-          tab.mesh.userData.orbitalVariantIndex = tab.variantIndex;
+          // The card update stores which client site the slot shows (tabs page).
+          if (!Number.isFinite(Number(tab.mesh.userData.orbitalVariantIndex))) {
+            tab.mesh.userData.orbitalVariantIndex = tab.variantIndex;
+          }
           if (tab.mesh.visible) pickables.push(tab.mesh);
         });
         station.cardThumbMeshes.forEach((thumb) => {
@@ -14960,6 +15032,12 @@ export default function ResumeSpace3D({
           nav.mesh.userData.orbitalStationIndex = stationIndex;
           nav.mesh.userData.orbitalPickKind = "thumb-nav";
           nav.mesh.userData.orbitalThumbNavDirection = nav.direction;
+          if (nav.mesh.visible) pickables.push(nav.mesh);
+        });
+        station.cardVariantTabNavMeshes.forEach((nav) => {
+          nav.mesh.userData.orbitalStationIndex = stationIndex;
+          nav.mesh.userData.orbitalPickKind = "tab-nav";
+          nav.mesh.userData.orbitalTabNavDirection = nav.direction;
           if (nav.mesh.visible) pickables.push(nav.mesh);
         });
         station.cardSlideNavMeshes.forEach((nav) => {
@@ -14981,6 +15059,7 @@ export default function ResumeSpace3D({
           | "variant"
           | "core"
           | "thumb-nav"
+          | "tab-nav"
           | "slide-nav"
           | undefined) ?? "plate";
       if (kind === "core") {
@@ -15005,6 +15084,11 @@ export default function ResumeSpace3D({
         const thumbNavDirection =
           hit.userData?.orbitalThumbNavDirection === "next" ? "next" : "prev";
         return { stationIndex, thumbNavDirection, kind: "thumb-nav" };
+      }
+      if (kind === "tab-nav") {
+        const tabNavDirection =
+          hit.userData?.orbitalTabNavDirection === "next" ? "next" : "prev";
+        return { stationIndex, tabNavDirection, kind: "tab-nav" };
       }
       if (kind === "slide-nav") {
         const slideNavDirection =
@@ -15107,6 +15191,37 @@ export default function ResumeSpace3D({
               nav.mesh.userData.orbitalPressedUntil = performance.now() + 140;
             }
           });
+        } else if (
+          pending.kind === "tab-nav" &&
+          typeof pending.stationIndex === "number"
+        ) {
+          const station = orbitalPortfolioStationsRef.current[pending.stationIndex];
+          const variantCount =
+            orbitalPortfolioGroupsRef.current[pending.stationIndex]?.variants
+              ?.length ?? 0;
+          if (station && variantCount > ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS) {
+            const delta =
+              pending.tabNavDirection === "next"
+                ? ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS
+                : -ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS;
+            const nextPageStart = THREE.MathUtils.clamp(
+              station.variantTabPageStart + delta,
+              0,
+              Math.max(0, variantCount - ORBITAL_PORTFOLIO_CARD_MAX_VARIANT_TABS),
+            );
+            if (nextPageStart !== station.variantTabPageStart) {
+              station.variantTabPageStart = nextPageStart;
+              setOrbitalPortfolioVariantIndex(nextPageStart);
+              setOrbitalPortfolioMediaIndex(0);
+              setOrbitalPortfolioThumbPageStart(0);
+            }
+            const activeDirection = pending.tabNavDirection;
+            station.cardVariantTabNavMeshes.forEach((nav) => {
+              if (nav.direction === activeDirection) {
+                nav.mesh.userData.orbitalPressedUntil = performance.now() + 140;
+              }
+            });
+          }
         } else if (
           pending.kind === "slide-nav" &&
           typeof pending.stationIndex === "number"
@@ -17105,6 +17220,7 @@ export default function ResumeSpace3D({
       const createThumbNav = (
         direction: "prev" | "next",
         x: number,
+        y = -23.8,
       ): {
         mesh: THREE.Mesh;
         frame: THREE.Mesh;
@@ -17151,8 +17267,8 @@ export default function ResumeSpace3D({
           },
         );
         navMesh.material.map = arrowTexture;
-        navFrame.position.set(x, -23.8, 1.16);
-        navMesh.position.set(x, -23.8, 1.2);
+        navFrame.position.set(x, y, 1.16);
+        navMesh.position.set(x, y, 1.2);
         navFrame.visible = false;
         navMesh.visible = false;
         stationGroup.add(navFrame, navMesh);
@@ -17161,6 +17277,11 @@ export default function ResumeSpace3D({
       const cardThumbNavMeshes = [
         createThumbNav("prev", -31.2),
         createThumbNav("next", 31.2),
+      ];
+      // Same height as the tab row (y 23.2), just outside the first and last tab.
+      const cardVariantTabNavMeshes = [
+        createThumbNav("prev", -31.2, 23.2),
+        createThumbNav("next", 31.2, 23.2),
       ];
       const createSlideNav = (
         direction: "prev" | "next",
@@ -17381,6 +17502,8 @@ export default function ResumeSpace3D({
         textureFitMode: media?.fit ?? "cover",
         cardTitleMesh,
         cardVariantTabs,
+        cardVariantTabNavMeshes,
+        variantTabPageStart: 0,
         cardThumbMeshes,
         cardThumbNavMeshes,
         cardSlideNavMeshes,
@@ -17432,7 +17555,7 @@ export default function ResumeSpace3D({
         thumb.mesh.layers.enable(0);
         thumb.mesh.layers.enable(ORBITAL_PORTFOLIO_LAYER);
       });
-      station.cardThumbNavMeshes.forEach((nav) => {
+      [...station.cardThumbNavMeshes, ...station.cardVariantTabNavMeshes].forEach((nav) => {
         nav.frame.layers.set(PROJECT_SHOWCASE_CARD_LAYER);
         nav.frame.layers.enable(0);
         nav.frame.layers.enable(ORBITAL_PORTFOLIO_LAYER);
