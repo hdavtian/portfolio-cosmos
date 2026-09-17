@@ -450,12 +450,9 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
                   ) : null}
                   {isActive && autoTour && !transition ? (
                     // Time left on this scene before the tour moves on.
-                    <span
-                      key={`${activeId}-tour`}
-                      className="showcase-scene-switcher__timer"
-                      style={{ animationDuration: `${TOUR_INTERVAL_MS - ENTER_MS}ms` }}
-                      aria-hidden="true"
-                    />
+                    <span key={`${activeId}-tour`} className="showcase-scene-switcher__timer" aria-hidden="true">
+                      <span style={{ animationDuration: `${TOUR_INTERVAL_MS - ENTER_MS}ms` }} />
+                    </span>
                   ) : null}
                   {status?.phase === "failed" ? <span className="showcase-scene-switcher__percent">offline</span> : null}
                 </button>
