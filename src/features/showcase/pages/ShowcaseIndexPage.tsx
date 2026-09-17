@@ -308,6 +308,7 @@ export function ShowcaseIndexPage() {
                   aria-controls={panelId}
                   onClick={(event) => openPreview(event, project)}
                   onMouseEnter={() => setHoverId(project.id)}
+                  onMouseLeave={() => setHoverId((current) => (current === project.id ? null : current))}
                   onFocus={() => setHoverId(project.id)}
                   onBlur={() => setHoverId(null)}
                 >
