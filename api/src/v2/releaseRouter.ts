@@ -12,6 +12,12 @@ const rollbackParamsSchema = z.object({
   id: z.coerce.number().int().min(1),
 });
 
+// Rolling back also resets the drafts to that release unless asked not to, so
+// the admin shows what the sites show.
+const rollbackBodySchema = z.object({
+  restoreDrafts: z.boolean().default(true),
+});
+
 const editorOf = (req: { auth?: { subject: string } }): string => req.auth?.subject ?? "unknown";
 
 export function createReleaseRouter(): Router {
@@ -80,7 +86,8 @@ export function createReleaseRouter(): Router {
     "/:id/rollback",
     asyncHandler(async (req, res) => {
       const { id } = parseOrThrow(rollbackParamsSchema, req.params);
-      res.json(await service().rollbackTo(id, editorOf(req)));
+      const { restoreDrafts } = parseOrThrow(rollbackBodySchema, req.body ?? {});
+      res.json(await service().rollbackTo(id, editorOf(req), { restoreDrafts }));
     }),
   );
 

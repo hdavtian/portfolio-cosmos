@@ -189,6 +189,65 @@ describe.skipIf(!dockerMongo)(`v2 releases (${dockerMongo ? "docker" : SKIP_MESS
     expect(history.body.items.filter((item: { current: boolean }) => item.current)).toHaveLength(1);
   });
 
+  it("restores the drafts to the rolled-back release and backs up the replaced drafts", async () => {
+    await saveSingletons();
+    await publish("original");
+
+    await request(app)
+      .put("/api/v2/admin/singletons/profile")
+      .set("Cookie", authCookie())
+      .send({ data: { ...profile, name: "Harma Davtian1" }, version: 1 })
+      .expect(200);
+    await request(app)
+      .post("/api/v2/admin/skillCategories")
+      .set("Cookie", authCookie())
+      .send({ slug: "extra", sortOrder: 0, name: "Extra" })
+      .expect(201);
+    await publish("edited");
+
+    await request(app).post("/api/v2/admin/releases/1/rollback").set("Cookie", authCookie()).expect(200);
+
+    const draftProfile = await request(app)
+      .get("/api/v2/admin/singletons/profile")
+      .set("Cookie", authCookie());
+    expect(draftProfile.body.data.name).toBe("Harma Davtian");
+    expect(draftProfile.body.version).toBe(3);
+
+    const categories = await request(app).get("/api/v2/admin/skillCategories").set("Cookie", authCookie());
+    expect(categories.body.items).toHaveLength(0);
+
+    const pending = await request(app)
+      .get("/api/v2/admin/releases/pending-changes")
+      .set("Cookie", authCookie());
+    expect(pending.body.lines).toEqual([]);
+
+    const backups = await getDb().collection("draftBackups").find({}).toArray();
+    expect(backups).toHaveLength(1);
+    expect(backups[0].reason).toBe("Drafts before rolling back to release 1");
+  });
+
+  it("keeps the drafts when asked to roll back the sites only", async () => {
+    await saveSingletons();
+    await publish();
+    await request(app)
+      .put("/api/v2/admin/singletons/profile")
+      .set("Cookie", authCookie())
+      .send({ data: { ...profile, name: "Work in progress" }, version: 1 })
+      .expect(200);
+    await publish();
+
+    await request(app)
+      .post("/api/v2/admin/releases/1/rollback")
+      .set("Cookie", authCookie())
+      .send({ restoreDrafts: false })
+      .expect(200);
+
+    const draftProfile = await request(app)
+      .get("/api/v2/admin/singletons/profile")
+      .set("Cookie", authCookie());
+    expect(draftProfile.body.data.name).toBe("Work in progress");
+  });
+
   it("refuses to roll back to the current release or an unknown one", async () => {
     await saveSingletons();
     await publish();

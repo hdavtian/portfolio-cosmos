@@ -12,9 +12,19 @@ import { createHash } from "node:crypto";
 import type { Db, Document } from "mongodb";
 import { ApiError } from "./http.js";
 import { summarizeChanges, type ContentSide } from "./changeSummary.js";
-import { fromDb, stripMeta } from "./storageCodec.js";
+import { fromDb, stripMeta, toDb } from "./storageCodec.js";
 
 export const RELEASES_COLLECTION = "releases";
+/** Drafts saved before a rollback replaced them. Never deleted automatically. */
+export const DRAFT_BACKUPS_COLLECTION = "draftBackups";
+
+// Key order differs between stored drafts and release snapshots; compare sorted.
+const stableJson = (value: unknown): string =>
+  JSON.stringify(value, (_key, nested: unknown) =>
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? Object.fromEntries(Object.entries(nested as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+      : nested,
+  );
 
 export interface ReleaseSummary {
   id: number;
@@ -188,11 +198,81 @@ export class ReleaseService {
     return toSummary(doc);
   }
 
-  public async rollbackTo(id: number, publishedBy: string): Promise<ReleaseSummary> {
+  /**
+   * Makes the drafts match a release, so the admin shows what the sites show.
+   * The drafts being replaced are saved to draftBackups first. A collection the
+   * release predates (absent from its snapshot) is left untouched rather than
+   * emptied.
+   */
+  public async restoreDraftsFrom(content: ContentBundle, restoredBy: string, releaseId: number): Promise<void> {
+    const now = new Date();
+
+    const backup: Record<string, unknown> = {
+      createdAt: now,
+      createdBy: restoredBy,
+      reason: `Drafts before rolling back to release ${releaseId}`,
+      singletons: await this.db.collection(SINGLETONS_COLLECTION).find({}).toArray(),
+      collections: {} as Record<string, Document[]>,
+    };
+    for (const name of Object.keys(collectionSchemas) as CollectionName[]) {
+      (backup.collections as Record<string, Document[]>)[name] = await this.db.collection(name).find({}).toArray();
+    }
+    await this.db.collection(DRAFT_BACKUPS_COLLECTION).insertOne(backup);
+
+    for (const [key, data] of Object.entries(content.singletons ?? {})) {
+      const current = await this.db.collection(SINGLETONS_COLLECTION).findOne({ key });
+      if (current && stableJson(fromDb(current.data)) === stableJson(data)) continue;
+      await this.db.collection(SINGLETONS_COLLECTION).updateOne(
+        { key },
+        {
+          $set: { key, data: toDb(data), updatedAt: now, updatedBy: restoredBy },
+          $inc: { version: 1 },
+          $setOnInsert: { createdAt: now },
+        },
+        { upsert: true },
+      );
+    }
+
+    const releaseCollections = (content.collections ?? {}) as Record<string, Array<Record<string, unknown>> | undefined>;
+    for (const name of Object.keys(collectionSchemas) as CollectionName[]) {
+      const records = releaseCollections[name];
+      if (!records) continue;
+      const collection = this.db.collection(name);
+      await collection.deleteMany({ slug: { $nin: records.map((record) => record.slug) } });
+      for (const record of records) {
+        const current = await collection.findOne({ slug: record.slug });
+        if (current && stableJson(fromDb(stripMeta(current))) === stableJson(record)) continue;
+        // Bumping the version makes any editor still open on the old draft get
+        // a conflict instead of silently overwriting the restored content.
+        await collection.replaceOne(
+          { slug: record.slug },
+          {
+            ...(toDb(record) as Document),
+            version: ((current?.version as number | undefined) ?? 0) + 1,
+            createdAt: current?.createdAt ?? now,
+            updatedAt: now,
+            updatedBy: restoredBy,
+          },
+          { upsert: true },
+        );
+      }
+    }
+  }
+
+  public async rollbackTo(
+    id: number,
+    publishedBy: string,
+    { restoreDrafts = true }: { restoreDrafts?: boolean } = {},
+  ): Promise<ReleaseSummary> {
     const collection = this.db.collection(RELEASES_COLLECTION);
     const target = await collection.findOne({ id });
     if (!target) throw ApiError.notFound(`No release ${id}`);
     if (target.current) throw ApiError.badRequest(`Release ${id} is already the current release`);
+
+    // Drafts first: if restoring fails, the live release has not moved yet.
+    if (restoreDrafts) {
+      await this.restoreDraftsFrom(target.content as ContentBundle, publishedBy, id);
+    }
 
     // Rolling back publishes a new release with the old content, so history
     // stays append-only and the change itself is recorded.

@@ -114,9 +114,10 @@ export function ReleasesPage() {
     mutationFn: (id: number) => api.post<ReleaseSummary>(`/api/v2/admin/releases/${id}/rollback`),
     onSuccess: (release) => {
       setSelectedRelease(null);
-      void refresh();
+      // Drafts were reset too, so every cached record in the admin is stale.
+      void queryClient.invalidateQueries();
       statusLine.success(
-        `Rolled back to release #${release.rolledBackFrom}, published as release #${release.id}. Your drafts are unchanged.`,
+        `Rolled back to release #${release.rolledBackFrom} (published as release #${release.id}). Drafts now match it.`,
       );
     },
     onError: (error) => statusLine.error(error, "Could not roll back."),
@@ -134,10 +135,19 @@ export function ReleasesPage() {
 
   const confirmRollback = (release: ReleaseSummary) => {
     if (rollback.isPending) return;
+    const escape = (text: string) =>
+      text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const unpublished = pending.data?.lines ?? [];
+    const replaced =
+      unpublished.length > 0
+        ? `<p><strong>These unpublished changes will be replaced</strong> (a backup is kept):</p><ul>${unpublished
+            .slice(0, 8)
+            .map((line) => `<li>${escape(line)}</li>`)
+            .join("")}${unpublished.length > 8 ? `<li>…and ${unpublished.length - 8} more</li>` : ""}</ul>`
+        : "";
     confirmAction({
       title: `Roll back to release #${release.id}?`,
-      content:
-        "Its content is republished as a new release, so the sites show it again. History is kept, and your drafts are not changed.",
+      content: `<p>The sites show release #${release.id} again, and your drafts in the admin are reset to match it. History is kept.</p>${replaced}`,
       confirmText: "Roll back",
       confirmClass: "e-danger e-outline",
       onConfirm: () => rollback.mutate(release.id),
