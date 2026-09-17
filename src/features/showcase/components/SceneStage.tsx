@@ -282,6 +282,8 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, fo
         aria-hidden="true"
       >
         <div ref={hostRef} className="showcase-scenes__canvas" />
+        <div className="showcase-scenes__mood" />
+        <div className="showcase-scenes__mood showcase-scenes__mood--lift" />
         <div className="showcase-scenes__shade" />
       </div>
 

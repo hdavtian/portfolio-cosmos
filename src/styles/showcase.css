@@ -121,7 +121,57 @@
 }
 
 .showcase-scenes__canvas canvas {
-  filter: brightness(0.66) saturate(0.95);
+  filter: brightness(calc(0.62 + var(--mood-lift) * 0.5)) saturate(0.95);
+}
+
+/*
+ * Mood: over a few minutes the scenes drift through colour and light, from
+ * deep night through dusk and amber to a pale dawn and back.
+ */
+@property --mood-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #0b1a3a;
+}
+
+@property --mood-lift {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.showcase-scenes {
+  --mood-color: #0b1a3a;
+  --mood-lift: 0;
+  animation: showcase-mood 240s ease-in-out infinite;
+}
+
+.showcase-scenes.is-showing {
+  animation: showcase-scene-glitch-in 900ms steps(1) both, showcase-mood 240s ease-in-out infinite;
+}
+
+@keyframes showcase-mood {
+  0%, 100% { --mood-color: #0b1a3a; --mood-lift: 0; }
+  18% { --mood-color: #0f5a63; --mood-lift: 0.22; }
+  34% { --mood-color: #b86a2c; --mood-lift: 0.5; }
+  50% { --mood-color: #c9b8e8; --mood-lift: 0.85; }
+  66% { --mood-color: #7fb7c9; --mood-lift: 0.6; }
+  82% { --mood-color: #5a1f5c; --mood-lift: 0.15; }
+}
+
+/* Tints the hue of the scene. */
+.showcase-scenes__mood {
+  position: absolute;
+  inset: 0;
+  background: var(--mood-color);
+  mix-blend-mode: color;
+  opacity: 0.4;
+}
+
+/* Washes light in during the brighter moods. */
+.showcase-scenes__mood--lift {
+  mix-blend-mode: screen;
+  opacity: calc(var(--mood-lift) * 0.32);
 }
 
 /* Keeps the big type legible over bright scenes. */
@@ -129,8 +179,13 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(4, 6, 10, 0.72) 0%, rgba(4, 6, 10, 0.3) 55%, rgba(4, 6, 10, 0.45) 100%),
-    radial-gradient(ellipse at 60% 50%, transparent 30%, rgba(4, 6, 10, 0.5) 100%);
+    linear-gradient(
+      90deg,
+      rgb(4 6 10 / calc(0.72 - var(--mood-lift) * 0.14)) 0%,
+      rgb(4 6 10 / calc(0.3 - var(--mood-lift) * 0.22)) 55%,
+      rgb(4 6 10 / calc(0.45 - var(--mood-lift) * 0.3)) 100%
+    ),
+    radial-gradient(ellipse at 60% 50%, transparent 30%, rgb(4 6 10 / calc(0.5 - var(--mood-lift) * 0.35)) 100%);
 }
 
 /* Switcher, tour toggle and gateway: foot of the right-hand column. */
