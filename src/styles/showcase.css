@@ -219,15 +219,15 @@
 
 .showcase-list__link {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: clamp(10px, 1.4vw, 22px);
+  display: block;
+  width: fit-content;
   max-width: 100%;
   text-decoration: none;
   color: var(--showcase-ink);
 }
 
 .showcase-list__title {
+  display: block;
   font-family: var(--showcase-display);
   font-weight: 900;
   font-size: clamp(1.43rem, 4.62vw, 5.225rem);
@@ -255,14 +255,18 @@
   transition: opacity 200ms ease, transform 260ms ease;
 }
 
+/* Out of the row's flow, so rows are only as tall as their text. */
 .showcase-list__thumb {
-  flex: none;
+  position: absolute;
+  top: 50%;
+  left: calc(100% + clamp(10px, 1.4vw, 22px));
   width: clamp(96px, 11vw, 180px);
   aspect-ratio: 16 / 10;
   object-fit: cover;
   border-radius: 3px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-  transform: translateX(-8px);
+  transform: translate(-8px, -50%);
+  z-index: 2;
 }
 
 .showcase-list__meta {
@@ -279,7 +283,7 @@
 
 .showcase-list__item.is-active .showcase-list__thumb {
   opacity: 1;
-  transform: none;
+  transform: translate(0, -50%);
 }
 
 .showcase-list__item.is-active .showcase-list__meta {
