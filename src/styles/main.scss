@@ -19,6 +19,12 @@ html {
 body {
     margin: 0;
     padding: 0;
+}
+
+// Scoped to the cinematic experience (App adds the class while mounted). This
+// stylesheet stays in the page once loaded - even from a hover prefetch - and an
+// unscoped overflow lock removed scrolling from every other page.
+body.cinematic-experience {
     font-family: $font-primary;
     font-size: $fs-base;
     line-height: 1.6;

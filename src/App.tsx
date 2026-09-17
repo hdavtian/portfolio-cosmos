@@ -421,6 +421,13 @@ function SkillsDiagram({ tree }: { tree: TechStackTreeNode[] }) {
 }
 
 function App() {
+  // The cinematic body styles (scroll lock, fonts) apply only while this page is
+  // mounted; see body.cinematic-experience in styles/main.scss.
+  useEffect(() => {
+    document.body.classList.add("cinematic-experience");
+    return () => document.body.classList.remove("cinematic-experience");
+  }, []);
+
   // The graph shows the published tech stack (Admin → Tech stack), which may
   // nest deeper than the resume's skills. Before it loads, the bundled resume
   // skills stand in. The rest of this page still reads resume.json.

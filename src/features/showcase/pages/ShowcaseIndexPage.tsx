@@ -8,7 +8,7 @@ import { useShowcaseProjects, type ShowcaseProject } from "../lib/useShowcasePro
  * core and technology chips (kept in the URL so a filtered view can be shared).
  */
 export function ShowcaseIndexPage() {
-  const { projects, cores, topTech, yearRange, personal, isLoading } = useShowcaseProjects();
+  const { projects, cores, topTech, personal, isLoading } = useShowcaseProjects();
   const { setTint } = useBackdropTint();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -141,15 +141,6 @@ export function ShowcaseIndexPage() {
             <>
               <br />
               {personal.location}
-            </>
-          ) : null}
-        </p>
-        <p className="showcase-label">
-          {projects.length} projects
-          {yearRange ? (
-            <>
-              <br />
-              {yearRange.from}–{yearRange.to}
             </>
           ) : null}
         </p>
