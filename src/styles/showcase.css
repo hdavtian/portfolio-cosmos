@@ -1264,16 +1264,16 @@ html.is-scene-dragging * {
   background-position: 100% 0, 0% 50%;
   mix-blend-mode: normal;
   opacity: 0.55;
-  animation:
-    showcase-watermark-in 2400ms ease both,
-    showcase-watermark-image 18s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+  animation: showcase-watermark-image 18s cubic-bezier(0.45, 0, 0.25, 1) infinite;
 }
 
+/* Starts and ends invisible, so the image fades in inside the letters and out again before the swap. */
 @keyframes showcase-watermark-image {
-  0% { background-position: 100% 0, 0% 40%; opacity: 0.2; }
+  0% { background-position: 100% 0, 0% 40%; opacity: 0; }
+  22% { opacity: 0.4; }
   38% { background-position: 0% 0, 100% 60%; opacity: 0.55; }
-  70% { background-position: 0% 0, 100% 60%; opacity: 0.18; }
-  100% { background-position: 0% 0, 100% 60%; opacity: 0.2; }
+  72% { opacity: 0.2; }
+  100% { background-position: 0% 0, 100% 60%; opacity: 0; }
 }
 
 /* The sheet of light crosses right to left early in each cycle, then rests off screen. */
