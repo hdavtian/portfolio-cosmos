@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "api:dev": "npm run dev -w api",
-    "api:local": "node scripts/with-local-env.mjs npm run dev -w api",
+    "api:local": "node scripts/with-local-env.mjs --api",
     "storage:cors": "node scripts/with-local-env.mjs npm run storage:cors -w api",
     "api:build": "npm run build -w api",
     "api:start": "npm run start -w api",

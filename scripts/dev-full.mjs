@@ -7,6 +7,7 @@
 import { execSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import concurrently from "concurrently";
+import { localApiCommand, localApiCwd } from "./local-api-command.mjs";
 import { LOCAL_API_PORT, localApiEnv, localWebEnv } from "./local-env.mjs";
 
 const run = (command) => execSync(command, { stdio: "inherit" });
@@ -44,7 +45,7 @@ const listeners = (port) => {
 const belongsToThisRepo = (command) => command.toLowerCase().includes(repoRoot.toLowerCase());
 
 /**
- * The listening process is often a child (tsx watch → server). Walk up to the
+ * The listening process is often a child (node --watch → server). Walk up to the
  * highest ancestor that still runs from this repo, so the watcher goes too.
  */
 const topmostRepoAncestor = (pid) => {
@@ -60,7 +61,7 @@ const topmostRepoAncestor = (pid) => {
   return current;
 };
 
-/** Stops a process and everything it started (tsx watch, npm wrappers). */
+/** Stops a process and everything it started (the API's watcher, npm wrappers). */
 const stopTree = (pid) => {
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/PID", String(topmostRepoAncestor(pid)), "/T", "/F"], { stdio: "ignore" });
@@ -125,9 +126,10 @@ const { result } = concurrently(
   [
     {
       name: "api",
-      command: "npm run dev -w api",
+      command: localApiCommand,
+      cwd: localApiCwd,
       prefixColor: "blue",
-      env: localApiEnv,
+      env: { ...process.env, ...localApiEnv },
     },
     {
       name: "web",
