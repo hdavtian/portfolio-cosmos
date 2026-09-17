@@ -50,8 +50,26 @@ const routes: RouteObject[] = [
     path: "/",
     element: <RootLayout />,
     children: [
-      // The redesigned portfolio is the homepage.
-      { index: true, element: <Navigate to="/portfolio" replace /> },
+      {
+        // The redesigned portfolio: its index is the homepage, projects live
+        // under /portfolio. One layout route, so the background scenes keep
+        // running between the two.
+        element: <LazyRoute><ShowcaseLayout /></LazyRoute>,
+        children: [
+          { index: true, element: <LazyRoute><ShowcaseIndexPage /></LazyRoute> },
+          {
+            path: "portfolio",
+            children: [
+              { index: true, element: <Navigate to="/" replace /> },
+              {
+                path: ":portfolioId",
+                element: <LazyRoute><ShowcaseProjectPage /></LazyRoute>,
+              },
+              { path: "*", element: <Navigate to="/" replace /> },
+            ],
+          },
+        ],
+      },
       {
         path: "cinematic",
         element: (
@@ -59,19 +77,6 @@ const routes: RouteObject[] = [
             <CinematicExperience />
           </LazyRoute>
         ),
-      },
-      {
-        // Redesigned portfolio.
-        path: "portfolio",
-        element: <LazyRoute><ShowcaseLayout /></LazyRoute>,
-        children: [
-          { index: true, element: <LazyRoute><ShowcaseIndexPage /></LazyRoute> },
-          {
-            path: ":portfolioId",
-            element: <LazyRoute><ShowcaseProjectPage /></LazyRoute>,
-          },
-          { path: "*", element: <Navigate to="/portfolio" replace /> },
-        ],
       },
       {
         // Previous portfolio, kept for comparison until the redesign is approved.
@@ -89,14 +94,14 @@ const routes: RouteObject[] = [
       {
         path: "fast",
         children: [
-          { index: true, element: <Navigate to="/portfolio" replace /> },
-          { path: "portfolio", element: <Navigate to="/portfolio" replace /> },
+          { index: true, element: <Navigate to="/" replace /> },
+          { path: "portfolio", element: <Navigate to="/" replace /> },
           {
             path: "portfolio/:portfolioId",
-            element: <Navigate to="/portfolio" replace />,
+            element: <Navigate to="/" replace />,
           },
-          { path: "resume", element: <Navigate to="/portfolio" replace /> },
-          { path: "*", element: <Navigate to="/portfolio" replace /> },
+          { path: "resume", element: <Navigate to="/" replace /> },
+          { path: "*", element: <Navigate to="/" replace /> },
         ],
       },
       { path: "resume", element: <LazyRoute><ResumePage /></LazyRoute> },

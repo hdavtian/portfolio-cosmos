@@ -10,7 +10,7 @@ export function ShowcaseProjectPage() {
   const { projects, isLoading } = useShowcaseProjects();
   const { setTint } = useBackdropTint();
 
-  const indexHref = `/portfolio${readIndexReturnState()?.search ?? ""}`;
+  const indexHref = `/${readIndexReturnState()?.search ?? ""}`;
   const index = projects.findIndex((project) => project.id === portfolioId);
   const project = index >= 0 ? projects[index] : null;
   const previous = index > 0 ? projects[index - 1] : null;
@@ -28,7 +28,7 @@ export function ShowcaseProjectPage() {
     return (
       <div className="showcase-project showcase-project--missing">
         <p className="showcase-label">{isLoading ? "Loading project…" : "That project could not be found."}</p>
-        <Link to="/portfolio" className="showcase-pill">
+        <Link to="/" className="showcase-pill">
           Return to index
         </Link>
       </div>
@@ -70,7 +70,7 @@ export function ShowcaseProjectPage() {
                 <ul className="showcase-spec__list">
                   {project.technologies.map((tech) => (
                     <li key={tech}>
-                      <Link to={`/portfolio?tech=${encodeURIComponent(tech)}`}>{tech}</Link>
+                      <Link to={`/?tech=${encodeURIComponent(tech)}`}>{tech}</Link>
                     </li>
                   ))}
                 </ul>

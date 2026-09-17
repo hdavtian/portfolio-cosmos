@@ -52,7 +52,7 @@ export function ShowcaseLayout() {
     [experience],
   );
   // Only the index lets the scene take the wheel; project pages scroll.
-  const onIndex = /^\/portfolio\/?$/.test(useLocation().pathname);
+  const onIndex = useLocation().pathname === "/";
   const [focusProjectId, setFocusProject] = useState<string | null>(null);
   const [sceneEnabled] = useState(canShowCinematicScene);
   const [sceneShowing, setSceneShowing] = useState(false);
@@ -83,7 +83,7 @@ export function ShowcaseLayout() {
           Skip to main content
         </a>
         <nav className="showcase-pills" aria-label="Site">
-          <Link to="/portfolio" className="showcase-pill">
+          <Link to="/" className="showcase-pill">
             Work
           </Link>
           <NavLink to="/resume" className="showcase-pill">
