@@ -215,7 +215,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
   const galleryEditor = (items: GalleryItem[], onChange: (items: GalleryItem[]) => void, prefix: string) => (
     <ListEditor<GalleryItem>
       title="Gallery"
-      description="Three.js app: when the card opens, the cover image is the large photo, and the cover plus these images appear as thumbnails beneath it (6 per row, arrows for more). Only the first 11 gallery images are shown there, and don't repeat the cover image here or it appears twice. HTML portfolio: every image appears in the detail view."
+      description="Three.js app: when the card opens, the cover image is the large photo, and the cover plus these images appear as thumbnails beneath it (6 per row, arrows for more). Don't repeat the cover image here or it appears twice. HTML portfolio: every image appears in the detail view."
       items={items}
       onChange={onChange}
       createItem={() => ({ slug: "", type: "image", mediaId: "", title: "", description: "", fit: "cover" })}
@@ -382,7 +382,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
 
       <ListEditor<ClientVariant>
         title="Client sites"
-        description="Individual client websites grouped under this project, each with its own image and gallery."
+        description="Effectively multiple galleries for one project. Three.js app: each client site becomes a tab above the image, and its tab shows that site's own image and gallery; the project's own image and gallery are then not shown in the card (a client site with an empty gallery borrows the project's). Only the first 5 client sites get tabs. HTML portfolio: each client site is a separate card."
         items={draft.clientVariants}
         onChange={(items) => set("clientVariants", items)}
         createItem={() => ({
