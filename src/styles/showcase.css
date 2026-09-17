@@ -483,16 +483,17 @@ html.is-scene-dragging * {
   text-transform: uppercase;
   text-decoration: none;
   color: #15161a;
-  background: var(--showcase-ink);
-  border: 1px solid var(--showcase-ink);
-  border-radius: 3px;
+  /* Same gold as the page scrollbar. */
+  background: #d4af37;
+  border: 1px solid #d4af37;
+  border-radius: 0;
   transition: background 160ms ease, color 160ms ease;
 }
 
 .showcase-pill:hover,
 .showcase-pill.active {
   background: transparent;
-  color: var(--showcase-ink);
+  color: #f0d98d;
 }
 
 .showcase-pill:focus-visible,
