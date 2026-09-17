@@ -14,11 +14,6 @@ const FastLayout = lazy(() =>
     default: module.FastLayout,
   })),
 );
-const LandingChoicePage = lazy(() =>
-  import("./pages/LandingChoicePage").then((module) => ({
-    default: module.LandingChoicePage,
-  })),
-);
 const ShowcaseLayout = lazy(() =>
   import("../features/showcase/ShowcaseLayout").then((module) => ({
     default: module.ShowcaseLayout,
@@ -55,7 +50,8 @@ const routes: RouteObject[] = [
     path: "/",
     element: <RootLayout />,
     children: [
-      { index: true, element: <LazyRoute><LandingChoicePage /></LazyRoute> },
+      // The redesigned portfolio is the homepage.
+      { index: true, element: <Navigate to="/portfolio" replace /> },
       {
         path: "cinematic",
         element: (
