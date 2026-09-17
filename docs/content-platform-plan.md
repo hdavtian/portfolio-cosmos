@@ -42,8 +42,15 @@ Next steps, in order:
       Contributor* scoped to `sthdsharedprod` only. The API picks it up through
       `AZURE_STORAGE_ACCOUNT=sthdsharedprod` (`DefaultAzureCredential`), set with
       the other app settings in step 3 so `harma-api` restarts once.
-   3. Register the API in the shared sign-on group, run `creds:set` centrally,
-      set auth/cookie app settings. *Approval (rotates shared credentials).*
+   3. ✅ **Done 2026-09-17.** `harma-api` app settings: the **current** shared
+      `AUTH_PASSWORD_HASH` / `AUTH_COOKIE_SECRET` (copied from the group apps by
+      script, never printed; no rotation), `AUTH_COOKIE_DOMAIN=.harmadavtian.com`,
+      `AZURE_STORAGE_ACCOUNT=sthdsharedprod`, `AZURE_STORAGE_CONTAINER=media`,
+      `MEDIA_PUBLIC_BASE_URL=https://sthdsharedprod.blob.core.windows.net/media`,
+      `CORS_ORIGINS` (site apex, www, admin). `scrolling-resume` added to the
+      shared-login `apps.json` (env path `api/.env.production.local`), so a
+      future `creds:set` updates it; Azure must then be updated as for the other
+      apps. v1 still serving after the restart (`/healthz`, `/api/v1/content/resume` 200).
    4. Serve the admin build on `portfolio-admin.harmadavtian.com` from
       `harma-api` (host-based routing, admin bundled into the API deploy);
       permanent Syncfusion key as GitHub secret `SYNCFUSION_LICENSE_KEY`
