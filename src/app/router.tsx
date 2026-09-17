@@ -19,6 +19,21 @@ const LandingChoicePage = lazy(() =>
     default: module.LandingChoicePage,
   })),
 );
+const ShowcaseLayout = lazy(() =>
+  import("../features/showcase/ShowcaseLayout").then((module) => ({
+    default: module.ShowcaseLayout,
+  })),
+);
+const ShowcaseIndexPage = lazy(() =>
+  import("../features/showcase/pages/ShowcaseIndexPage").then((module) => ({
+    default: module.ShowcaseIndexPage,
+  })),
+);
+const ShowcaseProjectPage = lazy(() =>
+  import("../features/showcase/pages/ShowcaseProjectPage").then((module) => ({
+    default: module.ShowcaseProjectPage,
+  })),
+);
 const PortfolioPage = lazy(() =>
   import("../features/fast/pages/PortfolioPage").then((module) => ({
     default: module.PortfolioPage,
@@ -50,7 +65,21 @@ const routes: RouteObject[] = [
         ),
       },
       {
+        // Redesigned portfolio.
         path: "portfolio",
+        element: <LazyRoute><ShowcaseLayout /></LazyRoute>,
+        children: [
+          { index: true, element: <LazyRoute><ShowcaseIndexPage /></LazyRoute> },
+          {
+            path: ":portfolioId",
+            element: <LazyRoute><ShowcaseProjectPage /></LazyRoute>,
+          },
+          { path: "*", element: <Navigate to="/portfolio" replace /> },
+        ],
+      },
+      {
+        // Previous portfolio, kept for comparison until the redesign is approved.
+        path: "portfolio-classic",
         element: <LazyRoute><FastLayout /></LazyRoute>,
         children: [
           { index: true, element: <LazyRoute><PortfolioPage /></LazyRoute> },
@@ -58,7 +87,7 @@ const routes: RouteObject[] = [
             path: ":portfolioId",
             element: <LazyRoute><PortfolioDetailPage /></LazyRoute>,
           },
-          { path: "*", element: <Navigate to="/portfolio" replace /> },
+          { path: "*", element: <Navigate to="/portfolio-classic" replace /> },
         ],
       },
       {

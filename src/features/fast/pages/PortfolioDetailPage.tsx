@@ -48,7 +48,7 @@ export function PortfolioDetailPage() {
         title="Project not found"
         message="This project may have been removed or filtered from the catalog."
         actionLabel="Back to portfolio"
-        onAction={() => navigate("/portfolio")}
+        onAction={() => navigate("/portfolio-classic")}
       />
     );
   }
@@ -87,11 +87,11 @@ export function PortfolioDetailPage() {
 
       <nav className="portfolio-detail__adjacent portfolio-detail__adjacent--top" aria-label="Adjacent projects">
         {previousItem ? (
-          <Link to={`/portfolio/${previousItem.id}`}>Previous: {previousItem.title}</Link>
+          <Link to={`/portfolio-classic/${previousItem.id}`}>Previous: {previousItem.title}</Link>
         ) : (
           <span />
         )}
-        {nextItem ? <Link to={`/portfolio/${nextItem.id}`}>Next: {nextItem.title}</Link> : null}
+        {nextItem ? <Link to={`/portfolio-classic/${nextItem.id}`}>Next: {nextItem.title}</Link> : null}
       </nav>
 
       <article className="portfolio-detail">
@@ -130,11 +130,11 @@ export function PortfolioDetailPage() {
 
       <nav className="portfolio-detail__adjacent" aria-label="Adjacent projects">
         {previousItem ? (
-          <Link to={`/portfolio/${previousItem.id}`}>Previous: {previousItem.title}</Link>
+          <Link to={`/portfolio-classic/${previousItem.id}`}>Previous: {previousItem.title}</Link>
         ) : (
           <span />
         )}
-        {nextItem ? <Link to={`/portfolio/${nextItem.id}`}>Next: {nextItem.title}</Link> : null}
+        {nextItem ? <Link to={`/portfolio-classic/${nextItem.id}`}>Next: {nextItem.title}</Link> : null}
       </nav>
     </>
   );

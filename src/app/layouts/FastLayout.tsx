@@ -8,7 +8,7 @@ const prefetchCinematic = () => {
 };
 
 export function FastLayout() {
-  const detailMatch = useMatch("/portfolio/:portfolioId");
+  const detailMatch = useMatch("/portfolio-classic/:portfolioId");
   const activePortfolioId = detailMatch?.params.portfolioId;
   const isPortfolioDetailRoute = Boolean(activePortfolioId);
   const portfolioQuery = usePortfolioCoresQuery();
@@ -25,7 +25,7 @@ export function FastLayout() {
       <FastTopNav />
       {isPortfolioDetailRoute ? (
         <nav className="fast-layout__crumbs" aria-label="Breadcrumb">
-          <Link to="/portfolio">Portfolio</Link>
+          <Link to="/portfolio-classic">Portfolio</Link>
           <span aria-hidden="true">|</span>
           <span>{activePortfolioTitle}</span>
         </nav>
