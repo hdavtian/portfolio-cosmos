@@ -577,10 +577,6 @@ html.is-scene-dragging * {
   display: none;
 }
 
-.showcase-filters__count {
-  font-variant-numeric: tabular-nums;
-}
-
 .showcase-empty {
   font-family: var(--showcase-display);
   font-weight: 800;

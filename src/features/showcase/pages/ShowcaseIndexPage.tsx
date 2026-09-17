@@ -243,9 +243,6 @@ export function ShowcaseIndexPage() {
               </button>
             ) : null}
           </div>
-          <p className="showcase-label showcase-filters__count" aria-live="polite">
-            {visible.length} of {projects.length} projects
-          </p>
         </div>
 
         {isLoading && projects.length === 0 ? <p className="showcase-label">Loading work…</p> : null}
