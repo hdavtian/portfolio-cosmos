@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { AtmosphereBackdrop } from "./components/AtmosphereBackdrop";
 import { SceneStage } from "./components/SceneStage";
 import { usePortfolioCoresQuery, useResumeQuery, useTechStackQuery } from "../../lib/query/contentQueries";
@@ -51,6 +51,8 @@ export function ShowcaseLayout() {
       }),
     [experience],
   );
+  // Only the index lets the scene take the wheel; project pages scroll.
+  const onIndex = /^\/portfolio\/?$/.test(useLocation().pathname);
   const [focusProjectId, setFocusProject] = useState<string | null>(null);
   const [sceneEnabled] = useState(canShowCinematicScene);
   const [sceneShowing, setSceneShowing] = useState(false);
@@ -72,6 +74,7 @@ export function ShowcaseLayout() {
             highlights={highlights}
             portfolioCores={portfolioCores}
             jobs={jobs}
+            interactive={onIndex}
             focusProjectId={focusProjectId}
             onShowing={setSceneShowing}
           />

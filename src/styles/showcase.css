@@ -188,6 +188,17 @@
     radial-gradient(ellipse at 60% 50%, transparent 30%, rgb(4 6 10 / calc(0.5 - var(--mood-lift) * 0.35)) 100%);
 }
 
+/* Empty space over a scene can be dragged to look around. */
+html.is-scene-grab body {
+  cursor: grab;
+}
+
+html.is-scene-dragging,
+html.is-scene-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
 /* Switcher, tour toggle and gateway: foot of the right-hand column. */
 .showcase-scene-panel {
   position: fixed;

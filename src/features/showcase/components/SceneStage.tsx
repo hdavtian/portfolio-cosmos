@@ -15,6 +15,8 @@ interface SceneStageProps {
   jobs: SceneJob[];
   /** Project whose preview is open on the page. */
   focusProjectId: string | null;
+  /** True where the wheel and drag over empty space control the scene (the index). */
+  interactive: boolean;
   /** Called once any scene is on screen (the terrain can pause). */
   onShowing: (showing: boolean) => void;
 }
@@ -31,6 +33,44 @@ const ENTER_MS = 900;
 /** Preloading scenes update at about 10 fps. */
 const PRELOAD_STEP_MS = 100;
 const TOUR_STORAGE_KEY = "showcase:auto-tour";
+/** Zoom is a lens change on the active scene's camera: narrower field = closer. */
+const ZOOM_MIN = 0.35;
+const ZOOM_MAX = 1.6;
+const ZOOM_WHEEL_RATE = 0.0012;
+/** Radians of look-around per pixel dragged, and its limits. */
+const DRAG_RATE = 0.0035;
+const DRAG_MAX_YAW = 1.2;
+const DRAG_MAX_PITCH = 0.6;
+/** After letting go, the view eases back to the scene's own framing. */
+const DRAG_RETURN_DELAY_MS = 3000;
+
+// Anything a visitor reads or uses keeps the wheel and pointer; the empty
+// space around it belongs to the scene.
+const PAGE_CONTENT_SELECTOR = [
+  "a",
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "label",
+  "p",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "img",
+  "svg",
+  "canvas",
+  "span",
+  "strong",
+  ".showcase-preview",
+  ".showcase-scene-panel",
+  ".showcase-pills",
+  "[data-scene-block]",
+].join(",");
+
+const isSceneSurface = (target: EventTarget | null) =>
+  target instanceof Element && !target.closest(PAGE_CONTENT_SELECTOR);
 
 const readTourPreference = () => {
   try {
@@ -48,7 +88,7 @@ const prefetchCinematic = () => {
  * Fragments of the cinematic universe behind the portfolio: one renderer, one
  * visible scene at a time, glitch transitions, a switcher and an auto-tour.
  */
-export function SceneStage({ projects, techStack, highlights, portfolioCores, jobs, focusProjectId, onShowing }: SceneStageProps) {
+export function SceneStage({ projects, techStack, highlights, portfolioCores, jobs, focusProjectId, interactive, onShowing }: SceneStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [statuses, setStatuses] = useState<Record<string, SceneStatus>>(() =>
     Object.fromEntries(SCENE_DEFINITIONS.map((scene) => [scene.id, { phase: "waiting", progress: 0 }])),
@@ -64,6 +104,7 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
   const autoTourRef = useRef(autoTour);
   const highlightsRef = useRef(highlights);
   const focusRef = useRef(focusProjectId);
+  const interactiveRef = useRef(interactive);
   const onShowingRef = useRef(onShowing);
   const lastInteractionRef = useRef(performance.now());
   const activeSinceRef = useRef(performance.now());
@@ -71,6 +112,7 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
     autoTourRef.current = autoTour;
     highlightsRef.current = highlights;
     focusRef.current = focusProjectId;
+    interactiveRef.current = interactive;
     onShowingRef.current = onShowing;
   });
 
@@ -148,6 +190,53 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
       };
       window.addEventListener("pointermove", onPointerMove, { passive: true });
 
+      // Visitor view control over empty space: wheel zooms, drag looks around.
+      const view = { zoom: 1, zoomTarget: 1, yaw: 0, pitch: 0, yawTarget: 0, pitchTarget: 0, releasedAt: 0 };
+      let drag: { id: number; x: number; y: number } | null = null;
+      const root = document.documentElement;
+      const canControl = (target: EventTarget | null) =>
+        interactiveRef.current && activeRef.current !== null && isSceneSurface(target);
+      const onWheel = (event: WheelEvent) => {
+        if (event.ctrlKey || !canControl(event.target)) return;
+        event.preventDefault();
+        view.zoomTarget = THREE.MathUtils.clamp(
+          view.zoomTarget * Math.exp(event.deltaY * ZOOM_WHEEL_RATE),
+          ZOOM_MIN,
+          ZOOM_MAX,
+        );
+        lastInteractionRef.current = performance.now();
+      };
+      const onPointerDown = (event: PointerEvent) => {
+        if (event.button !== 0 || event.pointerType === "touch" || !canControl(event.target)) return;
+        event.preventDefault();
+        drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        root.classList.add("is-scene-dragging");
+      };
+      const onDragMove = (event: PointerEvent) => {
+        if (!drag) {
+          root.classList.toggle("is-scene-grab", canControl(event.target));
+          return;
+        }
+        if (event.pointerId !== drag.id) return;
+        view.yawTarget = THREE.MathUtils.clamp(view.yawTarget - (event.clientX - drag.x) * DRAG_RATE, -DRAG_MAX_YAW, DRAG_MAX_YAW);
+        view.pitchTarget = THREE.MathUtils.clamp(view.pitchTarget - (event.clientY - drag.y) * DRAG_RATE, -DRAG_MAX_PITCH, DRAG_MAX_PITCH);
+        drag.x = event.clientX;
+        drag.y = event.clientY;
+      };
+      const onPointerUp = (event: PointerEvent) => {
+        if (!drag || event.pointerId !== drag.id) return;
+        drag = null;
+        view.releasedAt = performance.now();
+        root.classList.remove("is-scene-dragging");
+      };
+      window.addEventListener("wheel", onWheel, { passive: false });
+      window.addEventListener("pointerdown", onPointerDown);
+      window.addEventListener("pointermove", onDragMove, { passive: true });
+      window.addEventListener("pointerup", onPointerUp);
+      window.addEventListener("pointercancel", onPointerUp);
+      let viewSceneId: string | null = null;
+      const worldUp = new THREE.Vector3(0, 1, 0);
+
       const reported = new Map<string, string>();
       const report = (id: string, status: SceneStatus) => {
         const key = `${status.phase}:${Math.round(status.progress * 100)}`;
@@ -217,7 +306,43 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
         }
 
         const active = activeRef.current ? scenesRef.current.get(activeRef.current) : null;
-        if (active) renderer.render(active.scene, active.camera);
+        if (active) {
+          // A new scene starts from its own framing.
+          if (viewSceneId !== activeRef.current) {
+            viewSceneId = activeRef.current;
+            Object.assign(view, { zoom: 1, zoomTarget: 1, yaw: 0, pitch: 0, yawTarget: 0, pitchTarget: 0 });
+          }
+          if (!interactiveRef.current) view.zoomTarget = 1;
+          if (!drag && (!interactiveRef.current || now - view.releasedAt > DRAG_RETURN_DELAY_MS)) {
+            view.yawTarget *= Math.exp(-1.2 * dt);
+            view.pitchTarget *= Math.exp(-1.2 * dt);
+          }
+          const ease = 1 - Math.exp(-7 * dt);
+          view.zoom += (view.zoomTarget - view.zoom) * ease;
+          view.yaw += (view.yawTarget - view.yaw) * ease;
+          view.pitch += (view.pitchTarget - view.pitch) * ease;
+
+          // Applied just for this render, so scenes keep their own camera state.
+          const { camera } = active;
+          const adjusted =
+            Math.abs(view.zoom - 1) > 0.001 || Math.abs(view.yaw) > 0.0005 || Math.abs(view.pitch) > 0.0005;
+          const fov = camera.fov;
+          const quaternion = adjusted ? camera.quaternion.clone() : null;
+          if (adjusted) {
+            camera.fov = THREE.MathUtils.clamp(fov * view.zoom, 8, 120);
+            camera.updateProjectionMatrix();
+            camera.rotateOnWorldAxis(worldUp, view.yaw);
+            camera.rotateX(view.pitch);
+            camera.updateMatrixWorld();
+          }
+          renderer.render(active.scene, camera);
+          if (quaternion) {
+            camera.fov = fov;
+            camera.updateProjectionMatrix();
+            camera.quaternion.copy(quaternion);
+            camera.updateMatrixWorld();
+          }
+        }
         frame = requestAnimationFrame(render);
       };
 
@@ -235,6 +360,12 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
         cancelAnimationFrame(frame);
         document.removeEventListener("visibilitychange", onVisibility);
         window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("wheel", onWheel);
+        window.removeEventListener("pointerdown", onPointerDown);
+        window.removeEventListener("pointermove", onDragMove);
+        window.removeEventListener("pointerup", onPointerUp);
+        window.removeEventListener("pointercancel", onPointerUp);
+        root.classList.remove("is-scene-grab", "is-scene-dragging");
         observer.disconnect();
         for (const scene of scenesRef.current.values()) scene.dispose();
         scenesRef.current.clear();
