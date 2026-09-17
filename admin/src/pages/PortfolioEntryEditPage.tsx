@@ -215,7 +215,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
   const galleryEditor = (items: GalleryItem[], onChange: (items: GalleryItem[]) => void, prefix: string) => (
     <ListEditor<GalleryItem>
       title="Gallery"
-      description="Extra images shown on the project detail view."
+      description="Three.js app: when the card opens, the cover image is the large photo, and the cover plus these images appear as thumbnails beneath it (6 per row, arrows for more). Only the first 11 gallery images are shown there, and don't repeat the cover image here or it appears twice. HTML portfolio: every image appears in the detail view."
       items={items}
       onChange={onChange}
       createItem={() => ({ slug: "", type: "image", mediaId: "", title: "", description: "", fit: "cover" })}
