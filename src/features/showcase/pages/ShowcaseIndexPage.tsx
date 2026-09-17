@@ -4,10 +4,13 @@ import { HoloImage } from "../components/HoloImage";
 import { TechConstellation } from "../components/TechConstellation";
 import { useBackdropTint } from "../lib/backdropTint";
 import { clearIndexReturnState, readIndexReturnState, saveIndexReturnState } from "../lib/indexReturnState";
+import { useRestState } from "../lib/useRestState";
 import { useShowcaseProjects, type ShowcaseProject } from "../lib/useShowcaseProjects";
 
 // Matches the collapse animation in showcase.css.
 const CLOSE_MS = 240;
+/** Still this long and the list steps back into a watermark over the scene. */
+const REST_AFTER_MS = 9000;
 const EXCERPT_LENGTH = 320;
 
 const excerpt = (text: string) => {
@@ -58,6 +61,44 @@ export function ShowcaseIndexPage() {
   );
 
   const hovered = visible.find((project) => project.id === hoverId) ?? null;
+  const restState = useRestState(REST_AFTER_MS);
+
+  // While resting, every other sweep fills the watermark with a project's
+  // screenshot, swapped in while the names are at their faintest.
+  const [watermarkImage, setWatermarkImage] = useState<string | null>(null);
+  const watermarkImages = useMemo(
+    () => visible.map((project) => project.image).filter((image): image is string => Boolean(image)),
+    [visible],
+  );
+  const listRef = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    const list = listRef.current;
+    if (restState !== "resting" || !list || watermarkImages.length === 0) return;
+    let cycle = 0;
+    let cancelled = false;
+    const onIteration = (event: AnimationEvent) => {
+      if (event.animationName !== "showcase-watermark-sweep" && event.animationName !== "showcase-watermark-image") return;
+      // One sweep per cycle reaches every title; react to the first title only.
+      if (event.target !== list.querySelector(".showcase-list__title")) return;
+      cycle += 1;
+      if (cycle % 2 === 0) {
+        setWatermarkImage(null);
+        return;
+      }
+      const next = watermarkImages[Math.floor(Math.random() * watermarkImages.length)];
+      const loader = new Image();
+      loader.onload = () => {
+        if (!cancelled) setWatermarkImage(next);
+      };
+      loader.src = next;
+    };
+    list.addEventListener("animationiteration", onIteration);
+    return () => {
+      cancelled = true;
+      list.removeEventListener("animationiteration", onIteration);
+    };
+  }, [restState, watermarkImages]);
+  const shownWatermark = restState === "resting" ? watermarkImage : null;
   const opened = visible.find((project) => project.id === openId) ?? null;
   const filterCore = cores.find((core) => core.name === coreFilter);
 
@@ -144,7 +185,8 @@ export function ShowcaseIndexPage() {
 
   return (
     <div
-      className={`showcase-index${hovered ? " showcase-index--has-hover" : ""}${opened ? " showcase-index--has-open" : ""}`}
+      className={`showcase-index${hovered ? " showcase-index--has-hover" : ""}${opened ? " showcase-index--has-open" : ""} is-${restState}${shownWatermark ? " has-watermark-image" : ""}`}
+      style={shownWatermark ? ({ "--watermark-image": `url("${shownWatermark}")` } as React.CSSProperties) : undefined}
     >
       {/* Where the 3D scenes don't run (phones, reduced motion) the D3 constellation stands in. */}
       {sceneShowing ? null : (
@@ -211,8 +253,8 @@ export function ShowcaseIndexPage() {
           <p className="showcase-empty">Nothing matches those filters.</p>
         ) : null}
 
-        <ul className="showcase-list" onMouseLeave={() => setHoverId(null)}>
-          {visible.map((project) => {
+        <ul ref={listRef} className="showcase-list" onMouseLeave={() => setHoverId(null)}>
+          {visible.map((project, projectIndex) => {
             const isOpen = project.id === openId;
             const isClosing = project.id === closingId && !isOpen;
             const panelId = `showcase-preview-${project.id}`;
@@ -232,6 +274,7 @@ export function ShowcaseIndexPage() {
                 ]
                   .filter(Boolean)
                   .join(" ")}
+                style={{ "--item-index": projectIndex } as React.CSSProperties}
               >
                 <Link
                   to={`/portfolio/${project.id}`}

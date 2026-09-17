@@ -1180,6 +1180,146 @@ html.is-scene-dragging * {
   color: var(--showcase-ink-dim);
 }
 
+/* ---------- Resting: the list as a watermark over the scene ----------
+ * After the visitor goes still, titles let go (blur and fade), then live on as
+ * a watermark: a sheet of light, fixed to the viewport, sweeps across every
+ * title at once while the titles drift the other way, so the names surface
+ * through the scene and sink back as the motion settles. Overlay blending
+ * keeps whatever scene is behind them in the letters. Any movement wakes the
+ * list, name by name. The open project stays as it is.
+ */
+.showcase-index.is-fading .showcase-masthead,
+.showcase-index.is-fading .showcase-filters,
+.showcase-index.is-resting .showcase-masthead,
+.showcase-index.is-resting .showcase-filters {
+  opacity: 0.1;
+  transition: opacity 1400ms ease;
+}
+
+.showcase-masthead,
+.showcase-filters {
+  transition: opacity 700ms ease;
+}
+
+.showcase-index.is-fading .showcase-list__item:not(.is-open) .showcase-list__link {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translateX(-10px);
+  transition:
+    opacity 1300ms ease calc(min(var(--item-index), 16) * 28ms),
+    filter 1300ms ease calc(min(var(--item-index), 16) * 28ms),
+    transform 1500ms cubic-bezier(0.4, 0, 0.2, 1) calc(min(var(--item-index), 16) * 28ms);
+}
+
+.showcase-index.is-resting .showcase-list__item:not(.is-open) .showcase-list__link {
+  animation: showcase-watermark-drift 18s ease-in-out infinite;
+}
+
+.showcase-index.is-resting .showcase-list__item:not(.is-open) .showcase-list__title {
+  color: transparent;
+  background-image: linear-gradient(
+    105deg,
+    rgba(255, 255, 255, 0.07) 0%,
+    rgba(255, 255, 255, 0.07) 34%,
+    rgba(255, 255, 255, 0.5) 44%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(255, 255, 255, 0.5) 56%,
+    rgba(255, 255, 255, 0.07) 66%,
+    rgba(255, 255, 255, 0.07) 100%
+  );
+  background-size: 260vw 100vh;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  mix-blend-mode: overlay;
+  animation:
+    showcase-watermark-in 2400ms ease both,
+    showcase-watermark-sweep 18s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+.showcase-index.is-resting .showcase-list__item:not(.is-open) .showcase-list__meta,
+.showcase-index.is-fading .showcase-list__item:not(.is-open) .showcase-list__meta {
+  opacity: 0;
+}
+
+/*
+ * Image cycles: a project screenshot, fixed to the viewport like the light,
+ * shows through every title at once and pans the opposite way to the drift,
+ * with the light sheet still crossing over it.
+ */
+.showcase-index.is-resting.has-watermark-image .showcase-list__item:not(.is-open) .showcase-list__title {
+  background-image:
+    linear-gradient(
+      105deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0) 38%,
+      rgba(255, 255, 255, 0.55) 50%,
+      rgba(255, 255, 255, 0) 62%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    var(--watermark-image);
+  background-size: 260vw 100vh, cover;
+  background-position: 100% 0, 0% 50%;
+  mix-blend-mode: normal;
+  opacity: 0.55;
+  animation:
+    showcase-watermark-in 2400ms ease both,
+    showcase-watermark-image 18s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+@keyframes showcase-watermark-image {
+  0% { background-position: 100% 0, 0% 40%; opacity: 0.2; }
+  38% { background-position: 0% 0, 100% 60%; opacity: 0.55; }
+  70% { background-position: 0% 0, 100% 60%; opacity: 0.18; }
+  100% { background-position: 0% 0, 100% 60%; opacity: 0.2; }
+}
+
+/* The sheet of light crosses right to left early in each cycle, then rests off screen. */
+@keyframes showcase-watermark-sweep {
+  0% { background-position: 100% 0; }
+  38% { background-position: 0% 0; }
+  100% { background-position: 0% 0; }
+}
+
+/* Titles glide the opposite way while the light crosses, then settle. */
+@keyframes showcase-watermark-drift {
+  0% { transform: translateX(-14px); }
+  38% { transform: translateX(10px); }
+  60%, 100% { transform: translateX(-14px); }
+}
+
+@keyframes showcase-watermark-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Waking: names come back one after another, sharpening as they arrive. */
+.showcase-index.is-waking .showcase-list__item:not(.is-open) .showcase-list__link {
+  animation: showcase-wake 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(min(var(--item-index), 16) * 22ms);
+}
+
+@keyframes showcase-wake {
+  from { opacity: 0; filter: blur(10px); transform: translateX(14px); }
+  60% { opacity: 1; }
+  to { opacity: 1; filter: blur(0); transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-index.is-resting .showcase-list__item:not(.is-open) .showcase-list__link,
+  .showcase-index.is-resting .showcase-list__item:not(.is-open) .showcase-list__title,
+  .showcase-index.is-waking .showcase-list__item:not(.is-open) .showcase-list__link {
+    animation: none;
+  }
+
+  .showcase-index.is-fading .showcase-list__item:not(.is-open) .showcase-list__link {
+    filter: none;
+    transform: none;
+  }
+}
+
 /* ---------- Project ---------- */
 
 .showcase-project {
