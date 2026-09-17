@@ -65,6 +65,19 @@ nest to any depth, e.g. Frontend › Frameworks › React.
   unreachable, the tree is built from the resume skills
   (`techStackTreeFromSkills`), so the graph always renders.
 
+### Also drives the 3D Skills Lattice
+
+The same tech stack builds the Skills Lattice in the cinematic experience
+(`ResumeSpace3D.tsx`, the lattice build in the scene setup):
+
+- **Cores:** top-level nodes, as icosahedrons on the lattice ring.
+- **Depth 2:** orbits its core, as the skills always did.
+- **Depth 3 and deeper:** smaller nodes on rings tilted away from the
+  grandparent, so a branch fans outward.
+- **Particles:** every parent → child link gets pulsing particles.
+- **Selecting a node** lights its whole top-level branch. The info panel shows
+  its path ("In Frontend › Frameworks") and its children.
+
 The rest of that old resume page (name, summary, jobs, education,
 certifications) still reads `resume.json` directly.
 

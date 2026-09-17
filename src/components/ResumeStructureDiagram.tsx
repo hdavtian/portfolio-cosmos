@@ -86,7 +86,7 @@ function ResumeStructureDiagram({
 
 type PortfolioSpaceProps = Omit<
   React.ComponentProps<typeof ResumeSpace3D>,
-  "portfolioCores" | "moonPortfolioMapping" | "aboutPathTravelMessages"
+  "portfolioCores" | "moonPortfolioMapping" | "aboutPathTravelMessages" | "techStack"
 >;
 
 /**
@@ -106,6 +106,7 @@ function PortfolioSpace(props: PortfolioSpaceProps) {
       portfolioCores={portfolio.data.portfolioCores as CosmosPortfolioCoreSeed[]}
       moonPortfolioMapping={portfolio.data.moonPortfolioMapping}
       aboutPathTravelMessages={portfolio.data.aboutPathTravelMessages}
+      techStack={portfolio.data.techStack}
     />
   );
 }

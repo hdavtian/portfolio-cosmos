@@ -6,7 +6,7 @@ import * as THREE from "three";
 import ThreeGlobe from "three-globe";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import aboutDeck from "../../data/aboutDeck.json";
-import type { AboutPathTravelMessage } from "../../lib/api/contentV2";
+import type { AboutPathTravelMessage, TechStackTreeNode } from "../../lib/api/contentV2";
 import {
   CareerGallery,
   type CareerGalleryFocusInfo,
@@ -1882,8 +1882,14 @@ type SkillsLatticeNodeRecord = {
   baseScale: number;
   phase: number;
   label: string;
+  // "category" = a top-level tech stack node (a core); "skill" = any deeper node.
   nodeType: "category" | "skill";
+  /** Name of the top-level node this belongs to (its branch). */
   category: string;
+  /** 1 for cores, 2 for their children, and so on. */
+  depth: number;
+  /** Names from the core down to this node, e.g. ["Frontend", "Frameworks", "React"]. */
+  path: string[];
   detailItems: string[];
   halo?: THREE.Sprite;
   lineInfluence: number;
@@ -2028,6 +2034,7 @@ export default function ResumeSpace3D({
   portfolioCores,
   moonPortfolioMapping,
   aboutPathTravelMessages,
+  techStack,
 }: ResumeSpace3DProps) {
   // Published (or bundled) before mount, so a plain slice is stable for the scene's lifetime.
   const aboutPathRideMessages = useMemo(
@@ -5020,6 +5027,7 @@ export default function ResumeSpace3D({
     label: string;
     nodeType: "category" | "skill";
     category: string;
+    path: string[];
     detailItems: string[];
   } | null>(null);
   const spaceshipCameraOffsetRef = useRef(
@@ -7766,6 +7774,7 @@ export default function ResumeSpace3D({
         label: node.label,
         nodeType: node.nodeType,
         category: node.category,
+        path: node.path,
         detailItems: node.detailItems,
       });
       const controls = sceneRef.current.controls;
@@ -16527,9 +16536,8 @@ export default function ResumeSpace3D({
       .copy(skillsAnchor)
       .add(new THREE.Vector3(0, 8, 0));
     skillsLatticeRoot.visible = true;
-    const categoryEntries = Object.entries(resumeData.skills) as Array<
-      [string, string[]]
-    >;
+    // Cores are the top-level tech stack nodes (Admin → Portfolio → Tech stack).
+    const categoryEntries = techStack;
     const categoryNodeRadius = 3.2;
     const skillNodeRadius = 1.25;
     const latticeRadius = 58;
@@ -17787,7 +17795,13 @@ export default function ResumeSpace3D({
       skillsLatticeRoot.add(lines);
     }
 
-    categoryEntries.forEach(([category, skills], idx) => {
+    // Every name beneath a node, for evidence lookups and counts.
+    const descendantNames = (node: TechStackTreeNode): string[] =>
+      node.children.flatMap((child) => [child.name, ...descendantNames(child)]);
+
+    categoryEntries.forEach((root, idx) => {
+      const category = root.name;
+      const branchNames = descendantNames(root);
       const cPos = categoryPositions[idx];
       const categoryNode = new THREE.Mesh(
         new THREE.IcosahedronGeometry(categoryNodeRadius, 1),
@@ -17823,84 +17837,150 @@ export default function ResumeSpace3D({
         label: category,
         nodeType: "category",
         category,
-        detailItems: [...skills.slice(0, 8), ...findCategoryEvidence(skills)],
+        depth: 1,
+        path: [category],
+        detailItems: [
+          ...root.children.map((child) => child.name).slice(0, 8),
+          ...findCategoryEvidence(branchNames),
+        ],
         halo: catHalo ?? undefined,
         lineInfluence: idx,
       });
 
-      const catLabel = createLabel(category, `${skills.length} skills`);
+      const catLabel = createLabel(category, `${branchNames.length} skills`);
       catLabel.userData.skillsLatticeLabel = true;
       catLabel.position.set(cPos.x, cPos.y + 6.6, cPos.z);
       catLabel.visible = false;
       skillsLatticeRoot.add(catLabel);
       skillsLatticeNodeLabelsRef.current.push(catLabel);
 
+      // All links in this branch share one line group, so selecting any node
+      // in the branch lights the whole branch (as categories did before).
       const skillLinePoints: number[] = [];
-      const skillOrbitR = 11 + Math.min(7, skills.length * 0.7);
-      skills.forEach((skill, sIdx) => {
-        const sa =
-          (sIdx / Math.max(1, skills.length)) * Math.PI * 2 + idx * 0.35;
-        const sPos = new THREE.Vector3(
-          cPos.x + Math.cos(sa) * skillOrbitR,
-          cPos.y + Math.sin(sa * 1.4) * 2.2,
-          cPos.z + Math.sin(sa) * skillOrbitR,
-        );
-        const skillNode = new THREE.Mesh(
-          new THREE.OctahedronGeometry(skillNodeRadius, 0),
-          skillMat.clone(),
-        );
-        const skillEdges = new THREE.LineSegments(
-          new THREE.EdgesGeometry(skillNode.geometry),
-          new THREE.LineBasicMaterial({
-            color: 0xf4fbff,
-            transparent: true,
-            opacity: 0.75,
-            depthWrite: false,
-          }),
-        );
-        skillEdges.scale.setScalar(1.018);
-        skillNode.add(skillEdges);
-        skillNode.position.copy(sPos);
-        skillNode.userData.skillsNode = {
-          label: skill,
-          nodeType: "skill",
-          category,
-        };
-        skillsLatticeRoot.add(skillNode);
-        const skillHalo = makeNodeHalo(skillNodeRadius, 0xdaf1ff);
-        if (skillHalo) {
-          skillHalo.position.copy(sPos);
-          skillsLatticeRoot.add(skillHalo);
+
+      // Children orbit their parent. Depth 2 keeps the original ring around the
+      // core; deeper levels use smaller rings tilted to face away from the
+      // grandparent, so a branch fans outward instead of colliding with the
+      // ring it hangs from.
+      const placeChildren = (
+        parent: TechStackTreeNode,
+        parentPos: THREE.Vector3,
+        grandparentPos: THREE.Vector3 | null,
+        depth: number,
+        parentPath: string[],
+        orderSeed: number,
+      ) => {
+        const children = parent.children;
+        if (children.length === 0) return;
+        const orbitR =
+          depth === 2
+            ? 11 + Math.min(7, children.length * 0.7)
+            : Math.max(3.2, 6.2 - (depth - 3) * 1.2) +
+              Math.min(3, children.length * 0.35);
+        // Plane for this ring: depth 2 is the lattice's horizontal plane;
+        // deeper rings are perpendicular to the grandparent → parent direction
+        // and pushed a little further out along it.
+        const outward = grandparentPos
+          ? parentPos.clone().sub(grandparentPos).normalize()
+          : new THREE.Vector3(0, 1, 0);
+        const axisA = new THREE.Vector3();
+        const axisB = new THREE.Vector3();
+        let ringCenter = parentPos.clone();
+        if (depth === 2) {
+          axisA.set(1, 0, 0);
+          axisB.set(0, 0, 1);
+        } else {
+          const helper =
+            Math.abs(outward.y) < 0.9
+              ? new THREE.Vector3(0, 1, 0)
+              : new THREE.Vector3(1, 0, 0);
+          axisA.crossVectors(outward, helper).normalize();
+          axisB.crossVectors(outward, axisA).normalize();
+          ringCenter = parentPos.clone().addScaledVector(outward, orbitR * 0.55);
         }
-        const skillEvidence = findSkillEvidence(skill);
-        latticeNodes.push({
-          mesh: skillNode,
-          baseScale: 1,
-          phase: idx * 2.13 + sIdx * 0.77,
-          label: skill,
-          nodeType: "skill",
-          category,
-          detailItems: skillEvidence.length
-            ? [category, ...skillEvidence]
-            : [
-                category,
-                "No mapped evidence yet (add responsibilities with this skill term).",
-              ],
-          halo: skillHalo ?? undefined,
-          lineInfluence: idx + sIdx * 0.15,
+
+        children.forEach((child, sIdx) => {
+          const sa =
+            (sIdx / Math.max(1, children.length)) * Math.PI * 2 + orderSeed * 0.35;
+          const sPos =
+            depth === 2
+              ? new THREE.Vector3(
+                  parentPos.x + Math.cos(sa) * orbitR,
+                  parentPos.y + Math.sin(sa * 1.4) * 2.2,
+                  parentPos.z + Math.sin(sa) * orbitR,
+                )
+              : ringCenter
+                  .clone()
+                  .addScaledVector(axisA, Math.cos(sa) * orbitR)
+                  .addScaledVector(axisB, Math.sin(sa) * orbitR);
+          const radius = skillNodeRadius * Math.pow(0.78, depth - 2);
+          const skillNode = new THREE.Mesh(
+            new THREE.OctahedronGeometry(radius, 0),
+            skillMat.clone(),
+          );
+          const skillEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(skillNode.geometry),
+            new THREE.LineBasicMaterial({
+              color: 0xf4fbff,
+              transparent: true,
+              opacity: 0.75,
+              depthWrite: false,
+            }),
+          );
+          skillEdges.scale.setScalar(1.018);
+          skillNode.add(skillEdges);
+          skillNode.position.copy(sPos);
+          skillNode.userData.skillsNode = {
+            label: child.name,
+            nodeType: "skill",
+            category,
+          };
+          skillsLatticeRoot.add(skillNode);
+          const skillHalo = makeNodeHalo(radius, 0xdaf1ff);
+          if (skillHalo) {
+            skillHalo.position.copy(sPos);
+            skillsLatticeRoot.add(skillHalo);
+          }
+          const path = [...parentPath, child.name];
+          const childNames = child.children.map((grandchild) => grandchild.name);
+          const skillEvidence = findSkillEvidence(child.name);
+          latticeNodes.push({
+            mesh: skillNode,
+            baseScale: 1,
+            phase: idx * 2.13 + sIdx * 0.77 + depth * 0.31,
+            label: child.name,
+            nodeType: "skill",
+            category,
+            depth,
+            path,
+            detailItems: [
+              path.slice(0, -1).join(" › "),
+              ...(childNames.length ? [`Includes: ${childNames.join(", ")}`] : []),
+              ...(skillEvidence.length
+                ? skillEvidence
+                : childNames.length
+                  ? []
+                  : ["No mapped evidence yet (add responsibilities with this skill term)."]),
+            ],
+            halo: skillHalo ?? undefined,
+            lineInfluence: idx + sIdx * 0.15 + (depth - 2) * 0.05,
+          });
+          const skillLabel = createLabel(child.name);
+          skillLabel.userData.skillsLatticeLabel = true;
+          skillLabel.position.set(sPos.x, sPos.y + radius + 1.15, sPos.z);
+          skillLabel.visible = false;
+          skillsLatticeRoot.add(skillLabel);
+          skillsLatticeNodeLabelsRef.current.push(skillLabel);
+          skillLinePoints.push(parentPos.x, parentPos.y, parentPos.z, sPos.x, sPos.y, sPos.z);
+          latticeLinkSegments.push({
+            from: parentPos.clone(),
+            to: sPos.clone(),
+          });
+          placeChildren(child, sPos, parentPos, depth + 1, path, orderSeed + sIdx + 1);
         });
-        const skillLabel = createLabel(skill);
-        skillLabel.userData.skillsLatticeLabel = true;
-        skillLabel.position.set(sPos.x, sPos.y + 2.4, sPos.z);
-        skillLabel.visible = false;
-        skillsLatticeRoot.add(skillLabel);
-        skillsLatticeNodeLabelsRef.current.push(skillLabel);
-        skillLinePoints.push(cPos.x, cPos.y, cPos.z, sPos.x, sPos.y, sPos.z);
-        latticeLinkSegments.push({
-          from: cPos.clone(),
-          to: sPos.clone(),
-        });
-      });
+      };
+      placeChildren(root, cPos, null, 2, [category], idx);
+
       const skillGeom = new THREE.BufferGeometry();
       skillGeom.setAttribute(
         "position",
@@ -23074,7 +23154,7 @@ export default function ResumeSpace3D({
               >
                 {skillsLatticeSelection.nodeType === "category"
                   ? "Category"
-                  : `Skill in ${skillsLatticeSelection.category}`}
+                  : `In ${skillsLatticeSelection.path.slice(0, -1).join(" › ")}`}
               </div>
               <div
                 style={{
