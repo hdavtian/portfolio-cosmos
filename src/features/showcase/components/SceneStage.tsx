@@ -4,7 +4,7 @@ import type { TechStackTreeNode } from "../../../lib/api/contentV2";
 import type { PortfolioCoreSeed } from "../../fast/types";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
-import type { ShowcaseScene } from "../scenes/types";
+import type { SceneJob, ShowcaseScene } from "../scenes/types";
 
 interface SceneStageProps {
   projects: ShowcaseProject[];
@@ -12,6 +12,7 @@ interface SceneStageProps {
   /** Technologies of the project open on the page. */
   highlights: string[];
   portfolioCores: PortfolioCoreSeed[] | undefined;
+  jobs: SceneJob[];
   /** Project whose preview is open on the page. */
   focusProjectId: string | null;
   /** Called once any scene is on screen (the terrain can pause). */
@@ -47,7 +48,7 @@ const prefetchCinematic = () => {
  * Fragments of the cinematic universe behind the portfolio: one renderer, one
  * visible scene at a time, glitch transitions, a switcher and an auto-tour.
  */
-export function SceneStage({ projects, techStack, highlights, portfolioCores, focusProjectId, onShowing }: SceneStageProps) {
+export function SceneStage({ projects, techStack, highlights, portfolioCores, jobs, focusProjectId, onShowing }: SceneStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [statuses, setStatuses] = useState<Record<string, SceneStatus>>(() =>
     Object.fromEntries(SCENE_DEFINITIONS.map((scene) => [scene.id, { phase: "waiting", progress: 0 }])),
@@ -74,9 +75,9 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, fo
   });
 
   const hasData = projects.length > 0 && techStack !== undefined && portfolioCores !== undefined;
-  const dataRef = useRef({ projects, techStack: techStack ?? [], portfolioCores: portfolioCores ?? [] });
+  const dataRef = useRef({ projects, techStack: techStack ?? [], portfolioCores: portfolioCores ?? [], jobs });
   useLayoutEffect(() => {
-    dataRef.current = { projects, techStack: techStack ?? [], portfolioCores: portfolioCores ?? [] };
+    dataRef.current = { projects, techStack: techStack ?? [], portfolioCores: portfolioCores ?? [], jobs };
   });
 
   const switchTo = useCallback((id: string) => {

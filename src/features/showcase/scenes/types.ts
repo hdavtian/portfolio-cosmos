@@ -11,10 +11,24 @@ export interface ScenePointer {
   y: number;
 }
 
+/** A job as the scenes need it (from the published resume). */
+export interface SceneJob {
+  id: string;
+  company: string;
+  location?: string;
+  startDate?: string;
+  endDate?: string;
+  droneIntroText?: string;
+  positions: Array<{ title: string; startDate?: string; endDate?: string }>;
+  memories: Array<{ type: string; text: string }>;
+  tech: string[];
+}
+
 export interface SceneData {
   projects: ShowcaseProject[];
   techStack: TechStackTreeNode[];
   portfolioCores: PortfolioCoreSeed[];
+  jobs: SceneJob[];
 }
 
 /** What the host shares with scenes. */

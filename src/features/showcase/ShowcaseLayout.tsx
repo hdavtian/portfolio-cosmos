@@ -2,7 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { AtmosphereBackdrop } from "./components/AtmosphereBackdrop";
 import { SceneStage } from "./components/SceneStage";
-import { usePortfolioCoresQuery, useTechStackQuery } from "../../lib/query/contentQueries";
+import { usePortfolioCoresQuery, useResumeQuery, useTechStackQuery } from "../../lib/query/contentQueries";
+import type { SceneJob } from "./scenes/types";
 import { BackdropTintContext } from "./lib/backdropTint";
 import { useShowcaseProjects } from "./lib/useShowcaseProjects";
 
@@ -26,6 +27,30 @@ export function ShowcaseLayout() {
   const { personal, projects } = useShowcaseProjects();
   const techStack = useTechStackQuery().data?.payload;
   const portfolioCores = usePortfolioCoresQuery().data?.payload;
+  const experience = useResumeQuery().data?.payload.experience;
+  const jobs = useMemo<SceneJob[]>(
+    () =>
+      (experience ?? []).map((entry) => {
+        // The published resume carries the 3D site's extras too.
+        const extras = entry as typeof entry & {
+          droneIntroText?: string;
+          jobMemories?: Array<{ type: string; text: string }>;
+          jobTech?: Array<{ label: string }>;
+        };
+        return {
+          id: entry.id,
+          company: entry.company,
+          location: entry.location,
+          startDate: entry.startDate,
+          endDate: entry.endDate,
+          droneIntroText: extras.droneIntroText,
+          positions: entry.positions,
+          memories: extras.jobMemories ?? [],
+          tech: (extras.jobTech ?? []).map((tech) => tech.label),
+        };
+      }),
+    [experience],
+  );
   const [focusProjectId, setFocusProject] = useState<string | null>(null);
   const [sceneEnabled] = useState(canShowCinematicScene);
   const [sceneShowing, setSceneShowing] = useState(false);
@@ -46,6 +71,7 @@ export function ShowcaseLayout() {
             techStack={techStack}
             highlights={highlights}
             portfolioCores={portfolioCores}
+            jobs={jobs}
             focusProjectId={focusProjectId}
             onShowing={setSceneShowing}
           />
