@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../lib/apiClient";
 import { useMediaLookup, type MediaThumb } from "../lib/mediaLookup";
+import { ImagePreview } from "./ImagePreview";
 
 const PAGE_SIZE = 24;
 
@@ -20,6 +21,7 @@ export function MediaPicker({ value, onChange }: MediaPickerProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [previewing, setPreviewing] = useState(false);
   const selected = useMediaLookup([value]).byId.get(value ?? "");
 
   const results = useQuery({
@@ -39,11 +41,18 @@ export function MediaPicker({ value, onChange }: MediaPickerProps) {
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {selected ? (
-          <img
-            src={selected.url}
-            alt={selected.altText}
-            style={{ width: 96, height: 64, objectFit: "cover", borderRadius: 4, border: "1px solid #dfe3e8" }}
-          />
+          <button
+            type="button"
+            className="admin-thumb-button"
+            title="Click to enlarge"
+            onClick={() => setPreviewing(true)}
+          >
+            <img
+              src={selected.url}
+              alt={selected.altText}
+              style={{ width: 96, height: 64, objectFit: "cover", borderRadius: 4, display: "block" }}
+            />
+          </button>
         ) : (
           <div
             className="admin-status"
@@ -56,6 +65,8 @@ export function MediaPicker({ value, onChange }: MediaPickerProps) {
           {open ? "Close library" : value ? "Change image" : "Choose image"}
         </ButtonComponent>
       </div>
+
+      <ImagePreview image={previewing && selected ? selected : null} onClose={() => setPreviewing(false)} />
 
       {open ? (
         <div style={{ marginTop: 10, border: "1px solid #dfe3e8", borderRadius: 6, padding: 10 }}>
