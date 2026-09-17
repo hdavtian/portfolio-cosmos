@@ -16,7 +16,8 @@ const archive =
   process.argv[2] ??
   (existsSync(backupDir)
     ? readdirSync(backupDir)
-        .filter((name) => name.endsWith(".archive.gz"))
+        // Production dumps only (db:pull names them prod-…).
+        .filter((name) => name.startsWith("prod-") && name.endsWith(".archive.gz"))
         .map((name) => path.join(backupDir, name))
         .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0]
     : undefined);

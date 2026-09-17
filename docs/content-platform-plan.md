@@ -76,12 +76,30 @@ Next steps, in order:
 2. **Merge `feature/content-platform-phase-4` to `main`.** Deploys API v2, admin
    and the redesigned site together. Until release 1 exists the site renders
    its bundled content snapshot, so nothing breaks in between.
-3. **Phase 5 — production data.** `db:pull` backup of Atlas, import, upload the
-   202 images, publish release 1, confirm the live site reads the API (not the
-   fallback). *Approval.*
-4. **Phase 6b — stabilize.** Real admin use; decide when to retire
+3. ✅ **Merged and deployed 2026-09-17** (`37a544b`). API v2 + admin live on
+   `harma-api`; the new container took ~3 minutes to take traffic after the
+   deploy finished.
+4. ✅ **Phase 5 — production data, done 2026-09-17.** Instead of re-importing
+   `src/data` (which would have lost the admin reorganisation, e.g. Murad and
+   Disney demos grouped), the curated local database was copied to Atlas:
+   - Backups first: `prod-resume_cosmos-2026-09-17T17-24-45-874Z.archive.gz` and
+     `local-resume_cosmos_local-2026-09-17T17-24-47-521Z.archive.gz` in
+     `db-backups/`. Existing prod dumps renamed with the `prod-` prefix.
+   - `scripts/db-push-prod.mjs`: 368 documents restored into `resume_cosmos`
+     (all v2 collections incl. 31 releases, current release intact); the 12
+     legacy `content_documents` untouched.
+   - `npm run db:ensure-indexes-prod`: unique slug, one-current-release and
+     media indexes created on Atlas (the restore did not carry all of them).
+   - `scripts/media-push-prod.mjs`: 299 blobs copied from Azurite to
+     `sthdsharedprod/media` with Harma's login (granted *Storage Blob Data
+     Contributor* on that account).
+   - Verified: `/api/v2/content/release` 200 with blob URLs; all 204 media URLs
+     in the release return 200, CORS header present for the site; live
+     homepage lists the reorganised cores (single Murad and Disney Inspired
+     entries), no console errors.
+5. **Phase 6b — stabilize.** Real admin use; decide when to retire
    `/portfolio-classic`, the v1 routes and bundled JSON.
-5. **Phase 7/8 — Three.js admin + retrofit**, partly done (the cinematic app
+6. **Phase 7/8 — Three.js admin + retrofit**, partly done (the cinematic app
    already reads v2 content).
 
 ### Phase 0 notes

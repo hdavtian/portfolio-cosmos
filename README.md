@@ -88,8 +88,16 @@ If the admin shows "Internal server error" at login and the terminal keeps loggi
 
 | Command | What it does |
 | --- | --- |
-| `npm run db:pull` | Dumps the production database to `db-backups/` (read-only on production) |
-| `npm run db:restore-local` | Restores the newest dump into local Docker as a separate database |
+| `npm run db:pull` | Dumps the production database to `db-backups/prod-<db>-<time>.archive.gz` (read-only on production) |
+| `npm run db:backup-local` | Dumps the local Docker database to `db-backups/local-<db>-<time>.archive.gz` |
+| `npm run db:restore-local` | Restores the newest `prod-` dump into local Docker as a separate database |
+| `node scripts/db-push-prod.mjs --yes` | **Replaces production content with local**: backs up both sides first, then restores the local v2 collections (releases included) into Atlas; legacy v1 documents untouched |
+| `node scripts/media-push-prod.mjs --yes` | Copies media from Azurite to production storage (missing or changed files only; never deletes). Needs *Storage Blob Data Contributor* on `sthdsharedprod` for your Azure login |
+| `npm run db:ensure-indexes-prod` | Creates the content indexes on production (idempotent) |
+
+Backups in `db-backups/` start with `prod-` or `local-` so you can tell where each came from. They are never deleted automatically.
+
+Run the two push scripts with `node` directly: under Git Bash, `npm run` launching PowerShell for the Azure guard crashed with "Internal CLR error".
 | `npm run storage:cors` | Lets the 3D site load textures from Azurite; run once after resetting Azurite data |
 
 Content changes made in the admin only show on the sites after **Publishing → Publish**.
