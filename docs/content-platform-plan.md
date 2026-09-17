@@ -30,11 +30,18 @@ Also on that branch, beyond the original phases:
 Next steps, in order:
 
 1. **Phase 3 — infrastructure** (no merge needed; existing resources only):
-   1. Storage account in `rg-portfolio-prod`, container `media`, CORS for
-      `https://harmadavtian.com` and `https://portfolio-admin.harmadavtian.com`
-      (the WebGL background scenes read screenshots cross-origin). *Approval.*
-   2. System-assigned managed identity on `harma-api`, *Storage Blob Data
-      Contributor* on that account only.
+   1. ✅ **Done 2026-09-17.** Storage account `sthdsharedprod` (`rg-portfolio-prod`,
+      West US 2, Standard_LRS, Hot, TLS 1.2, HTTPS only), blob soft delete 7 days,
+      container `media` with anonymous blob read, CORS GET/HEAD/OPTIONS for
+      `https://harmadavtian.com`, `https://www.harmadavtian.com` and
+      `https://portfolio-admin.harmadavtian.com` (the WebGL background scenes
+      read screenshots cross-origin). Created through the management plane; no
+      storage keys used or stored.
+   2. ✅ **Done 2026-09-17.** System-assigned managed identity on `harma-api`
+      (principal `7cde9497-7517-4b08-b3a1-c21f8005ce43`), *Storage Blob Data
+      Contributor* scoped to `sthdsharedprod` only. The API picks it up through
+      `AZURE_STORAGE_ACCOUNT=sthdsharedprod` (`DefaultAzureCredential`), set with
+      the other app settings in step 3 so `harma-api` restarts once.
    3. Register the API in the shared sign-on group, run `creds:set` centrally,
       set auth/cookie app settings. *Approval (rotates shared credentials).*
    4. Serve the admin build on `portfolio-admin.harmadavtian.com` from
