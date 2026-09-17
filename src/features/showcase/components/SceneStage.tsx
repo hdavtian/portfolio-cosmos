@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { TechStackTreeNode } from "../../../lib/api/contentV2";
+import type { PortfolioCoreSeed } from "../../fast/types";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
 import type { ShowcaseScene } from "../scenes/types";
@@ -10,6 +11,9 @@ interface SceneStageProps {
   techStack: TechStackTreeNode[] | undefined;
   /** Technologies of the project open on the page. */
   highlights: string[];
+  portfolioCores: PortfolioCoreSeed[] | undefined;
+  /** Project whose preview is open on the page. */
+  focusProjectId: string | null;
   /** Called once any scene is on screen (the terrain can pause). */
   onShowing: (showing: boolean) => void;
 }
@@ -43,7 +47,7 @@ const prefetchCinematic = () => {
  * Fragments of the cinematic universe behind the portfolio: one renderer, one
  * visible scene at a time, glitch transitions, a switcher and an auto-tour.
  */
-export function SceneStage({ projects, techStack, highlights, onShowing }: SceneStageProps) {
+export function SceneStage({ projects, techStack, highlights, portfolioCores, focusProjectId, onShowing }: SceneStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [statuses, setStatuses] = useState<Record<string, SceneStatus>>(() =>
     Object.fromEntries(SCENE_DEFINITIONS.map((scene) => [scene.id, { phase: "waiting", progress: 0 }])),
@@ -58,19 +62,21 @@ export function SceneStage({ projects, techStack, highlights, onShowing }: Scene
   const transitionRef = useRef<"leaving" | "entering" | null>(null);
   const autoTourRef = useRef(autoTour);
   const highlightsRef = useRef(highlights);
+  const focusRef = useRef(focusProjectId);
   const onShowingRef = useRef(onShowing);
   const lastInteractionRef = useRef(performance.now());
   const activeSinceRef = useRef(performance.now());
   useLayoutEffect(() => {
     autoTourRef.current = autoTour;
     highlightsRef.current = highlights;
+    focusRef.current = focusProjectId;
     onShowingRef.current = onShowing;
   });
 
-  const hasData = projects.length > 0 && techStack !== undefined;
-  const dataRef = useRef({ projects, techStack: techStack ?? [] });
+  const hasData = projects.length > 0 && techStack !== undefined && portfolioCores !== undefined;
+  const dataRef = useRef({ projects, techStack: techStack ?? [], portfolioCores: portfolioCores ?? [] });
   useLayoutEffect(() => {
-    dataRef.current = { projects, techStack: techStack ?? [] };
+    dataRef.current = { projects, techStack: techStack ?? [], portfolioCores: portfolioCores ?? [] };
   });
 
   const switchTo = useCallback((id: string) => {
@@ -95,6 +101,10 @@ export function SceneStage({ projects, techStack, highlights, onShowing }: Scene
   useEffect(() => {
     for (const scene of scenesRef.current.values()) scene.setHighlights?.(highlights);
   }, [highlights]);
+
+  useEffect(() => {
+    for (const scene of scenesRef.current.values()) scene.setFocusProject?.(focusProjectId);
+  }, [focusProjectId]);
 
   useEffect(() => {
     try {
@@ -243,6 +253,7 @@ export function SceneStage({ projects, techStack, highlights, onShowing }: Scene
           }
           scene.resize(size.width, size.height);
           scene.setHighlights?.(highlightsRef.current);
+          scene.setFocusProject?.(focusRef.current);
           scenesRef.current.set(definition.id, scene);
         } catch {
           setStatuses((current) => ({ ...current, [definition.id]: { phase: "failed", progress: 0 } }));

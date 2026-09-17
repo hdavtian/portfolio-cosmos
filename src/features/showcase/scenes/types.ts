@@ -1,5 +1,6 @@
 import type * as THREE from "three";
 import type { TechStackTreeNode } from "../../../lib/api/contentV2";
+import type { PortfolioCoreSeed } from "../../fast/types";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 
 export type ThreeModule = typeof import("three");
@@ -13,6 +14,7 @@ export interface ScenePointer {
 export interface SceneData {
   projects: ShowcaseProject[];
   techStack: TechStackTreeNode[];
+  portfolioCores: PortfolioCoreSeed[];
 }
 
 /**
@@ -33,6 +35,8 @@ export interface ShowcaseScene {
   resize(width: number, height: number): void;
   /** Technologies of the project open on the page (scenes may light them). */
   setHighlights?(technologies: string[]): void;
+  /** Project open on the page (scenes may bring it into view). */
+  setFocusProject?(projectId: string | null): void;
   dispose(): void;
 }
 

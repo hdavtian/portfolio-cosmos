@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { AtmosphereBackdrop } from "./components/AtmosphereBackdrop";
 import { SceneStage } from "./components/SceneStage";
-import { useTechStackQuery } from "../../lib/query/contentQueries";
+import { usePortfolioCoresQuery, useTechStackQuery } from "../../lib/query/contentQueries";
 import { BackdropTintContext } from "./lib/backdropTint";
 import { useShowcaseProjects } from "./lib/useShowcaseProjects";
 
@@ -25,12 +25,14 @@ export function ShowcaseLayout() {
   const setTint = useCallback((color: string | null) => setTintState(color ?? DEFAULT_TINT), []);
   const { personal, projects } = useShowcaseProjects();
   const techStack = useTechStackQuery().data?.payload;
+  const portfolioCores = usePortfolioCoresQuery().data?.payload;
+  const [focusProjectId, setFocusProject] = useState<string | null>(null);
   const [sceneEnabled] = useState(canShowCinematicScene);
   const [sceneShowing, setSceneShowing] = useState(false);
   const [highlights, setHighlightsState] = useState<string[]>([]);
   const setHighlights = useCallback((technologies: string[]) => setHighlightsState(technologies), []);
   const context = useMemo(
-    () => ({ setTint, setHighlights, sceneShowing }),
+    () => ({ setTint, setHighlights, setFocusProject, sceneShowing }),
     [setTint, setHighlights, sceneShowing],
   );
 
@@ -43,6 +45,8 @@ export function ShowcaseLayout() {
             projects={projects}
             techStack={techStack}
             highlights={highlights}
+            portfolioCores={portfolioCores}
+            focusProjectId={focusProjectId}
             onShowing={setSceneShowing}
           />
         ) : null}

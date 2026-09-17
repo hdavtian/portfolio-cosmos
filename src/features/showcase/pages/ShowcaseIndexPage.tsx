@@ -25,7 +25,7 @@ const excerpt = (text: string) => {
  */
 export function ShowcaseIndexPage() {
   const { projects, cores, topTech, personal, isLoading } = useShowcaseProjects();
-  const { setTint, setHighlights, sceneShowing } = useBackdropTint();
+  const { setTint, setHighlights, setFocusProject, sceneShowing } = useBackdropTint();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -71,6 +71,11 @@ export function ShowcaseIndexPage() {
     setHighlights(openedTech ?? []);
   }, [openedTech, setHighlights]);
   useEffect(() => () => setHighlights([]), [setHighlights]);
+  const openedId = opened?.id ?? null;
+  useEffect(() => {
+    setFocusProject(openedId);
+  }, [openedId, setFocusProject]);
+  useEffect(() => () => setFocusProject(null), [setFocusProject]);
 
   useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
