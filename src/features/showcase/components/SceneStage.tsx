@@ -246,7 +246,7 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, fo
         if (disposed) return;
         setStatuses((current) => ({ ...current, [definition.id]: { phase: "loading", progress: 0 } }));
         try {
-          const scene = await definition.create(THREE, dataRef.current);
+          const scene = await definition.create(THREE, dataRef.current, { renderer });
           if (disposed) {
             scene.dispose();
             return;

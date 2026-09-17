@@ -17,6 +17,11 @@ export interface SceneData {
   portfolioCores: PortfolioCoreSeed[];
 }
 
+/** What the host shares with scenes. */
+export interface SceneContext {
+  renderer: THREE.WebGLRenderer;
+}
+
 /**
  * One fragment of the cinematic universe shown behind the portfolio. Scenes
  * own their THREE.Scene and camera; the host owns the renderer, loop and
@@ -44,5 +49,5 @@ export interface SceneDefinition {
   id: string;
   /** Name in the switcher, e.g. "Career gallery". */
   label: string;
-  create(three: ThreeModule, data: SceneData): Promise<ShowcaseScene>;
+  create(three: ThreeModule, data: SceneData, context: SceneContext): Promise<ShowcaseScene>;
 }
