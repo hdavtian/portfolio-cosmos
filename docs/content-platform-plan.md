@@ -51,10 +51,24 @@ Next steps, in order:
       shared-login `apps.json` (env path `api/.env.production.local`), so a
       future `creds:set` updates it; Azure must then be updated as for the other
       apps. v1 still serving after the restart (`/healthz`, `/api/v1/content/resume` 200).
-   4. Serve the admin build on `portfolio-admin.harmadavtian.com` from
-      `harma-api` (host-based routing, admin bundled into the API deploy);
-      permanent Syncfusion key as GitHub secret `SYNCFUSION_LICENSE_KEY`
-      (trial key expires 2026-09-23).
+   4. ✅ **Built 2026-09-17, ships with the merge.** `api/src/adminSite.ts` serves
+      the admin SPA when the request host is `ADMIN_HOST`
+      (default `portfolio-admin.harmadavtian.com`): hashed assets immutable,
+      `index.html` no-cache, SPA fallback, CSP allowing images from the media
+      origin; API paths (`/api/*`, `/healthz`, `/swagger`, `/openapi.json`) on
+      that host fall through to the API, other hosts never see the admin. The
+      deploy workflow builds the admin (`npm run build:admin` with secret
+      `SYNCFUSION_LICENSE_KEY`, set 2026-09-17 from the root `.env`) and
+      `make-api-deploy` ships it as `admin/` next to `dist/`.
+      **Fixed a deploy blocker found here:** `tsc` output imported
+      `@hd/content-schema` as TypeScript source, which the deploy package omits,
+      so the v2 API would have crashed on start in Azure. The API now builds
+      with esbuild into one `dist/server.js` (`scripts/build-api.mjs`, workspace
+      packages inlined, npm dependencies external) after a `tsc --noEmit`
+      typecheck. Verified: assembled the real deploy package, installed
+      production dependencies, ran it with `NODE_ENV=production` — admin pages
+      and assets 200 on the admin host, API routes 200 on it, admin 404 on other
+      hosts, login page renders with no CSP errors.
    5. Phase 2 leftovers: rate limiting on admin writes, request logging,
       production CORS allowlist. Watch B1 plan memory.
 2. **Merge `feature/content-platform-phase-4` to `main`.** Deploys API v2, admin

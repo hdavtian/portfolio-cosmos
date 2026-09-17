@@ -26,6 +26,16 @@ mkdirSync(outDir, { recursive: true });
 cpSync(path.join(apiDir, "dist"), path.join(outDir, "dist"), { recursive: true });
 cpSync(path.join(rootDir, "package-lock.json"), path.join(outDir, "package-lock.json"));
 
+// The admin SPA (npm run build:admin) ships alongside the API, which serves it
+// on the admin hostname from admin/ next to dist/.
+const adminDist = path.join(rootDir, "dist-admin");
+if (existsSync(path.join(adminDist, "index.html"))) {
+  cpSync(adminDist, path.join(outDir, "admin"), { recursive: true });
+  console.log("[make-api-deploy] Included admin build (admin/)");
+} else {
+  console.warn("[make-api-deploy] dist-admin not found; deploying the API without the admin");
+}
+
 const apiPackage = JSON.parse(readFileSync(path.join(apiDir, "package.json"), "utf8"));
 
 // Workspace packages are bundled into dist at build time, never installed.

@@ -10,6 +10,9 @@ on:
       - "package.json"
       - "package-lock.json"
       - "scripts/make-api-deploy.mjs"
+      - "admin/**"
+      - "vite.admin.config.ts"
+      - "tsconfig.admin.json"
       - ".github/workflows/deploy-api-azure.yml"
   workflow_dispatch:
 
@@ -49,6 +52,14 @@ jobs:
       - name: Build API
         run: npm run build -w api
 
+      # Served by the API on portfolio-admin.harmadavtian.com. The Syncfusion
+      # licence key is public in the built bundle by design, but kept out of
+      # the repo.
+      - name: Build admin
+        run: npm run build:admin
+        env:
+          VITE_SYNCFUSION_LICENSE_KEY: ${{ secrets.SYNCFUSION_LICENSE_KEY }}
+
       # Dependencies are hoisted to the repo root, so api/ has no complete
       # node_modules. Assemble a standalone folder with production deps only,
       # installed from the root lockfile's exact versions.
@@ -58,6 +69,7 @@ jobs:
           cd api-deploy
           npm install --omit=dev --ignore-scripts --no-audit --no-fund
           test -f dist/server.js
+          test -f admin/index.html
           test -d node_modules/express
           test -d node_modules/mongoose
 

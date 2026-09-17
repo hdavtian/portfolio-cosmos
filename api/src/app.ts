@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+import { createAdminSite } from "./adminSite.js";
 import { createAuthRoutes, type AuthConfig } from "./auth/authRoutes.js";
 import { env } from "./config/env.js";
 import { apiRouter } from "./routes/index.js";
@@ -52,6 +55,15 @@ export const createApp = () => {
   });
 
   app.use(morgan("combined"));
+
+  // The admin SPA on its own hostname (API paths on that host fall through).
+  const adminSite = createAdminSite({
+    host: env.ADMIN_HOST,
+    distDir:
+      env.ADMIN_DIST_DIR ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "admin"),
+    mediaOrigin: env.MEDIA_PUBLIC_BASE_URL ? new URL(env.MEDIA_PUBLIC_BASE_URL).origin : undefined,
+  });
+  if (adminSite) app.use(adminSite);
 
   app.use(createAuthRoutes({ auth: authConfig() }));
   app.use(apiRouter);

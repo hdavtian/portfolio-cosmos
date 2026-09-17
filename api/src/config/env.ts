@@ -15,6 +15,12 @@ const envSchema = z
     // Comma-separated allowlist for credentialed admin requests.
     CORS_ORIGINS: z.string().optional(),
 
+    // The admin SPA is served on this hostname from ADMIN_DIST_DIR (the deploy
+    // package puts the build in admin/ next to dist/). Unset or missing build:
+    // the app serves only the API.
+    ADMIN_HOST: z.string().min(1).default("portfolio-admin.harmadavtian.com"),
+    ADMIN_DIST_DIR: z.string().min(1).optional(),
+
     // Shared sign-on (hd_session). Generated centrally by
     // C:\sites\shared-login-for-personal-apps (`npm run creds:set`) for
     // production; local development uses its own throwaway values.
