@@ -2078,8 +2078,8 @@ html.is-scene-dragging * {
 .showcase-pager__title {
   font-family: var(--showcase-display);
   font-weight: 900;
-  font-size: clamp(1.8rem, 3.6vw, 3.6rem);
-  line-height: 0.9;
+  font-size: clamp(1.05rem, 1.6vw, 1.6rem);
+  line-height: 0.95;
   text-transform: uppercase;
 }
 
