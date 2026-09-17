@@ -5,6 +5,8 @@ import "./CosmosLoader.scss";
 
 export interface CosmosLoaderProps {
   onLoadingComplete: () => void;
+  /** Name on the loader's TV screen (published profile). */
+  wordmark?: string;
   isSceneReady?: boolean;
   loadingProgressHint?: number;
   loadingStageHint?: string;
@@ -44,6 +46,7 @@ const buildRevealLineFractions = (): number[] => {
 
 export default function CosmosLoader({
   onLoadingComplete,
+  wordmark = "HARMA DAVTIAN",
   isSceneReady = false,
   loadingProgressHint = 0,
   loadingStageHint = "",
@@ -439,7 +442,7 @@ export default function CosmosLoader({
             <div className="cosmos-loader__tv-content">
               <div className="cosmos-loader__tv-backdrop" aria-hidden="true" />
               <div className="cosmos-loader__tv-text">
-                <div className="cosmos-loader__tv-wordmark">HARMA DAVTIAN</div>
+                <div className="cosmos-loader__tv-wordmark">{wordmark}</div>
                 <div className="cosmos-loader__tv-sub">PORTFOLIO</div>
               </div>
             </div>

@@ -10,7 +10,7 @@ import DiagramSettings, {
 } from "./components/DiagramSettings";
 import { trackEvent } from "./lib/analytics";
 import type { TechStackTreeNode } from "./lib/api/contentV2";
-import { useTechStackQuery } from "./lib/query/contentQueries";
+import { useResumeQuery, useTechStackQuery } from "./lib/query/contentQueries";
 import "./styles/main.scss";
 
 // Tech stack graph using a D3 force-directed layout. Renders a tree of any
@@ -425,6 +425,11 @@ function App() {
   // nest deeper than the resume's skills. Before it loads, the bundled resume
   // skills stand in. The rest of this page still reads resume.json.
   const publishedTechStack = useTechStackQuery();
+  // Name, title, contact and summary come from the published profile
+  // (Admin → Profile), falling back to the bundled resume.
+  const publishedResume = useResumeQuery();
+  const personal = publishedResume.data?.payload.personal ?? resumeData.personal;
+  const summary = publishedResume.data?.payload.summary ?? resumeData.summary;
   const techStack = useMemo(
     () => publishedTechStack.data?.payload ?? techStackTreeFromSkills(resumeData.skills),
     [publishedTechStack.data],
@@ -689,8 +694,8 @@ function App() {
           className={`hero__header ${diagramStyle === "space" ? "hero__header--hidden" : ""}`}
         >
           <h1 className="hero__name">
-            {resumeData.personal.name}
-            <span className="hero__title">{resumeData.personal.title}</span>
+            {personal.name}
+            <span className="hero__title">{personal.title}</span>
           </h1>
         </div>
         <div className="hero__canvas">
@@ -707,14 +712,14 @@ function App() {
           className={`hero__footer ${diagramStyle === "space" ? "hero__footer--hidden" : ""}`}
         >
           <div className="hero__summary">
-            <p className="hero__summary-text">{resumeData.summary}</p>
+            <p className="hero__summary-text">{summary}</p>
           </div>
           <div className="hero__contact">
             <div className="hero__contact-item">
-              {resumeData.personal.email}
+              {personal.email}
             </div>
             <div className="hero__contact-item">
-              {resumeData.personal.location}
+              {personal.location}
             </div>
           </div>
         </div>

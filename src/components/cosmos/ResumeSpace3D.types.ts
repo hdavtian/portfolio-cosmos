@@ -17,6 +17,8 @@ export interface ResumeSpace3DProps {
   aboutPathTravelMessages: AboutPathTravelMessage[];
   /** Drives the Skills Lattice: top-level nodes are the cores, deeper nodes orbit their parent. */
   techStack: TechStackTreeNode[];
+  /** Name and title shown in the HUD badge and the loader (Admin → Profile). */
+  profile: { name: string; title: string };
 }
 
 export interface SceneRef {

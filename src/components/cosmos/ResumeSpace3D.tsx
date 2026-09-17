@@ -2035,6 +2035,7 @@ export default function ResumeSpace3D({
   moonPortfolioMapping,
   aboutPathTravelMessages,
   techStack,
+  profile,
 }: ResumeSpace3DProps) {
   // Published (or bundled) before mount, so a plain slice is stable for the scene's lifetime.
   const aboutPathRideMessages = useMemo(
@@ -21436,6 +21437,7 @@ export default function ResumeSpace3D({
       {/* Show loader while scene is setting up */}
       {isLoading && (
         <CosmosLoader
+          wordmark={profile.name.toUpperCase()}
           isSceneReady={criticalAssetsReady && droneGpuWarmupReady}
           loadingProgressHint={loaderProgressHint}
           loadingStageHint={loaderStageHint}
@@ -24901,8 +24903,8 @@ export default function ResumeSpace3D({
 
           {/* Spaceship HUD Interface */}
           <SpaceshipHUD
-            userName="HARMA DAVTIAN"
-            userTitle="Lead Full Stack Engineer"
+            userName={profile.name.toUpperCase()}
+            userTitle={profile.title}
             shipMovementDebug={shipMovementDebug}
             onShipMovementDebugChange={setShipMovementDebug}
             shipMovementDebugPanel={

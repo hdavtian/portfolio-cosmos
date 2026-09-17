@@ -86,7 +86,7 @@ function ResumeStructureDiagram({
 
 type PortfolioSpaceProps = Omit<
   React.ComponentProps<typeof ResumeSpace3D>,
-  "portfolioCores" | "moonPortfolioMapping" | "aboutPathTravelMessages" | "techStack"
+  "portfolioCores" | "moonPortfolioMapping" | "aboutPathTravelMessages" | "techStack" | "profile"
 >;
 
 // How long the scene waits for fresh content before using the copy saved from
@@ -120,6 +120,7 @@ function PortfolioSpace(props: PortfolioSpaceProps) {
       moonPortfolioMapping={portfolio.data.moonPortfolioMapping}
       aboutPathTravelMessages={portfolio.data.aboutPathTravelMessages}
       techStack={portfolio.data.techStack}
+      profile={portfolio.data.personal}
     />
   );
 }

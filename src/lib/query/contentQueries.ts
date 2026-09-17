@@ -48,6 +48,7 @@ export function useCosmosContentQuery() {
       moonPortfolioMapping: content.moonPortfolioMapping,
       aboutPathTravelMessages: content.aboutPathTravelMessages,
       techStack: content.techStack,
+      personal: content.resume.personal,
       source: content.source,
     }),
   });
