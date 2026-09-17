@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useBackdropTint } from "../lib/backdropTint";
+import { readIndexReturnState } from "../lib/indexReturnState";
 import { useShowcaseProjects } from "../lib/useShowcaseProjects";
 
 /** One project: story and spec sheet on the left, large images on the right. */
@@ -9,6 +10,7 @@ export function ShowcaseProjectPage() {
   const { projects, isLoading } = useShowcaseProjects();
   const { setTint } = useBackdropTint();
 
+  const indexHref = `/portfolio${readIndexReturnState()?.search ?? ""}`;
   const index = projects.findIndex((project) => project.id === portfolioId);
   const project = index >= 0 ? projects[index] : null;
   const previous = index > 0 ? projects[index - 1] : null;
@@ -38,7 +40,7 @@ export function ShowcaseProjectPage() {
   return (
     <article className="showcase-project">
       <header className="showcase-project__story">
-        <Link to="/portfolio" className="showcase-pill showcase-project__back">
+        <Link to={indexHref} className="showcase-pill showcase-project__back">
           Return to index
         </Link>
         <h1 className="showcase-project__title">{project.title}</h1>

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { HoloImage } from "../components/HoloImage";
 import { TechConstellation } from "../components/TechConstellation";
 import { useBackdropTint } from "../lib/backdropTint";
+import { clearIndexReturnState, readIndexReturnState, saveIndexReturnState } from "../lib/indexReturnState";
 import { useShowcaseProjects, type ShowcaseProject } from "../lib/useShowcaseProjects";
 
 // Matches the collapse animation in showcase.css.
@@ -26,7 +27,17 @@ export function ShowcaseIndexPage() {
   const { projects, cores, topTech, personal, isLoading } = useShowcaseProjects();
   const { setTint } = useBackdropTint();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  // Returning from a project page with the same view: restore it instantly.
+  const [returning] = useState(() => {
+    const saved = readIndexReturnState();
+    return saved && saved.search === window.location.search ? saved : null;
+  });
+  // The preview restored on return shows already open; cleared by the next open/close.
+  const [restoredOpenId, setRestoredOpenId] = useState(() =>
+    returning ? new URLSearchParams(returning.search).get("open") : null,
+  );
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
   const closeTimer = useRef<number | undefined>(undefined);
@@ -56,9 +67,19 @@ export function ShowcaseIndexPage() {
 
   useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
-  // Bring a newly opened preview fully into view once it has expanded.
+  // Put the page back where it was once the list has rendered.
+  const restored = useRef(false);
+  useLayoutEffect(() => {
+    if (!returning || restored.current || projects.length === 0) return;
+    restored.current = true;
+    window.scrollTo({ top: returning.scrollY, behavior: "instant" as ScrollBehavior });
+    clearIndexReturnState();
+  }, [returning, projects.length]);
+
+  // Bring a newly opened preview fully into view once it has expanded (not the
+  // one restored on return, which is already where the visitor left it).
   useEffect(() => {
-    if (!openId) return;
+    if (!openId || openId === restoredOpenId) return;
     const timer = window.setTimeout(() => {
       itemRefs.current.get(openId)?.scrollIntoView({
         block: "nearest",
@@ -66,7 +87,7 @@ export function ShowcaseIndexPage() {
       });
     }, 420);
     return () => window.clearTimeout(timer);
-  }, [openId]);
+  }, [openId, restoredOpenId]);
 
   const updateParams = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams);
@@ -87,6 +108,7 @@ export function ShowcaseIndexPage() {
     // Modified clicks keep their browser meaning (new tab, new window).
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     event.preventDefault();
+    setRestoredOpenId(null);
     if (openId === project.id) {
       beginClosing(project.id);
       updateParams({ open: null });
@@ -96,8 +118,14 @@ export function ShowcaseIndexPage() {
     updateParams({ open: project.id });
   };
 
+  const openProject = (project: ShowcaseProject) => {
+    saveIndexReturnState({ search: location.search, scrollY: window.scrollY });
+    navigate(`/portfolio/${project.id}`);
+  };
+
   const closePreview = () => {
     if (!openId) return;
+    setRestoredOpenId(null);
     beginClosing(openId);
     updateParams({ open: null });
   };
@@ -176,6 +204,7 @@ export function ShowcaseIndexPage() {
                   project.id === hoverId ? "is-hover" : "",
                   isOpen ? "is-open" : "",
                   isClosing ? "is-closing" : "",
+                  isOpen && project.id === restoredOpenId ? "is-restored" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
@@ -205,6 +234,17 @@ export function ShowcaseIndexPage() {
 
                 {isOpen || isClosing ? (
                   <div id={panelId} className="showcase-preview" role="region" aria-label={`${project.title} preview`}>
+                    {isOpen ? (
+                      <button
+                        type="button"
+                        className="showcase-preview__close"
+                        onClick={closePreview}
+                        aria-label={`Close ${project.title} preview`}
+                        title="Close"
+                      >
+                        <span aria-hidden="true">✕</span>
+                      </button>
+                    ) : null}
                     <div className="showcase-preview__inner">
                       {project.image ? <HoloImage src={project.image} className="showcase-preview__image" /> : null}
                       <div className="showcase-preview__body">
@@ -226,19 +266,14 @@ export function ShowcaseIndexPage() {
                         <div className="showcase-preview__actions">
                           <button
                             type="button"
-                            className="showcase-pill"
-                            onClick={() => navigate(`/portfolio/${project.id}`)}
+                            className="showcase-more"
+                            onClick={() => openProject(project)}
                             tabIndex={isOpen ? 0 : -1}
                           >
-                            More
-                          </button>
-                          <button
-                            type="button"
-                            className="showcase-pill showcase-pill--ghost"
-                            onClick={closePreview}
-                            tabIndex={isOpen ? 0 : -1}
-                          >
-                            Close
+                            View project
+                            <span className="showcase-more__arrow" aria-hidden="true">
+                              →
+                            </span>
                           </button>
                         </div>
                       </div>

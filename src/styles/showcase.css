@@ -521,6 +521,92 @@
   background: var(--showcase-ink);
 }
 
+/* Close: an X in the top-right corner of the open project's border. */
+.showcase-preview__close {
+  position: absolute;
+  top: calc(-1 * clamp(12px, 1.6vh, 20px) + 8px);
+  right: calc(-1 * clamp(12px, 1.2vw, 22px) + 8px);
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--showcase-ink);
+  background: rgba(12, 13, 16, 0.4);
+  border: 1px solid rgba(214, 244, 255, 0.35);
+  border-radius: 50%;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 160ms ease, color 160ms ease, transform 200ms ease;
+}
+
+.showcase-preview__close:hover {
+  color: #0d1a20;
+  background: #d6f4ff;
+  transform: rotate(90deg);
+}
+
+.showcase-preview__close:focus-visible,
+.showcase-more:focus-visible {
+  outline: 2px solid #d6f4ff;
+  outline-offset: 3px;
+}
+
+/* The one call to action in the preview. */
+.showcase-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  font-family: var(--showcase-display);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #06161d;
+  background: linear-gradient(180deg, #e9fbff 0%, #9fe4ff 100%);
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(214, 244, 255, 0.6), 0 0 24px rgba(110, 215, 255, 0.45);
+  animation: showcase-more-glow 2.4s ease-in-out infinite;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.showcase-more:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px #e9fbff, 0 0 36px rgba(110, 215, 255, 0.75);
+}
+
+.showcase-more__arrow {
+  display: inline-block;
+  transition: transform 200ms ease;
+}
+
+.showcase-more:hover .showcase-more__arrow {
+  transform: translateX(4px);
+}
+
+@keyframes showcase-more-glow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(214, 244, 255, 0.6), 0 0 18px rgba(110, 215, 255, 0.35); }
+  50% { box-shadow: 0 0 0 1px rgba(214, 244, 255, 0.9), 0 0 32px rgba(110, 215, 255, 0.65); }
+}
+
+/* Restored on return from a project: already open, nothing replays. */
+.showcase-list__item.is-restored,
+.showcase-list__item.is-restored::before,
+.showcase-list__item.is-restored .showcase-preview,
+.showcase-list__item.is-restored .showcase-preview__inner {
+  animation: none;
+  transition: none;
+}
+
+.showcase-list__item.is-restored .showcase-preview {
+  grid-template-rows: 1fr;
+}
+
 /* Switching projects: the old preview blurs and slides away quickly. */
 .showcase-list__item.is-closing .showcase-preview {
   animation: showcase-preview-close 240ms ease-in forwards;
@@ -830,7 +916,8 @@
   .showcase-preview,
   .showcase-preview__inner,
   .showcase-list__item.is-closing .showcase-preview,
-  .showcase-list__item.is-closing .showcase-preview__inner {
+  .showcase-list__item.is-closing .showcase-preview__inner,
+  .showcase-more {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
   }
