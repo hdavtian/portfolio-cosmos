@@ -259,23 +259,21 @@
 .showcase-list__item.is-open .showcase-list__title {
   font-style: italic;
   color: transparent;
-  background-image: linear-gradient(
-    100deg,
-    #c9fff6 0%,
-    #f6c4ff 18%,
-    #fff3b8 36%,
-    #b7e3ff 54%,
-    #e0c6ff 72%,
-    #c9fff6 100%
-  );
-  background-size: 260% 100%;
+  /* Cyan hologram with scanlines running through the letters. */
+  background-image:
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.32) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #e8fbff 0%, #9fe4ff 55%, #6fd0ff 100%);
+  background-size: 100% 3px, 100% 100%;
   -webkit-background-clip: text;
   background-clip: text;
-  filter: drop-shadow(0 0 16px rgba(160, 232, 255, 0.32));
-  animation: showcase-holo-shift 3.4s linear infinite;
+  filter: drop-shadow(0 0 10px rgba(110, 215, 255, 0.55)) drop-shadow(0 0 2px rgba(190, 240, 255, 0.8));
+  animation:
+    showcase-holo-scan 0.9s linear infinite,
+    showcase-holo-flicker 1.7s steps(1) infinite,
+    showcase-holo-jitter 0.42s steps(1) infinite;
 }
 
-/* Chromatic echoes either side of the lit name. */
+/* RGB split echoes that jump around, and slices that tear sideways. */
 .showcase-list__title::before,
 .showcase-list__title::after {
   content: attr(data-text);
@@ -289,78 +287,107 @@
 
 .showcase-list__item.is-hover .showcase-list__title::before,
 .showcase-list__item.is-open .showcase-list__title::before {
-  color: rgba(255, 70, 160, 0.34);
+  color: rgba(255, 60, 120, 0.55);
   opacity: 1;
-  transform: translate(-0.035em, 0.01em);
   mix-blend-mode: screen;
-  animation: showcase-holo-flicker 2.6s steps(1) infinite;
+  animation: showcase-holo-red 0.36s steps(1) infinite, showcase-holo-tear-a 1.3s steps(1) infinite;
 }
 
 .showcase-list__item.is-hover .showcase-list__title::after,
 .showcase-list__item.is-open .showcase-list__title::after {
-  color: rgba(70, 230, 255, 0.34);
+  color: rgba(60, 200, 255, 0.6);
   opacity: 1;
-  transform: translate(0.035em, -0.01em);
   mix-blend-mode: screen;
-  animation: showcase-holo-flicker 3.1s steps(1) infinite reverse;
+  animation: showcase-holo-blue 0.29s steps(1) infinite, showcase-holo-tear-b 1.7s steps(1) infinite;
 }
 
-@keyframes showcase-holo-shift {
-  from { background-position: 0% 50%; }
-  to { background-position: 260% 50%; }
+@keyframes showcase-holo-scan {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 0 3px, 0 0; }
 }
 
 @keyframes showcase-holo-flicker {
   0%, 100% { opacity: 1; }
-  47% { opacity: 1; }
-  48% { opacity: 0.2; }
-  50% { opacity: 1; }
-  83% { opacity: 0.6; }
+  12% { opacity: 0.86; }
+  13% { opacity: 1; }
+  41% { opacity: 0.55; }
+  42% { opacity: 1; }
+  43% { opacity: 0.8; }
+  44% { opacity: 1; }
+  77% { opacity: 0.9; }
+  78% { opacity: 1; }
 }
 
-/* Holographic image: sheen + scanlines over a slightly boosted photo. */
+@keyframes showcase-holo-jitter {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-1px, 0); }
+  40% { transform: translate(1px, 0.5px); }
+  60% { transform: translate(0, -0.5px); }
+  80% { transform: translate(1.5px, 0); }
+}
+
+@keyframes showcase-holo-red {
+  0% { transform: translate(-0.04em, 0.01em); }
+  25% { transform: translate(-0.02em, 0); }
+  50% { transform: translate(-0.06em, -0.01em); }
+  75% { transform: translate(-0.03em, 0.015em); }
+}
+
+@keyframes showcase-holo-blue {
+  0% { transform: translate(0.04em, -0.01em); }
+  33% { transform: translate(0.02em, 0.01em); }
+  66% { transform: translate(0.06em, 0); }
+}
+
+/* Horizontal bands of the echo tear sideways for a frame or two. */
+@keyframes showcase-holo-tear-a {
+  0%, 100% { clip-path: inset(0 0 0 0); }
+  18% { clip-path: inset(22% 0 58% 0); translate: 0.12em 0; }
+  20% { clip-path: inset(0 0 0 0); translate: 0 0; }
+  61% { clip-path: inset(64% 0 12% 0); translate: -0.16em 0; }
+  63% { clip-path: inset(0 0 0 0); translate: 0 0; }
+}
+
+@keyframes showcase-holo-tear-b {
+  0%, 100% { clip-path: inset(0 0 0 0); }
+  33% { clip-path: inset(40% 0 38% 0); translate: -0.14em 0; }
+  35% { clip-path: inset(0 0 0 0); translate: 0 0; }
+  82% { clip-path: inset(8% 0 72% 0); translate: 0.1em 0; }
+  84% { clip-path: inset(0 0 0 0); translate: 0 0; }
+}
+
+/* Hologram images: a WebGL canvas (HoloImage.tsx) draws tint, jitter and
+   reveal; the CSS sheen is only the fallback when WebGL is unavailable. */
 .showcase-holo-image {
   position: relative;
   display: block;
   overflow: hidden;
-  border-radius: 3px;
-  background: rgba(10, 11, 14, 0.4);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(200, 240, 255, 0.18);
+  border-radius: 2px;
+  filter: drop-shadow(0 0 18px rgba(110, 215, 255, 0.28));
 }
 
-.showcase-holo-image img {
+.showcase-holo-image__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.showcase-holo-image--fallback img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: saturate(1.15) contrast(1.05);
+  object-position: top;
+  filter: saturate(0.8) sepia(0.3) hue-rotate(160deg) brightness(1.05);
 }
 
-.showcase-holo-image::before,
-.showcase-holo-image::after {
+.showcase-holo-image--fallback::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-}
-
-.showcase-holo-image::before {
-  z-index: 1;
-  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 3px);
-}
-
-.showcase-holo-image::after {
-  z-index: 2;
-  background: linear-gradient(
-    115deg,
-    rgba(120, 255, 236, 0.3),
-    rgba(255, 130, 236, 0.22) 35%,
-    rgba(255, 246, 160, 0.2) 55%,
-    rgba(120, 196, 255, 0.3)
-  );
-  background-size: 220% 100%;
-  mix-blend-mode: color-dodge;
-  animation: showcase-holo-shift 3.8s linear infinite;
+  background: repeating-linear-gradient(0deg, rgba(140, 230, 255, 0.12) 0 1px, transparent 1px 3px);
+  box-shadow: inset 0 0 0 1px rgba(140, 230, 255, 0.5);
 }
 
 /* Hover preview beside the name: wipes in from the left. */
@@ -371,17 +398,8 @@
   width: clamp(190px, 20vw, 340px);
   aspect-ratio: 16 / 10;
   z-index: 3;
-  opacity: 0;
   pointer-events: none;
-  clip-path: inset(0 100% 0 0);
-  transform: translate(-14px, -50%) skewX(-4deg);
-  transition: clip-path 460ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 220ms ease, transform 460ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.showcase-list__item.is-hover .showcase-list__thumb {
-  opacity: 1;
-  clip-path: inset(0 0 0 0);
-  transform: translate(0, -50%) skewX(0deg);
+  transform: translateY(-50%);
 }
 
 .showcase-list__meta {
@@ -451,8 +469,6 @@
 
 .showcase-preview__image {
   aspect-ratio: 16 / 10;
-  clip-path: inset(0 100% 0 0);
-  animation: showcase-wipe-in 560ms cubic-bezier(0.2, 0.8, 0.2, 1) 160ms forwards;
 }
 
 .showcase-preview__body {
@@ -531,10 +547,6 @@
 
 @keyframes showcase-preview-blur-out {
   to { opacity: 0; filter: blur(10px); transform: translateX(28px); }
-}
-
-@keyframes showcase-wipe-in {
-  to { clip-path: inset(0 0 0 0); }
 }
 
 /* ---------- Tech stack constellation ---------- */
@@ -813,12 +825,10 @@
   .showcase-list__title,
   .showcase-list__title::before,
   .showcase-list__title::after,
-  .showcase-holo-image::after,
   .showcase-constellation__drift,
   .showcase-list__item.is-open::before,
   .showcase-preview,
   .showcase-preview__inner,
-  .showcase-preview__image,
   .showcase-list__item.is-closing .showcase-preview,
   .showcase-list__item.is-closing .showcase-preview__inner {
     animation-duration: 1ms !important;

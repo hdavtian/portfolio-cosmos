@@ -193,7 +193,7 @@ export function ShowcaseIndexPage() {
                   <span className="showcase-list__title" data-text={project.title}>
                     {project.title}
                   </span>
-                  {project.image && !isOpen ? (
+                  {project.image && !isOpen && project.id === hoverId ? (
                     <HoloImage src={project.image} className="showcase-list__thumb" />
                   ) : null}
                   <span className="showcase-list__meta">
