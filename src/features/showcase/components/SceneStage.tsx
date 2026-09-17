@@ -448,6 +448,15 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
                       <span className="showcase-scene-switcher__percent">{String(percent).padStart(2, "0")}%</span>
                     </span>
                   ) : null}
+                  {isActive && autoTour && !transition ? (
+                    // Time left on this scene before the tour moves on.
+                    <span
+                      key={`${activeId}-tour`}
+                      className="showcase-scene-switcher__timer"
+                      style={{ animationDuration: `${TOUR_INTERVAL_MS - ENTER_MS}ms` }}
+                      aria-hidden="true"
+                    />
+                  ) : null}
                   {status?.phase === "failed" ? <span className="showcase-scene-switcher__percent">offline</span> : null}
                 </button>
               </li>
@@ -458,7 +467,11 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
           type="button"
           className="showcase-scene-panel__tour"
           aria-pressed={autoTour}
-          onClick={() => setAutoTour((value) => !value)}
+          onClick={() => {
+            // Turning the tour on gives the current scene a full interval.
+            activeSinceRef.current = performance.now();
+            setAutoTour((value) => !value);
+          }}
         >
           Auto tour {autoTour ? "on" : "off"}
         </button>

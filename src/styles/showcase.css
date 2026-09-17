@@ -268,6 +268,22 @@ html.is-scene-dragging * {
   opacity: 0.8;
 }
 
+/* Auto-tour timer: a hairline under the active scene fills until the next. */
+.showcase-scene-switcher__timer {
+  grid-column: 2;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(207, 246, 255, 0.95), #eafbff);
+  box-shadow: 0 0 6px rgba(110, 215, 255, 0.8);
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: showcase-tour-timer linear forwards;
+}
+
+@keyframes showcase-tour-timer {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
 /* Racy, jittery loading bar per scene. */
 .showcase-scene-switcher__loading {
   grid-column: 2;
