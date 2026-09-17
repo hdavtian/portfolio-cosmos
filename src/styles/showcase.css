@@ -470,7 +470,7 @@ html.is-scene-dragging * {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 10px;
 }
 
 .showcase-pill {
@@ -482,18 +482,35 @@ html.is-scene-dragging * {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   text-decoration: none;
+  position: relative;
+  isolation: isolate;
   color: #15161a;
-  /* Same gold as the page scrollbar. */
+  background: none;
+  border: 0;
+  transition: color 160ms ease;
+}
+
+/* A slanted gold plate behind the label (same gold as the page scrollbar);
+   the label itself stays upright. */
+.showcase-pill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: #d4af37;
   border: 1px solid #d4af37;
-  border-radius: 0;
-  transition: background 160ms ease, color 160ms ease;
+  transform: skewX(-16deg);
+  transition: background 160ms ease;
 }
 
 .showcase-pill:hover,
 .showcase-pill.active {
-  background: transparent;
   color: #f0d98d;
+}
+
+.showcase-pill:hover::before,
+.showcase-pill.active::before {
+  background: transparent;
 }
 
 .showcase-pill:focus-visible,
@@ -907,16 +924,6 @@ html.is-scene-dragging * {
 
 .showcase-pill {
   cursor: pointer;
-}
-
-.showcase-pill--ghost {
-  color: var(--showcase-ink);
-  background: transparent;
-}
-
-.showcase-pill--ghost:hover {
-  color: #15161a;
-  background: var(--showcase-ink);
 }
 
 /* Close: an X in the top-right corner of the open project's border. */
