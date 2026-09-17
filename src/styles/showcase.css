@@ -829,20 +829,24 @@ html.is-scene-dragging * {
   100% { clip-path: inset(0 0 0 0); opacity: 1; }
 }
 
-/* The open project is as wide as its title; the preview fits under it. A floor
-   keeps short titles from squeezing the preview. */
+/* The open project sizes to its content, inline: as wide as its title's
+   longest line or the image-and-info row, whichever is wider. */
 .showcase-list__item.is-open,
 .showcase-list__item.is-closing {
+  --preview-image-width: clamp(220px, 18vw, 320px);
+  --preview-gap: clamp(16px, 2vw, 32px);
+  --preview-info-width: 380px;
   isolation: isolate;
-  width: var(--title-width, fit-content);
-  min-width: min(100%, 560px);
+  width: max(
+    var(--title-width, 0px),
+    calc(var(--preview-image-width) + var(--preview-gap) + var(--preview-info-width))
+  );
   max-width: 100%;
 }
 
 .showcase-preview {
   /* Never widens the item: its width comes from the title. */
   contain: inline-size;
-  container-type: inline-size;
   width: 100%;
   display: grid;
   grid-template-rows: 0fr;
@@ -853,8 +857,8 @@ html.is-scene-dragging * {
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(180px, 40%) minmax(0, 1fr);
-  gap: clamp(16px, 2vw, 32px);
+  grid-template-columns: var(--preview-image-width) minmax(0, 1fr);
+  gap: var(--preview-gap);
   align-items: start;
   padding-top: clamp(14px, 2vh, 22px);
   animation: showcase-preview-content 520ms ease 120ms both;
@@ -862,17 +866,6 @@ html.is-scene-dragging * {
 
 .showcase-preview__image {
   aspect-ratio: 16 / 10;
-}
-
-/* Narrow titles: image above the text. */
-@container (max-width: 620px) {
-  .showcase-preview__inner {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .showcase-preview__image {
-    max-width: 360px;
-  }
 }
 
 .showcase-preview__body {

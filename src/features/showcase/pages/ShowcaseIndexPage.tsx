@@ -137,7 +137,9 @@ export function ShowcaseIndexPage() {
     const title = item?.querySelector<HTMLElement>(".showcase-list__title");
     if (!item || !title) return;
     const measure = () => {
+      // Measure the title as it wraps across the full column, not the card.
       item.style.removeProperty("--title-width");
+      item.style.width = "100%";
       const range = document.createRange();
       range.selectNodeContents(title);
       let widest = 0;
@@ -145,6 +147,7 @@ export function ShowcaseIndexPage() {
       // Plus the italic overhang padding and a pixel of slack so it never rewraps.
       const overhang = parseFloat(getComputedStyle(title).paddingRight) || 0;
       if (widest > 0) item.style.setProperty("--title-width", `${Math.ceil(widest + overhang) + 2}px`);
+      item.style.removeProperty("width");
     };
     measure();
     window.addEventListener("resize", measure);
