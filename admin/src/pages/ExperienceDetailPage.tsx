@@ -187,11 +187,11 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
       </div>
 
       <section className="admin-card">
-        <Field label="Slug" hint="Lowercase id used in links and by the cosmos moons" error={fieldErrors.slug}>
-          <TextBoxComponent value={draft.slug} input={(e: { value: string }) => set("slug", e.value)} />
-        </Field>
         <Field label="Company" error={fieldErrors.company}>
           <TextBoxComponent value={draft.company} input={(e: { value: string }) => set("company", e.value)} />
+        </Field>
+        <Field label="Slug" hint="Lowercase id used in links and by the cosmos moons" error={fieldErrors.slug}>
+          <TextBoxComponent value={draft.slug} input={(e: { value: string }) => set("slug", e.value)} />
         </Field>
         <Field label="Short name" hint="Shown in navigation and on moon labels" error={fieldErrors.navLabel}>
           <TextBoxComponent value={draft.navLabel} input={(e: { value: string }) => set("navLabel", e.value)} />
@@ -262,11 +262,11 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
         errors={sectionErrors("projects")}
         renderItem={(item, update) => (
           <>
-            <Field label="Slug">
-              <TextBoxComponent value={item.slug} input={(e: { value: string }) => update({ ...item, slug: e.value })} />
-            </Field>
             <Field label="Title">
               <TextBoxComponent value={item.title} input={(e: { value: string }) => update({ ...item, title: e.value })} />
+            </Field>
+            <Field label="Slug">
+              <TextBoxComponent value={item.slug} input={(e: { value: string }) => update({ ...item, slug: e.value })} />
             </Field>
             <Field label="Summary">
               <TextBoxComponent

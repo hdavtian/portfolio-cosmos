@@ -171,6 +171,15 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
     return emptyOption ? [{ slug: "", label: emptyOption }, ...choices] : choices;
   };
 
+  // The slug is derived from the name, so it is shown right after it.
+  const orderedFields = (() => {
+    const slug = definition.fields.find((field) => field.key === "slug");
+    const rest = definition.fields.filter((field) => field.key !== "slug");
+    if (!slug) return rest;
+    const at = rest.findIndex((field) => field.key === definition.slugSource);
+    return at < 0 ? [slug, ...rest] : [...rest.slice(0, at + 1), slug, ...rest.slice(at + 1)];
+  })();
+
   const heading = definition.describe(draft) || (isNew ? `New ${definition.singular}` : String(draft.slug));
 
   return (
@@ -195,7 +204,7 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
       </div>
 
       <section className="admin-card">
-        {definition.fields.map((field) => (
+        {orderedFields.map((field) => (
           <FormField key={field.key} label={field.label} hint={field.hint} error={fieldErrors[field.key]}>
             {field.kind === "reference" ? (
               <DropDownListComponent
