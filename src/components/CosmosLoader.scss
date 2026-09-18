@@ -16,13 +16,94 @@
     overflow: hidden;
     background: #000;
 
-    &__canvas {
+    // ── Broadcast signal ──────────────────────────────────────
+    // The tuning bars and the data frenzy are drawn by the compositor:
+    // gradients on layers that only move (transform) or blink (opacity), so
+    // they keep running smoothly while the 3D scene loads on the main thread.
+    &__signal {
         position: absolute;
         inset: 0;
-        display: block;
-        width: 100%;
-        height: 100%;
         z-index: 0;
+        overflow: hidden;
+        background: #000;
+        contain: strict;
+    }
+
+    &__signal-bars,
+    &__signal-data,
+    &__signal-noise {
+        position: absolute;
+        left: 0;
+        width: 100%;
+        opacity: 0;
+        will-change: transform, opacity;
+        backface-visibility: hidden;
+    }
+
+    // Tuning bars: teal and maroon stripes drifting downward.
+    &__signal-bars {
+        top: -100%;
+        height: 300%;
+        background: repeating-linear-gradient(
+            180deg,
+            #007a87 0 calc(100vh / 27),
+            #720000 calc(100vh / 27) calc(100vh / 13.5)
+        );
+    }
+
+    // Data frenzy: two bands of different heights sliding at different speeds.
+    &__signal-data {
+        top: -100%;
+        height: 300%;
+        background:
+            repeating-linear-gradient(
+                180deg,
+                rgba(102, 91, 0, 0) 0 calc(100vh / 54),
+                rgba(0, 20, 89, 0.92) calc(100vh / 54) calc(100vh / 27)
+            ),
+            repeating-linear-gradient(
+                180deg,
+                #665b00 0 calc(100vh / 34),
+                #001459 calc(100vh / 34) calc(100vh / 21)
+            );
+    }
+
+    // A faster, thinner layer blinking over the frenzy, for the scramble.
+    &__signal-noise {
+        top: -100%;
+        height: 300%;
+        background: repeating-linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.05) 0 2px,
+            rgba(0, 0, 0, 0.35) 2px 6px,
+            rgba(102, 91, 0, 0.5) 6px 9px
+        );
+        mix-blend-mode: screen;
+    }
+
+    &__signal[data-phase="teaser"] &__signal-bars,
+    &__signal[data-phase="teaser"] .cosmos-loader__signal-bars {
+        opacity: 1;
+        animation: cosmos-loader-drift 1.15s linear infinite;
+    }
+
+    &__signal[data-phase="frenzy"] .cosmos-loader__signal-data {
+        opacity: 1;
+        animation: cosmos-loader-drift 0.42s linear infinite;
+    }
+
+    &__signal[data-phase="frenzy"] .cosmos-loader__signal-noise {
+        opacity: 0.75;
+        animation:
+            cosmos-loader-drift-up 0.19s linear infinite,
+            cosmos-loader-signal-blink 0.28s steps(2, end) infinite;
+    }
+
+    &__signal[data-phase="done"] .cosmos-loader__signal-bars,
+    &__signal[data-phase="done"] .cosmos-loader__signal-data,
+    &__signal[data-phase="done"] .cosmos-loader__signal-noise {
+        opacity: 0;
+        animation: none;
     }
 
     &__overlay {
@@ -422,5 +503,47 @@
     }
     50% {
         background-color: #000000;
+    }
+}
+
+@keyframes cosmos-loader-drift {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+
+    to {
+        transform: translate3d(0, calc(100vh / 13.5), 0);
+    }
+}
+
+@keyframes cosmos-loader-drift-up {
+    from {
+        transform: translate3d(0, 0, 0);
+    }
+
+    to {
+        transform: translate3d(0, -9px, 0);
+    }
+}
+
+@keyframes cosmos-loader-signal-blink {
+    0% {
+        opacity: 0.75;
+    }
+
+    50% {
+        opacity: 0.25;
+    }
+
+    100% {
+        opacity: 0.75;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cosmos-loader__signal-bars,
+    .cosmos-loader__signal-data,
+    .cosmos-loader__signal-noise {
+        animation: none !important;
     }
 }

@@ -1,3 +1,8 @@
+/* eslint-disable react-hooks/set-state-in-effect --
+ * The loader is a timed sequence (teaser, frenzy, end) driven by timers and by
+ * loading hints from the scene, so its effects do set state. Removing the
+ * canvas render loop made these long-standing patterns visible to the rule.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { trackEvent } from "../lib/analytics";
 import { IS_DEBUG_OVERLAYS, dlog } from "../lib/debugLog";
@@ -14,8 +19,6 @@ export interface CosmosLoaderProps {
 
 type Phase = "idle" | "colorCycle" | "teaser" | "frenzy" | "done";
 
-const TEASER_COLORS = ["#007A87", "#720000"];
-const DATA_COLORS = ["#665B00", "#001459"];
 const DEFAULT_REVEAL_LINES = 36;
 const REVEAL_LINE_MIN_RATIO = 0.2; // 1/5th of max line thickness
 const FRENZY_BASE_DURATION_MS = 333 * DEFAULT_REVEAL_LINES;
@@ -55,13 +58,14 @@ export default function CosmosLoader({
   const fastTrackEnabled =
     typeof window !== "undefined" &&
     !!new URLSearchParams(window.location.search).get("fastTrack");
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef = useRef<number | null>(null);
   const phaseRef = useRef<Phase>("idle");
-  const stripeStartPosRef = useRef(0);
   const timeoutsRef = useRef<number[]>([]);
   const intervalsRef = useRef<number[]>([]);
-  const lastColorRef = useRef("#000");
+  // The broadcast signal behind the TV is drawn by the compositor (see
+  // CosmosLoader.scss). It used to be redrawn on the canvas every frame, which
+  // stuttered whenever the 3D scene was busy compiling shaders or decoding
+  // textures on the main thread.
+  const [signalPhase, setSignalPhase] = useState<Phase>("idle");
 
   const [typedText, setTypedText] = useState("");
   const [stageText, setStageText] = useState("");
@@ -72,7 +76,6 @@ export default function CosmosLoader({
   const [hasEntered, setHasEntered] = useState(fastTrackEnabled);
   const [showInspirationOverlay, setShowInspirationOverlay] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [revealedSet, setRevealedSet] = useState<Set<number>>(new Set());
   const [revealLineFractions, setRevealLineFractions] = useState<number[]>(
     () =>
       Array.from(
@@ -100,6 +103,21 @@ export default function CosmosLoader({
 
   const shuffledOrderRef = useRef<number[]>([]);
   const revealCountRef = useRef(0);
+  const stripRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const setStripRef = useCallback(
+    (index: number) => (node: HTMLDivElement | null) => {
+      stripRefs.current[index] = node;
+    },
+    [],
+  );
+  const revealStrip = useCallback((index: number) => {
+    stripRefs.current[index]?.classList.add("cosmos-loader__tv-strip--peeled");
+  }, []);
+  const coverAllStrips = useCallback(() => {
+    for (const strip of stripRefs.current) {
+      strip?.classList.remove("cosmos-loader__tv-strip--peeled");
+    }
+  }, []);
 
   const queueTimeout = useCallback((fn: () => void, delay: number) => {
     const id = window.setTimeout(fn, delay);
@@ -144,101 +162,22 @@ export default function CosmosLoader({
     markDebugMode("user-entered");
   }, [hasEntered, markDebugMode]);
 
-  // ── Canvas renderers ─────────────────────────────────────────
-
-  const fillSolid = useCallback((color: string) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    lastColorRef.current = color;
-  }, []);
-
-  const showTeaserSignal = useCallback(() => {
-    if (phaseRef.current !== "teaser") return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.fillStyle = TEASER_COLORS[0];
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = TEASER_COLORS[1];
-    const thickness = canvas.height / 27;
-    for (let i = -1; i < 28; i += 2) {
-      ctx.fillRect(
-        0,
-        i * thickness + stripeStartPosRef.current,
-        canvas.width,
-        thickness,
-      );
-    }
-    stripeStartPosRef.current += 2;
-    if (stripeStartPosRef.current > thickness * 2)
-      stripeStartPosRef.current = 0;
-    rafRef.current = requestAnimationFrame(showTeaserSignal);
-  }, []);
-
-  const showFrenzySignal = useCallback(() => {
-    if (phaseRef.current !== "frenzy") return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.fillStyle = DATA_COLORS[0];
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const thickness = canvas.height / 27 / 2;
-    let pos = -thickness;
-    for (let i = 0; i < 56; i++) {
-      const t = thickness * (Math.floor(Math.random() * 2) + 1);
-      ctx.fillStyle = DATA_COLORS[i % 2];
-      ctx.fillRect(0, pos, canvas.width, t);
-      pos += t;
-    }
-    rafRef.current = requestAnimationFrame(showFrenzySignal);
-  }, []);
-
-  const stopLoop = useCallback(() => {
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-  }, []);
+  // ── Signal ───────────────────────────────────────────────────
 
   const startPhase = useCallback(
     (phase: Phase) => {
-      stopLoop();
       setLoaderPhase(phase);
-      stripeStartPosRef.current = 0;
-      if (phase === "teaser")
-        rafRef.current = requestAnimationFrame(showTeaserSignal);
-      else if (phase === "frenzy")
-        rafRef.current = requestAnimationFrame(showFrenzySignal);
+      setSignalPhase(phase);
     },
-    [stopLoop, showTeaserSignal, showFrenzySignal, setLoaderPhase],
+    [setLoaderPhase],
   );
 
   // ── Orchestration ────────────────────────────────────────────
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    resize();
-    window.addEventListener("resize", resize);
-
-    fillSolid("#000");
-
     if (fastTrackEnabled) {
       markDebugMode("fast-track-bypass");
-      return () => {
-        window.removeEventListener("resize", resize);
-        stopLoop();
-      };
+      return;
     }
 
     setLoaderPhase("idle", "idle");
@@ -246,7 +185,7 @@ export default function CosmosLoader({
     setShowStatusUI(true);
     setStageText("Initializing...");
     setProgress((prev) => Math.max(prev, 0));
-    setRevealedSet(new Set());
+    coverAllStrips();
     markDebugMode("status-ui-visible");
 
     // Build random reveal strips and shuffled reveal order
@@ -267,9 +206,8 @@ export default function CosmosLoader({
     );
 
     const stopTeaser = () => {
-      stopLoop();
+      setSignalPhase("idle");
       setLoaderPhase("idle", "teaser-end");
-      fillSolid(lastColorRef.current);
     };
 
     const runTeaser = (duration: number, onEnd: () => void) => {
@@ -284,7 +222,7 @@ export default function CosmosLoader({
       startPhase("frenzy");
       setStageText("Loading content...");
       setProgress(0);
-      setRevealedSet(new Set());
+      coverAllStrips();
       revealCountRef.current = 0;
 
       const revealId = queueInterval(() => {
@@ -296,7 +234,7 @@ export default function CosmosLoader({
         }
         const lineIndex = shuffledOrderRef.current[idx];
         revealCountRef.current++;
-        setRevealedSet((prev) => new Set(prev).add(lineIndex));
+        revealStrip(lineIndex);
 
         const count = revealCountRef.current;
         const pct = Math.round((count / revealLineCount) * 95);
@@ -315,9 +253,8 @@ export default function CosmosLoader({
     };
 
     const runEndPhase = () => {
-      stopLoop();
+      setSignalPhase("done");
       setLoaderPhase("idle", "end-prep");
-      fillSolid("#000");
       setProgress(100);
       setStageText("Ready for Exploration");
       setShowEndMessage(true);
@@ -347,21 +284,20 @@ export default function CosmosLoader({
     }, 180);
 
     return () => {
-      window.removeEventListener("resize", resize);
-      stopLoop();
       timeoutsRef.current.forEach((id) => clearTimeout(id));
       timeoutsRef.current = [];
       intervalsRef.current.forEach((id) => clearInterval(id));
       intervalsRef.current = [];
     };
   }, [
-    fillSolid,
+    coverAllStrips,
+    fastTrackEnabled,
     markDebugMode,
     queueInterval,
     queueTimeout,
     clearQueuedInterval,
+    revealStrip,
     startPhase,
-    stopLoop,
     setLoaderPhase,
   ]);
 
@@ -416,7 +352,11 @@ export default function CosmosLoader({
 
   return (
     <div className="cosmos-loader">
-      <canvas ref={canvasRef} className="cosmos-loader__canvas" />
+      <div className="cosmos-loader__signal" data-phase={signalPhase} aria-hidden="true">
+        <div className="cosmos-loader__signal-bars" />
+        <div className="cosmos-loader__signal-data" />
+        <div className="cosmos-loader__signal-noise" />
+      </div>
 
       <div className="cosmos-loader__overlay">
         {debugEnabled && (
@@ -450,11 +390,8 @@ export default function CosmosLoader({
               {revealLineFractions.map((fraction, i) => (
                 <div
                   key={i}
-                  className={`cosmos-loader__tv-strip${
-                    revealedSet.has(i)
-                      ? " cosmos-loader__tv-strip--peeled"
-                      : ""
-                  }`}
+                  ref={setStripRef(i)}
+                  className="cosmos-loader__tv-strip"
                   style={{ height: `${fraction * 100}%`, flex: "0 0 auto" }}
                 />
               ))}
