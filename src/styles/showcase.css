@@ -200,15 +200,7 @@ html.is-scene-dragging * {
 }
 
 /* Switcher, tour toggle and gateway: foot of the right-hand column. */
-/*
- * Always dim, so it never competes with the page: moving the pointer wakes
- * the list and the top of the page, but not this. Only hovering the panel
- * itself turns it on, and nothing moves or grows — only light changes.
- */
 .showcase-scene-panel {
-  opacity: 0.28;
-  /* Comes up gently, drops back the moment the pointer leaves. */
-  transition: opacity 90ms ease;
   perspective: 900px;
   perspective-origin: right center;
   position: fixed;
@@ -236,10 +228,33 @@ html.is-scene-dragging * {
   --scene-green-bright: 186, 255, 211;
 }
 
-.showcase-scene-panel:hover,
-.showcase-scene-panel:focus-within {
+/*
+ * The previews plate is always dim, so it never competes with the page:
+ * moving the pointer wakes the list and the top of the page, but not this.
+ * Only hovering the plate itself turns it on — and the gateway below is a
+ * separate thing, so hovering that leaves the plate dim.
+ */
+.showcase-scene-plate {
+  opacity: 0.28;
+  /* Comes up gently, drops back the moment the pointer leaves. */
+  transition: opacity 90ms ease, border-color 320ms ease, background 320ms ease;
+}
+
+.showcase-scene-plate:hover,
+.showcase-scene-plate:focus-within {
   opacity: 1;
-  transition: opacity 260ms ease;
+  transition: opacity 260ms ease, border-color 320ms ease, background 320ms ease;
+}
+
+/* The plate says what it is, so the scene names read as previews, not pages. */
+.showcase-scene-plate__title {
+  margin: 0 0 2px;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(var(--scene-green), 0.85);
+  border-bottom: 1px dashed rgba(var(--scene-green), 0.28);
+  padding-bottom: 6px;
 }
 
 /* One dashed plate holding the scene list and its tour switch, tilted away
@@ -258,7 +273,6 @@ html.is-scene-dragging * {
   box-shadow: -8px 6px 18px rgba(0, 0, 0, 0.3);
   transform-origin: right center;
   transform: rotateY(-18deg) rotateX(2deg);
-  transition: border-color 320ms ease, background 320ms ease;
 }
 
 .showcase-scene-switcher {
@@ -269,8 +283,8 @@ html.is-scene-dragging * {
   gap: 1px;
 }
 
-.showcase-scene-panel:hover .showcase-scene-plate,
-.showcase-scene-panel:focus-within .showcase-scene-plate {
+.showcase-scene-plate:hover,
+.showcase-scene-plate:focus-within {
   border-color: rgba(var(--scene-green), 0.55);
   background: linear-gradient(120deg, rgba(12, 32, 22, 0.6), rgba(9, 24, 17, 0.26));
 }

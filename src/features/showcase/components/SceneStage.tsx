@@ -438,7 +438,8 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
 
       <aside className="showcase-scene-panel" aria-label="Cinematic scenes">
       <div className="showcase-scene-plate">
-        <ol className="showcase-scene-switcher">
+        <p className="showcase-scene-plate__title">Background previews</p>
+        <ol className="showcase-scene-switcher" aria-label="Background previews">
           {SCENE_DEFINITIONS.map((definition, index) => {
             const status = statuses[definition.id];
             const percent = Math.round((status?.progress ?? 0) * 100);
