@@ -22,6 +22,18 @@
     visibility 0s linear 720ms;
 }
 
+/* Loading behind the page: the loader is the page's background, and nothing
+   in it can be clicked until the page steps aside. */
+.cinematic-host.is-preloading {
+  z-index: 0;
+  pointer-events: none;
+  transform: none;
+  clip-path: inset(0 0 0 0);
+  visibility: visible;
+  opacity: 1;
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cinematic-host,
   .cinematic-host.is-hidden {

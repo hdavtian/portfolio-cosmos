@@ -2460,55 +2460,56 @@ html.is-scene-dragging * {
 }
 
 /* ---------- Launching the cinematic experience ----------
- * The scene flickers like a screen losing signal, everything the visitor can
- * read or click fades away, and the page falls to black — which is what the
- * experience's own loader comes up on.
+ * The experience loads behind the page: its loader stands in as the
+ * background while the site stays in place, and once the loader is ready the
+ * page fades away so the visitor can press Enter on it.
  */
-html.is-cinematic-launch .showcase-scenes__canvas canvas {
-  animation: showcase-launch-flicker 1100ms steps(1) both;
+/* The page's own ground goes clear so the loader behind shows through. */
+html.is-cinematic-loading .showcase,
+html.is-cinematic-ready .showcase {
+  background: transparent;
 }
 
-html.is-cinematic-launch .showcase-masthead,
-html.is-cinematic-launch .showcase-filters,
-html.is-cinematic-launch .showcase-list,
-html.is-cinematic-launch .showcase-pills,
-html.is-cinematic-launch .showcase-scene-panel,
-html.is-cinematic-launch .showcase-gateway,
-html.is-cinematic-launch .showcase-project,
-html.is-cinematic-launch .showcase-resume,
-html.is-cinematic-launch .showcase-constellation {
+html.is-cinematic-loading .showcase-scenes {
+  animation: showcase-launch-flicker 620ms steps(1) both;
+}
+
+html.is-cinematic-loading .showcase-scene-panel,
+html.is-cinematic-loading .showcase-constellation {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+/* The gateway blinks like a switch being thrown, then reads as busy. */
+html.is-cinematic-loading .showcase-gateway {
+  animation: showcase-launch-switch 620ms steps(1) both;
+  pointer-events: none;
+}
+
+/* Ready: everything the visitor could read or click steps aside for the loader. */
+html.is-cinematic-ready .showcase-masthead,
+html.is-cinematic-ready .showcase-filters,
+html.is-cinematic-ready .showcase-list,
+html.is-cinematic-ready .showcase-pills,
+html.is-cinematic-ready .showcase-gateway,
+html.is-cinematic-ready .showcase-project,
+html.is-cinematic-ready .showcase-resume,
+html.is-cinematic-ready .showcase-scenes {
   animation: showcase-launch-fade 620ms ease both;
   pointer-events: none;
 }
 
-/* The gateway itself flickers out a beat later, like the switch being thrown. */
-html.is-cinematic-launch .showcase-gateway {
-  animation: showcase-launch-switch 620ms steps(1) both;
-}
-
-/* The blackout the experience loads on top of. */
-html.is-cinematic-launch body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  background: #000;
-  pointer-events: none;
-  animation: showcase-launch-black 1100ms ease both;
-}
-
 @keyframes showcase-launch-flicker {
-  0% { filter: brightness(0.66) saturate(0.95); }
-  8% { filter: brightness(1.8) saturate(0.4) contrast(1.4); }
-  12% { filter: brightness(0.15); }
-  18% { filter: brightness(1.4) saturate(0.2); transform: translateX(-4px); }
-  24% { filter: brightness(0.1); transform: none; }
-  34% { filter: brightness(1.1) contrast(1.6); }
-  40% { filter: brightness(0.06); }
-  56% { filter: brightness(0.8) saturate(0.3); transform: translateX(3px) scaleY(1.01); }
-  62% { filter: brightness(0.04); transform: none; }
-  80% { filter: brightness(0.3); }
-  100% { filter: brightness(0); }
+  0% { opacity: 1; filter: none; }
+  8% { opacity: 1; filter: brightness(1.8) contrast(1.4); }
+  12% { opacity: 0.1; }
+  18% { opacity: 1; filter: brightness(1.3); transform: translateX(-4px); }
+  24% { opacity: 0.05; transform: none; }
+  40% { opacity: 0.6; filter: brightness(0.7); }
+  52% { opacity: 0.05; }
+  70% { opacity: 0.2; }
+  100% { opacity: 0; filter: brightness(0); }
 }
 
 @keyframes showcase-launch-fade {
@@ -2523,14 +2524,7 @@ html.is-cinematic-launch body::after {
   16% { opacity: 1; }
   26% { opacity: 0.1; }
   34% { opacity: 1; }
-  60% { opacity: 0.3; }
-  100% { opacity: 0; }
-}
-
-@keyframes showcase-launch-black {
-  0% { opacity: 0; }
-  45% { opacity: 0.35; }
-  100% { opacity: 1; }
+  100% { opacity: 0.45; }
 }
 
 /* ---------- Narrow screens ---------- */

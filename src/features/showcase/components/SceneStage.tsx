@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { setCinematicLaunch } from "../../../app/cinematic/launchStore";
 import type { TechStackTreeNode } from "../../../lib/api/contentV2";
 import type { PortfolioCoreSeed } from "../../fast/types";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
@@ -88,15 +89,13 @@ const prefetchCinematic = () => {
   void import("../../../App");
 };
 
-/** Matches the launch sequence in showcase.css (flicker, fade, black). */
-const LAUNCH_MS = 1100;
+
 
 /**
  * Fragments of the cinematic universe behind the portfolio: one renderer, one
  * visible scene at a time, glitch transitions, a switcher and an auto-tour.
  */
 export function SceneStage({ projects, techStack, highlights, portfolioCores, jobs, focusProjectId, interactive, paused, showGateway, onShowing }: SceneStageProps) {
-  const navigate = useNavigate();
   const hostRef = useRef<HTMLDivElement>(null);
   const [statuses, setStatuses] = useState<Record<string, SceneStatus>>(() =>
     Object.fromEntries(SCENE_DEFINITIONS.map((scene) => [scene.id, { phase: "waiting", progress: 0 }])),
@@ -156,26 +155,15 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
   }, [highlights]);
 
   /**
-   * Leaving for the 3D experience: the scene flickers, the page's text and
-   * panels fade out and everything goes to black, then the experience takes
-   * over with its own loader. Modified clicks (new tab) and reduced motion
-   * skip straight there.
+   * Starts the 3D experience behind the page: the scene flickers out, its
+   * loader becomes the page's background, and the site stays usable until the
+   * loader is ready (see app/cinematic/CinematicHost). Modified clicks (new
+   * tab) fall through to the plain link.
    */
-  const launchTimer = useRef<number | undefined>(undefined);
-  useEffect(() => () => {
-    window.clearTimeout(launchTimer.current);
-    document.documentElement.classList.remove("is-cinematic-launch");
-  }, []);
   const launchCinematic = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     event.preventDefault();
-    document.documentElement.classList.add("is-cinematic-launch");
-    launchTimer.current = window.setTimeout(() => {
-      navigate("/cinematic");
-      // The experience covers the page from here; clear the blackout behind it.
-      window.setTimeout(() => document.documentElement.classList.remove("is-cinematic-launch"), 400);
-    }, LAUNCH_MS);
+    setCinematicLaunch("loading");
   };
 
   useEffect(() => {
