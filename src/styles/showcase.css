@@ -778,11 +778,11 @@ html.is-scene-dragging * {
   line-height: 0.86;
   letter-spacing: -0.005em;
   text-transform: uppercase;
-  /* One line each: a title too long for the column ends in an ellipsis. */
+  /* One line each, cut well before the column edge. */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  max-width: min(100%, 22ch);
   transition: color 220ms ease, transform 260ms ease;
 }
 
