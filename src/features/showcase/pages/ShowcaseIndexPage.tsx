@@ -214,6 +214,21 @@ export function ShowcaseIndexPage() {
     updateParams({ open: null });
   };
 
+  // Escape closes the open preview.
+  const closePreviewRef = useRef(closePreview);
+  useLayoutEffect(() => {
+    closePreviewRef.current = closePreview;
+  });
+  useEffect(() => {
+    if (!openId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      closePreviewRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [openId]);
+
   return (
     <div
       className={`showcase-index${hovered ? " showcase-index--has-hover" : ""}${opened ? " showcase-index--has-open" : ""} is-${restState}${shownWatermark ? " has-watermark-image" : ""}`}
