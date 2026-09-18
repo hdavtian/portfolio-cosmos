@@ -132,13 +132,6 @@ export function ShowcaseIndexPage() {
     clearIndexReturnState();
   }, [returning, projects.length]);
 
-  // The scene panel lives outside this page (in the layout), so the resting
-  // state is published on the document for its styles to follow.
-  useEffect(() => {
-    document.documentElement.classList.toggle("is-scene-resting", restState === "resting" || restState === "fading");
-    return () => document.documentElement.classList.remove("is-scene-resting");
-  }, [restState]);
-
   // Size the open project to its title's longest line. A wrapped title's box
   // spans the whole column, so measure the rendered lines instead.
   useLayoutEffect(() => {

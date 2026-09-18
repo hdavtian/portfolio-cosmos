@@ -201,12 +201,12 @@ html.is-scene-dragging * {
 
 /* Switcher, tour toggle and gateway: foot of the right-hand column. */
 /*
- * Dim by default, and dimmer still while the list is resting, so it never
- * competes with the page. Hovering the panel turns it on. Nothing moves or
- * grows: only light changes.
+ * Always dim, so it never competes with the page: moving the pointer wakes
+ * the list and the top of the page, but not this. Only hovering the panel
+ * itself turns it on, and nothing moves or grows — only light changes.
  */
 .showcase-scene-panel {
-  opacity: 0.4;
+  opacity: 0.28;
   /* Comes up gently, drops back the moment the pointer leaves. */
   transition: opacity 90ms ease;
   perspective: 900px;
@@ -240,22 +240,6 @@ html.is-scene-dragging * {
 .showcase-scene-panel:focus-within {
   opacity: 1;
   transition: opacity 260ms ease;
-}
-
-/* While the visitor is just watching, the panel steps back with the list. */
-html.is-scene-resting .showcase-scene-panel {
-  opacity: 0.16;
-  transition: opacity 1400ms ease;
-}
-
-html.is-scene-resting .showcase-scene-panel:not(:hover):not(:focus-within) {
-  transition: opacity 90ms ease;
-}
-
-html.is-scene-resting .showcase-scene-panel:hover,
-html.is-scene-resting .showcase-scene-panel:focus-within {
-  opacity: 1;
-  transition: opacity 320ms ease;
 }
 
 /* One dashed plate holding the scene list and its tour switch, tilted away
