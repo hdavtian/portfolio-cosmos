@@ -2459,6 +2459,80 @@ html.is-scene-dragging * {
   border-bottom: 0;
 }
 
+/* ---------- Launching the cinematic experience ----------
+ * The scene flickers like a screen losing signal, everything the visitor can
+ * read or click fades away, and the page falls to black — which is what the
+ * experience's own loader comes up on.
+ */
+html.is-cinematic-launch .showcase-scenes__canvas canvas {
+  animation: showcase-launch-flicker 1100ms steps(1) both;
+}
+
+html.is-cinematic-launch .showcase-masthead,
+html.is-cinematic-launch .showcase-filters,
+html.is-cinematic-launch .showcase-list,
+html.is-cinematic-launch .showcase-pills,
+html.is-cinematic-launch .showcase-scene-panel,
+html.is-cinematic-launch .showcase-gateway,
+html.is-cinematic-launch .showcase-project,
+html.is-cinematic-launch .showcase-resume,
+html.is-cinematic-launch .showcase-constellation {
+  animation: showcase-launch-fade 620ms ease both;
+  pointer-events: none;
+}
+
+/* The gateway itself flickers out a beat later, like the switch being thrown. */
+html.is-cinematic-launch .showcase-gateway {
+  animation: showcase-launch-switch 620ms steps(1) both;
+}
+
+/* The blackout the experience loads on top of. */
+html.is-cinematic-launch body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: #000;
+  pointer-events: none;
+  animation: showcase-launch-black 1100ms ease both;
+}
+
+@keyframes showcase-launch-flicker {
+  0% { filter: brightness(0.66) saturate(0.95); }
+  8% { filter: brightness(1.8) saturate(0.4) contrast(1.4); }
+  12% { filter: brightness(0.15); }
+  18% { filter: brightness(1.4) saturate(0.2); transform: translateX(-4px); }
+  24% { filter: brightness(0.1); transform: none; }
+  34% { filter: brightness(1.1) contrast(1.6); }
+  40% { filter: brightness(0.06); }
+  56% { filter: brightness(0.8) saturate(0.3); transform: translateX(3px) scaleY(1.01); }
+  62% { filter: brightness(0.04); transform: none; }
+  80% { filter: brightness(0.3); }
+  100% { filter: brightness(0); }
+}
+
+@keyframes showcase-launch-fade {
+  0% { opacity: 1; filter: none; }
+  30% { opacity: 0.85; filter: blur(1px); }
+  100% { opacity: 0; filter: blur(8px); }
+}
+
+@keyframes showcase-launch-switch {
+  0% { opacity: 1; }
+  10% { opacity: 0.2; }
+  16% { opacity: 1; }
+  26% { opacity: 0.1; }
+  34% { opacity: 1; }
+  60% { opacity: 0.3; }
+  100% { opacity: 0; }
+}
+
+@keyframes showcase-launch-black {
+  0% { opacity: 0; }
+  45% { opacity: 0.35; }
+  100% { opacity: 1; }
+}
+
 /* ---------- Narrow screens ---------- */
 
 @media (max-width: 900px) {
