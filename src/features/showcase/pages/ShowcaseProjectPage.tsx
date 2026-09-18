@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ProjectGallery } from "../components/ProjectGallery";
 import { useBackdropTint } from "../lib/backdropTint";
 import { readIndexReturnState } from "../lib/indexReturnState";
@@ -9,6 +9,7 @@ import { markProjectVisited } from "../lib/visitedProjects";
 /** One project: story and spec sheet on the left, large images on the right. */
 export function ShowcaseProjectPage() {
   const { portfolioId } = useParams();
+  const navigate = useNavigate();
   const { projects, isLoading } = useShowcaseProjects();
   const { setTint } = useBackdropTint();
 
@@ -29,6 +30,18 @@ export function ShowcaseProjectPage() {
   useEffect(() => {
     if (project) markProjectVisited(project.id);
   }, [project]);
+
+  // Escape leaves the project, unless the full-size viewer is open — that
+  // takes Escape first, to close itself.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (document.querySelector(".showcase-viewer")) return;
+      navigate(indexHref);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [indexHref, navigate]);
 
   if (!project) {
     return (
