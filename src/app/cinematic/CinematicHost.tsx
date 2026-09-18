@@ -2,7 +2,13 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncEx
 import { useLocation, useNavigate } from "react-router-dom";
 import { setCinematicSuspended } from "../../lib/cinematicSuspend";
 import { CINEMATIC_PATH, canKeepAlive } from "./keepAlive";
-import { getCinematicLaunch, setCinematicLaunch, subscribeCinematicLaunch } from "./launchStore";
+import {
+  getCinematicLaunch,
+  isCinematicLoaded,
+  setCinematicLaunch,
+  setCinematicLoaded,
+  subscribeCinematicLaunch,
+} from "./launchStore";
 import "./cinematicHost.css";
 
 const CinematicExperience = lazy(() => import("../../App"));
@@ -43,10 +49,15 @@ export function CinematicHost() {
 
   // The loader's Enter gate appearing means the experience is ready for the
   // visitor: the page can step aside. Watching the DOM keeps the handover out
-  // of the 3D app itself.
+  // of the 3D app itself. An experience that is already loaded has no loader
+  // at all, so it hands over straight away.
   useEffect(() => {
     const host = hostRef.current;
     if (!host || launch !== "loading") return;
+    if (isCinematicLoaded()) {
+      setCinematicLaunch("ready");
+      return;
+    }
     const check = () => {
       if (!host.querySelector(".cosmos-loader__entry-gate")) return false;
       setCinematicLaunch("ready");
@@ -57,6 +68,22 @@ export function CinematicHost() {
     observer.observe(host, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, [launch]);
+
+  // The loader going away means the experience itself is up and stays in
+  // memory: from here launches are instant and the link reads "back to".
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !showing || isCinematicLoaded()) return;
+    const check = () => {
+      if (host.querySelector(".cosmos-loader") || !host.querySelector("canvas")) return false;
+      setCinematicLoaded(true);
+      return true;
+    };
+    if (check()) return;
+    const observer = new MutationObserver(check);
+    observer.observe(host, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [showing]);
 
   // Once the page has faded, the experience owns the screen and the address.
   useEffect(() => {
@@ -77,7 +104,9 @@ export function CinematicHost() {
       enteredRoute.current = false;
       setCinematicLaunch("idle");
     }
-  }, [launch, onRoute]);
+    // Dropped from memory (context lost, or never kept): it will load again.
+    if (!kept) setCinematicLoaded(false);
+  }, [kept, launch, onRoute]);
 
   // If the browser drops the hidden experience's graphics under memory
   // pressure, let it go; the next visit loads it fresh.

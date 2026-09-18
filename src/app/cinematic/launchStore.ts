@@ -3,15 +3,24 @@
  *
  * "loading"  the experience is mounted and running behind the page, its loader
  *            standing in as the page's background while the site stays usable.
- * "ready"    the loader is waiting on its Enter button, so the page fades out
- *            and hands over.
+ * "ready"    the loader is waiting on its Enter button (or the experience is
+ *            already loaded), so the page fades out and hands over.
+ *
+ * `loaded` records that the experience has finished loading and is still in
+ * memory: later launches skip the loader entirely and the call to action says
+ * "back to", not "enter".
  */
 export type CinematicLaunch = "idle" | "loading" | "ready";
 
-type Listener = (state: CinematicLaunch) => void;
+type Listener = () => void;
 
 let state: CinematicLaunch = "idle";
+let loaded = false;
 const listeners = new Set<Listener>();
+
+const notify = () => {
+  for (const listener of listeners) listener();
+};
 
 export const getCinematicLaunch = () => state;
 
@@ -23,7 +32,15 @@ export const setCinematicLaunch = (next: CinematicLaunch) => {
   const root = document.documentElement;
   root.classList.toggle("is-cinematic-loading", next === "loading");
   root.classList.toggle("is-cinematic-ready", next === "ready");
-  for (const listener of listeners) listener(next);
+  notify();
+};
+
+export const isCinematicLoaded = () => loaded;
+
+export const setCinematicLoaded = (next: boolean) => {
+  if (next === loaded) return;
+  loaded = next;
+  notify();
 };
 
 export const subscribeCinematicLaunch = (listener: Listener) => {

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { CINEMATIC_PATH, canKeepAlive } from "../../app/cinematic/keepAlive";
+import { setCinematicLaunch } from "../../app/cinematic/launchStore";
 import { AtmosphereBackdrop } from "./components/AtmosphereBackdrop";
 import { SceneStage } from "./components/SceneStage";
 import { usePortfolioCoresQuery, useResumeQuery, useTechStackQuery } from "../../lib/query/contentQueries";
@@ -106,6 +107,12 @@ export function ShowcaseLayout() {
             className="showcase-pill"
             onMouseEnter={prefetchCinematic}
             onFocus={prefetchCinematic}
+            onClick={(event) => {
+              // Same hand-off as the gateway panel, so both routes in behave alike.
+              if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              setCinematicLaunch("loading");
+            }}
           >
             Cinematic
           </NavLink>

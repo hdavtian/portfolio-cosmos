@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link } from "react-router-dom";
-import { setCinematicLaunch } from "../../../app/cinematic/launchStore";
+import {
+  isCinematicLoaded,
+  setCinematicLaunch,
+  subscribeCinematicLaunch,
+} from "../../../app/cinematic/launchStore";
 import type { TechStackTreeNode } from "../../../lib/api/contentV2";
 import type { PortfolioCoreSeed } from "../../fast/types";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
@@ -97,6 +101,8 @@ const prefetchCinematic = () => {
  */
 export function SceneStage({ projects, techStack, highlights, portfolioCores, jobs, focusProjectId, interactive, paused, showGateway, onShowing }: SceneStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
+  // Already loaded and in memory: going back is instant, and the link says so.
+  const cinematicLoaded = useSyncExternalStore(subscribeCinematicLaunch, isCinematicLoaded, isCinematicLoaded);
   const [statuses, setStatuses] = useState<Record<string, SceneStatus>>(() =>
     Object.fromEntries(SCENE_DEFINITIONS.map((scene) => [scene.id, { phase: "waiting", progress: 0 }])),
   );
@@ -525,10 +531,12 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
         >
           <span className="showcase-gateway__eyebrow">{activeLabel} · a fragment of the cinematic universe</span>
           <span className="showcase-gateway__link">
-            Enter the full experience
+            {cinematicLoaded ? "Back to the full experience" : "Enter the full experience"}
             <span className="showcase-gateway__arrow" aria-hidden="true" />
           </span>
-          <span className="showcase-gateway__note">3D, sound and a few seconds to load</span>
+          <span className="showcase-gateway__note">
+            {cinematicLoaded ? "Still loaded — returns where you left it" : "3D, sound and a few seconds to load"}
+          </span>
         </Link>
       ) : null}
     </>
