@@ -437,6 +437,7 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
       </div>
 
       <aside className="showcase-scene-panel" aria-label="Cinematic scenes">
+      <div className="showcase-scene-plate">
         <ol className="showcase-scene-switcher">
           {SCENE_DEFINITIONS.map((definition, index) => {
             const status = statuses[definition.id];
@@ -489,6 +490,7 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
         >
           Auto tour {autoTour ? "on" : "off"}
         </button>
+      </div>
 
         {activeLabel ? (
           <div className="showcase-gateway" key={activeId}>
