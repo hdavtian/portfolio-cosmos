@@ -82,7 +82,7 @@ const FRAGMENT = `
   }
 `;
 
-const REVEAL_MS = 520;
+const REVEAL_MS = 260;
 
 const compile = (gl: WebGLRenderingContext, type: number, source: string) => {
   const shader = gl.createShader(type);
