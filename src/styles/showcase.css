@@ -741,7 +741,11 @@ html.is-scene-dragging * {
   line-height: 0.86;
   letter-spacing: -0.005em;
   text-transform: uppercase;
-  overflow-wrap: anywhere;
+  /* One line each: a title too long for the column ends in an ellipsis. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
   transition: color 220ms ease, transform 260ms ease;
 }
 
@@ -787,6 +791,9 @@ html.is-scene-dragging * {
   position: absolute;
   inset: 0;
   padding-right: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;
   opacity: 0;
   -webkit-text-fill-color: currentColor;
