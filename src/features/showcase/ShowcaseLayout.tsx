@@ -86,6 +86,7 @@ export function ShowcaseLayout() {
             jobs={jobs}
             interactive={onIndex}
             paused={onCinematic}
+            showGateway={!pathname.startsWith("/portfolio/")}
             focusProjectId={focusProjectId}
             onShowing={setSceneShowing}
           />

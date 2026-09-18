@@ -19,6 +19,8 @@ interface SceneStageProps {
   interactive: boolean;
   /** Hidden behind the cinematic experience: no updates, loading or rendering. */
   paused: boolean;
+  /** Show the way into the 3D experience (off on project pages). */
+  showGateway: boolean;
   /** Called once any scene is on screen (the terrain can pause). */
   onShowing: (showing: boolean) => void;
 }
@@ -90,7 +92,7 @@ const prefetchCinematic = () => {
  * Fragments of the cinematic universe behind the portfolio: one renderer, one
  * visible scene at a time, glitch transitions, a switcher and an auto-tour.
  */
-export function SceneStage({ projects, techStack, highlights, portfolioCores, jobs, focusProjectId, interactive, paused, onShowing }: SceneStageProps) {
+export function SceneStage({ projects, techStack, highlights, portfolioCores, jobs, focusProjectId, interactive, paused, showGateway, onShowing }: SceneStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [statuses, setStatuses] = useState<Record<string, SceneStatus>>(() =>
     Object.fromEntries(SCENE_DEFINITIONS.map((scene) => [scene.id, { phase: "waiting", progress: 0 }])),
@@ -493,17 +495,20 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
         </button>
       </div>
 
-        {activeLabel ? (
-          <div className="showcase-gateway" key={activeId}>
-            <p className="showcase-gateway__eyebrow">{activeLabel} · a fragment of the cinematic universe</p>
-            <Link to="/cinematic" className="showcase-gateway__link" onMouseEnter={prefetchCinematic} onFocus={prefetchCinematic}>
-              Enter the full experience
-              <span className="showcase-gateway__arrow" aria-hidden="true" />
-            </Link>
-            <p className="showcase-gateway__note">3D, sound and a few seconds to load</p>
-          </div>
-        ) : null}
       </aside>
+
+      {/* The way into the 3D site: with the site's own buttons, top right, and
+          out of the way on a project page. */}
+      {activeLabel && showGateway ? (
+        <aside className="showcase-gateway" key={activeId} aria-label="Cinematic experience">
+          <p className="showcase-gateway__eyebrow">{activeLabel} · a fragment of the cinematic universe</p>
+          <Link to="/cinematic" className="showcase-gateway__link" onMouseEnter={prefetchCinematic} onFocus={prefetchCinematic}>
+            Enter the full experience
+            <span className="showcase-gateway__arrow" aria-hidden="true" />
+          </Link>
+          <p className="showcase-gateway__note">3D, sound and a few seconds to load</p>
+        </aside>
+      ) : null}
     </>
   );
 }
