@@ -207,7 +207,8 @@ html.is-scene-dragging * {
  */
 .showcase-scene-panel {
   opacity: 0.4;
-  transition: opacity 420ms ease;
+  /* Comes up gently, drops back the moment the pointer leaves. */
+  transition: opacity 90ms ease;
   perspective: 900px;
   perspective-origin: right center;
   position: fixed;
@@ -238,12 +239,17 @@ html.is-scene-dragging * {
 .showcase-scene-panel:hover,
 .showcase-scene-panel:focus-within {
   opacity: 1;
+  transition: opacity 260ms ease;
 }
 
 /* While the visitor is just watching, the panel steps back with the list. */
 html.is-scene-resting .showcase-scene-panel {
   opacity: 0.16;
   transition: opacity 1400ms ease;
+}
+
+html.is-scene-resting .showcase-scene-panel:not(:hover):not(:focus-within) {
+  transition: opacity 90ms ease;
 }
 
 html.is-scene-resting .showcase-scene-panel:hover,
