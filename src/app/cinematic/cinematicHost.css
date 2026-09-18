@@ -34,6 +34,39 @@
   transition: none;
 }
 
+/* The paused experience as the page's backdrop: its last frame, dimmed for
+   readability, and clickable as the way back in. */
+.cinematic-host.is-still {
+  z-index: 0;
+  transform: none;
+  clip-path: inset(0 0 0 0);
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity 900ms ease;
+}
+
+.cinematic-host.is-still::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(4, 6, 10, 0.72) 0%, rgba(4, 6, 10, 0.3) 55%, rgba(4, 6, 10, 0.45) 100%),
+    radial-gradient(ellipse at 60% 50%, transparent 30%, rgba(4, 6, 10, 0.5) 100%);
+}
+
+.cinematic-host.is-still:focus-visible {
+  outline: 2px solid #dff8ff;
+  outline-offset: -6px;
+}
+
+/* Fading out once the previews are ready to take over again. */
+.cinematic-host.is-hidden {
+  opacity: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cinematic-host,
   .cinematic-host.is-hidden {

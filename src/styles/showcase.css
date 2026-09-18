@@ -2464,9 +2464,11 @@ html.is-scene-dragging * {
  * background while the site stays in place, and once the loader is ready the
  * page fades away so the visitor can press Enter on it.
  */
-/* The page's own ground goes clear so the loader behind shows through. */
+/* The page's own ground goes clear so the loader — or the experience's last
+   frame — shows through. */
 html.is-cinematic-loading .showcase,
-html.is-cinematic-ready .showcase {
+html.is-cinematic-ready .showcase,
+html.is-cinematic-still .showcase {
   background: transparent;
 }
 

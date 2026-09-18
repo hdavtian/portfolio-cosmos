@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { CINEMATIC_PATH, canKeepAlive } from "../../app/cinematic/keepAlive";
-import { setCinematicLaunch } from "../../app/cinematic/launchStore";
+import { isCinematicStill, setCinematicLaunch, subscribeCinematicLaunch } from "../../app/cinematic/launchStore";
 import { AtmosphereBackdrop } from "./components/AtmosphereBackdrop";
 import { SceneStage } from "./components/SceneStage";
 import { usePortfolioCoresQuery, useResumeQuery, useTechStackQuery } from "../../lib/query/contentQueries";
@@ -60,6 +60,8 @@ export function ShowcaseLayout() {
   // both can stay alive; elsewhere they unload and rebuild on return. A visit
   // that starts on the experience doesn't start them at all.
   const onCinematic = pathname === CINEMATIC_PATH;
+  // While the experience's last frame is the backdrop, the previews wait.
+  const cinematicStill = useSyncExternalStore(subscribeCinematicLaunch, isCinematicStill, isCinematicStill);
   const [keepScenes] = useState(canKeepAlive);
   const [scenesStarted, setScenesStarted] = useState(false);
   if (!onCinematic && !scenesStarted) setScenesStarted(true);
@@ -77,7 +79,7 @@ export function ShowcaseLayout() {
   return (
     <BackdropTintContext.Provider value={context}>
       <div className="showcase">
-        <AtmosphereBackdrop tint={tint} paused={sceneShowing || onCinematic} />
+        <AtmosphereBackdrop tint={tint} paused={sceneShowing || onCinematic || cinematicStill} />
         {sceneEnabled && runScenes ? (
           <SceneStage
             projects={projects}
@@ -85,8 +87,8 @@ export function ShowcaseLayout() {
             highlights={highlights}
             portfolioCores={portfolioCores}
             jobs={jobs}
-            interactive={onIndex}
-            paused={onCinematic}
+            interactive={onIndex && !cinematicStill}
+            paused={onCinematic || cinematicStill}
             showGateway={!pathname.startsWith("/portfolio/")}
             focusProjectId={focusProjectId}
             onShowing={setSceneShowing}

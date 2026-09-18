@@ -16,6 +16,7 @@ type Listener = () => void;
 
 let state: CinematicLaunch = "idle";
 let loaded = false;
+let still = false;
 const listeners = new Set<Listener>();
 
 const notify = () => {
@@ -32,6 +33,20 @@ export const setCinematicLaunch = (next: CinematicLaunch) => {
   const root = document.documentElement;
   root.classList.toggle("is-cinematic-loading", next === "loading");
   root.classList.toggle("is-cinematic-ready", next === "ready");
+  notify();
+};
+
+/**
+ * True while the paused experience stays on as a frozen backdrop behind the
+ * portfolio, just after coming back from it. Clicking it goes back in; after a
+ * while it fades and the background previews take over again.
+ */
+export const isCinematicStill = () => still;
+
+export const setCinematicStill = (next: boolean) => {
+  if (next === still) return;
+  still = next;
+  document.documentElement.classList.toggle("is-cinematic-still", next);
   notify();
 };
 

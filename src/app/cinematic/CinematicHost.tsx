@@ -5,10 +5,15 @@ import { CINEMATIC_PATH, canKeepAlive } from "./keepAlive";
 import {
   getCinematicLaunch,
   isCinematicLoaded,
+  isCinematicStill,
   setCinematicLaunch,
   setCinematicLoaded,
+  setCinematicStill,
   subscribeCinematicLaunch,
 } from "./launchStore";
+
+/** How long the paused experience stays on as a backdrop after coming back. */
+const STILL_MS = 45_000;
 import "./cinematicHost.css";
 
 const CinematicExperience = lazy(() => import("../../App"));
@@ -33,6 +38,7 @@ export function CinematicHost() {
   const preloading = launch !== "idle" && !onRoute;
   const showing = onRoute || launch === "ready";
 
+  const still = useSyncExternalStore(subscribeCinematicLaunch, isCinematicStill, isCinematicStill);
   const [keepAlive] = useState(canKeepAlive);
   const [kept, setKept] = useState(false);
   // Mount on the first visit (or when a launch starts) and keep it from then on.
@@ -108,6 +114,29 @@ export function CinematicHost() {
     if (!kept) setCinematicLoaded(false);
   }, [kept, launch, onRoute]);
 
+  // Coming back from the experience: its last frame stays behind the page for
+  // a while, clickable as the way back in, then fades so the background
+  // previews can take over again.
+  useEffect(() => {
+    if (onRoute) {
+      setCinematicStill(false);
+      return;
+    }
+    if (!kept || !isCinematicLoaded() || launch !== "idle") return;
+    setCinematicStill(true);
+    const timer = window.setTimeout(() => setCinematicStill(false), STILL_MS);
+    return () => window.clearTimeout(timer);
+  }, [kept, launch, onRoute]);
+
+  // A paused canvas loses its picture when the window changes size, so the
+  // still steps aside rather than showing black.
+  useEffect(() => {
+    if (!still) return;
+    const onResize = () => setCinematicStill(false);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [still]);
+
   // If the browser drops the hidden experience's graphics under memory
   // pressure, let it go; the next visit loads it fresh.
   useEffect(() => {
@@ -127,7 +156,7 @@ export function CinematicHost() {
     return onRoute ? <Suspense fallback={loading}>{<CinematicExperience />}</Suspense> : null;
   }
 
-  const state = showing ? "is-showing" : preloading ? "is-preloading" : "is-hidden";
+  const state = showing ? "is-showing" : preloading ? "is-preloading" : still ? "is-still" : "is-hidden";
 
   return (
     <div
@@ -135,6 +164,21 @@ export function CinematicHost() {
       className={`cinematic-host ${state}`}
       aria-hidden={!showing}
       inert={!showing}
+      // As a still it is one big way back into the experience.
+      onClick={still ? () => setCinematicLaunch("loading") : undefined}
+      role={still ? "button" : undefined}
+      tabIndex={still ? 0 : undefined}
+      aria-label={still ? "Back to the full experience" : undefined}
+      onKeyDown={
+        still
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setCinematicLaunch("loading");
+              }
+            }
+          : undefined
+      }
     >
       <Suspense fallback={loading}>
         <CinematicExperience />
