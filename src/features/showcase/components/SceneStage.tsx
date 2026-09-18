@@ -500,14 +500,20 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
       {/* The way into the 3D site: with the site's own buttons, top right, and
           out of the way on a project page. */}
       {activeLabel && showGateway ? (
-        <aside className="showcase-gateway" key={activeId} aria-label="Cinematic experience">
-          <p className="showcase-gateway__eyebrow">{activeLabel} · a fragment of the cinematic universe</p>
-          <Link to="/cinematic" className="showcase-gateway__link" onMouseEnter={prefetchCinematic} onFocus={prefetchCinematic}>
+        <Link
+          to="/cinematic"
+          className="showcase-gateway"
+          key={activeId}
+          onMouseEnter={prefetchCinematic}
+          onFocus={prefetchCinematic}
+        >
+          <span className="showcase-gateway__eyebrow">{activeLabel} · a fragment of the cinematic universe</span>
+          <span className="showcase-gateway__link">
             Enter the full experience
             <span className="showcase-gateway__arrow" aria-hidden="true" />
-          </Link>
-          <p className="showcase-gateway__note">3D, sound and a few seconds to load</p>
-        </aside>
+          </span>
+          <span className="showcase-gateway__note">3D, sound and a few seconds to load</span>
+        </Link>
       ) : null}
     </>
   );
