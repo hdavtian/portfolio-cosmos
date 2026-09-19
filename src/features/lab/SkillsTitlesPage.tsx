@@ -457,9 +457,6 @@ export function SkillsTitlesPage() {
       const ahead = new THREE.Vector3();
       const heading = new THREE.Vector3();
       const side = new THREE.Vector3();
-      const ease = (t: number) => t * t * (3 - 2 * t);
-      const between = (edge: number, to: number, value: number) =>
-        ease(Math.max(0, Math.min(1, (value - edge) / (to - edge))));
 
       const RIDE_HEIGHT = 34;
       const RIDE_LOOK = 18;
@@ -468,21 +465,66 @@ export function SkillsTitlesPage() {
       const BEFORE = 96 / roadLength;
       const AFTER = 124 / roadLength;
 
+      /** The stretch of road a segment covers. */
+      const stretchOf = (segment: Segment) => {
+        const here = cityArc[segment.city];
+        if (segment.kind === "dwell") return [here - BEFORE, Math.min(1, here + AFTER)];
+        const from = segment.previous < 0 ? 0 : Math.min(1, cityArc[segment.previous] + AFTER);
+        return [from, here - BEFORE];
+      };
+
+      /**
+       * How far along the road each moment of the film is. Rather than easing
+       * each stretch on its own — which brings the camera to a halt at every
+       * seam and makes the whole thing lurch — the raw distances are laid out
+       * and then smoothed as one curve, so the camera only ever speeds up and
+       * slows down gradually and never quite stops.
+       */
+      const roadTable = (() => {
+        const steps = 2400;
+        let table = new Float64Array(steps + 1);
+        for (let i = 0; i <= steps; i += 1) {
+          const at = i / steps;
+          const segment = segmentAt(timeline, at);
+          const [from, to] = stretchOf(segment);
+          table[i] = from + (to - from) * within(segment, at);
+        }
+        const radius = Math.round(steps * 0.016);
+        for (let pass = 0; pass < 3; pass += 1) {
+          const next = new Float64Array(steps + 1);
+          for (let i = 0; i <= steps; i += 1) {
+            let sum = 0;
+            for (let k = -radius; k <= radius; k += 1) {
+              sum += table[Math.max(0, Math.min(steps, i + k))];
+            }
+            next[i] = sum / (radius * 2 + 1);
+          }
+          table = next;
+        }
+        return { steps, table };
+      })();
+
+      const roadAt = (at: number) => {
+        const x = Math.max(0, Math.min(1, at)) * roadTable.steps;
+        const index = Math.min(roadTable.steps - 1, Math.floor(x));
+        const rest = x - index;
+        return roadTable.table[index] * (1 - rest) + roadTable.table[index + 1] * rest;
+      };
+
+      /** The lie of the land under the camera, averaged so bumps don't shake it. */
+      const settled = (x: number, z: number) =>
+        (heightAt(x, z) + heightAt(x + 16, z) + heightAt(x - 16, z) + heightAt(x, z + 16) + heightAt(x, z - 16)) / 5;
+
+      // Rises and falls away to nothing at both ends of a stop, gently.
+      const swell = (t: number) => Math.sin(Math.PI * t) ** 2;
+      // Softer than smoothstep at both ends, so a turn of the head has no corner in it.
+      const softly = (edge: number, to: number, value: number) => {
+        const x = Math.max(0, Math.min(1, (value - edge) / (to - edge)));
+        return x * x * x * (x * (x * 6 - 15) + 10);
+      };
+
       // On the way home the camera looks back over everywhere it has been.
       const recap = new THREE.CatmullRomCurve3([...points.slice(0, -1)].reverse(), false, "catmullrom", 0.4);
-
-      /** How far along the road a moment is. Always forward, eased at the seams. */
-      const roadAt = (segment: Segment, t: number) => {
-        const here = cityArc[segment.city];
-        if (segment.kind === "dwell") {
-          const from = here - BEFORE;
-          const to = Math.min(1, here + AFTER);
-          return from + (to - from) * ease(t);
-        }
-        const from = segment.previous < 0 ? 0 : Math.min(1, cityArc[segment.previous] + AFTER);
-        const to = here - BEFORE;
-        return from + (to - from) * ease(t);
-      };
 
       /**
        * The camera rides the road facing the way it is going. At a place it
@@ -490,33 +532,33 @@ export function SkillsTitlesPage() {
        * the view from the back of a truck pulling out — then turns forward
        * again before the next leg.
        */
-      const pose = (segment: Segment, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
-        const s = roadAt(segment, t);
-        journey.getPointAt(Math.max(0, Math.min(1, s)), spare);
-        journey.getTangentAt(Math.max(0, Math.min(1, s)), heading);
+      const pose = (at: number, segment: Segment, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
+        const s = Math.max(0, Math.min(1, roadAt(at)));
+        journey.getPointAt(s, spare);
+        journey.getTangentAt(s, heading);
         heading.y = 0;
         heading.normalize();
         side.set(heading.z, 0, -heading.x);
 
         const move = MOVES[placed[segment.city].move] ?? MOVES.spires;
-        const bulge = segment.kind === "dwell" ? Math.sin(Math.PI * t) : 0;
-        const ground = heightAt(spare.x, spare.z);
+        const rise = segment.kind === "dwell" ? swell(t) : 0;
+        const ground = settled(spare.x, spare.z);
 
         // Lean away from whichever side the place stands on, so it stays in
         // shot without filling the lens.
-        const lean = -placed[segment.city].away * move.wide * bulge;
+        const lean = -placed[segment.city].away * move.wide * rise;
         into.set(
           spare.x + side.x * lean,
-          ground + RIDE_HEIGHT + move.lift * bulge,
+          ground + RIDE_HEIGHT + move.lift * rise,
           spare.z + side.z * lean,
         );
 
         journey.getPointAt(Math.min(1, s + 0.02), ahead);
-        ahead.y = heightAt(ahead.x, ahead.z) + RIDE_LOOK;
+        ahead.y = settled(ahead.x, ahead.z) + RIDE_LOOK;
 
         if (segment.kind === "dwell") {
           // Hold the place in frame while going past it, then let it go.
-          const watch = between(0, 0.16, t) * (1 - between(move.hold, 1, t));
+          const watch = softly(0, 0.26, t) * (1 - softly(move.hold, 1, t));
           const spot = placed[segment.city].build.group.position;
           look.set(spot.x, spot.y + move.aim, spot.z);
           look.lerpVectors(ahead, look, watch);
@@ -524,8 +566,8 @@ export function SkillsTitlesPage() {
           // The way home: look back over the places already built, then turn
           // to face the camp coming up.
           recap.getPoint(Math.min(1, t / 0.6), look);
-          look.y = heightAt(look.x, look.z) + RIDE_LOOK + 4;
-          look.lerp(ahead, between(0.5, 0.95, t));
+          look.y = settled(look.x, look.z) + RIDE_LOOK + 4;
+          look.lerp(ahead, softly(0.45, 0.95, t));
         } else {
           look.copy(ahead);
         }
@@ -540,7 +582,7 @@ export function SkillsTitlesPage() {
         const segment = segmentAt(timeline, p);
         const t = within(segment, p);
 
-        pose(segment, t, eye, target);
+        pose(p, segment, t, eye, target);
 
         camera.position.copy(eye);
         camera.lookAt(target);
@@ -560,7 +602,7 @@ export function SkillsTitlesPage() {
           else stop.build.grow(built, phase, focus);
           if (segment === dwell) {
             const move = MOVES[stop.move] ?? MOVES.spires;
-            stop.build.group.rotation.y = move.spin * ease(t);
+            stop.build.group.rotation.y = move.spin * softly(0, 1, t);
           }
           stop.sprite.visible = built > 0.02;
           // The name announces the place on arrival, then gets out of the way
@@ -601,7 +643,7 @@ export function SkillsTitlesPage() {
     let frame = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      const step = (now - last) / 88000; // a full run in about a minute and a half
+      const step = (now - last) / 104000; // a full run in a little under two minutes
       last = now;
       setProgress((current) => {
         const next = current + step;
