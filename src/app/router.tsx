@@ -87,7 +87,7 @@ const routes: RouteObject[] = [
       },
       // Sketches for the skill timeline: mock data, not linked from the site.
       { path: "lab/skills", element: <LazyRoute><SkillsLabPage /></LazyRoute> },
-      { path: "lab/titles", element: <LazyRoute><SkillsTitlesPage /></LazyRoute> },
+      { path: "lab/got", element: <LazyRoute><SkillsTitlesPage /></LazyRoute> },
       {
         // Previous portfolio, kept for comparison until the redesign is approved.
         path: "portfolio-classic",
