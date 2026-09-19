@@ -92,7 +92,7 @@ function buildTimeline(cities: City[]): Segment[] {
       kind: "travel",
       city: index,
       previous: index - 1,
-      weight: index === 0 ? 1.8 : isReturn ? 4 : 2.3,
+      weight: index === 0 ? 1.8 : isReturn ? 2.5 : 2.3,
     });
     weights.push({
       kind: "dwell",
@@ -378,24 +378,51 @@ export function SkillsTitlesPage() {
       );
       contours.rotation.x = -Math.PI / 2;
       contours.position.y = 0.4;
+      contours.renderOrder = 0;
       scene.add(contours);
 
-      // One road for the whole film: the run in, the places in order, the long
-      // way round behind the hills, and back to the camp it started at.
+      // One road for the whole film, and it is a divided highway: out past
+      // every place in order, a turn at the far end, then home again on the
+      // carriageway running alongside, passing everything a second time.
       const onGround = (point: ThreeTypes.Vector3) => point.setY(heightAt(point.x, point.z));
-      const journeyPoints = [
+      const RETURN_SIDE = 88;
+
+      const outwardPoints = [
         onGround(new THREE.Vector3(spots[0].x - 900, 0, spots[0].z + 430)),
         ...spots.slice(0, -1),
-        onGround(new THREE.Vector3(spots[spots.length - 2].x * 0.6, 0, -900)),
-        onGround(new THREE.Vector3(spots[0].x * 0.6, 0, -850)),
-        spots[0],
+      ];
+      const outwardOnly = new THREE.CatmullRomCurve3(outwardPoints, false, "catmullrom", 0.4);
+
+      // The way home: the same line, stepped to one side and walked backwards.
+      const sideStep = new THREE.Vector3();
+      const stepped = (at: number, by: number) => {
+        const point = outwardOnly.getPointAt(Math.max(0, Math.min(1, at)));
+        const tangent = outwardOnly.getTangentAt(Math.max(0, Math.min(1, at)));
+        sideStep.set(tangent.z, 0, -tangent.x).normalize().multiplyScalar(by);
+        return onGround(point.add(sideStep));
+      };
+
+      const last = spots[spots.length - 2];
+      const turn = outwardOnly.getTangentAt(1).setY(0).normalize();
+      const homePoints = [
+        // Swing round the end of the run…
+        onGround(new THREE.Vector3(last.x + turn.x * 150, 0, last.z + turn.z * 150)),
+        stepped(1, RETURN_SIDE),
+        ...Array.from({ length: 26 }, (_, i) => stepped(1 - (i + 1) / 27, RETURN_SIDE)),
+        // …and back in beside the camp it started at.
+        stepped(0.08, RETURN_SIDE * 0.5),
+      ];
+
+      const journeyPoints = [
+        ...outwardPoints,
+        ...homePoints,
         onGround(new THREE.Vector3(spots[0].x - 520, 0, spots[0].z + 380)),
       ];
       const journey = new THREE.CatmullRomCurve3(journeyPoints, false, "catmullrom", 0.4);
       const roadLength = journey.getLength();
 
       // Where each place sits along that road, measured in distance travelled.
-      const samples = journey.getPoints(1400);
+      const samples = journey.getPoints(2200);
       const walked = [0];
       for (let i = 1; i < samples.length; i += 1) {
         walked.push(walked[i - 1] + samples[i].distanceTo(samples[i - 1]));
@@ -407,9 +434,7 @@ export function SkillsTitlesPage() {
         arcOfControl(index === legs - 1 ? journeyPoints.length - 2 : index + 1),
       );
 
-      // The road itself, laid on the land: dark tarmac with a dashed line down
-      // the middle and bright edges, so the shape of the journey is always
-      // readable and the camera never feels lost on an empty map.
+      // Dark tarmac with bright edges and a dashed line down the middle.
       const tarmac = (() => {
         const canvas = document.createElement("canvas");
         canvas.width = 64;
@@ -451,8 +476,8 @@ export function SkillsTitlesPage() {
           if (i > 0) run += ((toArc - fromArc) * roadLength) / steps / 26;
           const left = [lanePoint.x + laneSide.x, 0, lanePoint.z + laneSide.z];
           const right = [lanePoint.x - laneSide.x, 0, lanePoint.z - laneSide.z];
-          left[1] = heightAt(left[0], left[2]) + 0.9;
-          right[1] = heightAt(right[0], right[2]) + 0.9;
+          left[1] = heightAt(left[0], left[2]) + 1.7;
+          right[1] = heightAt(right[0], right[2]) + 1.7;
           positions.set(left, i * 6);
           positions.set(right, i * 6 + 3);
           uvs.set([0, run, 1, run], i * 4);
@@ -472,11 +497,14 @@ export function SkillsTitlesPage() {
             transparent: true,
             opacity,
             side: THREE.DoubleSide,
-            depthWrite: false,
+            depthWrite: true,
             polygonOffset: true,
-            polygonOffsetFactor: -2,
+            polygonOffsetFactor: -6,
           }),
         );
+        // Drawn after the land, and writing depth, so no contour line of the
+        // map shows through the tarmac.
+        mesh.renderOrder = 2;
         scene.add(mesh);
         return mesh;
       };
@@ -484,7 +512,7 @@ export function SkillsTitlesPage() {
       // The road out is there from the start. The way home is not: it only
       // appears once the film turns for home, so the opening shot has one road
       // in it and not two.
-      const splitAt = Math.min(1, cityArc[legs - 2] + 0.01);
+      const splitAt = Math.min(1, cityArc[legs - 2] + 0.012);
       layRoad(0, splitAt, 0.95);
       const wayHome = layRoad(splitAt, 1, 0);
 
@@ -599,6 +627,7 @@ export function SkillsTitlesPage() {
         return texture;
       };
 
+      let homeSign: ThreeTypes.Group | null = null;
       cities.forEach((city, index) => {
         // Stand it back up the road, so it is read on the way in.
         const at = Math.max(0, cityArc[index] - 170 / roadLength);
@@ -612,6 +641,11 @@ export function SkillsTitlesPage() {
         sign.position.set(lanePoint.x, heightAt(lanePoint.x, lanePoint.z), lanePoint.z);
         // Face back down the road at whoever is coming.
         sign.rotation.y = Math.atan2(-laneHeading.x, -laneHeading.z);
+        // The sign on the way home keeps the road's secret until the turn.
+        if (index === legs - 1) {
+          sign.visible = false;
+          homeSign = sign;
+        }
         scene.add(sign);
 
         const POST = 26;
@@ -724,9 +758,6 @@ export function SkillsTitlesPage() {
         return x * x * x * (x * (x * 6 - 15) + 10);
       };
 
-      // On the way home the camera looks back over everywhere it has been.
-      const recap = new THREE.CatmullRomCurve3([...points.slice(0, -1)].reverse(), false, "catmullrom", 0.4);
-
       /**
        * The camera rides the road facing the way it is going. At a place it
        * slows, passes close by, and keeps looking at it over its shoulder —
@@ -763,12 +794,6 @@ export function SkillsTitlesPage() {
           const spot = placed[segment.city].build.group.position;
           look.set(spot.x, spot.y + move.aim, spot.z);
           look.lerpVectors(ahead, look, watch);
-        } else if (segment.city === legs - 1) {
-          // The way home: look back over the places already built, then turn
-          // to face the camp coming up.
-          recap.getPoint(Math.min(1, t / 0.6), look);
-          look.y = settled(look.x, look.z) + RIDE_LOOK + 4;
-          look.lerp(ahead, softly(0.45, 0.95, t));
         } else {
           look.copy(ahead);
         }
@@ -789,8 +814,9 @@ export function SkillsTitlesPage() {
         // The way home appears as the last outward place finishes going up.
         const turnForHome = timeline.find((entry) => entry.kind === "dwell" && entry.city === legs - 2)!;
         const reveal = turnForHome.from + (turnForHome.to - turnForHome.from) * 0.55;
-        (wayHome.material as ThreeTypes.MeshBasicMaterial).opacity =
-          0.95 * softly(reveal, reveal + (turnForHome.to - turnForHome.from) * 0.5, p);
+        const shown = 0.95 * softly(reveal, reveal + (turnForHome.to - turnForHome.from) * 0.5, p);
+        (wayHome.material as ThreeTypes.MeshBasicMaterial).opacity = shown;
+        if (homeSign) (homeSign as ThreeTypes.Group).visible = shown > 0.02;
 
         // Damp along the road, but cut on a big jump — clicking a stop or
         // flinging the scrubber should arrive, not fly across the map.
