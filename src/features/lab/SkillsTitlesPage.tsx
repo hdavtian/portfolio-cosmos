@@ -217,8 +217,11 @@ export function SkillsTitlesPage() {
     let disposed = false;
     let cleanup = () => {};
 
-    void import("three").then((THREE) => {
+    void Promise.all([import("three"), import("camera-controls")]).then(([THREE, cameraControls]) => {
       if (disposed) return;
+      const CameraControls = cameraControls.default;
+      // Required once before use, the same way the cinematic app does it.
+      CameraControls.install({ THREE });
 
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
@@ -245,6 +248,21 @@ export function SkillsTitlesPage() {
         return texture;
       })();
       const camera = new THREE.PerspectiveCamera(52, 1, 0.5, 2800);
+
+      // The scrubber decides where the camera should be; camera-controls is
+      // what actually moves it there, damping the last of the roughness out of
+      // the path. It takes no input here — this is a film, not a viewer.
+      const controls = new CameraControls(camera, renderer.domElement);
+      controls.smoothTime = 0.42;
+      controls.mouseButtons.left = CameraControls.ACTION.NONE;
+      controls.mouseButtons.middle = CameraControls.ACTION.NONE;
+      controls.mouseButtons.right = CameraControls.ACTION.NONE;
+      controls.mouseButtons.wheel = CameraControls.ACTION.NONE;
+      controls.touches.one = CameraControls.ACTION.NONE;
+      controls.touches.two = CameraControls.ACTION.NONE;
+      controls.touches.three = CameraControls.ACTION.NONE;
+      controls.minDistance = 0.1;
+      controls.maxDistance = Infinity;
 
       scene.add(new THREE.HemisphereLight(0x8fb7ff, 0x1a1206, 0.85));
       const key = new THREE.DirectionalLight(0xffd9a0, 1.15);
@@ -392,51 +410,63 @@ export function SkillsTitlesPage() {
       })();
 
       const ROAD_WIDTH = 9;
-      const roadSamples = 2600;
-      const lanePositions = new Float32Array((roadSamples + 1) * 6);
-      const laneUvs = new Float32Array((roadSamples + 1) * 4);
-      const laneIndex: number[] = [];
       const lanePoint = new THREE.Vector3();
       const laneHeading = new THREE.Vector3();
       const laneSide = new THREE.Vector3();
-      let run = 0;
-      for (let i = 0; i <= roadSamples; i += 1) {
-        const at = i / roadSamples;
-        journey.getPointAt(at, lanePoint);
-        journey.getTangentAt(at, laneHeading);
-        laneHeading.y = 0;
-        laneHeading.normalize();
-        laneSide.set(laneHeading.z, 0, -laneHeading.x).multiplyScalar(ROAD_WIDTH);
-        if (i > 0) run += (roadLength / roadSamples) / 26;
-        const left = [lanePoint.x + laneSide.x, 0, lanePoint.z + laneSide.z];
-        const right = [lanePoint.x - laneSide.x, 0, lanePoint.z - laneSide.z];
-        left[1] = heightAt(left[0], left[2]) + 0.9;
-        right[1] = heightAt(right[0], right[2]) + 0.9;
-        lanePositions.set(left, i * 6);
-        lanePositions.set(right, i * 6 + 3);
-        laneUvs.set([0, run, 1, run], i * 4);
-        if (i < roadSamples) {
-          const a = i * 2;
-          laneIndex.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+
+      /** A stretch of road, laid on the land between two points of the journey. */
+      const layRoad = (fromArc: number, toArc: number, opacity: number) => {
+        const steps = Math.max(200, Math.round((toArc - fromArc) * 2600));
+        const positions = new Float32Array((steps + 1) * 6);
+        const uvs = new Float32Array((steps + 1) * 4);
+        const index: number[] = [];
+        let run = 0;
+        for (let i = 0; i <= steps; i += 1) {
+          const at = fromArc + (toArc - fromArc) * (i / steps);
+          journey.getPointAt(Math.max(0, Math.min(1, at)), lanePoint);
+          journey.getTangentAt(Math.max(0, Math.min(1, at)), laneHeading);
+          laneHeading.y = 0;
+          laneHeading.normalize();
+          laneSide.set(laneHeading.z, 0, -laneHeading.x).multiplyScalar(ROAD_WIDTH);
+          if (i > 0) run += ((toArc - fromArc) * roadLength) / steps / 26;
+          const left = [lanePoint.x + laneSide.x, 0, lanePoint.z + laneSide.z];
+          const right = [lanePoint.x - laneSide.x, 0, lanePoint.z - laneSide.z];
+          left[1] = heightAt(left[0], left[2]) + 0.9;
+          right[1] = heightAt(right[0], right[2]) + 0.9;
+          positions.set(left, i * 6);
+          positions.set(right, i * 6 + 3);
+          uvs.set([0, run, 1, run], i * 4);
+          if (i < steps) {
+            const a = i * 2;
+            index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+          }
         }
-      }
-      const lane = new THREE.BufferGeometry();
-      lane.setAttribute("position", new THREE.BufferAttribute(lanePositions, 3));
-      lane.setAttribute("uv", new THREE.BufferAttribute(laneUvs, 2));
-      lane.setIndex(laneIndex);
-      const road = new THREE.Mesh(
-        lane,
-        new THREE.MeshBasicMaterial({
-          map: tarmac,
-          transparent: true,
-          opacity: 0.95,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-          polygonOffset: true,
-          polygonOffsetFactor: -2,
-        }),
-      );
-      scene.add(road);
+        const lane = new THREE.BufferGeometry();
+        lane.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        lane.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+        lane.setIndex(index);
+        const mesh = new THREE.Mesh(
+          lane,
+          new THREE.MeshBasicMaterial({
+            map: tarmac,
+            transparent: true,
+            opacity,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -2,
+          }),
+        );
+        scene.add(mesh);
+        return mesh;
+      };
+
+      // The road out is there from the start. The way home is not: it only
+      // appears once the film turns for home, so the opening shot has one road
+      // in it and not two.
+      const splitAt = Math.min(1, cityArc[legs - 2] + 0.01);
+      layRoad(0, splitAt, 0.95);
+      const wayHome = layRoad(splitAt, 1, 0);
 
       // A marker post either side of the road at every place, like an exit sign.
       cities.forEach((city, index) => {
@@ -671,6 +701,7 @@ export function SkillsTitlesPage() {
       };
 
       let frame = 0;
+      const clock = new THREE.Clock();
       const render = () => {
         const p = progressRef.current;
         // Everything is a function of the scrubber: park it and the frame is
@@ -681,9 +712,15 @@ export function SkillsTitlesPage() {
 
         pose(p, segment, t, eye, target);
 
-        camera.position.copy(eye);
-        camera.lookAt(target);
-        glint.position.copy(eye).add(new THREE.Vector3(0, 10, 0));
+        // The way home appears as the last outward place finishes going up.
+        const turnForHome = timeline.find((entry) => entry.kind === "dwell" && entry.city === legs - 2)!;
+        const reveal = turnForHome.from + (turnForHome.to - turnForHome.from) * 0.55;
+        (wayHome.material as ThreeTypes.MeshBasicMaterial).opacity =
+          0.95 * softly(reveal, reveal + (turnForHome.to - turnForHome.from) * 0.5, p);
+
+        controls.setLookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, true);
+        controls.update(Math.min(0.05, clock.getDelta()));
+        glint.position.copy(camera.position).add(new THREE.Vector3(0, 10, 0));
 
         placed.forEach((stop, index) => {
           const dwell = timeline.find((entry) => entry.kind === "dwell" && entry.city === index)!;
@@ -723,6 +760,7 @@ export function SkillsTitlesPage() {
           if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
           else material?.dispose();
         });
+        controls.dispose();
         renderer.dispose();
         renderer.domElement.remove();
       };
