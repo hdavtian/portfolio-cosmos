@@ -1,0 +1,175 @@
+{
+  "comment": "MOCK DATA, not wired into the site. A shape to play with for 'how long have I done X'. Skills are ticked per job; spans default to the job's own dates, and only need start/end when a skill began or ended mid-job. Totals are computed (npm run skills:report), never stored, and overlapping jobs are merged so no year is counted twice.",
+  "capabilities": [
+    { "slug": "backend", "name": "Backend", "blurb": "Server-side languages, APIs and services" },
+    { "slug": "frontend-frameworks", "name": "Frontend frameworks", "blurb": "Component-based SPA work" },
+    { "slug": "web-fundamentals", "name": "Web fundamentals", "blurb": "HTML, CSS, JavaScript, browser craft" },
+    { "slug": "cloud-devops", "name": "Cloud & DevOps", "blurb": "Hosting, pipelines, containers" },
+    { "slug": "data", "name": "Data & messaging", "blurb": "Databases, queues, integrations" },
+    { "slug": "testing", "name": "Testing & automation", "blurb": "Test frameworks and automation platforms" },
+    { "slug": "leadership", "name": "Leadership & product", "blurb": "Leading teams, owning roadmaps" }
+  ],
+  "skills": [
+    { "slug": "csharp-dotnet", "name": "C# / .NET", "capability": "backend" },
+    { "slug": "java", "name": "Java / Spring Boot", "capability": "backend" },
+    { "slug": "php", "name": "PHP", "capability": "backend" },
+    { "slug": "node", "name": "Node.js", "capability": "backend" },
+    { "slug": "rest-apis", "name": "REST APIs", "capability": "backend" },
+    { "slug": "angular", "name": "Angular", "capability": "frontend-frameworks" },
+    { "slug": "react", "name": "React / Redux", "capability": "frontend-frameworks" },
+    { "slug": "nextjs", "name": "Next.js", "capability": "frontend-frameworks" },
+    { "slug": "typescript", "name": "TypeScript", "capability": "frontend-frameworks" },
+    { "slug": "javascript", "name": "JavaScript", "capability": "web-fundamentals" },
+    { "slug": "html-css", "name": "HTML / CSS", "capability": "web-fundamentals" },
+    { "slug": "jquery", "name": "jQuery", "capability": "web-fundamentals" },
+    { "slug": "animation", "name": "Animation (GSAP, Framer, Three.js)", "capability": "web-fundamentals" },
+    { "slug": "azure", "name": "Azure", "capability": "cloud-devops" },
+    { "slug": "aws", "name": "AWS", "capability": "cloud-devops" },
+    { "slug": "docker", "name": "Docker", "capability": "cloud-devops" },
+    { "slug": "cicd", "name": "CI/CD pipelines", "capability": "cloud-devops" },
+    { "slug": "linux-hosting", "name": "Linux hosting / LAMP", "capability": "cloud-devops" },
+    { "slug": "sql", "name": "SQL databases", "capability": "data" },
+    { "slug": "mongodb", "name": "MongoDB", "capability": "data" },
+    { "slug": "rabbitmq", "name": "RabbitMQ", "capability": "data" },
+    { "slug": "cms", "name": "CMS / e-commerce platforms", "capability": "data" },
+    { "slug": "playwright", "name": "Playwright", "capability": "testing" },
+    { "slug": "selenium", "name": "Selenium / TestNG", "capability": "testing" },
+    { "slug": "test-platforms", "name": "Test automation platforms", "capability": "testing" },
+    { "slug": "team-lead", "name": "Leading engineers", "capability": "leadership" },
+    { "slug": "product-owner", "name": "Product ownership", "capability": "leadership" },
+    { "slug": "client-delivery", "name": "Client delivery / consulting", "capability": "leadership" }
+  ],
+  "jobs": [
+    {
+      "slug": "investcloud",
+      "company": "InvestCloud Inc.",
+      "start": "2018-04",
+      "end": "2025-06",
+      "uses": [
+        { "skill": "angular", "level": "primary" },
+        { "skill": "react", "level": "secondary" },
+        { "skill": "typescript", "level": "primary" },
+        { "skill": "javascript", "level": "primary" },
+        { "skill": "html-css", "level": "primary" },
+        { "skill": "csharp-dotnet", "level": "primary", "start": "2020-01" },
+        { "skill": "java", "level": "secondary" },
+        { "skill": "node", "level": "secondary" },
+        { "skill": "rest-apis", "level": "primary" },
+        { "skill": "sql", "level": "secondary" },
+        { "skill": "mongodb", "level": "secondary", "start": "2021-01" },
+        { "skill": "rabbitmq", "level": "secondary", "start": "2021-01" },
+        { "skill": "azure", "level": "primary", "start": "2020-06" },
+        { "skill": "cicd", "level": "primary" },
+        { "skill": "docker", "level": "secondary", "start": "2020-06" },
+        { "skill": "playwright", "level": "primary", "start": "2022-01" },
+        { "skill": "selenium", "level": "primary", "end": "2022-06" },
+        { "skill": "test-platforms", "level": "primary" },
+        { "skill": "team-lead", "level": "primary", "start": "2024-02" },
+        { "skill": "product-owner", "level": "primary", "start": "2024-02" }
+      ]
+    },
+    {
+      "slug": "rpa",
+      "company": "RPA (Rubin Postaer & Associates)",
+      "start": "2014-10",
+      "end": "2017-07",
+      "uses": [
+        { "skill": "react", "level": "primary" },
+        { "skill": "nextjs", "level": "primary" },
+        { "skill": "javascript", "level": "primary" },
+        { "skill": "html-css", "level": "primary" },
+        { "skill": "animation", "level": "primary" },
+        { "skill": "java", "level": "secondary" },
+        { "skill": "php", "level": "secondary" },
+        { "skill": "rest-apis", "level": "primary" },
+        { "skill": "sql", "level": "secondary" },
+        { "skill": "cms", "level": "secondary" },
+        { "skill": "aws", "level": "primary" },
+        { "skill": "azure", "level": "exposure" },
+        { "skill": "docker", "level": "primary" },
+        { "skill": "cicd", "level": "primary" }
+      ]
+    },
+    {
+      "slug": "boingo",
+      "company": "Boingo Wireless",
+      "start": "2010-08",
+      "end": "2014-06",
+      "uses": [
+        { "skill": "php", "level": "primary" },
+        { "skill": "javascript", "level": "primary" },
+        { "skill": "jquery", "level": "primary" },
+        { "skill": "html-css", "level": "primary" },
+        { "skill": "rest-apis", "level": "secondary" },
+        { "skill": "sql", "level": "primary" },
+        { "skill": "cms", "level": "secondary" },
+        { "skill": "aws", "level": "secondary" },
+        { "skill": "linux-hosting", "level": "secondary" }
+      ]
+    },
+    {
+      "slug": "capital-group",
+      "company": "Capital Group",
+      "start": "2008-04",
+      "end": "2009-04",
+      "uses": [
+        { "skill": "html-css", "level": "primary" },
+        { "skill": "javascript", "level": "primary" },
+        { "skill": "java", "level": "exposure" }
+      ]
+    },
+    {
+      "slug": "murad",
+      "company": "Murad",
+      "start": "2005-05",
+      "end": "2008-04",
+      "uses": [
+        { "skill": "html-css", "level": "primary" },
+        { "skill": "javascript", "level": "secondary" },
+        { "skill": "cms", "level": "primary" }
+      ]
+    },
+    {
+      "slug": "unitedlayer",
+      "company": "UnitedLayer",
+      "start": "2001-01",
+      "end": "2002-01",
+      "uses": [
+        { "skill": "html-css", "level": "primary" },
+        { "skill": "php", "level": "primary" },
+        { "skill": "linux-hosting", "level": "primary" },
+        { "skill": "sql", "level": "secondary" }
+      ]
+    },
+    {
+      "slug": "stormscape",
+      "company": "StormScape (own studio)",
+      "start": "2000-01",
+      "end": "2010-01",
+      "uses": [
+        { "skill": "html-css", "level": "primary" },
+        { "skill": "javascript", "level": "primary" },
+        { "skill": "php", "level": "primary" },
+        { "skill": "sql", "level": "primary" },
+        { "skill": "cms", "level": "primary" },
+        { "skill": "linux-hosting", "level": "primary" },
+        { "skill": "client-delivery", "level": "primary" }
+      ]
+    }
+  ],
+  "outsideWork": [
+    {
+      "label": "harmadavtian.com (this site)",
+      "start": "2025-01",
+      "uses": [
+        { "skill": "react", "level": "primary" },
+        { "skill": "typescript", "level": "primary" },
+        { "skill": "node", "level": "primary" },
+        { "skill": "animation", "level": "primary" },
+        { "skill": "azure", "level": "primary" },
+        { "skill": "mongodb", "level": "primary" },
+        { "skill": "cicd", "level": "primary" }
+      ]
+    }
+  ]
+}

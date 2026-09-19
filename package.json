@@ -28,6 +28,7 @@
     "db:push-prod": "node scripts/db-push-prod.mjs",
     "media:push-prod": "node scripts/media-push-prod.mjs",
     "db:ensure-indexes-prod": "node scripts/db-ensure-indexes-prod.mjs",
+    "skills:report": "node scripts/skills-report.mjs",
     "admin:dev": "vite --config vite.admin.config.ts",
     "build:admin": "tsc -p tsconfig.admin.json --noEmit && vite build --config vite.admin.config.ts",
     "typecheck:admin": "tsc -p tsconfig.admin.json --noEmit"
