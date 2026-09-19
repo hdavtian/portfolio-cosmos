@@ -199,11 +199,16 @@ export function SkillsTitlesPage() {
   const [progress, setProgress] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [openRows, setOpenRows] = useState<string[]>([]);
+  // Nothing on screen moves unless the scrubber does.
+  const [moving, setMoving] = useState(false);
 
   // The scene reads progress from the ref every frame, so scrubbing never
   // re-runs the setup.
   useEffect(() => {
     progressRef.current = progress;
+    setMoving(true);
+    const settle = window.setTimeout(() => setMoving(false), 220);
+    return () => window.clearTimeout(settle);
   }, [progress]);
 
   useEffect(() => {
@@ -314,8 +319,8 @@ export function SkillsTitlesPage() {
       const homeward = new THREE.CatmullRomCurve3(
         [
           points[points.length - 2],
-          new THREE.Vector3(points[points.length - 2].x * 0.5, 0, -260),
-          new THREE.Vector3(points[0].x * 0.5, 0, -240),
+          new THREE.Vector3(points[points.length - 2].x * 0.55, 0, -186),
+          new THREE.Vector3(points[0].x * 0.55, 0, -172),
           points[points.length - 1],
         ],
         false,
@@ -407,62 +412,112 @@ export function SkillsTitlesPage() {
       window.addEventListener("resize", resize);
 
       const legs = cities.length;
+      const travelLegs = timeline.filter((entry) => entry.kind === "travel");
       const eye = new THREE.Vector3();
       const target = new THREE.Vector3();
-      const prevEye = new THREE.Vector3();
-      const prevTarget = new THREE.Vector3();
       const spare = new THREE.Vector3();
+      const spareTwo = new THREE.Vector3();
+      const heading = new THREE.Vector3();
+      const eyeIn = new THREE.Vector3();
+      const lookIn = new THREE.Vector3();
+      const eyeOut = new THREE.Vector3();
+      const lookOut = new THREE.Vector3();
       const ease = (t: number) => t * t * (3 - 2 * t);
 
-      /** Where the camera stands while a stop is being built. */
+      const TRAIL = 104;
+      const RIDE_HEIGHT = 48;
+      const RIDE_LOOK = 22;
+
+      // On the way home the camera looks back over everywhere it has been,
+      // in reverse, before turning to the studio coming up.
+      const recap = new THREE.CatmullRomCurve3([...points.slice(0, -1)].reverse(), false, "catmullrom", 0.4);
+
+      /** Where a leg is at this point, and which way it is heading. */
+      const legPoint = (segment: Segment, t: number, into: ThreeTypes.Vector3) => {
+        if (segment.previous < 0) {
+          opening.getPoint(t, into);
+          opening.getTangent(t, heading);
+        } else if (segment.city === legs - 1) {
+          homeward.getPoint(t, into);
+          homeward.getTangent(t, heading);
+        } else {
+          const span = 1 / (legs - 2);
+          const u = Math.min(1, (segment.previous + t) * span);
+          outward.getPoint(u, into);
+          outward.getTangent(u, heading);
+        }
+        heading.y = 0;
+        heading.normalize();
+      };
+
+      /** Travelling: the camera trails the road and looks the way it is going. */
+      const travelPose = (segment: Segment, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
+        legPoint(segment, t, spare);
+        const ground = heightAt(spare.x, spare.z);
+        // The way home flies lower, so the places it passes fill the frame.
+        const lift = segment.city === legs - 1 ? 30 : RIDE_HEIGHT;
+        into.set(spare.x - heading.x * TRAIL, ground + lift, spare.z - heading.z * TRAIL);
+        if (segment.city === legs - 1) {
+          recap.getPoint(Math.min(1, t / 0.6), look);
+          look.y = heightAt(look.x, look.z) + RIDE_LOOK + 4;
+          // Half way home, turn from the past towards the studio ahead.
+          const home = placed[legs - 1].build.group.position;
+          const turn = ease(Math.max(0, Math.min(1, (t - 0.5) / 0.4)));
+          look.lerp(spareTwo.set(home.x, home.y + RIDE_LOOK, home.z), turn);
+        } else {
+          look.set(spare.x + heading.x * 44, ground + RIDE_LOOK, spare.z + heading.z * 44);
+        }
+      };
+
+      /**
+       * Standing at a stop: the camera arrives on the heading it was
+       * travelling and leaves on the heading of the next leg, so the whole run
+       * is one move. In between it swings past the straight line, breathes in
+       * or out, and rises a little — differently at each place.
+       */
       const dwellPose = (index: number, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
         const move = MOVES[cities[index].kind] ?? MOVES.spires;
         const spot = placed[index].build.group.position;
-        const eased = ease(t);
-        const angle = move.sweep * eased;
-        const radius = move.radius[0] + (move.radius[1] - move.radius[0]) * eased;
-        const height = move.height[0] + (move.height[1] - move.height[0]) * eased;
-        into.set(spot.x + Math.sin(angle) * radius, spot.y + height, spot.z + Math.cos(angle) * radius);
-        look.set(spot.x, spot.y + move.look, spot.z);
-      };
-
-      /** Where the camera stands while travelling, riding the land. */
-      const ridePose = (point: ThreeTypes.Vector3, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
-        into.set(point.x, heightAt(point.x, point.z) + 52, point.z + 110);
-        look.set(point.x, heightAt(point.x, point.z) + 26, point.z);
-      };
-
-      const rideAt = (segment: Segment, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
-        if (segment.previous < 0) {
-          opening.getPoint(t, spare);
-        } else if (segment.city === legs - 1) {
-          homeward.getPoint(t, spare);
-        } else {
-          const span = 1 / (legs - 2);
-          outward.getPoint(Math.min(1, (segment.previous + t) * span), spare);
+        travelPose(travelLegs[index], 1, eyeIn, lookIn);
+        const leave = travelLegs[index + 1];
+        if (leave) travelPose(leave, 0, eyeOut, lookOut);
+        else {
+          eyeOut.copy(eyeIn);
+          lookOut.copy(lookIn);
         }
-        ridePose(spare, into, look);
+
+        const angleIn = Math.atan2(eyeIn.x - spot.x, eyeIn.z - spot.z);
+        let turn = Math.atan2(eyeOut.x - spot.x, eyeOut.z - spot.z) - angleIn;
+        while (turn > Math.PI) turn -= Math.PI * 2;
+        while (turn < -Math.PI) turn += Math.PI * 2;
+
+        const radiusIn = Math.hypot(eyeIn.x - spot.x, eyeIn.z - spot.z);
+        const radiusOut = Math.hypot(eyeOut.x - spot.x, eyeOut.z - spot.z);
+        const heightIn = eyeIn.y - spot.y;
+        const heightOut = eyeOut.y - spot.y;
+
+        const eased = ease(t);
+        const bulge = Math.sin(Math.PI * t);
+        const angle = angleIn + turn * eased + move.swing * bulge;
+        const radius = radiusIn + (radiusOut - radiusIn) * eased + move.zoom * bulge;
+        const height = heightIn + (heightOut - heightIn) * eased + move.lift * bulge;
+
+        into.set(spot.x + Math.sin(angle) * radius, spot.y + height, spot.z + Math.cos(angle) * radius);
+        look.lerpVectors(lookIn, lookOut, eased);
+        look.y += move.look * bulge;
       };
 
       let frame = 0;
       const render = () => {
         const p = progressRef.current;
-        const time = performance.now() / 1000;
+        // Everything is a function of the scrubber: park it and the frame is
+        // still, so labels and numbers can be read.
+        const phase = p * 30;
         const segment = segmentAt(timeline, p);
         const t = within(segment, p);
 
-        if (segment.kind === "dwell") {
-          dwellPose(segment.city, t, eye, target);
-        } else {
-          rideAt(segment, t, eye, target);
-          // Leave the last stop smoothly rather than cutting to the road.
-          if (segment.previous >= 0) {
-            dwellPose(segment.previous, 1, prevEye, prevTarget);
-            const blend = ease(Math.min(1, t / 0.35));
-            eye.lerpVectors(prevEye, eye, blend);
-            target.lerpVectors(prevTarget, target, blend);
-          }
-        }
+        if (segment.kind === "dwell") dwellPose(segment.city, t, eye, target);
+        else travelPose(segment, t, eye, target);
 
         camera.position.copy(eye);
         camera.lookAt(target);
@@ -478,7 +533,7 @@ export function SkillsTitlesPage() {
               : segment.kind === "travel" && segment.previous === index
                 ? Math.max(0, 1 - t / 0.3)
                 : 0;
-          stop.build.grow(built, time, focus);
+          stop.build.grow(built, phase, focus);
           stop.sprite.visible = built > 0.02;
           // The name announces the place on arrival, then gets out of the way
           // while the scrubber builds it.
@@ -552,7 +607,7 @@ export function SkillsTitlesPage() {
         <h1 className="titles__name">The Working Years</h1>
       </header>
 
-      <Tally rows={tally} open={openRows} setOpen={setOpenRows} total={total} />
+      <Tally rows={tally} open={openRows} setOpen={setOpenRows} total={total} moving={moving} />
 
       <aside className={`titles__card${atStop ? " is-on" : ""}`}>
         <h2 className="titles__card-name">{active.name}</h2>
@@ -621,16 +676,18 @@ function Tally({
   open,
   setOpen,
   total,
+  moving,
 }: {
   rows: TallyRow[];
   open: string[];
   setOpen: (next: string[]) => void;
   total: number;
+  moving: boolean;
 }) {
   const most = Math.max(1, ...rows.map((row) => row.years));
   return (
     <aside className="tally">
-      <Embers />
+      <Embers moving={moving} />
       <div className="tally__inner">
         <h2 className="tally__title">Running tally</h2>
         <p className="tally__total">
@@ -640,7 +697,7 @@ function Tally({
           {rows.map((row) => {
             const isOpen = open.includes(row.slug);
             return (
-              <li key={row.slug} className={`tally__row${row.hot ? " is-hot" : ""}`}>
+              <li key={row.slug} className={`tally__row${row.hot && moving ? " is-hot" : ""}`}>
                 <button
                   type="button"
                   className="tally__name"
@@ -675,9 +732,14 @@ function Tally({
   );
 }
 
-/** Embers drifting up behind the tally, for the heat of the thing. */
-function Embers() {
+/** Embers drifting up behind the tally, for the heat of the thing. They hold
+ * still with everything else when the scrubber is parked. */
+function Embers({ moving }: { moving: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const movingRef = useRef(moving);
+  useEffect(() => {
+    movingRef.current = moving;
+  }, [moving]);
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
@@ -704,6 +766,10 @@ function Embers() {
 
     let frame = 0;
     const draw = () => {
+      if (!movingRef.current) {
+        frame = requestAnimationFrame(draw);
+        return;
+      }
       const { width, height } = canvas;
       ctx.clearRect(0, 0, width, height);
       for (const spark of sparks) {

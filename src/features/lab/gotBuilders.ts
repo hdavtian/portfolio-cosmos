@@ -17,10 +17,11 @@ export interface Tower {
 export interface Build {
   group: ThreeTypes.Group;
   /**
-   * Called every frame: how far built (0 to 1), the clock, and how much the
-   * camera is paying attention to this stop (labels fade out once it leaves).
+   * How far built (0 to 1), a phase taken from the scrubber (never from the
+   * clock, so a parked scrubber means a still frame), and how much the camera
+   * is paying attention to this stop (labels fade once it leaves).
    */
-  grow: (eased: number, time: number, focus: number) => void;
+  grow: (eased: number, phase: number, focus: number) => void;
 }
 
 type Three = typeof ThreeTypes;
@@ -109,13 +110,13 @@ export function makeBuilders(THREE: Three, label: Label) {
     group.add(ring);
     return {
       group,
-      grow(eased, time, focus) {
+      grow(eased, phase, focus) {
         parts.forEach((part, index) => {
           const grown = Math.max(0.001, stage(eased, index, parts.length));
           part.mesh.scale.y = grown;
           part.mesh.position.y = (part.height * grown) / 2;
           // Freelance runs hot and cold; the spires breathe with it.
-          const busy = 0.55 + Math.abs(Math.sin(time * 0.35 + index * 1.4)) * 0.45;
+          const busy = 0.55 + Math.abs(Math.sin(phase * 3 + index * 1.4)) * 0.45;
           (part.mesh.material as ThreeTypes.MeshStandardMaterial).emissiveIntensity = busy;
           showTag(part, grown, focus, part.mesh.position.x, part.height * grown, part.mesh.position.z);
         });
@@ -138,13 +139,13 @@ export function makeBuilders(THREE: Three, label: Label) {
     group.add(floor);
     return {
       group,
-      grow(eased, time, focus) {
+      grow(eased, phase, focus) {
         parts.forEach((part, index) => {
           const grown = Math.max(0.001, stage(eased, index, parts.length));
           part.mesh.scale.y = grown;
           part.mesh.position.y = (part.height * grown) / 2;
           (part.mesh.material as ThreeTypes.MeshStandardMaterial).emissiveIntensity =
-            0.6 + Math.abs(Math.sin(time * 2.2 + index)) * 0.6;
+            0.6 + Math.abs(Math.sin(phase * 9 + index)) * 0.6;
           showTag(part, grown, focus, part.mesh.position.x, part.height * grown, part.mesh.position.z);
         });
         floor.scale.setScalar(0.3 + eased * 0.7);
@@ -169,12 +170,12 @@ export function makeBuilders(THREE: Three, label: Label) {
     });
     return {
       group,
-      grow(eased, time, focus) {
+      grow(eased, phase, focus) {
         parts.forEach((part, index) => {
           const grown = stage(eased, index, parts.length);
           part.mesh.scale.setScalar(Math.max(0.001, grown));
           part.mesh.position.y = part.y * grown;
-          part.mesh.rotation.y = (1 - grown) * 0.7 + Math.sin(time * 0.1 + index) * 0.02;
+          part.mesh.rotation.y = (1 - grown) * 0.7 + Math.sin(phase * 0.8 + index) * 0.02;
           showTag(part, grown, focus, part.width * 0.5 + 18, part.y * grown - 6, 0);
         });
       },
@@ -206,7 +207,7 @@ export function makeBuilders(THREE: Three, label: Label) {
     });
     return {
       group,
-      grow(eased, _time, focus) {
+      grow(eased, _phase, focus) {
         walls.forEach((wall, index) => {
           const grown = Math.max(0.001, stage(eased, index, 9));
           wall.scale.y = grown;
@@ -241,14 +242,14 @@ export function makeBuilders(THREE: Three, label: Label) {
     });
     return {
       group,
-      grow(eased, time, focus) {
+      grow(eased, phase, focus) {
         pole.scale.y = Math.max(0.001, stage(eased, 0, 3));
         pole.position.y = (height * pole.scale.y) / 2;
         parts.forEach((part, index) => {
           const grown = Math.max(0.001, stage(eased, index, parts.length));
           part.mesh.scale.setScalar(grown);
           (part.mesh.material as ThreeTypes.MeshStandardMaterial).emissiveIntensity =
-            0.4 + Math.abs(Math.sin(time * 1.2 - index * 0.7)) * 1.1;
+            0.4 + Math.abs(Math.sin(phase * 5 - index * 0.7)) * 1.1;
           showTag(part, grown, focus, part.radius * grown * 0.72, index * 4, part.radius * grown * 0.72);
         });
       },
@@ -282,8 +283,8 @@ export function makeBuilders(THREE: Three, label: Label) {
     });
     return {
       group,
-      grow(eased, time, focus) {
-        spinner.rotation.y = time * 0.11;
+      grow(eased, phase, focus) {
+        spinner.rotation.y = phase * 0.5;
         cog.scale.setScalar(Math.max(0.001, stage(eased, 0, 3)));
         parts.forEach((part, index) => {
           const grown = Math.max(0.001, stage(eased, index, parts.length));
@@ -322,12 +323,12 @@ export function makeBuilders(THREE: Three, label: Label) {
     group.add(plaza);
     return {
       group,
-      grow(eased, time, focus) {
+      grow(eased, phase, focus) {
         parts.forEach((part, index) => {
           const grown = Math.max(0.001, stage(eased, index, parts.length));
           part.mesh.scale.y = grown;
           part.mesh.position.y = (part.height * grown) / 2;
-          part.mesh.rotation.y = Math.sin(time * 0.15 + index) * 0.02;
+          part.mesh.rotation.y = Math.sin(phase * 0.7 + index) * 0.02;
           showTag(part, grown, focus, part.mesh.position.x, part.height * grown, part.mesh.position.z);
         });
         plaza.scale.setScalar(0.2 + eased * 0.8);
@@ -359,15 +360,15 @@ export function makeBuilders(THREE: Three, label: Label) {
     });
     return {
       group,
-      grow(eased, time, focus) {
+      grow(eased, phase, focus) {
         dome.scale.setScalar(Math.max(0.001, stage(eased, 0, 3)));
         arcs.forEach((arc, index) => {
           arc.scale.setScalar(Math.max(0.001, stage(eased, index, 4)));
-          arc.rotation.z += 0.0014 * (index + 1);
+          arc.rotation.z = index * 0.6 + phase * 0.12 * (index + 1);
         });
         parts.forEach((part, index) => {
           const grown = Math.max(0.001, stage(eased, index, parts.length));
-          const angle = time * part.speed + index;
+          const angle = phase * part.speed + index;
           const x = Math.cos(angle) * part.radius * grown;
           const y = 9 + Math.sin(angle + part.tilt) * 6;
           const z = Math.sin(angle) * part.radius * grown;
@@ -407,21 +408,26 @@ export const KIND_BY_PLACE: Record<string, string> = {
 
 export const KIND_ORDER = ["spires", "racks", "ziggurat", "keep", "mast", "carousel", "skyline", "orrery"];
 
-/** How the camera behaves while the scrubber builds a stop: a sweep, a crane, a push in. */
+/**
+ * How a stop is filmed. The camera always arrives on the heading it was
+ * travelling and leaves on the heading of the next leg, so these only say how
+ * it behaves in between: how far it swings past the straight line, how much
+ * it pulls back or pushes in, and how much it rises.
+ */
 export interface Move {
-  sweep: number;
-  radius: [number, number];
-  height: [number, number];
+  swing: number;
+  zoom: number;
+  lift: number;
   look: number;
 }
 
 export const MOVES: Record<string, Move> = {
-  spires: { sweep: -1.1, radius: [110, 90], height: [52, 42], look: 32 },
-  racks: { sweep: 0.9, radius: [110, 74], height: [52, 30], look: 18 },
-  ziggurat: { sweep: -1.4, radius: [110, 82], height: [52, 62], look: 22 },
-  keep: { sweep: 1.5, radius: [110, 88], height: [52, 30], look: 20 },
-  mast: { sweep: -1.8, radius: [110, 98], height: [52, 68], look: 32 },
-  carousel: { sweep: 1.2, radius: [110, 78], height: [52, 42], look: 24 },
-  skyline: { sweep: -1.5, radius: [110, 106], height: [52, 82], look: 38 },
-  orrery: { sweep: 2.1, radius: [110, 84], height: [52, 52], look: 24 },
+  spires: { swing: -0.55, zoom: -16, lift: 8, look: 26 },
+  racks: { swing: 0.4, zoom: -30, lift: -8, look: 14 },
+  ziggurat: { swing: -0.7, zoom: -18, lift: 20, look: 18 },
+  keep: { swing: 0.75, zoom: -22, lift: -6, look: 16 },
+  mast: { swing: -0.5, zoom: 16, lift: 24, look: 28 },
+  carousel: { swing: 0.85, zoom: -26, lift: 6, look: 20 },
+  skyline: { swing: -0.6, zoom: 20, lift: 28, look: 32 },
+  orrery: { swing: 0.95, zoom: -18, lift: 12, look: 20 },
 };
