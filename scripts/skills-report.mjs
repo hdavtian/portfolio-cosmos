@@ -38,7 +38,6 @@ const yearsBetween = (from, to) => (to - from + 1) / 12;
 
 const places = [
   ...data.jobs.map((job) => ({ ...job, kind: "job", name: job.company })),
-  ...(data.outsideWork ?? []).map((period) => ({ ...period, kind: "outside", name: period.label, slug: period.label })),
 ];
 for (const place of places) {
   place.from = toMonths(place.start);

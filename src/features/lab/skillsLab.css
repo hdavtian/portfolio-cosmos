@@ -151,26 +151,77 @@
   color: var(--lab-dim);
 }
 
-/* 02 ribbon */
+/* 02 ribbon, pinned while it plays */
+.lab-lock {
+  /* Tall enough that the reveal takes a comfortable scroll, then releases. */
+  height: 280vh;
+  margin-top: 18px;
+}
+
+.lab-lock__stage {
+  position: sticky;
+  top: 0;
+  /* Sits over the page's year rail, which the panel's own readout replaces. */
+  z-index: 6;
+  background: radial-gradient(ellipse at 20% -40%, #0d2030 0%, #05080c 60%, #04060a 100%);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 58px 0 18px;
+  box-sizing: border-box;
+}
+
+.lab-lock__head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+.lab-lock__year {
+  font-family: var(--lab-display);
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+  color: #7ae29c;
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-lock__live,
+.lab-lock__hint {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lab-dim);
+}
+
+.lab-lock__hint {
+  margin-left: auto;
+}
+
 .lab-ribbon {
   position: relative;
-  overflow-x: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .lab-ribbon__svg {
+  display: block;
   width: 100%;
-  min-width: 860px;
+  height: 100%;
 }
 
 .lab-ribbon__label {
   fill: rgba(232, 244, 240, 0.8);
   font-family: var(--lab-mono);
-  font-size: 10px;
+}
+
+.lab-ribbon__guide {
+  stroke: rgba(232, 244, 240, 0.07);
 }
 
 .lab-ribbon__bar {
   opacity: 0.45;
-  rx: 2;
 }
 
 .lab-ribbon__bar.is-exact {
@@ -200,6 +251,7 @@
   background: #7ae29c;
   box-shadow: 0 0 12px rgba(122, 226, 156, 0.9);
   pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
 /* 03 stream */
@@ -234,21 +286,27 @@
   border-radius: 50%;
 }
 
-/* 04 pulse */
-.lab-pulse {
-  display: block;
-  width: 100%;
-  height: 220px;
-  background: #060a0e;
-  border: 1px solid rgba(122, 226, 156, 0.22);
-}
-
-/* 05 terrain */
+/* 04 terrain */
 .lab-terrain {
   width: 100%;
   height: 380px;
   border: 1px solid rgba(232, 244, 240, 0.12);
   background: radial-gradient(ellipse at 50% 120%, rgba(20, 60, 80, 0.5), rgba(4, 8, 12, 0.9));
+}
+
+.lab-terrain {
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.lab-terrain:active {
+  cursor: grabbing;
+}
+
+.lab-terrain__reading {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--lab-dim);
 }
 
 .lab-terrain canvas {
@@ -257,15 +315,20 @@
   height: 100%;
 }
 
-/* 06 matrix */
+/* 05 matrix */
 .lab-matrix {
   overflow-x: auto;
 }
 
 .lab-matrix table {
+  width: 100%;
   border-collapse: collapse;
   font-size: 11px;
   min-width: 720px;
+}
+
+.lab-matrix tbody th {
+  width: 22%;
 }
 
 .lab-matrix th,
@@ -288,6 +351,61 @@
   white-space: nowrap;
 }
 
+.lab-matrix__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.lab-matrix__toggle:hover,
+.lab-matrix__group.is-open .lab-matrix__toggle {
+  color: #7ae29c;
+}
+
+.lab-matrix__chevron {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid currentColor;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.lab-matrix__count {
+  color: var(--lab-dim);
+  font-size: 10px;
+}
+
+.lab-matrix__group > th,
+.lab-matrix__group > td {
+  border-bottom: 1px solid rgba(232, 244, 240, 0.16);
+}
+
+.lab-matrix__detail th,
+.lab-matrix__detail td {
+  color: var(--lab-dim);
+  background: rgba(122, 226, 156, 0.04);
+}
+
+.lab-matrix__detail th {
+  padding-left: 26px;
+}
+
+.lab-matrix__total {
+  font-variant-numeric: tabular-nums;
+  color: var(--lab-ink);
+}
+
 .lab-matrix__cell {
   display: inline-grid;
   place-items: center;
@@ -297,19 +415,7 @@
   font-weight: 700;
 }
 
-/* 07 rings */
-.lab-rings {
-  width: min(100%, 460px);
-}
-
-.lab-rings__label {
-  fill: rgba(232, 244, 240, 0.72);
-  font-family: var(--lab-mono);
-  font-size: 9px;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .lab-pulse,
   .lab-terrain {
     display: none;
   }

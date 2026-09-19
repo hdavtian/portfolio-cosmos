@@ -1,5 +1,5 @@
 {
-  "comment": "MOCK DATA, not wired into the site. How long each skill was used, in years, at each job. No self-ratings. Three ways to state a use, most precise first: (1) 'from'/'to' actual years; (2) 'years' plus 'when' (start, middle, end) for where it sat in the job; (3) 'years' alone, assumed to overlap the job's other skills, so a category takes the longest rather than the sum. Categories are flat and a skill can belong to several ('scss' is both Styling and Frontend). A skill may have a 'parent' when it is part of another ('C# Web API' inside 'C#'): categories count parents, children add detail. Caps: a skill can't outlast its job, and a total can't outlast the real calendar span of the jobs it came from. Run: npm run skills:report",
+  "comment": "MOCK DATA, not wired into the site. How long each skill was used, in years, at each job. No self-ratings. Three ways to state a use, most precise first: (1) 'from'/'to' actual years; (2) 'years' plus 'when' (start, middle, end) for where it sat in the job; (3) 'years' alone, assumed to overlap the job's other skills, so a category takes the longest rather than the sum. Categories are flat and a skill can belong to several ('scss' is both Styling and Frontend). A skill may have a 'parent' when it is part of another ('C# Web API' inside 'C#'): categories count parents, children add detail. Caps: a skill can't outlast its job, and a total can't outlast the real calendar span of the jobs it came from. Own-studio work (including this site) sits under StormScape. Run: npm run skills:report",
   "categories": [
     {
       "slug": "backend",
@@ -619,13 +619,13 @@
           "years": 10
         }
       ]
-    }
-  ],
-  "outsideWork": [
+    },
     {
-      "label": "harmadavtian.com (this site)",
+      "slug": "stormscape-now",
+      "company": "StormScape (own studio, current)",
+      "title": "Own projects, including this site",
       "start": "2025-01",
-      "end": "2026-09",
+      "end": null,
       "uses": [
         {
           "skill": "react",

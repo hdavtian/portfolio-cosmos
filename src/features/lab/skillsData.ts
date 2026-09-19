@@ -30,9 +30,10 @@ export interface Category {
 export interface Place {
   slug: string;
   name: string;
+  /** The company on its own, for tight column headers. */
+  short: string;
   from: number;
   to: number;
-  kind: "job" | "outside";
 }
 
 const yearOf = (value: string | undefined, fallback: number) =>
@@ -44,27 +45,17 @@ export const categories: Category[] = [...mock.categories].sort((a, b) => a.sort
 export const skills = mock.skills as Array<{ slug: string; name: string; categories?: string[]; parent?: string }>;
 const skillsBySlug = new Map(skills.map((skill) => [skill.slug, skill]));
 
-export const places: Place[] = [
-  ...mock.jobs.map((job) => ({
-    slug: job.slug,
-    name: job.company,
-    from: yearOf(job.start, 2000),
-    to: yearOf(job.end, NOW_YEAR),
-    kind: "job" as const,
-  })),
-  ...(mock.outsideWork ?? []).map((period) => ({
-    slug: period.label,
-    name: period.label,
-    from: yearOf(period.start, 2000),
-    to: yearOf(period.end, NOW_YEAR),
-    kind: "outside" as const,
-  })),
-];
+export const places: Place[] = mock.jobs.map((job) => ({
+  slug: job.slug,
+  name: job.company,
+  short: job.company.split(/[ (]/)[0],
+  from: yearOf(job.start ?? undefined, 2000),
+  to: yearOf(job.end ?? undefined, NOW_YEAR),
+}));
 
-const rawUses = [
-  ...mock.jobs.flatMap((job) => job.uses.map((use) => ({ ...use, place: job.slug }))),
-  ...(mock.outsideWork ?? []).flatMap((period) => period.uses.map((use) => ({ ...use, place: period.label }))),
-] as Array<{ skill: string; place: string; years?: number; when?: string; from?: number; to?: number }>;
+const rawUses = mock.jobs.flatMap((job) =>
+  job.uses.map((use) => ({ ...use, place: job.slug })),
+) as Array<{ skill: string; place: string; years?: number; when?: string; from?: number; to?: number }>;
 
 export const spans: SkillSpan[] = rawUses
   .map((use) => {
@@ -138,8 +129,13 @@ export const categoryTotals = categories.map((category) => {
   const perYear = YEARS.map(
     (year) => clipped.filter((span) => span.from <= year + 0.999 && span.to >= year).length,
   );
+  const byPlace = new Map(
+    places.map((place) => [place.slug, totalYears(clipped.filter((span) => span.place === place.slug))]),
+  );
   return {
     ...category,
+    byPlace,
+    skills: [...new Set(clipped.map((span) => span.skill))],
     years: totalYears(clipped),
     first: clipped.length ? Math.min(...clipped.map((span) => span.from)) : 0,
     last: clipped.length ? Math.max(...clipped.map((span) => span.to)) : 0,

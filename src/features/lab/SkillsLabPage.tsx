@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 import {
   FIRST_YEAR,
@@ -10,7 +10,6 @@ import {
   say,
   skillTotals,
   skillsLiveIn,
-  spans,
 } from "./skillsData";
 import "./skillsLab.css";
 
@@ -26,7 +25,7 @@ export function SkillsLabPage() {
     <div className="lab">
       <header className="lab__head">
         <p className="lab__eyebrow">Sketches · mock data</p>
-        <h1 className="lab__title">Twenty-five years, six ways</h1>
+        <h1 className="lab__title">Twenty-five years, four ways</h1>
         <p className="lab__lede">
           Every panel below reads the same mock timeline. Scroll: the year marker moves with you, from the first
           line of HTML to today.
@@ -44,11 +43,11 @@ export function SkillsLabPage() {
       <section className="lab__panel">
         <h2 className="lab__panel-title">02 · Career ribbon</h2>
         <p className="lab__panel-note">
-          Every skill as a bar across the calendar. Exact ranges are solid, estimates are hatched. The line follows
-          your scroll.
+          Every skill as a bar across the calendar. The panel holds still while you scroll through it, drawing
+          2000 to today left to right; when it reaches the end the page carries on.
         </p>
-        <Ribbon year={year} />
       </section>
+      <RibbonLock />
 
       <section className="lab__panel">
         <h2 className="lab__panel-title">03 · What the stack looked like</h2>
@@ -60,33 +59,21 @@ export function SkillsLabPage() {
       </section>
 
       <section className="lab__panel">
-        <h2 className="lab__panel-title">04 · Pulse</h2>
+        <h2 className="lab__panel-title">04 · Terrain</h2>
         <p className="lab__panel-note">
-          A heartbeat where each beat is a year: the taller the spike, the more skills in play. It runs on its own,
-          left to right, and starts again at the beginning.
-        </p>
-        <Pulse />
-      </section>
-
-      <section className="lab__panel">
-        <h2 className="lab__panel-title">05 · Terrain</h2>
-        <p className="lab__panel-note">
-          The same numbers as a landscape: years run one way, categories the other, height is depth of work. It
-          breathes, and turns slowly.
+          The same numbers as a landscape: years run left to right, categories run back, and height is how many
+          skills in that category were live that year. Drag to turn it.
         </p>
         <Terrain />
       </section>
 
       <section className="lab__panel">
-        <h2 className="lab__panel-title">06 · The grid</h2>
-        <p className="lab__panel-note">Your table, with the years in the cells: where each skill was used, and for how long.</p>
+        <h2 className="lab__panel-title">05 · The grid</h2>
+        <p className="lab__panel-note">
+          Categories by job, with the years in the cells. Click a row to open it up and see which skills those
+          years came from.
+        </p>
         <Matrix />
-      </section>
-
-      <section className="lab__panel">
-        <h2 className="lab__panel-title">07 · Rings</h2>
-        <p className="lab__panel-note">Categories as arcs; length is years, so the shape of the career reads at a glance.</p>
-        <Rings />
       </section>
 
       <footer className="lab__foot">
@@ -183,59 +170,149 @@ const CATEGORY_COLOURS = d3.scaleOrdinal<string, string>(
   ["#6ad7ff", "#7ae29c", "#ffd084", "#ff9ecb", "#a7b6ff", "#b8ffd9", "#ffb8ef", "#ffe2b3", "#9beaff", "#d6f4ff"],
 );
 
-function Ribbon({ year }: { year: number }) {
-  const ref = useRef<SVGSVGElement>(null);
+/** How far a tall wrapper has been scrolled through, 0 to 1, while its stage is pinned. */
+function useLockProgress(ref: React.RefObject<HTMLElement | null>) {
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    const onScroll = () => {
+      const element = ref.current;
+      if (!element) return;
+      const box = element.getBoundingClientRect();
+      const travel = box.height - window.innerHeight;
+      setProgress(travel > 0 ? Math.min(1, Math.max(0, -box.top / travel)) : 0);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [ref]);
+  return progress;
+}
+
+/** The size of an element, so an SVG can be drawn in real pixels. */
+function useBox(ref: React.RefObject<HTMLElement | null>) {
+  const [box, setBox] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setBox({ width, height });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return box;
+}
+
+/**
+ * The ribbon, squeezed to one screen and played left to right: the section is
+ * tall, the panel sticks to the viewport while it passes, and page scrolling
+ * resumes once the last year is drawn.
+ */
+function RibbonLock() {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const plotRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const progress = useLockProgress(wrapRef);
+  const box = useBox(plotRef);
   const rows = useMemo(() => skillTotals.filter((skill) => !skill.parent), []);
 
+  const LEFT = 215;
+  const RIGHT = 18;
+  const AXIS = 22;
+
   useEffect(() => {
-    const svg = d3.select(ref.current);
-    const width = 980;
-    const rowHeight = 22;
-    const height = rows.length * rowHeight + 34;
+    const { width, height } = box;
+    if (!width || !height) return;
+    const svg = d3.select(svgRef.current);
     svg.attr("viewBox", `0 0 ${width} ${height}`).selectAll("*").remove();
 
-    const x = d3.scaleLinear().domain([FIRST_YEAR, LAST_YEAR]).range([190, width - 20]);
+    const rowHeight = (height - AXIS - 6) / rows.length;
+    const x = d3.scaleLinear().domain([FIRST_YEAR, LAST_YEAR]).range([LEFT, width - RIGHT]);
+
+    svg
+      .append("clipPath")
+      .attr("id", "lab-ribbon-clip")
+      .append("rect")
+      .attr("class", "lab-ribbon__clip-rect")
+      .attr("x", LEFT)
+      .attr("y", 0)
+      .attr("height", height);
 
     svg
       .append("g")
       .attr("class", "lab-ribbon__axis")
-      .attr("transform", `translate(0,${height - 22})`)
-      .call(d3.axisBottom(x).tickFormat(d3.format("d")).ticks(8));
+      .attr("transform", `translate(0,${height - AXIS})`)
+      .call(d3.axisBottom(x).tickFormat(d3.format("d")).ticks(width < 700 ? 5 : 9));
 
     const row = svg
       .selectAll(".lab-ribbon__row")
       .data(rows)
       .join("g")
       .attr("class", "lab-ribbon__row")
-      .attr("transform", (_, i) => `translate(0,${i * rowHeight + 8})`);
+      .attr("transform", (_, i) => `translate(0,${i * rowHeight + 3})`);
 
     row
       .append("text")
       .attr("class", "lab-ribbon__label")
-      .attr("x", 182)
-      .attr("y", 12)
+      .attr("x", LEFT - 10)
+      .attr("y", rowHeight * 0.72)
       .attr("text-anchor", "end")
-      .text((skill) => skill.name);
+      .style("font-size", `${Math.min(11, rowHeight * 0.62)}px`)
+      .text((skill) => (skill.name.length > 26 ? `${skill.name.slice(0, 25)}…` : skill.name));
+
+    row
+      .append("line")
+      .attr("class", "lab-ribbon__guide")
+      .attr("x1", LEFT)
+      .attr("x2", width - RIGHT)
+      .attr("y1", rowHeight * 0.5)
+      .attr("y2", rowHeight * 0.5);
 
     row
       .selectAll(".lab-ribbon__bar")
       .data((skill) => skill.spans)
       .join("rect")
       .attr("class", (span) => `lab-ribbon__bar${span.exact ? " is-exact" : ""}`)
+      .attr("clip-path", "url(#lab-ribbon-clip)")
       .attr("x", (span) => x(span.from))
-      .attr("y", 3)
-      .attr("height", rowHeight - 9)
+      .attr("y", rowHeight * 0.16)
+      .attr("height", Math.max(3, rowHeight * 0.66))
       .attr("width", (span) => Math.max(2, x(span.to) - x(span.from)))
       .attr("fill", (span) => CATEGORY_COLOURS(span.categories[0] ?? "backend"))
       .append("title")
       .text((span) => `${span.skillName} · ${span.placeName} · ${Math.round(span.from)}–${Math.round(span.to)}`);
-  }, [rows]);
+  }, [box, rows]);
 
-  const ratio = (year - FIRST_YEAR) / (LAST_YEAR - FIRST_YEAR);
+  // Only the reveal moves as you scroll, so the chart itself is never redrawn.
+  useEffect(() => {
+    const { width } = box;
+    if (!width) return;
+    const plotWidth = width - RIGHT - LEFT;
+    d3.select(svgRef.current).select(".lab-ribbon__clip-rect").attr("width", plotWidth * progress);
+  }, [box, progress]);
+
+  const year = FIRST_YEAR + progress * (LAST_YEAR - FIRST_YEAR);
+  const live = skillsLiveIn(year);
+  const markerLeft = box.width ? LEFT + (box.width - LEFT - RIGHT) * progress : 0;
+
   return (
-    <div className="lab-ribbon">
-      <svg ref={ref} className="lab-ribbon__svg" role="img" aria-label="Every skill as a bar across the calendar" />
-      <span className="lab-ribbon__now" style={{ left: `calc(19.4% + ${ratio * 78}%)` }} />
+    <div className="lab-lock" ref={wrapRef}>
+      <div className="lab-lock__stage">
+        <div className="lab-lock__head">
+          <span className="lab-lock__year">{Math.round(year)}</span>
+          <span className="lab-lock__live">{live} skills in play</span>
+          <span className="lab-lock__hint">{progress >= 0.999 ? "done — keep scrolling" : "scroll to play"}</span>
+        </div>
+        <div className="lab-ribbon" ref={plotRef}>
+          <svg ref={svgRef} className="lab-ribbon__svg" role="img" aria-label="Every skill as a bar across the calendar" />
+          <span className="lab-ribbon__now" style={{ left: `${markerLeft}px`, opacity: progress > 0.004 ? 1 : 0 }} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -306,86 +383,14 @@ function Stream({ year }: { year: number }) {
   );
 }
 
-/** A heartbeat trace: one beat per year, amplitude from how much was in play. */
-function Pulse() {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const dpr = Math.min(window.devicePixelRatio, 2);
-    const resize = () => {
-      canvas.width = canvas.clientWidth * dpr;
-      canvas.height = canvas.clientHeight * dpr;
-    };
-    resize();
-    window.addEventListener("resize", resize);
-
-    const beats = YEARS.map((yearValue) => ({ year: yearValue, live: skillsLiveIn(yearValue) }));
-    const peak = Math.max(...beats.map((beat) => beat.live));
-    let frame = 0;
-    let head = 0;
-    const speed = 0.22; // years per frame-ish
-
-    const draw = () => {
-      const { width, height } = canvas;
-      ctx.fillStyle = "rgba(6, 10, 14, 0.18)";
-      ctx.fillRect(0, 0, width, height);
-
-      const mid = height * 0.62;
-      const step = width / (beats.length - 1);
-      ctx.lineWidth = 2 * dpr;
-      ctx.strokeStyle = "#7ae29c";
-      ctx.shadowColor = "rgba(122, 226, 156, 0.8)";
-      ctx.shadowBlur = 12 * dpr;
-      ctx.beginPath();
-      ctx.moveTo(0, mid);
-
-      for (let i = 0; i < beats.length; i += 1) {
-        const x = i * step;
-        if (x > head * step) break;
-        const amplitude = (beats[i].live / peak) * height * 0.42;
-        // A beat: small dip, tall spike, overshoot, settle.
-        ctx.lineTo(x - step * 0.34, mid);
-        ctx.lineTo(x - step * 0.22, mid + amplitude * 0.16);
-        ctx.lineTo(x - step * 0.1, mid - amplitude);
-        ctx.lineTo(x, mid + amplitude * 0.34);
-        ctx.lineTo(x + step * 0.12, mid);
-      }
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      const headIndex = Math.min(beats.length - 1, Math.floor(head));
-      ctx.fillStyle = "#eafff4";
-      ctx.beginPath();
-      ctx.arc(headIndex * step, mid, 3 * dpr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.font = `${12 * dpr}px "JetBrains Mono", monospace`;
-      ctx.fillStyle = "rgba(234, 255, 244, 0.75)";
-      ctx.fillText(`${beats[headIndex].year}  ${beats[headIndex].live} skills`, 10 * dpr, 20 * dpr);
-
-      head += speed;
-      if (head > beats.length + 6) {
-        head = 0;
-        ctx.fillStyle = "#060a0e";
-        ctx.fillRect(0, 0, width, height);
-      }
-      frame = requestAnimationFrame(draw);
-    };
-    frame = requestAnimationFrame(draw);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener("resize", resize);
-    };
-  }, []);
-
-  return <canvas ref={ref} className="lab-pulse" aria-label="A heartbeat of skills in play per year" />;
-}
-
-/** Years across, categories deep, height is how much was in play: a landscape that breathes. */
+/**
+ * Years across, categories back, height is how many skills of that category
+ * were live that year. Labelled on both axes so the shape can be read.
+ */
 function Terrain() {
   const ref = useRef<HTMLDivElement>(null);
+  const [reading, setReading] = useState<string | null>(null);
+
   useEffect(() => {
     const host = ref.current;
     if (!host) return;
@@ -396,61 +401,138 @@ function Terrain() {
       if (disposed) return;
       const rows = categoryTotals.filter((category) => !category.era);
       const cols = YEARS.length;
+      const WIDTH = 26;
+      const DEPTH = 15;
+      const HEIGHT_UNIT = 0.62;
+
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-      const size = () => renderer.setSize(host.clientWidth, host.clientHeight, false);
       host.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-      const geometry = new THREE.PlaneGeometry(26, 10, cols - 1, rows.length - 1);
-      const colours = new Float32Array(geometry.attributes.position.count * 3);
-      const heights: number[] = [];
+      const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 120);
+      const world = new THREE.Group();
+      scene.add(world);
+
+      const geometry = new THREE.PlaneGeometry(WIDTH, DEPTH, cols - 1, rows.length - 1);
       const position = geometry.attributes.position;
+      const colours = new Float32Array(position.count * 3);
+      const heights: number[] = [];
+      const peak = Math.max(1, ...rows.flatMap((row) => row.perYear));
       for (let i = 0; i < position.count; i += 1) {
         const col = i % cols;
-        const row = Math.floor(i / cols);
-        const category = rows[Math.min(rows.length - 1, row)];
-        const value = category.perYear[col] ?? 0;
+        const row = Math.min(rows.length - 1, Math.floor(i / cols));
+        const value = rows[row].perYear[col] ?? 0;
         heights.push(value);
-        const colour = new THREE.Color(CATEGORY_COLOURS(category.slug));
-        colour.multiplyScalar(0.35 + Math.min(1, value / 4) * 0.8);
+        const colour = new THREE.Color(CATEGORY_COLOURS(rows[row].slug));
+        colour.multiplyScalar(0.3 + (value / peak) * 0.9);
         colours.set([colour.r, colour.g, colour.b], i * 3);
       }
       geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
-      const material = new THREE.MeshBasicMaterial({ vertexColors: true, wireframe: true, transparent: true, opacity: 0.9 });
+      const material = new THREE.MeshBasicMaterial({ vertexColors: true, wireframe: true, transparent: true, opacity: 0.92 });
       const mesh = new THREE.Mesh(geometry, material);
-      mesh.rotation.x = -Math.PI / 2.6;
-      scene.add(mesh);
-      camera.position.set(0, 9, 17);
+      mesh.rotation.x = -Math.PI / 2;
+      world.add(mesh);
+
+      // A label drawn to a canvas, hung in the scene so the axes can be read.
+      const label = (text: string, colour: string, scale: number) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 448;
+        canvas.height = 64;
+        const ctx = canvas.getContext("2d")!;
+        ctx.font = '600 32px "JetBrains Mono", Menlo, monospace';
+        ctx.fillStyle = colour;
+        ctx.textBaseline = "middle";
+        // Right-aligned, so the axis names stack against the edge of the surface.
+        ctx.textAlign = "right";
+        ctx.fillText(text, canvas.width - 6, 34);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+        sprite.scale.set(scale * 7, scale, 1);
+        return sprite;
+      };
+
+      const stepX = WIDTH / (cols - 1);
+      YEARS.forEach((yearValue, index) => {
+        if (yearValue % 5 !== 0) return;
+        const tick = label(String(yearValue), "rgba(232,244,240,0.75)", 0.9);
+        tick.position.set(-WIDTH / 2 + index * stepX + 1.4, 0.2, DEPTH / 2 + 1.4);
+        world.add(tick);
+      });
+
+      const stepZ = DEPTH / (rows.length - 1);
+      rows.forEach((row, index) => {
+        const tag = label(row.name, CATEGORY_COLOURS(row.slug), 0.78);
+        tag.position.set(-WIDTH / 2 - 3.0, 0.5, -DEPTH / 2 + index * stepZ);
+        world.add(tag);
+      });
+
+      camera.position.set(0, 10, 21);
       camera.lookAt(0, 0, 0);
 
       const resize = () => {
-        size();
+        renderer.setSize(host.clientWidth, host.clientHeight, false);
         camera.aspect = host.clientWidth / Math.max(1, host.clientHeight);
         camera.updateProjectionMatrix();
       };
       resize();
       window.addEventListener("resize", resize);
 
+      // Drag to turn; otherwise it drifts on its own.
+      let spin = 0;
+      let drift = true;
+      let dragging = false;
+      let lastX = 0;
+      const down = (event: PointerEvent) => {
+        dragging = true;
+        drift = false;
+        lastX = event.clientX;
+        host.setPointerCapture(event.pointerId);
+      };
+      const move = (event: PointerEvent) => {
+        if (!dragging) return;
+        spin += (event.clientX - lastX) * 0.006;
+        lastX = event.clientX;
+      };
+      const up = () => {
+        dragging = false;
+      };
+      host.addEventListener("pointerdown", down);
+      host.addEventListener("pointermove", move);
+      host.addEventListener("pointerup", up);
+      host.addEventListener("pointerleave", up);
+
       let frame = 0;
       const start = performance.now();
       const render = () => {
         const time = (performance.now() - start) / 1000;
+        // The surface settles into its real heights, then breathes gently.
+        const rise = Math.min(1, time / 1.6);
         for (let i = 0; i < position.count; i += 1) {
-          const wave = Math.sin(time * 1.2 + i * 0.09) * 0.22;
-          position.setZ(i, heights[i] * 0.5 + wave);
+          position.setZ(i, heights[i] * HEIGHT_UNIT * rise + Math.sin(time * 0.9 + i * 0.07) * 0.07);
         }
         position.needsUpdate = true;
-        mesh.rotation.z = Math.sin(time * 0.15) * 0.12;
+        if (drift) spin = Math.sin(time * 0.12) * 0.28;
+        world.rotation.y = spin;
         renderer.render(scene, camera);
         frame = requestAnimationFrame(render);
       };
       frame = requestAnimationFrame(render);
 
+      const busiest = YEARS.map((yearValue, index) => ({
+        year: yearValue,
+        total: rows.reduce((sum, row) => sum + row.perYear[index], 0),
+      })).sort((a, b) => b.total - a.total)[0];
+      setReading(`Tallest ridge: ${busiest.year}, ${busiest.total} skills live across ${rows.length} categories.`);
+
       cleanup = () => {
         cancelAnimationFrame(frame);
         window.removeEventListener("resize", resize);
+        host.removeEventListener("pointerdown", down);
+        host.removeEventListener("pointermove", move);
+        host.removeEventListener("pointerup", up);
+        host.removeEventListener("pointerleave", up);
         geometry.dispose();
         material.dispose();
         renderer.dispose();
@@ -464,90 +546,91 @@ function Terrain() {
     };
   }, []);
 
-  return <div ref={ref} className="lab-terrain" aria-label="Skills as a landscape" />;
+  return (
+    <>
+      <div ref={ref} className="lab-terrain" aria-label="Skills as a landscape" />
+      <p className="lab-terrain__reading">{reading ?? "Height is skills live that year."}</p>
+    </>
+  );
 }
 
+/** Categories by job, opening up into the skills underneath them. */
 function Matrix() {
-  const rows = skillTotals.filter((skill) => !skill.parent).slice(0, 18);
-  const maxYears = Math.max(...spans.map((span) => span.to - span.from));
+  const [open, setOpen] = useState<string[]>([]);
+  const rows = useMemo(() => categoryTotals.filter((category) => category.years > 0), []);
+  const skillsBySlug = useMemo(() => new Map(skillTotals.map((skill) => [skill.slug, skill])), []);
+  const maxYears = Math.max(...rows.flatMap((row) => [...row.byPlace.values()]));
+
+  const toggle = (slug: string) =>
+    setOpen((current) => (current.includes(slug) ? current.filter((entry) => entry !== slug) : [...current, slug]));
+
+  const cell = (years: number, colour: string) =>
+    years > 0.05 ? (
+      <span className="lab-matrix__cell" style={{ opacity: 0.3 + (years / maxYears) * 0.7, background: colour }}>
+        {years >= 1 ? Math.round(years) : "<1"}
+      </span>
+    ) : null;
+
   return (
     <div className="lab-matrix">
       <table>
         <thead>
           <tr>
-            <th />
+            <th>Category</th>
             {places.map((place) => (
-              <th key={place.slug}>{place.name.split(" ")[0]}</th>
+              <th key={place.slug} title={`${place.name} · ${Math.round(place.from)}–${Math.round(place.to)}`}>
+                {place.short}
+              </th>
             ))}
+            <th>Total</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((skill) => (
-            <tr key={skill.slug}>
-              <th scope="row">{skill.name}</th>
-              {places.map((place) => {
-                const span = skill.spans.find((entry) => entry.place === place.slug);
-                const years = span ? span.to - span.from : 0;
-                return (
-                  <td key={place.slug}>
-                    {years > 0 ? (
-                      <span
-                        className="lab-matrix__cell"
-                        style={{ opacity: 0.25 + (years / maxYears) * 0.75, background: CATEGORY_COLOURS(skill.categories?.[0] ?? "backend") }}
-                      >
-                        {Math.round(years)}
+          {rows.map((category) => {
+            const isOpen = open.includes(category.slug);
+            return (
+              <Fragments key={category.slug}>
+                <tr className={`lab-matrix__group${isOpen ? " is-open" : ""}`}>
+                  <th scope="row">
+                    <button type="button" className="lab-matrix__toggle" onClick={() => toggle(category.slug)} aria-expanded={isOpen}>
+                      <span className="lab-matrix__chevron" aria-hidden="true">
+                        {isOpen ? "–" : "+"}
                       </span>
-                    ) : null}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
+                      {category.name}
+                      <span className="lab-matrix__count">{category.skills.length}</span>
+                    </button>
+                  </th>
+                  {places.map((place) => (
+                    <td key={place.slug}>{cell(category.byPlace.get(place.slug) ?? 0, CATEGORY_COLOURS(category.slug))}</td>
+                  ))}
+                  <td className="lab-matrix__total">{say(category.years)}</td>
+                </tr>
+                {isOpen
+                  ? category.skills.map((slug) => {
+                      const skill = skillsBySlug.get(slug);
+                      if (!skill) return null;
+                      return (
+                        <tr key={`${category.slug}-${slug}`} className="lab-matrix__detail">
+                          <th scope="row">{skill.name}</th>
+                          {places.map((place) => {
+                            const span = skill.spans.find((entry) => entry.place === place.slug);
+                            return <td key={place.slug}>{cell(span ? span.to - span.from : 0, "rgba(232,244,240,0.75)")}</td>;
+                          })}
+                          <td className="lab-matrix__total">{say(skill.years)}</td>
+                        </tr>
+                      );
+                    })
+                  : null}
+              </Fragments>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
-function Rings() {
-  const ref = useRef<SVGSVGElement>(null);
-  useEffect(() => {
-    const svg = d3.select(ref.current);
-    const size = 420;
-    svg.attr("viewBox", `0 0 ${size} ${size}`).selectAll("*").remove();
-    const rows = categoryTotals.filter((category) => category.years > 0).sort((a, b) => b.years - a.years);
-    const max = Math.max(...rows.map((row) => row.years));
-    const centre = svg.append("g").attr("transform", `translate(${size / 2},${size / 2})`);
-
-    rows.forEach((row, index) => {
-      const radius = 40 + index * 17;
-      const angle = (row.years / max) * Math.PI * 1.85;
-      const arc = d3.arc().innerRadius(radius).outerRadius(radius + 12).startAngle(0);
-      centre
-        .append("path")
-        .attr("d", arc({ endAngle: Math.PI * 1.85 } as d3.DefaultArcObject) as string)
-        .attr("fill", "rgba(255,255,255,0.06)");
-      const path = centre
-        .append("path")
-        .attr("fill", CATEGORY_COLOURS(row.slug))
-        .attr("opacity", 0.9)
-        .attr("d", arc({ endAngle: 0 } as d3.DefaultArcObject) as string);
-      path
-        .transition()
-        .delay(index * 90)
-        .duration(1100)
-        .attrTween("d", () => {
-          const interpolate = d3.interpolate(0, angle);
-          return (t) => arc({ endAngle: interpolate(t) } as d3.DefaultArcObject) as string;
-        });
-      centre
-        .append("text")
-        .attr("class", "lab-rings__label")
-        .attr("x", 6)
-        .attr("y", -radius - 2)
-        .text(`${row.name}  ${say(row.years)}`);
-    });
-  }, []);
-
-  return <svg ref={ref} className="lab-rings" role="img" aria-label="Categories as arcs" />;
+/** A table body can't take a wrapper element, so group rows with a fragment. */
+function Fragments({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }
