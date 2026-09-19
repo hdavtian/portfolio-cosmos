@@ -884,7 +884,21 @@ export function SkillsTitlesPage() {
   const dwellStarts = timeline.filter((entry) => entry.kind === "dwell");
 
   return (
-    <div className="titles" ref={rootRef}>
+    <div
+      className="titles"
+      ref={rootRef}
+      onClick={(event) => {
+        // Anywhere that isn't a control of its own stops and starts the film.
+        if ((event.target as HTMLElement).closest("button, input, a, .tally")) return;
+        if (playing) {
+          setPlaying(false);
+          return;
+        }
+        if (direction > 0 && progress >= 1) setProgress(0);
+        if (direction < 0 && progress <= 0) setProgress(1);
+        setPlaying(true);
+      }}
+    >
       <div className="titles__stage" ref={hostRef} />
 
       <header className="titles__head">
