@@ -391,3 +391,10 @@
     animation: none;
   }
 }
+
+.titles__card-note {
+  margin: -8px 0 12px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: rgba(240, 216, 168, 0.5);
+}

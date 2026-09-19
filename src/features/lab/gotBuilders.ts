@@ -1,11 +1,12 @@
 import type * as ThreeTypes from "three";
+import { say } from "./skillsData";
 
 /**
  * A different thing gets built at every stop on the map: a camp of spires, a
  * row of racks, a ziggurat, a keep, a radio mast, a cog of billboards, a
  * skyline, an orrery. Each one is driven by the same two numbers — how many
  * skills the job used and how long each was used for — so the shape is the
- * data, not decoration.
+ * data, not decoration, and each piece carries its own label as it rises.
  */
 
 export interface Tower {
@@ -15,54 +16,108 @@ export interface Tower {
 
 export interface Build {
   group: ThreeTypes.Group;
-  /** Called every frame with how far built (0 to 1) and the clock. */
-  grow: (eased: number, time: number) => void;
+  /**
+   * Called every frame: how far built (0 to 1), the clock, and how much the
+   * camera is paying attention to this stop (labels fade out once it leaves).
+   */
+  grow: (eased: number, time: number, focus: number) => void;
 }
 
 type Three = typeof ThreeTypes;
+type Label = (text: string) => ThreeTypes.Sprite;
 
 export const GOLD = "#d9a441";
 
 /** Parts come in one at a time, so a place assembles rather than inflates. */
 const stage = (eased: number, index: number, count: number) =>
-  Math.max(0, Math.min(1, (eased - (index / Math.max(1, count)) * 0.55) / 0.45));
+  Math.max(0, Math.min(1, (eased - (index / Math.max(1, count)) * 0.62) / 0.38));
 
-export function makeBuilders(THREE: Three) {
-  const gold = (shade: number, wireframe = true, opacity = 0.85) =>
-    new THREE.MeshBasicMaterial({
-      color: new THREE.Color(GOLD).multiplyScalar(shade),
-      wireframe,
-      transparent: true,
-      opacity,
+const LABEL_LIMIT = 6;
+
+export function makeBuilders(THREE: Three, label: Label) {
+  /** Solid gold, lit, with its edges picked out so the form still reads. */
+  const solid = (shade: number) =>
+    new THREE.MeshStandardMaterial({
+      color: new THREE.Color(GOLD).multiplyScalar(0.45 + shade * 0.5),
+      emissive: new THREE.Color(GOLD).multiplyScalar(0.12 + shade * 0.1),
+      metalness: 0.75,
+      roughness: 0.38,
+      flatShading: true,
     });
 
-  const shadeFor = (tower: Tower, tallest: number) => 0.5 + (tower.years / tallest) * 0.7;
+  const outline = (mesh: ThreeTypes.Mesh) => {
+    const lines = new THREE.LineSegments(
+      new THREE.EdgesGeometry(mesh.geometry, 24),
+      new THREE.LineBasicMaterial({ color: 0xffd48a, transparent: true, opacity: 0.35 }),
+    );
+    mesh.add(lines);
+    return mesh;
+  };
 
-  /** A camp of spires: the early, scrappy years. */
+  const shadeFor = (tower: Tower, tallest: number) => Math.min(1, tower.years / tallest);
+
+  interface Part {
+    mesh: ThreeTypes.Mesh;
+    height: number;
+    tag?: ThreeTypes.Sprite;
+    /** Labels sit at three different heights so they don't stack on each other. */
+    lift: number;
+  }
+
+  /** One piece of a place: its mesh, and the label that arrives with it. */
+  const makePart = (
+    group: ThreeTypes.Group,
+    mesh: ThreeTypes.Mesh,
+    height: number,
+    tower: Tower,
+    index: number,
+  ): Part => {
+    outline(mesh);
+    group.add(mesh);
+    let tag: ThreeTypes.Sprite | undefined;
+    if (index < LABEL_LIMIT) {
+      tag = label(`${tower.name}  ·  ${say(tower.years)} yrs`);
+      group.add(tag);
+    }
+    return { mesh, height, tag, lift: 5 + (index % 3) * 8 };
+  };
+
+  const showTag = (part: Part, grown: number, focus: number, x: number, y: number, z: number) => {
+    if (!part.tag) return;
+    part.tag.position.set(x, y + part.lift, z);
+    (part.tag.material as ThreeTypes.SpriteMaterial).opacity = Math.max(0, Math.min(1, grown * 1.4 - 0.2)) * focus;
+  };
+
+  /** A camp of spires: the freelance years, put up one at a time. */
   const spires = (towers: Tower[], tallest: number): Build => {
     const group = new THREE.Group();
     const parts = towers.map((tower, index) => {
-      const height = 10 + (tower.years / tallest) * 34;
+      const height = 12 + shadeFor(tower, tallest) * 38;
       const mesh = new THREE.Mesh(
-        new THREE.ConeGeometry(2.4 + (tower.years / tallest) * 2, height, 5, 1, true),
-        gold(shadeFor(tower, tallest)),
+        new THREE.ConeGeometry(2.6 + shadeFor(tower, tallest) * 2.2, height, 6),
+        solid(shadeFor(tower, tallest)),
       );
       const angle = index * 2.399;
-      const radius = 6 + index * 2.4;
+      const radius = 8 + index * 2.6;
       mesh.position.set(Math.cos(angle) * radius, height / 2, Math.sin(angle) * radius);
-      group.add(mesh);
-      return { mesh, height };
+      return makePart(group, mesh, height, tower, index);
     });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(26, 0.3, 6, 48), gold(0.45, false));
+    const ring = outline(
+      new THREE.Mesh(new THREE.TorusGeometry(30, 0.5, 8, 60), solid(0.3)),
+    );
     ring.rotation.x = Math.PI / 2;
     group.add(ring);
     return {
       group,
-      grow(eased) {
+      grow(eased, time, focus) {
         parts.forEach((part, index) => {
           const grown = Math.max(0.001, stage(eased, index, parts.length));
           part.mesh.scale.y = grown;
           part.mesh.position.y = (part.height * grown) / 2;
+          // Freelance runs hot and cold; the spires breathe with it.
+          const busy = 0.55 + Math.abs(Math.sin(time * 0.35 + index * 1.4)) * 0.45;
+          (part.mesh.material as ThreeTypes.MeshStandardMaterial).emissiveIntensity = busy;
+          showTag(part, grown, focus, part.mesh.position.x, part.height * grown, part.mesh.position.z);
         });
         ring.scale.setScalar(0.2 + eased * 0.8);
       },
@@ -73,25 +128,24 @@ export function makeBuilders(THREE: Three) {
   const racks = (towers: Tower[], tallest: number): Build => {
     const group = new THREE.Group();
     const parts = towers.map((tower, index) => {
-      const height = 7 + (tower.years / tallest) * 26;
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(6, height, 4), gold(shadeFor(tower, tallest)));
-      const column = index % 2;
-      mesh.position.set(-16 + Math.floor(index / 2) * 11, height / 2, column === 0 ? -8 : 8);
-      group.add(mesh);
-      return { mesh, height };
+      const height = 9 + shadeFor(tower, tallest) * 26;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(7, height, 5), solid(shadeFor(tower, tallest)));
+      const row = index % 2;
+      mesh.position.set(-18 + Math.floor(index / 2) * 12, height / 2, row === 0 ? -9 : 9);
+      return makePart(group, mesh, height, tower, index);
     });
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(56, 0.4, 30), gold(0.3, true));
+    const floor = outline(new THREE.Mesh(new THREE.BoxGeometry(62, 0.6, 34), solid(0.15)));
     group.add(floor);
     return {
       group,
-      grow(eased, time) {
+      grow(eased, time, focus) {
         parts.forEach((part, index) => {
           const grown = Math.max(0.001, stage(eased, index, parts.length));
           part.mesh.scale.y = grown;
           part.mesh.position.y = (part.height * grown) / 2;
-          // A faint flicker, like rack lights.
-          (part.mesh.material as ThreeTypes.MeshBasicMaterial).opacity =
-            0.6 + Math.abs(Math.sin(time * 2 + index)) * 0.35;
+          (part.mesh.material as ThreeTypes.MeshStandardMaterial).emissiveIntensity =
+            0.6 + Math.abs(Math.sin(time * 2.2 + index)) * 0.6;
+          showTag(part, grown, focus, part.mesh.position.x, part.height * grown, part.mesh.position.z);
         });
         floor.scale.setScalar(0.3 + eased * 0.7);
       },
@@ -104,23 +158,24 @@ export function makeBuilders(THREE: Three) {
     const sorted = [...towers].sort((a, b) => b.years - a.years);
     let base = 0;
     const parts = sorted.map((tower, index) => {
-      const height = 4 + (tower.years / tallest) * 9;
-      const width = 34 - index * (26 / Math.max(1, sorted.length));
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, width), gold(shadeFor(tower, tallest)));
+      const height = 5 + shadeFor(tower, tallest) * 10;
+      const width = 38 - index * (28 / Math.max(1, sorted.length));
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, width), solid(shadeFor(tower, tallest)));
       const y = base + height / 2;
       base += height;
       mesh.position.y = y;
-      group.add(mesh);
-      return { mesh, y };
+      const part = makePart(group, mesh, height, tower, index);
+      return { ...part, y, width };
     });
     return {
       group,
-      grow(eased, time) {
+      grow(eased, time, focus) {
         parts.forEach((part, index) => {
           const grown = stage(eased, index, parts.length);
           part.mesh.scale.setScalar(Math.max(0.001, grown));
           part.mesh.position.y = part.y * grown;
-          part.mesh.rotation.y = (1 - grown) * 0.8 + Math.sin(time * 0.1 + index) * 0.02;
+          part.mesh.rotation.y = (1 - grown) * 0.7 + Math.sin(time * 0.1 + index) * 0.02;
+          showTag(part, grown, focus, part.width * 0.5 + 18, part.y * grown - 6, 0);
         });
       },
     };
@@ -129,35 +184,39 @@ export function makeBuilders(THREE: Three) {
   /** A keep: four walls, corner towers, money kept safe. */
   const keep = (towers: Tower[], tallest: number): Build => {
     const group = new THREE.Group();
-    const wallHeight = 12 + (towers[0]?.years ?? 1) * 2;
+    const wallHeight = 14;
     const walls = [0, 1, 2, 3].map((side) => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(34, wallHeight, 1.6), gold(0.55));
+      const mesh = outline(new THREE.Mesh(new THREE.BoxGeometry(38, wallHeight, 2.2), solid(0.25)));
       const angle = (side / 4) * Math.PI * 2;
-      mesh.position.set(Math.cos(angle) * 17, wallHeight / 2, Math.sin(angle) * 17);
+      mesh.position.set(Math.cos(angle) * 19, wallHeight / 2, Math.sin(angle) * 19);
       mesh.rotation.y = -angle;
       group.add(mesh);
       return mesh;
     });
-    const corners = towers.slice(0, 4).map((tower, index) => {
-      const height = 16 + (tower.years / tallest) * 24;
-      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 4.4, height, 8, 1, true), gold(shadeFor(tower, tallest)));
-      const angle = (index / 4) * Math.PI * 2 + Math.PI / 4;
-      mesh.position.set(Math.cos(angle) * 24, height / 2, Math.sin(angle) * 24);
-      group.add(mesh);
-      return { mesh, height };
+    const parts = towers.slice(0, 6).map((tower, index) => {
+      const height = 18 + shadeFor(tower, tallest) * 26;
+      const mesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(4, 5, height, 8),
+        solid(shadeFor(tower, tallest)),
+      );
+      const angle = (index / Math.min(6, towers.length)) * Math.PI * 2 + Math.PI / 4;
+      const radius = index < 4 ? 26 : 10;
+      mesh.position.set(Math.cos(angle) * radius, height / 2, Math.sin(angle) * radius);
+      return makePart(group, mesh, height, tower, index);
     });
     return {
       group,
-      grow(eased) {
+      grow(eased, _time, focus) {
         walls.forEach((wall, index) => {
-          const grown = Math.max(0.001, stage(eased, index, 8));
+          const grown = Math.max(0.001, stage(eased, index, 9));
           wall.scale.y = grown;
           wall.position.y = (wallHeight * grown) / 2;
         });
-        corners.forEach((corner, index) => {
-          const grown = Math.max(0.001, stage(eased, index + 4, 8));
-          corner.mesh.scale.y = grown;
-          corner.mesh.position.y = (corner.height * grown) / 2;
+        parts.forEach((part, index) => {
+          const grown = Math.max(0.001, stage(eased, index + 3, 9));
+          part.mesh.scale.y = grown;
+          part.mesh.position.y = (part.height * grown) / 2;
+          showTag(part, grown, focus, part.mesh.position.x, part.height * grown, part.mesh.position.z);
         });
       },
     };
@@ -166,38 +225,31 @@ export function makeBuilders(THREE: Three) {
   /** A mast throwing rings of signal outwards. */
   const mast = (towers: Tower[], tallest: number): Build => {
     const group = new THREE.Group();
-    const height = 30 + (towers[0]?.years ?? 2) * 3.4;
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 2.4, height, 6, 1, true), gold(1));
+    const height = 42;
+    const pole = outline(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 3, height, 8), solid(0.8)));
     pole.position.y = height / 2;
     group.add(pole);
-    const rings = towers.map((tower, index) => {
-      const mesh = new THREE.Mesh(new THREE.TorusGeometry(9 + index * 5, 0.3, 6, 44), gold(shadeFor(tower, tallest), false));
+    const parts = towers.map((tower, index) => {
+      const mesh = new THREE.Mesh(
+        new THREE.TorusGeometry(11 + index * 5.5, 0.5, 8, 52),
+        solid(shadeFor(tower, tallest)),
+      );
       mesh.rotation.x = Math.PI / 2;
-      mesh.position.y = 2 + index * 1.4;
-      group.add(mesh);
-      return mesh;
-    });
-    const beacons = towers.slice(0, 5).map((_, index) => {
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.9, 8, 8), gold(1.2, false));
-      group.add(mesh);
-      return { mesh, radius: 11 + index * 5, speed: 0.4 + index * 0.12 };
+      mesh.position.y = 3 + index * 1.6;
+      const part = makePart(group, mesh, 0, tower, index);
+      return { ...part, radius: 11 + index * 5.5 };
     });
     return {
       group,
-      grow(eased, time) {
+      grow(eased, time, focus) {
         pole.scale.y = Math.max(0.001, stage(eased, 0, 3));
         pole.position.y = (height * pole.scale.y) / 2;
-        rings.forEach((ring, index) => {
-          const grown = stage(eased, index, rings.length);
-          ring.scale.setScalar(Math.max(0.001, grown));
-          // The rings pulse outward, the way a signal does.
-          (ring.material as ThreeTypes.MeshBasicMaterial).opacity =
-            0.25 + Math.abs(Math.sin(time * 1.1 - index * 0.7)) * 0.6 * grown;
-        });
-        beacons.forEach((beacon, index) => {
-          const angle = time * beacon.speed + index;
-          beacon.mesh.position.set(Math.cos(angle) * beacon.radius * eased, 4 + index * 2, Math.sin(angle) * beacon.radius * eased);
-          beacon.mesh.scale.setScalar(Math.max(0.001, eased));
+        parts.forEach((part, index) => {
+          const grown = Math.max(0.001, stage(eased, index, parts.length));
+          part.mesh.scale.setScalar(grown);
+          (part.mesh.material as ThreeTypes.MeshStandardMaterial).emissiveIntensity =
+            0.4 + Math.abs(Math.sin(time * 1.2 - index * 0.7)) * 1.1;
+          showTag(part, grown, focus, part.radius * grown * 0.72, index * 4, part.radius * grown * 0.72);
         });
       },
     };
@@ -206,26 +258,45 @@ export function makeBuilders(THREE: Three) {
   /** A cog of billboards, turning: the agency years. */
   const carousel = (towers: Tower[], tallest: number): Build => {
     const group = new THREE.Group();
-    const cog = new THREE.Mesh(new THREE.CylinderGeometry(20, 20, 2.4, towers.length * 2, 1, true), gold(0.55));
-    cog.position.y = 1.4;
-    group.add(cog);
-    const panels = towers.map((tower, index) => {
-      const size = 7 + (tower.years / tallest) * 12;
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size * 0.62), gold(shadeFor(tower, tallest), true, 0.9));
+    const spinner = new THREE.Group();
+    group.add(spinner);
+    const cog = outline(
+      new THREE.Mesh(new THREE.CylinderGeometry(22, 22, 3, Math.max(8, towers.length * 2)), solid(0.25)),
+    );
+    cog.position.y = 1.6;
+    spinner.add(cog);
+    const parts = towers.map((tower, index) => {
+      const size = 9 + shadeFor(tower, tallest) * 13;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size * 0.62, 0.6), solid(shadeFor(tower, tallest)));
       const angle = (index / towers.length) * Math.PI * 2;
-      mesh.position.set(Math.cos(angle) * 20, 6 + size / 2, Math.sin(angle) * 20);
+      mesh.position.set(Math.cos(angle) * 22, 7 + size / 2, Math.sin(angle) * 22);
       mesh.rotation.y = -angle + Math.PI / 2;
-      group.add(mesh);
-      return mesh;
+      outline(mesh);
+      spinner.add(mesh);
+      let tag: ThreeTypes.Sprite | undefined;
+      if (index < LABEL_LIMIT) {
+        tag = label(`${tower.name}  ·  ${say(tower.years)} yrs`);
+        spinner.add(tag);
+      }
+      return { mesh, tag, size, angle };
     });
     return {
       group,
-      grow(eased, time) {
-        group.rotation.y = time * 0.12;
+      grow(eased, time, focus) {
+        spinner.rotation.y = time * 0.11;
         cog.scale.setScalar(Math.max(0.001, stage(eased, 0, 3)));
-        panels.forEach((panel, index) => {
-          const grown = Math.max(0.001, stage(eased, index, panels.length));
-          panel.scale.setScalar(grown);
+        parts.forEach((part, index) => {
+          const grown = Math.max(0.001, stage(eased, index, parts.length));
+          part.mesh.scale.setScalar(grown);
+          if (part.tag) {
+            part.tag.position.set(
+              Math.cos(part.angle) * 22,
+              7 + part.size * grown + 7 + (index % 3) * 9,
+              Math.sin(part.angle) * 22,
+            );
+            (part.tag.material as ThreeTypes.SpriteMaterial).opacity =
+              Math.max(0, Math.min(1, grown * 1.4 - 0.2)) * focus;
+          }
         });
       },
     };
@@ -235,29 +306,29 @@ export function makeBuilders(THREE: Three) {
   const skyline = (towers: Tower[], tallest: number): Build => {
     const group = new THREE.Group();
     const parts = towers.map((tower, index) => {
-      const height = 12 + (tower.years / tallest) * 46;
-      const width = 4 + (tower.years / tallest) * 3;
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, width), gold(shadeFor(tower, tallest)));
+      const height = 16 + shadeFor(tower, tallest) * 52;
+      const width = 5 + shadeFor(tower, tallest) * 3.5;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, width), solid(shadeFor(tower, tallest)));
       const ring = index < 4 ? 0 : 1;
       const within = ring === 0 ? index : index - 4;
       const count = ring === 0 ? 4 : Math.max(1, towers.length - 4);
       const angle = (within / count) * Math.PI * 2 + ring * 0.6;
-      const radius = ring === 0 ? 9 : 21;
+      const radius = ring === 0 ? 11 : 24;
       mesh.position.set(Math.cos(angle) * radius, height / 2, Math.sin(angle) * radius);
-      group.add(mesh);
-      return { mesh, height };
+      return makePart(group, mesh, height, tower, index);
     });
-    const plaza = new THREE.Mesh(new THREE.TorusGeometry(29, 0.4, 6, 60), gold(0.4, false));
+    const plaza = outline(new THREE.Mesh(new THREE.TorusGeometry(33, 0.6, 8, 70), solid(0.2)));
     plaza.rotation.x = Math.PI / 2;
     group.add(plaza);
     return {
       group,
-      grow(eased, time) {
+      grow(eased, time, focus) {
         parts.forEach((part, index) => {
           const grown = Math.max(0.001, stage(eased, index, parts.length));
           part.mesh.scale.y = grown;
           part.mesh.position.y = (part.height * grown) / 2;
-          part.mesh.rotation.y = Math.sin(time * 0.15 + index) * 0.03;
+          part.mesh.rotation.y = Math.sin(time * 0.15 + index) * 0.02;
+          showTag(part, grown, focus, part.mesh.position.x, part.height * grown, part.mesh.position.z);
         });
         plaza.scale.setScalar(0.2 + eased * 0.8);
       },
@@ -267,37 +338,42 @@ export function makeBuilders(THREE: Three) {
   /** An orrery for the work that is still turning. */
   const orrery = (towers: Tower[], tallest: number): Build => {
     const group = new THREE.Group();
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(16, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), gold(0.45));
+    const dome = outline(
+      new THREE.Mesh(new THREE.SphereGeometry(15, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), solid(0.2)),
+    );
     group.add(dome);
     const arcs = [0, 1, 2].map((index) => {
-      const arc = new THREE.Mesh(new THREE.TorusGeometry(19 + index * 4, 0.28, 6, 64), gold(0.7, false));
-      arc.rotation.x = Math.PI / 2 + index * 0.4;
+      const arc = outline(new THREE.Mesh(new THREE.TorusGeometry(20 + index * 4.5, 0.4, 8, 72), solid(0.45)));
+      arc.rotation.x = Math.PI / 2 + index * 0.42;
       arc.rotation.z = index * 0.6;
       group.add(arc);
       return arc;
     });
-    const planets = towers.map((tower, index) => {
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.8 + (tower.years / tallest) * 2.2, 10, 10), gold(shadeFor(tower, tallest), true));
-      group.add(mesh);
-      return { mesh, radius: 20 + index * 3.4, speed: 0.5 - index * 0.04, tilt: index * 0.22 };
+    const parts = towers.map((tower, index) => {
+      const mesh = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(1.4 + shadeFor(tower, tallest) * 2.6, 1),
+        solid(shadeFor(tower, tallest)),
+      );
+      const part = makePart(group, mesh, 0, tower, index);
+      return { ...part, radius: 21 + index * 3.6, speed: 0.42 - index * 0.035, tilt: index * 0.3 };
     });
     return {
       group,
-      grow(eased, time) {
+      grow(eased, time, focus) {
         dome.scale.setScalar(Math.max(0.001, stage(eased, 0, 3)));
         arcs.forEach((arc, index) => {
           arc.scale.setScalar(Math.max(0.001, stage(eased, index, 4)));
-          arc.rotation.z += 0.0012 * (index + 1);
+          arc.rotation.z += 0.0014 * (index + 1);
         });
-        planets.forEach((planet, index) => {
-          const grown = Math.max(0.001, stage(eased, index, planets.length));
-          const angle = time * planet.speed + index;
-          planet.mesh.position.set(
-            Math.cos(angle) * planet.radius * grown,
-            6 + Math.sin(angle + planet.tilt) * 5,
-            Math.sin(angle) * planet.radius * grown,
-          );
-          planet.mesh.scale.setScalar(grown);
+        parts.forEach((part, index) => {
+          const grown = Math.max(0.001, stage(eased, index, parts.length));
+          const angle = time * part.speed + index;
+          const x = Math.cos(angle) * part.radius * grown;
+          const y = 9 + Math.sin(angle + part.tilt) * 6;
+          const z = Math.sin(angle) * part.radius * grown;
+          part.mesh.position.set(x, y, z);
+          part.mesh.scale.setScalar(grown);
+          showTag(part, grown, focus, x, y, z);
         });
       },
     };
@@ -330,3 +406,22 @@ export const KIND_BY_PLACE: Record<string, string> = {
 };
 
 export const KIND_ORDER = ["spires", "racks", "ziggurat", "keep", "mast", "carousel", "skyline", "orrery"];
+
+/** How the camera behaves while the scrubber builds a stop: a sweep, a crane, a push in. */
+export interface Move {
+  sweep: number;
+  radius: [number, number];
+  height: [number, number];
+  look: number;
+}
+
+export const MOVES: Record<string, Move> = {
+  spires: { sweep: -1.1, radius: [110, 90], height: [52, 42], look: 32 },
+  racks: { sweep: 0.9, radius: [110, 74], height: [52, 30], look: 18 },
+  ziggurat: { sweep: -1.4, radius: [110, 82], height: [52, 62], look: 22 },
+  keep: { sweep: 1.5, radius: [110, 88], height: [52, 30], look: 20 },
+  mast: { sweep: -1.8, radius: [110, 98], height: [52, 68], look: 32 },
+  carousel: { sweep: 1.2, radius: [110, 78], height: [52, 42], look: 24 },
+  skyline: { sweep: -1.5, radius: [110, 106], height: [52, 82], look: 38 },
+  orrery: { sweep: 2.1, radius: [110, 84], height: [52, 52], look: 24 },
+};

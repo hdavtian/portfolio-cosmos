@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as ThreeTypes from "three";
-import { KIND_BY_PLACE, KIND_ORDER, makeBuilders, type Build } from "./gotBuilders";
-import { LAST_YEAR, categories, places, say, spans } from "./skillsData";
+import { KIND_BY_PLACE, KIND_ORDER, MOVES, makeBuilders, type Build } from "./gotBuilders";
+import { LAST_YEAR, NOW_YEAR, categories, places, say, spans } from "./skillsData";
 import "./skillsTitles.css";
 
 /**
- * A title sequence for the skill timeline: the camera runs a route over a map
- * with hills in it, and every stop builds a different thing out of the ground
- * — a camp of spires, a row of racks, a keep, a skyline — sized by the years
- * spent on each skill there. A running tally burns away on the left, adding
- * everything up as the sequence passes. Scrub it or let it play.
+ * A title sequence for the skill timeline. The camera rides a route over a
+ * map of coloured country, and the run alternates between travelling and
+ * standing still: at a stop the map stops moving and the scrubber itself
+ * builds the place, piece by piece, each piece labelled with the skill and
+ * the years behind it. A running tally burns away on the left, starting at
+ * nothing and adding up as the sequence passes.
+ *
+ * The route begins and ends at StormScape — the freelance work that ran
+ * quietly under everything else and is running again now.
  *
  * Sketch only, mock data, not linked from the site.
  */
@@ -27,21 +31,30 @@ export interface City {
   from: number;
   to: number;
   kind: string;
+  note: string;
   entries: Entry[];
-  /** Where this stop sits along the route, 0 to 1. */
-  at: number;
+  /** Stops share a place on the map when they are the same company. */
+  spot: number;
 }
 
 const TOWER_LIMIT = 9;
 
+const NOTES: Record<string, string> = {
+  stormscape: "Freelance and side work, dormant some years, busy in others",
+  "stormscape-now": "The same studio, picked back up",
+};
+
 function buildCities(): City[] {
   const ordered = [...places].sort((a, b) => a.from - b.from);
+  // The last stop is the studio again, so it stands where the first one did.
+  const spotOf = (slug: string, index: number) => (slug === "stormscape-now" ? 0 : index);
   return ordered.map((place, index) => ({
     slug: place.slug,
     name: place.name,
     from: place.from,
     to: place.to,
     kind: KIND_BY_PLACE[place.slug] ?? KIND_ORDER[index % KIND_ORDER.length],
+    note: NOTES[place.slug] ?? "",
     entries: spans
       .filter((span) => span.place === place.slug)
       .map((span) => ({
@@ -51,29 +64,84 @@ function buildCities(): City[] {
         categories: span.categories,
       }))
       .sort((a, b) => b.years - a.years),
-    at: ordered.length > 1 ? index / (ordered.length - 1) : 0,
+    spot: spotOf(place.slug, index),
   }));
 }
 
-/** How far a stop has been built at this point in the run: the scene uses the same curve. */
-function builtAt(city: City, progress: number) {
-  if (progress > city.at) return 1;
-  const rise = Math.max(0, Math.min(1, (0.13 - Math.abs(progress - city.at)) / 0.1));
-  return 1 - Math.pow(1 - rise, 3);
+type SegmentKind = "travel" | "dwell";
+
+interface Segment {
+  kind: SegmentKind;
+  city: number;
+  /** For a travel leg, the stop it is leaving (-1 for the opening run in). */
+  previous: number;
+  from: number;
+  to: number;
 }
 
 /**
- * The year under the scrubber. Stops sit evenly along the route, so the clock
- * runs between the years of the stops either side rather than straight down
- * the calendar — that way the readout matches the place on screen.
+ * The run: a leg of travel, then a stop that the scrubber builds, all the way
+ * along and back again. The first stop gets a longer turn because a decade of
+ * freelance passes while it goes up.
  */
-function yearAt(cities: City[], progress: number) {
-  const step = 1 / (cities.length - 1);
-  const index = Math.min(cities.length - 2, Math.floor(progress / step));
-  const within = (progress - index * step) / step;
-  const from = cities[index].from;
-  const to = index + 2 < cities.length ? cities[index + 1].from : LAST_YEAR;
-  return from + (to - from) * within;
+function buildTimeline(cities: City[]): Segment[] {
+  const weights: Array<{ kind: SegmentKind; city: number; previous: number; weight: number }> = [];
+  cities.forEach((_, index) => {
+    const isReturn = index === cities.length - 1;
+    weights.push({
+      kind: "travel",
+      city: index,
+      previous: index - 1,
+      weight: index === 0 ? 0.55 : isReturn ? 1.2 : 0.75,
+    });
+    weights.push({
+      kind: "dwell",
+      city: index,
+      previous: index - 1,
+      weight: index === 0 ? 2 : isReturn ? 1.5 : 1.05,
+    });
+  });
+  const total = weights.reduce((sum, entry) => sum + entry.weight, 0);
+  let cursor = 0;
+  return weights.map((entry) => {
+    const from = cursor;
+    cursor += entry.weight / total;
+    return { kind: entry.kind, city: entry.city, previous: entry.previous, from, to: cursor };
+  });
+}
+
+const segmentAt = (timeline: Segment[], progress: number) => {
+  const found = timeline.find((segment) => progress >= segment.from && progress < segment.to);
+  return found ?? timeline[timeline.length - 1];
+};
+
+const within = (segment: Segment, progress: number) =>
+  Math.max(0, Math.min(1, (progress - segment.from) / Math.max(0.0001, segment.to - segment.from)));
+
+/** How far each stop has been built: nothing before its turn, the scrubber during it. */
+function buildFractions(timeline: Segment[], cities: City[], progress: number) {
+  const current = segmentAt(timeline, progress);
+  const t = within(current, progress);
+  return cities.map((_, index) => {
+    const dwell = timeline.find((segment) => segment.kind === "dwell" && segment.city === index)!;
+    if (progress >= dwell.to) return 1;
+    if (current === dwell) return 1 - Math.pow(1 - t, 2);
+    return 0;
+  });
+}
+
+/** The year on the clock: it runs through a stop's own years while standing there. */
+function yearAt(timeline: Segment[], cities: City[], progress: number) {
+  const segment = segmentAt(timeline, progress);
+  const t = within(segment, progress);
+  const city = cities[segment.city];
+  if (segment.kind === "dwell") {
+    const end = city.to >= LAST_YEAR - 1 ? LAST_YEAR : city.to;
+    return city.from + (end - city.from) * t;
+  }
+  const previous = segment.previous >= 0 ? cities[segment.previous] : null;
+  const start = previous ? Math.min(previous.to, city.from) : city.from;
+  return start + (city.from - start) * t;
 }
 
 interface TallyRow {
@@ -85,11 +153,11 @@ interface TallyRow {
 }
 
 /** Everything built so far, added up: years per category, and per skill inside it. */
-function tallyAt(cities: City[], progress: number): TallyRow[] {
+function tallyAt(cities: City[], fractions: number[]): TallyRow[] {
   const byCategory = new Map<string, { years: number; hot: boolean; skills: Map<string, number> }>();
-  for (const city of cities) {
-    const built = builtAt(city, progress);
-    if (built <= 0.001) continue;
+  cities.forEach((city, index) => {
+    const built = fractions[index];
+    if (built <= 0.001) return;
     const rising = built < 0.999;
     for (const entry of city.entries) {
       for (const slug of entry.categories) {
@@ -100,7 +168,7 @@ function tallyAt(cities: City[], progress: number): TallyRow[] {
         byCategory.set(slug, row);
       }
     }
-  }
+  });
   return categories
     .filter((category) => byCategory.has(category.slug))
     .map((category) => {
@@ -118,8 +186,14 @@ function tallyAt(cities: City[], progress: number): TallyRow[] {
     .sort((a, b) => b.years - a.years);
 }
 
+/** One colour of country per stop, so the map reads like a map. */
+const REGION_COLOURS = [
+  0x2c5a56, 0x36476e, 0x57405c, 0x3f5738, 0x5c5133, 0x35586a, 0x5b3838, 0x2c5a56,
+];
+
 export function SkillsTitlesPage() {
   const cities = useMemo(buildCities, []);
+  const timeline = useMemo(() => buildTimeline(cities), [cities]);
   const hostRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef(0);
   const [progress, setProgress] = useState(0);
@@ -140,7 +214,6 @@ export function SkillsTitlesPage() {
 
     void import("three").then((THREE) => {
       if (disposed) return;
-      const builders = makeBuilders(THREE);
 
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
@@ -148,56 +221,134 @@ export function SkillsTitlesPage() {
       host.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0x05070b, 120, 470);
-      const camera = new THREE.PerspectiveCamera(52, 1, 0.5, 900);
+      scene.fog = new THREE.Fog(0x05070b, 150, 560);
+      const camera = new THREE.PerspectiveCamera(52, 1, 0.5, 1200);
 
-      // The land itself: low hills, so the route rises and falls.
+      scene.add(new THREE.HemisphereLight(0x8fb7ff, 0x1a1206, 0.85));
+      const key = new THREE.DirectionalLight(0xffd9a0, 1.15);
+      key.position.set(-120, 180, 140);
+      scene.add(key);
+      const glint = new THREE.PointLight(0xffb45a, 1.5, 320, 2);
+      scene.add(glint);
+
+      const label = (text: string) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 512;
+        canvas.height = 64;
+        const ctx = canvas.getContext("2d")!;
+        ctx.font = '600 26px "JetBrains Mono", Menlo, Consolas, monospace';
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const width = ctx.measureText(text).width + 24;
+        ctx.fillStyle = "rgba(5, 8, 12, 0.72)";
+        ctx.fillRect((canvas.width - width) / 2, 10, width, 44);
+        ctx.fillStyle = "#ffd9a0";
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const sprite = new THREE.Sprite(
+          new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0, depthTest: false }),
+        );
+        sprite.scale.set(21, 2.6, 1);
+        return sprite;
+      };
+
+      const builders = makeBuilders(THREE, label);
+
+      // The land: real hills, high enough to see the route climb them.
       const heightAt = (x: number, z: number) =>
-        Math.sin(x * 0.0075) * 8 + Math.cos(z * 0.021) * 4.5 + Math.sin(x * 0.026 + z * 0.014) * 2.6;
+        Math.sin(x * 0.0072) * 24 + Math.cos(z * 0.019) * 13 + Math.sin(x * 0.023 + z * 0.012) * 8;
 
-      const terrain = new THREE.PlaneGeometry(2200, 760, 150, 60);
+      // Stops are spread wide; the last one stands where the first one did.
+      const SPACING = 150;
+      const spots = cities.map((_, index) => {
+        const x = (index - (cities.length - 2) / 2) * SPACING;
+        const z = Math.sin(index * 1.15) * 58;
+        return new THREE.Vector3(x, heightAt(x, z), z);
+      });
+      const points = cities.map((city) => spots[city.spot]);
+
+      const terrain = new THREE.PlaneGeometry(2600, 900, 170, 70);
       const position = terrain.attributes.position;
+      const colours = new Float32Array(position.count * 3);
+      const colour = new THREE.Color();
       for (let i = 0; i < position.count; i += 1) {
-        // The plane is still flat here, so its y is the world z once laid down.
-        position.setZ(i, heightAt(position.getX(i), -position.getY(i)));
+        const x = position.getX(i);
+        const z = -position.getY(i);
+        const y = heightAt(x, z);
+        position.setZ(i, y);
+        // Each stop rules the country nearest to it.
+        let nearest = 0;
+        let best = Infinity;
+        points.forEach((point, index) => {
+          const distance = (point.x - x) ** 2 + (point.z - z) ** 2;
+          if (distance < best) {
+            best = distance;
+            nearest = index;
+          }
+        });
+        colour.setHex(REGION_COLOURS[nearest % REGION_COLOURS.length]);
+        // Higher ground catches more light.
+        colour.multiplyScalar(0.62 + Math.max(0, y) / 42);
+        colours.set([colour.r, colour.g, colour.b], i * 3);
       }
+      terrain.setAttribute("color", new THREE.BufferAttribute(colours, 3));
       terrain.computeVertexNormals();
+
       const land = new THREE.Mesh(
         terrain,
-        new THREE.MeshBasicMaterial({ color: 0x1c2b3a, wireframe: true, transparent: true, opacity: 0.55 }),
+        new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
       );
       land.rotation.x = -Math.PI / 2;
       scene.add(land);
-      const under = new THREE.Mesh(terrain.clone(), new THREE.MeshBasicMaterial({ color: 0x070b11 }));
-      under.rotation.x = -Math.PI / 2;
-      under.position.y = -0.6;
-      scene.add(under);
-
-      // Stops are spread wide, and each sits on the ground where it lands.
-      const SPACING = 138;
-      const points = cities.map((_, index) => {
-        const x = (index - (cities.length - 1) / 2) * SPACING;
-        const z = Math.sin(index * 1.15) * 52;
-        return new THREE.Vector3(x, heightAt(x, z), z);
-      });
-      const route = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.4);
-
-      const routeLine = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(
-          route.getPoints(600).map((point) => point.clone().setY(point.y + 1.2)),
-        ),
-        new THREE.LineDashedMaterial({ color: 0x8a6a2c, dashSize: 4, gapSize: 5 }),
+      const contours = new THREE.Mesh(
+        terrain,
+        new THREE.MeshBasicMaterial({ color: 0x8aa6c0, wireframe: true, transparent: true, opacity: 0.12 }),
       );
-      routeLine.computeLineDistances();
-      scene.add(routeLine);
+      contours.rotation.x = -Math.PI / 2;
+      contours.position.y = 0.4;
+      scene.add(contours);
 
-      const textTexture = (text: string, pixels: number, colour: string, spacing: number) => {
+      // The route out, and the long way home at the end.
+      const outward = new THREE.CatmullRomCurve3(points.slice(0, -1), false, "catmullrom", 0.4);
+      const homeward = new THREE.CatmullRomCurve3(
+        [
+          points[points.length - 2],
+          new THREE.Vector3(points[points.length - 2].x * 0.5, 0, -260),
+          new THREE.Vector3(points[0].x * 0.5, 0, -240),
+          points[points.length - 1],
+        ],
+        false,
+        "catmullrom",
+        0.4,
+      );
+      const opening = new THREE.CatmullRomCurve3(
+        [new THREE.Vector3(points[0].x - 230, heightAt(points[0].x - 230, 130), 130), points[0]],
+        false,
+        "catmullrom",
+        0.4,
+      );
+
+      const drawRoute = (curve: ThreeTypes.CatmullRomCurve3, opacity: number) => {
+        const line = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(
+            curve.getPoints(500).map((point) => point.clone().setY(heightAt(point.x, point.z) + 1.6)),
+          ),
+          new THREE.LineDashedMaterial({ color: 0xc79a46, dashSize: 5, gapSize: 6, transparent: true, opacity }),
+        );
+        line.computeLineDistances();
+        scene.add(line);
+      };
+      drawRoute(outward, 0.85);
+      drawRoute(homeward, 0.4);
+
+      const nameTexture = (text: string, pixels: number, ink: string, spacing: number) => {
         const canvas = document.createElement("canvas");
         canvas.width = 1024;
         canvas.height = 160;
         const ctx = canvas.getContext("2d")!;
         ctx.font = `700 ${pixels}px "Cinzel", "Barlow Condensed", Georgia, serif`;
-        ctx.fillStyle = colour;
+        ctx.fillStyle = ink;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.letterSpacing = `${spacing}px`;
@@ -211,44 +362,40 @@ export function SkillsTitlesPage() {
         build: Build;
         sprite: ThreeTypes.Sprite;
         ground: ThreeTypes.Mesh;
-        at: number;
       }
 
       const tallest = Math.max(1, ...cities.flatMap((city) => city.entries.map((entry) => entry.years)));
       const placed: Placed[] = cities.map((city, index) => {
-        const towers = city.entries.slice(0, TOWER_LIMIT);
-        const build = builders[city.kind](towers, tallest);
+        const build = builders[city.kind](city.entries.slice(0, TOWER_LIMIT), tallest);
         build.group.position.copy(points[index]);
+        // The studio's second turn stands beside its first, not on top of it.
+        if (city.spot !== index) build.group.position.add(new THREE.Vector3(38, 0, -52));
         scene.add(build.group);
 
         const shown = city.name.split(" (")[0].toUpperCase();
-
-        // The name floating over the place…
         const sprite = new THREE.Sprite(
-          new THREE.SpriteMaterial({ map: textTexture(shown, 74, "#f0d8a8", 6), transparent: true, depthTest: false }),
+          new THREE.SpriteMaterial({ map: nameTexture(shown, 74, "#f0d8a8", 6), transparent: true, depthTest: false }),
         );
-        sprite.scale.set(56, 8.5, 1);
-        sprite.position.copy(points[index]).add(new THREE.Vector3(0, 44, 0));
+        sprite.scale.set(58, 9, 1);
+        sprite.position.copy(build.group.position).add(new THREE.Vector3(0, 66, 0));
         scene.add(sprite);
 
-        // …and the same name burned into the map in front of it.
         const ground = new THREE.Mesh(
-          new THREE.PlaneGeometry(58, 9),
+          new THREE.PlaneGeometry(62, 10),
           new THREE.MeshBasicMaterial({
-            map: textTexture(shown, 66, "#c79a46", 10),
+            map: nameTexture(shown, 66, "#e6be72", 10),
             transparent: true,
             opacity: 0,
             depthWrite: false,
           }),
         );
         ground.rotation.x = -Math.PI / 2;
-        // Just in front of the build, small enough that the camera never drives over it.
-        const groundZ = points[index].z + 46;
-        const groundX = points[index].x + 6;
-        ground.position.set(groundX, heightAt(groundX, groundZ) + 0.6, groundZ);
+        const groundZ = build.group.position.z + 48;
+        const groundX = build.group.position.x + 6;
+        ground.position.set(groundX, heightAt(groundX, groundZ) + 1.6, groundZ);
         scene.add(ground);
 
-        return { build, sprite, ground, at: city.at };
+        return { build, sprite, ground };
       });
 
       const resize = () => {
@@ -259,30 +406,85 @@ export function SkillsTitlesPage() {
       resize();
       window.addEventListener("resize", resize);
 
-      let frame = 0;
+      const legs = cities.length;
       const eye = new THREE.Vector3();
-      const aim = new THREE.Vector3();
+      const target = new THREE.Vector3();
+      const prevEye = new THREE.Vector3();
+      const prevTarget = new THREE.Vector3();
+      const spare = new THREE.Vector3();
+      const ease = (t: number) => t * t * (3 - 2 * t);
+
+      /** Where the camera stands while a stop is being built. */
+      const dwellPose = (index: number, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
+        const move = MOVES[cities[index].kind] ?? MOVES.spires;
+        const spot = placed[index].build.group.position;
+        const eased = ease(t);
+        const angle = move.sweep * eased;
+        const radius = move.radius[0] + (move.radius[1] - move.radius[0]) * eased;
+        const height = move.height[0] + (move.height[1] - move.height[0]) * eased;
+        into.set(spot.x + Math.sin(angle) * radius, spot.y + height, spot.z + Math.cos(angle) * radius);
+        look.set(spot.x, spot.y + move.look, spot.z);
+      };
+
+      /** Where the camera stands while travelling, riding the land. */
+      const ridePose = (point: ThreeTypes.Vector3, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
+        into.set(point.x, heightAt(point.x, point.z) + 52, point.z + 110);
+        look.set(point.x, heightAt(point.x, point.z) + 26, point.z);
+      };
+
+      const rideAt = (segment: Segment, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
+        if (segment.previous < 0) {
+          opening.getPoint(t, spare);
+        } else if (segment.city === legs - 1) {
+          homeward.getPoint(t, spare);
+        } else {
+          const span = 1 / (legs - 2);
+          outward.getPoint(Math.min(1, (segment.previous + t) * span), spare);
+        }
+        ridePose(spare, into, look);
+      };
+
+      let frame = 0;
       const render = () => {
         const p = progressRef.current;
         const time = performance.now() / 1000;
+        const segment = segmentAt(timeline, p);
+        const t = within(segment, p);
 
-        // The camera rides the route in curve time, so a stop is reached at
-        // exactly the moment the scrubber says it is, and rises with the land.
-        route.getPoint(Math.min(1, p), eye);
-        route.getPoint(Math.min(1, p + 0.03), aim);
-        const drift = Math.sin(time * 0.25) * 5;
-        camera.position.set(eye.x - 10 + drift * 0.4, eye.y + 44 + Math.sin(time * 0.4) * 2.5, eye.z + 96);
-        camera.lookAt(eye.x + (aim.x - eye.x) * 0.35, eye.y + 14, eye.z + (aim.z - eye.z) * 0.35);
-
-        for (const stop of placed) {
-          const rise = Math.max(0, Math.min(1, (0.13 - Math.abs(p - stop.at)) / 0.1));
-          const held = p > stop.at ? 1 : rise;
-          const eased = 1 - Math.pow(1 - held, 3);
-          stop.build.grow(eased, time);
-          const near = Math.max(0, Math.min(1, (0.1 - Math.abs(p - stop.at)) / 0.05));
-          (stop.sprite.material as ThreeTypes.SpriteMaterial).opacity = near;
-          (stop.ground.material as ThreeTypes.MeshBasicMaterial).opacity = 0.2 + eased * 0.55;
+        if (segment.kind === "dwell") {
+          dwellPose(segment.city, t, eye, target);
+        } else {
+          rideAt(segment, t, eye, target);
+          // Leave the last stop smoothly rather than cutting to the road.
+          if (segment.previous >= 0) {
+            dwellPose(segment.previous, 1, prevEye, prevTarget);
+            const blend = ease(Math.min(1, t / 0.35));
+            eye.lerpVectors(prevEye, eye, blend);
+            target.lerpVectors(prevTarget, target, blend);
+          }
         }
+
+        camera.position.copy(eye);
+        camera.lookAt(target);
+        glint.position.copy(eye).add(new THREE.Vector3(0, 10, 0));
+
+        placed.forEach((stop, index) => {
+          const dwell = timeline.find((entry) => entry.kind === "dwell" && entry.city === index)!;
+          const built = p >= dwell.to ? 1 : segment === dwell ? 1 - Math.pow(1 - t, 2) : 0;
+          // Labels belong to the stop the camera is at, and fade as it leaves.
+          const focus =
+            segment === dwell
+              ? Math.min(1, t * 4)
+              : segment.kind === "travel" && segment.previous === index
+                ? Math.max(0, 1 - t / 0.3)
+                : 0;
+          stop.build.grow(built, time, focus);
+          stop.sprite.visible = built > 0.02;
+          // The name announces the place on arrival, then gets out of the way
+          // while the scrubber builds it.
+          (stop.sprite.material as ThreeTypes.SpriteMaterial).opacity = Math.min(1, built * 2) * (1 - focus * 0.82);
+          (stop.ground.material as ThreeTypes.MeshBasicMaterial).opacity = 0.15 + built * 0.6;
+        });
 
         renderer.render(scene, camera);
         frame = requestAnimationFrame(render);
@@ -308,7 +510,7 @@ export function SkillsTitlesPage() {
       disposed = true;
       cleanup();
     };
-  }, [cities]);
+  }, [cities, timeline]);
 
   // Autoplay, paused the moment the scrubber is touched.
   useEffect(() => {
@@ -316,7 +518,7 @@ export function SkillsTitlesPage() {
     let frame = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      const step = (now - last) / 62000; // a full run in about a minute
+      const step = (now - last) / 88000; // a full run in about a minute and a half
       last = now;
       setProgress((current) => {
         const next = current + step;
@@ -332,13 +534,14 @@ export function SkillsTitlesPage() {
     return () => cancelAnimationFrame(frame);
   }, [playing]);
 
-  const active = cities.reduce((closest, city) =>
-    Math.abs(city.at - progress) < Math.abs(closest.at - progress) ? city : closest,
-  );
-  const near = Math.abs(active.at - progress) < 0.11;
-  const year = Math.round(yearAt(cities, progress));
-  const tally = tallyAt(cities, progress);
+  const segment = segmentAt(timeline, progress);
+  const atStop = segment.kind === "dwell";
+  const active = cities[segment.city];
+  const fractions = buildFractions(timeline, cities, progress);
+  const tally = tallyAt(cities, fractions);
   const total = tally.reduce((sum, row) => sum + row.years, 0);
+  const year = Math.min(Math.floor(NOW_YEAR), Math.round(yearAt(timeline, cities, progress)));
+  const dwellStarts = timeline.filter((entry) => entry.kind === "dwell");
 
   return (
     <div className="titles">
@@ -351,11 +554,12 @@ export function SkillsTitlesPage() {
 
       <Tally rows={tally} open={openRows} setOpen={setOpenRows} total={total} />
 
-      <aside className={`titles__card${near ? " is-on" : ""}`}>
+      <aside className={`titles__card${atStop ? " is-on" : ""}`}>
         <h2 className="titles__card-name">{active.name}</h2>
         <p className="titles__card-years">
           {Math.round(active.from)} – {active.to >= LAST_YEAR - 1 ? "present" : Math.round(active.to)}
         </p>
+        {active.note ? <p className="titles__card-note">{active.note}</p> : null}
         <ul className="titles__card-list">
           {active.entries.slice(0, TOWER_LIMIT).map((entry) => (
             <li key={entry.name}>
@@ -380,7 +584,7 @@ export function SkillsTitlesPage() {
             type="range"
             min={0}
             max={1}
-            step={0.0005}
+            step={0.0002}
             value={progress}
             aria-label="Scrub the sequence"
             onChange={(event) => {
@@ -389,19 +593,19 @@ export function SkillsTitlesPage() {
             }}
           />
           <div className="titles__stops">
-            {cities.map((city) => (
+            {dwellStarts.map((stop) => (
               <button
-                key={city.slug}
+                key={`${cities[stop.city].slug}-${stop.from}`}
                 type="button"
-                className={`titles__stop${city.slug === active.slug && near ? " is-on" : ""}`}
-                style={{ left: `${city.at * 100}%` }}
-                title={city.name}
+                className={`titles__stop${stop === segment ? " is-on" : ""}`}
+                style={{ left: `${stop.from * 100}%` }}
+                title={cities[stop.city].name}
                 onClick={() => {
                   setPlaying(false);
-                  setProgress(city.at);
+                  setProgress(stop.from + 0.001);
                 }}
               >
-                <span>{city.name.split(" ")[0]}</span>
+                <span>{cities[stop.city].name.split(" ")[0]}</span>
               </button>
             ))}
           </div>
