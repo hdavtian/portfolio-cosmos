@@ -92,13 +92,13 @@ function buildTimeline(cities: City[]): Segment[] {
       kind: "travel",
       city: index,
       previous: index - 1,
-      weight: index === 0 ? 0.55 : isReturn ? 1.2 : 0.75,
+      weight: index === 0 ? 1.1 : isReturn ? 2.6 : 1.45,
     });
     weights.push({
       kind: "dwell",
       city: index,
       previous: index - 1,
-      weight: index === 0 ? 2 : isReturn ? 1.5 : 1.05,
+      weight: index === 0 ? 2.4 : isReturn ? 1.9 : 1.7,
     });
   });
   const total = weights.reduce((sum, entry) => sum + entry.weight, 0);
@@ -226,8 +226,25 @@ export function SkillsTitlesPage() {
       host.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0x05070b, 150, 560);
-      const camera = new THREE.PerspectiveCamera(52, 1, 0.5, 1200);
+      scene.fog = new THREE.Fog(0x05070b, 260, 1250);
+      // A little light left in the sky, so the long empty legs aren't a void.
+      scene.background = (() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 4;
+        canvas.height = 128;
+        const ctx = canvas.getContext("2d")!;
+        const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        sky.addColorStop(0, "#04060a");
+        sky.addColorStop(0.62, "#070d15");
+        sky.addColorStop(0.88, "#122031");
+        sky.addColorStop(1, "#243a4a");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        return texture;
+      })();
+      const camera = new THREE.PerspectiveCamera(52, 1, 0.5, 2800);
 
       scene.add(new THREE.HemisphereLight(0x8fb7ff, 0x1a1206, 0.85));
       const key = new THREE.DirectionalLight(0xffd9a0, 1.15);
@@ -266,17 +283,17 @@ export function SkillsTitlesPage() {
 
       // Stops are spread wide; the last one stands where the first one did.
       const legs = cities.length;
-      const SPACING = 150;
+      const SPACING = 430;
       const spots = cities.map((_, index) => {
         const x = (index - (cities.length - 2) / 2) * SPACING;
-        const z = Math.sin(index * 1.15) * 58;
+        const z = Math.sin(index * 1.15) * 150;
         return new THREE.Vector3(x, heightAt(x, z), z);
       });
       const points = cities.map((city) => spots[city.spot]);
 
       // The road runs past each place, not through it: every stop stands off
       // to one side, alternating, so the camera can fly by and look across.
-      const STAND_OFF = 62;
+      const STAND_OFF = 74;
       const standOff = spots.map((_spot, index) => {
         const before = spots[Math.max(0, index - 1)];
         const after = spots[Math.min(spots.length - 1, index + 1)];
@@ -284,7 +301,7 @@ export function SkillsTitlesPage() {
         return new THREE.Vector3(dir.z, 0, -dir.x).multiplyScalar(index % 2 === 0 ? STAND_OFF : -STAND_OFF);
       });
 
-      const terrain = new THREE.PlaneGeometry(2600, 900, 170, 70);
+      const terrain = new THREE.PlaneGeometry(3900, 1700, 210, 92);
       const position = terrain.attributes.position;
       const colours = new Float32Array(position.count * 3);
       const colour = new THREE.Color();
@@ -329,12 +346,12 @@ export function SkillsTitlesPage() {
       // way round behind the hills, and back to the camp it started at.
       const onGround = (point: ThreeTypes.Vector3) => point.setY(heightAt(point.x, point.z));
       const journeyPoints = [
-        onGround(new THREE.Vector3(spots[0].x - 250, 0, spots[0].z + 150)),
+        onGround(new THREE.Vector3(spots[0].x - 520, 0, spots[0].z + 300)),
         ...spots.slice(0, -1),
-        onGround(new THREE.Vector3(spots[spots.length - 2].x * 0.55, 0, -186)),
-        onGround(new THREE.Vector3(spots[0].x * 0.55, 0, -172)),
+        onGround(new THREE.Vector3(spots[spots.length - 2].x * 0.6, 0, -470)),
+        onGround(new THREE.Vector3(spots[0].x * 0.6, 0, -430)),
         spots[0],
-        onGround(new THREE.Vector3(spots[0].x - 150, 0, spots[0].z + 120)),
+        onGround(new THREE.Vector3(spots[0].x - 300, 0, spots[0].z + 230)),
       ];
       const journey = new THREE.CatmullRomCurve3(journeyPoints, false, "catmullrom", 0.4);
       const roadLength = journey.getLength();
@@ -375,7 +392,7 @@ export function SkillsTitlesPage() {
       })();
 
       const ROAD_WIDTH = 9;
-      const roadSamples = 1600;
+      const roadSamples = 2600;
       const lanePositions = new Float32Array((roadSamples + 1) * 6);
       const laneUvs = new Float32Array((roadSamples + 1) * 4);
       const laneIndex: number[] = [];
