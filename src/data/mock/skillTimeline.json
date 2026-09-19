@@ -1,20 +1,21 @@
 {
-  "comment": "MOCK DATA, not wired into the site. A shape to play with for 'how long have I done X'. Skills are ticked per job; spans default to the job's own dates, and only need start/end when a skill began or ended mid-job. Totals are computed (npm run skills:report), never stored, and overlapping jobs are merged so no year is counted twice.",
+  "comment": "MOCK DATA, not wired into the site. How long each skill was used, in years, at each job. No self-ratings. 'years' is what you'd say out loud: 'at InvestCloud, 5 years of Java, the last 3 heavy on C#'. Rules: years can't exceed the job's own length, and when jobs overlap in the calendar (StormScape ran alongside others) the totals are capped by the real calendar span so no year is counted twice. 'when' is optional and only says where in the job it sat (start, middle, end, throughout) — it drives timelines, never the totals. Run: npm run skills:report",
   "capabilities": [
     { "slug": "backend", "name": "Backend", "blurb": "Server-side languages, APIs and services" },
     { "slug": "frontend-frameworks", "name": "Frontend frameworks", "blurb": "Component-based SPA work" },
     { "slug": "web-fundamentals", "name": "Web fundamentals", "blurb": "HTML, CSS, JavaScript, browser craft" },
-    { "slug": "cloud-devops", "name": "Cloud & DevOps", "blurb": "Hosting, pipelines, containers" },
+    { "slug": "cloud", "name": "Cloud platforms", "blurb": "AWS and Azure: hosting, services, pipelines" },
+    { "slug": "hosting", "name": "Servers & hosting", "blurb": "Linux, LAMP, data centre era" },
     { "slug": "data", "name": "Data & messaging", "blurb": "Databases, queues, integrations" },
     { "slug": "testing", "name": "Testing & automation", "blurb": "Test frameworks and automation platforms" },
-    { "slug": "leadership", "name": "Leadership & product", "blurb": "Leading teams, owning roadmaps" }
+    { "slug": "leadership", "name": "Leadership & product", "blurb": "Leading engineers, owning roadmaps, client delivery" }
   ],
   "skills": [
     { "slug": "csharp-dotnet", "name": "C# / .NET", "capability": "backend" },
+    { "slug": "csharp-webapi", "name": "C# Web API", "capability": "backend" },
     { "slug": "java", "name": "Java / Spring Boot", "capability": "backend" },
     { "slug": "php", "name": "PHP", "capability": "backend" },
     { "slug": "node", "name": "Node.js", "capability": "backend" },
-    { "slug": "rest-apis", "name": "REST APIs", "capability": "backend" },
     { "slug": "angular", "name": "Angular", "capability": "frontend-frameworks" },
     { "slug": "react", "name": "React / Redux", "capability": "frontend-frameworks" },
     { "slug": "nextjs", "name": "Next.js", "capability": "frontend-frameworks" },
@@ -23,11 +24,12 @@
     { "slug": "html-css", "name": "HTML / CSS", "capability": "web-fundamentals" },
     { "slug": "jquery", "name": "jQuery", "capability": "web-fundamentals" },
     { "slug": "animation", "name": "Animation (GSAP, Framer, Three.js)", "capability": "web-fundamentals" },
-    { "slug": "azure", "name": "Azure", "capability": "cloud-devops" },
-    { "slug": "aws", "name": "AWS", "capability": "cloud-devops" },
-    { "slug": "docker", "name": "Docker", "capability": "cloud-devops" },
-    { "slug": "cicd", "name": "CI/CD pipelines", "capability": "cloud-devops" },
-    { "slug": "linux-hosting", "name": "Linux hosting / LAMP", "capability": "cloud-devops" },
+    { "slug": "azure", "name": "Azure", "capability": "cloud" },
+    { "slug": "aws", "name": "AWS", "capability": "cloud" },
+    { "slug": "docker", "name": "Docker", "capability": "cloud" },
+    { "slug": "cicd", "name": "CI/CD pipelines", "capability": "cloud" },
+    { "slug": "linux-hosting", "name": "Linux hosting / LAMP", "capability": "hosting" },
+    { "slug": "datacenter", "name": "Data centre operations", "capability": "hosting" },
     { "slug": "sql", "name": "SQL databases", "capability": "data" },
     { "slug": "mongodb", "name": "MongoDB", "capability": "data" },
     { "slug": "rabbitmq", "name": "RabbitMQ", "capability": "data" },
@@ -46,26 +48,26 @@
       "start": "2018-04",
       "end": "2025-06",
       "uses": [
-        { "skill": "angular", "level": "primary" },
-        { "skill": "react", "level": "secondary" },
-        { "skill": "typescript", "level": "primary" },
-        { "skill": "javascript", "level": "primary" },
-        { "skill": "html-css", "level": "primary" },
-        { "skill": "csharp-dotnet", "level": "primary", "start": "2020-01" },
-        { "skill": "java", "level": "secondary" },
-        { "skill": "node", "level": "secondary" },
-        { "skill": "rest-apis", "level": "primary" },
-        { "skill": "sql", "level": "secondary" },
-        { "skill": "mongodb", "level": "secondary", "start": "2021-01" },
-        { "skill": "rabbitmq", "level": "secondary", "start": "2021-01" },
-        { "skill": "azure", "level": "primary", "start": "2020-06" },
-        { "skill": "cicd", "level": "primary" },
-        { "skill": "docker", "level": "secondary", "start": "2020-06" },
-        { "skill": "playwright", "level": "primary", "start": "2022-01" },
-        { "skill": "selenium", "level": "primary", "end": "2022-06" },
-        { "skill": "test-platforms", "level": "primary" },
-        { "skill": "team-lead", "level": "primary", "start": "2024-02" },
-        { "skill": "product-owner", "level": "primary", "start": "2024-02" }
+        { "skill": "angular", "years": 4, "when": "start" },
+        { "skill": "react", "years": 2, "when": "end" },
+        { "skill": "typescript", "years": 7 },
+        { "skill": "javascript", "years": 7 },
+        { "skill": "html-css", "years": 7 },
+        { "skill": "java", "years": 5, "when": "start" },
+        { "skill": "csharp-dotnet", "years": 3, "when": "end" },
+        { "skill": "csharp-webapi", "years": 2, "when": "end" },
+        { "skill": "node", "years": 3 },
+        { "skill": "sql", "years": 5 },
+        { "skill": "mongodb", "years": 2, "when": "end" },
+        { "skill": "rabbitmq", "years": 2, "when": "end" },
+        { "skill": "azure", "years": 4, "when": "end" },
+        { "skill": "docker", "years": 3, "when": "end" },
+        { "skill": "cicd", "years": 6 },
+        { "skill": "selenium", "years": 4, "when": "start" },
+        { "skill": "playwright", "years": 3, "when": "end" },
+        { "skill": "test-platforms", "years": 6 },
+        { "skill": "team-lead", "years": 2, "when": "end" },
+        { "skill": "product-owner", "years": 2, "when": "end" }
       ]
     },
     {
@@ -74,20 +76,18 @@
       "start": "2014-10",
       "end": "2017-07",
       "uses": [
-        { "skill": "react", "level": "primary" },
-        { "skill": "nextjs", "level": "primary" },
-        { "skill": "javascript", "level": "primary" },
-        { "skill": "html-css", "level": "primary" },
-        { "skill": "animation", "level": "primary" },
-        { "skill": "java", "level": "secondary" },
-        { "skill": "php", "level": "secondary" },
-        { "skill": "rest-apis", "level": "primary" },
-        { "skill": "sql", "level": "secondary" },
-        { "skill": "cms", "level": "secondary" },
-        { "skill": "aws", "level": "primary" },
-        { "skill": "azure", "level": "exposure" },
-        { "skill": "docker", "level": "primary" },
-        { "skill": "cicd", "level": "primary" }
+        { "skill": "react", "years": 3 },
+        { "skill": "nextjs", "years": 2, "when": "end" },
+        { "skill": "javascript", "years": 3 },
+        { "skill": "html-css", "years": 3 },
+        { "skill": "animation", "years": 2 },
+        { "skill": "java", "years": 2 },
+        { "skill": "php", "years": 1 },
+        { "skill": "sql", "years": 3 },
+        { "skill": "cms", "years": 1 },
+        { "skill": "aws", "years": 3 },
+        { "skill": "docker", "years": 2 },
+        { "skill": "cicd", "years": 3 }
       ]
     },
     {
@@ -96,15 +96,14 @@
       "start": "2010-08",
       "end": "2014-06",
       "uses": [
-        { "skill": "php", "level": "primary" },
-        { "skill": "javascript", "level": "primary" },
-        { "skill": "jquery", "level": "primary" },
-        { "skill": "html-css", "level": "primary" },
-        { "skill": "rest-apis", "level": "secondary" },
-        { "skill": "sql", "level": "primary" },
-        { "skill": "cms", "level": "secondary" },
-        { "skill": "aws", "level": "secondary" },
-        { "skill": "linux-hosting", "level": "secondary" }
+        { "skill": "php", "years": 4 },
+        { "skill": "javascript", "years": 4 },
+        { "skill": "jquery", "years": 4 },
+        { "skill": "html-css", "years": 4 },
+        { "skill": "sql", "years": 4 },
+        { "skill": "cms", "years": 2 },
+        { "skill": "aws", "years": 2, "when": "end" },
+        { "skill": "linux-hosting", "years": 2 }
       ]
     },
     {
@@ -113,9 +112,8 @@
       "start": "2008-04",
       "end": "2009-04",
       "uses": [
-        { "skill": "html-css", "level": "primary" },
-        { "skill": "javascript", "level": "primary" },
-        { "skill": "java", "level": "exposure" }
+        { "skill": "html-css", "years": 1 },
+        { "skill": "javascript", "years": 1 }
       ]
     },
     {
@@ -124,9 +122,9 @@
       "start": "2005-05",
       "end": "2008-04",
       "uses": [
-        { "skill": "html-css", "level": "primary" },
-        { "skill": "javascript", "level": "secondary" },
-        { "skill": "cms", "level": "primary" }
+        { "skill": "html-css", "years": 3 },
+        { "skill": "javascript", "years": 2 },
+        { "skill": "cms", "years": 3 }
       ]
     },
     {
@@ -135,10 +133,11 @@
       "start": "2001-01",
       "end": "2002-01",
       "uses": [
-        { "skill": "html-css", "level": "primary" },
-        { "skill": "php", "level": "primary" },
-        { "skill": "linux-hosting", "level": "primary" },
-        { "skill": "sql", "level": "secondary" }
+        { "skill": "html-css", "years": 1 },
+        { "skill": "php", "years": 1 },
+        { "skill": "linux-hosting", "years": 1 },
+        { "skill": "datacenter", "years": 1 },
+        { "skill": "sql", "years": 1 }
       ]
     },
     {
@@ -147,13 +146,13 @@
       "start": "2000-01",
       "end": "2010-01",
       "uses": [
-        { "skill": "html-css", "level": "primary" },
-        { "skill": "javascript", "level": "primary" },
-        { "skill": "php", "level": "primary" },
-        { "skill": "sql", "level": "primary" },
-        { "skill": "cms", "level": "primary" },
-        { "skill": "linux-hosting", "level": "primary" },
-        { "skill": "client-delivery", "level": "primary" }
+        { "skill": "html-css", "years": 10 },
+        { "skill": "javascript", "years": 8 },
+        { "skill": "php", "years": 8 },
+        { "skill": "sql", "years": 8 },
+        { "skill": "cms", "years": 6 },
+        { "skill": "linux-hosting", "years": 6 },
+        { "skill": "client-delivery", "years": 10 }
       ]
     }
   ],
@@ -161,14 +160,15 @@
     {
       "label": "harmadavtian.com (this site)",
       "start": "2025-01",
+      "end": "2026-09",
       "uses": [
-        { "skill": "react", "level": "primary" },
-        { "skill": "typescript", "level": "primary" },
-        { "skill": "node", "level": "primary" },
-        { "skill": "animation", "level": "primary" },
-        { "skill": "azure", "level": "primary" },
-        { "skill": "mongodb", "level": "primary" },
-        { "skill": "cicd", "level": "primary" }
+        { "skill": "react", "years": 2 },
+        { "skill": "typescript", "years": 2 },
+        { "skill": "node", "years": 2 },
+        { "skill": "animation", "years": 2 },
+        { "skill": "azure", "years": 2 },
+        { "skill": "mongodb", "years": 1 },
+        { "skill": "cicd", "years": 2 }
       ]
     }
   ]
