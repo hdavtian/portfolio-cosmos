@@ -531,7 +531,6 @@ export function SkillsTitlesPage() {
       interface Placed {
         build: Build;
         sprite: ThreeTypes.Sprite;
-        ground: ThreeTypes.Mesh;
         /** How this stop is filmed. */
         move: string;
         /** A second visit: the place that is already here grows instead. */
@@ -550,7 +549,6 @@ export function SkillsTitlesPage() {
           placed.push({
             build: first.build,
             sprite: first.sprite,
-            ground: first.ground,
             move: "homecoming",
             later: true,
             away: first.away,
@@ -576,32 +574,78 @@ export function SkillsTitlesPage() {
         sprite.position.copy(build.group.position).add(new THREE.Vector3(0, 66, 0));
         scene.add(sprite);
 
-        // The name is laid over the ground rather than floating on one flat
-        // panel, so a rise in the land can't swallow half the letters.
-        const groundZ = build.group.position.z + 48;
-        const groundX = build.group.position.x + 6;
-        const groundShape = new THREE.PlaneGeometry(62, 10, 56, 10);
-        groundShape.rotateX(-Math.PI / 2);
-        const drape = groundShape.attributes.position;
-        for (let i = 0; i < drape.count; i += 1) {
-          drape.setY(i, heightAt(groundX + drape.getX(i), groundZ + drape.getZ(i)) + 1.4);
-        }
-        drape.needsUpdate = true;
-        const ground = new THREE.Mesh(
-          groundShape,
+        placed.push({ build, sprite, move: city.kind, later: false, away: index % 2 === 0 ? 1 : -1 });
+      });
+
+      /** A board on a gantry, the way a freeway announces what is coming up. */
+      const signFace = (name: string, years: string) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1024;
+        canvas.height = 256;
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#0a1018";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "#e6be72";
+        ctx.lineWidth = 8;
+        ctx.strokeRect(14, 14, canvas.width - 28, canvas.height - 28);
+        ctx.fillStyle = "#f4e6c8";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.letterSpacing = "6px";
+        ctx.font = '700 88px "Cinzel", "Barlow Condensed", Georgia, serif';
+        ctx.fillText(name, canvas.width / 2, 104, canvas.width - 70);
+        ctx.fillStyle = "rgba(230, 190, 114, 0.85)";
+        ctx.letterSpacing = "12px";
+        ctx.font = '600 44px "JetBrains Mono", Menlo, monospace';
+        ctx.fillText(years, canvas.width / 2, 186, canvas.width - 90);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        return texture;
+      };
+
+      cities.forEach((city, index) => {
+        // Stand it back up the road, so it is read on the way in.
+        const at = Math.max(0, cityArc[index] - 170 / roadLength);
+        journey.getPointAt(at, lanePoint);
+        journey.getTangentAt(at, laneHeading);
+        laneHeading.y = 0;
+        laneHeading.normalize();
+        laneSide.set(laneHeading.z, 0, -laneHeading.x);
+
+        const sign = new THREE.Group();
+        sign.position.set(lanePoint.x, heightAt(lanePoint.x, lanePoint.z), lanePoint.z);
+        // Face back down the road at whoever is coming.
+        sign.rotation.y = Math.atan2(-laneHeading.x, -laneHeading.z);
+        scene.add(sign);
+
+        const POST = 26;
+        const REACH = ROAD_WIDTH + 5;
+        [1, -1].forEach((which) => {
+          const post = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.7, 0.9, POST, 6),
+            new THREE.MeshStandardMaterial({ color: 0x6f5a33, metalness: 0.6, roughness: 0.5 }),
+          );
+          post.position.set(which * REACH, POST / 2, 0);
+          sign.add(post);
+        });
+        const beam = new THREE.Mesh(
+          new THREE.BoxGeometry(REACH * 2 + 2.4, 1.2, 1.2),
+          new THREE.MeshStandardMaterial({ color: 0x6f5a33, metalness: 0.6, roughness: 0.5 }),
+        );
+        beam.position.y = POST;
+        sign.add(beam);
+
+        const years = `${Math.round(city.from)} – ${city.to >= LAST_YEAR - 1 ? "NOW" : Math.round(city.to)}`;
+        const board = new THREE.Mesh(
+          new THREE.PlaneGeometry(REACH * 2.4, REACH * 0.62),
           new THREE.MeshBasicMaterial({
-            map: nameTexture(shown, 66, "#e6be72", 10),
+            map: signFace(city.name.split(" (")[0].toUpperCase(), years),
             transparent: true,
-            opacity: 0,
-            depthWrite: false,
-            polygonOffset: true,
-            polygonOffsetFactor: -4,
+            side: THREE.DoubleSide,
           }),
         );
-        ground.position.set(groundX, 0, groundZ);
-        scene.add(ground);
-
-        placed.push({ build, sprite, ground, move: city.kind, later: false, away: index % 2 === 0 ? 1 : -1 });
+        board.position.y = POST - REACH * 0.36;
+        sign.add(board);
       });
 
       const resize = () => {
@@ -752,7 +796,10 @@ export function SkillsTitlesPage() {
         (wayHome.material as ThreeTypes.MeshBasicMaterial).opacity =
           0.95 * softly(reveal, reveal + (turnForHome.to - turnForHome.from) * 0.5, p);
 
-        controls.setLookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, true);
+        // Damp along the road, but cut on a big jump — clicking a stop or
+        // flinging the scrubber should arrive, not fly across the map.
+        const leap = camera.position.distanceTo(eye) > 260;
+        controls.setLookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, !leap);
         controls.update(Math.min(0.05, clock.getDelta()));
         glint.position.copy(camera.position).add(new THREE.Vector3(0, 10, 0));
 
@@ -776,7 +823,6 @@ export function SkillsTitlesPage() {
           // The name announces the place on arrival, then gets out of the way
           // while the scrubber builds it.
           (stop.sprite.material as ThreeTypes.SpriteMaterial).opacity = Math.min(1, built * 2) * (1 - focus * 0.82);
-          (stop.ground.material as ThreeTypes.MeshBasicMaterial).opacity = 0.15 + built * 0.6;
         });
 
         renderer.render(scene, camera);
