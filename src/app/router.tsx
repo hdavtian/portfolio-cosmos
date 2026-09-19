@@ -38,6 +38,12 @@ const PortfolioDetailPage = lazy(() =>
     default: module.PortfolioDetailPage,
   })),
 );
+// Sketches for the skill timeline (mock data, not linked from the site).
+const SkillsLabPage = lazy(() =>
+  import("../features/lab/SkillsLabPage").then((module) => ({
+    default: module.SkillsLabPage,
+  })),
+);
 const ShowcaseResumePage = lazy(() =>
   import("../features/showcase/pages/ShowcaseResumePage").then((module) => ({
     default: module.ShowcaseResumePage,
@@ -74,6 +80,8 @@ const routes: RouteObject[] = [
           },
         ],
       },
+      // Sketches for the skill timeline: mock data, not linked from the site.
+      { path: "lab/skills", element: <LazyRoute><SkillsLabPage /></LazyRoute> },
       {
         // Previous portfolio, kept for comparison until the redesign is approved.
         path: "portfolio-classic",

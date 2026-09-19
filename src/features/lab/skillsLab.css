@@ -1,0 +1,316 @@
+/* Sketches page for the skill timeline. Mock data, not part of the site. */
+.lab {
+  --lab-ink: #e8f4f0;
+  --lab-dim: rgba(232, 244, 240, 0.55);
+  --lab-mono: "JetBrains Mono", Menlo, Consolas, monospace;
+  --lab-display: "Barlow Condensed", Oswald, Impact, sans-serif;
+
+  min-height: 100vh;
+  padding: clamp(24px, 4vw, 64px) clamp(16px, 4vw, 64px) 20vh;
+  background: radial-gradient(ellipse at 20% -10%, #0d2030 0%, #05080c 55%, #04060a 100%);
+  color: var(--lab-ink);
+  font-family: var(--lab-mono);
+}
+
+.lab__eyebrow {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--lab-dim);
+}
+
+.lab__title {
+  margin: 8px 0 10px;
+  font-family: var(--lab-display);
+  font-weight: 900;
+  font-size: clamp(2.4rem, 6vw, 5rem);
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.lab__lede {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--lab-dim);
+}
+
+/* The year marker that follows the scroll. */
+.lab__rail {
+  position: sticky;
+  top: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 28px 0 8px;
+  padding: 8px 14px;
+  background: rgba(6, 12, 18, 0.82);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(122, 226, 156, 0.3);
+}
+
+.lab__rail-year {
+  font-family: var(--lab-display);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  color: #7ae29c;
+}
+
+.lab__rail-live {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lab-dim);
+}
+
+.lab__rail-track {
+  flex: 1;
+  height: 2px;
+  background: rgba(122, 226, 156, 0.18);
+}
+
+.lab__rail-fill {
+  display: block;
+  height: 100%;
+  background: #7ae29c;
+  box-shadow: 0 0 10px rgba(122, 226, 156, 0.8);
+}
+
+.lab__panel {
+  margin-top: clamp(48px, 9vh, 110px);
+}
+
+.lab__panel-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #7ae29c;
+}
+
+.lab__panel-note {
+  margin: 0 0 18px;
+  max-width: 70ch;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--lab-dim);
+}
+
+.lab__foot {
+  margin-top: 12vh;
+  font-size: 11px;
+  color: var(--lab-dim);
+}
+
+/* 01 counters */
+.lab-counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+}
+
+.lab-counter {
+  padding: 16px 16px 14px;
+  border: 1px solid rgba(232, 244, 240, 0.14);
+  background: linear-gradient(160deg, rgba(14, 30, 40, 0.7), rgba(8, 16, 22, 0.35));
+}
+
+.lab-counter__value {
+  display: block;
+  font-family: var(--lab-display);
+  font-size: 46px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-counter__unit {
+  margin-left: 6px;
+  font-family: var(--lab-mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--lab-dim);
+}
+
+.lab-counter__label {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lab-counter__range {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--lab-dim);
+}
+
+/* 02 ribbon */
+.lab-ribbon {
+  position: relative;
+  overflow-x: auto;
+}
+
+.lab-ribbon__svg {
+  width: 100%;
+  min-width: 860px;
+}
+
+.lab-ribbon__label {
+  fill: rgba(232, 244, 240, 0.8);
+  font-family: var(--lab-mono);
+  font-size: 10px;
+}
+
+.lab-ribbon__bar {
+  opacity: 0.45;
+  rx: 2;
+}
+
+.lab-ribbon__bar.is-exact {
+  opacity: 0.95;
+}
+
+.lab-ribbon__axis text,
+.lab-stream__axis text {
+  fill: rgba(232, 244, 240, 0.5);
+  font-family: var(--lab-mono);
+  font-size: 10px;
+}
+
+.lab-ribbon__axis path,
+.lab-ribbon__axis line,
+.lab-stream__axis path,
+.lab-stream__axis line {
+  stroke: rgba(232, 244, 240, 0.2);
+}
+
+.lab-ribbon__now,
+.lab-stream__now {
+  position: absolute;
+  top: 0;
+  bottom: 24px;
+  width: 1px;
+  background: #7ae29c;
+  box-shadow: 0 0 12px rgba(122, 226, 156, 0.9);
+  pointer-events: none;
+}
+
+/* 03 stream */
+.lab-stream {
+  position: relative;
+}
+
+.lab-stream__svg {
+  width: 100%;
+}
+
+.lab-legend {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 11px;
+  color: var(--lab-dim);
+}
+
+.lab-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lab-legend__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+/* 04 pulse */
+.lab-pulse {
+  display: block;
+  width: 100%;
+  height: 220px;
+  background: #060a0e;
+  border: 1px solid rgba(122, 226, 156, 0.22);
+}
+
+/* 05 terrain */
+.lab-terrain {
+  width: 100%;
+  height: 380px;
+  border: 1px solid rgba(232, 244, 240, 0.12);
+  background: radial-gradient(ellipse at 50% 120%, rgba(20, 60, 80, 0.5), rgba(4, 8, 12, 0.9));
+}
+
+.lab-terrain canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 06 matrix */
+.lab-matrix {
+  overflow-x: auto;
+}
+
+.lab-matrix table {
+  border-collapse: collapse;
+  font-size: 11px;
+  min-width: 720px;
+}
+
+.lab-matrix th,
+.lab-matrix td {
+  padding: 5px 8px;
+  text-align: center;
+  border-bottom: 1px solid rgba(232, 244, 240, 0.08);
+}
+
+.lab-matrix thead th {
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lab-dim);
+}
+
+.lab-matrix tbody th {
+  text-align: left;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.lab-matrix__cell {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 20px;
+  color: #04121a;
+  font-weight: 700;
+}
+
+/* 07 rings */
+.lab-rings {
+  width: min(100%, 460px);
+}
+
+.lab-rings__label {
+  fill: rgba(232, 244, 240, 0.72);
+  font-family: var(--lab-mono);
+  font-size: 9px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lab-pulse,
+  .lab-terrain {
+    display: none;
+  }
+}
