@@ -484,27 +484,29 @@ export const KIND_BY_PLACE: Record<string, string> = {
 export const KIND_ORDER = ["spires", "racks", "ziggurat", "keep", "mast", "carousel", "skyline", "orrery"];
 
 /**
- * How a stop is filmed. The camera always arrives on the heading it was
- * travelling and leaves on the heading of the next leg, so these only say how
- * it behaves in between: how far it swings past the straight line, how much
- * it pulls back or pushes in, and how much it rises.
+ * How a stop is filmed. The camera never turns around and never backs up: it
+ * keeps going the way it was going, slowing to a crawl as it closes on the
+ * place. These say what it does while it creeps: how far it drifts to one
+ * side, how much it hangs back or leans in, how much it rises, and how far
+ * the place itself turns under it.
  */
 export interface Move {
-  swing: number;
+  side: number;
   zoom: number;
   lift: number;
   look: number;
+  spin: number;
 }
 
 export const MOVES: Record<string, Move> = {
-  spires: { swing: -0.55, zoom: -16, lift: 8, look: 26 },
-  racks: { swing: 0.4, zoom: -30, lift: -8, look: 14 },
-  ziggurat: { swing: -0.7, zoom: -18, lift: 20, look: 18 },
-  keep: { swing: 0.75, zoom: -22, lift: -6, look: 16 },
-  mast: { swing: -0.5, zoom: 16, lift: 24, look: 28 },
-  carousel: { swing: 0.85, zoom: -26, lift: 6, look: 20 },
-  skyline: { swing: -0.6, zoom: 20, lift: 28, look: 32 },
-  orrery: { swing: 0.95, zoom: -18, lift: 12, look: 20 },
+  spires: { side: -34, zoom: 12, lift: 8, look: 10, spin: 0.5 },
+  racks: { side: 42, zoom: -18, lift: -6, look: 2, spin: -0.6 },
+  ziggurat: { side: -30, zoom: -8, lift: 18, look: 8, spin: 0.7 },
+  keep: { side: 46, zoom: -4, lift: -4, look: 2, spin: -0.5 },
+  mast: { side: -26, zoom: 20, lift: 24, look: 14, spin: 0.3 },
+  carousel: { side: 38, zoom: -14, lift: 8, look: 6, spin: -0.75 },
+  skyline: { side: -44, zoom: 18, lift: 28, look: 16, spin: 0.45 },
+  orrery: { side: 34, zoom: -12, lift: 12, look: 8, spin: 0.6 },
   // Coming home: the camp is bigger than it was, so the camera gives it room.
-  homecoming: { swing: 0.7, zoom: 22, lift: 22, look: 26 },
+  homecoming: { side: 30, zoom: 24, lift: 20, look: 12, spin: -0.4 },
 };

@@ -273,6 +273,16 @@ export function SkillsTitlesPage() {
       });
       const points = cities.map((city) => spots[city.spot]);
 
+      // The road runs past each place, not through it: every stop stands off
+      // to one side, alternating, so the camera can fly by and look across.
+      const STAND_OFF = 68;
+      const standOff = spots.map((_spot, index) => {
+        const before = spots[Math.max(0, index - 1)];
+        const after = spots[Math.min(spots.length - 1, index + 1)];
+        const dir = new THREE.Vector3().subVectors(after, before).setY(0).normalize();
+        return new THREE.Vector3(dir.z, 0, -dir.x).multiplyScalar(index % 2 === 0 ? STAND_OFF : -STAND_OFF);
+      });
+
       const terrain = new THREE.PlaneGeometry(2600, 900, 170, 70);
       const position = terrain.attributes.position;
       const colours = new Float32Array(position.count * 3);
@@ -390,7 +400,8 @@ export function SkillsTitlesPage() {
           tallest,
           laterCity?.entries.slice(0, TOWER_LIMIT),
         );
-        build.group.position.copy(points[index]);
+        build.group.position.copy(points[index]).add(standOff[city.spot]);
+        build.group.position.y = heightAt(build.group.position.x, build.group.position.z);
         scene.add(build.group);
 
         const shown = city.name.split(" (")[0].toUpperCase();
@@ -428,99 +439,93 @@ export function SkillsTitlesPage() {
       window.addEventListener("resize", resize);
 
       const legs = cities.length;
-      const travelLegs = timeline.filter((entry) => entry.kind === "travel");
       const eye = new THREE.Vector3();
       const target = new THREE.Vector3();
       const spare = new THREE.Vector3();
-      const spareTwo = new THREE.Vector3();
+      const ahead = new THREE.Vector3();
       const heading = new THREE.Vector3();
-      const eyeIn = new THREE.Vector3();
-      const lookIn = new THREE.Vector3();
-      const eyeOut = new THREE.Vector3();
-      const lookOut = new THREE.Vector3();
+      const side = new THREE.Vector3();
       const ease = (t: number) => t * t * (3 - 2 * t);
 
       const TRAIL = 104;
       const RIDE_HEIGHT = 48;
       const RIDE_LOOK = 22;
+      // A stop is the last stretch of the approach: the camera keeps moving
+      // forward through it, just very slowly.
+      const SPAN = 1 / (legs - 2);
+      const PRE = 0.62;
+      const POST = 0.16;
 
-      // On the way home the camera looks back over everywhere it has been,
-      // in reverse, before turning to the studio coming up.
+      // On the way home the camera looks back over everywhere it has been.
       const recap = new THREE.CatmullRomCurve3([...points.slice(0, -1)].reverse(), false, "catmullrom", 0.4);
 
-      /** Where a leg is at this point, and which way it is heading. */
-      const legPoint = (segment: Segment, t: number, into: ThreeTypes.Vector3) => {
+      /**
+       * Where along the journey a moment sits. Travel covers the road between
+       * places; a stop covers the last of the approach and a little of the
+       * departure. Both are eased, so the camera slows to nothing at the seam
+       * and never jumps or reverses.
+       */
+      const placeOn = (segment: Segment, t: number) => {
+        const eased = ease(t);
+        const last = segment.city === legs - 1;
         if (segment.previous < 0) {
-          opening.getPoint(t, into);
-          opening.getTangent(t, heading);
-        } else if (segment.city === legs - 1) {
-          homeward.getPoint(t, into);
-          homeward.getTangent(t, heading);
-        } else {
-          const span = 1 / (legs - 2);
-          const u = Math.min(1, (segment.previous + t) * span);
-          outward.getPoint(u, into);
-          outward.getTangent(u, heading);
+          return { curve: opening, u: segment.kind === "travel" ? eased * 0.45 : 0.45 + eased * 0.55 };
         }
-        heading.y = 0;
-        heading.normalize();
-      };
-
-      /** Travelling: the camera trails the road and looks the way it is going. */
-      const travelPose = (segment: Segment, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
-        legPoint(segment, t, spare);
-        const ground = heightAt(spare.x, spare.z);
-        // The way home flies lower, so the places it passes fill the frame.
-        const lift = segment.city === legs - 1 ? 30 : RIDE_HEIGHT;
-        into.set(spare.x - heading.x * TRAIL, ground + lift, spare.z - heading.z * TRAIL);
-        if (segment.city === legs - 1) {
-          recap.getPoint(Math.min(1, t / 0.6), look);
-          look.y = heightAt(look.x, look.z) + RIDE_LOOK + 4;
-          // Half way home, turn from the past towards the studio ahead.
-          const home = placed[legs - 1].build.group.position;
-          const turn = ease(Math.max(0, Math.min(1, (t - 0.5) / 0.4)));
-          look.lerp(spareTwo.set(home.x, home.y + RIDE_LOOK, home.z), turn);
-        } else {
-          look.set(spare.x + heading.x * 44, ground + RIDE_LOOK, spare.z + heading.z * 44);
+        if (last) {
+          return { curve: homeward, u: segment.kind === "travel" ? eased * 0.62 : 0.62 + eased * 0.38 };
         }
+        const here = segment.city * SPAN;
+        if (segment.kind === "travel") {
+          const from = segment.previous * SPAN + POST * SPAN;
+          const to = here - PRE * SPAN;
+          return { curve: outward, u: from + (to - from) * eased };
+        }
+        const from = here - PRE * SPAN;
+        const to = Math.min(1, here + POST * SPAN);
+        return { curve: outward, u: from + (to - from) * eased };
       };
 
       /**
-       * Standing at a stop: the camera arrives on the heading it was
-       * travelling and leaves on the heading of the next leg, so the whole run
-       * is one move. In between it swings past the straight line, breathes in
-       * or out, and rises a little — differently at each place.
+       * The camera always faces the way it is travelling. Character comes from
+       * drifting to one side, hanging back or leaning in, and rising — never
+       * from turning around.
        */
-      const dwellPose = (index: number, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
-        const move = MOVES[placed[index].move] ?? MOVES.spires;
-        const spot = placed[index].build.group.position;
-        travelPose(travelLegs[index], 1, eyeIn, lookIn);
-        const leave = travelLegs[index + 1];
-        if (leave) travelPose(leave, 0, eyeOut, lookOut);
-        else {
-          eyeOut.copy(eyeIn);
-          lookOut.copy(lookIn);
+      const pose = (segment: Segment, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
+        const { curve, u } = placeOn(segment, t);
+        curve.getPoint(u, spare);
+        curve.getTangent(u, heading);
+        heading.y = 0;
+        heading.normalize();
+        side.set(heading.z, 0, -heading.x);
+
+        const move = MOVES[placed[segment.city].move] ?? MOVES.spires;
+        // Only a stop has character; on the road it is zero at both ends, so
+        // the two flow into each other.
+        const bulge = segment.kind === "dwell" ? Math.sin(Math.PI * t) : 0;
+        const ground = heightAt(spare.x, spare.z);
+        const lift = segment.city === legs - 1 && segment.kind === "travel" ? 30 : RIDE_HEIGHT;
+
+        into.set(
+          spare.x - heading.x * (TRAIL + move.zoom * bulge) + side.x * move.side * bulge,
+          ground + lift + move.lift * bulge,
+          spare.z - heading.z * (TRAIL + move.zoom * bulge) + side.z * move.side * bulge,
+        );
+
+        ahead.set(spare.x + heading.x * 44, ground + RIDE_LOOK + move.look * bulge, spare.z + heading.z * 44);
+        if (segment.kind === "dwell") {
+          // Keep the place itself in the middle of the frame as it goes up.
+          const spot = placed[segment.city].build.group.position;
+          look.set(spot.x, spot.y + RIDE_LOOK + move.look * bulge, spot.z);
+          look.lerpVectors(ahead, look, bulge * 0.85);
+        } else if (segment.city === legs - 1) {
+          // The way home: look back over the places already built, then turn
+          // to face the studio coming up.
+          recap.getPoint(Math.min(1, t / 0.6), look);
+          look.y = heightAt(look.x, look.z) + RIDE_LOOK + 4;
+          look.lerp(ahead, ease(Math.max(0, Math.min(1, (t - 0.5) / 0.45))));
+        } else {
+          look.copy(ahead);
         }
-
-        const angleIn = Math.atan2(eyeIn.x - spot.x, eyeIn.z - spot.z);
-        let turn = Math.atan2(eyeOut.x - spot.x, eyeOut.z - spot.z) - angleIn;
-        while (turn > Math.PI) turn -= Math.PI * 2;
-        while (turn < -Math.PI) turn += Math.PI * 2;
-
-        const radiusIn = Math.hypot(eyeIn.x - spot.x, eyeIn.z - spot.z);
-        const radiusOut = Math.hypot(eyeOut.x - spot.x, eyeOut.z - spot.z);
-        const heightIn = eyeIn.y - spot.y;
-        const heightOut = eyeOut.y - spot.y;
-
-        const eased = ease(t);
-        const bulge = Math.sin(Math.PI * t);
-        const angle = angleIn + turn * eased + move.swing * bulge;
-        const radius = radiusIn + (radiusOut - radiusIn) * eased + move.zoom * bulge;
-        const height = heightIn + (heightOut - heightIn) * eased + move.lift * bulge;
-
-        into.set(spot.x + Math.sin(angle) * radius, spot.y + height, spot.z + Math.cos(angle) * radius);
-        look.lerpVectors(lookIn, lookOut, eased);
-        look.y += move.look * bulge;
       };
 
       let frame = 0;
@@ -532,8 +537,7 @@ export function SkillsTitlesPage() {
         const segment = segmentAt(timeline, p);
         const t = within(segment, p);
 
-        if (segment.kind === "dwell") dwellPose(segment.city, t, eye, target);
-        else travelPose(segment, t, eye, target);
+        pose(segment, t, eye, target);
 
         camera.position.copy(eye);
         camera.lookAt(target);
@@ -551,6 +555,10 @@ export function SkillsTitlesPage() {
                 : 0;
           if (stop.later) stop.build.growLater?.(built, phase, focus);
           else stop.build.grow(built, phase, focus);
+          if (segment === dwell) {
+            const move = MOVES[stop.move] ?? MOVES.spires;
+            stop.build.group.rotation.y = move.spin * ease(t);
+          }
           stop.sprite.visible = built > 0.02;
           // The name announces the place on arrival, then gets out of the way
           // while the scrubber builds it.
