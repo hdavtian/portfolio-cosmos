@@ -16,6 +16,11 @@
 //      overlapped, so the group gets the longest of them, never their sum.
 //   3. Across jobs, a total is capped by the real calendar span of the places
 //      it was used, so overlapping jobs never invent years.
+//
+// Categories are flat and a skill can be in several of them; a category may
+// set an "era" year to count only from then ("Current stack", from 2014).
+// A skill with a "parent" is part of another (C# Web API inside C#): it adds
+// detail but never its own years to a category.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -143,36 +148,63 @@ const skillTotals = data.skills
   .filter(Boolean)
   .sort((a, b) => b.years - a.years);
 
-/** Per capability: years per place are capped by that place's length, then the same calendar rule. */
-const capabilityTotals = data.capabilities
-  .map((capability) => {
-    const members = new Set(data.skills.filter((skill) => skill.capability === capability.slug).map((s) => s.slug));
+/**
+ * Per category: the years covered inside each place (rule 2), then the calendar
+ * cap (rule 3). Skills that are part of another skill don't add their own
+ * years, and a category with an "era" only counts places from that year on.
+ */
+const categoryTotals = data.categories
+  .map((category) => {
+    const members = new Set(
+      data.skills
+        .filter((skill) => (skill.categories ?? []).includes(category.slug) && !skill.parent)
+        .map((skill) => skill.slug),
+    );
     const used = places
+      .filter((place) => !category.era || place.lastYear >= category.era)
       .map((place) => {
         const uses = place.uses.filter((use) => members.has(use.skill));
-        // Rule 2: the years this group covered inside the job.
         const covered = unionLength(uses.map((use) => placement(use, place.allowance, place)));
-        return { place, years: Math.min(covered, place.allowance) };
+        // An era clips what counts from this place.
+        const room = category.era ? Math.min(place.allowance, place.lastYear - category.era + 1) : place.allowance;
+        return { place, years: Math.min(covered, room) };
       })
       .filter((entry) => entry.years > 0);
     if (used.length === 0) return null;
     const claimed = used.reduce((total, entry) => total + entry.years, 0);
     const calendar = calendarYears(used.map((entry) => entry.place));
-    return { ...capability, years: Math.min(claimed, calendar.years), first: calendar.first, last: calendar.last };
+    const ceiling = category.era
+      ? Math.min(calendar.years, new Date().getFullYear() - category.era + 1)
+      : calendar.years;
+    return {
+      ...category,
+      years: Math.min(claimed, ceiling),
+      first: category.era ? Math.max(calendar.first, category.era) : calendar.first,
+      last: calendar.last,
+    };
   })
-  .filter(Boolean)
-  .sort((a, b) => b.years - a.years);
+  .filter(Boolean);
 
-console.log("\n=== At a glance ===");
-for (const row of capabilityTotals) {
+const byOrder = (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+
+console.log("\n=== At a glance (headline categories, in your order) ===");
+for (const row of categoryTotals.filter((entry) => entry.headline).sort(byOrder)) {
   console.log(`${row.name.padEnd(22)} ${say(row.years).padStart(9)}   ${row.first}–${row.last}`);
 }
 
+const rest = categoryTotals.filter((entry) => !entry.headline).sort(byOrder);
+if (rest.length > 0) {
+  console.log("\n=== Other categories ===");
+  for (const row of rest) {
+    console.log(`${row.name.padEnd(22)} ${say(row.years).padStart(9)}   ${row.first}–${row.last}`);
+  }
+}
+
 // Full stack: places where both backend and frontend work happened.
-const backendish = new Set(data.skills.filter((s) => s.capability === "backend").map((s) => s.slug));
-const frontendish = new Set(
-  data.skills.filter((s) => s.capability === "frontend-frameworks" || s.capability === "web-fundamentals").map((s) => s.slug),
-);
+const inCategory = (slug) =>
+  new Set(data.skills.filter((skill) => (skill.categories ?? []).includes(slug)).map((skill) => skill.slug));
+const backendish = inCategory("backend");
+const frontendish = inCategory("frontend");
 const bothPlaces = places.filter(
   (place) => place.uses.some((u) => backendish.has(u.skill)) && place.uses.some((u) => frontendish.has(u.skill)),
 );
@@ -183,10 +215,11 @@ if (bothPlaces.length > 0) {
 
 console.log("\n=== By skill ===");
 for (const row of skillTotals) {
-  const note = row.capped ? `  (claimed ${row.claimed}, capped by calendar)` : "";
+  const note = row.capped ? `  capped by calendar (claimed ${row.claimed})` : "";
+  const belongs = (row.categories ?? []).join(", ");
   console.log(
-    `${row.name.padEnd(34)} ${say(row.years).padStart(9)}   ${row.first}–${row.last}`.padEnd(64) +
-      `${row.places} place${row.places === 1 ? "" : "s"}${note}`,
+    `${(row.parent ? `  ${row.name} (in ${row.parent})` : row.name).padEnd(34)} ${say(row.years).padStart(9)}   ${row.first}–${row.last}`.padEnd(64) +
+      `${belongs}${note}`,
   );
 }
 
@@ -209,8 +242,8 @@ if (process.argv.includes("--matrix")) {
 }
 
 console.log("\n=== Sentences this would write for you ===");
-const pick = (slug) => capabilityTotals.find((row) => row.slug === slug);
-const sentence = ["backend", "frontend-frameworks", "cloud", "testing"]
+const pick = (slug) => categoryTotals.find((row) => row.slug === slug);
+const sentence = ["backend", "frameworks", "cloud", "testing"]
   .map(pick)
   .filter(Boolean)
   .map((row) => `${say(row.years)} ${row.name.toLowerCase()}`)
