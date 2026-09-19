@@ -352,14 +352,94 @@ export function SkillsTitlesPage() {
         arcOfControl(index === legs - 1 ? journeyPoints.length - 2 : index + 1),
       );
 
-      const road = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(
-          journey.getPoints(900).map((point) => point.clone().setY(heightAt(point.x, point.z) + 1.6)),
-        ),
-        new THREE.LineDashedMaterial({ color: 0xc79a46, dashSize: 5, gapSize: 6, transparent: true, opacity: 0.7 }),
+      // The road itself, laid on the land: dark tarmac with a dashed line down
+      // the middle and bright edges, so the shape of the journey is always
+      // readable and the camera never feels lost on an empty map.
+      const tarmac = (() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 64;
+        canvas.height = 256;
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#0b1017";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "rgba(199, 154, 70, 0.85)";
+        ctx.fillRect(2, 0, 3, canvas.height);
+        ctx.fillRect(canvas.width - 5, 0, 3, canvas.height);
+        ctx.fillStyle = "rgba(240, 216, 168, 0.75)";
+        for (let y = 24; y < canvas.height; y += 84) ctx.fillRect(canvas.width / 2 - 2, y, 4, 40);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        return texture;
+      })();
+
+      const ROAD_WIDTH = 9;
+      const roadSamples = 1600;
+      const lanePositions = new Float32Array((roadSamples + 1) * 6);
+      const laneUvs = new Float32Array((roadSamples + 1) * 4);
+      const laneIndex: number[] = [];
+      const lanePoint = new THREE.Vector3();
+      const laneHeading = new THREE.Vector3();
+      const laneSide = new THREE.Vector3();
+      let run = 0;
+      for (let i = 0; i <= roadSamples; i += 1) {
+        const at = i / roadSamples;
+        journey.getPointAt(at, lanePoint);
+        journey.getTangentAt(at, laneHeading);
+        laneHeading.y = 0;
+        laneHeading.normalize();
+        laneSide.set(laneHeading.z, 0, -laneHeading.x).multiplyScalar(ROAD_WIDTH);
+        if (i > 0) run += (roadLength / roadSamples) / 26;
+        const left = [lanePoint.x + laneSide.x, 0, lanePoint.z + laneSide.z];
+        const right = [lanePoint.x - laneSide.x, 0, lanePoint.z - laneSide.z];
+        left[1] = heightAt(left[0], left[2]) + 0.9;
+        right[1] = heightAt(right[0], right[2]) + 0.9;
+        lanePositions.set(left, i * 6);
+        lanePositions.set(right, i * 6 + 3);
+        laneUvs.set([0, run, 1, run], i * 4);
+        if (i < roadSamples) {
+          const a = i * 2;
+          laneIndex.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        }
+      }
+      const lane = new THREE.BufferGeometry();
+      lane.setAttribute("position", new THREE.BufferAttribute(lanePositions, 3));
+      lane.setAttribute("uv", new THREE.BufferAttribute(laneUvs, 2));
+      lane.setIndex(laneIndex);
+      const road = new THREE.Mesh(
+        lane,
+        new THREE.MeshBasicMaterial({
+          map: tarmac,
+          transparent: true,
+          opacity: 0.95,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+        }),
       );
-      road.computeLineDistances();
       scene.add(road);
+
+      // A marker post either side of the road at every place, like an exit sign.
+      cities.forEach((city, index) => {
+        if (city.spot !== index) return;
+        journey.getPointAt(cityArc[index], lanePoint);
+        journey.getTangentAt(cityArc[index], laneHeading);
+        laneHeading.y = 0;
+        laneHeading.normalize();
+        laneSide.set(laneHeading.z, 0, -laneHeading.x).multiplyScalar(ROAD_WIDTH + 3);
+        [1, -1].forEach((which) => {
+          const post = new THREE.Mesh(
+            new THREE.BoxGeometry(0.8, 9, 0.8),
+            new THREE.MeshBasicMaterial({ color: 0xe6be72 }),
+          );
+          const x = lanePoint.x + laneSide.x * which;
+          const z = lanePoint.z + laneSide.z * which;
+          post.position.set(x, heightAt(x, z) + 4.5, z);
+          scene.add(post);
+        });
+      });
 
       const nameTexture = (text: string, pixels: number, ink: string, spacing: number) => {
         const canvas = document.createElement("canvas");
