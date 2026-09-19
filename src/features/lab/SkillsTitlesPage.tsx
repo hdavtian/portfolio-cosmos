@@ -265,6 +265,7 @@ export function SkillsTitlesPage() {
         Math.sin(x * 0.0072) * 24 + Math.cos(z * 0.019) * 13 + Math.sin(x * 0.023 + z * 0.012) * 8;
 
       // Stops are spread wide; the last one stands where the first one did.
+      const legs = cities.length;
       const SPACING = 150;
       const spots = cities.map((_, index) => {
         const x = (index - (cities.length - 2) / 2) * SPACING;
@@ -275,7 +276,7 @@ export function SkillsTitlesPage() {
 
       // The road runs past each place, not through it: every stop stands off
       // to one side, alternating, so the camera can fly by and look across.
-      const STAND_OFF = 68;
+      const STAND_OFF = 62;
       const standOff = spots.map((_spot, index) => {
         const before = spots[Math.max(0, index - 1)];
         const after = spots[Math.min(spots.length - 1, index + 1)];
@@ -324,38 +325,41 @@ export function SkillsTitlesPage() {
       contours.position.y = 0.4;
       scene.add(contours);
 
-      // The route out, and the long way home at the end.
-      const outward = new THREE.CatmullRomCurve3(points.slice(0, -1), false, "catmullrom", 0.4);
-      const homeward = new THREE.CatmullRomCurve3(
-        [
-          points[points.length - 2],
-          new THREE.Vector3(points[points.length - 2].x * 0.55, 0, -186),
-          new THREE.Vector3(points[0].x * 0.55, 0, -172),
-          points[points.length - 1],
-        ],
-        false,
-        "catmullrom",
-        0.4,
-      );
-      const opening = new THREE.CatmullRomCurve3(
-        [new THREE.Vector3(points[0].x - 230, heightAt(points[0].x - 230, 130), 130), points[0]],
-        false,
-        "catmullrom",
-        0.4,
+      // One road for the whole film: the run in, the places in order, the long
+      // way round behind the hills, and back to the camp it started at.
+      const onGround = (point: ThreeTypes.Vector3) => point.setY(heightAt(point.x, point.z));
+      const journeyPoints = [
+        onGround(new THREE.Vector3(spots[0].x - 250, 0, spots[0].z + 150)),
+        ...spots.slice(0, -1),
+        onGround(new THREE.Vector3(spots[spots.length - 2].x * 0.55, 0, -186)),
+        onGround(new THREE.Vector3(spots[0].x * 0.55, 0, -172)),
+        spots[0],
+        onGround(new THREE.Vector3(spots[0].x - 150, 0, spots[0].z + 120)),
+      ];
+      const journey = new THREE.CatmullRomCurve3(journeyPoints, false, "catmullrom", 0.4);
+      const roadLength = journey.getLength();
+
+      // Where each place sits along that road, measured in distance travelled.
+      const samples = journey.getPoints(1400);
+      const walked = [0];
+      for (let i = 1; i < samples.length; i += 1) {
+        walked.push(walked[i - 1] + samples[i].distanceTo(samples[i - 1]));
+      }
+      const arcOfControl = (index: number) =>
+        walked[Math.round((index / (journeyPoints.length - 1)) * (samples.length - 1))] /
+        walked[walked.length - 1];
+      const cityArc = cities.map((_, index) =>
+        arcOfControl(index === legs - 1 ? journeyPoints.length - 2 : index + 1),
       );
 
-      const drawRoute = (curve: ThreeTypes.CatmullRomCurve3, opacity: number) => {
-        const line = new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints(
-            curve.getPoints(500).map((point) => point.clone().setY(heightAt(point.x, point.z) + 1.6)),
-          ),
-          new THREE.LineDashedMaterial({ color: 0xc79a46, dashSize: 5, gapSize: 6, transparent: true, opacity }),
-        );
-        line.computeLineDistances();
-        scene.add(line);
-      };
-      drawRoute(outward, 0.85);
-      drawRoute(homeward, 0.4);
+      const road = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(
+          journey.getPoints(900).map((point) => point.clone().setY(heightAt(point.x, point.z) + 1.6)),
+        ),
+        new THREE.LineDashedMaterial({ color: 0xc79a46, dashSize: 5, gapSize: 6, transparent: true, opacity: 0.7 }),
+      );
+      road.computeLineDistances();
+      scene.add(road);
 
       const nameTexture = (text: string, pixels: number, ink: string, spacing: number) => {
         const canvas = document.createElement("canvas");
@@ -381,6 +385,8 @@ export function SkillsTitlesPage() {
         move: string;
         /** A second visit: the place that is already here grows instead. */
         later: boolean;
+        /** Which side of the road this place stands on, so the camera leans off the other way. */
+        away: number;
       }
 
       const tallest = Math.max(1, ...cities.flatMap((city) => city.entries.map((entry) => entry.years)));
@@ -390,7 +396,14 @@ export function SkillsTitlesPage() {
         // already standing grows, and new work raises new pillars.
         if (city.spot !== index) {
           const first = placed[city.spot];
-          placed.push({ build: first.build, sprite: first.sprite, ground: first.ground, move: "homecoming", later: true });
+          placed.push({
+            build: first.build,
+            sprite: first.sprite,
+            ground: first.ground,
+            move: "homecoming",
+            later: true,
+            away: first.away,
+          });
           return;
         }
 
@@ -427,7 +440,7 @@ export function SkillsTitlesPage() {
         ground.position.set(groundX, heightAt(groundX, groundZ) + 1.6, groundZ);
         scene.add(ground);
 
-        placed.push({ build, sprite, ground, move: city.kind, later: false });
+        placed.push({ build, sprite, ground, move: city.kind, later: false, away: index % 2 === 0 ? 1 : -1 });
       });
 
       const resize = () => {
@@ -438,7 +451,6 @@ export function SkillsTitlesPage() {
       resize();
       window.addEventListener("resize", resize);
 
-      const legs = cities.length;
       const eye = new THREE.Vector3();
       const target = new THREE.Vector3();
       const spare = new THREE.Vector3();
@@ -446,83 +458,74 @@ export function SkillsTitlesPage() {
       const heading = new THREE.Vector3();
       const side = new THREE.Vector3();
       const ease = (t: number) => t * t * (3 - 2 * t);
+      const between = (edge: number, to: number, value: number) =>
+        ease(Math.max(0, Math.min(1, (value - edge) / (to - edge))));
 
-      const TRAIL = 104;
-      const RIDE_HEIGHT = 48;
-      const RIDE_LOOK = 22;
-      // A stop is the last stretch of the approach: the camera keeps moving
-      // forward through it, just very slowly.
-      const SPAN = 1 / (legs - 2);
-      const PRE = 0.62;
-      const POST = 0.16;
+      const RIDE_HEIGHT = 34;
+      const RIDE_LOOK = 18;
+      // A stop starts a little before the place and ends a little after it, so
+      // the camera is always passing through, never parked and never backing up.
+      const BEFORE = 96 / roadLength;
+      const AFTER = 124 / roadLength;
 
       // On the way home the camera looks back over everywhere it has been.
       const recap = new THREE.CatmullRomCurve3([...points.slice(0, -1)].reverse(), false, "catmullrom", 0.4);
 
-      /**
-       * Where along the journey a moment sits. Travel covers the road between
-       * places; a stop covers the last of the approach and a little of the
-       * departure. Both are eased, so the camera slows to nothing at the seam
-       * and never jumps or reverses.
-       */
-      const placeOn = (segment: Segment, t: number) => {
-        const eased = ease(t);
-        const last = segment.city === legs - 1;
-        if (segment.previous < 0) {
-          return { curve: opening, u: segment.kind === "travel" ? eased * 0.45 : 0.45 + eased * 0.55 };
+      /** How far along the road a moment is. Always forward, eased at the seams. */
+      const roadAt = (segment: Segment, t: number) => {
+        const here = cityArc[segment.city];
+        if (segment.kind === "dwell") {
+          const from = here - BEFORE;
+          const to = Math.min(1, here + AFTER);
+          return from + (to - from) * ease(t);
         }
-        if (last) {
-          return { curve: homeward, u: segment.kind === "travel" ? eased * 0.62 : 0.62 + eased * 0.38 };
-        }
-        const here = segment.city * SPAN;
-        if (segment.kind === "travel") {
-          const from = segment.previous * SPAN + POST * SPAN;
-          const to = here - PRE * SPAN;
-          return { curve: outward, u: from + (to - from) * eased };
-        }
-        const from = here - PRE * SPAN;
-        const to = Math.min(1, here + POST * SPAN);
-        return { curve: outward, u: from + (to - from) * eased };
+        const from = segment.previous < 0 ? 0 : Math.min(1, cityArc[segment.previous] + AFTER);
+        const to = here - BEFORE;
+        return from + (to - from) * ease(t);
       };
 
       /**
-       * The camera always faces the way it is travelling. Character comes from
-       * drifting to one side, hanging back or leaning in, and rising — never
-       * from turning around.
+       * The camera rides the road facing the way it is going. At a place it
+       * slows, passes close by, and keeps looking at it over its shoulder —
+       * the view from the back of a truck pulling out — then turns forward
+       * again before the next leg.
        */
       const pose = (segment: Segment, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
-        const { curve, u } = placeOn(segment, t);
-        curve.getPoint(u, spare);
-        curve.getTangent(u, heading);
+        const s = roadAt(segment, t);
+        journey.getPointAt(Math.max(0, Math.min(1, s)), spare);
+        journey.getTangentAt(Math.max(0, Math.min(1, s)), heading);
         heading.y = 0;
         heading.normalize();
         side.set(heading.z, 0, -heading.x);
 
         const move = MOVES[placed[segment.city].move] ?? MOVES.spires;
-        // Only a stop has character; on the road it is zero at both ends, so
-        // the two flow into each other.
         const bulge = segment.kind === "dwell" ? Math.sin(Math.PI * t) : 0;
         const ground = heightAt(spare.x, spare.z);
-        const lift = segment.city === legs - 1 && segment.kind === "travel" ? 30 : RIDE_HEIGHT;
 
+        // Lean away from whichever side the place stands on, so it stays in
+        // shot without filling the lens.
+        const lean = -placed[segment.city].away * move.wide * bulge;
         into.set(
-          spare.x - heading.x * (TRAIL + move.zoom * bulge) + side.x * move.side * bulge,
-          ground + lift + move.lift * bulge,
-          spare.z - heading.z * (TRAIL + move.zoom * bulge) + side.z * move.side * bulge,
+          spare.x + side.x * lean,
+          ground + RIDE_HEIGHT + move.lift * bulge,
+          spare.z + side.z * lean,
         );
 
-        ahead.set(spare.x + heading.x * 44, ground + RIDE_LOOK + move.look * bulge, spare.z + heading.z * 44);
+        journey.getPointAt(Math.min(1, s + 0.02), ahead);
+        ahead.y = heightAt(ahead.x, ahead.z) + RIDE_LOOK;
+
         if (segment.kind === "dwell") {
-          // Keep the place itself in the middle of the frame as it goes up.
+          // Hold the place in frame while going past it, then let it go.
+          const watch = between(0, 0.16, t) * (1 - between(move.hold, 1, t));
           const spot = placed[segment.city].build.group.position;
-          look.set(spot.x, spot.y + RIDE_LOOK + move.look * bulge, spot.z);
-          look.lerpVectors(ahead, look, bulge * 0.85);
+          look.set(spot.x, spot.y + move.aim, spot.z);
+          look.lerpVectors(ahead, look, watch);
         } else if (segment.city === legs - 1) {
           // The way home: look back over the places already built, then turn
-          // to face the studio coming up.
+          // to face the camp coming up.
           recap.getPoint(Math.min(1, t / 0.6), look);
           look.y = heightAt(look.x, look.z) + RIDE_LOOK + 4;
-          look.lerp(ahead, ease(Math.max(0, Math.min(1, (t - 0.5) / 0.45))));
+          look.lerp(ahead, between(0.5, 0.95, t));
         } else {
           look.copy(ahead);
         }

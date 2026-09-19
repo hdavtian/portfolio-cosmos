@@ -484,29 +484,30 @@ export const KIND_BY_PLACE: Record<string, string> = {
 export const KIND_ORDER = ["spires", "racks", "ziggurat", "keep", "mast", "carousel", "skyline", "orrery"];
 
 /**
- * How a stop is filmed. The camera never turns around and never backs up: it
- * keeps going the way it was going, slowing to a crawl as it closes on the
- * place. These say what it does while it creeps: how far it drifts to one
- * side, how much it hangs back or leans in, how much it rises, and how far
- * the place itself turns under it.
+ * How a stop is filmed. The camera rides the road forward the whole way and
+ * never turns back; what changes at each place is how wide it gives it (a big
+ * camp needs more room than a row of racks), how high it rides, where on the
+ * structure it looks, how long it keeps looking as it pulls away, and how far
+ * the place itself turns.
  */
 export interface Move {
-  side: number;
-  zoom: number;
+  /** How far the camera leans away from the place as it passes. */
+  wide: number;
   lift: number;
-  look: number;
+  aim: number;
+  hold: number;
   spin: number;
 }
 
 export const MOVES: Record<string, Move> = {
-  spires: { side: -34, zoom: 12, lift: 8, look: 10, spin: 0.5 },
-  racks: { side: 42, zoom: -18, lift: -6, look: 2, spin: -0.6 },
-  ziggurat: { side: -30, zoom: -8, lift: 18, look: 8, spin: 0.7 },
-  keep: { side: 46, zoom: -4, lift: -4, look: 2, spin: -0.5 },
-  mast: { side: -26, zoom: 20, lift: 24, look: 14, spin: 0.3 },
-  carousel: { side: 38, zoom: -14, lift: 8, look: 6, spin: -0.75 },
-  skyline: { side: -44, zoom: 18, lift: 28, look: 16, spin: 0.45 },
-  orrery: { side: 34, zoom: -12, lift: 12, look: 8, spin: 0.6 },
-  // Coming home: the camp is bigger than it was, so the camera gives it room.
-  homecoming: { side: 30, zoom: 24, lift: 20, look: 12, spin: -0.4 },
+  spires: { wide: 46, lift: 20, aim: 26, hold: 0.86, spin: 0.45 },
+  racks: { wide: 16, lift: -6, aim: 14, hold: 0.8, spin: -0.5 },
+  ziggurat: { wide: 20, lift: 16, aim: 16, hold: 0.84, spin: 0.6 },
+  keep: { wide: 24, lift: -4, aim: 16, hold: 0.8, spin: -0.4 },
+  mast: { wide: 30, lift: 26, aim: 34, hold: 0.9, spin: 0.3 },
+  carousel: { wide: 22, lift: 10, aim: 18, hold: 0.82, spin: -0.65 },
+  skyline: { wide: 38, lift: 30, aim: 40, hold: 0.88, spin: 0.4 },
+  orrery: { wide: 26, lift: 14, aim: 22, hold: 0.85, spin: 0.55 },
+  // Coming home: the camp is bigger than it was, so give it more room again.
+  homecoming: { wide: 54, lift: 24, aim: 32, hold: 0.9, spin: -0.35 },
 };
