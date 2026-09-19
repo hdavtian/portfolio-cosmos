@@ -367,14 +367,30 @@ export function SkillsTitlesPage() {
         build: Build;
         sprite: ThreeTypes.Sprite;
         ground: ThreeTypes.Mesh;
+        /** How this stop is filmed. */
+        move: string;
+        /** A second visit: the place that is already here grows instead. */
+        later: boolean;
       }
 
       const tallest = Math.max(1, ...cities.flatMap((city) => city.entries.map((entry) => entry.years)));
-      const placed: Placed[] = cities.map((city, index) => {
-        const build = builders[city.kind](city.entries.slice(0, TOWER_LIMIT), tallest);
+      const placed: Placed[] = [];
+      cities.forEach((city, index) => {
+        // Coming back to a place doesn't put up a second one: the camp that is
+        // already standing grows, and new work raises new pillars.
+        if (city.spot !== index) {
+          const first = placed[city.spot];
+          placed.push({ build: first.build, sprite: first.sprite, ground: first.ground, move: "homecoming", later: true });
+          return;
+        }
+
+        const laterCity = cities.find((entry) => entry.spot === index && entry !== city);
+        const build = builders[city.kind](
+          city.entries.slice(0, TOWER_LIMIT),
+          tallest,
+          laterCity?.entries.slice(0, TOWER_LIMIT),
+        );
         build.group.position.copy(points[index]);
-        // The studio's second turn stands beside its first, not on top of it.
-        if (city.spot !== index) build.group.position.add(new THREE.Vector3(38, 0, -52));
         scene.add(build.group);
 
         const shown = city.name.split(" (")[0].toUpperCase();
@@ -400,7 +416,7 @@ export function SkillsTitlesPage() {
         ground.position.set(groundX, heightAt(groundX, groundZ) + 1.6, groundZ);
         scene.add(ground);
 
-        return { build, sprite, ground };
+        placed.push({ build, sprite, ground, move: city.kind, later: false });
       });
 
       const resize = () => {
@@ -476,7 +492,7 @@ export function SkillsTitlesPage() {
        * or out, and rises a little — differently at each place.
        */
       const dwellPose = (index: number, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
-        const move = MOVES[cities[index].kind] ?? MOVES.spires;
+        const move = MOVES[placed[index].move] ?? MOVES.spires;
         const spot = placed[index].build.group.position;
         travelPose(travelLegs[index], 1, eyeIn, lookIn);
         const leave = travelLegs[index + 1];
@@ -533,7 +549,8 @@ export function SkillsTitlesPage() {
               : segment.kind === "travel" && segment.previous === index
                 ? Math.max(0, 1 - t / 0.3)
                 : 0;
-          stop.build.grow(built, phase, focus);
+          if (stop.later) stop.build.growLater?.(built, phase, focus);
+          else stop.build.grow(built, phase, focus);
           stop.sprite.visible = built > 0.02;
           // The name announces the place on arrival, then gets out of the way
           // while the scrubber builds it.

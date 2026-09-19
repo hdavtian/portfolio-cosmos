@@ -22,6 +22,11 @@ export interface Build {
    * is paying attention to this stop (labels fade once it leaves).
    */
   grow: (eased: number, phase: number, focus: number) => void;
+  /**
+   * A second visit to the same place: what was already here grows taller, and
+   * anything new puts up a pillar of its own.
+   */
+  growLater?: (eased: number, phase: number, focus: number) => void;
 }
 
 type Three = typeof ThreeTypes;
@@ -60,6 +65,8 @@ export function makeBuilders(THREE: Three, label: Label) {
   interface Part {
     mesh: ThreeTypes.Mesh;
     height: number;
+    name: string;
+    years: number;
     tag?: ThreeTypes.Sprite;
     /** Labels sit at three different heights so they don't stack on each other. */
     lift: number;
@@ -80,7 +87,7 @@ export function makeBuilders(THREE: Three, label: Label) {
       tag = label(`${tower.name}  ·  ${say(tower.years)} yrs`);
       group.add(tag);
     }
-    return { mesh, height, tag, lift: 5 + (index % 3) * 8 };
+    return { mesh, height, name: tower.name, years: tower.years, tag, lift: 5 + (index % 3) * 8 };
   };
 
   const showTag = (part: Part, grown: number, focus: number, x: number, y: number, z: number) => {
@@ -89,11 +96,15 @@ export function makeBuilders(THREE: Three, label: Label) {
     (part.tag.material as ThreeTypes.SpriteMaterial).opacity = Math.max(0, Math.min(1, grown * 1.4 - 0.2)) * focus;
   };
 
-  /** A camp of spires: the freelance years, put up one at a time. */
-  const spires = (towers: Tower[], tallest: number): Build => {
+  /**
+   * A camp of spires: the freelance years, put up one at a time. This is the
+   * one place the film comes back to, so it can be built twice — the second
+   * pass grows the spires that carried on and raises new ones for whatever is
+   * new since.
+   */
+  const spires = (towers: Tower[], tallest: number, later: Tower[] = []): Build => {
     const group = new THREE.Group();
-    const parts = towers.map((tower, index) => {
-      const height = 12 + shadeFor(tower, tallest) * 38;
+    const cone = (tower: Tower, index: number, height: number) => {
       const mesh = new THREE.Mesh(
         new THREE.ConeGeometry(2.6 + shadeFor(tower, tallest) * 2.2, height, 6),
         solid(shadeFor(tower, tallest)),
@@ -101,26 +112,90 @@ export function makeBuilders(THREE: Three, label: Label) {
       const angle = index * 2.399;
       const radius = 8 + index * 2.6;
       mesh.position.set(Math.cos(angle) * radius, height / 2, Math.sin(angle) * radius);
-      return makePart(group, mesh, height, tower, index);
+      return mesh;
+    };
+    const heightOf = (tower: Tower) => 12 + shadeFor(tower, tallest) * 38;
+
+    const parts = towers.map((tower, index) => {
+      const part = makePart(group, cone(tower, index, heightOf(tower)), heightOf(tower), tower, index);
+      return { ...part, grown: 0, taller: 0, laterTag: undefined as ThreeTypes.Sprite | undefined };
     });
-    const ring = outline(
-      new THREE.Mesh(new THREE.TorusGeometry(30, 0.5, 8, 60), solid(0.3)),
-    );
+
+    // Work from the second visit: more of the same, or something new.
+    const risen: Array<{ mesh: ThreeTypes.Mesh; height: number; tag?: ThreeTypes.Sprite; lift: number }> = [];
+    later.forEach((tower, order) => {
+      const already = parts.find((part) => part.name === tower.name);
+      if (already) {
+        already.taller = heightOf(tower) * 0.75;
+        already.laterTag = label(`${tower.name}  ·  ${say(already.years + tower.years)} yrs`);
+        group.add(already.laterTag);
+        return;
+      }
+      const index = towers.length + order;
+      const height = heightOf(tower);
+      const mesh = cone(tower, index, height);
+      // New work stands brighter than the old.
+      (mesh.material as ThreeTypes.MeshStandardMaterial).emissive = new THREE.Color(GOLD).multiplyScalar(0.3);
+      outline(mesh);
+      mesh.scale.y = 0.001;
+      group.add(mesh);
+      let tag: ThreeTypes.Sprite | undefined;
+      if (order < LABEL_LIMIT) {
+        tag = label(`${tower.name}  ·  ${say(tower.years)} yrs  ·  new`);
+        group.add(tag);
+      }
+      risen.push({ mesh, height, tag, lift: 5 + (order % 3) * 8 });
+    });
+
+    const ring = outline(new THREE.Mesh(new THREE.TorusGeometry(30, 0.5, 8, 60), solid(0.3)));
     ring.rotation.x = Math.PI / 2;
     group.add(ring);
+
+    const settle = (part: (typeof parts)[number], scale: number, focus: number, tag?: ThreeTypes.Sprite) => {
+      part.mesh.scale.y = scale;
+      part.mesh.position.y = (part.height * scale) / 2;
+      showTag(part, part.grown, focus, part.mesh.position.x, part.height * scale, part.mesh.position.z);
+      if (tag) {
+        tag.position.set(part.mesh.position.x, part.height * scale + part.lift, part.mesh.position.z);
+      }
+    };
+
     return {
       group,
       grow(eased, phase, focus) {
         parts.forEach((part, index) => {
-          const grown = Math.max(0.001, stage(eased, index, parts.length));
-          part.mesh.scale.y = grown;
-          part.mesh.position.y = (part.height * grown) / 2;
+          part.grown = Math.max(0.001, stage(eased, index, parts.length));
           // Freelance runs hot and cold; the spires breathe with it.
-          const busy = 0.55 + Math.abs(Math.sin(phase * 3 + index * 1.4)) * 0.45;
-          (part.mesh.material as ThreeTypes.MeshStandardMaterial).emissiveIntensity = busy;
-          showTag(part, grown, focus, part.mesh.position.x, part.height * grown, part.mesh.position.z);
+          (part.mesh.material as ThreeTypes.MeshStandardMaterial).emissiveIntensity =
+            0.55 + Math.abs(Math.sin(phase * 3 + index * 1.4)) * 0.45;
+          settle(part, part.grown, focus, part.laterTag);
+          if (part.laterTag) (part.laterTag.material as ThreeTypes.SpriteMaterial).opacity = 0;
         });
         ring.scale.setScalar(0.2 + eased * 0.8);
+      },
+      growLater(eased, _phase, focus) {
+        // What was already standing carries on growing…
+        parts.forEach((part) => {
+          if (part.taller <= 0) return;
+          const extra = (part.taller / part.height) * eased;
+          settle(part, part.grown + extra, 0, part.laterTag);
+          if (part.laterTag) {
+            (part.laterTag.material as ThreeTypes.SpriteMaterial).opacity =
+              Math.max(0, Math.min(1, eased * 1.6 - 0.2)) * focus;
+          }
+        });
+        // …and anything new puts up its own pillar.
+        risen.forEach((part, index) => {
+          const grown = Math.max(0.001, stage(eased, index, risen.length));
+          part.mesh.scale.y = grown;
+          part.mesh.position.y = (part.height * grown) / 2;
+          if (part.tag) {
+            part.tag.position.set(part.mesh.position.x, part.height * grown + part.lift, part.mesh.position.z);
+            (part.tag.material as ThreeTypes.SpriteMaterial).opacity =
+              Math.max(0, Math.min(1, grown * 1.4 - 0.2)) * focus;
+          }
+        });
+        ring.scale.setScalar(1 + eased * 0.22);
       },
     };
   };
@@ -380,7 +455,7 @@ export function makeBuilders(THREE: Three, label: Label) {
     };
   };
 
-  const byKind: Record<string, (towers: Tower[], tallest: number) => Build> = {
+  const byKind: Record<string, (towers: Tower[], tallest: number, later?: Tower[]) => Build> = {
     spires,
     racks,
     ziggurat,
@@ -403,7 +478,7 @@ export const KIND_BY_PLACE: Record<string, string> = {
   boingo: "mast",
   rpa: "carousel",
   investcloud: "skyline",
-  "stormscape-now": "orrery",
+  "stormscape-now": "spires",
 };
 
 export const KIND_ORDER = ["spires", "racks", "ziggurat", "keep", "mast", "carousel", "skyline", "orrery"];
@@ -430,4 +505,6 @@ export const MOVES: Record<string, Move> = {
   carousel: { swing: 0.85, zoom: -26, lift: 6, look: 20 },
   skyline: { swing: -0.6, zoom: 20, lift: 28, look: 32 },
   orrery: { swing: 0.95, zoom: -18, lift: 12, look: 20 },
+  // Coming home: the camp is bigger than it was, so the camera gives it room.
+  homecoming: { swing: 0.7, zoom: 22, lift: 22, look: 26 },
 };
