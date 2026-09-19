@@ -92,7 +92,7 @@ function buildTimeline(cities: City[]): Segment[] {
       kind: "travel",
       city: index,
       previous: index - 1,
-      weight: index === 0 ? 1.1 : isReturn ? 2.6 : 1.45,
+      weight: index === 0 ? 1.8 : isReturn ? 4 : 2.3,
     });
     weights.push({
       kind: "dwell",
@@ -199,6 +199,7 @@ export function SkillsTitlesPage() {
   const progressRef = useRef(0);
   const [progress, setProgress] = useState(0);
   const [playing, setPlaying] = useState(true);
+  const [direction, setDirection] = useState(1);
   const [openRows, setOpenRows] = useState<string[]>([]);
   // Nothing on screen moves unless the scrubber does.
   const [moving, setMoving] = useState(false);
@@ -223,17 +224,12 @@ export function SkillsTitlesPage() {
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
       const travelled = event.deltaY * unit;
       setPlaying(false);
-      setProgress((current) => {
-        // Standing at a place, a notch is barely more than a frame of the
-        // film, so winding through a build is as smooth as watching it. On the
-        // open road it can cover ground.
-        const pace = segmentAt(timeline, current).kind === "dwell" ? 200000 : 21000;
-        return Math.max(0, Math.min(1, current + travelled / pace));
-      });
+      // One pace throughout: the scrubber is there for fine work.
+      setProgress((current) => Math.max(0, Math.min(1, current + travelled / 21000)));
     };
     root.addEventListener("wheel", onWheel, { passive: false });
     return () => root.removeEventListener("wheel", onWheel);
-  }, [timeline]);
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -253,7 +249,7 @@ export function SkillsTitlesPage() {
       host.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0x05070b, 260, 1250);
+      scene.fog = new THREE.Fog(0x05070b, 320, 1900);
       // A little light left in the sky, so the long empty legs aren't a void.
       scene.background = (() => {
         const canvas = document.createElement("canvas");
@@ -271,7 +267,7 @@ export function SkillsTitlesPage() {
         texture.colorSpace = THREE.SRGBColorSpace;
         return texture;
       })();
-      const camera = new THREE.PerspectiveCamera(52, 1, 0.5, 2800);
+      const camera = new THREE.PerspectiveCamera(52, 1, 0.5, 4600);
 
       // The scrubber decides where the camera should be; camera-controls is
       // what actually moves it there, damping the last of the roughness out of
@@ -325,10 +321,10 @@ export function SkillsTitlesPage() {
 
       // Stops are spread wide; the last one stands where the first one did.
       const legs = cities.length;
-      const SPACING = 430;
+      const SPACING = 860;
       const spots = cities.map((_, index) => {
         const x = (index - (cities.length - 2) / 2) * SPACING;
-        const z = Math.sin(index * 1.15) * 150;
+        const z = Math.sin(index * 1.15) * 280;
         return new THREE.Vector3(x, heightAt(x, z), z);
       });
       const points = cities.map((city) => spots[city.spot]);
@@ -343,7 +339,7 @@ export function SkillsTitlesPage() {
         return new THREE.Vector3(dir.z, 0, -dir.x).multiplyScalar(index % 2 === 0 ? STAND_OFF : -STAND_OFF);
       });
 
-      const terrain = new THREE.PlaneGeometry(3900, 1700, 210, 92);
+      const terrain = new THREE.PlaneGeometry(8600, 2800, 300, 110);
       const position = terrain.attributes.position;
       const colours = new Float32Array(position.count * 3);
       const colour = new THREE.Color();
@@ -388,12 +384,12 @@ export function SkillsTitlesPage() {
       // way round behind the hills, and back to the camp it started at.
       const onGround = (point: ThreeTypes.Vector3) => point.setY(heightAt(point.x, point.z));
       const journeyPoints = [
-        onGround(new THREE.Vector3(spots[0].x - 520, 0, spots[0].z + 300)),
+        onGround(new THREE.Vector3(spots[0].x - 900, 0, spots[0].z + 430)),
         ...spots.slice(0, -1),
-        onGround(new THREE.Vector3(spots[spots.length - 2].x * 0.6, 0, -470)),
-        onGround(new THREE.Vector3(spots[0].x * 0.6, 0, -430)),
+        onGround(new THREE.Vector3(spots[spots.length - 2].x * 0.6, 0, -900)),
+        onGround(new THREE.Vector3(spots[0].x * 0.6, 0, -850)),
         spots[0],
-        onGround(new THREE.Vector3(spots[0].x - 300, 0, spots[0].z + 230)),
+        onGround(new THREE.Vector3(spots[0].x - 520, 0, spots[0].z + 380)),
       ];
       const journey = new THREE.CatmullRomCurve3(journeyPoints, false, "catmullrom", 0.4);
       const roadLength = journey.getLength();
@@ -861,10 +857,14 @@ export function SkillsTitlesPage() {
       const step = (now - last) / 104000; // a full run in a little under two minutes
       last = now;
       setProgress((current) => {
-        const next = current + step;
+        const next = current + step * direction;
         if (next >= 1) {
           setPlaying(false);
           return 1;
+        }
+        if (next <= 0) {
+          setPlaying(false);
+          return 0;
         }
         return next;
       });
@@ -872,7 +872,7 @@ export function SkillsTitlesPage() {
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [playing]);
+  }, [direction, playing]);
 
   const segment = segmentAt(timeline, progress);
   const atStop = segment.kind === "dwell";
@@ -914,8 +914,36 @@ export function SkillsTitlesPage() {
       </aside>
 
       <div className="titles__scrub">
-        <button type="button" className="titles__play" onClick={() => setPlaying((current) => !current)}>
-          {playing ? "Pause" : progress >= 1 ? "Replay" : "Play"}
+        <button
+          type="button"
+          className={`titles__play${playing && direction < 0 ? " is-on" : ""}`}
+          title="Play backwards"
+          onClick={() => {
+            if (playing && direction < 0) {
+              setPlaying(false);
+              return;
+            }
+            if (progress <= 0) setProgress(1);
+            setDirection(-1);
+            setPlaying(true);
+          }}
+        >
+          ◀ Back
+        </button>
+        <button
+          type="button"
+          className={`titles__play${playing && direction > 0 ? " is-on" : ""}`}
+          onClick={() => {
+            if (playing && direction > 0) {
+              setPlaying(false);
+              return;
+            }
+            if (progress >= 1) setProgress(0);
+            setDirection(1);
+            setPlaying(true);
+          }}
+        >
+          {playing && direction > 0 ? "Pause" : progress >= 1 ? "Replay" : "Play ▶"}
         </button>
         <span className="titles__year">{year}</span>
         <span className="titles__hint">scroll to wind</span>

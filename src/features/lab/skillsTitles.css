@@ -406,3 +406,9 @@
   color: rgba(240, 216, 168, 0.35);
   white-space: nowrap;
 }
+
+.titles__play.is-on {
+  background: rgba(217, 164, 65, 0.2);
+  border-color: rgba(217, 164, 65, 0.9);
+  color: #f4e6c8;
+}
