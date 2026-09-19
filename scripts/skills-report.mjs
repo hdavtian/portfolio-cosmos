@@ -3,6 +3,11 @@
 //   npm run skills:report
 //   npm run skills:report -- --matrix     also print the job/skill grid
 //
+// A use can be stated three ways, most precise first:
+//   from/to   actual years, e.g. 2022-2025 — exact, and years are derived
+//   years+when  how long, and where it sat in the job (start, middle, end)
+//   years       how long only — assumed to overlap the rest of the job's skills
+//
 // Three rules keep the numbers honest:
 //   1. A skill's years are what you say, but never more than the job lasted.
 //   2. Inside one job, a group (Backend, Frontend...) counts the years it
@@ -41,7 +46,19 @@ for (const place of places) {
 const problems = [];
 for (const place of places) {
   place.allowance = Math.max(1, Math.round(place.length));
+  place.firstYear = Math.floor(place.from / 12);
+  place.lastYear = Math.floor(place.to / 12);
   for (const use of place.uses) {
+    // Exact years win: the length comes from them.
+    if (use.from !== undefined) {
+      const to = use.to ?? place.lastYear;
+      use.years = Math.max(1, to - use.from);
+      if (use.from < place.firstYear || to > place.lastYear + 1) {
+        problems.push(
+          `${place.name}: ${use.skill} says ${use.from}–${to}, outside the ${place.kind} (${place.firstYear}–${place.lastYear})`,
+        );
+      }
+    }
     if (use.years > place.allowance) {
       problems.push(
         `${place.name}: ${use.skill} says ${use.years} yrs, but the ${place.kind} lasted ${place.length.toFixed(1)} (max ${place.allowance})`,
@@ -72,8 +89,13 @@ const unionLength = (spans) => {
  * placement overlap each other: a group then gets the longest of them rather
  * than their sum, which is the conservative reading.
  */
-const placement = (use, jobYears) => {
+const placement = (use, jobYears, place) => {
   const years = Math.min(use.years, jobYears);
+  // Exact years: place it where it actually sat inside the job.
+  if (use.from !== undefined && place) {
+    const start = Math.max(0, use.from - place.firstYear);
+    return { from: start, to: Math.min(jobYears, start + years) };
+  }
   if (use.when === "end") return { from: jobYears - years, to: jobYears };
   if (use.when === "middle") return { from: (jobYears - years) / 2, to: (jobYears + years) / 2 };
   return { from: 0, to: years };
@@ -129,7 +151,7 @@ const capabilityTotals = data.capabilities
       .map((place) => {
         const uses = place.uses.filter((use) => members.has(use.skill));
         // Rule 2: the years this group covered inside the job.
-        const covered = unionLength(uses.map((use) => placement(use, place.allowance)));
+        const covered = unionLength(uses.map((use) => placement(use, place.allowance, place)));
         return { place, years: Math.min(covered, place.allowance) };
       })
       .filter((entry) => entry.years > 0);
@@ -173,12 +195,17 @@ if (process.argv.includes("--matrix")) {
   console.log(`${"".padEnd(34)}${places.map((p) => p.slug.slice(0, 6).padEnd(7)).join("")}`);
   for (const skill of data.skills) {
     const cells = places
-      .map((place) => String(place.uses.find((use) => use.skill === skill.slug)?.years ?? "").padEnd(7))
+      .map((place) => {
+        const use = place.uses.find((entry) => entry.skill === skill.slug);
+        if (!use) return "".padEnd(7);
+        return (use.from !== undefined ? `${use.years}*` : String(use.years)).padEnd(7);
+      })
       .join("");
     console.log(`${skill.name.padEnd(34)}${cells}`);
   }
   console.log(`${"— length of the place —".padEnd(34)}${places.map((p) => p.length.toFixed(1).padEnd(7)).join("")}`);
   console.log(`${"— most you can claim —".padEnd(34)}${places.map((p) => String(p.allowance).padEnd(7)).join("")}`);
+  console.log("* stated as exact years rather than a length");
 }
 
 console.log("\n=== Sentences this would write for you ===");

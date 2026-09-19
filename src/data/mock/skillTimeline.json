@@ -1,5 +1,5 @@
 {
-  "comment": "MOCK DATA, not wired into the site. How long each skill was used, in years, at each job. No self-ratings. 'years' is what you'd say out loud: 'at InvestCloud, 5 years of Java, the last 3 heavy on C#'. Rules: years can't exceed the job's own length, and when jobs overlap in the calendar (StormScape ran alongside others) the totals are capped by the real calendar span so no year is counted twice. 'when' is optional and only says where in the job it sat (start, middle, end, throughout) — it drives timelines, never the totals. Run: npm run skills:report",
+  "comment": "MOCK DATA, not wired into the site. How long each skill was used, in years, at each job. No self-ratings. Three ways to say it, most precise first: (1) 'from'/'to' actual years, e.g. 2022-2025; (2) 'years' plus 'when' (start, middle, end) for where it sat in the job; (3) 'years' alone, which is assumed to overlap everything else, so a group takes the longest rather than the sum. Caps: a skill can't outlast its job, and totals can't outlast the real calendar span of the jobs (StormScape overlapped others). Run: npm run skills:report",
   "capabilities": [
     { "slug": "backend", "name": "Backend", "blurb": "Server-side languages, APIs and services" },
     { "slug": "frontend-frameworks", "name": "Frontend frameworks", "blurb": "Component-based SPA work" },
@@ -48,14 +48,14 @@
       "start": "2018-04",
       "end": "2025-06",
       "uses": [
-        { "skill": "angular", "years": 4, "when": "start" },
-        { "skill": "react", "years": 2, "when": "end" },
+        { "skill": "angular", "from": 2018, "to": 2022 },
+        { "skill": "react", "from": 2023, "to": 2025 },
         { "skill": "typescript", "years": 7 },
         { "skill": "javascript", "years": 7 },
         { "skill": "html-css", "years": 7 },
-        { "skill": "java", "years": 5, "when": "start" },
-        { "skill": "csharp-dotnet", "years": 3, "when": "end" },
-        { "skill": "csharp-webapi", "years": 2, "when": "end" },
+        { "skill": "java", "from": 2018, "to": 2023 },
+        { "skill": "csharp-dotnet", "from": 2022, "to": 2025 },
+        { "skill": "csharp-webapi", "from": 2023, "to": 2025 },
         { "skill": "node", "years": 3 },
         { "skill": "sql", "years": 5 },
         { "skill": "mongodb", "years": 2, "when": "end" },
