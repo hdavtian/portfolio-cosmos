@@ -221,7 +221,8 @@ export function SkillsTitlesPage() {
       if ((event.target as HTMLElement).closest(".tally__inner")) return;
       event.preventDefault();
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
-      const step = (event.deltaY * unit) / 6200;
+      // Fine grained on purpose: a notch is a nudge, not a chapter.
+      const step = (event.deltaY * unit) / 21000;
       setPlaying(false);
       setProgress((current) => Math.max(0, Math.min(1, current + step)));
     };
