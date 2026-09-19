@@ -576,19 +576,29 @@ export function SkillsTitlesPage() {
         sprite.position.copy(build.group.position).add(new THREE.Vector3(0, 66, 0));
         scene.add(sprite);
 
+        // The name is laid over the ground rather than floating on one flat
+        // panel, so a rise in the land can't swallow half the letters.
+        const groundZ = build.group.position.z + 48;
+        const groundX = build.group.position.x + 6;
+        const groundShape = new THREE.PlaneGeometry(62, 10, 56, 10);
+        groundShape.rotateX(-Math.PI / 2);
+        const drape = groundShape.attributes.position;
+        for (let i = 0; i < drape.count; i += 1) {
+          drape.setY(i, heightAt(groundX + drape.getX(i), groundZ + drape.getZ(i)) + 1.4);
+        }
+        drape.needsUpdate = true;
         const ground = new THREE.Mesh(
-          new THREE.PlaneGeometry(62, 10),
+          groundShape,
           new THREE.MeshBasicMaterial({
             map: nameTexture(shown, 66, "#e6be72", 10),
             transparent: true,
             opacity: 0,
             depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -4,
           }),
         );
-        ground.rotation.x = -Math.PI / 2;
-        const groundZ = build.group.position.z + 48;
-        const groundX = build.group.position.x + 6;
-        ground.position.set(groundX, heightAt(groundX, groundZ) + 1.6, groundZ);
+        ground.position.set(groundX, 0, groundZ);
         scene.add(ground);
 
         placed.push({ build, sprite, ground, move: city.kind, later: false, away: index % 2 === 0 ? 1 : -1 });
