@@ -273,7 +273,7 @@ export function SkillsTitlesPage() {
       // what actually moves it there, damping the last of the roughness out of
       // the path. It takes no input here — this is a film, not a viewer.
       const controls = new CameraControls(camera, renderer.domElement);
-      controls.smoothTime = 0.42;
+      controls.smoothTime = 0.24;
       controls.mouseButtons.left = CameraControls.ACTION.NONE;
       controls.mouseButtons.middle = CameraControls.ACTION.NONE;
       controls.mouseButtons.right = CameraControls.ACTION.NONE;
@@ -960,7 +960,7 @@ export function SkillsTitlesPage() {
           {playing && direction > 0 ? "Pause" : progress >= 1 ? "Replay" : "Play ▶"}
         </button>
         <span className="titles__year">{year}</span>
-        <span className="titles__hint">scroll to wind</span>
+        <span className="titles__hint">click to stop · scroll to wind</span>
         <div className="titles__track">
           <input
             id="titles-scrubber"
