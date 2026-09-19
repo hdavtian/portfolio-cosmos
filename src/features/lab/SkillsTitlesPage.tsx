@@ -221,14 +221,19 @@ export function SkillsTitlesPage() {
       if ((event.target as HTMLElement).closest(".tally__inner")) return;
       event.preventDefault();
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
-      // Fine grained on purpose: a notch is a nudge, not a chapter.
-      const step = (event.deltaY * unit) / 21000;
+      const travelled = event.deltaY * unit;
       setPlaying(false);
-      setProgress((current) => Math.max(0, Math.min(1, current + step)));
+      setProgress((current) => {
+        // Standing at a place, a notch is barely more than a frame of the
+        // film, so winding through a build is as smooth as watching it. On the
+        // open road it can cover ground.
+        const pace = segmentAt(timeline, current).kind === "dwell" ? 200000 : 21000;
+        return Math.max(0, Math.min(1, current + travelled / pace));
+      });
     };
     root.addEventListener("wheel", onWheel, { passive: false });
     return () => root.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [timeline]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -864,7 +869,7 @@ export function SkillsTitlesPage() {
             type="range"
             min={0}
             max={1}
-            step={0.0002}
+            step={0.00002}
             value={progress}
             aria-label="Scrub the sequence"
             onChange={(event) => {
