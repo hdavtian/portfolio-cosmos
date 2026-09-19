@@ -398,3 +398,11 @@
   line-height: 1.5;
   color: rgba(240, 216, 168, 0.5);
 }
+
+.titles__hint {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(240, 216, 168, 0.35);
+  white-space: nowrap;
+}

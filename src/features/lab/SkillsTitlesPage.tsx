@@ -194,6 +194,7 @@ const REGION_COLOURS = [
 export function SkillsTitlesPage() {
   const cities = useMemo(buildCities, []);
   const timeline = useMemo(() => buildTimeline(cities), [cities]);
+  const rootRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef(0);
   const [progress, setProgress] = useState(0);
@@ -210,6 +211,23 @@ export function SkillsTitlesPage() {
     const settle = window.setTimeout(() => setMoving(false), 220);
     return () => window.clearTimeout(settle);
   }, [progress]);
+
+  // The wheel runs the film: forward winds on, back rewinds.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const onWheel = (event: WheelEvent) => {
+      // Over the tally, the wheel belongs to the list.
+      if ((event.target as HTMLElement).closest(".tally__inner")) return;
+      event.preventDefault();
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
+      const step = (event.deltaY * unit) / 6200;
+      setPlaying(false);
+      setProgress((current) => Math.max(0, Math.min(1, current + step)));
+    };
+    root.addEventListener("wheel", onWheel, { passive: false });
+    return () => root.removeEventListener("wheel", onWheel);
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -804,7 +822,7 @@ export function SkillsTitlesPage() {
   const dwellStarts = timeline.filter((entry) => entry.kind === "dwell");
 
   return (
-    <div className="titles">
+    <div className="titles" ref={rootRef}>
       <div className="titles__stage" ref={hostRef} />
 
       <header className="titles__head">
@@ -838,6 +856,7 @@ export function SkillsTitlesPage() {
           {playing ? "Pause" : progress >= 1 ? "Replay" : "Play"}
         </button>
         <span className="titles__year">{year}</span>
+        <span className="titles__hint">scroll to wind</span>
         <div className="titles__track">
           <input
             id="titles-scrubber"
