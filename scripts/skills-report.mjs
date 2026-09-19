@@ -3,11 +3,14 @@
 //   npm run skills:report
 //   npm run skills:report -- --matrix     also print the job/skill grid
 //
-// Two rules keep the numbers honest:
-//   1. Years at a job can never exceed that job's own length.
-//   2. Where jobs overlap in the calendar (StormScape ran alongside others),
-//      a total is capped by the real calendar span of the places it was used,
-//      so the same year is never counted twice.
+// Three rules keep the numbers honest:
+//   1. A skill's years are what you say, but never more than the job lasted.
+//   2. Inside one job, a group (Backend, Frontend...) counts the years it
+//      covered, not the sum of its skills. "when" says where a skill sat in
+//      the job (start, end, middle); skills with no "when" are assumed to have
+//      overlapped, so the group gets the longest of them, never their sum.
+//   3. Across jobs, a total is capped by the real calendar span of the places
+//      it was used, so overlapping jobs never invent years.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -46,6 +49,35 @@ for (const place of places) {
     }
   }
 }
+
+/** Merges [from, to] spans and returns their total length. */
+const unionLength = (spans) => {
+  const sorted = [...spans].sort((a, b) => a.from - b.from);
+  let total = 0;
+  let current = null;
+  for (const span of sorted) {
+    if (current && span.from <= current.to) current.to = Math.max(current.to, span.to);
+    else {
+      if (current) total += current.to - current.from;
+      current = { ...span };
+    }
+  }
+  if (current) total += current.to - current.from;
+  return total;
+};
+
+/**
+ * Where a skill sat inside its job, as a span in years from the job's start.
+ * With no "when" the span is anchored at the start, so skills of unknown
+ * placement overlap each other: a group then gets the longest of them rather
+ * than their sum, which is the conservative reading.
+ */
+const placement = (use, jobYears) => {
+  const years = Math.min(use.years, jobYears);
+  if (use.when === "end") return { from: jobYears - years, to: jobYears };
+  if (use.when === "middle") return { from: (jobYears - years) / 2, to: (jobYears + years) / 2 };
+  return { from: 0, to: years };
+};
 
 /** Calendar span covered by a set of places, with overlaps merged. */
 const calendarYears = (usedPlaces) => {
@@ -94,13 +126,12 @@ const capabilityTotals = data.capabilities
   .map((capability) => {
     const members = new Set(data.skills.filter((skill) => skill.capability === capability.slug).map((s) => s.slug));
     const used = places
-      .map((place) => ({
-        place,
-        years: Math.min(
-          place.uses.filter((use) => members.has(use.skill)).reduce((total, use) => total + use.years, 0),
-          place.allowance,
-        ),
-      }))
+      .map((place) => {
+        const uses = place.uses.filter((use) => members.has(use.skill));
+        // Rule 2: the years this group covered inside the job.
+        const covered = unionLength(uses.map((use) => placement(use, place.allowance)));
+        return { place, years: Math.min(covered, place.allowance) };
+      })
       .filter((entry) => entry.years > 0);
     if (used.length === 0) return null;
     const claimed = used.reduce((total, entry) => total + entry.years, 0);
