@@ -455,6 +455,110 @@ export function makeBuilders(THREE: Three, label: Label) {
     };
   };
 
+  /**
+   * A switchboard: posts wired to one another, the way calls were put through.
+   * The dial-up years, where the whole thing started.
+   */
+  const switchboard = (towers: Tower[], tallest: number): Build => {
+    const group = new THREE.Group();
+    const spread = 13;
+    const parts = towers.map((tower, index) => {
+      const height = 10 + shadeFor(tower, tallest) * 26;
+      const mesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.1, 1.6, height, 6),
+        solid(shadeFor(tower, tallest)),
+      );
+      const across = index - (towers.length - 1) / 2;
+      mesh.position.set(across * spread, height / 2, (index % 2 === 0 ? -1 : 1) * 7);
+      return makePart(group, mesh, height, tower, index);
+    });
+
+    // The lines between them, strung post to post.
+    const wires = parts.slice(0, -1).map((part, index) => {
+      const next = parts[index + 1];
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(part.mesh.position.x, part.height, part.mesh.position.z),
+        new THREE.Vector3(
+          (part.mesh.position.x + next.mesh.position.x) / 2,
+          Math.min(part.height, next.height) - 5,
+          (part.mesh.position.z + next.mesh.position.z) / 2,
+        ),
+        new THREE.Vector3(next.mesh.position.x, next.height, next.mesh.position.z),
+      ]);
+      const wire = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.22, 5, false), solid(0.7));
+      group.add(wire);
+      return wire;
+    });
+
+    const base = outline(new THREE.Mesh(new THREE.BoxGeometry(towers.length * spread + 14, 0.8, 26), solid(0.15)));
+    group.add(base);
+
+    return {
+      group,
+      grow(eased, phase, focus) {
+        parts.forEach((part, index) => {
+          const grown = Math.max(0.001, stage(eased, index, parts.length));
+          part.mesh.scale.y = grown;
+          part.mesh.position.y = (part.height * grown) / 2;
+          (part.mesh.material as ThreeTypes.MeshStandardMaterial).emissiveIntensity =
+            0.5 + Math.abs(Math.sin(phase * 7 + index * 2)) * 0.7;
+          showTag(part, grown, focus, part.mesh.position.x, part.height * grown, part.mesh.position.z);
+        });
+        wires.forEach((wire, index) => {
+          const grown = stage(eased, index + 1, parts.length);
+          wire.visible = grown > 0.85;
+        });
+        base.scale.setScalar(0.3 + eased * 0.7);
+      },
+    };
+  };
+
+  /**
+   * A terrace of arches: a hosting business, one bay let out at a time, with a
+   * taller front for the sales floor.
+   */
+  const terraces = (towers: Tower[], tallest: number): Build => {
+    const group = new THREE.Group();
+    const bay = 15;
+    const parts = towers.map((tower, index) => {
+      const height = 12 + shadeFor(tower, tallest) * 26;
+      const arch = new THREE.Mesh(
+        new THREE.TorusGeometry(bay * 0.42, 1.4, 6, 16, Math.PI),
+        solid(shadeFor(tower, tallest)),
+      );
+      const across = index - (towers.length - 1) / 2;
+      arch.position.set(across * bay, height * 0.72, 0);
+      arch.scale.y = height / (bay * 0.84);
+      const part = makePart(group, arch, height, tower, index);
+      const pier = outline(new THREE.Mesh(new THREE.BoxGeometry(2.6, height * 0.72, 5), solid(0.3)));
+      pier.position.set(across * bay, height * 0.36, 0);
+      group.add(pier);
+      return { ...part, pier, across };
+    });
+
+    const roof = outline(new THREE.Mesh(new THREE.BoxGeometry(towers.length * bay + 6, 2, 12), solid(0.4)));
+    group.add(roof);
+
+    return {
+      group,
+      grow(eased, _phase, focus) {
+        let tallestBuilt = 0;
+        parts.forEach((part, index) => {
+          const grown = Math.max(0.001, stage(eased, index, parts.length));
+          part.mesh.visible = grown > 0.2;
+          part.mesh.scale.set(grown, (part.height / (bay * 0.84)) * grown, grown);
+          part.pier.scale.y = grown;
+          part.pier.position.y = part.height * 0.36 * grown;
+          part.mesh.position.y = part.height * 0.72 * grown;
+          tallestBuilt = Math.max(tallestBuilt, part.height * grown);
+          showTag(part, grown, focus, part.across * bay, part.height * grown, 0);
+        });
+        roof.scale.set(Math.max(0.001, eased), 1, 1);
+        roof.position.y = tallestBuilt + 1.4;
+      },
+    };
+  };
+
   const byKind: Record<string, (towers: Tower[], tallest: number, later?: Tower[]) => Build> = {
     spires,
     racks,
@@ -464,6 +568,8 @@ export function makeBuilders(THREE: Three, label: Label) {
     carousel,
     skyline,
     orrery,
+    switchboard,
+    terraces,
   };
 
   return byKind;
@@ -471,6 +577,8 @@ export function makeBuilders(THREE: Three, label: Label) {
 
 /** Which structure each stop puts up. Falls back in route order. */
 export const KIND_BY_PLACE: Record<string, string> = {
+  earthlink: "switchboard",
+  hostpro: "terraces",
   stormscape: "spires",
   unitedlayer: "racks",
   murad: "ziggurat",
@@ -481,7 +589,18 @@ export const KIND_BY_PLACE: Record<string, string> = {
   "stormscape-now": "spires",
 };
 
-export const KIND_ORDER = ["spires", "racks", "ziggurat", "keep", "mast", "carousel", "skyline", "orrery"];
+export const KIND_ORDER = [
+  "switchboard",
+  "terraces",
+  "spires",
+  "racks",
+  "ziggurat",
+  "keep",
+  "mast",
+  "carousel",
+  "skyline",
+  "orrery",
+];
 
 /**
  * How a stop is filmed. The camera rides the road forward the whole way and
@@ -508,6 +627,8 @@ export const MOVES: Record<string, Move> = {
   carousel: { wide: 22, lift: 10, aim: 18, hold: 0.82, spin: -0.65 },
   skyline: { wide: 38, lift: 30, aim: 40, hold: 0.88, spin: 0.4 },
   orrery: { wide: 26, lift: 14, aim: 22, hold: 0.85, spin: 0.55 },
+  switchboard: { wide: 34, lift: 8, aim: 18, hold: 0.84, spin: 0.35 },
+  terraces: { wide: 32, lift: 12, aim: 20, hold: 0.82, spin: -0.45 },
   // Coming home: the camp is bigger than it was, so give it more room again.
   homecoming: { wide: 54, lift: 24, aim: 32, hold: 0.9, spin: -0.35 },
 };

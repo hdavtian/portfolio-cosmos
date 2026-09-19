@@ -71,6 +71,13 @@
       "headline": true,
       "era": 2014,
       "blurb": "What I work in now — counted from 2014"
+    },
+    {
+      "slug": "support-sales",
+      "name": "Support & sales",
+      "sortOrder": 11,
+      "headline": false,
+      "blurb": "Front-line support, selling, and looking after clients"
     }
   ],
   "skills": [
@@ -309,6 +316,35 @@
         "frontend",
         "styling",
         "current-stack"
+      ]
+    },
+    {
+      "slug": "tech-support",
+      "name": "Front-line tech support",
+      "categories": [
+        "support-sales"
+      ]
+    },
+    {
+      "slug": "networking",
+      "name": "Dial-up / ISDN / networking",
+      "categories": [
+        "hosting"
+      ]
+    },
+    {
+      "slug": "sales",
+      "name": "Sales & account management",
+      "categories": [
+        "support-sales",
+        "leadership"
+      ]
+    },
+    {
+      "slug": "dns-domains",
+      "name": "DNS & domain infrastructure",
+      "categories": [
+        "hosting"
       ]
     }
   ],
@@ -654,6 +690,65 @@
         {
           "skill": "cicd",
           "years": 2
+        }
+      ]
+    },
+    {
+      "slug": "earthlink",
+      "company": "Earthlink Network",
+      "title": "Tech Support, then Sales Agent",
+      "start": "1994-03",
+      "end": "1997-01",
+      "uses": [
+        {
+          "skill": "tech-support",
+          "years": 3
+        },
+        {
+          "skill": "networking",
+          "years": 2,
+          "when": "start"
+        },
+        {
+          "skill": "sales",
+          "years": 2,
+          "when": "end"
+        }
+      ]
+    },
+    {
+      "slug": "hostpro",
+      "company": "HostPro LLC",
+      "title": "Web Hosting Sales, then Sales Manager",
+      "start": "1997-03",
+      "end": "2001-06",
+      "uses": [
+        {
+          "skill": "sales",
+          "years": 4
+        },
+        {
+          "skill": "dns-domains",
+          "years": 4
+        },
+        {
+          "skill": "client-delivery",
+          "years": 3
+        },
+        {
+          "skill": "linux-hosting",
+          "years": 3,
+          "when": "end"
+        },
+        {
+          "skill": "html-css",
+          "years": 3,
+          "when": "end"
+        },
+        {
+          "skill": "team-lead",
+          "years": 2,
+          "when": "end"
         }
       ]
     }
