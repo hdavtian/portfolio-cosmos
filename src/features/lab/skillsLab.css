@@ -420,3 +420,82 @@
     display: none;
   }
 }
+
+/* 06 bubbles */
+.lab-bubbles__bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.lab-bubbles__shape {
+  padding: 5px 12px;
+  background: none;
+  border: 1px solid rgba(232, 244, 240, 0.18);
+  color: var(--lab-dim);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.lab-bubbles__shape:hover {
+  color: var(--lab-ink);
+  border-color: rgba(122, 226, 156, 0.5);
+}
+
+.lab-bubbles__shape.is-on {
+  color: #04121a;
+  background: #7ae29c;
+  border-color: #7ae29c;
+}
+
+.lab-bubbles__shape--wide {
+  margin-left: auto;
+}
+
+.lab-bubbles__svg {
+  width: 100%;
+  border: 1px solid rgba(232, 244, 240, 0.1);
+  background: radial-gradient(ellipse at 50% 40%, rgba(16, 44, 60, 0.45), rgba(4, 8, 12, 0.85));
+}
+
+.lab-bubbles__link {
+  stroke: rgba(232, 244, 240, 0.16);
+  stroke-dasharray: 2 4;
+}
+
+.lab-bubbles__node {
+  cursor: grab;
+}
+
+.lab-bubbles__node.is-category {
+  cursor: pointer;
+}
+
+.lab-bubbles__node:active {
+  cursor: grabbing;
+}
+
+.lab-bubbles__node path {
+  transition: fill 0.2s ease;
+}
+
+.lab-bubbles__node:hover path {
+  fill-opacity: 1;
+}
+
+.lab-bubbles__label {
+  fill: var(--lab-ink);
+  font-family: var(--lab-mono);
+  pointer-events: none;
+}
+
+.lab-bubbles__years {
+  fill: rgba(232, 244, 240, 0.6);
+  font-family: var(--lab-mono);
+  font-size: 9px;
+  pointer-events: none;
+}

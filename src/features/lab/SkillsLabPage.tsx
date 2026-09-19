@@ -76,6 +76,16 @@ export function SkillsLabPage() {
         <Matrix />
       </section>
 
+      <section className="lab__panel">
+        <h2 className="lab__panel-title">06 · Bubbles</h2>
+        <p className="lab__panel-note">
+          The old force graph, fed by the years instead of a list: one shape per category, sized by how long it
+          has been in play. Click one to break it open into the skills inside it, and drag anything that gets in
+          the way.
+        </p>
+        <Bubbles />
+      </section>
+
       <footer className="lab__foot">
         <p>Mock data. Numbers are estimates until the real ones are entered.</p>
       </footer>
@@ -626,6 +636,214 @@ function Matrix() {
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+type ShapeName = "circle" | "hex" | "diamond" | "square";
+
+const SHAPES: Array<{ id: ShapeName; label: string }> = [
+  { id: "circle", label: "Circles" },
+  { id: "hex", label: "Hexagons" },
+  { id: "diamond", label: "Diamonds" },
+  { id: "square", label: "Squares" },
+];
+
+/** One shape, drawn around its own centre at the given radius. */
+function shapePath(shape: ShapeName, r: number) {
+  if (shape === "circle") return d3.symbol(d3.symbolCircle).size(Math.PI * r * r)()!;
+  if (shape === "square") return d3.symbol(d3.symbolSquare).size(r * r * 3.1)()!;
+  if (shape === "diamond") return d3.symbol(d3.symbolDiamond).size(r * r * 3.4)()!;
+  const points = d3.range(6).map((i) => {
+    const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+    return `${(Math.cos(angle) * r).toFixed(2)},${(Math.sin(angle) * r).toFixed(2)}`;
+  });
+  return `M${points.join("L")}Z`;
+}
+
+interface BubbleNode extends d3.SimulationNodeDatum {
+  id: string;
+  parent?: string;
+  label: string;
+  years: number;
+  radius: number;
+  colour: string;
+  isCategory: boolean;
+}
+
+/**
+ * Categories as shapes sized by their years, which open into the skills that
+ * made them up. A force layout keeps everything apart and settles.
+ */
+function Bubbles() {
+  const ref = useRef<SVGSVGElement>(null);
+  const positions = useRef(new Map<string, { x: number; y: number }>());
+  const [shape, setShape] = useState<ShapeName>("circle");
+  const [open, setOpen] = useState<string[]>([]);
+
+  const skillsBySlug = useMemo(() => new Map(skillTotals.map((skill) => [skill.slug, skill])), []);
+  const groups = useMemo(() => categoryTotals.filter((entry) => entry.years > 0), []);
+
+  useEffect(() => {
+    const svg = d3.select(ref.current);
+    const width = 1000;
+    const height = 560;
+    svg.attr("viewBox", `0 0 ${width} ${height}`).selectAll("*").remove();
+
+    const nodes: BubbleNode[] = [];
+    const links: Array<{ source: string; target: string }> = [];
+    for (const category of groups) {
+      const colour = CATEGORY_COLOURS(category.slug);
+      nodes.push({
+        id: category.slug,
+        label: category.name,
+        years: category.years,
+        radius: 26 + category.years * 1.9,
+        colour,
+        isCategory: true,
+      });
+      if (!open.includes(category.slug)) continue;
+      for (const slug of category.skills) {
+        const skill = skillsBySlug.get(slug);
+        if (!skill) continue;
+        const id = `${category.slug}/${slug}`;
+        nodes.push({
+          id,
+          parent: category.slug,
+          label: skill.name,
+          years: skill.years,
+          radius: 13 + skill.years * 1.5,
+          colour,
+          isCategory: false,
+        });
+        links.push({ source: category.slug, target: id });
+      }
+    }
+
+    // Reuse where a node already sat, so opening one group doesn't reshuffle the rest.
+    for (const node of nodes) {
+      const seen = positions.current.get(node.id) ?? (node.parent ? positions.current.get(node.parent) : undefined);
+      node.x = (seen?.x ?? width / 2) + (node.parent ? (Math.random() - 0.5) * 50 : 0);
+      node.y = (seen?.y ?? height / 2) + (node.parent ? (Math.random() - 0.5) * 50 : 0);
+    }
+
+    const link = svg
+      .append("g")
+      .selectAll("line")
+      .data(links)
+      .join("line")
+      .attr("class", "lab-bubbles__link");
+
+    const node = svg
+      .append("g")
+      .selectAll<SVGGElement, BubbleNode>("g")
+      .data(nodes, (entry) => entry.id)
+      .join("g")
+      .attr("class", (entry) => `lab-bubbles__node${entry.isCategory ? " is-category" : ""}`)
+      .on("click", (_event, entry) => {
+        if (!entry.isCategory) return;
+        setOpen((current) =>
+          current.includes(entry.id) ? current.filter((slug) => slug !== entry.id) : [...current, entry.id],
+        );
+      });
+
+    node
+      .append("path")
+      .attr("d", (entry) => shapePath(shape, entry.radius))
+      .attr("fill", (entry) => `${entry.colour}${entry.isCategory ? "26" : "14"}`)
+      .attr("stroke", (entry) => entry.colour)
+      .attr("stroke-width", (entry) => (entry.isCategory ? 1.6 : 1));
+
+    node
+      .append("text")
+      .attr("class", "lab-bubbles__label")
+      .attr("text-anchor", "middle")
+      .attr("dy", (entry) => (entry.radius > 28 ? -1 : entry.radius + 12))
+      .style("font-size", (entry) => `${entry.isCategory ? 11 : 9.5}px`)
+      // Long skill names sit outside their shape, so they get trimmed.
+      .text((entry) => (entry.label.length > 20 ? `${entry.label.slice(0, 19)}…` : entry.label));
+
+    node
+      .append("text")
+      .attr("class", "lab-bubbles__years")
+      .attr("text-anchor", "middle")
+      .attr("dy", (entry) => (entry.radius > 28 ? 13 : entry.radius + 22))
+      .text((entry) => `${say(entry.years)} yrs`);
+
+    const simulation = d3
+      .forceSimulation(nodes)
+      .force("charge", d3.forceManyBody().strength(-40))
+      .force(
+        "link",
+        d3
+          .forceLink<BubbleNode, d3.SimulationLinkDatum<BubbleNode>>(links as unknown as Array<d3.SimulationLinkDatum<BubbleNode>>)
+          .id((entry) => entry.id)
+          .distance((entry) => (entry.source as BubbleNode).radius + 48)
+          .strength(0.7),
+      )
+      .force("x", d3.forceX(width / 2).strength(0.045))
+      .force("y", d3.forceY(height / 2).strength(0.07))
+      .force("collide", d3.forceCollide<BubbleNode>((entry) => entry.radius + (entry.isCategory ? 16 : 24)).iterations(2))
+      .on("tick", () => {
+        for (const entry of nodes) {
+          entry.x = Math.max(entry.radius + 6, Math.min(width - entry.radius - 6, entry.x ?? 0));
+          entry.y = Math.max(entry.radius + 16, Math.min(height - entry.radius - 24, entry.y ?? 0));
+          positions.current.set(entry.id, { x: entry.x, y: entry.y });
+        }
+        node.attr("transform", (entry) => `translate(${entry.x},${entry.y})`);
+        link
+          .attr("x1", (entry) => ((entry.source as unknown) as BubbleNode).x ?? 0)
+          .attr("y1", (entry) => ((entry.source as unknown) as BubbleNode).y ?? 0)
+          .attr("x2", (entry) => ((entry.target as unknown) as BubbleNode).x ?? 0)
+          .attr("y2", (entry) => ((entry.target as unknown) as BubbleNode).y ?? 0);
+      });
+
+    node.call(
+      d3
+        .drag<SVGGElement, BubbleNode>()
+        .on("start", (event, entry) => {
+          if (!event.active) simulation.alphaTarget(0.25).restart();
+          entry.fx = entry.x;
+          entry.fy = entry.y;
+        })
+        .on("drag", (event, entry) => {
+          entry.fx = event.x;
+          entry.fy = event.y;
+        })
+        .on("end", (event, entry) => {
+          if (!event.active) simulation.alphaTarget(0);
+          entry.fx = null;
+          entry.fy = null;
+        }),
+    );
+
+    return () => {
+      simulation.stop();
+    };
+  }, [groups, open, shape, skillsBySlug]);
+
+  return (
+    <div className="lab-bubbles">
+      <div className="lab-bubbles__bar">
+        {SHAPES.map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            className={`lab-bubbles__shape${entry.id === shape ? " is-on" : ""}`}
+            onClick={() => setShape(entry.id)}
+          >
+            {entry.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="lab-bubbles__shape lab-bubbles__shape--wide"
+          onClick={() => setOpen(open.length ? [] : groups.map((entry) => entry.slug))}
+        >
+          {open.length ? "Close all" : "Open all"}
+        </button>
+      </div>
+      <svg ref={ref} className="lab-bubbles__svg" role="img" aria-label="Categories as shapes sized by years" />
     </div>
   );
 }
