@@ -1,15 +1,23 @@
 import type * as ThreeTypes from "three";
-import { say } from "./skillsData";
 
 /**
- * What gets built at each place on the map. In the spirit of the clockwork
- * cities of the title sequence it borrows from, every place is a different
- * machine-made thing — a switchboard, a colonnade, a camp of spires, a keep —
- * raised out of the map in weathered bronze, stone, timber and iron.
+ * What rises at each place on the map. Three directions are on trial here,
+ * side by side, so they can be judged against each other:
  *
- * The shapes are the data: one piece per skill, its height the years spent on
- * it at that job, and a gold cap on any skill appearing for the first time.
- * Each piece carries its own label as it rises.
+ *   A. Instruments  — brass machines in the family of the astrolabe, the
+ *                     skills engraved on their turning bands. (Earthlink)
+ *   B. Sigils       — a heraldic emblem that unfolds, the skills flown as
+ *                     banners round it. (HostPro)
+ *   C. Monuments    — a column of light ringed by glyphs of light, the skills
+ *                     written in the rings. (StormScape)
+ *
+ * Every place after those three is a combination: a machine for the body, a
+ * sigil for its floor, light for its crown.
+ *
+ * One rule runs through all of them: lettering that burns gold-white is a
+ * skill learned at that place; lettering in the place's own colour is a skill
+ * carried further. Numbers are not written on the map at all — they belong to
+ * the chapter card, where they can be read.
  */
 
 export interface Tower {
@@ -22,12 +30,11 @@ export interface Tower {
 export interface Build {
   group: ThreeTypes.Group;
   /**
-   * How far built (0 to 1), a phase taken from the scrubber (never the clock,
-   * so a parked scrubber is a still frame), and how much the camera is
-   * attending to this place (labels fade once it leaves).
+   * How far built (0 to 1), a phase that turns the mechanism, and how much the
+   * camera is attending to this place.
    */
   grow: (eased: number, phase: number, focus: number) => void;
-  /** A second visit: what stands grows taller, what is new raises its own. */
+  /** A second visit: the same place takes on what is new since. */
   growLater?: (eased: number, phase: number, focus: number) => void;
 }
 
@@ -35,22 +42,24 @@ type Three = typeof ThreeTypes;
 type Label = (text: string, bright: boolean) => ThreeTypes.Sprite;
 type SkinName = "bronze" | "stone" | "timber" | "iron";
 
+const NEW_GLOW = "#ffe2a0";
+
 /** Parts come in one after another, so a place assembles rather than inflates. */
 const stage = (eased: number, index: number, count: number) => {
   const x = Math.max(0, Math.min(1, (eased - (index / Math.max(1, count)) * 0.6) / 0.4));
   return x * x * x * (x * (x * 6 - 15) + 10);
 };
 
-const LABEL_LIMIT = 7;
-
 export function makeBuilders(THREE: Three, label: Label) {
-  /** Surfaces painted once and shared: nothing here is flat colour. */
-  const painted = (draw: (ctx: CanvasRenderingContext2D, size: number) => void) => {
+  /* ------------------------------------------------------------------ */
+  /* Surfaces                                                            */
+
+  const painted = (draw: (ctx: CanvasRenderingContext2D, size: number) => void, size = 256) => {
     const canvas = document.createElement("canvas");
-    canvas.width = 256;
-    canvas.height = 256;
+    canvas.width = size;
+    canvas.height = size;
     const ctx = canvas.getContext("2d")!;
-    draw(ctx, 256);
+    draw(ctx, size);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
@@ -67,7 +76,6 @@ export function makeBuilders(THREE: Three, label: Label) {
   };
 
   const textures: Record<SkinName, ThreeTypes.Texture> = {
-    // Brushed, tarnished bronze: streaks down the grain, green in the low spots.
     bronze: painted((ctx, size) => {
       const wash = ctx.createLinearGradient(0, 0, size, size);
       wash.addColorStop(0, "#9c7430");
@@ -87,25 +95,11 @@ export function makeBuilders(THREE: Three, label: Label) {
       }
       speckle(ctx, size, 420, "rgba(255, 230, 170, 0.16)", "rgba(30, 18, 4, 0.22)");
     }),
-    // Dressed stone: coursed blocks with worn joints.
     stone: painted((ctx, size) => {
       ctx.fillStyle = "#73695a";
       ctx.fillRect(0, 0, size, size);
-      for (let row = 0; row < 8; row += 1) {
-        const y = row * 32;
-        ctx.fillStyle = "rgba(24, 20, 14, 0.55)";
-        ctx.fillRect(0, y, size, 2);
-        for (let col = 0; col < 5; col += 1) {
-          const x = col * 64 + (row % 2) * 32;
-          ctx.fillRect(x % size, y, 2, 32);
-          ctx.fillStyle = `rgba(${150 + ((row * col * 13) % 40)}, ${138 + ((row + col) % 5) * 6}, 112, 0.10)`;
-          ctx.fillRect((x + 3) % size, y + 3, 58, 27);
-          ctx.fillStyle = "rgba(24, 20, 14, 0.55)";
-        }
-      }
-      speckle(ctx, size, 520, "rgba(220, 210, 184, 0.13)", "rgba(20, 16, 10, 0.2)");
+      speckle(ctx, size, 620, "rgba(220, 210, 184, 0.13)", "rgba(20, 16, 10, 0.2)");
     }),
-    // Dark timber, grain running up the post.
     timber: painted((ctx, size) => {
       ctx.fillStyle = "#4b331f";
       ctx.fillRect(0, 0, size, size);
@@ -118,7 +112,6 @@ export function makeBuilders(THREE: Three, label: Label) {
         ctx.stroke();
       }
     }),
-    // Black iron, hammered.
     iron: painted((ctx, size) => {
       ctx.fillStyle = "#2b2824";
       ctx.fillRect(0, 0, size, size);
@@ -141,492 +134,677 @@ export function makeBuilders(THREE: Three, label: Label) {
   };
 
   const shadeFor = (tower: Tower, tallest: number) => Math.min(1, tower.years / tallest);
-  const heightOf = (tower: Tower, tallest: number, low = 14, span = 46) => low + shadeFor(tower, tallest) * span;
 
-  interface Part {
-    mesh: ThreeTypes.Object3D;
-    height: number;
-    name: string;
-    years: number;
-    tag?: ThreeTypes.Sprite;
-    lift: number;
-    twist: number;
-  }
+  /* ------------------------------------------------------------------ */
+  /* Lettering                                                           */
 
-  /** A gold cap for a skill's first appearance: the thing the eye should find. */
-  const cap = (radius: number) =>
-    new THREE.Mesh(
-      new THREE.OctahedronGeometry(radius, 0),
-      new THREE.MeshStandardMaterial({
-        color: "#ffd27a",
-        emissive: "#ffb433",
-        emissiveIntensity: 0.9,
-        metalness: 0.9,
-        roughness: 0.25,
-      }),
-    );
+  /**
+   * A line of lettering as two textures: the metal with the words cut dark
+   * into it, and the words alone in white, which is where the band glows.
+   * Sized so that, wrapped round a band, the letters are not stretched.
+   */
+  const lettering = (text: string, circumference: number, height: number, font: "serif" | "mono" = "serif") => {
+    const H = 128;
+    const face = font === "serif" ? '700 78px "Cinzel", Georgia, serif' : '600 62px "JetBrains Mono", Menlo, monospace';
+    const probe = document.createElement("canvas").getContext("2d")!;
+    probe.font = face;
+    probe.letterSpacing = "8px";
+    const run = `${text}    ✦    `;
+    const runWidth = probe.measureText(run).width;
+    // How many times the words go round, so they keep their proportions.
+    const pixelsRound = (circumference / height) * H;
+    const repeats = Math.max(1, Math.round(pixelsRound / runWidth));
+    const W = Math.min(4096, Math.ceil(runWidth));
 
-  /** One piece of a place: its body, its label, and its cap if the skill is new. */
-  const makePart = (
-    group: ThreeTypes.Object3D,
-    body: ThreeTypes.Object3D,
-    height: number,
-    tower: Tower,
-    index: number,
-    capAt?: ThreeTypes.Vector3,
-  ): Part => {
-    group.add(body);
-    if (tower.fresh && capAt) {
-      const finial = cap(2.6);
-      finial.position.copy(capAt);
-      body.add(finial);
-    }
-    let tag: ThreeTypes.Sprite | undefined;
-    if (index < LABEL_LIMIT) {
-      tag = label(`${tower.fresh ? "NEW · " : ""}${tower.name} · ${say(tower.years)} yrs`, Boolean(tower.fresh));
-      group.add(tag);
-    }
+    const make = (paint: (ctx: CanvasRenderingContext2D) => void, srgb: boolean) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d")!;
+      paint(ctx);
+      const texture = new THREE.CanvasTexture(canvas);
+      if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.repeat.set(repeats, 1);
+      texture.anisotropy = 8;
+      return texture;
+    };
+    const write = (ctx: CanvasRenderingContext2D) => {
+      ctx.font = face;
+      ctx.letterSpacing = "8px";
+      ctx.textBaseline = "middle";
+      ctx.save();
+      ctx.scale(W / runWidth, 1);
+      ctx.fillText(run, 0, H / 2 + 4);
+      ctx.restore();
+    };
     return {
-      mesh: body,
-      height,
-      name: tower.name,
-      years: tower.years,
-      tag,
-      lift: 6 + (index % 3) * 8,
-      twist: (index % 2 === 0 ? 1 : -1) * (0.7 + (index % 3) * 0.25),
+      metal: make((ctx) => {
+        ctx.fillStyle = "#8b6628";
+        ctx.fillRect(0, 0, W, H);
+        for (let i = 0; i < 90; i += 1) {
+          ctx.fillStyle = i % 2 === 0 ? "rgba(255, 220, 150, 0.07)" : "rgba(30, 16, 4, 0.12)";
+          ctx.fillRect((i * 53) % W, 0, 2 + (i % 3), H);
+        }
+        ctx.fillStyle = "rgba(34, 18, 4, 0.55)";
+        ctx.fillRect(0, 0, W, 8);
+        ctx.fillRect(0, H - 8, W, 8);
+        ctx.fillStyle = "#2b1806";
+        write(ctx);
+      }, true),
+      glow: make((ctx) => {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = "#fff";
+        ctx.shadowColor = "#fff";
+        ctx.shadowBlur = 5;
+        write(ctx);
+      }, false),
     };
   };
 
-  /** Clockwork rise: a piece winds up out of the ground, turning as it comes. */
-  const wind = (part: Part, grown: number, baseY = 0) => {
-    const g = Math.max(0.001, grown);
-    part.mesh.scale.set(0.6 + 0.4 * g, g, 0.6 + 0.4 * g);
-    part.mesh.position.y = baseY;
-    part.mesh.rotation.y = (1 - g) * part.twist;
+  /** A bronze band with a skill engraved round it, the letters lit from within. */
+  const engravedBand = (radius: number, height: number, text: string, glow: string) => {
+    const faces = lettering(text.toUpperCase(), Math.PI * 2 * radius, height);
+    const material = new THREE.MeshStandardMaterial({
+      map: faces.metal,
+      metalness: 0.85,
+      roughness: 0.4,
+      emissive: new THREE.Color(glow),
+      emissiveMap: faces.glow,
+      emissiveIntensity: 1.5,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 96, 1, true), material);
+    [1, -1].forEach((edge) => {
+      const rail = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.7, 6, 96), skin("bronze", 0.6));
+      rail.rotation.x = Math.PI / 2;
+      rail.position.y = (edge * height) / 2;
+      mesh.add(rail);
+    });
+    return mesh;
   };
 
-  const showTag = (part: Part, grown: number, focus: number, x: number, y: number, z: number) => {
-    if (!part.tag) return;
-    part.tag.position.set(x, y + part.lift, z);
-    (part.tag.material as ThreeTypes.SpriteMaterial).opacity =
-      Math.max(0, Math.min(1, grown * 1.5 - 0.3)) * focus;
+  /** The same words with no metal at all: a ring of light. */
+  const glyphRing = (radius: number, height: number, text: string, colour: string) => {
+    const faces = lettering(text.toUpperCase(), Math.PI * 2 * radius, height);
+    return new THREE.Mesh(
+      new THREE.CylinderGeometry(radius, radius, height, 96, 1, true),
+      new THREE.MeshBasicMaterial({
+        map: faces.glow,
+        color: new THREE.Color(colour),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+      }),
+    );
   };
 
-  /** A body whose origin is at its foot, so scaling grows it upward. */
-  const footed = (mesh: ThreeTypes.Mesh, height: number) => {
+  /** A shaft of light standing on a place. */
+  const lightColumn = (radius: number, height: number, colour: string) => {
+    const fade = painted((ctx, size) => {
+      const up = ctx.createLinearGradient(0, size, 0, 0);
+      up.addColorStop(0, "rgba(255,255,255,0.95)");
+      up.addColorStop(0.5, "rgba(255,255,255,0.35)");
+      up.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = up;
+      ctx.fillRect(0, 0, size, size);
+    }, 64);
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.55, radius, height, 28, 1, true),
+      new THREE.MeshBasicMaterial({
+        map: fade,
+        color: new THREE.Color(colour),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+      }),
+    );
     mesh.position.y = height / 2;
-    const holder = new THREE.Group();
-    holder.add(mesh);
-    return holder;
+    return mesh;
+  };
+
+  /** A heraldic emblem, painted: enamel field, gold rims, a charge, and the house's letters. */
+  const emblem = (letters: string, field: string, second: string) =>
+    painted((ctx, size) => {
+      const c = size / 2;
+      ctx.fillStyle = "#1a1208";
+      ctx.fillRect(0, 0, size, size);
+      const disc = (r: number, fill: string) => {
+        ctx.beginPath();
+        ctx.arc(c, c, r, 0, Math.PI * 2);
+        ctx.fillStyle = fill;
+        ctx.fill();
+      };
+      disc(c * 0.98, "#c9973f");
+      disc(c * 0.92, "#5d4218");
+      disc(c * 0.88, field);
+      // Quartered field.
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(c, c, c * 0.88, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.fillStyle = second;
+      ctx.fillRect(c, 0, c, c);
+      ctx.fillRect(0, c, c, c);
+      // A chevron across it.
+      ctx.strokeStyle = "#d9b25a";
+      ctx.lineWidth = size * 0.045;
+      ctx.beginPath();
+      ctx.moveTo(c * 0.18, c * 1.5);
+      ctx.lineTo(c, c * 0.72);
+      ctx.lineTo(c * 1.82, c * 1.5);
+      ctx.stroke();
+      ctx.restore();
+      // Studs round the rim.
+      for (let i = 0; i < 24; i += 1) {
+        const a = (i / 24) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(c + Math.cos(a) * c * 0.95, c + Math.sin(a) * c * 0.95, size * 0.011, 0, Math.PI * 2);
+        ctx.fillStyle = "#f4dc9a";
+        ctx.fill();
+      }
+      disc(c * 0.4, "#1a1208");
+      disc(c * 0.36, "#c9973f");
+      disc(c * 0.32, field);
+      ctx.fillStyle = "#f6e2ae";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = `700 ${size * (letters.length > 1 ? 0.2 : 0.3)}px "Cinzel", Georgia, serif`;
+      ctx.fillText(letters, c, c + size * 0.015);
+    }, 1024);
+
+  const HOUSES: Record<string, [string, string, string]> = {
+    // letters, field, second colour
+    earthlink: ["E", "#1f4a63", "#15354a"],
+    hostpro: ["HP", "#6e1f24", "#4a1418"],
+    stormscape: ["S", "#252c52", "#171c38"],
+    unitedlayer: ["UL", "#2c4f52", "#1c3638"],
+    murad: ["M", "#5a3a66", "#3c2646"],
+    "capital-group": ["CG", "#1f3f6e", "#142b4d"],
+    boingo: ["B", "#7a4a1c", "#573312"],
+    rpa: ["RPA", "#5e2438", "#411827"],
+    investcloud: ["IC", "#1e5a4a", "#123d32"],
+  };
+
+  /** Fresh skills burn gold-white; carried ones take the place's own colour. */
+  const glowFor = (tower: Tower, own: string) => (tower.fresh ? NEW_GLOW : own);
+
+  /* ------------------------------------------------------------------ */
+  /* A. The instrument: Earthlink's beacon                                */
+
+  const beacon = (towers: Tower[], tallest: number): Build => {
+    const group = new THREE.Group();
+    const OWN = "#ff8a24";
+
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(30, 33, 6, 40), skin("bronze", 0.3));
+    drum.position.y = 3;
+    group.add(drum);
+
+    const GAP = 13;
+    const top = 12 + towers.length * GAP;
+    const column = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.6, top + 8, 10), skin("bronze", 0.7));
+    column.position.y = (top + 8) / 2;
+    const columnHolder = new THREE.Group();
+    columnHolder.add(column);
+    group.add(columnHolder);
+
+    // One engraved band to a skill, widest for the longest served, climbing the column.
+    const sorted = [...towers].sort((a, b) => b.years - a.years);
+    const bands = sorted.map((tower, index) => {
+      const radius = 13 + shadeFor(tower, tallest) * 15;
+      const mesh = engravedBand(radius, 10.5, tower.name, glowFor(tower, OWN));
+      const spokes = new THREE.Group();
+      for (let k = 0; k < 3; k += 1) {
+        const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, radius, 6), skin("bronze", 0.5));
+        spoke.rotation.z = Math.PI / 2;
+        spoke.rotation.y = (k / 3) * Math.PI * 2;
+        spoke.position.set(Math.cos((k / 3) * Math.PI * 2) * radius * 0.5, 0, -Math.sin((k / 3) * Math.PI * 2) * radius * 0.5);
+        spokes.add(spoke);
+      }
+      mesh.add(spokes);
+      group.add(mesh);
+      return { mesh, at: 14 + index * GAP, speed: (index % 2 === 0 ? 1 : -1) * (0.5 - index * 0.06) };
+    });
+
+    // The lamp: a light in a cage of gimbals.
+    const lamp = new THREE.Group();
+    lamp.add(new THREE.Mesh(new THREE.SphereGeometry(4.2, 24, 24), new THREE.MeshBasicMaterial({ color: 0xffe6b8 })));
+    const gimbals = [0, 1, 2].map((k) => {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(7 + k * 1.8, 0.45, 8, 48), skin("bronze", 0.8));
+      ring.rotation.set(k * 0.9, k * 0.5, 0);
+      lamp.add(ring);
+      return ring;
+    });
+    group.add(lamp);
+
+    // What a beacon is for: rings of signal running out across the country.
+    const pulses = [0, 1, 2].map(() => {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.93, 1, 96),
+        new THREE.MeshBasicMaterial({
+          color: 0xffc070,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+        }),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 7;
+      group.add(ring);
+      return ring;
+    });
+
+    return {
+      group,
+      grow(eased, phase) {
+        const base = Math.max(0.001, stage(eased, 0, 6));
+        drum.scale.set(base, 1, base);
+        columnHolder.scale.y = Math.max(0.001, stage(eased, 0, 4));
+
+        bands.forEach((band, index) => {
+          const grown = stage(eased, index + 1, bands.length + 2);
+          band.mesh.scale.setScalar(Math.max(0.001, grown));
+          band.mesh.position.y = band.at * grown;
+          band.mesh.rotation.y = phase * band.speed + (1 - grown) * 3;
+        });
+
+        const lit = stage(eased, bands.length + 1, bands.length + 2);
+        lamp.scale.setScalar(Math.max(0.001, lit));
+        lamp.position.y = (top + 14) * Math.max(0.2, lit);
+        gimbals.forEach((ring, k) => {
+          ring.rotation.x = k * 0.9 + phase * (0.5 + k * 0.2);
+          ring.rotation.y = k * 0.5 + phase * (0.3 + k * 0.15);
+        });
+
+        pulses.forEach((ring, k) => {
+          const life = (phase * 0.16 + k / pulses.length) % 1;
+          ring.scale.setScalar(34 + life * 190);
+          (ring.material as ThreeTypes.MeshBasicMaterial).opacity = lit * (1 - life) ** 1.6 * 0.75;
+        });
+      },
+    };
   };
 
   /* ------------------------------------------------------------------ */
+  /* B. The sigil: HostPro's standard                                     */
 
-  /** Earthlink: timber posts strung with lines, the way calls were put through. */
-  const switchboard = (towers: Tower[], tallest: number): Build => {
+  const standard = (towers: Tower[], tallest: number, _later: Tower[] | undefined, house = "hostpro"): Build => {
     const group = new THREE.Group();
-    const spread = 14;
-    const parts = towers.map((tower, index) => {
-      const height = heightOf(tower, tallest, 16, 34);
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.9, height, 7), skin("timber", 0.6));
-      const holder = footed(post, height);
-      const crossarm = new THREE.Mesh(new THREE.BoxGeometry(9, 1, 1.2), skin("bronze", shadeFor(tower, tallest)));
-      crossarm.position.y = height - 3;
-      holder.add(crossarm);
-      const across = index - (towers.length - 1) / 2;
-      holder.position.set(across * spread, 0, (index % 2 === 0 ? -1 : 1) * 8);
-      return makePart(group, holder, height, tower, index, new THREE.Vector3(0, height + 3, 0));
-    });
-    const wires = parts.slice(0, -1).map((part, index) => {
-      const next = parts[index + 1];
-      const a = part.mesh.position;
-      const b = next.mesh.position;
-      const curve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(a.x, part.height - 3, a.z),
-        new THREE.Vector3((a.x + b.x) / 2, Math.min(part.height, next.height) - 9, (a.z + b.z) / 2),
-        new THREE.Vector3(b.x, next.height - 3, b.z),
-      ]);
-      const wire = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, 0.2, 5, false), skin("iron", 0.8));
-      group.add(wire);
-      return wire;
-    });
-    const plinth = new THREE.Mesh(new THREE.BoxGeometry(towers.length * spread + 16, 2.4, 30), skin("stone", 0.4));
-    plinth.position.y = 1.2;
-    group.add(plinth);
-    return {
-      group,
-      grow(eased, _phase, focus) {
-        parts.forEach((part, index) => {
-          const grown = stage(eased, index, parts.length);
-          wind(part, grown, 2.4);
-          showTag(part, grown, focus, part.mesh.position.x, part.height * grown + 2.4, part.mesh.position.z);
-        });
-        wires.forEach((wire, index) => {
-          wire.visible = stage(eased, index + 1, parts.length) > 0.92;
-        });
-        plinth.scale.set(Math.max(0.001, stage(eased, 0, 4)), 1, 1);
-      },
-    };
-  };
+    const turntable = new THREE.Group();
+    group.add(turntable);
+    const [letters, field, second] = HOUSES[house] ?? HOUSES.hostpro;
 
-  /** HostPro: a stone colonnade, one bay let at a time, under a bronze beam. */
-  const terraces = (towers: Tower[], tallest: number): Build => {
-    const group = new THREE.Group();
-    const bay = 16;
-    const parts = towers.map((tower, index) => {
-      const height = heightOf(tower, tallest, 16, 30);
+    // The shield, in eight leaves that fan open.
+    const SHIELD = 26;
+    const face = emblem(letters, field, second);
+    const shield = new THREE.Group();
+    shield.position.y = SHIELD + 9;
+    shield.rotation.x = -0.32;
+    const leaves = Array.from({ length: 8 }, (_, k) => {
+      const leaf = new THREE.Mesh(
+        new THREE.CircleGeometry(SHIELD, 12, (k / 8) * Math.PI * 2, Math.PI / 4 + 0.002),
+        new THREE.MeshStandardMaterial({
+          map: face,
+          emissive: new THREE.Color("#ffffff"),
+          emissiveMap: face,
+          emissiveIntensity: 0.22,
+          metalness: 0.55,
+          roughness: 0.45,
+          side: THREE.DoubleSide,
+        }),
+      );
+      shield.add(leaf);
+      return leaf;
+    });
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(SHIELD, 1.3, 8, 72), skin("bronze", 0.8));
+    shield.add(rim);
+    turntable.add(shield);
+
+    const stand = new THREE.Group();
+    [-1, 1].forEach((sideOf) => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.7, SHIELD + 12, 8), skin("bronze", 0.4));
+      leg.position.set(sideOf * 12, (SHIELD + 12) / 2, -7);
+      leg.rotation.z = sideOf * -0.16;
+      stand.add(leg);
+    });
+    turntable.add(stand);
+
+    // The skills, flown as banners in an arc behind it: longest standing tallest.
+    const cloths = ["#7a1f26", "#1f3564"];
+    const banners = towers.map((tower, index) => {
+      const drop = 22 + shadeFor(tower, tallest) * 28;
       const holder = new THREE.Group();
-      [-1, 1].forEach((sideOf) => {
-        const pier = new THREE.Mesh(new THREE.BoxGeometry(3, height * 0.72, 6), skin("stone", 0.55));
-        pier.position.set(sideOf * bay * 0.4, height * 0.36, 0);
-        holder.add(pier);
-      });
-      const arch = new THREE.Mesh(
-        new THREE.TorusGeometry(bay * 0.4, 1.6, 6, 14, Math.PI),
-        skin("bronze", shadeFor(tower, tallest)),
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.75, drop + 12, 8), skin("timber", 0.7));
+      pole.position.y = (drop + 12) / 2;
+      holder.add(pole);
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 12, 6), skin("bronze", 0.7));
+      bar.rotation.z = Math.PI / 2;
+      bar.position.y = drop + 10;
+      holder.add(bar);
+
+      const cloth = new THREE.Mesh(
+        new THREE.PlaneGeometry(10.5, drop, 1, 8),
+        new THREE.MeshStandardMaterial({
+          map: painted((ctx, size) => {
+            ctx.fillStyle = tower.fresh ? "#8a6a1e" : cloths[index % 2];
+            ctx.fillRect(0, 0, size, size);
+            ctx.strokeStyle = "#d9b25a";
+            ctx.lineWidth = 10;
+            ctx.strokeRect(10, 10, size - 20, size - 20);
+            // The name runs down the cloth.
+            ctx.save();
+            ctx.translate(size / 2, size / 2);
+            ctx.rotate(Math.PI / 2);
+            ctx.fillStyle = tower.fresh ? "#fff3cf" : "#f1dca6";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.font = '700 96px "Cinzel", Georgia, serif';
+            ctx.fillText(tower.name.toUpperCase(), 0, 6, size - 70);
+            ctx.restore();
+          }, 512),
+          emissive: new THREE.Color(tower.fresh ? "#6a4a10" : "#000000"),
+          emissiveIntensity: tower.fresh ? 0.6 : 0,
+          roughness: 0.9,
+          side: THREE.DoubleSide,
+        }),
       );
-      arch.position.y = height * 0.72;
-      holder.add(arch);
-      const across = index - (towers.length - 1) / 2;
-      holder.position.set(across * bay, 0, 0);
-      const part = makePart(group, holder, height, tower, index, new THREE.Vector3(0, height * 0.72 + bay * 0.4 + 3, 0));
-      part.twist = 0;
-      return part;
-    });
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(towers.length * bay + 8, 2.4, 9), skin("bronze", 0.35));
-    group.add(beam);
-    return {
-      group,
-      grow(eased, _phase, focus) {
-        let top = 0;
-        parts.forEach((part, index) => {
-          const grown = stage(eased, index, parts.length);
-          wind(part, grown);
-          top = Math.max(top, (part.height * 0.72 + bay * 0.4) * grown);
-          showTag(part, grown, focus, part.mesh.position.x, (part.height * 0.72 + bay * 0.4) * grown, 0);
-        });
-        beam.scale.set(Math.max(0.001, stage(eased, parts.length - 1, parts.length)), 1, 1);
-        beam.position.y = top + 2;
-      },
-    };
-  };
-
-  /**
-   * StormScape: a camp of bronze spires, put up one at a time. The one place
-   * the film returns to, so it can be built twice: the second pass grows the
-   * spires that carried on and raises new ones for what is new since.
-   */
-  const spires = (towers: Tower[], tallest: number, later: Tower[] = []): Build => {
-    const group = new THREE.Group();
-    const spire = (tower: Tower, index: number, height: number) => {
-      const body = new THREE.Mesh(
-        new THREE.ConeGeometry(2.8 + shadeFor(tower, tallest) * 2.4, height, 6),
-        skin("bronze", shadeFor(tower, tallest)),
-      );
-      const holder = footed(body, height);
-      const skirt = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 5.6, 3, 6), skin("stone", 0.5));
-      skirt.position.y = 1.5;
-      holder.add(skirt);
-      const angle = index * 2.399;
-      const radius = 8 + index * 2.7;
-      holder.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
-      return holder;
-    };
-
-    const parts = towers.map((tower, index) => {
-      const height = heightOf(tower, tallest, 14, 44);
-      const part = makePart(group, spire(tower, index, height), height, tower, index, new THREE.Vector3(0, height + 2.4, 0));
-      return { ...part, grown: 0, taller: 0, laterTag: undefined as ThreeTypes.Sprite | undefined };
-    });
-
-    const risen: Part[] = [];
-    later.forEach((tower, order) => {
-      const already = parts.find((part) => part.name === tower.name);
-      if (already) {
-        already.taller = heightOf(tower, tallest, 14, 44) * 0.7;
-        already.laterTag = label(`${tower.name} · ${say(already.years + tower.years)} yrs`, false);
-        group.add(already.laterTag);
-        return;
+      // Hung from its top edge, so it unfurls downward.
+      cloth.geometry.translate(0, -drop / 2, 0);
+      cloth.position.y = drop + 9.4;
+      holder.add(cloth);
+      if (tower.fresh) {
+        const finial = new THREE.Mesh(
+          new THREE.OctahedronGeometry(1.9, 0),
+          new THREE.MeshStandardMaterial({ color: "#ffd27a", emissive: "#ffb433", emissiveIntensity: 0.9, metalness: 0.9, roughness: 0.25 }),
+        );
+        finial.position.y = drop + 14;
+        holder.add(finial);
       }
-      const index = towers.length + order;
-      const height = heightOf(tower, tallest, 14, 44);
-      const part = makePart(group, spire(tower, index, height), height, tower, order, new THREE.Vector3(0, height + 2.4, 0));
-      part.mesh.scale.y = 0.001;
-      risen.push(part);
-    });
 
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(32, 0.8, 8, 60), skin("bronze", 0.3));
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 1;
-    group.add(ring);
+      const spread = Math.min(2.5, 0.42 * Math.max(1, towers.length - 1));
+      const angle = Math.PI + (towers.length === 1 ? 0 : (index / (towers.length - 1) - 0.5) * spread);
+      holder.position.set(Math.sin(angle) * 38, 0, Math.cos(angle) * 38);
+      holder.rotation.y = angle + Math.PI;
+      turntable.add(holder);
+      return { holder, cloth };
+    });
 
     return {
       group,
-      grow(eased, _phase, focus) {
-        parts.forEach((part, index) => {
-          part.grown = stage(eased, index, parts.length);
-          wind(part, part.grown);
-          showTag(part, part.grown, focus, part.mesh.position.x, part.height * part.grown, part.mesh.position.z);
-          if (part.laterTag) (part.laterTag.material as ThreeTypes.SpriteMaterial).opacity = 0;
+      grow(eased, phase) {
+        turntable.rotation.y = phase * 0.16;
+        stand.scale.y = Math.max(0.001, stage(eased, 0, 5));
+        const open = stage(eased, 1, 5);
+        rim.scale.setScalar(Math.max(0.001, open));
+        leaves.forEach((leaf, k) => {
+          const mine = Math.max(0.001, Math.min(1, open * 1.6 - (k / 8) * 0.6));
+          leaf.scale.setScalar(mine);
+          leaf.rotation.z = (1 - mine) * 1.4;
         });
-        risen.forEach((part) => {
-          part.mesh.scale.y = 0.001;
-          if (part.tag) (part.tag.material as ThreeTypes.SpriteMaterial).opacity = 0;
+        banners.forEach((banner, index) => {
+          const grown = stage(eased, index + 2, banners.length + 3);
+          banner.holder.scale.y = Math.max(0.001, Math.min(1, grown * 2));
+          banner.cloth.scale.y = Math.max(0.001, Math.max(0, grown * 2 - 1));
+          banner.cloth.rotation.x = Math.sin(phase * 1.8 + index) * 0.05 * grown;
         });
-        ring.scale.setScalar(0.2 + eased * 0.8);
-      },
-      growLater(eased, _phase, focus) {
-        parts.forEach((part) => {
-          if (part.taller <= 0) return;
-          const extra = (part.taller / part.height) * eased;
-          part.mesh.scale.y = part.grown + extra;
-          if (part.laterTag) {
-            part.laterTag.position.set(
-              part.mesh.position.x,
-              part.height * (part.grown + extra) + part.lift,
-              part.mesh.position.z,
-            );
-            (part.laterTag.material as ThreeTypes.SpriteMaterial).opacity =
-              Math.max(0, Math.min(1, eased * 1.6 - 0.2)) * focus;
-          }
-        });
-        risen.forEach((part, index) => {
-          const grown = stage(eased, index, risen.length);
-          wind(part, grown);
-          showTag(part, grown, focus, part.mesh.position.x, part.height * grown, part.mesh.position.z);
-        });
-        ring.scale.setScalar(1 + eased * 0.24);
       },
     };
   };
 
-  /** UnitedLayer: iron cabinets in rows on a stone floor — a data centre. */
-  const racks = (towers: Tower[], tallest: number): Build => {
-    const group = new THREE.Group();
-    const parts = towers.map((tower, index) => {
-      const height = heightOf(tower, tallest, 12, 28);
-      const cabinet = new THREE.Mesh(new THREE.BoxGeometry(7.5, height, 5.5), skin("iron", 0.7));
-      const holder = footed(cabinet, height);
-      const face = new THREE.Mesh(new THREE.BoxGeometry(7.7, height * 0.84, 0.5), skin("bronze", shadeFor(tower, tallest)));
-      face.position.set(0, height / 2, 2.9);
-      holder.add(face);
-      holder.position.set(-18 + Math.floor(index / 2) * 13, 0, index % 2 === 0 ? -9 : 9);
-      return makePart(group, holder, height, tower, index, new THREE.Vector3(0, height + 2.6, 0));
-    });
-    const floor = new THREE.Mesh(new THREE.BoxGeometry(66, 2, 38), skin("stone", 0.4));
-    floor.position.y = 1;
-    group.add(floor);
-    return {
-      group,
-      grow(eased, _phase, focus) {
-        parts.forEach((part, index) => {
-          const grown = stage(eased, index, parts.length);
-          wind(part, grown, 2);
-          showTag(part, grown, focus, part.mesh.position.x, part.height * grown + 2, part.mesh.position.z);
-        });
-        const open = Math.max(0.001, stage(eased, 0, 4));
-        floor.scale.set(open, 1, open);
-      },
-    };
-  };
+  /* ------------------------------------------------------------------ */
+  /* C. The monument: StormScape's column of light                        */
 
-  /** Murad: a stone ziggurat, a tier per skill, bronze at the crown. */
-  const ziggurat = (towers: Tower[], tallest: number): Build => {
+  const monument = (towers: Tower[], tallest: number, later: Tower[] = []): Build => {
     const group = new THREE.Group();
-    const sorted = [...towers].sort((a, b) => b.years - a.years);
-    let base = 0;
-    const parts = sorted.map((tower, index) => {
-      const height = 6 + shadeFor(tower, tallest) * 10;
-      const width = 40 - index * (29 / Math.max(1, sorted.length));
-      const tier = new THREE.Mesh(
-        new THREE.BoxGeometry(width, height, width),
-        skin(index === sorted.length - 1 ? "bronze" : "stone", 0.45 + shadeFor(tower, tallest) * 0.4),
+    const OWN = "#7fc8ff";
+
+    const plinth = new THREE.Mesh(
+      new THREE.CylinderGeometry(21, 26, 6, 6),
+      new THREE.MeshStandardMaterial({ color: "#0f1220", metalness: 0.7, roughness: 0.22, flatShading: true }),
+    );
+    plinth.position.y = 3;
+    group.add(plinth);
+    const seams = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.CylinderGeometry(21.2, 26.2, 6.1, 6)),
+      new THREE.LineBasicMaterial({ color: 0x9fdcff }),
+    );
+    seams.position.y = 3;
+    group.add(seams);
+
+    const beam = lightColumn(7, 170, "#9fd4ff");
+    beam.position.y += 6;
+    group.add(beam);
+    const core = lightColumn(2.2, 190, "#ffffff");
+    core.position.y += 6;
+    group.add(core);
+
+    const makeRings = (list: Tower[], startIndex: number, own: string) =>
+      list.map((tower, order) => {
+        const radius = 15 + shadeFor(tower, tallest) * 20;
+        const ring = glyphRing(radius, 9.5, tower.name, glowFor(tower, own));
+        group.add(ring);
+        const index = startIndex + order;
+        return { ring, at: 16 + index * 11.5, speed: (index % 2 === 0 ? 1 : -1) * (0.42 - (index % 5) * 0.04) };
+      });
+    const rings = makeRings([...towers].sort((a, b) => b.years - a.years), 0, OWN);
+    // What the studio picked up the second time round, in a warmer light.
+    const laterRings = makeRings(later, towers.length, "#ffb266");
+
+    const shards = Array.from({ length: 12 }, (_, k) => {
+      const shard = new THREE.Mesh(
+        new THREE.OctahedronGeometry(1 + (k % 3) * 0.5, 0),
+        new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
       );
-      const holder = footed(tier, height);
-      const part = makePart(group, holder, height, tower, index, new THREE.Vector3(width / 2 - 2, height + 2.6, width / 2 - 2));
-      const at = base;
-      base += height;
-      return { ...part, at, width };
+      group.add(shard);
+      return { shard, radius: 12 + (k % 4) * 9, height: 12 + k * 9, speed: 0.5 + (k % 3) * 0.2 };
     });
+
+    const turn = (set: typeof rings, eased: number, phase: number) => {
+      set.forEach((entry, index) => {
+        const grown = stage(eased, index + 1, set.length + 2);
+        entry.ring.position.y = entry.at * (0.25 + 0.75 * grown);
+        entry.ring.scale.setScalar(Math.max(0.001, 0.4 + 0.6 * grown));
+        entry.ring.rotation.y = phase * entry.speed;
+        (entry.ring.material as ThreeTypes.MeshBasicMaterial).opacity = grown * 0.95;
+      });
+    };
+
     return {
       group,
-      grow(eased, _phase, focus) {
-        parts.forEach((part, index) => {
-          const grown = Math.max(0.001, stage(eased, index, parts.length));
-          part.mesh.scale.setScalar(grown);
-          part.mesh.position.y = part.at * grown;
-          part.mesh.rotation.y = (1 - grown) * part.twist;
-          showTag(part, grown, focus, part.width * 0.5 + 20, part.at * grown + part.height * 0.5 - 6, 0);
+      grow(eased, phase) {
+        const base = Math.max(0.001, stage(eased, 0, 6));
+        plinth.scale.set(base, 1, base);
+        seams.scale.set(base, 1, base);
+        const lit = stage(eased, 0, 3);
+        // A storm's light: never quite steady.
+        const flicker = 0.85 + 0.15 * Math.sin(phase * 9) * Math.sin(phase * 2.3);
+        (beam.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.34 * flicker;
+        (core.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.7 * flicker;
+        turn(rings, eased, phase);
+        laterRings.forEach((entry) => {
+          (entry.ring.material as ThreeTypes.MeshBasicMaterial).opacity = 0;
         });
+        shards.forEach((entry, k) => {
+          const angle = phase * entry.speed + k;
+          entry.shard.position.set(Math.cos(angle) * entry.radius, entry.height * lit, Math.sin(angle) * entry.radius);
+          entry.shard.rotation.set(angle, angle * 1.3, 0);
+          (entry.shard.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.85;
+        });
+      },
+      growLater(eased, phase) {
+        turn(laterRings, eased, phase);
+        (beam.material as ThreeTypes.MeshBasicMaterial).opacity = 0.34 + eased * 0.22;
+        (core.material as ThreeTypes.MeshBasicMaterial).opacity = 0.7 + eased * 0.25;
       },
     };
   };
 
-  /** Capital Group: a stone keep, bronze-roofed towers at its corners. */
-  const keep = (towers: Tower[], tallest: number): Build => {
-    const group = new THREE.Group();
-    const wallHeight = 15;
-    const walls = [0, 1, 2, 3].map((side) => {
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(40, wallHeight, 3), skin("stone", 0.5));
-      const holder = footed(wall, wallHeight);
-      const angle = (side / 4) * Math.PI * 2;
-      holder.position.set(Math.cos(angle) * 20, 0, Math.sin(angle) * 20);
-      holder.rotation.y = -angle + Math.PI / 2;
-      group.add(holder);
-      return holder;
-    });
-    const parts = towers.slice(0, 6).map((tower, index) => {
-      const height = heightOf(tower, tallest, 20, 28);
-      const drum = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 5.2, height, 8), skin("stone", 0.6));
-      const holder = footed(drum, height);
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(5.6, 9, 8), skin("bronze", shadeFor(tower, tallest)));
-      roof.position.y = height + 4.5;
-      holder.add(roof);
-      const angle = (index / Math.min(6, towers.length)) * Math.PI * 2 + Math.PI / 4;
-      const radius = index < 4 ? 28 : 10;
-      holder.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
-      return makePart(group, holder, height + 9, tower, index, new THREE.Vector3(0, height + 11.5, 0));
-    });
-    return {
-      group,
-      grow(eased, _phase, focus) {
-        walls.forEach((wall, index) => {
-          wall.scale.y = Math.max(0.001, stage(eased, index, 10));
-        });
-        parts.forEach((part, index) => {
-          const grown = stage(eased, index + 3, 10);
-          wind(part, grown);
-          showTag(part, grown, focus, part.mesh.position.x, part.height * grown, part.mesh.position.z);
-        });
-      },
-    };
-  };
+  /* ------------------------------------------------------------------ */
+  /* All three together: a machine, on its sigil, under its light         */
 
-  /** Boingo: an iron mast throwing rings of signal, each ring a skill. */
-  const mast = (towers: Tower[], tallest: number): Build => {
-    const group = new THREE.Group();
-    const height = 58;
-    const pole = footed(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 3.2, height, 8), skin("iron", 0.8)), height);
-    group.add(pole);
-    const parts = towers.map((tower, index) => {
-      const radius = 10 + index * 5.2;
-      const ringMesh = new THREE.Mesh(
-        new THREE.TorusGeometry(radius, 0.7 + shadeFor(tower, tallest) * 0.9, 8, 56),
-        skin("bronze", shadeFor(tower, tallest)),
+  type Works = "rotors" | "orrery" | "engine";
+
+  const combined =
+    (works: Works, house: string, own: string) =>
+    (towers: Tower[], tallest: number): Build => {
+      const group = new THREE.Group();
+      const [letters, field, second] = HOUSES[house] ?? HOUSES.hostpro;
+      const sorted = [...towers].sort((a, b) => b.years - a.years);
+
+      // B: the house's sigil, laid into the floor the machine stands on.
+      const face = emblem(letters, field, second);
+      const floor = new THREE.Mesh(
+        new THREE.CircleGeometry(44, 64),
+        new THREE.MeshStandardMaterial({
+          map: face,
+          emissive: new THREE.Color("#ffffff"),
+          emissiveMap: face,
+          emissiveIntensity: 0.18,
+          metalness: 0.5,
+          roughness: 0.5,
+        }),
       );
-      ringMesh.rotation.x = Math.PI / 2;
-      const holder = new THREE.Group();
-      holder.add(ringMesh);
-      holder.position.y = 4 + index * 5.4;
-      const part = makePart(group, holder, 0, tower, index, new THREE.Vector3(radius, 3, 0));
-      return { ...part, radius, at: 4 + index * 5.4 };
-    });
-    return {
-      group,
-      grow(eased, phase, focus) {
-        pole.scale.y = Math.max(0.001, stage(eased, 0, 3));
-        parts.forEach((part, index) => {
-          const grown = Math.max(0.001, stage(eased, index, parts.length));
-          part.mesh.scale.set(grown, 1, grown);
-          part.mesh.rotation.y = (1 - grown) * part.twist + phase * 0.05 * (index % 2 === 0 ? 1 : -1);
-          showTag(part, grown, focus, part.radius * grown * 0.72, part.at, part.radius * grown * 0.72);
-        });
-      },
-    };
-  };
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = 0.4;
+      group.add(floor);
 
-  /** RPA: a great bronze cog set with billboards, turning — the agency years. */
-  const carousel = (towers: Tower[], tallest: number): Build => {
-    const group = new THREE.Group();
-    const spinner = new THREE.Group();
-    group.add(spinner);
-    const cog = new THREE.Mesh(new THREE.CylinderGeometry(24, 24, 3.4, Math.max(10, towers.length * 2)), skin("bronze", 0.3));
-    cog.position.y = 1.7;
-    spinner.add(cog);
-    const parts = towers.map((tower, index) => {
-      const size = 10 + shadeFor(tower, tallest) * 13;
-      const holder = new THREE.Group();
-      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 8, 6), skin("iron", 0.7));
-      stem.position.y = 4;
-      holder.add(stem);
-      const board = new THREE.Mesh(new THREE.BoxGeometry(size, size * 0.62, 0.9), skin("timber", 0.7));
-      board.position.y = 8 + size * 0.31;
-      holder.add(board);
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(size + 1.6, size * 0.62 + 1.6, 0.5), skin("bronze", shadeFor(tower, tallest)));
-      frame.position.set(0, 8 + size * 0.31, -0.5);
-      holder.add(frame);
-      const angle = (index / towers.length) * Math.PI * 2;
-      holder.position.set(Math.cos(angle) * 24, 3.4, Math.sin(angle) * 24);
-      holder.rotation.y = -angle + Math.PI / 2;
-      const part = makePart(spinner, holder, 8 + size * 0.62, tower, index, new THREE.Vector3(0, 10 + size * 0.62, 0));
-      part.twist = 0;
-      return part;
-    });
-    return {
-      group,
-      grow(eased, phase, focus) {
-        spinner.rotation.y = phase * 0.35;
-        const open = Math.max(0.001, stage(eased, 0, 3));
-        cog.scale.set(open, 1, open);
-        parts.forEach((part, index) => {
-          const grown = Math.max(0.001, stage(eased, index, parts.length));
-          part.mesh.scale.setScalar(grown);
-          showTag(part, grown, focus, part.mesh.position.x, 3.4 + part.height * grown, part.mesh.position.z);
-        });
-      },
-    };
-  };
+      // C: light for a crown — a shaft, and the house's name going round it.
+      const shaft = lightColumn(3, 150, own);
+      group.add(shaft);
+      const crown = glyphRing(30, 8, house.replace("-", " "), own);
+      group.add(crown);
 
-  /** InvestCloud: a skyline of stone towers crowned in bronze — the long stretch. */
-  const skyline = (towers: Tower[], tallest: number): Build => {
-    const group = new THREE.Group();
-    const parts = towers.map((tower, index) => {
-      const height = heightOf(tower, tallest, 20, 52);
-      const width = 5.4 + shadeFor(tower, tallest) * 3.6;
-      const shaft = new THREE.Mesh(new THREE.BoxGeometry(width, height, width), skin("stone", 0.55));
-      const holder = footed(shaft, height);
-      const crown = new THREE.Mesh(new THREE.BoxGeometry(width + 1.6, 3.4, width + 1.6), skin("bronze", shadeFor(tower, tallest)));
-      crown.position.y = height + 1.7;
-      holder.add(crown);
-      const lantern = new THREE.Mesh(new THREE.ConeGeometry(width * 0.62, 6, 4), skin("bronze", shadeFor(tower, tallest)));
-      lantern.position.y = height + 6.4;
-      lantern.rotation.y = Math.PI / 4;
-      holder.add(lantern);
-      const inner = index < 4;
-      const within = inner ? index : index - 4;
-      const count = inner ? 4 : Math.max(1, towers.length - 4);
-      const angle = (within / count) * Math.PI * 2 + (inner ? 0 : 0.6);
-      const radius = inner ? 12 : 26;
-      holder.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
-      return makePart(group, holder, height + 9, tower, index, new THREE.Vector3(0, height + 11.6, 0));
-    });
-    const plaza = new THREE.Mesh(new THREE.CylinderGeometry(36, 38, 2.2, 28), skin("stone", 0.35));
-    plaza.position.y = 1.1;
-    group.add(plaza);
-    return {
-      group,
-      grow(eased, _phase, focus) {
-        parts.forEach((part, index) => {
-          const grown = stage(eased, index, parts.length);
-          wind(part, grown, 2.2);
-          showTag(part, grown, focus, part.mesh.position.x, part.height * grown + 2.2, part.mesh.position.z);
+      // A: the machine itself.
+      const moving: Array<(grown: number, phase: number) => void> = [];
+      let crownAt = 90;
+
+      if (works === "rotors") {
+        // A shaft of rotor drums, the skills engraved round them.
+        const axle = new THREE.Group();
+        axle.position.y = 30;
+        group.add(axle);
+        const total = sorted.length * 12;
+        sorted.forEach((tower, index) => {
+          const radius = 12 + shadeFor(tower, tallest) * 12;
+          const drum = engravedBand(radius, 10.5, tower.name, glowFor(tower, own));
+          drum.rotation.z = Math.PI / 2;
+          const holder = new THREE.Group();
+          holder.add(drum);
+          holder.position.x = -total / 2 + index * 12 + 6;
+          axle.add(holder);
+          const cheek = new THREE.Mesh(new THREE.CylinderGeometry(radius + 1.2, radius + 1.2, 1, 40), skin("bronze", 0.35));
+          cheek.rotation.z = Math.PI / 2;
+          cheek.position.x = 5.75;
+          holder.add(cheek);
+          moving.push((grown, phase) => {
+            holder.scale.setScalar(Math.max(0.001, grown));
+            drum.rotation.x = phase * (index % 2 === 0 ? 0.5 : -0.4) + (1 - grown) * 3;
+          });
         });
-        const open = Math.max(0.001, stage(eased, 0, 5));
-        plaza.scale.set(open, 1, open);
-      },
+        [-1, 1].forEach((sideOf) => {
+          const frame = new THREE.Mesh(new THREE.ConeGeometry(9, 32, 4), skin("iron", 0.8));
+          frame.position.set(sideOf * (total / 2 + 5), 16, 0);
+          group.add(frame);
+        });
+        const rod = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, total + 16, 10), skin("iron", 0.9));
+        rod.rotation.z = Math.PI / 2;
+        axle.add(rod);
+        crownAt = 74;
+      } else if (works === "orrery") {
+        // Rings within rings, each carrying its own world.
+        const heart = new THREE.Mesh(new THREE.SphereGeometry(6, 24, 24), skin("bronze", 0.9));
+        heart.position.y = 40;
+        group.add(heart);
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 2.4, 40, 8), skin("bronze", 0.5));
+        post.position.y = 20;
+        group.add(post);
+        sorted.forEach((tower, index) => {
+          const radius = 14 + index * 6.5;
+          const pivot = new THREE.Group();
+          pivot.position.y = 40;
+          pivot.rotation.set(0.25 + index * 0.33, index * 0.8, (index % 2 === 0 ? 1 : -1) * 0.2);
+          const ring = engravedBand(radius, 7.5, tower.name, glowFor(tower, own));
+          pivot.add(ring);
+          const world = new THREE.Mesh(new THREE.SphereGeometry(1.6 + shadeFor(tower, tallest) * 2.8, 16, 16), skin("bronze", 1));
+          world.position.x = radius;
+          ring.add(world);
+          group.add(pivot);
+          moving.push((grown, phase) => {
+            pivot.scale.setScalar(Math.max(0.001, grown));
+            ring.rotation.y = phase * (0.5 - index * 0.05) * (index % 2 === 0 ? 1 : -1);
+          });
+        });
+        crownAt = 96;
+      } else {
+        // A difference engine: a column of number wheels to every skill.
+        sorted.forEach((tower, index) => {
+          const wheels = 3 + Math.round(shadeFor(tower, tallest) * 8);
+          const holder = new THREE.Group();
+          const angle = (index / sorted.length) * Math.PI * 2;
+          const ringR = sorted.length > 5 ? 26 : 20;
+          holder.position.set(Math.cos(angle) * ringR, 1, Math.sin(angle) * ringR);
+          const spindle = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, wheels * 5.2 + 4, 8), skin("iron", 0.9));
+          spindle.position.y = (wheels * 5.2 + 4) / 2;
+          holder.add(spindle);
+          const stack = Array.from({ length: wheels }, (_, k) => {
+            const wheel = new THREE.Mesh(new THREE.CylinderGeometry(5.4, 5.4, 3.6, 12), skin("bronze", 0.35 + (k % 3) * 0.25));
+            wheel.position.y = 3 + k * 5.2;
+            holder.add(wheel);
+            return wheel;
+          });
+          // The top wheel of each column is the engraved one.
+          const collar = engravedBand(7.4, 7, tower.name, glowFor(tower, own));
+          collar.position.y = 3 + wheels * 5.2 + 3;
+          holder.add(collar);
+          const tag = label(tower.name, Boolean(tower.fresh));
+          tag.position.set(holder.position.x * 1.25, 3 + wheels * 5.2 + 14, holder.position.z * 1.25);
+          group.add(tag);
+          group.add(holder);
+          moving.push((grown, phase) => {
+            holder.scale.y = Math.max(0.001, grown);
+            stack.forEach((wheel, k) => {
+              wheel.rotation.y = phase * (k % 2 === 0 ? 0.9 : -0.7) * (1 + k * 0.1);
+            });
+            collar.rotation.y = phase * 0.4;
+            (tag.material as ThreeTypes.SpriteMaterial).opacity = Math.max(0, grown * 1.4 - 0.4);
+          });
+        });
+        crownAt = 84;
+      }
+
+      return {
+        group,
+        grow(eased, phase) {
+          const laid = Math.max(0.001, stage(eased, 0, 6));
+          floor.scale.setScalar(laid);
+          floor.rotation.z = (1 - laid) * 2;
+          moving.forEach((move, index) => move(stage(eased, index + 1, moving.length + 3), phase));
+          const lit = stage(eased, moving.length + 1, moving.length + 3);
+          (shaft.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.36;
+          crown.position.y = crownAt * (0.4 + 0.6 * lit);
+          crown.rotation.y = -phase * 0.3;
+          (crown.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.9;
+        },
+      };
     };
-  };
 
   const byKind: Record<string, (towers: Tower[], tallest: number, later?: Tower[]) => Build> = {
-    switchboard,
-    terraces,
-    spires,
-    racks,
-    ziggurat,
-    keep,
-    mast,
-    carousel,
-    skyline,
+    beacon,
+    standard,
+    monument,
+    "rotors-unitedlayer": combined("rotors", "unitedlayer", "#8fe0d8"),
+    "orrery-murad": combined("orrery", "murad", "#d9a8ff"),
+    "engine-capital": combined("engine", "capital-group", "#8fb8ff"),
+    "orrery-boingo": combined("orrery", "boingo", "#ffb266"),
+    "rotors-rpa": combined("rotors", "rpa", "#ff9db4"),
+    "engine-investcloud": combined("engine", "investcloud", "#8ff0c0"),
   };
 
   /** The clockwork each place stands on: a pair of meshed gears turned by the build. */
@@ -662,28 +840,26 @@ export function makeBuilders(THREE: Three, label: Label) {
   return { byKind, gearPlatform, skin };
 }
 
-/** Which structure each place puts up. */
+/** Which direction each place is built in. */
 export const KIND_BY_PLACE: Record<string, string> = {
-  earthlink: "switchboard",
-  hostpro: "terraces",
-  stormscape: "spires",
-  unitedlayer: "racks",
-  murad: "ziggurat",
-  "capital-group": "keep",
-  boingo: "mast",
-  rpa: "carousel",
-  investcloud: "skyline",
-  "stormscape-now": "spires",
+  earthlink: "beacon",
+  hostpro: "standard",
+  stormscape: "monument",
+  unitedlayer: "rotors-unitedlayer",
+  murad: "orrery-murad",
+  "capital-group": "engine-capital",
+  boingo: "orrery-boingo",
+  rpa: "rotors-rpa",
+  investcloud: "engine-investcloud",
+  "stormscape-now": "monument",
 };
 
-export const KIND_ORDER = [
-  "switchboard",
-  "terraces",
-  "spires",
-  "racks",
-  "ziggurat",
-  "keep",
-  "mast",
-  "carousel",
-  "skyline",
-];
+export const KIND_ORDER = Object.values(KIND_BY_PLACE);
+
+/** What each direction is called, for the chapter card. */
+export const DIRECTION_BY_PLACE: Record<string, string> = {
+  earthlink: "A · instrument",
+  hostpro: "B · sigil",
+  stormscape: "C · light",
+  "stormscape-now": "C · light",
+};
