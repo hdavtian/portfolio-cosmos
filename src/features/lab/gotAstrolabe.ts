@@ -3,9 +3,10 @@ import type * as ThreeTypes from "three";
 /**
  * The astrolabe: the sun the map is lit by. A burning core — its surface a
  * slow boil of fire, a corona licking off it, sparks thrown outward — caged
- * in three bronze bands that turn on different axes. The bands are pierced,
- * so the fire shows through them as they pass, and engraved with what the
- * film is about: the years, the places, the disciplines.
+ * in three bronze bands that turn on different axes and tremble in the blast.
+ * The bands are pierced, so the fire shows through them as they pass. The
+ * innermost carries the name, its letters burning; the outer two carry the
+ * trade itself, written in code.
  *
  * This is the one thing in the film that runs on the clock rather than the
  * scrubber. A sun that stops burning when you pause reads as broken, and
@@ -70,10 +71,7 @@ const NOISE = /* glsl */ `
   }
 `;
 
-export function makeAstrolabe(
-  THREE: Three,
-  engravings: { years: string; places: string; disciplines: string },
-) {
+export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: string; languages: string }) {
   const group = new THREE.Group();
   const CORE = 30;
 
@@ -201,36 +199,58 @@ export function makeAstrolabe(
   group.add(sparkCloud);
 
   /* The bands. */
-  const bandTexture = (text: string, ink: string, metal: string) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 4096;
-    canvas.height = 128;
-    const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = metal;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    for (let i = 0; i < 260; i += 1) {
-      ctx.fillStyle = i % 2 === 0 ? "rgba(255, 220, 150, 0.07)" : "rgba(30, 16, 4, 0.12)";
-      ctx.fillRect((i * 53) % canvas.width, 0, 2 + (i % 3), canvas.height);
-    }
-    ctx.fillStyle = "rgba(34, 18, 4, 0.55)";
-    ctx.fillRect(0, 0, canvas.width, 9);
-    ctx.fillRect(0, canvas.height - 9, canvas.width, 9);
-    ctx.fillStyle = ink;
-    ctx.font = '700 58px "Cinzel", Georgia, serif';
-    ctx.textBaseline = "middle";
-    ctx.letterSpacing = "10px";
-    let x = 30;
-    const run = `${text}   ✦   `;
-    const width = ctx.measureText(run).width;
-    while (x < canvas.width) {
-      ctx.fillText(run, x, canvas.height / 2 + 3);
-      x += width;
-    }
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.anisotropy = 8;
-    return texture;
+  const lettered = (text: string, font: string, spacing: number) => {
+    const make = (paint: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, srgb: boolean) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 4096;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d")!;
+      paint(ctx, canvas.width, canvas.height);
+      const texture = new THREE.CanvasTexture(canvas);
+      if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.anisotropy = 8;
+      return texture;
+    };
+    const write = (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+      ctx.font = font;
+      ctx.textBaseline = "middle";
+      ctx.letterSpacing = `${spacing}px`;
+      const run = `${text}     ✦     `;
+      const width = ctx.measureText(run).width;
+      // Whole repeats only, so the join round the back of the band is clean.
+      const repeats = Math.max(1, Math.round(w / width));
+      const scale = w / (repeats * width);
+      ctx.save();
+      ctx.scale(scale, 1);
+      for (let i = 0; i < repeats; i += 1) ctx.fillText(run, i * width, h / 2 + 3);
+      ctx.restore();
+    };
+    return {
+      // The metal, with the lettering cut dark into it.
+      metal: make((ctx, w, h) => {
+        ctx.fillStyle = "#8b6628";
+        ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 260; i += 1) {
+          ctx.fillStyle = i % 2 === 0 ? "rgba(255, 220, 150, 0.07)" : "rgba(30, 16, 4, 0.12)";
+          ctx.fillRect((i * 53) % w, 0, 2 + (i % 3), h);
+        }
+        ctx.fillStyle = "rgba(34, 18, 4, 0.55)";
+        ctx.fillRect(0, 0, w, 9);
+        ctx.fillRect(0, h - 9, w, 9);
+        ctx.fillStyle = "#2b1806";
+        write(ctx, w, h);
+      }, true),
+      // The same lettering alone, white on black: where the band burns.
+      glow: make((ctx, w, h) => {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = "#fff";
+        ctx.shadowColor = "#fff";
+        ctx.shadowBlur = 6;
+        write(ctx, w, h);
+      }, false),
+    };
   };
 
   // Slots cut through the metal, so the fire shows as the band goes by.
@@ -253,24 +273,31 @@ export function makeAstrolabe(
     return texture;
   };
 
-  const makeBand = (radius: number, height: number, text: string, tilt: [number, number, number], slots: number) => {
+  const makeBand = (
+    radius: number,
+    height: number,
+    text: string,
+    font: string,
+    spacing: number,
+    tilt: [number, number, number],
+    slots: number,
+  ) => {
     const pivot = new THREE.Group();
     pivot.rotation.set(tilt[0], tilt[1], tilt[2]);
-    const band = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius, radius, height, 128, 1, true),
-      new THREE.MeshStandardMaterial({
-        map: bandTexture(text, "#241405", "#8b6628"),
-        alphaMap: pierced(slots),
-        alphaTest: 0.5,
-        metalness: 0.85,
-        roughness: 0.38,
-        // The inside of a band is always facing the fire, so it glows a little.
-        emissive: new THREE.Color("#ff7a1c"),
-        emissiveIntensity: 0.16,
-        side: THREE.DoubleSide,
-      }),
-    );
-    // A thin rail either edge, to give the band some body.
+    const faces = lettered(text, font, spacing);
+    const material = new THREE.MeshStandardMaterial({
+      map: faces.metal,
+      alphaMap: pierced(slots),
+      alphaTest: 0.5,
+      metalness: 0.85,
+      roughness: 0.38,
+      // The lettering is what glows: lit from within, like metal at forge heat.
+      emissive: new THREE.Color("#ff8a24"),
+      emissiveMap: faces.glow,
+      emissiveIntensity: 1,
+      side: THREE.DoubleSide,
+    });
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 128, 1, true), material);
     [1, -1].forEach((edge) => {
       const rail = new THREE.Mesh(
         new THREE.TorusGeometry(radius, 1.5, 8, 128),
@@ -282,14 +309,44 @@ export function makeAstrolabe(
     });
     pivot.add(band);
     group.add(pivot);
-    return band;
+    return { band, pivot, material, tilt };
   };
 
+  const CODE = '600 50px "JetBrains Mono", Menlo, Consolas, monospace';
   const bands = [
-    { band: makeBand(74, 22, engravings.years, [0.35, 0, 0.2], 64), speed: 0.19 },
-    { band: makeBand(98, 18, engravings.places, [-0.5, 0.4, 1.05], 80), speed: -0.13 },
-    { band: makeBand(124, 16, engravings.disciplines, [1.15, -0.3, -0.45], 96), speed: 0.09 },
+    // The name, nearest the fire, burning.
+    { ...makeBand(74, 24, engravings.name, '700 64px "Cinzel", Georgia, serif', 14, [0.35, 0, 0.2], 64), speed: 0.17, heat: 2.4 },
+    // The trade, written out: what the browser reads…
+    { ...makeBand(100, 19, engravings.markup, CODE, 3, [-0.5, 0.4, 1.05], 80), speed: -0.12, heat: 1.05 },
+    // …and what the server runs.
+    { ...makeBand(126, 17, engravings.languages, CODE, 3, [1.15, -0.3, -0.45], 96), speed: 0.085, heat: 0.95 },
   ];
+
+  // Embers spitting off the name as it turns: the sizzle.
+  const SPITS = 150;
+  const spitPositions = new Float32Array(SPITS * 3);
+  const spitColours = new Float32Array(SPITS * 3);
+  const spits = Array.from({ length: SPITS }, () => ({
+    angle: Math.random() * Math.PI * 2,
+    across: (Math.random() - 0.5) * 22,
+    speed: 0.5 + Math.random() * 1.6,
+    offset: Math.random(),
+  }));
+  const spitGeometry = new THREE.BufferGeometry();
+  spitGeometry.setAttribute("position", new THREE.BufferAttribute(spitPositions, 3));
+  spitGeometry.setAttribute("color", new THREE.BufferAttribute(spitColours, 3));
+  const spitCloud = new THREE.Points(
+    spitGeometry,
+    new THREE.PointsMaterial({
+      size: 2.6,
+      map: (sparkCloud.material as ThreeTypes.PointsMaterial).map,
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  bands[0].band.add(spitCloud);
 
   /* The light it throws on the map, which wavers the way firelight does. */
   const light = new THREE.PointLight(0xffdcae, 1.9, 0, 0);
@@ -303,9 +360,39 @@ export function makeAstrolabe(
       (corona.material as ThreeTypes.ShaderMaterial).uniforms.uTime.value = time;
       corona.quaternion.copy(camera.quaternion);
 
-      bands.forEach(({ band, speed }) => {
+      bands.forEach(({ band, pivot, material, tilt, speed, heat }, index) => {
         band.rotation.y = time * speed;
+        // The bands tremble in the blast: never much, never still.
+        const tremor = 0.006 + index * 0.002;
+        pivot.rotation.set(
+          tilt[0] + Math.sin(time * 9.1 + index * 2.3) * tremor + Math.sin(time * 23.7 + index) * tremor * 0.4,
+          tilt[1] + Math.sin(time * 7.3 + index * 1.1) * tremor,
+          tilt[2] + Math.cos(time * 11.9 + index * 3.7) * tremor + Math.sin(time * 19.3) * tremor * 0.35,
+        );
+        pivot.position.set(
+          Math.sin(time * 13.3 + index) * 0.35,
+          Math.sin(time * 17.1 + index * 2) * 0.3,
+          Math.cos(time * 15.7 + index * 3) * 0.35,
+        );
+        // Lettering heat: a steady glow with a fast uneven flicker on top. The
+        // name runs hottest and flickers hardest.
+        const flicker =
+          0.78 +
+          0.14 * Math.sin(time * 31 + index * 5) * Math.sin(time * 7.7 + index) +
+          0.08 * Math.sin(time * 53.3 + index * 1.7);
+        material.emissiveIntensity = heat * (index === 0 ? flicker + 0.18 * Math.random() : 0.9 + 0.1 * flicker);
       });
+
+      spits.forEach((spit, index) => {
+        const life = (time * spit.speed + spit.offset) % 1;
+        const radius = 74 + life * 16;
+        const angle = spit.angle + life * 0.25;
+        spitPositions.set([Math.cos(angle) * radius, spit.across + life * 9, Math.sin(angle) * radius], index * 3);
+        const fade = (1 - life) ** 2;
+        spitColours.set([fade, 0.62 * fade, 0.16 * fade], index * 3);
+      });
+      spitGeometry.attributes.position.needsUpdate = true;
+      spitGeometry.attributes.color.needsUpdate = true;
 
       light.intensity = 1.9 * (0.93 + 0.045 * Math.sin(time * 7.3) + 0.03 * Math.sin(time * 13.1 + 1.7));
 
