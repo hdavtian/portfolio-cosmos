@@ -33,7 +33,7 @@ export interface Build {
 
 type Three = typeof ThreeTypes;
 type Label = (text: string, bright: boolean) => ThreeTypes.Sprite;
-type SkinName = "bronze" | "stone" | "timber" | "iron" | "glass" | "steel" | "concrete";
+type SkinName = "bronze" | "stone" | "timber" | "iron";
 
 /** Parts come in one after another, so a place assembles rather than inflates. */
 const stage = (eased: number, index: number, count: number) => {
@@ -124,66 +124,9 @@ export function makeBuilders(THREE: Three, label: Label) {
       ctx.fillRect(0, 0, size, size);
       speckle(ctx, size, 700, "rgba(160, 150, 130, 0.12)", "rgba(0, 0, 0, 0.3)");
     }),
-    // Curtain-wall glass: dark, cool, ruled off in panes by thin mullions.
-    glass: painted((ctx, size) => {
-      const wash = ctx.createLinearGradient(0, 0, 0, size);
-      wash.addColorStop(0, "#1d3f52");
-      wash.addColorStop(1, "#0c1f2c");
-      ctx.fillStyle = wash;
-      ctx.fillRect(0, 0, size, size);
-      ctx.fillStyle = "rgba(190, 215, 228, 0.55)";
-      for (let x = 0; x <= size; x += 32) ctx.fillRect(x - 1, 0, 2, size);
-      for (let y = 0; y <= size; y += 16) ctx.fillRect(0, y - 1, size, 1.5);
-    }),
-    // Brushed aluminium.
-    steel: painted((ctx, size) => {
-      ctx.fillStyle = "#b4bcc2";
-      ctx.fillRect(0, 0, size, size);
-      for (let i = 0; i < 120; i += 1) {
-        ctx.fillStyle = i % 2 === 0 ? "rgba(255, 255, 255, 0.10)" : "rgba(40, 50, 60, 0.10)";
-        ctx.fillRect(0, (i * 41) % size, size, 1);
-      }
-    }),
-    // Pale cast concrete.
-    concrete: painted((ctx, size) => {
-      ctx.fillStyle = "#c9c6bd";
-      ctx.fillRect(0, 0, size, size);
-      speckle(ctx, size, 600, "rgba(255, 255, 255, 0.14)", "rgba(60, 60, 56, 0.14)");
-    }),
   };
 
-  // Which panes are lit: the life inside a glass building at night.
-  const litWindows = painted((ctx, size) => {
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, size, size);
-    for (let row = 0; row < 16; row += 1) {
-      for (let col = 0; col < 8; col += 1) {
-        const roll = (row * 7 + col * 13 + row * col * 3) % 10;
-        if (roll > 5) continue;
-        ctx.fillStyle = roll % 3 === 0 ? "#bfe6ff" : "#ffe9bd";
-        ctx.fillRect(col * 32 + 4, row * 16 + 3, 24, 10);
-      }
-    }
-  });
-
   const skin = (name: SkinName, shade = 0.5) => {
-    if (name === "glass") {
-      return new THREE.MeshStandardMaterial({
-        map: textures.glass,
-        metalness: 0.55,
-        roughness: 0.16,
-        emissive: new THREE.Color("#ffffff"),
-        emissiveMap: litWindows,
-        emissiveIntensity: 0,
-      });
-    }
-    if (name === "steel" || name === "concrete") {
-      return new THREE.MeshStandardMaterial({
-        map: textures[name],
-        metalness: name === "steel" ? 0.8 : 0.02,
-        roughness: name === "steel" ? 0.34 : 0.9,
-      });
-    }
     const metal = name === "bronze" || name === "iron";
     const tint = 0.62 + shade * 0.5;
     return new THREE.MeshStandardMaterial({
@@ -322,193 +265,6 @@ export function makeBuilders(THREE: Three, label: Label) {
           wire.visible = stage(eased, index + 1, parts.length) > 0.92;
         });
         plinth.scale.set(Math.max(0.001, stage(eased, 0, 4)), 1, 1);
-      },
-    };
-  };
-
-  /**
-   * Earthlink: an internet service provider, raised on the old clockwork. Not
-   * a castle — the thing itself: glass towers that frame up in steel, glaze
-   * floor by floor and then light; a mast carrying a wire globe caught in an
-   * orbit (the earth, and the link); a dish turned to the sky; and lines run
-   * out to the homes around it, with data moving down them. Each tower is a
-   * skill, its height the years.
-   */
-  const uplink = (towers: Tower[], tallest: number): Build => {
-    const group = new THREE.Group();
-    const steelLine = new THREE.LineBasicMaterial({ color: 0xd6e2ea, transparent: true, opacity: 0.9 });
-
-    const podium = new THREE.Mesh(new THREE.CylinderGeometry(36, 37, 2.2, 40), skin("concrete"));
-    podium.position.y = 1.1;
-    group.add(podium);
-    const kerb = new THREE.Mesh(new THREE.TorusGeometry(36.4, 0.5, 6, 64), skin("steel"));
-    kerb.rotation.x = Math.PI / 2;
-    kerb.position.y = 2.2;
-    group.add(kerb);
-
-    const parts = towers.map((tower, index) => {
-      const height = heightOf(tower, tallest, 24, 38);
-      const width = 10 + shadeFor(tower, tallest) * 4;
-      const depth = 8.5;
-      const holder = new THREE.Group();
-      const angle = (index / Math.max(1, towers.length)) * Math.PI * 2 + 0.5;
-      holder.position.set(Math.cos(angle) * 19, 2.2, Math.sin(angle) * 19);
-      holder.rotation.y = -angle + Math.PI / 2;
-
-      // The steel goes up first…
-      const frame = new THREE.LineSegments(
-        new THREE.EdgesGeometry(new THREE.BoxGeometry(width + 0.5, height, depth + 0.5)),
-        steelLine,
-      );
-      frame.position.y = height / 2;
-      const floors = new THREE.Group();
-      for (let level = 1; level < Math.floor(height / 5); level += 1) {
-        const slab = new THREE.LineSegments(
-          new THREE.EdgesGeometry(new THREE.BoxGeometry(width + 0.5, 0.01, depth + 0.5)),
-          steelLine,
-        );
-        slab.position.y = level * 5;
-        floors.add(slab);
-      }
-      const skeleton = new THREE.Group();
-      skeleton.add(frame, floors);
-      holder.add(skeleton);
-
-      // …then the glass closes it in from the ground up…
-      const glassMaterial = skin("glass");
-      const glass = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), glassMaterial);
-      glass.position.y = height / 2;
-      const glazing = new THREE.Group();
-      glazing.add(glass);
-      holder.add(glazing);
-
-      // …and a steel cap finishes it.
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(width + 1.4, 0.9, depth + 1.4), skin("steel"));
-      roof.position.y = height + 0.45;
-      holder.add(roof);
-
-      const part = makePart(group, holder, height, tower, index, new THREE.Vector3(0, height + 4.2, 0));
-      part.twist = 0;
-      return { ...part, skeleton, glazing, roof, glassMaterial };
-    });
-
-    // The uplink: a mast, and on it the globe caught in its orbit.
-    const mastHeight = 58;
-    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.5, mastHeight, 8), skin("steel"));
-    mast.position.y = 2.2 + mastHeight / 2;
-    const uplinkHolder = new THREE.Group();
-    uplinkHolder.add(mast);
-    group.add(uplinkHolder);
-
-    const globe = new THREE.Group();
-    globe.position.y = 2.2 + mastHeight + 8;
-    globe.add(new THREE.Mesh(new THREE.SphereGeometry(7.2, 24, 16), new THREE.MeshStandardMaterial({ color: 0x10283a, metalness: 0.4, roughness: 0.3, emissive: 0x0a2a44, emissiveIntensity: 0.6 })));
-    globe.add(new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(7.5, 12, 8)), new THREE.LineBasicMaterial({ color: 0x9fd6ff, transparent: true, opacity: 0.85 })));
-    const orbit = new THREE.Mesh(new THREE.TorusGeometry(11.5, 0.35, 8, 64), skin("steel"));
-    orbit.rotation.set(Math.PI / 2 - 0.5, 0.3, 0);
-    globe.add(orbit);
-    const satellite = new THREE.Mesh(
-      new THREE.SphereGeometry(1.1, 12, 12),
-      new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x9fd6ff, emissiveIntensity: 1.6 }),
-    );
-    orbit.add(satellite);
-    group.add(globe);
-
-    // A dish on the podium, turned to the sky.
-    const dish = new THREE.Group();
-    const bowl = new THREE.Mesh(
-      new THREE.SphereGeometry(7, 24, 12, 0, Math.PI * 2, 0, 0.95),
-      new THREE.MeshStandardMaterial({ map: textures.steel, metalness: 0.7, roughness: 0.35, side: THREE.DoubleSide }),
-    );
-    bowl.rotation.x = Math.PI;
-    bowl.position.y = 7;
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 6, 8), skin("steel"));
-    arm.position.y = 3;
-    const feed = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 5, 6), skin("steel"));
-    feed.position.y = 4.5;
-    dish.add(arm, bowl, feed);
-    dish.position.set(-4, 2.2, -27);
-    dish.rotation.set(-0.5, 0.4, 0);
-    group.add(dish);
-
-    // Lines out to the homes it connects, and the data moving down them.
-    const HOMES = 9;
-    const lines = Array.from({ length: HOMES }, (_, index) => {
-      const angle = (index / HOMES) * Math.PI * 2 + 0.2;
-      const reach = 74 + (index % 3) * 9;
-      const end = new THREE.Vector3(Math.cos(angle) * reach, 1.2, Math.sin(angle) * reach);
-      const curve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(0, 2.2 + mastHeight * 0.55, 0),
-        new THREE.Vector3(Math.cos(angle) * 30, 20, Math.sin(angle) * 30),
-        new THREE.Vector3(end.x * 0.8, 6, end.z * 0.8),
-        end.clone().setY(3.4),
-      ]);
-      const wire = new THREE.Mesh(
-        new THREE.TubeGeometry(curve, 36, 0.16, 5, false),
-        new THREE.MeshStandardMaterial({ color: 0x8fb4c8, metalness: 0.6, roughness: 0.4 }),
-      );
-      group.add(wire);
-      const home = new THREE.Group();
-      const house = new THREE.Mesh(new THREE.BoxGeometry(4.4, 3.4, 4.4), skin("concrete"));
-      house.position.y = 1.7;
-      const lit = new THREE.Mesh(
-        new THREE.BoxGeometry(1.6, 1.3, 0.2),
-        new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffe2a8, emissiveIntensity: 0 }),
-      );
-      lit.position.set(0, 1.9, 2.25);
-      home.add(house, lit);
-      home.position.copy(end).setY(0);
-      home.rotation.y = -angle + Math.PI / 2;
-      group.add(home);
-      const packet = new THREE.Mesh(
-        new THREE.SphereGeometry(0.75, 10, 10),
-        new THREE.MeshBasicMaterial({ color: 0x9fe4ff }),
-      );
-      group.add(packet);
-      return { curve, wire, home, lit, packet, offset: index / HOMES };
-    });
-
-    const at = new THREE.Vector3();
-    return {
-      group,
-      grow(eased, phase, focus) {
-        const ground = Math.max(0.001, stage(eased, 0, 6));
-        podium.scale.set(ground, 1, ground);
-        kerb.scale.setScalar(ground);
-
-        parts.forEach((part, index) => {
-          const grown = stage(eased, index + 1, parts.length + 3);
-          // Steel first, glass a beat behind it, lights last of all.
-          const steelUp = Math.max(0.001, Math.min(1, grown * 1.7));
-          const glassUp = Math.max(0.001, Math.min(1, (grown - 0.22) / 0.6));
-          const lightsOn = Math.max(0, Math.min(1, (grown - 0.8) / 0.2));
-          part.skeleton.scale.y = steelUp;
-          part.glazing.scale.y = glassUp;
-          part.roof.visible = grown > 0.84;
-          part.glassMaterial.emissiveIntensity = lightsOn * 1.25;
-          showTag(part, grown, focus, part.mesh.position.x, 2.2 + part.height * glassUp, part.mesh.position.z);
-        });
-
-        const mastUp = Math.max(0.001, stage(eased, parts.length, parts.length + 3));
-        uplinkHolder.scale.y = mastUp;
-        const globeUp = stage(eased, parts.length + 1, parts.length + 3);
-        globe.scale.setScalar(Math.max(0.001, globeUp));
-        globe.position.y = 2.2 + mastHeight * mastUp + 8 * globeUp;
-        globe.rotation.y = phase * 0.4;
-        const round = phase * 1.3;
-        satellite.position.set(Math.cos(round) * 11.5, Math.sin(round) * 11.5, 0);
-        dish.scale.setScalar(Math.max(0.001, stage(eased, parts.length, parts.length + 3)));
-
-        // The network comes up last: lines out, windows on, packets moving.
-        const online = stage(eased, parts.length + 2, parts.length + 3);
-        lines.forEach((line) => {
-          line.wire.visible = online > 0.05;
-          line.home.scale.setScalar(Math.max(0.001, stage(eased, 1, 6)));
-          (line.lit.material as ThreeTypes.MeshStandardMaterial).emissiveIntensity = online * 1.6;
-          line.packet.visible = online > 0.6;
-          line.curve.getPoint((phase * 0.9 + line.offset) % 1, at);
-          line.packet.position.copy(at);
-        });
       },
     };
   };
@@ -862,7 +618,6 @@ export function makeBuilders(THREE: Three, label: Label) {
   };
 
   const byKind: Record<string, (towers: Tower[], tallest: number, later?: Tower[]) => Build> = {
-    uplink,
     switchboard,
     terraces,
     spires,
@@ -909,7 +664,7 @@ export function makeBuilders(THREE: Three, label: Label) {
 
 /** Which structure each place puts up. */
 export const KIND_BY_PLACE: Record<string, string> = {
-  earthlink: "uplink",
+  earthlink: "switchboard",
   hostpro: "terraces",
   stormscape: "spires",
   unitedlayer: "racks",
