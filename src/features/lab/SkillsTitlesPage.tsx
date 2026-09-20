@@ -288,6 +288,11 @@ export function SkillsTitlesPage() {
       const key = new THREE.DirectionalLight(0xffd9a0, 1.15);
       key.position.set(-120, 180, 140);
       scene.add(key);
+      // A low fill from the other side, so a hill isn't a black cut-out when
+      // the key light is behind it.
+      const fill = new THREE.DirectionalLight(0x9fc0e8, 0.45);
+      fill.position.set(160, 90, -140);
+      scene.add(fill);
       const glint = new THREE.PointLight(0xffb45a, 1.5, 320, 2);
       scene.add(glint);
 
@@ -333,13 +338,15 @@ export function SkillsTitlesPage() {
       }
       const mounds: Mound[] = [];
 
+      let carved: ((x: number, z: number) => number) | null = null;
       const moundsAt = (x: number, z: number, withRidges: boolean) => {
         let lift = 0;
         for (const mound of mounds) {
           if (!withRidges && mound.ridge) continue;
           const away = ((x - mound.x) ** 2 + (z - mound.z) ** 2) / (mound.radius * mound.radius);
           if (away > 6) continue;
-          lift += mound.height * Math.exp(-away * 1.6);
+          const rise = mound.height * Math.exp(-away * 1.6);
+          lift += mound.ridge && carved !== null ? rise * carved(x, z) : rise;
         }
         return lift;
       };
@@ -380,8 +387,32 @@ export function SkillsTitlesPage() {
         const across = new THREE.Vector3(along.z, 0, -along.x).multiplyScalar(index % 2 === 0 ? 330 : -330);
         return new THREE.Vector3().addVectors(before, spot).multiplyScalar(0.5).add(across);
       };
-      const ridgeAt = bendBetween(TUNNEL_LEG);
-      mounds.push({ x: ridgeAt.x, z: ridgeAt.z, radius: 340, height: 150, ridge: true });
+      // Put the ridge on a straighter run of the leg, past the bend: a short
+      // tunnel through a hill is a straight bore, and a curved one twists.
+      const ridgeAt = new THREE.Vector3().lerpVectors(bendBetween(TUNNEL_LEG), spots[TUNNEL_LEG], 0.5);
+      const ridgeWay = new THREE.Vector3()
+        .subVectors(spots[TUNNEL_LEG], bendBetween(TUNNEL_LEG))
+        .setY(0)
+        .normalize();
+      // Tight enough that the hill's skirt ends inside the bore: anywhere the
+      // ridge is still above the road, there has to be tunnel around it.
+      mounds.push({ x: ridgeAt.x, z: ridgeAt.z, radius: 190, height: 135, ridge: true });
+
+      /**
+       * A notch cut clean through the ridge for the road, so the hill can
+       * never close over the carriageway. The land itself is cut; the tunnel
+       * built into it is a roof over that cut, not a pipe buried in solid
+       * ground.
+       */
+      const CORRIDOR = 46;
+      carved = (x: number, z: number) => {
+        const from = new THREE.Vector3(x - ridgeAt.x, 0, z - ridgeAt.z);
+        const along = from.dot(ridgeWay);
+        const across = Math.abs(from.x * ridgeWay.z - from.z * ridgeWay.x);
+        if (Math.abs(along) > 470 || across > CORRIDOR + 28) return 1;
+        const edge = Math.max(0, Math.min(1, (across - CORRIDOR) / 28));
+        return edge * edge * (3 - 2 * edge);
+      };
 
       // Re-seat every spot now that the ground under it has moved.
       spots.forEach((spot) => spot.setY(heightAt(spot.x, spot.z)));
@@ -492,7 +523,7 @@ export function SkillsTitlesPage() {
        */
       const campArc = cityArc[cities[legs - 1].spot];
       const flight = new THREE.CatmullRomCurve3(
-        [1, 0.84, 0.66, 0.48, campArc + 0.1, campArc + 0.03].map((at, index, all) => {
+        [1, 0.82, 0.64, 0.46, 0.28, campArc + 0.08, campArc + 0.02].map((at, index, all) => {
           const point = journey.getPointAt(Math.max(0, Math.min(1, at)));
           const through = index / (all.length - 1);
           // Climb away, cross high, come down on the camp it started at.
@@ -583,50 +614,121 @@ export function SkillsTitlesPage() {
       // One road, there from the start: it is the only one there is.
       layRoad(0, 1, 0.95);
 
-      // The bore: a length of the road covered over, with a rim at each end.
+      // The tunnel. A mouth in the hillside, a lined bore with the trade
+      // written on its walls, and a mouth again on the far side.
       (() => {
-        let nearest = 0;
-        let best = Infinity;
-        for (let i = 0; i <= 400; i += 1) {
-          const at = i / 400;
-          const point = journey.getPointAt(at);
-          const away = (point.x - ridgeAt.x) ** 2 + (point.z - ridgeAt.z) ** 2;
-          if (away < best) {
-            best = away;
-            nearest = at;
-          }
-        }
-        const span = 210 / roadLength;
-        const through = new THREE.CatmullRomCurve3(
-          Array.from({ length: 24 }, (_, i) => {
-            const at = Math.max(0, Math.min(1, nearest - span + (2 * span * i) / 23));
-            const point = journey.getPointAt(at);
-            return new THREE.Vector3(point.x, travelHeight(point.x, point.z) + 20, point.z);
-          }),
-        );
-        const bore = new THREE.Mesh(
-          new THREE.TubeGeometry(through, 70, 30, 20, false),
+        const BORE = 34;
+
+        // Lines of the work, to be read as you pass.
+        const written = (() => {
+          const canvas = document.createElement("canvas");
+          canvas.width = 1024;
+          canvas.height = 512;
+          const ctx = canvas.getContext("2d")!;
+          ctx.fillStyle = "#0a0d12";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          const lines = [
+            "<!doctype html>", "body { margin: 0 }", "const years = skills.map(s => s.years)",
+            "public class Portfolio {", "SELECT * FROM experience", "@media (prefers-reduced-motion)",
+            "function build(place) {", ".grid { display: grid }", "await fetch('/api/skills')",
+            "var $el = $('#stage');", "using System.Linq;", "npm run build",
+            "export default function () {", "git commit -m 'ship it'", "<div class=\"tunnel\">",
+            "requestAnimationFrame(draw)", "SCSS: @include respond-to(md)", "docker compose up -d",
+          ];
+          ctx.font = '500 21px "JetBrains Mono", Menlo, Consolas, monospace';
+          lines.forEach((line, index) => {
+            const warm = index % 3 === 0;
+            ctx.fillStyle = warm ? "rgba(230, 190, 114, 0.5)" : "rgba(150, 200, 180, 0.32)";
+            ctx.fillText(line, 24 + (index % 2) * 60, 34 + index * 28);
+          });
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.wrapS = THREE.RepeatWrapping;
+          texture.wrapT = THREE.RepeatWrapping;
+          texture.repeat.set(-17, 4);
+          return texture;
+        })();
+
+        // The cut runs straight through the ridge, so the tunnel does too.
+        const rise = (along: number) => {
+          const at = ridgeAt.clone().add(ridgeWay.clone().multiplyScalar(along));
+          const away = ((at.x - ridgeAt.x) ** 2 + (at.z - ridgeAt.z) ** 2) / (190 * 190);
+          return 135 * Math.exp(-away * 1.6);
+        };
+        let reach = 0;
+        while (reach < 420 && rise(reach) > 26) reach += 6;
+        reach += 26;
+
+        const middleOf = ridgeAt.clone();
+        middleOf.y = travelHeight(ridgeAt.x, ridgeAt.z) + 24;
+        const heading = ridgeWay.clone();
+        const bore = reach * 2;
+        const mouthBack = ridgeAt.clone().add(heading.clone().multiplyScalar(-reach));
+        const mouthFront = ridgeAt.clone().add(heading.clone().multiplyScalar(reach));
+
+        // The lining: walls, seen from the inside, with the code on them.
+        const lining = new THREE.Mesh(
+          new THREE.CylinderGeometry(BORE, BORE, bore, 30, 4, true),
           new THREE.MeshStandardMaterial({
-            color: 0x1b2430,
-            emissive: 0x0b1017,
-            side: THREE.BackSide,
-            roughness: 0.95,
+            map: written,
+            color: 0x2a323d,
+            emissive: 0x11161d,
+            emissiveMap: written,
+            emissiveIntensity: 1.4,
+            // Solid from both sides, so the bore reads as a lined tunnel from
+            // the mouth as well as from inside it.
+            side: THREE.DoubleSide,
+            roughness: 0.9,
           }),
         );
-        scene.add(bore);
+        lining.position.copy(middleOf);
+        lining.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), heading);
+        scene.add(lining);
+
         [0, 1].forEach((end) => {
+          const at = end === 0 ? mouthBack.clone() : mouthFront.clone();
+          at.y = middleOf.y;
+          const outward = end === 0 ? heading.clone().negate() : heading.clone();
+
+          // A wall across the hillside with the opening cut in it, so the
+          // tunnel is something you arrive at rather than something you enter
+          // by accident.
+          const facade = new THREE.Mesh(
+            new THREE.RingGeometry(BORE, BORE + 46, 40, 1),
+            // Faces outward only, so the mouth is a wall from the hillside and
+            // nothing at all from inside the tunnel.
+            new THREE.MeshStandardMaterial({ color: 0x232a33, roughness: 0.95 }),
+          );
+          facade.position.copy(at).add(outward.clone().multiplyScalar(2));
+          facade.lookAt(facade.position.clone().add(outward));
+          scene.add(facade);
+
+          // A collar of stone standing proud of the hill, and a rim of gold.
+          const collar = new THREE.Mesh(
+            new THREE.CylinderGeometry(BORE + 6, BORE + 10, 26, 28, 1, true),
+            new THREE.MeshStandardMaterial({ color: 0x2b333e, roughness: 0.92 }),
+          );
+          collar.position.copy(at).add(outward.clone().multiplyScalar(13));
+          collar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), outward);
+          scene.add(collar);
+
           const rim = new THREE.Mesh(
-            new THREE.TorusGeometry(30, 2, 8, 30),
+            new THREE.TorusGeometry(BORE + 7, 2.2, 8, 32),
             new THREE.MeshStandardMaterial({ color: 0xc79a46, metalness: 0.7, roughness: 0.4 }),
           );
-          const at = through.getPointAt(end);
-          const facing = through.getTangentAt(end);
-          rim.position.copy(at);
-          rim.lookAt(at.clone().add(facing));
+          rim.position.copy(at).add(outward.clone().multiplyScalar(26));
+          rim.lookAt(rim.position.clone().add(outward));
           scene.add(rim);
-          // A lamp at each mouth, so the tunnel reads as a way through.
-          const lamp = new THREE.PointLight(0xffb45a, 2.4, 260, 2);
-          lamp.position.copy(at).add(new THREE.Vector3(0, 12, 0));
+
+          const lamp = new THREE.PointLight(0xffb45a, 2.2, 300, 2);
+          lamp.position.copy(at).add(outward.clone().multiplyScalar(34)).add(new THREE.Vector3(0, 16, 0));
+          scene.add(lamp);
+        });
+
+        // Lights down the length, so the writing can be read going through.
+        [-0.25, 0, 0.25].forEach((along) => {
+          const lamp = new THREE.PointLight(0xffd7a0, 1.6, 200, 2);
+          lamp.position.copy(middleOf).add(heading.clone().multiplyScalar(bore * along));
           scene.add(lamp);
         });
       })();
@@ -889,8 +991,11 @@ export function SkillsTitlesPage() {
           const f = segment.kind === "travel" ? eased * 0.84 : 0.84 + eased * 0.16;
           flight.getPointAt(f, spare);
           into.copy(spare);
-          flight.getPointAt(Math.min(1, f + 0.07), ahead);
-          ahead.y = travelHeight(ahead.x, ahead.z) + 12;
+          // Look down at a fixed angle rather than at the ground itself: the
+          // land rises and falls under a flight, and following it makes the
+          // camera lurch every time a hill goes by.
+          flight.getPointAt(Math.min(1, f + 0.08), ahead);
+          ahead.y = spare.y - 190;
           look.copy(ahead);
         } else {
           const s = Math.max(0, Math.min(1, roadAt(at)));
