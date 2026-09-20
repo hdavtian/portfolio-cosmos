@@ -3,7 +3,7 @@ import type * as ThreeTypes from "three";
 /**
  * The astrolabe: the sun the map is lit by. A burning core — its surface a
  * slow boil of fire, a corona licking off it, sparks thrown outward — caged
- * in three bronze bands that turn on different axes and tremble in the blast.
+ * in three bronze bands that turn on different axes.
  * The bands are pierced, so the fire shows through them as they pass. The
  * innermost carries the name, its letters burning; the outer two carry the
  * trade itself, written in code.
@@ -71,7 +71,7 @@ const NOISE = /* glsl */ `
   }
 `;
 
-export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: string; languages: string }) {
+export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: string[]; languages: string[] }) {
   const group = new THREE.Group();
   const CORE = 30;
 
@@ -199,11 +199,11 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
   group.add(sparkCloud);
 
   /* The bands. */
-  const lettered = (text: string, font: string, spacing: number) => {
+  const lettered = (text: string | string[], font: string, spacing: number) => {
     const make = (paint: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, srgb: boolean) => {
       const canvas = document.createElement("canvas");
       canvas.width = 4096;
-      canvas.height = 128;
+      canvas.height = Array.isArray(text) ? 192 : 128;
       const ctx = canvas.getContext("2d")!;
       paint(ctx, canvas.width, canvas.height);
       const texture = new THREE.CanvasTexture(canvas);
@@ -216,15 +216,21 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
       ctx.font = font;
       ctx.textBaseline = "middle";
       ctx.letterSpacing = `${spacing}px`;
-      const run = `${text}     ✦     `;
-      const width = ctx.measureText(run).width;
-      // Whole repeats only, so the join round the back of the band is clean.
-      const repeats = Math.max(1, Math.round(w / width));
-      const scale = w / (repeats * width);
-      ctx.save();
-      ctx.scale(scale, 1);
-      for (let i = 0; i < repeats; i += 1) ctx.fillText(run, i * width, h / 2 + 3);
-      ctx.restore();
+      const lines = Array.isArray(text) ? text : [text];
+      lines.forEach((line, row) => {
+        const run = `${line}     ✦     `;
+        const width = ctx.measureText(run).width;
+        // Whole repeats only, so the join round the back of the band is clean.
+        const repeats = Math.max(1, Math.round(w / width));
+        const scale = w / (repeats * width);
+        const y = lines.length === 1 ? h / 2 + 3 : 18 + ((h - 36) * (row + 0.5)) / lines.length;
+        ctx.save();
+        ctx.scale(scale, 1);
+        // Each line starts somewhere different, like a page of code rather than a ticker.
+        const indent = (row * width) / 3;
+        for (let i = -1; i < repeats; i += 1) ctx.fillText(run, i * width + indent, y);
+        ctx.restore();
+      });
     };
     return {
       // The metal, with the lettering cut dark into it.
@@ -276,7 +282,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
   const makeBand = (
     radius: number,
     height: number,
-    text: string,
+    text: string | string[],
     font: string,
     spacing: number,
     tilt: [number, number, number],
@@ -312,14 +318,14 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
     return { band, pivot, material, tilt };
   };
 
-  const CODE = '600 50px "JetBrains Mono", Menlo, Consolas, monospace';
+  const CODE = '600 40px "JetBrains Mono", Menlo, Consolas, monospace';
   const bands = [
     // The name, nearest the fire, burning.
-    { ...makeBand(74, 24, engravings.name, '700 64px "Cinzel", Georgia, serif', 14, [0.35, 0, 0.2], 64), speed: 0.17, heat: 2.4 },
+    { ...makeBand(74, 24, engravings.name, '700 64px "Cinzel", Georgia, serif', 14, [0.35, 0, 0.2], 64), speed: 0.34, heat: 2.4 },
     // The trade, written out: what the browser reads…
-    { ...makeBand(100, 19, engravings.markup, CODE, 3, [-0.5, 0.4, 1.05], 80), speed: -0.12, heat: 1.05 },
+    { ...makeBand(100, 30, engravings.markup, CODE, 3, [-0.5, 0.4, 1.05], 80), speed: -0.25, heat: 1.05 },
     // …and what the server runs.
-    { ...makeBand(126, 17, engravings.languages, CODE, 3, [1.15, -0.3, -0.45], 96), speed: 0.085, heat: 0.95 },
+    { ...makeBand(128, 28, engravings.languages, CODE, 3, [1.15, -0.3, -0.45], 96), speed: 0.19, heat: 0.95 },
   ];
 
   // Embers spitting off the name as it turns: the sizzle.
@@ -360,20 +366,8 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
       (corona.material as ThreeTypes.ShaderMaterial).uniforms.uTime.value = time;
       corona.quaternion.copy(camera.quaternion);
 
-      bands.forEach(({ band, pivot, material, tilt, speed, heat }, index) => {
+      bands.forEach(({ band, material, speed, heat }, index) => {
         band.rotation.y = time * speed;
-        // The bands tremble in the blast: never much, never still.
-        const tremor = 0.006 + index * 0.002;
-        pivot.rotation.set(
-          tilt[0] + Math.sin(time * 9.1 + index * 2.3) * tremor + Math.sin(time * 23.7 + index) * tremor * 0.4,
-          tilt[1] + Math.sin(time * 7.3 + index * 1.1) * tremor,
-          tilt[2] + Math.cos(time * 11.9 + index * 3.7) * tremor + Math.sin(time * 19.3) * tremor * 0.35,
-        );
-        pivot.position.set(
-          Math.sin(time * 13.3 + index) * 0.35,
-          Math.sin(time * 17.1 + index * 2) * 0.3,
-          Math.cos(time * 15.7 + index * 3) * 0.35,
-        );
         // Lettering heat: a steady glow with a fast uneven flicker on top. The
         // name runs hottest and flickers hardest.
         const flicker =

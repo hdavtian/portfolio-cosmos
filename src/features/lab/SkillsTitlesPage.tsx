@@ -594,11 +594,17 @@ export function SkillsTitlesPage() {
 
         const astrolabe = makeAstrolabe(THREE, {
           name: "HARMA DAVTIAN",
-          markup:
-            '<!doctype html>  <main class="work">  .grid { display: grid }  @media (min-width: 60rem)  const build = (place) => place.skills.map(raise)  type Skill = { name: string; years: number }  useEffect(() => {}, [])',
-          languages:
-            "public class Portfolio : IBuilt { }  using System.Linq;  await db.SaveChangesAsync();  @RestController public class Work { }  List<Skill> skills = new ArrayList<>();  SELECT name, years FROM skills",
-        });
+          markup: [
+          '<!doctype html>  <main class="work">  <section id="skills">  </section>  </main>',
+          ".grid { display: grid; gap: 1rem }  @media (min-width: 60rem) { .grid { grid-template-columns: repeat(3, 1fr) } }",
+          "const build = (place) => place.skills.map(raise);  type Skill = { name: string; years: number };",
+        ],
+        languages: [
+          "public class Portfolio : IBuilt { }  using System.Linq;  await db.SaveChangesAsync();",
+          "@RestController public class Work { }  List<Skill> skills = new ArrayList<>();",
+          "SELECT name, years FROM skills ORDER BY years DESC;  docker compose up -d",
+        ],
+      });
         astrolabe.group.position.copy(SUN);
         scene.add(astrolabe.group);
 
