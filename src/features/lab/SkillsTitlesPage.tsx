@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as ThreeTypes from "three";
+import resume from "../../data/resume.json";
 import { useShowcaseProjects } from "../showcase/lib/useShowcaseProjects";
 import { makeAstrolabe } from "./gotAstrolabe";
 import {
@@ -593,7 +594,8 @@ export function SkillsTitlesPage() {
         scene.add(rake);
 
         const astrolabe = makeAstrolabe(THREE, {
-          name: "HARMA DAVTIAN",
+          // Name and title straight from the resume, so they follow it.
+        name: `${resume.personal.name}   ✦   ${resume.personal.title}`.toUpperCase(),
           markup: [
           '<!doctype html>  <main class="work">  <section id="skills">  </section>  </main>',
           ".grid { display: grid; gap: 1rem }  @media (min-width: 60rem) { .grid { grid-template-columns: repeat(3, 1fr) } }",

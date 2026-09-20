@@ -287,6 +287,8 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
     spacing: number,
     tilt: [number, number, number],
     slots: number,
+    heatColour: string,
+    cast: string,
   ) => {
     const pivot = new THREE.Group();
     pivot.rotation.set(tilt[0], tilt[1], tilt[2]);
@@ -295,10 +297,12 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
       map: faces.metal,
       alphaMap: pierced(slots),
       alphaTest: 0.5,
+      // A cast in the metal, so each band reads as its own colour even unlit.
+      color: new THREE.Color(cast),
       metalness: 0.85,
       roughness: 0.38,
       // The lettering is what glows: lit from within, like metal at forge heat.
-      emissive: new THREE.Color("#ff8a24"),
+      emissive: new THREE.Color(heatColour),
       emissiveMap: faces.glow,
       emissiveIntensity: 1,
       side: THREE.DoubleSide,
@@ -321,11 +325,11 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
   const CODE = '600 40px "JetBrains Mono", Menlo, Consolas, monospace';
   const bands = [
     // The name, nearest the fire, burning.
-    { ...makeBand(74, 24, engravings.name, '700 64px "Cinzel", Georgia, serif', 14, [0.35, 0, 0.2], 64), speed: 0.34, heat: 2.4 },
+    { ...makeBand(74, 24, engravings.name, '700 58px "Cinzel", Georgia, serif', 10, [0.35, 0, 0.2], 64, "#ff3a1e", "#ffb4a0"), speed: 0.34, heat: 2.6 },
     // The trade, written out: what the browser reads…
-    { ...makeBand(100, 30, engravings.markup, CODE, 3, [-0.5, 0.4, 1.05], 80), speed: -0.25, heat: 1.05 },
+    { ...makeBand(100, 30, engravings.markup, CODE, 3, [-0.5, 0.4, 1.05], 80, "#3aa2ff", "#a9c6e8"), speed: -0.25, heat: 1.5 },
     // …and what the server runs.
-    { ...makeBand(128, 28, engravings.languages, CODE, 3, [1.15, -0.3, -0.45], 96), speed: 0.19, heat: 0.95 },
+    { ...makeBand(111, 26, engravings.languages, CODE, 3, [1.15, -0.3, -0.45], 96, "#ff9a2a", "#ffd9a6"), speed: 0.19, heat: 1.1 },
   ];
 
   // Embers spitting off the name as it turns: the sizzle.
@@ -383,7 +387,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
         const angle = spit.angle + life * 0.25;
         spitPositions.set([Math.cos(angle) * radius, spit.across + life * 9, Math.sin(angle) * radius], index * 3);
         const fade = (1 - life) ** 2;
-        spitColours.set([fade, 0.62 * fade, 0.16 * fade], index * 3);
+        spitColours.set([fade, 0.34 * fade, 0.1 * fade], index * 3);
       });
       spitGeometry.attributes.position.needsUpdate = true;
       spitGeometry.attributes.color.needsUpdate = true;
