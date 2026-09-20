@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as ThreeTypes from "three";
+import { useShowcaseProjects } from "../showcase/lib/useShowcaseProjects";
+import { makeAstrolabe } from "./gotAstrolabe";
 import { KIND_BY_PLACE, KIND_ORDER, makeBuilders, type Build } from "./gotBuilders";
 import { LAST_YEAR, NOW_YEAR, categories, places, say, spans } from "./skillsData";
 import "./skillsTitles.css";
@@ -111,7 +113,7 @@ interface Segment {
 
 function buildTimeline(cities: City[]): Segment[] {
   const parts: Array<{ kind: SegmentKind; city: number; weight: number }> = [
-    { kind: "intro", city: 0, weight: 1.4 },
+    { kind: "intro", city: 0, weight: 2.7 },
   ];
   cities.forEach((city, index) => {
     if (index > 0) {
@@ -237,6 +239,13 @@ const yearsLabel = (city: City) =>
 export function SkillsTitlesPage() {
   const cities = useMemo(buildCities, []);
   const timeline = useMemo(() => buildTimeline(cities), [cities]);
+  // "Since": the earliest year on any published project, so it follows the
+  // portfolio rather than being typed in here.
+  const { projects } = useShowcaseProjects();
+  const since = useMemo(() => {
+    const years = projects.map((project) => project.year).filter((year): year is number => typeof year === "number");
+    return years.length > 0 ? Math.min(...years) : Math.floor(cities[0].from);
+  }, [cities, projects]);
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef(0);
@@ -275,7 +284,14 @@ export function SkillsTitlesPage() {
     let disposed = false;
     let cleanup = () => {};
 
-    void Promise.all([import("three"), import("camera-controls")]).then(([THREE, cameraControls]) => {
+    void Promise.all([
+      import("three"),
+      import("camera-controls"),
+      import("three/examples/jsm/postprocessing/EffectComposer.js"),
+      import("three/examples/jsm/postprocessing/RenderPass.js"),
+      import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
+      import("three/examples/jsm/postprocessing/OutputPass.js"),
+    ]).then(([THREE, cameraControls, composerModule, renderModule, bloomModule, outputModule]) => {
       if (disposed) return;
       const CameraControls = cameraControls.default;
       CameraControls.install({ THREE });
@@ -415,39 +431,23 @@ export function SkillsTitlesPage() {
 
       const SUN = new THREE.Vector3(0, 520, -40);
       scene.add(new THREE.HemisphereLight(0xd8c49a, 0x1c1208, 0.34));
-      const sunlight = new THREE.PointLight(0xffdcae, 1.9, 0, 0);
-      sunlight.position.copy(SUN);
-      scene.add(sunlight);
       const rake = new THREE.DirectionalLight(0xffc98a, 1.5);
       rake.position.set(-600, 500, 500);
       scene.add(rake);
 
-      const astrolabe = new THREE.Group();
-      astrolabe.position.copy(SUN);
-      scene.add(astrolabe);
-      astrolabe.add(new THREE.Mesh(new THREE.SphereGeometry(30, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffe3b0 })));
-      const halo = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: (() => {
-            const canvas = document.createElement("canvas");
-            canvas.width = 256;
-            canvas.height = 256;
-            const ctx = canvas.getContext("2d")!;
-            const glow = ctx.createRadialGradient(128, 128, 8, 128, 128, 128);
-            glow.addColorStop(0, "rgba(255, 226, 170, 0.95)");
-            glow.addColorStop(0.35, "rgba(255, 170, 70, 0.35)");
-            glow.addColorStop(1, "rgba(255, 140, 40, 0)");
-            ctx.fillStyle = glow;
-            ctx.fillRect(0, 0, 256, 256);
-            return new THREE.CanvasTexture(canvas);
-          })(),
-          transparent: true,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-        }),
-      );
-      halo.scale.set(330, 330, 1);
-      astrolabe.add(halo);
+      const astrolabe = makeAstrolabe(THREE, {
+        years: Array.from(
+          { length: Math.floor(NOW_YEAR) - Math.floor(cities[0].from) + 1 },
+          (_, i) => String(Math.floor(cities[0].from) + i),
+        ).join("  ·  "),
+        places: cities
+          .filter((city, index) => city.spot === index)
+          .map((city) => city.name.toUpperCase())
+          .join("   ✦   "),
+        disciplines: categories.map((category) => category.name.toUpperCase()).join("   ✦   "),
+      });
+      astrolabe.group.position.copy(SUN);
+      scene.add(astrolabe.group);
 
       const label = (text: string, bright: boolean) => {
         const canvas = document.createElement("canvas");
@@ -474,42 +474,7 @@ export function SkillsTitlesPage() {
         return sprite;
       };
 
-      const { byKind, gearPlatform, skin } = makeBuilders(THREE, label);
-
-      const rings = [74, 96, 118].map((radius, index) => {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, 3, 10, 96), skin("bronze", 0.5));
-        ring.rotation.set(Math.PI / 2 + index * 0.5, index * 0.7, 0);
-        astrolabe.add(ring);
-        return ring;
-      });
-      // A band engraved with the disciplines the film is about to count.
-      const band = new THREE.Mesh(
-        new THREE.CylinderGeometry(132, 132, 20, 96, 1, true),
-        new THREE.MeshStandardMaterial({
-          map: (() => {
-            const canvas = document.createElement("canvas");
-            canvas.width = 2048;
-            canvas.height = 96;
-            const ctx = canvas.getContext("2d")!;
-            ctx.fillStyle = "#7a5a26";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = "#2a1a08";
-            ctx.font = '700 44px "Cinzel", Georgia, serif';
-            ctx.textBaseline = "middle";
-            ctx.letterSpacing = "8px";
-            const words = categories.map((category) => category.name.toUpperCase()).join("   ✦   ");
-            ctx.fillText(`${words}   ✦   `, 20, 50);
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.colorSpace = THREE.SRGBColorSpace;
-            texture.wrapS = THREE.RepeatWrapping;
-            return texture;
-          })(),
-          metalness: 0.75,
-          roughness: 0.45,
-          side: THREE.DoubleSide,
-        }),
-      );
-      astrolabe.add(band);
+      const { byKind, gearPlatform } = makeBuilders(THREE, label);
 
       /* ---------------------------------------------------------------- */
       /* The places                                                        */
@@ -649,7 +614,8 @@ export function SkillsTitlesPage() {
       const over = new THREE.Vector3();
       const WIDE_EYE = new THREE.Vector3(0, 1500, 2050);
       const WIDE_AIM = new THREE.Vector3(0, 0, -60);
-      const OPEN_EYE = new THREE.Vector3(SUN.x + 40, SUN.y + 60, SUN.z + 330);
+      const CLOSE_EYE = new THREE.Vector3(SUN.x + 26, SUN.y + 8, SUN.z + 150);
+      const OPEN_EYE = new THREE.Vector3(SUN.x + 90, SUN.y + 96, SUN.z + 520);
 
       /** A flight: up and over between two poses, the look running a little ahead of the body. */
       const flight = (t: number, lift: number, eye: ThreeTypes.Vector3, aim: ThreeTypes.Vector3) => {
@@ -673,11 +639,17 @@ export function SkillsTitlesPage() {
         if (segment.kind === "dwell") {
           dwellPose(segment.city, t, eye, aim);
         } else if (segment.kind === "intro") {
-          // Open on the astrolabe, then tip down to where the career begins.
-          fromEye.copy(OPEN_EYE);
-          fromAim.copy(SUN);
-          dwellPose(0, 0, toEye, toAim);
-          flight(t, 60, eye, aim);
+          // Open in close on the fire, ease back until the bands are all in
+          // frame, then tip down to where the career begins.
+          if (t < 0.52) {
+            eye.lerpVectors(CLOSE_EYE, OPEN_EYE, softly(0.12, 1, t / 0.52));
+            aim.copy(SUN);
+          } else {
+            fromEye.copy(OPEN_EYE);
+            fromAim.copy(SUN);
+            dwellPose(0, 0, toEye, toAim);
+            flight((t - 0.52) / 0.48, 60, eye, aim);
+          }
         } else if (segment.kind === "travel") {
           dwellPose(segment.city - 1, 1, fromEye, fromAim);
           dwellPose(segment.city, 0, toEye, toAim);
@@ -728,8 +700,17 @@ export function SkillsTitlesPage() {
         aimNow.set(at(3), at(4), at(5));
       };
 
+      // A little bloom, so the fire, the gold caps and the lit metal glow
+      // rather than merely being bright.
+      const composer = new composerModule.EffectComposer(renderer);
+      composer.addPass(new renderModule.RenderPass(scene, camera));
+      const bloom = new bloomModule.UnrealBloomPass(new THREE.Vector2(1, 1), 0.42, 0.65, 0.88);
+      composer.addPass(bloom);
+      composer.addPass(new outputModule.OutputPass());
+
       const resize = () => {
         renderer.setSize(host.clientWidth, host.clientHeight, false);
+        composer.setSize(host.clientWidth, host.clientHeight);
         camera.aspect = host.clientWidth / Math.max(1, host.clientHeight);
         camera.updateProjectionMatrix();
       };
@@ -750,10 +731,8 @@ export function SkillsTitlesPage() {
         controls.setLookAt(eyeNow.x, eyeNow.y, eyeNow.z, aimNow.x, aimNow.y, aimNow.z, !leap);
         controls.update(Math.min(0.05, clock.getDelta()));
 
-        rings.forEach((ring, index) => {
-          ring.rotation.z = phase * (0.22 + index * 0.09) * (index % 2 === 0 ? 1 : -1);
-        });
-        band.rotation.y = phase * 0.12;
+        // The sun burns on the clock, not the scrubber: it is the one living thing here.
+        astrolabe.update(clock.elapsedTime, camera);
 
         placed.forEach((stop, index) => {
           const dwell = timeline.find((entry) => entry.kind === "dwell" && entry.city === index)!;
@@ -772,7 +751,7 @@ export function SkillsTitlesPage() {
           if (stop.engraved) (stop.engraved.material as ThreeTypes.MeshBasicMaterial).opacity = 0.16 + built * 0.74;
         });
 
-        renderer.render(scene, camera);
+        composer.render();
         frame = requestAnimationFrame(render);
       };
       frame = requestAnimationFrame(render);
@@ -788,6 +767,7 @@ export function SkillsTitlesPage() {
           else material?.dispose();
         });
         controls.dispose();
+        composer.dispose();
         renderer.dispose();
         renderer.domElement.remove();
       };
@@ -868,7 +848,7 @@ export function SkillsTitlesPage() {
 
       <Tally
         rows={experience.rows}
-        career={experience.career}
+        since={since}
         open={openRows}
         setOpen={setOpenRows}
         moving={moving}
@@ -908,10 +888,8 @@ export function SkillsTitlesPage() {
       </aside>
 
       <section className="titles__finale" style={{ opacity: ending, pointerEvents: "none" }} aria-hidden={ending < 0.5}>
-        <p className="titles__finale-years">{Math.floor(experience.career)} years</p>
-        <p className="titles__finale-line">
-          {Math.round(cities[0].from)} to today, {cities.length - 1} places, one craft
-        </p>
+        <p className="titles__finale-years">Since {since}</p>
+        <p className="titles__finale-line">{cities.length - 1} places · one craft</p>
         <ul className="titles__finale-list">
           {experience.rows
             .filter((row) => ["frontend", "backend", "data", "cloud", "leadership"].includes(row.slug))
@@ -985,6 +963,10 @@ export function SkillsTitlesPage() {
                 }}
               >
                 <span>{cities[stop.city].name.split(" ")[0]}</span>
+                <span className="titles__stop-years">
+                  {Math.round(cities[stop.city].from)}–
+                  {cities[stop.city].to >= LAST_YEAR - 1 ? "now" : String(Math.round(cities[stop.city].to)).slice(2)}
+                </span>
               </button>
             ))}
           </div>
@@ -997,13 +979,13 @@ export function SkillsTitlesPage() {
 /** The message: years of experience so far, by discipline, opening into the skills behind each. */
 function Tally({
   rows,
-  career,
+  since,
   open,
   setOpen,
   moving,
 }: {
   rows: ExperienceRow[];
-  career: number;
+  since: number;
   open: string[];
   setOpen: (next: string[]) => void;
   moving: boolean;
@@ -1014,9 +996,7 @@ function Tally({
       <Embers moving={moving} />
       <div className="tally__inner">
         <h2 className="tally__title">Experience so far</h2>
-        <p className="tally__total">
-          <span>{Math.floor(career)}</span> years in the craft
-        </p>
+        <p className="tally__total">by discipline · building since {since}</p>
         <ul className="tally__list">
           {rows.map((row) => {
             const isOpen = open.includes(row.slug);

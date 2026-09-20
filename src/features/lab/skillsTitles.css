@@ -280,7 +280,7 @@
 .titles__track {
   position: relative;
   flex: 1;
-  padding-bottom: 20px;
+  padding-bottom: 30px;
 }
 
 .titles__track input[type="range"] {
@@ -312,7 +312,7 @@
 .titles__stops {
   position: absolute;
   inset: auto 0 0;
-  height: 18px;
+  height: 28px;
 }
 
 .titles__stop {
@@ -338,6 +338,18 @@
   height: 6px;
   margin: 0 auto 3px;
   background: currentColor;
+}
+
+.titles__stop span {
+  display: block;
+}
+
+.titles__stop-years {
+  margin-top: 1px;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
 }
 
 .titles__stop:hover,
