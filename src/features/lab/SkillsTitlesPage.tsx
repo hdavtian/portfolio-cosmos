@@ -291,7 +291,8 @@ export function SkillsTitlesPage() {
       import("three/examples/jsm/postprocessing/RenderPass.js"),
       import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
       import("three/examples/jsm/postprocessing/OutputPass.js"),
-    ]).then(([THREE, cameraControls, composerModule, renderModule, bloomModule, outputModule]) => {
+      import("three/examples/jsm/postprocessing/BokehPass.js"),
+    ]).then(([THREE, cameraControls, composerModule, renderModule, bloomModule, outputModule, bokehModule]) => {
       if (disposed) return;
       const CameraControls = cameraControls.default;
       CameraControls.install({ THREE });
@@ -379,34 +380,72 @@ export function SkillsTitlesPage() {
       const terrain = new THREE.PlaneGeometry(3800, 2600, 240, 164);
       const position = terrain.attributes.position;
       const colours = new Float32Array(position.count * 3);
+      // Each place has its own country: ice in the north, desert, green
+      // lowland, brown heath. The land between them shades from one to the next.
+      type Biome = "ice" | "green" | "desert" | "heath";
+      const BIOME_BY_PLACE: Record<string, Biome> = {
+        earthlink: "desert",
+        hostpro: "heath",
+        stormscape: "green",
+        unitedlayer: "ice",
+        murad: "ice",
+        "capital-group": "green",
+        boingo: "desert",
+        rpa: "green",
+        investcloud: "heath",
+      };
+      const PALETTES: Record<Biome, [string, string, string]> = {
+        // low ground, high ground, peaks
+        ice: ["#a8c6da", "#e2eef6", "#ffffff"],
+        green: ["#3f5a2c", "#6f8044", "#c9c29a"],
+        desert: ["#b08a4e", "#d2ad6c", "#ecd9a6"],
+        heath: ["#6a5434", "#94774a", "#d8c596"],
+      };
+      const palettes = cities.map((city) => {
+        const biome = BIOME_BY_PLACE[city.slug] ?? BIOME_BY_PLACE[cities[city.spot].slug] ?? "heath";
+        return PALETTES[biome].map((hex) => new THREE.Color(hex));
+      });
+
       const colour = new THREE.Color();
-      const lowland = new THREE.Color("#6e5b36");
-      const upland = new THREE.Color("#a98e58");
-      const peak = new THREE.Color("#e2d1a0");
-      const shore = new THREE.Color("#4b4027");
+      const low = new THREE.Color();
+      const high = new THREE.Color();
+      const top = new THREE.Color();
+      const shore = new THREE.Color("#5b5138");
+      const wood = new THREE.Color("#2f4423");
       for (let i = 0; i < position.count; i += 1) {
         const x = position.getX(i);
         const z = -position.getY(i);
         const y = heightAt(x, z);
         position.setZ(i, y);
-        if (y < SEA + 3) colour.copy(shore);
-        else if (y < 40) colour.copy(lowland).lerp(upland, Math.max(0, y) / 40);
-        else colour.copy(upland).lerp(peak, Math.min(1, (y - 40) / 70));
-        // A faint province tint, so the map reads as country rather than terrain.
-        let nearest = 0;
-        let best = Infinity;
+
+        // Blend the palettes of the places by how near each one is.
+        low.setRGB(0, 0, 0);
+        high.setRGB(0, 0, 0);
+        top.setRGB(0, 0, 0);
+        let total = 0;
         spots.forEach((spot, index) => {
+          if (cities[index].spot !== index) return;
           const d2 = (spot.x - x) ** 2 + (spot.y - z) ** 2;
-          if (d2 < best) {
-            best = d2;
-            nearest = index;
-          }
+          const weight = 1 / (d2 + 9000) ** 1.6;
+          total += weight;
+          low.add(colour.copy(palettes[index][0]).multiplyScalar(weight));
+          high.add(colour.copy(palettes[index][1]).multiplyScalar(weight));
+          top.add(colour.copy(palettes[index][2]).multiplyScalar(weight));
         });
-        const tint = ((nearest * 37) % 9) / 9 - 0.5;
-        colour.offsetHSL(tint * 0.035, 0, tint * 0.03);
-        // Woods and worn ground: darker, greener patches in the lowlands.
+        low.multiplyScalar(1 / total);
+        high.multiplyScalar(1 / total);
+        top.multiplyScalar(1 / total);
+
+        if (y < SEA + 3) colour.copy(shore).lerp(low, 0.35);
+        else if (y < 40) colour.copy(low).lerp(high, Math.max(0, y) / 40);
+        else colour.copy(high).lerp(top, Math.min(1, (y - 40) / 60));
+
+        // Woods in the green and heath lowlands; none on ice or sand.
+        const greenness = Math.max(0, low.g - Math.max(low.r, low.b) + 0.06) * 6;
         const patch = Math.sin(x * 0.013 + 1.7) * Math.cos(z * 0.017 - 0.6) + Math.sin((x + z) * 0.031) * 0.5;
-        if (y > SEA + 3 && y < 46 && patch > 0.35) colour.lerp(new THREE.Color("#3f4a28"), Math.min(0.55, (patch - 0.35) * 1.1));
+        if (y > SEA + 3 && y < 46 && patch > 0.3) {
+          colour.lerp(wood, Math.min(0.6, (patch - 0.3) * 1.2) * Math.min(1, greenness + 0.25));
+        }
         colours.set([colour.r, colour.g, colour.b], i * 3);
       }
       terrain.setAttribute("color", new THREE.BufferAttribute(colours, 3));
@@ -418,9 +457,30 @@ export function SkillsTitlesPage() {
       land.rotation.x = -Math.PI / 2;
       scene.add(land);
 
+      const water = new THREE.PlaneGeometry(9000, 9000, 180, 180);
+      const waterAt = water.attributes.position;
+      const waterColours = new Float32Array(waterAt.count * 3);
+      const shallow = new THREE.Color("#2f7f9c");
+      const mid = new THREE.Color("#124a78");
+      const deep = new THREE.Color("#061a3a");
+      for (let i = 0; i < waterAt.count; i += 1) {
+        const x = waterAt.getX(i);
+        const z = -waterAt.getY(i);
+        // How far below the waterline the sea bed would be, plus slow currents.
+        const bed = SEA - lifted(x, z);
+        const drift = Math.sin(x * 0.0031 + 0.8) * Math.cos(z * 0.0027 - 1.1) * 14;
+        const depth = Math.max(0, Math.min(1, (bed + drift) / 60));
+        if (depth < 0.35) colour.copy(shallow).lerp(mid, depth / 0.35);
+        else colour.copy(mid).lerp(deep, (depth - 0.35) / 0.65);
+        // Open ocean beyond the map goes darkest of all.
+        const edge = Math.max(0, (Math.hypot(x, z * 1.4) - 1900) / 1600);
+        colour.lerp(deep, Math.min(1, edge));
+        waterColours.set([colour.r, colour.g, colour.b], i * 3);
+      }
+      water.setAttribute("color", new THREE.BufferAttribute(waterColours, 3));
       const sea = new THREE.Mesh(
-        new THREE.PlaneGeometry(9000, 9000),
-        new THREE.MeshStandardMaterial({ color: 0x141c1b, roughness: 0.32, metalness: 0.55 }),
+        water,
+        new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.22, metalness: 0.35 }),
       );
       sea.rotation.x = -Math.PI / 2;
       sea.position.y = SEA;
@@ -471,6 +531,8 @@ export function SkillsTitlesPage() {
           new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0, depthTest: false }),
         );
         sprite.scale.set(34, 3.8, 1);
+        // Labels live on their own layer: drawn after the lens, so they are never blurred.
+        sprite.layers.set(1);
         return sprite;
       };
 
@@ -704,6 +766,25 @@ export function SkillsTitlesPage() {
       // rather than merely being bright.
       const composer = new composerModule.EffectComposer(renderer);
       composer.addPass(new renderModule.RenderPass(scene, camera));
+      // The lens holds whatever the camera is looking at and lets the distance
+      // and the near foreground go soft, the way a model shot does.
+      const lens = new bokehModule.BokehPass(scene, camera, { focus: 300, aperture: 0.00003, maxblur: 0.006 });
+      composer.addPass(lens);
+      const labelCamera = new THREE.PerspectiveCamera();
+      labelCamera.layers.set(1);
+      const labelPass = new renderModule.RenderPass(scene, labelCamera);
+      labelPass.clear = false;
+      labelPass.clearDepth = true;
+      // The sky belongs to the first pass; drawn again here it would paint
+      // over the picture the labels are being laid onto.
+      const drawLabels = labelPass.render.bind(labelPass);
+      labelPass.render = (...args: Parameters<typeof drawLabels>) => {
+        const sky = scene.background;
+        scene.background = null;
+        drawLabels(...args);
+        scene.background = sky;
+      };
+      composer.addPass(labelPass);
       const bloom = new bloomModule.UnrealBloomPass(new THREE.Vector2(1, 1), 0.42, 0.65, 0.88);
       composer.addPass(bloom);
       composer.addPass(new outputModule.OutputPass());
@@ -730,6 +811,12 @@ export function SkillsTitlesPage() {
         const leap = camera.position.distanceTo(eyeNow) > 420;
         controls.setLookAt(eyeNow.x, eyeNow.y, eyeNow.z, aimNow.x, aimNow.y, aimNow.z, !leap);
         controls.update(Math.min(0.05, clock.getDelta()));
+        // Close in, the lens is shallow and the background melts; pulled back
+        // over the whole map it stops down so the country stays sharp.
+        const reach = camera.position.distanceTo(aimNow);
+        const lensUniforms = lens.uniforms as Record<string, { value: number }>;
+        lensUniforms.focus.value = reach;
+        lensUniforms.aperture.value = 0.00003 * Math.max(0.02, Math.min(1, (240 / reach) ** 1.6));
 
         // The sun burns on the clock, not the scrubber: it is the one living thing here.
         astrolabe.update(clock.elapsedTime, camera);
@@ -751,6 +838,13 @@ export function SkillsTitlesPage() {
           if (stop.engraved) (stop.engraved.material as ThreeTypes.MeshBasicMaterial).opacity = 0.16 + built * 0.74;
         });
 
+        labelCamera.position.copy(camera.position);
+        labelCamera.quaternion.copy(camera.quaternion);
+        labelCamera.fov = camera.fov;
+        labelCamera.aspect = camera.aspect;
+        labelCamera.near = camera.near;
+        labelCamera.far = camera.far;
+        labelCamera.updateProjectionMatrix();
         composer.render();
         frame = requestAnimationFrame(render);
       };
