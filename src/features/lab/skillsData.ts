@@ -32,6 +32,8 @@ export interface Place {
   name: string;
   /** The company on its own, for tight column headers. */
   short: string;
+  /** The role held there. */
+  title: string;
   from: number;
   to: number;
 }
@@ -49,6 +51,7 @@ export const places: Place[] = mock.jobs.map((job) => ({
   slug: job.slug,
   name: job.company,
   short: job.company.split(/[ (]/)[0],
+  title: (job as { title?: string }).title ?? "",
   from: yearOf(job.start ?? undefined, 2000),
   to: yearOf(job.end ?? undefined, NOW_YEAR),
 }));

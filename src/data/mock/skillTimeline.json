@@ -452,7 +452,8 @@
           "skill": "scss",
           "years": 7
         }
-      ]
+      ],
+      "title": "Lead Full Stack Engineer"
     },
     {
       "slug": "rpa",
@@ -513,7 +514,8 @@
           "skill": "scss",
           "years": 3
         }
-      ]
+      ],
+      "title": "Senior Web Developer"
     },
     {
       "slug": "boingo",
@@ -554,7 +556,8 @@
           "skill": "linux-hosting",
           "years": 2
         }
-      ]
+      ],
+      "title": "Web Engineer"
     },
     {
       "slug": "capital-group",
@@ -570,7 +573,8 @@
           "skill": "javascript",
           "years": 1
         }
-      ]
+      ],
+      "title": "Front-End Coder"
     },
     {
       "slug": "murad",
@@ -590,7 +594,8 @@
           "skill": "cms",
           "years": 3
         }
-      ]
+      ],
+      "title": "Web Developer"
     },
     {
       "slug": "unitedlayer",
@@ -618,7 +623,8 @@
           "skill": "sql",
           "years": 1
         }
-      ]
+      ],
+      "title": "Web Developer/Designer"
     },
     {
       "slug": "stormscape",
@@ -654,7 +660,8 @@
           "skill": "client-delivery",
           "years": 10
         }
-      ]
+      ],
+      "title": "Principal Web Developer"
     },
     {
       "slug": "stormscape-now",

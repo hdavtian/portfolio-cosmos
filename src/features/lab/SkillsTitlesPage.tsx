@@ -1,150 +1,178 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as ThreeTypes from "three";
-import { KIND_BY_PLACE, KIND_ORDER, MOVES, makeBuilders, type Build } from "./gotBuilders";
+import { KIND_BY_PLACE, KIND_ORDER, makeBuilders, type Build } from "./gotBuilders";
 import { LAST_YEAR, NOW_YEAR, categories, places, say, spans } from "./skillsData";
 import "./skillsTitles.css";
 
 /**
- * A title sequence for the skill timeline. The camera rides a route over a
- * map of coloured country, and the run alternates between travelling and
- * standing still: at a stop the map stops moving and the scrubber itself
- * builds the place, piece by piece, each piece labelled with the skill and
- * the years behind it. A running tally burns away on the left, starting at
- * nothing and adding up as the sequence passes.
+ * The Working Years: a career told the way the Game of Thrones titles tell a
+ * kingdom. A relief map lit by an astrolabe sun; the camera sweeps from place
+ * to place, and at each one a clockwork structure winds up out of the map —
+ * one piece per skill, its height the years spent on it there, a gold cap on
+ * any skill appearing for the first time.
  *
- * The route begins and ends at StormScape — the freelance work that ran
- * quietly under everything else and is running again now.
+ * The delivery is the title sequence. The message is the panel on the left:
+ * years of real experience per discipline, counted honestly off the calendar,
+ * growing as the film goes — so by the end nobody has to ask how many years
+ * of frontend or backend there are.
  *
- * Sketch only, mock data, not linked from the site.
+ * Everything on screen is a function of the scrubber. Sketch, mock data, not
+ * linked from the site.
  */
 
 interface Entry {
   skill: string;
   name: string;
   years: number;
+  from: number;
+  to: number;
   categories: string[];
+  /** First appearance of this skill anywhere in the career. */
+  fresh: boolean;
 }
 
-export interface City {
+interface City {
   slug: string;
   name: string;
+  title: string;
   from: number;
   to: number;
   kind: string;
   note: string;
   entries: Entry[];
-  /** Stops share a place on the map when they are the same company. */
+  /** Places share a spot on the map when they are the same company. */
   spot: number;
 }
 
-const TOWER_LIMIT = 9;
+const PIECE_LIMIT = 9;
 
 const NOTES: Record<string, string> = {
-  stormscape: "Freelance and side work, dormant some years, busy in others",
+  stormscape: "Own studio: freelance and side work, running alongside everything that follows",
   "stormscape-now": "The same studio, picked back up",
+};
+
+/** Where each place sits on the map. The studio is home, under the sun. */
+const LAYOUT: Record<string, [number, number]> = {
+  earthlink: [-1180, 520],
+  hostpro: [-790, 220],
+  stormscape: [-150, 60],
+  unitedlayer: [-570, -460],
+  murad: [30, -650],
+  "capital-group": [560, -390],
+  boingo: [940, 100],
+  rpa: [530, 560],
+  investcloud: [1200, 660],
 };
 
 function buildCities(): City[] {
   const ordered = [...places].sort((a, b) => a.from - b.from);
-  // The last stop is the studio again, so it stands where the first one did.
-  const spotOf = (slug: string, index: number) => (slug === "stormscape-now" ? 0 : index);
-  return ordered.map((place, index) => ({
-    slug: place.slug,
-    name: place.name,
-    from: place.from,
-    to: place.to,
-    kind: KIND_BY_PLACE[place.slug] ?? KIND_ORDER[index % KIND_ORDER.length],
-    note: NOTES[place.slug] ?? "",
-    entries: spans
+  const seen = new Set<string>();
+  return ordered.map((place, index) => {
+    const entries = spans
       .filter((span) => span.place === place.slug)
       .map((span) => ({
         skill: span.skill,
         name: span.skillName,
         years: span.to - span.from,
+        from: span.from,
+        to: span.to,
         categories: span.categories,
+        fresh: false,
       }))
-      .sort((a, b) => b.years - a.years),
-    spot: spotOf(place.slug, index),
-  }));
+      .sort((a, b) => b.years - a.years);
+    for (const entry of entries) {
+      entry.fresh = !seen.has(entry.skill);
+      seen.add(entry.skill);
+    }
+    const home = ordered.findIndex((other) => other.slug === "stormscape");
+    return {
+      slug: place.slug,
+      name: place.name.split(" (")[0],
+      title: place.title,
+      from: place.from,
+      to: place.to,
+      kind: KIND_BY_PLACE[place.slug] ?? KIND_ORDER[index % KIND_ORDER.length],
+      note: NOTES[place.slug] ?? "",
+      entries,
+      spot: place.slug === "stormscape-now" && home >= 0 ? home : index,
+    };
+  });
 }
 
-type SegmentKind = "travel" | "dwell";
+type SegmentKind = "intro" | "travel" | "dwell" | "outro";
 
 interface Segment {
   kind: SegmentKind;
+  /** The place being built, or travelled to. */
   city: number;
-  /** For a travel leg, the stop it is leaving (-1 for the opening run in). */
-  previous: number;
   from: number;
   to: number;
 }
 
-/**
- * The run: a leg of travel, then a stop that the scrubber builds, all the way
- * along and back again. The first stop gets a longer turn because a decade of
- * freelance passes while it goes up.
- */
 function buildTimeline(cities: City[]): Segment[] {
-  const weights: Array<{ kind: SegmentKind; city: number; previous: number; weight: number }> = [];
-  cities.forEach((_, index) => {
-    const isReturn = index === cities.length - 1;
-    weights.push({
-      kind: "travel",
-      city: index,
-      previous: index - 1,
-      weight: index === 0 ? 1.8 : isReturn ? 2.5 : 2.3,
-    });
-    weights.push({
-      kind: "dwell",
-      city: index,
-      previous: index - 1,
-      weight: index === 0 ? 2.4 : isReturn ? 1.9 : 1.7,
-    });
+  const parts: Array<{ kind: SegmentKind; city: number; weight: number }> = [
+    { kind: "intro", city: 0, weight: 1.4 },
+  ];
+  cities.forEach((city, index) => {
+    if (index > 0) {
+      const a = LAYOUT[cities[index - 1].slug] ?? LAYOUT[cities[cities[index - 1].spot].slug] ?? [0, 0];
+      const b = LAYOUT[city.slug] ?? LAYOUT[cities[city.spot].slug] ?? [0, 0];
+      const distance = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      parts.push({ kind: "travel", city: index, weight: 0.9 + distance / 1500 });
+    }
+    parts.push({ kind: "dwell", city: index, weight: city.slug === "stormscape" ? 2.5 : 2.1 });
   });
-  const total = weights.reduce((sum, entry) => sum + entry.weight, 0);
+  parts.push({ kind: "outro", city: cities.length - 1, weight: 1.9 });
+
+  const total = parts.reduce((sum, part) => sum + part.weight, 0);
   let cursor = 0;
-  return weights.map((entry) => {
+  return parts.map((part) => {
     const from = cursor;
-    cursor += entry.weight / total;
-    return { kind: entry.kind, city: entry.city, previous: entry.previous, from, to: cursor };
+    cursor += part.weight / total;
+    return { kind: part.kind, city: part.city, from, to: cursor };
   });
 }
 
-const segmentAt = (timeline: Segment[], progress: number) => {
-  const found = timeline.find((segment) => progress >= segment.from && progress < segment.to);
-  return found ?? timeline[timeline.length - 1];
-};
+const segmentAt = (timeline: Segment[], progress: number) =>
+  timeline.find((segment) => progress >= segment.from && progress < segment.to) ?? timeline[timeline.length - 1];
 
 const within = (segment: Segment, progress: number) =>
   Math.max(0, Math.min(1, (progress - segment.from) / Math.max(0.0001, segment.to - segment.from)));
 
-/** How far each stop has been built: nothing before its turn, the scrubber during it. */
+/** Softer than smoothstep at both ends: no corner going in or coming out. */
+const softly = (edge: number, to: number, value: number) => {
+  const x = Math.max(0, Math.min(1, (value - edge) / (to - edge)));
+  return x * x * x * (x * (x * 6 - 15) + 10);
+};
+
+/** How far each place has been built: nothing before its turn, the scrubber during it. */
 function buildFractions(timeline: Segment[], cities: City[], progress: number) {
   const current = segmentAt(timeline, progress);
   const t = within(current, progress);
   return cities.map((_, index) => {
     const dwell = timeline.find((segment) => segment.kind === "dwell" && segment.city === index)!;
     if (progress >= dwell.to) return 1;
-    if (current === dwell) return 1 - Math.pow(1 - t, 2);
+    if (current === dwell) return softly(0.04, 0.82, t);
     return 0;
   });
 }
 
-/** The year on the clock: it runs through a stop's own years while standing there. */
-function yearAt(timeline: Segment[], cities: City[], progress: number) {
-  const segment = segmentAt(timeline, progress);
-  const t = within(segment, progress);
-  const city = cities[segment.city];
-  if (segment.kind === "dwell") {
-    const end = city.to >= LAST_YEAR - 1 ? LAST_YEAR : city.to;
-    return city.from + (end - city.from) * t;
+const unionYears = (ranges: Array<[number, number]>) => {
+  const sorted = ranges.filter(([from, to]) => to > from).sort((a, b) => a[0] - b[0]);
+  let total = 0;
+  let open: [number, number] | null = null;
+  for (const range of sorted) {
+    if (open && range[0] <= open[1]) open[1] = Math.max(open[1], range[1]);
+    else {
+      if (open) total += open[1] - open[0];
+      open = [range[0], range[1]];
+    }
   }
-  const previous = segment.previous >= 0 ? cities[segment.previous] : null;
-  const start = previous ? Math.min(previous.to, city.from) : city.from;
-  return start + (city.from - start) * t;
-}
+  if (open) total += open[1] - open[0];
+  return total;
+};
 
-interface TallyRow {
+interface ExperienceRow {
   slug: string;
   name: string;
   years: number;
@@ -152,44 +180,59 @@ interface TallyRow {
   skills: Array<{ name: string; years: number }>;
 }
 
-/** Everything built so far, added up: years per category, and per skill inside it. */
-function tallyAt(cities: City[], fractions: number[]): TallyRow[] {
-  const byCategory = new Map<string, { years: number; hot: boolean; skills: Map<string, number> }>();
+/**
+ * The message. Years of experience per discipline so far, counted off the
+ * calendar: overlapping jobs never count twice, so these are the numbers that
+ * can be said out loud in an interview.
+ */
+function experienceAt(cities: City[], fractions: number[]) {
+  const byCategory = new Map<string, { ranges: Array<[number, number]>; hot: boolean; skills: Map<string, Array<[number, number]>> }>();
+  const everything: Array<[number, number]> = [];
+
   cities.forEach((city, index) => {
     const built = fractions[index];
     if (built <= 0.001) return;
     const rising = built < 0.999;
     for (const entry of city.entries) {
+      const range: [number, number] = [entry.from, entry.from + (entry.to - entry.from) * built];
+      everything.push(range);
       for (const slug of entry.categories) {
-        const row = byCategory.get(slug) ?? { years: 0, hot: false, skills: new Map<string, number>() };
-        row.years += entry.years * built;
+        const era = categories.find((category) => category.slug === slug)?.era;
+        const clipped: [number, number] = era ? [Math.max(range[0], era), range[1]] : range;
+        if (clipped[1] <= clipped[0]) continue;
+        const row = byCategory.get(slug) ?? {
+          ranges: [] as Array<[number, number]>,
+          hot: false,
+          skills: new Map<string, Array<[number, number]>>(),
+        };
+        row.ranges.push(clipped);
         row.hot = row.hot || rising;
-        row.skills.set(entry.name, (row.skills.get(entry.name) ?? 0) + entry.years * built);
+        row.skills.set(entry.name, [...(row.skills.get(entry.name) ?? []), clipped]);
         byCategory.set(slug, row);
       }
     }
   });
-  return categories
+
+  const rows: ExperienceRow[] = categories
     .filter((category) => byCategory.has(category.slug))
     .map((category) => {
       const row = byCategory.get(category.slug)!;
       return {
         slug: category.slug,
         name: category.name,
-        years: row.years,
+        years: unionYears(row.ranges),
         hot: row.hot,
         skills: [...row.skills.entries()]
-          .map(([name, years]) => ({ name, years }))
+          .map(([name, ranges]) => ({ name, years: unionYears(ranges) }))
           .sort((a, b) => b.years - a.years),
       };
-    })
-    .sort((a, b) => b.years - a.years);
+    });
+
+  return { rows, career: unionYears(everything) };
 }
 
-/** One colour of country per stop, so the map reads like a map. */
-const REGION_COLOURS = [
-  0x2c5a56, 0x36476e, 0x57405c, 0x3f5738, 0x5c5133, 0x35586a, 0x5b3838, 0x2c5a56,
-];
+const yearsLabel = (city: City) =>
+  `${Math.round(city.from)} – ${city.to >= LAST_YEAR - 1 ? "today" : Math.round(city.to)}`;
 
 export function SkillsTitlesPage() {
   const cities = useMemo(buildCities, []);
@@ -204,8 +247,6 @@ export function SkillsTitlesPage() {
   // Nothing on screen moves unless the scrubber does.
   const [moving, setMoving] = useState(false);
 
-  // The scene reads progress from the ref every frame, so scrubbing never
-  // re-runs the setup.
   useEffect(() => {
     progressRef.current = progress;
     setMoving(true);
@@ -213,19 +254,16 @@ export function SkillsTitlesPage() {
     return () => window.clearTimeout(settle);
   }, [progress]);
 
-  // The wheel runs the film: forward winds on, back rewinds.
+  // The wheel winds the film forward and back.
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     const onWheel = (event: WheelEvent) => {
-      // Over the tally, the wheel belongs to the list.
       if ((event.target as HTMLElement).closest(".tally__inner")) return;
       event.preventDefault();
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1;
-      const travelled = event.deltaY * unit;
       setPlaying(false);
-      // One pace throughout: the scrubber is there for fine work.
-      setProgress((current) => Math.max(0, Math.min(1, current + travelled / 21000)));
+      setProgress((current) => Math.max(0, Math.min(1, current + (event.deltaY * unit) / 21000)));
     };
     root.addEventListener("wheel", onWheel, { passive: false });
     return () => root.removeEventListener("wheel", onWheel);
@@ -240,40 +278,36 @@ export function SkillsTitlesPage() {
     void Promise.all([import("three"), import("camera-controls")]).then(([THREE, cameraControls]) => {
       if (disposed) return;
       const CameraControls = cameraControls.default;
-      // Required once before use, the same way the cinematic app does it.
       CameraControls.install({ THREE });
 
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
-      renderer.setClearColor(0x05070b, 1);
       host.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0x05070b, 320, 1900);
-      // A little light left in the sky, so the long empty legs aren't a void.
+      scene.fog = new THREE.Fog(0x120c07, 700, 3600);
+      // Candle-dark above, a warm haze at the horizon.
       scene.background = (() => {
         const canvas = document.createElement("canvas");
         canvas.width = 4;
         canvas.height = 128;
         const ctx = canvas.getContext("2d")!;
         const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        sky.addColorStop(0, "#04060a");
-        sky.addColorStop(0.62, "#070d15");
-        sky.addColorStop(0.88, "#122031");
-        sky.addColorStop(1, "#243a4a");
+        sky.addColorStop(0, "#080503");
+        sky.addColorStop(0.6, "#140d07");
+        sky.addColorStop(1, "#3a2813");
         ctx.fillStyle = sky;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
         return texture;
       })();
-      const camera = new THREE.PerspectiveCamera(52, 1, 0.5, 4600);
 
-      // The scrubber decides where the camera should be; camera-controls is
-      // what actually moves it there, damping the last of the roughness out of
-      // the path. It takes no input here — this is a film, not a viewer.
+      const camera = new THREE.PerspectiveCamera(42, 1, 1, 9000);
+      // The scrubber decides where the camera should be; camera-controls moves
+      // it there, damping the path. It takes no input: this is a film.
       const controls = new CameraControls(camera, renderer.domElement);
-      controls.smoothTime = 0.24;
+      controls.smoothTime = 0.3;
       controls.mouseButtons.left = CameraControls.ACTION.NONE;
       controls.mouseButtons.middle = CameraControls.ACTION.NONE;
       controls.mouseButtons.right = CameraControls.ACTION.NONE;
@@ -284,486 +318,236 @@ export function SkillsTitlesPage() {
       controls.minDistance = 0.1;
       controls.maxDistance = Infinity;
 
-      scene.add(new THREE.HemisphereLight(0x8fb7ff, 0x1a1206, 0.85));
-      const key = new THREE.DirectionalLight(0xffd9a0, 1.15);
-      key.position.set(-120, 180, 140);
-      scene.add(key);
-      // A low fill from the other side, so a hill isn't a black cut-out when
-      // the key light is behind it.
-      const fill = new THREE.DirectionalLight(0x9fc0e8, 0.45);
-      fill.position.set(160, 90, -140);
-      scene.add(fill);
-      const glint = new THREE.PointLight(0xffb45a, 1.5, 320, 2);
-      scene.add(glint);
+      /* ---------------------------------------------------------------- */
+      /* The map                                                          */
 
-      const label = (text: string) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 512;
-        canvas.height = 64;
-        const ctx = canvas.getContext("2d")!;
-        ctx.font = '600 26px "JetBrains Mono", Menlo, Consolas, monospace';
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        const width = ctx.measureText(text).width + 24;
-        ctx.fillStyle = "rgba(5, 8, 12, 0.72)";
-        ctx.fillRect((canvas.width - width) / 2, 10, width, 44);
-        ctx.fillStyle = "#ffd9a0";
-        ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        const sprite = new THREE.Sprite(
-          new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0, depthTest: false }),
-        );
-        sprite.scale.set(21, 2.6, 1);
-        return sprite;
-      };
+      const spots = cities.map((city, index) => {
+        const at = LAYOUT[city.slug] ?? LAYOUT[cities[city.spot].slug];
+        if (at) return new THREE.Vector2(at[0], at[1]);
+        const angle = (index / cities.length) * Math.PI * 2;
+        return new THREE.Vector2(Math.cos(angle) * 900, Math.sin(angle) * 600);
+      });
 
-      const builders = makeBuilders(THREE, label);
+      const SEA = -6;
+      const wild = (x: number, z: number) =>
+        48 * Math.sin(x * 0.0019 + 0.6) * Math.cos(z * 0.0024 - 0.4) +
+        26 * Math.sin(x * 0.0052 + z * 0.0037) +
+        13 * Math.cos(z * 0.0098 - x * 0.0031) +
+        5 * Math.sin(x * 0.021) * Math.sin(z * 0.019) +
+        // Ranges of mountains, away from where anything is built.
+        70 * Math.max(0, Math.sin(x * 0.0041 + 2) * Math.sin(z * 0.0052 + 1)) ** 2;
 
-      // The land: real hills, high enough to see the route climb them.
-      const rolling = (x: number, z: number) =>
-        Math.sin(x * 0.0072) * 24 + Math.cos(z * 0.019) * 13 + Math.sin(x * 0.023 + z * 0.012) * 8;
-
-      /**
-       * Raised ground: a hill a place stands on, or a ridge the road has to
-       * get through. A ridge is marked so the road and the camera keep to the
-       * height of the land beneath it and pass under rather than over.
-       */
-      interface Mound {
-        x: number;
-        z: number;
-        radius: number;
-        height: number;
-        ridge: boolean;
-      }
-      const mounds: Mound[] = [];
-
-      let carved: ((x: number, z: number) => number) | null = null;
-      const moundsAt = (x: number, z: number, withRidges: boolean) => {
-        let lift = 0;
-        for (const mound of mounds) {
-          if (!withRidges && mound.ridge) continue;
-          const away = ((x - mound.x) ** 2 + (z - mound.z) ** 2) / (mound.radius * mound.radius);
-          if (away > 6) continue;
-          const rise = mound.height * Math.exp(-away * 1.6);
-          lift += mound.ridge && carved !== null ? rise * carved(x, z) : rise;
+      const lifted = (x: number, z: number) => {
+        let h = wild(x, z);
+        let near = 0;
+        for (const spot of spots) {
+          const d2 = (x - spot.x) ** 2 + (z - spot.y) ** 2;
+          near = Math.max(near, Math.exp(-d2 / (300 * 300)));
         }
-        return lift;
+        // Land rises gently toward every place, and mountains keep their distance.
+        h = h * (1 - near * 0.75) + 26 * near;
+        return h;
+      };
+      const spotHeights = spots.map((spot) => lifted(spot.x, spot.y));
+
+      const heightAt = (x: number, z: number) => {
+        let h = lifted(x, z);
+        // Level ground under each place, so its clockwork sits flat.
+        spots.forEach((spot, index) => {
+          const d = Math.hypot(x - spot.x, z - spot.y);
+          if (d < 130) h += (spotHeights[index] - h) * softly(0, 1, 1 - Math.max(0, d - 70) / 60);
+        });
+        return Math.max(h, SEA - 5);
       };
 
-      // What the land looks like…
-      const heightAt = (x: number, z: number) => rolling(x, z) + moundsAt(x, z, true);
-      // …and what the road and the camera sit on, which ignores a ridge so the
-      // route can run through it.
-      const travelHeight = (x: number, z: number) => rolling(x, z) + moundsAt(x, z, false);
-
-      // Stops are spread wide; the last one stands where the first one did.
-      const legs = cities.length;
-      const SPACING = 860;
-      const spots = cities.map((_, index) => {
-        const x = (index - (cities.length - 2) / 2) * SPACING;
-        const z = Math.sin(index * 1.15) * 280 + Math.cos(index * 2.1) * 120;
-        return new THREE.Vector3(x, 0, z);
-      });
-      // A couple of places stand on high ground.
-      const HILLS: Record<string, { radius: number; height: number }> = {
-        boingo: { radius: 300, height: 74 },
-        investcloud: { radius: 380, height: 58 },
-        murad: { radius: 260, height: 46 },
-      };
-      cities.forEach((city, index) => {
-        const hill = HILLS[city.slug];
-        if (!hill || city.spot !== index) return;
-        mounds.push({ x: spots[index].x, z: spots[index].z, radius: hill.radius, height: hill.height, ridge: false });
-      });
-      // One leg crosses a ridge, thrown up at the bend the road takes between
-      // two of the stops. It has to be here, before the land is built, or the
-      // hill would be missing and the tunnel would be a pipe lying in a field.
-      const TUNNEL_LEG = 4;
-      const bendBetween = (index: number) => {
-        const before = spots[index - 1];
-        const spot = spots[index];
-        const along = new THREE.Vector3().subVectors(spot, before).setY(0).normalize();
-        const across = new THREE.Vector3(along.z, 0, -along.x).multiplyScalar(index % 2 === 0 ? 330 : -330);
-        return new THREE.Vector3().addVectors(before, spot).multiplyScalar(0.5).add(across);
-      };
-      // Put the ridge on a straighter run of the leg, past the bend: a short
-      // tunnel through a hill is a straight bore, and a curved one twists.
-      const ridgeAt = new THREE.Vector3().lerpVectors(bendBetween(TUNNEL_LEG), spots[TUNNEL_LEG], 0.5);
-      const ridgeWay = new THREE.Vector3()
-        .subVectors(spots[TUNNEL_LEG], bendBetween(TUNNEL_LEG))
-        .setY(0)
-        .normalize();
-      // Tight enough that the hill's skirt ends inside the bore: anywhere the
-      // ridge is still above the road, there has to be tunnel around it.
-      mounds.push({ x: ridgeAt.x, z: ridgeAt.z, radius: 190, height: 135, ridge: true });
-
-      /**
-       * A notch cut clean through the ridge for the road, so the hill can
-       * never close over the carriageway. The land itself is cut; the tunnel
-       * built into it is a roof over that cut, not a pipe buried in solid
-       * ground.
-       */
-      const CORRIDOR = 46;
-      carved = (x: number, z: number) => {
-        const from = new THREE.Vector3(x - ridgeAt.x, 0, z - ridgeAt.z);
-        const along = from.dot(ridgeWay);
-        const across = Math.abs(from.x * ridgeWay.z - from.z * ridgeWay.x);
-        if (Math.abs(along) > 470 || across > CORRIDOR + 28) return 1;
-        const edge = Math.max(0, Math.min(1, (across - CORRIDOR) / 28));
-        return edge * edge * (3 - 2 * edge);
-      };
-
-      // Re-seat every spot now that the ground under it has moved.
-      spots.forEach((spot) => spot.setY(heightAt(spot.x, spot.z)));
-
-      const points = cities.map((city) => spots[city.spot]);
-
-      // The road runs past each place, not through it: every stop stands off
-      // to one side, alternating, so the camera can fly by and look across.
-      const STAND_OFF = 74;
-      const standOff = spots.map((_spot, index) => {
-        const before = spots[Math.max(0, index - 1)];
-        const after = spots[Math.min(spots.length - 1, index + 1)];
-        const dir = new THREE.Vector3().subVectors(after, before).setY(0).normalize();
-        return new THREE.Vector3(dir.z, 0, -dir.x).multiplyScalar(index % 2 === 0 ? STAND_OFF : -STAND_OFF);
-      });
-
-      const terrain = new THREE.PlaneGeometry(8600, 2800, 300, 110);
+      const terrain = new THREE.PlaneGeometry(3800, 2600, 240, 164);
       const position = terrain.attributes.position;
       const colours = new Float32Array(position.count * 3);
       const colour = new THREE.Color();
+      const lowland = new THREE.Color("#6e5b36");
+      const upland = new THREE.Color("#a98e58");
+      const peak = new THREE.Color("#e2d1a0");
+      const shore = new THREE.Color("#4b4027");
       for (let i = 0; i < position.count; i += 1) {
         const x = position.getX(i);
         const z = -position.getY(i);
         const y = heightAt(x, z);
         position.setZ(i, y);
-        // Each stop rules the country nearest to it.
+        if (y < SEA + 3) colour.copy(shore);
+        else if (y < 40) colour.copy(lowland).lerp(upland, Math.max(0, y) / 40);
+        else colour.copy(upland).lerp(peak, Math.min(1, (y - 40) / 70));
+        // A faint province tint, so the map reads as country rather than terrain.
         let nearest = 0;
         let best = Infinity;
-        points.forEach((point, index) => {
-          const distance = (point.x - x) ** 2 + (point.z - z) ** 2;
-          if (distance < best) {
-            best = distance;
+        spots.forEach((spot, index) => {
+          const d2 = (spot.x - x) ** 2 + (spot.y - z) ** 2;
+          if (d2 < best) {
+            best = d2;
             nearest = index;
           }
         });
-        colour.setHex(REGION_COLOURS[nearest % REGION_COLOURS.length]);
-        // Higher ground catches more light.
-        colour.multiplyScalar(0.62 + Math.max(0, y) / 42);
+        const tint = ((nearest * 37) % 9) / 9 - 0.5;
+        colour.offsetHSL(tint * 0.035, 0, tint * 0.03);
+        // Woods and worn ground: darker, greener patches in the lowlands.
+        const patch = Math.sin(x * 0.013 + 1.7) * Math.cos(z * 0.017 - 0.6) + Math.sin((x + z) * 0.031) * 0.5;
+        if (y > SEA + 3 && y < 46 && patch > 0.35) colour.lerp(new THREE.Color("#3f4a28"), Math.min(0.55, (patch - 0.35) * 1.1));
         colours.set([colour.r, colour.g, colour.b], i * 3);
       }
       terrain.setAttribute("color", new THREE.BufferAttribute(colours, 3));
       terrain.computeVertexNormals();
-
       const land = new THREE.Mesh(
         terrain,
-        new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
+        new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.96, metalness: 0.02 }),
       );
       land.rotation.x = -Math.PI / 2;
       scene.add(land);
-      const contours = new THREE.Mesh(
-        terrain,
-        new THREE.MeshBasicMaterial({ color: 0x8aa6c0, wireframe: true, transparent: true, opacity: 0.12 }),
+
+      const sea = new THREE.Mesh(
+        new THREE.PlaneGeometry(9000, 9000),
+        new THREE.MeshStandardMaterial({ color: 0x141c1b, roughness: 0.32, metalness: 0.55 }),
       );
-      contours.rotation.x = -Math.PI / 2;
-      contours.position.y = 0.4;
-      contours.renderOrder = 0;
-      scene.add(contours);
+      sea.rotation.x = -Math.PI / 2;
+      sea.position.y = SEA;
+      scene.add(sea);
 
-      // One road: out past every place in order, winding as it goes. There is
-      // no road home — the film flies back.
-      const onGround = (point: ThreeTypes.Vector3) => point.setY(travelHeight(point.x, point.z));
+      /* ---------------------------------------------------------------- */
+      /* The astrolabe: the sun this world is lit by                       */
 
-      // The way out: a stop, then a bend, then the next stop — so the road has
-      // some shape to it rather than running straight down the map.
-      const outwardPoints: ThreeTypes.Vector3[] = [
-        onGround(new THREE.Vector3(spots[0].x - 900, 0, spots[0].z + 430)),
-      ];
-      const cityControl: number[] = [];
-      spots.slice(0, -1).forEach((spot, index) => {
-        if (index > 0) {
-          outwardPoints.push(onGround(bendBetween(index)));
-        }
-        cityControl.push(outwardPoints.length);
-        outwardPoints.push(spot);
-      });
+      const SUN = new THREE.Vector3(0, 520, -40);
+      scene.add(new THREE.HemisphereLight(0xd8c49a, 0x1c1208, 0.34));
+      const sunlight = new THREE.PointLight(0xffdcae, 1.9, 0, 0);
+      sunlight.position.copy(SUN);
+      scene.add(sunlight);
+      const rake = new THREE.DirectionalLight(0xffc98a, 1.5);
+      rake.position.set(-600, 500, 500);
+      scene.add(rake);
 
-      // The road runs out to the last place and stops there; there is no road
-      // home. A tail past the end gives the last stop room to be passed.
-      const last = spots[spots.length - 2];
-      const out = new THREE.Vector3()
-        .subVectors(last, spots[spots.length - 3])
-        .setY(0)
-        .normalize();
-      const journeyPoints = [
-        ...outwardPoints,
-        onGround(new THREE.Vector3(last.x + out.x * 320, 0, last.z + out.z * 320)),
-      ];
-      const journey = new THREE.CatmullRomCurve3(journeyPoints, false, "catmullrom", 0.4);
-      const roadLength = journey.getLength();
-
-      // Where each place sits along that road, measured in distance travelled.
-      const samples = journey.getPoints(2200);
-      const walked = [0];
-      for (let i = 1; i < samples.length; i += 1) {
-        walked.push(walked[i - 1] + samples[i].distanceTo(samples[i - 1]));
-      }
-      const arcOfControl = (index: number) =>
-        walked[Math.round((index / (journeyPoints.length - 1)) * (samples.length - 1))] /
-        walked[walked.length - 1];
-      const cityArc = cities.map((_, index) =>
-        index === legs - 1 ? 1 : arcOfControl(cityControl[index]),
-      );
-
-      /**
-       * The way home is a flight, not a drive: up off the road at the last
-       * place, back across the country it has just crossed, looking down on
-       * it, and down again onto the camp where it started.
-       */
-      const campArc = cityArc[cities[legs - 1].spot];
-      const flight = new THREE.CatmullRomCurve3(
-        [1, 0.82, 0.64, 0.46, 0.28, campArc + 0.08, campArc + 0.02].map((at, index, all) => {
-          const point = journey.getPointAt(Math.max(0, Math.min(1, at)));
-          const through = index / (all.length - 1);
-          // Climb away, cross high, come down on the camp it started at.
-          const climb = Math.sin(Math.PI * Math.min(1, through * 1.1)) * 300;
-          const low = index === all.length - 1 ? 74 : 54;
-          return new THREE.Vector3(point.x, travelHeight(point.x, point.z) + low + climb, point.z);
+      const astrolabe = new THREE.Group();
+      astrolabe.position.copy(SUN);
+      scene.add(astrolabe);
+      astrolabe.add(new THREE.Mesh(new THREE.SphereGeometry(30, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffe3b0 })));
+      const halo = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: (() => {
+            const canvas = document.createElement("canvas");
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext("2d")!;
+            const glow = ctx.createRadialGradient(128, 128, 8, 128, 128, 128);
+            glow.addColorStop(0, "rgba(255, 226, 170, 0.95)");
+            glow.addColorStop(0.35, "rgba(255, 170, 70, 0.35)");
+            glow.addColorStop(1, "rgba(255, 140, 40, 0)");
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, 0, 256, 256);
+            return new THREE.CanvasTexture(canvas);
+          })(),
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
         }),
-        false,
-        "catmullrom",
-        0.35,
       );
+      halo.scale.set(330, 330, 1);
+      astrolabe.add(halo);
 
-      // Dark tarmac with bright edges and a dashed line down the middle.
-      const tarmac = (() => {
+      const label = (text: string, bright: boolean) => {
         const canvas = document.createElement("canvas");
-        canvas.width = 64;
-        canvas.height = 256;
+        canvas.width = 640;
+        canvas.height = 72;
         const ctx = canvas.getContext("2d")!;
-        ctx.fillStyle = "#0b1017";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "rgba(199, 154, 70, 0.85)";
-        ctx.fillRect(2, 0, 3, canvas.height);
-        ctx.fillRect(canvas.width - 5, 0, 3, canvas.height);
-        ctx.fillStyle = "rgba(240, 216, 168, 0.75)";
-        for (let y = 24; y < canvas.height; y += 84) ctx.fillRect(canvas.width / 2 - 2, y, 4, 40);
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.wrapS = THREE.ClampToEdgeWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
-      })();
-
-      const ROAD_WIDTH = 9;
-      const lanePoint = new THREE.Vector3();
-      const laneHeading = new THREE.Vector3();
-      const laneSide = new THREE.Vector3();
-
-      /** A stretch of road, laid on the land between two points of the journey. */
-      const layRoad = (fromArc: number, toArc: number, opacity: number) => {
-        const steps = Math.max(200, Math.round((toArc - fromArc) * 2600));
-        const positions = new Float32Array((steps + 1) * 6);
-        const uvs = new Float32Array((steps + 1) * 4);
-        const index: number[] = [];
-        let run = 0;
-        for (let i = 0; i <= steps; i += 1) {
-          const at = fromArc + (toArc - fromArc) * (i / steps);
-          journey.getPointAt(Math.max(0, Math.min(1, at)), lanePoint);
-          journey.getTangentAt(Math.max(0, Math.min(1, at)), laneHeading);
-          laneHeading.y = 0;
-          laneHeading.normalize();
-          laneSide.set(laneHeading.z, 0, -laneHeading.x).multiplyScalar(ROAD_WIDTH);
-          if (i > 0) run += ((toArc - fromArc) * roadLength) / steps / 26;
-          const left = [lanePoint.x + laneSide.x, 0, lanePoint.z + laneSide.z];
-          const right = [lanePoint.x - laneSide.x, 0, lanePoint.z - laneSide.z];
-          left[1] = travelHeight(left[0], left[2]) + 1.7;
-          right[1] = travelHeight(right[0], right[2]) + 1.7;
-          positions.set(left, i * 6);
-          positions.set(right, i * 6 + 3);
-          uvs.set([0, run, 1, run], i * 4);
-          if (i < steps) {
-            const a = i * 2;
-            index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-          }
-        }
-        const lane = new THREE.BufferGeometry();
-        lane.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-        lane.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
-        lane.setIndex(index);
-        const mesh = new THREE.Mesh(
-          lane,
-          new THREE.MeshBasicMaterial({
-            map: tarmac,
-            transparent: true,
-            opacity,
-            side: THREE.DoubleSide,
-            depthWrite: true,
-            polygonOffset: true,
-            polygonOffsetFactor: -6,
-          }),
-        );
-        // Drawn after the land, and writing depth, so no contour line of the
-        // map shows through the tarmac.
-        mesh.renderOrder = 2;
-        scene.add(mesh);
-        return mesh;
-      };
-
-      // One road, there from the start: it is the only one there is.
-      layRoad(0, 1, 0.95);
-
-      // The tunnel. A mouth in the hillside, a lined bore with the trade
-      // written on its walls, and a mouth again on the far side.
-      (() => {
-        const BORE = 34;
-
-        // Lines of the work, to be read as you pass.
-        const written = (() => {
-          const canvas = document.createElement("canvas");
-          canvas.width = 1024;
-          canvas.height = 512;
-          const ctx = canvas.getContext("2d")!;
-          ctx.fillStyle = "#0a0d12";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          const lines = [
-            "<!doctype html>", "body { margin: 0 }", "const years = skills.map(s => s.years)",
-            "public class Portfolio {", "SELECT * FROM experience", "@media (prefers-reduced-motion)",
-            "function build(place) {", ".grid { display: grid }", "await fetch('/api/skills')",
-            "var $el = $('#stage');", "using System.Linq;", "npm run build",
-            "export default function () {", "git commit -m 'ship it'", "<div class=\"tunnel\">",
-            "requestAnimationFrame(draw)", "SCSS: @include respond-to(md)", "docker compose up -d",
-          ];
-          ctx.font = '500 21px "JetBrains Mono", Menlo, Consolas, monospace';
-          lines.forEach((line, index) => {
-            const warm = index % 3 === 0;
-            ctx.fillStyle = warm ? "rgba(230, 190, 114, 0.5)" : "rgba(150, 200, 180, 0.32)";
-            ctx.fillText(line, 24 + (index % 2) * 60, 34 + index * 28);
-          });
-          const texture = new THREE.CanvasTexture(canvas);
-          texture.colorSpace = THREE.SRGBColorSpace;
-          texture.wrapS = THREE.RepeatWrapping;
-          texture.wrapT = THREE.RepeatWrapping;
-          texture.repeat.set(-17, 4);
-          return texture;
-        })();
-
-        // The cut runs straight through the ridge, so the tunnel does too.
-        const rise = (along: number) => {
-          const at = ridgeAt.clone().add(ridgeWay.clone().multiplyScalar(along));
-          const away = ((at.x - ridgeAt.x) ** 2 + (at.z - ridgeAt.z) ** 2) / (190 * 190);
-          return 135 * Math.exp(-away * 1.6);
-        };
-        let reach = 0;
-        while (reach < 420 && rise(reach) > 26) reach += 6;
-        reach += 26;
-
-        const middleOf = ridgeAt.clone();
-        middleOf.y = travelHeight(ridgeAt.x, ridgeAt.z) + 24;
-        const heading = ridgeWay.clone();
-        const bore = reach * 2;
-        const mouthBack = ridgeAt.clone().add(heading.clone().multiplyScalar(-reach));
-        const mouthFront = ridgeAt.clone().add(heading.clone().multiplyScalar(reach));
-
-        // The lining: walls, seen from the inside, with the code on them.
-        const lining = new THREE.Mesh(
-          new THREE.CylinderGeometry(BORE, BORE, bore, 30, 4, true),
-          new THREE.MeshStandardMaterial({
-            map: written,
-            color: 0x2a323d,
-            emissive: 0x11161d,
-            emissiveMap: written,
-            emissiveIntensity: 1.4,
-            // Solid from both sides, so the bore reads as a lined tunnel from
-            // the mouth as well as from inside it.
-            side: THREE.DoubleSide,
-            roughness: 0.9,
-          }),
-        );
-        lining.position.copy(middleOf);
-        lining.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), heading);
-        scene.add(lining);
-
-        [0, 1].forEach((end) => {
-          const at = end === 0 ? mouthBack.clone() : mouthFront.clone();
-          at.y = middleOf.y;
-          const outward = end === 0 ? heading.clone().negate() : heading.clone();
-
-          // A wall across the hillside with the opening cut in it, so the
-          // tunnel is something you arrive at rather than something you enter
-          // by accident.
-          const facade = new THREE.Mesh(
-            new THREE.RingGeometry(BORE, BORE + 46, 40, 1),
-            // Faces outward only, so the mouth is a wall from the hillside and
-            // nothing at all from inside the tunnel.
-            new THREE.MeshStandardMaterial({ color: 0x232a33, roughness: 0.95 }),
-          );
-          facade.position.copy(at).add(outward.clone().multiplyScalar(2));
-          facade.lookAt(facade.position.clone().add(outward));
-          scene.add(facade);
-
-          // A collar of stone standing proud of the hill, and a rim of gold.
-          const collar = new THREE.Mesh(
-            new THREE.CylinderGeometry(BORE + 6, BORE + 10, 26, 28, 1, true),
-            new THREE.MeshStandardMaterial({ color: 0x2b333e, roughness: 0.92 }),
-          );
-          collar.position.copy(at).add(outward.clone().multiplyScalar(13));
-          collar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), outward);
-          scene.add(collar);
-
-          const rim = new THREE.Mesh(
-            new THREE.TorusGeometry(BORE + 7, 2.2, 8, 32),
-            new THREE.MeshStandardMaterial({ color: 0xc79a46, metalness: 0.7, roughness: 0.4 }),
-          );
-          rim.position.copy(at).add(outward.clone().multiplyScalar(26));
-          rim.lookAt(rim.position.clone().add(outward));
-          scene.add(rim);
-
-          const lamp = new THREE.PointLight(0xffb45a, 2.2, 300, 2);
-          lamp.position.copy(at).add(outward.clone().multiplyScalar(34)).add(new THREE.Vector3(0, 16, 0));
-          scene.add(lamp);
-        });
-
-        // Lights down the length, so the writing can be read going through.
-        [-0.25, 0, 0.25].forEach((along) => {
-          const lamp = new THREE.PointLight(0xffd7a0, 1.6, 200, 2);
-          lamp.position.copy(middleOf).add(heading.clone().multiplyScalar(bore * along));
-          scene.add(lamp);
-        });
-      })();
-
-      // A marker post either side of the road at every place, like an exit sign.
-      cities.forEach((city, index) => {
-        if (city.spot !== index) return;
-        journey.getPointAt(cityArc[index], lanePoint);
-        journey.getTangentAt(cityArc[index], laneHeading);
-        laneHeading.y = 0;
-        laneHeading.normalize();
-        laneSide.set(laneHeading.z, 0, -laneHeading.x).multiplyScalar(ROAD_WIDTH + 3);
-        [1, -1].forEach((which) => {
-          const post = new THREE.Mesh(
-            new THREE.BoxGeometry(0.8, 9, 0.8),
-            new THREE.MeshBasicMaterial({ color: 0xe6be72 }),
-          );
-          const x = lanePoint.x + laneSide.x * which;
-          const z = lanePoint.z + laneSide.z * which;
-          post.position.set(x, heightAt(x, z) + 4.5, z);
-          scene.add(post);
-        });
-      });
-
-      const nameTexture = (text: string, pixels: number, ink: string, spacing: number) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 1024;
-        canvas.height = 160;
-        const ctx = canvas.getContext("2d")!;
-        ctx.font = `700 ${pixels}px "Cinzel", "Barlow Condensed", Georgia, serif`;
-        ctx.fillStyle = ink;
+        ctx.font = '600 28px "JetBrains Mono", Menlo, Consolas, monospace';
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.letterSpacing = `${spacing}px`;
-        ctx.fillText(text, canvas.width / 2, canvas.height / 2, canvas.width - 20);
+        const width = Math.min(canvas.width - 8, ctx.measureText(text).width + 30);
+        ctx.fillStyle = "rgba(10, 7, 4, 0.78)";
+        ctx.fillRect((canvas.width - width) / 2, 10, width, 52);
+        ctx.strokeStyle = bright ? "rgba(255, 196, 96, 0.95)" : "rgba(214, 180, 120, 0.4)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect((canvas.width - width) / 2 + 1, 11, width - 2, 50);
+        ctx.fillStyle = bright ? "#ffd27a" : "#f1dfba";
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2, canvas.width - 30);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const sprite = new THREE.Sprite(
+          new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0, depthTest: false }),
+        );
+        sprite.scale.set(34, 3.8, 1);
+        return sprite;
+      };
+
+      const { byKind, gearPlatform, skin } = makeBuilders(THREE, label);
+
+      const rings = [74, 96, 118].map((radius, index) => {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, 3, 10, 96), skin("bronze", 0.5));
+        ring.rotation.set(Math.PI / 2 + index * 0.5, index * 0.7, 0);
+        astrolabe.add(ring);
+        return ring;
+      });
+      // A band engraved with the disciplines the film is about to count.
+      const band = new THREE.Mesh(
+        new THREE.CylinderGeometry(132, 132, 20, 96, 1, true),
+        new THREE.MeshStandardMaterial({
+          map: (() => {
+            const canvas = document.createElement("canvas");
+            canvas.width = 2048;
+            canvas.height = 96;
+            const ctx = canvas.getContext("2d")!;
+            ctx.fillStyle = "#7a5a26";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#2a1a08";
+            ctx.font = '700 44px "Cinzel", Georgia, serif';
+            ctx.textBaseline = "middle";
+            ctx.letterSpacing = "8px";
+            const words = categories.map((category) => category.name.toUpperCase()).join("   ✦   ");
+            ctx.fillText(`${words}   ✦   `, 20, 50);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.wrapS = THREE.RepeatWrapping;
+            return texture;
+          })(),
+          metalness: 0.75,
+          roughness: 0.45,
+          side: THREE.DoubleSide,
+        }),
+      );
+      astrolabe.add(band);
+
+      /* ---------------------------------------------------------------- */
+      /* The places                                                        */
+
+      interface Shot {
+        r0: number;
+        r1: number;
+        h0: number;
+        h1: number;
+        sweep: number;
+        aim: number;
+      }
+      // A handful of moves, dealt round the places: a low sweep in, a rise
+      // over the top, a descent from height, a long slow orbit.
+      const SHOTS: Shot[] = [
+        { r0: 250, r1: 176, h0: 112, h1: 62, sweep: -1.9, aim: 30 },
+        { r0: 196, r1: 224, h0: 58, h1: 176, sweep: 1.5, aim: 28 },
+        { r0: 272, r1: 168, h0: 196, h1: 74, sweep: -1.6, aim: 32 },
+        { r0: 222, r1: 186, h0: 76, h1: 96, sweep: 2.3, aim: 34 },
+      ];
+      const HOMECOMING: Shot = { r0: 320, r1: 236, h0: 200, h1: 126, sweep: 2.5, aim: 36 };
+      const nameTexture = (name: string, years: string) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1024;
+        canvas.height = 256;
+        const ctx = canvas.getContext("2d")!;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.shadowColor = "rgba(20, 12, 4, 0.9)";
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = "#f3e2b8";
+        ctx.letterSpacing = "10px";
+        ctx.font = '700 92px "Cinzel", Georgia, serif';
+        ctx.fillText(name, canvas.width / 2, 100, canvas.width - 40);
+        ctx.fillStyle = "rgba(243, 226, 184, 0.78)";
+        ctx.letterSpacing = "16px";
+        ctx.font = '600 46px "Cinzel", Georgia, serif';
+        ctx.fillText(years, canvas.width / 2, 196, canvas.width - 80);
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
         return texture;
@@ -771,125 +555,178 @@ export function SkillsTitlesPage() {
 
       interface Placed {
         build: Build;
-        sprite: ThreeTypes.Sprite;
-        /** How this stop is filmed. */
-        move: string;
-        /** A second visit: the place that is already here grows instead. */
+        gears: ReturnType<typeof gearPlatform> | null;
+        engraved: ThreeTypes.Mesh | null;
+        at: ThreeTypes.Vector3;
         later: boolean;
-        /** Which side of the road this place stands on, so the camera leans off the other way. */
-        away: number;
       }
 
       const tallest = Math.max(1, ...cities.flatMap((city) => city.entries.map((entry) => entry.years)));
       const placed: Placed[] = [];
       cities.forEach((city, index) => {
-        // Coming back to a place doesn't put up a second one: the camp that is
-        // already standing grows, and new work raises new pillars.
         if (city.spot !== index) {
           const first = placed[city.spot];
-          placed.push({
-            build: first.build,
-            sprite: first.sprite,
-            move: "homecoming",
-            later: true,
-            away: first.away,
-          });
+          placed.push({ build: first.build, gears: null, engraved: null, at: first.at, later: true });
           return;
         }
-
-        const laterCity = cities.find((entry) => entry.spot === index && entry !== city);
-        const build = builders[city.kind](
-          city.entries.slice(0, TOWER_LIMIT),
+        const spot = spots[index];
+        const at = new THREE.Vector3(spot.x, spotHeights[index], spot.y);
+        const laterCity = cities.find((other) => other.spot === index && other !== city);
+        const build = byKind[city.kind](
+          city.entries.slice(0, PIECE_LIMIT),
           tallest,
-          laterCity?.entries.slice(0, TOWER_LIMIT),
+          laterCity?.entries.slice(0, PIECE_LIMIT),
         );
-        build.group.position.copy(points[index]).add(standOff[city.spot]);
-        build.group.position.y = heightAt(build.group.position.x, build.group.position.z);
+        build.group.position.copy(at).add(new THREE.Vector3(0, 1.5, 0));
         scene.add(build.group);
 
-        const shown = city.name.split(" (")[0].toUpperCase();
-        const sprite = new THREE.Sprite(
-          new THREE.SpriteMaterial({ map: nameTexture(shown, 74, "#f0d8a8", 6), transparent: true, depthTest: false }),
-        );
-        sprite.scale.set(58, 9, 1);
-        sprite.position.copy(build.group.position).add(new THREE.Vector3(0, 66, 0));
-        scene.add(sprite);
+        const gears = gearPlatform();
+        gears.holder.position.copy(at);
+        const base = new THREE.Group();
+        base.position.copy(at);
+        base.add(gears.holder);
+        gears.holder.position.set(0, 0, 0);
+        scene.add(base);
 
-        placed.push({ build, sprite, move: city.kind, later: false, away: index % 2 === 0 ? 1 : -1 });
-      });
-
-      /** A board on a gantry, the way a freeway announces what is coming up. */
-      const signFace = (name: string, years: string) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 1024;
-        canvas.height = 256;
-        const ctx = canvas.getContext("2d")!;
-        ctx.fillStyle = "#0a1018";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = "#e6be72";
-        ctx.lineWidth = 8;
-        ctx.strokeRect(14, 14, canvas.width - 28, canvas.height - 28);
-        ctx.fillStyle = "#f4e6c8";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.letterSpacing = "6px";
-        ctx.font = '700 88px "Cinzel", "Barlow Condensed", Georgia, serif';
-        ctx.fillText(name, canvas.width / 2, 104, canvas.width - 70);
-        ctx.fillStyle = "rgba(230, 190, 114, 0.85)";
-        ctx.letterSpacing = "12px";
-        ctx.font = '600 44px "JetBrains Mono", Menlo, monospace';
-        ctx.fillText(years, canvas.width / 2, 186, canvas.width - 90);
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        return texture;
-      };
-
-      cities.forEach((city, index) => {
-        // The last stop is flown into, so it gets no sign on the road.
-        if (index === legs - 1) return;
-        // Stand it back up the road, so it is read on the way in.
-        const at = Math.max(0, cityArc[index] - 170 / roadLength);
-        journey.getPointAt(at, lanePoint);
-        journey.getTangentAt(at, laneHeading);
-        laneHeading.y = 0;
-        laneHeading.normalize();
-        laneSide.set(laneHeading.z, 0, -laneHeading.x);
-
-        const sign = new THREE.Group();
-        sign.position.set(lanePoint.x, heightAt(lanePoint.x, lanePoint.z), lanePoint.z);
-        // Face back down the road at whoever is coming.
-        sign.rotation.y = Math.atan2(-laneHeading.x, -laneHeading.z);
-        scene.add(sign);
-
-        const POST = 26;
-        const REACH = ROAD_WIDTH + 5;
-        [1, -1].forEach((which) => {
-          const post = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.7, 0.9, POST, 6),
-            new THREE.MeshStandardMaterial({ color: 0x6f5a33, metalness: 0.6, roughness: 0.5 }),
-          );
-          post.position.set(which * REACH, POST / 2, 0);
-          sign.add(post);
-        });
-        const beam = new THREE.Mesh(
-          new THREE.BoxGeometry(REACH * 2 + 2.4, 1.2, 1.2),
-          new THREE.MeshStandardMaterial({ color: 0x6f5a33, metalness: 0.6, roughness: 0.5 }),
-        );
-        beam.position.y = POST;
-        sign.add(beam);
-
-        const years = `${Math.round(city.from)} – ${city.to >= LAST_YEAR - 1 ? "NOW" : Math.round(city.to)}`;
-        const board = new THREE.Mesh(
-          new THREE.PlaneGeometry(REACH * 2.4, REACH * 0.62),
+        // The name, engraved into the map beside the place and draped over
+        // the ground so no rise in the land can swallow a letter.
+        // It lies on the side the camera spends its time, turned to be read from there.
+        const before = index > 0 ? spots[index - 1] : new THREE.Vector2(0, 360);
+        const facing =
+          Math.atan2(before.x - spot.x, before.y - spot.y) + SHOTS[index % SHOTS.length].sweep * 0.55;
+        const width = 170;
+        const plate = new THREE.PlaneGeometry(width, width / 4, 48, 12);
+        plate.rotateX(-Math.PI / 2);
+        plate.rotateY(facing);
+        const drape = plate.attributes.position;
+        const px = at.x + Math.sin(facing) * 112;
+        const pz = at.z + Math.cos(facing) * 112;
+        for (let i = 0; i < drape.count; i += 1) {
+          drape.setY(i, Math.max(SEA, heightAt(px + drape.getX(i), pz + drape.getZ(i))) + 1.6);
+        }
+        const engraved = new THREE.Mesh(
+          plate,
           new THREE.MeshBasicMaterial({
-            map: signFace(city.name.split(" (")[0].toUpperCase(), years),
+            map: nameTexture(city.name.toUpperCase(), yearsLabel(city).toUpperCase()),
             transparent: true,
-            side: THREE.DoubleSide,
+            opacity: 0.16,
+            depthWrite: false,
           }),
         );
-        board.position.y = POST - REACH * 0.36;
-        sign.add(board);
+        engraved.position.set(px, 0, pz);
+        scene.add(engraved);
+
+        placed.push({ build, gears, engraved, at, later: false });
       });
+
+      /* ---------------------------------------------------------------- */
+      /* The camera                                                        */
+
+      const shotFor = (index: number) => (placed[index].later ? HOMECOMING : SHOTS[index % SHOTS.length]);
+
+      // A place is entered from the side the camera has come from.
+      const arrival = (index: number) => {
+        const here = placed[index].at;
+        const before = index > 0 ? placed[index - 1].at : new THREE.Vector3(SUN.x, 0, SUN.z + 400);
+        return Math.atan2(before.x - here.x, before.z - here.z);
+      };
+
+      const dwellPose = (index: number, t: number, eye: ThreeTypes.Vector3, aim: ThreeTypes.Vector3) => {
+        const shot = shotFor(index);
+        const here = placed[index].at;
+        const e = softly(0, 1, t);
+        const angle = arrival(index) + shot.sweep * e;
+        const radius = shot.r0 + (shot.r1 - shot.r0) * e;
+        const height = shot.h0 + (shot.h1 - shot.h0) * e;
+        eye.set(here.x + Math.sin(angle) * radius, here.y + height, here.z + Math.cos(angle) * radius);
+        aim.set(here.x, here.y + shot.aim, here.z);
+      };
+
+      const fromEye = new THREE.Vector3();
+      const fromAim = new THREE.Vector3();
+      const toEye = new THREE.Vector3();
+      const toAim = new THREE.Vector3();
+      const over = new THREE.Vector3();
+      const WIDE_EYE = new THREE.Vector3(0, 1500, 2050);
+      const WIDE_AIM = new THREE.Vector3(0, 0, -60);
+      const OPEN_EYE = new THREE.Vector3(SUN.x + 40, SUN.y + 60, SUN.z + 330);
+
+      /** A flight: up and over between two poses, the look running a little ahead of the body. */
+      const flight = (t: number, lift: number, eye: ThreeTypes.Vector3, aim: ThreeTypes.Vector3) => {
+        const e = softly(0, 1, t);
+        over.addVectors(fromEye, toEye).multiplyScalar(0.5);
+        over.y = Math.max(fromEye.y, toEye.y) + lift;
+        const a = (1 - e) * (1 - e);
+        const b = 2 * (1 - e) * e;
+        const c = e * e;
+        eye.set(
+          fromEye.x * a + over.x * b + toEye.x * c,
+          fromEye.y * a + over.y * b + toEye.y * c,
+          fromEye.z * a + over.z * b + toEye.z * c,
+        );
+        aim.lerpVectors(fromAim, toAim, softly(0.05, 0.85, t));
+      };
+
+      const rawPose = (p: number, eye: ThreeTypes.Vector3, aim: ThreeTypes.Vector3) => {
+        const segment = segmentAt(timeline, p);
+        const t = within(segment, p);
+        if (segment.kind === "dwell") {
+          dwellPose(segment.city, t, eye, aim);
+        } else if (segment.kind === "intro") {
+          // Open on the astrolabe, then tip down to where the career begins.
+          fromEye.copy(OPEN_EYE);
+          fromAim.copy(SUN);
+          dwellPose(0, 0, toEye, toAim);
+          flight(t, 60, eye, aim);
+        } else if (segment.kind === "travel") {
+          dwellPose(segment.city - 1, 1, fromEye, fromAim);
+          dwellPose(segment.city, 0, toEye, toAim);
+          flight(t, 110 + fromEye.distanceTo(toEye) * 0.16, eye, aim);
+        } else {
+          // Finish high over the whole map, every place standing.
+          dwellPose(segment.city, 1, fromEye, fromAim);
+          toEye.copy(WIDE_EYE);
+          toAim.copy(WIDE_AIM);
+          flight(t, 120, eye, aim);
+        }
+      };
+
+      // The whole film's camera, sampled and then smoothed as one path, so the
+      // seams between moves have no corners and the camera never quite stops.
+      const STEPS = 3200;
+      let track = new Float64Array((STEPS + 1) * 6);
+      {
+        const eye = new THREE.Vector3();
+        const aim = new THREE.Vector3();
+        for (let i = 0; i <= STEPS; i += 1) {
+          rawPose(i / STEPS, eye, aim);
+          track.set([eye.x, eye.y, eye.z, aim.x, aim.y, aim.z], i * 6);
+        }
+        const radius = Math.round(STEPS * 0.009);
+        for (let pass = 0; pass < 3; pass += 1) {
+          const next = new Float64Array(track.length);
+          for (let i = 0; i <= STEPS; i += 1) {
+            for (let k = 0; k < 6; k += 1) {
+              let sum = 0;
+              for (let j = -radius; j <= radius; j += 1) {
+                sum += track[Math.max(0, Math.min(STEPS, i + j)) * 6 + k];
+              }
+              next[i * 6 + k] = sum / (radius * 2 + 1);
+            }
+          }
+          track = next;
+        }
+      }
+      const eyeNow = new THREE.Vector3();
+      const aimNow = new THREE.Vector3();
+      const poseAt = (p: number) => {
+        const x = Math.max(0, Math.min(1, p)) * STEPS;
+        const i = Math.min(STEPS - 1, Math.floor(x));
+        const rest = x - i;
+        const at = (k: number) => track[i * 6 + k] * (1 - rest) + track[(i + 1) * 6 + k] * rest;
+        eyeNow.set(at(0), at(1), at(2));
+        aimNow.set(at(3), at(4), at(5));
+      };
 
       const resize = () => {
         renderer.setSize(host.clientWidth, host.clientHeight, false);
@@ -899,183 +736,40 @@ export function SkillsTitlesPage() {
       resize();
       window.addEventListener("resize", resize);
 
-      const eye = new THREE.Vector3();
-      const target = new THREE.Vector3();
-      const spare = new THREE.Vector3();
-      const ahead = new THREE.Vector3();
-      const heading = new THREE.Vector3();
-      const orbit = new THREE.Vector3();
-      const aimAt = new THREE.Vector3();
-
-      const RIDE_HEIGHT = 34;
-      const RIDE_LOOK = 18;
-      // A stop starts a little before the place and ends a little after it, so
-      // the camera is always passing through, never parked and never backing up.
-      const BEFORE = 96 / roadLength;
-      const AFTER = 124 / roadLength;
-
-      /** The stretch of road a segment covers; the flight home is not on it. */
-      const stretchOf = (segment: Segment) => {
-        if (segment.city === legs - 1) return [1, 1];
-        const here = cityArc[segment.city];
-        if (segment.kind === "dwell") return [here - BEFORE, Math.min(1, here + AFTER)];
-        const from = segment.previous < 0 ? 0 : Math.min(1, cityArc[segment.previous] + AFTER);
-        return [from, here - BEFORE];
-      };
-
-      /**
-       * How far along the road each moment of the film is. Rather than easing
-       * each stretch on its own — which brings the camera to a halt at every
-       * seam and makes the whole thing lurch — the raw distances are laid out
-       * and then smoothed as one curve, so the camera only ever speeds up and
-       * slows down gradually and never quite stops.
-       */
-      const roadTable = (() => {
-        const steps = 2400;
-        let table = new Float64Array(steps + 1);
-        for (let i = 0; i <= steps; i += 1) {
-          const at = i / steps;
-          const segment = segmentAt(timeline, at);
-          const [from, to] = stretchOf(segment);
-          table[i] = from + (to - from) * within(segment, at);
-        }
-        const radius = Math.round(steps * 0.016);
-        for (let pass = 0; pass < 3; pass += 1) {
-          const next = new Float64Array(steps + 1);
-          for (let i = 0; i <= steps; i += 1) {
-            let sum = 0;
-            for (let k = -radius; k <= radius; k += 1) {
-              sum += table[Math.max(0, Math.min(steps, i + k))];
-            }
-            next[i] = sum / (radius * 2 + 1);
-          }
-          table = next;
-        }
-        return { steps, table };
-      })();
-
-      const roadAt = (at: number) => {
-        const x = Math.max(0, Math.min(1, at)) * roadTable.steps;
-        const index = Math.min(roadTable.steps - 1, Math.floor(x));
-        const rest = x - index;
-        return roadTable.table[index] * (1 - rest) + roadTable.table[index + 1] * rest;
-      };
-
-      /** The lie of the land under the camera, averaged so bumps don't shake it. */
-      const settled = (x: number, z: number) =>
-        (travelHeight(x, z) +
-          travelHeight(x + 16, z) +
-          travelHeight(x - 16, z) +
-          travelHeight(x, z + 16) +
-          travelHeight(x, z - 16)) /
-        5;
-
-      // Softer than smoothstep at both ends, so a turn of the head has no corner in it.
-      const softly = (edge: number, to: number, value: number) => {
-        const x = Math.max(0, Math.min(1, (value - edge) / (to - edge)));
-        return x * x * x * (x * (x * 6 - 15) + 10);
-      };
-
-      /**
-       * The camera rides the road facing the way it is going. At a place it
-       * comes off the road: it slows, lifts away, and moves around the
-       * structure while it goes up — circling, climbing, always slowly — then
-       * settles back onto the road for the next leg. The ends of that move are
-       * the road itself, so there is no cut either side of it.
-       */
-      const pose = (at: number, segment: Segment, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
-        if (segment.city === legs - 1) {
-          // Home the fast way: over the top, looking down at the country it
-          // has already crossed.
-          const eased = softly(0, 1, t);
-          const f = segment.kind === "travel" ? eased * 0.84 : 0.84 + eased * 0.16;
-          flight.getPointAt(f, spare);
-          into.copy(spare);
-          // Look down at a fixed angle rather than at the ground itself: the
-          // land rises and falls under a flight, and following it makes the
-          // camera lurch every time a hill goes by.
-          flight.getPointAt(Math.min(1, f + 0.08), ahead);
-          ahead.y = spare.y - 190;
-          look.copy(ahead);
-        } else {
-          const s = Math.max(0, Math.min(1, roadAt(at)));
-          journey.getPointAt(s, spare);
-          journey.getTangentAt(s, heading);
-          heading.y = 0;
-          heading.normalize();
-
-          const ground = settled(spare.x, spare.z);
-          into.set(spare.x, ground + RIDE_HEIGHT, spare.z);
-          journey.getPointAt(Math.min(1, s + 0.02), ahead);
-          ahead.y = settled(ahead.x, ahead.z) + RIDE_LOOK;
-          look.copy(ahead);
-        }
-        if (segment.kind !== "dwell") return;
-
-        const move = MOVES[placed[segment.city].move] ?? MOVES.spires;
-        const spot = placed[segment.city].build.group.position;
-
-        // Start the circle from wherever the road brought us in, so it reads
-        // as leaving the road rather than cutting to another camera.
-        const entry = Math.atan2(into.x - spot.x, into.z - spot.z);
-        const angle = entry + move.orbit * softly(0, 1, t);
-        // Rises and falls away to nothing at both ends of the stop, gently.
-        const swell = Math.sin(Math.PI * t) ** 2;
-        const radius = move.near - swell * move.near * 0.18;
-        orbit.set(
-          spot.x + Math.sin(angle) * radius,
-          spot.y + move.high * (0.55 + 0.45 * swell),
-          spot.z + Math.cos(angle) * radius,
-        );
-
-        // Off the road at the start of the stop, back on it by the end.
-        const away = softly(0, 0.26, t) * (1 - softly(0.78, 1, t));
-        into.lerp(orbit, away);
-
-        const watch = softly(0, 0.22, t) * (1 - softly(move.hold, 1, t));
-        aimAt.set(spot.x, spot.y + move.aim, spot.z);
-        look.lerp(aimAt, Math.max(away, watch));
-      };
-
       let frame = 0;
       const clock = new THREE.Clock();
       const render = () => {
         const p = progressRef.current;
-        // Everything is a function of the scrubber: park it and the frame is
-        // still, so labels and numbers can be read.
-        const phase = p * 30;
+        // Everything is a function of the scrubber: park it and the frame is still.
+        const phase = p * 34;
         const segment = segmentAt(timeline, p);
         const t = within(segment, p);
 
-        pose(p, segment, t, eye, target);
-
-        // Damp along the road, but cut on a big jump — clicking a stop or
-        // flinging the scrubber should arrive, not fly across the map.
-        const leap = camera.position.distanceTo(eye) > 260;
-        controls.setLookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, !leap);
+        poseAt(p);
+        const leap = camera.position.distanceTo(eyeNow) > 420;
+        controls.setLookAt(eyeNow.x, eyeNow.y, eyeNow.z, aimNow.x, aimNow.y, aimNow.z, !leap);
         controls.update(Math.min(0.05, clock.getDelta()));
-        glint.position.copy(camera.position).add(new THREE.Vector3(0, 10, 0));
+
+        rings.forEach((ring, index) => {
+          ring.rotation.z = phase * (0.22 + index * 0.09) * (index % 2 === 0 ? 1 : -1);
+        });
+        band.rotation.y = phase * 0.12;
 
         placed.forEach((stop, index) => {
           const dwell = timeline.find((entry) => entry.kind === "dwell" && entry.city === index)!;
-          const built = p >= dwell.to ? 1 : segment === dwell ? 1 - Math.pow(1 - t, 2) : 0;
-          // Labels belong to the stop the camera is at, and fade as it leaves.
+          const built = p >= dwell.to ? 1 : segment === dwell ? softly(0.04, 0.82, t) : 0;
+          const leaving = timeline[timeline.indexOf(dwell) + 1];
           const focus =
             segment === dwell
-              ? Math.min(1, t * 4)
-              : segment.kind === "travel" && segment.previous === index
-                ? Math.max(0, 1 - t / 0.3)
+              ? Math.min(1, t * 5)
+              : segment === leaving
+                ? Math.max(0, 1 - within(leaving, p) / 0.3)
                 : 0;
           if (stop.later) stop.build.growLater?.(built, phase, focus);
           else stop.build.grow(built, phase, focus);
-          if (segment === dwell) {
-            const move = MOVES[stop.move] ?? MOVES.spires;
-            stop.build.group.rotation.y = move.spin * softly(0, 1, t);
-          }
-          stop.sprite.visible = built > 0.02;
-          // The name announces the place on arrival, then gets out of the way
-          // while the scrubber builds it.
-          (stop.sprite.material as ThreeTypes.SpriteMaterial).opacity = Math.min(1, built * 2) * (1 - focus * 0.82);
+          // The gears turn only while the place is going up, and they are what raises it.
+          stop.gears?.turn(built * 2.6, softly(0, 0.18, built));
+          if (stop.engraved) (stop.engraved.material as ThreeTypes.MeshBasicMaterial).opacity = 0.16 + built * 0.74;
         });
 
         renderer.render(scene, camera);
@@ -1105,13 +799,13 @@ export function SkillsTitlesPage() {
     };
   }, [cities, timeline]);
 
-  // Autoplay, paused the moment the scrubber is touched.
+  // Play, in either direction, until an end is reached.
   useEffect(() => {
     if (!playing) return;
     let frame = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      const step = (now - last) / 104000; // a full run in a little under two minutes
+      const step = (now - last) / 118000; // the whole film in about two minutes
       last = now;
       setProgress((current) => {
         const next = current + step * direction;
@@ -1132,13 +826,20 @@ export function SkillsTitlesPage() {
   }, [direction, playing]);
 
   const segment = segmentAt(timeline, progress);
-  const atStop = segment.kind === "dwell";
   const active = cities[segment.city];
+  const atPlace = segment.kind === "dwell";
   const fractions = buildFractions(timeline, cities, progress);
-  const tally = tallyAt(cities, fractions);
-  const total = tally.reduce((sum, row) => sum + row.years, 0);
-  const year = Math.min(Math.floor(NOW_YEAR), Math.round(yearAt(timeline, cities, progress)));
+  const experience = experienceAt(cities, fractions);
+  const ending = segment.kind === "outro" ? softly(0.35, 0.8, within(segment, progress)) : 0;
+  const era =
+    segment.kind === "intro"
+      ? `${Math.round(cities[0].from)}`
+      : segment.kind === "outro"
+        ? `${Math.round(cities[0].from)} – today`
+        : yearsLabel(active);
   const dwellStarts = timeline.filter((entry) => entry.kind === "dwell");
+  const fresh = active.entries.filter((entry) => entry.fresh).slice(0, PIECE_LIMIT);
+  const carried = active.entries.filter((entry) => !entry.fresh).slice(0, PIECE_LIMIT - Math.min(fresh.length, 5));
 
   return (
     <div
@@ -1157,32 +858,71 @@ export function SkillsTitlesPage() {
       }}
     >
       <div className="titles__stage" ref={hostRef} />
+      <div className="titles__vignette" aria-hidden="true" />
 
       <header className="titles__head">
-        <p className="titles__eyebrow">Sketch · mock data</p>
+        <p className="titles__eyebrow">Harma Davtian · sketch, mock data</p>
         <h1 className="titles__name">The Working Years</h1>
+        <p className="titles__era">{era}</p>
       </header>
 
-      <Tally rows={tally} open={openRows} setOpen={setOpenRows} total={total} moving={moving} />
+      <Tally
+        rows={experience.rows}
+        career={experience.career}
+        open={openRows}
+        setOpen={setOpenRows}
+        moving={moving}
+      />
 
-      <aside className={`titles__card${atStop ? " is-on" : ""}`}>
+      <aside className={`titles__card${atPlace ? " is-on" : ""}`}>
         <h2 className="titles__card-name">{active.name}</h2>
-        <p className="titles__card-years">
-          {Math.round(active.from)} – {active.to >= LAST_YEAR - 1 ? "present" : Math.round(active.to)}
-        </p>
+        <p className="titles__card-role">{active.title}</p>
+        <p className="titles__card-years">{yearsLabel(active)}</p>
         {active.note ? <p className="titles__card-note">{active.note}</p> : null}
-        <ul className="titles__card-list">
-          {active.entries.slice(0, TOWER_LIMIT).map((entry) => (
-            <li key={entry.name}>
-              <span className="titles__card-skill">{entry.name}</span>
-              <span className="titles__card-bar">
-                <span style={{ width: `${Math.min(100, (entry.years / 10) * 100)}%` }} />
-              </span>
-              <span className="titles__card-count">{say(entry.years)}</span>
-            </li>
-          ))}
-        </ul>
+        {fresh.length > 0 ? (
+          <>
+            <h3 className="titles__card-head is-new">Learned here</h3>
+            <ul className="titles__card-list">
+              {fresh.map((entry) => (
+                <li key={entry.name} className="is-new">
+                  <span className="titles__card-skill">{entry.name}</span>
+                  <span className="titles__card-count">{say(entry.years)} yrs</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        {carried.length > 0 ? (
+          <>
+            <h3 className="titles__card-head">Carried further</h3>
+            <ul className="titles__card-list">
+              {carried.map((entry) => (
+                <li key={entry.name}>
+                  <span className="titles__card-skill">{entry.name}</span>
+                  <span className="titles__card-count">+{say(entry.years)} yrs</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </aside>
+
+      <section className="titles__finale" style={{ opacity: ending, pointerEvents: "none" }} aria-hidden={ending < 0.5}>
+        <p className="titles__finale-years">{Math.floor(experience.career)} years</p>
+        <p className="titles__finale-line">
+          {Math.round(cities[0].from)} to today, {cities.length - 1} places, one craft
+        </p>
+        <ul className="titles__finale-list">
+          {experience.rows
+            .filter((row) => ["frontend", "backend", "data", "cloud", "leadership"].includes(row.slug))
+            .map((row) => (
+              <li key={row.slug}>
+                <strong>{Math.floor(row.years)}</strong>
+                <span>{row.name}</span>
+              </li>
+            ))}
+        </ul>
+      </section>
 
       <div className="titles__scrub">
         <button
@@ -1216,7 +956,6 @@ export function SkillsTitlesPage() {
         >
           {playing && direction > 0 ? "Pause" : progress >= 1 ? "Replay" : "Play ▶"}
         </button>
-        <span className="titles__year">{year}</span>
         <span className="titles__hint">click to stop · scroll to wind</span>
         <div className="titles__track">
           <input
@@ -1239,10 +978,10 @@ export function SkillsTitlesPage() {
                 type="button"
                 className={`titles__stop${stop === segment ? " is-on" : ""}`}
                 style={{ left: `${stop.from * 100}%` }}
-                title={cities[stop.city].name}
+                title={`${cities[stop.city].name} · ${yearsLabel(cities[stop.city])}`}
                 onClick={() => {
                   setPlaying(false);
-                  setProgress(stop.from + 0.001);
+                  setProgress(stop.from + (stop.to - stop.from) * 0.04);
                 }}
               >
                 <span>{cities[stop.city].name.split(" ")[0]}</span>
@@ -1255,28 +994,28 @@ export function SkillsTitlesPage() {
   );
 }
 
-/** The running total, lit from underneath: categories first, opening into their skills. */
+/** The message: years of experience so far, by discipline, opening into the skills behind each. */
 function Tally({
   rows,
+  career,
   open,
   setOpen,
-  total,
   moving,
 }: {
-  rows: TallyRow[];
+  rows: ExperienceRow[];
+  career: number;
   open: string[];
   setOpen: (next: string[]) => void;
-  total: number;
   moving: boolean;
 }) {
-  const most = Math.max(1, ...rows.map((row) => row.years));
+  const most = Math.max(1, NOW_YEAR - 1994, ...rows.map((row) => row.years));
   return (
     <aside className="tally">
       <Embers moving={moving} />
       <div className="tally__inner">
-        <h2 className="tally__title">Running tally</h2>
+        <h2 className="tally__title">Experience so far</h2>
         <p className="tally__total">
-          <span>{Math.round(total)}</span> skill-years so far
+          <span>{Math.floor(career)}</span> years in the craft
         </p>
         <ul className="tally__list">
           {rows.map((row) => {
@@ -1293,10 +1032,10 @@ function Tally({
                     {isOpen ? "–" : "+"}
                   </span>
                   {row.name}
-                  <span className="tally__years">{say(row.years)}</span>
+                  <span className="tally__years">{say(row.years)} yrs</span>
                 </button>
                 <span className="tally__bar">
-                  <span className="tally__fill" style={{ width: `${(row.years / most) * 100}%` }} />
+                  <span className="tally__fill" style={{ width: `${Math.min(100, (row.years / most) * 100)}%` }} />
                 </span>
                 {isOpen ? (
                   <ul className="tally__skills">
@@ -1312,13 +1051,13 @@ function Tally({
             );
           })}
         </ul>
+        <p className="tally__foot">Counted off the calendar: overlapping jobs never count twice.</p>
       </div>
     </aside>
   );
 }
 
-/** Embers drifting up behind the tally, for the heat of the thing. They hold
- * still with everything else when the scrubber is parked. */
+/** Embers drifting up behind the tally. They hold still with everything else when the scrubber is parked. */
 function Embers({ moving }: { moving: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const movingRef = useRef(moving);
@@ -1340,7 +1079,7 @@ function Embers({ moving }: { moving: boolean }) {
     resize();
     window.addEventListener("resize", resize);
 
-    const sparks = Array.from({ length: 44 }, () => ({
+    const sparks = Array.from({ length: 40 }, () => ({
       x: Math.random(),
       y: Math.random(),
       speed: 0.0009 + Math.random() * 0.0022,
@@ -1371,8 +1110,8 @@ function Embers({ moving }: { moving: boolean }) {
         const glow = 0.35 + Math.abs(Math.sin(spark.life * 3)) * 0.65;
         const radius = spark.size * dpr * (0.6 + glow * 0.8);
         const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * 4);
-        gradient.addColorStop(0, `rgba(255, 196, 96, ${0.75 * glow})`);
-        gradient.addColorStop(0.4, `rgba(226, 118, 32, ${0.3 * glow})`);
+        gradient.addColorStop(0, `rgba(255, 196, 96, ${0.7 * glow})`);
+        gradient.addColorStop(0.4, `rgba(226, 118, 32, ${0.28 * glow})`);
         gradient.addColorStop(1, "rgba(180, 60, 10, 0)");
         ctx.fillStyle = gradient;
         ctx.beginPath();
