@@ -316,17 +316,62 @@ export function SkillsTitlesPage() {
       const builders = makeBuilders(THREE, label);
 
       // The land: real hills, high enough to see the route climb them.
-      const heightAt = (x: number, z: number) =>
+      const rolling = (x: number, z: number) =>
         Math.sin(x * 0.0072) * 24 + Math.cos(z * 0.019) * 13 + Math.sin(x * 0.023 + z * 0.012) * 8;
+
+      /**
+       * Raised ground: a hill a place stands on, or a ridge the road has to
+       * get through. A ridge is marked so the road and the camera keep to the
+       * height of the land beneath it and pass under rather than over.
+       */
+      interface Mound {
+        x: number;
+        z: number;
+        radius: number;
+        height: number;
+        ridge: boolean;
+      }
+      const mounds: Mound[] = [];
+
+      const moundsAt = (x: number, z: number, withRidges: boolean) => {
+        let lift = 0;
+        for (const mound of mounds) {
+          if (!withRidges && mound.ridge) continue;
+          const away = ((x - mound.x) ** 2 + (z - mound.z) ** 2) / (mound.radius * mound.radius);
+          if (away > 6) continue;
+          lift += mound.height * Math.exp(-away * 1.6);
+        }
+        return lift;
+      };
+
+      // What the land looks like…
+      const heightAt = (x: number, z: number) => rolling(x, z) + moundsAt(x, z, true);
+      // …and what the road and the camera sit on, which ignores a ridge so the
+      // route can run through it.
+      const travelHeight = (x: number, z: number) => rolling(x, z) + moundsAt(x, z, false);
 
       // Stops are spread wide; the last one stands where the first one did.
       const legs = cities.length;
       const SPACING = 860;
       const spots = cities.map((_, index) => {
         const x = (index - (cities.length - 2) / 2) * SPACING;
-        const z = Math.sin(index * 1.15) * 280;
-        return new THREE.Vector3(x, heightAt(x, z), z);
+        const z = Math.sin(index * 1.15) * 280 + Math.cos(index * 2.1) * 120;
+        return new THREE.Vector3(x, 0, z);
       });
+      // A couple of places stand on high ground.
+      const HILLS: Record<string, { radius: number; height: number }> = {
+        boingo: { radius: 300, height: 74 },
+        investcloud: { radius: 380, height: 58 },
+        murad: { radius: 260, height: 46 },
+      };
+      cities.forEach((city, index) => {
+        const hill = HILLS[city.slug];
+        if (!hill || city.spot !== index) return;
+        mounds.push({ x: spots[index].x, z: spots[index].z, radius: hill.radius, height: hill.height, ridge: false });
+      });
+      // Re-seat every spot now that the ground under it has moved.
+      spots.forEach((spot) => spot.setY(heightAt(spot.x, spot.z)));
+
       const points = cities.map((city) => spots[city.spot]);
 
       // The road runs past each place, not through it: every stop stands off
@@ -384,13 +429,28 @@ export function SkillsTitlesPage() {
       // One road for the whole film, and it is a divided highway: out past
       // every place in order, a turn at the far end, then home again on the
       // carriageway running alongside, passing everything a second time.
-      const onGround = (point: ThreeTypes.Vector3) => point.setY(heightAt(point.x, point.z));
+      const onGround = (point: ThreeTypes.Vector3) => point.setY(travelHeight(point.x, point.z));
       const RETURN_SIDE = 88;
 
-      const outwardPoints = [
+      // The way out: a stop, then a bend, then the next stop — so the road has
+      // some shape to it rather than running straight down the map.
+      const outwardPoints: ThreeTypes.Vector3[] = [
         onGround(new THREE.Vector3(spots[0].x - 900, 0, spots[0].z + 430)),
-        ...spots.slice(0, -1),
       ];
+      const cityControl: number[] = [];
+      const bendPoints: number[] = [];
+      spots.slice(0, -1).forEach((spot, index) => {
+        if (index > 0) {
+          const before = spots[index - 1];
+          const along = new THREE.Vector3().subVectors(spot, before).setY(0).normalize();
+          const across = new THREE.Vector3(along.z, 0, -along.x).multiplyScalar(index % 2 === 0 ? 330 : -330);
+          const bend = new THREE.Vector3().addVectors(before, spot).multiplyScalar(0.5).add(across);
+          bendPoints.push(outwardPoints.length);
+          outwardPoints.push(onGround(bend));
+        }
+        cityControl.push(outwardPoints.length);
+        outwardPoints.push(spot);
+      });
       const outwardOnly = new THREE.CatmullRomCurve3(outwardPoints, false, "catmullrom", 0.4);
 
       // The way home: the same line, stepped to one side and walked backwards.
@@ -408,9 +468,9 @@ export function SkillsTitlesPage() {
         // Swing round the end of the run…
         onGround(new THREE.Vector3(last.x + turn.x * 150, 0, last.z + turn.z * 150)),
         stepped(1, RETURN_SIDE),
-        ...Array.from({ length: 26 }, (_, i) => stepped(1 - (i + 1) / 27, RETURN_SIDE)),
+        ...Array.from({ length: 30 }, (_, i) => stepped(1 - (i + 1) / 31, RETURN_SIDE)),
         // …and back in beside the camp it started at.
-        stepped(0.08, RETURN_SIDE * 0.5),
+        stepped(0.06, RETURN_SIDE * 0.5),
       ];
 
       const journeyPoints = [
@@ -431,8 +491,14 @@ export function SkillsTitlesPage() {
         walked[Math.round((index / (journeyPoints.length - 1)) * (samples.length - 1))] /
         walked[walked.length - 1];
       const cityArc = cities.map((_, index) =>
-        arcOfControl(index === legs - 1 ? journeyPoints.length - 2 : index + 1),
+        arcOfControl(index === legs - 1 ? journeyPoints.length - 2 : cityControl[index]),
       );
+
+      // One leg has a ridge across it, and the road goes through rather than
+      // over: the ground the road sits on ignores it, and a bore is cut for it.
+      const tunnelBend = bendPoints[3];
+      const tunnelCentre = journeyPoints[tunnelBend];
+      mounds.push({ x: tunnelCentre.x, z: tunnelCentre.z, radius: 300, height: 120, ridge: true });
 
       // Dark tarmac with bright edges and a dashed line down the middle.
       const tarmac = (() => {
@@ -476,8 +542,8 @@ export function SkillsTitlesPage() {
           if (i > 0) run += ((toArc - fromArc) * roadLength) / steps / 26;
           const left = [lanePoint.x + laneSide.x, 0, lanePoint.z + laneSide.z];
           const right = [lanePoint.x - laneSide.x, 0, lanePoint.z - laneSide.z];
-          left[1] = heightAt(left[0], left[2]) + 1.7;
-          right[1] = heightAt(right[0], right[2]) + 1.7;
+          left[1] = travelHeight(left[0], left[2]) + 1.7;
+          right[1] = travelHeight(right[0], right[2]) + 1.7;
           positions.set(left, i * 6);
           positions.set(right, i * 6 + 3);
           uvs.set([0, run, 1, run], i * 4);
@@ -515,6 +581,54 @@ export function SkillsTitlesPage() {
       const splitAt = Math.min(1, cityArc[legs - 2] + 0.012);
       layRoad(0, splitAt, 0.95);
       const wayHome = layRoad(splitAt, 1, 0);
+
+      // The bore: a length of the road covered over, with a rim at each end.
+      (() => {
+        let nearest = 0;
+        let best = Infinity;
+        for (let i = 0; i <= 400; i += 1) {
+          const at = i / 400;
+          const point = journey.getPointAt(at);
+          const away = (point.x - tunnelCentre.x) ** 2 + (point.z - tunnelCentre.z) ** 2;
+          if (away < best) {
+            best = away;
+            nearest = at;
+          }
+        }
+        const span = 210 / roadLength;
+        const through = new THREE.CatmullRomCurve3(
+          Array.from({ length: 24 }, (_, i) => {
+            const at = Math.max(0, Math.min(1, nearest - span + (2 * span * i) / 23));
+            const point = journey.getPointAt(at);
+            return new THREE.Vector3(point.x, travelHeight(point.x, point.z) + 20, point.z);
+          }),
+        );
+        const bore = new THREE.Mesh(
+          new THREE.TubeGeometry(through, 70, 30, 20, false),
+          new THREE.MeshStandardMaterial({
+            color: 0x1b2430,
+            emissive: 0x0b1017,
+            side: THREE.BackSide,
+            roughness: 0.95,
+          }),
+        );
+        scene.add(bore);
+        [0, 1].forEach((end) => {
+          const rim = new THREE.Mesh(
+            new THREE.TorusGeometry(30, 2, 8, 30),
+            new THREE.MeshStandardMaterial({ color: 0xc79a46, metalness: 0.7, roughness: 0.4 }),
+          );
+          const at = through.getPointAt(end);
+          const facing = through.getTangentAt(end);
+          rim.position.copy(at);
+          rim.lookAt(at.clone().add(facing));
+          scene.add(rim);
+          // A lamp at each mouth, so the tunnel reads as a way through.
+          const lamp = new THREE.PointLight(0xffb45a, 2.4, 260, 2);
+          lamp.position.copy(at).add(new THREE.Vector3(0, 12, 0));
+          scene.add(lamp);
+        });
+      })();
 
       // A marker post either side of the road at every place, like an exit sign.
       cities.forEach((city, index) => {
@@ -691,7 +805,8 @@ export function SkillsTitlesPage() {
       const spare = new THREE.Vector3();
       const ahead = new THREE.Vector3();
       const heading = new THREE.Vector3();
-      const side = new THREE.Vector3();
+      const orbit = new THREE.Vector3();
+      const aimAt = new THREE.Vector3();
 
       const RIDE_HEIGHT = 34;
       const RIDE_LOOK = 18;
@@ -748,10 +863,13 @@ export function SkillsTitlesPage() {
 
       /** The lie of the land under the camera, averaged so bumps don't shake it. */
       const settled = (x: number, z: number) =>
-        (heightAt(x, z) + heightAt(x + 16, z) + heightAt(x - 16, z) + heightAt(x, z + 16) + heightAt(x, z - 16)) / 5;
+        (travelHeight(x, z) +
+          travelHeight(x + 16, z) +
+          travelHeight(x - 16, z) +
+          travelHeight(x, z + 16) +
+          travelHeight(x, z - 16)) /
+        5;
 
-      // Rises and falls away to nothing at both ends of a stop, gently.
-      const swell = (t: number) => Math.sin(Math.PI * t) ** 2;
       // Softer than smoothstep at both ends, so a turn of the head has no corner in it.
       const softly = (edge: number, to: number, value: number) => {
         const x = Math.max(0, Math.min(1, (value - edge) / (to - edge)));
@@ -760,9 +878,10 @@ export function SkillsTitlesPage() {
 
       /**
        * The camera rides the road facing the way it is going. At a place it
-       * slows, passes close by, and keeps looking at it over its shoulder —
-       * the view from the back of a truck pulling out — then turns forward
-       * again before the next leg.
+       * comes off the road: it slows, lifts away, and moves around the
+       * structure while it goes up — circling, climbing, always slowly — then
+       * settles back onto the road for the next leg. The ends of that move are
+       * the road itself, so there is no cut either side of it.
        */
       const pose = (at: number, segment: Segment, t: number, into: ThreeTypes.Vector3, look: ThreeTypes.Vector3) => {
         const s = Math.max(0, Math.min(1, roadAt(at)));
@@ -770,33 +889,37 @@ export function SkillsTitlesPage() {
         journey.getTangentAt(s, heading);
         heading.y = 0;
         heading.normalize();
-        side.set(heading.z, 0, -heading.x);
 
-        const move = MOVES[placed[segment.city].move] ?? MOVES.spires;
-        const rise = segment.kind === "dwell" ? swell(t) : 0;
         const ground = settled(spare.x, spare.z);
-
-        // Lean away from whichever side the place stands on, so it stays in
-        // shot without filling the lens.
-        const lean = -placed[segment.city].away * move.wide * rise;
-        into.set(
-          spare.x + side.x * lean,
-          ground + RIDE_HEIGHT + move.lift * rise,
-          spare.z + side.z * lean,
-        );
-
+        into.set(spare.x, ground + RIDE_HEIGHT, spare.z);
         journey.getPointAt(Math.min(1, s + 0.02), ahead);
         ahead.y = settled(ahead.x, ahead.z) + RIDE_LOOK;
+        look.copy(ahead);
+        if (segment.kind !== "dwell") return;
 
-        if (segment.kind === "dwell") {
-          // Hold the place in frame while going past it, then let it go.
-          const watch = softly(0, 0.26, t) * (1 - softly(move.hold, 1, t));
-          const spot = placed[segment.city].build.group.position;
-          look.set(spot.x, spot.y + move.aim, spot.z);
-          look.lerpVectors(ahead, look, watch);
-        } else {
-          look.copy(ahead);
-        }
+        const move = MOVES[placed[segment.city].move] ?? MOVES.spires;
+        const spot = placed[segment.city].build.group.position;
+
+        // Start the circle from wherever the road brought us in, so it reads
+        // as leaving the road rather than cutting to another camera.
+        const entry = Math.atan2(into.x - spot.x, into.z - spot.z);
+        const angle = entry + move.orbit * softly(0, 1, t);
+        // Rises and falls away to nothing at both ends of the stop, gently.
+        const swell = Math.sin(Math.PI * t) ** 2;
+        const radius = move.near - swell * move.near * 0.18;
+        orbit.set(
+          spot.x + Math.sin(angle) * radius,
+          spot.y + move.high * (0.55 + 0.45 * swell),
+          spot.z + Math.cos(angle) * radius,
+        );
+
+        // Off the road at the start of the stop, back on it by the end.
+        const away = softly(0, 0.26, t) * (1 - softly(0.78, 1, t));
+        into.lerp(orbit, away);
+
+        const watch = softly(0, 0.22, t) * (1 - softly(move.hold, 1, t));
+        aimAt.set(spot.x, spot.y + move.aim, spot.z);
+        look.lerp(aimAt, Math.max(away, watch));
       };
 
       let frame = 0;
