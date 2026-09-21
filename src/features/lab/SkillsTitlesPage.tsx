@@ -867,7 +867,9 @@ export function SkillsTitlesPage() {
           // The shot says how high it comes in; the place may say how high it
           // should come to rest (a ring of tabards is read from low and level).
           const pitchIn = Math.atan2(shot.h0, shot.r0);
-          const pitchRest = placed[index].build.view?.pitch ?? Math.atan2(shot.h1, shot.r1);
+          // Everywhere, it comes to rest nearly level: lettering on a band or a
+          // cloth is read from the side, not from above.
+          const pitchRest = placed[index].build.view?.pitch ?? 0.2;
           const pitch = pitchIn + (pitchRest - pitchIn) * e;
           const top = placed[index].build.top;
           eye.set(
@@ -893,9 +895,9 @@ export function SkillsTitlesPage() {
           sun: [0, 0.09],
           bands: [
             [0.1, 0.2],
-            [0.235, 0.335],
-            // The third starts 30% of the way into the second: a 70% overlap.
-            [0.265, 0.365],
+            // Each starts 30% of the way into the one before: all three overlap.
+            [0.13, 0.23],
+            [0.16, 0.26],
           ],
           formed: 0.5,
           easeBack: 0.68,

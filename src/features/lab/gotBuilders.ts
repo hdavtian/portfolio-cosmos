@@ -684,8 +684,8 @@ export function makeBuilders(THREE: Three, label: Label) {
     seams.position.y = 3;
     group.add(seams);
 
-    const GAP = 12.5;
-    const crownAt = 20 + Math.max(towers.length, later.length) * GAP + 24;
+    const GAP = 13;
+    const crownAt = 20 + towers.length * GAP + 22;
 
     // The trunk: the shaft of light the place already had.
     const beam = lightColumn(6, crownAt + 50, OWN);
@@ -720,16 +720,25 @@ export function makeBuilders(THREE: Three, label: Label) {
       };
     };
 
-    const branch = (tower: Tower, order: number, height: number, turn: number, colour: string, bright: boolean) => {
-      const reach = 24 + shadeFor(tower, tallest) * 30;
+    const branch = (
+      trunk: ThreeTypes.Vector3,
+      tower: Tower,
+      order: number,
+      height: number,
+      turn: number,
+      colour: string,
+      bright: boolean,
+    ) => {
+      const reach = 26 + shadeFor(tower, tallest) * 26;
       const out = new THREE.Vector3(Math.sin(turn), 0, Math.cos(turn));
       const across = new THREE.Vector3(out.z, 0, -out.x);
-      const root = new THREE.Vector3(0, height, 0);
+      const root = new THREE.Vector3(trunk.x, height, trunk.z);
       const elbow = root.clone().addScaledVector(out, reach * 0.6);
       const tip = elbow.clone().addScaledVector(out, reach * 0.4).setY(height + reach * 0.3);
       const main = trace([root, elbow, tip], 0.5, colour);
 
-      const twigs = [0.34, 0.62].map((along, k) => {
+      // A matched pair of twigs, one each side, at the same point on every branch.
+      const twigs = [0.55, 0.55].map((along, k) => {
         const from = root.clone().lerp(elbow, along);
         const side = k === 0 ? 1 : -1;
         const mid = from.clone().addScaledVector(across, side * reach * 0.16);
@@ -753,8 +762,8 @@ export function makeBuilders(THREE: Three, label: Label) {
       return (eased: number, count: number, phase: number) => {
         const grown = stage(eased, order + 1, count + 2);
         main(grown * 1.25);
-        twigs.forEach((twig, k) => {
-          const mine = Math.max(0, Math.min(1, (grown - 0.35 - k * 0.2) / 0.4));
+        twigs.forEach((twig) => {
+          const mine = Math.max(0, Math.min(1, (grown - 0.4) / 0.4));
           twig.grow(mine);
           twig.bud.scale.setScalar(Math.max(0.001, mine));
         });
@@ -765,13 +774,36 @@ export function makeBuilders(THREE: Three, label: Label) {
       };
     };
 
+    // Order is what makes it readable: longest-served lowest, so the tree tapers
+    // upward, and the branches stepped evenly round the trunk, never crowding.
     const first = [...towers].sort((a, b) => b.years - a.years);
     const branches = first.map((tower, index) =>
-      branch(tower, index, 20 + index * GAP, index * 2.399, tower.fresh ? NEW_GLOW : OWN, Boolean(tower.fresh)),
+      branch(
+        new THREE.Vector3(0, 0, 0),
+        tower,
+        index,
+        20 + index * GAP,
+        (index / Math.max(1, first.length)) * Math.PI * 2,
+        tower.fresh ? NEW_GLOW : OWN,
+        Boolean(tower.fresh),
+      ),
     );
-    // The second growth comes in between the first, half a step up and round the other way.
-    const laterBranches = later.map((tower, index) =>
-      branch(tower, index, 20 + GAP / 2 + index * GAP, index * 2.399 + Math.PI * 0.62, LATER, true),
+
+    // Coming back, the studio doesn't graft onto the old tree: a second one
+    // grows beside it, in its own colour, for what is new since.
+    const SECOND = new THREE.Vector3(74, 0, 0);
+    const sapling = lightColumn(4.5, 20 + later.length * GAP + 40, LATER);
+    sapling.position.x = SECOND.x;
+    group.add(sapling);
+    const saplingBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(12, 15, 4, 6),
+      new THREE.MeshStandardMaterial({ color: "#1a120c", metalness: 0.7, roughness: 0.25, flatShading: true }),
+    );
+    saplingBase.position.set(SECOND.x, 2, 0);
+    group.add(saplingBase);
+    const laterSorted = [...later].sort((a, b) => b.years - a.years);
+    const laterBranches = laterSorted.map((tower, index) =>
+      branch(SECOND, tower, index, 16 + index * GAP, (index / Math.max(1, laterSorted.length)) * Math.PI * 2 + 0.4, LATER, true),
     );
 
     const shards = Array.from({ length: 10 }, (_, k) => {
@@ -785,7 +817,8 @@ export function makeBuilders(THREE: Three, label: Label) {
     return {
       group,
       top: crownAt + 8,
-      reach: 64,
+      // Room for the second tree, which stands to one side on the return.
+      reach: later.length > 0 ? 104 : 64,
       grow(eased, phase) {
         const base = Math.max(0.001, stage(eased, 0, 6));
         plinth.scale.set(base, 1, base);
@@ -797,6 +830,8 @@ export function makeBuilders(THREE: Three, label: Label) {
         (core.material as ThreeTypes.MeshBasicMaterial).opacity = on * 0.7 * flicker;
         branches.forEach((grow) => grow(eased, branches.length, phase));
         laterBranches.forEach((grow) => grow(0, laterBranches.length, phase));
+        (sapling.material as ThreeTypes.MeshBasicMaterial).opacity = 0;
+        saplingBase.scale.setScalar(0.001);
         shards.forEach((entry, k) => {
           const angle = phase * entry.speed + k;
           entry.shard.position.set(Math.cos(angle) * entry.radius, entry.height * on, Math.sin(angle) * entry.radius);
@@ -807,8 +842,8 @@ export function makeBuilders(THREE: Three, label: Label) {
       },
       growLater(eased, phase) {
         laterBranches.forEach((grow) => grow(eased, laterBranches.length, phase));
-        (beam.material as ThreeTypes.MeshBasicMaterial).opacity = 0.3 + eased * 0.2;
-        (core.material as ThreeTypes.MeshBasicMaterial).opacity = 0.7 + eased * 0.25;
+        (sapling.material as ThreeTypes.MeshBasicMaterial).opacity = stage(eased, 0, 3) * 0.4;
+        saplingBase.scale.setScalar(Math.max(0.001, stage(eased, 0, 4)));
       },
     };
   };
@@ -1379,17 +1414,17 @@ export function makeBuilders(THREE: Three, label: Label) {
     return wheel;
   };
 
-  /** What each place stands on: which maker's wheels, how many, and what is cut into them. */
+  /** What each place stands on: one maker's wheels — a place is all of one material — how many, and what is cut into them. */
   const PLATFORMS: Record<string, { wheels: Stuff[]; code: [string, string] }> = {
-    earthlink: { wheels: ["wood", "iron"], code: ['<html><body bgcolor="#ffffff">', '<a href="http://www.earthlink.net">'] },
-    hostpro: { wheels: ["iron", "wood", "iron"], code: ['<table cellpadding="0" cellspacing="0">', "body { font: 12px Arial, sans-serif }"] },
-    stormscape: { wheels: ["rock", "gold", "iron"], code: ["<?php echo $row['title']; ?>", "SELECT * FROM clients WHERE active = 1"] },
-    unitedlayer: { wheels: ["iron", "glass"], code: ["<?php include 'header.php'; ?>", "service httpd restart && tail -f access_log"] },
-    murad: { wheels: ["gold", "glass", "gold"], code: ["$('#cart').fadeIn('slow');", ".product { float: left; margin: 0 12px }"] },
-    "capital-group": { wheels: ["rock", "gold", "rock", "iron"], code: ["document.getElementById('nav')", '<div class="fund-table">  #nav li a:hover'] },
-    boingo: { wheels: ["glass", "iron", "glass"], code: ["$.ajax({ url: '/api/venues', type: 'GET' });", "SELECT ssid FROM hotspots WHERE venue_id = ?"] },
-    rpa: { wheels: ["wood", "gold", "glass", "wood"], code: ['const Hero = () => <section className="hero" />;', "@include breakpoint(md) { .grid { display: grid } }"] },
-    investcloud: { wheels: ["gold", "glass", "iron", "gold"], code: ["export class GridComponent implements OnInit { }", "public async Task<IActionResult> Get() => Ok(await repo.All());"] },
+    earthlink: { wheels: ["wood", "wood"], code: ['<html><body bgcolor="#ffffff">', '<a href="http://www.earthlink.net">'] },
+    hostpro: { wheels: ["iron", "iron", "iron"], code: ['<table cellpadding="0" cellspacing="0">', "body { font: 12px Arial, sans-serif }"] },
+    stormscape: { wheels: ["rock", "rock", "rock"], code: ["<?php echo $row['title']; ?>", "SELECT * FROM clients WHERE active = 1"] },
+    unitedlayer: { wheels: ["iron", "iron"], code: ["<?php include 'header.php'; ?>", "service httpd restart && tail -f access_log"] },
+    murad: { wheels: ["gold", "gold", "gold"], code: ["$('#cart').fadeIn('slow');", ".product { float: left; margin: 0 12px }"] },
+    "capital-group": { wheels: ["rock", "rock", "rock", "rock"], code: ["document.getElementById('nav')", '<div class="fund-table">  #nav li a:hover'] },
+    boingo: { wheels: ["glass", "glass", "glass"], code: ["$.ajax({ url: '/api/venues', type: 'GET' });", "SELECT ssid FROM hotspots WHERE venue_id = ?"] },
+    rpa: { wheels: ["wood", "wood", "wood", "wood"], code: ['const Hero = () => <section className="hero" />;', "@include breakpoint(md) { .grid { display: grid } }"] },
+    investcloud: { wheels: ["gold", "gold", "gold", "gold"], code: ["export class GridComponent implements OnInit { }", "public async Task<IActionResult> Get() => Ok(await repo.All());"] },
   };
 
   /** The clockwork each place stands on: two, three or four meshed wheels, turned by the build. */
