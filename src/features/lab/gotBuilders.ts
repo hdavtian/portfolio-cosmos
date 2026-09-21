@@ -36,6 +36,19 @@ export interface Build {
   grow: (eased: number, phase: number, focus: number) => void;
   /** A second visit: the same place takes on what is new since. */
   growLater?: (eased: number, phase: number, focus: number) => void;
+  /** How tall and how wide it stands once built, floating title included, so a camera can frame all of it. */
+  top: number;
+  reach: number;
+}
+
+/** What a builder is told about the place it is building. */
+export interface Place {
+  /** The company name, flown in a ring of light over the structure. */
+  title: string;
+  /** The place's accent colour, from the portfolio's cores where there is one. */
+  accent: string;
+  /** Which house's sigil to use. */
+  house: string;
 }
 
 type Three = typeof ThreeTypes;
@@ -268,6 +281,23 @@ export function makeBuilders(THREE: Three, label: Label) {
     return mesh;
   };
 
+  /**
+   * Every place is crowned the same way: a shaft of light in its own colour,
+   * and its name going round above it in letters of light.
+   */
+  const crowned = (group: ThreeTypes.Group, place: Place, at: number, radius = 30) => {
+    const shaft = lightColumn(3, at + 64, place.accent);
+    group.add(shaft);
+    const crown = glyphRing(radius, 8.5, place.title, place.accent);
+    group.add(crown);
+    return (lit: number, phase: number) => {
+      (shaft.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.36;
+      crown.position.y = at * (0.4 + 0.6 * lit);
+      crown.rotation.y = -phase * 0.3;
+      (crown.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.92;
+    };
+  };
+
   /** A heraldic emblem, painted: enamel field, gold rims, a charge, and the house's letters. */
   const emblem = (letters: string, field: string, second: string) =>
     painted((ctx, size) => {
@@ -337,9 +367,9 @@ export function makeBuilders(THREE: Three, label: Label) {
   /* ------------------------------------------------------------------ */
   /* A. The instrument: Earthlink's beacon                                */
 
-  const beacon = (towers: Tower[], tallest: number): Build => {
+  const beacon = (towers: Tower[], tallest: number, _later: Tower[] | undefined, place: Place): Build => {
     const group = new THREE.Group();
-    const OWN = "#ff8a24";
+    const OWN = place.accent;
 
     const drum = new THREE.Mesh(new THREE.CylinderGeometry(30, 33, 6, 40), skin("bronze", 0.3));
     drum.position.y = 3;
@@ -401,12 +431,18 @@ export function makeBuilders(THREE: Three, label: Label) {
       return ring;
     });
 
+    const crownAt = top + 40;
+    const crown = crowned(group, place, crownAt, 26);
+
     return {
       group,
+      top: crownAt + 8,
+      reach: 46,
       grow(eased, phase) {
         const base = Math.max(0.001, stage(eased, 0, 6));
         drum.scale.set(base, 1, base);
         columnHolder.scale.y = Math.max(0.001, stage(eased, 0, 4));
+        crown(stage(eased, bands.length + 1, bands.length + 2), phase);
 
         bands.forEach((band, index) => {
           const grown = stage(eased, index + 1, bands.length + 2);
@@ -435,30 +471,32 @@ export function makeBuilders(THREE: Three, label: Label) {
   /* ------------------------------------------------------------------ */
   /* B. The sigil: HostPro's standard                                     */
 
-  const standard = (towers: Tower[], tallest: number, _later: Tower[] | undefined, house = "hostpro"): Build => {
+  const standard = (towers: Tower[], tallest: number, _later: Tower[] | undefined, place: Place): Build => {
     const group = new THREE.Group();
     const turntable = new THREE.Group();
     group.add(turntable);
-    const [letters, field, second] = HOUSES[house] ?? HOUSES.hostpro;
+    const [letters, field, second] = HOUSES[place.house] ?? HOUSES.hostpro;
 
     // The shield, in eight leaves that fan open.
-    const SHIELD = 26;
+    const SHIELD = 24;
     const face = emblem(letters, field, second);
     const shield = new THREE.Group();
-    shield.position.y = SHIELD + 9;
-    shield.rotation.x = -0.32;
+    shield.position.y = SHIELD + 10;
+    // Leant back a little, so it is never seen dead edge-on as it turns.
+    shield.rotation.x = -0.35;
     const leaves = Array.from({ length: 8 }, (_, k) => {
+      const leafMaterial = new THREE.MeshStandardMaterial({
+        map: face,
+        emissive: new THREE.Color("#ffffff"),
+        emissiveMap: face,
+        emissiveIntensity: 0.24,
+        metalness: 0.55,
+        roughness: 0.45,
+        side: THREE.DoubleSide,
+      });
       const leaf = new THREE.Mesh(
         new THREE.CircleGeometry(SHIELD, 12, (k / 8) * Math.PI * 2, Math.PI / 4 + 0.002),
-        new THREE.MeshStandardMaterial({
-          map: face,
-          emissive: new THREE.Color("#ffffff"),
-          emissiveMap: face,
-          emissiveIntensity: 0.22,
-          metalness: 0.55,
-          roughness: 0.45,
-          side: THREE.DoubleSide,
-        }),
+        leafMaterial,
       );
       shield.add(leaf);
       return leaf;
@@ -466,83 +504,131 @@ export function makeBuilders(THREE: Three, label: Label) {
     const rim = new THREE.Mesh(new THREE.TorusGeometry(SHIELD, 1.3, 8, 72), skin("bronze", 0.8));
     shield.add(rim);
     turntable.add(shield);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 2.4, SHIELD + 10, 8), skin("bronze", 0.4));
+    post.position.y = (SHIELD + 10) / 2;
+    const postHolder = new THREE.Group();
+    postHolder.add(post);
+    turntable.add(postHolder);
 
-    const stand = new THREE.Group();
-    [-1, 1].forEach((sideOf) => {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.7, SHIELD + 12, 8), skin("bronze", 0.4));
-      leg.position.set(sideOf * 12, (SHIELD + 12) / 2, -7);
-      leg.rotation.z = sideOf * -0.16;
-      stand.add(leg);
-    });
-    turntable.add(stand);
+    // A tabard's cloth: the skill written down it in letters that glow — gold
+    // for one learned here, the house's colour for one carried further —
+    // the same rule the engraved bands follow everywhere else.
+    const tabard = (tower: Tower, width: number, drop: number, index: number) => {
+      const W = 256;
+      const H = Math.round((W * drop) / width);
+      const draw = (paint: (ctx: CanvasRenderingContext2D) => void, srgb: boolean) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext("2d")!;
+        paint(ctx);
+        const texture = new THREE.CanvasTexture(canvas);
+        if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 8;
+        return texture;
+      };
+      const write = (ctx: CanvasRenderingContext2D) => {
+        ctx.save();
+        ctx.translate(W / 2, H / 2);
+        ctx.rotate(Math.PI / 2);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = '700 120px "Cinzel", Georgia, serif';
+        ctx.letterSpacing = "6px";
+        ctx.fillText(tower.name.toUpperCase(), 0, 8, H - 90);
+        ctx.restore();
+      };
+      const cloth = draw((ctx) => {
+        ctx.fillStyle = index % 2 === 0 ? field : second;
+        ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = "#d9b25a";
+        ctx.lineWidth = 12;
+        ctx.strokeRect(12, 12, W - 24, H - 24);
+        // A swallow-tail cut into the hem.
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.moveTo(0, H);
+        ctx.lineTo(W / 2, H - 46);
+        ctx.lineTo(W, H);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "rgba(20, 10, 2, 0.55)";
+        write(ctx);
+      }, true);
+      const glow = draw((ctx) => {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = "#fff";
+        ctx.shadowColor = "#fff";
+        ctx.shadowBlur = 6;
+        write(ctx);
+      }, false);
+      return new THREE.MeshStandardMaterial({
+        map: cloth,
+        emissive: new THREE.Color(glowFor(tower, place.accent)),
+        emissiveMap: glow,
+        emissiveIntensity: 1.6,
+        roughness: 0.92,
+      });
+    };
 
-    // The skills, flown as banners in an arc behind it: longest standing tallest.
-    const cloths = ["#7a1f26", "#1f3564"];
+    // The skills, flown in a ring round the shield and facing out, so they can
+    // be read from wherever the camera is. Longest served hangs longest.
+    const RING = 46;
     const banners = towers.map((tower, index) => {
-      const drop = 22 + shadeFor(tower, tallest) * 28;
+      const drop = 34 + shadeFor(tower, tallest) * 30;
+      const width = 18;
       const holder = new THREE.Group();
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.75, drop + 12, 8), skin("timber", 0.7));
-      pole.position.y = (drop + 12) / 2;
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, drop + 14, 8), skin("timber", 0.7));
+      pole.position.y = (drop + 14) / 2;
       holder.add(pole);
-      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 12, 6), skin("bronze", 0.7));
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, width + 3, 6), skin("bronze", 0.7));
       bar.rotation.z = Math.PI / 2;
-      bar.position.y = drop + 10;
+      bar.position.y = drop + 12;
       holder.add(bar);
 
-      const cloth = new THREE.Mesh(
-        new THREE.PlaneGeometry(10.5, drop, 1, 8),
-        new THREE.MeshStandardMaterial({
-          map: painted((ctx, size) => {
-            ctx.fillStyle = tower.fresh ? "#8a6a1e" : cloths[index % 2];
-            ctx.fillRect(0, 0, size, size);
-            ctx.strokeStyle = "#d9b25a";
-            ctx.lineWidth = 10;
-            ctx.strokeRect(10, 10, size - 20, size - 20);
-            // The name runs down the cloth.
-            ctx.save();
-            ctx.translate(size / 2, size / 2);
-            ctx.rotate(Math.PI / 2);
-            ctx.fillStyle = tower.fresh ? "#fff3cf" : "#f1dca6";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.font = '700 96px "Cinzel", Georgia, serif';
-            ctx.fillText(tower.name.toUpperCase(), 0, 6, size - 70);
-            ctx.restore();
-          }, 512),
-          emissive: new THREE.Color(tower.fresh ? "#6a4a10" : "#000000"),
-          emissiveIntensity: tower.fresh ? 0.6 : 0,
-          roughness: 0.9,
-          side: THREE.DoubleSide,
-        }),
-      );
-      // Hung from its top edge, so it unfurls downward.
-      cloth.geometry.translate(0, -drop / 2, 0);
-      cloth.position.y = drop + 9.4;
-      holder.add(cloth);
+      // Two cloths back to back, so the lettering reads from either side.
+      const material = tabard(tower, width, drop, index);
+      const hang = new THREE.Group();
+      hang.position.y = drop + 11.4;
+      [0, Math.PI].forEach((turn) => {
+        const cloth = new THREE.Mesh(new THREE.PlaneGeometry(width, drop), material);
+        cloth.geometry.translate(0, -drop / 2, 0);
+        cloth.rotation.y = turn;
+        cloth.position.z = turn === 0 ? 0.12 : -0.12;
+        hang.add(cloth);
+      });
+      holder.add(hang);
+
       if (tower.fresh) {
         const finial = new THREE.Mesh(
-          new THREE.OctahedronGeometry(1.9, 0),
+          new THREE.OctahedronGeometry(2, 0),
           new THREE.MeshStandardMaterial({ color: "#ffd27a", emissive: "#ffb433", emissiveIntensity: 0.9, metalness: 0.9, roughness: 0.25 }),
         );
-        finial.position.y = drop + 14;
+        finial.position.y = drop + 16.5;
         holder.add(finial);
       }
 
-      const spread = Math.min(2.5, 0.42 * Math.max(1, towers.length - 1));
-      const angle = Math.PI + (towers.length === 1 ? 0 : (index / (towers.length - 1) - 0.5) * spread);
-      holder.position.set(Math.sin(angle) * 38, 0, Math.cos(angle) * 38);
-      holder.rotation.y = angle + Math.PI;
+      const angle = (index / towers.length) * Math.PI * 2;
+      holder.position.set(Math.sin(angle) * RING, 0, Math.cos(angle) * RING);
+      holder.rotation.y = angle;
       turntable.add(holder);
-      return { holder, cloth };
+      return { holder, hang };
     });
+
+    const crownAt = 104;
+    const crown = crowned(group, place, crownAt, 32);
 
     return {
       group,
+      top: crownAt + 8,
+      reach: RING + 12,
       grow(eased, phase) {
-        turntable.rotation.y = phase * 0.16;
-        stand.scale.y = Math.max(0.001, stage(eased, 0, 5));
+        turntable.rotation.y = phase * 0.12;
+        postHolder.scale.y = Math.max(0.001, stage(eased, 0, 5));
         const open = stage(eased, 1, 5);
         rim.scale.setScalar(Math.max(0.001, open));
+        shield.rotation.y = phase * 0.2;
         leaves.forEach((leaf, k) => {
           const mine = Math.max(0.001, Math.min(1, open * 1.6 - (k / 8) * 0.6));
           leaf.scale.setScalar(mine);
@@ -550,10 +636,13 @@ export function makeBuilders(THREE: Three, label: Label) {
         });
         banners.forEach((banner, index) => {
           const grown = stage(eased, index + 2, banners.length + 3);
+          // Nothing of a tabard shows before its turn, finial included.
+          banner.holder.visible = grown > 0.004;
           banner.holder.scale.y = Math.max(0.001, Math.min(1, grown * 2));
-          banner.cloth.scale.y = Math.max(0.001, Math.max(0, grown * 2 - 1));
-          banner.cloth.rotation.x = Math.sin(phase * 1.8 + index) * 0.05 * grown;
+          banner.hang.scale.y = Math.max(0.001, Math.max(0, grown * 2 - 1));
+          banner.hang.rotation.x = Math.sin(phase * 1.8 + index) * 0.04 * grown;
         });
+        crown(stage(eased, banners.length + 2, banners.length + 3), phase);
       },
     };
   };
@@ -561,9 +650,9 @@ export function makeBuilders(THREE: Three, label: Label) {
   /* ------------------------------------------------------------------ */
   /* C. The monument: StormScape's column of light                        */
 
-  const monument = (towers: Tower[], tallest: number, later: Tower[] = []): Build => {
+  const monument = (towers: Tower[], tallest: number, later: Tower[] = [], place: Place): Build => {
     const group = new THREE.Group();
-    const OWN = "#7fc8ff";
+    const OWN = place.accent;
 
     const plinth = new THREE.Mesh(
       new THREE.CylinderGeometry(21, 26, 6, 6),
@@ -578,7 +667,7 @@ export function makeBuilders(THREE: Three, label: Label) {
     seams.position.y = 3;
     group.add(seams);
 
-    const beam = lightColumn(7, 170, "#9fd4ff");
+    const beam = lightColumn(7, 170, place.accent);
     beam.position.y += 6;
     group.add(beam);
     const core = lightColumn(2.2, 190, "#ffffff");
@@ -616,12 +705,18 @@ export function makeBuilders(THREE: Three, label: Label) {
       });
     };
 
+    const crownAt = 16 + (towers.length + later.length) * 11.5 + 16;
+    const crown = crowned(group, place, crownAt, 34);
+
     return {
       group,
+      top: crownAt + 8,
+      reach: 46,
       grow(eased, phase) {
         const base = Math.max(0.001, stage(eased, 0, 6));
         plinth.scale.set(base, 1, base);
         seams.scale.set(base, 1, base);
+        crown(stage(eased, 1, 3), phase);
         const lit = stage(eased, 0, 3);
         // A storm's light: never quite steady.
         const flicker = 0.85 + 0.15 * Math.sin(phase * 9) * Math.sin(phase * 2.3);
@@ -652,10 +747,11 @@ export function makeBuilders(THREE: Three, label: Label) {
   type Works = "rotors" | "orrery" | "engine";
 
   const combined =
-    (works: Works, house: string, own: string) =>
-    (towers: Tower[], tallest: number): Build => {
+    (works: Works) =>
+    (towers: Tower[], tallest: number, _later: Tower[] | undefined, place: Place): Build => {
       const group = new THREE.Group();
-      const [letters, field, second] = HOUSES[house] ?? HOUSES.hostpro;
+      const own = place.accent;
+      const [letters, field, second] = HOUSES[place.house] ?? HOUSES.hostpro;
       const sorted = [...towers].sort((a, b) => b.years - a.years);
 
       // B: the house's sigil, laid into the floor the machine stands on.
@@ -674,12 +770,6 @@ export function makeBuilders(THREE: Three, label: Label) {
       floor.rotation.x = -Math.PI / 2;
       floor.position.y = 0.4;
       group.add(floor);
-
-      // C: light for a crown — a shaft, and the house's name going round it.
-      const shaft = lightColumn(3, 150, own);
-      group.add(shaft);
-      const crown = glyphRing(30, 8, house.replace("-", " "), own);
-      group.add(crown);
 
       // A: the machine itself. Its fixed parts go in one frame that rises with
       // the build, so nothing stands on the map before its turn.
@@ -786,8 +876,13 @@ export function makeBuilders(THREE: Three, label: Label) {
         crownAt = 84;
       }
 
+      // C: light for a crown.
+      const crown = crowned(group, place, crownAt, 30);
+
       return {
         group,
+        top: crownAt + 8,
+        reach: works === "rotors" ? Math.max(48, sorted.length * 7 + 14) : 50,
         grow(eased, phase) {
           const laid = Math.max(0.001, stage(eased, 0, 6));
           fixed.scale.setScalar(laid);
@@ -796,25 +891,18 @@ export function makeBuilders(THREE: Three, label: Label) {
           floor.scale.setScalar(laid);
           floor.rotation.z = (1 - laid) * 2;
           moving.forEach((move, index) => move(stage(eased, index + 1, moving.length + 3), phase));
-          const lit = stage(eased, moving.length + 1, moving.length + 3);
-          (shaft.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.36;
-          crown.position.y = crownAt * (0.4 + 0.6 * lit);
-          crown.rotation.y = -phase * 0.3;
-          (crown.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.9;
+          crown(stage(eased, moving.length + 1, moving.length + 3), phase);
         },
       };
     };
 
-  const byKind: Record<string, (towers: Tower[], tallest: number, later?: Tower[]) => Build> = {
+  const byKind: Record<string, (towers: Tower[], tallest: number, later: Tower[] | undefined, place: Place) => Build> = {
     beacon,
     standard,
     monument,
-    "rotors-unitedlayer": combined("rotors", "unitedlayer", "#8fe0d8"),
-    "orrery-murad": combined("orrery", "murad", "#d9a8ff"),
-    "engine-capital": combined("engine", "capital-group", "#8fb8ff"),
-    "orrery-boingo": combined("orrery", "boingo", "#ffb266"),
-    "rotors-rpa": combined("rotors", "rpa", "#ff9db4"),
-    "engine-investcloud": combined("engine", "investcloud", "#8ff0c0"),
+    rotors: combined("rotors"),
+    orrery: combined("orrery"),
+    engine: combined("engine"),
   };
 
   /** The clockwork each place stands on: a pair of meshed gears turned by the build. */
@@ -855,12 +943,12 @@ export const KIND_BY_PLACE: Record<string, string> = {
   earthlink: "beacon",
   hostpro: "standard",
   stormscape: "monument",
-  unitedlayer: "rotors-unitedlayer",
-  murad: "orrery-murad",
-  "capital-group": "engine-capital",
-  boingo: "orrery-boingo",
-  rpa: "rotors-rpa",
-  investcloud: "engine-investcloud",
+  unitedlayer: "rotors",
+  murad: "orrery",
+  "capital-group": "engine",
+  boingo: "orrery",
+  rpa: "rotors",
+  investcloud: "engine",
   "stormscape-now": "monument",
 };
 

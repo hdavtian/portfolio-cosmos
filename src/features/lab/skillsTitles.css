@@ -664,6 +664,8 @@
   letter-spacing: 0.16em;
   text-transform: uppercase;
   cursor: pointer;
+  /* Always on top: it must work at every moment of the film. */
+  z-index: 6;
 }
 
 .titles__toggle:hover,
@@ -674,6 +676,7 @@
 
 .tally {
   top: clamp(50px, 9vh, 86px);
+  z-index: 5;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.5s ease;

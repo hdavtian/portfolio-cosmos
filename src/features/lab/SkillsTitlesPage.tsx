@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as ThreeTypes from "three";
 import resume from "../../data/resume.json";
+import { usePortfolioCoresQuery } from "../../lib/query/contentQueries";
 import { useShowcaseProjects } from "../showcase/lib/useShowcaseProjects";
 import { makeAstrolabe } from "./gotAstrolabe";
 import { Link } from "react-router-dom";
@@ -62,6 +63,23 @@ interface City {
 }
 
 const PIECE_LIMIT = 9;
+
+/**
+ * A place's colour comes from its core in the portfolio (Admin → Cores), so
+ * the two sites agree. These stand in for any job that has no core yet.
+ */
+const ACCENT_FALLBACK: Record<string, string> = {
+  earthlink: "#ff9a3c",
+  hostpro: "#ff6a6a",
+  stormscape: "#5ED9FF",
+  unitedlayer: "#8fe0d8",
+  murad: "#ff9cfc",
+  "capital-group": "#8fb8ff",
+  boingo: "#FF6B35",
+  rpa: "#1EFAA2",
+  investcloud: "#FFD65C",
+};
+const plain = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 // Hidden for now rather than deleted: Harma is still deciding on these. Ask
 // before removing them; put them back when the title or the card comes up again.
@@ -135,7 +153,7 @@ interface Segment {
 
 function buildTimeline(cities: City[]): Segment[] {
   const parts: Array<{ kind: SegmentKind; city: number; weight: number }> = [
-    { kind: "intro", city: 0, weight: 4.6 },
+    { kind: "intro", city: 0, weight: 7.2 },
   ];
   cities.forEach((city, index) => {
     if (index > 0) {
@@ -274,20 +292,22 @@ function experienceAt(cities: City[], fractions: number[]) {
     }
   });
 
-  const rows: ExperienceRow[] = categories
-    .filter((category) => byCategory.has(category.slug))
-    .map((category) => {
-      const row = byCategory.get(category.slug)!;
-      return {
-        slug: category.slug,
-        name: category.name,
-        years: unionYears(row.ranges),
-        hot: row.hot,
-        skills: [...row.skills.entries()]
-          .map(([name, ranges]) => ({ name, years: unionYears(ranges) }))
-          .sort((a, b) => b.years - a.years),
-      };
-    });
+  // Every discipline is always listed, at nought until the film reaches it, so
+  // the panel has something to say from the first frame.
+  const rows: ExperienceRow[] = categories.map((category) => {
+    const row = byCategory.get(category.slug);
+    return {
+      slug: category.slug,
+      name: category.name,
+      years: row ? unionYears(row.ranges) : 0,
+      hot: row?.hot ?? false,
+      skills: row
+        ? [...row.skills.entries()]
+            .map(([name, ranges]) => ({ name, years: unionYears(ranges) }))
+            .sort((a, b) => b.years - a.years)
+        : [],
+    };
+  });
 
   return { rows, career: unionYears(everything) };
 }
@@ -301,6 +321,24 @@ export function SkillsTitlesPage() {
   // "Since": the earliest year on any published project, so it follows the
   // portfolio rather than being typed in here.
   const { projects } = useShowcaseProjects();
+  const coresQuery = usePortfolioCoresQuery();
+  // One colour per place, keyed by place: a core whose name matches the company wins.
+  const accents = useMemo(() => {
+    const cores = coresQuery.data?.payload ?? [];
+    const found: Record<string, string> = {};
+    for (const city of cities) {
+      const home = cities[city.spot];
+      const key = plain(home.name);
+      const core = cores.find((entry) => {
+        const name = plain(entry.core);
+        return name.length > 2 && (key.startsWith(name) || name.startsWith(key));
+      });
+      found[city.slug] = core?.coreColor ?? ACCENT_FALLBACK[home.slug] ?? "#ffb266";
+    }
+    return found;
+  }, [cities, coresQuery.data]);
+  const accentsRef = useRef(accents);
+  const accentsKey = Object.values(accents).join("|");
   const since = useMemo(() => {
     const years = projects
       .map((project) => project.year)
@@ -334,9 +372,17 @@ export function SkillsTitlesPage() {
     return () => window.clearTimeout(settle);
   }, [progress]);
 
+  // Declared before the scene's effect, so the colours are in place when it builds.
+  useEffect(() => {
+    accentsRef.current = accents;
+  }, [accents]);
+
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    // A freshly built scene starts with its camera at the origin: cut to where
+    // the film is rather than flying there from nowhere.
+    snapRef.current = true;
     let disposed = false;
     let cleanup = () => {};
 
@@ -727,6 +773,7 @@ export function SkillsTitlesPage() {
             city.entries.slice(0, PIECE_LIMIT),
             tallest,
             laterCity?.entries.slice(0, PIECE_LIMIT),
+            { title: city.name, accent: accentsRef.current[city.slug] ?? "#ffb266", house: city.slug },
           );
           build.group.position.copy(at).add(new THREE.Vector3(0, 1.5, 0));
           scene.add(build.group);
@@ -795,6 +842,16 @@ export function SkillsTitlesPage() {
           return Math.atan2(before.x - here.x, before.z - here.z);
         };
 
+        // How far back the camera must stand to hold the whole structure —
+        // floating title included — with air above it, whatever the window's shape.
+        const fitDistance = (index: number) => {
+          const { top, reach } = placed[index].build;
+          const half = THREE.MathUtils.degToRad(camera.fov / 2);
+          const tall = (top * 1.34) / 2 / Math.tan(half);
+          const wide = (reach * 2.5) / 2 / (Math.tan(half) * Math.max(1, camera.aspect * 0.78));
+          return Math.max(tall, wide) * 1.08;
+        };
+
         const dwellPose = (
           index: number,
           t: number,
@@ -805,14 +862,19 @@ export function SkillsTitlesPage() {
           const here = placed[index].at;
           const e = softly(0, 1, t);
           const angle = arrival(index) + shot.sweep * e;
-          const radius = shot.r0 + (shot.r1 - shot.r0) * e;
-          const height = shot.h0 + (shot.h1 - shot.h0) * e;
+          // Every shot ends at the distance that frames the place whole; where
+          // it starts from, and how it rises or falls, is the shot's own.
+          const fit = fitDistance(index);
+          const distance = fit * (shot.r0 / shot.r1) + (fit - fit * (shot.r0 / shot.r1)) * e;
+          const pitch = Math.atan2(shot.h0 + (shot.h1 - shot.h0) * e, shot.r0 + (shot.r1 - shot.r0) * e);
+          const top = placed[index].build.top;
           eye.set(
-            here.x + Math.sin(angle) * radius,
-            here.y + height,
-            here.z + Math.cos(angle) * radius,
+            here.x + Math.sin(angle) * Math.cos(pitch) * distance,
+            here.y + top * 0.5 + Math.sin(pitch) * distance,
+            here.z + Math.cos(angle) * Math.cos(pitch) * distance,
           );
-          aim.set(here.x, here.y + shot.aim, here.z);
+          // Aim a little above the middle, so the air is at the top, clear of the text below.
+          aim.set(here.x, here.y + top * 0.56, here.z);
         };
 
         const fromEye = new THREE.Vector3();
@@ -822,11 +884,22 @@ export function SkillsTitlesPage() {
         const over = new THREE.Vector3();
         const WIDE_EYE = new THREE.Vector3(0, 1500, 2050);
         const WIDE_AIM = new THREE.Vector3(0, 0, -60);
-        const CLOSE_EYE = new THREE.Vector3(
-          SUN.x + 30,
-          SUN.y + 14,
-          SUN.z + 190,
-        );
+        // The opening, as fractions of the intro: the sun lights, each band is
+        // forged in turn (the second and third overlapping), a breath, and only
+        // then does the camera begin to move away.
+        const INTRO = {
+          sun: [0, 0.09],
+          bands: [
+            [0.1, 0.2],
+            [0.235, 0.335],
+            [0.3, 0.4],
+          ],
+          formed: 0.5,
+          easeBack: 0.68,
+          pullOut: 0.8,
+        };
+        const FORGE_EYE = new THREE.Vector3(SUN.x + 46, SUN.y + 34, SUN.z + 372);
+        const MID_EYE = new THREE.Vector3(SUN.x + 60, SUN.y + 44, SUN.z + 400);
         const NEAR_EYE = new THREE.Vector3(SUN.x + 38, SUN.y + 22, SUN.z + 236);
         const OPEN_EYE = new THREE.Vector3(SUN.x + 80, SUN.y + 70, SUN.z + 430);
 
@@ -862,14 +935,21 @@ export function SkillsTitlesPage() {
           if (segment.kind === "dwell") {
             dwellPose(segment.city, t, eye, aim);
           } else if (segment.kind === "intro") {
-            if (t < 0.44) {
-              // A slow ease back from the fire: barely moving, reading the name.
-              eye.lerpVectors(CLOSE_EYE, NEAR_EYE, softly(0, 1, t / 0.44));
+            if (t < INTRO.formed) {
+              // Stand off while the sun lights and the three bands are forged,
+              // creeping in a little so the frame is never dead.
+              eye.lerpVectors(FORGE_EYE, NEAR_EYE, softly(0, 1, t / INTRO.formed) * 0.5);
               aim.copy(SUN);
-            } else if (t < 0.62) {
-              // Then a quick pull out and round, until all three bands are in frame.
-              const out = softly(0, 1, (t - 0.44) / 0.18);
-              eye.lerpVectors(NEAR_EYE, OPEN_EYE, out);
+            } else if (t < INTRO.easeBack) {
+              // A slow ease back, reading the name.
+              const back = softly(0, 1, (t - INTRO.formed) / (INTRO.easeBack - INTRO.formed));
+              fromEye.lerpVectors(FORGE_EYE, NEAR_EYE, 0.5);
+              eye.lerpVectors(fromEye, MID_EYE, back);
+              aim.copy(SUN);
+            } else if (t < INTRO.pullOut) {
+              // Then a quick pull out and round.
+              const out = softly(0, 1, (t - INTRO.easeBack) / (INTRO.pullOut - INTRO.easeBack));
+              eye.lerpVectors(MID_EYE, OPEN_EYE, out);
               const swing = out * 0.8;
               const dx = eye.x - SUN.x;
               const dz = eye.z - SUN.z;
@@ -879,9 +959,9 @@ export function SkillsTitlesPage() {
               aim.copy(SUN);
             } else {
               // And straight off, fast, to where the career begins.
-              rawPose(segment.from + (segment.to - segment.from) * 0.6199, fromEye, fromAim);
+              rawPose(segment.from + (segment.to - segment.from) * (INTRO.pullOut - 0.0001), fromEye, fromAim);
               dwellPose(0, 0, toEye, toAim);
-              flight((t - 0.62) / 0.38, 60, eye, aim);
+              flight((t - INTRO.pullOut) / (1 - INTRO.pullOut), 60, eye, aim);
             }
           } else if (segment.kind === "travel") {
             dwellPose(segment.city - 1, 1, fromEye, fromAim);
@@ -1127,7 +1207,11 @@ export function SkillsTitlesPage() {
             0.00003 * Math.max(0.02, Math.min(1, (240 / reach) ** 1.6));
 
           // The sun burns on the clock, not the scrubber: it is the one living thing here.
-          astrolabe.update(clock.elapsedTime, camera);
+          const forging = segment.kind === "intro";
+          astrolabe.update(clock.elapsedTime, camera, {
+            sun: forging ? softly(INTRO.sun[0], INTRO.sun[1], t) : 1,
+            bands: INTRO.bands.map(([from, to]) => (forging ? softly(from, to, t) : 1)),
+          });
 
           placed.forEach((stop, index) => {
             const dwell = timeline.find(
@@ -1204,7 +1288,7 @@ export function SkillsTitlesPage() {
       disposed = true;
       cleanup();
     };
-  }, [cities, timeline]);
+  }, [accentsKey, cities, timeline]);
 
   // Where the film waits: the end of each place's turn, built and framed.
   const holds = useMemo(
@@ -1475,6 +1559,23 @@ export function SkillsTitlesPage() {
       </section>
 
       <div className="titles__scrub">
+        <button
+          type="button"
+          className={`titles__play${playing ? " is-on" : ""}`}
+          onClick={() => {
+            // One button that does the sensible thing: replay at the end, pause
+            // on the move, on to the next place from a stop, otherwise play.
+            if (progress >= 1) replay();
+            else if (playing) setPlaying(false);
+            else if (holding) goNext();
+            else {
+              setDirection(1);
+              setPlaying(true);
+            }
+          }}
+        >
+          {progress >= 1 ? "Replay" : playing ? "Pause" : "Play ▶"}
+        </button>
         <div className="titles__track">
           <input
             id="titles-scrubber"

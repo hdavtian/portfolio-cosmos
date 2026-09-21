@@ -79,7 +79,8 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
   const core = new THREE.Mesh(
     new THREE.SphereGeometry(CORE, 64, 64),
     new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 } },
+      uniforms: { uTime: { value: 0 }, uFade: { value: 1 } },
+      transparent: true,
       vertexShader: /* glsl */ `
         varying vec3 vPos;
         varying vec3 vNormal;
@@ -94,6 +95,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
       `,
       fragmentShader: /* glsl */ `
         uniform float uTime;
+        uniform float uFade;
         varying vec3 vPos;
         varying vec3 vNormal;
         varying vec3 vView;
@@ -114,7 +116,8 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
           // The limb burns hotter against the dark, the way a star does.
           float rim = pow(1.0 - max(0.0, dot(vNormal, vView)), 2.2);
           colour += vec3(1.0, 0.5, 0.12) * rim * 0.9;
-          gl_FragColor = vec4(colour * 0.98, 1.0);
+          // Lighting up: dull ember first, then the full fire.
+          gl_FragColor = vec4(colour * 0.98 * (0.25 + 0.75 * uFade), uFade);
         }
       `,
     }),
@@ -125,7 +128,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
   const corona = new THREE.Mesh(
     new THREE.PlaneGeometry(CORE * 9, CORE * 9),
     new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 } },
+      uniforms: { uTime: { value: 0 }, uFade: { value: 1 } },
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
@@ -138,6 +141,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
       `,
       fragmentShader: /* glsl */ `
         uniform float uTime;
+        uniform float uFade;
         varying vec2 vUv;
         ${NOISE}
         void main() {
@@ -153,7 +157,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
           float haze = exp(-r * 3.4) * 0.85 + exp(-r * 1.5) * 0.18;
           vec3 colour = vec3(1.0, 0.46, 0.08) * flame * 0.9 + vec3(1.0, 0.58, 0.2) * haze * 0.7;
           float alpha = clamp(flame + haze, 0.0, 1.0) * smoothstep(1.0, 0.72, r);
-          gl_FragColor = vec4(colour, alpha);
+          gl_FragColor = vec4(colour * uFade, alpha * uFade);
         }
       `,
     }),
@@ -307,19 +311,49 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
       emissiveIntensity: 1,
       side: THREE.DoubleSide,
     });
+    // Forging: everything past the sweep's leading edge is simply not drawn
+    // yet. The angle is taken from where the vertex is on the ring, so the
+    // band and its rails, which are different shapes, close together.
+    const reveal = { value: 1 };
+    const forged = (target: ThreeTypes.Material, across: "z" | "y") => {
+      target.onBeforeCompile = (shader) => {
+        shader.uniforms.uReveal = reveal;
+        shader.vertexShader = shader.vertexShader
+          .replace("#include <common>", "#include <common>\nvarying float vSweep;")
+          .replace(
+            "#include <begin_vertex>",
+            `#include <begin_vertex>\nvSweep = atan(position.x, position.${across}) / 6.28318530718 + 0.5;`,
+          );
+        shader.fragmentShader = shader.fragmentShader
+          .replace("#include <common>", "#include <common>\nvarying float vSweep;\nuniform float uReveal;")
+          .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\nif (vSweep > uReveal) discard;");
+      };
+    };
+    forged(material, "z");
     const band = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 128, 1, true), material);
     [1, -1].forEach((edge) => {
-      const rail = new THREE.Mesh(
-        new THREE.TorusGeometry(radius, 1.5, 8, 128),
-        new THREE.MeshStandardMaterial({ color: "#a37a30", metalness: 0.9, roughness: 0.32 }),
-      );
+      const railMaterial = new THREE.MeshStandardMaterial({ color: "#a37a30", metalness: 0.9, roughness: 0.32 });
+      forged(railMaterial, "y");
+      const rail = new THREE.Mesh(new THREE.TorusGeometry(radius, 1.5, 8, 128), railMaterial);
       rail.rotation.x = Math.PI / 2;
       rail.position.y = (edge * height) / 2;
       band.add(rail);
     });
+    const weld = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: (sparkCloud.material as ThreeTypes.PointsMaterial).map,
+        color: 0xfff1d0,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    weld.scale.set(height * 2.6, height * 2.6, 1);
+    band.add(weld);
     pivot.add(band);
     group.add(pivot);
-    return { band, pivot, material, tilt };
+    return { band, pivot, material, tilt, reveal, weld, radius, turned: 0 };
   };
 
   const CODE = '600 40px "JetBrains Mono", Menlo, Consolas, monospace';
@@ -363,24 +397,48 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
   group.add(light);
 
   const spot = new THREE.Vector3();
+  let lastTime = 0;
   return {
     group,
-    update(time: number, camera: ThreeTypes.Camera) {
+    update(
+      time: number,
+      camera: ThreeTypes.Camera,
+      formation: { sun: number; bands: number[] } = { sun: 1, bands: [1, 1, 1] },
+    ) {
+      const dt = Math.min(0.05, Math.max(0, time - lastTime));
+      lastTime = time;
+      (core.material as ThreeTypes.ShaderMaterial).uniforms.uFade.value = formation.sun;
+      (corona.material as ThreeTypes.ShaderMaterial).uniforms.uFade.value = formation.sun;
+      sparkCloud.visible = formation.sun > 0.6;
       (core.material as ThreeTypes.ShaderMaterial).uniforms.uTime.value = time;
       (corona.material as ThreeTypes.ShaderMaterial).uniforms.uTime.value = time;
       corona.quaternion.copy(camera.quaternion);
 
-      bands.forEach(({ band, material, speed, heat }, index) => {
-        band.rotation.y = time * speed;
+      bands.forEach((entry, index) => {
+        const { band, material, speed, heat, reveal, weld, radius } = entry;
+        const made = formation.bands[index] ?? 1;
+        reveal.value = made >= 0.999 ? 2 : made;
+        band.visible = made > 0.001;
+        // It only starts to turn once it has closed on itself.
+        if (made >= 0.999) entry.turned += speed * dt;
+        band.rotation.y = entry.turned;
+        // The point the metal is drawn from rides the leading edge, and goes out when the ring closes.
+        const edge = (made - 0.5) * Math.PI * 2;
+        weld.position.set(Math.sin(edge) * radius, 0, Math.cos(edge) * radius);
+        (weld.material as ThreeTypes.SpriteMaterial).opacity = made > 0.001 && made < 0.999 ? 1 : 0;
         // Lettering heat: a steady glow with a fast uneven flicker on top. The
         // name runs hottest and flickers hardest.
         const flicker =
           0.78 +
           0.14 * Math.sin(time * 31 + index * 5) * Math.sin(time * 7.7 + index) +
           0.08 * Math.sin(time * 53.3 + index * 1.7);
-        material.emissiveIntensity = heat * (index === 0 ? flicker + 0.18 * Math.random() : 0.9 + 0.1 * flicker);
+        // The lettering takes its heat as the band closes.
+        const lettered = Math.max(0, Math.min(1, (made - 0.55) / 0.45));
+        material.emissiveIntensity =
+          lettered * heat * (index === 0 ? flicker + 0.18 * Math.random() : 0.9 + 0.1 * flicker);
       });
 
+      spitCloud.visible = (formation.bands[0] ?? 1) >= 0.999;
       spits.forEach((spit, index) => {
         const life = (time * spit.speed + spit.offset) % 1;
         const radius = 74 + life * 16;
@@ -392,7 +450,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
       spitGeometry.attributes.position.needsUpdate = true;
       spitGeometry.attributes.color.needsUpdate = true;
 
-      light.intensity = 1.9 * (0.93 + 0.045 * Math.sin(time * 7.3) + 0.03 * Math.sin(time * 13.1 + 1.7));
+      light.intensity = formation.sun * 1.9 * (0.93 + 0.045 * Math.sin(time * 7.3) + 0.03 * Math.sin(time * 13.1 + 1.7));
 
       sparks.forEach((spark, index) => {
         const life = (time * spark.speed + spark.offset) % 1;
