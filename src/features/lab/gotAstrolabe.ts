@@ -363,7 +363,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
     // The trade, written out: what the browser reads…
     { ...makeBand(100, 30, engravings.markup, CODE, 3, [-0.5, 0.4, 1.05], 80, "#3aa2ff", "#a9c6e8"), speed: -0.25, heat: 1.5 },
     // …and what the server runs.
-    { ...makeBand(111, 26, engravings.languages, CODE, 3, [1.15, -0.3, -0.45], 96, "#ff9a2a", "#ffd9a6"), speed: 0.19, heat: 1.1 },
+    { ...makeBand(111, 26, engravings.languages, CODE, 3, [0.5, 0.25, -0.8], 96, "#ff9a2a", "#ffd9a6"), speed: 0.19, heat: 1.1 },
   ];
 
   // Embers spitting off the name as it turns: the sizzle.

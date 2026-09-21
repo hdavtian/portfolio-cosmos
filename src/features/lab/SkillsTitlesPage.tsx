@@ -892,7 +892,8 @@ export function SkillsTitlesPage() {
           bands: [
             [0.1, 0.2],
             [0.235, 0.335],
-            [0.3, 0.4],
+            // The third starts 30% of the way into the second: a 70% overlap.
+            [0.265, 0.365],
           ],
           formed: 0.5,
           easeBack: 0.68,
@@ -1397,6 +1398,21 @@ export function SkillsTitlesPage() {
         ? `${Math.round(cities[0].from)} – today`
         : yearsLabel(active);
   const stops = timeline.filter((entry) => entry.kind === "dwell");
+
+  // The opening is long, and on an honest bar it would push every place to
+  // the right. So the bar is drawn to its own scale — the opening gets a short
+  // stretch marked Start — while the film itself plays at exactly the speed it
+  // always did.
+  const introEnd = timeline[0].to;
+  const START_STRETCH = 0.055;
+  const toBar = (at: number) =>
+    at <= introEnd
+      ? (at / introEnd) * START_STRETCH
+      : START_STRETCH + ((at - introEnd) / (1 - introEnd)) * (1 - START_STRETCH);
+  const fromBar = (bar: number) =>
+    bar <= START_STRETCH
+      ? (bar / START_STRETCH) * introEnd
+      : introEnd + ((bar - START_STRETCH) / (1 - START_STRETCH)) * (1 - introEnd);
   const fresh = active.entries.filter((entry) => entry.fresh).slice(0, PIECE_LIMIT);
   const carried = active.entries.filter((entry) => !entry.fresh).slice(0, PIECE_LIMIT);
 
@@ -1583,33 +1599,37 @@ export function SkillsTitlesPage() {
             min={0}
             max={1}
             step={0.00002}
-            value={progress}
+            value={toBar(progress)}
             aria-label="Scrub the sequence"
             onChange={(event) => {
               setPlaying(false);
               setHolding(false);
               snapRef.current = true;
-              setProgress(Number(event.target.value));
-            }}
-            // Let go of the scrubber and the film carries on to the next place
-            // from there: with no play button, it must never be left stranded.
-            onPointerUp={() => {
-              setDirection(1);
-              setPlaying(true);
-            }}
-            onKeyUp={() => {
-              setDirection(1);
-              setPlaying(true);
+              setProgress(fromBar(Number(event.target.value)));
             }}
           />
           <div className="titles__stops">
+            <button
+              type="button"
+              className={`titles__stop${segment.kind === "intro" ? " is-on" : ""}`}
+              style={{ left: "0%" }}
+              title="The opening"
+              onClick={() => {
+                snapRef.current = true;
+                setPlaying(false);
+                setHolding(false);
+                setProgress(0);
+              }}
+            >
+              <span>Start</span>
+            </button>
             {stops.map((stop, index) => (
               <button
                 key={`${cities[stop.city].slug}-${stop.from}`}
                 type="button"
                 className={`titles__stop${stop === segment ? " is-on" : ""}`}
                 // The mark stands where the place is finished, not where it starts going up.
-                style={{ left: `${holds[index] * 100}%` }}
+                style={{ left: `${toBar(holds[index]) * 100}%` }}
                 title={`${cities[stop.city].name} · ${yearsLabel(cities[stop.city])}`}
                 onClick={() => {
                   snapRef.current = true;

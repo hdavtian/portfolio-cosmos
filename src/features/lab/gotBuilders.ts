@@ -823,10 +823,14 @@ export function makeBuilders(THREE: Three, label: Label) {
         post.position.y = 20;
         fixed.add(post);
         sorted.forEach((tower, index) => {
-          const radius = 14 + index * 6.5;
+          const radius = 14 + index * 7;
           const pivot = new THREE.Group();
           pivot.position.y = 40;
-          pivot.rotation.set(0.25 + index * 0.33, index * 0.8, (index % 2 === 0 ? 1 : -1) * 0.2);
+          // An ordered fan: every ring leans a fixed step further than the one
+          // inside it, about one shared axis, so they open like a gyroscope
+          // rather than lying at odds with each other.
+          const lean = sorted.length > 1 ? (index / (sorted.length - 1) - 0.5) * 1.7 : 0;
+          pivot.rotation.set(0, 0, lean);
           const ring = engravedBand(radius, 7.5, tower.name, glowFor(tower, own));
           pivot.add(ring);
           const world = new THREE.Mesh(new THREE.SphereGeometry(1.6 + shadeFor(tower, tallest) * 2.8, 16, 16), skin("bronze", 1));
@@ -835,7 +839,8 @@ export function makeBuilders(THREE: Three, label: Label) {
           group.add(pivot);
           moving.push((grown, phase) => {
             pivot.scale.setScalar(Math.max(0.001, grown));
-            ring.rotation.y = phase * (0.5 - index * 0.05) * (index % 2 === 0 ? 1 : -1);
+            // One speed, alternating direction, all starting from the same mark.
+            ring.rotation.y = phase * 0.42 * (index % 2 === 0 ? 1 : -1);
           });
         });
         crownAt = 96;
