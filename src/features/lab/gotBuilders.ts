@@ -954,9 +954,6 @@ export function makeBuilders(THREE: Three, label: Label) {
           const collar = engravedBand(7.4, 7, tower.name, glowFor(tower, own));
           collar.position.y = 3 + wheels * 5.2 + 3;
           holder.add(collar);
-          const tag = label(tower.name, Boolean(tower.fresh));
-          tag.position.set(holder.position.x * 1.25, 3 + wheels * 5.2 + 14, holder.position.z * 1.25);
-          group.add(tag);
           group.add(holder);
           moving.push((grown, phase) => {
             holder.scale.y = Math.max(0.001, grown);
@@ -964,7 +961,6 @@ export function makeBuilders(THREE: Three, label: Label) {
               wheel.rotation.y = phase * (k % 2 === 0 ? 0.9 : -0.7) * (1 + k * 0.1);
             });
             collar.rotation.y = phase * 0.4;
-            (tag.material as ThreeTypes.SpriteMaterial).opacity = Math.max(0, grown * 1.4 - 0.4);
           });
         });
         crownAt = 84;
