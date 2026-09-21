@@ -156,15 +156,53 @@ reverted alone.
 - **Size of `ResumeSpace3D.tsx`** (20,000+ lines). Edits are limited to the
   listed reads; no refactoring rides along.
 
-## 8. Open questions
+## 8. Data: backups and how new data reaches production
+
+**Backups taken 2026-09-21 before any work** (in `db-backups/`, not in git,
+never auto-deleted):
+
+- `prod-resume_cosmos-2026-09-21T20-16-51-493Z.archive.gz` (production Atlas, read-only dump)
+- `local-resume_cosmos_local-2026-09-21T20-16-49-830Z.archive.gz` (local Docker)
+
+The production dump was restored locally as `resume_cosmos_prodcopy` to prove it
+reads back, then compared with local record by record: **all 16 content
+collections are identical** (7 experiences, 18 skills, 5 categories, 27 tech
+stack nodes, 5 cores, 27 entries, 206 media records…). Production has one more
+release in its history and ten old API v1 documents that local lacks; neither is
+read by any site. Media *files* (Azure blob storage) were not backed up; see Q5.
+
+**Working rule.** Local starts equal to production. New data is added and tested
+locally only. Production is untouched until a stage ships.
+
+**Shipping a stage that changes data:**
+
+1. `npm run db:pull` — fresh production backup; confirm production content has
+   not changed since local was matched (if it has, bring those edits into local first).
+2. Deploy the code (it must read both old and new data shapes during the switch,
+   or code and data go together in a quiet moment).
+3. Schema changes are applied by a **migration script** that is run and tested
+   locally, committed, then run against production. It only adds or transforms
+   what it names; it never drops a collection. Old collections (Skills, Skill
+   Categories) are left in place until a later, separate clean-up Harma approves.
+4. Content entered locally goes up with the existing `npm run db:push-prod --
+   --yes` (backs up both sides first, replaces production's content collections
+   with local's) and `npm run media:push-prod -- --yes` for any new files.
+5. Publish, check the live sites against the screenshots, keep the backups.
+
+Every production write is confirmed with Harma first. Azure commands only after
+the subscription and tenant check.
+
+## 9. Open questions
 
 | # | Question | Leaning |
 |---|---|---|
 | Q1 | Earthlink and HostPro are in `resume.json` on this branch, so the cinematic site shows nine moons here. Until visibility ticks exist: take them back out of `resume.json` (the film reads its own mock anyway), or accept nine moons? | Take them out now; they return properly as Experiences with visibility ticks. |
 | Q2 | Should the cinematic site really start reading Experiences, Skills and the About deck from the API? It is the point of "one data", but it is a behaviour change. | Yes, after the stage 1 diff shows what would change. |
 | Q3 | Keep the one-off import script and its round-trip test, or retire them too once the database is the only source? | Retire after a final verified backup; the files stay in git history. |
+| Q5 | Also back up production media files (Azure blob storage, 206 files) before starting? It is a read-only download but needs an Azure sign-in check. Nothing planned deletes or replaces media. | Yes, once, for completeness. |
 | Q4 | Do this on `skills-timeline-lab` or a new branch off `main`? | New branch off `main`: it is independent of the film and should ship first. |
 
-## 9. Change log
+## 10. Change log
 
+- 2026-09-21: backups taken and verified; data workflow added (section 8).
 - 2026-09-21: draft 1.
