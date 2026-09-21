@@ -151,6 +151,11 @@ interface Segment {
   to: number;
 }
 
+// One unit of a segment's weight is this long on screen, so the film's running
+// time is the sum of its parts rather than a fixed length they have to share.
+const SECONDS_PER_WEIGHT = 3;
+let filmSeconds = 118;
+
 function buildTimeline(cities: City[]): Segment[] {
   const parts: Array<{ kind: SegmentKind; city: number; weight: number }> = [
     { kind: "intro", city: 0, weight: 7.2 },
@@ -164,8 +169,8 @@ function buildTimeline(cities: City[]): Segment[] {
       parts.push({
         kind: "travel",
         city: index,
-        // Between places the camera covers ground half as fast again as it did.
-        weight: (0.9 + distance / 1500) / 1.5,
+        // A hop between places is short: long enough to see the country go by, no longer.
+        weight: 0.4 + distance / 4200,
       });
     }
     parts.push({
@@ -177,6 +182,7 @@ function buildTimeline(cities: City[]): Segment[] {
   parts.push({ kind: "outro", city: cities.length - 1, weight: 1.9 });
 
   const total = parts.reduce((sum, part) => sum + part.weight, 0);
+  filmSeconds = total * SECONDS_PER_WEIGHT;
   let cursor = 0;
   return parts.map((part) => {
     const from = cursor;
@@ -915,8 +921,9 @@ export function SkillsTitlesPage() {
           eye: ThreeTypes.Vector3,
           aim: ThreeTypes.Vector3,
         ) => {
-          // Ease-out: away quickly, and a long gentle settle into the next place.
-          const e = 1 - (1 - t) ** 3.2;
+          // Ease-out (quart): most of the ground is covered in the first third, and
+          // the rest of the hop is a long gentle settle into the next place.
+          const e = 1 - (1 - t) ** 4;
           over.addVectors(fromEye, toEye).multiplyScalar(0.5);
           over.y = Math.max(fromEye.y, toEye.y) + lift;
           const a = (1 - e) * (1 - e);
@@ -992,7 +999,7 @@ export function SkillsTitlesPage() {
             rawPose(i / STEPS, eye, aim);
             track.set([eye.x, eye.y, eye.z, aim.x, aim.y, aim.z], i * 6);
           }
-          const radius = Math.round(STEPS * 0.009);
+          const radius = Math.round(STEPS * 0.0028);
           // The film stops dead at the end of every place, so the path is
           // smoothed in stretches between those stops and never across one:
           // where the camera waits is exactly where the shot was composed.
@@ -1190,6 +1197,8 @@ export function SkillsTitlesPage() {
           const t = within(segment, p);
 
           poseAt(p);
+          // Damping is a slow start by another name, so on a hop it is nearly off.
+          controls.smoothTime = segment.kind === "travel" ? 0.07 : 0.3;
           if (!holdingNow) {
             // On the move the scrubber places the camera and camera-controls
             // eases it there — from wherever it is, including wherever the
@@ -1312,7 +1321,7 @@ export function SkillsTitlesPage() {
     let last = performance.now();
     const tick = (now: number) => {
       // Going back is a rewind, so it runs three times as fast.
-      const step = ((now - last) / 118000) * (direction < 0 ? 3 : 1);
+      const step = ((now - last) / (filmSeconds * 1000)) * (direction < 0 ? 3 : 1);
       last = now;
       setProgress((current) => {
         const next = current + step * direction;
