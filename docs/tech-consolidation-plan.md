@@ -1,6 +1,6 @@
 # One technology list: consolidation plan
 
-**Status: DISCUSSION DRAFT 1 (2026-09-21). Nothing here is built. Do not implement until Harma marks it settled.**
+**Status: DISCUSSION DRAFT 2 (2026-09-21). Nothing here is built. Do not implement until Harma marks it settled.**
 
 Related: `docs/content-platform-plan.md`, `docs/d3-skills-graph.md`, the mock at
 `src/data/mock/skillTimeline.json` and its rules in `scripts/skills-report.mjs`.
@@ -62,32 +62,41 @@ unique content and stay as they are.
 |---|---|---|
 | D1 | Tech Stack becomes the single master list and absorbs Skills and Skill Categories. | 2026-09-21 |
 | D2 | Combined labels ("React + Redux") can go. The sites show a comma-separated list of the linked technologies instead. | 2026-09-21 |
+| D4 | One tree. Categories are its top-level entries, not a second tagging system. Sites choose to show it nested or flattened. | 2026-09-21 |
+| D5 | "Current stack" stays as an idea, as a simple tick on a technology; no start-year tooling. | 2026-09-21 |
+| D6 | No stored derived data. One set of source records, one published release; any reshaping (`toLegacy`, the tree, year totals) is computed when read and never saved or edited. If a calculation ever gets too heavy it moves into the publish step, still regenerated every time. | 2026-09-21 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
 
 ### 4.1 Technology (the master list; today's Tech Stack node, extended)
 
+**One tree, no separate categories (D4).** A category is simply a top-level
+entry of the tree. The data is one thing; the sites choose how to show it:
+the parent/child breakdown for a recruiter or HR reader, a flattened list of
+technologies on projects for a technical reader.
+
 | Field | Notes |
 |---|---|
 | `slug`, `sortOrder`, `name` | as today |
-| `parentSlug` | as today. A child is part of its parent (C# Web API inside C#): it adds detail, never its own years to a total. |
-| `categorySlugs[]` | zero or more categories. Replaces a skill's single category. |
-| `showOnResume` | the resume and the Skills planet show only ticked ones, so they keep showing today's 18. |
-| `resumeCategorySlug` | *open question Q2*: which single category it sits under on the resume, if it has several. |
+| `parentSlug` | as today. Years roll up the tree: a parent's time is the calendar time covered by itself and everything under it, never the sum. |
+| `current` | tick: part of the stack that is relevant today (D5). Replaces the mock's "Current stack" category and its start year. |
+| `showOnResume` | the resume and the Skills planet show only ticked ones, so they keep showing today's 18 under today's 5 headings. |
+| `blurb` | optional one line, mainly for top-level entries |
+
+What the mock did with several categories per skill becomes nesting:
+
+| Mock | Tree |
+|---|---|
+| Angular in Frontend + SPA frameworks | Frontend → SPA frameworks → Angular |
+| HTML / CSS in Frontend + Styling | Frontend → Styling → HTML / CSS |
+| anything in Current stack | `current` tick |
+| Sales in Support & sales + Leadership | one home (Support & sales); *Q9* |
 
 ### 4.2 Category
 
-| Field | Notes |
-|---|---|
-| `slug`, `sortOrder`, `name` | as today's Skill Category |
-| `headline` | one of the main groups (film tally, summaries) |
-| `blurb` | one line |
-| `era` | optional year; the category only counts time from then on |
-| `showOnResume` | keeps the resume at today's 5 |
-
-Today's top-level Tech Stack nodes (Frontend, Backend…) are really categories.
-*Open question Q1* covers whether they stay as nodes, become categories, or both.
+Removed as a separate thing; see 4.1. The Skill Categories collection and
+screen go away, and its 5 entries are already the tree's top level.
 
 ### 4.3 Skill use (a technology at a job) — the "years per job" shape
 
@@ -169,13 +178,15 @@ All per the `syncfusion-list-pages` and `syncfusion-edit-dialogs` skills.
 
 | # | Question | Leaning |
 |---|---|---|
-| Q1 | Are top-level tree nodes (Frontend, Backend…) the same thing as categories, or does the tree keep its own top level while categories are a separate tagging? | Separate: tree = "part of", categories = "counts toward". A technology has one parent but many categories. |
-| Q2 | On the resume a skill shows under one category. If it has several, which? | A `resumeCategorySlug`, defaulting to the first. |
+| ~~Q1~~ | *Settled by D4.* ~~Are top-level tree nodes (Frontend, Backend…) the same thing as categories, or does the tree keep its own top level while categories are a separate tagging? | Separate: tree = "part of", categories = "counts toward". A technology has one parent but many categories. |
+| ~~Q2~~ | *Settled by D4: its top-level ancestor.* On the resume a skill shows under one category. If it has several, which? | A `resumeCategorySlug`, defaulting to the first. |
 | Q3 | Should every skill use show as a label on the job moon, or only ticked ones? 21 uses at InvestCloud is a lot of labels. | Tick-box, defaulting on for migrated labels only. |
-| Q4 | Totals computed by the API at publish time, or by each site from shared code? | Shared code, computed in the site: "now" moves, a published number would go stale. |
+| ~~Q4~~ | *Settled by D6.* Totals computed by the API at publish time, or by each site from shared code? | Shared code, computed in the site: "now" moves, a published number would go stale. |
 | Q5 | StormScape's return: second Experience or multiple periods on one? | Second Experience with a `continues` link to the first: smallest schema change, film already works this way. |
 | Q6 | Earthlink / HostPro on the resume and cinematic site, or film only? | Harma's call. |
 | Q7 | Non-code skills (sales, leading engineers) live in the same master list? | Yes, under their own categories, unticked for the resume unless wanted. |
+| Q9 | A few skills sat in two groups in the mock (Sales in Support & sales and Leadership). With one tree each gets one home. Acceptable? | Yes; pick the home that reads best to an employer. |
+| Q10 | New technologies appear in the portfolio constellation and lattice (they draw the tree). Show everything, or only `showOnResume` ones? | Harma's call after seeing it; start with ticked only so nothing changes. |
 | Q8 | Dates as years or year-months? | Year-month, matching Experience dates; the form accepts a bare year. |
 
 ## 8. Risks
@@ -200,4 +211,5 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-21: draft 2: one tree instead of tree + categories (D4), "current" as a tick (D5), no stored derived data (D6).
 - 2026-09-21: draft 1 from the usage analysis and Harma's decisions D1–D3.
