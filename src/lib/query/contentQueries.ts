@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchSiteContent } from "../api/contentV2";
+import type { Release } from "../api/release";
 
 export const contentKeys = {
   all: ["content"] as const,
@@ -51,5 +52,20 @@ export function useCosmosContentQuery() {
       personal: content.resume.personal,
       source: content.source,
     }),
+  });
+}
+
+/**
+ * The published release in its stored shapes: the one source every site is
+ * moving onto. Pass a selector to take only what a component needs, so it
+ * re-renders only when that part changes.
+ */
+export function useReleaseQuery<T = Release>(select?: (release: Release) => T) {
+  return useQuery({
+    ...releaseQuery,
+    select: (content) => {
+      if (!content.release) throw new Error("[content] No release: bundled fallback content is in use.");
+      return select ? select(content.release) : (content.release as T);
+    },
   });
 }

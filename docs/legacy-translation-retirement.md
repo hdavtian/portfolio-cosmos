@@ -198,6 +198,19 @@ the space site loads fully but stays on "ENTERING…" and never starts the 3D
 scene (the tab is not a focused, visible window, which the scene appears to
 need). No console errors. Options are in Q7.
 
+## 7b. Stages 2 and 3 (2026-09-21)
+
+- **Stage 2.** `src/lib/api/release.ts` holds the one shape every site will
+  read: the release as stored, lists in saved order, media ids resolved by
+  `release.mediaUrl(id)`. It rides along in the same single request as the old
+  shapes (`SiteContent.release`), so nothing is fetched twice. Sites read it with
+  `useReleaseQuery(select)`. The generated fallback file is deferred to stage 6,
+  since the fallback stays off until then.
+- **Stage 3.** The film's place colours come from `release.collections.portfolioCores`
+  (`name`, `color`) and the name and title on its first ring from
+  `release.profile`; its `resume.json` import is gone. Its project years still
+  come through `useShowcaseProjects`, which moves with the portfolio site in stage 4.
+
 ## 8. Data: backups and how new data reaches production
 
 **Backups taken 2026-09-21 before any work** (in `db-backups/`, not in git,
@@ -248,6 +261,7 @@ the subscription and tenant check.
 
 ## 10. Change log
 
+- 2026-09-21: stages 2 and 3 done (section 7b).
 - 2026-09-21: stage 1 done (section 7a): no content drift; space site interior not captured (Q7).
 - 2026-09-21: Q4 settled: branch `retire-legacy-translation` created from `main`, film branch merged in. All four questions closed; stage 1 is next.
 - 2026-09-21: Q3 settled: the import path is retired at the end.

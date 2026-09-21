@@ -1,4 +1,3 @@
-import type { ContentBundle } from "@hd/content-schema";
 // Only the projection back to the legacy shapes: the site must not bundle zod
 // and every schema just to read published content.
 import { toLegacy } from "@hd/content-schema/to-legacy";
@@ -13,6 +12,7 @@ import aboutPathTravelMessagesFallback from "../../data/aboutPathTravelMessages.
 import portfolioCoresFallback from "../../data/portfolioCores.json";
 import resumeFallback from "../../data/resume.json";
 import { API_BASE_URL, shouldSkipApiRequest } from "./contentClient";
+import { toRelease, type Release, type ReleaseResponse } from "./release";
 
 export type { TechStackTreeNode };
 
@@ -23,13 +23,6 @@ export interface AboutPathTravelMessage {
   fontSize?: string;
   fontColor?: string;
   fontShadow?: string;
-}
-
-interface ReleaseResponse {
-  etag: string;
-  draft: boolean;
-  content: ContentBundle;
-  media: Record<string, { url: string; altText: string; width?: number; height?: number }>;
 }
 
 export interface SiteContent {
@@ -45,6 +38,12 @@ export interface SiteContent {
    * been published.
    */
   techStack: TechStackTreeNode[];
+  /**
+   * The same release in the shapes it is stored in (see release.ts). Sites are
+   * being moved onto this; the older fields above go once none reads them.
+   * Null only when bundled fallback content is standing in.
+   */
+  release: Release | null;
   /** "api" when served from the published release, "fallback" when bundled JSON was used. */
   source: "api" | "fallback";
   etag?: string;
@@ -69,6 +68,7 @@ const FALLBACK: SiteContent = {
   moonPortfolioMapping: moonPortfolioMappingFallback,
   aboutPathTravelMessages: aboutPathTravelMessagesFallback as AboutPathTravelMessage[],
   techStack: techStackTreeFromSkills((resumeFallback as ResumePayload).skills),
+  release: null,
   source: "fallback",
 };
 
@@ -102,6 +102,7 @@ export async function fetchSiteContent(): Promise<SiteContent> {
         (release.content.collections.techStackNodes ?? []).length > 0
           ? buildTechStackTree(release.content.collections.techStackNodes)
           : techStackTreeFromSkills((legacy.resume as unknown as ResumePayload).skills),
+      release: toRelease(release),
       source: "api",
       etag: release.etag,
     };

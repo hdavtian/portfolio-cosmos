@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as ThreeTypes from "three";
-import resume from "../../data/resume.json";
-import { usePortfolioCoresQuery } from "../../lib/query/contentQueries";
+import { useReleaseQuery } from "../../lib/query/contentQueries";
 import { useShowcaseProjects } from "../showcase/lib/useShowcaseProjects";
 import { makeAstrolabe } from "./gotAstrolabe";
 import { Link } from "react-router-dom";
@@ -334,24 +333,28 @@ export function SkillsTitlesPage() {
   // "Since": the earliest year on any published project, so it follows the
   // portfolio rather than being typed in here.
   const { projects } = useShowcaseProjects();
-  const coresQuery = usePortfolioCoresQuery();
+  const coresQuery = useReleaseQuery((release) => release.collections.portfolioCores);
+  const profile = useReleaseQuery((release) => release.profile).data;
   // One colour per place, keyed by place: a core whose name matches the company wins.
   const accents = useMemo(() => {
-    const cores = coresQuery.data?.payload ?? [];
+    const cores = coresQuery.data ?? [];
     const found: Record<string, string> = {};
     for (const city of cities) {
       const home = cities[city.spot];
       const key = plain(home.name);
       const core = cores.find((entry) => {
-        const name = plain(entry.core);
+        const name = plain(entry.name);
         return name.length > 2 && (key.startsWith(name) || name.startsWith(key));
       });
-      found[city.slug] = core?.coreColor ?? ACCENT_FALLBACK[home.slug] ?? "#ffb266";
+      found[city.slug] = core?.color ?? ACCENT_FALLBACK[home.slug] ?? "#ffb266";
     }
     return found;
   }, [cities, coresQuery.data]);
   const accentsRef = useRef(accents);
   const accentsKey = Object.values(accents).join("|");
+  // The name and title forged into the first ring, from the published profile.
+  const banner = profile ? `${profile.name}   ✦   ${profile.title}`.toUpperCase() : "";
+  const bannerRef = useRef(banner);
   const since = useMemo(() => {
     const years = projects
       .map((project) => project.year)
@@ -388,7 +391,8 @@ export function SkillsTitlesPage() {
   // Declared before the scene's effect, so the colours are in place when it builds.
   useEffect(() => {
     accentsRef.current = accents;
-  }, [accents]);
+    bannerRef.current = banner;
+  }, [accents, banner]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -649,7 +653,7 @@ export function SkillsTitlesPage() {
 
         const astrolabe = makeAstrolabe(THREE, {
           // Name and title straight from the resume, so they follow it.
-        name: `${resume.personal.name}   ✦   ${resume.personal.title}`.toUpperCase(),
+        name: bannerRef.current,
           markup: [
           '<!doctype html>  <main class="work">  <section id="skills">  </section>  </main>',
           ".grid { display: grid; gap: 1rem }  @media (min-width: 60rem) { .grid { grid-template-columns: repeat(3, 1fr) } }",
@@ -1335,7 +1339,7 @@ export function SkillsTitlesPage() {
       disposed = true;
       cleanup();
     };
-  }, [accentsKey, cities, timeline]);
+  }, [accentsKey, banner, cities, timeline]);
 
   // Where the film waits: the end of each place's turn, built and framed.
   const holds = useMemo(
