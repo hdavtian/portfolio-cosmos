@@ -5,9 +5,18 @@ import { useBackdropTint } from "../lib/backdropTint";
 const dateRange = (start?: string, end?: string) =>
   start && end ? `${start} – ${end}` : (start ?? end ?? "");
 
-/** A dated role with no end, in a job with no end, is still held: "07/2025 – Present". */
-const positionDates = (position: { startDate?: string; endDate?: string }, jobEnd?: string) =>
-  dateRange(position.startDate, position.endDate ?? (position.startDate && !jobEnd ? "Present" : undefined));
+/**
+ * What follows a role's title: its dates, then where. A role with no dates of
+ * its own takes the job's; no end date anywhere means it is still held.
+ */
+const positionDetails = (
+  position: { startDate?: string; endDate?: string },
+  job: { startDate?: string; endDate?: string; location?: string },
+) => {
+  const start = position.startDate ?? job.startDate;
+  const end = position.endDate ?? (position.startDate ? undefined : job.endDate) ?? job.endDate ?? "Present";
+  return [dateRange(start, start ? end : undefined), job.location].filter(Boolean);
+};
 
 /** The resume, kept simple: who, summary and contact on the left, the record on the right. */
 export function ShowcaseResumePage() {
@@ -71,19 +80,16 @@ export function ShowcaseResumePage() {
               <li key={job.id} className="showcase-resume__job">
                 <header className="showcase-resume__job-head">
                   <h3 className="showcase-resume__company">{job.navLabel || job.company}</h3>
-                  <p className="showcase-label">
-                    {[job.location, dateRange(job.startDate, job.endDate ?? "Present")].filter(Boolean).join(" / ")}
-                  </p>
                 </header>
                 {job.positions.map((position, index) => (
                   <div key={`${job.id}-${index}`} className="showcase-resume__position">
                     <h4 className="showcase-resume__position-title">
                       {position.title}
-                      {positionDates(position, job.endDate) ? (
-                        <span className="showcase-resume__position-dates">
-                          {positionDates(position, job.endDate)}
+                      {positionDetails(position, job).map((detail) => (
+                        <span key={detail} className="showcase-resume__position-dates">
+                          {detail}
                         </span>
-                      ) : null}
+                      ))}
                     </h4>
                     {position.responsibilities.length ? (
                       <ul className="showcase-resume__bullets">
