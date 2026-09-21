@@ -155,6 +155,22 @@ site computes them.
   entry yet (WinForms, Framer Motion, Redux, Spring Boot) and would be added,
   mostly as children.
 
+## 4.6 How the sites read content (the translation step)
+
+All sites read the live API (`GET /api/v2/content/release`). In the browser,
+`toLegacy` (shared schema package, ~190 lines, round-trip tested) converts the
+response into the older file shapes the sites were written against. Nothing is
+stored; bundled JSON is used only if the API is unreachable.
+
+- **Cost:** one more place to update when the model changes; new fields reach a
+  site only once added to the translation.
+- **Use here:** it is the single point that controls what each site receives,
+  so it can hide a film-only Experience and rebuild the old skills map from the
+  tree, keeping the 3D sites unchanged.
+- **Direction:** new work (the GoT film) reads the new shapes directly. The new
+  portfolio site can migrate over time. The cinematic site keeps the translation
+  indefinitely. Ties in with platform stage 6b (stabilise).
+
 ## 5. What each site sees afterwards
 
 | Site | Change |
