@@ -165,8 +165,6 @@ import { usePointerInteractions } from "./hooks/usePointerInteractions";
 import { useRenderLoop } from "./hooks/useRenderLoop";
 import { useThreeScene } from "./hooks/useThreeScene";
 import {
-  INTRO_CAMERA_FINAL_POS,
-  INTRO_CAMERA_FINAL_TARGET,
   createIntroSequenceRunner,
 } from "./introSequence";
 import MoonOrbitHtmlLayout from "./MoonOrbitHtmlLayout";
@@ -807,14 +805,6 @@ const SKILLS_LATTICE_TONE_PRESETS: SkillsLatticeTonePreset[] = [
 const resolveSkillsLatticeTonePreset = (id: string): SkillsLatticeTonePreset =>
   SKILLS_LATTICE_TONE_PRESETS.find((preset) => preset.id === id) ??
   SKILLS_LATTICE_TONE_PRESETS[0];
-const FAST_TRACK_TARGET: string | null = (() => {
-  if (typeof window === "undefined") return null;
-  try {
-    return new URLSearchParams(window.location.search).get("fastTrack");
-  } catch {
-    return null;
-  }
-})();
 type KeyboardPianoKey = {
   note: string;
   midi: number;
@@ -5396,7 +5386,6 @@ export default function ResumeSpace3D({
   const startIntroSequenceRef = useRef<(() => void) | null>(null);
   const introStartQueuedRef = useRef(false);
   const introStartConsumedRef = useRef(false);
-  const fastTrackConsumedRef = useRef(false);
   const cameraDriverTraceRef = useRef<string>("boot");
   const startupUiRevealTlRef = useRef<gsap.core.Timeline | null>(null);
   const runStartupUiRevealRef = useRef<(() => void) | null>(null);
@@ -10335,37 +10324,6 @@ export default function ResumeSpace3D({
     if (isLoading || !sceneReady) return;
     if (!introStartQueuedRef.current || introStartConsumedRef.current) return;
 
-    if (FAST_TRACK_TARGET) {
-      introStartConsumedRef.current = true;
-      setCosmosIntroOverlayOpacity(0);
-      const camera = sceneRef.current.camera;
-      const controls = sceneRef.current.controls;
-      if (camera) {
-        camera.position.copy(INTRO_CAMERA_FINAL_POS);
-      }
-      if (controls) {
-        const controlsAny = controls as unknown as {
-          target?: THREE.Vector3;
-          setTarget?: (x: number, y: number, z: number) => void;
-        };
-        if (controlsAny.setTarget) {
-          controlsAny.setTarget(
-            INTRO_CAMERA_FINAL_TARGET.x,
-            INTRO_CAMERA_FINAL_TARGET.y,
-            INTRO_CAMERA_FINAL_TARGET.z,
-          );
-        } else if (controlsAny.target) {
-          controlsAny.target.copy(INTRO_CAMERA_FINAL_TARGET);
-        }
-        controls.update?.(0);
-      }
-      dwarn("[FAST_TRACK] Skipping intro sequence, positioning camera at home");
-      setStartupDestinationsVisible(true);
-      setStartupConsoleVisible(true);
-      setStartupMiniMapVisible(true);
-      return;
-    }
-
     const startIntro = startIntroSequenceRef.current;
     if (!startIntro) return;
     let fadeRaf = 0;
@@ -10401,15 +10359,6 @@ export default function ResumeSpace3D({
       if (fadeRaf) cancelAnimationFrame(fadeRaf);
     };
   }, [isLoading, sceneReady, shipLog]);
-
-  useEffect(() => {
-    if (!FAST_TRACK_TARGET || fastTrackConsumedRef.current) return;
-    if (isLoading || !sceneReady) return;
-    const target = FAST_TRACK_TARGET;
-    fastTrackConsumedRef.current = true;
-    dwarn(`[FAST_TRACK] Navigating directly to: ${target}`);
-    handleCockpitNavigate(target, "section");
-  }, [isLoading, sceneReady, handleCockpitNavigate]);
 
   const clearStartupUiRevealTimeline = useCallback(() => {
     if (startupUiRevealTlRef.current) {

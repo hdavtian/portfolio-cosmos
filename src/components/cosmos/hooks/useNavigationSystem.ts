@@ -1,3 +1,4 @@
+import type { SpaceResume } from "../spaceContent";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
@@ -95,7 +96,7 @@ export type NavigationTravelPhase =
   | "arrived";
 
 export const useNavigationSystem = (deps: {
-  resumeData: any;
+  resumeData: SpaceResume;
   emitterRef: React.MutableRefObject<{
     isTracking: (id: string) => boolean;
     getCurrentPosition: (id: string) => { worldPosition: THREE.Vector3 } | null;

@@ -1,3 +1,4 @@
+import type { SpaceResume } from "./spaceContent";
 import type React from "react";
 import * as THREE from "three";
 import { trackEvent } from "../../lib/analytics";
@@ -105,7 +106,7 @@ export const createPointerInteractionHandlers = (deps: {
   clickablePlanets: THREE.Object3D[];
   overlayClickables: THREE.Object3D[];
   handleNavigation: (target: string) => void | Promise<void>;
-  resumeData: any;
+  resumeData: SpaceResume;
   exitFocusedMoon: () => void;
   vlog: (message: string) => void;
   /** Optional: ref to the Star Destroyer group for click/hover detection */

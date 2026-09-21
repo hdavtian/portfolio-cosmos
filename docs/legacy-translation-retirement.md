@@ -282,12 +282,27 @@ time, when someone can watch the scenes while doing it.
   is left for Harma to decide.
 - **Not mine, left alone:** two `any` lint errors in `ResumeStructureDiagram.tsx`.
 
-**For Harma to check by eye** (the automated browser can't get past "ENTERING…"):
-Experience planet with ten moons, their spacing and labels; the nav and its two
-"Stormscape" entries; one job moon with the hologram open; the new
-StormScape (Freelance) moon (no memories or tech labels yet, and no moon
-texture of its own); Skills planet; a portfolio core; the About ride and deck
-pictures; a guided tour stop.
+**Checked in the browser (2026-09-21, second pass).** The earlier claim that
+the automated browser could not enter the space site was wrong: the coordinate
+clicks were not landing on the Enter button. Clicking the element
+(`button.cosmos-loader__enter-button`) once it is enabled works, and the site
+can then be driven through its navigation. Seen working from the API: all ten
+job moons with labels; the nav listing ten jobs; arrival at InvestCloud with its
+memories floating; arrival at the new StormScape (Freelance) moon (company name
+stands in for its missing memories); the Skills lattice; the About path, with no
+picture errors. One unrelated exception was seen once during GPU warm-up
+(`checkMaterialsReady … 'isReady'`, inside three.js); not yet known whether it
+predates this work.
+
+**Typing.** `resumeData` was `any` in `useNavigationSystem.ts`,
+`usePointerInteractions.ts` and `ResumeSpace3D.interaction.ts`; it is now
+`SpaceResume`, with no errors. That is the precondition for renaming fields
+safely (the compiler then finds every read). The space site's folder still has
+about 150 other `any`s; see Q8.
+
+**Removed at Harma's request:** the `?fastTrack=` URL switch (a relic that
+skipped the loader and intro and left the navigation hidden), from
+`CosmosLoader.tsx` and `ResumeSpace3D.tsx`.
 
 ## 8. Data: backups and how new data reaches production
 
@@ -334,6 +349,7 @@ the subscription and tenant check.
 | ~~Q3~~ | *Settled 2026-09-21: retire it, at the very end.* The import script, `fromLegacy`, `toLegacy`, the old-shape types, the round-trip test and the old JSON files are removed in stage 6, once every site is on the API. Until then they stay as a safety net. A fresh machine then starts from a restored backup; `docs/content-reseeding-runbook.md` is rewritten to say so. | — |
 | Q5 | Also back up production media files (Azure blob storage, 206 files) before starting? It is a read-only download but needs an Azure sign-in check. Nothing planned deletes or replaces media. | Yes, once, for completeness. |
 | ~~Q7~~ | *Settled 2026-09-21: (c).* The data check, plus Harma looking at a short checklist of scenes after each space-site sub-step: Experience planet and moons, one job moon with the hologram open, Skills planet, a portfolio core, the About ride, a guided tour stop. Harma confirmed Enter works normally in his browser; the "ENTERING…" hang is only the automated tab. | — |
+| Q8 | Now that the space site can be driven by the automated browser and its resume is typed: do the field renames inside it after all (`id` → `slug`, `Projects` → `projects`, cores `core`/`coreColor`/`plains` → `name`/`color`/`planes`), and shrink `spaceContent.ts` to nothing but grouping? And separately, work down the ~150 `any`s in that folder? | Yes to the renames, file by file with a browser check after each; the `any` clean-up as its own later job. |
 | Q6 | Keep the bundled fallback at the end, or drop it? Production's database is rarely down. Decide after testing it once, before merging to `main`. | Open. |
 | ~~Q4~~ | *Settled 2026-09-21: one branch, `retire-legacy-translation`, off `main`, with the film branch merged in* so nothing has to be imported later. The film lives at an unlinked URL (`/lab/got`), so shipping it is harmless. Consequence: this branch's `resume.json` holds Earthlink and HostPro, so the space site shows nine moons here from the start, from the file until it switches to the API. `skills-timeline-lab` is kept as it was; new film work happens here. | — |
 

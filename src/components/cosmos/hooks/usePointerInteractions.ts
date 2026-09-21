@@ -1,3 +1,4 @@
+import type { SpaceResume } from "../spaceContent";
 import type { MutableRefObject, RefObject } from "react";
 import { useCallback } from "react";
 import * as THREE from "three";
@@ -47,7 +48,7 @@ export const usePointerInteractions = (params: {
       clickablePlanets: THREE.Object3D[];
       overlayClickables: THREE.Object3D[];
       handleNavigation: (target: string) => void | Promise<void>;
-      resumeData: any;
+      resumeData: SpaceResume;
       exitFocusedMoon: () => void;
       vlog: (message: string) => void;
       starDestroyerRef?: MutableRefObject<THREE.Group | null>;

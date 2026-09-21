@@ -55,9 +55,6 @@ export default function CosmosLoader({
   loadingStageHint = "",
 }: CosmosLoaderProps) {
   const debugEnabled = IS_DEBUG_OVERLAYS;
-  const fastTrackEnabled =
-    typeof window !== "undefined" &&
-    !!new URLSearchParams(window.location.search).get("fastTrack");
   const phaseRef = useRef<Phase>("idle");
   const timeoutsRef = useRef<number[]>([]);
   const intervalsRef = useRef<number[]>([]);
@@ -73,7 +70,7 @@ export default function CosmosLoader({
   const [showEndMessage, setShowEndMessage] = useState(false);
   const [typedCompletionText, setTypedCompletionText] = useState("");
   const [entryGateVisible, setEntryGateVisible] = useState(false);
-  const [hasEntered, setHasEntered] = useState(fastTrackEnabled);
+  const [hasEntered, setHasEntered] = useState(false);
   const [showInspirationOverlay, setShowInspirationOverlay] = useState(false);
   const [progress, setProgress] = useState(0);
   const [revealLineFractions, setRevealLineFractions] = useState<number[]>(
@@ -83,7 +80,7 @@ export default function CosmosLoader({
         () => 1 / DEFAULT_REVEAL_LINES,
       ),
   );
-  const [animationDone, setAnimationDone] = useState(fastTrackEnabled);
+  const [animationDone, setAnimationDone] = useState(false);
   const [debugCurrentMode, setDebugCurrentMode] = useState("boot");
   const [debugModeHistory, setDebugModeHistory] = useState<string[]>([]);
   const currentYear = new Date().getFullYear();
@@ -175,11 +172,6 @@ export default function CosmosLoader({
   // ── Orchestration ────────────────────────────────────────────
 
   useEffect(() => {
-    if (fastTrackEnabled) {
-      markDebugMode("fast-track-bypass");
-      return;
-    }
-
     setLoaderPhase("idle", "idle");
     setTypedText(PROGRAM_TEXT);
     setShowStatusUI(true);
@@ -291,7 +283,6 @@ export default function CosmosLoader({
     };
   }, [
     coverAllStrips,
-    fastTrackEnabled,
     markDebugMode,
     queueInterval,
     queueTimeout,
