@@ -22,6 +22,7 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:import": "node scripts/with-local-env.mjs npm run import -w api --",
+    "db:add-early-jobs": "node scripts/with-local-env.mjs npm run add-early-jobs -w api",
     "db:pull": "node scripts/db-pull.mjs",
     "db:restore-local": "node scripts/db-restore-local.mjs",
     "db:backup-local": "node scripts/db-backup-local.mjs",

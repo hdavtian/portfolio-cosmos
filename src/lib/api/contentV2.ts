@@ -50,6 +50,19 @@ export interface SiteContent {
   etag?: string;
 }
 
+/**
+ * Whether bundled content may stand in for the API. Off unless the build sets
+ * VITE_CONTENT_FALLBACK=on, so that while the sites are being moved onto the
+ * API a failure shows up as a failure instead of hiding behind old content.
+ */
+const FALLBACK_ENABLED = import.meta.env.VITE_CONTENT_FALLBACK === "on";
+
+const fallbackOrThrow = (reason: string, cause?: unknown): SiteContent => {
+  if (FALLBACK_ENABLED) return FALLBACK;
+  console.error(`[content] ${reason}; bundled fallback is off (VITE_CONTENT_FALLBACK).`, cause ?? "");
+  throw new Error(`[content] ${reason}`);
+};
+
 const FALLBACK: SiteContent = {
   resume: resumeFallback as ResumePayload,
   portfolioCores: portfolioCoresFallback as PortfolioCoreSeed[],
@@ -66,15 +79,14 @@ const FALLBACK: SiteContent = {
  * back to the content bundled with the build, so the site always renders.
  */
 export async function fetchSiteContent(): Promise<SiteContent> {
-  if (shouldSkipApiRequest()) return FALLBACK;
+  if (shouldSkipApiRequest()) return fallbackOrThrow("No reachable API is configured for this host");
 
   try {
     const response = await fetch(`${API_BASE_URL}/api/v2/content/release`);
     if (!response.ok) {
-      if (response.status !== 404) {
-        console.warn(`[content] API v2 returned ${response.status}; using bundled content.`);
-      }
-      return FALLBACK;
+      return fallbackOrThrow(
+        response.status === 404 ? "Nothing has been published yet" : `API v2 returned ${response.status}`,
+      );
     }
 
     const release = (await response.json()) as ReleaseResponse;
@@ -94,7 +106,7 @@ export async function fetchSiteContent(): Promise<SiteContent> {
       etag: release.etag,
     };
   } catch (error) {
-    console.warn("[content] API v2 unreachable; using bundled content.", error);
-    return FALLBACK;
+    if (error instanceof Error && error.message.startsWith("[content]")) throw error;
+    return fallbackOrThrow("API v2 unreachable", error);
   }
 }
