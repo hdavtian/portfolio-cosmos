@@ -195,7 +195,7 @@ What stays, because it is not legacy: resolving media ids to URLs, sorting by
 
 ### Order of work (D9)
 
-0. **Step back: retire `toLegacy`.** One typed content reader in the new
+0. **Step back: retire `toLegacy`.** Full scope in `docs/legacy-translation-retirement.md`. One typed content reader in the new
    shapes; migrate the GoT film (nothing to do), the new portfolio site, then
    the cinematic site, one at a time, each proven by
    before/after screenshots. Bundled fallback converted to the new shape.
@@ -262,6 +262,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-21: step 0 has its own doc; it found that the cinematic site reads experiences, skills and the About deck from bundled files, not the API.
 - 2026-09-21: removed the dead scrolling-resume files; three sites, not four.
 - 2026-09-21: draft 4: retire the translation step first (D9), with its measured size and the new order of work.
 - 2026-09-21: draft 3: one home per skill is a hard rule (D7); non-code skills organised from real data later (D8).
