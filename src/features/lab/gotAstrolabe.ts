@@ -443,8 +443,8 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
         reveal.value = made >= 0.999 ? 2 : made;
         etch.value = written >= 0.999 ? 2 : written <= 0.001 ? -1 : written;
         band.visible = made > 0.001;
-        // It only starts to turn once it is whole and written.
-        if (made >= 0.999 && written >= 0.999) entry.turned += speed * dt;
+        // It turns from the moment there is any of it: forged and etched on the move.
+        if (made > 0.001) entry.turned += speed * dt;
         band.rotation.y = entry.turned;
         // A point of light rides the leading edge of whichever sweep is under
         // way: white-hot for the forging, the band's own colour for the etching.

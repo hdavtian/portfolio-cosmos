@@ -212,6 +212,12 @@ const softly = (edge: number, to: number, value: number) => {
   return x * x * x * (x * (x * 6 - 15) + 10);
 };
 
+/**
+ * How far a place is built, t of the way through its turn. A second visit waits
+ * for the camera to settle before anything grows, so the growth is watched.
+ */
+const builtWithin = (t: number, later: boolean) => (later ? softly(0.5, 0.97, t) : softly(0.04, 0.82, t));
+
 /** How far each place has been built: nothing before its turn, the scrubber during it. */
 function buildFractions(timeline: Segment[], cities: City[], progress: number) {
   const current = segmentAt(timeline, progress);
@@ -221,7 +227,7 @@ function buildFractions(timeline: Segment[], cities: City[], progress: number) {
       (segment) => segment.kind === "dwell" && segment.city === index,
     )!;
     if (progress >= dwell.to) return 1;
-    if (current === dwell) return softly(0.04, 0.82, t);
+    if (current === dwell) return builtWithin(t, cities[index].spot !== index);
     return 0;
   });
 }
@@ -866,7 +872,21 @@ export function SkillsTitlesPage() {
           const shot = shotFor(index);
           const here = placed[index].at;
           const e = softly(0, 1, t);
-          const angle = arrival(index) + shot.sweep * e;
+          const build = placed[index].build;
+          // A second visit may ask for its own resting view, to take in what was added.
+          const again = placed[index].later ? build.laterView : undefined;
+          // Some places are only read from certain sides (drums lettered round
+          // their rims, two trees side by side): the sweep ends on whichever of
+          // those sides it was already heading for.
+          const sides = again ? [0, Math.PI] : build.view?.sides;
+          let sweep = shot.sweep;
+          if (sides) {
+            const swept = arrival(index) + shot.sweep;
+            sweep = sides
+              .map((side) => shot.sweep + Math.atan2(Math.sin(side - swept), Math.cos(side - swept)))
+              .reduce((best, turn) => (Math.abs(turn - shot.sweep) < Math.abs(best - shot.sweep) ? turn : best));
+          }
+          const angle = arrival(index) + sweep * e;
           // Every shot ends at the distance that frames the place whole; where
           // it starts from, and how it rises or falls, is the shot's own.
           const fit = fitDistance(index);
@@ -876,7 +896,7 @@ export function SkillsTitlesPage() {
           const pitchIn = Math.atan2(shot.h0, shot.r0);
           // Everywhere, it comes to rest nearly level: lettering on a band or a
           // cloth is read from the side, not from above.
-          const pitchRest = placed[index].build.view?.pitch ?? 0.2;
+          const pitchRest = again?.pitch ?? build.view?.pitch ?? 0.2;
           const pitch = pitchIn + (pitchRest - pitchIn) * e;
           const top = placed[index].build.top;
           eye.set(
@@ -885,7 +905,7 @@ export function SkillsTitlesPage() {
             here.z + Math.cos(angle) * Math.cos(pitch) * distance,
           );
           // Aim a little above the middle, so the air is at the top, clear of the text below.
-          aim.set(here.x, here.y + top * 0.56, here.z);
+          aim.set(here.x + (again?.shift ?? 0) * e, here.y + top * 0.56, here.z);
         };
 
         const fromEye = new THREE.Vector3();
@@ -906,16 +926,16 @@ export function SkillsTitlesPage() {
             [0.13, 0.23],
             [0.16, 0.26],
           ],
-          // Once all three stand bare, the lettering is etched into each, on the same stagger.
+          // Each band is etched the moment it closes, not once all three stand.
           etch: [
-            [0.29, 0.39],
-            [0.32, 0.42],
-            [0.35, 0.45],
+            [0.2, 0.3],
+            [0.23, 0.33],
+            [0.26, 0.36],
           ],
           // Two seconds to read it, and the camera begins to leave.
-          formed: 0.45 + 2 / (timeline[0].to * filmSeconds),
-          easeBack: 0.45 + 2 / (timeline[0].to * filmSeconds) + 0.14,
-          pullOut: 0.45 + 2 / (timeline[0].to * filmSeconds) + 0.25,
+          formed: 0.36 + 2 / (timeline[0].to * filmSeconds),
+          easeBack: 0.36 + 2 / (timeline[0].to * filmSeconds) + 0.14,
+          pullOut: 0.36 + 2 / (timeline[0].to * filmSeconds) + 0.25,
         };
         const FORGE_EYE = new THREE.Vector3(SUN.x + 46, SUN.y + 34, SUN.z + 372);
         const MID_EYE = new THREE.Vector3(SUN.x + 60, SUN.y + 44, SUN.z + 400);
@@ -1245,7 +1265,7 @@ export function SkillsTitlesPage() {
               (entry) => entry.kind === "dwell" && entry.city === index,
             )!;
             const built =
-              p >= dwell.to ? 1 : segment === dwell ? softly(0.04, 0.82, t) : 0;
+              p >= dwell.to ? 1 : segment === dwell ? builtWithin(t, stop.later) : 0;
             const leaving = timeline[timeline.indexOf(dwell) + 1];
             const focus =
               segment === dwell

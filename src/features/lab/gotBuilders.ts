@@ -39,8 +39,14 @@ export interface Build {
   /** How tall and how wide it stands once built, floating title included, so a camera can frame all of it. */
   top: number;
   reach: number;
-  /** Where the camera should come to rest, if the place reads best from a particular height (radians above level). */
-  view?: { pitch: number };
+  /**
+   * Where the camera should come to rest, if the place reads best from somewhere
+   * in particular: how far above level (radians), and optionally which sides it
+   * should be seen from (angles round the place; the camera takes the nearest).
+   */
+  view?: { pitch: number; sides?: number[] };
+  /** The same for a second visit, with how far to shift the aim to take in what was added. */
+  laterView?: { pitch: number; shift: number };
 }
 
 /** What a builder is told about the place it is building. */
@@ -819,6 +825,8 @@ export function makeBuilders(THREE: Three, label: Label) {
       top: crownAt + 8,
       // Room for the second tree, which stands to one side on the return.
       reach: later.length > 0 ? 104 : 64,
+      // Coming back, look low and level at the pair of them, the new tree in the middle of it.
+      laterView: { pitch: 0.07, shift: 40 },
       grow(eased, phase) {
         const base = Math.max(0.001, stage(eased, 0, 6));
         plinth.scale.set(base, 1, base);
@@ -1009,6 +1017,8 @@ export function makeBuilders(THREE: Three, label: Label) {
         group,
         top: crownAt + 8,
         reach: works === "rotors" ? Math.max(48, sorted.length * 7 + 14) : spread,
+        // Rotor drums are lettered round their rims, so they are read square-on to the axle.
+        view: works === "rotors" ? { pitch: 0.2, sides: [0, Math.PI] } : undefined,
         grow(eased, phase) {
           const laid = Math.max(0.001, stage(eased, 0, 6));
           // What grows from the ground grows straight up: never sideways as well.
