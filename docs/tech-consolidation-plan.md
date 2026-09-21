@@ -1,6 +1,6 @@
 # One technology list: consolidation plan
 
-**Status: DISCUSSION DRAFT 3 (2026-09-21). Nothing here is built. Do not implement until Harma marks it settled.**
+**Status: DISCUSSION DRAFT 4 (2026-09-21). Nothing here is built. Do not implement until Harma marks it settled.**
 
 Related: `docs/content-platform-plan.md`, `docs/d3-skills-graph.md`, the mock at
 `src/data/mock/skillTimeline.json` and its rules in `scripts/skills-report.mjs`.
@@ -67,6 +67,7 @@ unique content and stay as they are.
 | D6 | No stored derived data. One set of source records, one published release; any reshaping (`toLegacy`, the tree, year totals) is computed when read and never saved or edited. If a calculation ever gets too heavy it moves into the publish step, still regenerated every time. | 2026-09-21 |
 | D7 | Hard rule: one home per skill (one parent in the tree). No site shows a skill under two headings today. If something seems to belong in two places it is two skills. Nesting is unlimited in depth (Frontend → React → Patterns → Provider, as the lattice shows today); the rule limits each entry to one parent, not the tree to one level. | 2026-09-21 |
 | D8 | Non-code skills (sales, support, consulting, leading people) live in the same tree. Harma will organise them when entering the data; grouping is revisited once the real data is in, not designed up front. | 2026-09-21 |
+| D9 | One data shape for every site. The `toLegacy` translation is retired **before** the skills consolidation, so the consolidation is done once, against the new shapes, not twice. No per-site filtering in a hidden layer; what a site shows is decided by visible fields on the record (e.g. visibility ticks). | 2026-09-21 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -167,9 +168,37 @@ stored; bundled JSON is used only if the API is unreachable.
 - **Use here:** it is the single point that controls what each site receives,
   so it can hide a film-only Experience and rebuild the old skills map from the
   tree, keeping the 3D sites unchanged.
-- **Direction:** new work (the GoT film) reads the new shapes directly. The new
-  portfolio site can migrate over time. The cinematic site keeps the translation
-  indefinitely. Ties in with platform stage 6b (stabilise).
+- **Direction (D9):** retire it. Every site reads the new shapes.
+
+### Size of retiring it (measured 2026-09-21)
+
+About 100 references in about 20 files read the old shapes (`resumeData` 57 in
+10 files, `portfolioCores` 26 in 10, moon mapping 10, travel messages 10). The
+cinematic site's main file has only 11 direct `resumeData.` reads. The
+differences are mostly mechanical:
+
+| Old shape | New shape |
+|---|---|
+| `id` | `slug` |
+| `skills` as `{ category: [names] }` | skill / technology records with a parent |
+| core `core`, `coreColor`, `plains[].items[].items[]` | core `name`, `color`, `planes`, entries as their own list linked by `coreSlug` |
+| entry `image` (a URL) | `mediaId`, resolved through the release's media table |
+| `Projects` | `projects` |
+| one nested resume object | separate lists, ordered by `sortOrder` |
+
+What stays, because it is not legacy: resolving media ids to URLs, sorting by
+`sortOrder`, and the bundled offline fallback (re-exported in the new shape).
+
+### Order of work (D9)
+
+0. **Step back: retire `toLegacy`.** One typed content reader in the new
+   shapes; migrate the GoT film (nothing to do), the new portfolio site, the old
+   scrolling resume, then the cinematic site, one at a time, each proven by
+   before/after screenshots. Bundled fallback converted to the new shape.
+   `fromLegacy` and the round-trip test stay only as long as the import script
+   needs them.
+1. Then the skills consolidation (sections 4.1–4.5), done once.
+2. Then the film reads the release.
 
 ## 5. What each site sees afterwards
 
@@ -229,6 +258,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-21: draft 4: retire the translation step first (D9), with its measured size and the new order of work.
 - 2026-09-21: draft 3: one home per skill is a hard rule (D7); non-code skills organised from real data later (D8).
 - 2026-09-21: draft 2: one tree instead of tree + categories (D4), "current" as a tick (D5), no stored derived data (D6).
 - 2026-09-21: draft 1 from the usage analysis and Harma's decisions D1–D3.
