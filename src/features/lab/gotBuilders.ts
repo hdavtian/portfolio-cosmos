@@ -39,6 +39,8 @@ export interface Build {
   /** How tall and how wide it stands once built, floating title included, so a camera can frame all of it. */
   top: number;
   reach: number;
+  /** Where the camera should come to rest, if the place reads best from a particular height (radians above level). */
+  view?: { pitch: number };
 }
 
 /** What a builder is told about the place it is building. */
@@ -514,7 +516,7 @@ export function makeBuilders(THREE: Three, label: Label) {
     // for one learned here, the house's colour for one carried further —
     // the same rule the engraved bands follow everywhere else.
     const tabard = (tower: Tower, width: number, drop: number, index: number) => {
-      const W = 256;
+      const W = 384;
       const H = Math.round((W * drop) / width);
       const draw = (paint: (ctx: CanvasRenderingContext2D) => void, srgb: boolean) => {
         const canvas = document.createElement("canvas");
@@ -527,16 +529,27 @@ export function makeBuilders(THREE: Three, label: Label) {
         texture.anisotropy = 8;
         return texture;
       };
+      // The name reads across the cloth, a word or two to a line, as large as
+      // the longest line allows.
+      const words = tower.name.toUpperCase().split(/\s+|(?<=\/)/).filter((word) => word && word !== "/");
+      const rows: string[] = [];
+      for (const word of words) {
+        const last = rows[rows.length - 1];
+        if (last !== undefined && (last + " " + word).length <= 11) rows[rows.length - 1] = `${last} ${word}`;
+        else rows.push(word);
+      }
       const write = (ctx: CanvasRenderingContext2D) => {
-        ctx.save();
-        ctx.translate(W / 2, H / 2);
-        ctx.rotate(Math.PI / 2);
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = '700 120px "Cinzel", Georgia, serif';
-        ctx.letterSpacing = "6px";
-        ctx.fillText(tower.name.toUpperCase(), 0, 8, H - 90);
-        ctx.restore();
+        let size = 74;
+        const fits = () => {
+          ctx.font = `700 ${size}px "Cinzel", Georgia, serif`;
+          return rows.every((row) => ctx.measureText(row).width <= W - 56);
+        };
+        while (!fits() && size > 26) size -= 2;
+        const lead = size * 1.18;
+        const start = Math.min(H * 0.42, 70 + (rows.length * lead) / 2) - ((rows.length - 1) * lead) / 2;
+        rows.forEach((row, k) => ctx.fillText(row, W / 2, start + k * lead));
       };
       const cloth = draw((ctx) => {
         ctx.fillStyle = index % 2 === 0 ? field : second;
@@ -574,10 +587,10 @@ export function makeBuilders(THREE: Three, label: Label) {
 
     // The skills, flown in a ring round the shield and facing out, so they can
     // be read from wherever the camera is. Longest served hangs longest.
-    const RING = 46;
+    const RING = 52;
     const banners = towers.map((tower, index) => {
-      const drop = 34 + shadeFor(tower, tallest) * 30;
-      const width = 18;
+      const drop = 30 + shadeFor(tower, tallest) * 26;
+      const width = 24;
       const holder = new THREE.Group();
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, drop + 14, 8), skin("timber", 0.7));
       pole.position.y = (drop + 14) / 2;
@@ -622,7 +635,9 @@ export function makeBuilders(THREE: Three, label: Label) {
     return {
       group,
       top: crownAt + 8,
-      reach: RING + 12,
+      reach: RING + 14,
+      // Tabards are read from the side: the camera comes to rest low and level.
+      view: { pitch: 0.16 },
       grow(eased, phase) {
         turntable.rotation.y = phase * 0.12;
         postHolder.scale.y = Math.max(0.001, stage(eased, 0, 5));
@@ -653,6 +668,8 @@ export function makeBuilders(THREE: Three, label: Label) {
   const monument = (towers: Tower[], tallest: number, later: Tower[] = [], place: Place): Build => {
     const group = new THREE.Group();
     const OWN = place.accent;
+    // What the studio picked up the second time round grows in its own colour.
+    const LATER = "#ff9d5c";
 
     const plinth = new THREE.Mesh(
       new THREE.CylinderGeometry(21, 26, 6, 6),
@@ -662,80 +679,135 @@ export function makeBuilders(THREE: Three, label: Label) {
     group.add(plinth);
     const seams = new THREE.LineSegments(
       new THREE.EdgesGeometry(new THREE.CylinderGeometry(21.2, 26.2, 6.1, 6)),
-      new THREE.LineBasicMaterial({ color: 0x9fdcff }),
+      new THREE.LineBasicMaterial({ color: new THREE.Color(OWN) }),
     );
     seams.position.y = 3;
     group.add(seams);
 
-    const beam = lightColumn(7, 170, place.accent);
+    const GAP = 12.5;
+    const crownAt = 20 + Math.max(towers.length, later.length) * GAP + 24;
+
+    // The trunk: the shaft of light the place already had.
+    const beam = lightColumn(6, crownAt + 50, OWN);
     beam.position.y += 6;
     group.add(beam);
-    const core = lightColumn(2.2, 190, "#ffffff");
+    const core = lightColumn(1.8, crownAt + 60, "#ffffff");
     core.position.y += 6;
     group.add(core);
 
-    const makeRings = (list: Tower[], startIndex: number, own: string) =>
-      list.map((tower, order) => {
-        const radius = 15 + shadeFor(tower, tallest) * 20;
-        const ring = glyphRing(radius, 9.5, tower.name, glowFor(tower, own));
-        group.add(ring);
-        const index = startIndex + order;
-        return { ring, at: 16 + index * 11.5, speed: (index % 2 === 0 ? 1 : -1) * (0.42 - (index % 5) * 0.04) };
+    /**
+     * A branch of the tree: a trace of light run out from the trunk the way a
+     * circuit is — level, then a clean turn upward — ending in a node, with a
+     * couple of twigs off it, and the skill's name standing at its tip. How
+     * far it reaches is how long the skill was used.
+     */
+    const lit = (colour: string) =>
+      new THREE.MeshBasicMaterial({
+        color: new THREE.Color(colour),
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
       });
-    const rings = makeRings([...towers].sort((a, b) => b.years - a.years), 0, OWN);
-    // What the studio picked up the second time round, in a warmer light.
-    const laterRings = makeRings(later, towers.length, "#ffb266");
-
-    const shards = Array.from({ length: 12 }, (_, k) => {
-      const shard = new THREE.Mesh(
-        new THREE.OctahedronGeometry(1 + (k % 3) * 0.5, 0),
-        new THREE.MeshBasicMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
-      );
-      group.add(shard);
-      return { shard, radius: 12 + (k % 4) * 9, height: 12 + k * 9, speed: 0.5 + (k % 3) * 0.2 };
-    });
-
-    const turn = (set: typeof rings, eased: number, phase: number) => {
-      set.forEach((entry, index) => {
-        const grown = stage(eased, index + 1, set.length + 2);
-        entry.ring.position.y = entry.at * (0.25 + 0.75 * grown);
-        entry.ring.scale.setScalar(Math.max(0.001, 0.4 + 0.6 * grown));
-        entry.ring.rotation.y = phase * entry.speed;
-        (entry.ring.material as ThreeTypes.MeshBasicMaterial).opacity = grown * 0.95;
-      });
+    const trace = (points: ThreeTypes.Vector3[], radius: number, colour: string) => {
+      const path = new THREE.CurvePath<ThreeTypes.Vector3>();
+      for (let k = 0; k < points.length - 1; k += 1) path.add(new THREE.LineCurve3(points[k], points[k + 1]));
+      const mesh = new THREE.Mesh(new THREE.TubeGeometry(path, 48, radius, 6, false), lit(colour));
+      const total = mesh.geometry.index?.count ?? 0;
+      group.add(mesh);
+      return (grown: number) => {
+        mesh.geometry.setDrawRange(0, Math.floor((total * Math.max(0, Math.min(1, grown))) / 3) * 3);
+      };
     };
 
-    const crownAt = 16 + (towers.length + later.length) * 11.5 + 16;
+    const branch = (tower: Tower, order: number, height: number, turn: number, colour: string, bright: boolean) => {
+      const reach = 24 + shadeFor(tower, tallest) * 30;
+      const out = new THREE.Vector3(Math.sin(turn), 0, Math.cos(turn));
+      const across = new THREE.Vector3(out.z, 0, -out.x);
+      const root = new THREE.Vector3(0, height, 0);
+      const elbow = root.clone().addScaledVector(out, reach * 0.6);
+      const tip = elbow.clone().addScaledVector(out, reach * 0.4).setY(height + reach * 0.3);
+      const main = trace([root, elbow, tip], 0.5, colour);
+
+      const twigs = [0.34, 0.62].map((along, k) => {
+        const from = root.clone().lerp(elbow, along);
+        const side = k === 0 ? 1 : -1;
+        const mid = from.clone().addScaledVector(across, side * reach * 0.16);
+        const end = mid.clone().addScaledVector(out, reach * 0.14).setY(height + reach * 0.12);
+        const bud = new THREE.Mesh(new THREE.OctahedronGeometry(0.85, 0), lit(colour));
+        bud.position.copy(end);
+        group.add(bud);
+        return { grow: trace([from, mid, end], 0.28, colour), bud };
+      });
+
+      const node = new THREE.Mesh(new THREE.OctahedronGeometry(1.9, 0), lit(bright ? NEW_GLOW : colour));
+      node.position.copy(tip);
+      group.add(node);
+
+      const tag = label(tower.name, bright);
+      // A tree is read by its leaves: these stand larger than labels elsewhere.
+      tag.scale.multiplyScalar(1.5);
+      tag.position.copy(tip).addScaledVector(out, 7).setY(tip.y + 8);
+      group.add(tag);
+
+      return (eased: number, count: number, phase: number) => {
+        const grown = stage(eased, order + 1, count + 2);
+        main(grown * 1.25);
+        twigs.forEach((twig, k) => {
+          const mine = Math.max(0, Math.min(1, (grown - 0.35 - k * 0.2) / 0.4));
+          twig.grow(mine);
+          twig.bud.scale.setScalar(Math.max(0.001, mine));
+        });
+        const arrived = Math.max(0, Math.min(1, (grown - 0.75) / 0.25));
+        node.scale.setScalar(Math.max(0.001, arrived) * (1 + 0.12 * Math.sin(phase * 4 + order)));
+        node.rotation.y = phase * 0.8 + order;
+        (tag.material as ThreeTypes.SpriteMaterial).opacity = arrived;
+      };
+    };
+
+    const first = [...towers].sort((a, b) => b.years - a.years);
+    const branches = first.map((tower, index) =>
+      branch(tower, index, 20 + index * GAP, index * 2.399, tower.fresh ? NEW_GLOW : OWN, Boolean(tower.fresh)),
+    );
+    // The second growth comes in between the first, half a step up and round the other way.
+    const laterBranches = later.map((tower, index) =>
+      branch(tower, index, 20 + GAP / 2 + index * GAP, index * 2.399 + Math.PI * 0.62, LATER, true),
+    );
+
+    const shards = Array.from({ length: 10 }, (_, k) => {
+      const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.9 + (k % 3) * 0.4, 0), lit(OWN));
+      group.add(shard);
+      return { shard, radius: 9 + (k % 4) * 5, height: 14 + k * 10, speed: 0.5 + (k % 3) * 0.2 };
+    });
+
     const crown = crowned(group, place, crownAt, 34);
 
     return {
       group,
       top: crownAt + 8,
-      reach: 46,
+      reach: 64,
       grow(eased, phase) {
         const base = Math.max(0.001, stage(eased, 0, 6));
         plinth.scale.set(base, 1, base);
         seams.scale.set(base, 1, base);
-        crown(stage(eased, 1, 3), phase);
-        const lit = stage(eased, 0, 3);
+        const on = stage(eased, 0, 3);
         // A storm's light: never quite steady.
         const flicker = 0.85 + 0.15 * Math.sin(phase * 9) * Math.sin(phase * 2.3);
-        (beam.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.34 * flicker;
-        (core.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.7 * flicker;
-        turn(rings, eased, phase);
-        laterRings.forEach((entry) => {
-          (entry.ring.material as ThreeTypes.MeshBasicMaterial).opacity = 0;
-        });
+        (beam.material as ThreeTypes.MeshBasicMaterial).opacity = on * 0.3 * flicker;
+        (core.material as ThreeTypes.MeshBasicMaterial).opacity = on * 0.7 * flicker;
+        branches.forEach((grow) => grow(eased, branches.length, phase));
+        laterBranches.forEach((grow) => grow(0, laterBranches.length, phase));
         shards.forEach((entry, k) => {
           const angle = phase * entry.speed + k;
-          entry.shard.position.set(Math.cos(angle) * entry.radius, entry.height * lit, Math.sin(angle) * entry.radius);
+          entry.shard.position.set(Math.cos(angle) * entry.radius, entry.height * on, Math.sin(angle) * entry.radius);
           entry.shard.rotation.set(angle, angle * 1.3, 0);
-          (entry.shard.material as ThreeTypes.MeshBasicMaterial).opacity = lit * 0.85;
+          (entry.shard.material as ThreeTypes.MeshBasicMaterial).opacity = on * 0.8;
         });
+        crown(stage(eased, 1, 3), phase);
       },
       growLater(eased, phase) {
-        turn(laterRings, eased, phase);
-        (beam.material as ThreeTypes.MeshBasicMaterial).opacity = 0.34 + eased * 0.22;
+        laterBranches.forEach((grow) => grow(eased, laterBranches.length, phase));
+        (beam.material as ThreeTypes.MeshBasicMaterial).opacity = 0.3 + eased * 0.2;
         (core.material as ThreeTypes.MeshBasicMaterial).opacity = 0.7 + eased * 0.25;
       },
     };
@@ -778,6 +850,7 @@ export function makeBuilders(THREE: Three, label: Label) {
       const moving: Array<(grown: number, phase: number) => void> = [];
       let axleVisible: (shown: boolean) => void = () => {};
       let crownAt = 90;
+      let spread = 50;
 
       if (works === "rotors") {
         // A shaft of rotor drums, the skills engraved round them.
@@ -815,34 +888,50 @@ export function makeBuilders(THREE: Three, label: Label) {
         };
         crownAt = 74;
       } else if (works === "orrery") {
-        // Rings within rings, each carrying its own world.
-        const heart = new THREE.Mesh(new THREE.SphereGeometry(6, 24, 24), skin("bronze", 0.9));
-        heart.position.y = 40;
-        fixed.add(heart);
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 2.4, 40, 8), skin("bronze", 0.5));
-        post.position.y = 20;
-        fixed.add(post);
-        sorted.forEach((tower, index) => {
-          const radius = 14 + index * 7;
-          const pivot = new THREE.Group();
-          pivot.position.y = 40;
-          // An ordered fan: every ring leans a fixed step further than the one
-          // inside it, about one shared axis, so they open like a gyroscope
-          // rather than lying at odds with each other.
-          const lean = sorted.length > 1 ? (index / (sorted.length - 1) - 0.5) * 1.7 : 0;
-          pivot.rotation.set(0, 0, lean);
-          const ring = engravedBand(radius, 7.5, tower.name, glowFor(tower, own));
-          pivot.add(ring);
-          const world = new THREE.Mesh(new THREE.SphereGeometry(1.6 + shadeFor(tower, tallest) * 2.8, 16, 16), skin("bronze", 1));
-          world.position.x = radius;
-          ring.add(world);
-          group.add(pivot);
-          moving.push((grown, phase) => {
-            pivot.scale.setScalar(Math.max(0.001, grown));
-            // One speed, alternating direction, all starting from the same mark.
-            ring.rotation.y = phase * 0.42 * (index % 2 === 0 ? 1 : -1);
+        // Rings within rings, each carrying its own world. A place with many
+        // skills gets two hearts side by side and the rings dealt between
+        // them, so no one cluster is ever too dense to read — however the
+        // data grows.
+        const CROWDED = 5;
+        const clusters =
+          sorted.length > CROWDED
+            ? [sorted.filter((_, k) => k % 2 === 0), sorted.filter((_, k) => k % 2 === 1)]
+            : [sorted];
+        const step = clusters.length > 1 ? 6 : 7;
+        const widest = 13 + (clusters[0].length - 1) * step;
+        clusters.forEach((cluster, which) => {
+          const centre = clusters.length > 1 ? (which === 0 ? -1 : 1) * (widest + 5) : 0;
+          const heart = new THREE.Mesh(new THREE.SphereGeometry(5.4, 24, 24), skin("bronze", 0.9));
+          heart.position.set(centre, 40, 0);
+          fixed.add(heart);
+          const post = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 2.4, 40, 8), skin("bronze", 0.5));
+          post.position.set(centre, 20, 0);
+          fixed.add(post);
+          cluster.forEach((tower, index) => {
+            const radius = 13 + index * step;
+            const pivot = new THREE.Group();
+            pivot.position.set(centre, 40, 0);
+            // An ordered fan: every ring leans a fixed step further than the one
+            // inside it, about one shared axis — and the second heart mirrors the first.
+            const lean = cluster.length > 1 ? (index / (cluster.length - 1) - 0.5) * 1.7 : 0;
+            pivot.rotation.set(0, 0, which === 0 ? lean : -lean);
+            const ring = engravedBand(radius, 7.5, tower.name, glowFor(tower, own));
+            pivot.add(ring);
+            const world = new THREE.Mesh(
+              new THREE.SphereGeometry(1.5 + shadeFor(tower, tallest) * 2.6, 16, 16),
+              skin("bronze", 1),
+            );
+            world.position.x = radius;
+            ring.add(world);
+            group.add(pivot);
+            moving.push((grown, phase) => {
+              pivot.scale.setScalar(Math.max(0.001, grown));
+              // One speed, alternating direction, all starting from the same mark.
+              ring.rotation.y = phase * 0.42 * (index % 2 === 0 ? 1 : -1);
+            });
           });
         });
+        spread = clusters.length > 1 ? widest * 2 + 12 : 50;
         crownAt = 96;
       } else {
         // A difference engine: a column of number wheels to every skill.
@@ -887,7 +976,7 @@ export function makeBuilders(THREE: Three, label: Label) {
       return {
         group,
         top: crownAt + 8,
-        reach: works === "rotors" ? Math.max(48, sorted.length * 7 + 14) : 50,
+        reach: works === "rotors" ? Math.max(48, sorted.length * 7 + 14) : spread,
         grow(eased, phase) {
           const laid = Math.max(0.001, stage(eased, 0, 6));
           fixed.scale.setScalar(laid);

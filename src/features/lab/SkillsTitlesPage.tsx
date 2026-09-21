@@ -866,7 +866,11 @@ export function SkillsTitlesPage() {
           // it starts from, and how it rises or falls, is the shot's own.
           const fit = fitDistance(index);
           const distance = fit * (shot.r0 / shot.r1) + (fit - fit * (shot.r0 / shot.r1)) * e;
-          const pitch = Math.atan2(shot.h0 + (shot.h1 - shot.h0) * e, shot.r0 + (shot.r1 - shot.r0) * e);
+          // The shot says how high it comes in; the place may say how high it
+          // should come to rest (a ring of tabards is read from low and level).
+          const pitchIn = Math.atan2(shot.h0, shot.r0);
+          const pitchRest = placed[index].build.view?.pitch ?? Math.atan2(shot.h1, shot.r1);
+          const pitch = pitchIn + (pitchRest - pitchIn) * e;
           const top = placed[index].build.top;
           eye.set(
             here.x + Math.sin(angle) * Math.cos(pitch) * distance,
@@ -1123,6 +1127,7 @@ export function SkillsTitlesPage() {
         const clock = new THREE.Clock();
         let idle = 0;
         let wasHolding = false;
+        let heldAt = -1;
         let touched = false;
         let handedOver = false;
         controls.addEventListener("controlstart", () => {
@@ -1172,10 +1177,13 @@ export function SkillsTitlesPage() {
           const dt = Math.min(0.05, clock.getDelta());
           const holdingNow = holdingRef.current;
           if (holdingNow) idle += dt;
-          if (holdingNow !== wasHolding) {
+          if (holdingNow !== wasHolding || (holdingNow && Math.abs(p - heldAt) > 1e-6)) {
+            // Also when thrown from one stop straight to another: let go of the
+            // first before taking hold at the second.
             wasHolding = holdingNow;
+            heldAt = p;
+            giveItBack();
             if (holdingNow) takeTheCamera();
-            else giveItBack();
           }
           const phase = p * 34 + idle * 0.55;
           const segment = segmentAt(timeline, p);
