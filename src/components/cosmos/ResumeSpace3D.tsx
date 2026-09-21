@@ -5,8 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import ThreeGlobe from "three-globe";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import aboutDeck from "../../data/aboutDeck.json";
-import type { AboutPathTravelMessage, TechStackTreeNode } from "../../lib/api/contentV2";
+import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
+import type { SpaceTravelMessage as AboutPathTravelMessage } from "./spaceContent";
 import {
   CareerGallery,
   type CareerGalleryFocusInfo,
@@ -51,7 +51,6 @@ import {
   writeStoredUniverseStyle,
   type UniverseStyle,
 } from "./universeBackdrop/UniverseBackdrop";
-import resumeData from "../../data/resume.json";
 import { trackEvent } from "../../lib/analytics";
 import { IS_DEBUG, IS_DEBUG_OVERLAYS, dlog, dwarn } from "../../lib/debugLog";
 import CosmosLoader from "../CosmosLoader";
@@ -1950,12 +1949,6 @@ type AboutDeckSlide = {
   blocks: AboutDeckBlock[];
 };
 
-type AboutDeckData = {
-  aboutDeck: {
-    slides: AboutDeckSlide[];
-  };
-};
-
 type AboutCellSlot = {
   worldPosition: THREE.Vector3;
   worldQuaternion: THREE.Quaternion;
@@ -2037,14 +2030,16 @@ export default function ResumeSpace3D({
   aboutPathTravelMessages,
   techStack,
   profile,
+  resumeData,
+  aboutSlides: publishedAboutSlides,
 }: ResumeSpace3DProps) {
   // Published (or bundled) before mount, so a plain slice is stable for the scene's lifetime.
   const aboutPathRideMessages = useMemo(
     () => aboutPathTravelMessages.slice(0, ABOUT_PATH_RIDE_MESSAGE_LIMIT),
     [aboutPathTravelMessages],
   );
-  const aboutDeckData = aboutDeck as AboutDeckData;
-  const aboutSlides = aboutDeckData.aboutDeck.slides;
+  // Published (Admin → About deck) before mount, like the rest of the content.
+  const aboutSlides = publishedAboutSlides as AboutDeckSlide[];
 
   const portfolioCoreBuild = useMemo(
     () =>
@@ -10763,6 +10758,9 @@ export default function ResumeSpace3D({
         let img = aboutImageCacheRef.current.get(block.src);
         if (!img) {
           img = new Image();
+          // The picture comes from media storage, another origin; the scene reads
+          // its pixels, which the browser only allows for a cross-origin request.
+          img.crossOrigin = "anonymous";
           img.src = block.src;
           await new Promise<void>((resolve) => {
             img!.onload = () => resolve();

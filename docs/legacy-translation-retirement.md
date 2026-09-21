@@ -237,6 +237,58 @@ Still on the old shapes, all of it the space site (stage 5): `App.tsx`,
 `ResumeStructureDiagram.tsx`, `cosmos/portfolioData.ts`,
 `cosmos/moonPortfolioSelector.ts`, `cosmos/ResumeSpace3D*.ts(x)`.
 
+## 7d. Stage 5: the space site (2026-09-21)
+
+The space site now takes **all** of its content from the published release. It
+imports no bundled content file any more (`resume.json`, `aboutDeck.json` and
+the moon-mapping file are out of it), so it follows admin like the other two.
+
+**A change of approach, and why.** The plan said "field renames" inside the
+scene. On reading the code, the jobs are passed around as `any` through five
+files (`ResumeSpace3D.tsx`, `.interaction.ts`, `hooks/useNavigationSystem.ts`,
+`hooks/usePointerInteractions.ts`, `TourDefinitionBuilder.ts`), so a missed
+rename (`job.id` → `job.slug`) would not be a compile error; it would be a moon
+with no texture or a nav button that does nothing, found by eye or not at all,
+in a site the automated browser can't enter. Instead the site has one small
+typed reader at its door, `src/components/cosmos/spaceContent.ts`, which takes
+the release and hands the scene jobs, skills and cores in the groupings its
+code reads (cores holding planes → rings → entries; skills under category
+names). It is the same idea as the portfolio site's `PortfolioItem`: a view of
+the one source, in the site's own folder, passing every record through and
+filtering nothing. The shared `toLegacy` is no longer used by any site.
+Renaming the fields inside the scene remains possible later, one file at a
+time, when someone can watch the scenes while doing it.
+
+- **Proved identical:** `npx tsx scripts/retirement-checks/space.ts` compares
+  what the scene received from the old translation with what it receives now:
+  profile, summary, skills, experience, education, links, certifications, cores,
+  moon mappings, travel messages and About slides all the same, in the same order.
+- **What visibly changes** (from section 7a): ten job moons instead of nine,
+  StormScape (Freelance) first; the original StormScape's company name as edited
+  in admin; About deck pictures served from media storage.
+- **Bug found and fixed while testing:** the About deck reads the pixels of its
+  pictures, and the browser refuses that for a picture from another origin
+  unless it was requested as cross-origin. Media storage already allows it
+  (local: any origin; production: `https://harmadavtian.com`), so the fix is one
+  line, `img.crossOrigin = "anonymous"`. After it, the space site loads with no
+  console errors.
+- **The flat diagram styles** (`ResumeStructureDiagram.tsx`) take their jobs
+  from the same reader. `App.tsx` takes name, title, contact and summary from
+  `release.profile`.
+- **Found, not changed:** `TourDefinitionBuilder.ts` imports
+  `cosmic-narrative.json` but reads `guidedTours` and `planets` one level too
+  high, so it has always received nothing from it. Guided tours, planets and the
+  introduction are in the release; wiring them up would be new behaviour, so it
+  is left for Harma to decide.
+- **Not mine, left alone:** two `any` lint errors in `ResumeStructureDiagram.tsx`.
+
+**For Harma to check by eye** (the automated browser can't get past "ENTERING…"):
+Experience planet with ten moons, their spacing and labels; the nav and its two
+"Stormscape" entries; one job moon with the hologram open; the new
+StormScape (Freelance) moon (no memories or tech labels yet, and no moon
+texture of its own); Skills planet; a portfolio core; the About ride and deck
+pictures; a guided tour stop.
+
 ## 8. Data: backups and how new data reaches production
 
 **Backups taken 2026-09-21 before any work** (in `db-backups/`, not in git,
@@ -287,6 +339,7 @@ the subscription and tenant check.
 
 ## 10. Change log
 
+- 2026-09-21: stage 5 done (section 7d); approach changed from renames to a typed reader at the space site's door.
 - 2026-09-21: stage 4 done (section 7c).
 - 2026-09-21: stages 2 and 3 done (section 7b).
 - 2026-09-21: stage 1 done (section 7a): no content drift; space site interior not captured (Q7).

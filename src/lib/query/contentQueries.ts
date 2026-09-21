@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchSiteContent } from "../api/contentV2";
 import { buildTechStackTree, techStackTreeFromSkills } from "@hd/content-schema/tech-stack-tree";
 import type { Release } from "../api/release";
+import { spaceContentFromRelease } from "../../components/cosmos/spaceContent";
 import { portfolioItemsFromRelease } from "../../features/fast/lib/portfolioTransform";
 
 export const contentKeys = {
@@ -90,4 +91,9 @@ export function useReleaseQuery<T = Release>(select?: (release: Release) => T) {
 /** The published projects, one per entry or client site, in portfolio order. */
 export function usePortfolioItemsQuery() {
   return useReleaseQuery(portfolioItemsFromRelease);
+}
+
+/** Everything the 3D site shows (see components/cosmos/spaceContent.ts). */
+export function useSpaceContentQuery() {
+  return useReleaseQuery(spaceContentFromRelease);
 }

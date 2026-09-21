@@ -1,6 +1,6 @@
 import * as d3 from "d3";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { TechStackTreeNode } from "../../../lib/api/contentV2";
+import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import { useTechStackQuery } from "../../../lib/query/contentQueries";
 
 interface TechConstellationProps {

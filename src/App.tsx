@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import gsap from "gsap";
-import resumeData from "./data/resume.json";
 import ResumeStructureDiagram from "./components/ResumeStructureDiagram";
 import DiagramSettings, {
   type DiagramStyle,
   type DiagramStyleOptions,
 } from "./components/DiagramSettings";
 import { isCinematicSuspended, subscribeCinematicSuspended } from "./lib/cinematicSuspend";
-import { useResumeQuery } from "./lib/query/contentQueries";
+import { useReleaseQuery } from "./lib/query/contentQueries";
 import "./styles/main.scss";
 
 // The diagram styles can link to page sections; the experience is a single
@@ -30,10 +29,10 @@ function App() {
   }, []);
 
   // Name, title, contact and summary come from the published profile
-  // (Admin → Profile), falling back to the bundled resume.
-  const publishedResume = useResumeQuery();
-  const personal = publishedResume.data?.payload.personal ?? resumeData.personal;
-  const summary = publishedResume.data?.payload.summary ?? resumeData.summary;
+  // (Admin → Profile).
+  const profile = useReleaseQuery((release) => release.profile).data;
+  const personal = profile ?? { name: "", title: "", email: "", location: "" };
+  const summary = profile?.summary ?? "";
 
   // Diagram settings state
   const [diagramStyle, setDiagramStyle] = useState<DiagramStyle>("space");

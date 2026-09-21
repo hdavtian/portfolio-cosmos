@@ -4,10 +4,9 @@ import type {
   PortfolioResolvedMediaItem,
 } from "./portfolioData";
 import { resolvePortfolioMediaItems } from "./portfolioData";
-import type {
-  MoonPortfolioCompanyMapping,
-  MoonPortfolioTabMapping,
-} from "../../data/moonPortfolioMapping";
+import type { SpaceMoonMapping as MoonPortfolioCompanyMapping } from "./spaceContent";
+
+type MoonPortfolioTabMapping = NonNullable<MoonPortfolioCompanyMapping["tabs"]>[number];
 
 export type MoonPortfolioSubcategory = {
   id: string;

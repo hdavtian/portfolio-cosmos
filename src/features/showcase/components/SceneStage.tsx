@@ -5,7 +5,7 @@ import {
   setCinematicLaunch,
   subscribeCinematicLaunch,
 } from "../../../app/cinematic/launchStore";
-import type { TechStackTreeNode } from "../../../lib/api/contentV2";
+import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
 import { EMPTY_PORTFOLIO, type SceneJob, type ScenePortfolio, type ShowcaseScene } from "../scenes/types";

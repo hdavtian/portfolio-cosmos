@@ -1,5 +1,5 @@
 import type * as THREE from "three";
-import type { TechStackTreeNode } from "../../../lib/api/contentV2";
+import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { SceneData, ScenePointer, ShowcaseScene, ThreeModule } from "./types";
 
 // A preview of the cinematic Skills Lattice, rebuilt as its own module from the
