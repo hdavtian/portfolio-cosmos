@@ -1,6 +1,6 @@
 # One technology list: consolidation plan
 
-**Status: DISCUSSION DRAFT 2 (2026-09-21). Nothing here is built. Do not implement until Harma marks it settled.**
+**Status: DISCUSSION DRAFT 3 (2026-09-21). Nothing here is built. Do not implement until Harma marks it settled.**
 
 Related: `docs/content-platform-plan.md`, `docs/d3-skills-graph.md`, the mock at
 `src/data/mock/skillTimeline.json` and its rules in `scripts/skills-report.mjs`.
@@ -65,6 +65,8 @@ unique content and stay as they are.
 | D4 | One tree. Categories are its top-level entries, not a second tagging system. Sites choose to show it nested or flattened. | 2026-09-21 |
 | D5 | "Current stack" stays as an idea, as a simple tick on a technology; no start-year tooling. | 2026-09-21 |
 | D6 | No stored derived data. One set of source records, one published release; any reshaping (`toLegacy`, the tree, year totals) is computed when read and never saved or edited. If a calculation ever gets too heavy it moves into the publish step, still regenerated every time. | 2026-09-21 |
+| D7 | Hard rule: one home per skill (one parent in the tree). No site shows a skill under two headings today. If something seems to belong in two places it is two skills. | 2026-09-21 |
+| D8 | Non-code skills (sales, support, consulting, leading people) live in the same tree. Harma will organise them when entering the data; grouping is revisited once the real data is in, not designed up front. | 2026-09-21 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -91,7 +93,7 @@ What the mock did with several categories per skill becomes nesting:
 | Angular in Frontend + SPA frameworks | Frontend → SPA frameworks → Angular |
 | HTML / CSS in Frontend + Styling | Frontend → Styling → HTML / CSS |
 | anything in Current stack | `current` tick |
-| Sales in Support & sales + Leadership | one home (Support & sales); *Q9* |
+| Sales in Support & sales + Leadership | dropped; Harma re-enters non-code skills per job (D8) |
 
 ### 4.2 Category
 
@@ -184,8 +186,8 @@ All per the `syncfusion-list-pages` and `syncfusion-edit-dialogs` skills.
 | ~~Q4~~ | *Settled by D6.* Totals computed by the API at publish time, or by each site from shared code? | Shared code, computed in the site: "now" moves, a published number would go stale. |
 | Q5 | StormScape's return: second Experience or multiple periods on one? | Second Experience with a `continues` link to the first: smallest schema change, film already works this way. |
 | Q6 | Earthlink / HostPro on the resume and cinematic site, or film only? | Harma's call. |
-| Q7 | Non-code skills (sales, leading engineers) live in the same master list? | Yes, under their own categories, unticked for the resume unless wanted. |
-| Q9 | A few skills sat in two groups in the mock (Sales in Support & sales and Leadership). With one tree each gets one home. Acceptable? | Yes; pick the home that reads best to an employer. |
+| ~~Q7~~ | *Settled by D8.* Non-code skills (sales, leading engineers) live in the same master list? | Yes, under their own categories, unticked for the resume unless wanted. |
+| ~~Q9~~ | *Settled by D7/D8.* A few skills sat in two groups in the mock (Sales in Support & sales and Leadership). With one tree each gets one home. Acceptable? | Yes; pick the home that reads best to an employer. |
 | Q10 | New technologies appear in the portfolio constellation and lattice (they draw the tree). Show everything, or only `showOnResume` ones? | Harma's call after seeing it; start with ticked only so nothing changes. |
 | Q8 | Dates as years or year-months? | Year-month, matching Experience dates; the form accepts a bare year. |
 
@@ -211,5 +213,6 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-21: draft 3: one home per skill is a hard rule (D7); non-code skills organised from real data later (D8).
 - 2026-09-21: draft 2: one tree instead of tree + categories (D4), "current" as a tick (D5), no stored derived data (D6).
 - 2026-09-21: draft 1 from the usage analysis and Harma's decisions D1–D3.
