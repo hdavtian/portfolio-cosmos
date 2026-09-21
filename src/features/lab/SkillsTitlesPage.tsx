@@ -490,10 +490,8 @@ export function SkillsTitlesPage() {
           // Level ground under each place, so its clockwork sits flat.
           spots.forEach((spot, index) => {
             const d = Math.hypot(x - spot.x, z - spot.y);
-            if (d < 130)
-              h +=
-                (spotHeights[index] - h) *
-                softly(0, 1, 1 - Math.max(0, d - 70) / 60);
+            // Wide enough for the outlying wheels, which would otherwise sink into a slope.
+            if (d < 200) h += (spotHeights[index] - h) * softly(0, 1, 1 - Math.max(0, d - 122) / 78);
           });
           return Math.max(h, SEA - 5);
         };
@@ -778,7 +776,7 @@ export function SkillsTitlesPage() {
           build.group.position.copy(at).add(new THREE.Vector3(0, 1.5, 0));
           scene.add(build.group);
 
-          const gears = gearPlatform();
+          const gears = gearPlatform(city.slug);
           gears.holder.position.copy(at);
           const base = new THREE.Group();
           base.position.copy(at);

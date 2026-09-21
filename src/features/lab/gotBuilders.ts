@@ -829,7 +829,8 @@ export function makeBuilders(THREE: Three, label: Label) {
       // B: the house's sigil, laid into the floor the machine stands on.
       const face = emblem(letters, field, second);
       const floor = new THREE.Mesh(
-        new THREE.CircleGeometry(44, 64),
+        // Small enough to leave the wheel's own dressing, and the code cut into it, showing round it.
+        new THREE.CircleGeometry(27, 64),
         new THREE.MeshStandardMaterial({
           map: face,
           emissive: new THREE.Color("#ffffff"),
@@ -995,31 +996,442 @@ export function makeBuilders(THREE: Three, label: Label) {
     engine: combined("engine"),
   };
 
-  /** The clockwork each place stands on: a pair of meshed gears turned by the build. */
-  const gearPlatform = () => {
-    const holder = new THREE.Group();
-    const makeGear = (radius: number, teeth: number, thickness: number) => {
-      const gear = new THREE.Group();
-      gear.add(new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, thickness, 40), skin("bronze", 0.25)));
-      for (let i = 0; i < teeth; i += 1) {
-        const tooth = new THREE.Mesh(new THREE.BoxGeometry(radius * 0.16, thickness, radius * 0.13), skin("bronze", 0.35));
-        const angle = (i / teeth) * Math.PI * 2;
-        tooth.position.set(Math.cos(angle) * radius * 1.06, 0, Math.sin(angle) * radius * 1.06);
-        tooth.rotation.y = -angle;
-        gear.add(tooth);
+  /* ------------------------------------------------------------------ */
+  /* The wheels each place stands on                                      */
+
+  /**
+   * Five makers' work, one per material, each dressed the way its trade would
+   * have dressed it, and each with code cut into it:
+   *
+   *   wood  — turned on a lathe, strapped in iron, the code burnt in with a poker
+   *   iron  — machined: brushed, grooved, a ring of bolts, the code stamped
+   *   glass — cut crystal: hard straight facets meeting at points, the code frosted
+   *   gold  — engine-turned: a guilloché rosette, a beaded rim, the code engraved
+   *   rock  — quarried granite: a chiselled channel, tally marks, the code carved
+   */
+  type Stuff = "wood" | "iron" | "glass" | "gold" | "rock";
+
+  /** Text set round a circle, the way it is on a coin or a dial. */
+  const roundText = (
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    c: number,
+    radius: number,
+    font: string,
+    paint: (char: string) => void,
+  ) => {
+    ctx.font = font;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const run = `${text}   ·   `;
+    const width = ctx.measureText(run).width;
+    const repeats = Math.max(1, Math.floor((Math.PI * 2 * radius) / width));
+    const whole = run.repeat(repeats);
+    const total = ctx.measureText(whole).width;
+    let at = 0;
+    for (const char of whole) {
+      const w = ctx.measureText(char).width;
+      const angle = ((at + w / 2) / total) * Math.PI * 2 - Math.PI / 2;
+      ctx.save();
+      ctx.translate(c + Math.cos(angle) * radius, c + Math.sin(angle) * radius);
+      ctx.rotate(angle + Math.PI / 2);
+      paint(char);
+      ctx.restore();
+      at += w;
+    }
+  };
+
+  const FACES = new Map<string, ThreeTypes.Texture>();
+  /** The top face of a wheel: the maker's ornament, and two rings of code. */
+  const wheelFace = (stuff: Stuff, code: [string, string]) => {
+    const key = `${stuff}|${code[0]}`;
+    const made = FACES.get(key);
+    if (made) return made;
+    const face = painted((ctx, size) => {
+      const c = size / 2;
+      const R = c * 0.985;
+      const circle = (r: number) => {
+        ctx.beginPath();
+        ctx.arc(c, c, r, 0, Math.PI * 2);
+      };
+      const mono = (px: number) => `600 ${px}px "JetBrains Mono", Menlo, Consolas, monospace`;
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, size, size);
+      ctx.save();
+      circle(R);
+      ctx.clip();
+
+      if (stuff === "wood") {
+        // Planks, then the lathe's rings over them.
+        ctx.fillStyle = "#6a4626";
+        ctx.fillRect(0, 0, size, size);
+        for (let i = 0; i < 9; i += 1) {
+          ctx.fillStyle = i % 2 === 0 ? "rgba(40, 22, 8, 0.28)" : "rgba(150, 100, 52, 0.16)";
+          ctx.fillRect(0, (i * size) / 9, size, size / 9);
+          ctx.fillStyle = "rgba(20, 10, 2, 0.7)";
+          ctx.fillRect(0, (i * size) / 9, size, 3);
+        }
+        for (let i = 0; i < 260; i += 1) {
+          ctx.strokeStyle = i % 2 === 0 ? "rgba(30, 14, 4, 0.22)" : "rgba(190, 130, 70, 0.12)";
+          ctx.beginPath();
+          const y = (i * 47) % size;
+          ctx.moveTo(0, y);
+          ctx.bezierCurveTo(size * 0.3, y + 7, size * 0.6, y - 7, size, y + 3);
+          ctx.stroke();
+        }
+        ctx.lineWidth = 2;
+        for (let r = R * 0.16; r < R; r += R * 0.043) {
+          ctx.strokeStyle = "rgba(24, 12, 3, 0.3)";
+          circle(r);
+          ctx.stroke();
+        }
+        // Iron straps with rivets, crossing the face.
+        for (let k = 0; k < 4; k += 1) {
+          ctx.save();
+          ctx.translate(c, c);
+          ctx.rotate((k / 4) * Math.PI);
+          ctx.fillStyle = "#26221e";
+          ctx.fillRect(-R, -13, R * 2, 26);
+          ctx.fillStyle = "#6f665a";
+          for (let x = -R * 0.9; x < R; x += R * 0.18) {
+            ctx.beginPath();
+            ctx.arc(x, 0, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+        // The code, burnt in.
+        roundText(ctx, code[0], c, R * 0.86, mono(30), (ch) => {
+          ctx.fillStyle = "rgba(18, 8, 2, 0.92)";
+          ctx.fillText(ch, 0, 0);
+        });
+        roundText(ctx, code[1], c, R * 0.6, mono(26), (ch) => {
+          ctx.fillStyle = "rgba(18, 8, 2, 0.85)";
+          ctx.fillText(ch, 0, 0);
+        });
+      } else if (stuff === "iron") {
+        ctx.fillStyle = "#4a4d50";
+        ctx.fillRect(0, 0, size, size);
+        // Brushed round the axis, the way a faced-off casting is.
+        for (let i = 0; i < 720; i += 1) {
+          const angle = (i / 720) * Math.PI * 2;
+          ctx.strokeStyle = i % 3 === 0 ? "rgba(255, 255, 255, 0.07)" : "rgba(0, 0, 0, 0.09)";
+          ctx.beginPath();
+          ctx.moveTo(c, c);
+          ctx.lineTo(c + Math.cos(angle) * R, c + Math.sin(angle) * R);
+          ctx.stroke();
+        }
+        // Machined grooves, and lightening holes between the spokes.
+        ctx.lineWidth = 5;
+        [0.95, 0.74, 0.47, 0.24].forEach((f) => {
+          ctx.strokeStyle = "rgba(10, 12, 14, 0.75)";
+          circle(R * f);
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(210, 220, 228, 0.22)";
+          ctx.lineWidth = 2;
+          circle(R * f - 4);
+          ctx.stroke();
+          ctx.lineWidth = 5;
+        });
+        for (let k = 0; k < 6; k += 1) {
+          const angle = (k / 6) * Math.PI * 2;
+          ctx.fillStyle = "#15171a";
+          ctx.beginPath();
+          ctx.arc(c + Math.cos(angle) * R * 0.355, c + Math.sin(angle) * R * 0.355, R * 0.085, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        for (let k = 0; k < 24; k += 1) {
+          const angle = (k / 24) * Math.PI * 2;
+          ctx.fillStyle = "#1c1e21";
+          ctx.beginPath();
+          ctx.arc(c + Math.cos(angle) * R * 0.91, c + Math.sin(angle) * R * 0.91, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "rgba(220, 228, 235, 0.35)";
+          ctx.fillRect(c + Math.cos(angle) * R * 0.91 - 4, c + Math.sin(angle) * R * 0.91 - 1, 8, 2);
+        }
+        // The code, stamped: a dark strike with a bright lip.
+        const stamp = (ch: string) => {
+          ctx.fillStyle = "rgba(225, 232, 238, 0.4)";
+          ctx.fillText(ch, 1.5, 1.5);
+          ctx.fillStyle = "rgba(8, 9, 10, 0.95)";
+          ctx.fillText(ch, 0, 0);
+        };
+        roundText(ctx, code[0], c, R * 0.845, mono(30), stamp);
+        roundText(ctx, code[1], c, R * 0.6, mono(26), stamp);
+      } else if (stuff === "glass") {
+        const wash = ctx.createRadialGradient(c, c, R * 0.05, c, c, R);
+        wash.addColorStop(0, "#9fe6e0");
+        wash.addColorStop(0.6, "#3f8f96");
+        wash.addColorStop(1, "#1c4d58");
+        ctx.fillStyle = wash;
+        ctx.fillRect(0, 0, size, size);
+        // Cut crystal: nothing curved, every line a straight cut to a point.
+        const cut = (x1: number, y1: number, x2: number, y2: number, alpha: number) => {
+          ctx.strokeStyle = `rgba(235, 255, 255, ${alpha})`;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+          ctx.strokeStyle = `rgba(6, 30, 38, ${alpha * 0.7})`;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x1 + 2, y1 + 2);
+          ctx.lineTo(x2 + 2, y2 + 2);
+          ctx.stroke();
+        };
+        const N = 16;
+        const point = (k: number, f: number): [number, number] => [
+          c + Math.cos((k / N) * Math.PI * 2) * R * f,
+          c + Math.sin((k / N) * Math.PI * 2) * R * f,
+        ];
+        for (let k = 0; k < N; k += 1) {
+          // A star of chords, skipping five points each time, and a second skipping seven.
+          cut(...point(k, 0.97), ...point(k + 5, 0.97), 0.75);
+          cut(...point(k, 0.72), ...point(k + 7, 0.72), 0.5);
+          cut(...point(k, 0.97), ...point(k + 0.5, 0.72), 0.55);
+          cut(...point(k + 1, 0.97), ...point(k + 0.5, 0.72), 0.55);
+          cut(...point(k, 0.3), ...point(k + 6, 0.3), 0.6);
+        }
+        // The code, frosted into the surface.
+        const frost = (ch: string) => {
+          ctx.fillStyle = "rgba(245, 255, 255, 0.95)";
+          ctx.fillText(ch, 0, 0);
+        };
+        roundText(ctx, code[0], c, R * 0.855, mono(29), frost);
+        roundText(ctx, code[1], c, R * 0.5, mono(25), frost);
+      } else if (stuff === "gold") {
+        const wash = ctx.createRadialGradient(c * 0.8, c * 0.7, R * 0.05, c, c, R);
+        wash.addColorStop(0, "#f7dc86");
+        wash.addColorStop(0.55, "#c9962f");
+        wash.addColorStop(1, "#8d6214");
+        ctx.fillStyle = wash;
+        ctx.fillRect(0, 0, size, size);
+        // Engine turning: a rosette of overlapping circles, as on a watch dial.
+        ctx.lineWidth = 1.4;
+        for (let k = 0; k < 72; k += 1) {
+          const angle = (k / 72) * Math.PI * 2;
+          ctx.strokeStyle = k % 2 === 0 ? "rgba(70, 40, 4, 0.5)" : "rgba(255, 244, 196, 0.45)";
+          ctx.beginPath();
+          ctx.arc(c + Math.cos(angle) * R * 0.27, c + Math.sin(angle) * R * 0.27, R * 0.27, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        // A band of waves between two fine lines, then a beaded rim.
+        ctx.strokeStyle = "rgba(60, 34, 2, 0.75)";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let i = 0; i <= 720; i += 1) {
+          const angle = (i / 720) * Math.PI * 2;
+          const r = R * (0.7 + Math.sin(angle * 36) * 0.018);
+          const x = c + Math.cos(angle) * r;
+          const y = c + Math.sin(angle) * r;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        [0.665, 0.735, 0.93].forEach((f) => {
+          circle(R * f);
+          ctx.stroke();
+        });
+        for (let k = 0; k < 96; k += 1) {
+          const angle = (k / 96) * Math.PI * 2;
+          const bead = ctx.createRadialGradient(
+            c + Math.cos(angle) * R * 0.962 - 2,
+            c + Math.sin(angle) * R * 0.962 - 2,
+            1,
+            c + Math.cos(angle) * R * 0.962,
+            c + Math.sin(angle) * R * 0.962,
+            8,
+          );
+          bead.addColorStop(0, "#fff6c8");
+          bead.addColorStop(1, "#7a5210");
+          ctx.fillStyle = bead;
+          ctx.beginPath();
+          ctx.arc(c + Math.cos(angle) * R * 0.962, c + Math.sin(angle) * R * 0.962, 7, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // The code, hand-engraved: a dark cut with a bright burr.
+        const engrave = (ch: string) => {
+          ctx.fillStyle = "rgba(255, 248, 210, 0.55)";
+          ctx.fillText(ch, 1.4, 1.4);
+          ctx.fillStyle = "rgba(52, 28, 0, 0.95)";
+          ctx.fillText(ch, 0, 0);
+        };
+        roundText(ctx, code[0], c, R * 0.835, mono(29), engrave);
+        roundText(ctx, code[1], c, R * 0.6, mono(24), engrave);
+      } else {
+        // Granite.
+        ctx.fillStyle = "#77736c";
+        ctx.fillRect(0, 0, size, size);
+        for (let i = 0; i < 5200; i += 1) {
+          const tone = (i * 37) % 3;
+          ctx.fillStyle =
+            tone === 0 ? "rgba(30, 28, 26, 0.35)" : tone === 1 ? "rgba(220, 214, 204, 0.3)" : "rgba(120, 96, 84, 0.3)";
+          const w = 1 + (i % 4);
+          ctx.fillRect((i * 193) % size, (i * 71 + ((i * i) % 97)) % size, w, w);
+        }
+        // Chiselled: every cut is a dark line with a lit edge beside it.
+        const chisel = (draw: () => void, width: number) => {
+          ctx.lineWidth = width;
+          ctx.strokeStyle = "rgba(14, 12, 10, 0.85)";
+          draw();
+          ctx.save();
+          ctx.translate(2, 2);
+          ctx.lineWidth = Math.max(1, width * 0.35);
+          ctx.strokeStyle = "rgba(235, 228, 214, 0.4)";
+          draw();
+          ctx.restore();
+        };
+        [0.95, 0.73, 0.45].forEach((f) =>
+          chisel(() => {
+            circle(R * f);
+            ctx.stroke();
+          }, 7),
+        );
+        // Tally marks round the inner channel, in fives, the oldest counting there is.
+        for (let k = 0; k < 60; k += 1) {
+          if (k % 6 === 5) continue;
+          const angle = (k / 60) * Math.PI * 2;
+          chisel(() => {
+            ctx.beginPath();
+            ctx.moveTo(c + Math.cos(angle) * R * 0.34, c + Math.sin(angle) * R * 0.34);
+            ctx.lineTo(c + Math.cos(angle) * R * 0.42, c + Math.sin(angle) * R * 0.42);
+            ctx.stroke();
+          }, 4);
+        }
+        // A key pattern of right angles between the outer channels.
+        for (let k = 0; k < 40; k += 1) {
+          const a0 = (k / 40) * Math.PI * 2;
+          const a1 = ((k + 0.5) / 40) * Math.PI * 2;
+          chisel(() => {
+            ctx.beginPath();
+            ctx.moveTo(c + Math.cos(a0) * R * 0.905, c + Math.sin(a0) * R * 0.905);
+            ctx.lineTo(c + Math.cos(a0) * R * 0.875, c + Math.sin(a0) * R * 0.875);
+            ctx.lineTo(c + Math.cos(a1) * R * 0.875, c + Math.sin(a1) * R * 0.875);
+            ctx.lineTo(c + Math.cos(a1) * R * 0.905, c + Math.sin(a1) * R * 0.905);
+            ctx.stroke();
+          }, 3);
+        }
+        // The code, carved.
+        const carve = (ch: string) => {
+          ctx.fillStyle = "rgba(240, 232, 218, 0.45)";
+          ctx.fillText(ch, 2, 2);
+          ctx.fillStyle = "rgba(12, 10, 8, 0.92)";
+          ctx.fillText(ch, 0, 0);
+        };
+        roundText(ctx, code[0], c, R * 0.805, mono(30), carve);
+        roundText(ctx, code[1], c, R * 0.59, mono(26), carve);
       }
-      gear.add(new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.16, radius * 0.16, thickness + 1.4, 12), skin("iron", 0.8)));
-      return gear;
-    };
-    const big = makeGear(52, 26, 3);
-    const small = makeGear(19, 10, 3);
-    small.position.set(52 + 19 + 3, 0, 0);
-    holder.add(big, small);
+      ctx.restore();
+    }, 1024);
+    face.wrapS = THREE.ClampToEdgeWrapping;
+    face.wrapT = THREE.ClampToEdgeWrapping;
+    face.anisotropy = 8;
+    FACES.set(key, face);
+    return face;
+  };
+
+  /** How each material takes the light, and what its teeth are like. */
+  const BODY: Record<Stuff, { side: () => ThreeTypes.Material; face: Partial<ThreeTypes.MeshStandardMaterialParameters>; teeth: number; tooth: [number, number]; bump: number }> = {
+    wood: { side: () => skin("timber", 0.7), face: { metalness: 0.05, roughness: 0.86 }, teeth: 0.42, tooth: [0.17, 0.13], bump: 0.9 },
+    iron: { side: () => skin("iron", 0.95), face: { metalness: 0.9, roughness: 0.36 }, teeth: 0.62, tooth: [0.1, 0.1], bump: 0.7 },
+    glass: {
+      side: () => new THREE.MeshStandardMaterial({ color: "#5fb3b8", metalness: 0.1, roughness: 0.06, transparent: true, opacity: 0.55 }),
+      face: { metalness: 0.1, roughness: 0.05, transparent: true, opacity: 0.72, emissive: new THREE.Color("#0c3a40"), emissiveIntensity: 0.5 },
+      teeth: 0.7,
+      tooth: [0.06, 0.12],
+      bump: 0.25,
+    },
+    gold: {
+      side: () => new THREE.MeshStandardMaterial({ color: "#d6a435", metalness: 1, roughness: 0.22, emissive: new THREE.Color("#5a3c08"), emissiveIntensity: 0.35 }),
+      face: { metalness: 1, roughness: 0.2, emissive: new THREE.Color("#4a3006"), emissiveIntensity: 0.4 },
+      teeth: 0.8,
+      tooth: [0.07, 0.07],
+      bump: 0.6,
+    },
+    rock: { side: () => skin("stone", 0.6), face: { metalness: 0, roughness: 0.97 }, teeth: 0.3, tooth: [0.24, 0.18], bump: 1.4 },
+  };
+
+  const makeWheel = (stuff: Stuff, radius: number, thickness: number, code: [string, string]) => {
+    const body = BODY[stuff];
+    const face = wheelFace(stuff, code);
+    const top = new THREE.MeshStandardMaterial({ map: face, bumpMap: face, bumpScale: body.bump, ...body.face });
+    const side = body.side();
+    const wheel = new THREE.Group();
+    // Side, top, bottom: the face the camera sees is the dressed one.
+    wheel.add(new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, thickness, 72), [side, top, side]));
+    const teeth = Math.max(8, Math.round(radius * body.teeth));
+    for (let i = 0; i < teeth; i += 1) {
+      const angle = (i / teeth) * Math.PI * 2;
+      const tooth =
+        stuff === "gold"
+          ? new THREE.Mesh(new THREE.CylinderGeometry(radius * body.tooth[0], radius * body.tooth[0], thickness, 12), side)
+          : new THREE.Mesh(new THREE.BoxGeometry(radius * body.tooth[0], thickness, radius * body.tooth[1]), side);
+      tooth.position.set(Math.cos(angle) * radius * 1.05, 0, Math.sin(angle) * radius * 1.05);
+      tooth.rotation.y = -angle;
+      wheel.add(tooth);
+    }
+    const boss = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.13, radius * 0.16, thickness + 1.6, 16),
+      stuff === "gold" || stuff === "glass" ? side : skin("iron", 0.9),
+    );
+    wheel.add(boss);
+    return wheel;
+  };
+
+  /** What each place stands on: which maker's wheels, how many, and what is cut into them. */
+  const PLATFORMS: Record<string, { wheels: Stuff[]; code: [string, string] }> = {
+    earthlink: { wheels: ["wood", "iron"], code: ['<html><body bgcolor="#ffffff">', '<a href="http://www.earthlink.net">'] },
+    hostpro: { wheels: ["iron", "wood", "iron"], code: ['<table cellpadding="0" cellspacing="0">', "body { font: 12px Arial, sans-serif }"] },
+    stormscape: { wheels: ["rock", "gold", "iron"], code: ["<?php echo $row['title']; ?>", "SELECT * FROM clients WHERE active = 1"] },
+    unitedlayer: { wheels: ["iron", "glass"], code: ["<?php include 'header.php'; ?>", "service httpd restart && tail -f access_log"] },
+    murad: { wheels: ["gold", "glass", "gold"], code: ["$('#cart').fadeIn('slow');", ".product { float: left; margin: 0 12px }"] },
+    "capital-group": { wheels: ["rock", "gold", "rock", "iron"], code: ["document.getElementById('nav')", '<div class="fund-table">  #nav li a:hover'] },
+    boingo: { wheels: ["glass", "iron", "glass"], code: ["$.ajax({ url: '/api/venues', type: 'GET' });", "SELECT ssid FROM hotspots WHERE venue_id = ?"] },
+    rpa: { wheels: ["wood", "gold", "glass", "wood"], code: ['const Hero = () => <section className="hero" />;', "@include breakpoint(md) { .grid { display: grid } }"] },
+    investcloud: { wheels: ["gold", "glass", "iron", "gold"], code: ["export class GridComponent implements OnInit { }", "public async Task<IActionResult> Get() => Ok(await repo.All());"] },
+  };
+
+  /** The clockwork each place stands on: two, three or four meshed wheels, turned by the build. */
+  const gearPlatform = (placeSlug: string) => {
+    const spec = PLATFORMS[placeSlug] ?? PLATFORMS.earthlink;
+    const holder = new THREE.Group();
+    const MAIN = 52;
+    const main = makeWheel(spec.wheels[0], MAIN, 3, spec.code);
+    holder.add(main);
+
+    // The others mesh with the main wheel, set round it; a fourth meshes with the second.
+    const bearings = [0.18, 2.35, 4.25];
+    const lesser = spec.wheels.slice(1).map((stuff, index) => {
+      const radius = [19, 24, 15][index];
+      const wheel = makeWheel(stuff, radius, 3, [spec.code[1], spec.code[0]]);
+      if (index < 2) {
+        const angle = bearings[index];
+        const reach = MAIN + radius + 3.4;
+        wheel.position.set(Math.cos(angle) * reach, 0, Math.sin(angle) * reach);
+        return { wheel, ratio: -(MAIN / radius), offset: index * 0.11 };
+      }
+      // The fourth hangs off the second wheel rather than the main one.
+      const parent = 19;
+      const from = bearings[0];
+      const centre = MAIN + parent + 3.4;
+      const out = from - 0.95;
+      wheel.position.set(
+        Math.cos(from) * centre + Math.cos(out) * (parent + radius + 2.6),
+        0,
+        Math.sin(from) * centre + Math.sin(out) * (parent + radius + 2.6),
+      );
+      return { wheel, ratio: (MAIN / parent) * (parent / radius), offset: 0.07 };
+    });
+    lesser.forEach((entry) => holder.add(entry.wheel));
+
     return {
       holder,
       turn(amount: number, rise: number) {
-        big.rotation.y = amount;
-        small.rotation.y = -amount * (52 / 19) + 0.16;
+        main.rotation.y = amount;
+        lesser.forEach((entry) => {
+          entry.wheel.rotation.y = amount * entry.ratio + entry.offset;
+        });
         holder.position.y = -7 + 7 * rise;
       },
     };
