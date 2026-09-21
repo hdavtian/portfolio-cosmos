@@ -40,3 +40,6 @@ db-backups/
 
 # Agent worktrees are separate checkouts, never part of this repo
 .claude/worktrees/
+
+# Production media backups (npm run media:pull)
+media-backups/
