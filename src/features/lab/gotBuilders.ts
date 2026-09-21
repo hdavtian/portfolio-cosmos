@@ -1011,7 +1011,8 @@ export function makeBuilders(THREE: Three, label: Label) {
         reach: works === "rotors" ? Math.max(48, sorted.length * 7 + 14) : spread,
         grow(eased, phase) {
           const laid = Math.max(0.001, stage(eased, 0, 6));
-          fixed.scale.setScalar(laid);
+          // What grows from the ground grows straight up: never sideways as well.
+          fixed.scale.set(1, laid, 1);
           fixed.visible = eased > 0.001;
           axleVisible(eased > 0.001);
           floor.scale.setScalar(laid);

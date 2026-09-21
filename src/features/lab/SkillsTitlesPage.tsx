@@ -176,7 +176,8 @@ function buildTimeline(cities: City[]): Segment[] {
     parts.push({
       kind: "dwell",
       city: index,
-      weight: city.slug === "stormscape" ? 2.5 : 2.1,
+      // Half as fast again as it was.
+      weight: (city.slug === "stormscape" ? 2.5 : 2.1) / 1.5,
     });
   });
   parts.push({ kind: "outro", city: cities.length - 1, weight: 1.9 });
@@ -905,9 +906,16 @@ export function SkillsTitlesPage() {
             [0.13, 0.23],
             [0.16, 0.26],
           ],
-          formed: 0.5,
-          easeBack: 0.68,
-          pullOut: 0.8,
+          // Once all three stand bare, the lettering is etched into each, on the same stagger.
+          etch: [
+            [0.29, 0.39],
+            [0.32, 0.42],
+            [0.35, 0.45],
+          ],
+          // Two seconds to read it, and the camera begins to leave.
+          formed: 0.45 + 2 / (timeline[0].to * filmSeconds),
+          easeBack: 0.45 + 2 / (timeline[0].to * filmSeconds) + 0.14,
+          pullOut: 0.45 + 2 / (timeline[0].to * filmSeconds) + 0.25,
         };
         const FORGE_EYE = new THREE.Vector3(SUN.x + 46, SUN.y + 34, SUN.z + 372);
         const MID_EYE = new THREE.Vector3(SUN.x + 60, SUN.y + 44, SUN.z + 400);
@@ -1229,6 +1237,7 @@ export function SkillsTitlesPage() {
           astrolabe.update(clock.elapsedTime, camera, {
             sun: forging ? softly(INTRO.sun[0], INTRO.sun[1], t) : 1,
             bands: INTRO.bands.map(([from, to]) => (forging ? softly(from, to, t) : 1)),
+            etch: INTRO.etch.map(([from, to]) => (forging ? softly(from, to, t) : 1)),
           });
 
           placed.forEach((stop, index) => {

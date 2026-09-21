@@ -203,7 +203,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
   group.add(sparkCloud);
 
   /* The bands. */
-  const lettered = (text: string | string[], font: string, spacing: number) => {
+  const lettered = (text: string | string[], font: string, spacing: number, blank = false) => {
     const make = (paint: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, srgb: boolean) => {
       const canvas = document.createElement("canvas");
       canvas.width = 4096;
@@ -249,7 +249,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
         ctx.fillRect(0, 0, w, 9);
         ctx.fillRect(0, h - 9, w, 9);
         ctx.fillStyle = "#2b1806";
-        write(ctx, w, h);
+        if (!blank) write(ctx, w, h);
       }, true),
       // The same lettering alone, white on black: where the band burns.
       glow: make((ctx, w, h) => {
@@ -258,7 +258,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
         ctx.fillStyle = "#fff";
         ctx.shadowColor = "#fff";
         ctx.shadowBlur = 6;
-        write(ctx, w, h);
+        if (!blank) write(ctx, w, h);
       }, false),
     };
   };
@@ -311,29 +311,51 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
       emissiveIntensity: 1,
       side: THREE.DoubleSide,
     });
-    // Forging: everything past the sweep's leading edge is simply not drawn
-    // yet. The angle is taken from where the vertex is on the ring, so the
-    // band and its rails, which are different shapes, close together.
+    // A band is made twice over. First it is forged bare: the metal drawn
+    // round from one point until it closes. Then it is etched: the same sweep
+    // again, and behind its leading edge the bare metal gives way to metal
+    // with the lettering cut in and glowing. Both sweeps are a matter of not
+    // drawing what hasn't happened yet; the angle comes from where the vertex
+    // sits on the ring, so band and rails, different shapes, close together.
     const reveal = { value: 1 };
-    const forged = (target: ThreeTypes.Material, across: "z" | "y") => {
+    const etch = { value: 1 };
+    const forged = (target: ThreeTypes.Material, across: "z" | "y", skin: "bare" | "lettered" | "rail") => {
       target.onBeforeCompile = (shader) => {
         shader.uniforms.uReveal = reveal;
+        shader.uniforms.uEtch = etch;
         shader.vertexShader = shader.vertexShader
           .replace("#include <common>", "#include <common>\nvarying float vSweep;")
           .replace(
             "#include <begin_vertex>",
             `#include <begin_vertex>\nvSweep = atan(position.x, position.${across}) / 6.28318530718 + 0.5;`,
           );
+        const drawn =
+          skin === "lettered"
+            ? "if (vSweep > uEtch) discard;"
+            : skin === "bare"
+              ? "if (vSweep > uReveal || vSweep <= uEtch) discard;"
+              : "if (vSweep > uReveal) discard;";
         shader.fragmentShader = shader.fragmentShader
-          .replace("#include <common>", "#include <common>\nvarying float vSweep;\nuniform float uReveal;")
-          .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\nif (vSweep > uReveal) discard;");
+          .replace("#include <common>", "#include <common>\nvarying float vSweep;\nuniform float uReveal;\nuniform float uEtch;")
+          .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>\n${drawn}`);
       };
     };
-    forged(material, "z");
+    forged(material, "z", "lettered");
     const band = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 128, 1, true), material);
+    const bareMaterial = new THREE.MeshStandardMaterial({
+      map: lettered(text, font, spacing, true).metal,
+      alphaMap: material.alphaMap,
+      alphaTest: 0.5,
+      color: new THREE.Color(cast),
+      metalness: 0.85,
+      roughness: 0.38,
+      side: THREE.DoubleSide,
+    });
+    forged(bareMaterial, "z", "bare");
+    band.add(new THREE.Mesh(band.geometry, bareMaterial));
     [1, -1].forEach((edge) => {
       const railMaterial = new THREE.MeshStandardMaterial({ color: "#a37a30", metalness: 0.9, roughness: 0.32 });
-      forged(railMaterial, "y");
+      forged(railMaterial, "y", "rail");
       const rail = new THREE.Mesh(new THREE.TorusGeometry(radius, 1.5, 8, 128), railMaterial);
       rail.rotation.x = Math.PI / 2;
       rail.position.y = (edge * height) / 2;
@@ -353,7 +375,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
     band.add(weld);
     pivot.add(band);
     group.add(pivot);
-    return { band, pivot, material, tilt, reveal, weld, radius, turned: 0 };
+    return { band, pivot, material, tilt, reveal, etch, weld, radius, heatColour, turned: 0 };
   };
 
   const CODE = '600 40px "JetBrains Mono", Menlo, Consolas, monospace';
@@ -403,7 +425,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
     update(
       time: number,
       camera: ThreeTypes.Camera,
-      formation: { sun: number; bands: number[] } = { sun: 1, bands: [1, 1, 1] },
+      formation: { sun: number; bands: number[]; etch: number[] } = { sun: 1, bands: [1, 1, 1], etch: [1, 1, 1] },
     ) {
       const dt = Math.min(0.05, Math.max(0, time - lastTime));
       lastTime = time;
@@ -415,30 +437,35 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
       corona.quaternion.copy(camera.quaternion);
 
       bands.forEach((entry, index) => {
-        const { band, material, speed, heat, reveal, weld, radius } = entry;
+        const { band, material, speed, heat, reveal, etch, weld, radius, heatColour } = entry;
         const made = formation.bands[index] ?? 1;
+        const written = formation.etch[index] ?? 1;
         reveal.value = made >= 0.999 ? 2 : made;
+        etch.value = written >= 0.999 ? 2 : written <= 0.001 ? -1 : written;
         band.visible = made > 0.001;
-        // It only starts to turn once it has closed on itself.
-        if (made >= 0.999) entry.turned += speed * dt;
+        // It only starts to turn once it is whole and written.
+        if (made >= 0.999 && written >= 0.999) entry.turned += speed * dt;
         band.rotation.y = entry.turned;
-        // The point the metal is drawn from rides the leading edge, and goes out when the ring closes.
-        const edge = (made - 0.5) * Math.PI * 2;
+        // A point of light rides the leading edge of whichever sweep is under
+        // way: white-hot for the forging, the band's own colour for the etching.
+        const forging = made > 0.001 && made < 0.999;
+        const etching = written > 0.001 && written < 0.999;
+        const edge = ((forging ? made : written) - 0.5) * Math.PI * 2;
         weld.position.set(Math.sin(edge) * radius, 0, Math.cos(edge) * radius);
-        (weld.material as ThreeTypes.SpriteMaterial).opacity = made > 0.001 && made < 0.999 ? 1 : 0;
+        const spark = weld.material as ThreeTypes.SpriteMaterial;
+        spark.opacity = forging || etching ? 1 : 0;
+        spark.color.set(forging ? 0xfff1d0 : heatColour);
+        weld.scale.setScalar(forging ? radius * 0.7 : radius * 0.42);
         // Lettering heat: a steady glow with a fast uneven flicker on top. The
         // name runs hottest and flickers hardest.
         const flicker =
           0.78 +
           0.14 * Math.sin(time * 31 + index * 5) * Math.sin(time * 7.7 + index) +
           0.08 * Math.sin(time * 53.3 + index * 1.7);
-        // The lettering takes its heat as the band closes.
-        const lettered = Math.max(0, Math.min(1, (made - 0.55) / 0.45));
-        material.emissiveIntensity =
-          lettered * heat * (index === 0 ? flicker + 0.18 * Math.random() : 0.9 + 0.1 * flicker);
+        material.emissiveIntensity = heat * (index === 0 ? flicker + 0.18 * Math.random() : 0.9 + 0.1 * flicker);
       });
 
-      spitCloud.visible = (formation.bands[0] ?? 1) >= 0.999;
+      spitCloud.visible = (formation.etch[0] ?? 1) >= 0.999;
       spits.forEach((spit, index) => {
         const life = (time * spit.speed + spit.offset) % 1;
         const radius = 74 + life * 16;
