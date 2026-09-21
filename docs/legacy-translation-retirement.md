@@ -196,7 +196,7 @@ the subscription and tenant check.
 
 | # | Question | Leaning |
 |---|---|---|
-| Q1 | Earthlink and HostPro are in `resume.json` on this branch, so the cinematic site shows nine moons here. Until visibility ticks exist: take them back out of `resume.json` (the film reads its own mock anyway), or accept nine moons? | Take them out now; they return properly as Experiences with visibility ticks. |
+| ~~Q1~~ | *Settled 2026-09-21: leave them in.* All three sites are heading for the same data, so Earthlink and HostPro become real Experiences in the database (local first) and every site shows them. Show/hide flags per site come later, only if needed. | — |
 | Q2 | Should the cinematic site really start reading Experiences, Skills and the About deck from the API? It is the point of "one data", but it is a behaviour change. | Yes, after the stage 1 diff shows what would change. |
 | Q3 | Keep the one-off import script and its round-trip test, or retire them too once the database is the only source? | Retire after a final verified backup; the files stay in git history. |
 | Q5 | Also back up production media files (Azure blob storage, 206 files) before starting? It is a read-only download but needs an Azure sign-in check. Nothing planned deletes or replaces media. | Yes, once, for completeness. |
@@ -204,5 +204,6 @@ the subscription and tenant check.
 
 ## 10. Change log
 
+- 2026-09-21: Q1 settled: nine jobs everywhere; no per-site flags for now. Every bundled-JSON read becomes an API read, with one generated fallback for when the API is down.
 - 2026-09-21: backups taken and verified; data workflow added (section 8).
 - 2026-09-21: draft 1.
