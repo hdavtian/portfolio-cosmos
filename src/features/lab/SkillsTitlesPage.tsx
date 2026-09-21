@@ -334,31 +334,6 @@ export function SkillsTitlesPage() {
     return () => window.clearTimeout(settle);
   }, [progress]);
 
-  // The wheel winds the film forward and back.
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const onWheel = (event: WheelEvent) => {
-      if ((event.target as HTMLElement).closest(".tally__inner")) return;
-      // Stopped at a place, the wheel belongs to the camera: it zooms.
-      if (holdingRef.current) return;
-      event.preventDefault();
-      const unit =
-        event.deltaMode === 1
-          ? 16
-          : event.deltaMode === 2
-            ? window.innerHeight
-            : 1;
-      setPlaying(false);
-      snapRef.current = true;
-      setProgress((current) =>
-        Math.max(0, Math.min(1, current + (event.deltaY * unit) / 21000)),
-      );
-    };
-    root.addEventListener("wheel", onWheel, { passive: false });
-    return () => root.removeEventListener("wheel", onWheel);
-  }, []);
-
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
