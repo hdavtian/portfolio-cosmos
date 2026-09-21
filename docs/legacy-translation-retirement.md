@@ -1,8 +1,8 @@
 # Retiring the legacy translation: every site reads one data shape
 
 **Status: DISCUSSION DRAFT 1 (2026-09-21). Nothing here is built. Step 0 of
-`docs/tech-consolidation-plan.md` (decision D9). The cinematic site is not
-touched until Harma gives an explicit go-ahead for that stage.**
+`docs/tech-consolidation-plan.md` (decision D9). Harma gave the go-ahead for the cinematic (space) site stage on 2026-09-21,
+within the limits in section 4.4.**
 
 ## 1. Goal
 
@@ -95,7 +95,7 @@ Simplest part of the job: `useShowcaseProjects` and `portfolioTransform` exist
 largely to *undo* the nesting the translation creates. With entries as their own
 list linked by `coreSlug`, they get shorter.
 
-### 4.4 Cinematic site (`src/components/`) — needs explicit go-ahead
+### 4.4 Cinematic site (`src/components/`) — go-ahead given 2026-09-21
 
 | File | Change |
 |---|---|
@@ -203,7 +203,7 @@ the subscription and tenant check.
 | # | Question | Leaning |
 |---|---|---|
 | ~~Q1~~ | *Settled 2026-09-21: leave them in.* All three sites are heading for the same data, so Earthlink and HostPro become real Experiences in the database (local first) and every site shows them. Show/hide flags per site come later, only if needed. | — |
-| Q2 | Should the cinematic site really start reading Experiences, Skills and the About deck from the API? It is the point of "one data", but it is a behaviour change. | Yes, after the stage 1 diff shows what would change. |
+| ~~Q2~~ | *Settled 2026-09-21: yes.* Harma gave explicit go-ahead for the space site to read Experiences, Skills and the About deck from the API: listed reads and field renames only, no refactoring, three sub-steps with screenshot comparison after each. | — |
 | Q3 | Keep the one-off import script and its round-trip test, or retire them too once the database is the only source? | Retire after a final verified backup; the files stay in git history. |
 | Q5 | Also back up production media files (Azure blob storage, 206 files) before starting? It is a read-only download but needs an Azure sign-in check. Nothing planned deletes or replaces media. | Yes, once, for completeness. |
 | Q6 | Keep the bundled fallback at the end, or drop it? Production's database is rarely down. Decide after testing it once, before merging to `main`. | Open. |
@@ -211,6 +211,7 @@ the subscription and tenant check.
 
 ## 10. Change log
 
+- 2026-09-21: Q2 settled: go-ahead for the space site stage.
 - 2026-09-21: Earthlink and HostPro added to the **local** database as draft Experiences by `npm run db:add-early-jobs` (positions 7 and 8; not published). Fallback put behind an off-by-default flag.
 - 2026-09-21: Q1 settled: nine jobs everywhere; no per-site flags for now. Every bundled-JSON read becomes an API read, with one generated fallback for when the API is down.
 - 2026-09-21: backups taken and verified; data workflow added (section 8).
