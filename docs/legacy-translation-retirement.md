@@ -180,6 +180,13 @@ Release snapshot, comparison output and screenshots are in `baselines/stage1/`
 | Travel messages | one differs: message 1 ends "…about code." in the file and "…about code..." in the API | already API-driven; no change |
 | `portfolioCores.json` | badly stale (80 differences: still has a "Disney Inspired" core, old colours and angles, 16 entries since removed, 12 missing) | none: every site already reads cores from the API. Confirms the file should go, not be trusted as a fallback. |
 
+**Re-run after Harma's edits (release `34ef6f20…`):** one new, intended
+difference. The original StormScape job's company is "Stormscape (DBA for Harma
+Davtian)" in the file and "Stormscape (Freelance)" in the API, so the space
+site's first StormScape moon will take the new name when it switches. Both
+StormScape jobs now share the company name and nav label "Stormscape"; they are
+told apart by dates. Everything else is unchanged.
+
 So there is no drift to fix in admin before switching. The risk flagged in
 section 7 (database and `resume.json` having drifted apart) did not materialise.
 
