@@ -113,7 +113,7 @@ list linked by `coreSlug`, they get shorter.
 | File | Change |
 |---|---|
 | `packages/content-schema/src/legacy/toLegacy.ts` | deleted once no site imports it |
-| `legacy/fromLegacy.ts`, `types.ts`, `diff.ts`, `test/legacy-roundtrip.test.ts` | kept only while `api/src/scripts/importContent.ts` (the one-off import from the old files) is still wanted; see Q3 |
+| `legacy/fromLegacy.ts`, `types.ts`, `diff.ts`, `test/legacy-roundtrip.test.ts`, `api/src/scripts/importContent.ts`, `db:import` | removed in stage 6 (Q3). Re-running the import would overwrite admin edits with stale file content, so it goes once nothing needs it. |
 | `package.json` export `@hd/content-schema/to-legacy` | removed with it |
 
 ## 5. Order of work
@@ -130,7 +130,9 @@ reverted alone.
 5. **Cinematic site** switches, only after go-ahead, in three sub-steps so any
    visual change can be pinned to one: (a) cores and entries, (b) experiences,
    memories and job tech, (c) skills planet and About deck. Compare after each.
-6. **Remove** the old hooks, `toLegacy`, the old types and the old fallback files.
+6. **Remove** the old hooks, `toLegacy`, `fromLegacy`, the import script and its
+   test, the old types and the old JSON files. Rewrite the reseeding runbook:
+   a fresh machine restores a backup. Test the fallback once and decide Q6.
 
 ## 6. How each stage is verified
 
@@ -204,13 +206,14 @@ the subscription and tenant check.
 |---|---|---|
 | ~~Q1~~ | *Settled 2026-09-21: leave them in.* All three sites are heading for the same data, so Earthlink and HostPro become real Experiences in the database (local first) and every site shows them. Show/hide flags per site come later, only if needed. | — |
 | ~~Q2~~ | *Settled 2026-09-21: yes.* Harma gave explicit go-ahead for the space site to read Experiences, Skills and the About deck from the API: listed reads and field renames only, no refactoring, three sub-steps with screenshot comparison after each. | — |
-| Q3 | Keep the one-off import script and its round-trip test, or retire them too once the database is the only source? | Retire after a final verified backup; the files stay in git history. |
+| ~~Q3~~ | *Settled 2026-09-21: retire it, at the very end.* The import script, `fromLegacy`, `toLegacy`, the old-shape types, the round-trip test and the old JSON files are removed in stage 6, once every site is on the API. Until then they stay as a safety net. A fresh machine then starts from a restored backup; `docs/content-reseeding-runbook.md` is rewritten to say so. | — |
 | Q5 | Also back up production media files (Azure blob storage, 206 files) before starting? It is a read-only download but needs an Azure sign-in check. Nothing planned deletes or replaces media. | Yes, once, for completeness. |
 | Q6 | Keep the bundled fallback at the end, or drop it? Production's database is rarely down. Decide after testing it once, before merging to `main`. | Open. |
 | Q4 | Do this on `skills-timeline-lab` or a new branch off `main`? | New branch off `main`: it is independent of the film and should ship first. |
 
 ## 10. Change log
 
+- 2026-09-21: Q3 settled: the import path is retired at the end.
 - 2026-09-21: Q2 settled: go-ahead for the space site stage.
 - 2026-09-21: Earthlink and HostPro added to the **local** database as draft Experiences by `npm run db:add-early-jobs` (positions 7 and 8; not published). Fallback put behind an off-by-default flag.
 - 2026-09-21: Q1 settled: nine jobs everywhere; no per-site flags for now. Every bundled-JSON read becomes an API read, with one generated fallback for when the API is down.
