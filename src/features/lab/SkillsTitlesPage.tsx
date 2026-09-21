@@ -63,6 +63,12 @@ interface City {
 
 const PIECE_LIMIT = 9;
 
+// Hidden for now rather than deleted: Harma is still deciding on these. Ask
+// before removing them; put them back when the title or the card comes up again.
+const SHOW_TITLE = false;
+const SHOW_PANEL_HEADINGS = false;
+const SHOW_CHAPTER_CARD = false;
+
 const NOTES: Record<string, string> = {
   stormscape:
     "Own studio: freelance and side work, running alongside everything that follows",
@@ -140,7 +146,8 @@ function buildTimeline(cities: City[]): Segment[] {
       parts.push({
         kind: "travel",
         city: index,
-        weight: 0.9 + distance / 1500,
+        // Between places the camera covers ground half as fast again as it did.
+        weight: (0.9 + distance / 1500) / 1.5,
       });
     }
     parts.push({
@@ -311,6 +318,9 @@ export function SkillsTitlesPage() {
   const [holding, setHolding] = useState(false);
   const [autoContinue, setAutoContinue] = useState(false);
   const holdingRef = useRef(false);
+  // Set when the film is thrown somewhere (the scrubber, a tick, replay): the camera cuts instead of flying.
+  const snapRef = useRef(true);
+  const [panelOpen, setPanelOpen] = useState(false);
   useEffect(() => {
     holdingRef.current = holding;
   }, [holding]);
@@ -330,6 +340,8 @@ export function SkillsTitlesPage() {
     if (!root) return;
     const onWheel = (event: WheelEvent) => {
       if ((event.target as HTMLElement).closest(".tally__inner")) return;
+      // Stopped at a place, the wheel belongs to the camera: it zooms.
+      if (holdingRef.current) return;
       event.preventDefault();
       const unit =
         event.deltaMode === 1
@@ -338,6 +350,7 @@ export function SkillsTitlesPage() {
             ? window.innerHeight
             : 1;
       setPlaying(false);
+      snapRef.current = true;
       setProgress((current) =>
         Math.max(0, Math.min(1, current + (event.deltaY * unit) / 21000)),
       );
@@ -839,6 +852,7 @@ export function SkillsTitlesPage() {
           SUN.y + 14,
           SUN.z + 190,
         );
+        const NEAR_EYE = new THREE.Vector3(SUN.x + 38, SUN.y + 22, SUN.z + 236);
         const OPEN_EYE = new THREE.Vector3(SUN.x + 80, SUN.y + 70, SUN.z + 430);
 
         /** A flight: up and over between two poses, the look running a little ahead of the body. */
@@ -848,7 +862,8 @@ export function SkillsTitlesPage() {
           eye: ThreeTypes.Vector3,
           aim: ThreeTypes.Vector3,
         ) => {
-          const e = softly(0, 1, t);
+          // Ease-out: away quickly, and a long gentle settle into the next place.
+          const e = 1 - (1 - t) ** 3.2;
           over.addVectors(fromEye, toEye).multiplyScalar(0.5);
           over.y = Math.max(fromEye.y, toEye.y) + lift;
           const a = (1 - e) * (1 - e);
@@ -859,7 +874,7 @@ export function SkillsTitlesPage() {
             fromEye.y * a + over.y * b + toEye.y * c,
             fromEye.z * a + over.z * b + toEye.z * c,
           );
-          aim.lerpVectors(fromAim, toAim, softly(0.05, 0.85, t));
+          aim.lerpVectors(fromAim, toAim, 1 - (1 - Math.min(1, t / 0.85)) ** 3);
         };
 
         const rawPose = (
@@ -872,29 +887,26 @@ export function SkillsTitlesPage() {
           if (segment.kind === "dwell") {
             dwellPose(segment.city, t, eye, aim);
           } else if (segment.kind === "intro") {
-            // Open in close on the fire, ease back until the bands are all in
-            // frame, then tip down to where the career begins.
-            // Hold in close on the fire and the burning name, ease back until
-            // every band can be read, stay there a while, then tip down to where
-            // the career begins.
-            if (t < 0.7) {
-              const back = softly(0.3, 0.62, t);
-              eye.lerpVectors(CLOSE_EYE, OPEN_EYE, back);
-              // Never quite still: a slow drift round the sun the whole time.
-              const drift = (t / 0.7) * 0.5;
+            if (t < 0.44) {
+              // A slow ease back from the fire: barely moving, reading the name.
+              eye.lerpVectors(CLOSE_EYE, NEAR_EYE, softly(0, 1, t / 0.44));
+              aim.copy(SUN);
+            } else if (t < 0.62) {
+              // Then a quick pull out and round, until all three bands are in frame.
+              const out = softly(0, 1, (t - 0.44) / 0.18);
+              eye.lerpVectors(NEAR_EYE, OPEN_EYE, out);
+              const swing = out * 0.8;
               const dx = eye.x - SUN.x;
               const dz = eye.z - SUN.z;
-              eye.x = SUN.x + dx * Math.cos(drift) - dz * Math.sin(drift);
-              eye.z = SUN.z + dx * Math.sin(drift) + dz * Math.cos(drift);
+              eye.x = SUN.x + dx * Math.cos(swing) - dz * Math.sin(swing);
+              eye.z = SUN.z + dx * Math.sin(swing) + dz * Math.cos(swing);
+              eye.y += out * 50;
               aim.copy(SUN);
             } else {
-              rawPose(
-                segment.from + (segment.to - segment.from) * 0.6999,
-                fromEye,
-                fromAim,
-              );
+              // And straight off, fast, to where the career begins.
+              rawPose(segment.from + (segment.to - segment.from) * 0.6199, fromEye, fromAim);
               dwellPose(0, 0, toEye, toAim);
-              flight((t - 0.7) / 0.3, 60, eye, aim);
+              flight((t - 0.62) / 0.38, 60, eye, aim);
             }
           } else if (segment.kind === "travel") {
             dwellPose(segment.city - 1, 1, fromEye, fromAim);
@@ -921,13 +933,30 @@ export function SkillsTitlesPage() {
             track.set([eye.x, eye.y, eye.z, aim.x, aim.y, aim.z], i * 6);
           }
           const radius = Math.round(STEPS * 0.009);
+          // The film stops dead at the end of every place, so the path is
+          // smoothed in stretches between those stops and never across one:
+          // where the camera waits is exactly where the shot was composed.
+          const breaks = [
+            0,
+            ...timeline
+              .filter((entry) => entry.kind === "dwell")
+              .map((entry) => Math.round((entry.to - 0.0004) * STEPS)),
+            STEPS,
+          ];
+          const stretchOf = new Int32Array(STEPS + 1);
+          for (let k = 0, i = 0; i <= STEPS; i += 1) {
+            while (k < breaks.length - 2 && i > breaks[k + 1]) k += 1;
+            stretchOf[i] = k;
+          }
           for (let pass = 0; pass < 3; pass += 1) {
             const next = new Float64Array(track.length);
             for (let i = 0; i <= STEPS; i += 1) {
+              const low = breaks[stretchOf[i]];
+              const high = breaks[stretchOf[i] + 1];
               for (let k = 0; k < 6; k += 1) {
                 let sum = 0;
                 for (let j = -radius; j <= radius; j += 1) {
-                  sum += track[Math.max(0, Math.min(STEPS, i + j)) * 6 + k];
+                  sum += track[Math.max(low, Math.min(high, i + j)) * 6 + k];
                 }
                 next[i * 6 + k] = sum / (radius * 2 + 1);
               }
@@ -1037,37 +1066,79 @@ export function SkillsTitlesPage() {
         let frame = 0;
         const clock = new THREE.Clock();
         let idle = 0;
-        let drift = 0;
+        let wasHolding = false;
+        let touched = false;
+        let handedOver = false;
+        controls.addEventListener("controlstart", () => {
+          touched = true;
+        });
+
+        // Stopped at a place: drag circles it, the wheel zooms, and neither
+        // can take the camera away from it or under the ground.
+        const takeTheCamera = () => {
+          poseAt(progressRef.current);
+          // Arriving by the film, ease in; thrown here by a tick, cut.
+          const cut = snapRef.current;
+          snapRef.current = false;
+          controls.setLookAt(eyeNow.x, eyeNow.y, eyeNow.z, aimNow.x, aimNow.y, aimNow.z, !cut);
+          handedOver = false;
+          touched = false;
+        };
+        // The camera is only handed over once it has arrived: limits applied
+        // while it is still flying in would yank it about.
+        const handOver = () => {
+          const reach = eyeNow.distanceTo(aimNow);
+          controls.minDistance = reach * 0.55;
+          controls.maxDistance = reach * 1.45;
+          controls.minPolarAngle = 0.35;
+          controls.maxPolarAngle = 1.42;
+          controls.mouseButtons.left = CameraControls.ACTION.ROTATE;
+          controls.mouseButtons.wheel = CameraControls.ACTION.DOLLY;
+          controls.touches.one = CameraControls.ACTION.TOUCH_ROTATE;
+          controls.touches.two = CameraControls.ACTION.TOUCH_DOLLY;
+          handedOver = true;
+        };
+        const giveItBack = () => {
+          controls.mouseButtons.left = CameraControls.ACTION.NONE;
+          controls.mouseButtons.wheel = CameraControls.ACTION.NONE;
+          controls.touches.one = CameraControls.ACTION.NONE;
+          controls.touches.two = CameraControls.ACTION.NONE;
+          controls.minDistance = 0.1;
+          controls.maxDistance = Infinity;
+          controls.minPolarAngle = 0;
+          controls.maxPolarAngle = Math.PI;
+        };
         const render = () => {
           const p = progressRef.current;
           // Everything is a function of the scrubber: park it and the frame is still.
           // …except while it is holding at a place for the card to be read:
           // then the machine keeps turning on the clock, and the camera drifts.
           const dt = Math.min(0.05, clock.getDelta());
-          if (holdingRef.current) idle += dt;
-          drift += ((holdingRef.current ? Math.sin(idle * 0.16) * 0.22 : 0) - drift) * Math.min(1, dt * 1.6);
+          const holdingNow = holdingRef.current;
+          if (holdingNow) idle += dt;
+          if (holdingNow !== wasHolding) {
+            wasHolding = holdingNow;
+            if (holdingNow) takeTheCamera();
+            else giveItBack();
+          }
           const phase = p * 34 + idle * 0.55;
           const segment = segmentAt(timeline, p);
           const t = within(segment, p);
 
           poseAt(p);
-          if (Math.abs(drift) > 0.0005) {
-            // Swing the camera a little round what it is looking at.
-            const dx = eyeNow.x - aimNow.x;
-            const dz = eyeNow.z - aimNow.z;
-            eyeNow.x = aimNow.x + dx * Math.cos(drift) - dz * Math.sin(drift);
-            eyeNow.z = aimNow.z + dx * Math.sin(drift) + dz * Math.cos(drift);
+          if (!holdingNow) {
+            // On the move the scrubber places the camera and camera-controls
+            // eases it there — from wherever it is, including wherever the
+            // viewer left it. It only cuts when the film is thrown somewhere.
+            const cut = snapRef.current;
+            snapRef.current = false;
+            controls.setLookAt(eyeNow.x, eyeNow.y, eyeNow.z, aimNow.x, aimNow.y, aimNow.z, !cut);
+          } else if (!handedOver) {
+            if (camera.position.distanceTo(eyeNow) < 24) handOver();
+          } else if (!touched) {
+            // Until somebody takes hold of it, it keeps circling slowly.
+            controls.rotate(dt * 0.05, 0, true);
           }
-          const leap = camera.position.distanceTo(eyeNow) > 420;
-          controls.setLookAt(
-            eyeNow.x,
-            eyeNow.y,
-            eyeNow.z,
-            aimNow.x,
-            aimNow.y,
-            aimNow.z,
-            !leap,
-          );
           controls.update(dt);
           // Close in, the lens is shallow and the background melts; pulled back
           // over the whole map it stops down so the country stays sharp.
@@ -1166,23 +1237,25 @@ export function SkillsTitlesPage() {
     [timeline],
   );
 
-  // Play, in either direction, until an end — or, going forward, the next place — is reached.
+  // Play, in either direction, until the next place — or an end — is reached.
   useEffect(() => {
     if (!playing) return;
     let frame = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      const step = (now - last) / 118000; // the whole film in about two minutes
+      // Going back is a rewind, so it runs three times as fast.
+      const step = ((now - last) / 118000) * (direction < 0 ? 3 : 1);
       last = now;
       setProgress((current) => {
         const next = current + step * direction;
-        if (direction > 0) {
-          const hold = holds.find((at) => current < at && next >= at);
-          if (hold !== undefined) {
-            setPlaying(false);
-            setHolding(true);
-            return hold;
-          }
+        const hold =
+          direction > 0
+            ? holds.find((at) => current < at && next >= at)
+            : [...holds].reverse().find((at) => current > at && next <= at);
+        if (hold !== undefined) {
+          setPlaying(false);
+          setHolding(true);
+          return hold;
         }
         if (next >= 1) {
           setPlaying(false);
@@ -1200,56 +1273,75 @@ export function SkillsTitlesPage() {
     return () => cancelAnimationFrame(frame);
   }, [direction, holds, playing]);
 
-  const carryOn = () => {
+  /** On to the next place (or, from the last one, out to the ending). */
+  const goNext = () => {
     setHolding(false);
     setDirection(1);
     setProgress((current) => Math.min(1, current + 0.0006));
     setPlaying(true);
   };
 
+  /** Back to the place before this one. */
+  const goPrevious = () => {
+    setHolding(false);
+    setDirection(-1);
+    setProgress((current) => Math.max(0, current - 0.0006));
+    setPlaying(true);
+  };
+
+  /** From the top. */
+  const replay = () => {
+    snapRef.current = true;
+    setHolding(false);
+    setDirection(1);
+    setProgress(0);
+    setPlaying(true);
+  };
+
   // Left to itself, it moves on after a read.
   useEffect(() => {
     if (!holding || !autoContinue) return;
-    const timer = window.setTimeout(carryOn, 9000);
+    const timer = window.setTimeout(goNext, 9000);
     return () => window.clearTimeout(timer);
   }, [autoContinue, holding]);
 
-  // Space plays and pauses; right arrow or Enter carries on from a hold.
+  const segment = segmentAt(timeline, progress);
+  const active = cities[segment.city];
+  const atPlace = segment.kind === "dwell";
+  const cityIndex = segment.city;
+  const isFirstPlace = cityIndex === 0;
+
+  // Right arrow, space or Enter: next. Left arrow: previous.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.target as HTMLElement).closest("input, textarea")) return;
-      if (event.key === "ArrowRight" || event.key === "Enter") {
+      if (!holdingRef.current) return;
+      if (event.key === "ArrowRight" || event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        carryOn();
-      } else if (event.key === " ") {
+        goNext();
+      } else if (event.key === "ArrowLeft") {
         event.preventDefault();
-        if (holdingRef.current) carryOn();
-        else setPlaying((current) => !current);
+        goPrevious();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const segment = segmentAt(timeline, progress);
-  const active = cities[segment.city];
-  const atPlace = segment.kind === "dwell";
   const fractions = buildFractions(timeline, cities, progress);
   const experience = experienceAt(cities, fractions);
-  const ending =
-    segment.kind === "outro" ? softly(0.35, 0.8, within(segment, progress)) : 0;
+  const ending = segment.kind === "outro" ? softly(0.35, 0.8, within(segment, progress)) : 0;
   const era =
     segment.kind === "intro"
       ? `${Math.round(cities[0].from)}`
       : segment.kind === "outro"
         ? `${Math.round(cities[0].from)} – today`
         : yearsLabel(active);
-  const dwellStarts = timeline.filter((entry) => entry.kind === "dwell");
+  const stops = timeline.filter((entry) => entry.kind === "dwell");
   const fresh = active.entries.filter((entry) => entry.fresh).slice(0, PIECE_LIMIT);
   const carried = active.entries.filter((entry) => !entry.fresh).slice(0, PIECE_LIMIT);
 
   // What this place added: each discipline it touched, before it and after it.
-  const cityIndex = segment.city;
   const before = experienceAt(
     cities,
     fractions.map((_, index) => (index < cityIndex ? 1 : 0)),
@@ -1268,113 +1360,126 @@ export function SkillsTitlesPage() {
     .slice(0, 6);
   const longest = Math.max(1, ...after.rows.map((row) => row.years));
   const built = fractions[cityIndex] ?? 0;
-  const showCard = atPlace && built > 0.86;
+  const showCard = SHOW_CHAPTER_CARD && atPlace && built > 0.86;
 
   return (
-    <div
-      className="titles"
-      ref={rootRef}
-      onClick={(event) => {
-        // Anywhere that isn't a control of its own stops and starts the film.
-        if ((event.target as HTMLElement).closest("button, input, a, .tally"))
-          return;
-        if (playing) {
-          setPlaying(false);
-          return;
-        }
-        if (direction > 0 && progress >= 1) setProgress(0);
-        if (direction < 0 && progress <= 0) setProgress(1);
-        setPlaying(true);
-      }}
-    >
+    <div className={`titles${holding ? " is-holding" : ""}`} ref={rootRef}>
       <div className="titles__stage" ref={hostRef} />
       <div className="titles__vignette" aria-hidden="true" />
 
-      <header className="titles__head">
-        <p className="titles__eyebrow">Harma Davtian · sketch, mock data</p>
-        <h1 className="titles__name">The Working Years</h1>
-        <p className="titles__era">{era}</p>
-      </header>
+      {SHOW_TITLE ? (
+        <header className="titles__head">
+          <p className="titles__eyebrow">Harma Davtian · sketch, mock data</p>
+          <h1 className="titles__name">The Working Years</h1>
+          <p className="titles__era">{era}</p>
+        </header>
+      ) : null}
 
+      <button
+        type="button"
+        className={`titles__toggle${panelOpen ? " is-on" : ""}`}
+        aria-expanded={panelOpen}
+        onClick={() => setPanelOpen((current) => !current)}
+      >
+        Skill progress
+      </button>
       <Tally
         rows={experience.rows}
         since={since}
         open={openRows}
         setOpen={setOpenRows}
         moving={moving}
+        shown={panelOpen}
       />
 
-      <aside className={`titles__card${showCard ? " is-on" : ""}`}>
-        <p className="titles__card-kicker">
-          Chapter {cityIndex + 1} of {cities.length}
-          {DIRECTION_BY_PLACE[active.slug] ? ` · look ${DIRECTION_BY_PLACE[active.slug]}` : " · look A+B+C"}
-        </p>
-        <h2 className="titles__card-name">{active.name}</h2>
-        <p className="titles__card-years">{yearsLabel(active)}</p>
-
-        {fresh.length > 0 ? (
-          <>
-            <h3 className="titles__card-head is-new">Learned here</h3>
-            <ul className="titles__chips">
-              {fresh.map((entry) => (
-                <li key={entry.name} className="is-new">
-                  {entry.name}
-                  <span>{say(entry.years)} yrs</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
-        {carried.length > 0 ? (
-          <>
-            <h3 className="titles__card-head">Carried further</h3>
-            <ul className="titles__chips">
-              {carried.map((entry) => (
-                <li key={entry.name}>
-                  {entry.name}
-                  <span>+{say(entry.years)} yrs</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
-
-        {growth.length > 0 ? (
-          <>
-            <h3 className="titles__card-head">Experience, before and after</h3>
-            <ul className="titles__growth">
-              {growth.map((row) => (
-                <li key={row.slug}>
-                  <span className="titles__growth-name">{row.name}</span>
-                  <span className="titles__growth-bar">
-                    <span className="titles__growth-was" style={{ width: `${(row.was / longest) * 100}%` }} />
-                    <span className="titles__growth-gain" style={{ width: `${(row.gained / longest) * 100}%` }} />
-                  </span>
-                  <span className="titles__growth-figures">
-                    {row.was > 0.05 ? `${say(row.was)} → ` : ""}
-                    <strong>{say(row.now)} yrs</strong>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
-
-        <div className="titles__card-foot">
-          <button type="button" className="titles__continue" onClick={carryOn}>
-            Continue <span aria-hidden="true">→</span>
+      {/* Stopped at a place: where we are, and the way on or back. */}
+      <section className={`titles__now${holding ? " is-on" : ""}`} aria-hidden={!holding}>
+        <h2 className="titles__now-name">{active.name}</h2>
+        <p className="titles__now-years">{yearsLabel(active)}</p>
+        {active.title ? <p className="titles__now-role">{active.title}</p> : null}
+        <div className="titles__nav">
+          <button type="button" className="titles__nav-button" onClick={goPrevious} disabled={!holding || isFirstPlace}>
+            <span aria-hidden="true">←</span> Previous
           </button>
-          <span className="titles__card-keys">space · enter · →</span>
+          <button type="button" className="titles__nav-button" onClick={goNext} disabled={!holding}>
+            Next <span aria-hidden="true">→</span>
+          </button>
         </div>
-      </aside>
+        <label className="titles__auto">
+          <input
+            type="checkbox"
+            checked={autoContinue}
+            disabled={!holding}
+            onChange={(event) => setAutoContinue(event.target.checked)}
+          />
+          auto-continue
+        </label>
+      </section>
+
+      {SHOW_CHAPTER_CARD ? (
+        <aside className={`titles__card${showCard ? " is-on" : ""}`}>
+          <p className="titles__card-kicker">
+            Chapter {cityIndex + 1} of {cities.length}
+            {DIRECTION_BY_PLACE[active.slug] ? ` · look ${DIRECTION_BY_PLACE[active.slug]}` : " · look A+B+C"}
+          </p>
+          <h2 className="titles__card-name">{active.name}</h2>
+          <p className="titles__card-years">{yearsLabel(active)}</p>
+          {fresh.length > 0 ? (
+            <>
+              <h3 className="titles__card-head is-new">Learned here</h3>
+              <ul className="titles__chips">
+                {fresh.map((entry) => (
+                  <li key={entry.name} className="is-new">
+                    {entry.name}
+                    <span>{say(entry.years)} yrs</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {carried.length > 0 ? (
+            <>
+              <h3 className="titles__card-head">Carried further</h3>
+              <ul className="titles__chips">
+                {carried.map((entry) => (
+                  <li key={entry.name}>
+                    {entry.name}
+                    <span>+{say(entry.years)} yrs</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {growth.length > 0 ? (
+            <>
+              <h3 className="titles__card-head">Experience, before and after</h3>
+              <ul className="titles__growth">
+                {growth.map((row) => (
+                  <li key={row.slug}>
+                    <span className="titles__growth-name">{row.name}</span>
+                    <span className="titles__growth-bar">
+                      <span className="titles__growth-was" style={{ width: `${(row.was / longest) * 100}%` }} />
+                      <span className="titles__growth-gain" style={{ width: `${(row.gained / longest) * 100}%` }} />
+                    </span>
+                    <span className="titles__growth-figures">
+                      {row.was > 0.05 ? `${say(row.was)} → ` : ""}
+                      <strong>{say(row.now)} yrs</strong>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </aside>
+      ) : null}
 
       <section
         className="titles__finale"
         style={{ opacity: ending, pointerEvents: ending > 0.6 ? "auto" : "none" }}
         aria-hidden={ending < 0.5}
       >
-        <p className="titles__finale-years">Since {since}</p>
-        <p className="titles__finale-line">{cities.length - 1} places · one craft</p>
+        <p className="titles__finale-since">Since {since}</p>
+        <p className="titles__finale-craft">One craft</p>
         <ul className="titles__finale-list">
           {experience.rows
             .filter((row) => ["frontend", "backend", "data", "cloud", "leadership"].includes(row.slug))
@@ -1386,66 +1491,15 @@ export function SkillsTitlesPage() {
             ))}
         </ul>
         <p className="titles__finale-links">
-          <Link to="/resume">Read the resume</Link>
-          <Link to="/">See the work</Link>
+          <button type="button" onClick={replay}>
+            Replay
+          </button>
+          <Link to="/resume">Read resume</Link>
+          <Link to="/cinematic">Enter space theme portfolio</Link>
         </p>
       </section>
 
       <div className="titles__scrub">
-        <button
-          type="button"
-          className={`titles__play${playing && direction < 0 ? " is-on" : ""}`}
-          title="Play backwards"
-          onClick={() => {
-            if (playing && direction < 0) {
-              setPlaying(false);
-              return;
-            }
-            if (progress <= 0) setProgress(1);
-            setDirection(-1);
-            setPlaying(true);
-          }}
-        >
-          ◀ Back
-        </button>
-        <button
-          type="button"
-          className={`titles__play${playing && direction > 0 ? " is-on" : ""}`}
-          onClick={() => {
-            if (playing && direction > 0) {
-              setPlaying(false);
-              return;
-            }
-            if (progress >= 1) setProgress(0);
-            setDirection(1);
-            setPlaying(true);
-          }}
-        >
-          {playing && direction > 0
-            ? "Pause"
-            : progress >= 1
-              ? "Replay"
-              : "Play ▶"}
-        </button>
-        <label className="titles__auto">
-          <input
-            type="checkbox"
-            checked={autoContinue}
-            onChange={(event) => setAutoContinue(event.target.checked)}
-          />
-          auto-continue
-        </label>
-        <button
-          type="button"
-          className="titles__play"
-          onClick={() => {
-            setPlaying(false);
-            setHolding(false);
-            setProgress(1);
-          }}
-        >
-          Skip to summary
-        </button>
         <div className="titles__track">
           <input
             id="titles-scrubber"
@@ -1458,20 +1512,34 @@ export function SkillsTitlesPage() {
             onChange={(event) => {
               setPlaying(false);
               setHolding(false);
+              snapRef.current = true;
               setProgress(Number(event.target.value));
+            }}
+            // Let go of the scrubber and the film carries on to the next place
+            // from there: with no play button, it must never be left stranded.
+            onPointerUp={() => {
+              setDirection(1);
+              setPlaying(true);
+            }}
+            onKeyUp={() => {
+              setDirection(1);
+              setPlaying(true);
             }}
           />
           <div className="titles__stops">
-            {dwellStarts.map((stop) => (
+            {stops.map((stop, index) => (
               <button
                 key={`${cities[stop.city].slug}-${stop.from}`}
                 type="button"
                 className={`titles__stop${stop === segment ? " is-on" : ""}`}
-                style={{ left: `${stop.from * 100}%` }}
+                // The mark stands where the place is finished, not where it starts going up.
+                style={{ left: `${holds[index] * 100}%` }}
                 title={`${cities[stop.city].name} · ${yearsLabel(cities[stop.city])}`}
                 onClick={() => {
+                  snapRef.current = true;
                   setPlaying(false);
-                  setProgress(stop.from + (stop.to - stop.from) * 0.04);
+                  setProgress(holds[index]);
+                  setHolding(true);
                 }}
               >
                 <span>{cities[stop.city].name.split(" ")[0]}</span>
@@ -1497,20 +1565,26 @@ function Tally({
   open,
   setOpen,
   moving,
+  shown,
 }: {
   rows: ExperienceRow[];
   since: number;
   open: string[];
   setOpen: (next: string[]) => void;
   moving: boolean;
+  shown: boolean;
 }) {
   const most = Math.max(1, NOW_YEAR - 1994, ...rows.map((row) => row.years));
   return (
-    <aside className="tally">
+    <aside className={`tally${shown ? " is-open" : ""}`} aria-hidden={!shown}>
       <Embers moving={moving} />
       <div className="tally__inner">
-        <h2 className="tally__title">Experience so far</h2>
-        <p className="tally__total">by discipline · building since {since}</p>
+        {SHOW_PANEL_HEADINGS ? (
+          <>
+            <h2 className="tally__title">Experience so far</h2>
+            <p className="tally__total">by discipline · building since {since}</p>
+          </>
+        ) : null}
         <ul className="tally__list">
           {rows.map((row) => {
             const isOpen = open.includes(row.slug);
@@ -1559,9 +1633,6 @@ function Tally({
             );
           })}
         </ul>
-        <p className="tally__foot">
-          Counted off the calendar: overlapping jobs never count twice.
-        </p>
       </div>
     </aside>
   );

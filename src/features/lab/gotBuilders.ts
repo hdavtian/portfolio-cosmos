@@ -681,8 +681,12 @@ export function makeBuilders(THREE: Three, label: Label) {
       const crown = glyphRing(30, 8, house.replace("-", " "), own);
       group.add(crown);
 
-      // A: the machine itself.
+      // A: the machine itself. Its fixed parts go in one frame that rises with
+      // the build, so nothing stands on the map before its turn.
+      const fixed = new THREE.Group();
+      group.add(fixed);
       const moving: Array<(grown: number, phase: number) => void> = [];
+      let axleVisible: (shown: boolean) => void = () => {};
       let crownAt = 90;
 
       if (works === "rotors") {
@@ -711,20 +715,23 @@ export function makeBuilders(THREE: Three, label: Label) {
         [-1, 1].forEach((sideOf) => {
           const frame = new THREE.Mesh(new THREE.ConeGeometry(9, 32, 4), skin("iron", 0.8));
           frame.position.set(sideOf * (total / 2 + 5), 16, 0);
-          group.add(frame);
+          fixed.add(frame);
         });
         const rod = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, total + 16, 10), skin("iron", 0.9));
         rod.rotation.z = Math.PI / 2;
         axle.add(rod);
+        axleVisible = (shown) => {
+          rod.visible = shown;
+        };
         crownAt = 74;
       } else if (works === "orrery") {
         // Rings within rings, each carrying its own world.
         const heart = new THREE.Mesh(new THREE.SphereGeometry(6, 24, 24), skin("bronze", 0.9));
         heart.position.y = 40;
-        group.add(heart);
+        fixed.add(heart);
         const post = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 2.4, 40, 8), skin("bronze", 0.5));
         post.position.y = 20;
-        group.add(post);
+        fixed.add(post);
         sorted.forEach((tower, index) => {
           const radius = 14 + index * 6.5;
           const pivot = new THREE.Group();
@@ -783,6 +790,9 @@ export function makeBuilders(THREE: Three, label: Label) {
         group,
         grow(eased, phase) {
           const laid = Math.max(0.001, stage(eased, 0, 6));
+          fixed.scale.setScalar(laid);
+          fixed.visible = eased > 0.001;
+          axleVisible(eased > 0.001);
           floor.scale.setScalar(laid);
           floor.rotation.z = (1 - laid) * 2;
           moving.forEach((move, index) => move(stage(eased, index + 1, moving.length + 3), phase));
