@@ -82,7 +82,8 @@ export const experienceSchema = z.object({
   navLabel: text(60),
   location: text(150),
   startDate: yearMonthSchema,
-  endDate: yearMonthSchema,
+  // Left out while the job is still current; the sites show "Present".
+  endDate: yearMonthSchema.optional(),
   droneIntroText: text(2000),
   positions: z.array(positionSchema).min(1),
   projects: z.array(experienceProjectSchema).default([]),

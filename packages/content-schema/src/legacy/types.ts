@@ -14,7 +14,8 @@ export interface LegacyResume {
     navLabel: string;
     location: string;
     startDate: string;
-    endDate: string;
+    /** Missing while the job is current. */
+    endDate?: string;
     Projects?: Array<{ id: string; title: string; summary: string }>;
     positions: Array<{
       title: string;

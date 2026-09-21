@@ -72,6 +72,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D7 | Hard rule: one home per skill (one parent in the tree). No site shows a skill under two headings today. If something seems to belong in two places it is two skills. Nesting is unlimited in depth (Frontend → React → Patterns → Provider, as the lattice shows today); the rule limits each entry to one parent, not the tree to one level. | 2026-09-21 |
 | D8 | Non-code skills (sales, support, consulting, leading people) live in the same tree. Harma will organise them when entering the data; grouping is revisited once the real data is in, not designed up front. | 2026-09-21 |
 | D9 | One data shape for every site. The `toLegacy` translation is retired **before** the skills consolidation, so the consolidation is done once, against the new shapes, not twice. No per-site filtering in a hidden layer; what a site shows is decided by visible fields on the record (e.g. visibility ticks). | 2026-09-21 |
+| D10 | StormScape's return is a second Experience (`stormscape-freelance`, Jul 2025 → present), not extra periods on the first (settles Q5). An Experience's end date may be left out, meaning current; the sites show "Present". Added to the local database 2026-09-21. | 2026-09-21 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -233,7 +234,7 @@ All per the `syncfusion-list-pages` and `syncfusion-edit-dialogs` skills.
 | ~~Q2~~ | *Settled by D4: its top-level ancestor.* On the resume a skill shows under one category. If it has several, which? | A `resumeCategorySlug`, defaulting to the first. |
 | Q3 | Should every skill use show as a label on the job moon, or only ticked ones? 21 uses at InvestCloud is a lot of labels. | Tick-box, defaulting on for migrated labels only. |
 | ~~Q4~~ | *Settled by D6.* Totals computed by the API at publish time, or by each site from shared code? | Shared code, computed in the site: "now" moves, a published number would go stale. |
-| Q5 | StormScape's return: second Experience or multiple periods on one? | Second Experience with a `continues` link to the first: smallest schema change, film already works this way. |
+| ~~Q5~~ | *Settled by D10.* StormScape's return: second Experience or multiple periods on one? | Second Experience with a `continues` link to the first: smallest schema change, film already works this way. |
 | Q6 | Earthlink / HostPro on the resume and cinematic site, or film only? | Harma's call. |
 | ~~Q7~~ | *Settled by D8.* Non-code skills (sales, leading engineers) live in the same master list? | Yes, under their own categories, unticked for the resume unless wanted. |
 | ~~Q9~~ | *Settled by D7/D8.* A few skills sat in two groups in the mock (Sales in Support & sales and Leadership). With one tree each gets one home. Acceptable? | Yes; pick the home that reads best to an employer. |

@@ -68,7 +68,7 @@ export function ShowcaseResumePage() {
                 <header className="showcase-resume__job-head">
                   <h3 className="showcase-resume__company">{job.navLabel || job.company}</h3>
                   <p className="showcase-label">
-                    {[job.location, dateRange(job.startDate, job.endDate)].filter(Boolean).join(" / ")}
+                    {[job.location, dateRange(job.startDate, job.endDate ?? "Present")].filter(Boolean).join(" / ")}
                   </p>
                 </header>
                 {job.positions.map((position, index) => (

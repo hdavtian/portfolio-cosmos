@@ -15,6 +15,7 @@
     "test": "vitest run",
     "import": "tsx src/scripts/importContent.ts",
     "add-early-jobs": "tsx src/scripts/addEarlyJobs.ts",
+    "add-stormscape-return": "tsx src/scripts/addStormscapeReturn.ts",
     "storage:cors": "tsx src/scripts/configureLocalStorageCors.ts"
   },
   "dependencies": {
