@@ -5,6 +5,10 @@ import { useBackdropTint } from "../lib/backdropTint";
 const dateRange = (start?: string, end?: string) =>
   start && end ? `${start} – ${end}` : (start ?? end ?? "");
 
+/** A dated role with no end, in a job with no end, is still held: "07/2025 – Present". */
+const positionDates = (position: { startDate?: string; endDate?: string }, jobEnd?: string) =>
+  dateRange(position.startDate, position.endDate ?? (position.startDate && !jobEnd ? "Present" : undefined));
+
 /** The resume, kept simple: who, summary and contact on the left, the record on the right. */
 export function ShowcaseResumePage() {
   const { data, isPending, isError } = useResumeQuery();
@@ -75,9 +79,9 @@ export function ShowcaseResumePage() {
                   <div key={`${job.id}-${index}`} className="showcase-resume__position">
                     <h4 className="showcase-resume__position-title">
                       {position.title}
-                      {dateRange(position.startDate, position.endDate) ? (
+                      {positionDates(position, job.endDate) ? (
                         <span className="showcase-resume__position-dates">
-                          {dateRange(position.startDate, position.endDate)}
+                          {positionDates(position, job.endDate)}
                         </span>
                       ) : null}
                     </h4>

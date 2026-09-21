@@ -26,6 +26,7 @@ const record = {
   positions: [
     {
       title: "Principal Full Stack Developer",
+      startDate: "07/2025",
       responsibilities: [
         "Architected and built Hydrodent, a dental product catalog platform, with React, Next.js, TypeScript, Tailwind as the public site, an admin dashboard app for backend management powered by an Express/TypeScript API using Prisma and MySQL.",
         "Hydrodent: Syncfusion data grids with paging, sorting, filtering, and grouping, file uploads.",
