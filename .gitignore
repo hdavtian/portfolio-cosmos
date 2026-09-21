@@ -43,3 +43,6 @@ db-backups/
 
 # Production media backups (npm run media:pull)
 media-backups/
+
+# Before/after evidence for the legacy-translation retirement (screenshots, release snapshots)
+baselines/

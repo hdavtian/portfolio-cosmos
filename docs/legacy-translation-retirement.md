@@ -164,6 +164,33 @@ reverted alone.
 - **Size of `ResumeSpace3D.tsx`** (20,000+ lines). Edits are limited to the
   listed reads; no refactoring rides along.
 
+## 7a. Stage 1 results (2026-09-21)
+
+Release snapshot, comparison output and screenshots are in `baselines/stage1/`
+(not in git). Re-run the comparison with
+`npx tsx scripts/compare-bundled-to-release.ts`.
+
+**Bundled files against the published local release (`0c5c9ae8…`):**
+
+| Content | Result | Effect when the space site switches to the API |
+|---|---|---|
+| Experiences | The nine jobs in `resume.json` match the API **word for word** (titles, bullets, memories, job tech, dates). The API has one more, StormScape (Freelance), placed first, so every other job moves down one. | A tenth moon; order shifts by one. Nothing else. |
+| Skills, profile, summary, education, links, certifications | identical | none |
+| About deck | identical except the five image paths: `/images/about/img1.jpg` in the file, media storage URLs in the API | same pictures, served from media storage; to be checked by eye |
+| Travel messages | one differs: message 1 ends "…about code." in the file and "…about code..." in the API | already API-driven; no change |
+| `portfolioCores.json` | badly stale (80 differences: still has a "Disney Inspired" core, old colours and angles, 16 entries since removed, 12 missing) | none: every site already reads cores from the API. Confirms the file should go, not be trusted as a fallback. |
+
+So there is no drift to fix in admin before switching. The risk flagged in
+section 7 (database and `resume.json` having drifted apart) did not materialise.
+
+**Screenshots taken:** portfolio home, resume page, a project page
+(`/portfolio/tcc`), and the space site's loader at "load completed".
+
+**Not captured: the inside of the space site.** In the automated browser tab
+the space site loads fully but stays on "ENTERING…" and never starts the 3D
+scene (the tab is not a focused, visible window, which the scene appears to
+need). No console errors. Options are in Q7.
+
 ## 8. Data: backups and how new data reaches production
 
 **Backups taken 2026-09-21 before any work** (in `db-backups/`, not in git,
@@ -208,11 +235,13 @@ the subscription and tenant check.
 | ~~Q2~~ | *Settled 2026-09-21: yes.* Harma gave explicit go-ahead for the space site to read Experiences, Skills and the About deck from the API: listed reads and field renames only, no refactoring, three sub-steps with screenshot comparison after each. | — |
 | ~~Q3~~ | *Settled 2026-09-21: retire it, at the very end.* The import script, `fromLegacy`, `toLegacy`, the old-shape types, the round-trip test and the old JSON files are removed in stage 6, once every site is on the API. Until then they stay as a safety net. A fresh machine then starts from a restored backup; `docs/content-reseeding-runbook.md` is rewritten to say so. | — |
 | Q5 | Also back up production media files (Azure blob storage, 206 files) before starting? It is a read-only download but needs an Azure sign-in check. Nothing planned deletes or replaces media. | Yes, once, for completeness. |
+| Q7 | Baseline for the inside of the space site, which the automated browser can't enter: (a) Harma captures the agreed scenes by hand before and after each sub-step; (b) I add a debug URL switch that skips the entry sequence so automation can get in; (c) rely on the data check plus Harma's eye after each sub-step. | (c) plus a short checklist of scenes for Harma to look at; the data is already proven identical. |
 | Q6 | Keep the bundled fallback at the end, or drop it? Production's database is rarely down. Decide after testing it once, before merging to `main`. | Open. |
 | ~~Q4~~ | *Settled 2026-09-21: one branch, `retire-legacy-translation`, off `main`, with the film branch merged in* so nothing has to be imported later. The film lives at an unlinked URL (`/lab/got`), so shipping it is harmless. Consequence: this branch's `resume.json` holds Earthlink and HostPro, so the space site shows nine moons here from the start, from the file until it switches to the API. `skills-timeline-lab` is kept as it was; new film work happens here. | — |
 
 ## 10. Change log
 
+- 2026-09-21: stage 1 done (section 7a): no content drift; space site interior not captured (Q7).
 - 2026-09-21: Q4 settled: branch `retire-legacy-translation` created from `main`, film branch merged in. All four questions closed; stage 1 is next.
 - 2026-09-21: Q3 settled: the import path is retired at the end.
 - 2026-09-21: Q2 settled: go-ahead for the space site stage.
