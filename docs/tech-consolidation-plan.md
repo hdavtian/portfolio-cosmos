@@ -35,14 +35,18 @@ unique content and stay as they are.
 
 ### 2.2 Who reads what
 
-| Data | New portfolio site (`/`) | Cinematic 3D site | Old scrolling resume | GoT film |
-|---|---|---|---|---|
-| Skills + Categories | — | Skills planet and its category moons | skills block | — |
-| Tech Stack | tech constellation, skills lattice, About ride | skills lattice, structure diagram | — | — |
-| Cores | project grouping and colours | portfolio cores | — | place colours |
-| Job Tech | labels on each job moon | moon labels, drone hologram, overlay; hover highlights resume text | — | — |
-| Memories | floating memories on the job moon | memory sequence per job | — | — |
-| Entry technologies | project tags | holograms, moon filters | — | — |
+| Data | New portfolio site (`/`) | Cinematic 3D site | GoT film |
+|---|---|---|---|
+| Skills + Categories | — | Skills planet and its category moons, tour builder | — |
+| Tech Stack | tech constellation, skills lattice, About ride | skills lattice, structure diagram | — |
+| Cores | project grouping and colours | portfolio cores | place colours |
+| Job Tech | labels on each job moon | moon labels, drone hologram, overlay; hover highlights resume text | — |
+| Memories | floating memories on the job moon | memory sequence per job | — |
+| Entry technologies | project tags | holograms, moon filters | — |
+
+The old scrolling resume (the arrow-key sections inside the cinematic site) was
+removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
+`Footer` and their styles) were deleted on 2026-09-21. There are three sites.
 
 ### 2.3 What the film needs that the API lacks
 
@@ -192,8 +196,8 @@ What stays, because it is not legacy: resolving media ids to URLs, sorting by
 ### Order of work (D9)
 
 0. **Step back: retire `toLegacy`.** One typed content reader in the new
-   shapes; migrate the GoT film (nothing to do), the new portfolio site, the old
-   scrolling resume, then the cinematic site, one at a time, each proven by
+   shapes; migrate the GoT film (nothing to do), the new portfolio site, then
+   the cinematic site, one at a time, each proven by
    before/after screenshots. Bundled fallback converted to the new shape.
    `fromLegacy` and the round-trip test stay only as long as the import script
    needs them.
@@ -204,7 +208,7 @@ What stays, because it is not legacy: resolving media ids to URLs, sorting by
 
 | Site | Change |
 |---|---|
-| Old resume skills block, Skills planet | none: `toLegacy` builds the same category → names map from ticked technologies |
+| Skills planet | none: `toLegacy` builds the same category → names map from ticked technologies |
 | Tech constellation, lattice, About ride, diagram | none if the tree is unchanged; *Q1* decides whether new technologies appear there |
 | Job moon labels (both sites), hologram, overlay | combined labels become single technology names, comma-separated where shown in a line (D2). More, shorter labels per job. |
 | Project tags | consistent names and capitalisation |
@@ -258,6 +262,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-21: removed the dead scrolling-resume files; three sites, not four.
 - 2026-09-21: draft 4: retire the translation step first (D9), with its measured size and the new order of work.
 - 2026-09-21: draft 3: one home per skill is a hard rule (D7); non-code skills organised from real data later (D8).
 - 2026-09-21: draft 2: one tree instead of tree + categories (D4), "current" as a tick (D5), no stored derived data (D6).
