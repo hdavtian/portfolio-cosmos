@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "test": "vitest run",
     "import": "tsx src/scripts/importContent.ts",
+    "add-early-jobs": "tsx src/scripts/addEarlyJobs.ts",
     "storage:cors": "tsx src/scripts/configureLocalStorageCors.ts"
   },
   "dependencies": {

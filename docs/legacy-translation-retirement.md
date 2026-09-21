@@ -26,7 +26,13 @@ Admin → database → publish → GET /api/v2/content/release   (new shapes)
                               the sites
 ```
 
-If the API can't be reached, the bundled JSON in `src/data/` is used instead.
+If the API can't be reached, the bundled JSON in `src/data/` can be used instead.
+**That fallback is switched off for the duration of this work** (2026-09-21):
+`VITE_CONTENT_FALLBACK=on` turns it back on; without it a failed API call is a
+visible error, so old bundled content can't mask a bug. At the very end the
+fallback is tested once and Harma decides whether to keep it (Q6). **It must be
+decided before this branch reaches `main`**, because production would otherwise
+ship with the fallback off.
 
 ## 3. Finding: the cinematic site mostly does not read the API
 
@@ -200,10 +206,12 @@ the subscription and tenant check.
 | Q2 | Should the cinematic site really start reading Experiences, Skills and the About deck from the API? It is the point of "one data", but it is a behaviour change. | Yes, after the stage 1 diff shows what would change. |
 | Q3 | Keep the one-off import script and its round-trip test, or retire them too once the database is the only source? | Retire after a final verified backup; the files stay in git history. |
 | Q5 | Also back up production media files (Azure blob storage, 206 files) before starting? It is a read-only download but needs an Azure sign-in check. Nothing planned deletes or replaces media. | Yes, once, for completeness. |
+| Q6 | Keep the bundled fallback at the end, or drop it? Production's database is rarely down. Decide after testing it once, before merging to `main`. | Open. |
 | Q4 | Do this on `skills-timeline-lab` or a new branch off `main`? | New branch off `main`: it is independent of the film and should ship first. |
 
 ## 10. Change log
 
+- 2026-09-21: Earthlink and HostPro added to the **local** database as draft Experiences by `npm run db:add-early-jobs` (positions 7 and 8; not published). Fallback put behind an off-by-default flag.
 - 2026-09-21: Q1 settled: nine jobs everywhere; no per-site flags for now. Every bundled-JSON read becomes an API read, with one generated fallback for when the API is down.
 - 2026-09-21: backups taken and verified; data workflow added (section 8).
 - 2026-09-21: draft 1.
