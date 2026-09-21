@@ -1,0 +1,763 @@
+{
+  "comment": "MOCK DATA, not wired into the site. How long each skill was used, in years, at each job. No self-ratings. Three ways to state a use, most precise first: (1) 'from'/'to' actual years; (2) 'years' plus 'when' (start, middle, end) for where it sat in the job; (3) 'years' alone, assumed to overlap the job's other skills, so a category takes the longest rather than the sum. Categories are flat and a skill can belong to several ('scss' is both Styling and Frontend). A skill may have a 'parent' when it is part of another ('C# Web API' inside 'C#'): categories count parents, children add detail. Caps: a skill can't outlast its job, and a total can't outlast the real calendar span of the jobs it came from. Own-studio work (including this site) sits under StormScape. Run: npm run skills:report",
+  "categories": [
+    {
+      "slug": "backend",
+      "name": "Backend",
+      "sortOrder": 1,
+      "headline": true,
+      "blurb": "Server-side languages, APIs and services"
+    },
+    {
+      "slug": "frontend",
+      "name": "Frontend",
+      "sortOrder": 2,
+      "headline": true,
+      "blurb": "Everything that runs in the browser"
+    },
+    {
+      "slug": "frameworks",
+      "name": "SPA frameworks",
+      "sortOrder": 3,
+      "headline": true,
+      "blurb": "Angular, React and friends"
+    },
+    {
+      "slug": "styling",
+      "name": "Styling",
+      "sortOrder": 4,
+      "headline": false,
+      "blurb": "CSS, SCSS, design systems, animation"
+    },
+    {
+      "slug": "cloud",
+      "name": "Cloud platforms",
+      "sortOrder": 5,
+      "headline": true,
+      "blurb": "AWS and Azure: hosting, services, pipelines"
+    },
+    {
+      "slug": "hosting",
+      "name": "Servers & hosting",
+      "sortOrder": 6,
+      "headline": false,
+      "blurb": "Linux, LAMP, data centre era"
+    },
+    {
+      "slug": "data",
+      "name": "Data & messaging",
+      "sortOrder": 7,
+      "headline": true,
+      "blurb": "Databases, queues, integrations"
+    },
+    {
+      "slug": "testing",
+      "name": "Testing & automation",
+      "sortOrder": 8,
+      "headline": true,
+      "blurb": "Test frameworks and automation platforms"
+    },
+    {
+      "slug": "leadership",
+      "name": "Leadership & product",
+      "sortOrder": 9,
+      "headline": true,
+      "blurb": "Leading engineers, owning roadmaps, client delivery"
+    },
+    {
+      "slug": "current-stack",
+      "name": "Current stack",
+      "sortOrder": 10,
+      "headline": true,
+      "era": 2014,
+      "blurb": "What I work in now — counted from 2014"
+    },
+    {
+      "slug": "support-sales",
+      "name": "Support & sales",
+      "sortOrder": 11,
+      "headline": false,
+      "blurb": "Front-line support, selling, and looking after clients"
+    }
+  ],
+  "skills": [
+    {
+      "slug": "csharp-dotnet",
+      "name": "C# / .NET",
+      "categories": [
+        "backend",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "csharp-webapi",
+      "name": "C# Web API",
+      "categories": [
+        "backend",
+        "current-stack"
+      ],
+      "parent": "csharp-dotnet"
+    },
+    {
+      "slug": "java",
+      "name": "Java / Spring Boot",
+      "categories": [
+        "backend",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "php",
+      "name": "PHP",
+      "categories": [
+        "backend"
+      ]
+    },
+    {
+      "slug": "node",
+      "name": "Node.js",
+      "categories": [
+        "backend",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "angular",
+      "name": "Angular",
+      "categories": [
+        "frontend",
+        "frameworks",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "react",
+      "name": "React / Redux",
+      "categories": [
+        "frontend",
+        "frameworks",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "nextjs",
+      "name": "Next.js",
+      "categories": [
+        "frontend",
+        "frameworks",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "typescript",
+      "name": "TypeScript",
+      "categories": [
+        "frontend",
+        "frameworks",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "javascript",
+      "name": "JavaScript",
+      "categories": [
+        "frontend"
+      ]
+    },
+    {
+      "slug": "html-css",
+      "name": "HTML / CSS",
+      "categories": [
+        "frontend",
+        "styling"
+      ]
+    },
+    {
+      "slug": "jquery",
+      "name": "jQuery",
+      "categories": [
+        "frontend"
+      ]
+    },
+    {
+      "slug": "animation",
+      "name": "Animation (GSAP, Framer, Three.js)",
+      "categories": [
+        "frontend",
+        "styling",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "azure",
+      "name": "Azure",
+      "categories": [
+        "cloud",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "aws",
+      "name": "AWS",
+      "categories": [
+        "cloud"
+      ]
+    },
+    {
+      "slug": "docker",
+      "name": "Docker",
+      "categories": [
+        "cloud",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "cicd",
+      "name": "CI/CD pipelines",
+      "categories": [
+        "cloud",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "linux-hosting",
+      "name": "Linux hosting / LAMP",
+      "categories": [
+        "hosting"
+      ]
+    },
+    {
+      "slug": "datacenter",
+      "name": "Data centre operations",
+      "categories": [
+        "hosting"
+      ]
+    },
+    {
+      "slug": "sql",
+      "name": "SQL databases",
+      "categories": [
+        "data"
+      ]
+    },
+    {
+      "slug": "mongodb",
+      "name": "MongoDB",
+      "categories": [
+        "data",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "rabbitmq",
+      "name": "RabbitMQ",
+      "categories": [
+        "data",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "cms",
+      "name": "CMS / e-commerce platforms",
+      "categories": [
+        "data"
+      ]
+    },
+    {
+      "slug": "playwright",
+      "name": "Playwright",
+      "categories": [
+        "testing",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "selenium",
+      "name": "Selenium / TestNG",
+      "categories": [
+        "testing"
+      ]
+    },
+    {
+      "slug": "test-platforms",
+      "name": "Test automation platforms",
+      "categories": [
+        "testing",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "team-lead",
+      "name": "Leading engineers",
+      "categories": [
+        "leadership",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "product-owner",
+      "name": "Product ownership",
+      "categories": [
+        "leadership",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "client-delivery",
+      "name": "Client delivery / consulting",
+      "categories": [
+        "leadership"
+      ]
+    },
+    {
+      "slug": "scss",
+      "name": "SCSS / design systems",
+      "categories": [
+        "frontend",
+        "styling",
+        "current-stack"
+      ]
+    },
+    {
+      "slug": "tech-support",
+      "name": "Front-line tech support",
+      "categories": [
+        "support-sales"
+      ]
+    },
+    {
+      "slug": "networking",
+      "name": "Dial-up / ISDN / networking",
+      "categories": [
+        "hosting"
+      ]
+    },
+    {
+      "slug": "sales",
+      "name": "Sales & account management",
+      "categories": [
+        "support-sales",
+        "leadership"
+      ]
+    },
+    {
+      "slug": "dns-domains",
+      "name": "DNS & domain infrastructure",
+      "categories": [
+        "hosting"
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "slug": "investcloud",
+      "company": "InvestCloud Inc.",
+      "start": "2018-04",
+      "end": "2025-06",
+      "uses": [
+        {
+          "skill": "angular",
+          "from": 2018,
+          "to": 2022
+        },
+        {
+          "skill": "react",
+          "from": 2023,
+          "to": 2025
+        },
+        {
+          "skill": "typescript",
+          "years": 7
+        },
+        {
+          "skill": "javascript",
+          "years": 7
+        },
+        {
+          "skill": "html-css",
+          "years": 7
+        },
+        {
+          "skill": "java",
+          "from": 2018,
+          "to": 2023
+        },
+        {
+          "skill": "csharp-dotnet",
+          "from": 2022,
+          "to": 2025
+        },
+        {
+          "skill": "csharp-webapi",
+          "from": 2023,
+          "to": 2025
+        },
+        {
+          "skill": "node",
+          "years": 3
+        },
+        {
+          "skill": "sql",
+          "years": 5
+        },
+        {
+          "skill": "mongodb",
+          "years": 2,
+          "when": "end"
+        },
+        {
+          "skill": "rabbitmq",
+          "years": 2,
+          "when": "end"
+        },
+        {
+          "skill": "azure",
+          "years": 4,
+          "when": "end"
+        },
+        {
+          "skill": "docker",
+          "years": 3,
+          "when": "end"
+        },
+        {
+          "skill": "cicd",
+          "years": 6
+        },
+        {
+          "skill": "selenium",
+          "years": 4,
+          "when": "start"
+        },
+        {
+          "skill": "playwright",
+          "years": 3,
+          "when": "end"
+        },
+        {
+          "skill": "test-platforms",
+          "years": 6
+        },
+        {
+          "skill": "team-lead",
+          "years": 2,
+          "when": "end"
+        },
+        {
+          "skill": "product-owner",
+          "years": 2,
+          "when": "end"
+        },
+        {
+          "skill": "scss",
+          "years": 7
+        }
+      ],
+      "title": "Lead Full Stack Engineer"
+    },
+    {
+      "slug": "rpa",
+      "company": "RPA (Rubin Postaer & Associates)",
+      "start": "2014-10",
+      "end": "2017-07",
+      "uses": [
+        {
+          "skill": "react",
+          "years": 3
+        },
+        {
+          "skill": "nextjs",
+          "years": 2,
+          "when": "end"
+        },
+        {
+          "skill": "javascript",
+          "years": 3
+        },
+        {
+          "skill": "html-css",
+          "years": 3
+        },
+        {
+          "skill": "animation",
+          "years": 2
+        },
+        {
+          "skill": "java",
+          "years": 2
+        },
+        {
+          "skill": "php",
+          "years": 1
+        },
+        {
+          "skill": "sql",
+          "years": 3
+        },
+        {
+          "skill": "cms",
+          "years": 1
+        },
+        {
+          "skill": "aws",
+          "years": 3
+        },
+        {
+          "skill": "docker",
+          "years": 2
+        },
+        {
+          "skill": "cicd",
+          "years": 3
+        },
+        {
+          "skill": "scss",
+          "years": 3
+        }
+      ],
+      "title": "Senior Web Developer"
+    },
+    {
+      "slug": "boingo",
+      "company": "Boingo Wireless",
+      "start": "2010-08",
+      "end": "2014-06",
+      "uses": [
+        {
+          "skill": "php",
+          "years": 4
+        },
+        {
+          "skill": "javascript",
+          "years": 4
+        },
+        {
+          "skill": "jquery",
+          "years": 4
+        },
+        {
+          "skill": "html-css",
+          "years": 4
+        },
+        {
+          "skill": "sql",
+          "years": 4
+        },
+        {
+          "skill": "cms",
+          "years": 2
+        },
+        {
+          "skill": "aws",
+          "years": 2,
+          "when": "end"
+        },
+        {
+          "skill": "linux-hosting",
+          "years": 2
+        }
+      ],
+      "title": "Web Engineer"
+    },
+    {
+      "slug": "capital-group",
+      "company": "Capital Group",
+      "start": "2008-04",
+      "end": "2009-04",
+      "uses": [
+        {
+          "skill": "html-css",
+          "years": 1
+        },
+        {
+          "skill": "javascript",
+          "years": 1
+        }
+      ],
+      "title": "Front-End Coder"
+    },
+    {
+      "slug": "murad",
+      "company": "Murad",
+      "start": "2005-05",
+      "end": "2008-04",
+      "uses": [
+        {
+          "skill": "html-css",
+          "years": 3
+        },
+        {
+          "skill": "javascript",
+          "years": 2
+        },
+        {
+          "skill": "cms",
+          "years": 3
+        }
+      ],
+      "title": "Web Developer"
+    },
+    {
+      "slug": "unitedlayer",
+      "company": "UnitedLayer",
+      "start": "2001-01",
+      "end": "2002-01",
+      "uses": [
+        {
+          "skill": "html-css",
+          "years": 1
+        },
+        {
+          "skill": "php",
+          "years": 1
+        },
+        {
+          "skill": "linux-hosting",
+          "years": 1
+        },
+        {
+          "skill": "datacenter",
+          "years": 1
+        },
+        {
+          "skill": "sql",
+          "years": 1
+        }
+      ],
+      "title": "Web Developer/Designer"
+    },
+    {
+      "slug": "stormscape",
+      "company": "StormScape (own studio)",
+      "start": "2000-01",
+      "end": "2010-01",
+      "uses": [
+        {
+          "skill": "html-css",
+          "years": 10
+        },
+        {
+          "skill": "javascript",
+          "years": 8
+        },
+        {
+          "skill": "php",
+          "years": 8
+        },
+        {
+          "skill": "sql",
+          "years": 8
+        },
+        {
+          "skill": "cms",
+          "years": 6
+        },
+        {
+          "skill": "linux-hosting",
+          "years": 6
+        },
+        {
+          "skill": "client-delivery",
+          "years": 10
+        }
+      ],
+      "title": "Principal Web Developer"
+    },
+    {
+      "slug": "stormscape-now",
+      "company": "StormScape (own studio, current)",
+      "title": "Own projects, including this site",
+      "start": "2025-01",
+      "end": null,
+      "uses": [
+        {
+          "skill": "react",
+          "years": 2
+        },
+        {
+          "skill": "typescript",
+          "years": 2
+        },
+        {
+          "skill": "node",
+          "years": 2
+        },
+        {
+          "skill": "animation",
+          "years": 2
+        },
+        {
+          "skill": "azure",
+          "years": 2
+        },
+        {
+          "skill": "mongodb",
+          "years": 1
+        },
+        {
+          "skill": "cicd",
+          "years": 2
+        }
+      ]
+    },
+    {
+      "slug": "earthlink",
+      "company": "Earthlink Network",
+      "title": "Tech Support, then Sales Agent",
+      "start": "1994-03",
+      "end": "1997-01",
+      "uses": [
+        {
+          "skill": "tech-support",
+          "years": 3
+        },
+        {
+          "skill": "networking",
+          "years": 2,
+          "when": "start"
+        },
+        {
+          "skill": "sales",
+          "years": 2,
+          "when": "end"
+        }
+      ]
+    },
+    {
+      "slug": "hostpro",
+      "company": "HostPro LLC",
+      "title": "Web Hosting Sales, then Sales Manager",
+      "start": "1997-03",
+      "end": "2001-06",
+      "uses": [
+        {
+          "skill": "sales",
+          "years": 4
+        },
+        {
+          "skill": "dns-domains",
+          "years": 4
+        },
+        {
+          "skill": "client-delivery",
+          "years": 3
+        },
+        {
+          "skill": "linux-hosting",
+          "years": 3,
+          "when": "end"
+        },
+        {
+          "skill": "html-css",
+          "years": 3,
+          "when": "end"
+        },
+        {
+          "skill": "team-lead",
+          "years": 2,
+          "when": "end"
+        }
+      ]
+    }
+  ]
+}

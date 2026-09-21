@@ -209,11 +209,11 @@ the subscription and tenant check.
 | ~~Q3~~ | *Settled 2026-09-21: retire it, at the very end.* The import script, `fromLegacy`, `toLegacy`, the old-shape types, the round-trip test and the old JSON files are removed in stage 6, once every site is on the API. Until then they stay as a safety net. A fresh machine then starts from a restored backup; `docs/content-reseeding-runbook.md` is rewritten to say so. | — |
 | Q5 | Also back up production media files (Azure blob storage, 206 files) before starting? It is a read-only download but needs an Azure sign-in check. Nothing planned deletes or replaces media. | Yes, once, for completeness. |
 | Q6 | Keep the bundled fallback at the end, or drop it? Production's database is rarely down. Decide after testing it once, before merging to `main`. | Open. |
-| ~~Q4~~ | *Settled 2026-09-21: new branch off `main`.* `retire-legacy-translation`, carrying the planning docs, backup and early-jobs scripts, fallback flag and dead-file clean-up. The film stays on `skills-timeline-lab` and rebases onto this once it lands. `npm run db:add-early-jobs` has already been run; on this branch `resume.json` does not hold the two jobs, so it is not re-runnable here (the jobs are in the local database). | — |
+| ~~Q4~~ | *Settled 2026-09-21: one branch, `retire-legacy-translation`, off `main`, with the film branch merged in* so nothing has to be imported later. The film lives at an unlinked URL (`/lab/got`), so shipping it is harmless. Consequence: this branch's `resume.json` holds Earthlink and HostPro, so the space site shows nine moons here from the start, from the file until it switches to the API. `skills-timeline-lab` is kept as it was; new film work happens here. | — |
 
 ## 10. Change log
 
-- 2026-09-21: Q4 settled: branch `retire-legacy-translation` created from `main`. All four questions closed; stage 1 is next.
+- 2026-09-21: Q4 settled: branch `retire-legacy-translation` created from `main`, film branch merged in. All four questions closed; stage 1 is next.
 - 2026-09-21: Q3 settled: the import path is retired at the end.
 - 2026-09-21: Q2 settled: go-ahead for the space site stage.
 - 2026-09-21: Earthlink and HostPro added to the **local** database as draft Experiences by `npm run db:add-early-jobs` (positions 7 and 8; not published). Fallback put behind an off-by-default flag.

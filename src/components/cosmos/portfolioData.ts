@@ -443,6 +443,10 @@ export const buildPortfolioCoreViews = (
       });
     });
 
+    // A core with nothing attached is only a name and a colour — it may exist
+    // just to give a job its accent elsewhere — so there is nothing to draw.
+    if (coreGroupIds.length === 0) return;
+
     cores.push({
       id: coreId,
       title: coreTitle,
