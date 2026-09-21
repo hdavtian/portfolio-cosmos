@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { usePortfolioCoresQuery, useResumeQuery } from "../../../lib/query/contentQueries";
-import { flattenPortfolioCores } from "../../fast/lib/portfolioTransform";
+import { useReleaseQuery } from "../../../lib/query/contentQueries";
+import { portfolioItemsFromRelease } from "../../fast/lib/portfolioTransform";
 import type { PortfolioItem } from "../../fast/types";
 
 export interface ShowcaseProject extends PortfolioItem {
@@ -22,13 +22,13 @@ const TOP_TECH_COUNT = 10;
  * cores and most-used technologies that drive the filter chips.
  */
 export function useShowcaseProjects() {
-  const portfolio = usePortfolioCoresQuery();
-  const resume = useResumeQuery();
+  const content = useReleaseQuery();
 
   return useMemo(() => {
-    const cores = portfolio.data?.payload ?? [];
-    const colorByCore = new Map(cores.map((core) => [core.core, core.coreColor ?? FALLBACK_TINT]));
-    const flattened = flattenPortfolioCores(cores);
+    const release = content.data;
+    const cores = release?.collections.portfolioCores ?? [];
+    const colorByCore = new Map(cores.map((core) => [core.name, core.color ?? FALLBACK_TINT]));
+    const flattened = release ? portfolioItemsFromRelease(release) : [];
 
     // Technology names are typed by hand in the admin ("css", "CSS "), so one
     // spelling is chosen per name: the one with the most capitals ("CSS",
@@ -59,9 +59,9 @@ export function useShowcaseProjects() {
 
     const coreList: ShowcaseCore[] = cores
       .map((core) => ({
-        name: core.core,
-        color: core.coreColor ?? FALLBACK_TINT,
-        count: projects.filter((project) => project.category === core.core).length,
+        name: core.name,
+        color: core.color ?? FALLBACK_TINT,
+        count: projects.filter((project) => project.category === core.name).length,
       }))
       .filter((core) => core.count > 0);
 
@@ -77,12 +77,12 @@ export function useShowcaseProjects() {
     const years = projects.map((project) => project.year).filter((year): year is number => year !== null);
 
     return {
-      isLoading: portfolio.isLoading,
+      isLoading: content.isLoading,
       projects,
       cores: coreList,
       topTech,
       yearRange: years.length ? { from: Math.min(...years), to: Math.max(...years) } : null,
-      personal: resume.data?.payload.personal ?? null,
+      personal: release?.profile ?? null,
     };
-  }, [portfolio.data, portfolio.isLoading, resume.data]);
+  }, [content.data, content.isLoading]);
 }

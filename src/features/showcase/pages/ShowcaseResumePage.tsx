@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useResumeQuery } from "../../../lib/query/contentQueries";
+import { useReleaseQuery } from "../../../lib/query/contentQueries";
 import { useBackdropTint } from "../lib/backdropTint";
 
 const dateRange = (start?: string, end?: string) =>
@@ -20,7 +20,7 @@ const positionDetails = (
 
 /** The resume, kept simple: who, summary and contact on the left, the record on the right. */
 export function ShowcaseResumePage() {
-  const { data, isPending, isError } = useResumeQuery();
+  const { data, isPending, isError } = useReleaseQuery();
   const { setTint } = useBackdropTint();
 
   useEffect(() => {
@@ -36,7 +36,10 @@ export function ShowcaseResumePage() {
     );
   }
 
-  const { personal, summary, experience, education, certifications } = data.payload;
+  const personal = data.profile;
+  const { summary } = data.profile;
+  const { experiences: experience, certifications } = data.collections;
+  const [education] = data.collections.education;
 
   return (
     <article className="showcase-resume">
@@ -77,12 +80,12 @@ export function ShowcaseResumePage() {
           </h2>
           <ol className="showcase-resume__jobs">
             {experience.map((job) => (
-              <li key={job.id} className="showcase-resume__job">
+              <li key={job.slug} className="showcase-resume__job">
                 <header className="showcase-resume__job-head">
                   <h3 className="showcase-resume__company">{job.navLabel || job.company}</h3>
                 </header>
                 {job.positions.map((position, index) => (
-                  <div key={`${job.id}-${index}`} className="showcase-resume__position">
+                  <div key={`${job.slug}-${index}`} className="showcase-resume__position">
                     <h4 className="showcase-resume__position-title">
                       {position.title}
                       {positionDetails(position, job).map((detail) => (

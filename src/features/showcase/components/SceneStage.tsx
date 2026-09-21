@@ -6,17 +6,16 @@ import {
   subscribeCinematicLaunch,
 } from "../../../app/cinematic/launchStore";
 import type { TechStackTreeNode } from "../../../lib/api/contentV2";
-import type { PortfolioCoreSeed } from "../../fast/types";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
-import type { SceneJob, ShowcaseScene } from "../scenes/types";
+import { EMPTY_PORTFOLIO, type SceneJob, type ScenePortfolio, type ShowcaseScene } from "../scenes/types";
 
 interface SceneStageProps {
   projects: ShowcaseProject[];
   techStack: TechStackTreeNode[] | undefined;
   /** Technologies of the project open on the page. */
   highlights: string[];
-  portfolioCores: PortfolioCoreSeed[] | undefined;
+  portfolio: ScenePortfolio | undefined;
   jobs: SceneJob[];
   /** Project whose preview is open on the page. */
   focusProjectId: string | null;
@@ -99,7 +98,7 @@ const prefetchCinematic = () => {
  * Fragments of the cinematic universe behind the portfolio: one renderer, one
  * visible scene at a time, glitch transitions, a switcher and an auto-tour.
  */
-export function SceneStage({ projects, techStack, highlights, portfolioCores, jobs, focusProjectId, interactive, paused, showGateway, onShowing }: SceneStageProps) {
+export function SceneStage({ projects, techStack, highlights, portfolio, jobs, focusProjectId, interactive, paused, showGateway, onShowing }: SceneStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Already loaded and in memory: going back is instant, and the link says so.
   const cinematicLoaded = useSyncExternalStore(subscribeCinematicLaunch, isCinematicLoaded, isCinematicLoaded);
@@ -131,10 +130,10 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
     onShowingRef.current = onShowing;
   });
 
-  const hasData = projects.length > 0 && techStack !== undefined && portfolioCores !== undefined;
-  const dataRef = useRef({ projects, techStack: techStack ?? [], portfolioCores: portfolioCores ?? [], jobs });
+  const hasData = projects.length > 0 && techStack !== undefined && portfolio !== undefined;
+  const dataRef = useRef({ projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs });
   useLayoutEffect(() => {
-    dataRef.current = { projects, techStack: techStack ?? [], portfolioCores: portfolioCores ?? [], jobs };
+    dataRef.current = { projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs };
   });
 
   const switchTo = useCallback((id: string) => {

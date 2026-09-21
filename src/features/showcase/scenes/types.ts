@@ -1,6 +1,6 @@
 import type * as THREE from "three";
-import type { TechStackTreeNode } from "../../../lib/api/contentV2";
-import type { PortfolioCoreSeed } from "../../fast/types";
+import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
+import type { PortfolioCore, PortfolioEntry } from "@hd/content-schema";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 
 export type ThreeModule = typeof import("three");
@@ -13,7 +13,7 @@ export interface ScenePointer {
 
 /** A job as the scenes need it (from the published resume). */
 export interface SceneJob {
-  id: string;
+  slug: string;
   company: string;
   location?: string;
   startDate?: string;
@@ -24,10 +24,19 @@ export interface SceneJob {
   tech: string[];
 }
 
+/** The published portfolio as stored: cores, their entries, and where images live. */
+export interface ScenePortfolio {
+  cores: PortfolioCore[];
+  entries: PortfolioEntry[];
+  mediaUrl: (mediaId: string | null | undefined) => string;
+}
+
+export const EMPTY_PORTFOLIO: ScenePortfolio = { cores: [], entries: [], mediaUrl: () => "" };
+
 export interface SceneData {
   projects: ShowcaseProject[];
   techStack: TechStackTreeNode[];
-  portfolioCores: PortfolioCoreSeed[];
+  portfolio: ScenePortfolio;
   jobs: SceneJob[];
 }
 

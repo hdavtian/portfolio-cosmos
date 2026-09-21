@@ -4,7 +4,7 @@ import { CINEMATIC_PATH, canKeepAlive } from "../../app/cinematic/keepAlive";
 import { isCinematicStill, setCinematicLaunch, subscribeCinematicLaunch } from "../../app/cinematic/launchStore";
 import { AtmosphereBackdrop } from "./components/AtmosphereBackdrop";
 import { SceneStage } from "./components/SceneStage";
-import { usePortfolioCoresQuery, useResumeQuery, useTechStackQuery } from "../../lib/query/contentQueries";
+import { useReleaseQuery, useTechStackQuery } from "../../lib/query/contentQueries";
 import type { SceneJob } from "./scenes/types";
 import { BackdropTintContext } from "./lib/backdropTint";
 import { useShowcaseProjects } from "./lib/useShowcaseProjects";
@@ -28,30 +28,30 @@ export function ShowcaseLayout() {
   const setTint = useCallback((color: string | null) => setTintState(color ?? DEFAULT_TINT), []);
   const { personal, projects } = useShowcaseProjects();
   const techStack = useTechStackQuery().data?.payload;
-  const portfolioCores = usePortfolioCoresQuery().data?.payload;
-  const experience = useResumeQuery().data?.payload.experience;
+  const release = useReleaseQuery().data;
+  const portfolio = useMemo(
+    () =>
+      release && {
+        cores: release.collections.portfolioCores,
+        entries: release.collections.portfolioEntries,
+        mediaUrl: release.mediaUrl,
+      },
+    [release],
+  );
   const jobs = useMemo<SceneJob[]>(
     () =>
-      (experience ?? []).map((entry) => {
-        // The published resume carries the 3D site's extras too.
-        const extras = entry as typeof entry & {
-          droneIntroText?: string;
-          jobMemories?: Array<{ type: string; text: string }>;
-          jobTech?: Array<{ label: string }>;
-        };
-        return {
-          id: entry.id,
-          company: entry.company,
-          location: entry.location,
-          startDate: entry.startDate,
-          endDate: entry.endDate,
-          droneIntroText: extras.droneIntroText,
-          positions: entry.positions,
-          memories: extras.jobMemories ?? [],
-          tech: (extras.jobTech ?? []).map((tech) => tech.label),
-        };
-      }),
-    [experience],
+      (release?.collections.experiences ?? []).map((entry) => ({
+        slug: entry.slug,
+        company: entry.company,
+        location: entry.location,
+        startDate: entry.startDate,
+        endDate: entry.endDate,
+        droneIntroText: entry.droneIntroText,
+        positions: entry.positions,
+        memories: entry.jobMemories,
+        tech: entry.jobTech.map((tech) => tech.label),
+      })),
+    [release],
   );
   const { pathname } = useLocation();
   // Only the index lets the scene take the wheel; project pages scroll.
@@ -85,7 +85,7 @@ export function ShowcaseLayout() {
             projects={projects}
             techStack={techStack}
             highlights={highlights}
-            portfolioCores={portfolioCores}
+            portfolio={portfolio}
             jobs={jobs}
             interactive={onIndex && !cinematicStill}
             paused={onCinematic || cinematicStill}

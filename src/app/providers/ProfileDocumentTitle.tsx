@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useResumeQuery } from "../../lib/query/contentQueries";
+import { useReleaseQuery } from "../../lib/query/contentQueries";
 
 /**
  * Keeps the browser tab title in step with the published profile
@@ -8,9 +8,9 @@ import { useResumeQuery } from "../../lib/query/contentQueries";
  * (scripts/vite-profile-head.ts).
  */
 export function ProfileDocumentTitle() {
-  const resume = useResumeQuery();
-  const name = resume.data?.payload.personal.name;
-  const title = resume.data?.payload.personal.title;
+  const profile = useReleaseQuery((release) => release.profile).data;
+  const name = profile?.name;
+  const title = profile?.title;
 
   useEffect(() => {
     if (!name) return;

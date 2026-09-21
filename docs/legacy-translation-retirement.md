@@ -211,6 +211,32 @@ need). No console errors. Options are in Q7.
   `release.profile`; its `resume.json` import is gone. Its project years still
   come through `useShowcaseProjects`, which moves with the portfolio site in stage 4.
 
+## 7c. Stage 4: the new portfolio site (2026-09-21)
+
+Everything under `src/features/showcase`, `src/features/fast` and `src/app` now
+reads the release; none of it touches the old shapes.
+
+- **Projects.** `portfolioItemsFromRelease(release)` replaces translating to
+  nested cores and flattening them back out. Order is kept as laid out: core,
+  plane, ring, then the entry's own order. **Proved identical:**
+  `npx tsx scripts/retirement-checks/projects.ts` compares old and new on a saved
+  release: 48 projects, same fields, same order.
+- **Resume page, page title, masthead:** from `release.profile` and the stored
+  experiences, education and certifications.
+- **Background scenes:** given the stored cores and entries (`ScenePortfolio`)
+  and jobs keyed by `slug`; the orbital scene places entries by their
+  `placement` instead of walking nested lists.
+- **Tech stack tree:** built from `release.collections.techStackNodes`.
+- **Checked:** home, resume and a project page against the stage 1 screenshots
+  (`baselines/stage4/`), no console errors, production build passes.
+- **Not mine, left alone:** three lint errors in the classic portfolio pages
+  (`PortfolioMediaViewer`, `PortfolioDetailPage`, `PortfolioPage`) were already
+  there before this work.
+
+Still on the old shapes, all of it the space site (stage 5): `App.tsx`,
+`ResumeStructureDiagram.tsx`, `cosmos/portfolioData.ts`,
+`cosmos/moonPortfolioSelector.ts`, `cosmos/ResumeSpace3D*.ts(x)`.
+
 ## 8. Data: backups and how new data reaches production
 
 **Backups taken 2026-09-21 before any work** (in `db-backups/`, not in git,
@@ -261,6 +287,7 @@ the subscription and tenant check.
 
 ## 10. Change log
 
+- 2026-09-21: stage 4 done (section 7c).
 - 2026-09-21: stages 2 and 3 done (section 7b).
 - 2026-09-21: stage 1 done (section 7a): no content drift; space site interior not captured (Q7).
 - 2026-09-21: Q4 settled: branch `retire-legacy-translation` created from `main`, film branch merged in. All four questions closed; stage 1 is next.

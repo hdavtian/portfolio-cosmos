@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchSiteContent } from "../api/contentV2";
+import { buildTechStackTree, techStackTreeFromSkills } from "@hd/content-schema/tech-stack-tree";
 import type { Release } from "../api/release";
+import { portfolioItemsFromRelease } from "../../features/fast/lib/portfolioTransform";
 
 export const contentKeys = {
   all: ["content"] as const,
@@ -25,12 +27,27 @@ export function usePortfolioCoresQuery() {
   });
 }
 
+// Releases published before the tech stack existed have no nodes; the tree is
+// then two levels, built from the skill categories and their skills.
+const techStackFromRelease = (release: Release) => {
+  const { techStackNodes, skillCategories, skills } = release.collections;
+  const payload =
+    techStackNodes.length > 0
+      ? buildTechStackTree(techStackNodes)
+      : techStackTreeFromSkills(
+          Object.fromEntries(
+            skillCategories.map((category) => [
+              category.name,
+              skills.filter((skill) => skill.categorySlug === category.slug).map((skill) => skill.name),
+            ]),
+          ),
+        );
+  return { payload, source: "api" as const };
+};
+
 /** Nested tech stack for the D3 skills graph (and the portfolio site redesign). */
 export function useTechStackQuery() {
-  return useQuery({
-    ...releaseQuery,
-    select: (content) => ({ payload: content.techStack, source: content.source }),
-  });
+  return useReleaseQuery(techStackFromRelease);
 }
 
 export function useResumeQuery() {
@@ -68,4 +85,9 @@ export function useReleaseQuery<T = Release>(select?: (release: Release) => T) {
       return select ? select(content.release) : (content.release as T);
     },
   });
+}
+
+/** The published projects, one per entry or client site, in portfolio order. */
+export function usePortfolioItemsQuery() {
+  return useReleaseQuery(portfolioItemsFromRelease);
 }

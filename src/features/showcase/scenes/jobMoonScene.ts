@@ -190,7 +190,7 @@ interface Memory {
 }
 
 export async function createJobMoonScene(THREE: ThreeModule, data: SceneData): Promise<ShowcaseScene> {
-  const job = data.jobs.find((entry) => entry.id === JOB_ID) ?? data.jobs[0];
+  const job = data.jobs.find((entry) => entry.slug === JOB_ID) ?? data.jobs[0];
   if (!job) throw new Error("No experience to show");
 
   const scene = new THREE.Scene();
@@ -218,7 +218,7 @@ export async function createJobMoonScene(THREE: ThreeModule, data: SceneData): P
   scene.add(moon);
   disposables.push(moonMaterial, moonGeometry);
   new THREE.TextureLoader().load(
-    MOON_TEXTURES[job.id] ?? MOON_TEXTURES.investcloud,
+    MOON_TEXTURES[job.slug] ?? MOON_TEXTURES.investcloud,
     (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
       moonMaterial.map = texture;
