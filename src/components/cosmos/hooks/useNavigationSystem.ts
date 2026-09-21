@@ -1,4 +1,4 @@
-import type { SpaceResume } from "../spaceContent";
+import type { SpaceJob, SpaceResume } from "../spaceContent";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
@@ -124,7 +124,7 @@ export const useNavigationSystem = (deps: {
   enterMoonViewRef: React.MutableRefObject<
     | ((params: {
         moonMesh: THREE.Mesh;
-        company: any;
+        company: SpaceJob;
         useFlight?: boolean;
       }) => void)
     | null
@@ -401,7 +401,7 @@ export const useNavigationSystem = (deps: {
 
   /** Callback fired when ship arrives at a moon — set by ResumeSpace3D to trigger orbit */
   const onMoonOrbitArrivalRef = useRef<
-    ((moonMesh: THREE.Mesh, company: any) => void) | null
+    ((moonMesh: THREE.Mesh, company: SpaceJob) => void) | null
   >(null);
 
   /** Set once per moon approach when within pre-warm distance so the render
@@ -725,7 +725,7 @@ export const useNavigationSystem = (deps: {
 
         const companyId = targetId.replace("moon-", "");
         const company = resumeData.experience.find(
-          (exp: any) => exp.id === companyId,
+          (exp) => exp.slug === companyId,
         );
 
         if (!company) {
@@ -2666,7 +2666,7 @@ export const useNavigationSystem = (deps: {
           );
 
           const company = resumeData.experience.find(
-            (exp: any) => exp.id === target.id,
+            (exp) => exp.slug === target.id,
           );
           let moonMesh: THREE.Mesh | null = null;
 

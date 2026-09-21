@@ -304,6 +304,37 @@ about 150 other `any`s; see Q8.
 skipped the loader and intro and left the navigation hidden), from
 `CosmosLoader.tsx` and `ResumeSpace3D.tsx`.
 
+## 7e. Stage 5, second pass: stored field names inside the space site (2026-09-21)
+
+Done after the space site turned out to be drivable in the browser and its
+content could be typed. Settles Q8.
+
+| Content | Inside the scene now |
+|---|---|
+| Jobs | the stored `Experience` record itself: `slug` (was `id`), `projects` (was `Projects`). Eleven reads changed in `ResumeSpace3D.tsx`, two in `useNavigationSystem.ts`, plus `ResumeSpace3D.content.ts`. Seven of them were typed `any`, so the compiler would not have flagged them; their annotations are now the real type. One of those (`getMoonPortfolio`) would have silently emptied every job moon's project tabs. |
+| Cores | `slug`, `name`, `color`, `planes[].rings[].entries[]` (were `core`, `coreColor`, `plains[].items[].items[]`). The builder's tolerance for hand-written JSON (partial items, `sourceId` lookups, the `oribitColor` typo) is gone: the content is validated before it is stored. |
+| Entries, variants, gallery | `slug` and stored names, with `image` added in place of `mediaId`. |
+| Moon mappings | the stored record: `experienceSlug`, `coreSlugs`, `includeEntrySlugs`, `excludeEntrySlugs`, tabs by `slug`. Cores are now matched by slug, not by a loose match on their title. |
+| Ride messages, About slides | the stored records (`slug`); slides' picture blocks carry `src`. |
+
+**Where the line was drawn.** The scene builds models of its own (cards, groups,
+core views, nav targets) with ids it invents, such as
+`tcc-c1p1r1i1` for one placement of an entry. Those are the scene's names, not
+content fields, so they keep `id`. `entryFromSeed` in `portfolioData.ts` is the
+one place a content `slug` becomes a scene `id`.
+
+`spaceContent.ts` now only groups (entries onto their rings, skills under
+category names) and fills in media addresses.
+
+**Proved identical**, `npx tsx scripts/retirement-checks/space.ts`: the scene's
+portfolio model (cores, groups, cards, media), every job moon's project tabs
+(all ten), jobs, skills, profile, slides and messages. The old builders are kept
+under `scripts/retirement-checks/old/` for that comparison and go in stage 6.
+
+**Seen working in the browser:** normal entry, the nav with ten jobs, the RPA
+moon with its texture, memories and hologram drone, and the Portfolio with its
+cores, project cards, pictures and registry panel. No console errors.
+
 ## 8. Data: backups and how new data reaches production
 
 **Backups taken 2026-09-21 before any work** (in `db-backups/`, not in git,
@@ -349,12 +380,13 @@ the subscription and tenant check.
 | ~~Q3~~ | *Settled 2026-09-21: retire it, at the very end.* The import script, `fromLegacy`, `toLegacy`, the old-shape types, the round-trip test and the old JSON files are removed in stage 6, once every site is on the API. Until then they stay as a safety net. A fresh machine then starts from a restored backup; `docs/content-reseeding-runbook.md` is rewritten to say so. | — |
 | Q5 | Also back up production media files (Azure blob storage, 206 files) before starting? It is a read-only download but needs an Azure sign-in check. Nothing planned deletes or replaces media. | Yes, once, for completeness. |
 | ~~Q7~~ | *Settled 2026-09-21: (c).* The data check, plus Harma looking at a short checklist of scenes after each space-site sub-step: Experience planet and moons, one job moon with the hologram open, Skills planet, a portfolio core, the About ride, a guided tour stop. Harma confirmed Enter works normally in his browser; the "ENTERING…" hang is only the automated tab. | — |
-| Q8 | Now that the space site can be driven by the automated browser and its resume is typed: do the field renames inside it after all (`id` → `slug`, `Projects` → `projects`, cores `core`/`coreColor`/`plains` → `name`/`color`/`planes`), and shrink `spaceContent.ts` to nothing but grouping? And separately, work down the ~150 `any`s in that folder? | Yes to the renames, file by file with a browser check after each; the `any` clean-up as its own later job. |
+| ~~Q8~~ | *Settled 2026-09-21: renames done (section 7e).* The wider `any` clean-up in the space site (about 150, mostly Three.js objects and event handlers) is its own later job. | — |
 | Q6 | Keep the bundled fallback at the end, or drop it? Production's database is rarely down. Decide after testing it once, before merging to `main`. | Open. |
 | ~~Q4~~ | *Settled 2026-09-21: one branch, `retire-legacy-translation`, off `main`, with the film branch merged in* so nothing has to be imported later. The film lives at an unlinked URL (`/lab/got`), so shipping it is harmless. Consequence: this branch's `resume.json` holds Earthlink and HostPro, so the space site shows nine moons here from the start, from the file until it switches to the API. `skills-timeline-lab` is kept as it was; new film work happens here. | — |
 
 ## 10. Change log
 
+- 2026-09-21: stage 5 second pass: stored field names inside the space site (section 7e).
 - 2026-09-21: stage 5 done (section 7d); approach changed from renames to a typed reader at the space site's door.
 - 2026-09-21: stage 4 done (section 7c).
 - 2026-09-21: stages 2 and 3 done (section 7b).

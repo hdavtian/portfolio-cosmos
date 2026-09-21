@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { OverlayContent } from "../CosmicContentOverlay";
+import type { SpaceJob } from "./spaceContent";
 
 export type OrbitItem = {
   mesh: THREE.Mesh;
@@ -32,7 +33,7 @@ export const createFinalizeFocusOnMoon = (deps: {
   sceneRef: React.MutableRefObject<{ camera?: THREE.Camera }>;
   focusedMoonRef: React.MutableRefObject<THREE.Mesh | null>;
   focusedMoonCameraDistanceRef: React.MutableRefObject<number | null>;
-  getMoonPortfolio?: (company: any) => OverlayContent["moonPortfolio"];
+  getMoonPortfolio?: (company: SpaceJob) => OverlayContent["moonPortfolio"];
   onFocus?: () => void;
 }) => {
   const {
@@ -49,7 +50,7 @@ export const createFinalizeFocusOnMoon = (deps: {
     onFocus,
   } = deps;
 
-  return (moonMesh: THREE.Mesh, company: any) => {
+  return (moonMesh: THREE.Mesh, company: SpaceJob) => {
     try {
       onFocus?.();
       const moonWorldPos = new THREE.Vector3();
@@ -114,10 +115,10 @@ export const createFinalizeFocusOnMoon = (deps: {
         droneIntroText: typeof company.droneIntroText === "string" ? company.droneIntroText : undefined,
         sections,
         jobTech,
-        projects: Array.isArray(company.Projects) ? company.Projects : [],
+        projects: company.projects,
         moonPortfolio: getMoonPortfolio ? getMoonPortfolio(company) : null,
         enableDroneCardDock:
-          Array.isArray(company.Projects) && company.Projects.length > 0,
+          company.projects.length > 0,
       };
 
       // Show right-pane content (simulate load)

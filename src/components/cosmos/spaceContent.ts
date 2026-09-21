@@ -1,7 +1,14 @@
-import type { ClientVariant, GalleryItem } from "@hd/content-schema";
+import type {
+  AboutDeckSlide,
+  ClientVariant,
+  Experience,
+  GalleryItem,
+  MoonPortfolioMapping,
+  PathTravelMessage,
+} from "@hd/content-schema";
 import { buildTechStackTree, techStackTreeFromSkills, type TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { Release } from "../../lib/api/release";
-import type { PortfolioClientVariant, PortfolioCoreSeed, PortfolioEntry, PortfolioMediaEntry } from "./portfolioData";
+import type { PortfolioCoreSeed, PortfolioSeedMedia, PortfolioSeedVariant } from "./portfolioData";
 
 /**
  * Everything the 3D site shows, taken from the published release. This is the
@@ -11,20 +18,8 @@ import type { PortfolioClientVariant, PortfolioCoreSeed, PortfolioEntry, Portfol
  * (cores holding their planes, rings and entries; skills under category
  * names), so the grouping is done once here rather than throughout the scene.
  */
-export interface SpaceJob {
-  id: string;
-  company: string;
-  navLabel: string;
-  location: string;
-  startDate: string;
-  /** Missing while the job is current. */
-  endDate?: string;
-  droneIntroText: string;
-  jobMemories: Array<{ type: string; text: string }>;
-  jobTech: Array<{ label: string; highlightMatches: string[] }>;
-  Projects?: Array<{ id: string; title: string; summary: string }>;
-  positions: Array<{ title: string; startDate?: string; endDate?: string; responsibilities: string[] }>;
-}
+/** A job, exactly as stored: the Experience moons, their memories, tech and positions. */
+export type SpaceJob = Experience;
 
 export interface SpaceResume {
   personal: { name: string; title: string; email: string; phone: string; location: string };
@@ -37,34 +32,16 @@ export interface SpaceResume {
   certifications: Array<{ name: string; date: string }>;
 }
 
-export interface SpaceMoonMapping {
-  companyId: string;
-  coreTitles?: string[];
-  includeEntryIds?: string[];
-  excludeEntryIds?: string[];
-  tabs?: Array<{ id: string; title: string; includeEntryIds?: string[] }>;
-}
+/** Which projects each job moon shows, exactly as stored. */
+export type SpaceMoonMapping = MoonPortfolioMapping;
 
-export interface SpaceTravelMessage {
-  id: string;
-  textContent: string;
-  fontFamily?: string[];
-  fontSize?: string;
-  fontColor?: string;
-  fontShadow?: string;
-}
+/** A message of the About ride, exactly as stored. */
+export type SpaceTravelMessage = PathTravelMessage;
 
-export interface SpaceAboutSlide {
-  id: string;
-  holdMs?: number;
-  explodeAfter?: boolean;
-  reveal?: {
-    pattern?: "scanline" | "center-out" | "spiral" | "noise-cluster";
-    blockStaggerMs?: number;
-    cellRevealMs?: number;
-  };
+/** An About deck slide as stored, with each picture block's address filled in as `src`. */
+export type SpaceAboutSlide = Omit<AboutDeckSlide, "blocks"> & {
   blocks: Array<{ type: string; title: string; body?: string; src?: string }>;
-}
+};
 
 export interface SpaceContent {
   resume: SpaceResume;
@@ -75,35 +52,30 @@ export interface SpaceContent {
   techStack: TechStackTreeNode[];
 }
 
-const listed = <K extends string, V>(key: K, values: V[]) =>
-  (values.length > 0 ? { [key]: values } : {}) as { [P in K]?: V[] };
-
 export function spaceContentFromRelease(release: Release): SpaceContent {
   const c = release.collections;
   const { summary, ...personal } = release.profile;
 
-  const gallery = (items: GalleryItem[]): PortfolioMediaEntry[] =>
-    items.map((item) => ({
-      id: item.slug,
-      type: item.type,
-      image: release.mediaUrl(item.mediaId),
-      title: item.title,
-      description: item.description,
-      fit: item.fit,
-    }));
+  const media = (item: GalleryItem): PortfolioSeedMedia => ({
+    slug: item.slug,
+    type: item.type,
+    image: release.mediaUrl(item.mediaId),
+    title: item.title,
+    description: item.description,
+    fit: item.fit,
+  });
 
-  const variant = (item: ClientVariant): PortfolioClientVariant => ({
-    id: item.slug,
+  const variant = (item: ClientVariant): PortfolioSeedVariant => ({
+    slug: item.slug,
     title: item.title,
     image: release.mediaUrl(item.mediaId),
     description: item.description,
     technologies: item.technologies,
     year: item.year,
     fit: item.fit,
-    ...listed("galleryMedia", gallery(item.galleryMedia)),
+    galleryMedia: item.galleryMedia.map(media),
   });
 
-  const coreName = new Map(c.portfolioCores.map((core) => [core.slug, core.name]));
   const skills = Object.fromEntries(
     c.skillCategories.map((category) => [
       category.name,
@@ -117,22 +89,7 @@ export function spaceContentFromRelease(release: Release): SpaceContent {
       personal,
       summary,
       skills,
-      experience: c.experiences.map((job) => ({
-        id: job.slug,
-        company: job.company,
-        droneIntroText: job.droneIntroText,
-        jobMemories: job.jobMemories,
-        jobTech: job.jobTech,
-        navLabel: job.navLabel,
-        location: job.location,
-        startDate: job.startDate,
-        endDate: job.endDate,
-        ...listed(
-          "Projects",
-          job.projects.map((project) => ({ id: project.slug, title: project.title, summary: project.summary })),
-        ),
-        positions: job.positions,
-      })),
+      experience: c.experiences,
       education: {
         institution: education?.institution ?? "",
         degree: education?.degree ?? "",
@@ -142,63 +99,30 @@ export function spaceContentFromRelease(release: Release): SpaceContent {
       links: c.links.map((link) => ({ title: link.title, url: link.url })),
       certifications: c.certifications.map((cert) => ({ name: cert.name, date: cert.date })),
     },
+    // Each core with its planes, each plane's rings, and the entries placed on each ring.
     portfolioCores: c.portfolioCores.map((core) => ({
-      core: core.name,
-      coreColor: core.color,
-      plains: core.planes.map((plane, planeIndex) => ({
+      slug: core.slug,
+      name: core.name,
+      color: core.color,
+      planes: core.planes.map((plane, planeIndex) => ({
         angle: plane.angle,
-        items: plane.rings.map((ring, ringIndex) => ({
+        rings: plane.rings.map((ring, ringIndex) => ({
           orbitColor: ring.orbitColor,
-          items: c.portfolioEntries
+          entries: c.portfolioEntries
             .filter(
               (entry) =>
                 entry.coreSlug === core.slug &&
                 entry.placement.plane === planeIndex &&
                 entry.placement.ring === ringIndex,
             )
-            .map(
-              (entry): PortfolioEntry => ({
-                id: entry.slug,
-                title: entry.title,
-                image: release.mediaUrl(entry.mediaId),
-                description: entry.description,
-                technologies: entry.technologies,
-                year: entry.year,
-                fit: entry.fit,
-                ...listed("galleryMedia", gallery(entry.galleryMedia)),
-                ...listed("clientVariants", entry.clientVariants.map(variant)),
-              }),
-            ),
+            .map((entry) => ({ ...variant(entry), clientVariants: entry.clientVariants.map(variant) })),
         })),
       })),
     })),
-    moonPortfolioMapping: c.moonPortfolioMappings.map((mapping) => ({
-      companyId: mapping.experienceSlug,
-      ...listed("coreTitles", mapping.coreSlugs.map((slug) => coreName.get(slug) ?? slug)),
-      ...listed("includeEntryIds", mapping.includeEntrySlugs),
-      ...listed("excludeEntryIds", mapping.excludeEntrySlugs),
-      ...listed(
-        "tabs",
-        mapping.tabs.map((tab) => ({
-          id: tab.slug,
-          title: tab.title,
-          ...listed("includeEntryIds", tab.includeEntrySlugs),
-        })),
-      ),
-    })),
-    aboutPathTravelMessages: c.pathTravelMessages.map((message) => ({
-      id: message.slug,
-      textContent: message.textContent,
-      fontFamily: message.fontFamily,
-      fontSize: message.fontSize,
-      fontColor: message.fontColor,
-      fontShadow: message.fontShadow,
-    })),
+    moonPortfolioMapping: c.moonPortfolioMappings,
+    aboutPathTravelMessages: c.pathTravelMessages,
     aboutSlides: c.aboutDeckSlides.map((slide) => ({
-      id: slide.slug,
-      holdMs: slide.holdMs,
-      explodeAfter: slide.explodeAfter,
-      reveal: slide.reveal,
+      ...slide,
       blocks: slide.blocks.map((block) =>
         block.type === "image"
           ? { type: block.type, title: block.title, src: release.mediaUrl(block.mediaId) }

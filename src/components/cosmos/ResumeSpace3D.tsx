@@ -6,7 +6,7 @@ import * as THREE from "three";
 import ThreeGlobe from "three-globe";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
-import type { SpaceTravelMessage as AboutPathTravelMessage } from "./spaceContent";
+import type { SpaceJob, SpaceTravelMessage as AboutPathTravelMessage } from "./spaceContent";
 import {
   CareerGallery,
   type CareerGalleryFocusInfo,
@@ -1928,7 +1928,7 @@ type AboutDeckBlock = {
 };
 
 type AboutDeckSlide = {
-  id: string;
+  slug: string;
   holdMs?: number;
   explodeAfter?: boolean;
   reveal?: {
@@ -2038,12 +2038,12 @@ export default function ResumeSpace3D({
   );
   const moonPortfolioByCompanyId = useMemo(() => {
     const map = new Map<string, NonNullable<OverlayContent["moonPortfolio"]>>();
-    (resumeData.experience ?? []).forEach((company: any) => {
-      const companyId = String(company?.id ?? "").trim();
+    resumeData.experience.forEach((company) => {
+      const companyId = company.slug.trim();
       if (!companyId) return;
       const payload = buildMoonPortfolioPayload({
         companyId,
-        companyName: String(company?.company ?? companyId),
+        companyName: company.company || companyId,
         coreSeeds: portfolioCores,
         mappings: moonPortfolioMapping,
       });
@@ -2052,8 +2052,8 @@ export default function ResumeSpace3D({
     return map;
   }, [portfolioCores, moonPortfolioMapping]);
   const getMoonPortfolio = useCallback(
-    (company: any): OverlayContent["moonPortfolio"] => {
-      const companyId = String(company?.id ?? "").trim();
+    (company: SpaceJob): OverlayContent["moonPortfolio"] => {
+      const companyId = company.slug.trim();
       if (!companyId) return null;
       return moonPortfolioByCompanyId.get(companyId) ?? null;
     },
@@ -4915,10 +4915,7 @@ export default function ResumeSpace3D({
     angle: Math.PI * 0.25,
   });
   const moonTravelSignCatalog = useMemo(() => {
-    const experience = (resumeData as { experience?: unknown }).experience;
-    const entries = Array.isArray(experience)
-      ? (experience as Array<Record<string, unknown>>)
-      : [];
+    const entries = resumeData.experience;
     const normalizeMemoryType = (value: unknown): JobMemoryType => {
       const raw = String(value ?? "")
         .trim()
@@ -4934,7 +4931,7 @@ export default function ResumeSpace3D({
     };
     const catalog = new Map<string, { pool: JobMemoryEntry[] }>();
     entries.forEach((entry) => {
-      const id = String(entry.id ?? "").toLowerCase();
+      const id = entry.slug.toLowerCase();
       if (!id) return;
       const sequence = Array.isArray(entry.jobMemories)
         ? (entry.jobMemories as unknown[])
@@ -5253,7 +5250,7 @@ export default function ResumeSpace3D({
 
   const formatNavTargetLabel = useCallback((targetId: string): string => {
     const company = resumeData.experience.find(
-      (exp: any) => exp.id === targetId,
+      (exp) => exp.slug === targetId,
     );
     if (company) return company.navLabel || company.company || targetId;
 
@@ -5454,7 +5451,7 @@ export default function ResumeSpace3D({
       icon: "⬡",
     },
     ...resumeData.experience.map((exp) => ({
-      id: exp.id,
+      id: exp.slug,
       label: exp.navLabel || exp.company,
       type: "moon" as const,
       icon: "◦",
@@ -16362,7 +16359,7 @@ export default function ResumeSpace3D({
 
     experienceJobs.forEach((job, i) => {
       const overlayTextureUrl =
-        EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID[job.id];
+        EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID[job.slug];
       const baseTextureUrl =
         EXPERIENCE_MOON_BASE_TEXTURES[i % EXPERIENCE_MOON_BASE_TEXTURES.length];
 
@@ -16431,7 +16428,7 @@ export default function ResumeSpace3D({
       experienceMoonMeshes.push(moonMesh);
 
       // Register moon with position emitter for tracking
-      const moonId = `moon-${job.id}`;
+      const moonId = `moon-${job.slug}`;
       moonMesh.userData.moonId = moonId;
       emitterRef.current.registerObject(moonId, moonMesh, 16); // 60fps updates
 
@@ -19540,9 +19537,8 @@ export default function ResumeSpace3D({
           const candidate =
             (waypoint.content && (waypoint.content as any).title) ||
             waypoint.name;
-          const company = (resumeData.experience as any[]).find((c) => {
-            if (!c) return false;
-            const lname = (c.company || c.id || "").toLowerCase();
+          const company = resumeData.experience.find((c) => {
+            const lname = (c.company || c.slug).toLowerCase();
             return candidate
               .toLowerCase()
               .includes(lname.split(" ")[0] || lname);
@@ -19554,7 +19550,7 @@ export default function ResumeSpace3D({
               if (object instanceof THREE.Mesh && object.userData.planetName) {
                 const pname = object.userData.planetName.toLowerCase();
                 if (
-                  pname.includes((company.id || "").toLowerCase()) ||
+                  pname.includes(company.slug.toLowerCase()) ||
                   pname.includes((company.company || "").toLowerCase())
                 ) {
                   moonMesh = object;
@@ -20130,8 +20126,7 @@ export default function ResumeSpace3D({
           submenu.innerHTML = "";
           resumeData.experience.forEach((company) => {
             const id =
-              (company.id as string) ||
-              company.company.toLowerCase().replace(/\s+/g, "-");
+              company.slug || company.company.toLowerCase().replace(/\s+/g, "-");
             const btn = document.createElement("button");
             btn.className = "target-button submenu-item";
             btn.dataset.target = `experience-${id}`;

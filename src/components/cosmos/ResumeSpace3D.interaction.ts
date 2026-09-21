@@ -450,7 +450,7 @@ export const createPointerInteractionHandlers = (deps: {
 
         // Special handling for job moons - show cosmic overlay
         const jobData = resumeData.experience.find(
-          (job: any) => job.company === planetName,
+          (job) => job.company === planetName,
         );
         if (jobData) {
           // Trigger the same travel + focus behavior as navigator clicks
