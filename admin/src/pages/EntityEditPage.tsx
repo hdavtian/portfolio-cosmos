@@ -1,5 +1,10 @@
 import { ButtonComponent, CheckBoxComponent } from "@syncfusion/ej2-react-buttons";
-import { DropDownListComponent, MultiSelectComponent } from "@syncfusion/ej2-react-dropdowns";
+import {
+  CheckBoxSelection,
+  DropDownListComponent,
+  Inject,
+  MultiSelectComponent,
+} from "@syncfusion/ej2-react-dropdowns";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -227,7 +232,11 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
                 placeholder="Nowhere"
                 value={Array.isArray(draft[field.key]) ? (draft[field.key] as string[]) : []}
                 change={(event: { value: string[] | null }) => setField(field.key, event.value ?? [])}
-              />
+              >
+                {/* CheckBox mode and Select All come from this module; without
+                    it the control throws as it renders. */}
+                <Inject services={[CheckBoxSelection]} />
+              </MultiSelectComponent>
             ) : field.kind === "tags" ? (
               // One per line: the list is read and edited as text, which is
               // faster than a chip control for pasting a handful of old names.
@@ -259,6 +268,8 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
             ) : (
               <TextBoxComponent
                 multiline={field.kind === "multiline"}
+                // An id other records point at is set once and never changed.
+                enabled={isNew || !field.immutableAfterCreate}
                 value={String(draft[field.key] ?? "")}
                 input={(event: { value: string }) => setField(field.key, event.value)}
               />

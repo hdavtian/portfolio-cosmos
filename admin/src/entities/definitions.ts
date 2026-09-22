@@ -20,6 +20,12 @@ export interface FieldDefinition {
   emptyOption?: string;
   /** For `multiselect` fields: the fixed choices, stored as an array of values. */
   options?: { value: string; label: string }[];
+  /**
+   * Set once, on creation, and read-only afterwards. Used for the slug of
+   * anything other records point at: changing it would silently break every
+   * link, and the display name is editable instead.
+   */
+  immutableAfterCreate?: boolean;
 }
 
 export interface ColumnDefinition {
@@ -50,6 +56,13 @@ const slugField: FieldDefinition = {
   label: "Slug",
   hint: "Lowercase id with hyphens; suggested from the name for new records",
   kind: "text",
+};
+
+/** For entities other records point at by slug: the id is fixed after creation. */
+const fixedSlugField: FieldDefinition = {
+  ...slugField,
+  hint: "Fixed once saved: jobs and projects point at this id. Rename the technology instead - every screen shows the name.",
+  immutableAfterCreate: true,
 };
 
 const text = (value: unknown) => (typeof value === "string" ? value : "");
@@ -163,7 +176,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     slugSource: "name",
     columns: [],
     fields: [
-      slugField,
+      fixedSlugField,
       { key: "name", label: "Name", kind: "text" },
       {
         key: "parentSlug",
