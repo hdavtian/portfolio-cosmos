@@ -177,7 +177,20 @@ job as prose rather than entering the tree.
 - `Marketing Microsites`
 - `Chrome Extension`
 
-## 7. Headings deleted
+## 7. For later, not for this migration
+
+APIs is deliberately thin (REST APIs, OAuth). Harma intends to add the API
+frameworks - Express, C# Web API, Java Spring Boot - once the tree is in.
+Two consequences to remember then:
+
+- One home per skill (D7), so moving Spring Boot to APIs **removes** it from
+  Backend. These are moves, not copies.
+- `.NET Web API` is on the merge list below, folding into `.NET`. If a
+  "C# Web API" entry is wanted under APIs, undo that merge - cheap now,
+  awkward once the records exist.
+- Express appears nowhere in the data, so it is a genuinely new entry.
+
+## 8. Headings deleted
 
 These exist today as groupings. Their children are refiled above and the
 heading itself goes; no skill is lost, because nothing claims a heading.
