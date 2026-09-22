@@ -219,7 +219,11 @@ export function TechStackPage() {
     <>
       <div className="admin-page-header">
         <div>
-          <h1>Tech stack</h1>
+          <h1>Tech stack (being replaced)</h1>
+          <p>
+            <strong>Technologies is the list to edit now.</strong> This one still exists because the sites read it,
+            and it goes once they read Technologies instead. Changes made here will not carry over.
+          </p>
           <p>
             Nested tech stack for the portfolio site and the D3 skills graph, any depth (e.g. Frontend › Frameworks ›
             React). Separate from the resume&apos;s Skills, which stay one level deep. Drag a row onto another to nest

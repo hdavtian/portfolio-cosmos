@@ -30,7 +30,7 @@ const NAV_GROUPS: Array<{
       { to: "/portfolioEntries", text: "Projects", ready: true },
       { to: "/portfolioCores", text: "Cores", ready: true },
       { to: "/technologies", text: "Technologies", ready: true },
-      { to: "/techStackNodes", text: "Tech stack", ready: true },
+      { to: "/techStackNodes", text: "Tech stack (old)", ready: true },
     ],
   },
   {
