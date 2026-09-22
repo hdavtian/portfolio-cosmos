@@ -1354,10 +1354,19 @@ export function SkillsTitlesPage() {
   // never left looking at a still frame wondering. It goes the moment
   // progress moves again.
   const [stalled, setStalled] = useState(false);
+  // What the loop has actually been given since it was last started, so a stall
+  // can say whether the frames stopped coming or the film stopped asking.
+  const framesRef = useRef({ asked: 0, ran: 0, since: 0 });
   useEffect(() => {
     setStalled(false);
     if (!playing || holding) return;
-    const timer = window.setTimeout(() => setStalled(true), 2500);
+    const timer = window.setTimeout(() => {
+      setStalled(true);
+      const { asked, ran, since } = framesRef.current;
+      // One line, once per stall: enough to tell a starved loop (no frames at
+      // all) from a suspended one (frames, none of them used) without a debugger.
+      console.info("[film] stalled at %s after %sms: %d frames asked, %d ran, suspended=%s, page=%s", progressRef.current.toFixed(4), Math.round(performance.now() - since), asked, ran, isFilmSuspended(), document.visibilityState);
+    }, 2500);
     return () => window.clearTimeout(timer);
   }, [playing, holding, progress]);
 
@@ -1372,7 +1381,9 @@ export function SkillsTitlesPage() {
     if (!playing) return;
     let frame = 0;
     let last = performance.now();
+    framesRef.current = { asked: 0, ran: 0, since: last };
     const tick = (now: number) => {
+      framesRef.current.asked += 1;
       if (isFilmSuspended()) {
         last = now;
         frame = requestAnimationFrame(tick);
@@ -1381,6 +1392,7 @@ export function SkillsTitlesPage() {
       // Going back is a rewind, so it runs three times as fast. A frame that
       // arrives after a long gap (the tab or the film hidden) counts as one
       // frame, not the whole gap, so coming back never jumps to the end.
+      framesRef.current.ran += 1;
       const step = (Math.min(now - last, 100) / (filmSeconds * 1000)) * (direction < 0 ? 3 : 1);
       last = now;
       // Decided here, not inside a state updater: setting other state from an
