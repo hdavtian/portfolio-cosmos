@@ -340,15 +340,3 @@ body {
   object-fit: contain;
   background: repeating-conic-gradient(#f2f4f7 0% 25%, #fff 0% 50%) 50% / 16px 16px;
 }
-
-/* Per-option hints under a checkbox group: one line each, so a tick's effect
-   is read beside the tick rather than out of a paragraph. */
-.admin-option-hints {
-  margin: 6px 0 0;
-  padding-left: 18px;
-  list-style: disc;
-}
-
-.admin-option-hints li {
-  margin: 2px 0;
-}

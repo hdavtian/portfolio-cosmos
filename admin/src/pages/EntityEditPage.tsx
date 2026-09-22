@@ -227,38 +227,31 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
                 change={(event: { checked: boolean }) => setField(field.key, event.checked)}
               />
             ) : field.kind === "checkboxes" ? (
-              <>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 20px" }}>
+              // One option per line: tick, label, then what ticking it does,
+              // so the effect is read beside the tick rather than in a block
+              // of prose underneath.
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {(field.options ?? []).map((option) => {
                   const chosen = Array.isArray(draft[field.key]) ? (draft[field.key] as string[]) : [];
                   return (
-                    <CheckBoxComponent
-                      key={option.value}
-                      label={option.label}
-                      checked={chosen.includes(option.value)}
-                      change={(event: { checked: boolean }) =>
-                        setField(
-                          field.key,
-                          event.checked
-                            ? [...chosen, option.value]
-                            : chosen.filter((value) => value !== option.value),
-                        )
-                      }
-                    />
+                    <div key={option.value} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <CheckBoxComponent
+                        label={option.label}
+                        checked={chosen.includes(option.value)}
+                        change={(event: { checked: boolean }) =>
+                          setField(
+                            field.key,
+                            event.checked
+                              ? [...chosen, option.value]
+                              : chosen.filter((value) => value !== option.value),
+                          )
+                        }
+                      />
+                      {option.hint ? <span className="admin-status">{option.hint}</span> : null}
+                    </div>
                   );
                 })}
               </div>
-              {(field.options ?? []).some((option) => option.hint) ? (
-                <ul className="admin-status admin-option-hints">
-                  {(field.options ?? []).map((option) => (
-                    <li key={option.value}>
-                      <strong>{option.label}</strong>
-                      {option.hint ? `: ${option.hint}` : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              </>
             ) : field.kind === "multiselect" ? (
               <MultiSelectComponent
                 dataSource={field.options ?? []}
