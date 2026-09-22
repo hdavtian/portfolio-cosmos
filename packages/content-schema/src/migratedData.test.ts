@@ -61,6 +61,18 @@ describe.skipIf(!available)("the migrated database", () => {
     expect(issues).toEqual([]);
   });
 
+  // D16, checked against the real migration rather than a fixture: these three
+  // have children and are real technologies. Inferring "heading" from "has
+  // children" marks them as headings and drops them from every screen that
+  // shows skills only - which is what the first migration did.
+  it("does not treat a technology with children as a heading", () => {
+    const wrong = (technologies as TechnologyRecord[])
+      .filter((record) => ["React", "AWS", "Azure"].includes(record.name))
+      .filter((record) => record.isGrouping)
+      .map((record) => record.name);
+    expect(wrong).toEqual([]);
+  });
+
   // The failure that would be invisible on screen: a use pointing at nothing.
   it("has no skill use pointing at a technology that does not exist", () => {
     const slugs = new Set((technologies as TechnologyRecord[]).map((record) => record.slug));

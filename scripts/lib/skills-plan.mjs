@@ -36,6 +36,33 @@ export const RETIRED = {
   "Data & Messaging": "decomposed: Databases for the stores, Backend for RabbitMQ. Few job descriptions ask for the phrase",
 };
 
+/**
+ * Headings: organising names nobody claims as a skill (D16). Marked, never
+ * inferred from having children - React, AWS and Azure all have children and
+ * are real technologies, and inferring would drop them from every screen that
+ * shows skills only.
+ */
+export const GROUPINGS = new Set([
+  "Frontend",
+  "Backend",
+  "APIs",
+  "AI",
+  "Desktop & platform",
+  "CMS & e-commerce",
+  "Databases",
+  "Cloud & DevOps",
+  "Infrastructure & hosting",
+  "Testing",
+  "Ways of working",
+  "Marketing & analytics",
+  "Client & support",
+  "SPA frameworks",
+  "Styling",
+  "Animation",
+  "Build tools",
+  "Patterns",
+]);
+
 /** technology -> its parent. Roots map to null. */
 export const TREE = {
   Frontend: null,

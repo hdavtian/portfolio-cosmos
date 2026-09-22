@@ -14,7 +14,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { MERGES, PROSE, RETIRED, TREE } from "./lib/skills-plan.mjs";
+import { GROUPINGS, MERGES, PROSE, RETIRED, TREE } from "./lib/skills-plan.mjs";
 import { resolve as applyRules } from "./lib/skills-rules.mjs";
 
 const container = "scrolling-resume-mongo";
@@ -105,7 +105,7 @@ Object.entries(TREE).forEach(([name, parentName], index) => {
   });
 });
 for (const record of technologies.values()) {
-  record.isGrouping = Object.values(TREE).includes(record.name) || TREE[record.name] === null;
+  record.isGrouping = GROUPINGS.has(record.name);
   record.parentSlug = record.parentName ? (technologies.get(fold(record.parentName))?.slug ?? "") : "";
   record.surfaces = ["lattice", "resume", "filmProgress", "filters"];
 }
