@@ -4,13 +4,11 @@ import {
   ColumnChooser,
   ColumnDirective,
   ColumnsDirective,
-  Filter,
   Inject,
   Reorder,
   Resize,
   RowDD,
   Selection,
-  Sort,
   Toolbar,
   TreeGridComponent,
 } from "@syncfusion/ej2-react-treegrid";
@@ -30,9 +28,12 @@ type NodeRecord = EntityRecord<TechStackNode>;
 type TreeRow = { slug: string; name: string; parentId: string | null; childCount: number };
 
 // Constants handed to Syncfusion, so re-renders never refresh the grid.
-const TOOLBAR = ["Search", "ExpandAll", "CollapseAll", "ColumnChooser"];
-const FILTER_SETTINGS = { type: "Menu" as const };
+const TOOLBAR = ["ExpandAll", "CollapseAll", "ColumnChooser"];
 const SELECTION = { type: "Single" as const };
+// Measured in the browser, not assumed: sorting this tree paints an empty grid
+// that no refresh recovers, and searching empties it until the term is cleared.
+// So the tree offers neither, and is ordered by its hierarchy. Resizing, the
+// column chooser and column reordering were all checked and are fine.
 
 interface DropArgs {
   data?: TreeRow[];
@@ -115,30 +116,26 @@ export function TechStackPage() {
 
   // The tree paints "No records to display" on its first mount even though it
   // holds every row - the same way the flat grids did under StrictMode (see
-  // admin/src/main.tsx). One refresh once the rows are in draws them. Guarded
-  // by a ref so it happens once, not on every render.
+  // admin/src/main.tsx). A refresh draws them, but only once the grid has
+  // taken the rows in: refreshing in the same tick refreshes an empty grid and
+  // it stays empty. So it waits for the frame after the rows arrive, and gives
+  // up once rows are on screen.
   const drawnRef = useRef(false);
   useEffect(() => {
     if (drawnRef.current || items.length === 0) return;
-    drawnRef.current = true;
-    gridRef.current?.refresh();
+    const timer = window.setTimeout(() => {
+      const grid = gridRef.current;
+      if (!grid) return;
+      drawnRef.current = true;
+      grid.refresh();
+    }, 60);
+    return () => window.clearTimeout(timer);
   }, [items.length]);
 
   const handleDrop = (args: DropArgs) => {
     // The move is saved to the API and the tree re-renders from saved data, so
     // the grid's own in-memory move is cancelled.
     args.cancel = true;
-    // Sorting or filtering rearranges the view, and a drop is read as a
-    // position in that view: the result would be an order nobody asked for.
-    const grid = gridRef.current;
-    const rearranged =
-      (grid?.sortSettings?.columns?.length ?? 0) > 0 ||
-      (grid?.filterSettings?.columns?.length ?? 0) > 0 ||
-      Boolean(grid?.searchSettings?.key);
-    if (rearranged) {
-      status.failure("Clear the sorting, filter or search before dragging: the tree must be in its saved order.");
-      return;
-    }
     const dragged = args.data?.[0];
     const target = gridRef.current?.getCurrentViewRecords()[args.dropIndex ?? -1] as TreeRow | undefined;
     if (!dragged || !target || dragged.slug === target.slug || saving) return;
@@ -269,11 +266,8 @@ export function TechStackPage() {
             id={GRID_ID}
             allowRowDragAndDrop
             allowResizing
-            allowSorting
-            allowFiltering
             allowReordering
             showColumnChooser
-            filterSettings={FILTER_SETTINGS}
             selectionSettings={SELECTION}
             toolbar={TOOLBAR}
             gridLines="Horizontal"
@@ -288,7 +282,7 @@ export function TechStackPage() {
               <ColumnDirective field="childCount" headerText="Children" width={100} textAlign="Right" />
               <ColumnDirective headerText="Actions" width={260} template={actionsTemplate} />
             </ColumnsDirective>
-            <Inject services={[RowDD, Selection, Toolbar, Sort, Filter, Resize, Reorder, ColumnChooser]} />
+            <Inject services={[RowDD, Selection, Toolbar, Resize, Reorder, ColumnChooser]} />
           </TreeGridComponent>
         </div>
       ) : null}
