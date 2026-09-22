@@ -1349,6 +1349,18 @@ export function SkillsTitlesPage() {
     };
   }, [accentsKey, banner, cities, timeline]);
 
+  // A film that should be moving and isn't (a dead animation loop, a hidden
+  // tab, anything) shows a Start/Play button in the middle, so a visitor is
+  // never left looking at a still frame wondering. It goes the moment
+  // progress moves again.
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    setStalled(false);
+    if (!playing || holding) return;
+    const timer = window.setTimeout(() => setStalled(true), 2500);
+    return () => window.clearTimeout(timer);
+  }, [playing, holding, progress]);
+
   // Where the film waits: the end of each place's turn, built and framed.
   const holds = useMemo(
     () => timeline.filter((entry) => entry.kind === "dwell").map((entry) => entry.to - 0.0004),
@@ -1644,17 +1656,20 @@ export function SkillsTitlesPage() {
       </section>
 
       {/* Paused part-way (not at a stop, which has its own Next): say so, in the middle, where it can't be missed. */}
-      {!playing && !holding && progress > 0 && progress < 1 ? (
+      {(!playing && !holding && progress > 0 && progress < 1) || stalled ? (
         <button
           type="button"
           className="titles__resume"
           onClick={() => {
+            // Stalled: stop and start again, so the play effect is re-run from scratch.
+            setStalled(false);
+            setPlaying(false);
             setDirection(1);
-            setPlaying(true);
+            window.setTimeout(() => setPlaying(true), 0);
           }}
         >
           <span className="titles__resume-mark" aria-hidden="true">▶</span>
-          Resume
+          {stalled ? (progress <= 0 ? "Start" : "Play") : "Resume"}
         </button>
       ) : null}
       <div className="titles__scrub">
