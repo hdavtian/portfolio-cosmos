@@ -39,7 +39,7 @@ export function FastLayout() {
           harmadavtian.com | {new Date().getFullYear()}
         </p>
         <NavLink
-          to="/cinematic"
+          to="/universe"
           className="fast-footer__cinematic-link"
           onMouseEnter={prefetchCinematic}
           onFocus={prefetchCinematic}

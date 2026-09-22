@@ -17,7 +17,7 @@ export function NavHint({ hovered, onEnterCinematic }: { hovered: NavHintId | nu
     home: {
       eyebrow: "Home",
       title: "The work",
-      note: "Every project, filtered by company or technology, over a fragment of the cinematic universe",
+      note: "Every project, filtered by company or technology, over a fragment of the universe",
     },
     tech: {
       eyebrow: "Tech Progression",
@@ -30,8 +30,8 @@ export function NavHint({ hovered, onEnterCinematic }: { hovered: NavHintId | nu
       note: "Roles, dates and responsibilities, on one page",
     },
     cinematic: {
-      eyebrow: "Cinematic",
-      title: cinematicLoaded ? "Back to the full experience" : "Enter the full experience",
+      eyebrow: "Universe",
+      title: cinematicLoaded ? "Back to the universe" : "Enter the universe",
       note: cinematicLoaded
         ? "Still loaded — returns where you left it"
         : "A 3D universe of the career: planets, moons, a ship. Sound, and a few seconds to load",
@@ -58,7 +58,7 @@ export function NavHint({ hovered, onEnterCinematic }: { hovered: NavHintId | nu
   if (hovered === "cinematic") {
     return (
       <Link
-        to="/cinematic"
+        to="/universe"
         className="showcase-gateway"
         onClick={(event) => {
           if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

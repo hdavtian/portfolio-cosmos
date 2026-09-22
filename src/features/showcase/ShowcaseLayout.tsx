@@ -133,7 +133,7 @@ export function ShowcaseLayout() {
             Résumé
           </NavLink>
           <NavLink
-            to="/cinematic"
+            to="/universe"
             className="showcase-pill"
             onMouseEnter={() => {
               setHovered("cinematic");
@@ -150,7 +150,7 @@ export function ShowcaseLayout() {
               setCinematicLaunch("loading");
             }}
           >
-            Cinematic
+            Universe
           </NavLink>
           {personal?.email ? (
             <a href={`mailto:${personal.email}`} className="showcase-pill" onMouseEnter={() => setHovered("contact")} onFocus={() => setHovered("contact")}>

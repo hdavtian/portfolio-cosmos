@@ -435,7 +435,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         <div className="showcase-scenes__shade" />
       </div>
 
-      <aside className="showcase-scene-panel" aria-label="Cinematic scenes" hidden={!showPanel}>
+      <aside className="showcase-scene-panel" aria-label="Universe scenes" hidden={!showPanel}>
       <div className="showcase-scene-plate">
         <p className="showcase-scene-plate__title">Background previews</p>
         <ol className="showcase-scene-switcher" aria-label="Background previews">

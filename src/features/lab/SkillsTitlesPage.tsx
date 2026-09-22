@@ -1651,7 +1651,7 @@ export function SkillsTitlesPage() {
             Replay
           </button>
           <Link to="/resume">Read résumé</Link>
-          <Link to="/cinematic">Enter space theme portfolio</Link>
+          <Link to="/universe">Enter the universe</Link>
         </p>
       </section>
 

@@ -68,7 +68,9 @@ const routes: RouteObject[] = [
           // Rendered by CinematicHost in RootLayout, which can keep it alive.
           // It sits in this layout so the portfolio's scenes can wait, paused,
           // underneath it.
-          { path: "cinematic", element: null },
+          { path: "universe", element: null },
+          // The old address, kept for links already out there.
+          { path: "cinematic", element: <Navigate to="/universe" replace /> },
           {
             path: "portfolio",
             children: [
