@@ -1,6 +1,6 @@
 # Skills migration: what it wrote
 
-`resume_cosmos_prodcopy` -> `resume_cosmos_migrated`, 2026-09-22 14:10. Production untouched.
+`resume_cosmos_prodcopy` -> `resume_cosmos_migrated`, 2026-09-22 14:44. Production untouched.
 
 | | Before | After |
 |---|---|---|
