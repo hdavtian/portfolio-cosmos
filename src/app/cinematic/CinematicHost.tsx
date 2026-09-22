@@ -156,12 +156,26 @@ export function CinematicHost() {
     return onRoute ? <Suspense fallback={loading}>{<CinematicExperience />}</Suspense> : null;
   }
 
+  // Coming back to a paused universe: it flickers back to life rather than
+  // snapping on, like a screen powering up. Only from a still, never on first launch.
+  const [waking, setWaking] = useState(false);
+  const wasStillRef = useRef(false);
+  useEffect(() => {
+    if (still) wasStillRef.current = true;
+    if (showing && wasStillRef.current) {
+      wasStillRef.current = false;
+      setWaking(true);
+      const timer = window.setTimeout(() => setWaking(false), 1100);
+      return () => window.clearTimeout(timer);
+    }
+  }, [showing, still]);
+
   const state = showing ? "is-showing" : preloading ? "is-preloading" : still ? "is-still" : "is-hidden";
 
   return (
     <div
       ref={hostRef}
-      className={`cinematic-host ${state}`}
+      className={`cinematic-host ${state}${waking ? " is-waking" : ""}`}
       aria-hidden={!showing}
       inert={!showing}
       // As a still it is one big way back into the experience.
