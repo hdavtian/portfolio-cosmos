@@ -87,9 +87,28 @@ const prose = new Set(PROSE.map(fold));
 const retired = new Set(Object.keys(RETIRED).map(fold));
 const mergeInto = new Map(Object.entries(MERGES).map(([from, to]) => [fold(from), to]));
 
+/**
+ * sortOrder is the tree read depth first - a heading, then everything under
+ * it, then the next heading - which is how the grid renumbers after any drag
+ * (see planMove in TechnologiesPage). Numbering by declaration order instead
+ * would put React's children after Next.js, and the first drag in admin would
+ * silently correct it.
+ */
+const declarationOrder = Object.keys(TREE);
+const depthFirst = [];
+const walkNames = (parentName) => {
+  for (const name of declarationOrder) {
+    if (TREE[name] !== parentName) continue;
+    depthFirst.push(name);
+    walkNames(name);
+  }
+};
+walkNames(null);
+
 // The tree is the authority on which technologies exist and where they sit.
 const technologies = new Map(); // folded name -> record
-Object.entries(TREE).forEach(([name, parentName], index) => {
+depthFirst.forEach((name, index) => {
+  const parentName = TREE[name];
   technologies.set(fold(name), {
     slug: slugify(name),
     sortOrder: index,
@@ -104,6 +123,10 @@ Object.entries(TREE).forEach(([name, parentName], index) => {
     aliases: new Set(),
   });
 });
+if (depthFirst.length !== declarationOrder.length) {
+  console.error(`[skills:write] ${declarationOrder.length - depthFirst.length} entries are unreachable from a root.`);
+  process.exit(1);
+}
 for (const record of technologies.values()) {
   record.isGrouping = GROUPINGS.has(record.name);
   record.parentSlug = record.parentName ? (technologies.get(fold(record.parentName))?.slug ?? "") : "";
