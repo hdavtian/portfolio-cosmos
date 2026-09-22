@@ -102,6 +102,9 @@ export function ShowcaseLayout() {
           <Link to="/" className="showcase-pill">
             Work
           </Link>
+          <NavLink to="/lab/got" className="showcase-pill">
+            Tech
+          </NavLink>
           <NavLink to="/resume" className="showcase-pill">
             Resume
           </NavLink>
