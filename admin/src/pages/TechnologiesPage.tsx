@@ -19,7 +19,6 @@ import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/apiClient";
 import { confirmAction } from "../lib/confirm";
-import { resetGridLayout } from "../lib/gridLayout";
 import { useAllEntities, withoutMeta, type EntityRecord } from "../lib/entityApi";
 import { useStatus } from "../lib/status";
 
@@ -266,22 +265,9 @@ export function TechnologiesPage() {
       ) : null}
       {list.truncated ? <p className="admin-error">Showing the first 100 technologies only.</p> : null}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
-        <span className="admin-status">
-          {saving ? "Saving…" : "Drag a row onto another to nest it, or above or below a row to reorder."}
-        </span>
-        <ButtonComponent
-          cssClass="e-small e-flat e-outline"
-          style={{ marginLeft: "auto" }}
-          title="Forget the remembered column widths, order, hidden columns, sorting and filters for this list."
-          onClick={() => {
-            resetGridLayout(GRID_ID);
-            window.location.reload();
-          }}
-        >
-          Reset layout
-        </ButtonComponent>
-      </div>
+      <p className="admin-status">
+        {saving ? "Saving…" : "Drag a row onto another to nest it, or above or below a row to reorder."}
+      </p>
 
       {list.isLoading ? <p className="admin-status">Loading…</p> : null}
       {list.items ? (
@@ -293,7 +279,6 @@ export function TechnologiesPage() {
             parentIdMapping="parentId"
             treeColumnIndex={0}
             id={GRID_ID}
-            enablePersistence
             allowRowDragAndDrop
             allowResizing
             allowSorting

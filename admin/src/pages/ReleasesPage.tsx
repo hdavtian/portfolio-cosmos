@@ -338,7 +338,6 @@ export function ReleasesPage() {
             </p>
             <GridComponent
               id="releaseHistory"
-              enablePersistence
               key={history.data.items[0]?.id ?? "empty"}
               dataSource={historyRows}
               allowPaging
