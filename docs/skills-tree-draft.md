@@ -9,7 +9,7 @@ Nothing here is built.
 filling in blanks - you are correcting mine. So:
 
 1. Read section 2 and tell me the rows where the parent is wrong.
-2. Answer the five questions in section 4.
+2. Answer the questions in section 4.
 3. Skim sections 5 and 6 and tell me anything that should not be there.
 
 Marking up is easiest as a list: `HTML Email -> Marketing & analytics`.
@@ -21,9 +21,10 @@ question - it just shows how much of the tree is arriving at once.
 ## 1. The shape at a glance
 
 - **Frontend** - 14 entries: HTML, CSS, SCSS, JavaScript, TypeScript, jQuery, Flash, Dreamweaver, HTML Email, RxJS, Redux, SPA frameworks (+4), Styling & animation (+2), Build tools (+2)
-- **Backend** - 10 entries: C#, .NET, Java, Spring Boot, Node.js, PHP, CakePHP, REST APIs, OAuth, WinForms
+- **Backend** - 8 entries: C#, .NET, Java, Spring Boot, Node.js, PHP, CakePHP, WinForms
+- **APIs & integrations** *(new root)* - 3 entries: REST APIs, OAuth, RabbitMQ
 - **CMS & e-commerce** *(new root)* - 4 entries: WordPress, Drupal, ShopSite, E-commerce
-- **Data & Messaging** - 4 entries: PostgreSQL, MongoDB, RabbitMQ, MySQL
+- **Databases** *(new root)* - 3 entries: PostgreSQL, MySQL, MongoDB
 - **Cloud & DevOps** - 5 entries: AWS (+3), Azure (+1), Docker, CI/CD, GitLab
 - **Infrastructure & hosting** *(new root)* - 9 entries: Web hosting, DNS, Domains, LAMP, Linux, Data centre operations, Dial-up, ISDN, Networking
 - **Testing** - 3 entries: Playwright, Selenium, TestNG
@@ -70,19 +71,20 @@ question - it just shows how much of the tree is arriving at once.
 | &nbsp;&nbsp;&nbsp;&nbsp;Node.js | Backend |  | tree, skill, memory |
 | &nbsp;&nbsp;&nbsp;&nbsp;PHP | Backend | **NEW** | jobTech, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;CakePHP | Backend | **NEW** | jobTech |
-| &nbsp;&nbsp;&nbsp;&nbsp;REST APIs | Backend |  | tree, skill, entry |
-| &nbsp;&nbsp;&nbsp;&nbsp;OAuth | Backend | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;WinForms | Backend | **NEW** | entry |
+| **APIs & integrations** | *(root)* | **NEW** | invented here |
+| &nbsp;&nbsp;&nbsp;&nbsp;REST APIs | APIs & integrations |  | tree, skill, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;OAuth | APIs & integrations | **NEW** | jobTech |
+| &nbsp;&nbsp;&nbsp;&nbsp;RabbitMQ | APIs & integrations |  | tree, skill, jobTech, memory |
 | **CMS & e-commerce** | *(root)* | **NEW** | invented here |
 | &nbsp;&nbsp;&nbsp;&nbsp;WordPress | CMS & e-commerce | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;Drupal | CMS & e-commerce | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;ShopSite | CMS & e-commerce | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;E-commerce | CMS & e-commerce | **NEW** | jobTech |
-| **Data & Messaging** | *(root)* |  | tree |
-| &nbsp;&nbsp;&nbsp;&nbsp;PostgreSQL | Data & Messaging |  | tree, skill, jobTech, entry |
-| &nbsp;&nbsp;&nbsp;&nbsp;MongoDB | Data & Messaging |  | tree, skill, jobTech, memory |
-| &nbsp;&nbsp;&nbsp;&nbsp;RabbitMQ | Data & Messaging |  | tree, skill, jobTech, memory |
-| &nbsp;&nbsp;&nbsp;&nbsp;MySQL | Data & Messaging | **NEW** | jobTech, entry |
+| **Databases** | *(root)* | **NEW** | invented here |
+| &nbsp;&nbsp;&nbsp;&nbsp;PostgreSQL | Databases |  | tree, skill, jobTech, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;MySQL | Databases | **NEW** | jobTech, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;MongoDB | Databases |  | tree, skill, jobTech, memory |
 | **Cloud & DevOps** | *(root)* |  | tree |
 | &nbsp;&nbsp;&nbsp;&nbsp;AWS | Cloud & DevOps |  | tree, skill, jobTech, memory |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EC2 | AWS | **NEW** | jobTech |
@@ -121,26 +123,30 @@ question - it just shows how much of the tree is arriving at once.
 
 ## 3. Counts
 
-- 83 entries in the tree, 10 of them roots
-- 56 of those do not exist today
+- 84 entries in the tree, 11 of them roots
+- 58 of those do not exist today
 - 11 strings merge into an existing record (section 5)
 - 6 strings stay as prose on their job (section 6)
+- 1 heading deleted (section 7)
 
-*Groups and roots invented for this draft (not in the data): SPA frameworks, Styling & animation, Build tools, CMS & e-commerce, GitLab, Infrastructure & hosting, Linux, Networking, Ways of working, Marketing & analytics, Client & support, Client delivery, Technical support.*
+*Groups and roots invented for this draft (not in the data): SPA frameworks, Styling & animation, Build tools, APIs & integrations, CMS & e-commerce, Databases, GitLab, Infrastructure & hosting, Linux, Networking, Ways of working, Marketing & analytics, Client & support, Client delivery, Technical support.*
 
-## 4. The five questions
+## 4. The questions
 
 1. **Are the five new roots the right five, and named the way an employer
    should read them?** (CMS & e-commerce, Infrastructure & hosting, Ways of
-   working, Marketing & analytics, Client & support.) This naming is what a
+   working, Marketing & analytics, Client & support, Databases, APIs & integrations.)
+   This naming is what a
    recruiter actually sees on the resume.
 2. **Do the three new groups inside Frontend earn their nesting** (SPA
    frameworks, Styling & animation, Build tools), or should Frontend stay
    flat at 17 entries?
-3. **`WinForms` sits under Backend for want of anywhere better.** Is there a
+3. **`RabbitMQ` sits under APIs & integrations** rather than Backend, so that
+   removing Data & Messaging does not need a niche Messaging root. Agreed?
+4. **`WinForms` sits under Backend for want of anywhere better.** Is there a
    "Desktop & platform" root hiding here?
-4. **`HTML Email`** - Frontend, or Marketing & analytics with SEO?
-5. **`AngularJS` is kept separate from Angular** because they are different
+5. **`HTML Email`** - Frontend, or Marketing & analytics with SEO?
+6. **`AngularJS` is kept separate from Angular** because they are different
    frameworks covering different years at InvestCloud. Agreed?
 
 ## 5. Merges: the same thing typed twice
@@ -172,3 +178,10 @@ job as prose rather than entering the tree.
 - `Email Campaign Engineering`
 - `Marketing Microsites`
 - `Chrome Extension`
+
+## 7. Headings deleted
+
+These exist today as groupings. Their children are refiled above and the
+heading itself goes; no skill is lost, because nothing claims a heading.
+
+- **Data & Messaging** - decomposed into Databases and APIs & integrations: few job descriptions ask for the phrase

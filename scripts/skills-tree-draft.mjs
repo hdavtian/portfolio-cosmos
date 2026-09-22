@@ -35,6 +35,12 @@ const PROSE = [
   "Chrome Extension",
 ];
 
+/** Headings that exist today and are dissolved: their children are refiled and
+ *  the heading itself is deleted. Nothing claims them as a skill (D16). */
+const RETIRED = {
+  "Data & Messaging": "decomposed into Databases and APIs & integrations: few job descriptions ask for the phrase",
+};
+
 /** technology -> its parent. Roots map to null. */
 const TREE = {
   Frontend: null,
@@ -73,9 +79,14 @@ const TREE = {
   "Node.js": "Backend",
   PHP: "Backend",
   CakePHP: "Backend",
-  "REST APIs": "Backend",
-  OAuth: "Backend",
   WinForms: "Backend",
+
+  // APIs earn a root of their own: only a root becomes a heading on the resume
+  // and the Skills planet, and job descriptions single out API experience.
+  "APIs & integrations": null,
+  "REST APIs": "APIs & integrations",
+  OAuth: "APIs & integrations",
+  RabbitMQ: "APIs & integrations",
 
   "CMS & e-commerce": null,
   WordPress: "CMS & e-commerce",
@@ -83,11 +94,12 @@ const TREE = {
   ShopSite: "CMS & e-commerce",
   "E-commerce": "CMS & e-commerce",
 
-  "Data & Messaging": null,
-  PostgreSQL: "Data & Messaging",
-  MongoDB: "Data & Messaging",
-  RabbitMQ: "Data & Messaging",
-  MySQL: "Data & Messaging",
+  // "Data & Messaging" decomposed: few employers ask for that phrase, and
+  // "Databases" is what a job description actually says.
+  Databases: null,
+  PostgreSQL: "Databases",
+  MySQL: "Databases",
+  MongoDB: "Databases",
 
   "Cloud & DevOps": null,
   AWS: "Cloud & DevOps",
@@ -137,7 +149,7 @@ const merged = new Set(Object.keys(MERGES));
 const prose = new Set(PROSE);
 
 // Everything the migration would create must be accounted for exactly once.
-const unfiled = [...proposed].filter((n) => !(n in TREE) && !merged.has(n) && !prose.has(n));
+const unfiled = [...proposed].filter((n) => !(n in TREE) && !merged.has(n) && !prose.has(n) && !(n in RETIRED));
 // And nothing in the tree should be a name the data never produced, except the
 // roots and groups invented here.
 const invented = Object.keys(TREE).filter((n) => !proposed.has(n));
@@ -158,7 +170,7 @@ L.push("**I have already proposed a parent for every technology.** You are not")
 L.push("filling in blanks - you are correcting mine. So:");
 L.push("");
 L.push("1. Read section 2 and tell me the rows where the parent is wrong.");
-L.push("2. Answer the five questions in section 4.");
+L.push("2. Answer the questions in section 4.");
 L.push("3. Skim sections 5 and 6 and tell me anything that should not be there.");
 L.push("");
 L.push("Marking up is easiest as a list: `HTML Email -> Marketing & analytics`.");
@@ -200,6 +212,7 @@ L.push(`- ${Object.keys(TREE).length} entries in the tree, ${roots.length} of th
 L.push(`- ${Object.keys(TREE).filter((n) => isNew(n)).length} of those do not exist today`);
 L.push(`- ${merged.size} strings merge into an existing record (section 5)`);
 L.push(`- ${prose.size} strings stay as prose on their job (section 6)`);
+L.push(`- ${Object.keys(RETIRED).length} heading deleted (section 7)`);
 if (unfiled.length) {
   L.push("");
   L.push("**UNFILED - these have no home and need one:**");
@@ -210,19 +223,22 @@ if (invented.length) {
   L.push(`*Groups and roots invented for this draft (not in the data): ${invented.join(", ")}.*`);
 }
 L.push("");
-L.push("## 4. The five questions");
+L.push("## 4. The questions");
 L.push("");
 L.push("1. **Are the five new roots the right five, and named the way an employer");
 L.push("   should read them?** (CMS & e-commerce, Infrastructure & hosting, Ways of");
-L.push("   working, Marketing & analytics, Client & support.) This naming is what a");
+L.push("   working, Marketing & analytics, Client & support, Databases, APIs & integrations.)");
+L.push("   This naming is what a");
 L.push("   recruiter actually sees on the resume.");
 L.push("2. **Do the three new groups inside Frontend earn their nesting** (SPA");
 L.push("   frameworks, Styling & animation, Build tools), or should Frontend stay");
 L.push("   flat at 17 entries?");
-L.push("3. **`WinForms` sits under Backend for want of anywhere better.** Is there a");
+L.push("3. **`RabbitMQ` sits under APIs & integrations** rather than Backend, so that");
+L.push("   removing Data & Messaging does not need a niche Messaging root. Agreed?");
+L.push("4. **`WinForms` sits under Backend for want of anywhere better.** Is there a");
 L.push("   \"Desktop & platform\" root hiding here?");
-L.push("4. **`HTML Email`** - Frontend, or Marketing & analytics with SEO?");
-L.push("5. **`AngularJS` is kept separate from Angular** because they are different");
+L.push("5. **`HTML Email`** - Frontend, or Marketing & analytics with SEO?");
+L.push("6. **`AngularJS` is kept separate from Angular** because they are different");
 L.push("   frameworks covering different years at InvestCloud. Agreed?");
 L.push("");
 L.push("## 5. Merges: the same thing typed twice");
@@ -239,6 +255,13 @@ L.push("From `tech` and `code` memories. They describe work, so they stay on the
 L.push("job as prose rather than entering the tree.");
 L.push("");
 for (const name of PROSE) L.push(`- \`${name}\``);
+L.push("");
+L.push("## 7. Headings deleted");
+L.push("");
+L.push("These exist today as groupings. Their children are refiled above and the");
+L.push("heading itself goes; no skill is lost, because nothing claims a heading.");
+L.push("");
+for (const [name, why] of Object.entries(RETIRED)) L.push(`- **${name}** - ${why}`);
 L.push("");
 
 writeFileSync("docs/skills-tree-draft.md", L.join("\n"), "utf8");
