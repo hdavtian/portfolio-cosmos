@@ -26,6 +26,10 @@ import {
 /** A `tags` field is edited as one value per line. */
 const NEWLINE = String.fromCharCode(10);
 
+// One object, not a literal per render: Syncfusion rebinds when a prop's
+// identity changes, and rebinding a multi-select drops its selection.
+const MULTISELECT_FIELDS = { text: "label", value: "value" };
+
 type Content = Record<string, unknown>;
 
 /** Loads the record (or the record count, for a new one), then mounts the editor. */
@@ -225,13 +229,19 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
             ) : field.kind === "multiselect" ? (
               <MultiSelectComponent
                 dataSource={field.options ?? []}
-                fields={{ text: "label", value: "value" }}
+                fields={MULTISELECT_FIELDS}
                 mode="CheckBox"
                 showSelectAll
                 showDropDownIcon
                 placeholder="Nowhere"
                 value={Array.isArray(draft[field.key]) ? (draft[field.key] as string[]) : []}
-                change={(event: { value: string[] | null }) => setField(field.key, event.value ?? [])}
+                // The control fires `change` while it initialises, with an
+                // empty value and isInteracted false. Treating that as an edit
+                // emptied the field on open and would have saved it empty.
+                change={(event: { value: string[] | null; isInteracted?: boolean }) => {
+                  if (!event.isInteracted) return;
+                  setField(field.key, event.value ?? []);
+                }}
               >
                 {/* CheckBox mode and Select All come from this module; without
                     it the control throws as it renders. */}
