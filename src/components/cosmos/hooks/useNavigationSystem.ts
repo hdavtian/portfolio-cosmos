@@ -2668,22 +2668,12 @@ export const useNavigationSystem = (deps: {
           const company = resumeData.experience.find(
             (exp) => exp.slug === target.id,
           );
+          // The moon is found by its id, never by name: two jobs can share a
+          // company name (StormScape, twice), and a name match took the last.
           let moonMesh: THREE.Mesh | null = null;
-
           sceneRef.current.scene?.traverse((object) => {
-            if (object instanceof THREE.Mesh && object.userData.planetName) {
-              const objName = (object.userData.planetName || "").toLowerCase();
-              if (company) {
-                const companyName = (
-                  company.navLabel || company.company
-                ).toLowerCase();
-                if (
-                  objName.includes(companyName.split(" ")[0]) ||
-                  companyName.includes(objName)
-                ) {
-                  moonMesh = object;
-                }
-              }
+            if (object instanceof THREE.Mesh && object.userData.moonId === `moon-${target.id}`) {
+              moonMesh = object;
             }
           });
 

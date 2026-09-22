@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { CINEMATIC_PATH, canKeepAlive } from "../../app/cinematic/keepAlive";
 import { FILM_PATH, FilmHost } from "../../app/film/FilmHost";
 import { isCinematicStill, setCinematicLaunch, subscribeCinematicLaunch } from "../../app/cinematic/launchStore";
 import { AtmosphereBackdrop } from "./components/AtmosphereBackdrop";
 import { SceneStage } from "./components/SceneStage";
+import { NavHint, type NavHintId } from "./components/NavHint";
 import { useReleaseQuery, useTechStackQuery } from "../../lib/query/contentQueries";
 import type { SceneJob } from "./scenes/types";
 import { BackdropTintContext } from "./lib/backdropTint";
@@ -26,6 +27,20 @@ const prefetchCinematic = () => {
 /** Shell of the redesigned portfolio: atmosphere, pills, and the page. */
 export function ShowcaseLayout() {
   const [tint, setTintState] = useState(DEFAULT_TINT);
+  // Which nav pill the pointer is on; the hint panel under the nav follows it.
+  const [hovered, setHovered] = useState<NavHintId | null>(null);
+  // The hint panel is as wide as the row of pills, measured (the row wraps).
+  const pillsRef = useRef<HTMLElement>(null);
+  const [navWidth, setNavWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const nav = pillsRef.current;
+    if (!nav) return;
+    const measure = () => setNavWidth(nav.getBoundingClientRect().width);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, []);
   const setTint = useCallback((color: string | null) => setTintState(color ?? DEFAULT_TINT), []);
   const { personal, projects } = useShowcaseProjects();
   const techStack = useTechStackQuery().data?.payload;
@@ -93,7 +108,7 @@ export function ShowcaseLayout() {
             jobs={jobs}
             interactive={onIndex && !cinematicStill}
             paused={onCinematic || onFilm || cinematicStill}
-            showGateway={!pathname.startsWith("/portfolio/") && !onFilm}
+            showPanel={!pathname.startsWith("/portfolio/") && !onFilm}
             focusProjectId={focusProjectId}
             onShowing={setSceneShowing}
           />
@@ -101,36 +116,55 @@ export function ShowcaseLayout() {
         <a href="#showcase-main" className="skip-link">
           Skip to main content
         </a>
-        <nav className="showcase-pills" aria-label="Site">
-          <Link to="/" className="showcase-pill">
-            Work
-          </Link>
-          <NavLink to="/lab/got" className="showcase-pill">
-            Tech
+        <nav
+          ref={pillsRef}
+          className="showcase-pills"
+          aria-label="Site"
+          onMouseLeave={() => setHovered(null)}
+        >
+          {/* `end`: Home is current only on the index, not on every route under it. */}
+          <NavLink to="/" end className="showcase-pill" onMouseEnter={() => setHovered("home")} onFocus={() => setHovered("home")}>
+            Home
           </NavLink>
-          <NavLink to="/resume" className="showcase-pill">
-            Resume
+          <NavLink to="/lab/got" className="showcase-pill" onMouseEnter={() => setHovered("tech")} onFocus={() => setHovered("tech")}>
+            Tech Progression
+          </NavLink>
+          <NavLink to="/resume" className="showcase-pill" onMouseEnter={() => setHovered("resume")} onFocus={() => setHovered("resume")}>
+            Résumé
           </NavLink>
           <NavLink
-            to="/cinematic"
+            to="/universe"
             className="showcase-pill"
-            onMouseEnter={prefetchCinematic}
-            onFocus={prefetchCinematic}
+            onMouseEnter={() => {
+              setHovered("cinematic");
+              prefetchCinematic();
+            }}
+            onFocus={() => {
+              setHovered("cinematic");
+              prefetchCinematic();
+            }}
             onClick={(event) => {
-              // Same hand-off as the gateway panel, so both routes in behave alike.
+              // Same hand-off as the hint panel, so both routes in behave alike.
               if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
               event.preventDefault();
               setCinematicLaunch("loading");
             }}
           >
-            Cinematic
+            Universe
           </NavLink>
           {personal?.email ? (
-            <a href={`mailto:${personal.email}`} className="showcase-pill">
+            <a href={`mailto:${personal.email}`} className="showcase-pill" onMouseEnter={() => setHovered("contact")} onFocus={() => setHovered("contact")}>
               Contact
             </a>
           ) : null}
         </nav>
+        <div
+          className="showcase-nav-hint"
+          style={navWidth ? { width: navWidth } : undefined}
+          onMouseLeave={() => setHovered(null)}
+        >
+          <NavHint hovered={hovered} onEnterCinematic={() => setHovered(null)} />
+        </div>
         <main id="showcase-main" className="showcase__main">
           <Outlet />
         </main>

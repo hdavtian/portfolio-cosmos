@@ -154,6 +154,8 @@ interface Segment {
 // One unit of a segment's weight is this long on screen, so the film's running
 // time is the sum of its parts rather than a fixed length they have to share.
 const SECONDS_PER_WEIGHT = 3;
+// How often the playing film updates React state (the scrubber, the captions).
+const SHOW_EVERY_MS = 100;
 let filmSeconds = 118;
 
 function buildTimeline(cities: City[]): Segment[] {
@@ -1349,6 +1351,27 @@ export function SkillsTitlesPage() {
     };
   }, [accentsKey, banner, cities, timeline]);
 
+  // A film that should be moving and isn't (a dead animation loop, a hidden
+  // tab, anything) shows a Start/Play button in the middle, so a visitor is
+  // never left looking at a still frame wondering. It goes the moment
+  // progress moves again.
+  const [stalled, setStalled] = useState(false);
+  // What the loop has actually been given since it was last started, so a stall
+  // can say whether the frames stopped coming or the film stopped asking.
+  const framesRef = useRef({ asked: 0, ran: 0, since: 0 });
+  useEffect(() => {
+    setStalled(false);
+    if (!playing || holding) return;
+    const timer = window.setTimeout(() => {
+      setStalled(true);
+      const { asked, ran, since } = framesRef.current;
+      // One line, once per stall: enough to tell a starved loop (no frames at
+      // all) from a suspended one (frames, none of them used) without a debugger.
+      console.info("[film] stalled at %s after %sms: %d frames asked, %d ran, suspended=%s, page=%s", progressRef.current.toFixed(4), Math.round(performance.now() - since), asked, ran, isFilmSuspended(), document.visibilityState);
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, [playing, holding, progress]);
+
   // Where the film waits: the end of each place's turn, built and framed.
   const holds = useMemo(
     () => timeline.filter((entry) => entry.kind === "dwell").map((entry) => entry.to - 0.0004),
@@ -1360,36 +1383,57 @@ export function SkillsTitlesPage() {
     if (!playing) return;
     let frame = 0;
     let last = performance.now();
+    // When the scrubber was last told where the film is.
+    let shown = last;
+    framesRef.current = { asked: 0, ran: 0, since: last };
     const tick = (now: number) => {
+      framesRef.current.asked += 1;
       if (isFilmSuspended()) {
         last = now;
         frame = requestAnimationFrame(tick);
         return;
       }
-      // Going back is a rewind, so it runs three times as fast.
-      const step = ((now - last) / (filmSeconds * 1000)) * (direction < 0 ? 3 : 1);
+      // Going back is a rewind, so it runs three times as fast. A frame that
+      // arrives after a long gap (the tab or the film hidden) counts as one
+      // frame, not the whole gap, so coming back never jumps to the end.
+      framesRef.current.ran += 1;
+      const step = (Math.min(now - last, 100) / (filmSeconds * 1000)) * (direction < 0 ? 3 : 1);
       last = now;
-      setProgress((current) => {
-        const next = current + step * direction;
-        const hold =
-          direction > 0
-            ? holds.find((at) => current < at && next >= at)
-            : [...holds].reverse().find((at) => current > at && next <= at);
-        if (hold !== undefined) {
-          setPlaying(false);
-          setHolding(true);
-          return hold;
-        }
-        if (next >= 1) {
-          setPlaying(false);
-          return 1;
-        }
-        if (next <= 0) {
-          setPlaying(false);
-          return 0;
-        }
-        return next;
-      });
+      // Decided here, not inside a state updater: setting other state from an
+      // updater runs during render, which React refuses ("maximum update depth").
+      const current = progressRef.current;
+      const next = current + step * direction;
+      const hold =
+        direction > 0
+          ? holds.find((at) => current < at && next >= at)
+          : [...holds].reverse().find((at) => current > at && next <= at);
+      if (hold !== undefined) {
+        // A stop or an end is exact, whatever the throttle was up to.
+        progressRef.current = hold;
+        setProgress(hold);
+        setPlaying(false);
+        setHolding(true);
+        return;
+      }
+      if (next >= 1 || next <= 0) {
+        const end = next >= 1 ? 1 : 0;
+        progressRef.current = end;
+        setProgress(end);
+        setPlaying(false);
+        return;
+      }
+      progressRef.current = next;
+      // The film is driven by the ref, which is exact every frame; React state
+      // only has to carry the scrubber and the captions, so it is told about
+      // ten times a second. Telling it every frame is a state update per frame,
+      // which React eventually refuses ("maximum update depth exceeded") — and
+      // once it does, the scrubber freezes while the scene, reading the ref,
+      // carries on animating: a film stopped at frame one with the air still
+      // shimmering over it.
+      if (now - shown >= SHOW_EVERY_MS) {
+        shown = now;
+        setProgress(next);
+      }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -1633,11 +1677,31 @@ export function SkillsTitlesPage() {
           <button type="button" onClick={replay}>
             Replay
           </button>
-          <Link to="/resume">Read resume</Link>
-          <Link to="/cinematic">Enter space theme portfolio</Link>
+          <Link to="/resume">Read résumé</Link>
+          <Link to="/universe">Enter the universe</Link>
         </p>
       </section>
 
+      {/* Stopped anywhere short of the end, and not at a stop (which has its own
+          Next): say so, in the middle, where it can't be missed. The very
+          beginning counts — a film sitting at frame one, stopped, is the case a
+          visitor is most likely to mistake for a broken page. */}
+      {(!playing && !holding && progress < 1) || stalled ? (
+        <button
+          type="button"
+          className="titles__resume"
+          onClick={() => {
+            // Stalled: stop and start again, so the play effect is re-run from scratch.
+            setStalled(false);
+            setPlaying(false);
+            setDirection(1);
+            window.setTimeout(() => setPlaying(true), 0);
+          }}
+        >
+          <span className="titles__resume-mark" aria-hidden="true">▶</span>
+          {progress <= 0 ? "Start" : stalled ? "Play" : "Resume"}
+        </button>
+      ) : null}
       <div className="titles__scrub">
         <button
           type="button"

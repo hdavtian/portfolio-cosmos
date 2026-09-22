@@ -44,7 +44,10 @@
   opacity: 1;
   pointer-events: auto;
   cursor: pointer;
-  transition: opacity 900ms ease;
+  /* The paused universe as a memory, not a page: drained of colour, softened
+     and dimmed, so its own nav and labels can't be mistaken for the site's. */
+  filter: grayscale(1) blur(2px) brightness(0.55) contrast(0.9);
+  transition: opacity 900ms ease, filter 900ms ease;
 }
 
 .cinematic-host.is-still::after {
@@ -60,6 +63,18 @@
 .cinematic-host.is-still:focus-visible {
   outline: 2px solid #dff8ff;
   outline-offset: -6px;
+}
+
+/* Back from a still: colour and focus stutter in over a second, then hold
+   (keyframes in ../wake.css, shared with the film). */
+.cinematic-host.is-showing.is-waking {
+  animation: cinematic-wake 1100ms steps(1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-host.is-showing.is-waking {
+    animation: none;
+  }
 }
 
 /* Fading out once the previews are ready to take over again. */

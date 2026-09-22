@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useReleaseQuery } from "../../../lib/query/contentQueries";
 import { useBackdropTint } from "../lib/backdropTint";
 
@@ -22,11 +23,22 @@ const positionDetails = (
 export function ShowcaseResumePage() {
   const { data, isPending, isError } = useReleaseQuery();
   const { setTint } = useBackdropTint();
+  const navigate = useNavigate();
 
   useEffect(() => {
     setTint(null);
     window.scrollTo({ top: 0 });
   }, [setTint]);
+
+  // Escape leaves the resume, like a project page.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      navigate("/");
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [navigate]);
 
   if (isPending || isError) {
     return (
@@ -44,7 +56,11 @@ export function ShowcaseResumePage() {
   return (
     <article className="showcase-resume">
       <header className="showcase-resume__intro">
-        <p className="showcase-label">Resume</p>
+        <Link to="/" className="showcase-back showcase-resume__back">
+          <span className="showcase-back__arrow" aria-hidden="true" />
+          Back
+        </Link>
+        <p className="showcase-label">Résumé</p>
         <h1 className="showcase-resume__name">{personal.name}</h1>
         <p className="showcase-resume__role">{personal.title}</p>
         {summary ? <p className="showcase-resume__summary">{summary}</p> : null}

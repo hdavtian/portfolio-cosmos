@@ -1,5 +1,7 @@
 /** The address of the cinematic experience. */
-export const CINEMATIC_PATH = "/cinematic";
+export const CINEMATIC_PATH = "/universe";
+/** Where it used to live; links to it are redirected. */
+export const CINEMATIC_OLD_PATH = "/cinematic";
 
 /**
  * Keeping the 3D experience (and the portfolio's scenes behind it) alive costs

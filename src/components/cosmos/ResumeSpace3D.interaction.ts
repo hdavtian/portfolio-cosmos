@@ -448,21 +448,19 @@ export const createPointerInteractionHandlers = (deps: {
           return;
         }
 
-        // Special handling for job moons - show cosmic overlay
-        const jobData = resumeData.experience.find(
-          (job) => job.company === planetName,
-        );
+        // A job moon: the same travel + focus as a navigator click. The moon
+        // carries its job's slug (two jobs can share a company name).
+        const moonId = String(hit.object.userData.moonId ?? "");
+        const jobData = moonId
+          ? resumeData.experience.find((job) => `moon-${job.slug}` === moonId)
+          : undefined;
         if (jobData) {
-          // Trigger the same travel + focus behavior as navigator clicks
           try {
-            const cid =
-              (jobData as any).id ||
-              (jobData.company || "").toLowerCase().replace(/\s+/g, "-");
             trackEvent("experience_moon_click", {
               company: jobData.company,
-              company_id: cid,
+              company_id: jobData.slug,
             });
-            handleNavigation(`experience-${cid}`);
+            handleNavigation(`experience-${jobData.slug}`);
           } catch (e) {
             // ignore if function not yet defined
           }
