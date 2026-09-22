@@ -114,9 +114,10 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D17 | Earthlink and HostPro appear **everywhere**, like any other job: on the resume and as moons in the universe (settles Q6). No "show on resume" tick on Experience is needed, which removes a field from the plan. The resume grows to 10 entries and the universe gains two moons, so both need a look before publishing, and the three missing cores (Earthlink, HostPro, UnitedLayer) become content Harma enters. | 2026-09-22 |
 | D18 | One date field per skill use, accepting `2018` or `04/2018` (settles Q8). A bare year counts as the whole year; rule 1 caps any use at the job's length, so an imprecise year can never inflate a total. Two fields (year + optional month) would double the typing across 82 rows for precision that 1997 will never have. | 2026-09-22 |
 | D19 | The tree is settled (`docs/skills-tree-draft.md`, 89 entries, 13 roots): Data & Messaging dissolved into Databases and Backend; APIs is a root holding the *frameworks* (REST APIs, OAuth, ASP.NET Core Web API, Spring Boot) while Backend keeps the *languages and runtimes*, which is what lets an API heading exist without breaking one home per skill (D7); Styling and Animation are separate groups under Frontend; Desktop & platform takes WinForms and Chrome Extension; AI is a top-level heading that arrives empty, unticked until Harma enters records. AngularJS stays separate from Angular. | 2026-09-22 |
-| D20 | Visibility is two typed multi-selects, not a row of booleans, because the ten surfaces fall into three families (section 4.8). A technology carries `surfaces` (lattice, resume, film progress) plus `featured` and `isGrouping` (D22); a skill use carries `surfaces` (moon label, fly-by, film destination) plus `style` and its years. The project surfaces (home chips, project preview, project detail, Portfolio dropdown) read each project's own tag list and get no tick, because one on the technology could not remove a tag. All ticked on at migration (D15). | 2026-09-22 |
+| D20 | Visibility is two typed multi-selects, not a row of booleans, because the ten surfaces fall into three families (section 4.8). A technology carries `surfaces` (lattice, resume, film progress, filters - see D23) plus `featured` and `isGrouping` (D22); a skill use carries `surfaces` (moon label, fly-by, film destination) plus `style` and its years. The project tag lists (project preview, project detail) read each project's own tags and get no tick, because one on the technology could not remove a tag. All ticked on at migration (D15). | 2026-09-22 |
 | D21 | `featured` (called `headline` until D22) marks the categories that matter to an employer. The resume summary and the film's closing list read only featured entries. It is emphasis, not visibility, so it is a separate flag from `surfaces`; in practice it is set on roots. This revives the mock's `headline` flag (2.3 item 4), which never reached the API. | 2026-09-22 |
 | D22 | `isHeading` and `headline` are renamed `isGrouping` and `featured`: the originals sounded alike and meant unrelated things (what a record *is* vs how *important* it is). Every tick and multi-select in admin carries hint text naming the exact screens it affects, in the existing `<Field label hint>` pattern, so no one has to read this document to know what a one-word label does. The hint strings are in section 4.9 and ship with the screens. | 2026-09-22 |
+| D23 | **Corrects D20.** Filter lists are not project tag lists. The home page chips and the universe Portfolio drop-down *offer* technologies to filter by; a project's preview and detail page *list* what that project used. So `filters` is a technology surface with fine control, while the tag lists stay per-project. Today the chips are simply the eight most-used names by count, which puts HTML and CSS in a row of eight slots and filters to nearly everything - the counter chooses, and it chooses badly. Harma chooses instead. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -136,7 +137,7 @@ technologies on projects for a technical reader.
 | `showOnResume` | the resume and the Skills planet show only ticked ones, so they keep showing today's 18 under today's 5 headings. |
 | `blurb` | optional one line, mainly for top-level entries |
 | `featured` | matters to an employer: the resume summary and the film's closing list read only these (D21) |
-| `surfaces` | where it may appear: lattice, resume, film progress (D20) |
+| `surfaces` | where it may appear: lattice, resume, film progress, filters (D20, D23) |
 | `isGrouping` | a grouping, not a skill (D16). On by default for top-level entries. Surfaces that show skills only skip these; the resume and Skills planet use them as headings. |
 
 What the mock did with several categories per skill becomes nesting:
@@ -379,15 +380,22 @@ the surface actually reads.
 | **Job** | Moon: job detail labels | skill use `surfaces` |
 | | Moon: memories fly-by | skill use `surfaces` |
 | | Film: destination graphic (ring, banner, branch) | skill use `surfaces` |
-| **Project** | Home: tech chips (project filter) | the project's own tag list |
-| | Project preview | the project's own tag list |
+| **Filter lists** | Home: tech chips | technology `surfaces` (`filters`) |
+| | Universe Portfolio: skills drop-down | technology `surfaces` (`filters`) |
+| **Project** | Project preview | the project's own tag list |
 | | Project detail: technologies | the project's own tag list |
-| | Universe Portfolio: skills drop-down | the project's own tag list |
 
-**The project family gets no tick on purpose.** Those four surfaces list what
-is tagged on each project. A tick on the technology could not remove a tag, so
-offering one would be a control that does not control anything; the tag is
-removed on the project.
+**A filter list is not a tag list (D23).** The chips and the drop-down *offer*
+technologies to filter by; a project's preview and detail page *list* what that
+project used. HTML belongs on the project - taking it off would be a lie - but
+it is a poor filter, because filtering by HTML returns nearly everything.
+Today the chips are the eight most-used names by count
+(`useShowcaseProjects.ts:72`), so HTML and CSS take slots in a row of eight.
+`filters` gives that row fine control.
+
+**The project tag lists get no tick on purpose.** They list what is tagged on
+each project; a tick on the technology could not remove a tag, so it would be
+a control that does not control anything. The tag is removed on the project.
 
 **Why multi-selects rather than booleans.** Seven checkboxes on every one of 89
 technologies and 82 uses is unusable in a grid, and each new surface would add
@@ -418,7 +426,7 @@ where the tick is.
 |---|---|
 | `isGrouping` | "A heading, not a skill you claim. Headings organise the tree (Frontend, Databases, APIs). Screens that show skills only - the film's Skill Progress, moon labels, the home page chips - skip them." |
 | `featured` | "One of the few areas to put in front of a recruiter. Only featured entries appear in the resume summary and the film's closing list. It does not change where else this shows." |
-| `surfaces` | "Where this may appear. Lattice: the universe's Skills Lattice. Resume: the resume's skills section. Film progress: the film's Skill Progress screen. Project tags are not set here - to remove a technology from a project's tags, edit the project." |
+| `surfaces` | "Where this may appear. Lattice: the universe's Skills Lattice. Resume: the resume's skills section. Film progress: the film's Skill Progress screen. Filters: offered as a filter in the home page chips and the universe Portfolio drop-down - leave this off for something like HTML that nearly every project uses, so the filter row keeps its slots for choices worth making. A project's own technology list is not set here; edit the project." |
 | `current` | "Part of the stack you work in today. Marks it as current wherever a site separates present from past." |
 | `parent` | "Its one home in the tree. A skill has exactly one parent; if it seems to belong in two places, it is two skills." |
 
@@ -491,6 +499,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (n): D23 corrects D20 - a filter list is not a tag list, so the home chips and the Portfolio drop-down get fine control after all.
 - 2026-09-22: draft 5 (m): isHeading and headline renamed isGrouping and featured, and every option gets hint text naming the screens it affects (D22).
 - 2026-09-22: draft 5 (l): Harma's list of the ten places a skill shows, mapped to what governs each (D20), and `headline` revived for the recruiter-facing summaries (D21).
 - 2026-09-22: draft 5 (k): the tree is settled (D19). The dry run had been reading tech memories but not code ones; fixed, 86 technologies become 89.
