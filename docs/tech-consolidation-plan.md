@@ -109,6 +109,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D14 | `style` is a **named token** (`plain`, `code`, `handwritten`), never raw font/colour/border values, and it lives on the *use* - a skill use or a prose memory - not on the technology or the job. It is optional; empty means "the default for this kind" (skill use -> `plain`, prose -> `handwritten`). The token's appearance is defined once in code (today's `styleByType` table), so a restyle changes one table rather than every record, and a new style is one token plus one dropdown option with no migration. | 2026-09-22 |
 | D13 | A memory's `type` is a style switch (font, glow, backdrop box), not a kind of content, which is why technology names were filed as `code` to get a monospace box. The two ideas separate: content is either a technology from the master list or a prose memory; how it flies is a `style` field (`plain`, `code`, `handwritten`) on the item. Today's look is preserved by defaults, and a technology drawn as a code box is still a link, so renaming it renames the box. | 2026-09-22 |
 | D12 | The `tech` **and `code`** memory types retire. Both were free text holding technology names: of the 25 tech memories 13 duplicate a label on the same job, 7 name a technology found nowhere else (including Node.js at InvestCloud) and 5 describe work; of the 14 code memories 8 duplicate a label, 3 name something new and 3 are prose. Each is deleted, harvested into a skill use, or re-typed as prose. Afterwards a memory is prose, and technologies live only in the master list. | 2026-09-22 |
+| D15 | Every visibility option migrates **on**: it is easier to see everything and take things off than to hunt for what is missing (settles Q3 and Q10). Because "all on" would put ISDN on the resume, the curation happens in the production copy *before* the first publish: the migration runs, Harma unticks what should not show, and only then is anything pushed to production. The hard rule (sites unchanged on the day it ships) is kept by that ordering, not by the default. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -378,14 +379,14 @@ All per the `syncfusion-list-pages` and `syncfusion-edit-dialogs` skills.
 |---|---|---|
 | ~~Q1~~ | *Settled by D4.* ~~Are top-level tree nodes (Frontend, Backend…) the same thing as categories, or does the tree keep its own top level while categories are a separate tagging? | Separate: tree = "part of", categories = "counts toward". A technology has one parent but many categories. |
 | ~~Q2~~ | *Settled by D4: its top-level ancestor.* On the resume a skill shows under one category. If it has several, which? | A `resumeCategorySlug`, defaulting to the first. |
-| Q3 | Should every skill use show as a label on the job moon, or only ticked ones? 21 uses at InvestCloud is a lot of labels. | Tick-box, defaulting on for migrated labels only. |
+| ~~Q3~~ | *Settled by D15: on for all, curated before publish.* ~~Should every skill use show as a label on the job moon, or only ticked ones?~~ | |
 | ~~Q4~~ | *Settled by D6.* Totals computed by the API at publish time, or by each site from shared code? | Shared code, computed in the site: "now" moves, a published number would go stale. |
 | ~~Q5~~ | *Settled by D10.* StormScape's return: second Experience or multiple periods on one? | Second Experience with a `continues` link to the first: smallest schema change, film already works this way. |
 | Q6 | Earthlink / HostPro on the resume and cinematic site, or film only? | Harma's call. |
 | ~~Q7~~ | *Settled by D8.* Non-code skills (sales, leading engineers) live in the same master list? | Yes, under their own categories, unticked for the resume unless wanted. |
 | ~~Q9~~ | *Settled by D7/D8.* A few skills sat in two groups in the mock (Sales in Support & sales and Leadership). With one tree each gets one home. Acceptable? | Yes; pick the home that reads best to an employer. |
-| Q10 | New technologies appear in the portfolio constellation and lattice (they draw the tree). Show everything, or only `showOnResume` ones? | Harma's call after seeing it; start with ticked only so nothing changes. |
-| Q8 | Dates as years or year-months? | Year-month, matching Experience dates; the form accepts a bare year. |
+| ~~Q10~~ | *Settled by D15.* ~~Show everything in the constellation and lattice, or only `showOnResume` ones?~~ | |
+| Q8 | Dates as years or year-months? | **Proposed:** one field accepting either `2018` or `04/2018`, matching Experience dates. A bare year counts as the whole year; rule 1 caps any use at the job's length, so a vague year cannot inflate a total. |
 
 ## 8. Risks
 
@@ -409,6 +410,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (g): every option migrates on and is curated in the copy before the first publish (D15), settling Q3 and Q10.
 - 2026-09-22: draft 5 (f): style is a named token on the use, with the appearance defined once in code (D14); including `code` memories then costs nothing, because the look no longer depends on the content type.
 - 2026-09-22: draft 5 (e): `code` memories are technology names too; the memory type turns out to be a style switch, so style separates from content (D13).
 - 2026-09-22: draft 5 (d): memories keep only prose and code (D12); the tech ones are deleted, harvested or re-typed, and the orbit fly-by reads skill uses instead.
