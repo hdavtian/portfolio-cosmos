@@ -3,7 +3,7 @@
 // identical pages. Entities with nested content (experiences, portfolio) keep
 // bespoke pages.
 
-export type FieldKind = "text" | "multiline" | "reference";
+export type FieldKind = "text" | "multiline" | "reference" | "boolean" | "multiselect" | "tags";
 
 export interface FieldDefinition {
   key: string;
@@ -18,6 +18,8 @@ export interface FieldDefinition {
    * descendants are left out, so a loop cannot be chosen.
    */
   emptyOption?: string;
+  /** For `multiselect` fields: the fixed choices, stored as an array of values. */
+  options?: { value: string; label: string }[];
 }
 
 export interface ColumnDefinition {
@@ -151,6 +153,83 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     ],
     empty: () => ({ slug: "", sortOrder: 0, title: "", url: "" }),
     describe: (record) => text(record.title),
+  },
+  {
+    entity: "technologies",
+    title: "Technologies",
+    singular: "technology",
+    description:
+      "The one list of technologies. Everything else - a job's skills, a project's tags - points at an entry here, so a name is typed once and corrected once. Drag a row onto another to nest it, or above or below a row to reorder.",
+    slugSource: "name",
+    columns: [],
+    fields: [
+      slugField,
+      { key: "name", label: "Name", kind: "text" },
+      {
+        key: "parentSlug",
+        label: "Parent",
+        hint: "Its one home in the tree. A skill has exactly one parent; if it seems to belong in two places, it is two skills.",
+        kind: "reference",
+        reference: { entity: "technologies", labelField: "name" },
+        emptyOption: "— Top level —",
+      },
+      {
+        key: "isGrouping",
+        label: "Heading",
+        hint: "A heading, not a skill you claim. Headings organise the tree (Frontend, Databases, APIs). Screens that show skills only - the film's Skill Progress, moon labels, the home page chips - skip them.",
+        kind: "boolean",
+      },
+      {
+        key: "featured",
+        label: "Featured",
+        hint: "One of the few areas to put in front of a recruiter. Only featured entries appear in the resume summary and the film's closing list. It does not change where else this shows.",
+        kind: "boolean",
+      },
+      {
+        key: "current",
+        label: "Current stack",
+        hint: "Part of the stack you work in today. Marks it as current wherever a site separates present from past.",
+        kind: "boolean",
+      },
+      {
+        key: "surfaces",
+        label: "Shown in",
+        hint: "Where this may appear. Lattice: the universe's Skills Lattice. Resume: the resume's skills section. Film progress: the film's Skill Progress screen. Filters: offered as a filter in the home page chips and the universe Portfolio drop-down - leave this off for something like HTML that nearly every project uses, so the filter row keeps its slots for choices worth making. A project's own technology list is not set here; edit the project.",
+        kind: "multiselect",
+        options: [
+          { value: "lattice", label: "Skills Lattice (universe)" },
+          { value: "resume", label: "Resume skills" },
+          { value: "filmProgress", label: "Film: Skill Progress" },
+          { value: "filters", label: "Filters (home chips, Portfolio drop-down)" },
+        ],
+      },
+      {
+        key: "aliases",
+        label: "Also known as",
+        hint: "Older names and the combined labels this replaced, one per line. Typing any of them finds this technology, and nothing else may claim the same one.",
+        kind: "tags",
+      },
+      {
+        key: "blurb",
+        label: "Blurb",
+        hint: "Optional one line, mainly for headings.",
+        kind: "multiline",
+      },
+    ],
+    empty: () => ({
+      slug: "",
+      sortOrder: 0,
+      name: "",
+      parentSlug: "",
+      isGrouping: false,
+      featured: false,
+      current: false,
+      surfaces: ["lattice", "resume", "filmProgress", "filters"],
+      aliases: [],
+      blurb: "",
+    }),
+    describe: (record) => text(record.name),
+    customList: true,
   },
   {
     entity: "techStackNodes",

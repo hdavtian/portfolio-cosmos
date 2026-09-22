@@ -1,5 +1,5 @@
-import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
-import { DropDownListComponent } from "@syncfusion/ej2-react-dropdowns";
+import { ButtonComponent, CheckBoxComponent } from "@syncfusion/ej2-react-buttons";
+import { DropDownListComponent, MultiSelectComponent } from "@syncfusion/ej2-react-dropdowns";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -17,6 +17,9 @@ import {
   type EntityRecord,
   type PagedResult,
 } from "../lib/entityApi";
+
+/** A `tags` field is edited as one value per line. */
+const NEWLINE = String.fromCharCode(10);
 
 type Content = Record<string, unknown>;
 
@@ -103,10 +106,13 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
   const saving = create.isPending || update.isPending;
   const listPath = `/${definition.entity}`;
 
-  const setField = (key: string, value: string) => {
+  const setField = (key: string, value: string | boolean | string[]) => {
     setDraft((current) => {
       const next = { ...current, [key]: value };
-      if (key === definition.slugSource && !slugTouched) next.slug = suggestSlug(value);
+      // The slug follows the name only while it is still text and untouched.
+      if (key === definition.slugSource && !slugTouched && typeof value === "string") {
+        next.slug = suggestSlug(value);
+      }
       return next;
     });
     if (key === "slug") setSlugTouched(true);
@@ -206,7 +212,39 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
       <section className="admin-card">
         {orderedFields.map((field) => (
           <FormField key={field.key} label={field.label} hint={field.hint} error={fieldErrors[field.key]}>
-            {field.kind === "reference" ? (
+            {field.kind === "boolean" ? (
+              <CheckBoxComponent
+                checked={Boolean(draft[field.key])}
+                change={(event: { checked: boolean }) => setField(field.key, event.checked)}
+              />
+            ) : field.kind === "multiselect" ? (
+              <MultiSelectComponent
+                dataSource={field.options ?? []}
+                fields={{ text: "label", value: "value" }}
+                mode="CheckBox"
+                showSelectAll
+                showDropDownIcon
+                placeholder="Nowhere"
+                value={Array.isArray(draft[field.key]) ? (draft[field.key] as string[]) : []}
+                change={(event: { value: string[] | null }) => setField(field.key, event.value ?? [])}
+              />
+            ) : field.kind === "tags" ? (
+              // One per line: the list is read and edited as text, which is
+              // faster than a chip control for pasting a handful of old names.
+              <TextBoxComponent
+                multiline
+                value={(Array.isArray(draft[field.key]) ? (draft[field.key] as string[]) : []).join(NEWLINE)}
+                input={(event: { value: string }) =>
+                  setField(
+                    field.key,
+                    event.value
+                      .split(NEWLINE)
+                      .map((line) => line.trim())
+                      .filter(Boolean),
+                  )
+                }
+              />
+            ) : field.kind === "reference" ? (
               <DropDownListComponent
                 dataSource={choicesFor(
                   field.key,

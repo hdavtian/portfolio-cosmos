@@ -20,6 +20,7 @@ import { PortfolioCoresPage } from "../pages/PortfolioCoresPage";
 import { PortfolioEntriesPage } from "../pages/PortfolioEntriesPage";
 import { PortfolioEntryEditPage } from "../pages/PortfolioEntryEditPage";
 import { PathMessageEditPage } from "../pages/PathMessageEditPage";
+import { TechnologiesPage } from "../pages/TechnologiesPage";
 import { TechStackPage } from "../pages/TechStackPage";
 
 export function AdminApp() {
@@ -68,6 +69,7 @@ export function AdminApp() {
             <Route path="portfolioCores" element={<PortfolioCoresPage />} />
             <Route path="portfolioCores/:slug" element={<PortfolioCoreEditPage />} />
             <Route path="pathTravelMessages/:slug" element={<PathMessageEditPage />} />
+            <Route path="technologies" element={<TechnologiesPage />} />
             <Route path="techStackNodes" element={<TechStackPage />} />
             {/* Config-driven sections; keyed so switching entity resets grid state. */}
             {ENTITY_DEFINITIONS.flatMap((definition) => [

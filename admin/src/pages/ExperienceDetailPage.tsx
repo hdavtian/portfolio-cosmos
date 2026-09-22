@@ -36,6 +36,7 @@ const EMPTY: Experience = {
   projects: [],
   jobMemories: [],
   jobTech: [],
+  skillsUsed: [],
 };
 
 const MEMORY_TYPES = [

@@ -7,6 +7,7 @@ import {
   type ContentBundle,
   type SingletonName,
   techStackIssues,
+  technologyIssues,
 } from "@hd/content-schema";
 import { createHash } from "node:crypto";
 import type { Db, Document } from "mongodb";
@@ -123,6 +124,20 @@ export class ReleaseService {
         treeIssues.map((issue) => ({
           path: `techStackNodes.${issue.index}.parentSlug`,
           message: `"${result.data.collections.techStackNodes[issue.index]?.name}" ${issue.message}`,
+        })),
+      );
+    }
+
+    // The master list must form a tree, and no two entries may claim the same
+    // name or alias: a string that resolves to two technologies cannot be
+    // resolved at all (D25/D26). The schemas check each record on its own.
+    const technologyProblems = technologyIssues(result.data.collections.technologies);
+    if (technologyProblems.length > 0) {
+      throw ApiError.badRequest(
+        "Cannot publish: some technologies have a broken parent or a name used twice. Fix the listed entries and try again.",
+        technologyProblems.map((issue) => ({
+          path: `technologies.${issue.index}`,
+          message: `"${result.data.collections.technologies[issue.index]?.name}" ${issue.message}`,
         })),
       );
     }
