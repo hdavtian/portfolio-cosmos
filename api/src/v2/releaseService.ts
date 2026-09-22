@@ -219,13 +219,22 @@ export class ReleaseService {
    * release predates (absent from its snapshot) is left untouched rather than
    * emptied.
    */
-  public async restoreDraftsFrom(content: ContentBundle, restoredBy: string, releaseId: number): Promise<void> {
+  /**
+   * `reason` is stored on the backup: a discard and a rollback both replace the
+   * drafts, and which one it was is the first thing anyone recovering will ask.
+   */
+  public async restoreDraftsFrom(
+    content: ContentBundle,
+    restoredBy: string,
+    releaseId: number,
+    reason = `Drafts before rolling back to release ${releaseId}`,
+  ): Promise<void> {
     const now = new Date();
 
     const backup: Record<string, unknown> = {
       createdAt: now,
       createdBy: restoredBy,
-      reason: `Drafts before rolling back to release ${releaseId}`,
+      reason,
       singletons: await this.db.collection(SINGLETONS_COLLECTION).find({}).toArray(),
       collections: {} as Record<string, Document[]>,
     };
@@ -272,6 +281,24 @@ export class ReleaseService {
         );
       }
     }
+  }
+
+  /**
+   * Throws away every unpublished change by restoring the drafts from the live
+   * release. No release is published: history stays a record of what went out,
+   * not of what was abandoned. The drafts being replaced are backed up first,
+   * exactly as a rollback does, so a discard is recoverable.
+   */
+  public async discardDrafts(discardedBy: string): Promise<{ discarded: boolean }> {
+    const current = await this.db.collection(RELEASES_COLLECTION).findOne({ current: true });
+    if (!current) throw ApiError.badRequest("Nothing has been published yet, so there is nothing to go back to.");
+    await this.restoreDraftsFrom(
+      current.content as ContentBundle,
+      discardedBy,
+      current.id as number,
+      `Drafts discarded, restoring release ${current.id as number}`,
+    );
+    return { discarded: true };
   }
 
   public async rollbackTo(

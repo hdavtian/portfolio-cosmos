@@ -69,6 +69,9 @@ export function ReleasesPage() {
   const queryClient = useQueryClient();
   const statusLine = useStatus();
   const [notes, setNotes] = useState("");
+  // The notes start as the summary of what changed, refreshed while they are
+  // untouched. Typing anything stops that: an edited note is never overwritten.
+  const [notesEdited, setNotesEdited] = useState(false);
 
   const status = useQuery({
     queryKey: ["releases", "status"],
@@ -103,12 +106,39 @@ export function ReleasesPage() {
   const publish = useMutation({
     mutationFn: () => api.post<ReleaseSummary>("/api/v2/admin/releases/publish", { notes: notes.trim() }),
     onSuccess: (release) => {
+      // The next release starts from its own summary again.
       setNotes("");
+      setNotesEdited(false);
+      setSuggestionShown("");
       void refresh();
       statusLine.success(`Release #${release.id} is live on both sites.`);
     },
     onError: (error) => statusLine.error(error, "Could not publish."),
   });
+
+  const discard = useMutation({
+    mutationFn: () => api.post<{ discarded: boolean }>("/api/v2/admin/releases/discard-drafts"),
+    onSuccess: () => {
+      // Every cached record in the admin is now stale.
+      void queryClient.invalidateQueries();
+      statusLine.success("Unpublished changes discarded. The drafts match the live release again.");
+    },
+    onError: (error: unknown) => statusLine.error(error, "Could not discard the changes."),
+  });
+
+  const confirmDiscard = () => {
+    if (discard.isPending) return;
+    const count = pending.data?.lines.length ?? 0;
+    confirmAction({
+      title: "Discard unpublished changes?",
+      content:
+        `${count === 1 ? "One change" : `${count} changes`} will be thrown away and the drafts will match the live ` +
+        "release again. A copy of the drafts is kept, so this can be undone by hand if it was a mistake.",
+      confirmText: "Discard changes",
+      confirmClass: "e-danger e-outline",
+      onConfirm: () => discard.mutate(),
+    });
+  };
 
   const rollback = useMutation({
     mutationFn: (id: number) => api.post<ReleaseSummary>(`/api/v2/admin/releases/${id}/rollback`),
@@ -156,7 +186,14 @@ export function ReleasesPage() {
 
   const historyRows = useMemo(() => (history.data?.items ?? []).map(toHistoryRow), [history.data]);
 
-  const busy = publish.isPending || check.isPending;
+  const suggestedNotes = pending.data ? toNotes(pending.data.lines) : "";
+  const [suggestionShown, setSuggestionShown] = useState("");
+  if (!notesEdited && suggestedNotes !== suggestionShown) {
+    setSuggestionShown(suggestedNotes);
+    setNotes(suggestedNotes);
+  }
+
+  const busy = publish.isPending || check.isPending || discard.isPending;
   const s = status.data;
 
   // Rolling back acts on one release, so the button belongs in its row: the
@@ -220,7 +257,10 @@ export function ReleasesPage() {
                 <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
                   <ButtonComponent
                     cssClass="e-small e-flat e-outline"
-                    onClick={() => setNotes(toNotes(pending.data.lines))}
+                    onClick={() => {
+                      setNotes(toNotes(pending.data.lines));
+                      setNotesEdited(false);
+                    }}
                   >
                     Use as notes
                   </ButtonComponent>
@@ -243,17 +283,35 @@ export function ReleasesPage() {
               multiline
               maxLength={NOTES_MAX}
               value={notes}
-              input={(event: { value: string }) => setNotes(event.value)}
+              input={(event: { value: string }) => {
+                setNotes(event.value);
+                setNotesEdited(true);
+              }}
             />
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <ButtonComponent cssClass="e-flat e-outline" disabled={busy} onClick={() => check.mutate()}>
-            {check.isPending ? "Checking…" : "Check drafts"}
+        {/* Publishing and its dry run on the left; discarding is destructive,
+            so it sits apart on the right where it cannot be hit by habit. */}
+        <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+          <ButtonComponent
+            cssClass="e-flat e-outline"
+            disabled={busy}
+            title="Runs every check that publishing runs, and publishes nothing."
+            onClick={() => check.mutate()}
+          >
+            {check.isPending ? "Checking…" : "Dry run"}
           </ButtonComponent>
           <ButtonComponent cssClass="e-primary e-outline" disabled={busy} onClick={confirmPublish}>
             {publish.isPending ? "Publishing…" : "Publish"}
+          </ButtonComponent>
+          <ButtonComponent
+            cssClass="e-danger e-outline"
+            style={{ marginLeft: "auto" }}
+            disabled={busy || (pending.data?.lines.length ?? 0) === 0}
+            onClick={confirmDiscard}
+          >
+            {discard.isPending ? "Discarding…" : "Discard changes"}
           </ButtonComponent>
         </div>
       </section>

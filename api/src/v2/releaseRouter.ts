@@ -83,6 +83,13 @@ export function createReleaseRouter(): Router {
   );
 
   router.post(
+    "/discard-drafts",
+    asyncHandler(async (req, res) => {
+      res.json(await service().discardDrafts(editorOf(req)));
+    }),
+  );
+
+  router.post(
     "/:id/rollback",
     asyncHandler(async (req, res) => {
       const { id } = parseOrThrow(rollbackParamsSchema, req.params);
