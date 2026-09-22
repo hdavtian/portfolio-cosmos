@@ -11,22 +11,19 @@ export const contentKeys = {
 };
 
 // One request for the whole published release, shared by every page through
-// the query cache. Each hook selects its slice and keeps the `{ payload }`
-// envelope the pages were written against, so they needed no changes.
+// the query cache. Each hook selects its slice.
 export const releaseQuery = {
   queryKey: contentKeys.release(),
   queryFn: fetchSiteContent,
   staleTime: 60_000,
   gcTime: 1000 * 60 * 60 * 24,
   refetchOnMount: "always" as const,
+  // A request that fails is treated as "offline" by default and parked until
+  // the network comes back, which leaves the page on "Loading…" for ever when
+  // it is the API, not the visitor, that is down. Always attempt, so a failure
+  // becomes an error (or the bundled fallback) after the retry.
+  networkMode: "always" as const,
 };
-
-export function usePortfolioCoresQuery() {
-  return useQuery({
-    ...releaseQuery,
-    select: (content) => ({ payload: content.portfolioCores, source: content.source }),
-  });
-}
 
 // Releases published before the tech stack existed have no nodes; the tree is
 // then two levels, built from the skill categories and their skills.
@@ -51,28 +48,6 @@ export function useTechStackQuery() {
   return useReleaseQuery(techStackFromRelease);
 }
 
-export function useResumeQuery() {
-  return useQuery({
-    ...releaseQuery,
-    select: (content) => ({ payload: content.resume, source: content.source }),
-  });
-}
-
-/** Published content the 3D site reads: portfolio, moon filters and ride messages. */
-export function useCosmosContentQuery() {
-  return useQuery({
-    ...releaseQuery,
-    select: (content) => ({
-      portfolioCores: content.portfolioCores,
-      moonPortfolioMapping: content.moonPortfolioMapping,
-      aboutPathTravelMessages: content.aboutPathTravelMessages,
-      techStack: content.techStack,
-      personal: content.resume.personal,
-      source: content.source,
-    }),
-  });
-}
-
 /**
  * The published release in its stored shapes: the one source every site is
  * moving onto. Pass a selector to take only what a component needs, so it
@@ -81,10 +56,7 @@ export function useCosmosContentQuery() {
 export function useReleaseQuery<T = Release>(select?: (release: Release) => T) {
   return useQuery({
     ...releaseQuery,
-    select: (content) => {
-      if (!content.release) throw new Error("[content] No release: bundled fallback content is in use.");
-      return select ? select(content.release) : (content.release as T);
-    },
+    select: (content) => (select ? select(content.release) : (content.release as T)),
   });
 }
 

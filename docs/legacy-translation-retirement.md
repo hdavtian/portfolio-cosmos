@@ -1,6 +1,6 @@
 # Retiring the legacy translation: every site reads one data shape
 
-**Status: DISCUSSION DRAFT 1 (2026-09-21). Nothing here is built. Step 0 of
+**Status: DONE on branch `retire-legacy-translation` (2026-09-21), pending merge to `main`. Step 0 of
 `docs/tech-consolidation-plan.md` (decision D9). Harma gave the go-ahead for the cinematic (space) site stage on 2026-09-21,
 within the limits in section 4.4.**
 
@@ -335,6 +335,54 @@ under `scripts/retirement-checks/old/` for that comparison and go in stage 6.
 moon with its texture, memories and hologram drone, and the Portfolio with its
 cores, project cards, pictures and registry panel. No console errors.
 
+## 7f. Stage 6: clean-up (2026-09-21)
+
+**Removed.** `toLegacy`, `fromLegacy`, the old-shape types, the round-trip
+test and the `@hd/content-schema/to-legacy` export; the import script and
+`db:import`; the old hooks (`useResumeQuery`, `usePortfolioCoresQuery`,
+`useCosmosContentQuery`) and `fetchContentByKey`; the comparison copies under
+`scripts/retirement-checks/`; every bundled content file in `src/data/`
+(`resume.json`, `portfolioCores.json`, `aboutDeck.json`,
+`moonPortfolioMapping.ts`, `aboutPathTravelMessages.json`, `cosmic-narrative.json`,
+`aboutContent.json`, the `aboutHall*` files, `legacyWebsites.json`). Also the
+API's v1 content route, its `modules/content`, the `content_documents` seed and
+`dev:full -- --seed`: v1's only feeders were the deleted files and no site
+called it. `TourDefinitionBuilder` had read `cosmic-narrative.json` one level too
+high and always got nothing; its built-in text is now simply the text.
+
+**One shape.** `SiteContent` is `{ release, source }`. `useReleaseQuery(select)`
+is the one hook; `useTechStackQuery`, `usePortfolioItemsQuery` and
+`useSpaceContentQuery` are selectors over it.
+
+**The fallback (settles Q6): kept, generated, off by default.**
+`src/data/release.fallback.json` is written by `npm run content:fallback` from
+a published release (123 KB, loaded only when needed), never by hand. It is used
+only when the build sets `VITE_CONTENT_FALLBACK=on`. **Tested both ways with the
+API unreachable** (a second dev server pointed at a dead port):
+- off: the resume page shows "The resume could not be loaded. Refresh to try
+  again.", the home page "The work could not be loaded…", the space site "The
+  experience could not load its content…"; console logs the error. Confirmed by Harma.
+- on: full content, console `showing bundled fallback content`, name all gold
+  (the tell off). Confirmed by Harma.
+Two fixes came out of the test: the pages had no error state for a missing
+release (added), and a failed request was being parked as "offline" by the query
+library and never became an error (`networkMode: "always"` on the content query).
+The production build should set `VITE_CONTENT_FALLBACK=on` with a fallback
+generated from the production API; that is a deploy setting, left for the
+merge.
+
+**Bug caught in the final browser pass.** `Release.mediaUrl` was a function on
+the release object; the query cache is persisted to localStorage between
+visits, functions don't survive that, and a page starting from the restored
+cache (the film, on a second visit) crashed with `release.mediaUrl is not a
+function`. The lookup is now a plain function over the release's `media` data
+(`mediaUrl(release, id)`), and the scene data carries the `media` table itself.
+Also removed: the spent `db:add-early-jobs` script (it read the deleted
+`resume.json`; its records are in the database and every backup).
+
+**Runbook rewritten:** `docs/content-reseeding-runbook.md` (a fresh machine
+restores a backup; how content ships to production; the fallback).
+
 ## 8. Data: backups and how new data reaches production
 
 **Backups taken 2026-09-21 before any work** (in `db-backups/`, not in git,
@@ -381,11 +429,12 @@ the subscription and tenant check.
 | Q5 | Also back up production media files (Azure blob storage, 206 files) before starting? It is a read-only download but needs an Azure sign-in check. Nothing planned deletes or replaces media. | Yes, once, for completeness. |
 | ~~Q7~~ | *Settled 2026-09-21: (c).* The data check, plus Harma looking at a short checklist of scenes after each space-site sub-step: Experience planet and moons, one job moon with the hologram open, Skills planet, a portfolio core, the About ride, a guided tour stop. Harma confirmed Enter works normally in his browser; the "ENTERING…" hang is only the automated tab. | — |
 | ~~Q8~~ | *Settled 2026-09-21: renames done (section 7e).* The wider `any` clean-up in the space site (about 150, mostly Three.js objects and event handlers) is its own later job. | — |
-| Q6 | Keep the bundled fallback at the end, or drop it? Production's database is rarely down. Decide after testing it once, before merging to `main`. | Open. |
+| ~~Q6~~ | *Settled 2026-09-21: keep the fallback, generated and off by default (section 7f). Turn it on for the production build with a production-generated copy.* | — |
 | ~~Q4~~ | *Settled 2026-09-21: one branch, `retire-legacy-translation`, off `main`, with the film branch merged in* so nothing has to be imported later. The film lives at an unlinked URL (`/lab/got`), so shipping it is harmless. Consequence: this branch's `resume.json` holds Earthlink and HostPro, so the space site shows nine moons here from the start, from the file until it switches to the API. `skills-timeline-lab` is kept as it was; new film work happens here. | — |
 
 ## 10. Change log
 
+- 2026-09-21: stage 6 done (section 7f). Retirement complete on the branch.
 - 2026-09-21: stage 5 second pass: stored field names inside the space site (section 7e).
 - 2026-09-21: stage 5 done (section 7d); approach changed from renames to a typed reader at the space site's door.
 - 2026-09-21: stage 4 done (section 7c).

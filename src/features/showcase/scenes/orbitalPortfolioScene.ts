@@ -105,7 +105,8 @@ export async function createOrbitalPortfolioScene(THREE: ThreeModule, data: Scen
   const halo = haloTexture(THREE);
   disposables.push(halo);
 
-  const { cores: seeds, entries: published, mediaUrl } = data.portfolio;
+  const { cores: seeds, entries: published } = data.portfolio;
+  const mediaUrl = (mediaId: string | null | undefined) => (mediaId ? (data.portfolio.media[mediaId]?.url ?? "") : "");
   const columns = Math.max(1, Math.ceil(Math.sqrt(seeds.length)));
   const rows = Math.ceil(seeds.length / columns);
   const cores: CoreRecord[] = [];

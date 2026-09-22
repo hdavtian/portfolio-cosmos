@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import type { NavigationWaypoint } from "./CosmicNavigation";
 import type { OverlayContent } from "./CosmicContentOverlay";
-import cosmicNarrative from "../data/cosmic-narrative.json";
 
 export interface CosmicTourDefinition {
   id: string;
@@ -25,10 +24,8 @@ export interface PlanetData {
 
 export class TourDefinitionBuilder {
   private planets: Map<string, PlanetData> = new Map();
-  private cosmicData: any;
 
   constructor() {
-    this.cosmicData = cosmicNarrative;
   }
 
   // Register planet data for tour building
@@ -145,7 +142,6 @@ export class TourDefinitionBuilder {
         "A comprehensive journey through professional growth and achievements",
       duration: waypoints.length * 7, // Approximate total duration
       waypoints,
-      narrative: this.cosmicData.guidedTours?.["career-journey"]?.narrative,
     };
   }
 
@@ -226,8 +222,6 @@ export class TourDefinitionBuilder {
         "An in-depth exploration of technical skills and innovations",
       duration: waypoints.length * 6,
       waypoints,
-      narrative:
-        this.cosmicData.guidedTours?.["technical-deep-dive"]?.narrative,
     };
   }
 
@@ -291,7 +285,6 @@ export class TourDefinitionBuilder {
       description: "The evolution of leadership skills and team impact",
       duration: waypoints.length * 8,
       waypoints,
-      narrative: this.cosmicData.guidedTours?.["leadership-story"]?.narrative,
     };
   }
 
@@ -340,13 +333,10 @@ export class TourDefinitionBuilder {
   }
 
   private createExperienceContent(): OverlayContent {
-    const planetData = this.cosmicData.planets?.experience || {};
-
     return {
-      title: planetData.name || "Experience Planet",
-      subtitle: planetData.atmosphere || "Professional Growth Sector",
+      title: "Experience Planet",
+      subtitle: "Professional Growth Sector",
       description:
-        planetData.description ||
         "A world shaped by professional challenges, leadership opportunities, and continuous learning.",
       sections: [
         {
@@ -398,13 +388,10 @@ export class TourDefinitionBuilder {
   }
 
   private createSkillsContent(): OverlayContent {
-    const planetData = this.cosmicData.planets?.skills || {};
-
     return {
-      title: planetData.name || "Skills Constellation",
-      subtitle: planetData.atmosphere || "Technical Mastery Zone",
+      title: "Skills Constellation",
+      subtitle: "Technical Mastery Zone",
       description:
-        planetData.description ||
         "A constellation of technical abilities, creative tools, and problem-solving methodologies.",
       sections: [
         {

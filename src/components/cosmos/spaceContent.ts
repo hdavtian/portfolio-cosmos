@@ -7,7 +7,7 @@ import type {
   PathTravelMessage,
 } from "@hd/content-schema";
 import { buildTechStackTree, techStackTreeFromSkills, type TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
-import type { Release } from "../../lib/api/release";
+import { mediaUrl, type Release } from "../../lib/api/release";
 import type { PortfolioCoreSeed, PortfolioSeedMedia, PortfolioSeedVariant } from "./portfolioData";
 
 /**
@@ -59,7 +59,7 @@ export function spaceContentFromRelease(release: Release): SpaceContent {
   const media = (item: GalleryItem): PortfolioSeedMedia => ({
     slug: item.slug,
     type: item.type,
-    image: release.mediaUrl(item.mediaId),
+    image: mediaUrl(release, item.mediaId),
     title: item.title,
     description: item.description,
     fit: item.fit,
@@ -68,7 +68,7 @@ export function spaceContentFromRelease(release: Release): SpaceContent {
   const variant = (item: ClientVariant): PortfolioSeedVariant => ({
     slug: item.slug,
     title: item.title,
-    image: release.mediaUrl(item.mediaId),
+    image: mediaUrl(release, item.mediaId),
     description: item.description,
     technologies: item.technologies,
     year: item.year,
@@ -125,7 +125,7 @@ export function spaceContentFromRelease(release: Release): SpaceContent {
       ...slide,
       blocks: slide.blocks.map((block) =>
         block.type === "image"
-          ? { type: block.type, title: block.title, src: release.mediaUrl(block.mediaId) }
+          ? { type: block.type, title: block.title, src: mediaUrl(release, block.mediaId) }
           : { type: block.type, title: block.title, body: block.body },
       ),
     })),

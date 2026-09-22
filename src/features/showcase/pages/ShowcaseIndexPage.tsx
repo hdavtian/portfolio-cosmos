@@ -29,7 +29,7 @@ const excerpt = (text: string) => {
  * works.
  */
 export function ShowcaseIndexPage() {
-  const { projects, cores, topTech, personal, isLoading } = useShowcaseProjects();
+  const { projects, cores, topTech, personal, isLoading, isError } = useShowcaseProjects();
   const { setTint, setHighlights, setFocusProject, sceneShowing } = useBackdropTint();
   const navigate = useNavigate();
   const location = useLocation();
@@ -295,7 +295,9 @@ export function ShowcaseIndexPage() {
         </div>
 
         {isLoading && projects.length === 0 ? <p className="showcase-label">Loading work…</p> : null}
-        {!isLoading && visible.length === 0 ? (
+        {isError ? (
+          <p className="showcase-empty">The work could not be loaded. Refresh to try again.</p>
+        ) : !isLoading && visible.length === 0 ? (
           <p className="showcase-empty">Nothing matches those filters.</p>
         ) : null}
 

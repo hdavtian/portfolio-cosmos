@@ -34,7 +34,7 @@ export function ShowcaseLayout() {
       release && {
         cores: release.collections.portfolioCores,
         entries: release.collections.portfolioEntries,
-        mediaUrl: release.mediaUrl,
+        media: release.media,
       },
     [release],
   );

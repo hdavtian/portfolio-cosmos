@@ -117,6 +117,14 @@ function PortfolioSpace(props: PortfolioSpaceProps) {
   }, []);
 
   const fresh = portfolio.isFetchedAfterMount;
+  if (portfolio.isError && !portfolio.data) {
+    // Nothing to build the universe from: say so instead of a black screen.
+    return (
+      <p className="hero__content-error">
+        The experience could not load its content. Refresh to try again.
+      </p>
+    );
+  }
   if (!portfolio.data || (!fresh && !waitedLongEnough)) return null;
   return (
     <ResumeSpace3D

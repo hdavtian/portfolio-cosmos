@@ -28,10 +28,10 @@ export interface SceneJob {
 export interface ScenePortfolio {
   cores: PortfolioCore[];
   entries: PortfolioEntry[];
-  mediaUrl: (mediaId: string | null | undefined) => string;
+  media: Record<string, { url: string }>;
 }
 
-export const EMPTY_PORTFOLIO: ScenePortfolio = { cores: [], entries: [], mediaUrl: () => "" };
+export const EMPTY_PORTFOLIO: ScenePortfolio = { cores: [], entries: [], media: {} };
 
 export interface SceneData {
   projects: ShowcaseProject[];

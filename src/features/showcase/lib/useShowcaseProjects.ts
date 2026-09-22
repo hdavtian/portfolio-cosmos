@@ -78,11 +78,12 @@ export function useShowcaseProjects() {
 
     return {
       isLoading: content.isLoading,
+      isError: content.isError,
       projects,
       cores: coreList,
       topTech,
       yearRange: years.length ? { from: Math.min(...years), to: Math.max(...years) } : null,
       personal: release?.profile ?? null,
     };
-  }, [content.data, content.isLoading]);
+  }, [content.data, content.isError, content.isLoading]);
 }

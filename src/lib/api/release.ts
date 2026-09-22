@@ -28,9 +28,15 @@ export interface Release {
   cosmosIntroduction: ContentBundle["singletons"]["cosmosIntroduction"];
   collections: ContentBundle["collections"];
   media: Record<string, ReleaseMedia>;
-  /** The address of a media file, or "" when the id is unknown. */
-  mediaUrl: (mediaId: string | null | undefined) => string;
 }
+
+/**
+ * The address of a media file, or "" when the id is unknown. A plain function
+ * over the release's data, not a method on it: the query cache is saved to
+ * localStorage between visits, and only data survives that.
+ */
+export const mediaUrl = (release: Pick<Release, "media">, mediaId: string | null | undefined): string =>
+  mediaId ? (release.media[mediaId]?.url ?? "") : "";
 
 const bySortOrder = <T extends { sortOrder: number }>(items: readonly T[]): T[] =>
   [...items].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -50,6 +56,5 @@ export const toRelease = (response: ReleaseResponse): Release => {
     cosmosIntroduction: singletons.cosmosIntroduction,
     collections: ordered,
     media: response.media,
-    mediaUrl: (mediaId) => (mediaId ? (response.media[mediaId]?.url ?? "") : ""),
   };
 };

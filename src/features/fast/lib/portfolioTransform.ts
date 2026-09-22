@@ -1,5 +1,5 @@
 import type { ClientVariant, GalleryItem, PortfolioEntry } from "@hd/content-schema";
-import type { Release } from "../../../lib/api/release";
+import { mediaUrl, type Release } from "../../../lib/api/release";
 import type { PortfolioItem, PortfolioMedia } from "../types";
 
 /**
@@ -42,14 +42,14 @@ const gallery = (release: Release, media: GalleryItem[]): PortfolioMedia[] =>
   media.map((item) => ({
     id: item.slug,
     type: item.type,
-    image: release.mediaUrl(item.mediaId),
+    image: mediaUrl(release, item.mediaId),
     title: item.title,
     description: item.description,
     fit: item.fit,
   }));
 
 function entryItem(release: Release, category: string, entry: PortfolioEntry): PortfolioItem {
-  const image = release.mediaUrl(entry.mediaId);
+  const image = mediaUrl(release, entry.mediaId);
   return {
     id: entry.slug,
     title: entry.title,
@@ -70,7 +70,7 @@ function variantItem(
   parent: PortfolioEntry,
   variant: ClientVariant,
 ): PortfolioItem {
-  const image = release.mediaUrl(variant.mediaId) || release.mediaUrl(parent.mediaId);
+  const image = mediaUrl(release, variant.mediaId) || mediaUrl(release, parent.mediaId);
   const media = variant.galleryMedia.length > 0 ? variant.galleryMedia : parent.galleryMedia;
   return {
     id: variant.slug,

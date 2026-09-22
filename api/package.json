@@ -10,11 +10,8 @@
     "dev": "node --watch --import tsx src/server.ts",
     "build": "tsc -p tsconfig.json --noEmit && node ../scripts/build-api.mjs",
     "start": "node dist/server.js",
-    "seed": "tsx src/scripts/seedContent.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "test": "vitest run",
-    "import": "tsx src/scripts/importContent.ts",
-    "add-early-jobs": "tsx src/scripts/addEarlyJobs.ts",
     "add-stormscape-return": "tsx src/scripts/addStormscapeReturn.ts",
     "storage:cors": "tsx src/scripts/configureLocalStorageCors.ts"
   },

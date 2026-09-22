@@ -129,22 +129,6 @@ export const buildOpenApiDocument = () => {
     },
   });
 
-  // ---- legacy v1 content ----
-
-  registry.registerPath({
-    method: "get",
-    path: "/api/v1/content/{key}",
-    tags: ["Content (v1, legacy)"],
-    summary: "Legacy content document (replaced by v2)",
-    description:
-      "Serves only the keys the current site requests. Retired keys return 404. Removed once the Three.js retrofit lands.",
-    request: { params: z.object({ key: z.enum(["resume", "portfolio-cores"]) }) },
-    responses: {
-      200: { description: "Content document" },
-      ...errorResponses(404),
-    },
-  });
-
   // ---- public v2 content ----
 
   const previewQuery = z.object({

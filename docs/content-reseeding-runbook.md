@@ -1,67 +1,89 @@
-# Content Reseeding Runbook
+# Content runbook: where content lives and how to move it
 
-This project stores portfolio/resume/about content in source files under `src/data` and seeds Mongo content documents from those files.
+Since 2026-09-21 the database is the only source of content. There are no
+content files to edit: the portfolio site, the space site and the GoT film all
+read the published release from the API (`GET /api/v2/content/release`), and
+content is edited in admin (local: http://localhost:5174, production:
+https://portfolio-admin.harmadavtian.com). Publishing in admin is what makes an
+edit visible.
 
-Use this runbook whenever JSON/TS source content is updated and the database must be refreshed.
+The only content file left in the repo is `src/data/release.fallback.json`, a
+generated copy of a published release for the sites to show if the API can't be
+reached. It is never edited by hand (see "The fallback" below).
 
-## What gets seeded
+## Everyday: edit, publish, see it
 
-- Seed script: `api/src/scripts/seedContent.ts`
-- Seed command from repo root: `npm run api:seed`
-- Target collection: `content_documents`
-- Primary sources (since 2026-09-15, only the keys the API still serves):
-  - `src/data/resume.json` → key `resume`
-  - `src/data/portfolioCores.json` → key `portfolio-cores`
+1. Edit in local admin and publish.
+2. Reload the site; the console says `[content] Published content from the API (release …)`.
+3. Private tell: when content came from the API, the H and D of the name are
+   red and blue (portfolio masthead, space-site badge). On fallback content the
+   name is all gold.
 
-The seed process upserts by document key. The previously seeded keys
-(`about-*`, `cosmic-narrative`, `legacy-websites`, `moon-portfolio-mapping`)
-are retired: the API returns 404 for them and the seed no longer refreshes them.
-Their old documents remain in the database, untouched and unread.
+## Starting fresh: a new machine, or a broken local database
 
-This runbook covers the legacy v1 flow. New content work goes through
-`npm run db:import` and the v2 API — see `docs/content-platform-plan.md`.
+There is no import from files. A fresh local database is a **restored copy of
+production**:
 
-## Local reseed workflow
+```bash
+npm run db:pull            # dumps production Atlas to db-backups/ (read-only on Atlas)
+npm run db:restore-local   # restores the newest dump beside the working database
+```
 
-1. Update source data in `src/data`.
-2. Validate JSON syntax in edited files.
-3. Run:
+`db:restore-local` restores into `resume_cosmos_prodcopy`, leaving the working
+database alone. To make the copy the working database, restore with the working
+name, or point `LOCAL_MONGODB_DB_NAME` at the copy. Media files for local
+Azurite come from `npm run media:pull` (production media, read-only) if they
+are needed locally.
 
-   ```bash
-   npm run api:seed
-   ```
+One one-off script remains; it adds a specific record to the **local** database
+only and refuses to run anywhere else:
 
-4. Confirm expected output includes:
-   - `Seed completed. Upserted ... content documents.`
-5. Verify locally:
-   - API response contains updated payload values:
-     - `http://localhost:8080/api/v1/content/portfolio-cores`
-   - Frontend pages display updated data.
+- `npm run db:add-stormscape-return` — StormScape (Freelance), 2025 → present (already run)
 
-## Production reseed workflow
+(Earthlink and HostPro were added the same way on 2026-09-21; that script read
+the since-deleted `resume.json` and is gone with it. The records are in the
+database and in every backup since.)
 
-> `api/.env` targets local Docker MongoDB, so `npm run api:seed` seeds the local
-> database. A production reseed must pass the production connection explicitly,
-> for example by setting `MONGODB_URI` and `MONGODB_DB_NAME` in the shell for
-> that one command (values live in the `harma-api` Azure app settings, or in the
-> git-ignored `api/.env.production.local`).
+## Shipping content to production
 
-1. Ensure source data changes are committed and deployed.
-2. Run the seed script against the production API environment (same `api/src/scripts/seedContent.ts` process, with production Mongo connection settings passed in the environment).
-3. Verify production API returns updated values:
-   - `https://api.harmadavtian.com/api/v1/content/portfolio-cores`
-4. If frontend depends on API base URL, ensure deploy variable is correct:
-   - `VITE_API_BASE_URL=https://api.harmadavtian.com`
-5. Redeploy frontend if needed and re-check network responses are JSON, not HTML.
+Production is written only when a stage ships, and only after confirming with
+Harma. Every production write is preceded by a backup.
 
-## Quick troubleshooting
+```bash
+npm run db:pull                     # 1. fresh production backup; check production hasn't changed
+npm run db:push-prod -- --yes       # 2. replaces production's content collections with local's
+npm run media:push-prod -- --yes    # 3. copies any new media files (missing or changed only)
+```
 
-- If frontend request to `/api/v1/content/...` returns HTML:
-  - Request is hitting SPA host fallback, not API.
-  - Fix `VITE_API_BASE_URL` in deployment variables and redeploy frontend.
-- If API returns old data:
-  - Seed may not have been run in the target environment.
-  - Rerun seed in that environment and verify endpoint payload.
-- If updated source is overwritten later:
-  - Confirm source-of-truth files in `src/data` were updated and committed before reseeding.
+Then publish in production admin and check the live sites. Backups in
+`db-backups/` and `media-backups/` are kept; nothing deletes them automatically.
 
+## The fallback
+
+`src/data/release.fallback.json` is written by:
+
+```bash
+npm run content:fallback                              # from the local API
+npm run content:fallback -- https://api.harmadavtian.com   # from production
+```
+
+It is used only when the build sets `VITE_CONTENT_FALLBACK=on` and the API
+can't be reached; otherwise a failed load is a visible error ("The resume could
+not be loaded. Refresh to try again."). Media addresses inside it are whatever
+API it was generated from, so a production build should carry a copy generated
+from the production API. Regenerate it as part of a release when content has
+changed a lot; it does not need to be current to the day.
+
+## Retired
+
+- The v1 content route (`/api/v1/content/:key`), its `content_documents`
+  collection and the seed from `src/data` files. The old `content_documents`
+  documents remain in the databases, unread.
+- The import from legacy files (`db:import`) and the legacy translation
+  (`toLegacy`/`fromLegacy`). Their code is in git history before 2026-09-21.
+- The bundled content files (`resume.json`, `portfolioCores.json`,
+  `aboutDeck.json`, `moonPortfolioMapping.ts`, `aboutPathTravelMessages.json`,
+  `cosmic-narrative.json`, the `about*` and `legacyWebsites` files).
+
+See `docs/legacy-translation-retirement.md` for how this happened and
+`docs/content-platform-plan.md` for the platform as a whole.
