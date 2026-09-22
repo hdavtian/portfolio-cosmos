@@ -33,10 +33,35 @@ Every admin grid provides:
 - **Column resizing** — `allowResizing` on the component *and* `Resize` in
   `Inject`. The prop alone does nothing, and the omission only shows when a
   value is clipped.
-- Row drag-and-drop reordering for entities with `sortOrder`, persisted through
-  the entity's order endpoint.
+- Row drag-and-drop reordering for entities with `sortOrder`, always enabled,
+  persisted through the entity's order endpoint (see "Reordering is always on").
 
 Do not build custom filter/search widgets when Syncfusion provides one.
+
+## Where actions go
+
+**Row actions live in the row.** Every action that operates on one record
+(edit, delete, add child, roll back to this one) is a button in an actions
+column on that row, never a button at the top of the page that acts on the
+selected row. A list can be long: selecting a row near the bottom and then
+scrolling back to the top to press a button is the failure this rule prevents.
+
+**Only genuinely global actions sit above the grid**, and only when they need
+no row: "Add", "Publish", a filter that applies to the whole list.
+
+This applies to `TreeGridComponent` as much as `GridComponent`: a tree still
+gets an actions column, and selection stays for dragging, not for acting.
+
+## Reordering is always on
+
+Row dragging is enabled on every grid that has a `sortOrder`. There is no
+"Reorder rows" mode to unlock first: the handle is always there.
+
+A drop index is a position in the *visible* view, so only a view in saved order
+can be translated back into `sortOrder`. When the grid is sorted, grouped,
+filtered or searched, the drop is cancelled and the status line says which of
+those to clear. Refusing is the point - the alternative is saving an order
+nobody asked for, silently.
 
 ## Guardrails (lessons learned)
 

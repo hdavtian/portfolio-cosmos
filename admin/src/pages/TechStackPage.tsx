@@ -88,7 +88,6 @@ export function TechStackPage() {
   const status = useStatus();
   const list = useAllEntities<TechStackNode>(ENTITY);
   const gridRef = useRef<TreeGridComponent>(null);
-  const [selected, setSelected] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const items = useMemo(() => (list.items ?? []) as NodeRecord[], [list.items]);
@@ -105,7 +104,6 @@ export function TechStackPage() {
     [items],
   );
 
-  const selectedRecord = items.find((item) => item.slug === selected);
   const refresh = () => queryClient.invalidateQueries({ queryKey: [ENTITY] });
 
   const handleDrop = (args: DropArgs) => {
@@ -149,8 +147,7 @@ export function TechStackPage() {
     })();
   };
 
-  const confirmDelete = () => {
-    if (!selectedRecord) return;
+  const confirmDelete = (selectedRecord: NodeRecord) => {
     const childCount = items.filter((item) => item.parentSlug === selectedRecord.slug).length;
     if (childCount > 0) {
       status.failure(
@@ -168,12 +165,36 @@ export function TechStackPage() {
           .delete(`/api/v2/admin/${ENTITY}/${selectedRecord.slug}`)
           .then(() => {
             status.success(`Deleted "${selectedRecord.name}". Publish to remove it from the sites.`);
-            setSelected(null);
           })
           .catch((error: unknown) => status.error(error, "Could not delete."))
           .finally(() => void refresh());
       },
     });
+  };
+
+  /**
+   * Row actions belong in the row: a long tree makes "select, then scroll back
+   * to the top" a poor way to reach Edit.
+   */
+  const actionsTemplate = (row: TreeRow) => {
+    const record = items.find((item) => item.slug === row.slug);
+    if (!record) return <span />;
+    return (
+      <div style={{ display: "flex", gap: 6 }}>
+        <ButtonComponent
+          cssClass="e-small e-primary e-outline"
+          onClick={() => navigate(`/${ENTITY}/new?parentSlug=${encodeURIComponent(record.slug)}`)}
+        >
+          Add child
+        </ButtonComponent>
+        <ButtonComponent cssClass="e-small e-flat e-outline" onClick={() => navigate(`/${ENTITY}/${record.slug}`)}>
+          Edit
+        </ButtonComponent>
+        <ButtonComponent cssClass="e-small e-danger e-outline" onClick={() => confirmDelete(record)}>
+          Delete
+        </ButtonComponent>
+      </div>
+    );
   };
 
   return (
@@ -199,32 +220,9 @@ export function TechStackPage() {
       ) : null}
       {list.truncated ? <p className="admin-error">Showing the first 100 nodes only.</p> : null}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
-        <ButtonComponent
-          cssClass="e-small e-primary e-outline"
-          disabled={!selectedRecord}
-          onClick={() => selectedRecord && navigate(`/${ENTITY}/new?parentSlug=${encodeURIComponent(selectedRecord.slug)}`)}
-        >
-          Add child
-        </ButtonComponent>
-        <ButtonComponent
-          cssClass="e-small e-flat e-outline"
-          disabled={!selectedRecord}
-          onClick={() => selectedRecord && navigate(`/${ENTITY}/${selectedRecord.slug}`)}
-        >
-          Edit
-        </ButtonComponent>
-        <ButtonComponent cssClass="e-small e-danger e-outline" disabled={!selectedRecord} onClick={confirmDelete}>
-          Delete
-        </ButtonComponent>
-        <span className="admin-status">
-          {saving
-            ? "Saving…"
-            : selectedRecord
-              ? `"${selectedRecord.name}" selected. Double-click a row to edit it.`
-              : "Select a node, or double-click one to edit it."}
-        </span>
-      </div>
+      <p className="admin-status">
+        {saving ? "Saving…" : "Drag a row onto another to nest it, or above or below a row to reorder."}
+      </p>
 
       {list.isLoading ? <p className="admin-status">Loading…</p> : null}
       {list.items ? (
@@ -240,8 +238,6 @@ export function TechStackPage() {
             toolbar={TOOLBAR}
             gridLines="Horizontal"
             rowDrop={handleDrop}
-            rowSelected={(args: { data?: TreeRow }) => setSelected(args.data?.slug ?? null)}
-            rowDeselected={() => setSelected(null)}
             recordDoubleClick={(args: { rowData?: TreeRow }) =>
               args.rowData && navigate(`/${ENTITY}/${args.rowData.slug}`)
             }
@@ -250,6 +246,7 @@ export function TechStackPage() {
               <ColumnDirective field="name" headerText="Name" width={320} />
               <ColumnDirective field="slug" headerText="Slug" width={220} />
               <ColumnDirective field="childCount" headerText="Children" width={100} textAlign="Right" />
+              <ColumnDirective headerText="Actions" width={260} template={actionsTemplate} />
             </ColumnsDirective>
             <Inject services={[RowDD, Selection, Toolbar]} />
           </TreeGridComponent>

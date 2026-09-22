@@ -1,4 +1,3 @@
-import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import {
   ColumnChooser,
   ColumnsDirective,
@@ -79,7 +78,8 @@ export function EntityGrid<T extends GridRow>({
   // Row drag-and-drop and grouping must never be active together: with both on,
   // grouping freezes the page (reproduced on Skills). Reordering is therefore a
   // separate mode, which also guarantees drags follow the saved order.
-  const [reordering, setReordering] = useState(false);
+  // Why a drop was refused, when the view is not in saved order.
+  const [reorderNotice, setReorderNotice] = useState<string | null>(null);
   const [settings] = useState(createGridSettings);
 
   // Everything handed to Syncfusion is memoised: a new object on every render
@@ -114,22 +114,38 @@ export function EntityGrid<T extends GridRow>({
     if (!sameState(next, state)) onStateChange(next);
   };
 
-  const startReordering = () => {
+  /**
+   * Dragging is always on, so a drop can arrive while the grid is sorted,
+   * grouped, filtered or searched. Drop indices are positions in the *visible*
+   * view, and only a view in saved order can be spliced back into the full
+   * list - so those drops are refused and say why, rather than saving an order
+   * nobody asked for.
+   */
+  const outOfOrderReason = (): string | null => {
     const grid = gridRef.current;
-    if (grid) {
-      grid.clearGrouping();
-      grid.clearSorting();
-      grid.clearFiltering();
-      grid.search("");
-    }
-    setReordering(true);
+    if (!grid) return null;
+    if ((grid.sortSettings?.columns?.length ?? 0) > 0) return "sorted";
+    if ((grid.groupSettings?.columns?.length ?? 0) > 0) return "grouped";
+    if ((grid.filterSettings?.columns?.length ?? 0) > 0) return "filtered";
+    if (grid.searchSettings?.key) return "searched";
+    return null;
   };
 
   // Drop indices are positions within the visible page. That page's slugs are
   // reordered, then spliced back into the full list, which is in saved order.
-  const handleRowDrop = (args: { fromIndex?: number; dropIndex?: number }) => {
+  const handleRowDrop = (args: { fromIndex?: number; dropIndex?: number; cancel?: boolean }) => {
     const grid = gridRef.current;
     if (!onReorder || !rows || !grid || args.fromIndex === undefined || args.dropIndex === undefined) return;
+
+    const reason = outOfOrderReason();
+    if (reason) {
+      args.cancel = true;
+      setReorderNotice(
+        `The list is ${reason}, so a row cannot be dropped into its saved place. Clear it and drag again.`,
+      );
+      return;
+    }
+    setReorderNotice(null);
 
     const view = (grid.getCurrentViewRecords() as T[]).map((row) => row.slug ?? "");
     const reorderedView = [...view];
@@ -147,40 +163,25 @@ export function EntityGrid<T extends GridRow>({
     <>
       {onReorder ? (
         <div className="admin-grid-mode">
-          {reordering ? (
-            <>
-              <span className="admin-status">
-                Drag rows by their handle to change the saved order. Each drop saves immediately.
-              </span>
-              <ButtonComponent cssClass="e-small e-primary e-outline" onClick={() => setReordering(false)}>
-                Done reordering
-              </ButtonComponent>
-            </>
-          ) : (
-            <ButtonComponent cssClass="e-small e-flat e-outline" onClick={startReordering}>
-              Reorder rows
-            </ButtonComponent>
-          )}
+          <span className="admin-status">
+            {reorderNotice ?? "Drag rows by their handle to change the saved order. Each drop saves immediately."}
+          </span>
         </div>
       ) : null}
 
-      {/* Keyed on the mode: Syncfusion only builds the drag-handle column when
-          the grid is created, so toggling allowRowDragAndDrop on a live grid
-          showed no handles. Remounting is cheap here (rows are already loaded). */}
       <GridComponent
-        key={reordering ? "reorder" : "browse"}
         ref={gridRef}
         dataSource={dataSource}
         dataStateChange={isServer ? handleDataStateChange : undefined}
-        rowDrop={reordering ? handleRowDrop : undefined}
+        rowDrop={handleRowDrop}
         allowPaging
-        allowSorting={!reordering}
-        allowFiltering={!isServer && !reordering}
-        allowGrouping={!isServer && !reordering}
+        allowSorting
+        allowFiltering={!isServer}
+        allowGrouping={!isServer}
         groupSettings={settings.groupSettings}
         allowReordering
         allowResizing
-        allowRowDragAndDrop={reordering}
+        allowRowDragAndDrop
         showColumnChooser
         toolbar={settings.toolbar}
         filterSettings={settings.filterSettings}

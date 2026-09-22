@@ -73,7 +73,7 @@ export function ExperiencesPage() {
       <div className="admin-page-header">
         <div>
           <h1>Experience</h1>
-          <p>Jobs shown on the resume and as moons in the cosmos. Use Reorder rows to change their order.</p>
+          <p>Jobs shown on the resume and as moons in the cosmos. Drag a row by its handle to change the order.</p>
         </div>
         <ButtonComponent cssClass="e-primary e-outline" onClick={() => navigate("/experiences/new")}>
           Add job

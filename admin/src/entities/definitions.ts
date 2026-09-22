@@ -72,7 +72,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     entity: "skills",
     title: "Skills",
     singular: "skill",
-    description: "Technologies listed on the resume, grouped by category. Use Reorder rows to change their order.",
+    description: "Technologies listed on the resume, grouped by category. Drag a row by its handle to change the order.",
     slugSource: "name",
     columns: [
       { field: "name", header: "Skill", width: 220 },
@@ -95,7 +95,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     entity: "skillCategories",
     title: "Skill categories",
     singular: "category",
-    description: "Groups for skills, such as Frontend or Cloud & DevOps. Use Reorder rows to change their order.",
+    description: "Groups for skills, such as Frontend or Cloud & DevOps. Drag a row by its handle to change the order.",
     slugSource: "name",
     columns: [{ field: "name", header: "Category", width: 260 }],
     fields: [slugField, { key: "name", label: "Name", kind: "text" }],
@@ -153,7 +153,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     entity: "links",
     title: "Links",
     singular: "link",
-    description: "Profile and demo links (LinkedIn, GitHub, live demos). Use Reorder rows to change their order.",
+    description: "Profile and demo links (LinkedIn, GitHub, live demos). Drag a row by its handle to change the order.",
     slugSource: "title",
     columns: [
       { field: "title", header: "Title", width: 260 },
@@ -249,7 +249,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     title: "Tech stack",
     singular: "tech stack node",
     description:
-      "Nested tech stack for the portfolio site and the D3 skills graph, any depth (e.g. Frontend › Frameworks › React). Separate from the resume's Skills, which stay one level deep. Order within a level follows Reorder rows.",
+      "Nested tech stack for the portfolio site and the D3 skills graph, any depth (e.g. Frontend › Frameworks › React). Separate from the resume's Skills, which stay one level deep. Order within a level follows the drag handle.",
     slugSource: "name",
     columns: [],
     fields: [
@@ -273,7 +273,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     title: "Ride messages",
     singular: "ride message",
     description:
-      "Only used in the Three.js app. Messages shown one after another while Mjolnir pulls you along the About path, in this order. Use Reorder rows to change it.",
+      "Only used in the Three.js app. Messages shown one after another while Mjolnir pulls you along the About path, in this order. Drag a row by its handle to change the order.",
     slugSource: "textContent",
     columns: [
       { field: "textContent", header: "Message", width: 420 },

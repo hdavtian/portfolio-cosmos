@@ -71,7 +71,7 @@ export function PortfolioCoresPage() {
       <div className="admin-page-header">
         <div>
           <h1>Cores</h1>
-          <p>The centres projects orbit in the 3D portfolio, usually one per company. Use Reorder rows to change their order.</p>
+          <p>The centres projects orbit in the 3D portfolio, usually one per company. Drag a row by its handle to change the order.</p>
         </div>
         <ButtonComponent cssClass="e-primary e-outline" onClick={() => navigate("/portfolioCores/new")}>
           Add core

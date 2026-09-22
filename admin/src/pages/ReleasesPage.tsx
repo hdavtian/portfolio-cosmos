@@ -113,7 +113,6 @@ export function ReleasesPage() {
   const rollback = useMutation({
     mutationFn: (id: number) => api.post<ReleaseSummary>(`/api/v2/admin/releases/${id}/rollback`),
     onSuccess: (release) => {
-      setSelectedRelease(null);
       // Drafts were reset too, so every cached record in the admin is stale.
       void queryClient.invalidateQueries();
       statusLine.success(
@@ -156,10 +155,24 @@ export function ReleasesPage() {
 
 
   const historyRows = useMemo(() => (history.data?.items ?? []).map(toHistoryRow), [history.data]);
-  const [selectedRelease, setSelectedRelease] = useState<ReleaseSummary | null>(null);
 
   const busy = publish.isPending || check.isPending;
   const s = status.data;
+
+  // Rolling back acts on one release, so the button belongs in its row: the
+  // history is paged and the one you want is rarely at the top.
+  const rollbackTemplate = (row: HistoryRow) =>
+    row.current ? (
+      <span className="admin-status">Live</span>
+    ) : (
+      <ButtonComponent
+        cssClass="e-small e-danger e-outline"
+        disabled={rollback.isPending}
+        onClick={() => confirmRollback(row)}
+      >
+        Roll back
+      </ButtonComponent>
+    );
 
   return (
     <>
@@ -253,22 +266,9 @@ export function ReleasesPage() {
         {history.isLoading ? <p className="admin-status">Loading…</p> : null}
         {history.data ? (
           <>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
-              <ButtonComponent
-                cssClass="e-small e-danger e-outline"
-                disabled={!selectedRelease || selectedRelease.current || rollback.isPending}
-                onClick={() => selectedRelease && confirmRollback(selectedRelease)}
-              >
-                {rollback.isPending ? "Rolling back…" : "Roll back to selected release"}
-              </ButtonComponent>
-              <span className="admin-status">
-                {selectedRelease
-                  ? selectedRelease.current
-                    ? `Release #${selectedRelease.id} is already live.`
-                    : `Release #${selectedRelease.id} selected.`
-                  : "Select an earlier release to roll back to it."}
-              </span>
-            </div>
+            <p className="admin-status">
+              {rollback.isPending ? "Rolling back…" : "Roll back from the row of the release you want to restore."}
+            </p>
             <GridComponent
               key={history.data.items[0]?.id ?? "empty"}
               dataSource={historyRows}
@@ -277,14 +277,13 @@ export function ReleasesPage() {
               allowResizing
               pageSettings={HISTORY_PAGE_SETTINGS}
               gridLines="Horizontal"
-              rowSelected={(args: { data?: HistoryRow }) => setSelectedRelease(args.data ?? null)}
-              rowDeselected={() => setSelectedRelease(null)}
             >
               <ColumnsDirective>
                 <ColumnDirective field="id" headerText="#" width={70} textAlign="Right" />
                 <ColumnDirective field="publishedLabel" headerText="Published" width={190} allowSorting={false} />
                 <ColumnDirective field="publishedBy" headerText="By" width={110} />
                 <ColumnDirective field="notesLabel" headerText="Notes" width={420} clipMode="EllipsisWithTooltip" />
+                <ColumnDirective headerText="Actions" width={150} template={rollbackTemplate} />
               </ColumnsDirective>
               <Inject services={[Page, Sort, Resize]} />
             </GridComponent>
