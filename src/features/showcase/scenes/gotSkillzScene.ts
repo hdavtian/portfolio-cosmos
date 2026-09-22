@@ -119,8 +119,20 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
     const light = object as { isPointLight?: boolean; intensity?: number };
     if (light.isPointLight) light.intensity = (light.intensity ?? 1) * 3;
   });
+  // A soft glow, drawn as a radial gradient: a sprite with no texture would be a square.
+  const glowCanvas = document.createElement("canvas");
+  glowCanvas.width = glowCanvas.height = 256;
+  const glowCtx = glowCanvas.getContext("2d")!;
+  const gradient = glowCtx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gradient.addColorStop(0, "rgba(255, 200, 120, 1)");
+  gradient.addColorStop(0.35, "rgba(255, 150, 70, 0.45)");
+  gradient.addColorStop(1, "rgba(255, 120, 40, 0)");
+  glowCtx.fillStyle = gradient;
+  glowCtx.fillRect(0, 0, 256, 256);
+  const glowTexture = new THREE.CanvasTexture(glowCanvas);
+  glowTexture.colorSpace = THREE.SRGBColorSpace;
   const halo = new THREE.Sprite(
-    new THREE.SpriteMaterial({ color: 0xffb060, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.SpriteMaterial({ map: glowTexture, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   halo.scale.setScalar(260);
   halo.position.copy(SUN);
