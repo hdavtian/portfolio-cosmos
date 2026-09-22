@@ -112,6 +112,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D15 | Every visibility option migrates **on**: it is easier to see everything and take things off than to hunt for what is missing (settles Q3 and Q10). Because "all on" would put ISDN on the resume, the curation happens in the production copy *before* the first publish: the migration runs, Harma unticks what should not show, and only then is anything pushed to production. The hard rule (sites unchanged on the day it ships) is kept by that ordering, not by the default. | 2026-09-22 |
 | D16 | Some surfaces show skills only, no headings (the flattened view of D4). "Has children" cannot decide this: React (Hooks, Patterns), AWS (EC2, RDS, S3) and Azure are real technologies that are also parents, and hiding every parent would drop them from exactly the views that flatten. An explicit `isHeading` tick decides it, defaulting on for top-level entries. Stating it rather than inferring it also allows a technology at the top level (Git, with no obvious parent) without it silently becoming a heading. | 2026-09-22 |
 | D17 | Earthlink and HostPro appear **everywhere**, like any other job: on the resume and as moons in the universe (settles Q6). No "show on resume" tick on Experience is needed, which removes a field from the plan. The resume grows to 10 entries and the universe gains two moons, so both need a look before publishing, and the three missing cores (Earthlink, HostPro, UnitedLayer) become content Harma enters. | 2026-09-22 |
+| D18 | One date field per skill use, accepting `2018` or `04/2018` (settles Q8). A bare year counts as the whole year; rule 1 caps any use at the job's length, so an imprecise year can never inflate a total. Two fields (year + optional month) would double the typing across 82 rows for precision that 1997 will never have. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -389,7 +390,7 @@ All per the `syncfusion-list-pages` and `syncfusion-edit-dialogs` skills.
 | ~~Q7~~ | *Settled by D8.* Non-code skills (sales, leading engineers) live in the same master list? | Yes, under their own categories, unticked for the resume unless wanted. |
 | ~~Q9~~ | *Settled by D7/D8.* A few skills sat in two groups in the mock (Sales in Support & sales and Leadership). With one tree each gets one home. Acceptable? | Yes; pick the home that reads best to an employer. |
 | ~~Q10~~ | *Settled by D15.* ~~Show everything in the constellation and lattice, or only `showOnResume` ones?~~ | |
-| Q8 | Dates as years or year-months? | **Proposed:** one field accepting either `2018` or `04/2018`, matching Experience dates. A bare year counts as the whole year; rule 1 caps any use at the job's length, so a vague year cannot inflate a total. |
+| ~~Q8~~ | *Settled by D18: one field, `2018` or `04/2018`.* ~~Dates as years or year-months?~~ | |
 
 ## 8. Risks
 
@@ -413,6 +414,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (j): Q8 settled as D18. Every open question in section 7 is now closed; the tree mark-up is what remains.
 - 2026-09-22: draft 5 (i): Q6 recorded as D17 (Earthlink and HostPro appear everywhere), which drops the proposed Experience visibility tick.
 - 2026-09-22: draft 5 (h): headings are marked, not inferred from having children (D16), so React and AWS survive the flattened views.
 - 2026-09-22: draft 5 (g): every option migrates on and is curated in the copy before the first publish (D15), settling Q3 and Q10.
