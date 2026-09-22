@@ -5,16 +5,6 @@ import { parseCookies, verifySessionToken } from "./sessionToken.js";
 // AUTH_COOKIE_SECRET means one login is accepted everywhere. Do not rename.
 export const SESSION_COOKIE_NAME = "hd_session";
 
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace Express {
-    interface Request {
-      auth?: { subject: string };
-      requestId?: string;
-    }
-  }
-}
-
 export interface RequireAuthOptions {
   cookieSecret: string;
   enabled?: boolean;
