@@ -57,6 +57,17 @@ gets an actions column, and selection stays for dragging, not for acting.
 Row dragging is enabled on every grid that has a `sortOrder`. There is no
 "Reorder rows" mode to unlock first: the handle is always there.
 
+One drop renumbers the whole collection: the client sends every slug in its
+new order and `EntityRepository.reorder` sets `sortOrder` to each one's index.
+That is deliberate at this size (the largest collection is under a hundred
+rows) and it keeps the logic trivial. It does mean a single drag marks every
+record as changed, which the publish summary will list.
+
+Past roughly 500 rows in one collection it should become sparse or fractional
+ordering - gaps between numbers, so a move writes one row - but the reason is
+the publish diff and the release snapshot, not the database write, which stays
+cheap.
+
 A drop index is a position in the *visible* view, so only a view in saved order
 can be translated back into `sortOrder`. When the grid is sorted, grouped,
 filtered or searched, the drop is cancelled and the status line says which of
