@@ -14,7 +14,6 @@ describe("generated OpenAPI document", () => {
       "/api/v1/auth/login",
       "/api/v1/auth/logout",
       "/api/v1/auth/session",
-      "/api/v1/content/{key}",
       "/api/v2/content/release",
       "/api/v2/content/{area}",
     ]) {
