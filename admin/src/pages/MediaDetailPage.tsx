@@ -46,6 +46,7 @@ function MediaEditor({ record }: { record: MediaDetail }) {
       }),
     onSuccess: () => {
       status.success("Saved. Publish to show the new alt text on the sites.");
+      navigate("/media");
       void queryClient.invalidateQueries({ queryKey: ["media"] });
     },
     onError: (error) => status.error(error, "Could not save."),

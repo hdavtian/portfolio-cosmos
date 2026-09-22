@@ -80,10 +80,18 @@ export function useEntity<T>(entity: string, slug: string | undefined) {
   });
 }
 
-/** Invalidates every cached view of an entity after a write. */
+/**
+ * Invalidates every cached view of an entity after a write. Deliberately does
+ * not return the promise: TanStack awaits a hook-level onSuccess before running
+ * the callbacks passed to mutate(), and by the time the refetch resolves the
+ * editor - keyed by record version - has remounted, so those callbacks (the
+ * navigation back to the list, the success message) were dropped on the floor.
+ */
 const useInvalidate = (entity: string) => {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: [entity] });
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: [entity] });
+  };
 };
 
 export function useCreateEntity<T>(entity: string) {

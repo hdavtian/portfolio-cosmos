@@ -154,7 +154,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
   const status = useStatus();
 
   const [draft, setDraft] = useState<PortfolioEntry>(initial);
-  const [version, setVersion] = useState(initialVersion);
+  const [version] = useState(initialVersion);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [slugTouched, setSlugTouched] = useState(!isNew);
 
@@ -190,8 +190,8 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
     if (isNew) {
       create.mutate(content, {
         onSuccess: (record) => {
-          status.success("Created project. Publish to show it on the sites.");
-          navigate(`/portfolioEntries/${record.slug}`, { replace: true });
+          status.success(`Created project "${record.title}". Publish to show it on the sites.`);
+          navigate("/portfolioEntries");
         },
         onError: handleError,
       });
@@ -202,10 +202,8 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
       { slug: initial.slug, content, version },
       {
         onSuccess: (record) => {
-          status.success(`Saved (version ${record.version}). Publish to show changes on the sites.`);
-          setVersion(record.version);
-          setDraft(withoutMeta(record));
-          if (record.slug !== initial.slug) navigate(`/portfolioEntries/${record.slug}`, { replace: true });
+          status.success(`Saved project "${record.title}". Publish to show changes on the sites.`);
+          navigate("/portfolioEntries");
         },
         onError: handleError,
       },

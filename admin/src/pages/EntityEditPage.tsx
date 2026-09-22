@@ -107,7 +107,7 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
   const status = useStatus();
 
   const [draft, setDraft] = useState<Content>(initial);
-  const [version, setVersion] = useState(initialVersion);
+  const [version] = useState(initialVersion);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   // Until the slug is typed by hand, new records follow the name field.
   const [slugTouched, setSlugTouched] = useState(!isNew);
@@ -141,9 +141,11 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
 
     if (isNew) {
       create.mutate(content, {
+        // Back to the list, where the new row is: the message survives the
+        // navigation, so it appears above the grid.
         onSuccess: (record) => {
-          status.success(`Created ${definition.singular}. Publish to show it on the sites.`);
-          navigate(`${listPath}/${record.slug}`, { replace: true });
+          status.success(`Created ${definition.singular} "${definition.describe(record) || record.slug}". Publish to show it on the sites.`);
+          navigate(listPath);
         },
         onError: handleError,
       });
@@ -154,11 +156,8 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
       { slug: String(initial.slug), content, version },
       {
         onSuccess: (record) => {
-          status.success(`Saved (version ${record.version}). Publish to show changes on the sites.`);
-          setVersion(record.version);
-          setDraft(withoutMeta(record));
-          // The slug is part of the URL; follow it if it was changed.
-          if (record.slug !== initial.slug) navigate(`${listPath}/${record.slug}`, { replace: true });
+          status.success(`Saved ${definition.singular} "${definition.describe(record) || record.slug}". Publish to show changes on the sites.`);
+          navigate(listPath);
         },
         onError: handleError,
       },

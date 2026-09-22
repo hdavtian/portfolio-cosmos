@@ -108,7 +108,7 @@ function MessageEditor({
   const status = useStatus();
 
   const [draft, setDraft] = useState<PathMessage>(initial);
-  const [version, setVersion] = useState(initialVersion);
+  const [version] = useState(initialVersion);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const saving = create.isPending || update.isPending;
 
@@ -134,9 +134,9 @@ function MessageEditor({
 
     if (isNew) {
       create.mutate(content, {
-        onSuccess: (record) => {
+        onSuccess: () => {
           status.success("Created ride message. Publish to show it in the Three.js app.");
-          navigate(`/${ENTITY}/${record.slug}`, { replace: true });
+          navigate(`/${ENTITY}`);
         },
         onError: handleError,
       });
@@ -146,11 +146,9 @@ function MessageEditor({
     update.mutate(
       { slug: initial.slug, content, version },
       {
-        onSuccess: (record) => {
-          status.success(`Saved (version ${record.version}). Publish to show it in the Three.js app.`);
-          setVersion(record.version);
-          setDraft(withoutMeta(record));
-          if (record.slug !== initial.slug) navigate(`/${ENTITY}/${record.slug}`, { replace: true });
+        onSuccess: () => {
+          status.success("Saved ride message. Publish to show it in the Three.js app.");
+          navigate(`/${ENTITY}`);
         },
         onError: handleError,
       },

@@ -122,7 +122,7 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
   const status = useStatus();
 
   const [draft, setDraft] = useState<Experience>(initial);
-  const [version, setVersion] = useState(initialVersion);
+  const [version] = useState(initialVersion);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const saving = create.isPending || update.isPending;
@@ -147,8 +147,8 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
     if (isNew) {
       create.mutate(content, {
         onSuccess: (record) => {
-          status.success("Created job. Publish to show it on the sites.");
-          navigate(`/experiences/${record.slug}`, { replace: true });
+          status.success(`Created job "${record.company}". Publish to show it on the sites.`);
+          navigate("/experiences");
         },
         onError: handleError,
       });
@@ -159,9 +159,8 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
       { slug: initial.slug, content, version },
       {
         onSuccess: (record) => {
-          status.success(`Saved (version ${record.version}). Publish to show changes on the sites.`);
-          setVersion(record.version);
-          setDraft(withoutMeta(record));
+          status.success(`Saved job "${record.company}". Publish to show changes on the sites.`);
+          navigate("/experiences");
         },
         onError: handleError,
       },

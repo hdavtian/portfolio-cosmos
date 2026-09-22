@@ -35,18 +35,24 @@ Every admin grid provides:
   value is clipped.
 - Row drag-and-drop reordering for entities with `sortOrder`, always enabled,
   persisted through the entity's order endpoint (see "Reordering is always on").
-**Do not use `enablePersistence` on a grid with template columns.** Tried and
-reverted on 2026-09-22. `Grid.getPersistData` saves `columns` into
-localStorage as JSON, and a column's `template` is a function, which JSON drops.
-On the next load the restored columns replace the declared ones without their
-templates, so every template cell - row actions, image previews, computed dates
-- renders blank or throws. Every grid here has template columns.
+**Flat grids remember their layout.** `enablePersistence` with a stable, unique
+`id` on every `EntityGrid` and the release history: column widths and order,
+hidden columns, sorting, filters and page size come back on the next visit.
+Measured on 2026-09-22: sort a column, change the page size, navigate away and
+back - both persist and every template cell (row actions, previews) still
+renders. The earlier note that persistence drops template functions was wrong
+for the flat grid and has been withdrawn.
 
-Remembering a layout therefore has to be done by hand: save the widths and
-visibility on `actionComplete` and reapply them on `dataBound`, leaving the
-column definitions alone. Not built yet.
+**Tree grids do not persist, and offer neither sorting nor search.** Measured
+the same day: sorting a `TreeGridComponent` with self-referencing data paints
+an empty grid that no refresh recovers, and search empties it until the term is
+cleared. Persisting a sorted state would therefore blank the tree on every
+load. Trees keep resizing, the column chooser and column reordering.
 
-Do not build custom filter/search widgets when Syncfusion provides one.
+**Every persisted grid shows Reset layout**, which clears the key
+(`lib/gridLayout.ts`) and reloads: the saved state includes the columns as they
+were, so a later column change can leave a stale layout with no way out from
+inside the grid.
 
 ## Where actions go
 

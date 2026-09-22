@@ -51,6 +51,17 @@ Adapted from the Hydrodent project's proven rules. Plan context:
 11. Save sends the record's `version`; a `409` conflict shows
     `DialogUtility.alert` explaining the record changed and offers reload.
 
+## After a successful save
+
+A full-page editor that belongs to a list goes **back to that list** after a
+successful create or save, and the success message names the record
+("Saved technology "React"...") so it reads correctly above the grid. The
+status line keeps success messages across navigation; only errors are bound
+to the page they happened on.
+
+Staying on the editor after save is the exception, for a form with no list
+behind it (Profile) - not the default.
+
 ## Close/cancel
 
 - Cancel closes through the Syncfusion dialog lifecycle (button click → dialog

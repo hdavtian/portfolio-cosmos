@@ -14,6 +14,8 @@ import {
   Toolbar,
 } from "@syncfusion/ej2-react-grids";
 import { useMemo, useRef, useState, type ReactNode } from "react";
+import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
+import { resetGridLayout } from "../lib/gridLayout";
 import type { ListState } from "../lib/entityApi";
 
 interface GridRow {
@@ -169,11 +171,23 @@ export function EntityGrid<T extends GridRow>({
           <span className="admin-status">
             {reorderNotice ?? "Drag rows by their handle to change the saved order. Each drop saves immediately."}
           </span>
+          <ButtonComponent
+            cssClass="e-small e-flat e-outline"
+            style={{ marginLeft: "auto" }}
+            title="Forget the remembered column widths, order, hidden columns, sorting, filters and page size for this list."
+            onClick={() => {
+              resetGridLayout(gridId);
+              window.location.reload();
+            }}
+          >
+            Reset layout
+          </ButtonComponent>
         </div>
       ) : null}
 
       <GridComponent
         id={gridId}
+        enablePersistence
         ref={gridRef}
         dataSource={dataSource}
         dataStateChange={isServer ? handleDataStateChange : undefined}
