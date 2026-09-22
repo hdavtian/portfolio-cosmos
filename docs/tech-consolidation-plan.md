@@ -465,13 +465,14 @@ splitting a record, so the operation is worth having either way.
 that would make an entry its own ancestor; without that check one drag creates
 a cycle and every tree render fails at once.
 
-**Slug uniqueness (D26).** `techStackNodes` is listed in
-`scripts/db-ensure-indexes-prod.mjs` but carries no unique slug index in the
-production data pulled on 2026-09-22 - every sibling collection has one. Two
-duplicate slugs there would be accepted silently today. It must be in place
-before that collection becomes the master list; `npm run db:ensure-indexes-prod`
-creates it and is idempotent, but it writes to production and needs Harma's
-go-ahead.
+**Slug uniqueness (D26). Fixed 2026-09-22.** `techStackNodes` was listed in
+`scripts/db-ensure-indexes-prod.mjs` but carried no unique slug index in
+production, though every sibling collection had one, so two duplicate slugs
+would have been accepted silently. Checked first (27 documents, 27 distinct
+slugs, none missing, no case collisions), then `npm run db:ensure-indexes-prod`
+was run with Harma's go-ahead. A fresh pull confirms
+`slug_1 (unique)` on the collection, and the published release is unchanged at
+`34ef6f20`. The collection is now safe to become the master list.
 
 **Alias uniqueness.** R2's case-insensitive uniqueness covers names; aliases
 need it across the whole list too, names included. Otherwise a string like
@@ -552,6 +553,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (r): the missing unique slug index on techStackNodes was created in production and verified by a fresh pull; content unchanged.
 - 2026-09-22: draft 5 (q): how slug uniqueness is actually enforced (D26), and the finding that techStackNodes has no unique slug index in production.
 - 2026-09-22: draft 5 (p): six scenarios settled ahead of the build (D25), and the film reconciliation named as the one piece still unplanned. "Data centre" corrected to "Data center".
 - 2026-09-22: draft 5 (o): the filter row loses its ten-item cap (D24); the tick is the only control, and the most-used-first order stays.
