@@ -114,6 +114,8 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D17 | Earthlink and HostPro appear **everywhere**, like any other job: on the resume and as moons in the universe (settles Q6). No "show on resume" tick on Experience is needed, which removes a field from the plan. The resume grows to 10 entries and the universe gains two moons, so both need a look before publishing, and the three missing cores (Earthlink, HostPro, UnitedLayer) become content Harma enters. | 2026-09-22 |
 | D18 | One date field per skill use, accepting `2018` or `04/2018` (settles Q8). A bare year counts as the whole year; rule 1 caps any use at the job's length, so an imprecise year can never inflate a total. Two fields (year + optional month) would double the typing across 82 rows for precision that 1997 will never have. | 2026-09-22 |
 | D19 | The tree is settled (`docs/skills-tree-draft.md`, 89 entries, 13 roots): Data & Messaging dissolved into Databases and Backend; APIs is a root holding the *frameworks* (REST APIs, OAuth, ASP.NET Core Web API, Spring Boot) while Backend keeps the *languages and runtimes*, which is what lets an API heading exist without breaking one home per skill (D7); Styling and Animation are separate groups under Frontend; Desktop & platform takes WinForms and Chrome Extension; AI is a top-level heading that arrives empty, unticked until Harma enters records. AngularJS stays separate from Angular. | 2026-09-22 |
+| D20 | Visibility is two typed multi-selects, not a row of booleans, because the ten surfaces fall into three families (section 4.8). A technology carries `surfaces` (lattice, resume, film progress) plus `headline` and `isHeading`; a skill use carries `surfaces` (moon label, fly-by, film destination) plus `style` and its years. The project surfaces (home chips, project preview, project detail, Portfolio dropdown) read each project's own tag list and get no tick, because one on the technology could not remove a tag. All ticked on at migration (D15). | 2026-09-22 |
+| D21 | `headline` marks the categories that matter to an employer. The resume summary and the film's closing list read only headline entries. It is emphasis, not visibility, so it is a separate flag from `surfaces`; in practice it is set on roots. This revives the mock's `headline` flag (2.3 item 4), which never reached the API. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -132,6 +134,8 @@ technologies on projects for a technical reader.
 | `current` | tick: part of the stack that is relevant today (D5). Replaces the mock's "Current stack" category and its start year. |
 | `showOnResume` | the resume and the Skills planet show only ticked ones, so they keep showing today's 18 under today's 5 headings. |
 | `blurb` | optional one line, mainly for top-level entries |
+| `headline` | matters to an employer: the resume summary and the film's closing list read only these (D21) |
+| `surfaces` | where it may appear: lattice, resume, film progress (D20) |
 | `isHeading` | a grouping, not a skill (D16). On by default for top-level entries. Surfaces that show skills only skip these; the resume and Skills planet use them as headings. |
 
 What the mock did with several categories per skill becomes nesting:
@@ -159,7 +163,8 @@ Held on the Experience, as a list. This replaces Job Tech's free-text labels.
 | `years` | optional; how long, when exact dates aren't known |
 | `when` | optional: `start`, `middle`, `end`. Where those years sat in the job. |
 | `highlightMatches[]` | carried over from Job Tech, so cinematic hover-highlighting keeps working |
-| `showAsChip` | *open question Q3*: whether it appears in the job's visible tech list |
+| `surfaces` | where this use may appear: moon label, fly-by, film destination (D20) |
+| `style` | `plain`, `code` or `handwritten`; empty means the default for its kind (D14) |
 
 A use is stated one of four ways, most precise first:
 
@@ -357,6 +362,49 @@ does not apply to them.
 | `CMS / e-commerce platforms` | CMS, E-commerce | both real |
 | `Semantic HTML` | HTML | a way of writing it, not a tool |
 
+## 4.8 Which surface reads what (D20)
+
+Harma's list of everywhere a skill appears, and what governs each one. The
+family decides where the tick has to live: a tick is only useful on the record
+the surface actually reads.
+
+| Family | Surface | Governed by |
+|---|---|---|
+| **Tree / summary** | Skills lattice (universe) | technology `surfaces` |
+| | Resume skills section | technology `surfaces` |
+| | Film: Skill Progress | technology `surfaces` |
+| | Film: closing summary | technology `headline` (D21) |
+| | Resume summary | technology `headline` (D21) |
+| **Job** | Moon: job detail labels | skill use `surfaces` |
+| | Moon: memories fly-by | skill use `surfaces` |
+| | Film: destination graphic (ring, banner, branch) | skill use `surfaces` |
+| **Project** | Home: tech chips (project filter) | the project's own tag list |
+| | Project preview | the project's own tag list |
+| | Project detail: technologies | the project's own tag list |
+| | Universe Portfolio: skills drop-down | the project's own tag list |
+
+**The project family gets no tick on purpose.** Those four surfaces list what
+is tagged on each project. A tick on the technology could not remove a tag, so
+offering one would be a control that does not control anything; the tag is
+removed on the project.
+
+**Why multi-selects rather than booleans.** Seven checkboxes on every one of 89
+technologies and 82 uses is unusable in a grid, and each new surface would add
+a column and a migration. One typed multi-select per side is a single admin
+control, validated against an enum in `@hd/content-schema`, and a new surface
+is one enum value.
+
+**Flattened surfaces** (Film Skill Progress, moon labels, chips) skip
+`isHeading` records and show leaves only (D16). That is what makes the film's
+"skills only, no categories" rework a reading of the same data rather than a
+second shape.
+
+### Not part of this migration
+
+The film's Skill Progress screen is to be rebuilt - collapsed categories out,
+skills only. The data work above supports it, but the rebuild is its own piece
+of work and is tracked separately so it cannot delay the consolidation.
+
 ## 5. What each site sees afterwards
 
 | Site | Change |
@@ -415,6 +463,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (l): Harma's list of the ten places a skill shows, mapped to what governs each (D20), and `headline` revived for the recruiter-facing summaries (D21).
 - 2026-09-22: draft 5 (k): the tree is settled (D19). The dry run had been reading tech memories but not code ones; fixed, 86 technologies become 89.
 - 2026-09-22: draft 5 (j): Q8 settled as D18. Every open question in section 7 is now closed; the tree mark-up is what remains.
 - 2026-09-22: draft 5 (i): Q6 recorded as D17 (Earthlink and HostPro appear everywhere), which drops the proposed Experience visibility tick.
