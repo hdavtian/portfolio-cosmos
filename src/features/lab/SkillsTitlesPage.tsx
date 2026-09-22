@@ -1371,27 +1371,30 @@ export function SkillsTitlesPage() {
       // frame, not the whole gap, so coming back never jumps to the end.
       const step = (Math.min(now - last, 100) / (filmSeconds * 1000)) * (direction < 0 ? 3 : 1);
       last = now;
-      setProgress((current) => {
-        const next = current + step * direction;
-        const hold =
-          direction > 0
-            ? holds.find((at) => current < at && next >= at)
-            : [...holds].reverse().find((at) => current > at && next <= at);
-        if (hold !== undefined) {
-          setPlaying(false);
-          setHolding(true);
-          return hold;
-        }
-        if (next >= 1) {
-          setPlaying(false);
-          return 1;
-        }
-        if (next <= 0) {
-          setPlaying(false);
-          return 0;
-        }
-        return next;
-      });
+      // Decided here, not inside a state updater: setting other state from an
+      // updater runs during render, which React refuses ("maximum update depth").
+      const current = progressRef.current;
+      const next = current + step * direction;
+      const hold =
+        direction > 0
+          ? holds.find((at) => current < at && next >= at)
+          : [...holds].reverse().find((at) => current > at && next <= at);
+      if (hold !== undefined) {
+        progressRef.current = hold;
+        setProgress(hold);
+        setPlaying(false);
+        setHolding(true);
+        return;
+      }
+      if (next >= 1 || next <= 0) {
+        const end = next >= 1 ? 1 : 0;
+        progressRef.current = end;
+        setProgress(end);
+        setPlaying(false);
+        return;
+      }
+      progressRef.current = next;
+      setProgress(next);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -1635,11 +1638,25 @@ export function SkillsTitlesPage() {
           <button type="button" onClick={replay}>
             Replay
           </button>
-          <Link to="/resume">Read resume</Link>
+          <Link to="/resume">Read résumé</Link>
           <Link to="/cinematic">Enter space theme portfolio</Link>
         </p>
       </section>
 
+      {/* Paused part-way (not at a stop, which has its own Next): say so, in the middle, where it can't be missed. */}
+      {!playing && !holding && progress > 0 && progress < 1 ? (
+        <button
+          type="button"
+          className="titles__resume"
+          onClick={() => {
+            setDirection(1);
+            setPlaying(true);
+          }}
+        >
+          <span className="titles__resume-mark" aria-hidden="true">▶</span>
+          Resume
+        </button>
+      ) : null}
       <div className="titles__scrub">
         <button
           type="button"

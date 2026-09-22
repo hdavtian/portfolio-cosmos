@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { CINEMATIC_PATH, canKeepAlive } from "../../app/cinematic/keepAlive";
 import { FILM_PATH, FilmHost } from "../../app/film/FilmHost";
 import { isCinematicStill, setCinematicLaunch, subscribeCinematicLaunch } from "../../app/cinematic/launchStore";
@@ -102,14 +102,15 @@ export function ShowcaseLayout() {
           Skip to main content
         </a>
         <nav className="showcase-pills" aria-label="Site">
-          <Link to="/" className="showcase-pill">
-            Work
-          </Link>
+          {/* `end`: Home is current only on the index, not on every route under it. */}
+          <NavLink to="/" end className="showcase-pill">
+            Home
+          </NavLink>
           <NavLink to="/lab/got" className="showcase-pill">
-            Tech
+            Tech Progression
           </NavLink>
           <NavLink to="/resume" className="showcase-pill">
-            Resume
+            Résumé
           </NavLink>
           <NavLink
             to="/cinematic"

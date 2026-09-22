@@ -60,7 +60,7 @@ export function ShowcaseResumePage() {
           <span className="showcase-back__arrow" aria-hidden="true" />
           Back
         </Link>
-        <p className="showcase-label">Resume</p>
+        <p className="showcase-label">Résumé</p>
         <h1 className="showcase-resume__name">{personal.name}</h1>
         <p className="showcase-resume__role">{personal.title}</p>
         {summary ? <p className="showcase-resume__summary">{summary}</p> : null}
