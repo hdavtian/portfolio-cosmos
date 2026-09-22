@@ -111,6 +111,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D12 | The `tech` **and `code`** memory types retire. Both were free text holding technology names: of the 25 tech memories 13 duplicate a label on the same job, 7 name a technology found nowhere else (including Node.js at InvestCloud) and 5 describe work; of the 14 code memories 8 duplicate a label, 3 name something new and 3 are prose. Each is deleted, harvested into a skill use, or re-typed as prose. Afterwards a memory is prose, and technologies live only in the master list. | 2026-09-22 |
 | D15 | Every visibility option migrates **on**: it is easier to see everything and take things off than to hunt for what is missing (settles Q3 and Q10). Because "all on" would put ISDN on the resume, the curation happens in the production copy *before* the first publish: the migration runs, Harma unticks what should not show, and only then is anything pushed to production. The hard rule (sites unchanged on the day it ships) is kept by that ordering, not by the default. | 2026-09-22 |
 | D16 | Some surfaces show skills only, no headings (the flattened view of D4). "Has children" cannot decide this: React (Hooks, Patterns), AWS (EC2, RDS, S3) and Azure are real technologies that are also parents, and hiding every parent would drop them from exactly the views that flatten. An explicit `isHeading` tick decides it, defaulting on for top-level entries. Stating it rather than inferring it also allows a technology at the top level (Git, with no obvious parent) without it silently becoming a heading. | 2026-09-22 |
+| D17 | Earthlink and HostPro appear **everywhere**, like any other job: on the resume and as moons in the universe (settles Q6). No "show on resume" tick on Experience is needed, which removes a field from the plan. The resume grows to 10 entries and the universe gains two moons, so both need a look before publishing, and the three missing cores (Earthlink, HostPro, UnitedLayer) become content Harma enters. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -187,9 +188,9 @@ site computes them.
 - StormScape's return: *open question Q5*. Either a second Experience
   ("stormscape-now") flagged so the resume doesn't list it twice, or one
   Experience with more than one period.
-- Earthlink and HostPro are added as Experiences. *Open question Q6*: whether
-  they should appear on the resume and the cinematic site, or only in the film
-  (a "show on resume" tick on Experience).
+- Earthlink and HostPro are added as Experiences (done, in production) and
+  appear everywhere, like any other job (D17). No visibility tick on
+  Experience.
 
 ### 4.5 Memories and project technologies
 
@@ -384,7 +385,7 @@ All per the `syncfusion-list-pages` and `syncfusion-edit-dialogs` skills.
 | ~~Q3~~ | *Settled by D15: on for all, curated before publish.* ~~Should every skill use show as a label on the job moon, or only ticked ones?~~ | |
 | ~~Q4~~ | *Settled by D6.* Totals computed by the API at publish time, or by each site from shared code? | Shared code, computed in the site: "now" moves, a published number would go stale. |
 | ~~Q5~~ | *Settled by D10.* StormScape's return: second Experience or multiple periods on one? | Second Experience with a `continues` link to the first: smallest schema change, film already works this way. |
-| Q6 | Earthlink / HostPro on the resume and cinematic site, or film only? | Harma's call. |
+| ~~Q6~~ | *Settled by D17: everywhere, like any other job.* ~~Earthlink / HostPro on the resume and cinematic site, or film only?~~ | |
 | ~~Q7~~ | *Settled by D8.* Non-code skills (sales, leading engineers) live in the same master list? | Yes, under their own categories, unticked for the resume unless wanted. |
 | ~~Q9~~ | *Settled by D7/D8.* A few skills sat in two groups in the mock (Sales in Support & sales and Leadership). With one tree each gets one home. Acceptable? | Yes; pick the home that reads best to an employer. |
 | ~~Q10~~ | *Settled by D15.* ~~Show everything in the constellation and lattice, or only `showOnResume` ones?~~ | |
@@ -412,6 +413,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (i): Q6 recorded as D17 (Earthlink and HostPro appear everywhere), which drops the proposed Experience visibility tick.
 - 2026-09-22: draft 5 (h): headings are marked, not inferred from having children (D16), so React and AWS survive the flattened views.
 - 2026-09-22: draft 5 (g): every option migrates on and is curated in the copy before the first publish (D15), settling Q3 and Q10.
 - 2026-09-22: draft 5 (f): style is a named token on the use, with the appearance defined once in code (D14); including `code` memories then costs nothing, because the look no longer depends on the content type.
