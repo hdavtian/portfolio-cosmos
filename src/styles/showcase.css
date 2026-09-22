@@ -1544,7 +1544,8 @@ html.is-scene-dragging * {
   scrollbar-width: none;
 }
 
-.showcase-project__back {
+.showcase-project__back,
+.showcase-resume__back {
   justify-self: start;
 }
 
@@ -2480,8 +2481,11 @@ html.is-cinematic-still .showcase {
   background: transparent;
 }
 
-html.is-cinematic-loading .showcase-scenes {
+html.is-cinematic-loading .showcase-scenes,
+/* The skills film covers the page; it flickers out too, so the loader shows through at once. */
+html.is-cinematic-loading .film-host {
   animation: showcase-launch-flicker 620ms steps(1) both;
+  pointer-events: none;
 }
 
 html.is-cinematic-loading .showcase-scene-panel,
@@ -2505,7 +2509,8 @@ html.is-cinematic-ready .showcase-pills,
 html.is-cinematic-ready .showcase-gateway,
 html.is-cinematic-ready .showcase-project,
 html.is-cinematic-ready .showcase-resume,
-html.is-cinematic-ready .showcase-scenes {
+html.is-cinematic-ready .showcase-scenes,
+html.is-cinematic-ready .film-host {
   animation: showcase-launch-fade 620ms ease both;
   pointer-events: none;
 }
