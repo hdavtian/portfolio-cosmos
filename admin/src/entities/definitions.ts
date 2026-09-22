@@ -27,8 +27,12 @@ export interface FieldDefinition {
    * descendants are left out, so a loop cannot be chosen.
    */
   emptyOption?: string;
-  /** For `checkboxes` and `multiselect` fields: the choices, stored as an array of values. */
-  options?: { value: string; label: string }[];
+  /**
+   * For `checkboxes` and `multiselect` fields: the choices, stored as an array
+   * of values. A choice's `hint` says what ticking it does, listed under the
+   * control so each option explains itself rather than sharing one paragraph.
+   */
+  options?: { value: string; label: string; hint?: string }[];
   /**
    * Set once, on creation, and read-only afterwards. Used for the slug of
    * anything other records point at: changing it would silently break every
@@ -216,13 +220,32 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
       {
         key: "surfaces",
         label: "Shown in",
-        hint: "Where this may appear. Lattice: the universe's Skills Lattice. Resume: the resume's skills section. Film progress: the film's Skill Progress screen. Filters: offered as a filter in the home page chips and the universe Portfolio drop-down - leave this off for something like HTML that nearly every project uses, so the filter row keeps its slots for choices worth making. A project's own technology list is not set here; edit the project.",
+        hint: "A project's own technology list is not set here; edit the project.",
         kind: "checkboxes",
         options: [
-          { value: "lattice", label: "Skills Lattice (universe)" },
-          { value: "resume", label: "Resume skills" },
-          { value: "filmProgress", label: "Film: Skill Progress" },
-          { value: "filters", label: "Filters (home chips, Portfolio drop-down)" },
+          {
+            value: "lattice",
+            label: "Skills Lattice (universe)",
+            hint: "appears in the universe's Skills Lattice",
+          },
+          {
+            value: "resume",
+            label: "Resume skills",
+            hint: "appears in the resume's skills section",
+          },
+          {
+            value: "filmProgress",
+            label: "Film: Skill Progress",
+            hint: "appears on the film's Skill Progress screen",
+          },
+          {
+            value: "filters",
+            label: "Filters",
+            hint:
+              "offered as a filter in the home page chips and the universe Portfolio drop-down. Leave off for " +
+              "something like HTML that nearly every project uses, so the filter row keeps its slots for choices " +
+              "worth making",
+          },
         ],
       },
       {

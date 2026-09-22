@@ -227,6 +227,7 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
                 change={(event: { checked: boolean }) => setField(field.key, event.checked)}
               />
             ) : field.kind === "checkboxes" ? (
+              <>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 20px" }}>
                 {(field.options ?? []).map((option) => {
                   const chosen = Array.isArray(draft[field.key]) ? (draft[field.key] as string[]) : [];
@@ -247,6 +248,17 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
                   );
                 })}
               </div>
+              {(field.options ?? []).some((option) => option.hint) ? (
+                <ul className="admin-status admin-option-hints">
+                  {(field.options ?? []).map((option) => (
+                    <li key={option.value}>
+                      <strong>{option.label}</strong>
+                      {option.hint ? `: ${option.hint}` : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              </>
             ) : field.kind === "multiselect" ? (
               <MultiSelectComponent
                 dataSource={field.options ?? []}
