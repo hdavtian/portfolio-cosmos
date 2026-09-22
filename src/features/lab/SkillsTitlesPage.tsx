@@ -154,6 +154,8 @@ interface Segment {
 // One unit of a segment's weight is this long on screen, so the film's running
 // time is the sum of its parts rather than a fixed length they have to share.
 const SECONDS_PER_WEIGHT = 3;
+// How often the playing film updates React state (the scrubber, the captions).
+const SHOW_EVERY_MS = 100;
 let filmSeconds = 118;
 
 function buildTimeline(cities: City[]): Segment[] {
@@ -1381,6 +1383,8 @@ export function SkillsTitlesPage() {
     if (!playing) return;
     let frame = 0;
     let last = performance.now();
+    // When the scrubber was last told where the film is.
+    let shown = last;
     framesRef.current = { asked: 0, ran: 0, since: last };
     const tick = (now: number) => {
       framesRef.current.asked += 1;
@@ -1404,6 +1408,7 @@ export function SkillsTitlesPage() {
           ? holds.find((at) => current < at && next >= at)
           : [...holds].reverse().find((at) => current > at && next <= at);
       if (hold !== undefined) {
+        // A stop or an end is exact, whatever the throttle was up to.
         progressRef.current = hold;
         setProgress(hold);
         setPlaying(false);
@@ -1418,7 +1423,17 @@ export function SkillsTitlesPage() {
         return;
       }
       progressRef.current = next;
-      setProgress(next);
+      // The film is driven by the ref, which is exact every frame; React state
+      // only has to carry the scrubber and the captions, so it is told about
+      // ten times a second. Telling it every frame is a state update per frame,
+      // which React eventually refuses ("maximum update depth exceeded") — and
+      // once it does, the scrubber freezes while the scene, reading the ref,
+      // carries on animating: a film stopped at frame one with the air still
+      // shimmering over it.
+      if (now - shown >= SHOW_EVERY_MS) {
+        shown = now;
+        setProgress(next);
+      }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
