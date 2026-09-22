@@ -14,6 +14,7 @@ import {
 
 /** How long the paused experience stays on as a backdrop after coming back. */
 const STILL_MS = 45_000;
+import "../wake.css";
 import "./cinematicHost.css";
 
 const CinematicExperience = lazy(() => import("../../App"));
@@ -155,16 +156,24 @@ export function CinematicHost() {
   // Coming back to a paused universe: it flickers back to life rather than
   // snapping on, like a screen powering up. Only from a still, never on first launch.
   const [waking, setWaking] = useState(false);
-  const wasStillRef = useRef(false);
-  useEffect(() => {
-    if (still) wasStillRef.current = true;
-    if (showing && wasStillRef.current) {
-      wasStillRef.current = false;
+  // Asleep from the moment it becomes a still until it is next shown, even if
+  // the still has since faded out. Noticed during render (derived state) so
+  // the wake class is on the very first frame back.
+  const [asleep, setAsleep] = useState(false);
+  const [wasShowing, setWasShowing] = useState(showing);
+  if (still && !asleep) setAsleep(true);
+  if (showing !== wasShowing) {
+    setWasShowing(showing);
+    if (showing && asleep) {
+      setAsleep(false);
       setWaking(true);
-      const timer = window.setTimeout(() => setWaking(false), 1100);
-      return () => window.clearTimeout(timer);
     }
-  }, [showing, still]);
+  }
+  useEffect(() => {
+    if (!waking) return;
+    const timer = window.setTimeout(() => setWaking(false), 1100);
+    return () => window.clearTimeout(timer);
+  }, [waking]);
 
   if (!keepAlive || !kept) {
     return onRoute ? <Suspense fallback={loading}>{<CinematicExperience />}</Suspense> : null;

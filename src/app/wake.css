@@ -1,0 +1,14 @@
+/* A paused screen powering back up: colour and focus stutter in over a
+   second, then hold. Shared by the universe and the film hosts. */
+@keyframes cinematic-wake {
+  0% { filter: grayscale(1) blur(2px) brightness(0.55); }
+  10% { filter: grayscale(0) blur(0) brightness(1.4); }
+  16% { filter: grayscale(1) blur(2px) brightness(0.45); }
+  28% { filter: grayscale(0.2) blur(0) brightness(1.1); }
+  36% { filter: grayscale(1) blur(1px) brightness(0.6); }
+  50% { filter: grayscale(0) blur(0) brightness(1.25); }
+  58% { filter: grayscale(0.8) blur(1px) brightness(0.7); }
+  72% { filter: grayscale(0) blur(0) brightness(1); }
+  80% { filter: grayscale(0.5) brightness(0.85); }
+  100% { filter: none; }
+}

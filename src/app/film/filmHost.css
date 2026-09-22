@@ -10,3 +10,20 @@
   visibility: hidden;
   pointer-events: none;
 }
+
+/* Put away: its last frame drained of colour, like the paused universe, so
+   that is the frame it wakes from. */
+.film-host.is-hidden {
+  filter: grayscale(1) blur(2px) brightness(0.55) contrast(0.9);
+}
+
+/* Back to a paused film: colour and focus stutter in (keyframes in ../wake.css). */
+.film-host.is-showing.is-waking {
+  animation: cinematic-wake 1100ms steps(1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .film-host.is-showing.is-waking {
+    animation: none;
+  }
+}
