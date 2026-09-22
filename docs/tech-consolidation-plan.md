@@ -1,6 +1,7 @@
 # One technology list: consolidation plan
 
-**Status: DISCUSSION DRAFT 4 (2026-09-21). Nothing here is built. Do not implement until Harma marks it settled.**
+**Status: DRAFT 5 (2026-09-22). Step 0 is built and live. Sections 4.1–4.5 are
+not built; do not implement until Harma marks them settled (Q3, Q6, Q8, Q10 are open).**
 
 Related: `docs/content-platform-plan.md`, `docs/d3-skills-graph.md`, the mock at
 `src/data/mock/skillTimeline.json` and its rules in `scripts/skills-report.mjs`.
@@ -16,6 +17,37 @@ agreed below.
 
 **Hard rule:** the sites keep looking and behaving the same. Small site changes
 are allowed only where they let a site read the consolidated data.
+
+## 1b. Where we are (2026-09-22)
+
+**Step 0 is done and deployed.** The `toLegacy` translation is retired; all
+three sites read the published release from the API, and the bundled content
+JSON files are gone (see `docs/legacy-translation-retirement.md`). Production
+serves release `34ef6f20`.
+
+Also settled since draft 4, by entering the data rather than by writing code:
+
+- All three missing jobs exist (2.3 item 5). The live release has **10
+  experiences**, including `earthlink` (1994–1997), `hostpro` (1997–2001) and
+  `stormscape-freelance` (07/2025 → present, open end date, D10).
+- An Experience may have no end date, and the sites show "Present".
+
+**One JSON file is still read by the app.** `src/data/mock/skillTimeline.json`
+is the film's own data: 11 categories, 34 skills and **75 skill-uses across 10
+jobs**. `src/features/lab/skillsData.ts` turns it into spans, and the film
+(`SkillsTitlesPage`) and the skills lab page read it. The film gets its profile
+and cores from the API, but its *places and years* still come from this file.
+Retiring it is the point of sections 4.1–4.5: the 75 uses have no home in the
+API yet.
+
+| 2.3 gap | State |
+|---|---|
+| 1. Per-job skill history (75 records) | **open** — the work below |
+| 2. 16 technologies the master list lacks | **open** — live: 18 skills, 27 tree nodes; mock: 34 skills |
+| 3. A technology in several categories | settled by D4/D7 (nesting, one home) |
+| 4. More categories, headline, blurb, era | **open** — live: 5 categories; mock: 11 |
+| 5. Three missing jobs | **done**, in production |
+| 6. Cores for Earthlink, HostPro, UnitedLayer | **open** — live cores: investcloud, murad, rpa, boingo, stormscape |
 
 ## 2. What exists today
 
@@ -263,6 +295,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5: step 0 shipped; section 1b records what is done and what is left. The mock file is the last JSON the app reads.
 - 2026-09-21: step 0 has its own doc; it found that the cinematic site reads experiences, skills and the About deck from bundled files, not the API.
 - 2026-09-21: removed the dead scrolling-resume files; three sites, not four.
 - 2026-09-21: draft 4: retire the translation step first (D9), with its measured size and the new order of work.
