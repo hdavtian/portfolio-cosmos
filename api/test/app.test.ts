@@ -20,42 +20,22 @@ describe("app", () => {
     expect(response.headers["content-type"]).toMatch(/json/);
   });
 
-  // Retired v1 surface: these must not reach MongoDB (no database in tests).
-  it.each([
-    "about-deck",
-    "about-hall-levels",
-    "about-hall-slides",
-    "about-path-travel-messages",
-    "cosmic-narrative",
-    "about-content",
-    "legacy-websites",
-    "moon-portfolio-mapping",
-  ])("returns 404 for retired content key %s", async (key) => {
-    const response = await request(app).get(`/api/v1/content/${key}`);
+  // v1 content is retired (2026-09-21): the sites read the v2 release. Its
+  // routes are plain 404s that never reach MongoDB (no database in tests).
+  it.each(["/api/v1/content", "/api/v1/content/resume", "/api/v1/content/portfolio-cores"])(
+    "no longer serves %s",
+    async (path) => {
+      const response = await request(app).get(path);
 
-    expect(response.status).toBe(404);
-    expect(response.body.message).toContain(key);
-  });
+      expect(response.status).toBe(404);
+      expect(response.headers["content-type"]).toMatch(/json/);
+    },
+  );
 
-  it("no longer exposes the content listing route", async () => {
-    const response = await request(app).get("/api/v1/content");
-
-    expect(response.status).toBe(404);
-  });
-
-  it("documents only the v1 keys still served", () => {
+  it("documents no v1 content route", () => {
     const doc = buildOpenApiDocument();
-    const parameters = doc.paths["/api/v1/content/{key}"]?.get?.parameters as Array<{
-      name: string;
-      schema: { enum?: string[] };
-    }>;
-    const keyParam = parameters.find((parameter) => parameter.name === "key");
-
-    expect(keyParam?.schema.enum).toEqual(["resume", "portfolio-cores"]);
-
-    // The retired v1 routes stay undocumented.
-    for (const retired of ["/api/v1/content", "/api/v1/content/about-deck"]) {
-      expect(Object.keys(doc.paths)).not.toContain(retired);
+    for (const path of Object.keys(doc.paths)) {
+      expect(path, path).not.toMatch(/^\/api\/v1\/content/);
     }
   });
 });
