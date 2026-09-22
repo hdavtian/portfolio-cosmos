@@ -113,6 +113,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D16 | Some surfaces show skills only, no headings (the flattened view of D4). "Has children" cannot decide this: React (Hooks, Patterns), AWS (EC2, RDS, S3) and Azure are real technologies that are also parents, and hiding every parent would drop them from exactly the views that flatten. An explicit `isHeading` tick decides it, defaulting on for top-level entries. Stating it rather than inferring it also allows a technology at the top level (Git, with no obvious parent) without it silently becoming a heading. | 2026-09-22 |
 | D17 | Earthlink and HostPro appear **everywhere**, like any other job: on the resume and as moons in the universe (settles Q6). No "show on resume" tick on Experience is needed, which removes a field from the plan. The resume grows to 10 entries and the universe gains two moons, so both need a look before publishing, and the three missing cores (Earthlink, HostPro, UnitedLayer) become content Harma enters. | 2026-09-22 |
 | D18 | One date field per skill use, accepting `2018` or `04/2018` (settles Q8). A bare year counts as the whole year; rule 1 caps any use at the job's length, so an imprecise year can never inflate a total. Two fields (year + optional month) would double the typing across 82 rows for precision that 1997 will never have. | 2026-09-22 |
+| D19 | The tree is settled (`docs/skills-tree-draft.md`, 89 entries, 13 roots): Data & Messaging dissolved into Databases and Backend; APIs is a root holding the *frameworks* (REST APIs, OAuth, ASP.NET Core Web API, Spring Boot) while Backend keeps the *languages and runtimes*, which is what lets an API heading exist without breaking one home per skill (D7); Styling and Animation are separate groups under Frontend; Desktop & platform takes WinForms and Chrome Extension; AI is a top-level heading that arrives empty, unticked until Harma enters records. AngularJS stays separate from Angular. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -414,6 +415,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (k): the tree is settled (D19). The dry run had been reading tech memories but not code ones; fixed, 86 technologies become 89.
 - 2026-09-22: draft 5 (j): Q8 settled as D18. Every open question in section 7 is now closed; the tree mark-up is what remains.
 - 2026-09-22: draft 5 (i): Q6 recorded as D17 (Earthlink and HostPro appear everywhere), which drops the proposed Experience visibility tick.
 - 2026-09-22: draft 5 (h): headings are marked, not inferred from having children (D16), so React and AWS survive the flattened views.

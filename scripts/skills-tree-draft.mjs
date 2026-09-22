@@ -23,6 +23,7 @@ const MERGES = {
   "Java Integration": ["Java"],
   "IBM iStore Ecommerce": ["ShopSite"],
   // Framework names carrying a language or a suffix: the record is the framework.
+  ".NET Web API": ["ASP.NET Core Web API"],
   "C# Playwright API": ["Playwright"],
   "Spring Boot API": ["Spring Boot"],
 };
@@ -92,7 +93,7 @@ const TREE = {
   APIs: null,
   "REST APIs": "APIs",
   OAuth: "APIs",
-  ".NET Web API": "APIs",
+  "ASP.NET Core Web API": "APIs",
   "Spring Boot": "APIs",
 
   // Employers are increasingly explicit about AI, so it gets a heading of its
@@ -239,7 +240,7 @@ if (invented.length) {
   L.push(`*Groups and roots invented for this draft (not in the data): ${invented.join(", ")}.*`);
 }
 L.push("");
-L.push("## 4. The questions");
+L.push("## 4. The questions (the rest are settled)");
 L.push("");
 L.push("1. **Are the five new roots the right five, and named the way an employer");
 L.push("   should read them?** (CMS & e-commerce, Infrastructure & hosting, Ways of");
@@ -248,12 +249,8 @@ L.push("   This naming is what a");
 L.push("   recruiter actually sees on the resume.");
 L.push("2. **Do the four new groups inside Frontend earn their nesting** (SPA");
 L.push("   frameworks, Styling, Animation, Build tools), or should Frontend stay flat?");
-L.push("3. **`.NET Web API` is a placeholder name.** Harma will confirm the exact");
-L.push("   current term (ASP.NET Core Web API). The old string stays as an alias.");
-L.push("   `Chrome Extension` has moved out of prose into Desktop & platform - veto");
-L.push("   that if it should stay a memory.");
-L.push("4. **`AngularJS` is kept separate from Angular** because they are different");
-L.push("   frameworks covering different years at InvestCloud. Agreed?");
+L.push("3. **`Chrome Extension` has moved out of prose into Desktop & platform** -");
+L.push("   veto that if it should stay a memory.");
 L.push("");
 L.push("## 5. Merges: the same thing typed twice");
 L.push("");

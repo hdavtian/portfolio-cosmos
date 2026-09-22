@@ -22,7 +22,7 @@ question - it just shows how much of the tree is arriving at once.
 
 - **Frontend** - 13 entries: HTML, JavaScript, TypeScript, jQuery, Flash, Dreamweaver, HTML Email, RxJS, Redux, SPA frameworks (+4), Styling (+2), Animation (+2), Build tools (+2)
 - **Backend** - 7 entries: C#, .NET, Java, Node.js, PHP, CakePHP, RabbitMQ
-- **APIs** *(new root)* - 4 entries: REST APIs, OAuth, .NET Web API, Spring Boot
+- **APIs** *(new root)* - 4 entries: REST APIs, OAuth, ASP.NET Core Web API, Spring Boot
 - **AI** *(new root)* - 0 entries: 
 - **Desktop & platform** *(new root)* - 2 entries: WinForms, Chrome Extension
 - **CMS & e-commerce** *(new root)* - 4 entries: WordPress, Drupal, ShopSite, E-commerce
@@ -77,7 +77,7 @@ question - it just shows how much of the tree is arriving at once.
 | **APIs** | *(root)* | **NEW** | invented here |
 | &nbsp;&nbsp;&nbsp;&nbsp;REST APIs | APIs |  | tree, skill, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;OAuth | APIs | **NEW** | jobTech |
-| &nbsp;&nbsp;&nbsp;&nbsp;.NET Web API | APIs | **NEW** | entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;ASP.NET Core Web API | APIs | **NEW** | invented here |
 | &nbsp;&nbsp;&nbsp;&nbsp;Spring Boot | APIs | **NEW** | jobTech, memory, entry |
 | **AI** | *(root)* | **NEW** | invented here |
 | **Desktop & platform** | *(root)* | **NEW** | invented here |
@@ -132,13 +132,13 @@ question - it just shows how much of the tree is arriving at once.
 
 - 89 entries in the tree, 13 of them roots
 - 63 of those do not exist today
-- 12 strings merge into an existing record (section 5)
+- 13 strings merge into an existing record (section 5)
 - 5 strings stay as prose on their job (section 6)
 - 1 heading deleted (section 7)
 
-*Groups and roots invented for this draft (not in the data): SPA frameworks, Styling, Animation, Build tools, APIs, AI, Desktop & platform, CMS & e-commerce, Databases, GitLab, Infrastructure & hosting, Linux, Networking, Ways of working, Marketing & analytics, Client & support, Client delivery, Technical support.*
+*Groups and roots invented for this draft (not in the data): SPA frameworks, Styling, Animation, Build tools, APIs, ASP.NET Core Web API, AI, Desktop & platform, CMS & e-commerce, Databases, GitLab, Infrastructure & hosting, Linux, Networking, Ways of working, Marketing & analytics, Client & support, Client delivery, Technical support.*
 
-## 4. The questions
+## 4. The questions (the rest are settled)
 
 1. **Are the five new roots the right five, and named the way an employer
    should read them?** (CMS & e-commerce, Infrastructure & hosting, Ways of
@@ -147,12 +147,8 @@ question - it just shows how much of the tree is arriving at once.
    recruiter actually sees on the resume.
 2. **Do the four new groups inside Frontend earn their nesting** (SPA
    frameworks, Styling, Animation, Build tools), or should Frontend stay flat?
-3. **`.NET Web API` is a placeholder name.** Harma will confirm the exact
-   current term (ASP.NET Core Web API). The old string stays as an alias.
-   `Chrome Extension` has moved out of prose into Desktop & platform - veto
-   that if it should stay a memory.
-4. **`AngularJS` is kept separate from Angular** because they are different
-   frameworks covering different years at InvestCloud. Agreed?
+3. **`Chrome Extension` has moved out of prose into Desktop & platform** -
+   veto that if it should stay a memory.
 
 ## 5. Merges: the same thing typed twice
 
@@ -170,6 +166,7 @@ Each becomes an alias (R8), so the original string still finds the record.
 | `Hosting` | Web hosting |
 | `Java Integration` | Java |
 | `IBM iStore Ecommerce` | ShopSite |
+| `.NET Web API` | ASP.NET Core Web API |
 | `C# Playwright API` | Playwright |
 | `Spring Boot API` | Spring Boot |
 
