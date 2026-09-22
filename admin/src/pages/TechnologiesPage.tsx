@@ -15,7 +15,7 @@ import {
   TreeGridComponent,
 } from "@syncfusion/ej2-react-treegrid";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../lib/apiClient";
 import { confirmAction } from "../lib/confirm";
@@ -135,6 +135,17 @@ export function TechnologiesPage() {
   );
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: [ENTITY] });
+
+  // The tree paints "No records to display" on its first mount even though it
+  // holds every row - the same way the flat grids did under StrictMode (see
+  // admin/src/main.tsx). One refresh once the rows are in draws them. Guarded
+  // by a ref so it happens once, not on every render.
+  const drawnRef = useRef(false);
+  useEffect(() => {
+    if (drawnRef.current || items.length === 0) return;
+    drawnRef.current = true;
+    gridRef.current?.refresh();
+  }, [items.length]);
 
   const handleDrop = (args: DropArgs) => {
     // The move is saved to the API and the tree re-renders from saved data, so
