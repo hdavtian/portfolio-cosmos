@@ -119,6 +119,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D22 | `isHeading` and `headline` are renamed `isGrouping` and `featured`: the originals sounded alike and meant unrelated things (what a record *is* vs how *important* it is). Every tick and multi-select in admin carries hint text naming the exact screens it affects, in the existing `<Field label hint>` pattern, so no one has to read this document to know what a one-word label does. The hint strings are in section 4.9 and ship with the screens. | 2026-09-22 |
 | D23 | **Corrects D20.** Filter lists are not project tag lists. The home page chips and the universe Portfolio drop-down *offer* technologies to filter by; a project's preview and detail page *list* what that project used. So `filters` is a technology surface with fine control, while the tag lists stay per-project. Today the chips are simply the most-used names by count, which spends slots on HTML and CSS and filters to nearly everything - the counter chooses, and it chooses badly. Harma chooses instead (see D24 for the cap). | 2026-09-22 |
 | D24 | No cap on the filter row. Today it is the ten most-used technologies by count (`TOP_TECH_COUNT` in `useShowcaseProjects.ts`, added with the redesign in `9adbf5e`). A tick *and* a cap are two controls fighting: ticking twelve would silently drop two with no way to see which. The `filters` tick alone decides which technologies appear and the row wraps if it is long; they stay ordered by how many projects use them, which is a useful order once it is no longer also doing the choosing. `TOP_TECH_COUNT` is deleted; the sort stays. | 2026-09-22 |
+| D25 | Scenarios settled ahead of the build, because each is cheap now and expensive once records exist (section 4.10): slugs are immutable while names stay editable; a referenced technology cannot be deleted, only merged into another; reparenting moves the subtree and a cycle is rejected; aliases are unique across the whole list; unmatched project tags go to a holding list rather than being dropped or auto-created; a grouping with no visible children does not render a heading. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -442,6 +443,48 @@ where the tick is.
 | `when` | "Where those years sat in the job: at the start, the middle, or the end." |
 | `highlightMatches` | "Words to light up in the resume text when this skill is hovered in the universe." |
 
+## 4.10 Scenarios to settle before the build (D25)
+
+Not an attempt to foresee everything - only the cases that are cheap to decide
+now and awkward once 89 technologies and 82 uses exist.
+
+**Renaming.** The slug is generated once and never changes; the name is freely
+editable. Every surface displays the name, and skill uses, project tags and
+memories point at the slug, so a rename can never break a link. This matters
+immediately: `ASP.NET Core Web API` is a name that will be refined.
+
+**Deleting something in use.** A technology with any skill use, project tag or
+child cannot be deleted. The offered action is **merge into another
+technology**: its uses move, its aliases and its own name are absorbed as
+aliases of the target, and the record goes. Admin states the count ("used by
+12 skills across 4 jobs") rather than refusing blankly. This is the reverse of
+splitting a record, so the operation is worth having either way.
+
+**Reparenting.** Moving an entry moves its subtree. The API rejects a move
+that would make an entry its own ancestor; without that check one drag creates
+a cycle and every tree render fails at once.
+
+**Alias uniqueness.** R2's case-insensitive uniqueness covers names; aliases
+need it across the whole list too, names included. Otherwise a string like
+`C# Web API` could point at two records and the picker is ambiguous.
+
+**Unmatched project tags.** 27 portfolio entries carry tags. A tag matching no
+technology is neither dropped nor auto-created: it goes to a holding list in
+the migration report for Harma to resolve one at a time. Auto-creating is how
+junk records like "Financial Web Content" got into the tree in the first place.
+
+**Empty groupings.** AI arrives with no children and, per D15, with its
+surfaces ticked on. A grouping with no visible children renders nothing, so
+the resume never shows a bare heading. This is a rendering rule, not a tick.
+
+### Still unplanned: reconciling the film
+
+The film's mock has 11 categories and 75 uses; the migration produces 13 roots
+and 82 uses, and the job slugs differ (`stormscape-now` in the mock,
+`stormscape-freelance` in the database). Mapping the mock's per-job years onto
+the migrated skill uses is real work that no decision above covers. It is the
+last step of the consolidation (order of work, item 2) and needs its own pass.
+
 ## 5. What each site sees afterwards
 
 | Site | Change |
@@ -500,6 +543,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (p): six scenarios settled ahead of the build (D25), and the film reconciliation named as the one piece still unplanned. "Data centre" corrected to "Data center".
 - 2026-09-22: draft 5 (o): the filter row loses its ten-item cap (D24); the tick is the only control, and the most-used-first order stays.
 - 2026-09-22: draft 5 (n): D23 corrects D20 - a filter list is not a tag list, so the home chips and the Portfolio drop-down get fine control after all.
 - 2026-09-22: draft 5 (m): isHeading and headline renamed isGrouping and featured, and every option gets hint text naming the screens it affects (D22).

@@ -61,7 +61,7 @@ const EXCEPTIONS = {
   "Semantic HTML": { keep: "HTML" },
   "Semantic HTML + SCSS": { split: ["HTML", "SCSS"] },
   "Cross-browser CSS": { keep: "CSS" },
-  "Data Center Ops": { keep: "Data centre operations" },
+  "Data Center Ops": { keep: "Data center operations" },
   "Dreamweaver-era Tools": { keep: "Dreamweaver" },
   "Front-line tech support": { keep: "Technical support" },
   "Mac Support": { keep: "Desktop support" },

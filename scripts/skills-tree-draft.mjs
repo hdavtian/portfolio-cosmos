@@ -135,7 +135,7 @@ const TREE = {
   Domains: "Infrastructure & hosting",
   LAMP: "Infrastructure & hosting",
   Linux: "Infrastructure & hosting",
-  "Data centre operations": "Infrastructure & hosting",
+  "Data center operations": "Infrastructure & hosting",
   "Dial-up": "Infrastructure & hosting",
   ISDN: "Infrastructure & hosting",
   Networking: "Infrastructure & hosting",

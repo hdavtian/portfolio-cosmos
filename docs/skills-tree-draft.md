@@ -28,7 +28,7 @@ question - it just shows how much of the tree is arriving at once.
 - **CMS & e-commerce** *(new root)* - 4 entries: WordPress, Drupal, ShopSite, E-commerce
 - **Databases** *(new root)* - 3 entries: PostgreSQL, MySQL, MongoDB
 - **Cloud & DevOps** - 5 entries: AWS (+3), Azure (+1), Docker, CI/CD, GitLab
-- **Infrastructure & hosting** *(new root)* - 9 entries: Web hosting, DNS, Domains, LAMP, Linux, Data centre operations, Dial-up, ISDN, Networking
+- **Infrastructure & hosting** *(new root)* - 9 entries: Web hosting, DNS, Domains, LAMP, Linux, Data center operations, Dial-up, ISDN, Networking
 - **Testing** - 3 entries: Playwright, Selenium, TestNG
 - **Ways of working** *(new root)* - 2 entries: Agile, Scrum
 - **Marketing & analytics** *(new root)* - 3 entries: SEO, Analytics, Adobe Test & Target
@@ -108,7 +108,7 @@ question - it just shows how much of the tree is arriving at once.
 | &nbsp;&nbsp;&nbsp;&nbsp;Domains | Infrastructure & hosting | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;LAMP | Infrastructure & hosting | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;Linux | Infrastructure & hosting | **NEW** | invented here |
-| &nbsp;&nbsp;&nbsp;&nbsp;Data centre operations | Infrastructure & hosting | **NEW** | jobTech |
+| &nbsp;&nbsp;&nbsp;&nbsp;Data center operations | Infrastructure & hosting | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;Dial-up | Infrastructure & hosting | **NEW** | jobTech, memory |
 | &nbsp;&nbsp;&nbsp;&nbsp;ISDN | Infrastructure & hosting | **NEW** | jobTech, memory |
 | &nbsp;&nbsp;&nbsp;&nbsp;Networking | Infrastructure & hosting | **NEW** | invented here |
