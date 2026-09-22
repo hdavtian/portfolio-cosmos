@@ -38,7 +38,7 @@ const PROSE = [
 /** Headings that exist today and are dissolved: their children are refiled and
  *  the heading itself is deleted. Nothing claims them as a skill (D16). */
 const RETIRED = {
-  "Data & Messaging": "decomposed into Databases and APIs & integrations: few job descriptions ask for the phrase",
+  "Data & Messaging": "decomposed: Databases for the stores, Backend for RabbitMQ. Few job descriptions ask for the phrase",
 };
 
 /** technology -> its parent. Roots map to null. */
@@ -83,13 +83,13 @@ const TREE = {
   PHP: "Backend",
   CakePHP: "Backend",
   WinForms: "Backend",
+  RabbitMQ: "Backend",
 
   // APIs earn a root of their own: only a root becomes a heading on the resume
   // and the Skills planet, and job descriptions single out API experience.
-  "APIs & integrations": null,
-  "REST APIs": "APIs & integrations",
-  OAuth: "APIs & integrations",
-  RabbitMQ: "APIs & integrations",
+  APIs: null,
+  "REST APIs": "APIs",
+  OAuth: "APIs",
 
   "CMS & e-commerce": null,
   WordPress: "CMS & e-commerce",
@@ -230,17 +230,15 @@ L.push("## 4. The questions");
 L.push("");
 L.push("1. **Are the five new roots the right five, and named the way an employer");
 L.push("   should read them?** (CMS & e-commerce, Infrastructure & hosting, Ways of");
-L.push("   working, Marketing & analytics, Client & support, Databases, APIs & integrations.)");
+L.push("   working, Marketing & analytics, Client & support, Databases, APIs.)");
 L.push("   This naming is what a");
 L.push("   recruiter actually sees on the resume.");
 L.push("2. **Do the four new groups inside Frontend earn their nesting** (SPA");
 L.push("   frameworks, Styling, Animation, Build tools), or should Frontend stay flat?");
-L.push("3. **`RabbitMQ` sits under APIs & integrations** rather than Backend, so that");
-L.push("   removing Data & Messaging does not need a niche Messaging root. Agreed?");
-L.push("4. **`WinForms` sits under Backend for want of anywhere better.** Is there a");
+L.push("3. **`WinForms` sits under Backend for want of anywhere better.** Is there a");
 L.push("   \"Desktop & platform\" root hiding here?");
-L.push("5. **`HTML Email`** - Frontend, or Marketing & analytics with SEO?");
-L.push("6. **`AngularJS` is kept separate from Angular** because they are different");
+L.push("4. **`HTML Email`** - Frontend, or Marketing & analytics with SEO?");
+L.push("5. **`AngularJS` is kept separate from Angular** because they are different");
 L.push("   frameworks covering different years at InvestCloud. Agreed?");
 L.push("");
 L.push("## 5. Merges: the same thing typed twice");
