@@ -1366,8 +1366,10 @@ export function SkillsTitlesPage() {
         frame = requestAnimationFrame(tick);
         return;
       }
-      // Going back is a rewind, so it runs three times as fast.
-      const step = ((now - last) / (filmSeconds * 1000)) * (direction < 0 ? 3 : 1);
+      // Going back is a rewind, so it runs three times as fast. A frame that
+      // arrives after a long gap (the tab or the film hidden) counts as one
+      // frame, not the whole gap, so coming back never jumps to the end.
+      const step = (Math.min(now - last, 100) / (filmSeconds * 1000)) * (direction < 0 ? 3 : 1);
       last = now;
       setProgress((current) => {
         const next = current + step * direction;
