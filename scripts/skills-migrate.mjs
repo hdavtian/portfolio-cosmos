@@ -46,6 +46,9 @@ const EXCEPTIONS = {
   "OpenTable Integration": { drop: "not a technology (R7)" },
   "IBM iStore": { drop: "not a technology (R7)" },
   "Early Internet": { drop: "not a technology (R7)" },
+  "First Client Websites": { drop: "not a technology (R7)" },
+  "PHP Workflows": { drop: "not a technology (R7)" },
+  "Modem + Browser Config": { drop: "not a technology (R7)" },
   "Windows + Mac Support": { keep: "Desktop support" },
   "Client delivery / consulting": { keep: "Client delivery" },
   "Shared + Dedicated Hosting": { keep: "Web hosting" },
@@ -206,8 +209,11 @@ for (const experience of experiences) {
       });
     }
   }
+  // Both tech and code memories hold technology names (D12); code memories were
+  // filed as "code" only to get the monospace box, which is styling (D13).
   for (const memory of experience.jobMemories ?? []) {
     if (memory.type === "tech") take((memory.text ?? "").trim(), "memory", null);
+    if (memory.type === "code") take((memory.text ?? "").trim(), "code", null);
   }
 }
 for (const entry of entries) for (const tech of entry.technologies ?? []) take(tech, "entry", null);

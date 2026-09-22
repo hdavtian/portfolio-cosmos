@@ -21,8 +21,10 @@ question - it just shows how much of the tree is arriving at once.
 ## 1. The shape at a glance
 
 - **Frontend** - 13 entries: HTML, JavaScript, TypeScript, jQuery, Flash, Dreamweaver, HTML Email, RxJS, Redux, SPA frameworks (+4), Styling (+2), Animation (+2), Build tools (+2)
-- **Backend** - 9 entries: C#, .NET, Java, Spring Boot, Node.js, PHP, CakePHP, WinForms, RabbitMQ
-- **APIs** *(new root)* - 2 entries: REST APIs, OAuth
+- **Backend** - 7 entries: C#, .NET, Java, Node.js, PHP, CakePHP, RabbitMQ
+- **APIs** *(new root)* - 4 entries: REST APIs, OAuth, .NET Web API, Spring Boot
+- **AI** *(new root)* - 0 entries: 
+- **Desktop & platform** *(new root)* - 2 entries: WinForms, Chrome Extension
 - **CMS & e-commerce** *(new root)* - 4 entries: WordPress, Drupal, ShopSite, E-commerce
 - **Databases** *(new root)* - 3 entries: PostgreSQL, MySQL, MongoDB
 - **Cloud & DevOps** - 5 entries: AWS (+3), Azure (+1), Docker, CI/CD, GitLab
@@ -37,10 +39,10 @@ question - it just shows how much of the tree is arriving at once.
 | Technology | Proposed parent | | Came from |
 |---|---|---|---|
 | **Frontend** | *(root)* |  | tree |
-| &nbsp;&nbsp;&nbsp;&nbsp;HTML | Frontend | **NEW** | jobTech, entry |
-| &nbsp;&nbsp;&nbsp;&nbsp;JavaScript | Frontend |  | tree, skill, jobTech, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;HTML | Frontend | **NEW** | jobTech, code, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;JavaScript | Frontend |  | tree, skill, jobTech, code, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;TypeScript | Frontend |  | tree, skill, jobTech, memory, entry |
-| &nbsp;&nbsp;&nbsp;&nbsp;jQuery | Frontend | **NEW** | jobTech |
+| &nbsp;&nbsp;&nbsp;&nbsp;jQuery | Frontend | **NEW** | jobTech, code |
 | &nbsp;&nbsp;&nbsp;&nbsp;Flash | Frontend | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;Dreamweaver | Frontend | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;HTML Email | Frontend | **NEW** | jobTech |
@@ -54,9 +56,9 @@ question - it just shows how much of the tree is arriving at once.
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Patterns | React |  | tree |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Context | Patterns |  | tree |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Provider | Patterns |  | tree |
-| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Next.js | SPA frameworks | **NEW** | jobTech, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Next.js | SPA frameworks | **NEW** | jobTech, code, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;Styling | Frontend | **NEW** | invented here |
-| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CSS | Styling | **NEW** | jobTech, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CSS | Styling | **NEW** | jobTech, code, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SCSS | Styling | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;Animation | Frontend | **NEW** | invented here |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GSAP | Animation | **NEW** | jobTech, memory, entry |
@@ -68,23 +70,27 @@ question - it just shows how much of the tree is arriving at once.
 | &nbsp;&nbsp;&nbsp;&nbsp;C# | Backend |  | tree, skill, jobTech, memory, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;.NET | Backend | **NEW** | jobTech, memory, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;Java | Backend |  | tree, skill, jobTech, memory, entry |
-| &nbsp;&nbsp;&nbsp;&nbsp;Spring Boot | Backend | **NEW** | jobTech, memory, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;Node.js | Backend |  | tree, skill, memory |
-| &nbsp;&nbsp;&nbsp;&nbsp;PHP | Backend | **NEW** | jobTech, entry |
-| &nbsp;&nbsp;&nbsp;&nbsp;CakePHP | Backend | **NEW** | jobTech |
-| &nbsp;&nbsp;&nbsp;&nbsp;WinForms | Backend | **NEW** | entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;PHP | Backend | **NEW** | jobTech, code, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;CakePHP | Backend | **NEW** | jobTech, code |
 | &nbsp;&nbsp;&nbsp;&nbsp;RabbitMQ | Backend |  | tree, skill, jobTech, memory |
 | **APIs** | *(root)* | **NEW** | invented here |
 | &nbsp;&nbsp;&nbsp;&nbsp;REST APIs | APIs |  | tree, skill, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;OAuth | APIs | **NEW** | jobTech |
+| &nbsp;&nbsp;&nbsp;&nbsp;.NET Web API | APIs | **NEW** | entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;Spring Boot | APIs | **NEW** | jobTech, memory, entry |
+| **AI** | *(root)* | **NEW** | invented here |
+| **Desktop & platform** | *(root)* | **NEW** | invented here |
+| &nbsp;&nbsp;&nbsp;&nbsp;WinForms | Desktop & platform | **NEW** | entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;Chrome Extension | Desktop & platform | **NEW** | jobTech |
 | **CMS & e-commerce** | *(root)* | **NEW** | invented here |
-| &nbsp;&nbsp;&nbsp;&nbsp;WordPress | CMS & e-commerce | **NEW** | jobTech |
-| &nbsp;&nbsp;&nbsp;&nbsp;Drupal | CMS & e-commerce | **NEW** | jobTech |
+| &nbsp;&nbsp;&nbsp;&nbsp;WordPress | CMS & e-commerce | **NEW** | jobTech, code |
+| &nbsp;&nbsp;&nbsp;&nbsp;Drupal | CMS & e-commerce | **NEW** | jobTech, code |
 | &nbsp;&nbsp;&nbsp;&nbsp;ShopSite | CMS & e-commerce | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;E-commerce | CMS & e-commerce | **NEW** | jobTech |
 | **Databases** | *(root)* | **NEW** | invented here |
 | &nbsp;&nbsp;&nbsp;&nbsp;PostgreSQL | Databases |  | tree, skill, jobTech, entry |
-| &nbsp;&nbsp;&nbsp;&nbsp;MySQL | Databases | **NEW** | jobTech, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;MySQL | Databases | **NEW** | jobTech, code, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;MongoDB | Databases |  | tree, skill, jobTech, memory |
 | **Cloud & DevOps** | *(root)* |  | tree |
 | &nbsp;&nbsp;&nbsp;&nbsp;AWS | Cloud & DevOps |  | tree, skill, jobTech, memory |
@@ -93,7 +99,7 @@ question - it just shows how much of the tree is arriving at once.
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S3 | AWS | **NEW** | jobTech, memory |
 | &nbsp;&nbsp;&nbsp;&nbsp;Azure | Cloud & DevOps |  | tree, skill, jobTech, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Azure Container Apps | Azure | **NEW** | memory |
-| &nbsp;&nbsp;&nbsp;&nbsp;Docker | Cloud & DevOps |  | tree, skill, jobTech, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;Docker | Cloud & DevOps |  | tree, skill, jobTech, code, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;CI/CD | Cloud & DevOps |  | tree, skill, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;GitLab | Cloud & DevOps | **NEW** | invented here |
 | **Infrastructure & hosting** | *(root)* | **NEW** | invented here |
@@ -124,13 +130,13 @@ question - it just shows how much of the tree is arriving at once.
 
 ## 3. Counts
 
-- 85 entries in the tree, 11 of them roots
-- 59 of those do not exist today
-- 11 strings merge into an existing record (section 5)
-- 6 strings stay as prose on their job (section 6)
+- 89 entries in the tree, 13 of them roots
+- 63 of those do not exist today
+- 12 strings merge into an existing record (section 5)
+- 5 strings stay as prose on their job (section 6)
 - 1 heading deleted (section 7)
 
-*Groups and roots invented for this draft (not in the data): SPA frameworks, Styling, Animation, Build tools, APIs, CMS & e-commerce, Databases, GitLab, Infrastructure & hosting, Linux, Networking, Ways of working, Marketing & analytics, Client & support, Client delivery, Technical support.*
+*Groups and roots invented for this draft (not in the data): SPA frameworks, Styling, Animation, Build tools, APIs, AI, Desktop & platform, CMS & e-commerce, Databases, GitLab, Infrastructure & hosting, Linux, Networking, Ways of working, Marketing & analytics, Client & support, Client delivery, Technical support.*
 
 ## 4. The questions
 
@@ -141,10 +147,11 @@ question - it just shows how much of the tree is arriving at once.
    recruiter actually sees on the resume.
 2. **Do the four new groups inside Frontend earn their nesting** (SPA
    frameworks, Styling, Animation, Build tools), or should Frontend stay flat?
-3. **`WinForms` sits under Backend for want of anywhere better.** Is there a
-   "Desktop & platform" root hiding here?
-4. **`HTML Email`** - Frontend, or Marketing & analytics with SEO?
-5. **`AngularJS` is kept separate from Angular** because they are different
+3. **`.NET Web API` is a placeholder name.** Harma will confirm the exact
+   current term (ASP.NET Core Web API). The old string stays as an alias.
+   `Chrome Extension` has moved out of prose into Desktop & platform - veto
+   that if it should stay a memory.
+4. **`AngularJS` is kept separate from Angular** because they are different
    frameworks covering different years at InvestCloud. Agreed?
 
 ## 5. Merges: the same thing typed twice
@@ -153,7 +160,6 @@ Each becomes an alias (R8), so the original string still finds the record.
 
 | Typed somewhere | Becomes |
 |---|---|
-| `.NET Web API` | .NET |
 | `.NET/C#` | .NET **and** C# |
 | `Selenium/Java` | Selenium **and** Java |
 | `AWS EC2` | EC2 |
@@ -164,6 +170,8 @@ Each becomes an alias (R8), so the original string still finds the record.
 | `Hosting` | Web hosting |
 | `Java Integration` | Java |
 | `IBM iStore Ecommerce` | ShopSite |
+| `C# Playwright API` | Playwright |
+| `Spring Boot API` | Spring Boot |
 
 ## 6. Prose: not technologies (D12)
 
@@ -175,11 +183,16 @@ job as prose rather than entering the tree.
 - `Java Team Integration`
 - `Email Campaign Engineering`
 - `Marketing Microsites`
-- `Chrome Extension`
 
 ## 7. For later, not for this migration
 
-APIs is deliberately thin (REST APIs, OAuth). Harma intends to add the API
+**AI is an empty root.** Nothing in the existing content mentions AI, so the
+heading exists but has no records yet. Harma enters them (the tools, the
+models, the practices). Until then it stays unticked so the resume does not
+show an empty heading.
+
+APIs holds the frameworks now (REST APIs, OAuth, .NET Web API, Spring Boot).
+Harma intends to add the remaining API
 frameworks - Express, C# Web API, Java Spring Boot - once the tree is in.
 Two consequences to remember then:
 

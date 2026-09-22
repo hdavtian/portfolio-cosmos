@@ -12,7 +12,6 @@ const proposal = JSON.parse(readFileSync("db-backups/skills-migration-proposal.j
 
 /** Same thing typed twice: left becomes an alias of the right. */
 const MERGES = {
-  ".NET Web API": [".NET"],
   ".NET/C#": [".NET", "C#"],
   "Selenium/Java": ["Selenium", "Java"],
   "AWS EC2": ["EC2"],
@@ -23,6 +22,9 @@ const MERGES = {
   Hosting: ["Web hosting"],
   "Java Integration": ["Java"],
   "IBM iStore Ecommerce": ["ShopSite"],
+  // Framework names carrying a language or a suffix: the record is the framework.
+  "C# Playwright API": ["Playwright"],
+  "Spring Boot API": ["Spring Boot"],
 };
 
 /** Work, not a tool: stays on its job as a prose memory (D12). */
@@ -32,7 +34,6 @@ const PROSE = [
   "Java Team Integration",
   "Email Campaign Engineering",
   "Marketing Microsites",
-  "Chrome Extension",
 ];
 
 /** Headings that exist today and are dissolved: their children are refiled and
@@ -78,18 +79,30 @@ const TREE = {
   "C#": "Backend",
   ".NET": "Backend",
   Java: "Backend",
-  "Spring Boot": "Backend",
   "Node.js": "Backend",
   PHP: "Backend",
   CakePHP: "Backend",
-  WinForms: "Backend",
   RabbitMQ: "Backend",
 
   // APIs earn a root of their own: only a root becomes a heading on the resume
   // and the Skills planet, and job descriptions single out API experience.
+  // Backend holds the languages and runtimes; APIs holds the frameworks you
+  // build services with. ASP.NET Web API is not C#, Spring Boot is not Java,
+  // so one home per skill (D7) is kept and both headings mean something.
   APIs: null,
   "REST APIs": "APIs",
   OAuth: "APIs",
+  ".NET Web API": "APIs",
+  "Spring Boot": "APIs",
+
+  // Employers are increasingly explicit about AI, so it gets a heading of its
+  // own. Nothing in the existing data mentions AI, so it arrives empty and
+  // Harma enters the records; an empty heading stays unticked until it has them.
+  AI: null,
+
+  "Desktop & platform": null,
+  WinForms: "Desktop & platform",
+  "Chrome Extension": "Desktop & platform",
 
   "CMS & e-commerce": null,
   WordPress: "CMS & e-commerce",
@@ -235,10 +248,11 @@ L.push("   This naming is what a");
 L.push("   recruiter actually sees on the resume.");
 L.push("2. **Do the four new groups inside Frontend earn their nesting** (SPA");
 L.push("   frameworks, Styling, Animation, Build tools), or should Frontend stay flat?");
-L.push("3. **`WinForms` sits under Backend for want of anywhere better.** Is there a");
-L.push("   \"Desktop & platform\" root hiding here?");
-L.push("4. **`HTML Email`** - Frontend, or Marketing & analytics with SEO?");
-L.push("5. **`AngularJS` is kept separate from Angular** because they are different");
+L.push("3. **`.NET Web API` is a placeholder name.** Harma will confirm the exact");
+L.push("   current term (ASP.NET Core Web API). The old string stays as an alias.");
+L.push("   `Chrome Extension` has moved out of prose into Desktop & platform - veto");
+L.push("   that if it should stay a memory.");
+L.push("4. **`AngularJS` is kept separate from Angular** because they are different");
 L.push("   frameworks covering different years at InvestCloud. Agreed?");
 L.push("");
 L.push("## 5. Merges: the same thing typed twice");
@@ -258,7 +272,13 @@ for (const name of PROSE) L.push(`- \`${name}\``);
 L.push("");
 L.push("## 7. For later, not for this migration");
 L.push("");
-L.push("APIs is deliberately thin (REST APIs, OAuth). Harma intends to add the API");
+L.push("**AI is an empty root.** Nothing in the existing content mentions AI, so the");
+L.push("heading exists but has no records yet. Harma enters them (the tools, the");
+L.push("models, the practices). Until then it stays unticked so the resume does not");
+L.push("show an empty heading.");
+L.push("");
+L.push("APIs holds the frameworks now (REST APIs, OAuth, .NET Web API, Spring Boot).");
+L.push("Harma intends to add the remaining API");
 L.push("frameworks - Express, C# Web API, Java Spring Boot - once the tree is in.");
 L.push("Two consequences to remember then:");
 L.push("");
