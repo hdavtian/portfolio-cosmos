@@ -470,12 +470,9 @@ html.is-scene-dragging * {
 
 /* Gateway into the full Three.js experience: under the site buttons, top right. */
 .showcase-gateway {
-  position: fixed;
-  top: calc(var(--showcase-gutter) + 42px);
-  right: var(--showcase-gutter);
-  z-index: 5;
-  width: max-content;
-  max-width: min(340px, 40vw);
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
   display: grid;
   justify-items: start;
   gap: 4px;
@@ -497,6 +494,11 @@ html.is-scene-dragging * {
   cursor: pointer;
   animation: showcase-gateway-in 700ms steps(1) both;
   transition: border-color 200ms ease, background 200ms ease, color 200ms ease;
+}
+
+/* A plain hint: read, not clicked. */
+.showcase-gateway--hint {
+  cursor: default;
 }
 
 /* The whole panel is the link; hover only changes colour. */
@@ -532,8 +534,7 @@ html.is-scene-dragging * {
   display: block;
   margin: 0;
   transition: color 200ms ease;
-  /* Wrap before they widen the panel past the link itself. */
-  max-width: 34ch;
+  max-width: 60ch;
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -553,15 +554,26 @@ html.is-scene-dragging * {
   text-decoration: none;
   /* One line always: the arrow grows on hover, which used to wrap the label. */
   white-space: nowrap;
-  color: #dff8ff;
-  text-shadow: 0 0 12px rgba(110, 215, 255, 0.55);
+  /* The hologram the project titles wear on hover: cyan with scanlines. */
+  color: transparent;
+  background-image:
+    repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.32) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #e8fbff 0%, #9fe4ff 55%, #6fd0ff 100%);
+  background-size: 100% 3px, 100% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0 10px rgba(110, 215, 255, 0.55)) drop-shadow(0 0 2px rgba(190, 240, 255, 0.8));
+  animation:
+    showcase-holo-scan 0.9s linear infinite,
+    showcase-holo-flicker 1.7s steps(1) infinite;
 }
 
 .showcase-gateway__arrow {
   position: relative;
   width: 26px;
   height: 1px;
-  background: currentColor;
+  /* The title's text is transparent (hologram), so the arrow needs its own colour. */
+  background: #dff8ff;
 }
 
 .showcase-gateway__arrow::after {
@@ -612,6 +624,23 @@ html.is-scene-dragging * {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* The hint panel hangs under the nav and spans it: from the left of Home to
+   the right of Contact. A bridge of empty space above it keeps the hint open
+   while the pointer travels down from a pill. */
+.showcase-nav-hint {
+  position: fixed;
+  top: calc(var(--showcase-gutter) + 30px);
+  right: var(--showcase-gutter);
+  z-index: 5;
+  width: var(--showcase-nav-width, auto);
+  min-width: 320px;
+  padding-top: 12px;
+}
+
+.showcase-nav-hint:empty {
+  pointer-events: none;
 }
 
 .showcase-pill {

@@ -1,10 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Link } from "react-router-dom";
-import {
-  isCinematicLoaded,
-  setCinematicLaunch,
-  subscribeCinematicLaunch,
-} from "../../../app/cinematic/launchStore";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
@@ -25,7 +19,8 @@ interface SceneStageProps {
   /** Hidden behind the cinematic experience: no updates, loading or rendering. */
   paused: boolean;
   /** Show the way into the 3D experience (off on project pages). */
-  showGateway: boolean;
+  /** Whether the previews panel is shown (not on project pages or under the film). */
+  showPanel: boolean;
   /** Called once any scene is on screen (the terrain can pause). */
   onShowing: (showing: boolean) => void;
 }
@@ -89,20 +84,15 @@ const readTourPreference = () => {
   }
 };
 
-const prefetchCinematic = () => {
-  void import("../../../App");
-};
-
 
 
 /**
  * Fragments of the cinematic universe behind the portfolio: one renderer, one
  * visible scene at a time, glitch transitions, a switcher and an auto-tour.
  */
-export function SceneStage({ projects, techStack, highlights, portfolio, profile, jobs, focusProjectId, interactive, paused, showGateway, onShowing }: SceneStageProps) {
+export function SceneStage({ projects, techStack, highlights, portfolio, profile, jobs, focusProjectId, interactive, paused, showPanel, onShowing }: SceneStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Already loaded and in memory: going back is instant, and the link says so.
-  const cinematicLoaded = useSyncExternalStore(subscribeCinematicLaunch, isCinematicLoaded, isCinematicLoaded);
   const [statuses, setStatuses] = useState<Record<string, SceneStatus>>(() =>
     Object.fromEntries(SCENE_DEFINITIONS.map((scene) => [scene.id, { phase: "waiting", progress: 0 }])),
   );
@@ -159,18 +149,6 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   useEffect(() => {
     for (const scene of scenesRef.current.values()) scene.setHighlights?.(highlights);
   }, [highlights]);
-
-  /**
-   * Starts the 3D experience behind the page: the scene flickers out, its
-   * loader becomes the page's background, and the site stays usable until the
-   * loader is ready (see app/cinematic/CinematicHost). Modified clicks (new
-   * tab) fall through to the plain link.
-   */
-  const launchCinematic = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    setCinematicLaunch("loading");
-  };
 
   useEffect(() => {
     for (const scene of scenesRef.current.values()) scene.setFocusProject?.(focusProjectId);
@@ -439,8 +417,6 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
     };
   }, [hasData, switchTo]);
 
-  const activeLabel = SCENE_DEFINITIONS.find((definition) => definition.id === activeId)?.label;
-
   return (
     <>
       <div
@@ -459,7 +435,7 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         <div className="showcase-scenes__shade" />
       </div>
 
-      <aside className="showcase-scene-panel" aria-label="Cinematic scenes" hidden={!showGateway}>
+      <aside className="showcase-scene-panel" aria-label="Cinematic scenes" hidden={!showPanel}>
       <div className="showcase-scene-plate">
         <p className="showcase-scene-plate__title">Background previews</p>
         <ol className="showcase-scene-switcher" aria-label="Background previews">
@@ -518,27 +494,6 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
 
       </aside>
 
-      {/* The way into the 3D site: with the site's own buttons, top right, and
-          out of the way on a project page. */}
-      {activeLabel && showGateway ? (
-        <Link
-          to="/cinematic"
-          className="showcase-gateway"
-          key={activeId}
-          onMouseEnter={prefetchCinematic}
-          onFocus={prefetchCinematic}
-          onClick={launchCinematic}
-        >
-          <span className="showcase-gateway__eyebrow">{activeLabel} · a fragment of the cinematic universe</span>
-          <span className="showcase-gateway__link">
-            {cinematicLoaded ? "Back to the full experience" : "Enter the full experience"}
-            <span className="showcase-gateway__arrow" aria-hidden="true" />
-          </span>
-          <span className="showcase-gateway__note">
-            {cinematicLoaded ? "Still loaded — returns where you left it" : "3D, sound and a few seconds to load"}
-          </span>
-        </Link>
-      ) : null}
     </>
   );
 }
