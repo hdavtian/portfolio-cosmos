@@ -120,6 +120,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D23 | **Corrects D20.** Filter lists are not project tag lists. The home page chips and the universe Portfolio drop-down *offer* technologies to filter by; a project's preview and detail page *list* what that project used. So `filters` is a technology surface with fine control, while the tag lists stay per-project. Today the chips are simply the most-used names by count, which spends slots on HTML and CSS and filters to nearly everything - the counter chooses, and it chooses badly. Harma chooses instead (see D24 for the cap). | 2026-09-22 |
 | D24 | No cap on the filter row. Today it is the ten most-used technologies by count (`TOP_TECH_COUNT` in `useShowcaseProjects.ts`, added with the redesign in `9adbf5e`). A tick *and* a cap are two controls fighting: ticking twelve would silently drop two with no way to see which. The `filters` tick alone decides which technologies appear and the row wraps if it is long; they stay ordered by how many projects use them, which is a useful order once it is no longer also doing the choosing. `TOP_TECH_COUNT` is deleted; the sort stays. | 2026-09-22 |
 | D25 | Scenarios settled ahead of the build, because each is cheap now and expensive once records exist (section 4.10): slugs are immutable while names stay editable; a referenced technology cannot be deleted, only merged into another; reparenting moves the subtree and a cycle is rejected; aliases are unique across the whole list; unmatched project tags go to a holding list rather than being dropped or auto-created; a grouping with no visible children does not render a heading. | 2026-09-22 |
+| D26 | Slug uniqueness has three layers: a unique index on the collection (the only real guarantee, since it is the only one that holds under two simultaneous saves), an API check that also translates the index's duplicate-key error into a field error rather than a 500, and admin generating the slug from the name, editable before the first save, with availability checked as it is typed. Generation appends `-2`, `-3` when two names produce the same slug (`C#` and `C Sharp` both want `csharp`). Because slugs are immutable (D25), uniqueness is checked once, at creation, and a rename never re-opens it. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -464,6 +465,14 @@ splitting a record, so the operation is worth having either way.
 that would make an entry its own ancestor; without that check one drag creates
 a cycle and every tree render fails at once.
 
+**Slug uniqueness (D26).** `techStackNodes` is listed in
+`scripts/db-ensure-indexes-prod.mjs` but carries no unique slug index in the
+production data pulled on 2026-09-22 - every sibling collection has one. Two
+duplicate slugs there would be accepted silently today. It must be in place
+before that collection becomes the master list; `npm run db:ensure-indexes-prod`
+creates it and is idempotent, but it writes to production and needs Harma's
+go-ahead.
+
 **Alias uniqueness.** R2's case-insensitive uniqueness covers names; aliases
 need it across the whole list too, names included. Otherwise a string like
 `C# Web API` could point at two records and the picker is ambiguous.
@@ -543,6 +552,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (q): how slug uniqueness is actually enforced (D26), and the finding that techStackNodes has no unique slug index in production.
 - 2026-09-22: draft 5 (p): six scenarios settled ahead of the build (D25), and the film reconciliation named as the one piece still unplanned. "Data centre" corrected to "Data center".
 - 2026-09-22: draft 5 (o): the filter row loses its ten-item cap (D24); the tick is the only control, and the most-used-first order stays.
 - 2026-09-22: draft 5 (n): D23 corrects D20 - a filter list is not a tag list, so the home chips and the Portfolio drop-down get fine control after all.
