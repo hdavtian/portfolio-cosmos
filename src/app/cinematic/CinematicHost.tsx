@@ -152,10 +152,6 @@ export function CinematicHost() {
     return () => host.removeEventListener("webglcontextlost", onContextLost, true);
   }, [kept]);
 
-  if (!keepAlive || !kept) {
-    return onRoute ? <Suspense fallback={loading}>{<CinematicExperience />}</Suspense> : null;
-  }
-
   // Coming back to a paused universe: it flickers back to life rather than
   // snapping on, like a screen powering up. Only from a still, never on first launch.
   const [waking, setWaking] = useState(false);
@@ -169,6 +165,10 @@ export function CinematicHost() {
       return () => window.clearTimeout(timer);
     }
   }, [showing, still]);
+
+  if (!keepAlive || !kept) {
+    return onRoute ? <Suspense fallback={loading}>{<CinematicExperience />}</Suspense> : null;
+  }
 
   const state = showing ? "is-showing" : preloading ? "is-preloading" : still ? "is-still" : "is-hidden";
 
