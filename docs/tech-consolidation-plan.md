@@ -106,7 +106,8 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D9 | One data shape for every site. The `toLegacy` translation is retired **before** the skills consolidation, so the consolidation is done once, against the new shapes, not twice. No per-site filtering in a hidden layer; what a site shows is decided by visible fields on the record (e.g. visibility ticks). | 2026-09-21 |
 | D10 | StormScape's return is a second Experience (`stormscape-freelance`, Jul 2025 → present), not extra periods on the first (settles Q5). An Experience's end date may be left out, meaning current; the sites show "Present". Added to the local database 2026-09-21. | 2026-09-21 |
 | D11 | Names are de-duplicated and normalised by rule, with a reviewed exception list (section 4.7). One record per technology, one spelling, compounds split into their parts, and every string that mapped to a record kept on it as an alias so the migration is auditable. | 2026-09-22 |
-| D12 | The `tech` memory type retires. Each of the 25 tech memories is either deleted (13 duplicate a label on the same job), harvested into a skill use (7 name a technology found nowhere else, including Node.js at InvestCloud), or re-typed as `memory` prose (5 describe work, not tools). Afterwards a memory is prose or code, and technologies live only in the master list. | 2026-09-22 |
+| D13 | A memory's `type` is a style switch (font, glow, backdrop box), not a kind of content, which is why technology names were filed as `code` to get a monospace box. The two ideas separate: content is either a technology from the master list or a prose memory; how it flies is a `style` field (`plain`, `code`, `handwritten`) on the item. Today's look is preserved by defaults, and a technology drawn as a code box is still a link, so renaming it renames the box. | 2026-09-22 |
+| D12 | The `tech` **and `code`** memory types retire. Both were free text holding technology names: of the 25 tech memories 13 duplicate a label on the same job, 7 name a technology found nowhere else (including Node.js at InvestCloud) and 5 describe work; of the 14 code memories 8 duplicate a label, 3 name something new and 3 are prose. Each is deleted, harvested into a skill use, or re-typed as prose. Afterwards a memory is prose, and technologies live only in the master list. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -193,6 +194,10 @@ site computes them.
   either named a technology recorded nowhere else (harvested into a skill use,
   so nothing is lost) or described a piece of work (re-typed as prose).
   `memory` and `code` stay free text.
+
+  The same applies to `code` memories, which hold technology names too: 8 of
+  14 duplicate a label on the same job. They were filed as "code" to get the
+  monospace box, which is a styling choice, not a kind of content (D13).
 
   **What the universe shows on orbit.** Today the floating memories that start
   with the moon orbit draw from all of a job's memories at once, tech and prose
@@ -397,6 +402,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (e): `code` memories are technology names too; the memory type turns out to be a style switch, so style separates from content (D13).
 - 2026-09-22: draft 5 (d): memories keep only prose and code (D12); the tech ones are deleted, harvested or re-typed, and the orbit fly-by reads skill uses instead.
 - 2026-09-22: draft 5 (c): the naming rules are migration-only; afterwards any name is allowed and only uniqueness, one parent and alias rules persist.
 - 2026-09-22: draft 5 (b): naming and de-duplication rules R1-R10 and the exception list (D11), measured from the 124 live strings.
