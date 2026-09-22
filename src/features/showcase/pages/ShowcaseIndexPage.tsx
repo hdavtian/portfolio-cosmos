@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { SourceMarkedName } from "../../../components/ui/SourceMarkedName";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { HoloImage } from "../components/HoloImage";
 import { TechConstellation } from "../components/TechConstellation";
@@ -241,7 +242,9 @@ export function ShowcaseIndexPage() {
 
       {/* Masthead: on the pills' line, top left. */}
       <header className="showcase-masthead">
-        <h1 className="showcase-masthead__name">{personal?.name ?? "Harma Davtian"}</h1>
+        <h1 className="showcase-masthead__name">
+          <SourceMarkedName name={personal?.name ?? "Harma Davtian"} />
+        </h1>
         <p className="showcase-masthead__role">
           {personal?.title ?? "Full Stack Engineer"}
           {personal?.location ? <span className="showcase-masthead__place">{personal.location}</span> : null}

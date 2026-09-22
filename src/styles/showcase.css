@@ -1344,7 +1344,8 @@ html.is-scene-dragging * {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--showcase-ink);
+  /* The same gold as the name badge in the 3D experience. */
+  color: #d4a845;
 }
 
 .showcase-masthead__role {

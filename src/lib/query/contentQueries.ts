@@ -13,7 +13,7 @@ export const contentKeys = {
 // One request for the whole published release, shared by every page through
 // the query cache. Each hook selects its slice and keeps the `{ payload }`
 // envelope the pages were written against, so they needed no changes.
-const releaseQuery = {
+export const releaseQuery = {
   queryKey: contentKeys.release(),
   queryFn: fetchSiteContent,
   staleTime: 60_000,

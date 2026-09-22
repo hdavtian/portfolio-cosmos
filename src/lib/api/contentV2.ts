@@ -57,7 +57,10 @@ export interface SiteContent {
 const FALLBACK_ENABLED = import.meta.env.VITE_CONTENT_FALLBACK === "on";
 
 const fallbackOrThrow = (reason: string, cause?: unknown): SiteContent => {
-  if (FALLBACK_ENABLED) return FALLBACK;
+  if (FALLBACK_ENABLED) {
+    console.info(`[content] ${reason}; showing bundled fallback content.`, cause ?? "");
+    return FALLBACK;
+  }
   console.error(`[content] ${reason}; bundled fallback is off (VITE_CONTENT_FALLBACK).`, cause ?? "");
   throw new Error(`[content] ${reason}`);
 };
@@ -90,6 +93,7 @@ export async function fetchSiteContent(): Promise<SiteContent> {
     }
 
     const release = (await response.json()) as ReleaseResponse;
+    console.info(`[content] Published content from the API (release ${release.etag.slice(0, 8)}).`);
     const legacy = toLegacy(release.content, (mediaId) => release.media[mediaId]?.url ?? "");
 
     return {
