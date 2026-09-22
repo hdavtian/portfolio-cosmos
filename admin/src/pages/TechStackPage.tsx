@@ -1,16 +1,12 @@
 import type { TechStackNode } from "@hd/content-schema";
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import {
-  ColumnChooser,
   ColumnDirective,
   ColumnsDirective,
-  Filter,
   Inject,
-  Reorder,
   Resize,
   RowDD,
   Selection,
-  Sort,
   Toolbar,
   TreeGridComponent,
 } from "@syncfusion/ej2-react-treegrid";
@@ -30,8 +26,7 @@ type NodeRecord = EntityRecord<TechStackNode>;
 type TreeRow = { slug: string; name: string; parentId: string | null; childCount: number };
 
 // Constants handed to Syncfusion, so re-renders never refresh the grid.
-const TOOLBAR = ["Search", "ExpandAll", "CollapseAll", "ColumnChooser"];
-const FILTER_SETTINGS = { type: "Menu" as const };
+const TOOLBAR = ["Search", "ExpandAll", "CollapseAll"];
 const SELECTION = { type: "Single" as const };
 
 interface DropArgs {
@@ -117,17 +112,6 @@ export function TechStackPage() {
     // The move is saved to the API and the tree re-renders from saved data, so
     // the grid's own in-memory move is cancelled.
     args.cancel = true;
-    // Sorting or filtering rearranges the view, and a drop is read as a
-    // position in that view: the result would be an order nobody asked for.
-    const grid = gridRef.current;
-    const rearranged =
-      (grid?.sortSettings?.columns?.length ?? 0) > 0 ||
-      (grid?.filterSettings?.columns?.length ?? 0) > 0 ||
-      Boolean(grid?.searchSettings?.key);
-    if (rearranged) {
-      status.failure("Clear the sorting, filter or search before dragging: the tree must be in its saved order.");
-      return;
-    }
     const dragged = args.data?.[0];
     const target = gridRef.current?.getCurrentViewRecords()[args.dropIndex ?? -1] as TreeRow | undefined;
     if (!dragged || !target || dragged.slug === target.slug || saving) return;
@@ -258,11 +242,6 @@ export function TechStackPage() {
             id={GRID_ID}
             allowRowDragAndDrop
             allowResizing
-            allowSorting
-            allowFiltering
-            allowReordering
-            showColumnChooser
-            filterSettings={FILTER_SETTINGS}
             selectionSettings={SELECTION}
             toolbar={TOOLBAR}
             gridLines="Horizontal"
@@ -277,7 +256,7 @@ export function TechStackPage() {
               <ColumnDirective field="childCount" headerText="Children" width={100} textAlign="Right" />
               <ColumnDirective headerText="Actions" width={260} template={actionsTemplate} />
             </ColumnsDirective>
-            <Inject services={[RowDD, Selection, Toolbar, Sort, Filter, Resize, Reorder, ColumnChooser]} />
+            <Inject services={[RowDD, Selection, Toolbar, Resize]} />
           </TreeGridComponent>
         </div>
       ) : null}
