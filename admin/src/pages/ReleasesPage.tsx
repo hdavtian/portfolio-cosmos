@@ -250,8 +250,10 @@ export function ReleasesPage() {
             ) : pending.data && pending.data.lines.length > 0 ? (
               <>
                 <ul className="admin-change-list" aria-label="Changes waiting to be published">
-                  {pending.data.lines.map((line) => (
-                    <li key={line}>{line}</li>
+                  {/* Keyed by position: two records with the same name make
+                      the same line, and a repeated key breaks the list. */}
+                  {pending.data.lines.map((line, index) => (
+                    <li key={`${index}-${line}`}>{line}</li>
                   ))}
                 </ul>
                 <div style={{ display: "flex", gap: 8, marginTop: 6 }}>

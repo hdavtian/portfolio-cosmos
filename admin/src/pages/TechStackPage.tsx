@@ -244,7 +244,7 @@ export function TechStackPage() {
           >
             <ColumnsDirective>
               <ColumnDirective field="name" headerText="Name" width={320} />
-              <ColumnDirective field="slug" headerText="Slug" width={220} />
+              <ColumnDirective field="slug" headerText="Slug" width={220} isPrimaryKey />
               <ColumnDirective field="childCount" headerText="Children" width={100} textAlign="Right" />
               <ColumnDirective headerText="Actions" width={260} template={actionsTemplate} />
             </ColumnsDirective>

@@ -133,7 +133,19 @@ export function summarizeChanges(live: ContentSide, draft: ContentSide): string[
     const after = bySortOrder(draft.collections[collection] ?? []);
     const beforeBySlug = new Map(before.map((record) => [String(record.slug), record]));
     const afterBySlug = new Map(after.map((record) => [String(record.slug), record]));
-    const quote = (record: Record_) => `${wording.singular} "${wording.label(record)}"`;
+    // Two records can carry the same label - both StormScape jobs are called
+    // "Stormscape (Freelance)" - which made a line ambiguous to read and gave
+    // two of them the same React key. An ambiguous label carries its slug.
+    const labelCounts = new Map<string, number>();
+    for (const record of [...before, ...after]) {
+      const label = wording.label(record);
+      labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+    }
+    const quote = (record: Record_) => {
+      const label = wording.label(record);
+      const ambiguous = (labelCounts.get(label) ?? 0) > 2;
+      return `${wording.singular} "${label}"${ambiguous ? ` (${String(record.slug)})` : ""}`;
+    };
 
     const added = after.filter((record) => !beforeBySlug.has(String(record.slug)));
     const deleted = before.filter((record) => !afterBySlug.has(String(record.slug)));
