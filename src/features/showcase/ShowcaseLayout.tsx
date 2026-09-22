@@ -86,6 +86,7 @@ export function ShowcaseLayout() {
             techStack={techStack}
             highlights={highlights}
             portfolio={portfolio}
+            profile={release?.profile}
             jobs={jobs}
             interactive={onIndex && !cinematicStill}
             paused={onCinematic || cinematicStill}

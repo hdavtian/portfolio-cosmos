@@ -16,6 +16,7 @@ interface SceneStageProps {
   /** Technologies of the project open on the page. */
   highlights: string[];
   portfolio: ScenePortfolio | undefined;
+  profile: { name: string; title: string } | undefined;
   jobs: SceneJob[];
   /** Project whose preview is open on the page. */
   focusProjectId: string | null;
@@ -98,7 +99,7 @@ const prefetchCinematic = () => {
  * Fragments of the cinematic universe behind the portfolio: one renderer, one
  * visible scene at a time, glitch transitions, a switcher and an auto-tour.
  */
-export function SceneStage({ projects, techStack, highlights, portfolio, jobs, focusProjectId, interactive, paused, showGateway, onShowing }: SceneStageProps) {
+export function SceneStage({ projects, techStack, highlights, portfolio, profile, jobs, focusProjectId, interactive, paused, showGateway, onShowing }: SceneStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Already loaded and in memory: going back is instant, and the link says so.
   const cinematicLoaded = useSyncExternalStore(subscribeCinematicLaunch, isCinematicLoaded, isCinematicLoaded);
@@ -131,9 +132,9 @@ export function SceneStage({ projects, techStack, highlights, portfolio, jobs, f
   });
 
   const hasData = projects.length > 0 && techStack !== undefined && portfolio !== undefined;
-  const dataRef = useRef({ projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs });
+  const dataRef = useRef({ profile: profile ?? { name: "", title: "" }, projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs });
   useLayoutEffect(() => {
-    dataRef.current = { projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs };
+    dataRef.current = { profile: profile ?? { name: "", title: "" }, projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs };
   });
 
   const switchTo = useCallback((id: string) => {

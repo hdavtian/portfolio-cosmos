@@ -34,6 +34,8 @@ export interface ScenePortfolio {
 export const EMPTY_PORTFOLIO: ScenePortfolio = { cores: [], entries: [], media: {} };
 
 export interface SceneData {
+  /** Name and title from the published profile. */
+  profile: { name: string; title: string };
   projects: ShowcaseProject[];
   techStack: TechStackTreeNode[];
   portfolio: ScenePortfolio;
