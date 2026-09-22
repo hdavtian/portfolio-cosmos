@@ -105,6 +105,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D8 | Non-code skills (sales, support, consulting, leading people) live in the same tree. Harma will organise them when entering the data; grouping is revisited once the real data is in, not designed up front. | 2026-09-21 |
 | D9 | One data shape for every site. The `toLegacy` translation is retired **before** the skills consolidation, so the consolidation is done once, against the new shapes, not twice. No per-site filtering in a hidden layer; what a site shows is decided by visible fields on the record (e.g. visibility ticks). | 2026-09-21 |
 | D10 | StormScape's return is a second Experience (`stormscape-freelance`, Jul 2025 → present), not extra periods on the first (settles Q5). An Experience's end date may be left out, meaning current; the sites show "Present". Added to the local database 2026-09-21. | 2026-09-21 |
+| D11 | Names are de-duplicated and normalised by rule, with a reviewed exception list (section 4.7). One record per technology, one spelling, compounds split into their parts, and every string that mapped to a record kept on it as an alias so the migration is auditable. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -237,6 +238,80 @@ What stays, because it is not legacy: resolving media ids to URLs, sorting by
 1. Then the skills consolidation (sections 4.1–4.5), done once.
 2. Then the film reads the release.
 
+## 4.7 Naming and de-duplication rules (D11)
+
+Measured 2026-09-22 across the live release and the mock: **124 distinct
+technology strings**, of which **47 are compounds** and **7 are pure spelling
+collisions** (`HTML`/`html`, `CSS`/`css`, `JavaScript`/`javascript`,
+`PHP`/`php`, `MySQL`/`mysql`, `Agile / Scrum`/`Agile Scrum`,
+`AWS (EC2 + RDS + S3)`/`AWS EC2 + RDS + S3`). Splitting and case-folding
+mechanically yields ~106 atoms, so the rules below are what turn that into a
+list worth keeping.
+
+**R1 — One record, one spelling.** A technology is one record in the master
+list. Sites render the record's `name`; no site ever displays a typed string.
+This is what fixes `html` ×12 / `HTML` ×8 on project tags without anyone
+editing the tags.
+
+**R2 — Canonical spelling is the vendor's own.** `JavaScript`, `TypeScript`,
+`PHP`, `MySQL`, `PostgreSQL`, `Node.js`, `.NET`, `C#`, `CSS`, `HTML`, `SCSS`.
+Uniqueness is enforced case-insensitively: two records whose names fold to the
+same key are rejected by the schema, so the collision cannot come back.
+
+**R3 — Compounds split into one record per part.** Separators that split:
+` + `, ` / ` (spaced), ` & `, commas, and a trailing parenthetical list.
+`React + Redux` → React, Redux. `AWS (EC2 + RDS + S3)` → AWS, EC2, RDS, S3.
+`HTML + CSS + JS` → HTML, CSS, JavaScript (via R4).
+
+**R4 — Abbreviations fold to the full name.** `JS` → JavaScript, `SCRUM` →
+Scrum, `AGILE` → Agile, `Ecommerce`/`E-commerce` → E-commerce,
+`Framer` → Framer Motion, `LAMP Stack` → LAMP.
+
+**R5 — A slash with no spaces is part of the name, not a separator.**
+`CI/CD` stays `CI/CD`. (`Agile / Scrum`, spaced, splits.)
+
+**R6 — Proper names are never split**, whatever separator they contain:
+`Adobe Test & Target`, `Tax & Financial Content`. The exception list below is
+the authority; anything not on it splits by R3.
+
+**R7 — Not every string is a technology.** Phrases that describe work rather
+than a tool (`Marketing Microsites`, `Tax & Financial Content`,
+`OpenTable Integration`, `Early Internet`) are job content, not master-list
+entries. They stay as memories or responsibilities on their job.
+
+**R8 — Every source string is kept as an alias.** Each record carries
+`aliases[]`: the exact strings that mapped to it. This makes the migration
+auditable (every one of the 124 strings is accounted for), lets the admin
+pickers match what Harma types, and means a mistaken merge can be found and
+undone later.
+
+**R9 — Highlight words follow the split.** A combined label's
+`highlightMatches` are distributed to the parts they belong to, so the
+cinematic hover-highlighting keeps working (see Risks).
+
+**R10 — Category headings are not technologies.** `Cloud & DevOps` and
+`Data & Messaging` are top-level tree entries and keep their ampersands; R3
+does not apply to them.
+
+### Exception list (to review before the migration runs)
+
+| String | Treatment | Why |
+|---|---|---|
+| `Adobe Test & Target` | one record | product name (R6) |
+| `CI/CD` | one record | R5 |
+| `Tax & Financial Content` | not a technology | R7 |
+| `Marketing Microsites`, `OpenTable Integration`, `IBM iStore`, `Early Internet` | not technologies | R7 |
+| `Windows + Mac Support` | one record: "Desktop support" | splitting gives "Windows" and "Mac Support", neither true |
+| `Client delivery / consulting` | one record: "Client delivery" | one non-code skill, not two |
+| `Dial-up / ISDN / networking` | Dial-up, ISDN, Networking | three real things |
+| `Linux hosting / LAMP` | Linux, LAMP | "Linux hosting" is not a separate tool |
+| `Shared + Dedicated Hosting` | one record: "Web hosting" | two sales terms for one skill |
+| `Animation (GSAP, Framer, Three.js)` | GSAP, Framer Motion, Three.js | drop the wrapper word |
+| `.NET/C#`, `Selenium/Java` | split | unspaced, but two products, not a name (R5 exception) |
+| `SCSS / design systems` | SCSS, Design systems | both real |
+| `CMS / e-commerce platforms` | CMS, E-commerce | both real |
+| `Semantic HTML` | HTML | a way of writing it, not a tool |
+
 ## 5. What each site sees afterwards
 
 | Site | Change |
@@ -295,6 +370,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (b): naming and de-duplication rules R1-R10 and the exception list (D11), measured from the 124 live strings.
 - 2026-09-22: draft 5: step 0 shipped; section 1b records what is done and what is left. The mock file is the last JSON the app reads.
 - 2026-09-21: step 0 has its own doc; it found that the cinematic site reads experiences, skills and the About deck from bundled files, not the API.
 - 2026-09-21: removed the dead scrolling-resume files; three sites, not four.
