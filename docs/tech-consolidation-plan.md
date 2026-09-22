@@ -240,6 +240,21 @@ What stays, because it is not legacy: resolving media ids to URLs, sorting by
 
 ## 4.7 Naming and de-duplication rules (D11)
 
+**These are migration rules, not a naming policy.** R3-R10 interpret the 124
+strings of existing free text once, and then never run again. Afterwards Harma
+may name a technology anything, ampersands included: a record called
+"Sales & Management" linked to five jobs is five links to one row, which is
+what consolidation means. Compounds were only ever a problem because they were
+free text repeated per job, and the picker removes that.
+
+Only three rules outlive the migration: case-insensitive uniqueness (R2), one
+parent per entry (D7), and an alias pointing at only one record (R8). A name
+containing ` + ` or ` & ` earns a dismissible hint in admin ("this looks like
+two technologies - split it?"), never a block. Because aliases are kept,
+splitting a record in two later is an ordinary admin operation, not a
+migration.
+
+
 Measured 2026-09-22 across the live release and the mock: **124 distinct
 technology strings**, of which **47 are compounds** and **7 are pure spelling
 collisions** (`HTML`/`html`, `CSS`/`css`, `JavaScript`/`javascript`,
@@ -370,6 +385,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (c): the naming rules are migration-only; afterwards any name is allowed and only uniqueness, one parent and alias rules persist.
 - 2026-09-22: draft 5 (b): naming and de-duplication rules R1-R10 and the exception list (D11), measured from the 124 live strings.
 - 2026-09-22: draft 5: step 0 shipped; section 1b records what is done and what is left. The mock file is the last JSON the app reads.
 - 2026-09-21: step 0 has its own doc; it found that the cinematic site reads experiences, skills and the About deck from bundled files, not the API.
