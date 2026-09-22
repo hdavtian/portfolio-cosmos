@@ -279,7 +279,7 @@ export function TechnologiesPage() {
               <ColumnDirective field="featured" headerText="Featured" width={110} />
               <ColumnDirective field="shownIn" headerText="Shown in" width={280} />
               <ColumnDirective field="aliases" headerText="Also known as" width={280} />
-              <ColumnDirective field="slug" headerText="Slug" width={200} />
+              <ColumnDirective field="slug" headerText="Slug" width={200} isPrimaryKey />
               <ColumnDirective field="childCount" headerText="Children" width={100} textAlign="Right" />
             </ColumnsDirective>
             <Inject services={[RowDD, Selection, Toolbar]} />

@@ -255,7 +255,10 @@ for (const entry of entries) {
 // carries: admin sends `version` back when saving, and `updatedBy` is how a
 // script-created record is told apart from a hand-edited one.
 const now = new Date().toISOString();
-const meta = { version: 1, createdAt: now, updatedAt: now, updatedBy: "script:skills-migrate" };
+// Dates are written as real Date objects inside the container script below:
+// the storage layer calls toISOString() on them, so an ISO string here would
+// read back as a 500 from every admin list.
+const meta = { version: 1, updatedBy: "script:skills-migrate" };
 
 const technologyDocs = [...technologies.values()]
   .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -292,13 +295,15 @@ for (const name of src.getCollectionNames()) {
   if (docs.length) dst.getCollection(name).insertMany(docs);
 }
 dst.technologies.insertMany(${JSON.stringify(technologyDocs)});
+const stamp = new Date(${JSON.stringify(now)});
+dst.technologies.updateMany({}, { $set: { createdAt: stamp, updatedAt: stamp } });
 dst.technologies.createIndex({ slug: 1 }, { unique: true });
 dst.technologies.createIndex({ sortOrder: 1 });
 for (const update of ${JSON.stringify(experienceUpdates)}) {
   dst.experiences.updateOne(
     { slug: update.slug },
     {
-      $set: { skillsUsed: update.skillsUsed, jobMemories: update.jobMemories, updatedAt: ${JSON.stringify(now)}, updatedBy: "script:skills-migrate" },
+      $set: { skillsUsed: update.skillsUsed, jobMemories: update.jobMemories, updatedAt: stamp, updatedBy: "script:skills-migrate" },
       $inc: { version: 1 },
     },
   );
@@ -307,7 +312,7 @@ for (const entry of ${JSON.stringify([...entryTags].map(([slug, technologySlugs]
   dst.portfolioEntries.updateOne(
     { slug: entry.slug },
     {
-      $set: { technologySlugs: entry.technologySlugs, updatedAt: ${JSON.stringify(now)}, updatedBy: "script:skills-migrate" },
+      $set: { technologySlugs: entry.technologySlugs, updatedAt: stamp, updatedBy: "script:skills-migrate" },
       $inc: { version: 1 },
     },
   );
