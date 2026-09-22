@@ -3,8 +3,8 @@ import type { SceneData, ScenePointer, ShowcaseScene, ThreeModule } from "./type
 /**
  * "GOT inspired Skillz": the opening of the skills film (/lab/got) as a
  * background. The sun lights, three rings are forged round it and etched with
- * the name and code, then the StormScape tree of light grows from the ground
- * beside it, one skill per branch. It fades and starts again.
+ * the name and code, then InvestCloud's difference engine builds itself from
+ * the ground beside it, one skill per column. It fades and starts again.
  *
  * The parts are the film's own (gotAstrolabe, gotBuilders), unmodified; this
  * scene supplies the camera, ground and timing. Its skill data is the film's,
@@ -29,7 +29,7 @@ const smooth = (from: number, to: number, t: number) => {
 };
 
 export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData): Promise<ShowcaseScene> {
-  const [{ makeAstrolabe }, { makeBuilders }, { places, spans }] = await Promise.all([
+  const [{ makeAstrolabe }, { makeBuilders, KIND_BY_PLACE }, { places, spans }] = await Promise.all([
     import("../../lab/gotAstrolabe"),
     import("../../lab/gotBuilders"),
     import("../../lab/skillsData"),
@@ -70,7 +70,7 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
   astrolabe.group.position.copy(SUN);
   scene.add(astrolabe.group);
 
-  // The tree: StormScape's monument, with its skills as branches.
+  // The engine: InvestCloud's construct, with its skills as columns.
   const label = (text: string, bright: boolean) => {
     const canvas = document.createElement("canvas");
     canvas.width = 640;
@@ -101,16 +101,16 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
       .map((span) => ({ name: span.skillName, years: span.to - span.from, fresh: true }))
       .sort((a, b) => b.years - a.years)
       .slice(0, 9);
-  const home = places.find((place) => place.slug === "stormscape");
-  const accent = data.portfolio.cores.find((core) => core.slug === "stormscape")?.color ?? "#5ED9FF";
-  const tree = byKind.monument(towersOf("stormscape"), tallest, towersOf("stormscape-now"), {
-    title: home?.name.split(" (")[0] ?? "StormScape",
+  const home = places.find((place) => place.slug === "investcloud");
+  const accent = data.portfolio.cores.find((core) => core.slug === "investcloud")?.color ?? "#FFD65C";
+  const engine = byKind[KIND_BY_PLACE.investcloud](towersOf("investcloud"), tallest, undefined, {
+    title: home?.name.split(" (")[0] ?? "InvestCloud",
     accent,
-    house: "stormscape",
+    house: "investcloud",
   });
-  tree.group.position.set(120, 1.5, 40);
-  scene.add(tree.group);
-  tree.grow(0, 0, 0);
+  engine.group.position.set(120, 1.5, 40);
+  scene.add(engine.group);
+  engine.grow(0, 0, 0);
 
   // A black sheet in front of the camera, for the fade between loops.
   const veil = new THREE.Mesh(
@@ -146,9 +146,9 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
       });
       astrolabe.update(clock, camera, { sun, bands, etch });
 
-      // Then the tree grows, and keeps turning once grown.
+      // Then the engine builds, and keeps turning once built.
       const built = smooth(TREE_START, TREE_START + TREE_LEN, t);
-      tree.grow(built, clock * 0.6, 1);
+      engine.grow(built, clock * 0.6, 1);
 
       // The whole thing fades to black at the end of the loop, so the restart isn't a jump.
       const fade = 1 - smooth(HOLD_UNTIL, HOLD_UNTIL + FADE_LEN, t);
