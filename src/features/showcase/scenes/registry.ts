@@ -4,11 +4,13 @@ import { createOrbitalPortfolioScene } from "./orbitalPortfolioScene";
 import { createSkillsLatticeScene } from "./skillsLatticeScene";
 import { createUniverseTourScene } from "./universeTourScene";
 import { createJobMoonScene } from "./jobMoonScene";
+import { createGotSkillzScene } from "./gotSkillzScene";
 import type { SceneDefinition } from "./types";
 
 /** Scenes in tour order. The first is shown first. */
 export const SCENE_DEFINITIONS: SceneDefinition[] = [
   { id: "skills-lattice", label: "Skills lattice", create: createSkillsLatticeScene },
+  { id: "got-skillz", label: "GOT inspired Skillz", create: createGotSkillzScene },
   { id: "career-gallery", label: "Career gallery", create: createCareerGalleryScene },
   { id: "orbital-portfolio", label: "Orbital portfolio", create: createOrbitalPortfolioScene },
   { id: "about-ride", label: "About ride", create: createAboutRideScene },

@@ -1,13 +1,26 @@
 import { useEffect } from "react";
-import { useResumeQuery } from "../../../lib/query/contentQueries";
+import { useReleaseQuery } from "../../../lib/query/contentQueries";
 import { useBackdropTint } from "../lib/backdropTint";
 
 const dateRange = (start?: string, end?: string) =>
   start && end ? `${start} – ${end}` : (start ?? end ?? "");
 
+/**
+ * What follows a role's title: its dates, then where. A role with no dates of
+ * its own takes the job's; no end date anywhere means it is still held.
+ */
+const positionDetails = (
+  position: { startDate?: string; endDate?: string },
+  job: { startDate?: string; endDate?: string; location?: string },
+) => {
+  const start = position.startDate ?? job.startDate;
+  const end = position.endDate ?? (position.startDate ? undefined : job.endDate) ?? job.endDate ?? "Present";
+  return [dateRange(start, start ? end : undefined), job.location].filter(Boolean);
+};
+
 /** The resume, kept simple: who, summary and contact on the left, the record on the right. */
 export function ShowcaseResumePage() {
-  const { data, isPending, isError } = useResumeQuery();
+  const { data, isPending, isError } = useReleaseQuery();
   const { setTint } = useBackdropTint();
 
   useEffect(() => {
@@ -23,7 +36,10 @@ export function ShowcaseResumePage() {
     );
   }
 
-  const { personal, summary, experience, education, certifications } = data.payload;
+  const personal = data.profile;
+  const { summary } = data.profile;
+  const { experiences: experience, certifications } = data.collections;
+  const [education] = data.collections.education;
 
   return (
     <article className="showcase-resume">
@@ -64,22 +80,19 @@ export function ShowcaseResumePage() {
           </h2>
           <ol className="showcase-resume__jobs">
             {experience.map((job) => (
-              <li key={job.id} className="showcase-resume__job">
+              <li key={job.slug} className="showcase-resume__job">
                 <header className="showcase-resume__job-head">
                   <h3 className="showcase-resume__company">{job.navLabel || job.company}</h3>
-                  <p className="showcase-label">
-                    {[job.location, dateRange(job.startDate, job.endDate)].filter(Boolean).join(" / ")}
-                  </p>
                 </header>
                 {job.positions.map((position, index) => (
-                  <div key={`${job.id}-${index}`} className="showcase-resume__position">
+                  <div key={`${job.slug}-${index}`} className="showcase-resume__position">
                     <h4 className="showcase-resume__position-title">
                       {position.title}
-                      {dateRange(position.startDate, position.endDate) ? (
-                        <span className="showcase-resume__position-dates">
-                          {dateRange(position.startDate, position.endDate)}
+                      {positionDetails(position, job).map((detail) => (
+                        <span key={detail} className="showcase-resume__position-dates">
+                          {detail}
                         </span>
-                      ) : null}
+                      ))}
                     </h4>
                     {position.responsibilities.length ? (
                       <ul className="showcase-resume__bullets">

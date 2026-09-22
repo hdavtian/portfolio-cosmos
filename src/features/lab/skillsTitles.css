@@ -1,12 +1,13 @@
-/* A title sequence for the skill timeline. Sketch, mock data. */
+/* The Working Years: a career as a title sequence. Sketch, mock data. */
 .titles {
   --titles-gold: #d9a441;
-  --titles-pale: #f0d8a8;
+  --titles-pale: #f3e2b8;
+  --titles-ink: rgba(12, 8, 4, 0.82);
 
   position: relative;
   height: 100vh;
   overflow: hidden;
-  background: #05070b;
+  background: #0a0704;
   color: var(--titles-pale);
   font-family: "JetBrains Mono", Menlo, Consolas, monospace;
 }
@@ -22,10 +23,20 @@
   height: 100%;
 }
 
+/* A lens around the map: dark at the edges, the way the titles are shot. */
+.titles__vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 46%, transparent 38%, rgba(8, 5, 2, 0.55) 78%, rgba(6, 4, 2, 0.92) 100%),
+    linear-gradient(to right, rgba(8, 5, 2, 0.72) 0%, transparent 26%, transparent 76%, rgba(8, 5, 2, 0.6) 100%);
+}
+
 .titles__head {
   position: absolute;
-  top: clamp(18px, 4vh, 46px);
-  left: clamp(18px, 4vw, 54px);
+  top: clamp(16px, 3.4vh, 40px);
+  left: clamp(18px, 3.4vw, 50px);
   pointer-events: none;
 }
 
@@ -34,115 +45,324 @@
   font-size: 10px;
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  color: rgba(240, 216, 168, 0.5);
+  color: rgba(243, 226, 184, 0.5);
 }
 
 .titles__name {
   margin: 6px 0 0;
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: clamp(1.6rem, 3.4vw, 2.8rem);
+  font-size: clamp(1.5rem, 2.9vw, 2.5rem);
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--titles-gold);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.8);
 }
 
-/* The card that arrives with each stop. */
+.titles__era {
+  margin: 4px 0 0;
+  font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
+  font-size: clamp(1.1rem, 2vw, 1.7rem);
+  letter-spacing: 0.14em;
+  color: var(--titles-pale);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9);
+}
+
+/* The chapter card: the film stops, and this is what there is to read. */
 .titles__card {
   position: absolute;
   top: 50%;
-  right: clamp(18px, 4vw, 54px);
-  width: min(330px, 40vw);
-  padding: 18px 20px 16px;
-  transform: translateY(-50%) translateX(14px);
-  border: 1px solid rgba(217, 164, 65, 0.35);
-  background: linear-gradient(160deg, rgba(12, 16, 24, 0.9), rgba(6, 9, 14, 0.75));
-  backdrop-filter: blur(6px);
+  right: clamp(18px, 3.4vw, 50px);
+  width: min(430px, 42vw);
+  max-height: calc(100vh - 190px);
+  overflow-y: auto;
+  padding: 24px 26px 20px;
+  transform: translateY(-50%) translateX(18px);
+  border: 1px solid rgba(217, 164, 65, 0.45);
+  background: linear-gradient(165deg, rgba(26, 17, 8, 0.94), rgba(10, 7, 4, 0.86));
+  backdrop-filter: blur(8px);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
   opacity: 0;
-  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition: opacity 0.6s ease, transform 0.6s ease;
   pointer-events: none;
+  cursor: default;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(217, 164, 65, 0.4) transparent;
 }
 
 .titles__card.is-on {
   opacity: 1;
   transform: translateY(-50%) translateX(0);
+  pointer-events: auto;
+}
+
+.titles__card-kicker {
+  margin: 0 0 6px;
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(243, 226, 184, 0.45);
 }
 
 .titles__card-name {
   margin: 0;
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: 17px;
-  letter-spacing: 0.1em;
+  font-size: clamp(1.5rem, 2.4vw, 2.1rem);
+  line-height: 1.1;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--titles-gold);
 }
 
 .titles__card-years {
-  margin: 4px 0 14px;
-  font-size: 11px;
+  margin: 6px 0 4px;
+  font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
+  font-size: 1.15rem;
   letter-spacing: 0.16em;
-  color: rgba(240, 216, 168, 0.6);
+  color: var(--titles-pale);
 }
 
-.titles__card-list {
+.titles__card-head {
+  margin: 18px 0 8px;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(243, 226, 184, 0.55);
+}
+
+.titles__card-head.is-new {
+  color: #ffc45f;
+}
+
+.titles__chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.titles__chips li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 11px;
+  border: 1px solid rgba(243, 226, 184, 0.2);
+  font-size: 13px;
+  color: rgba(243, 226, 184, 0.9);
+}
+
+.titles__chips li span {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(243, 226, 184, 0.55);
+}
+
+.titles__chips li.is-new {
+  border-color: rgba(255, 196, 95, 0.75);
+  background: rgba(255, 180, 60, 0.1);
+  color: #ffe2a0;
+}
+
+.titles__growth {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 7px;
+  gap: 9px;
 }
 
-.titles__card-list li {
+.titles__growth li {
   display: grid;
-  grid-template-columns: 1fr 58px 34px;
+  grid-template-columns: minmax(96px, 0.9fr) 1.2fr auto;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
+  gap: 10px;
+  font-size: 12px;
 }
 
-.titles__card-skill {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.titles__growth-name {
+  color: rgba(243, 226, 184, 0.85);
 }
 
-.titles__card-bar {
-  height: 3px;
-  background: rgba(217, 164, 65, 0.18);
+.titles__growth-bar {
+  display: flex;
+  height: 7px;
+  background: rgba(217, 164, 65, 0.12);
 }
 
-.titles__card-bar span {
-  display: block;
-  height: 100%;
-  background: var(--titles-gold);
+.titles__growth-was {
+  background: rgba(217, 164, 65, 0.45);
 }
 
-.titles__card-count {
-  text-align: right;
-  color: rgba(240, 216, 168, 0.65);
+.titles__growth-gain {
+  background: linear-gradient(90deg, #e2761f, #ffd06a);
+  box-shadow: 0 0 10px rgba(255, 170, 60, 0.7);
+}
+
+.titles__growth-figures {
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: rgba(243, 226, 184, 0.55);
+}
+
+.titles__growth-figures strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffd27a;
+}
+
+.titles__card-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.titles__continue {
+  padding: 11px 22px;
+  background: var(--titles-gold);
+  border: 0;
+  color: #1a1006;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.titles__continue:hover {
+  background: #f2c15c;
+}
+
+.titles__card-keys {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: rgba(243, 226, 184, 0.35);
+}
+
+.titles__auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(243, 226, 184, 0.55);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.titles__auto input {
+  accent-color: #d9a441;
+}
+
+.titles__finale-links {
+  display: flex;
+  gap: 14px;
+  margin: 30px 0 0;
+}
+
+.titles__finale-links a {
+  padding: 10px 20px;
+  border: 1px solid rgba(217, 164, 65, 0.7);
+  color: var(--titles-gold);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.titles__finale-links a:first-child {
+  background: var(--titles-gold);
+  color: #1a1006;
+}
+
+/* The last frame: the whole map, and the number it has been adding up to. */
+.titles__finale {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 50%, rgba(8, 5, 2, 0.62), transparent 62%);
+}
+
+.titles__finale-years {
+  margin: 0;
+  font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
+  font-size: clamp(3rem, 8vw, 6.5rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--titles-gold);
+  text-shadow: 0 0 40px rgba(255, 150, 40, 0.5), 0 4px 24px rgba(0, 0, 0, 0.9);
+}
+
+.titles__finale-line {
+  margin: 4px 0 26px;
+  font-size: 12px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(243, 226, 184, 0.75);
+}
+
+.titles__finale-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 34px;
+}
+
+.titles__finale-list li {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.titles__finale-list strong {
+  font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  color: var(--titles-pale);
+}
+
+.titles__finale-list span {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(243, 226, 184, 0.6);
 }
 
 /* The scrubber. */
 .titles__scrub {
   position: absolute;
-  right: clamp(18px, 4vw, 54px);
-  bottom: clamp(18px, 4vh, 40px);
-  left: clamp(18px, 4vw, 54px);
+  right: clamp(18px, 3.4vw, 50px);
+  bottom: clamp(16px, 3.4vh, 36px);
+  left: clamp(18px, 3.4vw, 50px);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
+  cursor: default;
 }
 
 .titles__play {
-  padding: 7px 16px;
-  background: none;
+  padding: 7px 14px;
+  background: rgba(10, 7, 4, 0.55);
   border: 1px solid rgba(217, 164, 65, 0.5);
   color: var(--titles-gold);
   font: inherit;
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -150,18 +370,24 @@
   background: rgba(217, 164, 65, 0.14);
 }
 
-.titles__year {
-  font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--titles-gold);
-  font-variant-numeric: tabular-nums;
+.titles__play.is-on {
+  background: rgba(217, 164, 65, 0.2);
+  border-color: rgba(217, 164, 65, 0.9);
+  color: #f4e6c8;
+}
+
+.titles__hint {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(243, 226, 184, 0.35);
+  white-space: nowrap;
 }
 
 .titles__track {
   position: relative;
   flex: 1;
-  padding-bottom: 20px;
+  padding-bottom: 30px;
 }
 
 .titles__track input[type="range"] {
@@ -193,7 +419,7 @@
 .titles__stops {
   position: absolute;
   inset: auto 0 0;
-  height: 18px;
+  height: 28px;
 }
 
 .titles__stop {
@@ -203,7 +429,7 @@
   padding: 0;
   background: none;
   border: 0;
-  color: rgba(240, 216, 168, 0.45);
+  color: rgba(243, 226, 184, 0.45);
   font: inherit;
   font-size: 9px;
   letter-spacing: 0.08em;
@@ -221,19 +447,32 @@
   background: currentColor;
 }
 
+.titles__stop span {
+  display: block;
+}
+
+.titles__stop-years {
+  margin-top: 1px;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
 .titles__stop:hover,
 .titles__stop.is-on {
   color: var(--titles-gold);
 }
 
-/* The running tally, lit from underneath. */
+/* The message: years of experience so far, lit from underneath. */
 .tally {
   position: absolute;
-  top: clamp(96px, 16vh, 150px);
+  top: clamp(118px, 19vh, 176px);
   bottom: clamp(74px, 12vh, 110px);
-  left: clamp(18px, 4vw, 54px);
-  width: min(290px, 32vw);
+  left: clamp(18px, 3.4vw, 50px);
+  width: min(300px, 32vw);
   overflow: hidden;
+  cursor: default;
 }
 
 .tally__embers {
@@ -251,8 +490,7 @@
   padding-right: 6px;
   scrollbar-width: thin;
   scrollbar-color: rgba(217, 164, 65, 0.4) transparent;
-  /* The list burns out towards the bottom rather than stopping dead. */
-  mask-image: linear-gradient(to bottom, #000 0, #000 86%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 88%, transparent 100%);
 }
 
 .tally__title {
@@ -261,7 +499,7 @@
   font-size: 12px;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: rgba(240, 216, 168, 0.75);
+  color: rgba(243, 226, 184, 0.78);
 }
 
 .tally__total {
@@ -269,12 +507,12 @@
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(240, 216, 168, 0.45);
+  color: rgba(243, 226, 184, 0.5);
 }
 
 .tally__total span {
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: 30px;
+  font-size: 34px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #ffb648;
@@ -298,7 +536,7 @@
   padding: 0;
   background: none;
   border: 0;
-  color: rgba(240, 216, 168, 0.82);
+  color: rgba(243, 226, 184, 0.86);
   font: inherit;
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -324,7 +562,8 @@
 .tally__years {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
-  color: rgba(240, 216, 168, 0.6);
+  text-transform: none;
+  color: rgba(243, 226, 184, 0.72);
 }
 
 .tally__bar {
@@ -341,7 +580,7 @@
   box-shadow: 0 0 10px rgba(226, 118, 32, 0.6);
 }
 
-/* A category that is still taking on years sizzles. */
+/* A discipline that is taking on years right now sizzles. */
 .tally__row.is-hot .tally__fill {
   animation: tally-sizzle 0.5s steps(4, end) infinite;
 }
@@ -373,7 +612,7 @@
   display: grid;
   gap: 3px;
   font-size: 10px;
-  color: rgba(240, 216, 168, 0.55);
+  color: rgba(243, 226, 184, 0.58);
 }
 
 .tally__skills li {
@@ -386,15 +625,197 @@
   font-variant-numeric: tabular-nums;
 }
 
+.tally__foot {
+  margin: 16px 0 24px;
+  font-size: 9px;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+  color: rgba(243, 226, 184, 0.36);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tally__row.is-hot .tally__fill {
     animation: none;
   }
 }
 
-.titles__card-note {
-  margin: -8px 0 12px;
-  font-size: 10px;
-  line-height: 1.5;
-  color: rgba(240, 216, 168, 0.5);
+
+/* Stopped at a place, the scene is the viewer's to turn. */
+.titles.is-holding .titles__stage {
+  cursor: grab;
+}
+
+.titles.is-holding .titles__stage:active {
+  cursor: grabbing;
+}
+
+/* The skills panel is out of the way until it is asked for. */
+.titles__toggle {
+  position: absolute;
+  top: clamp(16px, 3.4vh, 40px);
+  left: clamp(18px, 3.4vw, 50px);
+  /* The bar's old buttons, about 40% smaller (type held at a readable size). */
+  padding: 4px 9px;
+  background: none;
+  border: 1px solid rgba(217, 164, 65, 0.5);
+  color: var(--titles-gold);
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  /* Always on top: it must work at every moment of the film. */
+  z-index: 6;
+}
+
+.titles__toggle:hover,
+.titles__toggle.is-on {
+  border-color: rgba(217, 164, 65, 0.95);
+  color: #f4e6c8;
+}
+
+.tally {
+  top: clamp(50px, 9vh, 86px);
+  z-index: 5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+
+.tally.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Where we are, and the way on or back. */
+.titles__now {
+  position: absolute;
+  left: clamp(18px, 3.4vw, 50px);
+  bottom: clamp(84px, 14vh, 128px);
+  max-width: min(560px, 60vw);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  pointer-events: none;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9);
+}
+
+.titles__now.is-on {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.titles__now-name {
+  margin: 0;
+  font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
+  font-size: clamp(1.7rem, 3.4vw, 3rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--titles-gold);
+}
+
+.titles__now-years {
+  margin: 6px 0 0;
+  font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
+  font-size: clamp(1rem, 1.7vw, 1.4rem);
+  letter-spacing: 0.18em;
+  color: var(--titles-pale);
+}
+
+.titles__now-role {
+  margin: 4px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(243, 226, 184, 0.72);
+}
+
+.titles__nav {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.titles__now.is-on .titles__nav,
+.titles__now.is-on .titles__auto {
+  pointer-events: auto;
+}
+
+.titles__nav-button {
+  padding: 8px 16px;
+  background: rgba(10, 7, 4, 0.35);
+  border: 1px solid rgba(217, 164, 65, 0.6);
+  color: var(--titles-gold);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.titles__nav-button:hover:not(:disabled) {
+  background: rgba(217, 164, 65, 0.16);
+  color: #f4e6c8;
+}
+
+.titles__nav-button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.titles__now .titles__auto {
+  margin-top: 9px;
+  font-size: 8.5px;
+  color: rgba(243, 226, 184, 0.45);
+}
+
+.titles__now .titles__auto input {
+  width: 10px;
+  height: 10px;
+}
+
+/* The ending: the small line first, then the large one. */
+.titles__finale-since {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(243, 226, 184, 0.78);
+}
+
+.titles__finale-craft {
+  margin: 6px 0 28px;
+  font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
+  font-size: clamp(3rem, 8vw, 6.5rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--titles-gold);
+  text-shadow: 0 0 40px rgba(255, 150, 40, 0.5), 0 4px 24px rgba(0, 0, 0, 0.9);
+}
+
+.titles__finale-links button {
+  padding: 10px 20px;
+  background: none;
+  border: 1px solid rgba(217, 164, 65, 0.7);
+  color: var(--titles-gold);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.titles__finale-links a:first-child {
+  background: none;
+  color: var(--titles-gold);
+}
+
+.titles__finale-links a:hover,
+.titles__finale-links button:hover {
+  background: rgba(217, 164, 65, 0.16);
+  color: #f4e6c8;
 }

@@ -1,139 +1,99 @@
-import type {
-  PortfolioCoreSeed,
-  PortfolioEntrySeed,
-  PortfolioItem,
-  PortfolioClientVariantSeed,
-  PortfolioMedia,
-} from "../types";
+import type { ClientVariant, GalleryItem, PortfolioEntry } from "@hd/content-schema";
+import { mediaUrl, type Release } from "../../../lib/api/release";
+import type { PortfolioItem, PortfolioMedia } from "../types";
 
-export function flattenPortfolioCores(cores: PortfolioCoreSeed[]): PortfolioItem[] {
-  const deduped = new Map<string, PortfolioItem>();
+/**
+ * The published projects as the pages list them: one item per entry, or one
+ * per client site where an entry groups several. Ordered as the portfolio is
+ * laid out: by core, then plane, then ring, then the entry's own order.
+ */
+export function portfolioItemsFromRelease(release: Release): PortfolioItem[] {
+  const { portfolioCores, portfolioEntries } = release.collections;
+  const coreOrder = new Map(portfolioCores.map((core, index) => [core.slug, index]));
+  const coreName = new Map(portfolioCores.map((core) => [core.slug, core.name]));
 
-  cores.forEach((core) => {
-    core.plains?.forEach((plain) => {
-      plain.items?.forEach((ring) => {
-        ring.items?.forEach((entry) => {
-          if (!isPublished(entry)) return;
+  const entries = portfolioEntries
+    .filter((entry) => coreOrder.has(entry.coreSlug))
+    .map((entry, index) => ({ entry, index }))
+    .sort(
+      (a, b) =>
+        coreOrder.get(a.entry.coreSlug)! - coreOrder.get(b.entry.coreSlug)! ||
+        a.entry.placement.plane - b.entry.placement.plane ||
+        a.entry.placement.ring - b.entry.placement.ring ||
+        a.index - b.index,
+    )
+    .map(({ entry }) => entry);
 
-          const variants = entry.clientVariants?.filter((variant) => Boolean(variant.id));
-          if (variants && variants.length > 0) {
-            variants.forEach((variant) => {
-              if (deduped.has(variant.id)) return;
-              deduped.set(
-                variant.id,
-                toPortfolioVariantItem(core.core, entry.title, entry, variant),
-              );
-            });
-            return;
-          }
-
-          if (deduped.has(entry.id)) return;
-          deduped.set(entry.id, toPortfolioItem(core.core, entry));
-        });
+  const items = new Map<string, PortfolioItem>();
+  entries.forEach((entry) => {
+    const category = coreName.get(entry.coreSlug) ?? "";
+    if (entry.clientVariants.length > 0) {
+      entry.clientVariants.forEach((variant) => {
+        if (!items.has(variant.slug)) items.set(variant.slug, variantItem(release, category, entry, variant));
       });
-    });
+      return;
+    }
+    if (!items.has(entry.slug)) items.set(entry.slug, entryItem(release, category, entry));
   });
-
-  return Array.from(deduped.values());
+  return [...items.values()];
 }
 
-function isPublished(entry: PortfolioEntrySeed) {
-  return entry.published !== false;
-}
+const gallery = (release: Release, media: GalleryItem[]): PortfolioMedia[] =>
+  media.map((item) => ({
+    id: item.slug,
+    type: item.type,
+    image: mediaUrl(release, item.mediaId),
+    title: item.title,
+    description: item.description,
+    fit: item.fit,
+  }));
 
-function toPortfolioItem(
-  coreName: string,
-  entry: PortfolioEntrySeed,
-): PortfolioItem {
-  const primaryImage = entry.image ?? "";
+function entryItem(release: Release, category: string, entry: PortfolioEntry): PortfolioItem {
+  const image = mediaUrl(release, entry.mediaId);
   return {
-    id: entry.id,
+    id: entry.slug,
     title: entry.title,
-    description: entry.description ?? "No description provided.",
-    image: primaryImage,
-    technologies: entry.technologies ?? [],
-    year: entry.year ?? null,
-    category: coreName,
+    description: entry.description,
+    image,
+    technologies: entry.technologies,
+    year: entry.year,
+    category,
     subcategory: "General",
-    detailMedia: buildDetailMedia({
-      itemId: entry.id,
-      title: entry.title,
-      description: entry.description,
-      primaryImage,
-      galleryMedia: entry.galleryMedia,
-    }),
+    detailMedia: withCover(entry.slug, entry.title, entry.description, image, gallery(release, entry.galleryMedia)),
     isClientVariation: false,
   };
 }
 
-function toPortfolioVariantItem(
-  coreName: string,
-  parentTitle: string,
-  parentEntry: PortfolioEntrySeed,
-  variant: PortfolioClientVariantSeed,
+function variantItem(
+  release: Release,
+  category: string,
+  parent: PortfolioEntry,
+  variant: ClientVariant,
 ): PortfolioItem {
-  const primaryImage = variant.image ?? parentEntry.image ?? "";
-  const description =
-    variant.description ??
-    parentEntry.description ??
-    "No description provided.";
+  const image = mediaUrl(release, variant.mediaId) || mediaUrl(release, parent.mediaId);
+  const media = variant.galleryMedia.length > 0 ? variant.galleryMedia : parent.galleryMedia;
   return {
-    id: variant.id,
+    id: variant.slug,
     title: variant.title,
-    description,
-    image: primaryImage,
-    technologies: variant.technologies ?? parentEntry.technologies ?? [],
-    year:
-      typeof variant.year === "number"
-        ? variant.year
-        : (parentEntry.year ?? null),
-    category: coreName,
-    subcategory: parentTitle,
-    detailMedia: buildDetailMedia({
-      itemId: variant.id,
-      title: variant.title,
-      description,
-      primaryImage,
-      galleryMedia: variant.galleryMedia ?? parentEntry.galleryMedia,
-    }),
+    description: variant.description,
+    image,
+    technologies: variant.technologies,
+    year: typeof variant.year === "number" ? variant.year : parent.year,
+    category,
+    subcategory: parent.title,
+    detailMedia: withCover(variant.slug, variant.title, variant.description, image, gallery(release, media)),
     isClientVariation: true,
   };
 }
 
-interface BuildDetailMediaInput {
-  itemId: string;
-  title: string;
-  description?: string;
-  primaryImage: string;
-  galleryMedia?: PortfolioMedia[];
-}
-
-function buildDetailMedia({
-  itemId,
-  title,
-  description,
-  primaryImage,
-  galleryMedia,
-}: BuildDetailMediaInput): PortfolioMedia[] {
-  const media = [...(galleryMedia ?? [])];
-
-  if (!primaryImage) {
-    return media;
-  }
-
-  const alreadyIncluded = media.some((entry) => entry.image === primaryImage);
-  if (alreadyIncluded) {
-    return media;
-  }
-
-  return [
-    {
-      id: `${itemId}-cover`,
-      type: "image",
-      image: primaryImage,
-      title,
-      description: description ?? "",
-    },
-    ...media,
-  ];
+/** The cover image leads the detail gallery unless the gallery already has it. */
+function withCover(
+  itemId: string,
+  title: string,
+  description: string,
+  cover: string,
+  media: PortfolioMedia[],
+): PortfolioMedia[] {
+  if (!cover || media.some((entry) => entry.image === cover)) return media;
+  return [{ id: `${itemId}-cover`, type: "image", image: cover, title, description }, ...media];
 }

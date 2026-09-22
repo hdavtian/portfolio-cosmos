@@ -5,18 +5,18 @@ import {
   setCinematicLaunch,
   subscribeCinematicLaunch,
 } from "../../../app/cinematic/launchStore";
-import type { TechStackTreeNode } from "../../../lib/api/contentV2";
-import type { PortfolioCoreSeed } from "../../fast/types";
+import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
-import type { SceneJob, ShowcaseScene } from "../scenes/types";
+import { EMPTY_PORTFOLIO, type SceneJob, type ScenePortfolio, type ShowcaseScene } from "../scenes/types";
 
 interface SceneStageProps {
   projects: ShowcaseProject[];
   techStack: TechStackTreeNode[] | undefined;
   /** Technologies of the project open on the page. */
   highlights: string[];
-  portfolioCores: PortfolioCoreSeed[] | undefined;
+  portfolio: ScenePortfolio | undefined;
+  profile: { name: string; title: string } | undefined;
   jobs: SceneJob[];
   /** Project whose preview is open on the page. */
   focusProjectId: string | null;
@@ -99,7 +99,7 @@ const prefetchCinematic = () => {
  * Fragments of the cinematic universe behind the portfolio: one renderer, one
  * visible scene at a time, glitch transitions, a switcher and an auto-tour.
  */
-export function SceneStage({ projects, techStack, highlights, portfolioCores, jobs, focusProjectId, interactive, paused, showGateway, onShowing }: SceneStageProps) {
+export function SceneStage({ projects, techStack, highlights, portfolio, profile, jobs, focusProjectId, interactive, paused, showGateway, onShowing }: SceneStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Already loaded and in memory: going back is instant, and the link says so.
   const cinematicLoaded = useSyncExternalStore(subscribeCinematicLaunch, isCinematicLoaded, isCinematicLoaded);
@@ -131,10 +131,10 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
     onShowingRef.current = onShowing;
   });
 
-  const hasData = projects.length > 0 && techStack !== undefined && portfolioCores !== undefined;
-  const dataRef = useRef({ projects, techStack: techStack ?? [], portfolioCores: portfolioCores ?? [], jobs });
+  const hasData = projects.length > 0 && techStack !== undefined && portfolio !== undefined;
+  const dataRef = useRef({ profile: profile ?? { name: "", title: "" }, projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs });
   useLayoutEffect(() => {
-    dataRef.current = { projects, techStack: techStack ?? [], portfolioCores: portfolioCores ?? [], jobs };
+    dataRef.current = { profile: profile ?? { name: "", title: "" }, projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs };
   });
 
   const switchTo = useCallback((id: string) => {
@@ -459,7 +459,7 @@ export function SceneStage({ projects, techStack, highlights, portfolioCores, jo
         <div className="showcase-scenes__shade" />
       </div>
 
-      <aside className="showcase-scene-panel" aria-label="Cinematic scenes">
+      <aside className="showcase-scene-panel" aria-label="Cinematic scenes" hidden={!showGateway}>
       <div className="showcase-scene-plate">
         <p className="showcase-scene-plate__title">Background previews</p>
         <ol className="showcase-scene-switcher" aria-label="Background previews">

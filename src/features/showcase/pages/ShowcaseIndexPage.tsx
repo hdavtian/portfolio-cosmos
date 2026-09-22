@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { SourceMarkedName } from "../../../components/ui/SourceMarkedName";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { HoloImage } from "../components/HoloImage";
 import { TechConstellation } from "../components/TechConstellation";
@@ -28,7 +29,7 @@ const excerpt = (text: string) => {
  * works.
  */
 export function ShowcaseIndexPage() {
-  const { projects, cores, topTech, personal, isLoading } = useShowcaseProjects();
+  const { projects, cores, topTech, personal, isLoading, isError } = useShowcaseProjects();
   const { setTint, setHighlights, setFocusProject, sceneShowing } = useBackdropTint();
   const navigate = useNavigate();
   const location = useLocation();
@@ -241,7 +242,9 @@ export function ShowcaseIndexPage() {
 
       {/* Masthead: on the pills' line, top left. */}
       <header className="showcase-masthead">
-        <h1 className="showcase-masthead__name">{personal?.name ?? "Harma Davtian"}</h1>
+        <h1 className="showcase-masthead__name">
+          <SourceMarkedName name={personal?.name ?? "Harma Davtian"} />
+        </h1>
         <p className="showcase-masthead__role">
           {personal?.title ?? "Full Stack Engineer"}
           {personal?.location ? <span className="showcase-masthead__place">{personal.location}</span> : null}
@@ -292,7 +295,9 @@ export function ShowcaseIndexPage() {
         </div>
 
         {isLoading && projects.length === 0 ? <p className="showcase-label">Loading work…</p> : null}
-        {!isLoading && visible.length === 0 ? (
+        {isError ? (
+          <p className="showcase-empty">The work could not be loaded. Refresh to try again.</p>
+        ) : !isLoading && visible.length === 0 ? (
           <p className="showcase-empty">Nothing matches those filters.</p>
         ) : null}
 

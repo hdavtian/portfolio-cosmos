@@ -5,8 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import ThreeGlobe from "three-globe";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import aboutDeck from "../../data/aboutDeck.json";
-import type { AboutPathTravelMessage, TechStackTreeNode } from "../../lib/api/contentV2";
+import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
+import type { SpaceJob, SpaceTravelMessage as AboutPathTravelMessage } from "./spaceContent";
 import {
   CareerGallery,
   type CareerGalleryFocusInfo,
@@ -51,7 +51,6 @@ import {
   writeStoredUniverseStyle,
   type UniverseStyle,
 } from "./universeBackdrop/UniverseBackdrop";
-import resumeData from "../../data/resume.json";
 import { trackEvent } from "../../lib/analytics";
 import { IS_DEBUG, IS_DEBUG_OVERLAYS, dlog, dwarn } from "../../lib/debugLog";
 import CosmosLoader from "../CosmosLoader";
@@ -166,8 +165,6 @@ import { usePointerInteractions } from "./hooks/usePointerInteractions";
 import { useRenderLoop } from "./hooks/useRenderLoop";
 import { useThreeScene } from "./hooks/useThreeScene";
 import {
-  INTRO_CAMERA_FINAL_POS,
-  INTRO_CAMERA_FINAL_TARGET,
   createIntroSequenceRunner,
 } from "./introSequence";
 import MoonOrbitHtmlLayout from "./MoonOrbitHtmlLayout";
@@ -808,14 +805,6 @@ const SKILLS_LATTICE_TONE_PRESETS: SkillsLatticeTonePreset[] = [
 const resolveSkillsLatticeTonePreset = (id: string): SkillsLatticeTonePreset =>
   SKILLS_LATTICE_TONE_PRESETS.find((preset) => preset.id === id) ??
   SKILLS_LATTICE_TONE_PRESETS[0];
-const FAST_TRACK_TARGET: string | null = (() => {
-  if (typeof window === "undefined") return null;
-  try {
-    return new URLSearchParams(window.location.search).get("fastTrack");
-  } catch {
-    return null;
-  }
-})();
 type KeyboardPianoKey = {
   note: string;
   midi: number;
@@ -1939,7 +1928,7 @@ type AboutDeckBlock = {
 };
 
 type AboutDeckSlide = {
-  id: string;
+  slug: string;
   holdMs?: number;
   explodeAfter?: boolean;
   reveal?: {
@@ -1948,12 +1937,6 @@ type AboutDeckSlide = {
     cellRevealMs?: number;
   };
   blocks: AboutDeckBlock[];
-};
-
-type AboutDeckData = {
-  aboutDeck: {
-    slides: AboutDeckSlide[];
-  };
 };
 
 type AboutCellSlot = {
@@ -2037,14 +2020,16 @@ export default function ResumeSpace3D({
   aboutPathTravelMessages,
   techStack,
   profile,
+  resumeData,
+  aboutSlides: publishedAboutSlides,
 }: ResumeSpace3DProps) {
   // Published (or bundled) before mount, so a plain slice is stable for the scene's lifetime.
   const aboutPathRideMessages = useMemo(
     () => aboutPathTravelMessages.slice(0, ABOUT_PATH_RIDE_MESSAGE_LIMIT),
     [aboutPathTravelMessages],
   );
-  const aboutDeckData = aboutDeck as AboutDeckData;
-  const aboutSlides = aboutDeckData.aboutDeck.slides;
+  // Published (Admin → About deck) before mount, like the rest of the content.
+  const aboutSlides = publishedAboutSlides as AboutDeckSlide[];
 
   const portfolioCoreBuild = useMemo(
     () =>
@@ -2053,12 +2038,12 @@ export default function ResumeSpace3D({
   );
   const moonPortfolioByCompanyId = useMemo(() => {
     const map = new Map<string, NonNullable<OverlayContent["moonPortfolio"]>>();
-    (resumeData.experience ?? []).forEach((company: any) => {
-      const companyId = String(company?.id ?? "").trim();
+    resumeData.experience.forEach((company) => {
+      const companyId = company.slug.trim();
       if (!companyId) return;
       const payload = buildMoonPortfolioPayload({
         companyId,
-        companyName: String(company?.company ?? companyId),
+        companyName: company.company || companyId,
         coreSeeds: portfolioCores,
         mappings: moonPortfolioMapping,
       });
@@ -2067,8 +2052,8 @@ export default function ResumeSpace3D({
     return map;
   }, [portfolioCores, moonPortfolioMapping]);
   const getMoonPortfolio = useCallback(
-    (company: any): OverlayContent["moonPortfolio"] => {
-      const companyId = String(company?.id ?? "").trim();
+    (company: SpaceJob): OverlayContent["moonPortfolio"] => {
+      const companyId = company.slug.trim();
       if (!companyId) return null;
       return moonPortfolioByCompanyId.get(companyId) ?? null;
     },
@@ -4930,10 +4915,7 @@ export default function ResumeSpace3D({
     angle: Math.PI * 0.25,
   });
   const moonTravelSignCatalog = useMemo(() => {
-    const experience = (resumeData as { experience?: unknown }).experience;
-    const entries = Array.isArray(experience)
-      ? (experience as Array<Record<string, unknown>>)
-      : [];
+    const entries = resumeData.experience;
     const normalizeMemoryType = (value: unknown): JobMemoryType => {
       const raw = String(value ?? "")
         .trim()
@@ -4949,7 +4931,7 @@ export default function ResumeSpace3D({
     };
     const catalog = new Map<string, { pool: JobMemoryEntry[] }>();
     entries.forEach((entry) => {
-      const id = String(entry.id ?? "").toLowerCase();
+      const id = entry.slug.toLowerCase();
       if (!id) return;
       const sequence = Array.isArray(entry.jobMemories)
         ? (entry.jobMemories as unknown[])
@@ -5268,7 +5250,7 @@ export default function ResumeSpace3D({
 
   const formatNavTargetLabel = useCallback((targetId: string): string => {
     const company = resumeData.experience.find(
-      (exp: any) => exp.id === targetId,
+      (exp) => exp.slug === targetId,
     );
     if (company) return company.navLabel || company.company || targetId;
 
@@ -5401,7 +5383,6 @@ export default function ResumeSpace3D({
   const startIntroSequenceRef = useRef<(() => void) | null>(null);
   const introStartQueuedRef = useRef(false);
   const introStartConsumedRef = useRef(false);
-  const fastTrackConsumedRef = useRef(false);
   const cameraDriverTraceRef = useRef<string>("boot");
   const startupUiRevealTlRef = useRef<gsap.core.Timeline | null>(null);
   const runStartupUiRevealRef = useRef<(() => void) | null>(null);
@@ -5470,7 +5451,7 @@ export default function ResumeSpace3D({
       icon: "⬡",
     },
     ...resumeData.experience.map((exp) => ({
-      id: exp.id,
+      id: exp.slug,
       label: exp.navLabel || exp.company,
       type: "moon" as const,
       icon: "◦",
@@ -10340,37 +10321,6 @@ export default function ResumeSpace3D({
     if (isLoading || !sceneReady) return;
     if (!introStartQueuedRef.current || introStartConsumedRef.current) return;
 
-    if (FAST_TRACK_TARGET) {
-      introStartConsumedRef.current = true;
-      setCosmosIntroOverlayOpacity(0);
-      const camera = sceneRef.current.camera;
-      const controls = sceneRef.current.controls;
-      if (camera) {
-        camera.position.copy(INTRO_CAMERA_FINAL_POS);
-      }
-      if (controls) {
-        const controlsAny = controls as unknown as {
-          target?: THREE.Vector3;
-          setTarget?: (x: number, y: number, z: number) => void;
-        };
-        if (controlsAny.setTarget) {
-          controlsAny.setTarget(
-            INTRO_CAMERA_FINAL_TARGET.x,
-            INTRO_CAMERA_FINAL_TARGET.y,
-            INTRO_CAMERA_FINAL_TARGET.z,
-          );
-        } else if (controlsAny.target) {
-          controlsAny.target.copy(INTRO_CAMERA_FINAL_TARGET);
-        }
-        controls.update?.(0);
-      }
-      dwarn("[FAST_TRACK] Skipping intro sequence, positioning camera at home");
-      setStartupDestinationsVisible(true);
-      setStartupConsoleVisible(true);
-      setStartupMiniMapVisible(true);
-      return;
-    }
-
     const startIntro = startIntroSequenceRef.current;
     if (!startIntro) return;
     let fadeRaf = 0;
@@ -10406,15 +10356,6 @@ export default function ResumeSpace3D({
       if (fadeRaf) cancelAnimationFrame(fadeRaf);
     };
   }, [isLoading, sceneReady, shipLog]);
-
-  useEffect(() => {
-    if (!FAST_TRACK_TARGET || fastTrackConsumedRef.current) return;
-    if (isLoading || !sceneReady) return;
-    const target = FAST_TRACK_TARGET;
-    fastTrackConsumedRef.current = true;
-    dwarn(`[FAST_TRACK] Navigating directly to: ${target}`);
-    handleCockpitNavigate(target, "section");
-  }, [isLoading, sceneReady, handleCockpitNavigate]);
 
   const clearStartupUiRevealTimeline = useCallback(() => {
     if (startupUiRevealTlRef.current) {
@@ -10763,6 +10704,9 @@ export default function ResumeSpace3D({
         let img = aboutImageCacheRef.current.get(block.src);
         if (!img) {
           img = new Image();
+          // The picture comes from media storage, another origin; the scene reads
+          // its pixels, which the browser only allows for a cross-origin request.
+          img.crossOrigin = "anonymous";
           img.src = block.src;
           await new Promise<void>((resolve) => {
             img!.onload = () => resolve();
@@ -16415,7 +16359,7 @@ export default function ResumeSpace3D({
 
     experienceJobs.forEach((job, i) => {
       const overlayTextureUrl =
-        EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID[job.id];
+        EXPERIENCE_MOON_OVERLAY_TEXTURE_BY_JOB_ID[job.slug];
       const baseTextureUrl =
         EXPERIENCE_MOON_BASE_TEXTURES[i % EXPERIENCE_MOON_BASE_TEXTURES.length];
 
@@ -16484,7 +16428,7 @@ export default function ResumeSpace3D({
       experienceMoonMeshes.push(moonMesh);
 
       // Register moon with position emitter for tracking
-      const moonId = `moon-${job.id}`;
+      const moonId = `moon-${job.slug}`;
       moonMesh.userData.moonId = moonId;
       emitterRef.current.registerObject(moonId, moonMesh, 16); // 60fps updates
 
@@ -19593,9 +19537,8 @@ export default function ResumeSpace3D({
           const candidate =
             (waypoint.content && (waypoint.content as any).title) ||
             waypoint.name;
-          const company = (resumeData.experience as any[]).find((c) => {
-            if (!c) return false;
-            const lname = (c.company || c.id || "").toLowerCase();
+          const company = resumeData.experience.find((c) => {
+            const lname = (c.company || c.slug).toLowerCase();
             return candidate
               .toLowerCase()
               .includes(lname.split(" ")[0] || lname);
@@ -19607,7 +19550,7 @@ export default function ResumeSpace3D({
               if (object instanceof THREE.Mesh && object.userData.planetName) {
                 const pname = object.userData.planetName.toLowerCase();
                 if (
-                  pname.includes((company.id || "").toLowerCase()) ||
+                  pname.includes(company.slug.toLowerCase()) ||
                   pname.includes((company.company || "").toLowerCase())
                 ) {
                   moonMesh = object;
@@ -20183,8 +20126,7 @@ export default function ResumeSpace3D({
           submenu.innerHTML = "";
           resumeData.experience.forEach((company) => {
             const id =
-              (company.id as string) ||
-              company.company.toLowerCase().replace(/\s+/g, "-");
+              company.slug || company.company.toLowerCase().replace(/\s+/g, "-");
             const btn = document.createElement("button");
             btn.className = "target-button submenu-item";
             btn.dataset.target = `experience-${id}`;

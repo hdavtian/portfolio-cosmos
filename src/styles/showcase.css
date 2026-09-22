@@ -1344,7 +1344,8 @@ html.is-scene-dragging * {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--showcase-ink);
+  /* The same gold as the name badge in the 3D experience. */
+  color: #d4a845;
 }
 
 .showcase-masthead__role {
@@ -2402,6 +2403,13 @@ html.is-scene-dragging * {
 .showcase-resume__position-dates {
   font-weight: 400;
   color: var(--showcase-ink-quiet);
+}
+
+/* Title | dates | place: a pipe before each detail. */
+.showcase-resume__position-dates::before {
+  content: "|";
+  margin-right: 14px;
+  opacity: 0.55;
 }
 
 .showcase-resume__bullets {

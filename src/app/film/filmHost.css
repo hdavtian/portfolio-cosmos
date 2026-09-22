@@ -1,0 +1,12 @@
+/* The kept-alive skills film: shown on its route, kept out of sight otherwise. */
+.film-host {
+  position: fixed;
+  inset: 0;
+  /* Over the page and its preview panel; under the site nav (z-index 5 is the pills). */
+  z-index: 4;
+}
+
+.film-host.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}

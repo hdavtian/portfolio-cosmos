@@ -9,4 +9,3 @@ export * from "./cosmos.js";
 export * from "./techStack.js";
 export * from "./techStackTree.js";
 export * from "./collections.js";
-export * from "./legacy/index.js";

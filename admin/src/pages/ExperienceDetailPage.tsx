@@ -56,6 +56,8 @@ const clean = (values: string[]) => values.map((value) => value.trim()).filter(B
 /** Normalises the editable text back into the shape the API validates. */
 const normalise = (draft: Experience): Experience => ({
   ...draft,
+  // Blank means the job is current.
+  endDate: draft.endDate?.trim() || undefined,
   positions: draft.positions.map((position) => ({
     ...position,
     startDate: position.startDate?.trim() || undefined,
@@ -202,7 +204,7 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
         <Field label="Start date" hint="MM/YYYY" error={fieldErrors.startDate}>
           <TextBoxComponent value={draft.startDate} input={(e: { value: string }) => set("startDate", e.value)} />
         </Field>
-        <Field label="End date" hint="MM/YYYY" error={fieldErrors.endDate}>
+        <Field label="End date" hint="MM/YYYY, or leave blank for a current job" error={fieldErrors.endDate}>
           <TextBoxComponent value={draft.endDate} input={(e: { value: string }) => set("endDate", e.value)} />
         </Field>
         <Field label="Intro text" hint="Read out by the drone in the cosmos" error={fieldErrors.droneIntroText}>

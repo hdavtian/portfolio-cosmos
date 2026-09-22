@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
-import resumeData from "../data/resume.json";
 import { type DiagramStyle, type DiagramStyleOptions } from "./DiagramSettings";
 import ResumeSpace3D from "./cosmos/ResumeSpace3D";
-import type { PortfolioCoreSeed as CosmosPortfolioCoreSeed } from "./cosmos/portfolioData";
-import { useCosmosContentQuery } from "../lib/query/contentQueries";
+import type { SpaceResume } from "./cosmos/spaceContent";
+import { useSpaceContentQuery } from "../lib/query/contentQueries";
 
 interface ResumeStructureDiagramProps {
   onNavigate: (section: number) => void;
@@ -29,38 +28,40 @@ function ResumeStructureDiagram({
   onReloadUniverse,
 }: ResumeStructureDiagramProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  // The jobs the flat diagram styles draw, from the published release.
+  const resumeData = useSpaceContentQuery().data?.resume;
 
   useEffect(() => {
     // If style is "space", skip D3 rendering (handled by conditional return below)
     if (style === "space") return;
 
     const svg = svgRef.current;
-    if (!svg) return;
+    if (!svg || !resumeData) return;
 
     // Re-render when style or options change
     switch (style) {
       case "circles":
-        renderCirclesStyle(svg, onNavigate, options);
+        renderCirclesStyle(svg, onNavigate, options, resumeData);
         break;
       case "constellation":
-        renderConstellationStyle(svg, onNavigate, options);
+        renderConstellationStyle(svg, onNavigate, options, resumeData);
         break;
       case "circuit":
-        renderCircuitStyle(svg, onNavigate, options);
+        renderCircuitStyle(svg, onNavigate, options, resumeData);
         break;
       case "rings":
-        renderRingsStyle(svg, onNavigate, options);
+        renderRingsStyle(svg, onNavigate, options, resumeData);
         break;
       case "tree":
-        renderTreeStyle(svg, onNavigate, options);
+        renderTreeStyle(svg, onNavigate, options, resumeData);
         break;
       case "neural":
-        renderNeuralStyle(svg, onNavigate, options);
+        renderNeuralStyle(svg, onNavigate, options, resumeData);
         break;
       default:
-        renderCirclesStyle(svg, onNavigate, options);
+        renderCirclesStyle(svg, onNavigate, options, resumeData);
     }
-  }, [onNavigate, style, options]);
+  }, [onNavigate, style, options, resumeData]);
 
   // If style is "space", return 3D component
   if (style === "space") {
@@ -86,7 +87,13 @@ function ResumeStructureDiagram({
 
 type PortfolioSpaceProps = Omit<
   React.ComponentProps<typeof ResumeSpace3D>,
-  "portfolioCores" | "moonPortfolioMapping" | "aboutPathTravelMessages" | "techStack" | "profile"
+  | "portfolioCores"
+  | "moonPortfolioMapping"
+  | "aboutPathTravelMessages"
+  | "techStack"
+  | "profile"
+  | "resumeData"
+  | "aboutSlides"
 >;
 
 // How long the scene waits for fresh content before using the copy saved from
@@ -98,11 +105,11 @@ const FRESH_CONTENT_WAIT_MS = 2500;
  * its lattice, orbits and ride messages a single time, so it must start with
  * the current release rather than swap it in later. The browser keeps a copy
  * of the last release; mounting on that copy showed the previous publish until
- * a second reload, so the scene waits for this visit's fetch (which falls back
- * to bundled content on error), or the saved copy after a short timeout.
+ * a second reload, so the scene waits for this visit's fetch, or the saved copy
+ * after a short timeout.
  */
 function PortfolioSpace(props: PortfolioSpaceProps) {
-  const portfolio = useCosmosContentQuery();
+  const portfolio = useSpaceContentQuery();
   const [waitedLongEnough, setWaitedLongEnough] = useState(false);
   useEffect(() => {
     const timer = window.setTimeout(() => setWaitedLongEnough(true), FRESH_CONTENT_WAIT_MS);
@@ -110,17 +117,25 @@ function PortfolioSpace(props: PortfolioSpaceProps) {
   }, []);
 
   const fresh = portfolio.isFetchedAfterMount;
+  if (portfolio.isError && !portfolio.data) {
+    // Nothing to build the universe from: say so instead of a black screen.
+    return (
+      <p className="hero__content-error">
+        The experience could not load its content. Refresh to try again.
+      </p>
+    );
+  }
   if (!portfolio.data || (!fresh && !waitedLongEnough)) return null;
   return (
     <ResumeSpace3D
       {...props}
-      // Same data as the bundled JSON the scene was written against; the fast
-      // site's seed type just marks every level optional.
-      portfolioCores={portfolio.data.portfolioCores as CosmosPortfolioCoreSeed[]}
+      portfolioCores={portfolio.data.portfolioCores}
       moonPortfolioMapping={portfolio.data.moonPortfolioMapping}
       aboutPathTravelMessages={portfolio.data.aboutPathTravelMessages}
       techStack={portfolio.data.techStack}
-      profile={portfolio.data.personal}
+      profile={portfolio.data.resume.personal}
+      resumeData={portfolio.data.resume}
+      aboutSlides={portfolio.data.aboutSlides}
     />
   );
 }
@@ -130,6 +145,7 @@ function renderCirclesStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
   options: DiagramStyleOptions,
+  resumeData: SpaceResume,
 ) {
   const width = 1000;
   const height = 500;
@@ -678,6 +694,7 @@ function renderConstellationStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
   options: DiagramStyleOptions,
+  resumeData: SpaceResume,
 ) {
   // Use parent container dimensions
   const parent = svg.parentElement;
@@ -1190,6 +1207,7 @@ function renderCircuitStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
   options: DiagramStyleOptions,
+  resumeData: SpaceResume,
 ) {
   const width = 1000;
   const height = 500;
@@ -2069,6 +2087,7 @@ function renderRingsStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
   options: DiagramStyleOptions,
+  resumeData: SpaceResume,
 ) {
   const width = 1000;
   const height = 500;
@@ -2184,6 +2203,7 @@ function renderTreeStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
   options: DiagramStyleOptions,
+  resumeData: SpaceResume,
 ) {
   const width = 1000;
   const height = 500;
@@ -2334,6 +2354,7 @@ function renderNeuralStyle(
   svg: SVGSVGElement,
   onNavigate: (section: number) => void,
   options: DiagramStyleOptions,
+  resumeData: SpaceResume,
 ) {
   const width = 1000;
   const height = 500;

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import "./IdentityBadge.scss";
+import { SourceMarkedName } from "./SourceMarkedName";
 
 interface Props {
   name: string;
@@ -24,7 +25,9 @@ const IdentityBadge: React.FC<Props> = ({ name, title }) => {
         onMouseEnter={() => setExpanded(true)}
         onMouseLeave={() => setExpanded(false)}
       >
-        <div className="id-badge__name">{name}</div>
+        <div className="id-badge__name">
+          <SourceMarkedName name={name} />
+        </div>
         <div className="id-badge__detail">
           <div className="id-badge__title">{title}</div>
         </div>

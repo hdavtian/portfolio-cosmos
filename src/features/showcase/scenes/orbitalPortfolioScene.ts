@@ -105,7 +105,8 @@ export async function createOrbitalPortfolioScene(THREE: ThreeModule, data: Scen
   const halo = haloTexture(THREE);
   disposables.push(halo);
 
-  const seeds = data.portfolioCores;
+  const { cores: seeds, entries: published } = data.portfolio;
+  const mediaUrl = (mediaId: string | null | undefined) => (mediaId ? (data.portfolio.media[mediaId]?.url ?? "") : "");
   const columns = Math.max(1, Math.ceil(Math.sqrt(seeds.length)));
   const rows = Math.ceil(seeds.length / columns);
   const cores: CoreRecord[] = [];
@@ -134,7 +135,7 @@ export async function createOrbitalPortfolioScene(THREE: ThreeModule, data: Scen
   disposables.push(frameGeometry, plateGeometry, nucleusGeometry, glowGeometry);
 
   seeds.forEach((seed, coreIndex) => {
-    const color = new THREE.Color(seed.coreColor ?? "#8fd3ff");
+    const color = new THREE.Color(seed.color ?? "#8fd3ff");
     const center = new THREE.Vector3(
       (coreIndex % columns - (columns - 1) / 2) * CORE_SPACING,
       Math.sin(coreIndex * 1.3) * 60,
@@ -191,7 +192,7 @@ export async function createOrbitalPortfolioScene(THREE: ThreeModule, data: Scen
       disposables.push(geometry, material);
     }
 
-    const label = labelSprite(THREE, seed.core, `#${color.getHexString()}`);
+    const label = labelSprite(THREE, seed.name, `#${color.getHexString()}`);
     label.position.set(0, 86, 0);
     disposables.push(label.material, label.material.map!);
 
@@ -200,9 +201,14 @@ export async function createOrbitalPortfolioScene(THREE: ThreeModule, data: Scen
     cores.push({ center, slices, glow, phase: coreIndex * 1.7 });
 
     // Rings and the project cards orbiting on them.
-    (seed.plains ?? []).forEach((plain) => {
-      const plane = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(plain.angle ?? 0));
-      (plain.items ?? []).forEach((ring, ringIndex) => {
+    seed.planes.forEach((plain, planeIndex) => {
+      const plane = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(plain.angle));
+      plain.rings.forEach((ring, ringIndex) => {
+        // The entries placed on this ring of this plane.
+        const entries = published.filter(
+          (entry) =>
+            entry.coreSlug === seed.slug && entry.placement.plane === planeIndex && entry.placement.ring === ringIndex,
+        );
         const radius = RING_BASE_RADIUS + ringIndex * RING_STEP;
         const points = Array.from({ length: 160 }, (_, i) => {
           const a = (i / 160) * Math.PI * 2;
@@ -212,13 +218,12 @@ export async function createOrbitalPortfolioScene(THREE: ThreeModule, data: Scen
         const material = new THREE.LineBasicMaterial({
           color: new THREE.Color(ring.orbitColor ?? "#62d8ff"),
           transparent: true,
-          opacity: (ring.items ?? []).length > 0 ? 0.5 : 0.18,
+          opacity: entries.length > 0 ? 0.5 : 0.18,
           depthWrite: false,
         });
         root.add(new THREE.LineLoop(geometry, material));
         disposables.push(geometry, material);
 
-        const entries = (ring.items ?? []).filter((entry) => entry.published !== false);
         entries.forEach((entry, slot) => {
           const group = new THREE.Group();
           const frame = new THREE.Mesh(
@@ -239,10 +244,13 @@ export async function createOrbitalPortfolioScene(THREE: ThreeModule, data: Scen
           root.add(group);
           disposables.push(frame.material, plate.material, flash.material);
 
-          const imageUrl = entry.image ?? entry.clientVariants?.find((variant) => variant.image)?.image ?? null;
+          const imageUrl =
+            mediaUrl(entry.mediaId) ||
+            entry.clientVariants.map((variant) => mediaUrl(variant.mediaId)).find(Boolean) ||
+            null;
           cards.push({
-            entryId: entry.id,
-            ids: new Set([entry.id, ...(entry.clientVariants ?? []).map((variant) => variant.id)]),
+            entryId: entry.slug,
+            ids: new Set([entry.slug, ...entry.clientVariants.map((variant) => variant.slug)]),
             core: coreIndex,
             group,
             plate,

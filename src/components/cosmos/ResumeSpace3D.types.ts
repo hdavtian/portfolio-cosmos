@@ -1,20 +1,24 @@
 import type * as THREE from "three";
 import type CameraControls from "camera-controls";
 import type { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import type { MoonPortfolioCompanyMapping } from "../../data/moonPortfolioMapping";
-import type { AboutPathTravelMessage, TechStackTreeNode } from "../../lib/api/contentV2";
+import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { DiagramStyleOptions } from "../DiagramSettings";
 import type { PortfolioCoreSeed } from "./portfolioData";
+import type { SpaceAboutSlide, SpaceMoonMapping, SpaceResume, SpaceTravelMessage } from "./spaceContent";
 
 export interface ResumeSpace3DProps {
   onNavigate: (section: number) => void;
   options: DiagramStyleOptions;
   onOptionsChange?: (options: DiagramStyleOptions) => void;
   onReloadUniverse?: () => void;
-  /** Published portfolio (or the bundled copy), loaded before the scene mounts. */
+  /** Published content (see spaceContent.ts), loaded before the scene mounts. */
   portfolioCores: PortfolioCoreSeed[];
-  moonPortfolioMapping: MoonPortfolioCompanyMapping[];
-  aboutPathTravelMessages: AboutPathTravelMessage[];
+  moonPortfolioMapping: SpaceMoonMapping[];
+  aboutPathTravelMessages: SpaceTravelMessage[];
+  /** Jobs (the Experience moons), skills (the Skills planet), education and links. */
+  resumeData: SpaceResume;
+  /** Slides of the About deck. */
+  aboutSlides: SpaceAboutSlide[];
   /** Drives the Skills Lattice: top-level nodes are the cores, deeper nodes orbit their parent. */
   techStack: TechStackTreeNode[];
   /** Name and title shown in the HUD badge and the loader (Admin → Profile). */

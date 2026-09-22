@@ -1,7 +1,6 @@
 import { Link, NavLink, Outlet, useMatch } from "react-router-dom";
 import { FastTopNav } from "../../features/fast/components/FastTopNav";
-import { usePortfolioCoresQuery } from "../../lib/query/contentQueries";
-import { flattenPortfolioCores } from "../../features/fast/lib/portfolioTransform";
+import { usePortfolioItemsQuery } from "../../lib/query/contentQueries";
 
 const prefetchCinematic = () => {
   void import("../../App");
@@ -11,8 +10,7 @@ export function FastLayout() {
   const detailMatch = useMatch("/portfolio-classic/:portfolioId");
   const activePortfolioId = detailMatch?.params.portfolioId;
   const isPortfolioDetailRoute = Boolean(activePortfolioId);
-  const portfolioQuery = usePortfolioCoresQuery();
-  const portfolioItems = flattenPortfolioCores(portfolioQuery.data?.payload ?? []);
+  const portfolioItems = usePortfolioItemsQuery().data ?? [];
   const activePortfolioTitle =
     portfolioItems.find((item) => item.id === activePortfolioId)?.title ??
     "Unknown";

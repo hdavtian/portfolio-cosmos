@@ -81,27 +81,92 @@ export type PortfolioGroupView = {
   sourceEntry?: PortfolioEntry;
 };
 
-export type PortfolioCoreItemSeed = {
-  sourceId?: string;
-} & Partial<PortfolioEntry>;
-
-export type PortfolioCoreRingSeed = {
-  orbitColor?: string;
-  // Temporary typo compatibility while data evolves.
-  oribitColor?: string;
-  items?: PortfolioCoreItemSeed[];
+/**
+ * The published portfolio as the scene is handed it: stored field names, with
+ * each core holding its planes, each plane its rings, each ring the entries
+ * placed on it, and every media id already turned into an address (`image`).
+ */
+export type PortfolioSeedMedia = {
+  slug: string;
+  type: "image";
+  image: string;
+  title: string;
+  description: string;
+  fit: "contain" | "cover";
 };
 
-export type PortfolioCorePlainSeed = {
+export type PortfolioSeedVariant = {
+  slug: string;
+  title: string;
+  image: string;
+  description: string;
+  technologies: string[];
+  year: number | null;
+  fit: "contain" | "cover";
+  galleryMedia: PortfolioSeedMedia[];
+};
+
+export type PortfolioSeedEntry = Omit<PortfolioSeedVariant, "galleryMedia"> & {
+  galleryMedia: PortfolioSeedMedia[];
+  clientVariants: PortfolioSeedVariant[];
+};
+
+export type PortfolioCoreRingSeed = {
+  orbitColor: string;
+  entries: PortfolioSeedEntry[];
+};
+
+export type PortfolioCorePlaneSeed = {
   angle: number;
-  items: PortfolioCoreRingSeed[];
+  rings: PortfolioCoreRingSeed[];
 };
 
 export type PortfolioCoreSeed = {
-  core: string;
-  coreColor?: string;
-  plains: PortfolioCorePlainSeed[];
+  slug: string;
+  name: string;
+  color: string;
+  planes: PortfolioCorePlaneSeed[];
 };
+
+const mediaFromSeed = (item: PortfolioSeedMedia): PortfolioMediaEntry => ({
+  id: item.slug,
+  type: item.type,
+  image: item.image,
+  title: item.title,
+  description: item.description,
+  fit: item.fit,
+});
+
+/**
+ * A published entry as the scene's own entry record. The scene gives cards,
+ * groups and instances ids of its own making, so `id` here is the scene's
+ * name for the thing; it starts out as the entry's slug. Empty galleries and
+ * variant lists are left off, which is how the scene tells "none" apart.
+ */
+export const entryFromSeed = (seed: PortfolioSeedEntry): PortfolioEntry => ({
+  id: seed.slug,
+  title: seed.title,
+  image: seed.image,
+  description: seed.description,
+  technologies: seed.technologies,
+  year: seed.year,
+  fit: seed.fit,
+  ...(seed.galleryMedia.length > 0 ? { galleryMedia: seed.galleryMedia.map(mediaFromSeed) } : {}),
+  ...(seed.clientVariants.length > 0
+    ? {
+        clientVariants: seed.clientVariants.map((variant) => ({
+          id: variant.slug,
+          title: variant.title,
+          image: variant.image,
+          description: variant.description,
+          technologies: variant.technologies,
+          year: variant.year,
+          fit: variant.fit,
+          ...(variant.galleryMedia.length > 0 ? { galleryMedia: variant.galleryMedia.map(mediaFromSeed) } : {}),
+        })),
+      }
+    : {}),
+});
 
 export type PortfolioCoreRingView = {
   orbitColor: string;
@@ -358,62 +423,24 @@ export const buildPortfolioCoreViews = (
 
   const groups: PortfolioGroupView[] = [];
   const cores: PortfolioCoreView[] = [];
-  const scoreEntryRichness = (entry: PortfolioEntry): number =>
-    (entry.galleryMedia?.length ?? 0) + (entry.clientVariants?.length ?? 0) * 4;
-  const toEntry = (item: PortfolioCoreItemSeed): PortfolioEntry | null =>
-    typeof item.id === "string" &&
-    typeof item.title === "string" &&
-    typeof item.image === "string"
-      ? {
-          id: item.id,
-          title: item.title,
-          image: item.image,
-          description: item.description,
-          technologies: item.technologies,
-          year: item.year,
-          fit: item.fit,
-          galleryMedia: item.galleryMedia,
-          clientVariants: item.clientVariants,
-          published: item.published,
-        }
-      : null;
-  const catalogById = new Map<string, PortfolioEntry>();
-  coreSeeds.forEach((coreSeed) => {
-    (coreSeed.plains ?? []).forEach((plain) => {
-      (plain.items ?? []).forEach((ring) => {
-        (ring.items ?? []).forEach((item) => {
-          const parsed = toEntry(item);
-          if (!parsed) return;
-          const prev = catalogById.get(parsed.id);
-          if (!prev || scoreEntryRichness(parsed) >= scoreEntryRichness(prev)) {
-            catalogById.set(parsed.id, parsed);
-          }
-        });
-      });
-    });
-  });
-
   coreSeeds.forEach((coreSeed, coreIndex) => {
-    const coreId = `core-${slugify(coreSeed.core)}-${coreIndex + 1}`;
-    const coreTitle = coreSeed.core || `Core ${coreIndex + 1}`;
+    const coreId = `core-${slugify(coreSeed.name)}-${coreIndex + 1}`;
+    const coreTitle = coreSeed.name || `Core ${coreIndex + 1}`;
     const coreGroupIds: string[] = [];
     const plainViews: PortfolioCorePlainView[] = [];
 
-    (coreSeed.plains ?? []).forEach((plain, plainIndex) => {
+    coreSeed.planes.forEach((plain, plainIndex) => {
       const ringViews: PortfolioCoreRingView[] = [];
-      (plain.items ?? []).forEach((ring, ringIndex) => {
-        const ringItems = ring.items ?? [];
+      plain.rings.forEach((ring, ringIndex) => {
+        const ringItems = ring.entries;
         const orbitColor = ensureHexColor(
-          ring.orbitColor ?? ring.oribitColor,
+          ring.orbitColor,
           colorFallbacks[(coreIndex + plainIndex + ringIndex) % colorFallbacks.length],
         );
         const ringGroupIds: string[] = [];
 
         ringItems.forEach((item, itemIndex) => {
-          const source =
-            toEntry(item) ??
-            (typeof item.id === "string" ? (catalogById.get(item.id) ?? null) : null);
-          if (!source) return;
+          const source = entryFromSeed(item);
           const suffix = `c${coreIndex + 1}p${plainIndex + 1}r${ringIndex + 1}i${itemIndex + 1}`;
           const instanceId = `${source.id}-${suffix}`;
           const instanceTitle = `${source.title} • ${coreTitle} ${plainIndex + 1}.${ringIndex + 1}.${itemIndex + 1}`;
@@ -443,10 +470,14 @@ export const buildPortfolioCoreViews = (
       });
     });
 
+    // A core with nothing attached is only a name and a colour — it may exist
+    // just to give a job its accent elsewhere — so there is nothing to draw.
+    if (coreGroupIds.length === 0) return;
+
     cores.push({
       id: coreId,
       title: coreTitle,
-      coreColor: ensureHexColor(coreSeed.coreColor, 0x67d8ff),
+      coreColor: ensureHexColor(coreSeed.color, 0x67d8ff),
       groupIds: coreGroupIds,
       plains: plainViews,
     });

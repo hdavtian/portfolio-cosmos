@@ -157,13 +157,13 @@ export async function createAboutRideScene(THREE: ThreeModule, data: SceneData):
 
   // Portfolio: the published cores on a grid.
   const portfolioCenter = v(PORTFOLIO_CENTER);
-  const cores = data.portfolioCores.length > 0 ? data.portfolioCores : [{ core: "Portfolio", coreColor: "#8fd3ff" }];
+  const cores = data.portfolio.cores.length > 0 ? data.portfolio.cores : [{ name: "Portfolio", color: "#8fd3ff" }];
   const columns = Math.max(1, Math.ceil(Math.sqrt(cores.length)));
   const rows = Math.ceil(cores.length / columns);
   const coreGeometry = track(new THREE.SphereGeometry(60, 24, 24));
   const sliceGeometry = track(new THREE.TorusGeometry(110, 3, 8, 64));
   const coreGroups = cores.map((seed, index) => {
-    const color = new THREE.Color(seed.coreColor ?? "#8fd3ff");
+    const color = new THREE.Color(seed.color ?? "#8fd3ff");
     const group = new THREE.Group();
     group.position.set(
       (index % columns - (columns - 1) / 2) * CORE_SPACING,

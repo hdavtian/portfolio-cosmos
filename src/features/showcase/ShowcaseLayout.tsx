@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { CINEMATIC_PATH, canKeepAlive } from "../../app/cinematic/keepAlive";
+import { FILM_PATH, FilmHost } from "../../app/film/FilmHost";
 import { isCinematicStill, setCinematicLaunch, subscribeCinematicLaunch } from "../../app/cinematic/launchStore";
 import { AtmosphereBackdrop } from "./components/AtmosphereBackdrop";
 import { SceneStage } from "./components/SceneStage";
-import { usePortfolioCoresQuery, useResumeQuery, useTechStackQuery } from "../../lib/query/contentQueries";
+import { useReleaseQuery, useTechStackQuery } from "../../lib/query/contentQueries";
 import type { SceneJob } from "./scenes/types";
 import { BackdropTintContext } from "./lib/backdropTint";
 import { useShowcaseProjects } from "./lib/useShowcaseProjects";
@@ -28,30 +29,30 @@ export function ShowcaseLayout() {
   const setTint = useCallback((color: string | null) => setTintState(color ?? DEFAULT_TINT), []);
   const { personal, projects } = useShowcaseProjects();
   const techStack = useTechStackQuery().data?.payload;
-  const portfolioCores = usePortfolioCoresQuery().data?.payload;
-  const experience = useResumeQuery().data?.payload.experience;
+  const release = useReleaseQuery().data;
+  const portfolio = useMemo(
+    () =>
+      release && {
+        cores: release.collections.portfolioCores,
+        entries: release.collections.portfolioEntries,
+        media: release.media,
+      },
+    [release],
+  );
   const jobs = useMemo<SceneJob[]>(
     () =>
-      (experience ?? []).map((entry) => {
-        // The published resume carries the 3D site's extras too.
-        const extras = entry as typeof entry & {
-          droneIntroText?: string;
-          jobMemories?: Array<{ type: string; text: string }>;
-          jobTech?: Array<{ label: string }>;
-        };
-        return {
-          id: entry.id,
-          company: entry.company,
-          location: entry.location,
-          startDate: entry.startDate,
-          endDate: entry.endDate,
-          droneIntroText: extras.droneIntroText,
-          positions: entry.positions,
-          memories: extras.jobMemories ?? [],
-          tech: (extras.jobTech ?? []).map((tech) => tech.label),
-        };
-      }),
-    [experience],
+      (release?.collections.experiences ?? []).map((entry) => ({
+        slug: entry.slug,
+        company: entry.company,
+        location: entry.location,
+        startDate: entry.startDate,
+        endDate: entry.endDate,
+        droneIntroText: entry.droneIntroText,
+        positions: entry.positions,
+        memories: entry.jobMemories,
+        tech: entry.jobTech.map((tech) => tech.label),
+      })),
+    [release],
   );
   const { pathname } = useLocation();
   // Only the index lets the scene take the wheel; project pages scroll.
@@ -60,12 +61,14 @@ export function ShowcaseLayout() {
   // both can stay alive; elsewhere they unload and rebuild on return. A visit
   // that starts on the experience doesn't start them at all.
   const onCinematic = pathname === CINEMATIC_PATH;
+  // The skills film covers the page the same way; the previews pause under it.
+  const onFilm = pathname === FILM_PATH;
   // While the experience's last frame is the backdrop, the previews wait.
   const cinematicStill = useSyncExternalStore(subscribeCinematicLaunch, isCinematicStill, isCinematicStill);
   const [keepScenes] = useState(canKeepAlive);
   const [scenesStarted, setScenesStarted] = useState(false);
-  if (!onCinematic && !scenesStarted) setScenesStarted(true);
-  const runScenes = scenesStarted && (!onCinematic || keepScenes);
+  if (!onCinematic && !onFilm && !scenesStarted) setScenesStarted(true);
+  const runScenes = scenesStarted && (!(onCinematic || onFilm) || keepScenes);
   const [focusProjectId, setFocusProject] = useState<string | null>(null);
   const [sceneEnabled] = useState(canShowCinematicScene);
   const [sceneShowing, setSceneShowing] = useState(false);
@@ -79,17 +82,18 @@ export function ShowcaseLayout() {
   return (
     <BackdropTintContext.Provider value={context}>
       <div className="showcase">
-        <AtmosphereBackdrop tint={tint} paused={sceneShowing || onCinematic || cinematicStill} />
+        <AtmosphereBackdrop tint={tint} paused={sceneShowing || onCinematic || onFilm || cinematicStill} />
         {sceneEnabled && runScenes ? (
           <SceneStage
             projects={projects}
             techStack={techStack}
             highlights={highlights}
-            portfolioCores={portfolioCores}
+            portfolio={portfolio}
+            profile={release?.profile}
             jobs={jobs}
             interactive={onIndex && !cinematicStill}
-            paused={onCinematic || cinematicStill}
-            showGateway={!pathname.startsWith("/portfolio/")}
+            paused={onCinematic || onFilm || cinematicStill}
+            showGateway={!pathname.startsWith("/portfolio/") && !onFilm}
             focusProjectId={focusProjectId}
             onShowing={setSceneShowing}
           />
@@ -101,6 +105,9 @@ export function ShowcaseLayout() {
           <Link to="/" className="showcase-pill">
             Work
           </Link>
+          <NavLink to="/lab/got" className="showcase-pill">
+            Tech
+          </NavLink>
           <NavLink to="/resume" className="showcase-pill">
             Resume
           </NavLink>
@@ -127,6 +134,7 @@ export function ShowcaseLayout() {
         <main id="showcase-main" className="showcase__main">
           <Outlet />
         </main>
+        <FilmHost />
       </div>
     </BackdropTintContext.Provider>
   );

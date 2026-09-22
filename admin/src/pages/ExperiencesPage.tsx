@@ -57,7 +57,7 @@ export function ExperiencesPage() {
 
   const datesTemplate = (record: EntityRecord<Experience>) => (
     <span>
-      {record.startDate} – {record.endDate}
+      {record.startDate} – {record.endDate ?? "Present"}
     </span>
   );
 

@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { usePortfolioCoresQuery } from "../../../lib/query/contentQueries";
+import { usePortfolioItemsQuery } from "../../../lib/query/contentQueries";
 import { trackEvent } from "../../../lib/analytics";
-import { flattenPortfolioCores } from "../lib/portfolioTransform";
 import { EmptyState } from "../components/EmptyState";
 import { PortfolioMediaViewer } from "../components/PortfolioMediaViewer";
 import { useVisited } from "../hooks/useVisited";
@@ -10,7 +9,7 @@ import { useVisited } from "../hooks/useVisited";
 export function PortfolioDetailPage() {
   const { portfolioId } = useParams();
   const navigate = useNavigate();
-  const portfolioQuery = usePortfolioCoresQuery();
+  const portfolioQuery = usePortfolioItemsQuery();
   const { markVisited } = useVisited();
 
   useEffect(() => {
@@ -36,7 +35,7 @@ export function PortfolioDetailPage() {
     );
   }
 
-  const items = flattenPortfolioCores(portfolioQuery.data?.payload ?? []);
+  const items = portfolioQuery.data ?? [];
   const itemIndex = items.findIndex((candidate) => candidate.id === portfolioId);
   const item = itemIndex >= 0 ? items[itemIndex] : null;
   const previousItem = itemIndex > 0 ? items[itemIndex - 1] : null;

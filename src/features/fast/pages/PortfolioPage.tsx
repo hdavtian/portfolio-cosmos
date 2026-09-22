@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { usePortfolioCoresQuery } from "../../../lib/query/contentQueries";
+import { usePortfolioItemsQuery } from "../../../lib/query/contentQueries";
 import { trackEvent } from "../../../lib/analytics";
-import { flattenPortfolioCores } from "../lib/portfolioTransform";
 import { useFavorites } from "../hooks/useFavorites";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { useVisited } from "../hooks/useVisited";
@@ -39,13 +38,13 @@ export function PortfolioPage() {
     (value): value is boolean => typeof value === "boolean",
   );
 
-  const portfolioQuery = usePortfolioCoresQuery();
+  const portfolioQuery = usePortfolioItemsQuery();
   const { favoritesSet, toggleFavorite } = useFavorites();
   const { visitedSet, markVisited, clearVisited } = useVisited();
 
   const allItems = useMemo(
-    () => flattenPortfolioCores(portfolioQuery.data?.payload ?? []),
-    [portfolioQuery.data?.payload],
+    () => portfolioQuery.data ?? [],
+    [portfolioQuery.data],
   );
 
   const categoryOptions = useMemo(

@@ -3,7 +3,6 @@
 //   npm run dev:full
 //   npm run dev:full-restart       first stops this project's API/site/admin
 //                                  still holding their ports (e.g. after a crash)
-//   npm run dev:full -- --seed     also seeds local MongoDB from src/data first
 import { execSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import concurrently from "concurrently";
@@ -111,16 +110,6 @@ try {
 
 console.log("[dev:full] Starting MongoDB and Azurite...");
 run("docker compose up -d --wait");
-
-if (process.argv.includes("--seed")) {
-  console.log("[dev:full] Seeding local MongoDB...");
-  const seed = spawnSync("npm run seed -w api", {
-    stdio: "inherit",
-    shell: true,
-    env: { ...process.env, ...localApiEnv },
-  });
-  if (seed.status !== 0) process.exit(seed.status ?? 1);
-}
 
 const { result } = concurrently(
   [

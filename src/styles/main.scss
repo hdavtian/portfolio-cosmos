@@ -108,6 +108,20 @@ body.cinematic-experience {
         overflow: hidden;
     }
 
+    // Shown in place of the universe when its content could not be loaded.
+    &__content-error {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        margin: 0;
+        padding: 0 24px;
+        text-align: center;
+        font-family: var(--font-hud, monospace);
+        letter-spacing: 0.08em;
+        color: var(--hud-primary, #d4a845);
+    }
+
     &__footer {
         text-align: center;
         z-index: 10;

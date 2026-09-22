@@ -4,6 +4,7 @@ export interface PortfolioMedia {
   image?: string;
   title?: string;
   description?: string;
+  fit?: string;
 }
 
 export interface PortfolioEntrySeed {
