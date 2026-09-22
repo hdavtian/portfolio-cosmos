@@ -1655,8 +1655,11 @@ export function SkillsTitlesPage() {
         </p>
       </section>
 
-      {/* Paused part-way (not at a stop, which has its own Next): say so, in the middle, where it can't be missed. */}
-      {(!playing && !holding && progress > 0 && progress < 1) || stalled ? (
+      {/* Stopped anywhere short of the end, and not at a stop (which has its own
+          Next): say so, in the middle, where it can't be missed. The very
+          beginning counts — a film sitting at frame one, stopped, is the case a
+          visitor is most likely to mistake for a broken page. */}
+      {(!playing && !holding && progress < 1) || stalled ? (
         <button
           type="button"
           className="titles__resume"
@@ -1669,7 +1672,7 @@ export function SkillsTitlesPage() {
           }}
         >
           <span className="titles__resume-mark" aria-hidden="true">▶</span>
-          {stalled ? (progress <= 0 ? "Start" : "Play") : "Resume"}
+          {progress <= 0 ? "Start" : stalled ? "Play" : "Resume"}
         </button>
       ) : null}
       <div className="titles__scrub">
