@@ -47,7 +47,14 @@ for the flat grid and has been withdrawn.
 the same day: sorting a `TreeGridComponent` with self-referencing data paints
 an empty grid that no refresh recovers, and search empties it until the term is
 cleared. Persisting a sorted state would therefore blank the tree on every
-load. Trees keep resizing, the column chooser and column reordering.
+load. Trees keep resizing, the column chooser, column reordering and
+**filtering** (`filterSettings.type: "Excel"`), which was measured separately
+and works: a filter narrows the tree and clearing it restores every row.
+
+**A stored array shows as one checkbox column per value.** `surfaces` is one
+array on the record; the grid splits it into boolean columns
+(`type="boolean" displayAsCheckBox`) so each value can be read and filtered on
+its own, matching the checkbox group on the edit form.
 
 **Every persisted grid shows Reset layout**, which clears the key
 (`lib/gridLayout.ts`) and reloads: the saved state includes the columns as they

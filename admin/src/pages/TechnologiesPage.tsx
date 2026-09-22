@@ -4,6 +4,7 @@ import {
   ColumnChooser,
   ColumnDirective,
   ColumnsDirective,
+  Filter,
   Inject,
   Reorder,
   Resize,
@@ -28,28 +29,29 @@ type NodeRecord = EntityRecord<Technology>;
 // TreeGrid rows: self-referencing by slug. Top-level nodes need a null parent.
 // The extra columns are the curation state, so a pass over the tree can be read
 // rather than opened row by row.
+// The record stores `surfaces` as one array; here it is split into a boolean
+// per surface so each is its own checkbox column, filterable on its own, and
+// reads the same way as the checkboxes on the edit form.
 type TreeRow = {
   slug: string;
   name: string;
   parentId: string | null;
   childCount: number;
   kind: string;
-  featured: string;
-  shownIn: string;
+  featured: boolean;
+  current: boolean;
+  lattice: boolean;
+  resume: boolean;
+  film: boolean;
+  filters: boolean;
   aliases: string;
-};
-
-/** Short labels for the surfaces, so a row reads at a glance. */
-const SURFACE_LABELS: Record<string, string> = {
-  lattice: "Lattice",
-  resume: "Resume",
-  filmProgress: "Film",
-  filters: "Filters",
 };
 
 // Constants handed to Syncfusion, so re-renders never refresh the grid.
 const TOOLBAR = ["ExpandAll", "CollapseAll", "ColumnChooser"];
 const SELECTION = { type: "Single" as const };
+// Excel-style filter menus: a checkbox column filters to ticked or unticked.
+const FILTER_SETTINGS = { type: "Excel" as const };
 // Measured in the browser, not assumed: sorting this tree paints an empty grid
 // that no refresh recovers, and searching empties it until the term is cleared.
 // So the tree offers neither, and is ordered by its hierarchy. Resizing, the
@@ -129,8 +131,12 @@ export function TechnologiesPage() {
           parentId: item.parentSlug || null,
           childCount: items.filter((other) => other.parentSlug === item.slug).length,
           kind: item.isGrouping ? "Heading" : "Skill",
-          featured: item.featured ? "Featured" : "",
-          shownIn: (item.surfaces ?? []).map((surface) => SURFACE_LABELS[surface] ?? surface).join(", ") || "Nowhere",
+          featured: Boolean(item.featured),
+          current: Boolean(item.current),
+          lattice: (item.surfaces ?? []).includes("lattice"),
+          resume: (item.surfaces ?? []).includes("resume"),
+          film: (item.surfaces ?? []).includes("filmProgress"),
+          filters: (item.surfaces ?? []).includes("filters"),
           aliases: (item.aliases ?? []).join(", "),
         })),
     [items],
@@ -303,10 +309,12 @@ export function TechnologiesPage() {
             id={GRID_ID}
             allowRowDragAndDrop
             allowResizing
+            allowFiltering
             allowReordering
             showColumnChooser
             selectionSettings={SELECTION}
             toolbar={TOOLBAR}
+            filterSettings={FILTER_SETTINGS}
             gridLines="Horizontal"
             rowDrop={handleDrop}
             recordDoubleClick={(args: { rowData?: TreeRow }) =>
@@ -315,15 +323,19 @@ export function TechnologiesPage() {
           >
             <ColumnsDirective>
               <ColumnDirective field="name" headerText="Name" width={300} />
-              <ColumnDirective field="kind" headerText="Kind" width={110} />
-              <ColumnDirective field="featured" headerText="Featured" width={110} />
-              <ColumnDirective field="shownIn" headerText="Shown in" width={280} />
+              <ColumnDirective field="kind" headerText="Kind" width={100} />
+              <ColumnDirective field="featured" headerText="Featured" width={100} type="boolean" displayAsCheckBox textAlign="Center" />
+              <ColumnDirective field="current" headerText="Current" width={100} type="boolean" displayAsCheckBox textAlign="Center" />
+              <ColumnDirective field="lattice" headerText="Lattice" width={95} type="boolean" displayAsCheckBox textAlign="Center" />
+              <ColumnDirective field="resume" headerText="Resume" width={95} type="boolean" displayAsCheckBox textAlign="Center" />
+              <ColumnDirective field="film" headerText="Film" width={85} type="boolean" displayAsCheckBox textAlign="Center" />
+              <ColumnDirective field="filters" headerText="Filters" width={90} type="boolean" displayAsCheckBox textAlign="Center" />
               <ColumnDirective field="aliases" headerText="Also known as" width={280} />
               <ColumnDirective field="slug" headerText="Slug" width={200} isPrimaryKey />
               <ColumnDirective field="childCount" headerText="Children" width={100} textAlign="Right" />
               <ColumnDirective headerText="Actions" width={260} template={actionsTemplate} />
             </ColumnsDirective>
-            <Inject services={[RowDD, Selection, Toolbar, Resize, Reorder, ColumnChooser]} />
+            <Inject services={[RowDD, Selection, Toolbar, Resize, Reorder, ColumnChooser, Filter]} />
           </TreeGridComponent>
         </div>
       ) : null}
