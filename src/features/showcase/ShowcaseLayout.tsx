@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { CINEMATIC_PATH, canKeepAlive } from "../../app/cinematic/keepAlive";
+import { FILM_PATH, FilmHost } from "../../app/film/FilmHost";
 import { isCinematicStill, setCinematicLaunch, subscribeCinematicLaunch } from "../../app/cinematic/launchStore";
 import { AtmosphereBackdrop } from "./components/AtmosphereBackdrop";
 import { SceneStage } from "./components/SceneStage";
@@ -60,12 +61,14 @@ export function ShowcaseLayout() {
   // both can stay alive; elsewhere they unload and rebuild on return. A visit
   // that starts on the experience doesn't start them at all.
   const onCinematic = pathname === CINEMATIC_PATH;
+  // The skills film covers the page the same way; the previews pause under it.
+  const onFilm = pathname === FILM_PATH;
   // While the experience's last frame is the backdrop, the previews wait.
   const cinematicStill = useSyncExternalStore(subscribeCinematicLaunch, isCinematicStill, isCinematicStill);
   const [keepScenes] = useState(canKeepAlive);
   const [scenesStarted, setScenesStarted] = useState(false);
-  if (!onCinematic && !scenesStarted) setScenesStarted(true);
-  const runScenes = scenesStarted && (!onCinematic || keepScenes);
+  if (!onCinematic && !onFilm && !scenesStarted) setScenesStarted(true);
+  const runScenes = scenesStarted && (!(onCinematic || onFilm) || keepScenes);
   const [focusProjectId, setFocusProject] = useState<string | null>(null);
   const [sceneEnabled] = useState(canShowCinematicScene);
   const [sceneShowing, setSceneShowing] = useState(false);
@@ -79,7 +82,7 @@ export function ShowcaseLayout() {
   return (
     <BackdropTintContext.Provider value={context}>
       <div className="showcase">
-        <AtmosphereBackdrop tint={tint} paused={sceneShowing || onCinematic || cinematicStill} />
+        <AtmosphereBackdrop tint={tint} paused={sceneShowing || onCinematic || onFilm || cinematicStill} />
         {sceneEnabled && runScenes ? (
           <SceneStage
             projects={projects}
@@ -89,8 +92,8 @@ export function ShowcaseLayout() {
             profile={release?.profile}
             jobs={jobs}
             interactive={onIndex && !cinematicStill}
-            paused={onCinematic || cinematicStill}
-            showGateway={!pathname.startsWith("/portfolio/")}
+            paused={onCinematic || onFilm || cinematicStill}
+            showGateway={!pathname.startsWith("/portfolio/") && !onFilm}
             focusProjectId={focusProjectId}
             onShowing={setSceneShowing}
           />
@@ -131,6 +134,7 @@ export function ShowcaseLayout() {
         <main id="showcase-main" className="showcase__main">
           <Outlet />
         </main>
+        <FilmHost />
       </div>
     </BackdropTintContext.Provider>
   );

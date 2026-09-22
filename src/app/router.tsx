@@ -44,11 +44,6 @@ const SkillsLabPage = lazy(() =>
     default: module.SkillsLabPage,
   })),
 );
-const SkillsTitlesPage = lazy(() =>
-  import("../features/lab/SkillsTitlesPage").then((module) => ({
-    default: module.SkillsTitlesPage,
-  })),
-);
 const ShowcaseResumePage = lazy(() =>
   import("../features/showcase/pages/ShowcaseResumePage").then((module) => ({
     default: module.ShowcaseResumePage,
@@ -68,6 +63,8 @@ const routes: RouteObject[] = [
         children: [
           { index: true, element: <LazyRoute><ShowcaseIndexPage /></LazyRoute> },
           { path: "resume", element: <LazyRoute><ShowcaseResumePage /></LazyRoute> },
+          // The skills film, under the site nav; FilmHost in the layout can keep it alive.
+          { path: "lab/got", element: null },
           // Rendered by CinematicHost in RootLayout, which can keep it alive.
           // It sits in this layout so the portfolio's scenes can wait, paused,
           // underneath it.
@@ -87,7 +84,6 @@ const routes: RouteObject[] = [
       },
       // Sketches for the skill timeline: mock data, not linked from the site.
       { path: "lab/skills", element: <LazyRoute><SkillsLabPage /></LazyRoute> },
-      { path: "lab/got", element: <LazyRoute><SkillsTitlesPage /></LazyRoute> },
       {
         // Previous portfolio, kept for comparison until the redesign is approved.
         path: "portfolio-classic",

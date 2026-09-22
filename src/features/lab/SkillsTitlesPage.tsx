@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as ThreeTypes from "three";
 import { useReleaseQuery } from "../../lib/query/contentQueries";
+import { isFilmSuspended } from "../../lib/filmSuspend";
 import { useShowcaseProjects } from "../showcase/lib/useShowcaseProjects";
 import { makeAstrolabe } from "./gotAstrolabe";
 import { Link } from "react-router-dom";
@@ -1209,6 +1210,13 @@ export function SkillsTitlesPage() {
           controls.maxPolarAngle = Math.PI;
         };
         const render = () => {
+          if (isFilmSuspended()) {
+            // Put away behind the portfolio: draw nothing, and don't let the
+            // clock run on, so it resumes exactly where it was.
+            clock.getDelta();
+            frame = requestAnimationFrame(render);
+            return;
+          }
           const p = progressRef.current;
           // Everything is a function of the scrubber: park it and the frame is still.
           // …except while it is holding at a place for the card to be read:
@@ -1353,6 +1361,11 @@ export function SkillsTitlesPage() {
     let frame = 0;
     let last = performance.now();
     const tick = (now: number) => {
+      if (isFilmSuspended()) {
+        last = now;
+        frame = requestAnimationFrame(tick);
+        return;
+      }
       // Going back is a rewind, so it runs three times as fast.
       const step = ((now - last) / (filmSeconds * 1000)) * (direction < 0 ? 3 : 1);
       last = now;
@@ -1424,6 +1437,7 @@ export function SkillsTitlesPage() {
   // Right arrow, space or Enter: next. Left arrow: previous.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (isFilmSuspended()) return;
       if ((event.target as HTMLElement).closest("input, textarea")) return;
       if (!holdingRef.current) return;
       if (event.key === "ArrowRight" || event.key === "Enter" || event.key === " ") {
