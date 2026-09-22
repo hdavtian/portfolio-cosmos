@@ -20,7 +20,7 @@ question - it just shows how much of the tree is arriving at once.
 
 ## 1. The shape at a glance
 
-- **Frontend** - 14 entries: HTML, CSS, SCSS, JavaScript, TypeScript, jQuery, Flash, Dreamweaver, HTML Email, RxJS, Redux, SPA frameworks (+4), Styling & animation (+2), Build tools (+2)
+- **Frontend** - 13 entries: HTML, JavaScript, TypeScript, jQuery, Flash, Dreamweaver, HTML Email, RxJS, Redux, SPA frameworks (+4), Styling (+2), Animation (+2), Build tools (+2)
 - **Backend** - 8 entries: C#, .NET, Java, Spring Boot, Node.js, PHP, CakePHP, WinForms
 - **APIs & integrations** *(new root)* - 3 entries: REST APIs, OAuth, RabbitMQ
 - **CMS & e-commerce** *(new root)* - 4 entries: WordPress, Drupal, ShopSite, E-commerce
@@ -38,8 +38,6 @@ question - it just shows how much of the tree is arriving at once.
 |---|---|---|---|
 | **Frontend** | *(root)* |  | tree |
 | &nbsp;&nbsp;&nbsp;&nbsp;HTML | Frontend | **NEW** | jobTech, entry |
-| &nbsp;&nbsp;&nbsp;&nbsp;CSS | Frontend | **NEW** | jobTech, entry |
-| &nbsp;&nbsp;&nbsp;&nbsp;SCSS | Frontend | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;JavaScript | Frontend |  | tree, skill, jobTech, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;TypeScript | Frontend |  | tree, skill, jobTech, memory, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;jQuery | Frontend | **NEW** | jobTech |
@@ -57,9 +55,12 @@ question - it just shows how much of the tree is arriving at once.
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Context | Patterns |  | tree |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Provider | Patterns |  | tree |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Next.js | SPA frameworks | **NEW** | jobTech, entry |
-| &nbsp;&nbsp;&nbsp;&nbsp;Styling & animation | Frontend | **NEW** | invented here |
-| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GSAP | Styling & animation | **NEW** | jobTech, memory, entry |
-| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Framer Motion | Styling & animation | **NEW** | jobTech, memory, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;Styling | Frontend | **NEW** | invented here |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;CSS | Styling | **NEW** | jobTech, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SCSS | Styling | **NEW** | jobTech |
+| &nbsp;&nbsp;&nbsp;&nbsp;Animation | Frontend | **NEW** | invented here |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GSAP | Animation | **NEW** | jobTech, memory, entry |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Framer Motion | Animation | **NEW** | jobTech, memory, entry |
 | &nbsp;&nbsp;&nbsp;&nbsp;Build tools | Frontend | **NEW** | invented here |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Webpack | Build tools | **NEW** | jobTech |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Gulp | Build tools | **NEW** | jobTech |
@@ -123,13 +124,13 @@ question - it just shows how much of the tree is arriving at once.
 
 ## 3. Counts
 
-- 84 entries in the tree, 11 of them roots
-- 58 of those do not exist today
+- 85 entries in the tree, 11 of them roots
+- 59 of those do not exist today
 - 11 strings merge into an existing record (section 5)
 - 6 strings stay as prose on their job (section 6)
 - 1 heading deleted (section 7)
 
-*Groups and roots invented for this draft (not in the data): SPA frameworks, Styling & animation, Build tools, APIs & integrations, CMS & e-commerce, Databases, GitLab, Infrastructure & hosting, Linux, Networking, Ways of working, Marketing & analytics, Client & support, Client delivery, Technical support.*
+*Groups and roots invented for this draft (not in the data): SPA frameworks, Styling, Animation, Build tools, APIs & integrations, CMS & e-commerce, Databases, GitLab, Infrastructure & hosting, Linux, Networking, Ways of working, Marketing & analytics, Client & support, Client delivery, Technical support.*
 
 ## 4. The questions
 
@@ -138,9 +139,8 @@ question - it just shows how much of the tree is arriving at once.
    working, Marketing & analytics, Client & support, Databases, APIs & integrations.)
    This naming is what a
    recruiter actually sees on the resume.
-2. **Do the three new groups inside Frontend earn their nesting** (SPA
-   frameworks, Styling & animation, Build tools), or should Frontend stay
-   flat at 17 entries?
+2. **Do the four new groups inside Frontend earn their nesting** (SPA
+   frameworks, Styling, Animation, Build tools), or should Frontend stay flat?
 3. **`RabbitMQ` sits under APIs & integrations** rather than Backend, so that
    removing Data & Messaging does not need a niche Messaging root. Agreed?
 4. **`WinForms` sits under Backend for want of anywhere better.** Is there a

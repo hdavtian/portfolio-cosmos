@@ -45,8 +45,6 @@ const RETIRED = {
 const TREE = {
   Frontend: null,
   HTML: "Frontend",
-  CSS: "Frontend",
-  SCSS: "Frontend",
   JavaScript: "Frontend",
   TypeScript: "Frontend",
   jQuery: "Frontend",
@@ -64,9 +62,14 @@ const TREE = {
   Patterns: "React",
   Context: "Patterns",
   Provider: "Patterns",
-  "Styling & animation": "Frontend",
-  GSAP: "Styling & animation",
-  "Framer Motion": "Styling & animation",
+  // Styling and animation are two skills an employer reads differently: CSS
+  // craft is not the same as motion work, so they are two groups, not one.
+  Styling: "Frontend",
+  CSS: "Styling",
+  SCSS: "Styling",
+  Animation: "Frontend",
+  GSAP: "Animation",
+  "Framer Motion": "Animation",
   "Build tools": "Frontend",
   Webpack: "Build tools",
   Gulp: "Build tools",
@@ -230,9 +233,8 @@ L.push("   should read them?** (CMS & e-commerce, Infrastructure & hosting, Ways
 L.push("   working, Marketing & analytics, Client & support, Databases, APIs & integrations.)");
 L.push("   This naming is what a");
 L.push("   recruiter actually sees on the resume.");
-L.push("2. **Do the three new groups inside Frontend earn their nesting** (SPA");
-L.push("   frameworks, Styling & animation, Build tools), or should Frontend stay");
-L.push("   flat at 17 entries?");
+L.push("2. **Do the four new groups inside Frontend earn their nesting** (SPA");
+L.push("   frameworks, Styling, Animation, Build tools), or should Frontend stay flat?");
 L.push("3. **`RabbitMQ` sits under APIs & integrations** rather than Backend, so that");
 L.push("   removing Data & Messaging does not need a niche Messaging root. Agreed?");
 L.push("4. **`WinForms` sits under Backend for want of anywhere better.** Is there a");
