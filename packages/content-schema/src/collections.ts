@@ -3,6 +3,7 @@ import { aboutDeckSlideSchema, pathTravelMessageSchema } from "./about.js";
 import { cosmosIntroductionSchema, cosmosPlanetSchema, guidedTourSchema } from "./cosmos.js";
 import { mediaAssetSchema } from "./media.js";
 import { techStackNodeSchema } from "./techStack.js";
+import { technologySchema } from "./technology.js";
 import {
   moonPortfolioMappingSchema,
   portfolioCoreSchema,
@@ -32,6 +33,9 @@ export const collectionSchemas = {
   skillCategories: skillCategorySchema,
   skills: skillSchema,
   techStackNodes: techStackNodeSchema,
+  // The master list (D1). `skills`, `skillCategories` and `techStackNodes`
+  // remain until the migration has run and the sites read this instead.
+  technologies: technologySchema,
   experiences: experienceSchema,
   portfolioCores: portfolioCoreSchema,
   portfolioEntries: portfolioEntrySchema,

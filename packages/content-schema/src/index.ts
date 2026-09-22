@@ -7,5 +7,7 @@ export * from "./portfolio.js";
 export * from "./about.js";
 export * from "./cosmos.js";
 export * from "./techStack.js";
+export * from "./technology.js";
+export * from "./technologyTree.js";
 export * from "./techStackTree.js";
 export * from "./collections.js";
