@@ -110,6 +110,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D13 | A memory's `type` is a style switch (font, glow, backdrop box), not a kind of content, which is why technology names were filed as `code` to get a monospace box. The two ideas separate: content is either a technology from the master list or a prose memory; how it flies is a `style` field (`plain`, `code`, `handwritten`) on the item. Today's look is preserved by defaults, and a technology drawn as a code box is still a link, so renaming it renames the box. | 2026-09-22 |
 | D12 | The `tech` **and `code`** memory types retire. Both were free text holding technology names: of the 25 tech memories 13 duplicate a label on the same job, 7 name a technology found nowhere else (including Node.js at InvestCloud) and 5 describe work; of the 14 code memories 8 duplicate a label, 3 name something new and 3 are prose. Each is deleted, harvested into a skill use, or re-typed as prose. Afterwards a memory is prose, and technologies live only in the master list. | 2026-09-22 |
 | D15 | Every visibility option migrates **on**: it is easier to see everything and take things off than to hunt for what is missing (settles Q3 and Q10). Because "all on" would put ISDN on the resume, the curation happens in the production copy *before* the first publish: the migration runs, Harma unticks what should not show, and only then is anything pushed to production. The hard rule (sites unchanged on the day it ships) is kept by that ordering, not by the default. | 2026-09-22 |
+| D16 | Some surfaces show skills only, no headings (the flattened view of D4). "Has children" cannot decide this: React (Hooks, Patterns), AWS (EC2, RDS, S3) and Azure are real technologies that are also parents, and hiding every parent would drop them from exactly the views that flatten. An explicit `isHeading` tick decides it, defaulting on for top-level entries. Stating it rather than inferring it also allows a technology at the top level (Git, with no obvious parent) without it silently becoming a heading. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -128,6 +129,7 @@ technologies on projects for a technical reader.
 | `current` | tick: part of the stack that is relevant today (D5). Replaces the mock's "Current stack" category and its start year. |
 | `showOnResume` | the resume and the Skills planet show only ticked ones, so they keep showing today's 18 under today's 5 headings. |
 | `blurb` | optional one line, mainly for top-level entries |
+| `isHeading` | a grouping, not a skill (D16). On by default for top-level entries. Surfaces that show skills only skip these; the resume and Skills planet use them as headings. |
 
 What the mock did with several categories per skill becomes nesting:
 
@@ -410,6 +412,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (h): headings are marked, not inferred from having children (D16), so React and AWS survive the flattened views.
 - 2026-09-22: draft 5 (g): every option migrates on and is curated in the copy before the first publish (D15), settling Q3 and Q10.
 - 2026-09-22: draft 5 (f): style is a named token on the use, with the appearance defined once in code (D14); including `code` memories then costs nothing, because the look no longer depends on the content type.
 - 2026-09-22: draft 5 (e): `code` memories are technology names too; the memory type turns out to be a style switch, so style separates from content (D13).
