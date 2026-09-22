@@ -106,6 +106,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D9 | One data shape for every site. The `toLegacy` translation is retired **before** the skills consolidation, so the consolidation is done once, against the new shapes, not twice. No per-site filtering in a hidden layer; what a site shows is decided by visible fields on the record (e.g. visibility ticks). | 2026-09-21 |
 | D10 | StormScape's return is a second Experience (`stormscape-freelance`, Jul 2025 → present), not extra periods on the first (settles Q5). An Experience's end date may be left out, meaning current; the sites show "Present". Added to the local database 2026-09-21. | 2026-09-21 |
 | D11 | Names are de-duplicated and normalised by rule, with a reviewed exception list (section 4.7). One record per technology, one spelling, compounds split into their parts, and every string that mapped to a record kept on it as an alias so the migration is auditable. | 2026-09-22 |
+| D12 | The `tech` memory type retires. Each of the 25 tech memories is either deleted (13 duplicate a label on the same job), harvested into a skill use (7 name a technology found nowhere else, including Node.js at InvestCloud), or re-typed as `memory` prose (5 describe work, not tools). Afterwards a memory is prose or code, and technologies live only in the master list. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -187,8 +188,19 @@ site computes them.
 
 ### 4.5 Memories and project technologies
 
-- Memories of type `tech` pick from the master list instead of free text.
+- Memories of type `tech` are retired entirely (D12), not converted to pickers.
+  A tech memory duplicated the job's own labels 13 times out of 25; the rest
+  either named a technology recorded nowhere else (harvested into a skill use,
+  so nothing is lost) or described a piece of work (re-typed as prose).
   `memory` and `code` stay free text.
+
+  **What the universe shows on orbit.** Today the floating memories that start
+  with the moon orbit draw from all of a job's memories at once, tech and prose
+  mixed, with the type changing only the styling. Afterwards the pool is the
+  prose and code memories plus the job's linked skill uses, so the two lists
+  stop describing the same thing twice. The pool grows (InvestCloud: 9 tech
+  memories today, about 17 skill uses after), which is what the visibility tick
+  in Q3 has to govern.
 - Portfolio entry technologies pick from the master list. Tags render the
   technology's name, which fixes html/HTML. Some current tags have no master
   entry yet (WinForms, Framer Motion, Redux, Spring Boot) and would be added,
@@ -385,6 +397,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
+- 2026-09-22: draft 5 (d): memories keep only prose and code (D12); the tech ones are deleted, harvested or re-typed, and the orbit fly-by reads skill uses instead.
 - 2026-09-22: draft 5 (c): the naming rules are migration-only; afterwards any name is allowed and only uniqueness, one parent and alias rules persist.
 - 2026-09-22: draft 5 (b): naming and de-duplication rules R1-R10 and the exception list (D11), measured from the 124 live strings.
 - 2026-09-22: draft 5: step 0 shipped; section 1b records what is done and what is left. The mock file is the last JSON the app reads.
