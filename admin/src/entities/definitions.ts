@@ -3,7 +3,16 @@
 // identical pages. Entities with nested content (experiences, portfolio) keep
 // bespoke pages.
 
-export type FieldKind = "text" | "multiline" | "reference" | "boolean" | "multiselect" | "tags";
+export type FieldKind =
+  | "text"
+  | "multiline"
+  | "reference"
+  | "boolean"
+  /** A short, fixed set of options, all visible: read the state without opening anything. */
+  | "checkboxes"
+  /** The same, behind a dropdown. For sets too long to show at once. */
+  | "multiselect"
+  | "tags";
 
 export interface FieldDefinition {
   key: string;
@@ -18,7 +27,7 @@ export interface FieldDefinition {
    * descendants are left out, so a loop cannot be chosen.
    */
   emptyOption?: string;
-  /** For `multiselect` fields: the fixed choices, stored as an array of values. */
+  /** For `checkboxes` and `multiselect` fields: the choices, stored as an array of values. */
   options?: { value: string; label: string }[];
   /**
    * Set once, on creation, and read-only afterwards. Used for the slug of
@@ -208,7 +217,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
         key: "surfaces",
         label: "Shown in",
         hint: "Where this may appear. Lattice: the universe's Skills Lattice. Resume: the resume's skills section. Film progress: the film's Skill Progress screen. Filters: offered as a filter in the home page chips and the universe Portfolio drop-down - leave this off for something like HTML that nearly every project uses, so the filter row keeps its slots for choices worth making. A project's own technology list is not set here; edit the project.",
-        kind: "multiselect",
+        kind: "checkboxes",
         options: [
           { value: "lattice", label: "Skills Lattice (universe)" },
           { value: "resume", label: "Resume skills" },

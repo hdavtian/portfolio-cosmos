@@ -226,6 +226,27 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
                 checked={Boolean(draft[field.key])}
                 change={(event: { checked: boolean }) => setField(field.key, event.checked)}
               />
+            ) : field.kind === "checkboxes" ? (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 20px" }}>
+                {(field.options ?? []).map((option) => {
+                  const chosen = Array.isArray(draft[field.key]) ? (draft[field.key] as string[]) : [];
+                  return (
+                    <CheckBoxComponent
+                      key={option.value}
+                      label={option.label}
+                      checked={chosen.includes(option.value)}
+                      change={(event: { checked: boolean }) =>
+                        setField(
+                          field.key,
+                          event.checked
+                            ? [...chosen, option.value]
+                            : chosen.filter((value) => value !== option.value),
+                        )
+                      }
+                    />
+                  );
+                })}
+              </div>
             ) : field.kind === "multiselect" ? (
               <MultiSelectComponent
                 dataSource={field.options ?? []}
