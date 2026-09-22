@@ -35,6 +35,14 @@ Every admin grid provides:
   value is clipped.
 - Row drag-and-drop reordering for entities with `sortOrder`, always enabled,
   persisted through the entity's order endpoint (see "Reordering is always on").
+- A remembered layout: `enablePersistence` with a stable, unique `id`, so
+  column widths, order, hidden columns, sorting and filters survive leaving the
+  page. Tree grids too.
+
+**Every persisted grid needs a way out.** The saved state includes the columns
+as they were, so changing a grid's columns can leave a stale layout hiding the
+new one, with no escape from inside the grid. Each grid shows a **Reset layout**
+button that clears the key (`lib/gridLayout.ts`) and reloads.
 
 Do not build custom filter/search widgets when Syncfusion provides one.
 

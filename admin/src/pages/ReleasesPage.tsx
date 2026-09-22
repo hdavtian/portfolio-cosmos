@@ -1,12 +1,16 @@
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import {
+  ColumnChooser,
   ColumnDirective,
   ColumnsDirective,
+  Filter,
   GridComponent,
   Inject,
   Page,
+  Reorder,
   Resize,
   Sort,
+  Toolbar,
 } from "@syncfusion/ej2-react-grids";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -37,6 +41,9 @@ interface ReleaseStatus {
 const HISTORY_PAGE_SETTINGS = { pageSize: 25 };
 
 // Matches the API's limit on release notes.
+const HISTORY_TOOLBAR = ["Search", "ColumnChooser"];
+const HISTORY_FILTER_SETTINGS = { type: "Menu" as const };
+
 const NOTES_MAX = 500;
 
 /** Joins change lines into notes, trimming whole lines to stay within the limit. */
@@ -330,11 +337,18 @@ export function ReleasesPage() {
               {rollback.isPending ? "Rolling back…" : "Roll back from the row of the release you want to restore."}
             </p>
             <GridComponent
+              id="releaseHistory"
+              enablePersistence
               key={history.data.items[0]?.id ?? "empty"}
               dataSource={historyRows}
               allowPaging
               allowSorting
               allowResizing
+              allowFiltering
+              allowReordering
+              showColumnChooser
+              filterSettings={HISTORY_FILTER_SETTINGS}
+              toolbar={HISTORY_TOOLBAR}
               pageSettings={HISTORY_PAGE_SETTINGS}
               gridLines="Horizontal"
             >
@@ -345,7 +359,7 @@ export function ReleasesPage() {
                 <ColumnDirective field="notesLabel" headerText="Notes" width={420} clipMode="EllipsisWithTooltip" />
                 <ColumnDirective headerText="Actions" width={150} template={rollbackTemplate} />
               </ColumnsDirective>
-              <Inject services={[Page, Sort, Resize]} />
+              <Inject services={[Page, Sort, Resize, Filter, Reorder, Toolbar, ColumnChooser]} />
             </GridComponent>
           </>
         ) : null}

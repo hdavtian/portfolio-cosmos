@@ -81,7 +81,7 @@ export function PortfolioCoresPage() {
       {list.isError ? <p className="admin-error">Could not load cores.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid rows={list.items} mode="local" onReorder={saveOrder}>
+        <EntityGrid gridId="portfolioCores" rows={list.items} mode="local" onReorder={saveOrder}>
           {[
             <ColumnDirective key="name" field="name" headerText="Core" width={220} />,
             <ColumnDirective key="color" headerText="Color" width={160} template={colorTemplate} allowSorting={false} allowFiltering={false} allowGrouping={false} />,

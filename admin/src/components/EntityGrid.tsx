@@ -14,6 +14,8 @@ import {
   Toolbar,
 } from "@syncfusion/ej2-react-grids";
 import { useMemo, useRef, useState, type ReactNode } from "react";
+import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
+import { resetGridLayout } from "../lib/gridLayout";
 import type { ListState } from "../lib/entityApi";
 
 interface GridRow {
@@ -21,6 +23,11 @@ interface GridRow {
 }
 
 interface EntityGridProps<T extends GridRow> {
+  /**
+   * Stable, unique id for this grid. Syncfusion remembers the layout under it
+   * (see lib/gridLayout), so it must not change between renders or entities.
+   */
+  gridId: string;
   /** ColumnDirective elements. Nothing else may sit between them. */
   children: ReactNode;
   rows: T[] | undefined;
@@ -64,6 +71,7 @@ const sameState = (a: ListState, b: ListState) =>
   a.page === b.page && a.pageSize === b.pageSize && a.sort === b.sort && a.search === b.search;
 
 export function EntityGrid<T extends GridRow>({
+  gridId,
   children,
   rows,
   mode,
@@ -166,10 +174,23 @@ export function EntityGrid<T extends GridRow>({
           <span className="admin-status">
             {reorderNotice ?? "Drag rows by their handle to change the saved order. Each drop saves immediately."}
           </span>
+          <ButtonComponent
+            cssClass="e-small e-flat e-outline"
+            style={{ marginLeft: "auto" }}
+            title="Forget the remembered column widths, order, hidden columns, sorting and filters for this list."
+            onClick={() => {
+              resetGridLayout(gridId);
+              window.location.reload();
+            }}
+          >
+            Reset layout
+          </ButtonComponent>
         </div>
       ) : null}
 
       <GridComponent
+        id={gridId}
+        enablePersistence
         ref={gridRef}
         dataSource={dataSource}
         dataStateChange={isServer ? handleDataStateChange : undefined}

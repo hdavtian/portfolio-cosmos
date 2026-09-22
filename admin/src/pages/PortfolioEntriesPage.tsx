@@ -100,7 +100,7 @@ export function PortfolioEntriesPage() {
       {list.truncated ? <p className="admin-error">Showing the first 100 projects only.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid rows={rows} mode="local" onReorder={saveOrder}>
+        <EntityGrid gridId="portfolioEntries" rows={rows} mode="local" onReorder={saveOrder}>
           {[
             <ColumnDirective key="title" field="title" headerText="Project" width={240} clipMode="EllipsisWithTooltip" />,
             <ColumnDirective key="preview" headerText="Image" width={100} template={previewTemplate} allowSorting={false} allowFiltering={false} allowGrouping={false} />,

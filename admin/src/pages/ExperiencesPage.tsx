@@ -88,7 +88,7 @@ export function ExperiencesPage() {
       {list.truncated ? <p className="admin-error">Showing the first 100 records only.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid rows={list.items} mode="local" onReorder={saveOrder}>
+        <EntityGrid gridId="experiences" rows={list.items} mode="local" onReorder={saveOrder}>
           {[
             <ColumnDirective key="company" field="company" headerText="Company" width="220" clipMode="EllipsisWithTooltip" />,
             <ColumnDirective key="navLabel" field="navLabel" headerText="Short name" width="130" />,

@@ -108,7 +108,7 @@ export function EntityListPage({ definition }: { definition: EntityDefinition })
       {list.truncated ? <p className="admin-error">Showing the first 100 records only.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid rows={rows} mode="local" onReorder={saveOrder}>
+        <EntityGrid gridId={definition.entity} rows={rows} mode="local" onReorder={saveOrder}>
           {[
             ...columns,
             <ColumnDirective key="updatedAt" field="updatedAt" headerText="Updated" width={140} type="date" format="yMd" />,
