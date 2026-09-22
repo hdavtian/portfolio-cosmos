@@ -118,7 +118,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D21 | `featured` (called `headline` until D22) marks the categories that matter to an employer. The resume summary and the film's closing list read only featured entries. It is emphasis, not visibility, so it is a separate flag from `surfaces`; in practice it is set on roots. This revives the mock's `headline` flag (2.3 item 4), which never reached the API. | 2026-09-22 |
 | D22 | `isHeading` and `headline` are renamed `isGrouping` and `featured`: the originals sounded alike and meant unrelated things (what a record *is* vs how *important* it is). Every tick and multi-select in admin carries hint text naming the exact screens it affects, in the existing `<Field label hint>` pattern, so no one has to read this document to know what a one-word label does. The hint strings are in section 4.9 and ship with the screens. | 2026-09-22 |
 | D23 | **Corrects D20.** Filter lists are not project tag lists. The home page chips and the universe Portfolio drop-down *offer* technologies to filter by; a project's preview and detail page *list* what that project used. So `filters` is a technology surface with fine control, while the tag lists stay per-project. Today the chips are simply the most-used names by count, which spends slots on HTML and CSS and filters to nearly everything - the counter chooses, and it chooses badly. Harma chooses instead (see D24 for the cap). | 2026-09-22 |
-| D24 | No cap on the filter row. Today it is the ten most-used technologies by count (`TOP_TECH_COUNT` in `useShowcaseProjects.ts`, added with the redesign in `9adbf5e`). A tick *and* a cap are two controls fighting: ticking twelve would silently drop two with no way to see which. The `filters` tick alone decides, the row wraps if it is long, and the chips order by the tree's `sortOrder` rather than by usage count, so the row reads in the order Harma set. `TOP_TECH_COUNT` is deleted. | 2026-09-22 |
+| D24 | No cap on the filter row. Today it is the ten most-used technologies by count (`TOP_TECH_COUNT` in `useShowcaseProjects.ts`, added with the redesign in `9adbf5e`). A tick *and* a cap are two controls fighting: ticking twelve would silently drop two with no way to see which. The `filters` tick alone decides which technologies appear and the row wraps if it is long; they stay ordered by how many projects use them, which is a useful order once it is no longer also doing the choosing. `TOP_TECH_COUNT` is deleted; the sort stays. | 2026-09-22 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -427,7 +427,7 @@ where the tick is.
 |---|---|
 | `isGrouping` | "A heading, not a skill you claim. Headings organise the tree (Frontend, Databases, APIs). Screens that show skills only - the film's Skill Progress, moon labels, the home page chips - skip them." |
 | `featured` | "One of the few areas to put in front of a recruiter. Only featured entries appear in the resume summary and the film's closing list. It does not change where else this shows." |
-| `surfaces` | "Where this may appear. Lattice: the universe's Skills Lattice. Resume: the resume's skills section. Film progress: the film's Skill Progress screen. Filters: offered as a filter in the home page chips and the universe Portfolio drop-down. Every ticked technology appears, in tree order - there is no limit, so leave this off for something like HTML that nearly every project uses and would filter to almost everything. A project's own technology list is not set here; edit the project." |
+| `surfaces` | "Where this may appear. Lattice: the universe's Skills Lattice. Resume: the resume's skills section. Film progress: the film's Skill Progress screen. Filters: offered as a filter in the home page chips and the universe Portfolio drop-down. Every ticked technology appears, most-used first - there is no limit, so leave this off for something like HTML that nearly every project uses and would filter to almost everything. A project's own technology list is not set here; edit the project." |
 | `current` | "Part of the stack you work in today. Marks it as current wherever a site separates present from past." |
 | `parent` | "Its one home in the tree. A skill has exactly one parent; if it seems to belong in two places, it is two skills." |
 
@@ -500,7 +500,7 @@ years → film reads the release → remove the old screens and collections.
 
 ## 10. Change log
 
-- 2026-09-22: draft 5 (o): the filter row loses its ten-item cap (D24); the tick is the only control.
+- 2026-09-22: draft 5 (o): the filter row loses its ten-item cap (D24); the tick is the only control, and the most-used-first order stays.
 - 2026-09-22: draft 5 (n): D23 corrects D20 - a filter list is not a tag list, so the home chips and the Portfolio drop-down get fine control after all.
 - 2026-09-22: draft 5 (m): isHeading and headline renamed isGrouping and featured, and every option gets hint text naming the screens it affects (D22).
 - 2026-09-22: draft 5 (l): Harma's list of the ten places a skill shows, mapped to what governs each (D20), and `headline` revived for the recruiter-facing summaries (D21).
