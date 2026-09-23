@@ -38,6 +38,7 @@ const EMPTY: PortfolioEntry = {
   mediaId: "",
   description: "",
   technologies: [],
+  technologySlugs: [],
   year: null,
   fit: "cover",
   galleryMedia: [],
