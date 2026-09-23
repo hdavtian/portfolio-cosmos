@@ -398,3 +398,20 @@ body {
   object-fit: contain;
   background: repeating-conic-gradient(#f2f4f7 0% 25%, #fff 0% 50%) 50% / 16px 16px;
 }
+
+/* The technology picker: a pool on the left, the chosen ones on the right. */
+.admin-tech-picker__lists {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.admin-tech-picker__pane {
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .admin-tech-picker__lists {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,12 +1,6 @@
 import type { Technology } from "@hd/content-schema";
-import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
-import {
-  CheckBoxSelection,
-  Inject,
-  ListBoxComponent,
-  MultiSelectComponent,
-} from "@syncfusion/ej2-react-dropdowns";
-import { useMemo, useRef } from "react";
+import { ListBoxComponent } from "@syncfusion/ej2-react-dropdowns";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAllEntities } from "../lib/entityApi";
 
@@ -23,21 +17,23 @@ interface Choice {
   search: string;
 }
 
-// One object, not a literal per render: Syncfusion rebinds when a prop's
-// identity changes, and rebinding a multi-select drops its selection.
+// Constants handed to Syncfusion, so re-renders never rebuild the lists.
 const FIELDS = { text: "name", value: "slug" };
-const LIST_FIELDS = { text: "name", value: "slug" };
+const POOL_TOOLBAR = { items: ["moveTo", "moveFrom"] };
+const CHOSEN_TOOLBAR = { items: ["moveUp", "moveDown"] };
+const SELECTION = { mode: "Multiple" as const, showCheckbox: false };
+const LIST_HEIGHT = "340px";
 
 /**
  * Picks technologies from the master list (Admin -> Technologies) and orders
- * them. The top control is for choosing: tick as many as you like, in any
- * order, searching by name or by any old name the record absorbed. The list
- * underneath is the chosen ones in the order the sites will show them; drag a
- * row to move it. Headings are not offered - a project is tagged with skills.
+ * them: Syncfusion's dual list box. The pool on the left is every skill (not
+ * headings), filtered by name or by any old name a record absorbed. Move rows
+ * across with the arrows or by dragging; the right-hand list is the chosen
+ * ones in the order the sites show them, moved up and down the same way.
  */
 export function TechnologyPicker({ value, onChange }: TechnologyPickerProps) {
   const list = useAllEntities<Technology>("technologies");
-  const choices = useMemo<Choice[]>(
+  const all = useMemo<Choice[]>(
     () =>
       (list.items ?? [])
         .filter((record) => !record.isGrouping)
@@ -48,106 +44,91 @@ export function TechnologyPicker({ value, onChange }: TechnologyPickerProps) {
         })),
     [list.items],
   );
-  const nameBySlug = useMemo(() => new Map(choices.map((choice) => [choice.slug, choice.name])), [choices]);
+  const bySlug = useMemo(() => new Map(all.map((choice) => [choice.slug, choice])), [all]);
 
-  // Chosen slugs the list no longer knows (deleted since) are kept in the
-  // value so a save does not silently drop them, but shown by slug.
-  const ordered = useMemo(
-    () => value.map((slug) => ({ slug, name: nameBySlug.get(slug) ?? `${slug} (no longer in the list)` })),
-    [value, nameBySlug],
+  // A chosen slug the list no longer knows (deleted since) is kept, so a save
+  // cannot silently drop it, and shown by its slug.
+  const chosen = useMemo<Choice[]>(
+    () =>
+      value.map(
+        (slug) => bySlug.get(slug) ?? { slug, name: `${slug} (no longer in the list)`, search: slug },
+      ),
+    [value, bySlug],
   );
+  // What is typed in the pool's filter box. The narrowing is done here, on
+  // name and aliases alike, and handed to the list as its data - Syncfusion's
+  // own filter only reads the text field and would drop an alias-only match.
+  const [term, setTerm] = useState("");
+  const pool = useMemo<Choice[]>(() => {
+    const needle = term.trim().toLowerCase();
+    return all.filter((choice) => !value.includes(choice.slug) && (!needle || choice.search.includes(needle)));
+  }, [all, value, term]);
 
-  const listRef = useRef<ListBoxComponent>(null);
+  const chosenRef = useRef<ListBoxComponent>(null);
 
-  // Syncfusion's own filter only looks at the text field; this one also reads
-  // the aliases, and hands the control the narrowed set.
-  const filtering = (event: { text: string; updateData: (data: Choice[]) => void; preventDefaultAction?: boolean }) => {
-    const term = event.text.trim().toLowerCase();
-    event.preventDefaultAction = true;
-    event.updateData(term ? choices.filter((choice) => choice.search.includes(term)) : choices);
-  };
-
-  // Ticking adds to the end; unticking removes; the order of what was already
-  // there is kept, because that order is the sites' order.
-  const onPick = (event: { value: string[] | null; isInteracted?: boolean }) => {
-    if (!event.isInteracted) return;
-    const picked = new Set(event.value ?? []);
-    const kept = value.filter((slug) => picked.has(slug));
-    const added = [...picked].filter((slug) => !value.includes(slug));
-    onChange([...kept, ...added]);
-  };
-
-  // The list box reorders its own data source on a drop; read the new order
-  // back from it rather than trying to compute where the row landed.
-  const onDrop = () => {
+  // After any move, up/down or drop, the chosen list's own data is the truth;
+  // read it back rather than working out what the toolbar or the drag did.
+  const readBack = () => {
     window.setTimeout(() => {
-      const items = (listRef.current?.getDataList?.() as Choice[] | undefined) ?? [];
+      const items = (chosenRef.current?.getDataList?.() as Choice[] | undefined) ?? [];
       const slugs = items.map((item) => item.slug);
-      if (slugs.length === value.length && slugs.some((slug, index) => slug !== value[index])) onChange(slugs);
+      if (slugs.length !== value.length || slugs.some((slug, index) => slug !== value[index])) onChange(slugs);
     }, 0);
   };
 
-  const removeSelected = () => {
-    // `value` is the public view of the selection: the chosen rows' slugs.
-    const selected = (listRef.current?.value ?? []) as string[];
-    if (selected.length === 0) return;
-    const gone = new Set(selected);
-    onChange(value.filter((slug) => !gone.has(slug)));
+  const filtering = (event: { text: string; preventDefaultAction?: boolean }) => {
+    event.preventDefaultAction = true;
+    setTerm(event.text ?? "");
   };
 
   return (
     <div className="admin-tech-picker">
-      <MultiSelectComponent
-        dataSource={choices as unknown as { [key: string]: object }[]}
-        fields={FIELDS}
-        mode="CheckBox"
-        allowFiltering
-        filtering={filtering}
-        filterBarPlaceholder="Type a name, or an old name it used to go by"
-        showDropDownIcon
-        placeholder={list.isLoading ? "Loading the technologies…" : "Choose technologies"}
-        value={value}
-        change={onPick}
-      >
-        <Inject services={[CheckBoxSelection]} />
-      </MultiSelectComponent>
-
-      {ordered.length > 0 ? (
-        <div className="admin-tech-picker__order">
-          <div className="admin-status" style={{ margin: "8px 0 4px" }}>
-            In the order the sites show them. Drag a row to move it.
+      <div className="admin-tech-picker__lists">
+        <div className="admin-tech-picker__pane">
+          <div className="admin-status" style={{ margin: "0 0 4px" }}>
+            {list.isLoading ? "Loading the technologies…" : `Available (${pool.length})`}
           </div>
           <ListBoxComponent
-            ref={listRef}
-            dataSource={ordered as unknown as { [key: string]: object }[]}
-            fields={LIST_FIELDS}
+            dataSource={pool as unknown as { [key: string]: object }[]}
+            fields={FIELDS}
+            height={LIST_HEIGHT}
+            scope="#technology-picker-chosen"
+            toolbarSettings={POOL_TOOLBAR}
             allowDragAndDrop
-            drop={onDrop}
-            selectionSettings={{ mode: "Multiple", showCheckbox: false }}
-            height="auto"
+            allowFiltering
+            filterBarPlaceholder="Find by name, or by an old name it went by"
+            filtering={filtering}
+            selectionSettings={SELECTION}
+            actionComplete={readBack}
+            drop={readBack}
           />
-          <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
-            <ButtonComponent cssClass="e-small e-flat e-outline" onClick={removeSelected}>
-              Remove selected
-            </ButtonComponent>
-            <span className="admin-status">
-              Not in the list?{" "}
-              <Link to="/technologies/new" target="_blank" rel="noreferrer">
-                Add a technology
-              </Link>{" "}
-              in a new tab, then pick it here.
-            </span>
-          </div>
         </div>
-      ) : (
-        <p className="admin-status" style={{ margin: "6px 0 0" }}>
-          Nothing chosen yet.{" "}
-          <Link to="/technologies/new" target="_blank" rel="noreferrer">
-            Add a technology
-          </Link>{" "}
-          if the one you need is missing.
-        </p>
-      )}
+        <div className="admin-tech-picker__pane">
+          <div className="admin-status" style={{ margin: "0 0 4px" }}>
+            Chosen ({chosen.length}) - in the order the sites show them
+          </div>
+          <ListBoxComponent
+            id="technology-picker-chosen"
+            ref={chosenRef}
+            dataSource={chosen as unknown as { [key: string]: object }[]}
+            fields={FIELDS}
+            height={LIST_HEIGHT}
+            toolbarSettings={CHOSEN_TOOLBAR}
+            allowDragAndDrop
+            selectionSettings={SELECTION}
+            actionComplete={readBack}
+            drop={readBack}
+          />
+        </div>
+      </div>
+      <p className="admin-status" style={{ margin: "6px 0 0" }}>
+        Select a row and use the arrows, or drag it across; drag or use the up and down arrows to order. Not in the
+        list?{" "}
+        <Link to="/technologies/new" target="_blank" rel="noreferrer">
+          Add a technology
+        </Link>{" "}
+        in a new tab, then pick it here.
+      </p>
     </div>
   );
 }
