@@ -58,6 +58,12 @@ export const portfolioEntrySchema = z.object({
   mediaId: mediaRefSchema,
   description: text(4000),
   technologies: z.array(text(60)),
+  /**
+   * Links into the master technology list (plan 4.5). The free-text
+   * `technologies` above stays until every site reads these; a site renders
+   * the linked record's name, which is what makes html/HTML one tag.
+   */
+  technologySlugs: z.array(slugSchema).default([]),
   year: yearSchema,
   fit: imageFitSchema,
   galleryMedia: z.array(galleryItemSchema).default([]),

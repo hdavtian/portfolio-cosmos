@@ -51,6 +51,8 @@ export interface PortfolioItem {
   description: string;
   image: string;
   technologies: string[];
+  /** Links into the master technology list; empty for a release from before it existed. */
+  technologySlugs: string[];
   year: number | null;
   category: string;
   subcategory: string;
