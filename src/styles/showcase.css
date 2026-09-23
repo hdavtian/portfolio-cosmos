@@ -686,7 +686,7 @@ html.is-scene-dragging * {
 .showcase-pill:focus-visible,
 /* Sort: two small square switches, one side of one switch lit. Deliberately
    not chips, so the row reads as a setting rather than as more filters. */
-.showcase-filters__row--sort {
+.showcase-filters__chips--sort {
   gap: 10px;
 }
 
@@ -747,22 +747,51 @@ html.is-scene-dragging * {
   padding-block: calc(var(--showcase-gutter) + 36px) 12vh;
 }
 
+/* Filters and sort: one labelled row per group, a faint dotted rule between
+   them, the labels in a column of their own so wrapped chips line up under
+   the first chip rather than under the label. Same sizes as before; only the
+   organisation changes. */
 .showcase-filters {
   display: grid;
-  gap: 8px;
+  gap: 0;
   margin-bottom: clamp(20px, 4vh, 44px);
   max-width: 980px;
+  border-top: 1px dotted rgba(244, 241, 236, 0.22);
+  border-bottom: 1px dotted rgba(244, 241, 236, 0.22);
 }
 
 .showcase-filters__row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: start;
+  padding: 7px 0;
+}
+
+.showcase-filters__row + .showcase-filters__row {
+  border-top: 1px dotted rgba(244, 241, 236, 0.16);
+}
+
+.showcase-filters__row > .showcase-label {
+  min-width: 0;
+  padding-top: 5px;
+  color: var(--showcase-ink-dim);
+}
+
+/* Everything after the label wraps in the second column. */
+.showcase-filters__row > :not(.showcase-label) {
+  grid-column: 2;
+}
+
+.showcase-filters__row > .showcase-label + * {
+  grid-row: 1;
+}
+
+.showcase-filters__chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-}
-
-.showcase-filters__row > .showcase-label {
-  min-width: 44px;
 }
 
 .showcase-chip {

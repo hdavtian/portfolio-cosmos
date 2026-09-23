@@ -1,13 +1,32 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import { SourceMarkedName } from "../../../components/ui/SourceMarkedName";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 import { HoloImage } from "../components/HoloImage";
 import { TechConstellation } from "../components/TechConstellation";
 import { useBackdropTint } from "../lib/backdropTint";
-import { clearIndexReturnState, readIndexReturnState, saveIndexReturnState } from "../lib/indexReturnState";
+import {
+  clearIndexReturnState,
+  readIndexReturnState,
+  saveIndexReturnState,
+} from "../lib/indexReturnState";
 import { useRestState } from "../lib/useRestState";
 import { readVisitedProjects } from "../lib/visitedProjects";
-import { useShowcaseProjects, type ShowcaseProject } from "../lib/useShowcaseProjects";
+import {
+  useShowcaseProjects,
+  type ShowcaseProject,
+} from "../lib/useShowcaseProjects";
 
 // Matches the collapse animation in showcase.css.
 const CLOSE_MS = 240;
@@ -16,7 +35,10 @@ type SortKey = "newest" | "oldest" | "az" | "za";
 const DEFAULT_SORT: SortKey = "newest";
 // Two switches, each a pair: one side of each is lit. Choosing a side of one
 // switch is the sort; the other switch goes dark.
-const SORT_SWITCHES: Array<{ label: string; sides: Array<{ key: SortKey; label: string; title: string }> }> = [
+const SORT_SWITCHES: Array<{
+  label: string;
+  sides: Array<{ key: SortKey; label: string; title: string }>;
+}> = [
   {
     label: "Date",
     sides: [
@@ -35,12 +57,18 @@ const SORT_SWITCHES: Array<{ label: string; sides: Array<{ key: SortKey; label: 
 const isSortKey = (value: string | null): value is SortKey =>
   value === "newest" || value === "oldest" || value === "az" || value === "za";
 // A missing year sorts after every real one, in both date orders.
-const yearOf = (project: ShowcaseProject, missing: number) => (project.year === null ? missing : project.year);
-const SORTERS: Record<SortKey, (a: ShowcaseProject, b: ShowcaseProject) => number> = {
+const yearOf = (project: ShowcaseProject, missing: number) =>
+  project.year === null ? missing : project.year;
+const SORTERS: Record<
+  SortKey,
+  (a: ShowcaseProject, b: ShowcaseProject) => number
+> = {
   newest: (a, b) => yearOf(b, -Infinity) - yearOf(a, -Infinity),
   oldest: (a, b) => yearOf(a, Infinity) - yearOf(b, Infinity),
-  az: (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }),
-  za: (a, b) => b.title.localeCompare(a.title, undefined, { sensitivity: "base" }),
+  az: (a, b) =>
+    a.title.localeCompare(b.title, undefined, { sensitivity: "base" }),
+  za: (a, b) =>
+    b.title.localeCompare(a.title, undefined, { sensitivity: "base" }),
 };
 
 const REST_AFTER_MS = 9000;
@@ -60,8 +88,10 @@ const excerpt = (text: string) => {
  * works.
  */
 export function ShowcaseIndexPage() {
-  const { projects, cores, topTech, personal, isLoading, isError } = useShowcaseProjects();
-  const { setTint, setHighlights, setFocusProject, sceneShowing } = useBackdropTint();
+  const { projects, cores, topTech, personal, isLoading, isError } =
+    useShowcaseProjects();
+  const { setTint, setHighlights, setFocusProject, sceneShowing } =
+    useBackdropTint();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -82,7 +112,9 @@ export function ShowcaseIndexPage() {
   const coreFilter = searchParams.get("core");
   const techFilter = searchParams.get("tech");
   const openId = searchParams.get("open");
-  const sort: SortKey = isSortKey(searchParams.get("sort")) ? (searchParams.get("sort") as SortKey) : DEFAULT_SORT;
+  const sort: SortKey = isSortKey(searchParams.get("sort"))
+    ? (searchParams.get("sort") as SortKey)
+    : DEFAULT_SORT;
 
   // Filtered, then ordered. The sort is stable, so projects that tie (the
   // same year, or no year at all) keep the admin's order among themselves;
@@ -105,17 +137,25 @@ export function ShowcaseIndexPage() {
   // screenshot, swapped in while the names are at their faintest.
   const [watermarkImage, setWatermarkImage] = useState<string | null>(null);
   const watermarkImages = useMemo(
-    () => visible.map((project) => project.image).filter((image): image is string => Boolean(image)),
+    () =>
+      visible
+        .map((project) => project.image)
+        .filter((image): image is string => Boolean(image)),
     [visible],
   );
   const listRef = useRef<HTMLUListElement>(null);
   useEffect(() => {
     const list = listRef.current;
-    if (restState !== "resting" || !list || watermarkImages.length === 0) return;
+    if (restState !== "resting" || !list || watermarkImages.length === 0)
+      return;
     let cycle = 0;
     let cancelled = false;
     const onIteration = (event: AnimationEvent) => {
-      if (event.animationName !== "showcase-watermark-sweep" && event.animationName !== "showcase-watermark-image") return;
+      if (
+        event.animationName !== "showcase-watermark-sweep" &&
+        event.animationName !== "showcase-watermark-image"
+      )
+        return;
       // One sweep per cycle reaches every title; react to the first title only.
       if (event.target !== list.querySelector(".showcase-list__title")) return;
       cycle += 1;
@@ -123,7 +163,8 @@ export function ShowcaseIndexPage() {
         setWatermarkImage(null);
         return;
       }
-      const next = watermarkImages[Math.floor(Math.random() * watermarkImages.length)];
+      const next =
+        watermarkImages[Math.floor(Math.random() * watermarkImages.length)];
       const loader = new Image();
       loader.onload = () => {
         if (!cancelled) setWatermarkImage(next);
@@ -141,7 +182,9 @@ export function ShowcaseIndexPage() {
   const filterCore = cores.find((core) => core.name === coreFilter);
 
   useEffect(() => {
-    setTint(hovered?.coreColor ?? opened?.coreColor ?? filterCore?.color ?? null);
+    setTint(
+      hovered?.coreColor ?? opened?.coreColor ?? filterCore?.color ?? null,
+    );
   }, [hovered, opened, filterCore, setTint]);
 
   // The open project's technologies light up in the 3D Skills Lattice.
@@ -163,7 +206,10 @@ export function ShowcaseIndexPage() {
   useLayoutEffect(() => {
     if (!returning || restored.current || projects.length === 0) return;
     restored.current = true;
-    window.scrollTo({ top: returning.scrollY, behavior: "instant" as ScrollBehavior });
+    window.scrollTo({
+      top: returning.scrollY,
+      behavior: "instant" as ScrollBehavior,
+    });
     clearIndexReturnState();
   }, [returning, projects.length]);
 
@@ -181,10 +227,18 @@ export function ShowcaseIndexPage() {
       const range = document.createRange();
       range.selectNodeContents(title);
       let widest = 0;
-      for (const rect of range.getClientRects()) widest = Math.max(widest, rect.right - title.getBoundingClientRect().left);
+      for (const rect of range.getClientRects())
+        widest = Math.max(
+          widest,
+          rect.right - title.getBoundingClientRect().left,
+        );
       // Plus the italic overhang padding and a pixel of slack so it never rewraps.
       const overhang = parseFloat(getComputedStyle(title).paddingRight) || 0;
-      if (widest > 0) item.style.setProperty("--title-width", `${Math.ceil(widest + overhang) + 2}px`);
+      if (widest > 0)
+        item.style.setProperty(
+          "--title-width",
+          `${Math.ceil(widest + overhang) + 2}px`,
+        );
       item.style.removeProperty("width");
     };
     measure();
@@ -202,7 +256,9 @@ export function ShowcaseIndexPage() {
     const timer = window.setTimeout(() => {
       itemRefs.current.get(openId)?.scrollIntoView({
         block: "nearest",
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
       });
     }, 420);
     return () => window.clearTimeout(timer);
@@ -210,7 +266,9 @@ export function ShowcaseIndexPage() {
 
   const updateParams = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams);
-    Object.entries(changes).forEach(([key, value]) => (value === null ? next.delete(key) : next.set(key, value)));
+    Object.entries(changes).forEach(([key, value]) =>
+      value === null ? next.delete(key) : next.set(key, value),
+    );
     setSearchParams(next, { replace: true });
   };
 
@@ -223,9 +281,19 @@ export function ShowcaseIndexPage() {
     closeTimer.current = window.setTimeout(() => setClosingId(null), CLOSE_MS);
   };
 
-  const openPreview = (event: MouseEvent<HTMLAnchorElement>, project: ShowcaseProject) => {
+  const openPreview = (
+    event: MouseEvent<HTMLAnchorElement>,
+    project: ShowcaseProject,
+  ) => {
     // Modified clicks keep their browser meaning (new tab, new window).
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.button !== 0
+    )
+      return;
     event.preventDefault();
     setRestoredOpenId(null);
     if (openId === project.id) {
@@ -267,11 +335,20 @@ export function ShowcaseIndexPage() {
   return (
     <div
       className={`showcase-index${hovered ? " showcase-index--has-hover" : ""}${opened ? " showcase-index--has-open" : ""} is-${restState}${shownWatermark ? " has-watermark-image" : ""}`}
-      style={shownWatermark ? ({ "--watermark-image": `url("${shownWatermark}")` } as React.CSSProperties) : undefined}
+      style={
+        shownWatermark
+          ? ({
+              "--watermark-image": `url("${shownWatermark}")`,
+            } as React.CSSProperties)
+          : undefined
+      }
     >
       {/* Where the 3D scenes don't run (phones, reduced motion) the D3 constellation stands in. */}
       {sceneShowing ? null : (
-        <TechConstellation highlights={opened?.technologies ?? []} visible={Boolean(opened)} />
+        <TechConstellation
+          highlights={opened?.technologies ?? []}
+          visible={Boolean(opened)}
+        />
       )}
 
       {/* Masthead: on the pills' line, top left. */}
@@ -281,80 +358,111 @@ export function ShowcaseIndexPage() {
         </h1>
         <p className="showcase-masthead__role">
           {personal?.title ?? "Full Stack Engineer"}
-          {personal?.location ? <span className="showcase-masthead__place">{personal.location}</span> : null}
+          {personal?.location ? (
+            <span className="showcase-masthead__place">
+              {personal.location}
+            </span>
+          ) : null}
         </p>
       </header>
 
       <section className="showcase-index__work" aria-label="Projects">
-        <div className="showcase-filters" role="group" aria-label="Filter projects">
+        <div
+          className="showcase-filters"
+          role="group"
+          aria-label="Filter projects"
+        >
           <div className="showcase-filters__row">
             <span className="showcase-label">Core</span>
-            {cores.map((core) => (
-              <button
-                key={core.name}
-                type="button"
-                className="showcase-chip"
-                aria-pressed={coreFilter === core.name}
-                style={{ "--chip-color": core.color } as React.CSSProperties}
-                onClick={() => toggleFilter("core", core.name)}
-              >
-                {core.name}
-                <span className="showcase-chip__count">{core.count}</span>
-              </button>
-            ))}
+            <div className="showcase-filters__chips">
+              {cores.map((core) => (
+                <button
+                  key={core.name}
+                  type="button"
+                  className="showcase-chip"
+                  aria-pressed={coreFilter === core.name}
+                  style={{ "--chip-color": core.color } as React.CSSProperties}
+                  onClick={() => toggleFilter("core", core.name)}
+                >
+                  {core.name}
+                  <span className="showcase-chip__count">{core.count}</span>
+                </button>
+              ))}
+            </div>
           </div>
           <div className="showcase-filters__row">
             <span className="showcase-label">Tech</span>
-            {topTech.map((tech) => (
-              <button
-                key={tech}
-                type="button"
-                className="showcase-chip"
-                aria-pressed={techFilter === tech}
-                onClick={() => toggleFilter("tech", tech)}
-              >
-                {tech}
-              </button>
-            ))}
-            {coreFilter || techFilter ? (
-              <button
-                type="button"
-                className="showcase-chip showcase-chip--clear"
-                onClick={() => updateParams({ core: null, tech: null })}
-              >
-                Clear
-              </button>
-            ) : null}
+            <div className="showcase-filters__chips">
+              {topTech.map((tech) => (
+                <button
+                  key={tech}
+                  type="button"
+                  className="showcase-chip"
+                  aria-pressed={techFilter === tech}
+                  onClick={() => toggleFilter("tech", tech)}
+                >
+                  {tech}
+                </button>
+              ))}
+              {coreFilter || techFilter ? (
+                <button
+                  type="button"
+                  className="showcase-chip showcase-chip--clear"
+                  onClick={() => updateParams({ core: null, tech: null })}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
           </div>
           <div className="showcase-filters__row showcase-filters__row--sort">
             <span className="showcase-label">Sort</span>
-            {SORT_SWITCHES.map((group) => (
-              <div key={group.label} className="showcase-switch" role="group" aria-label={`Sort by ${group.label.toLowerCase()}`}>
-                {group.sides.map((side) => (
-                  <button
-                    key={side.key}
-                    type="button"
-                    className="showcase-switch__side"
-                    aria-pressed={sort === side.key}
-                    title={side.title}
-                    onClick={() => updateParams({ sort: side.key === DEFAULT_SORT ? null : side.key })}
-                  >
-                    {side.label}
-                  </button>
-                ))}
-              </div>
-            ))}
+            <div className="showcase-filters__chips showcase-filters__chips--sort">
+              {SORT_SWITCHES.map((group) => (
+                <div
+                  key={group.label}
+                  className="showcase-switch"
+                  role="group"
+                  aria-label={`Sort by ${group.label.toLowerCase()}`}
+                >
+                  {group.sides.map((side) => (
+                    <button
+                      key={side.key}
+                      type="button"
+                      className="showcase-switch__side"
+                      aria-pressed={sort === side.key}
+                      title={side.title}
+                      onClick={() =>
+                        updateParams({
+                          sort: side.key === DEFAULT_SORT ? null : side.key,
+                        })
+                      }
+                    >
+                      {side.label}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {isLoading && projects.length === 0 ? <p className="showcase-label">Loading work…</p> : null}
+        {isLoading && projects.length === 0 ? (
+          <p className="showcase-label">Loading work…</p>
+        ) : null}
         {isError ? (
-          <p className="showcase-empty">The work could not be loaded. Refresh to try again.</p>
+          <p className="showcase-empty">
+            The work could not be loaded. Refresh to try again.
+          </p>
         ) : !isLoading && visible.length === 0 ? (
           <p className="showcase-empty">Nothing matches those filters.</p>
         ) : null}
 
-        <ul ref={listRef} className="showcase-list" onMouseLeave={() => setHoverId(null)}>
+        <ul
+          ref={listRef}
+          className="showcase-list"
+          onMouseLeave={() => setHoverId(null)}
+        >
           {visible.map((project, projectIndex) => {
             const isOpen = project.id === openId;
             const isClosing = project.id === closingId && !isOpen;
@@ -385,25 +493,42 @@ export function ShowcaseIndexPage() {
                   aria-controls={panelId}
                   onClick={(event) => openPreview(event, project)}
                   onMouseEnter={() => setHoverId(project.id)}
-                  onMouseLeave={() => setHoverId((current) => (current === project.id ? null : current))}
+                  onMouseLeave={() =>
+                    setHoverId((current) =>
+                      current === project.id ? null : current,
+                    )
+                  }
                   onFocus={() => setHoverId(project.id)}
                   onBlur={() => setHoverId(null)}
                 >
-                  <span className="showcase-list__title" data-text={project.title}>
+                  <span
+                    className="showcase-list__title"
+                    data-text={project.title}
+                  >
                     {project.title}
                   </span>
                   {project.image && !isOpen && project.id === hoverId ? (
-                    <HoloImage src={project.image} className="showcase-list__thumb" />
+                    <HoloImage
+                      src={project.image}
+                      className="showcase-list__thumb"
+                    />
                   ) : null}
                   <span className="showcase-list__meta">
                     {project.category}
-                    {project.isClientVariation ? ` / ${project.subcategory}` : ""}
+                    {project.isClientVariation
+                      ? ` / ${project.subcategory}`
+                      : ""}
                     {project.year ? ` / ${project.year}` : ""}
                   </span>
                 </Link>
 
                 {isOpen || isClosing ? (
-                  <div id={panelId} className="showcase-preview" role="region" aria-label={`${project.title} preview`}>
+                  <div
+                    id={panelId}
+                    className="showcase-preview"
+                    role="region"
+                    aria-label={`${project.title} preview`}
+                  >
                     {isOpen ? (
                       <button
                         type="button"
@@ -416,15 +541,24 @@ export function ShowcaseIndexPage() {
                       </button>
                     ) : null}
                     <div className="showcase-preview__inner">
-                      {project.image ? <HoloImage src={project.image} className="showcase-preview__image" /> : null}
+                      {project.image ? (
+                        <HoloImage
+                          src={project.image}
+                          className="showcase-preview__image"
+                        />
+                      ) : null}
                       <div className="showcase-preview__body">
                         <p className="showcase-label">
                           {project.category}
-                          {project.isClientVariation ? ` / ${project.subcategory}` : ""}
+                          {project.isClientVariation
+                            ? ` / ${project.subcategory}`
+                            : ""}
                           {project.year ? ` / ${project.year}` : ""}
                         </p>
                         {project.description ? (
-                          <p className="showcase-preview__lead">{excerpt(project.description)}</p>
+                          <p className="showcase-preview__lead">
+                            {excerpt(project.description)}
+                          </p>
                         ) : null}
                         {project.technologies.length ? (
                           <ul className="showcase-preview__tech">
@@ -440,8 +574,13 @@ export function ShowcaseIndexPage() {
                             onClick={() => openProject(project)}
                             tabIndex={isOpen ? 0 : -1}
                           >
-                            <span className="showcase-more__label">View project</span>
-                            <span className="showcase-more__arrow" aria-hidden="true" />
+                            <span className="showcase-more__label">
+                              View project
+                            </span>
+                            <span
+                              className="showcase-more__arrow"
+                              aria-hidden="true"
+                            />
                           </button>
                         </div>
                       </div>
@@ -453,7 +592,6 @@ export function ShowcaseIndexPage() {
           })}
         </ul>
       </section>
-
     </div>
   );
 }
