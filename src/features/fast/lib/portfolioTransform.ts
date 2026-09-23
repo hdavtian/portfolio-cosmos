@@ -79,8 +79,10 @@ function variantItem(
     description: variant.description,
     image,
     technologies: variant.technologies,
-    // A variant with links of its own uses them; otherwise it shares the parent's.
-    technologySlugs: variant.technologySlugs?.length ? variant.technologySlugs : (parent.technologySlugs ?? []),
+    // Every flattened item is tagged on its own; a variant never borrows the
+    // parent's tags, because a client site and the platform it was built on
+    // are different work.
+    technologySlugs: variant.technologySlugs ?? [],
     year: typeof variant.year === "number" ? variant.year : parent.year,
     category,
     subcategory: parent.title,

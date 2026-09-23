@@ -20,6 +20,7 @@ import { PortfolioCoresPage } from "../pages/PortfolioCoresPage";
 import { PortfolioEntriesPage } from "../pages/PortfolioEntriesPage";
 import { PortfolioEntryEditPage } from "../pages/PortfolioEntryEditPage";
 import { PathMessageEditPage } from "../pages/PathMessageEditPage";
+import { TaggingPage } from "../pages/TaggingPage";
 import { TechnologiesPage } from "../pages/TechnologiesPage";
 import { TechStackPage } from "../pages/TechStackPage";
 
@@ -65,6 +66,8 @@ export function AdminApp() {
             <Route path="media" element={<MediaPage />} />
             <Route path="media/:id" element={<MediaDetailPage />} />
             <Route path="portfolioEntries" element={<PortfolioEntriesPage />} />
+            {/* Before the :slug route, or "tagging" would be read as a project. */}
+            <Route path="portfolioEntries/tagging" element={<TaggingPage />} />
             <Route path="portfolioEntries/:slug" element={<PortfolioEntryEditPage />} />
             <Route path="portfolioCores" element={<PortfolioCoresPage />} />
             <Route path="portfolioCores/:slug" element={<PortfolioCoreEditPage />} />
