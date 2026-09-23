@@ -430,22 +430,27 @@ body {
   border-bottom: 3px solid var(--admin-accent) !important;
 }
 
-/* "Into": the outline runs round the row as one box, not cell by cell, and
-   is thick enough to read from across the screen. */
+/* "Into": Syncfusion marks the target's cells (not the row) mid-drag, so the
+   cells are what carry the box - 4px top and bottom on every cell, the left
+   and right edges on the first and last, so it reads as one thick outline. */
+.e-treegrid td.e-childborder,
 .e-treegrid tr.e-childborder > td {
   background: #dce9fb !important;
   border-top: 4px solid var(--admin-accent) !important;
   border-bottom: 4px solid var(--admin-accent) !important;
 }
 
+.e-treegrid td.e-childborder:first-child,
 .e-treegrid tr.e-childborder > td:first-child {
   border-left: 4px solid var(--admin-accent) !important;
 }
 
+.e-treegrid td.e-childborder:last-child,
 .e-treegrid tr.e-childborder > td:last-child {
   border-right: 4px solid var(--admin-accent) !important;
 }
 
+.e-treegrid td.e-childborder:first-child::before,
 .e-treegrid tr.e-childborder > td:first-child::before {
   content: "into";
   margin-right: 8px;
