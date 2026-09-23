@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchSiteContent } from "../api/contentV2";
-import { buildTechStackTree, techStackTreeFromSkills } from "@hd/content-schema/tech-stack-tree";
+import { buildTechStackTree, techStackTreeFromSkills, type TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
+import {
+  buildTechnologyTree,
+  hasVisibleChildren,
+  type TechnologyRecord,
+  type TechnologyTreeNode,
+} from "@hd/content-schema/technology-tree";
 import type { Release } from "../api/release";
 import { spaceContentFromRelease } from "../../components/cosmos/spaceContent";
 import { portfolioItemsFromRelease } from "../../features/fast/lib/portfolioTransform";
@@ -25,12 +31,34 @@ export const releaseQuery = {
   networkMode: "always" as const,
 };
 
-// Releases published before the tech stack existed have no nodes; the tree is
-// then two levels, built from the skill categories and their skills.
+/**
+ * The tree the portfolio site draws (constellation, skills lattice, About
+ * ride), read from the master technology list: entries ticked for the lattice
+ * surface, nested under their headings, a heading kept only while something
+ * visible sits under it (so an empty heading such as AI draws nothing). The
+ * shape is the one the scenes already take, so they need no change.
+ */
+const latticeFromTechnologies = (records: TechnologyRecord[]): TechStackTreeNode[] => {
+  const shown = (record: TechnologyRecord) =>
+    record.isGrouping
+      ? hasVisibleChildren(records, record.slug, "lattice")
+      : (record.surfaces ?? []).includes("lattice");
+  const toNode = (node: TechnologyTreeNode): TechStackTreeNode => ({
+    slug: node.slug,
+    name: node.name,
+    children: node.children.map(toNode),
+  });
+  return buildTechnologyTree(records.filter(shown)).map(toNode);
+};
+
+// A release from before the master list has no technologies: the tree then
+// comes from the tech stack nodes, or before those, from the skill categories.
 const techStackFromRelease = (release: Release) => {
-  const { techStackNodes, skillCategories, skills } = release.collections;
+  const { technologies, techStackNodes, skillCategories, skills } = release.collections;
   const payload =
-    techStackNodes.length > 0
+    technologies.length > 0
+      ? latticeFromTechnologies(technologies)
+      : techStackNodes.length > 0
       ? buildTechStackTree(techStackNodes)
       : techStackTreeFromSkills(
           Object.fromEntries(
