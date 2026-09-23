@@ -10,7 +10,9 @@ const MONGO_RETRY_MS = 15000;
 const connectMongoWithRetry = async (): Promise<void> => {
   try {
     await connectMongo();
-    console.log("MongoDB connected.");
+    // Named on purpose: the admin once showed stale data because the API had
+    // been restarted onto a different database, and nothing said so.
+    console.log(`MongoDB connected: database "${mongoose.connection.name}".`);
   } catch (error) {
     console.error("MongoDB connection failed. Retrying...", error);
     setTimeout(() => {
