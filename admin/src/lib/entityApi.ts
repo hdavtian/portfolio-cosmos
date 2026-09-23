@@ -68,7 +68,16 @@ export async function fetchAllEntities<T>(entity: string): Promise<Array<EntityR
       api.get<PagedResult<T>>(listPath(entity, { page: index + 2, pageSize: 100, sort: "sortOrder" })),
     ),
   );
-  return [first, ...rest].flatMap((page) => page.items);
+  const items = [first, ...rest].flatMap((page) => page.items);
+  // Fewer than the API said exist is a truncated list, and a truncated list
+  // shown as complete is how records silently "disappear" from an admin. It
+  // fails loudly instead.
+  if (items.length < first.total) {
+    throw new Error(
+      `Only ${items.length} of ${first.total} ${entity} could be loaded. Reload; if it persists, the list is being cut off.`,
+    );
+  }
+  return items;
 }
 
 /**

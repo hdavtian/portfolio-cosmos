@@ -120,6 +120,16 @@ nobody asked for, silently.
 - If a behavior cannot be done natively in Syncfusion, stop and ask Harma before
   adding custom styling or logic.
 
+## Fetching "all of them"
+
+The API caps a page at 100 (`MAX_PAGE_SIZE`). Any list the admin treats as
+complete - a tree, a picker, a parent dropdown, the tagging page - goes through
+`fetchAllEntities` / `useAllEntities`, which page until `total` is reached and
+**throw** if they end up short. Never call the list endpoint with
+`pageSize=100` and treat the result as everything: that is how records that
+were saved perfectly well appeared to vanish (2026-09-23, the 101st
+technology; the day before, a client's records in another admin).
+
 ## Backend alignment
 
 - Sort/filter/search field names must match the API allowlist for the entity.
