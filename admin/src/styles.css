@@ -149,7 +149,9 @@ body {
 }
 
 .admin-main {
-  padding: 24px 28px;
+  /* The top 56px is the band the floating status line lives in, so a
+     message never sits over the page's own content. */
+  padding: 64px 28px 24px;
   min-width: 0;
 }
 
@@ -203,18 +205,50 @@ body {
    width the nav is at. */
 .admin-status-line {
   position: fixed;
-  top: 12px;
-  left: calc(var(--admin-sidebar-width) + 28px);
-  right: 28px;
+  top: 10px;
+  left: var(--admin-sidebar-width);
+  right: 0;
   z-index: 20;
   margin: 0;
-  filter: drop-shadow(0 6px 18px rgba(20, 30, 50, 0.18));
+  display: flex;
+  justify-content: center;
+  /* The band is only a positioning frame; the message itself takes clicks. */
+  pointer-events: none;
+}
+
+/* A centred pill in the band the page leaves free at the top: its own solid
+   colour by severity, no wider than its text needs, and small type. */
+.admin-status-line .e-message.e-message {
+  /* One row - icon, text, close - so the pill stays inside the band. */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+  max-width: min(760px, calc(100% - 56px));
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  box-shadow: 0 6px 18px rgba(20, 30, 50, 0.22);
+}
+
+.admin-status-line .e-message strong {
+  font-weight: 600;
+}
+
+.admin-status-line .e-message .e-msg-content {
+  padding: 0;
+}
+
+.admin-status-line .e-message .e-msg-close-icon {
+  position: static;
+  margin: 0;
 }
 
 .admin-status-line__details {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   padding-left: 18px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .admin-grid-mode {

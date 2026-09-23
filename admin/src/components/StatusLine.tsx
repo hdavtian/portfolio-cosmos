@@ -13,7 +13,7 @@ export function StatusLine() {
       <MessageComponent
         key={current.id}
         severity={current.severity}
-        variant="Outlined"
+        variant="Filled"
         showCloseIcon
         closed={status.clear}
       >
