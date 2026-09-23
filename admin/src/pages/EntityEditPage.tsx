@@ -26,6 +26,9 @@ import {
 /** A `tags` field is edited as one value per line. */
 const NEWLINE = String.fromCharCode(10);
 
+// One object, not a literal per render: a new identity makes Syncfusion rebind.
+const REFERENCE_FIELDS = { text: "label", value: "slug" };
+
 // One object, not a literal per render: Syncfusion rebinds when a prop's
 // identity changes, and rebinding a multi-select drops its selection.
 const MULTISELECT_FIELDS = { text: "label", value: "value" };
@@ -182,6 +185,26 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
       }
       choices = choices.filter((option) => !excluded.has(option.slug));
     }
+    if (selfReference) {
+      // A tree is easier to search when each choice shows where it sits
+      // ("Frontend › SPA frameworks › React") and the list runs alphabetically
+      // by that path, so siblings sit together and a name is found by typing
+      // any part of it.
+      const all = references.options[key] ?? [];
+      const bySlug = new Map(all.map((option) => [option.slug, option]));
+      const pathOf = (slug: string): string => {
+        const parts: string[] = [];
+        const seen = new Set<string>();
+        for (let current = bySlug.get(slug); current && !seen.has(current.slug); current = current.parentSlug ? bySlug.get(current.parentSlug) : undefined) {
+          seen.add(current.slug);
+          parts.unshift(current.label);
+        }
+        return parts.join(" › ");
+      };
+      choices = choices
+        .map((option) => ({ ...option, label: pathOf(option.slug) }))
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+    }
     return emptyOption ? [{ slug: "", label: emptyOption }, ...choices] : choices;
   };
 
@@ -295,9 +318,15 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
                   field.emptyOption,
                   field.reference?.entity === definition.entity,
                 )}
-                fields={{ text: "label", value: "slug" }}
+                fields={REFERENCE_FIELDS}
                 value={String(draft[field.key] ?? "")}
                 placeholder={references.isLoading ? "Loading…" : `Choose a ${field.label.toLowerCase()}`}
+                // Type to narrow the list; "Contains" so any part of a path
+                // matches, not only its start.
+                allowFiltering
+                filterType="Contains"
+                filterBarPlaceholder="Type to find"
+                popupHeight="360px"
                 change={(event: { value: string }) => setField(field.key, event.value ?? "")}
               />
             ) : (
