@@ -21,8 +21,9 @@ body {
 }
 
 .admin-shell {
+  --admin-sidebar-width: 240px;
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: var(--admin-sidebar-width) 1fr;
   min-height: 100vh;
   transition: grid-template-columns 180ms ease;
 }
@@ -30,7 +31,7 @@ body {
 /* Folded: a slim rail holding only the button that brings the nav back, so a
    grid gets the rest of the window. */
 .admin-shell.is-collapsed {
-  grid-template-columns: 40px 1fr;
+  --admin-sidebar-width: 40px;
 }
 
 .admin-shell.is-collapsed .admin-sidebar > :not(.admin-sidebar__rail) {
@@ -197,11 +198,17 @@ body {
   gap: 14px;
 }
 
+/* Floats over the page instead of sitting in its flow, so appearing and
+   clearing never shifts what is underneath. Spans the main column, whatever
+   width the nav is at. */
 .admin-status-line {
-  position: sticky;
-  top: 0;
+  position: fixed;
+  top: 12px;
+  left: calc(var(--admin-sidebar-width) + 28px);
+  right: 28px;
   z-index: 20;
-  margin-bottom: 14px;
+  margin: 0;
+  filter: drop-shadow(0 6px 18px rgba(20, 30, 50, 0.18));
 }
 
 .admin-status-line__details {
@@ -336,6 +343,11 @@ body {
 
   .admin-shell.is-collapsed {
     grid-template-columns: 1fr;
+  }
+
+  .admin-status-line {
+    left: 16px;
+    right: 16px;
   }
 
   .admin-shell.is-collapsed .admin-sidebar > :not(.admin-sidebar__rail) {
