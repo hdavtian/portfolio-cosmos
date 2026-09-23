@@ -58,17 +58,35 @@ export function useEntityList<T>(entity: string, state: ListState) {
   });
 }
 
+/** Every page of an entity, fetched in turn and joined; the API caps a page at 100. */
+export async function fetchAllEntities<T>(entity: string): Promise<Array<EntityRecord<T>>> {
+  const first = await api.get<PagedResult<T>>(listPath(entity, { page: 1, pageSize: 100, sort: "sortOrder" }));
+  const pages = Math.ceil(first.total / first.pageSize);
+  if (pages <= 1) return first.items;
+  const rest = await Promise.all(
+    Array.from({ length: pages - 1 }, (_, index) =>
+      api.get<PagedResult<T>>(listPath(entity, { page: index + 2, pageSize: 100, sort: "sortOrder" })),
+    ),
+  );
+  return [first, ...rest].flatMap((page) => page.items);
+}
+
 /**
- * Every record of a small entity, in saved order, for grids in local mode.
- * `truncated` is true when more exist than one API page (100) can return.
+ * Every record of an entity, in saved order, for grids in local mode and for
+ * pickers. Fetches every page, so a list that grows past 100 - the master
+ * technology list did - is never silently cut off at the API's page cap.
  */
 export function useAllEntities<T>(entity: string) {
-  const query = useEntityList<T>(entity, { page: 1, pageSize: 100, sort: "sortOrder" });
-  const items = query.data?.items;
+  const query = useQuery({
+    queryKey: [entity, "all"],
+    queryFn: () => fetchAllEntities<T>(entity),
+    placeholderData: (previous) => previous,
+  });
   return {
     ...query,
-    items,
-    truncated: Boolean(query.data && query.data.total > query.data.items.length),
+    items: query.data,
+    /** Kept for callers that still render a notice; nothing is cut off any more. */
+    truncated: false,
   };
 }
 
