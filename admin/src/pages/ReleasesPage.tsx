@@ -118,7 +118,7 @@ export function ReleasesPage() {
       setNotesEdited(false);
       setSuggestionShown("");
       void refresh();
-      statusLine.success(`Release #${release.id} is live on both sites.`);
+      statusLine.success(`Published as release #${release.id}.`);
     },
     onError: (error) => statusLine.error(error, "Could not publish."),
   });
