@@ -1402,21 +1402,11 @@ html.is-scene-dragging * {
  * title at once while the titles drift the other way, so the names surface
  * through the scene and sink back as the motion settles. Overlay blending
  * keeps whatever scene is behind them in the letters. Any movement wakes the
- * list, name by name. The open project stays as it is.
+ * list, name by name. The open project stays as it is. The name, title and
+ * place at the top and the filter chips stay lit throughout: they are the
+ * page's identity and its controls, and the scene is meant to show behind the
+ * list, not behind them.
  */
-.showcase-index.is-fading .showcase-masthead,
-.showcase-index.is-fading .showcase-filters,
-.showcase-index.is-resting .showcase-masthead,
-.showcase-index.is-resting .showcase-filters {
-  opacity: 0.1;
-  transition: opacity 1400ms ease;
-}
-
-.showcase-masthead,
-.showcase-filters {
-  transition: opacity 700ms ease;
-}
-
 .showcase-index.is-fading .showcase-list__item:not(.is-open) .showcase-list__link {
   opacity: 0;
   filter: blur(8px);
