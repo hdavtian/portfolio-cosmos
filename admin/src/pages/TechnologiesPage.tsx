@@ -290,6 +290,7 @@ export function TechnologiesPage() {
             treeColumnIndex={0}
             id={GRID_ID}
             allowRowDragAndDrop
+            rowHeight={44}
             allowResizing
             allowSorting
             allowFiltering

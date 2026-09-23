@@ -415,3 +415,31 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Dragging a row in a tree. Syncfusion splits each row into three zones and
+   marks the target itself: a line above or below for "before"/"after", a
+   border round the row for "make it a child". The default cues are faint, so
+   they are drawn here in the accent - the line thick, the child case unmistakable. */
+.e-treegrid tr.e-droptop > td,
+.e-treegrid td.e-droptop {
+  border-top: 3px solid var(--admin-accent) !important;
+}
+
+.e-treegrid tr.e-dropbottom > td,
+.e-treegrid td.e-dropbottom {
+  border-bottom: 3px solid var(--admin-accent) !important;
+}
+
+.e-treegrid tr.e-childborder > td {
+  background: #e7f0fe !important;
+  box-shadow: inset 0 0 0 2px var(--admin-accent);
+}
+
+.e-treegrid tr.e-childborder > td:first-child::before {
+  content: "into";
+  margin-right: 8px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--admin-accent);
+}
