@@ -242,9 +242,9 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
             value: "filters",
             label: "Filters",
             hint:
-              "offered as a filter in the home page chips and the universe Portfolio drop-down. Leave off for " +
-              "something like HTML that nearly every project uses, so the filter row keeps its slots for choices " +
-              "worth making",
+              "offered as a filter in the home page chips and the universe Portfolio drop-down - but only once at " +
+              "least one project is tagged with it, since a filter that finds nothing is not shown. Leave off for " +
+              "something like HTML that nearly every project uses",
           },
         ],
       },
