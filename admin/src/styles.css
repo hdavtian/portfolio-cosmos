@@ -37,14 +37,21 @@ body {
   display: none;
 }
 
+/* Stays put while a long page scrolls; scrolls on its own if it is taller
+   than the window. `align-self: start` keeps it from stretching to the grid
+   row's full height, which is what would defeat sticky. */
 .admin-sidebar {
   background: var(--admin-surface);
   border-right: 1px solid var(--admin-border);
   padding: 20px 0;
   display: flex;
   flex-direction: column;
-  position: relative;
-  overflow: hidden;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .admin-sidebar__rail {
@@ -321,6 +328,10 @@ body {
   .admin-sidebar {
     border-right: none;
     border-bottom: 1px solid var(--admin-border);
+    /* A band above the page on a phone: it scrolls away with the page. */
+    position: static;
+    height: auto;
+    overflow: visible;
   }
 
   .admin-shell.is-collapsed {
