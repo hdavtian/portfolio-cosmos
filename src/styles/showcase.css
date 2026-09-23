@@ -684,6 +684,52 @@ html.is-scene-dragging * {
 }
 
 .showcase-pill:focus-visible,
+/* Sort: two small square switches, one side of one switch lit. Deliberately
+   not chips, so the row reads as a setting rather than as more filters. */
+.showcase-filters__row--sort {
+  gap: 10px;
+}
+
+.showcase-switch {
+  display: inline-flex;
+  border: 1px solid var(--showcase-ink-dim);
+  border-radius: 0;
+}
+
+.showcase-switch__side {
+  appearance: none;
+  margin: 0;
+  padding: 3px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--showcase-ink-quiet);
+  font-family: var(--showcase-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.showcase-switch__side + .showcase-switch__side {
+  border-left: 1px solid var(--showcase-ink-dim);
+}
+
+.showcase-switch__side:hover {
+  color: var(--showcase-ink, #e8eef6);
+}
+
+.showcase-switch__side[aria-pressed="true"] {
+  background: var(--showcase-ink, #e8eef6);
+  color: #0b0f16;
+}
+
+.showcase-switch__side:focus-visible {
+  outline: 2px solid var(--showcase-ink, #e8eef6);
+  outline-offset: 1px;
+}
+
 .showcase-chip:focus-visible,
 .showcase-list__link:focus-visible,
 .showcase-pager:focus-visible {

@@ -12,6 +12,37 @@ import { useShowcaseProjects, type ShowcaseProject } from "../lib/useShowcasePro
 // Matches the collapse animation in showcase.css.
 const CLOSE_MS = 240;
 /** Still this long and the list steps back into a watermark over the scene. */
+type SortKey = "newest" | "oldest" | "az" | "za";
+const DEFAULT_SORT: SortKey = "newest";
+// Two switches, each a pair: one side of each is lit. Choosing a side of one
+// switch is the sort; the other switch goes dark.
+const SORT_SWITCHES: Array<{ label: string; sides: Array<{ key: SortKey; label: string; title: string }> }> = [
+  {
+    label: "Date",
+    sides: [
+      { key: "newest", label: "Newest", title: "Most recent first" },
+      { key: "oldest", label: "Oldest", title: "Earliest first" },
+    ],
+  },
+  {
+    label: "Name",
+    sides: [
+      { key: "az", label: "A→Z", title: "By name, A to Z" },
+      { key: "za", label: "Z→A", title: "By name, Z to A" },
+    ],
+  },
+];
+const isSortKey = (value: string | null): value is SortKey =>
+  value === "newest" || value === "oldest" || value === "az" || value === "za";
+// A missing year sorts after every real one, in both date orders.
+const yearOf = (project: ShowcaseProject, missing: number) => (project.year === null ? missing : project.year);
+const SORTERS: Record<SortKey, (a: ShowcaseProject, b: ShowcaseProject) => number> = {
+  newest: (a, b) => yearOf(b, -Infinity) - yearOf(a, -Infinity),
+  oldest: (a, b) => yearOf(a, Infinity) - yearOf(b, Infinity),
+  az: (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }),
+  za: (a, b) => b.title.localeCompare(a.title, undefined, { sensitivity: "base" }),
+};
+
 const REST_AFTER_MS = 9000;
 const EXCERPT_LENGTH = 320;
 
@@ -51,16 +82,19 @@ export function ShowcaseIndexPage() {
   const coreFilter = searchParams.get("core");
   const techFilter = searchParams.get("tech");
   const openId = searchParams.get("open");
+  const sort: SortKey = isSortKey(searchParams.get("sort")) ? (searchParams.get("sort") as SortKey) : DEFAULT_SORT;
 
-  const visible = useMemo(
-    () =>
-      projects.filter(
-        (project) =>
-          (!coreFilter || project.category === coreFilter) &&
-          (!techFilter || project.technologies.includes(techFilter)),
-      ),
-    [projects, coreFilter, techFilter],
-  );
+  // Filtered, then ordered. The sort is stable, so projects that tie (the
+  // same year, or no year at all) keep the admin's order among themselves;
+  // a project with no year goes last whichever way the dates run.
+  const visible = useMemo(() => {
+    const kept = projects.filter(
+      (project) =>
+        (!coreFilter || project.category === coreFilter) &&
+        (!techFilter || project.technologies.includes(techFilter)),
+    );
+    return [...kept].sort(SORTERS[sort]);
+  }, [projects, coreFilter, techFilter, sort]);
 
   const hovered = visible.find((project) => project.id === hoverId) ?? null;
   const restState = useRestState(REST_AFTER_MS);
@@ -291,6 +325,25 @@ export function ShowcaseIndexPage() {
                 Clear
               </button>
             ) : null}
+          </div>
+          <div className="showcase-filters__row showcase-filters__row--sort">
+            <span className="showcase-label">Sort</span>
+            {SORT_SWITCHES.map((group) => (
+              <div key={group.label} className="showcase-switch" role="group" aria-label={`Sort by ${group.label.toLowerCase()}`}>
+                {group.sides.map((side) => (
+                  <button
+                    key={side.key}
+                    type="button"
+                    className="showcase-switch__side"
+                    aria-pressed={sort === side.key}
+                    title={side.title}
+                    onClick={() => updateParams({ sort: side.key === DEFAULT_SORT ? null : side.key })}
+                  >
+                    {side.label}
+                  </button>
+                ))}
+              </div>
+            ))}
           </div>
         </div>
 
