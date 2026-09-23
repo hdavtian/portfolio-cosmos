@@ -24,6 +24,17 @@ body {
   display: grid;
   grid-template-columns: 240px 1fr;
   min-height: 100vh;
+  transition: grid-template-columns 180ms ease;
+}
+
+/* Folded: a slim rail holding only the button that brings the nav back, so a
+   grid gets the rest of the window. */
+.admin-shell.is-collapsed {
+  grid-template-columns: 40px 1fr;
+}
+
+.admin-shell.is-collapsed .admin-sidebar > :not(.admin-sidebar__rail) {
+  display: none;
 }
 
 .admin-sidebar {
@@ -32,6 +43,41 @@ body {
   padding: 20px 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-sidebar__rail {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 8px 4px;
+}
+
+.admin-shell.is-collapsed .admin-sidebar__rail {
+  justify-content: center;
+  padding: 0;
+}
+
+.admin-sidebar__toggle {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--admin-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.admin-sidebar__toggle:hover {
+  color: var(--admin-accent);
+  border-color: var(--admin-accent);
+}
+
+.admin-sidebar__toggle:focus-visible {
+  outline: 2px solid var(--admin-accent);
+  outline-offset: 1px;
 }
 
 .admin-sidebar__brand {
@@ -275,6 +321,18 @@ body {
   .admin-sidebar {
     border-right: none;
     border-bottom: 1px solid var(--admin-border);
+  }
+
+  .admin-shell.is-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-shell.is-collapsed .admin-sidebar > :not(.admin-sidebar__rail) {
+    display: revert;
+  }
+
+  .admin-sidebar__rail {
+    display: none;
   }
 
   .admin-form__row {
