@@ -79,7 +79,8 @@ function variantItem(
     description: variant.description,
     image,
     technologies: variant.technologies,
-    technologySlugs: parent.technologySlugs ?? [],
+    // A variant with links of its own uses them; otherwise it shares the parent's.
+    technologySlugs: variant.technologySlugs?.length ? variant.technologySlugs : (parent.technologySlugs ?? []),
     year: typeof variant.year === "number" ? variant.year : parent.year,
     category,
     subcategory: parent.title,

@@ -23,6 +23,8 @@ export const clientVariantSchema = z.object({
   mediaId: mediaRefSchema,
   description: text(4000),
   technologies: z.array(text(60)),
+  /** Links into the master list; empty means "same as the parent project". */
+  technologySlugs: z.array(slugSchema).default([]),
   year: yearSchema,
   fit: imageFitSchema,
   galleryMedia: z.array(galleryItemSchema).default([]),

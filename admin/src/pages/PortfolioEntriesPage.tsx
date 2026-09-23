@@ -67,7 +67,7 @@ export function PortfolioEntriesPage() {
     const variants = record?.clientVariants?.length ?? 0;
     return (
       <span className="admin-status">
-        {record?.technologies?.length ?? 0} tech · {record?.galleryMedia?.length ?? 0} images
+        {record?.technologySlugs?.length || record?.technologies?.length || 0} tech · {record?.galleryMedia?.length ?? 0} images
         {variants > 0 ? ` · ${variants} client sites` : ""}
       </span>
     );

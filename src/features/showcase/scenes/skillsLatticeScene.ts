@@ -48,19 +48,23 @@ const makeHaloTexture = (THREE: ThreeModule) => {
   return texture;
 };
 
-const makeLabel = (THREE: ThreeModule, text: string, size: number) => {
+/**
+ * A name over a node. Headings read bright and cool; a child reads smaller and
+ * a shade warmer, so the two levels tell apart at a glance.
+ */
+const makeLabel = (THREE: ThreeModule, text: string, size: number, isCore = true) => {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
-  const font = `600 44px "JetBrains Mono", Menlo, monospace`;
+  const font = `${isCore ? 600 : 500} 44px "JetBrains Mono", Menlo, monospace`;
   ctx.font = font;
   const width = Math.ceil(ctx.measureText(text.toUpperCase()).width) + 24;
   canvas.width = width;
   canvas.height = 64;
   ctx.font = font;
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "rgba(223, 246, 255, 1)";
-  ctx.shadowColor = "rgba(110, 215, 255, 0.9)";
-  ctx.shadowBlur = 12;
+  ctx.fillStyle = isCore ? "rgba(223, 246, 255, 1)" : "rgba(196, 214, 232, 1)";
+  ctx.shadowColor = isCore ? "rgba(110, 215, 255, 0.9)" : "rgba(120, 170, 220, 0.7)";
+  ctx.shadowBlur = isCore ? 12 : 8;
   ctx.fillText(text.toUpperCase(), 12, 34);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -156,7 +160,7 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
     halo.scale.setScalar(radius * 4.6);
     root.add(halo);
 
-    const label = makeLabel(THREE, name, isCore ? 3.4 : 2.1);
+    const label = makeLabel(THREE, name, isCore ? 3.4 : 1.6, isCore);
     label.position.set(position.x, position.y + radius + (isCore ? 3.4 : 1.8), position.z);
     root.add(label);
 
@@ -327,7 +331,9 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
         node.halo.material.color.copy(isLit ? litColor : node.depth === 1 ? coreColor : nodeColor);
         node.halo.scale.setScalar((node.depth === 1 ? CORE_RADIUS : NODE_RADIUS) * (isLit ? 7 : 4.6));
         if (node.label) {
-          const target = isLit ? 1 : node.depth === 1 ? (highlighting ? 0.35 : 0.75) : 0;
+          // Children keep a quiet label of their own, so the tree can be read
+          // without hovering; it steps back while a project is highlighted.
+          const target = isLit ? 1 : node.depth === 1 ? (highlighting ? 0.35 : 0.75) : highlighting ? 0.12 : 0.42;
           node.label.material.opacity += (target - node.label.material.opacity) * (1 - Math.exp(-6 * dt));
         }
       });

@@ -8,6 +8,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { FormField } from "../components/FormField";
 import { ListEditor } from "../components/ListEditor";
 import { MediaPicker } from "../components/MediaPicker";
+import { TechnologyPicker } from "../components/TechnologyPicker";
 import { useStatus } from "../lib/status";
 import { suggestSlug } from "../entities/definitions";
 import { fieldLabel } from "../lib/validationMessages";
@@ -46,7 +47,6 @@ const EMPTY: PortfolioEntry = {
 };
 
 const toCommaList = (values: string[]) => values.join(", ");
-const fromCommaList = (text: string) => text.split(",").map((value) => value.trimStart());
 const clean = (values: string[]) => values.map((value) => value.trim()).filter(Boolean);
 
 /**
@@ -314,11 +314,16 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
             input={(e: { value: string }) => set("description", e.value)}
           />
         </FormField>
-        <FormField label="Technologies" hint="Comma-separated" error={fieldErrors.technologies}>
-          <TextBoxComponent
-            value={toCommaList(draft.technologies)}
-            input={(e: { value: string }) => set("technologies", fromCommaList(e.value))}
-          />
+        <FormField
+          label="Technologies"
+          hint={
+            draft.technologies.length
+              ? `Typed before the master list existed: ${toCommaList(draft.technologies)}. The sites read the linked list above; the typed one goes once every site does.`
+              : undefined
+          }
+          error={fieldErrors.technologySlugs ?? fieldErrors.technologies}
+        >
+          <TechnologyPicker value={draft.technologySlugs} onChange={(slugs) => set("technologySlugs", slugs)} />
         </FormField>
         <FormField label="Year" hint="Leave empty if unknown" error={fieldErrors.year}>
           <NumericTextBoxComponent
@@ -390,6 +395,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
           mediaId: "",
           description: "",
           technologies: [],
+          technologySlugs: [],
           year: null,
           fit: "cover",
           galleryMedia: [],
@@ -415,10 +421,18 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
                 input={(e: { value: string }) => updateItem({ ...item, description: e.value })}
               />
             </FormField>
-            <FormField label="Technologies" hint="Comma-separated" error={itemError("clientVariants", index, "technologies")}>
-              <TextBoxComponent
-                value={toCommaList(item.technologies)}
-                input={(e: { value: string }) => updateItem({ ...item, technologies: fromCommaList(e.value) })}
+            <FormField
+              label="Technologies"
+              hint={
+                item.technologies.length
+                  ? `Typed before the master list existed: ${toCommaList(item.technologies)}. Leave the list empty to share the project's.`
+                  : "Leave empty to share the project's technologies."
+              }
+              error={itemError("clientVariants", index, "technologySlugs") ?? itemError("clientVariants", index, "technologies")}
+            >
+              <TechnologyPicker
+                value={item.technologySlugs ?? []}
+                onChange={(slugs) => updateItem({ ...item, technologySlugs: slugs })}
               />
             </FormField>
             <FormField label="Year" error={itemError("clientVariants", index, "year")}>
