@@ -14,6 +14,7 @@ export interface TechnologyRecord {
   parentSlug: string;
   isGrouping?: boolean;
   current?: boolean;
+  rollUpInFilm?: boolean;
   surfaces?: readonly string[];
   aliases?: readonly string[];
   blurb?: string;

@@ -202,7 +202,13 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
       {
         key: "isGrouping",
         label: "Heading",
-        hint: "A heading, not a skill you claim. Headings organise the tree (Frontend, Databases, APIs). Screens that show skills only - the film's Skill Progress, moon labels, the home page chips - skip them.",
+        hint: "A heading, not a skill you claim. Headings organise the tree (Frontend, Databases, APIs). Screens that show skills only - moon labels, the home page chips - skip them; the film's Skill Progress rows are the headings ticked Resume.",
+        kind: "boolean",
+      },
+      {
+        key: "rollUpInFilm",
+        label: "Roll up in the film",
+        hint: "For a heading. In the film, its skills at each job become one tower - Frontend instead of HTML, CSS and JavaScript - with the years merged so overlaps never double-count. The Skill Progress panel still lists every skill beneath it. Off: one tower per skill.",
         kind: "boolean",
       },
       {
@@ -226,11 +232,6 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
             value: "resume",
             label: "Resume skills",
             hint: "on the resume's skills section and the film's closing list. A ticked heading gets its own line; a ticked skill is printed on the line of the nearest ticked heading above it. Nothing is inherited: tick the heading and each skill you want printed",
-          },
-          {
-            value: "filmProgress",
-            label: "Film: Skill Progress",
-            hint: "appears on the film's Skill Progress screen",
           },
           {
             value: "filters",
@@ -262,7 +263,8 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
       parentSlug: "",
       isGrouping: false,
       current: false,
-      surfaces: ["lattice", "filmProgress", "filters"],
+      rollUpInFilm: false,
+      surfaces: ["lattice", "filters"],
       aliases: [],
       blurb: "",
     }),

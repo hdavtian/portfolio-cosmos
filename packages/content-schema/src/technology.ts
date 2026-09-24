@@ -20,8 +20,6 @@ export const technologySurfaceSchema = z.enum([
    * line of the nearest ticked heading above it. Nothing is inherited.
    */
   "resume",
-  /** The film's Skill Progress screen. */
-  "filmProgress",
   /** Offered as a filter: the home page chips and the Portfolio drop-down. */
   "filters",
 ]);
@@ -42,7 +40,18 @@ export const technologySchema = z.object({
   isGrouping: z.boolean().default(false),
   /** Part of the stack in use today (D5). */
   current: z.boolean().default(false),
-  surfaces: z.array(technologySurfaceSchema).default([]),
+  /**
+   * On a heading: in the film, its skills at each job merge into one tower
+   * (years merged, so overlaps never double-count) while the Skill Progress
+   * panel keeps every skill beneath it (D30). Off: one tower per skill.
+   */
+  rollUpInFilm: z.boolean().default(false),
+  // "filmProgress" was a surface until D30; records that still carry it read
+  // clean, since the film reads the resume's lines and each job's ticks.
+  surfaces: z.preprocess(
+    (value) => (Array.isArray(value) ? value.filter((entry) => entry !== "filmProgress") : value),
+    z.array(technologySurfaceSchema).default([]),
+  ),
   /**
    * Every source string that meant this technology (R8): "React + Redux" and
    * ".NET Web API" among them. Kept so the migration is auditable, so admin

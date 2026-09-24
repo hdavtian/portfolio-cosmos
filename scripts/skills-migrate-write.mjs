@@ -129,7 +129,7 @@ if (depthFirst.length !== declarationOrder.length) {
 for (const record of technologies.values()) {
   record.isGrouping = GROUPINGS.has(record.name);
   record.parentSlug = record.parentName ? (technologies.get(fold(record.parentName))?.slug ?? "") : "";
-  record.surfaces = ["lattice", "resume", "filmProgress", "filters"];
+  record.surfaces = ["lattice", "resume", "filters"];
 }
 
 const unmatched = [];

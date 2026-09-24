@@ -90,8 +90,8 @@ export function ShowcaseLayout() {
   }, [release]);
   // The film's timeline, for its preview on the home page.
   const skills = useMemo(() => {
-    const { places, spans } = release ? skillsDataFromRelease(release) : skillsDataFromMock();
-    return { places, spans };
+    const { places, spans, lineOf, lineNames, rolled } = release ? skillsDataFromRelease(release) : skillsDataFromMock();
+    return { places, spans, lineOf, lineNames, rolled };
   }, [release]);
   const { pathname } = useLocation();
   // Only the index lets the scene take the wheel; project pages scroll.

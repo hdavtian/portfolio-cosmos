@@ -41,7 +41,14 @@ export interface SceneData {
   portfolio: ScenePortfolio;
   jobs: SceneJob[];
   /** The film's timeline (places and skill spans), for its home-page preview. */
-  skills: { places: SkillsPlace[]; spans: SkillsSpan[] };
+  skills: {
+    places: SkillsPlace[];
+    spans: SkillsSpan[];
+    /** Which line each skill prints on, and which lines roll up into one tower. */
+    lineOf: ReadonlyMap<string, string>;
+    lineNames: ReadonlyMap<string, string>;
+    rolled: ReadonlySet<string>;
+  };
 }
 
 export interface SkillsPlace {

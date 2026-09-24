@@ -67,6 +67,8 @@ export interface SkillsInput {
   skills: SkillDefinition[];
   places: Place[];
   uses: RawUse[];
+  /** Lines whose skills the film draws as one tower per job (D30). */
+  rolled?: Set<string>;
 }
 
 export const NOW_YEAR = new Date().getFullYear() + new Date().getMonth() / 12;
@@ -175,6 +177,17 @@ export function computeSkillsData(input: SkillsInput) {
 
   const headlineCategories = categoryTotals.filter((category) => category.headline);
 
+  // Which line a skill prints on (its first category that is not the era
+  // row), and which lines roll up into one tower - for the film's builders.
+  const lineOf = new Map(
+    skills.flatMap((skill) => {
+      const line = (skill.categories ?? []).find((category) => category !== "current-stack");
+      return line ? [[skill.slug, line] as const] : [];
+    }),
+  );
+  const lineNames = new Map(categories.map((category) => [category.slug, category.name]));
+  const rolled = input.rolled ?? new Set<string>();
+
   /** How many distinct skills were live in a given year: the pulse of a career. */
   const skillsLiveIn = (year: number) =>
     new Set(spans.filter((span) => span.from <= year + 0.999 && span.to >= year).map((span) => span.skill)).size;
@@ -192,7 +205,57 @@ export function computeSkillsData(input: SkillsInput) {
     categoryTotals,
     headlineCategories,
     skillsLiveIn,
+    lineOf,
+    lineNames,
+    rolled,
   };
+}
+
+/** A tower the film draws: a skill, or a rolled-up line standing for its skills. */
+export interface Tower {
+  key: string;
+  name: string;
+  years: number;
+  from: number;
+  to: number;
+  /** The skill slugs behind it: one, or a line's several. */
+  skills: string[];
+}
+
+/**
+ * The towers at one place (D30): one per skill, except on a rolled-up line,
+ * whose skills at that place merge into one tower named for the line - its
+ * years the union of theirs, so a year of HTML and CSS together counts once.
+ */
+export function towersAt(
+  spans: readonly SkillSpan[],
+  place: string,
+  lineOf: ReadonlyMap<string, string>,
+  lineNames: ReadonlyMap<string, string>,
+  rolled: ReadonlySet<string>,
+): Tower[] {
+  const mine = spans.filter((span) => span.place === place);
+  const towers = new Map<string, { name: string; ranges: Array<{ from: number; to: number }>; skills: Set<string> }>();
+  for (const span of mine) {
+    const line = lineOf.get(span.skill);
+    const rolledUp = line !== undefined && rolled.has(line);
+    const key = rolledUp ? `line:${line}` : span.skill;
+    const name = rolledUp ? (lineNames.get(line) ?? line) : span.skillName;
+    const tower = towers.get(key) ?? { name, ranges: [], skills: new Set<string>() };
+    tower.ranges.push({ from: span.from, to: span.to });
+    tower.skills.add(span.skill);
+    towers.set(key, tower);
+  }
+  return [...towers.entries()]
+    .map(([key, tower]) => ({
+      key,
+      name: tower.name,
+      years: totalYears(tower.ranges),
+      from: Math.min(...tower.ranges.map((range) => range.from)),
+      to: Math.max(...tower.ranges.map((range) => range.to)),
+      skills: [...tower.skills],
+    }))
+    .sort((a, b) => b.years - a.years);
 }
 
 export type SkillsData = ReturnType<typeof computeSkillsData>;
@@ -234,9 +297,9 @@ const yearOf = (value: string | undefined, fallback: number) => {
  * Resume skills ordering - so the film's tally and the resume agree (plus
  * "Current stack", counted from CURRENT_STACK_SINCE, for everything ticked
  * current). A skill's row is the line it prints on. A job's uses are its
- * spans, each dated as recorded or, undated, taken as the whole job. Only
- * uses ticked for the film's destination, on skills ticked for the film's
- * progress, are drawn.
+ * spans, each dated as recorded or, undated, taken as the whole job; only
+ * uses ticked for the film are drawn. A line ticked "roll up in the film"
+ * stands as one tower for its skills at each job (D30).
  */
 export function skillsDataFromRelease(release: Release): SkillsData {
   const technologies = release.collections.technologies ?? [];
@@ -280,8 +343,9 @@ export function skillsDataFromRelease(release: Release): SkillsData {
         ]
       : []),
   ];
+  const rolled = new Set(lines.filter((line) => bySlug.get(line.slug)?.rollUpInFilm).map((line) => line.slug));
   const skills: SkillDefinition[] = ordered
-    .filter((record) => !record.isGrouping && record.surfaces.includes("filmProgress"))
+    .filter((record) => !record.isGrouping)
     .map((record) => {
       const line = lineOf.get(record.slug);
       const parent = record.parentSlug ? bySlug.get(record.parentSlug) : undefined;
@@ -304,5 +368,5 @@ export function skillsDataFromRelease(release: Release): SkillsData {
     }))
     .sort((a, b) => a.from - b.from);
 
-  return computeSkillsData({ categories, skills, places, uses: uses.filter((use) => known.has(use.skill)) });
+  return computeSkillsData({ categories, skills, places, uses: uses.filter((use) => known.has(use.skill)), rolled });
 }

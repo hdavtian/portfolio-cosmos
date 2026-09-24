@@ -42,8 +42,8 @@ type TreeRow = {
   current: boolean;
   lattice: boolean;
   resume: boolean;
-  film: boolean;
   filters: boolean;
+  rollUp: boolean;
   aliases: string;
 };
 
@@ -52,13 +52,14 @@ type TreeRow = {
 // a box live, changed cells are marked, and nothing is written until Update
 // in the toolbar; Cancel reverts every pending change. A stray click is a
 // visible pending change, not a save.
-type TickField = "current" | "lattice" | "resume" | "film" | "filters";
+type TickField = "current" | "lattice" | "resume" | "filters" | "rollUp";
 const TICKS: Array<{ field: TickField; headerText: string; width: number; surface?: Technology["surfaces"][number] }> = [
   { field: "current", headerText: "Current", width: 100 },
   { field: "lattice", headerText: "Lattice", width: 95, surface: "lattice" },
   { field: "resume", headerText: "Resume", width: 95, surface: "resume" },
-  { field: "film", headerText: "Film", width: 85, surface: "filmProgress" },
   { field: "filters", headerText: "Filters", width: 90, surface: "filters" },
+  // A heading's roll-up in the film (D30); on a skill it means nothing.
+  { field: "rollUp", headerText: "Roll up (film)", width: 110 },
 ];
 
 // Constants handed to Syncfusion, so re-renders never refresh the grid.
@@ -150,8 +151,8 @@ export function TechnologiesPage() {
           current: Boolean(item.current),
           lattice: (item.surfaces ?? []).includes("lattice"),
           resume: (item.surfaces ?? []).includes("resume"),
-          film: (item.surfaces ?? []).includes("filmProgress"),
           filters: (item.surfaces ?? []).includes("filters"),
+          rollUp: Boolean(item.rollUpInFilm),
           aliases: (item.aliases ?? []).join(", "),
         })),
     [items],
@@ -282,6 +283,7 @@ export function TechnologiesPage() {
           await api.put(`/api/v2/admin/${ENTITY}/${record.slug}`, {
             ...withoutMeta(record),
             current: row.current,
+            rollUpInFilm: row.rollUp,
             surfaces,
             version: record.version,
           });
@@ -436,8 +438,8 @@ export function TechnologiesPage() {
               <ColumnDirective field="current" headerText="Current" width={100} type="boolean" displayAsCheckBox editType="booleanedit" textAlign="Center" />
               <ColumnDirective field="lattice" headerText="Lattice" width={95} type="boolean" displayAsCheckBox editType="booleanedit" textAlign="Center" />
               <ColumnDirective field="resume" headerText="Resume" width={95} type="boolean" displayAsCheckBox editType="booleanedit" textAlign="Center" />
-              <ColumnDirective field="film" headerText="Film" width={85} type="boolean" displayAsCheckBox editType="booleanedit" textAlign="Center" />
               <ColumnDirective field="filters" headerText="Filters" width={90} type="boolean" displayAsCheckBox editType="booleanedit" textAlign="Center" />
+              <ColumnDirective field="rollUp" headerText="Roll up (film)" width={110} type="boolean" displayAsCheckBox editType="booleanedit" textAlign="Center" />
               <ColumnDirective field="aliases" headerText="Also known as" width={280} allowEditing={false} />
               <ColumnDirective field="slug" headerText="Slug" width={200} isPrimaryKey allowEditing={false} />
               <ColumnDirective field="childCount" headerText="Children" width={100} textAlign="Right" allowEditing={false} />

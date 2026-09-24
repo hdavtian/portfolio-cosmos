@@ -121,9 +121,10 @@ export function SkillsUsedEditor({ value, onChange, jobStart, jobEnd, errors = [
       <div className="admin-card__head">
         <h2>Skills used</h2>
         <p>
-          Which technologies this job used, for how long, and where each shows. Pick them below; the right-hand
-          order is the order of the moon&apos;s labels. Then, per skill: dates if you know them (blank means the
-          whole job), or roughly how many years and where in the job they fell.
+          Which technologies this job used, for how long, and where each shows <em>for this job</em>. Pick them
+          below; the right-hand order is the order of the moon&apos;s labels. Then, per skill: dates if you know
+          them (blank means the whole job), or roughly how many years and where in the job they fell. Where a
+          technology may appear at all (lattice, resume, filters) is set once, in Technologies.
         </p>
       </div>
       {errors.length > 0 ? (
@@ -143,7 +144,7 @@ export function SkillsUsedEditor({ value, onChange, jobStart, jobEnd, errors = [
             <span>To</span>
             <span>or Years</span>
             <span>Where in the job</span>
-            <span>Shown in</span>
+            <span>Shown at this job</span>
             <span>Style</span>
           </div>
           {value.map((use, index) => {

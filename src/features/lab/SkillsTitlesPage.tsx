@@ -12,7 +12,7 @@ import {
   makeBuilders,
   type Build,
 } from "./gotBuilders";
-import { NOW_YEAR, say, skillsDataFromMock, skillsDataFromRelease, type SkillsData } from "./skillsData";
+import { NOW_YEAR, say, skillsDataFromMock, skillsDataFromRelease, towersAt, type SkillsData } from "./skillsData";
 import "./skillsTitles.css";
 
 /**
@@ -50,7 +50,10 @@ interface City {
   to: number;
   kind: string;
   note: string;
+  /** Every skill used here: what the Skill Progress panel reads. */
   entries: Entry[];
+  /** What is built here: the entries, or a rolled-up line's as one (D30). */
+  towers: Entry[];
   /** Places share a spot on the map when they are the same company. */
   spot: number;
 }
@@ -101,9 +104,10 @@ const LAYOUT: Record<string, [number, number]> = {
   investcloud: [1200, 660],
 };
 
-function buildCities({ places, spans }: SkillsData): City[] {
+function buildCities({ places, spans, lineOf, lineNames, rolled }: SkillsData): City[] {
   const ordered = [...places].sort((a, b) => a.from - b.from);
   const seen = new Set<string>();
+  const seenTowers = new Set<string>();
   return ordered.map((place, index) => {
     const entries = spans
       .filter((span) => span.place === place.slug)
@@ -121,6 +125,16 @@ function buildCities({ places, spans }: SkillsData): City[] {
       entry.fresh = !seen.has(entry.skill);
       seen.add(entry.skill);
     }
+    const towers: Entry[] = towersAt(spans, place.slug, lineOf, lineNames, rolled).map((tower) => ({
+      skill: tower.key,
+      name: tower.name,
+      years: tower.years,
+      from: tower.from,
+      to: tower.to,
+      categories: [...new Set(tower.skills.map((skill) => lineOf.get(skill) ?? ""))].filter(Boolean),
+      fresh: !seenTowers.has(tower.key),
+    }));
+    for (const tower of towers) seenTowers.add(tower.skill);
     const home = ordered.findIndex((other) => other.slug === "stormscape");
     return {
       slug: place.slug,
@@ -131,6 +145,7 @@ function buildCities({ places, spans }: SkillsData): City[] {
       kind: KIND_BY_PLACE[place.slug] ?? KIND_ORDER[index % KIND_ORDER.length],
       note: NOTES[place.slug] ?? "",
       entries,
+      towers,
       spot: place.slug === "stormscape-now" && home >= 0 ? home : index,
     };
   });
@@ -777,7 +792,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
 
         const tallest = Math.max(
           1,
-          ...cities.flatMap((city) => city.entries.map((entry) => entry.years)),
+          ...cities.flatMap((city) => city.towers.map((entry) => entry.years)),
         );
         const placed: Placed[] = [];
         cities.forEach((city, index) => {
@@ -798,9 +813,9 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
             (other) => other.spot === index && other !== city,
           );
           const build = byKind[city.kind](
-            city.entries.slice(0, PIECE_LIMIT),
+            city.towers.slice(0, PIECE_LIMIT),
             tallest,
-            laterCity?.entries.slice(0, PIECE_LIMIT),
+            laterCity?.towers.slice(0, PIECE_LIMIT),
             { title: city.name, accent: accentsRef.current[city.slug] ?? "#ffb266", house: city.slug },
           );
           build.group.position.copy(at).add(new THREE.Vector3(0, 1.5, 0));
@@ -1531,8 +1546,8 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
     bar <= START_STRETCH
       ? (bar / START_STRETCH) * introEnd
       : introEnd + ((bar - START_STRETCH) / (1 - START_STRETCH)) * (1 - introEnd);
-  const fresh = active.entries.filter((entry) => entry.fresh).slice(0, PIECE_LIMIT);
-  const carried = active.entries.filter((entry) => !entry.fresh).slice(0, PIECE_LIMIT);
+  const fresh = active.towers.filter((entry) => entry.fresh).slice(0, PIECE_LIMIT);
+  const carried = active.towers.filter((entry) => !entry.fresh).slice(0, PIECE_LIMIT);
 
   // What this place added: each discipline it touched, before it and after it.
   const before = experienceAt(
