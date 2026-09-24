@@ -12,7 +12,7 @@ import {
   makeBuilders,
   type Build,
 } from "./gotBuilders";
-import { NOW_YEAR, say, skillsDataFromMock, skillsDataFromRelease, towersAt, type SkillsData } from "./skillsData";
+import { NOW_YEAR, say, skillsDataFromRelease, towersAt, type SkillsData } from "./skillsData";
 import "./skillsTitles.css";
 
 /**
@@ -347,9 +347,15 @@ const yearsLabel = (city: City, lastYear: number) =>
  * the film (the key below) rather than mixing two timelines mid-play.
  */
 export function SkillsTitlesPage() {
-  const release = useReleaseQuery((content) => skillsDataFromRelease(content)).data;
-  const data = release ?? skillsDataFromMock();
-  return <SkillsTitlesFilm key={data === skillsDataFromMock() ? "mock" : "release"} data={data} />;
+  const query = useReleaseQuery((content) => skillsDataFromRelease(content));
+  if (!query.data) {
+    return (
+      <div className="titles titles--loading">
+        <p className="titles__caption">{query.isError ? "The film could not load its timeline. Refresh to try again." : "Loading the timeline…"}</p>
+      </div>
+    );
+  }
+  return <SkillsTitlesFilm key={query.data.LAST_YEAR} data={query.data} />;
 }
 
 function SkillsTitlesFilm({ data }: { data: SkillsData }) {

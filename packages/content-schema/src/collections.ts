@@ -2,7 +2,6 @@ import { z } from "zod";
 import { aboutDeckSlideSchema, pathTravelMessageSchema } from "./about.js";
 import { cosmosIntroductionSchema, cosmosPlanetSchema, guidedTourSchema } from "./cosmos.js";
 import { mediaAssetSchema } from "./media.js";
-import { techStackNodeSchema } from "./techStack.js";
 import { technologySchema } from "./technology.js";
 import {
   moonPortfolioMappingSchema,
@@ -16,8 +15,6 @@ import {
   linkSchema,
   profileSchema,
   resumeSkillsSchema,
-  skillCategorySchema,
-  skillSchema,
 } from "./resume.js";
 
 // One document each, stored in the `singletons` collection under `key`.
@@ -34,11 +31,8 @@ export const collectionSchemas = {
   education: educationSchema,
   certifications: certificationSchema,
   links: linkSchema,
-  skillCategories: skillCategorySchema,
-  skills: skillSchema,
-  techStackNodes: techStackNodeSchema,
-  // The master list (D1). `skills`, `skillCategories` and `techStackNodes`
-  // remain until the migration has run and the sites read this instead.
+  // The master list (D1). The skills, skill categories and tech stack nodes
+  // it absorbed were retired once every site read it (D31).
   technologies: technologySchema,
   experiences: experienceSchema,
   portfolioCores: portfolioCoreSchema,

@@ -16,7 +16,7 @@ interface PagedResponse {
 const COUNTED = [
   { key: "experiences", label: "Experience" },
   { key: "portfolioEntries", label: "Projects" },
-  { key: "skills", label: "Skills" },
+  { key: "technologies", label: "Technologies" },
   { key: "aboutDeckSlides", label: "About slides" },
   { key: "pathTravelMessages", label: "Path messages" },
   { key: "media", label: "Media" },

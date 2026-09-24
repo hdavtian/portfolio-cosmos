@@ -3,7 +3,7 @@ import { slugSchema, sortOrderSchema } from "./primitives.js";
 
 // The master technology list (tech-consolidation-plan.md, D1). One record per
 // technology, one spelling, one home in the tree. It supersedes `skills`,
-// `skillCategories` and `techStackNodes`, which stay in place until the
+// `skillCategories` and `techStackNodes`, which were retired (D31) once the
 // migration has run.
 //
 // Slugs are immutable once created and names are freely editable (D25): every

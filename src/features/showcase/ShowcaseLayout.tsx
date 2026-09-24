@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { skillsDataFromMock, skillsDataFromRelease } from "../lab/skillsData";
+import { skillsDataFromRelease } from "../lab/skillsData";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { CINEMATIC_PATH, canKeepAlive } from "../../app/cinematic/keepAlive";
 import { FILM_PATH, FilmHost } from "../../app/film/FilmHost";
@@ -90,7 +90,8 @@ export function ShowcaseLayout() {
   }, [release]);
   // The film's timeline, for its preview on the home page.
   const skills = useMemo(() => {
-    const { places, spans, lineOf, lineNames, rolled } = release ? skillsDataFromRelease(release) : skillsDataFromMock();
+    if (!release) return { places: [], spans: [], lineOf: new Map(), lineNames: new Map(), rolled: new Set<string>() };
+    const { places, spans, lineOf, lineNames, rolled } = skillsDataFromRelease(release);
     return { places, spans, lineOf, lineNames, rolled };
   }, [release]);
   const { pathname } = useLocation();

@@ -82,40 +82,6 @@ const text = (value: unknown) => (typeof value === "string" ? value : "");
 
 export const ENTITY_DEFINITIONS: EntityDefinition[] = [
   {
-    entity: "skills",
-    title: "Skills",
-    singular: "skill",
-    description: "Technologies listed on the resume, grouped by category. Drag a row by its handle to change the order.",
-    slugSource: "name",
-    columns: [
-      { field: "name", header: "Skill", width: 220 },
-      { field: "categorySlug", header: "Category", width: 200 },
-    ],
-    fields: [
-      slugField,
-      { key: "name", label: "Name", kind: "text" },
-      {
-        key: "categorySlug",
-        label: "Category",
-        kind: "reference",
-        reference: { entity: "skillCategories", labelField: "name" },
-      },
-    ],
-    empty: () => ({ slug: "", sortOrder: 0, name: "", categorySlug: "" }),
-    describe: (record) => text(record.name),
-  },
-  {
-    entity: "skillCategories",
-    title: "Skill categories",
-    singular: "category",
-    description: "Groups for skills, such as Frontend or Cloud & DevOps. Drag a row by its handle to change the order.",
-    slugSource: "name",
-    columns: [{ field: "name", header: "Category", width: 260 }],
-    fields: [slugField, { key: "name", label: "Name", kind: "text" }],
-    empty: () => ({ slug: "", sortOrder: 0, name: "" }),
-    describe: (record) => text(record.name),
-  },
-  {
     entity: "education",
     title: "Education",
     singular: "education entry",
@@ -268,30 +234,6 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
       aliases: [],
       blurb: "",
     }),
-    describe: (record) => text(record.name),
-    customList: true,
-  },
-  {
-    entity: "techStackNodes",
-    title: "Tech stack",
-    singular: "tech stack node",
-    description:
-      "Nested tech stack for the portfolio site and the D3 skills graph, any depth (e.g. Frontend › Frameworks › React). Separate from the resume's Skills, which stay one level deep. Order within a level follows the drag handle.",
-    slugSource: "name",
-    columns: [],
-    fields: [
-      slugField,
-      { key: "name", label: "Name", kind: "text" },
-      {
-        key: "parentSlug",
-        label: "Parent",
-        hint: "Leave at top level for a main branch",
-        kind: "reference",
-        reference: { entity: "techStackNodes", labelField: "name" },
-        emptyOption: "— Top level —",
-      },
-    ],
-    empty: () => ({ slug: "", sortOrder: 0, name: "", parentSlug: "" }),
     describe: (record) => text(record.name),
     customList: true,
   },

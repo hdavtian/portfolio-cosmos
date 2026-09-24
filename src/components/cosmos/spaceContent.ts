@@ -6,7 +6,7 @@ import type {
   MoonPortfolioMapping,
   PathTravelMessage,
 } from "@hd/content-schema";
-import { buildTechStackTree, techStackTreeFromSkills, type TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
+import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import { latticeByHeading, latticeTree } from "@hd/content-schema/technology-tree";
 import { mediaUrl, type Release } from "../../lib/api/release";
 import type { PortfolioCoreSeed, PortfolioSeedMedia, PortfolioSeedVariant } from "./portfolioData";
@@ -67,9 +67,7 @@ export function spaceContentFromRelease(release: Release): SpaceContent {
   });
 
   // The master list (D1): names by slug, for everything that points at it.
-  // A release from before it has none, and each surface then reads the old
-  // fields it always did.
-  const technologies = c.technologies ?? [];
+  const technologies = c.technologies;
   const nameBySlug = new Map(technologies.map((record) => [record.slug, record.name]));
   const names = (slugs: readonly string[] | undefined) =>
     (slugs ?? []).map((slug) => nameBySlug.get(slug)).filter((name): name is string => Boolean(name));
@@ -89,15 +87,7 @@ export function spaceContentFromRelease(release: Release): SpaceContent {
   });
 
   // The Skills planet's moons: one per top-level heading of the lattice.
-  const skills =
-    technologies.length > 0
-      ? latticeByHeading(technologies)
-      : Object.fromEntries(
-          c.skillCategories.map((category) => [
-            category.name,
-            c.skills.filter((skill) => skill.categorySlug === category.slug).map((skill) => skill.name),
-          ]),
-        );
+  const skills = latticeByHeading(technologies);
   const [education] = c.education;
 
   // A job's moon labels and fly-by memories come from its skill uses (D20):
@@ -173,13 +163,7 @@ export function spaceContentFromRelease(release: Release): SpaceContent {
           : { type: block.type, title: block.title, body: block.body },
       ),
     })),
-    // The Skills lattice: the master list's lattice ticks, or, before it, the
-    // old tech stack nodes, or before those, the skill categories.
-    techStack:
-      technologies.length > 0
-        ? latticeTree(technologies)
-        : c.techStackNodes.length > 0
-        ? buildTechStackTree(c.techStackNodes)
-        : techStackTreeFromSkills(skills),
+    // The Skills lattice: the master list's lattice ticks.
+    techStack: latticeTree(technologies),
   };
 }

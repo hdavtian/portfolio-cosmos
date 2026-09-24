@@ -19,8 +19,6 @@ const NAV_GROUPS: Array<{
       { to: "/profile", text: "Profile", ready: true },
       { to: "/experiences", text: "Experience", ready: true },
       { to: "/resumeSkills", text: "Resume skills ordering", ready: true },
-      { to: "/skills", text: "Skills (old)", ready: true },
-      { to: "/skillCategories", text: "Skill categories", ready: true },
       { to: "/education", text: "Education", ready: true },
       { to: "/certifications", text: "Certifications", ready: true },
       { to: "/links", text: "Links", ready: true },
@@ -32,7 +30,6 @@ const NAV_GROUPS: Array<{
       { to: "/portfolioEntries", text: "Projects", ready: true },
       { to: "/portfolioCores", text: "Cores", ready: true },
       { to: "/technologies", text: "Technologies", ready: true },
-      { to: "/techStackNodes", text: "Tech stack (old)", ready: true },
     ],
   },
   {

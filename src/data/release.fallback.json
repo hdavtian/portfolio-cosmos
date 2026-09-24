@@ -1,5 +1,5 @@
 {
-  "etag": "34ef6f20557986fd68e183c9973c25ac",
+  "etag": "b441934e8cbecadf589982015fdf889b",
   "draft": false,
   "content": {
     "singletons": {
@@ -15,6 +15,22 @@
         "title": "The Harma System",
         "subtitle": "A Digital Galaxy of Professional Excellence",
         "description": "Welcome to the Harma System, where each planet represents a domain of expertise, and every moon tells the story of a professional journey through the digital cosmos."
+      },
+      "resumeSkills": {
+        "headingOrder": [
+          "frontend",
+          "styling",
+          "spa-frameworks",
+          "backend",
+          "apis",
+          "databases",
+          "ui-component-libraries",
+          "testing",
+          "ai",
+          "cloud-and-devops",
+          "ways-of-working",
+          "client-and-support"
+        ]
       }
     },
     "collections": {
@@ -68,305 +84,1753 @@
           "url": "https://www.youtube.com/@harmadavtian2916"
         }
       ],
-      "skillCategories": [
-        {
-          "slug": "frontend",
-          "sortOrder": 0,
-          "name": "Frontend"
-        },
-        {
-          "slug": "backend",
-          "sortOrder": 1,
-          "name": "Backend"
-        },
-        {
-          "slug": "cloud-and-devops",
-          "sortOrder": 2,
-          "name": "Cloud & DevOps"
-        },
-        {
-          "slug": "data-and-messaging",
-          "sortOrder": 3,
-          "name": "Data & Messaging"
-        },
-        {
-          "slug": "testing",
-          "sortOrder": 4,
-          "name": "Testing"
-        }
-      ],
-      "skills": [
-        {
-          "slug": "angular",
-          "sortOrder": 0,
-          "categorySlug": "frontend",
-          "name": "Angular"
-        },
-        {
-          "slug": "react",
-          "sortOrder": 1,
-          "categorySlug": "frontend",
-          "name": "React"
-        },
-        {
-          "slug": "typescript",
-          "sortOrder": 2,
-          "categorySlug": "frontend",
-          "name": "TypeScript"
-        },
-        {
-          "slug": "javascript",
-          "sortOrder": 3,
-          "categorySlug": "frontend",
-          "name": "JavaScript"
-        },
-        {
-          "slug": "c-sharp",
-          "sortOrder": 4,
-          "categorySlug": "backend",
-          "name": "C#"
-        },
-        {
-          "slug": "java",
-          "sortOrder": 5,
-          "categorySlug": "backend",
-          "name": "Java"
-        },
-        {
-          "slug": "node-js",
-          "sortOrder": 6,
-          "categorySlug": "backend",
-          "name": "Node.js"
-        },
-        {
-          "slug": "rest-apis",
-          "sortOrder": 7,
-          "categorySlug": "backend",
-          "name": "REST APIs"
-        },
-        {
-          "slug": "azure",
-          "sortOrder": 8,
-          "categorySlug": "cloud-and-devops",
-          "name": "Azure"
-        },
-        {
-          "slug": "aws",
-          "sortOrder": 9,
-          "categorySlug": "cloud-and-devops",
-          "name": "AWS"
-        },
-        {
-          "slug": "docker",
-          "sortOrder": 10,
-          "categorySlug": "cloud-and-devops",
-          "name": "Docker"
-        },
-        {
-          "slug": "ci-cd",
-          "sortOrder": 11,
-          "categorySlug": "cloud-and-devops",
-          "name": "CI/CD"
-        },
-        {
-          "slug": "postgresql",
-          "sortOrder": 12,
-          "categorySlug": "data-and-messaging",
-          "name": "PostgreSQL"
-        },
-        {
-          "slug": "mongodb",
-          "sortOrder": 13,
-          "categorySlug": "data-and-messaging",
-          "name": "MongoDB"
-        },
-        {
-          "slug": "rabbitmq",
-          "sortOrder": 14,
-          "categorySlug": "data-and-messaging",
-          "name": "RabbitMQ"
-        },
-        {
-          "slug": "playwright",
-          "sortOrder": 15,
-          "categorySlug": "testing",
-          "name": "Playwright"
-        },
-        {
-          "slug": "selenium",
-          "sortOrder": 16,
-          "categorySlug": "testing",
-          "name": "Selenium"
-        },
-        {
-          "slug": "testng",
-          "sortOrder": 17,
-          "categorySlug": "testing",
-          "name": "TestNG"
-        }
-      ],
-      "techStackNodes": [
+      "technologies": [
         {
           "slug": "frontend",
           "sortOrder": 0,
           "name": "Frontend",
-          "parentSlug": ""
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
         },
         {
-          "slug": "angular",
+          "slug": "html",
           "sortOrder": 1,
-          "name": "Angular",
-          "parentSlug": "frontend"
+          "name": "HTML",
+          "parentSlug": "frontend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume"
+          ],
+          "aliases": []
         },
         {
-          "slug": "react",
+          "slug": "semantic-html",
           "sortOrder": 2,
-          "name": "React",
-          "parentSlug": "frontend"
-        },
-        {
-          "slug": "typescript",
-          "sortOrder": 3,
-          "name": "TypeScript",
-          "parentSlug": "frontend"
+          "name": "Semantic HTML",
+          "parentSlug": "frontend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
         },
         {
           "slug": "javascript",
-          "sortOrder": 4,
+          "sortOrder": 3,
           "name": "JavaScript",
-          "parentSlug": "frontend"
+          "parentSlug": "frontend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
         },
         {
-          "slug": "backend",
+          "slug": "typescript",
+          "sortOrder": 4,
+          "name": "TypeScript",
+          "parentSlug": "frontend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "jquery",
           "sortOrder": 5,
-          "name": "Backend",
-          "parentSlug": ""
+          "name": "jQuery",
+          "parentSlug": "frontend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
         },
         {
-          "slug": "c-sharp",
+          "slug": "html-email",
           "sortOrder": 6,
-          "name": "C#",
-          "parentSlug": "backend"
+          "name": "HTML Email",
+          "parentSlug": "frontend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": []
         },
         {
-          "slug": "java",
+          "slug": "spa-frameworks",
           "sortOrder": 7,
-          "name": "Java",
-          "parentSlug": "backend"
+          "name": "SPA frameworks",
+          "parentSlug": "frontend",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
         },
         {
-          "slug": "node-js",
+          "slug": "react",
           "sortOrder": 8,
-          "name": "Node.js",
-          "parentSlug": "backend"
-        },
-        {
-          "slug": "rest-apis",
-          "sortOrder": 9,
-          "name": "REST APIs",
-          "parentSlug": "backend"
-        },
-        {
-          "slug": "cloud-and-devops",
-          "sortOrder": 10,
-          "name": "Cloud & DevOps",
-          "parentSlug": ""
-        },
-        {
-          "slug": "azure",
-          "sortOrder": 11,
-          "name": "Azure",
-          "parentSlug": "cloud-and-devops"
-        },
-        {
-          "slug": "aws",
-          "sortOrder": 12,
-          "name": "AWS",
-          "parentSlug": "cloud-and-devops"
-        },
-        {
-          "slug": "docker",
-          "sortOrder": 13,
-          "name": "Docker",
-          "parentSlug": "cloud-and-devops"
-        },
-        {
-          "slug": "ci-cd",
-          "sortOrder": 14,
-          "name": "CI/CD",
-          "parentSlug": "cloud-and-devops"
-        },
-        {
-          "slug": "data-and-messaging",
-          "sortOrder": 15,
-          "name": "Data & Messaging",
-          "parentSlug": ""
-        },
-        {
-          "slug": "postgresql",
-          "sortOrder": 16,
-          "name": "PostgreSQL",
-          "parentSlug": "data-and-messaging"
-        },
-        {
-          "slug": "mongodb",
-          "sortOrder": 17,
-          "name": "MongoDB",
-          "parentSlug": "data-and-messaging"
-        },
-        {
-          "slug": "rabbitmq",
-          "sortOrder": 18,
-          "name": "RabbitMQ",
-          "parentSlug": "data-and-messaging"
-        },
-        {
-          "slug": "testing",
-          "sortOrder": 19,
-          "name": "Testing",
-          "parentSlug": ""
-        },
-        {
-          "slug": "playwright",
-          "sortOrder": 20,
-          "name": "Playwright",
-          "parentSlug": "testing"
-        },
-        {
-          "slug": "selenium",
-          "sortOrder": 21,
-          "name": "Selenium",
-          "parentSlug": "testing"
-        },
-        {
-          "slug": "testng",
-          "sortOrder": 22,
-          "name": "TestNG",
-          "parentSlug": "testing"
-        },
-        {
-          "slug": "patterns",
-          "sortOrder": 23,
-          "name": "Patterns",
-          "parentSlug": "react"
-        },
-        {
-          "slug": "provider",
-          "sortOrder": 24,
-          "name": "Provider",
-          "parentSlug": "patterns"
-        },
-        {
-          "slug": "context",
-          "sortOrder": 25,
-          "name": "Context",
-          "parentSlug": "patterns"
+          "name": "React",
+          "parentSlug": "spa-frameworks",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
         },
         {
           "slug": "hooks",
-          "sortOrder": 26,
+          "sortOrder": 9,
           "name": "Hooks",
-          "parentSlug": "react"
+          "parentSlug": "react",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "patterns",
+          "sortOrder": 10,
+          "name": "Patterns",
+          "parentSlug": "react",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "context",
+          "sortOrder": 11,
+          "name": "Context",
+          "parentSlug": "patterns",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "provider",
+          "sortOrder": 12,
+          "name": "Provider",
+          "parentSlug": "patterns",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "redux",
+          "sortOrder": 13,
+          "name": "Redux",
+          "parentSlug": "spa-frameworks",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "next-js",
+          "sortOrder": 14,
+          "name": "Next.js",
+          "parentSlug": "spa-frameworks",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "angular",
+          "sortOrder": 15,
+          "name": "Angular",
+          "parentSlug": "spa-frameworks",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "angularjs",
+          "sortOrder": 16,
+          "name": "AngularJS",
+          "parentSlug": "spa-frameworks",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "rxjs",
+          "sortOrder": 17,
+          "name": "RxJS",
+          "parentSlug": "spa-frameworks",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "styling",
+          "sortOrder": 18,
+          "name": "Styling",
+          "parentSlug": "frontend",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "css",
+          "sortOrder": 19,
+          "name": "CSS",
+          "parentSlug": "styling",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume"
+          ],
+          "aliases": [
+            "Cross-browser CSS"
+          ]
+        },
+        {
+          "slug": "scss",
+          "sortOrder": 20,
+          "name": "SCSS",
+          "parentSlug": "styling",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "bootstrap",
+          "sortOrder": 21,
+          "name": "Bootstrap",
+          "parentSlug": "styling",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "tailwind-css",
+          "sortOrder": 22,
+          "name": "Tailwind CSS",
+          "parentSlug": "styling",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "animation",
+          "sortOrder": 23,
+          "name": "Animation",
+          "parentSlug": "frontend",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "flash",
+          "sortOrder": 24,
+          "name": "Flash",
+          "parentSlug": "animation",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "gsap",
+          "sortOrder": 25,
+          "name": "GSAP",
+          "parentSlug": "animation",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "framer-motion",
+          "sortOrder": 26,
+          "name": "Framer Motion",
+          "parentSlug": "animation",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "build-tools",
+          "sortOrder": 27,
+          "name": "Build tools",
+          "parentSlug": "frontend",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "webpack",
+          "sortOrder": 28,
+          "name": "Webpack",
+          "parentSlug": "build-tools",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "gulp",
+          "sortOrder": 29,
+          "name": "Gulp",
+          "parentSlug": "build-tools",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "backend",
+          "sortOrder": 30,
+          "name": "Backend",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "c-sharp",
+          "sortOrder": 31,
+          "name": "C#",
+          "parentSlug": "backend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "net",
+          "sortOrder": 32,
+          "name": ".NET",
+          "parentSlug": "backend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "java",
+          "sortOrder": 33,
+          "name": "Java",
+          "parentSlug": "backend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [
+            "Java Integration"
+          ]
+        },
+        {
+          "slug": "spring-boot",
+          "sortOrder": 34,
+          "name": "Spring Boot",
+          "parentSlug": "backend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [
+            "Spring Boot API"
+          ]
+        },
+        {
+          "slug": "node-js",
+          "sortOrder": 35,
+          "name": "Node.js",
+          "parentSlug": "backend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "express-js",
+          "sortOrder": 36,
+          "name": "Express.js",
+          "parentSlug": "node-js",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters",
+            "resume"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "php",
+          "sortOrder": 37,
+          "name": "PHP",
+          "parentSlug": "backend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "laravel",
+          "sortOrder": 38,
+          "name": "Laravel",
+          "parentSlug": "backend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "cakephp",
+          "sortOrder": 39,
+          "name": "CakePHP",
+          "parentSlug": "backend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "rabbitmq",
+          "sortOrder": 40,
+          "name": "RabbitMQ",
+          "parentSlug": "backend",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "apis",
+          "sortOrder": 41,
+          "name": "APIs",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "rest-apis",
+          "sortOrder": 42,
+          "name": "REST APIs",
+          "parentSlug": "apis",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "oauth",
+          "sortOrder": 43,
+          "name": "OAuth",
+          "parentSlug": "apis",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "asp-net-core-web-api",
+          "sortOrder": 44,
+          "name": "ASP.NET Web API",
+          "parentSlug": "apis",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [
+            ".NET Web API"
+          ]
+        },
+        {
+          "slug": "openapi-swagger",
+          "sortOrder": 45,
+          "name": "OpenAPI/Swagger",
+          "parentSlug": "apis",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "ai",
+          "sortOrder": 46,
+          "name": "AI",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "copilot",
+          "sortOrder": 47,
+          "name": "Copilot",
+          "parentSlug": "ai",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "cursor",
+          "sortOrder": 48,
+          "name": "Cursor",
+          "parentSlug": "ai",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "claude-code",
+          "sortOrder": 49,
+          "name": "Claude Code",
+          "parentSlug": "ai",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "codex",
+          "sortOrder": 50,
+          "name": "Codex",
+          "parentSlug": "ai",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "desktop-and-platform",
+          "sortOrder": 51,
+          "name": "Desktop & platform",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "winforms",
+          "sortOrder": 52,
+          "name": "WinForms",
+          "parentSlug": "desktop-and-platform",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "chrome-extension",
+          "sortOrder": 53,
+          "name": "Chrome Extension",
+          "parentSlug": "desktop-and-platform",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "cms-and-e-commerce",
+          "sortOrder": 54,
+          "name": "CMS & e-commerce",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "wordpress",
+          "sortOrder": 55,
+          "name": "WordPress",
+          "parentSlug": "cms-and-e-commerce",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "drupal",
+          "sortOrder": 56,
+          "name": "Drupal",
+          "parentSlug": "cms-and-e-commerce",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "shopsite",
+          "sortOrder": 57,
+          "name": "ShopSite",
+          "parentSlug": "cms-and-e-commerce",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": [
+            "IBM iStore Ecommerce"
+          ]
+        },
+        {
+          "slug": "e-commerce",
+          "sortOrder": 58,
+          "name": "E-commerce",
+          "parentSlug": "cms-and-e-commerce",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": [
+            "Ecommerce Integrations"
+          ]
+        },
+        {
+          "slug": "shopify",
+          "sortOrder": 59,
+          "name": "Shopify",
+          "parentSlug": "cms-and-e-commerce",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "databases",
+          "sortOrder": 60,
+          "name": "Databases",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "mysql",
+          "sortOrder": 61,
+          "name": "MySQL",
+          "parentSlug": "databases",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "postgresql",
+          "sortOrder": 62,
+          "name": "PostgreSQL",
+          "parentSlug": "databases",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "mongodb",
+          "sortOrder": 63,
+          "name": "MongoDB",
+          "parentSlug": "databases",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "cloud-and-devops",
+          "sortOrder": 64,
+          "name": "Cloud & DevOps",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "aws",
+          "sortOrder": 65,
+          "name": "AWS",
+          "parentSlug": "cloud-and-devops",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "ec2",
+          "sortOrder": 66,
+          "name": "EC2",
+          "parentSlug": "aws",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "rds",
+          "sortOrder": 67,
+          "name": "RDS",
+          "parentSlug": "aws",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "s3",
+          "sortOrder": 68,
+          "name": "S3",
+          "parentSlug": "aws",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "azure",
+          "sortOrder": 69,
+          "name": "Azure",
+          "parentSlug": "cloud-and-devops",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "azure-container-apps",
+          "sortOrder": 70,
+          "name": "Azure Container Apps",
+          "parentSlug": "azure",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "docker",
+          "sortOrder": 71,
+          "name": "Docker",
+          "parentSlug": "cloud-and-devops",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "ci-cd",
+          "sortOrder": 72,
+          "name": "CI/CD",
+          "parentSlug": "cloud-and-devops",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "gitlab",
+          "sortOrder": 73,
+          "name": "GitLab",
+          "parentSlug": "cloud-and-devops",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "infrastructure-and-hosting",
+          "sortOrder": 74,
+          "name": "Infrastructure & hosting",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "web-hosting",
+          "sortOrder": 75,
+          "name": "Web hosting",
+          "parentSlug": "infrastructure-and-hosting",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": [
+            "Shared + Dedicated Hosting"
+          ]
+        },
+        {
+          "slug": "dns",
+          "sortOrder": 76,
+          "name": "DNS",
+          "parentSlug": "infrastructure-and-hosting",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "domains",
+          "sortOrder": 77,
+          "name": "Domains",
+          "parentSlug": "infrastructure-and-hosting",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "lamp",
+          "sortOrder": 78,
+          "name": "LAMP",
+          "parentSlug": "infrastructure-and-hosting",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": [
+            "LAMP Stack",
+            "LAMP Stack Deployment"
+          ]
+        },
+        {
+          "slug": "linux",
+          "sortOrder": 79,
+          "name": "Linux",
+          "parentSlug": "infrastructure-and-hosting",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "data-center-operations",
+          "sortOrder": 80,
+          "name": "Data center operations",
+          "parentSlug": "infrastructure-and-hosting",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": [
+            "Data Center Ops"
+          ]
+        },
+        {
+          "slug": "dial-up",
+          "sortOrder": 81,
+          "name": "Dial-up",
+          "parentSlug": "infrastructure-and-hosting",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "isdn",
+          "sortOrder": 82,
+          "name": "ISDN",
+          "parentSlug": "infrastructure-and-hosting",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "networking",
+          "sortOrder": 83,
+          "name": "Networking",
+          "parentSlug": "infrastructure-and-hosting",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "testing",
+          "sortOrder": 84,
+          "name": "Testing",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "cypress",
+          "sortOrder": 85,
+          "name": "Cypress",
+          "parentSlug": "testing",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters",
+            "resume"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "playwright",
+          "sortOrder": 86,
+          "name": "Playwright",
+          "parentSlug": "testing",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [
+            "C# Playwright API"
+          ]
+        },
+        {
+          "slug": "selenium",
+          "sortOrder": 87,
+          "name": "Selenium",
+          "parentSlug": "testing",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "testng",
+          "sortOrder": 88,
+          "name": "TestNG",
+          "parentSlug": "testing",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "ways-of-working",
+          "sortOrder": 89,
+          "name": "Ways of working",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "agile",
+          "sortOrder": 90,
+          "name": "Agile",
+          "parentSlug": "ways-of-working",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "scrum",
+          "sortOrder": 91,
+          "name": "Scrum",
+          "parentSlug": "ways-of-working",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "marketing-and-analytics",
+          "sortOrder": 92,
+          "name": "Marketing & analytics",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "seo",
+          "sortOrder": 93,
+          "name": "SEO",
+          "parentSlug": "marketing-and-analytics",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "analytics",
+          "sortOrder": 94,
+          "name": "Analytics",
+          "parentSlug": "marketing-and-analytics",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "adobe-test-and-target",
+          "sortOrder": 95,
+          "name": "Adobe Test & Target",
+          "parentSlug": "marketing-and-analytics",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "client-and-support",
+          "sortOrder": 96,
+          "name": "Client & support",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "sales",
+          "sortOrder": 97,
+          "name": "Sales",
+          "parentSlug": "client-and-support",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "client-delivery",
+          "sortOrder": 98,
+          "name": "Client delivery",
+          "parentSlug": "client-and-support",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "desktop-support",
+          "sortOrder": 99,
+          "name": "Desktop support",
+          "parentSlug": "client-and-support",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": [
+            "Windows + Mac Support"
+          ]
+        },
+        {
+          "slug": "technical-support",
+          "sortOrder": 100,
+          "name": "Technical support",
+          "parentSlug": "client-and-support",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": []
+        },
+        {
+          "slug": "product",
+          "sortOrder": 101,
+          "name": "Product",
+          "parentSlug": "",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "resume",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "integrations",
+          "sortOrder": 102,
+          "name": "Integrations",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "opentable",
+          "sortOrder": 103,
+          "name": "OpenTable",
+          "parentSlug": "integrations",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "meilisearch",
+          "sortOrder": 104,
+          "name": "Meilisearch",
+          "parentSlug": "integrations",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "frameworks-and-libraries",
+          "sortOrder": 105,
+          "name": "Frameworks & Libraries",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "ui-component-libraries",
+          "sortOrder": 106,
+          "name": "UI component libraries",
+          "parentSlug": "frameworks-and-libraries",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters",
+            "resume"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "devextreme",
+          "sortOrder": 107,
+          "name": "DevExtreme",
+          "parentSlug": "ui-component-libraries",
+          "isGrouping": false,
+          "current": true,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters",
+            "resume"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "syncfusion",
+          "sortOrder": 108,
+          "name": "Syncfusion",
+          "parentSlug": "ui-component-libraries",
+          "isGrouping": false,
+          "current": true,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters",
+            "resume"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "ag-grid",
+          "sortOrder": 109,
+          "name": "AG Grid",
+          "parentSlug": "ui-component-libraries",
+          "isGrouping": false,
+          "current": true,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters",
+            "resume"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "editors-and-ides",
+          "sortOrder": 110,
+          "name": "Editors & IDEs",
+          "parentSlug": "",
+          "isGrouping": true,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice",
+            "filters"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "visual-studio-code",
+          "sortOrder": 111,
+          "name": "Visual Studio Code",
+          "parentSlug": "editors-and-ides",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "visual-studio",
+          "sortOrder": 112,
+          "name": "Visual Studio",
+          "parentSlug": "editors-and-ides",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "intellij-idea",
+          "sortOrder": 113,
+          "name": "IntelliJ IDEA",
+          "parentSlug": "editors-and-ides",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "netbeans",
+          "sortOrder": 114,
+          "name": "NetBeans",
+          "parentSlug": "editors-and-ides",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "eclipse",
+          "sortOrder": 115,
+          "name": "Eclipse",
+          "parentSlug": "editors-and-ides",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "sublime-text",
+          "sortOrder": 116,
+          "name": "Sublime Text",
+          "parentSlug": "editors-and-ides",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": [],
+          "blurb": ""
+        },
+        {
+          "slug": "dreamweaver",
+          "sortOrder": 117,
+          "name": "Dreamweaver",
+          "parentSlug": "editors-and-ides",
+          "isGrouping": false,
+          "current": false,
+          "rollUpInFilm": false,
+          "surfaces": [
+            "lattice"
+          ],
+          "aliases": [
+            "Dreamweaver-era Tools"
+          ]
         }
       ],
       "experiences": [
@@ -396,7 +1860,65 @@
           ],
           "projects": [],
           "jobMemories": [],
-          "jobTech": []
+          "jobTech": [],
+          "skillsUsed": [
+            {
+              "technologySlug": "react",
+              "years": 2,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "typescript",
+              "years": 2,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "node-js",
+              "years": 2,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "gsap",
+              "years": 2,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "azure",
+              "years": 2,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "mongodb",
+              "years": 1,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "ci-cd",
+              "years": 2,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            }
+          ]
         },
         {
           "slug": "investcloud",
@@ -453,52 +1975,12 @@
           ],
           "jobMemories": [
             {
-              "type": "tech",
-              "text": "Angular"
-            },
-            {
-              "type": "tech",
-              "text": "AngularJS"
-            },
-            {
               "type": "memory",
               "text": "Led automation platform initiative"
             },
             {
-              "type": "tech",
-              "text": "TypeScript"
-            },
-            {
-              "type": "tech",
-              "text": ".NET + C#"
-            },
-            {
               "type": "memory",
               "text": "Fun times playing basketball"
-            },
-            {
-              "type": "tech",
-              "text": "Java + Spring Boot"
-            },
-            {
-              "type": "tech",
-              "text": "Node.js"
-            },
-            {
-              "type": "tech",
-              "text": "Selenium + TestNG"
-            },
-            {
-              "type": "code",
-              "text": "C# Playwright API"
-            },
-            {
-              "type": "tech",
-              "text": "Azure Container Apps"
-            },
-            {
-              "type": "tech",
-              "text": "RabbitMQ + MongoDB"
             },
             {
               "type": "memory",
@@ -603,6 +2085,379 @@
                 "Product Owner"
               ]
             }
+          ],
+          "skillsUsed": [
+            {
+              "technologySlug": "angular",
+              "from": "2018",
+              "to": "2022",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Angular"
+              ]
+            },
+            {
+              "technologySlug": "react",
+              "from": "2023",
+              "to": "2025",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "React",
+                "Redux"
+              ]
+            },
+            {
+              "technologySlug": "redux",
+              "from": "2023",
+              "to": "2025",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "React",
+                "Redux"
+              ]
+            },
+            {
+              "technologySlug": "typescript",
+              "years": 7,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "TypeScript"
+              ]
+            },
+            {
+              "technologySlug": "c-sharp",
+              "from": "2022",
+              "to": "2025",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "C#",
+                ".NET"
+              ]
+            },
+            {
+              "technologySlug": "net",
+              "from": "2022",
+              "to": "2025",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "C#",
+                ".NET"
+              ]
+            },
+            {
+              "technologySlug": "playwright",
+              "years": 3,
+              "when": "end",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "Playwright"
+              ]
+            },
+            {
+              "technologySlug": "java",
+              "from": "2018",
+              "to": "2023",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Java",
+                "Spring Boot"
+              ]
+            },
+            {
+              "technologySlug": "spring-boot",
+              "from": "2018",
+              "to": "2023",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Java",
+                "Spring Boot"
+              ]
+            },
+            {
+              "technologySlug": "selenium",
+              "years": 4,
+              "when": "start",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Selenium",
+                "TestNG"
+              ]
+            },
+            {
+              "technologySlug": "testng",
+              "years": 4,
+              "when": "start",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Selenium",
+                "TestNG"
+              ]
+            },
+            {
+              "technologySlug": "rabbitmq",
+              "years": 2,
+              "when": "end",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "RabbitMQ",
+                "MongoDB"
+              ]
+            },
+            {
+              "technologySlug": "mongodb",
+              "years": 2,
+              "when": "end",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "RabbitMQ",
+                "MongoDB"
+              ]
+            },
+            {
+              "technologySlug": "postgresql",
+              "years": 5,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "PostgreSQL"
+              ]
+            },
+            {
+              "technologySlug": "azure",
+              "years": 4,
+              "when": "end",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Azure",
+                "GitLab",
+                "CI/CD"
+              ]
+            },
+            {
+              "technologySlug": "gitlab",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Azure",
+                "GitLab",
+                "CI/CD"
+              ]
+            },
+            {
+              "technologySlug": "ci-cd",
+              "years": 6,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Azure",
+                "GitLab",
+                "CI/CD"
+              ]
+            },
+            {
+              "technologySlug": "rxjs",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "RxJS"
+              ]
+            },
+            {
+              "technologySlug": "chrome-extension",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Chrome extension"
+              ]
+            },
+            {
+              "technologySlug": "oauth",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "OAuth"
+              ]
+            },
+            {
+              "technologySlug": "scrum",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "SCRUM",
+                "AGILE",
+                "Product Owner"
+              ]
+            },
+            {
+              "technologySlug": "agile",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "SCRUM",
+                "AGILE",
+                "Product Owner"
+              ]
+            },
+            {
+              "technologySlug": "angularjs",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "node-js",
+              "years": 3,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "azure-container-apps",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "javascript",
+              "years": 7,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "html",
+              "years": 7,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "asp-net-core-web-api",
+              "from": "2023",
+              "to": "2025",
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "docker",
+              "years": 3,
+              "when": "end",
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "product",
+              "years": 2,
+              "when": "end",
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "scss",
+              "years": 7,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            }
           ]
         },
         {
@@ -639,32 +2494,7 @@
               "summary": "Responsive React and Next.js campaign sites with animated storytelling UX."
             }
           ],
-          "jobMemories": [
-            {
-              "type": "tech",
-              "text": "React + Redux"
-            },
-            {
-              "type": "code",
-              "text": "Next.js"
-            },
-            {
-              "type": "tech",
-              "text": "Framer Motion + GSAP"
-            },
-            {
-              "type": "code",
-              "text": "Spring Boot API"
-            },
-            {
-              "type": "code",
-              "text": "MySQL + Docker"
-            },
-            {
-              "type": "tech",
-              "text": "AWS + Azure CI/CD"
-            }
-          ],
+          "jobMemories": [],
           "jobTech": [
             {
               "label": "React + Redux",
@@ -731,6 +2561,258 @@
                 "SCSS"
               ]
             }
+          ],
+          "skillsUsed": [
+            {
+              "technologySlug": "react",
+              "years": 3,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "React",
+                "Redux"
+              ]
+            },
+            {
+              "technologySlug": "redux",
+              "years": 3,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "React",
+                "Redux"
+              ]
+            },
+            {
+              "technologySlug": "next-js",
+              "years": 2,
+              "when": "end",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "Next.js"
+              ]
+            },
+            {
+              "technologySlug": "framer-motion",
+              "years": 2,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Framer Motion",
+                "GSAP"
+              ]
+            },
+            {
+              "technologySlug": "gsap",
+              "years": 2,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Framer Motion",
+                "GSAP"
+              ]
+            },
+            {
+              "technologySlug": "java",
+              "years": 2,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Java",
+                "Spring Boot"
+              ]
+            },
+            {
+              "technologySlug": "spring-boot",
+              "years": 2,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "Java",
+                "Spring Boot"
+              ]
+            },
+            {
+              "technologySlug": "mysql",
+              "years": 3,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "MySQL",
+                "Docker"
+              ]
+            },
+            {
+              "technologySlug": "docker",
+              "years": 2,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "MySQL",
+                "Docker"
+              ]
+            },
+            {
+              "technologySlug": "aws",
+              "years": 3,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "AWS",
+                "Azure",
+                "CI/CD"
+              ]
+            },
+            {
+              "technologySlug": "azure",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "AWS",
+                "Azure",
+                "CI/CD"
+              ]
+            },
+            {
+              "technologySlug": "ci-cd",
+              "years": 3,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "AWS",
+                "Azure",
+                "CI/CD"
+              ]
+            },
+            {
+              "technologySlug": "gulp",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Gulp",
+                "Grunt",
+                "Webpack"
+              ]
+            },
+            {
+              "technologySlug": "webpack",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Gulp",
+                "Grunt",
+                "Webpack"
+              ]
+            },
+            {
+              "technologySlug": "php",
+              "years": 1,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "PHP",
+                "WordPress"
+              ]
+            },
+            {
+              "technologySlug": "wordpress",
+              "years": 1,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "PHP",
+                "WordPress"
+              ]
+            },
+            {
+              "technologySlug": "html",
+              "years": 3,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "HTML",
+                "CSS",
+                "SCSS"
+              ]
+            },
+            {
+              "technologySlug": "scss",
+              "years": 3,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "HTML",
+                "CSS",
+                "SCSS"
+              ]
+            },
+            {
+              "technologySlug": "javascript",
+              "years": 3,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            }
           ]
         },
         {
@@ -759,26 +2841,6 @@
           ],
           "projects": [],
           "jobMemories": [
-            {
-              "type": "code",
-              "text": "PHP"
-            },
-            {
-              "type": "code",
-              "text": "JavaScript + jQuery"
-            },
-            {
-              "type": "code",
-              "text": "CakePHP + MySQL"
-            },
-            {
-              "type": "tech",
-              "text": "AWS EC2 + RDS + S3"
-            },
-            {
-              "type": "tech",
-              "text": "Agile Scrum"
-            },
             {
               "type": "memory",
               "text": "Managed marketing microsites"
@@ -842,6 +2904,211 @@
                 "Agile"
               ]
             }
+          ],
+          "skillsUsed": [
+            {
+              "technologySlug": "php",
+              "years": 4,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "PHP"
+              ]
+            },
+            {
+              "technologySlug": "javascript",
+              "years": 4,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "JavaScript",
+                "jQuery"
+              ]
+            },
+            {
+              "technologySlug": "jquery",
+              "years": 4,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "JavaScript",
+                "jQuery"
+              ]
+            },
+            {
+              "technologySlug": "cakephp",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "CakePHP",
+                "MySQL"
+              ]
+            },
+            {
+              "technologySlug": "mysql",
+              "years": 4,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "CakePHP",
+                "MySQL"
+              ]
+            },
+            {
+              "technologySlug": "aws",
+              "years": 2,
+              "when": "end",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "AWS",
+                "EC2",
+                "RDS",
+                "S3"
+              ]
+            },
+            {
+              "technologySlug": "ec2",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "AWS",
+                "EC2",
+                "RDS",
+                "S3"
+              ]
+            },
+            {
+              "technologySlug": "rds",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "AWS",
+                "EC2",
+                "RDS",
+                "S3"
+              ]
+            },
+            {
+              "technologySlug": "s3",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "AWS",
+                "EC2",
+                "RDS",
+                "S3"
+              ]
+            },
+            {
+              "technologySlug": "html",
+              "years": 4,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "HTML",
+                "CSS"
+              ]
+            },
+            {
+              "technologySlug": "css",
+              "years": 4,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "HTML",
+                "CSS"
+              ]
+            },
+            {
+              "technologySlug": "adobe-test-and-target",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Adobe Test & Target"
+              ]
+            },
+            {
+              "technologySlug": "agile",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Scrum",
+                "Agile"
+              ]
+            },
+            {
+              "technologySlug": "scrum",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Scrum",
+                "Agile"
+              ]
+            },
+            {
+              "technologySlug": "wordpress",
+              "years": 2,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "linux",
+              "years": 2,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            }
           ]
         },
         {
@@ -866,19 +3133,15 @@
           "projects": [],
           "jobMemories": [
             {
-              "type": "code",
-              "text": "HTML + CSS + JavaScript"
-            },
-            {
-              "type": "tech",
+              "type": "memory",
               "text": "Financial Web Content"
             },
             {
-              "type": "tech",
+              "type": "memory",
               "text": "Tax Calculators"
             },
             {
-              "type": "tech",
+              "type": "memory",
               "text": "Java Team Integration"
             }
           ],
@@ -902,6 +3165,64 @@
               "highlightMatches": [
                 "tax",
                 "calculators"
+              ]
+            }
+          ],
+          "skillsUsed": [
+            {
+              "technologySlug": "html",
+              "years": 1,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "HTML",
+                "CSS",
+                "JavaScript"
+              ]
+            },
+            {
+              "technologySlug": "css",
+              "years": 1,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "HTML",
+                "CSS",
+                "JavaScript"
+              ]
+            },
+            {
+              "technologySlug": "javascript",
+              "years": 1,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "HTML",
+                "CSS",
+                "JavaScript"
+              ]
+            },
+            {
+              "technologySlug": "java",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Java"
               ]
             }
           ]
@@ -931,24 +3252,12 @@
           "projects": [],
           "jobMemories": [
             {
-              "type": "tech",
+              "type": "memory",
               "text": "Marketing Microsites"
             },
             {
-              "type": "tech",
+              "type": "memory",
               "text": "Email Campaign Engineering"
-            },
-            {
-              "type": "tech",
-              "text": "IBM iStore Ecommerce"
-            },
-            {
-              "type": "tech",
-              "text": "SEO + Analytics"
-            },
-            {
-              "type": "code",
-              "text": "Cross-browser CSS"
             }
           ],
           "jobTech": [
@@ -988,6 +3297,78 @@
                 "Marketing"
               ]
             }
+          ],
+          "skillsUsed": [
+            {
+              "technologySlug": "html-email",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "HTML Emails",
+                "Email"
+              ]
+            },
+            {
+              "technologySlug": "seo",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "SEO",
+                "Google Analytics",
+                "search engine"
+              ]
+            },
+            {
+              "technologySlug": "analytics",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "SEO",
+                "Google Analytics",
+                "search engine"
+              ]
+            },
+            {
+              "technologySlug": "css",
+              "years": 3,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "CSS",
+                "cross browser"
+              ]
+            },
+            {
+              "technologySlug": "shopsite",
+              "years": 3,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "javascript",
+              "years": 2,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            }
           ]
         },
         {
@@ -1011,14 +3392,6 @@
           ],
           "projects": [],
           "jobMemories": [
-            {
-              "type": "code",
-              "text": "HTML + CSS + PHP"
-            },
-            {
-              "type": "tech",
-              "text": "LAMP Stack Deployment"
-            },
             {
               "type": "memory",
               "text": "Data Center Operations"
@@ -1047,6 +3420,88 @@
                 "server",
                 "hardware"
               ]
+            }
+          ],
+          "skillsUsed": [
+            {
+              "technologySlug": "html",
+              "years": 1,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "HTML",
+                "CSS",
+                "PHP"
+              ]
+            },
+            {
+              "technologySlug": "css",
+              "years": 1,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "HTML",
+                "CSS",
+                "PHP"
+              ]
+            },
+            {
+              "technologySlug": "php",
+              "years": 1,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "HTML",
+                "CSS",
+                "PHP"
+              ]
+            },
+            {
+              "technologySlug": "lamp",
+              "years": 1,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "LAMP",
+                "Linux"
+              ]
+            },
+            {
+              "technologySlug": "data-center-operations",
+              "years": 1,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "data center",
+                "server",
+                "hardware"
+              ]
+            },
+            {
+              "technologySlug": "mysql",
+              "years": 1,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
             }
           ]
         },
@@ -1095,16 +3550,9 @@
               "text": "Client Solutions End-to-End"
             },
             {
-              "type": "code",
-              "text": "Drupal + WordPress"
-            },
-            {
-              "type": "code",
-              "text": "PHP Workflows"
-            },
-            {
-              "type": "tech",
-              "text": "Ecommerce Integrations"
+              "type": "memory",
+              "text": "PHP Workflows",
+              "style": "code"
             },
             {
               "type": "memory",
@@ -1157,6 +3605,146 @@
                 "Dreamweaver"
               ]
             }
+          ],
+          "skillsUsed": [
+            {
+              "technologySlug": "php",
+              "years": 8,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "PHP"
+              ]
+            },
+            {
+              "technologySlug": "drupal",
+              "years": 6,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "Drupal",
+                "WordPress",
+                "CMS"
+              ]
+            },
+            {
+              "technologySlug": "wordpress",
+              "years": 6,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "style": "code",
+              "highlightMatches": [
+                "Drupal",
+                "WordPress",
+                "CMS"
+              ]
+            },
+            {
+              "technologySlug": "flash",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Flash",
+                "HTML"
+              ]
+            },
+            {
+              "technologySlug": "html",
+              "years": 10,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Flash",
+                "HTML"
+              ]
+            },
+            {
+              "technologySlug": "e-commerce",
+              "years": 6,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "ShopSite",
+                "e-commerce",
+                "shopping cart"
+              ]
+            },
+            {
+              "technologySlug": "shopsite",
+              "years": 6,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "ShopSite",
+                "e-commerce",
+                "shopping cart"
+              ]
+            },
+            {
+              "technologySlug": "dreamweaver",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Dreamweaver"
+              ]
+            },
+            {
+              "technologySlug": "javascript",
+              "years": 8,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "mysql",
+              "years": 8,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "linux",
+              "years": 6,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "client-delivery",
+              "years": 10,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            }
           ]
         },
         {
@@ -1183,12 +3771,9 @@
           "projects": [],
           "jobMemories": [
             {
-              "type": "tech",
-              "text": "Shared + Dedicated Hosting"
-            },
-            {
-              "type": "code",
-              "text": "First Client Websites"
+              "type": "memory",
+              "text": "First Client Websites",
+              "style": "code"
             },
             {
               "type": "memory",
@@ -1220,6 +3805,110 @@
                 "website"
               ]
             }
+          ],
+          "skillsUsed": [
+            {
+              "technologySlug": "web-hosting",
+              "years": 3,
+              "when": "end",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "hosting",
+                "ecommerce",
+                "dedicated"
+              ]
+            },
+            {
+              "technologySlug": "e-commerce",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "hosting",
+                "ecommerce",
+                "dedicated"
+              ]
+            },
+            {
+              "technologySlug": "dns",
+              "years": 4,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "DNS",
+                "domain",
+                "registration"
+              ]
+            },
+            {
+              "technologySlug": "domains",
+              "years": 4,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "DNS",
+                "domain",
+                "registration"
+              ]
+            },
+            {
+              "technologySlug": "html",
+              "years": 3,
+              "when": "end",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "HTML",
+                "CSS",
+                "website"
+              ]
+            },
+            {
+              "technologySlug": "css",
+              "years": 3,
+              "when": "end",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "HTML",
+                "CSS",
+                "website"
+              ]
+            },
+            {
+              "technologySlug": "sales",
+              "years": 4,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            },
+            {
+              "technologySlug": "client-delivery",
+              "years": 3,
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
+            }
           ]
         },
         {
@@ -1246,16 +3935,13 @@
           "projects": [],
           "jobMemories": [
             {
-              "type": "tech",
-              "text": "Dial-up + ISDN"
-            },
-            {
               "type": "memory",
               "text": "18,000+ Calls"
             },
             {
-              "type": "code",
-              "text": "Modem + Browser Config"
+              "type": "memory",
+              "text": "Modem + Browser Config",
+              "style": "code"
             }
           ],
           "jobTech": [
@@ -1282,6 +3968,61 @@
                 "email",
                 "browser"
               ]
+            }
+          ],
+          "skillsUsed": [
+            {
+              "technologySlug": "dial-up",
+              "years": 2,
+              "when": "start",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "dial-up",
+                "ISDN",
+                "modem"
+              ]
+            },
+            {
+              "technologySlug": "isdn",
+              "years": 2,
+              "when": "start",
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "dial-up",
+                "ISDN",
+                "modem"
+              ]
+            },
+            {
+              "technologySlug": "desktop-support",
+              "years": 3,
+              "surfaces": [
+                "moonLabel",
+                "flyBy",
+                "filmDestination"
+              ],
+              "highlightMatches": [
+                "Windows",
+                "Mac",
+                "support"
+              ]
+            },
+            {
+              "technologySlug": "sales",
+              "years": 2,
+              "when": "end",
+              "surfaces": [
+                "filmDestination"
+              ],
+              "highlightMatches": []
             }
           ]
         }
@@ -1454,6 +4195,18 @@
             "Selenium/Java",
             "TestNG"
           ],
+          "technologySlugs": [
+            "net",
+            "c-sharp",
+            "winforms",
+            "java",
+            "selenium",
+            "testng",
+            "ci-cd",
+            "docker",
+            "gitlab",
+            "product"
+          ],
           "year": 2018,
           "fit": "contain",
           "galleryMedia": [
@@ -1533,6 +4286,18 @@
             "HTML",
             "CSS"
           ],
+          "technologySlugs": [
+            "javascript",
+            "typescript",
+            "html",
+            "css",
+            "product",
+            "angular",
+            "webpack",
+            "scss",
+            "rest-apis",
+            "chrome-extension"
+          ],
           "year": 2019,
           "fit": "contain",
           "galleryMedia": [
@@ -1599,6 +4364,22 @@
             "TypeScript",
             "HTML",
             "CSS"
+          ],
+          "technologySlugs": [
+            "net",
+            "c-sharp",
+            "asp-net-core-web-api",
+            "angular",
+            "playwright",
+            "javascript",
+            "typescript",
+            "html",
+            "css",
+            "azure",
+            "product",
+            "analytics",
+            "oauth",
+            "mongodb"
           ],
           "year": 2024,
           "fit": "contain",
@@ -1736,6 +4517,21 @@
             "Docker",
             "CI/CD"
           ],
+          "technologySlugs": [
+            "react",
+            "java",
+            "postgresql",
+            "docker",
+            "ci-cd",
+            "html",
+            "redux",
+            "scss",
+            "framer-motion",
+            "rest-apis",
+            "spring-boot",
+            "azure",
+            "semantic-html"
+          ],
           "year": 2025,
           "fit": "contain",
           "galleryMedia": [
@@ -1837,6 +4633,11 @@
             "HTML",
             "CSS",
             "JavaScript"
+          ],
+          "technologySlugs": [
+            "html",
+            "css",
+            "javascript"
           ],
           "year": 2006,
           "fit": "cover",
@@ -1952,6 +4753,11 @@
             "Java",
             "Spring Boot"
           ],
+          "technologySlugs": [
+            "framer-motion",
+            "gsap",
+            "semantic-html"
+          ],
           "year": 2016,
           "fit": "cover",
           "galleryMedia": [
@@ -2013,6 +4819,21 @@
             "React",
             "Azure"
           ],
+          "technologySlugs": [
+            "react",
+            "azure",
+            "html",
+            "typescript",
+            "next-js",
+            "scss",
+            "rest-apis",
+            "gsap",
+            "client-delivery",
+            "seo",
+            "express-js",
+            "openapi-swagger",
+            "mysql"
+          ],
           "year": 2026,
           "fit": "cover",
           "galleryMedia": [
@@ -2046,6 +4867,15 @@
             "GSAP",
             "Java",
             "Spring Boot"
+          ],
+          "technologySlugs": [
+            "react",
+            "redux",
+            "next-js",
+            "framer-motion",
+            "gsap",
+            "java",
+            "spring-boot"
           ],
           "year": 2016,
           "fit": "cover",
@@ -2097,6 +4927,16 @@
             "Java",
             "Spring Boot"
           ],
+          "technologySlugs": [
+            "react",
+            "redux",
+            "next-js",
+            "framer-motion",
+            "gsap",
+            "java",
+            "spring-boot",
+            "semantic-html"
+          ],
           "year": 2016,
           "fit": "cover",
           "galleryMedia": [
@@ -2138,6 +4978,17 @@
             "GSAP",
             "Java",
             "Spring Boot"
+          ],
+          "technologySlugs": [
+            "framer-motion",
+            "gsap",
+            "wordpress",
+            "asp-net-core-web-api",
+            "css",
+            "bootstrap",
+            "webpack",
+            "jquery",
+            "semantic-html"
           ],
           "year": 2017,
           "fit": "cover",
@@ -2187,6 +5038,15 @@
             "CSS",
             "REST APIs"
           ],
+          "technologySlugs": [
+            "javascript",
+            "html",
+            "css",
+            "rest-apis",
+            "jquery",
+            "php",
+            "bootstrap"
+          ],
           "year": 2011,
           "fit": "cover",
           "galleryMedia": [
@@ -2219,6 +5079,13 @@
             "css",
             "javascript"
           ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript"
+          ],
           "year": null,
           "fit": "cover",
           "galleryMedia": [],
@@ -2229,6 +5096,13 @@
               "mediaId": "6aa9cb492b8a773842005873",
               "description": "Equipment reseller storefront and product catalog presentation.",
               "technologies": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript"
+              ],
+              "technologySlugs": [
                 "php",
                 "mysql",
                 "html",
@@ -2276,6 +5150,13 @@
                 "css",
                 "javascript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript"
+              ],
               "year": 2006,
               "fit": "cover",
               "galleryMedia": [
@@ -2295,6 +5176,13 @@
               "mediaId": "6aa9cb492b8a773842005879",
               "description": "Financial Equipment is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
               "technologies": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript"
+              ],
+              "technologySlugs": [
                 "php",
                 "mysql",
                 "html",
@@ -2333,6 +5221,14 @@
                 "HTML",
                 "CSS",
                 "JavaScript"
+              ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
               ],
               "year": 2003,
               "fit": "cover",
@@ -2375,6 +5271,14 @@
             "css",
             "javascript"
           ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript",
+            "flash"
+          ],
           "year": null,
           "fit": "cover",
           "galleryMedia": [],
@@ -2390,6 +5294,14 @@
                 "html",
                 "css",
                 "javascript"
+              ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
               ],
               "year": 2003,
               "fit": "cover",
@@ -2424,6 +5336,14 @@
                 "css",
                 "javascript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
+              ],
               "year": 2003,
               "fit": "cover",
               "galleryMedia": [
@@ -2448,6 +5368,14 @@
                 "HTML",
                 "CSS",
                 "JavaScript"
+              ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
               ],
               "year": 2002,
               "fit": "cover",
@@ -2530,6 +5458,14 @@
                 "CSS",
                 "JavaScript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
+              ],
               "year": 2003,
               "fit": "cover",
               "galleryMedia": [
@@ -2563,6 +5499,14 @@
                 "CSS",
                 "JavaScript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
+              ],
               "year": null,
               "fit": "cover",
               "galleryMedia": [
@@ -2593,6 +5537,12 @@
                 "HTML",
                 "CSS",
                 "JavaScript",
+                "flash"
+              ],
+              "technologySlugs": [
+                "html",
+                "css",
+                "javascript",
                 "flash"
               ],
               "year": 2005,
@@ -2628,6 +5578,14 @@
             "css",
             "javascript"
           ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript",
+            "flash"
+          ],
           "year": null,
           "fit": "cover",
           "galleryMedia": [],
@@ -2638,6 +5596,13 @@
               "mediaId": "6aa9cb492b8a773842005895",
               "description": "Ardy for Clerk is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
               "technologies": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript"
+              ],
+              "technologySlugs": [
                 "php",
                 "mysql",
                 "html",
@@ -2685,6 +5650,13 @@
                 "css",
                 "javascript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript"
+              ],
               "year": 2003,
               "fit": "cover",
               "galleryMedia": [
@@ -2712,6 +5684,13 @@
               "mediaId": "6aa9cb492b8a77384200589c",
               "description": "Paul Krekorian for Congress is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
               "technologies": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript"
+              ],
+              "technologySlugs": [
                 "php",
                 "mysql",
                 "html",
@@ -2751,6 +5730,13 @@
                 "css",
                 "javascript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript"
+              ],
               "year": 2005,
               "fit": "cover",
               "galleryMedia": []
@@ -2775,6 +5761,14 @@
             "css",
             "javascript"
           ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript",
+            "flash"
+          ],
           "year": null,
           "fit": "cover",
           "galleryMedia": [],
@@ -2790,6 +5784,14 @@
                 "html",
                 "css",
                 "javascript"
+              ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
               ],
               "year": 2005,
               "fit": "cover",
@@ -2856,6 +5858,14 @@
                 "css",
                 "javascript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
+              ],
               "year": 2005,
               "fit": "cover",
               "galleryMedia": [
@@ -2889,6 +5899,14 @@
                 "css",
                 "javascript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
+              ],
               "year": 2005,
               "fit": "cover",
               "galleryMedia": [
@@ -2913,6 +5931,14 @@
                 "html",
                 "css",
                 "javascript"
+              ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
               ],
               "year": 2005,
               "fit": "cover",
@@ -2946,6 +5972,14 @@
                 "html",
                 "css",
                 "javascript"
+              ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
               ],
               "year": 2005,
               "fit": "cover",
@@ -2996,6 +6030,13 @@
                 "css",
                 "javascript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript"
+              ],
               "year": 2006,
               "fit": "cover",
               "galleryMedia": [
@@ -3020,6 +6061,14 @@
                 "html",
                 "css",
                 "javascript"
+              ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
               ],
               "year": 2006,
               "fit": "cover",
@@ -3054,6 +6103,13 @@
             "css",
             "javascript"
           ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript"
+          ],
           "year": null,
           "fit": "cover",
           "galleryMedia": [],
@@ -3069,6 +6125,14 @@
                 "html",
                 "css",
                 "javascript"
+              ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
               ],
               "year": 2003,
               "fit": "cover",
@@ -3103,6 +6167,14 @@
                 "css",
                 "javascript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "jquery"
+              ],
               "year": 2011,
               "fit": "cover",
               "galleryMedia": [
@@ -3135,6 +6207,14 @@
                 "HTML",
                 "CSS",
                 "JavaScript"
+              ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
               ],
               "year": null,
               "fit": "cover",
@@ -3185,6 +6265,13 @@
             "css",
             "javascript"
           ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript"
+          ],
           "year": 2005,
           "fit": "cover",
           "galleryMedia": [],
@@ -3200,6 +6287,14 @@
                 "HTML",
                 "CSS",
                 "JavaScript"
+              ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript",
+                "flash"
               ],
               "year": null,
               "fit": "cover",
@@ -3234,6 +6329,13 @@
                 "CSS",
                 "JavaScript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript"
+              ],
               "year": null,
               "fit": "cover",
               "galleryMedia": [
@@ -3267,6 +6369,13 @@
                 "CSS",
                 "JavaScript"
               ],
+              "technologySlugs": [
+                "php",
+                "mysql",
+                "html",
+                "css",
+                "javascript"
+              ],
               "year": null,
               "fit": "cover",
               "galleryMedia": [
@@ -3294,6 +6403,13 @@
           "mediaId": "6aa9cb492b8a7738420058ca",
           "description": "BWVideo Productions is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
           "technologies": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript"
+          ],
+          "technologySlugs": [
             "php",
             "mysql",
             "html",
@@ -3339,6 +6455,14 @@
             "html",
             "css",
             "javascript"
+          ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript",
+            "flash"
           ],
           "year": 2003,
           "fit": "cover",
@@ -3386,6 +6510,11 @@
             "css",
             "javascript"
           ],
+          "technologySlugs": [
+            "html",
+            "css",
+            "javascript"
+          ],
           "year": 1999,
           "fit": "cover",
           "galleryMedia": [
@@ -3426,6 +6555,13 @@
             "css",
             "javascript"
           ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript"
+          ],
           "year": 2002,
           "fit": "cover",
           "galleryMedia": [
@@ -3457,6 +6593,14 @@
             "html",
             "css",
             "javascript"
+          ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript",
+            "flash"
           ],
           "year": null,
           "fit": "cover",
@@ -3600,6 +6744,11 @@
             "css",
             "javascript"
           ],
+          "technologySlugs": [
+            "html",
+            "css",
+            "javascript"
+          ],
           "year": 1999,
           "fit": "cover",
           "galleryMedia": [
@@ -3648,6 +6797,13 @@
             "CSS",
             "JavaScript"
           ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript"
+          ],
           "year": null,
           "fit": "cover",
           "galleryMedia": [
@@ -3688,6 +6844,13 @@
             "CSS",
             "JavaScript"
           ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript"
+          ],
           "year": null,
           "fit": "cover",
           "galleryMedia": [
@@ -3720,6 +6883,13 @@
             "CSS",
             "JavaScript"
           ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript"
+          ],
           "year": null,
           "fit": "cover",
           "galleryMedia": [],
@@ -3742,6 +6912,13 @@
             "HTML",
             "CSS",
             "JavaScript"
+          ],
+          "technologySlugs": [
+            "php",
+            "mysql",
+            "html",
+            "css",
+            "javascript"
           ],
           "year": null,
           "fit": "cover",

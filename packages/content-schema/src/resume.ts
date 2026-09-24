@@ -47,19 +47,6 @@ export const linkSchema = z.object({
   url: httpUrlSchema,
 });
 
-export const skillCategorySchema = z.object({
-  slug: slugSchema,
-  sortOrder: sortOrderSchema,
-  name: text(100),
-});
-
-export const skillSchema = z.object({
-  slug: slugSchema,
-  sortOrder: sortOrderSchema,
-  categorySlug: slugSchema,
-  name: text(100),
-});
-
 export const positionSchema = z.object({
   title: text(200),
   startDate: yearMonthSchema.optional(),
@@ -171,8 +158,6 @@ export type ResumeSkills = z.infer<typeof resumeSkillsSchema>;
 export type Education = z.infer<typeof educationSchema>;
 export type Certification = z.infer<typeof certificationSchema>;
 export type Link = z.infer<typeof linkSchema>;
-export type SkillCategory = z.infer<typeof skillCategorySchema>;
-export type Skill = z.infer<typeof skillSchema>;
 export type Experience = z.infer<typeof experienceSchema>;
 export type SkillUse = z.infer<typeof skillUseSchema>;
 export type SkillUseSurface = z.infer<typeof skillUseSurfaceSchema>;

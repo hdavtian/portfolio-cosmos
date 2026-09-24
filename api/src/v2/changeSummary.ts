@@ -38,9 +38,6 @@ const field =
 
 const COLLECTIONS: Record<string, CollectionWording> = {
   experiences: { singular: "job", plural: "jobs", label: field("company") },
-  skills: { singular: "skill", plural: "skills", label: field("name") },
-  skillCategories: { singular: "skill category", plural: "skill categories", label: field("name") },
-  techStackNodes: { singular: "tech stack node", plural: "tech stack nodes", label: field("name") },
   technologies: { singular: "technology", plural: "technologies", label: field("name") },
   education: { singular: "education entry", plural: "education entries", label: field("institution") },
   certifications: { singular: "certification", plural: "certifications", label: field("name") },

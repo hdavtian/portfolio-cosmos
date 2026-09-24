@@ -1,6 +1,5 @@
 import { resumeSkillLines } from "@hd/content-schema/technology-tree";
 import type { Release } from "../../lib/api/release";
-import mock from "../../data/mock/skillTimeline.json";
 
 /**
  * Turns a skill timeline into spans on the calendar, so every view - the
@@ -8,10 +7,8 @@ import mock from "../../data/mock/skillTimeline.json";
  * the same numbers. The rules match scripts/skills-report.mjs: exact years
  * win, then placement inside the job, then "assume it overlapped".
  *
- * The timeline comes from the published release (the master list, and each
- * job's skill uses with their years); a release from before the list, or one
- * whose jobs carry no uses yet, falls back to the mock so the film still
- * plays.
+ * The timeline comes from the published release: the master list, and each
+ * job's skill uses with their years.
  */
 
 export interface SkillSpan {
@@ -260,30 +257,6 @@ export function towersAt(
 
 export type SkillsData = ReturnType<typeof computeSkillsData>;
 
-const yearOfIso = (value: string | null | undefined, fallback: number) =>
-  value ? Number(value.split("-")[0]) + (Number(value.split("-")[1]) - 1) / 12 : fallback;
-
-let mockData: SkillsData | null = null;
-
-/** The film's own timeline, kept as the fallback until every release carries the uses. */
-export function skillsDataFromMock(): SkillsData {
-  if (mockData) return mockData;
-  mockData = computeSkillsData({
-    categories: mock.categories as Category[],
-    skills: mock.skills as SkillDefinition[],
-    places: mock.jobs.map((job) => ({
-      slug: job.slug,
-      name: job.company,
-      short: job.company.split(/[ (]/)[0],
-      title: (job as { title?: string }).title ?? "",
-      from: yearOfIso(job.start, 2000),
-      to: yearOfIso(job.end, NOW_YEAR),
-    })),
-    uses: mock.jobs.flatMap((job) => job.uses.map((use) => ({ ...use, place: job.slug }))) as RawUse[],
-  });
-  return mockData;
-}
-
 /** "YYYY" or "MM/YYYY" (the schema's job and skill dates) as a fractional year. */
 const yearOf = (value: string | undefined, fallback: number) => {
   if (!value) return fallback;
@@ -316,7 +289,6 @@ export function skillsDataFromRelease(release: Release): SkillsData {
         to: use.to ? yearOf(use.to, 0) : undefined,
       })),
   );
-  if (technologies.length === 0 || uses.length === 0) return skillsDataFromMock();
 
   const bySlug = new Map(technologies.map((record) => [record.slug, record]));
   const ordered = [...technologies].sort((a, b) => a.sortOrder - b.sortOrder);

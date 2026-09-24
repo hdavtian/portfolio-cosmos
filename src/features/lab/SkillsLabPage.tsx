@@ -1,13 +1,17 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 import { useReleaseQuery } from "../../lib/query/contentQueries";
-import { say, skillsDataFromMock, skillsDataFromRelease, type SkillsData } from "./skillsData";
+import { say, skillsDataFromRelease, type SkillsData } from "./skillsData";
 import "./skillsLab.css";
 
 // Every panel reads the one timeline through this; the page remounts when the
 // timeline changes, so no panel's memo holds an older one.
-const SkillsDataContext = createContext<SkillsData>(skillsDataFromMock());
-const useSkillsData = () => useContext(SkillsDataContext);
+const SkillsDataContext = createContext<SkillsData | null>(null);
+const useSkillsData = () => {
+  const data = useContext(SkillsDataContext);
+  if (!data) throw new Error("SkillsLab panels render inside the provider only");
+  return data;
+};
 
 /**
  * Sketches for showing how long each skill has been in play. Not wired into
@@ -15,10 +19,10 @@ const useSkillsData = () => useContext(SkillsDataContext);
  * shapes can be judged before anything is built for real.
  */
 export function SkillsLabPage() {
-  const release = useReleaseQuery((content) => skillsDataFromRelease(content)).data;
-  const data = release ?? skillsDataFromMock();
+  const data = useReleaseQuery((content) => skillsDataFromRelease(content)).data;
+  if (!data) return <p className="lab__lede">Loading the timeline…</p>;
   return (
-    <SkillsDataContext.Provider value={data} key={data === skillsDataFromMock() ? "mock" : "release"}>
+    <SkillsDataContext.Provider value={data} key={data.LAST_YEAR}>
       <SkillsLab />
     </SkillsDataContext.Provider>
   );
