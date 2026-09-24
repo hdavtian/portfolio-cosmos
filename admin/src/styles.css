@@ -490,6 +490,12 @@ body {
 /* "Into": Syncfusion marks the target's cells (not the row) mid-drag, so the
    cells are what carry the box - 4px top and bottom on every cell, the left
    and right edges on the first and last, so it reads as one thick outline. */
+/* Heading rows of the technologies tree read as headings, not skills. */
+.e-treegrid tr.admin-tree-heading > td.e-rowcell {
+  background: #f1f4f8;
+  font-weight: 600;
+}
+
 .e-treegrid td.e-childborder,
 .e-treegrid tr.e-childborder > td {
   background: #dce9fb !important;

@@ -117,13 +117,19 @@ nobody asked for, silently.
   reading live state through a ref). A new function each render makes the
   grid rebuild every cell, which re-renders React, which makes new functions:
   with five checkbox templates a row the page froze on the first click.
-- Live tick columns (a click saves that record, no edit mode) are a
-  `CheckBoxComponent` template that PUTs with the record's version and updates
-  the query cache first; guard `change` with `event.event` so a re-render does
-  not save. Never disable the box through React state: the grid re-renders a
-  cell only when its row data changes, so a box rendered disabled stays
-  disabled (a second click did nothing). Track the in-flight save in a ref and
-  ignore a click while it is out.
+- In-place ticks use Syncfusion **batch editing** (`editSettings` mode
+  `Batch`, `Edit` inject, toolbar `Update`/`Cancel`, `showConfirmDialog`
+  false with the status line reporting): changes are visible pending cells,
+  written only on Update, reverted by Cancel. `beforeBatchSave` gets
+  `batchChanges.changedRecords`; PUT each with its version, then refetch.
+  Batch mode opens a cell on double-click; for a tick column, a click handler
+  on the wrapper does `editCell` -> click `.e-frame` -> `saveCell` so one
+  click flips it. Keep `recordDoubleClick` off tick columns. Refuse a row drop
+  while `getBatchChanges().changedRecords` is non-empty (a drop reloads).
+  Plain boolean columns (`displayAsCheckBox`, `editType="booleanedit"`), no
+  templates. Do not build live-save checkbox templates: they saved once and
+  then stayed disabled, and new template functions per render froze the page.
+- Tree row styling by kind: `rowDataBound` adds a class; style it in CSS.
 - Row actions use Syncfusion buttons with Syncfusion class tokens (`e-small`,
   `e-outline`, `e-flat`, `e-primary`), never project button classes.
 - Add/edit overlays follow the `syncfusion-edit-dialogs` skill.

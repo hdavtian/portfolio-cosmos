@@ -1,9 +1,10 @@
 import type { Technology } from "@hd/content-schema";
-import { ButtonComponent, CheckBoxComponent } from "@syncfusion/ej2-react-buttons";
+import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import {
   ColumnChooser,
   ColumnDirective,
   ColumnsDirective,
+  Edit,
   Filter,
   Inject,
   Sort,
@@ -47,9 +48,10 @@ type TreeRow = {
 };
 
 // The tick columns, and the record field each one writes (D20/D27). They are
-// live checkboxes: a click saves that one record straight away, the way a
-// drop saves a move, so a curation pass is a run of clicks down a column
-// rather than open, tick, save, back for every row.
+// edited in place, spreadsheet-style (Syncfusion batch editing): a click makes
+// a box live, changed cells are marked, and nothing is written until Update
+// in the toolbar; Cancel reverts every pending change. A stray click is a
+// visible pending change, not a save.
 type TickField = "current" | "lattice" | "resume" | "film" | "filters";
 const TICKS: Array<{ field: TickField; headerText: string; width: number; surface?: Technology["surfaces"][number] }> = [
   { field: "current", headerText: "Current", width: 100 },
@@ -60,7 +62,9 @@ const TICKS: Array<{ field: TickField; headerText: string; width: number; surfac
 ];
 
 // Constants handed to Syncfusion, so re-renders never refresh the grid.
-const TOOLBAR = ["Search", "ExpandAll", "CollapseAll", "ColumnChooser"];
+const TOOLBAR = ["Update", "Cancel", "Search", "ExpandAll", "CollapseAll", "ColumnChooser"];
+// No confirm pop-ups on Update or Cancel: the status line reports the result.
+const EDIT_SETTINGS = { allowEditing: true, mode: "Batch" as const, showConfirmDialog: false };
 const SEARCH_SETTINGS = { fields: ["name", "slug", "aliases"] };
 const SELECTION = { type: "Single" as const };
 // Excel-style filter menus: a checkbox column filters to ticked or unticked.
@@ -172,6 +176,12 @@ export function TechnologiesPage() {
       status.failure("Clear the sorting, filter or search before dragging: the tree must be in its saved order.");
       return;
     }
+    // A drop reloads the tree from what is saved, which would drop ticks
+    // still waiting for Update.
+    if (pendingTicks().length > 0) {
+      status.failure("Update or Cancel your ticked changes before dragging.");
+      return;
+    }
     const dragged = args.data?.[0];
     const target = gridRef.current?.getCurrentViewRecords()[args.dropIndex ?? -1] as TreeRow | undefined;
     if (!dragged || !target || dragged.slug === target.slug || saving) return;
@@ -240,62 +250,73 @@ export function TechnologiesPage() {
    * Row actions belong in the row: a long tree makes "select, then scroll back
    * to the top" a poor way to reach Edit.
    */
-  // One record, one field, one PUT. The list in the query cache is updated
-  // first so the box shows its new state at once; the version travels with
-  // the body, so a row changed elsewhere since it loaded is refused (409)
-  // rather than overwritten, and the list is refetched either way. A box
-  // whose save is still out ignores a second click; it is not disabled in
-  // React state, because the grid re-renders a cell only when its row data
-  // changes, and a box once rendered disabled stayed that way.
-  const ticking = useRef(new Set<string>());
-  const saveTick = (slug: string, tick: (typeof TICKS)[number], checked: boolean) => {
-    const record = items.find((item) => item.slug === slug);
-    const key = `${slug}:${tick.field}`;
-    if (!record || ticking.current.has(key)) return;
-    ticking.current.add(key);
-    const surfaces = record.surfaces ?? [];
-    const content: Technology = tick.surface
-      ? {
-          ...withoutMeta(record),
-          surfaces: checked ? [...surfaces, tick.surface] : surfaces.filter((surface) => surface !== tick.surface),
-        }
-      : { ...withoutMeta(record), current: checked };
-    queryClient.setQueryData<NodeRecord[]>([ENTITY, "all"], (previous) =>
-      previous?.map((item) => (item.slug === slug ? { ...item, ...content } : item)),
-    );
+  const pendingTicks = () => {
+    const changes = gridRef.current?.getBatchChanges() as { changedRecords?: TreeRow[] } | undefined;
+    return changes?.changedRecords ?? [];
+  };
+
+  // Update in the toolbar: one PUT per changed record, carrying its version,
+  // so a row changed elsewhere since it loaded is refused (409) rather than
+  // overwritten. The grid applies the changes to its own rows meanwhile; the
+  // list is refetched afterwards either way, so what shows is what was saved.
+  const saveTicks = (args: { batchChanges?: { changedRecords?: TreeRow[] }; cancel?: boolean }) => {
+    const changed = args.batchChanges?.changedRecords ?? [];
+    if (changed.length === 0) return;
+    setSaving(true);
     void (async () => {
-      try {
-        await api.put(`/api/v2/admin/${ENTITY}/${slug}`, { ...content, version: record.version });
-        status.success(`${checked ? "Ticked" : "Unticked"} ${tick.headerText} for "${record.name}". Publish to show it on the sites.`);
-      } catch (error) {
-        status.error(error, `Could not save ${tick.headerText} for "${record.name}".`);
-      } finally {
-        ticking.current.delete(key);
-        void refresh();
+      const failed: string[] = [];
+      let firstError: unknown;
+      for (const row of changed) {
+        const record = items.find((item) => item.slug === row.slug);
+        if (!record) continue;
+        const surfaces = TICKS.flatMap((tick) => (tick.surface && row[tick.field] ? [tick.surface] : []));
+        try {
+          await api.put(`/api/v2/admin/${ENTITY}/${record.slug}`, {
+            ...withoutMeta(record),
+            current: row.current,
+            surfaces,
+            version: record.version,
+          });
+        } catch (error) {
+          failed.push(record.name);
+          firstError ??= error;
+        }
       }
+      const saved = changed.length - failed.length;
+      if (failed.length === 0) {
+        status.success(`Saved ${saved} ${saved === 1 ? "row" : "rows"}. Publish to show it on the sites.`);
+      } else {
+        status.error(firstError, `Saved ${saved} of ${changed.length}; could not save ${failed.join(", ")}.`);
+      }
+      setSaving(false);
+      void refresh();
     })();
   };
 
-  // The templates are created once. A new template function on every render
-  // makes the grid rebuild all its cells (five checkboxes a row), which
-  // re-renders React, which makes new templates: the page froze on the first
-  // tick. They read the current state and handlers through a ref instead.
-  const latest = useRef({ saveTick, items, confirmDelete });
-  latest.current = { saveTick, items, confirmDelete };
-  const tickTemplates = useMemo(
-    () =>
-      TICKS.map((tick) => (row: TreeRow) => (
-        <CheckBoxComponent
-          checked={row[tick.field]}
-          change={(event: { checked: boolean; event?: Event }) => {
-            // Only a click or key press saves; the control also raises change
-            // when the grid re-renders it with a new value.
-            if (event.event) latest.current.saveTick(row.slug, tick, event.checked);
-          }}
-        />
-      )),
-    [],
-  );
+  // Batch editing opens a cell on double-click. For a tick that is two
+  // gestures too many (and double-click opens the editor here), so one click
+  // on a tick cell opens it, flips it and closes it: a pending change, shown
+  // as such, saved by Update. Other cells are untouched.
+  const TICK_FIELDS = new Set<string>(TICKS.map((tick) => tick.field));
+  const clickTick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const grid = gridRef.current;
+    const cell = (event.target as HTMLElement).closest("td.e-rowcell");
+    if (!grid || !cell || cell.classList.contains("e-editedbatchcell")) return;
+    const info = grid.grid.getRowInfo(cell as HTMLElement) as { rowIndex?: number; column?: { field?: string } };
+    const field = info.column?.field;
+    if (info.rowIndex === undefined || !field || !TICK_FIELDS.has(field)) return;
+    grid.editCell(info.rowIndex, field);
+    (cell.querySelector(".e-frame") as HTMLElement | null)?.click();
+    grid.saveCell();
+  };
+
+  // Headings read as headings: a class on the row, styled in styles.css.
+  const rowDataBound = (args: { data?: TreeRow; row?: Element }) => {
+    if (args.data?.kind === "Heading") args.row?.classList.add("admin-tree-heading");
+  };
+
+  const latest = useRef({ items, confirmDelete });
+  latest.current = { items, confirmDelete };
 
   const actionsTemplate = useMemo(
     () => (row: TreeRow) => {
@@ -330,7 +351,9 @@ export function TechnologiesPage() {
             The one list of technologies. A job&apos;s skills and a project&apos;s tags point at an entry here, so a
             name is typed once and corrected once. <strong>Headings</strong> organise the tree and are not skills
             anyone claims; <strong>Shown in</strong> is where an entry may appear. Drag a row onto another to nest it, or above or below a row to
-            reorder; each drop saves immediately, and so does each tick in the Current and Shown in columns.
+            reorder; each drop saves immediately. Ticks in the Current and Shown in columns are edited in place: click a box
+            to change it, and press <strong>Update</strong> to save every changed row, or <strong>Cancel</strong> to
+            discard them.
           </p>
         </div>
         <ButtonComponent cssClass="e-primary e-outline" onClick={() => navigate(`/${ENTITY}/new`)}>
@@ -351,7 +374,7 @@ export function TechnologiesPage() {
 
       {list.isLoading ? <p className="admin-status">Loading…</p> : null}
       {list.items ? (
-        <div className="admin-grid-wrap">
+        <div className="admin-grid-wrap" onClick={clickTick}>
           <TreeGridComponent
             ref={gridRef}
             dataSource={rows}
@@ -371,25 +394,29 @@ export function TechnologiesPage() {
             searchSettings={SEARCH_SETTINGS}
             filterSettings={FILTER_SETTINGS}
             gridLines="Horizontal"
+            editSettings={EDIT_SETTINGS}
+            beforeBatchSave={saveTicks}
+            batchCancel={() => status.success("Pending changes discarded.")}
             rowDrop={handleDrop}
-            recordDoubleClick={(args: { rowData?: TreeRow }) =>
-              args.rowData && navigate(`/${ENTITY}/${args.rowData.slug}`)
-            }
+            rowDataBound={rowDataBound}
+            recordDoubleClick={(args: { rowData?: TreeRow; column?: { field?: string } }) => {
+              if (args.rowData && !TICK_FIELDS.has(args.column?.field ?? "")) navigate(`/${ENTITY}/${args.rowData.slug}`);
+            }}
           >
             <ColumnsDirective>
-              <ColumnDirective field="name" headerText="Name" width={300} />
-              <ColumnDirective field="kind" headerText="Kind" width={100} />
-              <ColumnDirective field="current" headerText="Current" width={100} type="boolean" textAlign="Center" template={tickTemplates[0]} />
-              <ColumnDirective field="lattice" headerText="Lattice" width={95} type="boolean" textAlign="Center" template={tickTemplates[1]} />
-              <ColumnDirective field="resume" headerText="Resume" width={95} type="boolean" textAlign="Center" template={tickTemplates[2]} />
-              <ColumnDirective field="film" headerText="Film" width={85} type="boolean" textAlign="Center" template={tickTemplates[3]} />
-              <ColumnDirective field="filters" headerText="Filters" width={90} type="boolean" textAlign="Center" template={tickTemplates[4]} />
-              <ColumnDirective field="aliases" headerText="Also known as" width={280} />
-              <ColumnDirective field="slug" headerText="Slug" width={200} isPrimaryKey />
-              <ColumnDirective field="childCount" headerText="Children" width={100} textAlign="Right" />
-              <ColumnDirective headerText="Actions" width={260} template={actionsTemplate} />
+              <ColumnDirective field="name" headerText="Name" width={300} allowEditing={false} />
+              <ColumnDirective field="kind" headerText="Kind" width={100} allowEditing={false} />
+              <ColumnDirective field="current" headerText="Current" width={100} type="boolean" displayAsCheckBox editType="booleanedit" textAlign="Center" />
+              <ColumnDirective field="lattice" headerText="Lattice" width={95} type="boolean" displayAsCheckBox editType="booleanedit" textAlign="Center" />
+              <ColumnDirective field="resume" headerText="Resume" width={95} type="boolean" displayAsCheckBox editType="booleanedit" textAlign="Center" />
+              <ColumnDirective field="film" headerText="Film" width={85} type="boolean" displayAsCheckBox editType="booleanedit" textAlign="Center" />
+              <ColumnDirective field="filters" headerText="Filters" width={90} type="boolean" displayAsCheckBox editType="booleanedit" textAlign="Center" />
+              <ColumnDirective field="aliases" headerText="Also known as" width={280} allowEditing={false} />
+              <ColumnDirective field="slug" headerText="Slug" width={200} isPrimaryKey allowEditing={false} />
+              <ColumnDirective field="childCount" headerText="Children" width={100} textAlign="Right" allowEditing={false} />
+              <ColumnDirective headerText="Actions" width={260} template={actionsTemplate} allowEditing={false} />
             </ColumnsDirective>
-            <Inject services={[RowDD, Selection, Toolbar, Resize, Reorder, ColumnChooser, Filter, Sort]} />
+            <Inject services={[RowDD, Selection, Toolbar, Resize, Reorder, ColumnChooser, Filter, Sort, Edit]} />
           </TreeGridComponent>
         </div>
       ) : null}
