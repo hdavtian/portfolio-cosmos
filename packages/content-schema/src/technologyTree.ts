@@ -26,6 +26,48 @@ export interface TechnologyTreeNode {
   children: TechnologyTreeNode[];
 }
 
+/** A node of the Skills lattice: what the universe draws. */
+export interface LatticeNode {
+  slug: string;
+  name: string;
+  children: LatticeNode[];
+}
+
+/**
+ * The Skills lattice (D20): every record ticked for the `lattice` surface,
+ * nested as in the tree, and a heading only where something visible sits
+ * under it. Nothing is inherited: React appears with Hooks beneath it only if
+ * Hooks is ticked itself.
+ */
+export function latticeTree(records: readonly TechnologyRecord[]): LatticeNode[] {
+  const shown = (record: TechnologyRecord) =>
+    record.isGrouping
+      ? hasVisibleChildren(records, record.slug, "lattice")
+      : (record.surfaces ?? []).includes("lattice");
+  const toNode = (node: TechnologyTreeNode): LatticeNode => ({
+    slug: node.slug,
+    name: node.name,
+    children: node.children.map(toNode),
+  });
+  return buildTechnologyTree(records.filter(shown)).map(toNode);
+}
+
+/**
+ * The lattice as the Skills planet's moons read it: each top-level heading's
+ * name to the names of the skills under it, at any depth, in tree order.
+ */
+export function latticeByHeading(records: readonly TechnologyRecord[]): Record<string, string[]> {
+  const leaves = (node: LatticeNode): string[] =>
+    node.children.length === 0 ? [node.name] : [node.name, ...node.children.flatMap(leaves)].filter((name, i, all) => all.indexOf(name) === i);
+  const bySlug = new Map(records.map((record) => [record.slug, record]));
+  return Object.fromEntries(
+    latticeTree(records).map((root) => [
+      root.name,
+      root.children.flatMap((child) => (bySlug.get(child.slug)?.isGrouping ? child.children.flatMap(leaves) : leaves(child))),
+    ]),
+  );
+}
+
 /** One line of the resume's skills section: a heading and its skills. */
 export interface ResumeSkillLine {
   slug: string;

@@ -6,6 +6,8 @@ import {
   flattenTechnologies,
   hasVisibleChildren,
   headingFor,
+  latticeByHeading,
+  latticeTree,
   resumeSkillLines,
   technologyIssues,
   wouldCycle,
@@ -243,5 +245,44 @@ describe("resumeSkillLines", () => {
       "backend",
       "frontend",
     ]);
+  });
+});
+
+describe("latticeTree", () => {
+  const t = (slug: string, parentSlug: string, sortOrder: number, isGrouping: boolean, lattice = true) => ({
+    slug,
+    name: slug,
+    parentSlug,
+    sortOrder,
+    isGrouping,
+    surfaces: lattice ? ["lattice"] : [],
+  });
+  const tree = [
+    t("frontend", "", 0, true),
+    t("react", "frontend", 1, false),
+    t("hooks", "react", 2, false),
+    t("redux", "react", 3, false, false),
+    t("patterns", "frontend", 4, true),
+    t("context", "patterns", 5, false),
+    t("empty", "", 6, true),
+    t("orphan-heading", "", 7, true),
+    t("hidden", "orphan-heading", 8, false, false),
+  ];
+
+  it("nests ticked records and drops headings with nothing visible under them", () => {
+    expect(latticeTree(tree)).toEqual([
+      {
+        slug: "frontend",
+        name: "frontend",
+        children: [
+          { slug: "react", name: "react", children: [{ slug: "hooks", name: "hooks", children: [] }] },
+          { slug: "patterns", name: "patterns", children: [{ slug: "context", name: "context", children: [] }] },
+        ],
+      },
+    ]);
+  });
+
+  it("lists each heading's skills for the Skills planet, any depth, no headings", () => {
+    expect(latticeByHeading(tree)).toEqual({ frontend: ["react", "hooks", "context"] });
   });
 });

@@ -7,6 +7,7 @@ import type {
   PathTravelMessage,
 } from "@hd/content-schema";
 import { buildTechStackTree, techStackTreeFromSkills, type TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
+import { latticeByHeading, latticeTree } from "@hd/content-schema/technology-tree";
 import { mediaUrl, type Release } from "../../lib/api/release";
 import type { PortfolioCoreSeed, PortfolioSeedMedia, PortfolioSeedVariant } from "./portfolioData";
 
@@ -65,31 +66,74 @@ export function spaceContentFromRelease(release: Release): SpaceContent {
     fit: item.fit,
   });
 
+  // The master list (D1): names by slug, for everything that points at it.
+  // A release from before it has none, and each surface then reads the old
+  // fields it always did.
+  const technologies = c.technologies ?? [];
+  const nameBySlug = new Map(technologies.map((record) => [record.slug, record.name]));
+  const names = (slugs: readonly string[] | undefined) =>
+    (slugs ?? []).map((slug) => nameBySlug.get(slug)).filter((name): name is string => Boolean(name));
+
+  // Project tags come from the project's own technologySlugs; a variant
+  // never inherits its parent's (a client site and the platform it was built
+  // on are different work).
   const variant = (item: ClientVariant): PortfolioSeedVariant => ({
     slug: item.slug,
     title: item.title,
     image: mediaUrl(release, item.mediaId),
     description: item.description,
-    technologies: item.technologies,
+    technologies: item.technologySlugs?.length ? names(item.technologySlugs) : item.technologies,
     year: item.year,
     fit: item.fit,
     galleryMedia: item.galleryMedia.map(media),
   });
 
-  const skills = Object.fromEntries(
-    c.skillCategories.map((category) => [
-      category.name,
-      c.skills.filter((skill) => skill.categorySlug === category.slug).map((skill) => skill.name),
-    ]),
-  );
+  // The Skills planet's moons: one per top-level heading of the lattice.
+  const skills =
+    technologies.length > 0
+      ? latticeByHeading(technologies)
+      : Object.fromEntries(
+          c.skillCategories.map((category) => [
+            category.name,
+            c.skills.filter((skill) => skill.categorySlug === category.slug).map((skill) => skill.name),
+          ]),
+        );
   const [education] = c.education;
+
+  // A job's moon labels and fly-by memories come from its skill uses (D20):
+  // a use ticked moonLabel is a label; one ticked flyBy drifts past in orbit,
+  // drawn in its style; prose memories keep flying too. The scene reads the
+  // jobTech and jobMemories fields it always has, filled here from the uses,
+  // so a job without uses yet still shows what it used to.
+  const asMemoryType = (style?: string) => (style === "code" ? "code" : style === "handwritten" ? "memory" : "tech");
+  const experiences: SpaceJob[] = c.experiences.map((entry) => {
+    const uses = (entry.skillsUsed ?? [])
+      .map((use) => ({ ...use, name: nameBySlug.get(use.technologySlug) }))
+      .filter((use): use is typeof use & { name: string } => Boolean(use.name));
+    if (uses.length === 0) return entry;
+    return {
+      ...entry,
+      jobTech: uses
+        .filter((use) => use.surfaces.includes("moonLabel"))
+        .map((use) => ({ label: use.name, highlightMatches: use.highlightMatches })),
+      jobMemories: [
+        ...entry.jobMemories.map((memory) => ({
+          ...memory,
+          type: (memory.style ? asMemoryType(memory.style) : memory.type) as typeof memory.type,
+        })),
+        ...uses
+          .filter((use) => use.surfaces.includes("flyBy"))
+          .map((use) => ({ type: asMemoryType(use.style) as "tech" | "code" | "memory", text: use.name, style: use.style })),
+      ],
+    };
+  });
 
   return {
     resume: {
       personal,
       summary,
       skills,
-      experience: c.experiences,
+      experience: experiences,
       education: {
         institution: education?.institution ?? "",
         degree: education?.degree ?? "",
@@ -129,7 +173,13 @@ export function spaceContentFromRelease(release: Release): SpaceContent {
           : { type: block.type, title: block.title, body: block.body },
       ),
     })),
+    // The Skills lattice: the master list's lattice ticks, or, before it, the
+    // old tech stack nodes, or before those, the skill categories.
     techStack:
-      c.techStackNodes.length > 0 ? buildTechStackTree(c.techStackNodes) : techStackTreeFromSkills(skills),
+      technologies.length > 0
+        ? latticeTree(technologies)
+        : c.techStackNodes.length > 0
+        ? buildTechStackTree(c.techStackNodes)
+        : techStackTreeFromSkills(skills),
   };
 }
