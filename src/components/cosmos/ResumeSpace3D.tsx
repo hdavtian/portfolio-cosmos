@@ -78,7 +78,7 @@ import {
 import type { ResumeSpace3DProps, SceneRef } from "./ResumeSpace3D.types";
 // Import our new cosmic systems
 import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
+import { LatticeFocusPass, setFocused } from "./latticeFocusPass";
 import type { OverlayContent } from "../CosmicContentOverlay";
 import {
   COSMIC_AUDIO_TRACKS,
@@ -1894,6 +1894,7 @@ type SkillsLatticeLinkSegment = {
 };
 
 type SkillsLatticeLineGroup = {
+  object: THREE.Object3D;
   material: THREE.LineBasicMaterial;
   kind: "ring" | "skill";
   category?: string;
@@ -11814,10 +11815,9 @@ export default function ResumeSpace3D({
 
     // Focus. Clicking a node puts its system in focus: the node, its
     // parent, its siblings and everything under it (a core: the core and
-    // its branch). The rest dims, loses its labels, and falls out of focus
-    // through a depth-of-field pass whose focal distance follows the node -
-    // so what is near the chosen system in depth stays sharp and what is
-    // far goes soft, the way a lens would see it. The blur eases in and out.
+    // its branch). The rest dims, loses its labels and goes soft - by
+    // membership, not by depth, since a system's parts sit all around it
+    // (see latticeFocusPass.ts). The effect eases in and out.
     const startsWith = (prefix: string[], path: string[]) =>
       prefix.length <= path.length && prefix.every((name, index) => name === path[index]);
     const inSystem = (node: SkillsLatticeNodeRecord, selected: SkillsLatticeNodeRecord | null) => {
@@ -11827,42 +11827,29 @@ export default function ResumeSpace3D({
       if (startsWith(node.path, selected.path)) return true; // above it
       return node.path.length === selected.path.length && startsWith(selected.path.slice(0, -1), node.path); // beside it
     };
-    let focusPass: BokehPass | null = null;
-    // The pass types its uniforms as a bare object; these are its names.
-    const focusUniforms = (pass: BokehPass) => pass.uniforms as Record<"focus" | "maxblur", { value: number }>;
-    let focusBlur = 0;
-    const FOCUS_MAX_BLUR = 0.012;
-    // Blur grows with distance from the focal plane; this keeps a system's
-    // own spread (about 25 units) sharp and everything a branch away soft.
-    const FOCUS_APERTURE = FOCUS_MAX_BLUR / 25;
+    let focusPass: LatticeFocusPass | null = null;
+    let focusStrength = 0;
     let lastFocusMs = performance.now();
     const syncFocus = () => {
       const nowFocusMs = performance.now();
       const dtFocus = Math.min((nowFocusMs - lastFocusMs) / 1000, 0.05);
       lastFocusMs = nowFocusMs;
-      const selected = skillsLatticeSelectedNodeRef.current;
-      const wantFocus = skillsLatticeActiveRef.current && !!selected;
+      const wantFocus = skillsLatticeActiveRef.current && !!skillsLatticeSelectedNodeRef.current;
       const composer = composerRef.current;
       const { scene, camera } = sceneRef.current;
       if (wantFocus && !focusPass && composer && scene && camera) {
-        focusPass = new BokehPass(scene, camera, { focus: 60, aperture: FOCUS_APERTURE, maxblur: 0 });
+        const size = composer.renderTarget1;
+        focusPass = new LatticeFocusPass(scene, camera, size.width, size.height);
         composer.insertPass(focusPass, 1);
       }
       if (!focusPass) return;
-      focusBlur += ((wantFocus ? FOCUS_MAX_BLUR : 0) - focusBlur) * (1 - Math.exp(-dtFocus * 4));
-      const uniforms = focusUniforms(focusPass);
-      uniforms.maxblur.value = focusBlur;
-      if (selected && camera) {
-        selected.mesh.getWorldPosition(selectedPos);
-        const current = uniforms.focus.value;
-        const target = camera.position.distanceTo(selectedPos);
-        uniforms.focus.value = current + (target - current) * (1 - Math.exp(-dtFocus * 6));
-      }
-      if (!wantFocus && focusBlur < 0.0004 && composer) {
+      focusStrength += ((wantFocus ? 1 : 0) - focusStrength) * (1 - Math.exp(-dtFocus * 4));
+      focusPass.strength = focusStrength;
+      if (!wantFocus && focusStrength < 0.02 && composer) {
         composer.removePass(focusPass);
         focusPass.dispose();
         focusPass = null;
-        focusBlur = 0;
+        focusStrength = 0;
       }
     };
 
@@ -12087,6 +12074,10 @@ export default function ResumeSpace3D({
           if (node.labelObject && selected) {
             node.labelObject.visible = node.labelObject.visible && isRelated;
           }
+          // What stays sharp: the system's nodes and their names (halos are
+          // glows and may soften with the rest).
+          setFocused(node.mesh, !!selected && isRelated);
+          if (node.labelObject) setFocused(node.labelObject, !!selected && isRelated);
           const selectedBoost = isSelected ? 1.28 : isRelated ? 1.03 : 0.92;
           const toneBoost =
             node.nodeType === "category" ? toneAccentT * 0.4 : 0;
@@ -12160,6 +12151,7 @@ export default function ResumeSpace3D({
               ? selected.nodeType === "category"
               : group.category === selected.category);
           const baseOpacity = isRelated ? wave : 0.08;
+          setFocused(group.object, !!selected && group.kind === "skill" && isRelated);
           const rippleBoost = ripple.active && rippleRadius >= 0 ? 0.12 : 0;
           group.material.opacity = latticeInternalsVisible
             ? THREE.MathUtils.clamp(baseOpacity + rippleBoost, 0.04, 0.9)
@@ -17903,6 +17895,7 @@ export default function ResumeSpace3D({
       const ringMat = lines.material as THREE.LineBasicMaterial;
       latticeLineMats.push(ringMat);
       latticeLineGroups.push({
+        object: lines,
         material: ringMat,
         kind: "ring",
       });
@@ -18111,6 +18104,7 @@ export default function ResumeSpace3D({
       const skillMatRef = skillLines.material as THREE.LineBasicMaterial;
       latticeLineMats.push(skillMatRef);
       latticeLineGroups.push({
+        object: skillLines,
         material: skillMatRef,
         kind: "skill",
         category,
