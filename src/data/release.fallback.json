@@ -1,5 +1,5 @@
 {
-  "etag": "b441934e8cbecadf589982015fdf889b",
+  "etag": "e7278370e46002e151695f904b81d426",
   "draft": false,
   "content": {
     "singletons": {
@@ -1860,7 +1860,6 @@
           ],
           "projects": [],
           "jobMemories": [],
-          "jobTech": [],
           "skillsUsed": [
             {
               "technologySlug": "react",
@@ -1975,115 +1974,20 @@
           ],
           "jobMemories": [
             {
-              "type": "memory",
-              "text": "Led automation platform initiative"
+              "text": "Led automation platform initiative",
+              "style": "handwritten"
             },
             {
-              "type": "memory",
-              "text": "Fun times playing basketball"
+              "text": "Fun times playing basketball",
+              "style": "handwritten"
             },
             {
-              "type": "memory",
-              "text": "Led automation platform initiative"
+              "text": "Led automation platform initiative",
+              "style": "handwritten"
             },
             {
-              "type": "memory",
-              "text": "Mentored cross-functional teams"
-            }
-          ],
-          "jobTech": [
-            {
-              "label": "Angular",
-              "highlightMatches": [
-                "Angular"
-              ]
-            },
-            {
-              "label": "React + Redux",
-              "highlightMatches": [
-                "React",
-                "Redux"
-              ]
-            },
-            {
-              "label": "TypeScript",
-              "highlightMatches": [
-                "TypeScript"
-              ]
-            },
-            {
-              "label": "C# + .NET",
-              "highlightMatches": [
-                "C#",
-                ".NET"
-              ]
-            },
-            {
-              "label": "Playwright",
-              "highlightMatches": [
-                "Playwright"
-              ]
-            },
-            {
-              "label": "Java + Spring Boot",
-              "highlightMatches": [
-                "Java",
-                "Spring Boot"
-              ]
-            },
-            {
-              "label": "Selenium + TestNG",
-              "highlightMatches": [
-                "Selenium",
-                "TestNG"
-              ]
-            },
-            {
-              "label": "RabbitMQ + MongoDB",
-              "highlightMatches": [
-                "RabbitMQ",
-                "MongoDB"
-              ]
-            },
-            {
-              "label": "PostgreSQL",
-              "highlightMatches": [
-                "PostgreSQL"
-              ]
-            },
-            {
-              "label": "Azure + GitLab CI/CD",
-              "highlightMatches": [
-                "Azure",
-                "GitLab",
-                "CI/CD"
-              ]
-            },
-            {
-              "label": "RxJS",
-              "highlightMatches": [
-                "RxJS"
-              ]
-            },
-            {
-              "label": "Chrome Extension",
-              "highlightMatches": [
-                "Chrome extension"
-              ]
-            },
-            {
-              "label": "OAuth",
-              "highlightMatches": [
-                "OAuth"
-              ]
-            },
-            {
-              "label": "SCRUM / AGILE",
-              "highlightMatches": [
-                "SCRUM",
-                "AGILE",
-                "Product Owner"
-              ]
+              "text": "Mentored cross-functional teams",
+              "style": "handwritten"
             }
           ],
           "skillsUsed": [
@@ -2495,73 +2399,6 @@
             }
           ],
           "jobMemories": [],
-          "jobTech": [
-            {
-              "label": "React + Redux",
-              "highlightMatches": [
-                "React",
-                "Redux"
-              ]
-            },
-            {
-              "label": "Next.js",
-              "highlightMatches": [
-                "Next.js"
-              ]
-            },
-            {
-              "label": "Framer Motion + GSAP",
-              "highlightMatches": [
-                "Framer Motion",
-                "GSAP"
-              ]
-            },
-            {
-              "label": "Java + Spring Boot",
-              "highlightMatches": [
-                "Java",
-                "Spring Boot"
-              ]
-            },
-            {
-              "label": "MySQL + Docker",
-              "highlightMatches": [
-                "MySQL",
-                "Docker"
-              ]
-            },
-            {
-              "label": "AWS + Azure CI/CD",
-              "highlightMatches": [
-                "AWS",
-                "Azure",
-                "CI/CD"
-              ]
-            },
-            {
-              "label": "Gulp + Webpack",
-              "highlightMatches": [
-                "Gulp",
-                "Grunt",
-                "Webpack"
-              ]
-            },
-            {
-              "label": "PHP + WordPress",
-              "highlightMatches": [
-                "PHP",
-                "WordPress"
-              ]
-            },
-            {
-              "label": "Semantic HTML + SCSS",
-              "highlightMatches": [
-                "HTML",
-                "CSS",
-                "SCSS"
-              ]
-            }
-          ],
           "skillsUsed": [
             {
               "technologySlug": "react",
@@ -2842,67 +2679,16 @@
           "projects": [],
           "jobMemories": [
             {
-              "type": "memory",
-              "text": "Managed marketing microsites"
+              "text": "Managed marketing microsites",
+              "style": "handwritten"
             },
             {
-              "type": "memory",
-              "text": "Migrated infra to AWS"
+              "text": "Migrated infra to AWS",
+              "style": "handwritten"
             },
             {
-              "type": "memory",
-              "text": "Introduced jQuery to the team"
-            }
-          ],
-          "jobTech": [
-            {
-              "label": "PHP",
-              "highlightMatches": [
-                "PHP"
-              ]
-            },
-            {
-              "label": "JavaScript + jQuery",
-              "highlightMatches": [
-                "JavaScript",
-                "jQuery"
-              ]
-            },
-            {
-              "label": "CakePHP + MySQL",
-              "highlightMatches": [
-                "CakePHP",
-                "MySQL"
-              ]
-            },
-            {
-              "label": "AWS (EC2 + RDS + S3)",
-              "highlightMatches": [
-                "AWS",
-                "EC2",
-                "RDS",
-                "S3"
-              ]
-            },
-            {
-              "label": "HTML + CSS",
-              "highlightMatches": [
-                "HTML",
-                "CSS"
-              ]
-            },
-            {
-              "label": "Adobe Test & Target",
-              "highlightMatches": [
-                "Adobe Test & Target"
-              ]
-            },
-            {
-              "label": "Agile / Scrum",
-              "highlightMatches": [
-                "Scrum",
-                "Agile"
-              ]
+              "text": "Introduced jQuery to the team",
+              "style": "handwritten"
             }
           ],
           "skillsUsed": [
@@ -3133,39 +2919,16 @@
           "projects": [],
           "jobMemories": [
             {
-              "type": "memory",
-              "text": "Financial Web Content"
+              "text": "Financial Web Content",
+              "style": "handwritten"
             },
             {
-              "type": "memory",
-              "text": "Tax Calculators"
+              "text": "Tax Calculators",
+              "style": "handwritten"
             },
             {
-              "type": "memory",
-              "text": "Java Team Integration"
-            }
-          ],
-          "jobTech": [
-            {
-              "label": "HTML + CSS + JS",
-              "highlightMatches": [
-                "HTML",
-                "CSS",
-                "JavaScript"
-              ]
-            },
-            {
-              "label": "Java Integration",
-              "highlightMatches": [
-                "Java"
-              ]
-            },
-            {
-              "label": "Tax & Financial Content",
-              "highlightMatches": [
-                "tax",
-                "calculators"
-              ]
+              "text": "Java Team Integration",
+              "style": "handwritten"
             }
           ],
           "skillsUsed": [
@@ -3252,50 +3015,12 @@
           "projects": [],
           "jobMemories": [
             {
-              "type": "memory",
-              "text": "Marketing Microsites"
+              "text": "Marketing Microsites",
+              "style": "handwritten"
             },
             {
-              "type": "memory",
-              "text": "Email Campaign Engineering"
-            }
-          ],
-          "jobTech": [
-            {
-              "label": "HTML Email",
-              "highlightMatches": [
-                "HTML Emails",
-                "Email"
-              ]
-            },
-            {
-              "label": "IBM iStore",
-              "highlightMatches": [
-                "IBM iStore",
-                "ecommerce"
-              ]
-            },
-            {
-              "label": "SEO + Analytics",
-              "highlightMatches": [
-                "SEO",
-                "Google Analytics",
-                "search engine"
-              ]
-            },
-            {
-              "label": "Cross-browser CSS",
-              "highlightMatches": [
-                "CSS",
-                "cross browser"
-              ]
-            },
-            {
-              "label": "Marketing Microsites",
-              "highlightMatches": [
-                "microsites",
-                "Marketing"
-              ]
+              "text": "Email Campaign Engineering",
+              "style": "handwritten"
             }
           ],
           "skillsUsed": [
@@ -3393,33 +3118,8 @@
           "projects": [],
           "jobMemories": [
             {
-              "type": "memory",
-              "text": "Data Center Operations"
-            }
-          ],
-          "jobTech": [
-            {
-              "label": "HTML + CSS + PHP",
-              "highlightMatches": [
-                "HTML",
-                "CSS",
-                "PHP"
-              ]
-            },
-            {
-              "label": "LAMP Stack",
-              "highlightMatches": [
-                "LAMP",
-                "Linux"
-              ]
-            },
-            {
-              "label": "Data Center Ops",
-              "highlightMatches": [
-                "data center",
-                "server",
-                "hardware"
-              ]
+              "text": "Data Center Operations",
+              "style": "handwritten"
             }
           ],
           "skillsUsed": [
@@ -3546,64 +3246,20 @@
           ],
           "jobMemories": [
             {
-              "type": "memory",
-              "text": "Client Solutions End-to-End"
+              "text": "Client Solutions End-to-End",
+              "style": "handwritten"
             },
             {
-              "type": "memory",
               "text": "PHP Workflows",
               "style": "code"
             },
             {
-              "type": "memory",
-              "text": "Interactive Flash Era Builds"
+              "text": "Interactive Flash Era Builds",
+              "style": "handwritten"
             },
             {
-              "type": "memory",
-              "text": "Long-term Client Support"
-            }
-          ],
-          "jobTech": [
-            {
-              "label": "PHP",
-              "highlightMatches": [
-                "PHP"
-              ]
-            },
-            {
-              "label": "Drupal + WordPress",
-              "highlightMatches": [
-                "Drupal",
-                "WordPress",
-                "CMS"
-              ]
-            },
-            {
-              "label": "Flash + HTML",
-              "highlightMatches": [
-                "Flash",
-                "HTML"
-              ]
-            },
-            {
-              "label": "OpenTable Integration",
-              "highlightMatches": [
-                "OpenTable"
-              ]
-            },
-            {
-              "label": "E-commerce (ShopSite)",
-              "highlightMatches": [
-                "ShopSite",
-                "e-commerce",
-                "shopping cart"
-              ]
-            },
-            {
-              "label": "Dreamweaver-era Tools",
-              "highlightMatches": [
-                "Dreamweaver"
-              ]
+              "text": "Long-term Client Support",
+              "style": "handwritten"
             }
           ],
           "skillsUsed": [
@@ -3771,39 +3427,12 @@
           "projects": [],
           "jobMemories": [
             {
-              "type": "memory",
               "text": "First Client Websites",
               "style": "code"
             },
             {
-              "type": "memory",
-              "text": "Led a Team of 8"
-            }
-          ],
-          "jobTech": [
-            {
-              "label": "Hosting + Ecommerce",
-              "highlightMatches": [
-                "hosting",
-                "ecommerce",
-                "dedicated"
-              ]
-            },
-            {
-              "label": "DNS + Domains",
-              "highlightMatches": [
-                "DNS",
-                "domain",
-                "registration"
-              ]
-            },
-            {
-              "label": "HTML + CSS",
-              "highlightMatches": [
-                "HTML",
-                "CSS",
-                "website"
-              ]
+              "text": "Led a Team of 8",
+              "style": "handwritten"
             }
           ],
           "skillsUsed": [
@@ -3935,39 +3564,12 @@
           "projects": [],
           "jobMemories": [
             {
-              "type": "memory",
-              "text": "18,000+ Calls"
+              "text": "18,000+ Calls",
+              "style": "handwritten"
             },
             {
-              "type": "memory",
               "text": "Modem + Browser Config",
               "style": "code"
-            }
-          ],
-          "jobTech": [
-            {
-              "label": "Dial-up + ISDN",
-              "highlightMatches": [
-                "dial-up",
-                "ISDN",
-                "modem"
-              ]
-            },
-            {
-              "label": "Windows + Mac Support",
-              "highlightMatches": [
-                "Windows",
-                "Mac",
-                "support"
-              ]
-            },
-            {
-              "label": "Early Internet",
-              "highlightMatches": [
-                "internet",
-                "email",
-                "browser"
-              ]
             }
           ],
           "skillsUsed": [
@@ -4188,13 +3790,6 @@
           "title": "Test Control Center",
           "mediaId": "6aa9cb492b8a77384200582c",
           "description": "An winform application running selenium test cases.",
-          "technologies": [
-            ".NET",
-            "WinForms",
-            "C#",
-            "Selenium/Java",
-            "TestNG"
-          ],
           "technologySlugs": [
             "net",
             "c-sharp",
@@ -4280,12 +3875,6 @@
           "title": "V4 Analyzer",
           "mediaId": "6aa9cb492b8a773842005834",
           "description": "A JavaScript/TypeScript application to help analyze InvestCloud Portals",
-          "technologies": [
-            "JavaScript",
-            "TypeScript",
-            "HTML",
-            "CSS"
-          ],
           "technologySlugs": [
             "javascript",
             "typescript",
@@ -4355,16 +3944,6 @@
           "title": "Test Automation Framework for InvestCloud Efficiency",
           "mediaId": "6aa9cb492b8a77384200583a",
           "description": "A C# Playwright framework to help automate the testing of InvestCloud Portals",
-          "technologies": [
-            ".NET/C#",
-            ".NET Web API",
-            "Angular",
-            "Playwright",
-            "JavaScript",
-            "TypeScript",
-            "HTML",
-            "CSS"
-          ],
           "technologySlugs": [
             "net",
             "c-sharp",
@@ -4510,13 +4089,6 @@
           "title": "Disney Inspired",
           "mediaId": "6aa9cb492b8a773842005849",
           "description": "A Demo for Disney showcasing characters, moviews, parks, games, AI RAG and more",
-          "technologies": [
-            "React",
-            "Java",
-            "PostgreSQL",
-            "Docker",
-            "CI/CD"
-          ],
           "technologySlugs": [
             "react",
             "java",
@@ -4629,11 +4201,6 @@
           "title": "Murad",
           "mediaId": "6aa9cb492b8a773842005854",
           "description": "Landing pages and emails for Murad products.",
-          "technologies": [
-            "HTML",
-            "CSS",
-            "JavaScript"
-          ],
           "technologySlugs": [
             "html",
             "css",
@@ -4744,15 +4311,6 @@
           "title": "Race with Honda",
           "mediaId": "6aa9cb492b8a773842005860",
           "description": "Race with Honda website featuring drivers, calendar, tracks, race results, and more. Served as lead web developer.",
-          "technologies": [
-            "React",
-            "Redux",
-            "Next.js",
-            "Framer Motion",
-            "GSAP",
-            "Java",
-            "Spring Boot"
-          ],
           "technologySlugs": [
             "framer-motion",
             "gsap",
@@ -4815,10 +4373,6 @@
           "title": "Hydrodent",
           "mediaId": "6aaac47270ccfc342df6bc70",
           "description": "hydrodent",
-          "technologies": [
-            "React",
-            "Azure"
-          ],
           "technologySlugs": [
             "react",
             "azure",
@@ -4859,15 +4413,6 @@
           "title": "Hall of Claims",
           "mediaId": "6aa9cb492b8a773842005866",
           "description": "Interactive campaign portal for Farmers Insurance featuring animated storytelling and claims education. Worked alongside talented web and UX designers, and other lead web developers to create a an animated website.",
-          "technologies": [
-            "React",
-            "Redux",
-            "Next.js",
-            "Framer Motion",
-            "GSAP",
-            "Java",
-            "Spring Boot"
-          ],
           "technologySlugs": [
             "react",
             "redux",
@@ -4918,15 +4463,6 @@
           "title": "Honda Automobiles",
           "mediaId": "6aa9cb492b8a77384200586a",
           "description": "Marketing portal showcasing Honda automobile lineup with interactive features and responsive design.  Worked alongside talented web designers, UX designers, and web developers to create various Honda automobile landing pages, showcasing trims and features, calculators and other interactive features.",
-          "technologies": [
-            "React",
-            "Redux",
-            "Next.js",
-            "Framer Motion",
-            "GSAP",
-            "Java",
-            "Spring Boot"
-          ],
           "technologySlugs": [
             "react",
             "redux",
@@ -4970,15 +4506,6 @@
           "title": "RPA Agency Redesign",
           "mediaId": "6aa9cb492b8a77384200586d",
           "description": "Agency website redesign for RPA (Rubin Postaer and Associates) with modern responsive layout. Worked alongside talented web designers, UX designers, and developers to create a modern, responsive, and user-friendly website.",
-          "technologies": [
-            "React",
-            "Redux",
-            "Next.js",
-            "Framer Motion",
-            "GSAP",
-            "Java",
-            "Spring Boot"
-          ],
           "technologySlugs": [
             "framer-motion",
             "gsap",
@@ -5031,13 +4558,6 @@
           "title": "WiFinder",
           "mediaId": "6aa9cb492b8a773842005871",
           "description": "Consumer-facing WiFi hotspot finder application helping users locate Boingo wireless access points.",
-          "technologies": [
-            "React",
-            "JavaScript",
-            "HTML",
-            "CSS",
-            "REST APIs"
-          ],
           "technologySlugs": [
             "javascript",
             "html",
@@ -5072,13 +4592,6 @@
           "title": "Equipment Resellers",
           "mediaId": "6aa9cb492b8a773842005873",
           "description": "Equipment reseller websites grouped by client.",
-          "technologies": [
-            "php",
-            "mysql",
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -5095,13 +4608,6 @@
               "title": "acecount.com",
               "mediaId": "6aa9cb492b8a773842005873",
               "description": "Equipment reseller storefront and product catalog presentation.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5143,13 +4649,6 @@
               "title": "ABM JAX",
               "mediaId": "6aa9cb492b8a773842005877",
               "description": "ABM JAX is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5175,13 +4674,6 @@
               "title": "Financial Equipment",
               "mediaId": "6aa9cb492b8a773842005879",
               "description": "Financial Equipment is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5215,13 +4707,6 @@
               "title": "Ammlock",
               "mediaId": "6aa9cb492b8a77384200587c",
               "description": "Real estate website for Ammlock.",
-              "technologies": [
-                "PHP",
-                "MySQL",
-                "HTML",
-                "CSS",
-                "JavaScript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5264,13 +4749,6 @@
           "title": "Cultural Organizations",
           "mediaId": "6aa9cb492b8a77384200587f",
           "description": "Cultural organization websites grouped by chapter/location.",
-          "technologies": [
-            "php",
-            "mysql",
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -5288,13 +4766,6 @@
               "title": "AGBU YPLA",
               "mediaId": "6aa9cb492b8a77384200587f",
               "description": "AGBU YPLA is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5329,13 +4800,6 @@
               "title": "AGBU YPNY",
               "mediaId": "6aa9cb492b8a773842005882",
               "description": "AGBU YPNY is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5362,13 +4826,6 @@
               "title": "AGBU YP Demos",
               "mediaId": "6aa9cb492b8a773842005884",
               "description": "Demo websites for AGBU Young Professionals chapters.",
-              "technologies": [
-                "PHP",
-                "MySQL",
-                "HTML",
-                "CSS",
-                "JavaScript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5451,13 +4908,6 @@
               "title": "AFFMA",
               "mediaId": "6aa9cb492b8a77384200588d",
               "description": "Website for the Armenian Film Foundation and Media Arts.",
-              "technologies": [
-                "PHP",
-                "MySQL",
-                "HTML",
-                "CSS",
-                "JavaScript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5492,13 +4942,6 @@
               "title": "GenNext Demo",
               "mediaId": "6aa9cb492b8a773842005890",
               "description": "Demo website for a GenNext cultural initiative.",
-              "technologies": [
-                "PHP",
-                "MySQL",
-                "HTML",
-                "CSS",
-                "JavaScript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5533,12 +4976,6 @@
               "title": "Hacob Photography",
               "mediaId": "6aa9cb492b8a773842005893",
               "description": "Website for Hacob Photography.",
-              "technologies": [
-                "HTML",
-                "CSS",
-                "JavaScript",
-                "flash"
-              ],
               "technologySlugs": [
                 "html",
                 "css",
@@ -5571,13 +5008,6 @@
           "title": "Political Websites",
           "mediaId": "6aa9cb492b8a773842005895",
           "description": "Political campaign websites grouped by candidate.",
-          "technologies": [
-            "php",
-            "mysql",
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -5595,13 +5025,6 @@
               "title": "Ardy for Clerk",
               "mediaId": "6aa9cb492b8a773842005895",
               "description": "Ardy for Clerk is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5643,13 +5066,6 @@
               "title": "Simmons for Governor",
               "mediaId": "6aa9cb492b8a773842005899",
               "description": "Simmons for Governor is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5683,13 +5099,6 @@
               "title": "Paul Krekorian for Congress",
               "mediaId": "6aa9cb492b8a77384200589c",
               "description": "Paul Krekorian for Congress is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5723,13 +5132,6 @@
               "title": "Judy for Mayor",
               "mediaId": "6aa9cb492b8a77384200589f",
               "description": "Judy for Mayor is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5754,13 +5156,6 @@
           "title": "Restaurant Websites",
           "mediaId": "6aa9cb492b8a7738420058a0",
           "description": "Restaurant and hospitality websites grouped by client brand.",
-          "technologies": [
-            "php",
-            "mysql",
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -5778,13 +5173,6 @@
               "title": "Arroyo Chop House",
               "mediaId": "6aa9cb492b8a7738420058a0",
               "description": "Arroyo Chop House is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5851,13 +5239,6 @@
               "title": "Parkway Grill",
               "mediaId": "6aa9cb492b8a7738420058a7",
               "description": "Parkway Grill is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5892,13 +5273,6 @@
               "title": "Smitty's Grill",
               "mediaId": "6aa9cb492b8a7738420058aa",
               "description": "Smitty's Grill is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5925,13 +5299,6 @@
               "title": "Smith Brothers Restaurants Corp",
               "mediaId": "6aa9cb492b8a7738420058ac",
               "description": "Smith Brothers Restaurants Corp is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -5966,13 +5333,6 @@
               "title": "Vibrato Grill Jazz",
               "mediaId": "6aa9cb492b8a7738420058af",
               "description": "Vibrato Grill Jazz is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -6023,13 +5383,6 @@
               "title": "Brandview Collection",
               "mediaId": "6aa9cb492b8a7738420058b4",
               "description": "Brandview Collection is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -6055,13 +5408,6 @@
               "title": "Caspers Hot Dogs",
               "mediaId": "6aa9cb492b8a7738420058b6",
               "description": "Caspers Hot Dogs is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -6096,13 +5442,6 @@
           "title": "Attorney Websites",
           "mediaId": "6aa9cb492b8a7738420058b8",
           "description": "Attorney website projects grouped by practice presentation.",
-          "technologies": [
-            "php",
-            "mysql",
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -6119,13 +5458,6 @@
               "title": "Ourfalian Law (A)",
               "mediaId": "6aa9cb492b8a7738420058b8",
               "description": "Ourfalian Law (A) is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -6160,13 +5492,6 @@
               "title": "Ourfalian Law (B)",
               "mediaId": "6aa9cb492b8a7738420058bb",
               "description": "Ourfalian Law (B) is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-              "technologies": [
-                "php",
-                "mysql",
-                "html",
-                "css",
-                "javascript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -6201,13 +5526,6 @@
               "title": "Dana Profili",
               "mediaId": "6aa9cb492b8a7738420058be",
               "description": "Professional website for Dana Profili.",
-              "technologies": [
-                "PHP",
-                "MySQL",
-                "HTML",
-                "CSS",
-                "JavaScript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -6258,13 +5576,6 @@
           "title": "Health",
           "mediaId": "6aa9cb492b8a7738420058c2",
           "description": "Health and research-related website project examples.",
-          "technologies": [
-            "php",
-            "mysql",
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -6281,13 +5592,6 @@
               "title": "UCLA Research Core",
               "mediaId": "6aa9cb492b8a7738420058c2",
               "description": "Website for UCLA Research Core.",
-              "technologies": [
-                "PHP",
-                "MySQL",
-                "HTML",
-                "CSS",
-                "JavaScript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -6322,13 +5626,6 @@
               "title": "Central Valley Bariatrics",
               "mediaId": "6aa9cb492b8a7738420058c5",
               "description": "Website for Central Valley Bariatrics medical practice.",
-              "technologies": [
-                "PHP",
-                "MySQL",
-                "HTML",
-                "CSS",
-                "JavaScript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -6362,13 +5659,6 @@
               "title": "UCLA Digestive Diseases Demo",
               "mediaId": "6aa9cb492b8a7738420058c8",
               "description": "Demo website for UCLA Digestive Diseases center.",
-              "technologies": [
-                "PHP",
-                "MySQL",
-                "HTML",
-                "CSS",
-                "JavaScript"
-              ],
               "technologySlugs": [
                 "php",
                 "mysql",
@@ -6402,13 +5692,6 @@
           "title": "BWVideo Productions",
           "mediaId": "6aa9cb492b8a7738420058ca",
           "description": "BWVideo Productions is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-          "technologies": [
-            "php",
-            "mysql",
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -6449,13 +5732,6 @@
           "title": "Commerce Escrow Company",
           "mediaId": "6aa9cb492b8a7738420058cd",
           "description": "Commerce Escrow Company is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-          "technologies": [
-            "php",
-            "mysql",
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -6505,11 +5781,6 @@
           "title": "Haigmats.com",
           "mediaId": "6aa9cb492b8a7738420058d1",
           "description": "This is one of my very first websites, created in 1999. I did the photography and the design and scanned brochures for the client and created downloadable pdfs.",
-          "technologies": [
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "html",
             "css",
@@ -6548,13 +5819,6 @@
           "title": "UnitedLayer Inc.",
           "mediaId": "6aa9cb492b8a7738420058d4",
           "description": "UnitedLayer Inc. is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-          "technologies": [
-            "php",
-            "mysql",
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -6587,13 +5851,6 @@
           "title": "StormScape Studios",
           "mediaId": "6aa9cb492b8a7738420058d6",
           "description": "StormScape Studios is a production web experience built with php, mysql, html, focused on usability, performance, and clear information flow.",
-          "technologies": [
-            "php",
-            "mysql",
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -6739,11 +5996,6 @@
           "title": "Sean Young",
           "mediaId": "6aa9cb4a2b8a7738420058e6",
           "description": "Promotional website created in 1999 for actress Sean Young.",
-          "technologies": [
-            "html",
-            "css",
-            "javascript"
-          ],
           "technologySlugs": [
             "html",
             "css",
@@ -6790,13 +6042,6 @@
           "title": "Pacobond Demo",
           "mediaId": "6aa9cb4a2b8a7738420058ea",
           "description": "Demo website for Pacobond.",
-          "technologies": [
-            "PHP",
-            "MySQL",
-            "HTML",
-            "CSS",
-            "JavaScript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -6837,13 +6082,6 @@
           "title": "SDC Engineering",
           "mediaId": "6aa9cb4a2b8a7738420058ed",
           "description": "Website for SDC Engineering.",
-          "technologies": [
-            "PHP",
-            "MySQL",
-            "HTML",
-            "CSS",
-            "JavaScript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -6876,13 +6114,6 @@
           "title": "GD Demo",
           "mediaId": "6aa9cb4a2b8a7738420058ef",
           "description": "Demo website for GD.",
-          "technologies": [
-            "PHP",
-            "MySQL",
-            "HTML",
-            "CSS",
-            "JavaScript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
@@ -6906,13 +6137,6 @@
           "title": "HD Portfolio",
           "mediaId": "6aa9cb4a2b8a7738420058f0",
           "description": "Portfolio presentation demo.",
-          "technologies": [
-            "PHP",
-            "MySQL",
-            "HTML",
-            "CSS",
-            "JavaScript"
-          ],
           "technologySlugs": [
             "php",
             "mysql",
