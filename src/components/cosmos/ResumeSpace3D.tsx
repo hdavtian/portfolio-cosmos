@@ -78,6 +78,7 @@ import {
 import type { ResumeSpace3DProps, SceneRef } from "./ResumeSpace3D.types";
 // Import our new cosmic systems
 import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
 import type { OverlayContent } from "../CosmicContentOverlay";
 import {
   COSMIC_AUDIO_TRACKS,
@@ -1882,6 +1883,8 @@ type SkillsLatticeNodeRecord = {
   path: string[];
   detailItems: string[];
   halo?: THREE.Sprite;
+  /** The name over the node, hidden while another system is in focus. */
+  labelObject?: THREE.Object3D;
   lineInfluence: number;
 };
 
@@ -11808,7 +11811,63 @@ export default function ResumeSpace3D({
     const shellUp = new THREE.Vector3();
     const sunDir = new THREE.Vector3();
     const toneAccentColor = new THREE.Color();
+
+    // Focus. Clicking a node puts its system in focus: the node, its
+    // parent, its siblings and everything under it (a core: the core and
+    // its branch). The rest dims, loses its labels, and falls out of focus
+    // through a depth-of-field pass whose focal distance follows the node -
+    // so what is near the chosen system in depth stays sharp and what is
+    // far goes soft, the way a lens would see it. The blur eases in and out.
+    const startsWith = (prefix: string[], path: string[]) =>
+      prefix.length <= path.length && prefix.every((name, index) => name === path[index]);
+    const inSystem = (node: SkillsLatticeNodeRecord, selected: SkillsLatticeNodeRecord | null) => {
+      if (!selected || node.mesh === selected.mesh) return true;
+      if (startsWith(selected.path, node.path)) return true; // beneath it
+      if (selected.nodeType === "category") return false;
+      if (startsWith(node.path, selected.path)) return true; // above it
+      return node.path.length === selected.path.length && startsWith(selected.path.slice(0, -1), node.path); // beside it
+    };
+    let focusPass: BokehPass | null = null;
+    // The pass types its uniforms as a bare object; these are its names.
+    const focusUniforms = (pass: BokehPass) => pass.uniforms as Record<"focus" | "maxblur", { value: number }>;
+    let focusBlur = 0;
+    const FOCUS_MAX_BLUR = 0.012;
+    // Blur grows with distance from the focal plane; this keeps a system's
+    // own spread (about 25 units) sharp and everything a branch away soft.
+    const FOCUS_APERTURE = FOCUS_MAX_BLUR / 25;
+    let lastFocusMs = performance.now();
+    const syncFocus = () => {
+      const nowFocusMs = performance.now();
+      const dtFocus = Math.min((nowFocusMs - lastFocusMs) / 1000, 0.05);
+      lastFocusMs = nowFocusMs;
+      const selected = skillsLatticeSelectedNodeRef.current;
+      const wantFocus = skillsLatticeActiveRef.current && !!selected;
+      const composer = composerRef.current;
+      const { scene, camera } = sceneRef.current;
+      if (wantFocus && !focusPass && composer && scene && camera) {
+        focusPass = new BokehPass(scene, camera, { focus: 60, aperture: FOCUS_APERTURE, maxblur: 0 });
+        composer.insertPass(focusPass, 1);
+      }
+      if (!focusPass) return;
+      focusBlur += ((wantFocus ? FOCUS_MAX_BLUR : 0) - focusBlur) * (1 - Math.exp(-dtFocus * 4));
+      const uniforms = focusUniforms(focusPass);
+      uniforms.maxblur.value = focusBlur;
+      if (selected && camera) {
+        selected.mesh.getWorldPosition(selectedPos);
+        const current = uniforms.focus.value;
+        const target = camera.position.distanceTo(selectedPos);
+        uniforms.focus.value = current + (target - current) * (1 - Math.exp(-dtFocus * 6));
+      }
+      if (!wantFocus && focusBlur < 0.0004 && composer) {
+        composer.removePass(focusPass);
+        focusPass.dispose();
+        focusPass = null;
+        focusBlur = 0;
+      }
+    };
+
     const tick = () => {
+      syncFocus();
       if (skillsLatticeActiveRef.current) {
         const nowMs = performance.now();
         const dt = Math.min((nowMs - lastTickMs) / 1000, 0.05);
@@ -12024,13 +12083,11 @@ export default function ResumeSpace3D({
             : 0;
           const pulse = 1 + Math.sin(t * 1.7 + node.phase) * 0.08;
           const isSelected = selected?.mesh === node.mesh;
-          const isRelated =
-            !selected ||
-            (selected.nodeType === "category"
-              ? node.category === selected.category
-              : node.category === selected.category ||
-                node.label === selected.label);
-          const selectedBoost = isSelected ? 1.28 : isRelated ? 1.03 : 0.96;
+          const isRelated = inSystem(node, selected);
+          if (node.labelObject && selected) {
+            node.labelObject.visible = node.labelObject.visible && isRelated;
+          }
+          const selectedBoost = isSelected ? 1.28 : isRelated ? 1.03 : 0.92;
           const toneBoost =
             node.nodeType === "category" ? toneAccentT * 0.4 : 0;
           node.mesh.scale.setScalar(node.baseScale * pulse * selectedBoost);
@@ -12042,7 +12099,7 @@ export default function ResumeSpace3D({
           bodyMat.opacity = latticeInternalsVisible
             ? isRelated
               ? baseNodeOpacity + toneAccentT * 0.26
-              : 0.2
+              : 0.12
             : 0;
           if (plasmaActive) {
             const baseColor =
@@ -12076,7 +12133,7 @@ export default function ResumeSpace3D({
           }
           if (node.halo?.material) {
             const hMat = node.halo.material as THREE.SpriteMaterial;
-            const focusAlpha = isSelected ? 0.62 : isRelated ? 0.24 : 0.08;
+            const focusAlpha = isSelected ? 0.62 : isRelated ? 0.24 : 0.04;
             let rippleBoost = 0;
             if (ripple.active && rippleRadius >= 0) {
               node.mesh.getWorldPosition(worldNodePos);
@@ -12263,7 +12320,13 @@ export default function ResumeSpace3D({
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (focusPass && composerRef.current) {
+        composerRef.current.removePass(focusPass);
+        focusPass.dispose();
+      }
+    };
   }, [sceneReady, exitSkillsLattice]);
 
   useEffect(() => {
@@ -17900,6 +17963,7 @@ export default function ResumeSpace3D({
 
       const catLabel = createLabel(category, `${branchNames.length} skills`);
       catLabel.userData.skillsLatticeLabel = true;
+      latticeNodes[latticeNodes.length - 1].labelObject = catLabel;
       catLabel.position.set(cPos.x, cPos.y + 6.6, cPos.z);
       catLabel.visible = false;
       skillsLatticeRoot.add(catLabel);
@@ -18015,6 +18079,7 @@ export default function ResumeSpace3D({
           });
           const skillLabel = createLabel(child.name);
           skillLabel.userData.skillsLatticeLabel = true;
+          latticeNodes[latticeNodes.length - 1].labelObject = skillLabel;
           skillLabel.position.set(sPos.x, sPos.y + radius + 1.15, sPos.z);
           skillLabel.visible = false;
           skillsLatticeRoot.add(skillLabel);
