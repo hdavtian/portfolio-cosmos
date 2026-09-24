@@ -1697,8 +1697,10 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         <p className="titles__finale-since">Since {since}</p>
         <p className="titles__finale-craft">One craft</p>
         <ul className="titles__finale-list">
-          {[...experience.rows]
-            .sort((a, b) => b.years - a.years)
+          {/* The first five lines in the resume's own order (Admin -> Resume skills
+              ordering): the finale follows the curation, not a leaderboard. */}
+          {experience.rows
+            .filter((row) => row.slug !== "current-stack" && row.years > 0)
             .slice(0, 5)
             .map((row) => (
               <li key={row.slug}>
