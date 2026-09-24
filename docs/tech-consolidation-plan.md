@@ -123,6 +123,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D26 | Slug uniqueness has three layers: a unique index on the collection (the only real guarantee, since it is the only one that holds under two simultaneous saves), an API check that also translates the index's duplicate-key error into a field error rather than a 500, and admin generating the slug from the name, editable before the first save, with availability checked as it is typed. Generation appends `-2`, `-3` when two names produce the same slug (`C#` and `C Sharp` both want `csharp`). Because slugs are immutable (D25), uniqueness is checked once, at creation, and a rename never re-opens it. | 2026-09-22 |
 | D27 | `featured` is removed; the Resume tick under Shown in does the whole job, because "shown in resume" says what it does and "featured" did not until its hint was read. The rule at every level of the tree: a ticked heading gets its own line, top-level or nested; a ticked skill is printed on the line of the nearest ticked heading above it; nothing is inherited from a parent, so a heading's tick never pulls in its skills, and a line with no ticked skills is not printed. The film's closing list reads the same set. This supersedes D21 and the "resume summary" row in 4.8. Curation is the point: the same set will later feed a plain, machine-readable resume generated for download (a future phase), where every extra keyword costs. New records no longer default the Resume tick on. | 2026-09-24 |
 | D28 | The order of the resume's skills lines is its own record, not the tree's order: a singleton `resumeSkills` holding `headingOrder`, the slugs of Resume-ticked headings in the order they print. Nested headings can then print anywhere (Styling above Backend), and the tree keeps the order the lattice and admin use. A ticked heading missing from the list prints after the listed ones in tree order, so a newly ticked heading never disappears; a stale slug is ignored. The lines are built by one function, `resumeSkillLines` in `@hd/content-schema`, read by the site and by Admin -> Resume -> Resume skills, a grid of the generated lines dragged into order, each drop saving. Chosen over a per-heading number because the order is one fact, saved once. | 2026-09-24 |
+| D29 | The film reads the release. Its timeline is one pure function of the release (`skillsDataFromRelease`): places are the published jobs, spans are each job's skill uses - dated as recorded, or the whole job when undated - and the Skill Progress rows are the tree's top-level headings plus "Current stack" (everything ticked current, counted from 2014 as the mock did). Only uses ticked Film destination, on skills ticked Film progress, are drawn. The mock's 75 per-job years were carried onto the database uses once by `scripts/skills-years-from-mock.mjs` (63 dated, 25 film-only uses added where a job had none of a mock skill's technologies; "leading engineers" and "test automation platforms" have no technology and were dropped). The mock stays as the fallback for a release from before the list, and is retired with the old collections. | 2026-09-24 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -486,13 +487,12 @@ junk records like "Financial Web Content" got into the tree in the first place.
 surfaces ticked on. A grouping with no visible children renders nothing, so
 the resume never shows a bare heading. This is a rendering rule, not a tick.
 
-### Still unplanned: reconciling the film
+### Reconciling the film: done (D29)
 
-The film's mock has 11 categories and 75 uses; the migration produces 13 roots
-and 82 uses, and the job slugs differ (`stormscape-now` in the mock,
-`stormscape-freelance` in the database). Mapping the mock's per-job years onto
-the migrated skill uses is real work that no decision above covers. It is the
-last step of the consolidation (order of work, item 2) and needs its own pass.
+The mock's per-job years were carried onto the database uses by
+`scripts/skills-years-from-mock.mjs` (mapping table inside it; `stormscape-now`
+is `stormscape-freelance`). The film, its home-page preview and the lab page
+read the release; the mock is the fallback until it is retired.
 
 ## 5. What each site sees afterwards
 
@@ -557,6 +557,7 @@ years → film reads the release → remove the old screens and collections.
 - 2026-09-22: draft 5 (p): six scenarios settled ahead of the build (D25), and the film reconciliation named as the one piece still unplanned. "Data centre" corrected to "Data center".
 - 2026-09-22: draft 5 (o): the filter row loses its ten-item cap (D24); the tick is the only control, and the most-used-first order stays.
 - 2026-09-22: draft 5 (n): D23 corrects D20 - a filter list is not a tag list, so the home chips and the Portfolio drop-down get fine control after all.
+- 2026-09-24: draft 8: the film reads the release and the mock's years are carried over (D29).
 - 2026-09-24: draft 7: the resume lines' order is a singleton, ordered on its own admin page (D28).
 - 2026-09-24: draft 6: `featured` removed, the Resume tick carries the rule at every level (D27).
 - 2026-09-22: draft 5 (m): isHeading and headline renamed isGrouping and featured, and every option gets hint text naming the screens it affects (D22).
