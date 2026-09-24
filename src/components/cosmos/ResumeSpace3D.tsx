@@ -9858,6 +9858,24 @@ export default function ResumeSpace3D({
     enterOrbitalPortfolio,
   ]);
 
+  // Left and right arrows step the portfolio like the Prev and Next
+  // buttons, only while the portfolio is active: the listener is added on
+  // entry and removed on exit. Keys typed into the registry's search box are
+  // left alone, and the event stops here so the ship does not steer.
+  useEffect(() => {
+    if (!orbitalPortfolioActive) return;
+    const onArrow = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      stepOrbitalPortfolioSequence(event.key === "ArrowLeft" ? -1 : 1);
+    };
+    window.addEventListener("keydown", onArrow, { capture: true });
+    return () => window.removeEventListener("keydown", onArrow, { capture: true });
+  }, [orbitalPortfolioActive, stepOrbitalPortfolioSequence]);
+
   useEffect(() => {
     if (orbitalPortfolioActive) return;
     orbitalPortfolioStationsRef.current.forEach((station) => {
