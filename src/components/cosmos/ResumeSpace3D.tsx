@@ -3300,8 +3300,11 @@ export default function ResumeSpace3D({
   const orbitalPortfolioFocusedCoreIdRef = useRef("");
   const [orbitalRegistrySelectedCoreId, setOrbitalRegistrySelectedCoreId] =
     useState("");
+  // The registry arrives minimized: a tab at the screen's edge, the panel
+  // sliding in from the right when asked for, so the portfolio is seen
+  // before its controls.
   const [orbitalRegistryPanelVisible, setOrbitalRegistryPanelVisible] =
-    useState(true);
+    useState(false);
   const orbitalPortfolioLastViewedRef = useRef<{
     focusIndex: number | null;
     variantIndex: number;
@@ -7193,7 +7196,7 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioTechFilter("all");
     setOrbitalPortfolioFocusedCoreId("");
     setOrbitalRegistrySelectedCoreId("");
-    setOrbitalRegistryPanelVisible(true);
+    setOrbitalRegistryPanelVisible(false);
     orbitalPortfolioFocusIndexRef.current = 0;
     setOrbitalPortfolioFocusIndex(0);
     orbitalPortfolioLastViewedRef.current = {
@@ -21014,22 +21017,6 @@ export default function ResumeSpace3D({
                 {orbitalPortfolioAutoplayEnabled
                   ? "Auto-play On"
                   : "Auto-play Off"}
-              </button>
-              <button
-                onClick={exitOrbitalPortfolio}
-                style={{
-                  padding: "4px 6px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(255, 195, 160, 0.45)",
-                  background: "rgba(28, 14, 10, 0.82)",
-                  color: "#ffe2d5",
-                  fontFamily: "'Rajdhani', sans-serif",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  marginLeft: "auto",
-                }}
-              >
-                Exit
               </button>
             </div>
             <div
