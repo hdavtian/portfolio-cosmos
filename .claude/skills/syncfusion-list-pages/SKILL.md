@@ -113,6 +113,14 @@ nobody asked for, silently.
   not even a JSX comment. Syncfusion reads children positionally; an extra child
   blanks template cells and drops `visible={false}`. Put comments above the grid.
 - Never render a grid inside a `<form>`: template cells render empty.
+- Column `template` functions must be stable across renders (`useMemo` once,
+  reading live state through a ref). A new function each render makes the
+  grid rebuild every cell, which re-renders React, which makes new functions:
+  with five checkbox templates a row the page froze on the first click.
+- Live tick columns (a click saves that record, no edit mode) are a
+  `CheckBoxComponent` template that PUTs with the record's version, disables
+  itself while saving, and updates the query cache first; guard `change` with
+  `event.event` so a re-render does not save.
 - Row actions use Syncfusion buttons with Syncfusion class tokens (`e-small`,
   `e-outline`, `e-flat`, `e-primary`), never project button classes.
 - Add/edit overlays follow the `syncfusion-edit-dialogs` skill.

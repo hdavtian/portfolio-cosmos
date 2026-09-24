@@ -1,5 +1,5 @@
 import type { Technology } from "@hd/content-schema";
-import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
+import { ButtonComponent, CheckBoxComponent } from "@syncfusion/ej2-react-buttons";
 import {
   ColumnChooser,
   ColumnDirective,
@@ -45,6 +45,19 @@ type TreeRow = {
   filters: boolean;
   aliases: string;
 };
+
+// The tick columns, and the record field each one writes (D20/D27). They are
+// live checkboxes: a click saves that one record straight away, the way a
+// drop saves a move, so a curation pass is a run of clicks down a column
+// rather than open, tick, save, back for every row.
+type TickField = "current" | "lattice" | "resume" | "film" | "filters";
+const TICKS: Array<{ field: TickField; headerText: string; width: number; surface?: Technology["surfaces"][number] }> = [
+  { field: "current", headerText: "Current", width: 100 },
+  { field: "lattice", headerText: "Lattice", width: 95, surface: "lattice" },
+  { field: "resume", headerText: "Resume", width: 95, surface: "resume" },
+  { field: "film", headerText: "Film", width: 85, surface: "filmProgress" },
+  { field: "filters", headerText: "Filters", width: 90, surface: "filters" },
+];
 
 // Constants handed to Syncfusion, so re-renders never refresh the grid.
 const TOOLBAR = ["Search", "ExpandAll", "CollapseAll", "ColumnChooser"];
@@ -227,26 +240,88 @@ export function TechnologiesPage() {
    * Row actions belong in the row: a long tree makes "select, then scroll back
    * to the top" a poor way to reach Edit.
    */
-  const actionsTemplate = (row: TreeRow) => {
-    const record = items.find((item) => item.slug === row.slug);
-    if (!record) return <span />;
-    return (
-      <div style={{ display: "flex", gap: 6 }}>
-        <ButtonComponent
-          cssClass="e-small e-primary e-outline"
-          onClick={() => navigate(`/${ENTITY}/new?parentSlug=${encodeURIComponent(record.slug)}`)}
-        >
-          Add child
-        </ButtonComponent>
-        <ButtonComponent cssClass="e-small e-flat e-outline" onClick={() => navigate(`/${ENTITY}/${record.slug}`)}>
-          Edit
-        </ButtonComponent>
-        <ButtonComponent cssClass="e-small e-danger e-outline" onClick={() => confirmDelete(record)}>
-          Delete
-        </ButtonComponent>
-      </div>
+  // One record, one field, one PUT. The list in the query cache is updated
+  // first so the box shows its new state at once; the version travels with
+  // the body, so a row changed elsewhere since it loaded is refused (409)
+  // rather than overwritten, and the list is refetched either way.
+  const [ticking, setTicking] = useState<Set<string>>(() => new Set());
+  const saveTick = (slug: string, tick: (typeof TICKS)[number], checked: boolean) => {
+    const record = items.find((item) => item.slug === slug);
+    if (!record) return;
+    const key = `${slug}:${tick.field}`;
+    const surfaces = record.surfaces ?? [];
+    const content: Technology = tick.surface
+      ? {
+          ...withoutMeta(record),
+          surfaces: checked ? [...surfaces, tick.surface] : surfaces.filter((surface) => surface !== tick.surface),
+        }
+      : { ...withoutMeta(record), current: checked };
+    setTicking((prev) => new Set(prev).add(key));
+    queryClient.setQueryData<NodeRecord[]>([ENTITY, "all"], (previous) =>
+      previous?.map((item) => (item.slug === slug ? { ...item, ...content } : item)),
     );
+    void (async () => {
+      try {
+        await api.put(`/api/v2/admin/${ENTITY}/${slug}`, { ...content, version: record.version });
+        status.success(`${checked ? "Ticked" : "Unticked"} ${tick.headerText} for "${record.name}". Publish to show it on the sites.`);
+      } catch (error) {
+        status.error(error, `Could not save ${tick.headerText} for "${record.name}".`);
+      } finally {
+        setTicking((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        void refresh();
+      }
+    })();
   };
+
+  // The templates are created once. A new template function on every render
+  // makes the grid rebuild all its cells (five checkboxes a row), which
+  // re-renders React, which makes new templates: the page froze on the first
+  // tick. They read the current state and handlers through a ref instead.
+  const latest = useRef({ ticking, saveTick, items, confirmDelete });
+  latest.current = { ticking, saveTick, items, confirmDelete };
+  const tickTemplates = useMemo(
+    () =>
+      TICKS.map((tick) => (row: TreeRow) => (
+        <CheckBoxComponent
+          checked={row[tick.field]}
+          disabled={latest.current.ticking.has(`${row.slug}:${tick.field}`)}
+          change={(event: { checked: boolean; event?: Event }) => {
+            // Only a click or key press saves; the control also raises change
+            // when the grid re-renders it with a new value.
+            if (event.event) latest.current.saveTick(row.slug, tick, event.checked);
+          }}
+        />
+      )),
+    [],
+  );
+
+  const actionsTemplate = useMemo(
+    () => (row: TreeRow) => {
+      const record = latest.current.items.find((item) => item.slug === row.slug);
+      if (!record) return <span />;
+      return (
+        <div style={{ display: "flex", gap: 6 }}>
+          <ButtonComponent
+            cssClass="e-small e-primary e-outline"
+            onClick={() => navigate(`/${ENTITY}/new?parentSlug=${encodeURIComponent(record.slug)}`)}
+          >
+            Add child
+          </ButtonComponent>
+          <ButtonComponent cssClass="e-small e-flat e-outline" onClick={() => navigate(`/${ENTITY}/${record.slug}`)}>
+            Edit
+          </ButtonComponent>
+          <ButtonComponent cssClass="e-small e-danger e-outline" onClick={() => latest.current.confirmDelete(record)}>
+            Delete
+          </ButtonComponent>
+        </div>
+      );
+    },
+    [navigate],
+  );
 
   return (
     <>
@@ -257,7 +332,7 @@ export function TechnologiesPage() {
             The one list of technologies. A job&apos;s skills and a project&apos;s tags point at an entry here, so a
             name is typed once and corrected once. <strong>Headings</strong> organise the tree and are not skills
             anyone claims; <strong>Shown in</strong> is where an entry may appear. Drag a row onto another to nest it, or above or below a row to
-            reorder; each drop saves immediately.
+            reorder; each drop saves immediately, and so does each tick in the Current and Shown in columns.
           </p>
         </div>
         <ButtonComponent cssClass="e-primary e-outline" onClick={() => navigate(`/${ENTITY}/new`)}>
@@ -306,11 +381,11 @@ export function TechnologiesPage() {
             <ColumnsDirective>
               <ColumnDirective field="name" headerText="Name" width={300} />
               <ColumnDirective field="kind" headerText="Kind" width={100} />
-              <ColumnDirective field="current" headerText="Current" width={100} type="boolean" displayAsCheckBox textAlign="Center" />
-              <ColumnDirective field="lattice" headerText="Lattice" width={95} type="boolean" displayAsCheckBox textAlign="Center" />
-              <ColumnDirective field="resume" headerText="Resume" width={95} type="boolean" displayAsCheckBox textAlign="Center" />
-              <ColumnDirective field="film" headerText="Film" width={85} type="boolean" displayAsCheckBox textAlign="Center" />
-              <ColumnDirective field="filters" headerText="Filters" width={90} type="boolean" displayAsCheckBox textAlign="Center" />
+              <ColumnDirective field="current" headerText="Current" width={100} type="boolean" textAlign="Center" template={tickTemplates[0]} />
+              <ColumnDirective field="lattice" headerText="Lattice" width={95} type="boolean" textAlign="Center" template={tickTemplates[1]} />
+              <ColumnDirective field="resume" headerText="Resume" width={95} type="boolean" textAlign="Center" template={tickTemplates[2]} />
+              <ColumnDirective field="film" headerText="Film" width={85} type="boolean" textAlign="Center" template={tickTemplates[3]} />
+              <ColumnDirective field="filters" headerText="Filters" width={90} type="boolean" textAlign="Center" template={tickTemplates[4]} />
               <ColumnDirective field="aliases" headerText="Also known as" width={280} />
               <ColumnDirective field="slug" headerText="Slug" width={200} isPrimaryKey />
               <ColumnDirective field="childCount" headerText="Children" width={100} textAlign="Right" />
