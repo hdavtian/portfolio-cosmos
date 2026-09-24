@@ -261,7 +261,7 @@ const MOON_TRAVEL_SIGN_PASSED_VIEWER_DIST = 4;
 const MOON_ORBIT_SIGN_DEBUG_LOGS = false;
 // Card layer stays on the overlay pass to avoid bloom/tonemapping washout.
 const PROJECT_SHOWCASE_CARD_LAYER = 1;
-const SKILLS_LATTICE_LAYER = 3;
+const SKILLS_LATTICE_LAYER = 3; // the focus mask uses 9 (latticeFocusPass.ts)
 const EXPERIENCE_END_CAMERA_POSITION = new THREE.Vector3(
   11281.3,
   -534.0,

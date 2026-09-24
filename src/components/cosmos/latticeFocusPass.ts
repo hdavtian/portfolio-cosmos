@@ -13,7 +13,9 @@ import { FullScreenQuad, Pass } from "three/examples/jsm/postprocessing/Pass.js"
  * then blurred everywhere the mask is dark, and left as it is where it is
  * lit. `strength` (0-1) eases the effect in and out.
  */
-export const FOCUS_LAYER = 3;
+// The universe already uses layers 0, 1 (showcase cards), 3 (the lattice)
+// and 4 (the portfolio); this one is the mask's alone.
+export const FOCUS_LAYER = 9;
 
 const shader = {
   uniforms: {
