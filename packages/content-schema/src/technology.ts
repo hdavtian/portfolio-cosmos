@@ -14,7 +14,11 @@ import { slugSchema, sortOrderSchema } from "./primitives.js";
 export const technologySurfaceSchema = z.enum([
   /** The universe's Skills Lattice. */
   "lattice",
-  /** The resume's skills section. */
+  /**
+   * The resume's skills section, and the film's closing list (D27). Ticked on
+   * a heading: it gets its own line. Ticked on a skill: it is printed on the
+   * line of the nearest ticked heading above it. Nothing is inherited.
+   */
   "resume",
   /** The film's Skill Progress screen. */
   "filmProgress",
@@ -36,11 +40,6 @@ export const technologySchema = z.object({
    * because React, AWS and Azure are real technologies that are also parents.
    */
   isGrouping: z.boolean().default(false),
-  /**
-   * Worth putting in front of a recruiter (D21/D22). The resume summary and the
-   * film's closing list read only these. Emphasis, not visibility.
-   */
-  featured: z.boolean().default(false),
   /** Part of the stack in use today (D5). */
   current: z.boolean().default(false),
   surfaces: z.array(technologySurfaceSchema).default([]),

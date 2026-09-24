@@ -4,38 +4,35 @@ import { useReleaseQuery } from "../../../lib/query/contentQueries";
 import { useBackdropTint } from "../lib/backdropTint";
 
 /**
- * The technical skills summary, the way it reads on the printed resume:
- * one line per heading, the skills under it in the tree's order. A heading
- * is one of the few ticked Featured (Admin -> Technologies); a skill appears
- * when ticked for the Resume surface and sits anywhere under that heading.
- * Until any heading is featured, every heading with such skills is shown, so
- * the section reads with content while it is being curated.
+ * The technical skills summary, the way it reads on the printed resume (D27).
+ * One switch decides it: the Resume tick in Admin -> Technologies. A ticked
+ * heading gets its own line, top-level or nested; a ticked skill is printed on
+ * the line of the nearest ticked heading above it; nothing is inherited, and a
+ * line with no skills is not printed. Lines and skills follow the tree's order.
  */
-type TechnologyRow = { slug: string; name: string; parentSlug: string; sortOrder: number; isGrouping: boolean; featured: boolean; surfaces: string[] };
+type TechnologyRow = { slug: string; name: string; parentSlug: string; sortOrder: number; isGrouping: boolean; surfaces: string[] };
 
 const technicalSkills = (technologies: TechnologyRow[]) => {
   const ordered = [...technologies].sort((a, b) => a.sortOrder - b.sortOrder);
   const bySlug = new Map(ordered.map((record) => [record.slug, record]));
-  const rootOf = (record: TechnologyRow) => {
-    let current = record;
-    const seen = new Set<string>();
-    while (current.parentSlug && !seen.has(current.slug)) {
-      seen.add(current.slug);
-      const parent = bySlug.get(current.parentSlug);
-      if (!parent) break;
-      current = parent;
+  const onResume = (record: TechnologyRow) => record.surfaces.includes("resume");
+  const lineFor = (record: TechnologyRow) => {
+    const seen = new Set<string>([record.slug]);
+    let parent = record.parentSlug ? bySlug.get(record.parentSlug) : undefined;
+    while (parent && !seen.has(parent.slug)) {
+      if (parent.isGrouping && onResume(parent)) return parent.slug;
+      seen.add(parent.slug);
+      parent = parent.parentSlug ? bySlug.get(parent.parentSlug) : undefined;
     }
-    return current;
+    return null;
   };
-  const roots = ordered.filter((record) => !record.parentSlug && record.isGrouping);
-  const featured = roots.filter((record) => record.featured);
-  const shownRoots = featured.length > 0 ? featured : roots;
-  return shownRoots
-    .map((root) => ({
-      slug: root.slug,
-      name: root.name,
+  return ordered
+    .filter((record) => record.isGrouping && onResume(record))
+    .map((heading) => ({
+      slug: heading.slug,
+      name: heading.name,
       skills: ordered
-        .filter((record) => !record.isGrouping && record.surfaces.includes("resume") && rootOf(record).slug === root.slug)
+        .filter((record) => !record.isGrouping && onResume(record) && lineFor(record) === heading.slug)
         .map((record) => record.name),
     }))
     .filter((row) => row.skills.length > 0);

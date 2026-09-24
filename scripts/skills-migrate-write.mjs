@@ -116,7 +116,6 @@ depthFirst.forEach((name, index) => {
     parentName,
     parentSlug: "",
     isGrouping: false,
-    featured: false,
     current: false,
     // Every visibility option on (D15); curated in admin before publishing.
     surfaces: parentName === null || TREE[name] === null ? [] : [],
@@ -291,9 +290,6 @@ const technologyDocs = [...technologies.values()]
     name: record.name,
     parentSlug: record.parentSlug,
     isGrouping: record.isGrouping,
-    // Emphasis, not visibility: ticking everything would make it meaningless,
-    // so Harma chooses the few (D21).
-    featured: false,
     current: false,
     surfaces: record.surfaces,
     aliases: [...record.aliases].sort(),

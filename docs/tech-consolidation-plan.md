@@ -121,6 +121,7 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D24 | No cap on the filter row. Today it is the ten most-used technologies by count (`TOP_TECH_COUNT` in `useShowcaseProjects.ts`, added with the redesign in `9adbf5e`). A tick *and* a cap are two controls fighting: ticking twelve would silently drop two with no way to see which. The `filters` tick alone decides which technologies appear and the row wraps if it is long; they stay ordered by how many projects use them, which is a useful order once it is no longer also doing the choosing. `TOP_TECH_COUNT` is deleted; the sort stays. | 2026-09-22 |
 | D25 | Scenarios settled ahead of the build, because each is cheap now and expensive once records exist (section 4.10): slugs are immutable while names stay editable; a referenced technology cannot be deleted, only merged into another; reparenting moves the subtree and a cycle is rejected; aliases are unique across the whole list; unmatched project tags go to a holding list rather than being dropped or auto-created; a grouping with no visible children does not render a heading. | 2026-09-22 |
 | D26 | Slug uniqueness has three layers: a unique index on the collection (the only real guarantee, since it is the only one that holds under two simultaneous saves), an API check that also translates the index's duplicate-key error into a field error rather than a 500, and admin generating the slug from the name, editable before the first save, with availability checked as it is typed. Generation appends `-2`, `-3` when two names produce the same slug (`C#` and `C Sharp` both want `csharp`). Because slugs are immutable (D25), uniqueness is checked once, at creation, and a rename never re-opens it. | 2026-09-22 |
+| D27 | `featured` is removed; the Resume tick under Shown in does the whole job, because "shown in resume" says what it does and "featured" did not until its hint was read. The rule at every level of the tree: a ticked heading gets its own line, top-level or nested; a ticked skill is printed on the line of the nearest ticked heading above it; nothing is inherited from a parent, so a heading's tick never pulls in its skills, and a line with no ticked skills is not printed. The film's closing list reads the same set. This supersedes D21 and the "resume summary" row in 4.8. Curation is the point: the same set will later feed a plain, machine-readable resume generated for download (a future phase), where every extra keyword costs. New records no longer default the Resume tick on. | 2026-09-24 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -139,7 +140,6 @@ technologies on projects for a technical reader.
 | `current` | tick: part of the stack that is relevant today (D5). Replaces the mock's "Current stack" category and its start year. |
 | `showOnResume` | the resume and the Skills planet show only ticked ones, so they keep showing today's 18 under today's 5 headings. |
 | `blurb` | optional one line, mainly for top-level entries |
-| `featured` | matters to an employer: the resume summary and the film's closing list read only these (D21) |
 | `surfaces` | where it may appear: lattice, resume, film progress, filters (D20, D23) |
 | `isGrouping` | a grouping, not a skill (D16). On by default for top-level entries. Surfaces that show skills only skip these; the resume and Skills planet use them as headings. |
 
@@ -378,8 +378,7 @@ the surface actually reads.
 | **Tree / summary** | Skills lattice (universe) | technology `surfaces` |
 | | Resume skills section | technology `surfaces` |
 | | Film: Skill Progress | technology `surfaces` |
-| | Film: closing summary | technology `featured` (D21) |
-| | Resume summary | technology `featured` (D21) |
+| | Film: closing summary | technology `surfaces` (resume, D27) |
 | **Job** | Moon: job detail labels | skill use `surfaces` |
 | | Moon: memories fly-by | skill use `surfaces` |
 | | Film: destination graphic (ring, banner, branch) | skill use `surfaces` |
@@ -428,8 +427,7 @@ where the tick is.
 | Field | Hint text |
 |---|---|
 | `isGrouping` | "A heading, not a skill you claim. Headings organise the tree (Frontend, Databases, APIs). Screens that show skills only - the film's Skill Progress, moon labels, the home page chips - skip them." |
-| `featured` | "One of the few areas to put in front of a recruiter. Only featured entries appear in the resume summary and the film's closing list. It does not change where else this shows." |
-| `surfaces` | "Where this may appear. Lattice: the universe's Skills Lattice. Resume: the resume's skills section. Film progress: the film's Skill Progress screen. Filters: offered as a filter in the home page chips and the universe Portfolio drop-down. Every ticked technology appears, most-used first - there is no limit, so leave this off for something like HTML that nearly every project uses and would filter to almost everything. A project's own technology list is not set here; edit the project." |
+| `surfaces` | "Where this may appear. Lattice: the universe's Skills Lattice. Resume: the resume's skills section and the film's closing list - a ticked heading gets its own line, a ticked skill is printed on the line of the nearest ticked heading above it, nothing is inherited (D27). Film progress: the film's Skill Progress screen. Filters: offered as a filter in the home page chips and the universe Portfolio drop-down. Every ticked technology appears, most-used first - there is no limit, so leave this off for something like HTML that nearly every project uses and would filter to almost everything. A project's own technology list is not set here; edit the project." |
 | `current` | "Part of the stack you work in today. Marks it as current wherever a site separates present from past." |
 | `parent` | "Its one home in the tree. A skill has exactly one parent; if it seems to belong in two places, it is two skills." |
 
@@ -558,6 +556,7 @@ years → film reads the release → remove the old screens and collections.
 - 2026-09-22: draft 5 (p): six scenarios settled ahead of the build (D25), and the film reconciliation named as the one piece still unplanned. "Data centre" corrected to "Data center".
 - 2026-09-22: draft 5 (o): the filter row loses its ten-item cap (D24); the tick is the only control, and the most-used-first order stays.
 - 2026-09-22: draft 5 (n): D23 corrects D20 - a filter list is not a tag list, so the home chips and the Portfolio drop-down get fine control after all.
+- 2026-09-24: draft 6: `featured` removed, the Resume tick carries the rule at every level (D27).
 - 2026-09-22: draft 5 (m): isHeading and headline renamed isGrouping and featured, and every option gets hint text naming the screens it affects (D22).
 - 2026-09-22: draft 5 (l): Harma's list of the ten places a skill shows, mapped to what governs each (D20), and `headline` revived for the recruiter-facing summaries (D21).
 - 2026-09-22: draft 5 (k): the tree is settled (D19). The dry run had been reading tech memories but not code ones; fixed, 86 technologies become 89.

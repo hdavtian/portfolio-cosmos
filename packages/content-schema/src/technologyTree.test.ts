@@ -160,7 +160,6 @@ describe("technologySchema", () => {
     expect(parsed).toMatchObject({
       parentSlug: "",
       isGrouping: false,
-      featured: false,
       current: false,
       surfaces: [],
       aliases: [],

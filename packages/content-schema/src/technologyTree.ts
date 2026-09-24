@@ -13,7 +13,6 @@ export interface TechnologyRecord {
   name: string;
   parentSlug: string;
   isGrouping?: boolean;
-  featured?: boolean;
   current?: boolean;
   surfaces?: readonly string[];
   aliases?: readonly string[];

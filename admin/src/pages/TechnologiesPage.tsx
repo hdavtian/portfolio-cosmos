@@ -38,7 +38,6 @@ type TreeRow = {
   parentId: string | null;
   childCount: number;
   kind: string;
-  featured: boolean;
   current: boolean;
   lattice: boolean;
   resume: boolean;
@@ -131,7 +130,6 @@ export function TechnologiesPage() {
           parentId: item.parentSlug || null,
           childCount: items.filter((other) => other.parentSlug === item.slug).length,
           kind: item.isGrouping ? "Heading" : "Skill",
-          featured: Boolean(item.featured),
           current: Boolean(item.current),
           lattice: (item.surfaces ?? []).includes("lattice"),
           resume: (item.surfaces ?? []).includes("resume"),
@@ -258,8 +256,7 @@ export function TechnologiesPage() {
           <p>
             The one list of technologies. A job&apos;s skills and a project&apos;s tags point at an entry here, so a
             name is typed once and corrected once. <strong>Headings</strong> organise the tree and are not skills
-            anyone claims; <strong>Shown in</strong> is where an entry may appear, and <strong>Featured</strong> marks
-            the few an employer should read first. Drag a row onto another to nest it, or above or below a row to
+            anyone claims; <strong>Shown in</strong> is where an entry may appear. Drag a row onto another to nest it, or above or below a row to
             reorder; each drop saves immediately.
           </p>
         </div>
@@ -309,7 +306,6 @@ export function TechnologiesPage() {
             <ColumnsDirective>
               <ColumnDirective field="name" headerText="Name" width={300} />
               <ColumnDirective field="kind" headerText="Kind" width={100} />
-              <ColumnDirective field="featured" headerText="Featured" width={100} type="boolean" displayAsCheckBox textAlign="Center" />
               <ColumnDirective field="current" headerText="Current" width={100} type="boolean" displayAsCheckBox textAlign="Center" />
               <ColumnDirective field="lattice" headerText="Lattice" width={95} type="boolean" displayAsCheckBox textAlign="Center" />
               <ColumnDirective field="resume" headerText="Resume" width={95} type="boolean" displayAsCheckBox textAlign="Center" />

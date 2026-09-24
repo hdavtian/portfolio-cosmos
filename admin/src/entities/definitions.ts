@@ -206,12 +206,6 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
         kind: "boolean",
       },
       {
-        key: "featured",
-        label: "Featured",
-        hint: "One of the few areas to put in front of a recruiter. Only featured entries appear in the resume summary and the film's closing list. It does not change where else this shows.",
-        kind: "boolean",
-      },
-      {
         key: "current",
         label: "Current stack",
         hint: "Part of the stack you work in today. Marks it as current wherever a site separates present from past.",
@@ -231,7 +225,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
           {
             value: "resume",
             label: "Resume skills",
-            hint: "appears in the resume's skills section",
+            hint: "on the resume's skills section and the film's closing list. A ticked heading gets its own line; a ticked skill is printed on the line of the nearest ticked heading above it. Nothing is inherited: tick the heading and each skill you want printed",
           },
           {
             value: "filmProgress",
@@ -267,9 +261,8 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
       name: "",
       parentSlug: "",
       isGrouping: false,
-      featured: false,
       current: false,
-      surfaces: ["lattice", "resume", "filmProgress", "filters"],
+      surfaces: ["lattice", "filmProgress", "filters"],
       aliases: [],
       blurb: "",
     }),
