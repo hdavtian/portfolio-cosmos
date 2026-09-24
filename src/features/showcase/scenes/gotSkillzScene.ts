@@ -29,11 +29,11 @@ const smooth = (from: number, to: number, t: number) => {
 };
 
 export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData): Promise<ShowcaseScene> {
-  const [{ makeAstrolabe }, { makeBuilders, KIND_BY_PLACE }, { places, spans }] = await Promise.all([
+  const [{ makeAstrolabe }, { makeBuilders, KIND_BY_PLACE }] = await Promise.all([
     import("../../lab/gotAstrolabe"),
     import("../../lab/gotBuilders"),
-    import("../../lab/skillsData"),
   ]);
+  const { places, spans } = data.skills;
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x07060a, 0.00045);

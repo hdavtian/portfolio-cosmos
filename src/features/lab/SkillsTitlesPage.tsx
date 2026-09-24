@@ -12,14 +12,7 @@ import {
   makeBuilders,
   type Build,
 } from "./gotBuilders";
-import {
-  LAST_YEAR,
-  NOW_YEAR,
-  categories,
-  places,
-  say,
-  spans,
-} from "./skillsData";
+import { NOW_YEAR, say, skillsDataFromMock, skillsDataFromRelease, type SkillsData } from "./skillsData";
 import "./skillsTitles.css";
 
 /**
@@ -91,6 +84,7 @@ const NOTES: Record<string, string> = {
   stormscape:
     "Own studio: freelance and side work, running alongside everything that follows",
   "stormscape-now": "The same studio, picked back up",
+  "stormscape-freelance": "The same studio, picked back up",
 };
 
 /** Where each place sits on the map. The studio is home, under the sun. */
@@ -98,6 +92,7 @@ const LAYOUT: Record<string, [number, number]> = {
   earthlink: [-1180, 520],
   hostpro: [-790, 220],
   stormscape: [-150, 60],
+  "stormscape-freelance": [-150, 60],
   unitedlayer: [-570, -460],
   murad: [30, -650],
   "capital-group": [560, -390],
@@ -106,7 +101,7 @@ const LAYOUT: Record<string, [number, number]> = {
   investcloud: [1200, 660],
 };
 
-function buildCities(): City[] {
+function buildCities({ places, spans }: SkillsData): City[] {
   const ordered = [...places].sort((a, b) => a.from - b.from);
   const seen = new Set<string>();
   return ordered.map((place, index) => {
@@ -264,7 +259,7 @@ interface ExperienceRow {
  * calendar: overlapping jobs never count twice, so these are the numbers that
  * can be said out loud in an interview.
  */
-function experienceAt(cities: City[], fractions: number[]) {
+function experienceAt({ categories }: SkillsData, cities: City[], fractions: number[]) {
   const byCategory = new Map<
     string,
     {
@@ -327,11 +322,23 @@ function experienceAt(cities: City[], fractions: number[]) {
   return { rows, career: unionYears(everything) };
 }
 
-const yearsLabel = (city: City) =>
-  `${Math.round(city.from)} – ${city.to >= LAST_YEAR - 1 ? "today" : Math.round(city.to)}`;
+// A start is the year it fell in (July 2025 is 2025, not 2026); an end rounds.
+const yearsLabel = (city: City, lastYear: number) =>
+  `${Math.floor(city.from)} – ${city.to >= lastYear - 1 ? "today" : Math.round(city.to)}`;
 
+/**
+ * The film plays the published timeline. Everything it builds - cities,
+ * timeline, fractions - is derived from that data, so a new release remounts
+ * the film (the key below) rather than mixing two timelines mid-play.
+ */
 export function SkillsTitlesPage() {
-  const cities = useMemo(buildCities, []);
+  const release = useReleaseQuery((content) => skillsDataFromRelease(content)).data;
+  const data = release ?? skillsDataFromMock();
+  return <SkillsTitlesFilm key={data === skillsDataFromMock() ? "mock" : "release"} data={data} />;
+}
+
+function SkillsTitlesFilm({ data }: { data: SkillsData }) {
+  const cities = useMemo(() => buildCities(data), [data]);
   const timeline = useMemo(() => buildTimeline(cities), [cities]);
   // "Since": the earliest year on any published project, so it follows the
   // portfolio rather than being typed in here.
@@ -831,7 +838,7 @@ export function SkillsTitlesPage() {
             new THREE.MeshBasicMaterial({
               map: nameTexture(
                 city.name.toUpperCase(),
-                yearsLabel(city).toUpperCase(),
+                yearsLabel(city, data.LAST_YEAR).toUpperCase(),
               ),
               transparent: true,
               opacity: 0.16,
@@ -1497,14 +1504,14 @@ export function SkillsTitlesPage() {
   }, []);
 
   const fractions = buildFractions(timeline, cities, progress);
-  const experience = experienceAt(cities, fractions);
+  const experience = experienceAt(data, cities, fractions);
   const ending = segment.kind === "outro" ? softly(0.35, 0.8, within(segment, progress)) : 0;
   const era =
     segment.kind === "intro"
-      ? `${Math.round(cities[0].from)}`
+      ? `${Math.floor(cities[0].from)}`
       : segment.kind === "outro"
-        ? `${Math.round(cities[0].from)} – today`
-        : yearsLabel(active);
+        ? `${Math.floor(cities[0].from)} – today`
+        : yearsLabel(active, data.LAST_YEAR);
   const stops = timeline.filter((entry) => entry.kind === "dwell");
 
   // The opening is long, and on an honest bar it would push every place to
@@ -1526,10 +1533,12 @@ export function SkillsTitlesPage() {
 
   // What this place added: each discipline it touched, before it and after it.
   const before = experienceAt(
+    data,
     cities,
     fractions.map((_, index) => (index < cityIndex ? 1 : 0)),
   );
   const after = experienceAt(
+    data,
     cities,
     fractions.map((_, index) => (index <= cityIndex ? 1 : 0)),
   );
@@ -1578,7 +1587,7 @@ export function SkillsTitlesPage() {
       {/* Stopped at a place: where we are, and the way on or back. */}
       <section className={`titles__now${holding ? " is-on" : ""}`} aria-hidden={!holding}>
         <h2 className="titles__now-name">{active.name}</h2>
-        <p className="titles__now-years">{yearsLabel(active)}</p>
+        <p className="titles__now-years">{yearsLabel(active, data.LAST_YEAR)}</p>
         {active.title ? <p className="titles__now-role">{active.title}</p> : null}
         <div className="titles__nav">
           <button type="button" className="titles__nav-button" onClick={goPrevious} disabled={!holding || isFirstPlace}>
@@ -1606,7 +1615,7 @@ export function SkillsTitlesPage() {
             {DIRECTION_BY_PLACE[active.slug] ? ` · look ${DIRECTION_BY_PLACE[active.slug]}` : " · look A+B+C"}
           </p>
           <h2 className="titles__card-name">{active.name}</h2>
-          <p className="titles__card-years">{yearsLabel(active)}</p>
+          <p className="titles__card-years">{yearsLabel(active, data.LAST_YEAR)}</p>
           {fresh.length > 0 ? (
             <>
               <h3 className="titles__card-head is-new">Learned here</h3>
@@ -1758,7 +1767,7 @@ export function SkillsTitlesPage() {
                 className={`titles__stop${stop === segment ? " is-on" : ""}`}
                 // The mark stands where the place is finished, not where it starts going up.
                 style={{ left: `${toBar(holds[index]) * 100}%` }}
-                title={`${cities[stop.city].name} · ${yearsLabel(cities[stop.city])}`}
+                title={`${cities[stop.city].name} · ${yearsLabel(cities[stop.city], data.LAST_YEAR)}`}
                 onClick={() => {
                   snapRef.current = true;
                   setPlaying(false);
@@ -1768,8 +1777,8 @@ export function SkillsTitlesPage() {
               >
                 <span>{cities[stop.city].name.split(" ")[0]}</span>
                 <span className="titles__stop-years">
-                  {Math.round(cities[stop.city].from)}–
-                  {cities[stop.city].to >= LAST_YEAR - 1
+                  {Math.floor(cities[stop.city].from)}–
+                  {cities[stop.city].to >= data.LAST_YEAR - 1
                     ? "now"
                     : String(Math.round(cities[stop.city].to)).slice(2)}
                 </span>

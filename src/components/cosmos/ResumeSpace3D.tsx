@@ -23410,30 +23410,6 @@ export default function ResumeSpace3D({
           )}
 
           {skillsLatticeActive && (
-            <button
-              onClick={() =>
-                exitSkillsLattice({ restoreShip: true, clearSystem: true })
-              }
-              style={{
-                position: "fixed",
-                right: 18,
-                top: 72,
-                zIndex: 1121,
-                padding: "5px 8px",
-                borderRadius: 8,
-                border: "1px solid rgba(255, 195, 160, 0.45)",
-                background: "rgba(28, 14, 10, 0.82)",
-                color: "#ffe2d5",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontSize: 11,
-                cursor: "pointer",
-              }}
-            >
-              Exit
-            </button>
-          )}
-
-          {skillsLatticeActive && (
             <div
               style={{
                 position: "fixed",

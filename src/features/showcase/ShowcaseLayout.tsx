@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { skillsDataFromMock, skillsDataFromRelease } from "../lab/skillsData";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { CINEMATIC_PATH, canKeepAlive } from "../../app/cinematic/keepAlive";
 import { FILM_PATH, FilmHost } from "../../app/film/FilmHost";
@@ -87,6 +88,11 @@ export function ShowcaseLayout() {
       };
     });
   }, [release]);
+  // The film's timeline, for its preview on the home page.
+  const skills = useMemo(() => {
+    const { places, spans } = release ? skillsDataFromRelease(release) : skillsDataFromMock();
+    return { places, spans };
+  }, [release]);
   const { pathname } = useLocation();
   // Only the index lets the scene take the wheel; project pages scroll.
   const onIndex = pathname === "/";
@@ -124,6 +130,7 @@ export function ShowcaseLayout() {
             portfolio={portfolio}
             profile={release?.profile}
             jobs={jobs}
+            skills={skills}
             interactive={onIndex && !cinematicStill}
             paused={onCinematic || onFilm || cinematicStill}
             showPanel={!pathname.startsWith("/portfolio/") && !onFilm}
