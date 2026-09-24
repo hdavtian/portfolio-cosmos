@@ -26,6 +26,14 @@ const PRE_DRAW_WAIT_DURATION = 1.0;
 const PRE_DRAW_SCAN_STEPS = 3;
 /** The drone (Death Star) turns slowly about its own vertical axis. */
 const DRONE_SPIN_AXIS = new THREE.Vector3(0, 1, 0);
+/**
+ * deathstar.glb is authored with its pole along +Z (its dish sits 22 degrees
+ * north of the XY plane, where the real one sits north of the equator), so
+ * spun about Y it rolled: the equatorial trench leaned and the dish wandered
+ * diagonally. Stood up by a quarter turn about X, its pole is Y, the trench
+ * is level to the camera, and the Y spin is a true axial spin.
+ */
+const DEATH_STAR_UPRIGHT = new THREE.Euler(-Math.PI / 2, 0, 0);
 const DRONE_SPIN_SPEED = 0.25;
 const PRE_DRAW_SCAN_TURN_DURATION = 0.45;
 const PRE_DRAW_SCAN_HOLD_DURATION = 0.5;
@@ -567,6 +575,7 @@ export class HologramDroneDisplay {
     group.name = "HologramDrone";
 
     const model = this.oblivionDroneTemplate.clone(true);
+    model.rotation.copy(DEATH_STAR_UPRIGHT);
     model.name = "OblivionDroneModel";
 
     // Deep-clone geometry and materials so this instance is fully
