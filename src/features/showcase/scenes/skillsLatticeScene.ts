@@ -182,9 +182,27 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
   };
 
   const roots = data.techStack;
-  const corePositions = roots.map((_, index) => {
-    const angle = (index / Math.max(1, roots.length)) * Math.PI * 2;
-    return new THREE.Vector3(Math.cos(angle) * RING_RADIUS, Math.sin(index * 0.9) * 6, Math.sin(angle) * RING_RADIUS);
+  // Cores on a sphere, not a ring (the same layout as the universe's lattice):
+  // a Fibonacci spiral spreads them evenly, the radius grows with the count
+  // so neighbours stay a branch-width apart, and a jitter seeded from the
+  // name loosens the pattern while keeping the layout the same every visit.
+  const seeded = (text: string, salt: number) => {
+    let h = 2166136261 ^ salt;
+    for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+    return ((h >>> 0) % 10000) / 10000;
+  };
+  const largestBranch = Math.max(1, ...roots.map((root) => root.children.length));
+  const branchReach = 11 + Math.min(7, largestBranch * 0.7);
+  const coreSpacing = branchReach * 2 + 14;
+  const count = Math.max(1, roots.length);
+  const sphereRadius = Math.max(RING_RADIUS, Math.sqrt((count * coreSpacing * coreSpacing) / (4 * Math.PI)));
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  const corePositions = roots.map((root, index) => {
+    const y = 1 - ((index + 0.5) / count) * 2;
+    const ringR = Math.sqrt(Math.max(0, 1 - y * y));
+    const theta = goldenAngle * index + (seeded(root.name, 1) - 0.5) * 0.6;
+    const radius = sphereRadius * (0.88 + seeded(root.name, 2) * 0.24);
+    return new THREE.Vector3(Math.cos(theta) * ringR * radius, y * radius * 0.85, Math.sin(theta) * ringR * radius);
   });
 
   // Ring links between neighbouring cores.
@@ -208,13 +226,15 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
       depth === 2
         ? 11 + Math.min(7, children.length * 0.7)
         : Math.max(3.2, 6.2 - (depth - 3) * 1.2) + Math.min(3, children.length * 0.35);
+    // A core's ring faces away from the lattice's centre, fanning into empty
+    // space; deeper rings face away from the grandparent.
     const outward = grandparentPosition
       ? parentPosition.clone().sub(grandparentPosition).normalize()
-      : new THREE.Vector3(0, 1, 0);
+      : parentPosition.clone().normalize();
     const axisA = new THREE.Vector3();
     const axisB = new THREE.Vector3();
     let center = parentPosition.clone();
-    if (depth === 2) {
+    if (depth === 2 && outward.lengthSq() < 1e-6) {
       axisA.set(1, 0, 0);
       axisB.set(0, 0, 1);
     } else {
@@ -225,17 +245,11 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
     }
     children.forEach((child, index) => {
       const angle = (index / Math.max(1, children.length)) * Math.PI * 2 + seed * 0.35;
-      const position =
-        depth === 2
-          ? new THREE.Vector3(
-              parentPosition.x + Math.cos(angle) * orbit,
-              parentPosition.y + Math.sin(angle * 1.4) * 2.2,
-              parentPosition.z + Math.sin(angle) * orbit,
-            )
-          : center
-              .clone()
-              .addScaledVector(axisA, Math.cos(angle) * orbit)
-              .addScaledVector(axisB, Math.sin(angle) * orbit);
+      const position = center
+        .clone()
+        .addScaledVector(axisA, Math.cos(angle) * orbit)
+        .addScaledVector(axisB, Math.sin(angle) * orbit)
+        .addScaledVector(outward, depth === 2 ? Math.sin(angle * 1.4) * 2.2 : 0);
       addNode(child.name, position, depth, seed * 2.13 + index * 0.77 + depth * 0.31, pathKeys);
       segments.push({ from: parentPosition.clone(), to: position.clone() });
       placeChildren(child, position, parentPosition, depth + 1, [...pathKeys, normalize(child.name)], seed + index + 1);
@@ -308,7 +322,8 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
       const targetElevation = 0.42 - pointer.y * 0.5;
       elevation += (targetElevation - elevation) * (1 - Math.exp(-2 * dt));
       const angle = azimuth + pointer.x * 0.9;
-      const distance = 128 + Math.sin(time * 0.08) * 10;
+      // Far enough to hold the whole sphere and its branches in frame.
+      const distance = sphereRadius * 1.85 + Math.sin(time * 0.08) * 10;
       camera.position.set(
         Math.cos(angle) * Math.cos(elevation) * distance,
         Math.sin(elevation) * distance,
