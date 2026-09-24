@@ -1702,8 +1702,11 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
             .slice(0, 5)
             .map((row) => (
               <li key={row.slug}>
-                <strong>{Math.floor(row.years)}</strong>
-                <span>yrs · {row.name}</span>
+                <span className="titles__finale-label">{row.name}</span>
+                <strong>
+                  {Math.floor(row.years)}
+                  <small>yrs</small>
+                </strong>
               </li>
             ))}
         </ul>
