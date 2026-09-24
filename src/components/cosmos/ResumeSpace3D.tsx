@@ -17669,13 +17669,38 @@ export default function ResumeSpace3D({
     orbitalPortfolioMatterPacketsRef.current = matterPackets;
     setOrbitalPortfolioReady(true);
 
-    const categoryPositions = categoryEntries.map((_, idx) => {
-      const a = (idx / Math.max(1, categoryEntries.length)) * Math.PI * 2;
-      const y = Math.sin(idx * 0.9) * 6;
+    // Category nodes sit on a sphere, not a ring: with twenty-odd headings a
+    // ring of radius 58 put neighbours 18 units apart while their child rings
+    // reach 18, so branches overlapped. A Fibonacci spiral spreads them evenly
+    // over the sphere; its radius grows with the count so neighbours stay a
+    // branch-width apart; a seeded jitter (from the name, so the layout is the
+    // same every visit) breaks the pattern into something that reads as found
+    // rather than plotted.
+    const seeded = (text: string, salt: number) => {
+      let h = 2166136261 ^ salt;
+      for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+      return ((h >>> 0) % 10000) / 10000;
+    };
+    const largestBranch = Math.max(1, ...categoryEntries.map((root) => root.children.length));
+    const branchReach = 11 + Math.min(7, largestBranch * 0.7);
+    const categorySpacing = branchReach * 2 + 14;
+    const count = Math.max(1, categoryEntries.length);
+    const sphereRadius = Math.max(
+      latticeRadius,
+      Math.sqrt((count * categorySpacing * categorySpacing) / (4 * Math.PI)),
+    );
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    const categoryPositions = categoryEntries.map((root, idx) => {
+      // Evenly spaced heights, spiralling around; the poles are left slightly
+      // clear so no heading sits straight above or below the centre.
+      const y = 1 - ((idx + 0.5) / count) * 2;
+      const ringR = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = goldenAngle * idx + (seeded(root.name, 1) - 0.5) * 0.6;
+      const radius = sphereRadius * (0.88 + seeded(root.name, 2) * 0.24);
       return new THREE.Vector3(
-        Math.cos(a) * latticeRadius,
-        y,
-        Math.sin(a) * latticeRadius,
+        Math.cos(theta) * ringR * radius,
+        y * radius * 0.85,
+        Math.sin(theta) * ringR * radius,
       );
     });
 
@@ -17882,16 +17907,17 @@ export default function ResumeSpace3D({
             ? 11 + Math.min(7, children.length * 0.7)
             : Math.max(3.2, 6.2 - (depth - 3) * 1.2) +
               Math.min(3, children.length * 0.35);
-        // Plane for this ring: depth 2 is the lattice's horizontal plane;
-        // deeper rings are perpendicular to the grandparent → parent direction
-        // and pushed a little further out along it.
+        // Plane for this ring: depth 2 faces away from the lattice's centre,
+        // so a branch on the sphere fans outward into empty space instead of
+        // lying flat across its neighbours; deeper rings are perpendicular to
+        // the grandparent → parent direction and pushed further out along it.
         const outward = grandparentPos
           ? parentPos.clone().sub(grandparentPos).normalize()
-          : new THREE.Vector3(0, 1, 0);
+          : parentPos.clone().normalize();
         const axisA = new THREE.Vector3();
         const axisB = new THREE.Vector3();
         let ringCenter = parentPos.clone();
-        if (depth === 2) {
+        if (depth === 2 && outward.lengthSq() < 1e-6) {
           axisA.set(1, 0, 0);
           axisB.set(0, 0, 1);
         } else {
@@ -17907,17 +17933,13 @@ export default function ResumeSpace3D({
         children.forEach((child, sIdx) => {
           const sa =
             (sIdx / Math.max(1, children.length)) * Math.PI * 2 + orderSeed * 0.35;
-          const sPos =
-            depth === 2
-              ? new THREE.Vector3(
-                  parentPos.x + Math.cos(sa) * orbitR,
-                  parentPos.y + Math.sin(sa * 1.4) * 2.2,
-                  parentPos.z + Math.sin(sa) * orbitR,
-                )
-              : ringCenter
-                  .clone()
-                  .addScaledVector(axisA, Math.cos(sa) * orbitR)
-                  .addScaledVector(axisB, Math.sin(sa) * orbitR);
+          const sPos = ringCenter
+            .clone()
+            .addScaledVector(axisA, Math.cos(sa) * orbitR)
+            .addScaledVector(axisB, Math.sin(sa) * orbitR)
+            // A little rise and fall around the ring keeps it from reading as
+            // a flat disc.
+            .addScaledVector(outward, depth === 2 ? Math.sin(sa * 1.4) * 2.2 : 0);
           const radius = skillNodeRadius * Math.pow(0.78, depth - 2);
           const skillNode = new THREE.Mesh(
             new THREE.OctahedronGeometry(radius, 0),
