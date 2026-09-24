@@ -38,7 +38,6 @@ const EMPTY: PortfolioEntry = {
   title: "",
   mediaId: "",
   description: "",
-  technologies: [],
   technologySlugs: [],
   year: null,
   fit: "cover",
@@ -46,8 +45,6 @@ const EMPTY: PortfolioEntry = {
   clientVariants: [],
 };
 
-const toCommaList = (values: string[]) => values.join(", ");
-const clean = (values: string[]) => values.map((value) => value.trim()).filter(Boolean);
 
 /**
  * Gallery images only need an image: the slug is generated, and a blank title
@@ -79,7 +76,6 @@ const normalise = (draft: PortfolioEntry): PortfolioEntry => ({
   slug: draft.slug.trim(),
   title: draft.title.trim(),
   description: draft.description.trim(),
-  technologies: clean(draft.technologies),
   galleryMedia: trimGallery(draft.galleryMedia, draft),
   clientVariants: draft.clientVariants.map((variant) => {
     const slug = variant.slug.trim() || suggestSlug(variant.title);
@@ -88,7 +84,6 @@ const normalise = (draft: PortfolioEntry): PortfolioEntry => ({
       slug,
       title: variant.title.trim(),
       description: variant.description.trim(),
-      technologies: clean(variant.technologies),
       galleryMedia: trimGallery(variant.galleryMedia, { ...variant, slug }),
     };
   }),
@@ -316,12 +311,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
         </FormField>
         <FormField
           label="Technologies"
-          hint={
-            draft.technologies.length
-              ? `Typed before the master list existed: ${toCommaList(draft.technologies)}. The sites read the linked list above; the typed one goes once every site does.`
-              : undefined
-          }
-          error={fieldErrors.technologySlugs ?? fieldErrors.technologies}
+          error={fieldErrors.technologySlugs}
         >
           <TechnologyPicker value={draft.technologySlugs} onChange={(slugs) => set("technologySlugs", slugs)} />
         </FormField>
@@ -394,7 +384,6 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
           title: "",
           mediaId: "",
           description: "",
-          technologies: [],
           technologySlugs: [],
           year: null,
           fit: "cover",
@@ -423,12 +412,8 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
             </FormField>
             <FormField
               label="Technologies"
-              hint={
-                item.technologies.length
-                  ? `Typed before the master list existed: ${toCommaList(item.technologies)}. Leave the list empty to share the project's.`
-                  : "Leave empty to share the project's technologies."
-              }
-              error={itemError("clientVariants", index, "technologySlugs") ?? itemError("clientVariants", index, "technologies")}
+              hint="A client site is tagged on its own; it never borrows the project's tags."
+              error={itemError("clientVariants", index, "technologySlugs")}
             >
               <TechnologyPicker
                 value={item.technologySlugs ?? []}

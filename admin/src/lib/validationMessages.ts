@@ -10,7 +10,6 @@ const FIELD_LABELS: Record<string, string> = {
   positions: "Position",
   projects: "Project",
   jobMemories: "Memory",
-  jobTech: "Tech",
   planes: "Plane",
   rings: "Ring",
   mediaId: "Image",

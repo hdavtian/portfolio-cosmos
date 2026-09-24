@@ -20,7 +20,7 @@ import { fromDb, toDb } from "./storageCodec.js";
 // else falls back to slug-only search.
 const SEARCHABLE_FIELDS: Partial<Record<CollectionName, readonly string[]>> = {
   experiences: ["slug", "company", "navLabel", "location"],
-  portfolioEntries: ["slug", "title", "description", "technologies"],
+  portfolioEntries: ["slug", "title", "description"],
   portfolioCores: ["slug", "name"],
   links: ["slug", "title", "url"],
   certifications: ["slug", "name"],

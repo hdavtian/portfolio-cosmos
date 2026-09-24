@@ -35,14 +35,14 @@ const EMPTY: Experience = {
   positions: [{ title: "", responsibilities: [] }],
   projects: [],
   jobMemories: [],
-  jobTech: [],
   skillsUsed: [],
 };
 
-const MEMORY_TYPES = [
-  { value: "tech", text: "Tech" },
-  { value: "memory", text: "Memory" },
+// How a memory is drawn as it flies past the moon (D13/D14).
+const MEMORY_STYLES = [
+  { value: "plain", text: "Plain" },
   { value: "code", text: "Code" },
+  { value: "handwritten", text: "Handwritten" },
 ];
 
 // Lines are edited as text and stored as arrays. Blank entries are kept while
@@ -62,10 +62,6 @@ const normalise = (draft: Experience): Experience => ({
     startDate: position.startDate?.trim() || undefined,
     endDate: position.endDate?.trim() || undefined,
     responsibilities: clean(position.responsibilities),
-  })),
-  jobTech: draft.jobTech.map((tech) => ({
-    ...tech,
-    highlightMatches: clean(tech.highlightMatches),
   })),
   // Blank dates mean the whole job; a years box left empty is no years.
   skillsUsed: draft.skillsUsed.map((use) => ({
@@ -294,18 +290,18 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
         description="Short fragments the cosmos drone cycles through."
         items={draft.jobMemories}
         onChange={(items) => set("jobMemories", items)}
-        createItem={() => ({ type: "memory", text: "" })}
+        createItem={() => ({ style: "plain", text: "" })}
         describeItem={(item, index) => item.text || `Memory ${index + 1}`}
         addLabel="Add memory"
         errors={sectionErrors("jobMemories")}
         renderItem={(item, update) => (
           <>
-            <Field label="Type">
+            <Field label="Style" hint="How it is drawn on the fly-by: plain text, a code box, or handwriting">
               <DropDownListComponent
-                dataSource={MEMORY_TYPES}
+                dataSource={MEMORY_STYLES}
                 fields={{ text: "text", value: "value" }}
-                value={item.type}
-                change={(e: { value: string }) => update({ ...item, type: e.value as JobMemory["type"] })}
+                value={item.style}
+                change={(e: { value: string }) => update({ ...item, style: e.value as JobMemory["style"] })}
               />
             </Field>
             <Field label="Text">
@@ -323,18 +319,6 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
         errors={sectionErrors("skillsUsed")}
       />
 
-      {/* The chips that came before skills used. Read-only until they are
-          retired with the old collections; the sites no longer read them
-          once a job has skills used. */}
-      {draft.jobTech.length > 0 ? (
-        <section className="admin-card">
-          <div className="admin-card__head">
-            <h2>Tech chips (old)</h2>
-            <p>Replaced by Skills used above; kept read-only until the old fields are retired.</p>
-          </div>
-          <p className="admin-status">{draft.jobTech.map((tech) => tech.label).join(", ")}</p>
-        </section>
-      ) : null}
     </>
   );
 }

@@ -61,15 +61,6 @@ export const experienceProjectSchema = z.object({
 });
 
 /**
- * Retiring (D12). `tech` and `code` both held technology names as free text -
- * 13 of 25 tech memories and 8 of 14 code memories simply repeated a label on
- * the same job - and `code` existed to get the monospace box, which is styling,
- * not content (D13). After the migration a memory is prose and the type is
- * gone; it stays here until then so today's stored data still validates.
- */
-export const jobMemoryTypeSchema = z.enum(["tech", "memory", "code"]);
-
-/**
  * How a thing is drawn as it flies past a moon (D13/D14). A name, never a font
  * or a colour: the appearance of each token lives in one table in the site, so
  * restyling every code box is one edit rather than one per record. Empty means
@@ -79,17 +70,14 @@ export const flyByStyleSchema = z.enum(["plain", "code", "handwritten"]);
 
 export const FLY_BY_STYLES = flyByStyleSchema.options;
 
+/**
+ * A prose memory that drifts past the job's moon (D12): its text and how it
+ * is drawn. The old `type` (tech / memory / code) became `style` in D32;
+ * the technology names it used to carry live in skillsUsed.
+ */
 export const jobMemorySchema = z.object({
-  type: jobMemoryTypeSchema,
   text: text(500),
-  style: flyByStyleSchema.optional(),
-});
-
-// Tech chips on a job; highlightMatches are the resume terms each chip lights up.
-// Superseded by skillUseSchema below (D1/D2); kept until the migration has run.
-export const jobTechSchema = z.object({
-  label: text(100),
-  highlightMatches: z.array(text(100)),
+  style: flyByStyleSchema.default("plain"),
 });
 
 /** Where one skill may appear for one job (D20). */
@@ -132,7 +120,7 @@ export const skillUseSchema = z.object({
   when: skillUseWhenSchema.optional(),
   surfaces: z.array(skillUseSurfaceSchema).default([]),
   style: flyByStyleSchema.optional(),
-  /** Carried over from jobTech so the universe's hover-highlighting keeps working. */
+  /** The resume terms this skill lights up when hovered on the moon. */
   highlightMatches: z.array(text(100)).default([]),
 });
 
@@ -149,7 +137,6 @@ export const experienceSchema = z.object({
   positions: z.array(positionSchema).min(1),
   projects: z.array(experienceProjectSchema).default([]),
   jobMemories: z.array(jobMemorySchema).default([]),
-  jobTech: z.array(jobTechSchema).default([]),
   skillsUsed: z.array(skillUseSchema).default([]),
 });
 

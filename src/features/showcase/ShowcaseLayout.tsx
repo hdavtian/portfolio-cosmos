@@ -71,10 +71,7 @@ export function ShowcaseLayout() {
       const flyBy = uses
         .filter((use) => use.surfaces.includes("flyBy"))
         .map((use) => ({ type: asMemoryType(use.style), text: use.name }));
-      const prose = entry.jobMemories.map((memory) => ({
-        type: memory.style ? asMemoryType(memory.style) : memory.type,
-        text: memory.text,
-      }));
+      const prose = entry.jobMemories.map((memory) => ({ type: asMemoryType(memory.style), text: memory.text }));
       return {
         slug: entry.slug,
         company: entry.company,
@@ -83,8 +80,8 @@ export function ShowcaseLayout() {
         endDate: entry.endDate,
         droneIntroText: entry.droneIntroText,
         positions: entry.positions,
-        memories: uses.length > 0 ? [...prose, ...flyBy] : entry.jobMemories,
-        tech: uses.length > 0 ? labels : entry.jobTech.map((tech) => tech.label),
+        memories: [...prose, ...flyBy],
+        tech: labels,
       };
     });
   }, [release]);

@@ -38,20 +38,10 @@ export function useShowcaseProjects() {
     const flattened = release ? portfolioItemsFromRelease(release) : [];
 
     const technologies = release?.collections.technologies ?? [];
-    const nameBySlug = new Map(technologies.map((record) => [record.slug, record.name]));
 
+    // Tags are already the linked technologies' names (portfolioTransform).
     const projects: ShowcaseProject[] = flattened.map((item) => ({
       ...item,
-      technologies:
-        item.technologySlugs.length > 0
-          ? [
-              ...new Set(
-                item.technologySlugs
-                  .map((slug) => nameBySlug.get(slug))
-                  .filter((name): name is string => Boolean(name)),
-              ),
-            ]
-          : [...new Set(item.technologies.map((raw) => raw.trim()).filter(Boolean))],
       coreColor: colorByCore.get(item.category) ?? FALLBACK_TINT,
     }));
 
