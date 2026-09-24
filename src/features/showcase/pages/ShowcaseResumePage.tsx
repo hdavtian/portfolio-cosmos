@@ -1,7 +1,45 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useReleaseQuery } from "../../../lib/query/contentQueries";
 import { useBackdropTint } from "../lib/backdropTint";
+
+/**
+ * The technical skills summary, the way it reads on the printed resume:
+ * one line per heading, the skills under it in the tree's order. A heading
+ * is one of the few ticked Featured (Admin -> Technologies); a skill appears
+ * when ticked for the Resume surface and sits anywhere under that heading.
+ * Until any heading is featured, every heading with such skills is shown, so
+ * the section reads with content while it is being curated.
+ */
+type TechnologyRow = { slug: string; name: string; parentSlug: string; sortOrder: number; isGrouping: boolean; featured: boolean; surfaces: string[] };
+
+const technicalSkills = (technologies: TechnologyRow[]) => {
+  const ordered = [...technologies].sort((a, b) => a.sortOrder - b.sortOrder);
+  const bySlug = new Map(ordered.map((record) => [record.slug, record]));
+  const rootOf = (record: TechnologyRow) => {
+    let current = record;
+    const seen = new Set<string>();
+    while (current.parentSlug && !seen.has(current.slug)) {
+      seen.add(current.slug);
+      const parent = bySlug.get(current.parentSlug);
+      if (!parent) break;
+      current = parent;
+    }
+    return current;
+  };
+  const roots = ordered.filter((record) => !record.parentSlug && record.isGrouping);
+  const featured = roots.filter((record) => record.featured);
+  const shownRoots = featured.length > 0 ? featured : roots;
+  return shownRoots
+    .map((root) => ({
+      slug: root.slug,
+      name: root.name,
+      skills: ordered
+        .filter((record) => !record.isGrouping && record.surfaces.includes("resume") && rootOf(record).slug === root.slug)
+        .map((record) => record.name),
+    }))
+    .filter((row) => row.skills.length > 0);
+};
 
 const dateRange = (start?: string, end?: string) =>
   start && end ? `${start} – ${end}` : (start ?? end ?? "");
@@ -52,6 +90,7 @@ export function ShowcaseResumePage() {
   const { summary } = data.profile;
   const { experiences: experience, certifications } = data.collections;
   const [education] = data.collections.education;
+  const skills = useMemo(() => technicalSkills(data.collections.technologies ?? []), [data.collections.technologies]);
 
   return (
     <article className="showcase-resume">
@@ -83,6 +122,7 @@ export function ShowcaseResumePage() {
         </dl>
 
         <nav className="showcase-resume__jump" aria-label="Resume sections">
+          {skills.length ? <a href="#resume-skills">Skills</a> : null}
           <a href="#resume-experience">Experience</a>
           {education ? <a href="#resume-education">Education</a> : null}
           {certifications?.length ? <a href="#resume-certifications">Certifications</a> : null}
@@ -90,6 +130,21 @@ export function ShowcaseResumePage() {
       </header>
 
       <div className="showcase-resume__record">
+        {skills.length ? (
+          <section aria-labelledby="resume-skills">
+            <h2 id="resume-skills" className="showcase-label showcase-resume__heading">
+              Technical skills
+            </h2>
+            <ul className="showcase-resume__skills">
+              {skills.map((row) => (
+                <li key={row.slug}>
+                  <span className="showcase-resume__skills-heading">{row.name}</span>
+                  <span className="showcase-resume__skills-list">{row.skills.join(", ")}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <section aria-labelledby="resume-experience">
           <h2 id="resume-experience" className="showcase-label showcase-resume__heading">
             Experience

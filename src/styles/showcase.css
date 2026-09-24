@@ -2438,6 +2438,43 @@ html.is-scene-dragging * {
   border-bottom: 1px solid rgba(244, 241, 236, 0.22);
 }
 
+/* Technical skills: one line per heading, as on the printed resume. */
+.showcase-resume__skills {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.showcase-resume__skills li {
+  display: grid;
+  grid-template-columns: minmax(120px, 170px) 1fr;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.showcase-resume__skills-heading {
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-resume__skills-list {
+  color: var(--showcase-ink);
+}
+
+@media (max-width: 600px) {
+  .showcase-resume__skills li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
 .showcase-resume__jobs {
   list-style: none;
   margin: 0;
