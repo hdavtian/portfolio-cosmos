@@ -90,8 +90,9 @@ export class ReleaseService {
       singletonDocs.map((doc) => [doc.key as string, fromDb(doc.data)]),
     );
 
+    // A singleton whose schema has a default (resumeSkills) need not exist.
     const missing = (Object.keys(singletonSchemas) as SingletonName[]).filter(
-      (name) => !(name in singletons),
+      (name) => !(name in singletons) && !singletonSchemas[name].safeParse(undefined).success,
     );
     if (missing.length > 0) {
       throw ApiError.badRequest(

@@ -1,0 +1,97 @@
+import { resumeSkillLines, type ResumeSkills, type Technology } from "@hd/content-schema";
+import { ColumnDirective } from "@syncfusion/ej2-react-grids";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
+import { EntityGrid } from "../components/EntityGrid";
+import { api, ApiError } from "../lib/apiClient";
+import { useAllEntities } from "../lib/entityApi";
+import { useStatus } from "../lib/status";
+
+interface SingletonResponse<T> {
+  key: string;
+  data: T;
+  version: number;
+}
+
+const queryKey = ["singletons", "resumeSkills"] as const;
+const EMPTY: ResumeSkills = { headingOrder: [] };
+
+/**
+ * The resume's skills section as it will print, one row per line, dragged
+ * into the order it prints in (D28). The lines themselves come from
+ * Technologies - the Resume tick decides what is on them - so nothing here
+ * is edited but the order. Each drop saves the order at once.
+ */
+export function ResumeSkillsPage() {
+  const queryClient = useQueryClient();
+  const status = useStatus();
+  const technologies = useAllEntities<Technology>("technologies");
+  const order = useQuery({
+    queryKey,
+    queryFn: async () => {
+      try {
+        return await api.get<SingletonResponse<ResumeSkills>>("/api/v2/admin/singletons/resumeSkills");
+      } catch (error) {
+        // Never saved yet: the lines print in tree order until the first drag.
+        if (error instanceof ApiError && error.status === 404) {
+          return { key: "resumeSkills", data: EMPTY, version: 0 } satisfies SingletonResponse<ResumeSkills>;
+        }
+        throw error;
+      }
+    },
+  });
+
+  const lines = useMemo(
+    () => resumeSkillLines(technologies.items ?? [], order.data?.data.headingOrder ?? []),
+    [technologies.items, order.data],
+  );
+  const rows = useMemo(
+    () => lines.map((line) => ({ slug: line.slug, heading: line.name, skills: line.skills.join(", ") })),
+    [lines],
+  );
+
+  const save = useMutation({
+    mutationFn: (headingOrder: string[]) =>
+      api.put<SingletonResponse<ResumeSkills>>("/api/v2/admin/singletons/resumeSkills", {
+        data: { headingOrder },
+        version: order.data?.version ?? 0,
+      }),
+    onSuccess: () => {
+      status.success("Order saved. Publish to show it on the resume.");
+      void queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error) => status.error(error, "Could not save the order."),
+  });
+
+  if (technologies.isLoading || order.isLoading) return <p className="admin-status">Loading…</p>;
+  if (technologies.isError || order.isError) return <p className="admin-error">Could not load the resume skills.</p>;
+
+  return (
+    <>
+      <div className="admin-page-header">
+        <div>
+          <h1>Resume skills</h1>
+          <p>
+            The skills section exactly as the resume prints it: one line per heading ticked <strong>Resume</strong> in{" "}
+            <Link to="/technologies">Technologies</Link>, with the skills ticked under it. Nothing is edited here but
+            the order of the lines: drag a row by its handle, and each drop saves. What is on a line, and which lines
+            exist, is decided by the ticks in Technologies.
+          </p>
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <p className="admin-status">
+          No lines yet: tick <strong>Resume</strong> on a heading and on the skills under it in Technologies.
+        </p>
+      ) : (
+        <div className="admin-grid-wrap">
+          <EntityGrid gridId="resume-skills" rows={rows} mode="local" onReorder={(slugs) => save.mutate(slugs)}>
+            <ColumnDirective field="heading" headerText="Line" width={220} />
+            <ColumnDirective field="skills" headerText="Skills, as printed" />
+          </EntityGrid>
+        </div>
+      )}
+    </>
+  );
+}

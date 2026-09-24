@@ -15,6 +15,7 @@ import {
   experienceSchema,
   linkSchema,
   profileSchema,
+  resumeSkillsSchema,
   skillCategorySchema,
   skillSchema,
 } from "./resume.js";
@@ -23,6 +24,9 @@ import {
 export const singletonSchemas = {
   profile: profileSchema,
   cosmosIntroduction: cosmosIntroductionSchema,
+  // Defaulted, so a release from before it existed still validates, and a
+  // publish is not blocked until the order has been saved once.
+  resumeSkills: resumeSkillsSchema.default({ headingOrder: [] }),
 } as const;
 
 // Ordered, slug-keyed entity collections. The key is the MongoDB collection name.

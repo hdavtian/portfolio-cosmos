@@ -57,6 +57,7 @@ const COLLECTIONS: Record<string, CollectionWording> = {
 const SINGLETON_NAMES: Record<string, string> = {
   profile: "profile",
   cosmosIntroduction: "cosmos introduction",
+  resumeSkills: "resume skills order",
 };
 
 const FIELD_NAMES: Record<string, string> = {

@@ -13,6 +13,17 @@ export const profileSchema = z.object({
   summary: text(4000),
 });
 
+/**
+ * Singleton: the order of the resume's skills lines (D28). Each line is a
+ * heading ticked for the Resume surface; this is the order they print in.
+ * A ticked heading missing from the list prints after the listed ones, in
+ * tree order, so a newly ticked heading never disappears. The list is the
+ * whole record: one document, one save, nothing spread across the tree.
+ */
+export const resumeSkillsSchema = z.object({
+  headingOrder: z.array(slugSchema).default([]),
+});
+
 export const educationSchema = z.object({
   slug: slugSchema,
   sortOrder: sortOrderSchema,
@@ -156,6 +167,7 @@ export const experienceSchema = z.object({
 });
 
 export type Profile = z.infer<typeof profileSchema>;
+export type ResumeSkills = z.infer<typeof resumeSkillsSchema>;
 export type Education = z.infer<typeof educationSchema>;
 export type Certification = z.infer<typeof certificationSchema>;
 export type Link = z.infer<typeof linkSchema>;

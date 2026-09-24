@@ -12,6 +12,7 @@ import { ExperienceDetailPage } from "../pages/ExperienceDetailPage";
 import { ExperiencesPage } from "../pages/ExperiencesPage";
 import { LoginPage } from "../pages/LoginPage";
 import { ProfilePage } from "../pages/ProfilePage";
+import { ResumeSkillsPage } from "../pages/ResumeSkillsPage";
 import { ReleasesPage } from "../pages/ReleasesPage";
 import { MediaDetailPage } from "../pages/MediaDetailPage";
 import { MediaPage } from "../pages/MediaPage";
@@ -62,6 +63,7 @@ export function AdminApp() {
             <Route path="experiences" element={<ExperiencesPage />} />
             <Route path="experiences/:slug" element={<ExperienceDetailPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="resumeSkills" element={<ResumeSkillsPage />} />
             <Route path="releases" element={<ReleasesPage />} />
             <Route path="media" element={<MediaPage />} />
             <Route path="media/:id" element={<MediaDetailPage />} />

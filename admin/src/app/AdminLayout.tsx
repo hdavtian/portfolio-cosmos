@@ -18,7 +18,8 @@ const NAV_GROUPS: Array<{
     links: [
       { to: "/profile", text: "Profile", ready: true },
       { to: "/experiences", text: "Experience", ready: true },
-      { to: "/skills", text: "Skills", ready: true },
+      { to: "/resumeSkills", text: "Resume skills", ready: true },
+      { to: "/skills", text: "Skills (old)", ready: true },
       { to: "/skillCategories", text: "Skill categories", ready: true },
       { to: "/education", text: "Education", ready: true },
       { to: "/certifications", text: "Certifications", ready: true },

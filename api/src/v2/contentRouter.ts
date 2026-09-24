@@ -16,7 +16,7 @@ type Area = z.infer<typeof areaSchema>;
 
 const AREA_CONTENTS: Record<Area, { singletons: string[]; collections: string[] }> = {
   resume: {
-    singletons: ["profile"],
+    singletons: ["profile", "resumeSkills"],
     collections: ["education", "certifications", "links", "skillCategories", "skills", "experiences"],
   },
   portfolio: {

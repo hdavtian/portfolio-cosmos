@@ -6,6 +6,7 @@ import {
   flattenTechnologies,
   hasVisibleChildren,
   headingFor,
+  resumeSkillLines,
   technologyIssues,
   wouldCycle,
   type TechnologyRecord,
@@ -202,5 +203,45 @@ describe("skillUseSchema", () => {
   it("refuses an unknown surface or style", () => {
     expect(() => skillUseSchema.parse({ technologySlug: "html", surfaces: ["resume"] })).toThrow();
     expect(() => skillUseSchema.parse({ technologySlug: "html", style: "neon" })).toThrow();
+  });
+});
+
+describe("resumeSkillLines", () => {
+  const t = (slug: string, parentSlug: string, sortOrder: number, isGrouping: boolean, resume = true) => ({
+    slug,
+    name: slug,
+    parentSlug,
+    sortOrder,
+    isGrouping,
+    surfaces: resume ? ["resume"] : [],
+  });
+  const tree = [
+    t("frontend", "", 0, true),
+    t("react", "frontend", 1, false),
+    t("styling", "frontend", 2, true),
+    t("sass", "styling", 3, false),
+    t("tailwind", "styling", 4, false, false),
+    t("animation", "frontend", 5, true, false),
+    t("gsap", "animation", 6, false),
+    t("backend", "", 7, true),
+    t("csharp", "backend", 8, false),
+    t("empty", "", 9, true),
+  ];
+
+  it("gives a ticked heading its own line and rolls unticked headings' skills up", () => {
+    expect(resumeSkillLines(tree)).toEqual([
+      { slug: "frontend", name: "frontend", skills: ["react", "gsap"] },
+      { slug: "styling", name: "styling", skills: ["sass"] },
+      { slug: "backend", name: "backend", skills: ["csharp"] },
+    ]);
+  });
+
+  it("orders lines by headingOrder, unlisted ones after in tree order", () => {
+    expect(resumeSkillLines(tree, ["backend"]).map((line) => line.slug)).toEqual(["backend", "frontend", "styling"]);
+    expect(resumeSkillLines(tree, ["styling", "gone", "backend"]).map((line) => line.slug)).toEqual([
+      "styling",
+      "backend",
+      "frontend",
+    ]);
   });
 });

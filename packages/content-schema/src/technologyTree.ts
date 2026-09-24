@@ -26,6 +26,57 @@ export interface TechnologyTreeNode {
   children: TechnologyTreeNode[];
 }
 
+/** One line of the resume's skills section: a heading and its skills. */
+export interface ResumeSkillLine {
+  slug: string;
+  name: string;
+  skills: string[];
+}
+
+/**
+ * The resume's skills lines (D27/D28), shared by the site that prints them
+ * and the admin page that orders them. One tick decides it: `resume` in
+ * `surfaces`. A ticked heading gets its own line, top-level or nested; a
+ * ticked skill is printed on the line of the nearest ticked heading above it;
+ * nothing is inherited, and a line with no skills is not printed. Lines
+ * follow `headingOrder`; ticked headings not in it come after, in tree order.
+ * Skills within a line stay in tree order.
+ */
+export function resumeSkillLines(
+  records: readonly TechnologyRecord[],
+  headingOrder: readonly string[] = [],
+): ResumeSkillLine[] {
+  const ordered = [...records].sort((a, b) => a.sortOrder - b.sortOrder);
+  const bySlug = new Map(ordered.map((record) => [record.slug, record]));
+  const onResume = (record: TechnologyRecord) => (record.surfaces ?? []).includes("resume");
+  const lineFor = (record: TechnologyRecord): string | null => {
+    const seen = new Set<string>([record.slug]);
+    let parent = record.parentSlug ? bySlug.get(record.parentSlug) : undefined;
+    while (parent && !seen.has(parent.slug)) {
+      if (parent.isGrouping && onResume(parent)) return parent.slug;
+      seen.add(parent.slug);
+      parent = parent.parentSlug ? bySlug.get(parent.parentSlug) : undefined;
+    }
+    return null;
+  };
+  const lines = ordered
+    .filter((record) => record.isGrouping && onResume(record))
+    .map((heading) => ({
+      slug: heading.slug,
+      name: heading.name,
+      skills: ordered
+        .filter((record) => !record.isGrouping && onResume(record) && lineFor(record) === heading.slug)
+        .map((record) => record.name),
+    }))
+    .filter((line) => line.skills.length > 0);
+  const rank = new Map(headingOrder.map((slug, index) => [slug, index]));
+  const unlisted = headingOrder.length;
+  return lines
+    .map((line, treeIndex) => ({ line, key: [rank.get(line.slug) ?? unlisted, treeIndex] as const }))
+    .sort((a, b) => a.key[0] - b.key[0] || a.key[1] - b.key[1])
+    .map(({ line }) => line);
+}
+
 export interface TechnologyIssue {
   /** Index of the offending record in the list it was given. */
   index: number;

@@ -1,42 +1,8 @@
 import { useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { resumeSkillLines } from "@hd/content-schema/technology-tree";
 import { useReleaseQuery } from "../../../lib/query/contentQueries";
 import { useBackdropTint } from "../lib/backdropTint";
-
-/**
- * The technical skills summary, the way it reads on the printed resume (D27).
- * One switch decides it: the Resume tick in Admin -> Technologies. A ticked
- * heading gets its own line, top-level or nested; a ticked skill is printed on
- * the line of the nearest ticked heading above it; nothing is inherited, and a
- * line with no skills is not printed. Lines and skills follow the tree's order.
- */
-type TechnologyRow = { slug: string; name: string; parentSlug: string; sortOrder: number; isGrouping: boolean; surfaces: string[] };
-
-const technicalSkills = (technologies: TechnologyRow[]) => {
-  const ordered = [...technologies].sort((a, b) => a.sortOrder - b.sortOrder);
-  const bySlug = new Map(ordered.map((record) => [record.slug, record]));
-  const onResume = (record: TechnologyRow) => record.surfaces.includes("resume");
-  const lineFor = (record: TechnologyRow) => {
-    const seen = new Set<string>([record.slug]);
-    let parent = record.parentSlug ? bySlug.get(record.parentSlug) : undefined;
-    while (parent && !seen.has(parent.slug)) {
-      if (parent.isGrouping && onResume(parent)) return parent.slug;
-      seen.add(parent.slug);
-      parent = parent.parentSlug ? bySlug.get(parent.parentSlug) : undefined;
-    }
-    return null;
-  };
-  return ordered
-    .filter((record) => record.isGrouping && onResume(record))
-    .map((heading) => ({
-      slug: heading.slug,
-      name: heading.name,
-      skills: ordered
-        .filter((record) => !record.isGrouping && onResume(record) && lineFor(record) === heading.slug)
-        .map((record) => record.name),
-    }))
-    .filter((row) => row.skills.length > 0);
-};
 
 const dateRange = (start?: string, end?: string) =>
   start && end ? `${start} – ${end}` : (start ?? end ?? "");
@@ -87,7 +53,11 @@ export function ShowcaseResumePage() {
   const { summary } = data.profile;
   const { experiences: experience, certifications } = data.collections;
   const [education] = data.collections.education;
-  const skills = useMemo(() => technicalSkills(data.collections.technologies ?? []), [data.collections.technologies]);
+  // The lines are built by the same function the admin's ordering page uses.
+  const skills = useMemo(
+    () => resumeSkillLines(data.collections.technologies ?? [], data.resumeSkills.headingOrder),
+    [data.collections.technologies, data.resumeSkills.headingOrder],
+  );
 
   return (
     <article className="showcase-resume">
