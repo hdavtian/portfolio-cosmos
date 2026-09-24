@@ -250,6 +250,13 @@ export function TechnologiesPage() {
    * Row actions belong in the row: a long tree makes "select, then scroll back
    * to the top" a poor way to reach Edit.
    */
+  // How many rows have pending ticks. Update and Cancel live in the grid's
+  // toolbar, which is off-screen once the tree is scrolled, so the count is
+  // also shown in a bar fixed to the bottom with its own Update and Cancel.
+  const [pendingCount, setPendingCount] = useState(0);
+  const countPending = () =>
+    window.setTimeout(() => setPendingCount((gridRef.current?.getBatchChanges() as { changedRecords?: unknown[] })?.changedRecords?.length ?? 0), 0);
+
   const pendingTicks = () => {
     const changes = gridRef.current?.getBatchChanges() as { changedRecords?: TreeRow[] } | undefined;
     return changes?.changedRecords ?? [];
@@ -261,6 +268,7 @@ export function TechnologiesPage() {
   // list is refetched afterwards either way, so what shows is what was saved.
   const saveTicks = (args: { batchChanges?: { changedRecords?: TreeRow[] }; cancel?: boolean }) => {
     const changed = args.batchChanges?.changedRecords ?? [];
+    setPendingCount(0);
     if (changed.length === 0) return;
     setSaving(true);
     void (async () => {
@@ -308,6 +316,7 @@ export function TechnologiesPage() {
     grid.editCell(info.rowIndex, field);
     (cell.querySelector(".e-frame") as HTMLElement | null)?.click();
     grid.saveCell();
+    countPending();
   };
 
   // Headings read as headings: a class on the row, styled in styles.css.
@@ -375,6 +384,19 @@ export function TechnologiesPage() {
       {list.isLoading ? <p className="admin-status">Loading…</p> : null}
       {list.items ? (
         <div className="admin-grid-wrap" onClick={clickTick}>
+          {pendingCount > 0 ? (
+            <div className="admin-pending-bar" role="status">
+              <span>
+                {pendingCount} {pendingCount === 1 ? "row" : "rows"} changed, not saved yet
+              </span>
+              <ButtonComponent cssClass="e-primary e-outline" onClick={() => gridRef.current?.endEdit()}>
+                Update
+              </ButtonComponent>
+              <ButtonComponent cssClass="e-flat e-outline" onClick={() => gridRef.current?.grid.editModule.batchCancel()}>
+                Cancel
+              </ButtonComponent>
+            </div>
+          ) : null}
           <TreeGridComponent
             ref={gridRef}
             dataSource={rows}
@@ -396,7 +418,11 @@ export function TechnologiesPage() {
             gridLines="Horizontal"
             editSettings={EDIT_SETTINGS}
             beforeBatchSave={saveTicks}
-            batchCancel={() => status.success("Pending changes discarded.")}
+            batchCancel={() => {
+              setPendingCount(0);
+              status.success("Pending changes discarded.");
+            }}
+            cellSaved={countPending}
             rowDrop={handleDrop}
             rowDataBound={rowDataBound}
             recordDoubleClick={(args: { rowData?: TreeRow; column?: { field?: string } }) => {

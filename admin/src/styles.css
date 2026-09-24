@@ -490,6 +490,32 @@ body {
 /* "Into": Syncfusion marks the target's cells (not the row) mid-drag, so the
    cells are what carry the box - 4px top and bottom on every cell, the left
    and right edges on the first and last, so it reads as one thick outline. */
+/* Pending batch edits: a bar fixed to the bottom, visible wherever the tree
+   is scrolled, carrying the same Update and Cancel as the toolbar. */
+.admin-pending-bar {
+  position: fixed;
+  bottom: 16px;
+  left: var(--admin-sidebar-width);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.admin-pending-bar > * {
+  pointer-events: auto;
+}
+.admin-pending-bar > span {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #fff6e5;
+  border: 1px solid #e0a832;
+  font-weight: 600;
+  font-size: 13px;
+}
+
 /* Heading rows of the technologies tree read as headings, not skills. */
 .e-treegrid tr.admin-tree-heading > td.e-rowcell {
   background: #f1f4f8;
