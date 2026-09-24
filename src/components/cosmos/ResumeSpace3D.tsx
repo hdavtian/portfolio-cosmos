@@ -5041,6 +5041,9 @@ export default function ResumeSpace3D({
     center: new THREE.Vector3(),
     startedAt: 0,
   });
+  // The node under the pointer: drawn sharp and in a warm colour even when
+  // out of focus, so a soft node can be read before it is clicked.
+  const skillsLatticeHoverNodeRef = useRef<SkillsLatticeNodeRecord | null>(null);
   const skillsLatticeSelectedNodeRef = useRef<SkillsLatticeNodeRecord | null>(
     null,
   );
@@ -11812,6 +11815,7 @@ export default function ResumeSpace3D({
     const shellUp = new THREE.Vector3();
     const sunDir = new THREE.Vector3();
     const toneAccentColor = new THREE.Color();
+    const hoverColor = new THREE.Color(0xffa64d);
 
     // Focus. Clicking a node puts its system in focus: the node, its
     // parent, its siblings and everything under it (a core: the core and
@@ -11862,6 +11866,7 @@ export default function ResumeSpace3D({
         const t = nowMs * 0.001;
         const toneRuntime = orbitalPortfolioToneRuntimeRef.current;
         const selected = skillsLatticeSelectedNodeRef.current;
+        const hovered = skillsLatticeActiveRef.current ? skillsLatticeHoverNodeRef.current : null;
         const plasmaActive = !!selected;
         const categoryNodes = skillsLatticeNodesRef.current.filter(
           (n) => n.nodeType === "category",
@@ -12070,12 +12075,13 @@ export default function ResumeSpace3D({
             : 0;
           const pulse = 1 + Math.sin(t * 1.7 + node.phase) * 0.08;
           const isSelected = selected?.mesh === node.mesh;
-          const isRelated = inSystem(node, selected);
+          const isHovered = hovered?.mesh === node.mesh;
+          const isRelated = inSystem(node, selected) || isHovered;
           if (node.labelObject && selected) {
             node.labelObject.visible = node.labelObject.visible && isRelated;
           }
-          // What stays sharp: the system's nodes and their names (halos are
-          // glows and may soften with the rest).
+          // What stays sharp: the system's nodes and their names, and the
+          // node under the pointer (halos are glows and may soften with the rest).
           setFocused(node.mesh, !!selected && isRelated);
           if (node.labelObject) setFocused(node.labelObject, !!selected && isRelated);
           const selectedBoost = isSelected ? 1.28 : isRelated ? 1.03 : 0.92;
@@ -12122,9 +12128,18 @@ export default function ResumeSpace3D({
               THREE.MathUtils.clamp(0.25 + toneAccentT * 0.55, 0, 1),
             );
           }
+          // Under the pointer: a warm colour nothing else in the lattice uses,
+          // so the hover is unmistakable, and full opacity so it can be read.
+          if (isHovered) {
+            bodyMat.color.lerp(hoverColor, 0.85);
+            if (latticeInternalsVisible) bodyMat.opacity = 1;
+            node.mesh.scale.multiplyScalar(1.12);
+          }
           if (node.halo?.material) {
             const hMat = node.halo.material as THREE.SpriteMaterial;
-            const focusAlpha = isSelected ? 0.62 : isRelated ? 0.24 : 0.04;
+            if (isHovered) hMat.color.copy(hoverColor);
+            else hMat.color.set(node.nodeType === "category" ? 0x8fd3ff : 0xdaf1ff);
+            const focusAlpha = isSelected ? 0.62 : isHovered ? 0.55 : isRelated ? 0.24 : 0.04;
             let rippleBoost = 0;
             if (ripple.active && rippleRadius >= 0) {
               node.mesh.getWorldPosition(worldNodePos);
@@ -12748,11 +12763,38 @@ export default function ResumeSpace3D({
       focusSkillsLatticeNode(node, true);
       event.stopPropagation();
     };
+    // Hover: one pick per frame at most, and the cursor says a node is there.
+    let hoverRaf = 0;
+    let hoverAt: { x: number; y: number } | null = null;
+    const setHover = (node: SkillsLatticeNodeRecord | null) => {
+      if (skillsLatticeHoverNodeRef.current === node) return;
+      skillsLatticeHoverNodeRef.current = node;
+      mount.style.cursor = node ? "pointer" : "";
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (!skillsLatticeActiveRef.current) {
+        setHover(null);
+        return;
+      }
+      hoverAt = { x: event.clientX, y: event.clientY };
+      if (hoverRaf) return;
+      hoverRaf = requestAnimationFrame(() => {
+        hoverRaf = 0;
+        if (hoverAt) setHover(pickNodeAtPointer(hoverAt.x, hoverAt.y));
+      });
+    };
+    const onPointerLeave = () => setHover(null);
     mount.addEventListener("pointerdown", onPointerDown, { capture: true });
+    mount.addEventListener("pointermove", onPointerMove);
+    mount.addEventListener("pointerleave", onPointerLeave);
     return () => {
       mount.removeEventListener("pointerdown", onPointerDown, {
         capture: true,
       });
+      mount.removeEventListener("pointermove", onPointerMove);
+      mount.removeEventListener("pointerleave", onPointerLeave);
+      if (hoverRaf) cancelAnimationFrame(hoverRaf);
+      setHover(null);
     };
   }, [focusSkillsLatticeNode]);
 
