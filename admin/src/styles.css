@@ -738,3 +738,90 @@ body {
     height: auto;
   }
 }
+
+.admin-card__head {
+  margin-bottom: 12px;
+}
+.admin-card__head h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.admin-card__head p {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+/* Skills used on a job: one row per skill, its span drawn on the job's timeline. */
+.admin-skill-uses {
+  margin-top: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.admin-skill-use {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) 84px 84px 64px 150px minmax(240px, 1.6fr) 120px;
+  gap: 8px;
+  align-items: start;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-skill-use--head {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--admin-muted);
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-skill-use__name {
+  font-weight: 600;
+  padding-top: 4px;
+}
+
+.admin-skill-use__bar {
+  position: relative;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 3px;
+  background: #e6ebf2;
+}
+
+.admin-skill-use__span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: var(--admin-accent);
+}
+
+.admin-skill-use__span.is-rough {
+  background: repeating-linear-gradient(45deg, var(--admin-accent) 0 4px, #b9d0ee 4px 8px);
+}
+
+.admin-skill-use__ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-top: 4px;
+}
+
+.admin-skill-use__name .admin-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .admin-skill-use {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .admin-skill-use--head {
+    display: none;
+  }
+  .admin-skill-use__name,
+  .admin-skill-use__ticks {
+    grid-column: 1 / -1;
+  }
+}

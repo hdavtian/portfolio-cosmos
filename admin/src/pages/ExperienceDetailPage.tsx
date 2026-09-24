@@ -5,6 +5,7 @@ import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
 import { useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ListEditor } from "../components/ListEditor";
+import { SkillsUsedEditor } from "../components/SkillsUsedEditor";
 import { useStatus } from "../lib/status";
 import { fieldLabel } from "../lib/validationMessages";
 import { ApiError } from "../lib/apiClient";
@@ -21,7 +22,6 @@ const ENTITY = "experiences";
 type Position = Experience["positions"][number];
 type Project = Experience["projects"][number];
 type JobMemory = Experience["jobMemories"][number];
-type JobTech = Experience["jobTech"][number];
 
 const EMPTY: Experience = {
   slug: "",
@@ -45,12 +45,10 @@ const MEMORY_TYPES = [
   { value: "code", text: "Code" },
 ];
 
-// Lines and comma lists are edited as text and stored as arrays. Blank entries
-// are kept while typing (so Enter works) and dropped on save.
+// Lines are edited as text and stored as arrays. Blank entries are kept while
+// typing (so Enter works) and dropped on save.
 const toLines = (values: string[]) => values.join("\n");
 const fromLines = (text: string) => text.split("\n");
-const toCommaList = (values: string[]) => values.join(", ");
-const fromCommaList = (text: string) => text.split(",").map((value) => value.trimStart());
 
 const clean = (values: string[]) => values.map((value) => value.trim()).filter(Boolean);
 
@@ -68,6 +66,16 @@ const normalise = (draft: Experience): Experience => ({
   jobTech: draft.jobTech.map((tech) => ({
     ...tech,
     highlightMatches: clean(tech.highlightMatches),
+  })),
+  // Blank dates mean the whole job; a years box left empty is no years.
+  skillsUsed: draft.skillsUsed.map((use) => ({
+    ...use,
+    from: use.from?.trim() || undefined,
+    to: use.to?.trim() || undefined,
+    years: use.years === undefined || Number.isNaN(use.years) ? undefined : use.years,
+    when: use.when || undefined,
+    style: use.style || undefined,
+    highlightMatches: clean(use.highlightMatches ?? []),
   })),
 });
 
@@ -307,29 +315,26 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
         )}
       />
 
-      <ListEditor<JobTech>
-        title="Tech chips"
-        description="Technology labels; each lights up the listed words in the resume text."
-        items={draft.jobTech}
-        onChange={(items) => set("jobTech", items)}
-        createItem={() => ({ label: "", highlightMatches: [] })}
-        describeItem={(item, index) => item.label || `Tech ${index + 1}`}
-        addLabel="Add tech chip"
-        errors={sectionErrors("jobTech")}
-        renderItem={(item, update) => (
-          <>
-            <Field label="Label">
-              <TextBoxComponent value={item.label} input={(e: { value: string }) => update({ ...item, label: e.value })} />
-            </Field>
-            <Field label="Highlights" hint="Comma-separated words to highlight">
-              <TextBoxComponent
-                value={toCommaList(item.highlightMatches)}
-                input={(e: { value: string }) => update({ ...item, highlightMatches: fromCommaList(e.value) })}
-              />
-            </Field>
-          </>
-        )}
+      <SkillsUsedEditor
+        value={draft.skillsUsed}
+        onChange={(uses) => set("skillsUsed", uses)}
+        jobStart={draft.startDate}
+        jobEnd={draft.endDate}
+        errors={sectionErrors("skillsUsed")}
       />
+
+      {/* The chips that came before skills used. Read-only until they are
+          retired with the old collections; the sites no longer read them
+          once a job has skills used. */}
+      {draft.jobTech.length > 0 ? (
+        <section className="admin-card">
+          <div className="admin-card__head">
+            <h2>Tech chips (old)</h2>
+            <p>Replaced by Skills used above; kept read-only until the old fields are retired.</p>
+          </div>
+          <p className="admin-status">{draft.jobTech.map((tech) => tech.label).join(", ")}</p>
+        </section>
+      ) : null}
     </>
   );
 }
