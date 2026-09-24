@@ -263,7 +263,10 @@ body {
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
   border-radius: 8px;
-  overflow: hidden;
+  /* Not overflow: hidden - that would make this the sticky container and
+     pin a grid's sticky header to the wrapper instead of the viewport. */
+  overflow: clip;
+  overflow-clip-margin: 1px;
 }
 
 .admin-form__row {

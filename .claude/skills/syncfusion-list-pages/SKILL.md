@@ -129,6 +129,10 @@ nobody asked for, silently.
   Plain boolean columns (`displayAsCheckBox`, `editType="booleanedit"`), no
   templates. Do not build live-save checkbox templates: they saved once and
   then stayed disabled, and new template functions per render froze the page.
+- Long grids: `enableStickyHeader` (Grid and TreeGrid) pins the header and
+  toolbar to the viewport. It needs no `overflow: hidden` on any ancestor -
+  that makes the ancestor the sticky container; use `overflow: clip` for
+  rounded corners instead.
 - Tree row styling by kind: `rowDataBound` adds a class; style it in CSS.
 - Row actions use Syncfusion buttons with Syncfusion class tokens (`e-small`,
   `e-outline`, `e-flat`, `e-primary`), never project button classes.

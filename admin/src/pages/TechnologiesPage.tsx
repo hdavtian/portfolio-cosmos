@@ -416,6 +416,7 @@ export function TechnologiesPage() {
             searchSettings={SEARCH_SETTINGS}
             filterSettings={FILTER_SETTINGS}
             gridLines="Horizontal"
+            enableStickyHeader
             editSettings={EDIT_SETTINGS}
             beforeBatchSave={saveTicks}
             batchCancel={() => {
