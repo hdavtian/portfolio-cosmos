@@ -243,12 +243,16 @@ export function TechnologiesPage() {
   // One record, one field, one PUT. The list in the query cache is updated
   // first so the box shows its new state at once; the version travels with
   // the body, so a row changed elsewhere since it loaded is refused (409)
-  // rather than overwritten, and the list is refetched either way.
-  const [ticking, setTicking] = useState<Set<string>>(() => new Set());
+  // rather than overwritten, and the list is refetched either way. A box
+  // whose save is still out ignores a second click; it is not disabled in
+  // React state, because the grid re-renders a cell only when its row data
+  // changes, and a box once rendered disabled stayed that way.
+  const ticking = useRef(new Set<string>());
   const saveTick = (slug: string, tick: (typeof TICKS)[number], checked: boolean) => {
     const record = items.find((item) => item.slug === slug);
-    if (!record) return;
     const key = `${slug}:${tick.field}`;
+    if (!record || ticking.current.has(key)) return;
+    ticking.current.add(key);
     const surfaces = record.surfaces ?? [];
     const content: Technology = tick.surface
       ? {
@@ -256,7 +260,6 @@ export function TechnologiesPage() {
           surfaces: checked ? [...surfaces, tick.surface] : surfaces.filter((surface) => surface !== tick.surface),
         }
       : { ...withoutMeta(record), current: checked };
-    setTicking((prev) => new Set(prev).add(key));
     queryClient.setQueryData<NodeRecord[]>([ENTITY, "all"], (previous) =>
       previous?.map((item) => (item.slug === slug ? { ...item, ...content } : item)),
     );
@@ -267,11 +270,7 @@ export function TechnologiesPage() {
       } catch (error) {
         status.error(error, `Could not save ${tick.headerText} for "${record.name}".`);
       } finally {
-        setTicking((prev) => {
-          const next = new Set(prev);
-          next.delete(key);
-          return next;
-        });
+        ticking.current.delete(key);
         void refresh();
       }
     })();
@@ -281,14 +280,13 @@ export function TechnologiesPage() {
   // makes the grid rebuild all its cells (five checkboxes a row), which
   // re-renders React, which makes new templates: the page froze on the first
   // tick. They read the current state and handlers through a ref instead.
-  const latest = useRef({ ticking, saveTick, items, confirmDelete });
-  latest.current = { ticking, saveTick, items, confirmDelete };
+  const latest = useRef({ saveTick, items, confirmDelete });
+  latest.current = { saveTick, items, confirmDelete };
   const tickTemplates = useMemo(
     () =>
       TICKS.map((tick) => (row: TreeRow) => (
         <CheckBoxComponent
           checked={row[tick.field]}
-          disabled={latest.current.ticking.has(`${row.slug}:${tick.field}`)}
           change={(event: { checked: boolean; event?: Event }) => {
             // Only a click or key press saves; the control also raises change
             // when the grid re-renders it with a new value.

@@ -118,9 +118,12 @@ nobody asked for, silently.
   grid rebuild every cell, which re-renders React, which makes new functions:
   with five checkbox templates a row the page froze on the first click.
 - Live tick columns (a click saves that record, no edit mode) are a
-  `CheckBoxComponent` template that PUTs with the record's version, disables
-  itself while saving, and updates the query cache first; guard `change` with
-  `event.event` so a re-render does not save.
+  `CheckBoxComponent` template that PUTs with the record's version and updates
+  the query cache first; guard `change` with `event.event` so a re-render does
+  not save. Never disable the box through React state: the grid re-renders a
+  cell only when its row data changes, so a box rendered disabled stays
+  disabled (a second click did nothing). Track the in-flight save in a ref and
+  ignore a click while it is out.
 - Row actions use Syncfusion buttons with Syncfusion class tokens (`e-small`,
   `e-outline`, `e-flat`, `e-primary`), never project button classes.
 - Add/edit overlays follow the `syncfusion-edit-dialogs` skill.
