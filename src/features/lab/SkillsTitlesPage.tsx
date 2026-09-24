@@ -373,9 +373,12 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   }, [cities, projects]);
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
-  const progressRef = useRef(0);
-  const [progress, setProgress] = useState(0);
-  const [playing, setPlaying] = useState(true);
+  // The film opens on its last frame - today's complete picture, every tower
+  // up and the tally full - because that is the question a visitor brings.
+  // Play then runs the build-up from the first job.
+  const progressRef = useRef(1);
+  const [progress, setProgress] = useState(1);
+  const [playing, setPlaying] = useState(false);
   const [direction, setDirection] = useState(1);
   const [openRows, setOpenRows] = useState<string[]>([]);
   // The film stops at each place once it is built, until it is told to go on.
@@ -1673,8 +1676,9 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         <p className="titles__finale-since">Since {since}</p>
         <p className="titles__finale-craft">One craft</p>
         <ul className="titles__finale-list">
-          {experience.rows
-            .filter((row) => ["frontend", "backend", "data", "cloud", "leadership"].includes(row.slug))
+          {[...experience.rows]
+            .sort((a, b) => b.years - a.years)
+            .slice(0, 5)
             .map((row) => (
               <li key={row.slug}>
                 <strong>{Math.floor(row.years)}</strong>
@@ -1684,7 +1688,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         </ul>
         <p className="titles__finale-links">
           <button type="button" onClick={replay}>
-            Replay
+            Play from the start
           </button>
           <Link to="/resume">Read résumé</Link>
           <Link to="/universe">Enter the universe</Link>
@@ -1727,7 +1731,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
             }
           }}
         >
-          {progress >= 1 ? "Replay" : playing ? "Pause" : "Play ▶"}
+          {progress >= 1 ? "Play from the start ▶" : playing ? "Pause" : "Play ▶"}
         </button>
         <div className="titles__track">
           <input

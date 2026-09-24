@@ -1,3 +1,4 @@
+import { resumeSkillLines } from "@hd/content-schema/technology-tree";
 import type { Release } from "../../lib/api/release";
 import mock from "../../data/mock/skillTimeline.json";
 
@@ -228,12 +229,14 @@ const yearOf = (value: string | undefined, fallback: number) => {
 };
 
 /**
- * The timeline from the published release. Categories are the tree's
- * top-level headings (plus "Current stack", counted from CURRENT_STACK_SINCE,
- * for everything ticked current); a skill's category is the heading it sits
- * under; a job's uses are its spans, each dated as recorded or, undated,
- * taken as the whole job. Only uses ticked for the film's destination, on
- * skills ticked for the film's progress, are drawn.
+ * The timeline from the published release. The Skill Progress rows are the
+ * resume's lines - the headings ticked Resume, in the order set on Admin ->
+ * Resume skills ordering - so the film's tally and the resume agree (plus
+ * "Current stack", counted from CURRENT_STACK_SINCE, for everything ticked
+ * current). A skill's row is the line it prints on. A job's uses are its
+ * spans, each dated as recorded or, undated, taken as the whole job. Only
+ * uses ticked for the film's destination, on skills ticked for the film's
+ * progress, are drawn.
  */
 export function skillsDataFromRelease(release: Release): SkillsData {
   const technologies = release.collections.technologies ?? [];
@@ -253,27 +256,18 @@ export function skillsDataFromRelease(release: Release): SkillsData {
   if (technologies.length === 0 || uses.length === 0) return skillsDataFromMock();
 
   const bySlug = new Map(technologies.map((record) => [record.slug, record]));
-  const rootOf = (slug: string) => {
-    const seen = new Set<string>();
-    let current = bySlug.get(slug);
-    while (current?.parentSlug && !seen.has(current.slug)) {
-      seen.add(current.slug);
-      current = bySlug.get(current.parentSlug);
-    }
-    return current;
-  };
   const ordered = [...technologies].sort((a, b) => a.sortOrder - b.sortOrder);
+  const lines = resumeSkillLines(technologies, release.resumeSkills?.headingOrder ?? []);
+  const lineOf = new Map(lines.flatMap((line) => line.skillSlugs.map((slug) => [slug, line.slug] as const)));
   const anyCurrent = ordered.some((record) => record.current && !record.isGrouping);
   const categories: Category[] = [
-    ...ordered
-      .filter((record) => record.isGrouping && !record.parentSlug)
-      .map((record) => ({
-        slug: record.slug,
-        name: record.name,
-        sortOrder: record.sortOrder,
-        headline: record.surfaces.includes("resume"),
-        blurb: record.blurb,
-      })),
+    ...lines.map((line, index) => ({
+      slug: line.slug,
+      name: line.name,
+      sortOrder: index,
+      headline: true,
+      blurb: bySlug.get(line.slug)?.blurb,
+    })),
     ...(anyCurrent
       ? [
           {
@@ -289,12 +283,12 @@ export function skillsDataFromRelease(release: Release): SkillsData {
   const skills: SkillDefinition[] = ordered
     .filter((record) => !record.isGrouping && record.surfaces.includes("filmProgress"))
     .map((record) => {
-      const root = rootOf(record.slug);
+      const line = lineOf.get(record.slug);
       const parent = record.parentSlug ? bySlug.get(record.parentSlug) : undefined;
       return {
         slug: record.slug,
         name: record.name,
-        categories: [...(root && root.isGrouping ? [root.slug] : []), ...(record.current ? ["current-stack"] : [])],
+        categories: [...(line ? [line] : []), ...(record.current ? ["current-stack"] : [])],
         parent: parent && !parent.isGrouping ? parent.slug : undefined,
       };
     });

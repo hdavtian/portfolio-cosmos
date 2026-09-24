@@ -73,6 +73,8 @@ export interface ResumeSkillLine {
   slug: string;
   name: string;
   skills: string[];
+  /** The same skills, by slug, for readers that key on records. */
+  skillSlugs: string[];
 }
 
 /**
@@ -103,13 +105,17 @@ export function resumeSkillLines(
   };
   const lines = ordered
     .filter((record) => record.isGrouping && onResume(record))
-    .map((heading) => ({
-      slug: heading.slug,
-      name: heading.name,
-      skills: ordered
-        .filter((record) => !record.isGrouping && onResume(record) && lineFor(record) === heading.slug)
-        .map((record) => record.name),
-    }))
+    .map((heading) => {
+      const records = ordered.filter(
+        (record) => !record.isGrouping && onResume(record) && lineFor(record) === heading.slug,
+      );
+      return {
+        slug: heading.slug,
+        name: heading.name,
+        skills: records.map((record) => record.name),
+        skillSlugs: records.map((record) => record.slug),
+      };
+    })
     .filter((line) => line.skills.length > 0);
   const rank = new Map(headingOrder.map((slug, index) => [slug, index]));
   const unlisted = headingOrder.length;

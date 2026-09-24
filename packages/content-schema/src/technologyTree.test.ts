@@ -232,9 +232,9 @@ describe("resumeSkillLines", () => {
 
   it("gives a ticked heading its own line and rolls unticked headings' skills up", () => {
     expect(resumeSkillLines(tree)).toEqual([
-      { slug: "frontend", name: "frontend", skills: ["react", "gsap"] },
-      { slug: "styling", name: "styling", skills: ["sass"] },
-      { slug: "backend", name: "backend", skills: ["csharp"] },
+      { slug: "frontend", name: "frontend", skills: ["react", "gsap"], skillSlugs: ["react", "gsap"] },
+      { slug: "styling", name: "styling", skills: ["sass"], skillSlugs: ["sass"] },
+      { slug: "backend", name: "backend", skills: ["csharp"], skillSlugs: ["csharp"] },
     ]);
   });
 
