@@ -282,15 +282,45 @@
 }
 
 /* The last frame: the whole map, and the number it has been adding up to. */
+/* The closing screen is the left column: the title above the skill
+   progress panel (which moves down for it), the links beneath the panel,
+   above the scrubber. The map stays clear. */
 .titles__finale {
   position: absolute;
-  inset: 0;
+  top: clamp(50px, 9vh, 86px);
+  bottom: clamp(84px, 13vh, 120px);
+  left: 0;
+  right: 0;
+  padding-left: clamp(18px, 3.4vw, 50px);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  background: radial-gradient(ellipse at 50% 50%, rgba(8, 5, 2, 0.62), transparent 62%);
+  align-items: flex-start;
+  text-align: left;
+  /* The title takes clicks; the panel underneath must not be covered. */
+  pointer-events: none;
+}
+
+/* The three actions: one row, centred across the screen, low, above the
+   scrubber (the finale block itself stays in the left column). */
+.titles__finale-links {
+  position: absolute;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  margin: 0;
+  pointer-events: auto;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+
+.titles__finale-links a,
+.titles__finale-links button {
+  white-space: nowrap;
+}
+
+.tally.is-finale {
+  top: calc(clamp(50px, 9vh, 86px) + 96px);
+  bottom: clamp(140px, 22vh, 190px);
 }
 
 .titles__finale-years {
@@ -319,7 +349,7 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 10px 34px;
+  gap: 8px 28px;
 }
 
 .titles__finale-list li {
@@ -331,7 +361,7 @@
 /* The line's name leads, read first; the years sit under it, "yrs" small beside them. */
 .titles__finale-label {
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: clamp(0.8rem, 1.3vw, 1.05rem);
+  font-size: clamp(0.7rem, 1.05vw, 0.88rem);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--titles-pale);
@@ -342,7 +372,7 @@
   align-items: baseline;
   gap: 6px;
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  font-size: clamp(1.2rem, 2.3vw, 1.9rem);
   color: var(--titles-pale);
 }
 
@@ -478,11 +508,14 @@
 
 /* The message: years of experience so far, lit from underneath. */
 .tally {
+  /* The three columns, in px so the line (11px type) and its opened skills
+     (10px type) resolve to the same widths: em would differ. */
+  --tally-columns: minmax(0, 192px) minmax(180px, 1fr) 58px;
   position: absolute;
   top: clamp(118px, 19vh, 176px);
   bottom: clamp(74px, 12vh, 110px);
   left: clamp(18px, 3.4vw, 50px);
-  width: min(300px, 32vw);
+  width: min(560px, 48vw);
   overflow: hidden;
   cursor: default;
 }
@@ -537,14 +570,26 @@
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 9px;
+  gap: 7px;
+}
+
+/* A row is three columns: name (right-aligned), bar, years. The opened
+   skills list runs under all three. */
+.tally__row {
+  display: grid;
+  grid-template-columns: var(--tally-columns);
+  align-items: center;
+  column-gap: 10px;
 }
 
 .tally__name {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  text-align: right;
   gap: 7px;
   width: 100%;
+  min-width: 0;
   padding: 0;
   background: none;
   border: 0;
@@ -572,24 +617,28 @@
 }
 
 .tally__years {
-  margin-left: auto;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
-  text-transform: none;
+  white-space: nowrap;
   color: rgba(243, 226, 184, 0.72);
 }
 
 .tally__bar {
   display: block;
   height: 4px;
-  margin-top: 4px;
   background: rgba(217, 164, 65, 0.12);
 }
 
 .tally__fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #8f2c06, #e2761f 55%, #ffd06a);
-  box-shadow: 0 0 10px rgba(226, 118, 32, 0.6);
+  /* Yellow at the start, hotter along the track: the gradient is sized to the
+     whole track (100 / the fill's percentage), so a short bar shows only its
+     yellow beginning and a long one runs into the red. */
+  background: linear-gradient(90deg, #ffd96a, #ffb43a 35%, #e2761f 70%, #b8240c);
+  background-size: calc(100% * 100 / var(--pct, 100)) 100%;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 10px rgba(226, 118, 32, 0.5);
 }
 
 /* A discipline that is taking on years right now sizzles. */
@@ -617,24 +666,45 @@
   }
 }
 
+/* The opened skills: the same three columns as the line above them, the
+   names right-aligned to the same edge, their bars on the same track. */
 .tally__skills {
+  grid-column: 1 / -1;
   list-style: none;
-  margin: 6px 0 2px 20px;
+  margin: 3px 0 4px;
   padding: 0;
   display: grid;
   gap: 3px;
   font-size: 10px;
-  color: rgba(243, 226, 184, 0.58);
+  color: rgba(243, 226, 184, 0.62);
 }
 
 .tally__skills li {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: var(--tally-columns);
+  align-items: center;
+  column-gap: 10px;
 }
 
-.tally__skills li span:last-child {
-  font-variant-numeric: tabular-nums;
+.tally__skill-name {
+  text-align: right;
+  /* Sits where the line's name sits, clear of its chevron. */
+  padding-right: 20px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tally__bar--skill {
+  height: 3px;
+  opacity: 0.85;
+}
+
+.tally__years--skill {
+  font-size: 10px;
+  color: rgba(243, 226, 184, 0.55);
 }
 
 .tally__foot {
@@ -699,11 +769,14 @@
   pointer-events: auto;
 }
 
-/* Where we are, and the way on or back. */
+/* Where we are, and the way on or back. Sits to the right of the skill
+   progress panel, and above it in stacking, so its buttons are never under
+   the panel. */
 .titles__now {
   position: absolute;
-  left: clamp(18px, 3.4vw, 50px);
+  left: calc(clamp(18px, 3.4vw, 50px) + min(560px, 48vw) + 28px);
   bottom: clamp(84px, 14vh, 128px);
+  z-index: 7;
   max-width: min(560px, 60vw);
   opacity: 0;
   transform: translateY(8px);
@@ -798,9 +871,9 @@
 }
 
 .titles__finale-craft {
-  margin: 6px 0 28px;
+  margin: 2px 0 0;
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: clamp(3rem, 8vw, 6.5rem);
+  font-size: clamp(1.5rem, 4vw, 3.25rem);
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.08em;
@@ -866,4 +939,17 @@
 @keyframes titles-resume-in {
   from { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Narrower windows: a shorter panel so the finale's title keeps clear of it. */
+@media (max-width: 1400px) {
+  .tally {
+    width: min(420px, 40vw);
+  }
+  .tally {
+    --tally-columns: minmax(0, 160px) minmax(120px, 1fr) 58px;
+  }
+  .titles__now {
+    left: calc(clamp(18px, 3.4vw, 50px) + min(420px, 40vw) + 28px);
+  }
 }

@@ -82,6 +82,9 @@ const plain = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 const SHOW_TITLE = false;
 const SHOW_PANEL_HEADINGS = false;
 const SHOW_CHAPTER_CARD = false;
+// The closing screen's centre numbers repeat the skill progress panel, which
+// is always shown now; hidden while Harma decides whether they stay.
+const SHOW_FINALE_NUMBERS = false;
 
 const NOTES: Record<string, string> = {
   stormscape:
@@ -146,7 +149,9 @@ function buildCities({ places, spans, lineOf, lineNames, rolled }: SkillsData): 
       note: NOTES[place.slug] ?? "",
       entries,
       towers,
-      spot: place.slug === "stormscape-now" && home >= 0 ? home : index,
+      // The studio's return shares the studio's spot on the map: the second
+      // build rises on the same ground, later.
+      spot: (place.slug === "stormscape-now" || place.slug === "stormscape-freelance") && home >= 0 ? home : index,
     };
   });
 }
@@ -411,7 +416,9 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   const holdingRef = useRef(false);
   // Set when the film is thrown somewhere (the scrubber, a tick, replay): the camera cuts instead of flying.
   const snapRef = useRef(true);
-  const [panelOpen, setPanelOpen] = useState(false);
+  // Skill progress is shown from the first frame, its lines closed; the
+  // toggle hides it for anyone who wants the map alone.
+  const [panelOpen, setPanelOpen] = useState(true);
   useEffect(() => {
     holdingRef.current = holding;
   }, [holding]);
@@ -1609,6 +1616,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         setOpen={setOpenRows}
         moving={moving}
         shown={panelOpen}
+        finale={ending > 0.5}
       />
 
       {/* Stopped at a place: where we are, and the way on or back. */}
@@ -1699,6 +1707,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
       >
         <p className="titles__finale-since">Since {since}</p>
         <p className="titles__finale-craft">One craft</p>
+        {SHOW_FINALE_NUMBERS ? (
         <ul className="titles__finale-list">
           {/* The lines ticked "Closing screen" on the Resume skills ordering
               page, in the resume's order; the Skill Progress panel lists every
@@ -1715,6 +1724,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
               </li>
             ))}
         </ul>
+        ) : null}
         <p className="titles__finale-links">
           <button type="button" onClick={replay}>
             Play from the start
@@ -1832,6 +1842,7 @@ function Tally({
   setOpen,
   moving,
   shown,
+  finale,
 }: {
   rows: ExperienceRow[];
   since: number;
@@ -1839,10 +1850,12 @@ function Tally({
   setOpen: (next: string[]) => void;
   moving: boolean;
   shown: boolean;
+  /** On the closing screen the title sits above the panel, which moves down for it. */
+  finale: boolean;
 }) {
   const most = Math.max(1, NOW_YEAR - 1994, ...rows.map((row) => row.years));
   return (
-    <aside className={`tally${shown ? " is-open" : ""}`} aria-hidden={!shown}>
+    <aside className={`tally${shown ? " is-open" : ""}${finale ? " is-finale" : ""}`} aria-hidden={!shown}>
       <Embers moving={moving} />
       <div className="tally__inner">
         {SHOW_PANEL_HEADINGS ? (
@@ -1859,6 +1872,9 @@ function Tally({
                 key={row.slug}
                 className={`tally__row${row.hot && moving ? " is-hot" : ""}`}
               >
+                {/* Three columns: the name (right-aligned to its column), the
+                    bar, the years - so the bars start on one line whatever
+                    the name's length. */}
                 <button
                   type="button"
                   className="tally__name"
@@ -1871,26 +1887,42 @@ function Tally({
                     )
                   }
                 >
+                  {row.name}
                   <span className="tally__chevron" aria-hidden="true">
                     {isOpen ? "–" : "+"}
                   </span>
-                  {row.name}
-                  <span className="tally__years">{say(row.years)} yrs</span>
                 </button>
+                {/* The fill's gradient spans the whole track, so a bar starts
+                    yellow and only reaches the hot end as it grows. */}
                 <span className="tally__bar">
                   <span
                     className="tally__fill"
-                    style={{
-                      width: `${Math.min(100, (row.years / most) * 100)}%`,
-                    }}
+                    style={
+                      {
+                        width: `${Math.min(100, (row.years / most) * 100)}%`,
+                        "--pct": Math.max(0.5, Math.min(100, (row.years / most) * 100)),
+                      } as React.CSSProperties
+                    }
                   />
                 </span>
+                <span className="tally__years">{say(row.years)} yrs</span>
                 {isOpen ? (
                   <ul className="tally__skills">
                     {row.skills.map((skill) => (
                       <li key={skill.name}>
-                        <span>{skill.name}</span>
-                        <span>{say(skill.years)}</span>
+                        <span className="tally__skill-name">{skill.name}</span>
+                        <span className="tally__bar tally__bar--skill">
+                          <span
+                            className="tally__fill"
+                            style={
+                              {
+                                width: `${Math.min(100, (skill.years / most) * 100)}%`,
+                                "--pct": Math.max(0.5, Math.min(100, (skill.years / most) * 100)),
+                              } as React.CSSProperties
+                            }
+                          />
+                        </span>
+                        <span className="tally__years tally__years--skill">{say(skill.years)} yrs</span>
                       </li>
                     ))}
                   </ul>
