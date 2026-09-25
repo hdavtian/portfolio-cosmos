@@ -482,7 +482,7 @@
   top: clamp(118px, 19vh, 176px);
   bottom: clamp(74px, 12vh, 110px);
   left: clamp(18px, 3.4vw, 50px);
-  width: min(380px, 38vw);
+  width: min(560px, 48vw);
   overflow: hidden;
   cursor: default;
 }
@@ -544,7 +544,7 @@
    skills list runs under all three. */
 .tally__row {
   display: grid;
-  grid-template-columns: minmax(0, 14em) minmax(60px, 1fr) 4.5em;
+  grid-template-columns: minmax(0, 14em) minmax(180px, 1fr) 4.5em;
   align-items: center;
   column-gap: 10px;
 }
@@ -599,8 +599,13 @@
 .tally__fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #8f2c06, #e2761f 55%, #ffd06a);
-  box-shadow: 0 0 10px rgba(226, 118, 32, 0.6);
+  /* Yellow at the start, hotter along the track: the gradient is sized to the
+     whole track (100 / the fill's percentage), so a short bar shows only its
+     yellow beginning and a long one runs into the red. */
+  background: linear-gradient(90deg, #ffd96a, #ffb43a 35%, #e2761f 70%, #b8240c);
+  background-size: calc(100% * 100 / var(--pct, 100)) 100%;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 10px rgba(226, 118, 32, 0.5);
 }
 
 /* A discipline that is taking on years right now sizzles. */
@@ -716,7 +721,7 @@
    the panel. */
 .titles__now {
   position: absolute;
-  left: calc(clamp(18px, 3.4vw, 50px) + min(380px, 38vw) + 28px);
+  left: calc(clamp(18px, 3.4vw, 50px) + min(560px, 48vw) + 28px);
   bottom: clamp(84px, 14vh, 128px);
   z-index: 7;
   max-width: min(560px, 60vw);

@@ -1876,17 +1876,22 @@ function Tally({
                     )
                   }
                 >
+                  {row.name}
                   <span className="tally__chevron" aria-hidden="true">
                     {isOpen ? "–" : "+"}
                   </span>
-                  {row.name}
                 </button>
+                {/* The fill's gradient spans the whole track, so a bar starts
+                    yellow and only reaches the hot end as it grows. */}
                 <span className="tally__bar">
                   <span
                     className="tally__fill"
-                    style={{
-                      width: `${Math.min(100, (row.years / most) * 100)}%`,
-                    }}
+                    style={
+                      {
+                        width: `${Math.min(100, (row.years / most) * 100)}%`,
+                        "--pct": Math.max(0.5, Math.min(100, (row.years / most) * 100)),
+                      } as React.CSSProperties
+                    }
                   />
                 </span>
                 <span className="tally__years">{say(row.years)} yrs</span>
