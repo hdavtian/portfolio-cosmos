@@ -19,15 +19,17 @@ export function resumeText(model: ResumeModel): string {
   section("Technical skills");
   for (const line of model.skills) lines.push(`- ${line.heading}: ${line.skills}`);
 
+  // Every role is its own block with the company above it (see docx.ts).
   section("Experience");
-  model.experience.forEach((job, index) => {
-    if (index > 0) lines.push("");
-    lines.push(`${job.company} - ${job.location}`);
+  let first = true;
+  for (const job of model.experience) {
     for (const position of job.positions) {
-      lines.push(`${position.title} | ${position.dates}`);
+      if (!first) lines.push("");
+      lines.push(`${job.company} - ${job.location}`, `${position.title} | ${position.dates}`);
       for (const bullet of position.bullets) lines.push(`- ${bullet}`);
+      first = false;
     }
-  });
+  }
 
   if (model.education.length > 0) {
     section("Education");

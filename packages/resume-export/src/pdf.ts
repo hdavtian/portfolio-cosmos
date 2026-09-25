@@ -13,8 +13,9 @@ const MARGIN = 36;
 const WIDTH = PAGE.width - MARGIN * 2;
 const BODY = 11;
 const NAME = 18;
-const SECTION = 16;
-const JOB = 14;
+const SECTION = 14;
+const COMPANY = 12;
+const ROLE = 11;
 const LEADING = 1.3;
 const BULLET_INDENT = 16;
 const INK = rgb(0.07, 0.07, 0.07);
@@ -124,15 +125,18 @@ export async function resumePdf(model: ResumeModel): Promise<Uint8Array> {
   section(writer, "Technical skills");
   for (const line of model.skills) bullet(writer, [{ text: `${line.heading}: `, bold: true }, { text: line.skills }]);
 
+  // Every role is its own block with the company above it (see docx.ts).
   section(writer, "Experience");
-  model.experience.forEach((job, index) => {
-    if (index > 0) writer.y -= 8;
-    write(writer, `${job.company} - ${job.location}`, { size: JOB, bold: true, after: 0, keepWith: JOB * LEADING + BODY * LEADING * 2 });
+  let first = true;
+  for (const job of model.experience) {
     for (const position of job.positions) {
-      write(writer, `${position.title} | ${position.dates}`, { size: JOB, bold: true, after: 3, keepWith: BODY * LEADING * 2 });
+      if (!first) writer.y -= 8;
+      write(writer, `${job.company} - ${job.location}`, { size: COMPANY, bold: true, after: 0, keepWith: ROLE * LEADING + BODY * LEADING * 2 });
+      write(writer, `${position.title} | ${position.dates}`, { size: ROLE, bold: true, after: 3, keepWith: BODY * LEADING * 2 });
       for (const item of position.bullets) bullet(writer, [{ text: item }]);
+      first = false;
     }
-  });
+  }
 
   if (model.education.length > 0) {
     section(writer, "Education");

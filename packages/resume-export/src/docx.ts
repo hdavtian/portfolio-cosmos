@@ -19,8 +19,9 @@ import type { ResumeModel } from "./model.js";
 const FONT = "Arial";
 const BODY = 22; // half-points: 11pt
 const NAME = 36; // 18pt
-const SECTION = 32; // 16pt
-const JOB = 28; // 14pt
+const SECTION = 28; // 14pt
+const COMPANY = 24; // 12pt
+const ROLE = 22; // 11pt
 const BULLETS = "bullets";
 
 const run = (text: string, options: { bold?: boolean; size?: number; color?: string } = {}) =>
@@ -58,16 +59,20 @@ export function resumeDocument(model: ResumeModel): Document {
     children.push(bullet([run(`${line.heading}: `, { bold: true }), run(line.skills)]));
   }
 
+  // Every role is its own block with the company above it, so a parser that
+  // reads "title + dates" as one job always finds the company beside it.
   children.push(sectionHeading("Experience"));
-  model.experience.forEach((job, index) => {
-    children.push(
-      paragraph([run(`${job.company} - ${job.location}`, { bold: true, size: JOB })], { before: index > 0 ? 160 : 0, after: 20 }),
-    );
+  let first = true;
+  for (const job of model.experience) {
     for (const position of job.positions) {
-      children.push(paragraph([run(`${position.title} | ${position.dates}`, { bold: true, size: JOB })], { after: 60 }));
+      children.push(
+        paragraph([run(`${job.company} - ${job.location}`, { bold: true, size: COMPANY })], { before: first ? 0 : 160, after: 20 }),
+      );
+      children.push(paragraph([run(`${position.title} | ${position.dates}`, { bold: true, size: ROLE })], { after: 60 }));
       for (const item of position.bullets) children.push(bullet(item));
+      first = false;
     }
-  });
+  }
 
   if (model.education.length > 0) {
     children.push(sectionHeading("Education"));
