@@ -357,35 +357,6 @@ export class TourDefinitionBuilder {
             "Explore the moons of this planet to discover specific roles, companies, and achievements that have shaped the professional journey.",
           type: "text",
         },
-        {
-          id: "highlights",
-          title: "Key Achievements",
-          content: "",
-          type: "achievements",
-          data: [
-            {
-              icon: "👥",
-              title: "Team Leadership",
-              description:
-                "Led cross-functional teams to deliver complex projects",
-              metric: "10+ teams managed",
-            },
-            {
-              icon: "📈",
-              title: "Growth Impact",
-              description:
-                "Drove significant business growth through technical innovation",
-              metric: "200% performance increase",
-            },
-            {
-              icon: "🏆",
-              title: "Recognition",
-              description:
-                "Received multiple awards for technical excellence and leadership",
-              metric: "5+ awards",
-            },
-          ],
-        },
       ],
       actions: [
         {
@@ -587,30 +558,6 @@ export class TourDefinitionBuilder {
       description:
         "Strategic leadership, team development, and organizational impact during this role.",
       sections: [
-        {
-          id: "leadership-impact",
-          title: "Leadership Impact",
-          content: "",
-          type: "achievements",
-          data: [
-            {
-              icon: "👥",
-              title: "Team Development",
-              description: "Built and mentored high-performing teams",
-              metric: moonData?.teamSize
-                ? `${moonData.teamSize} team members`
-                : "5-15 team members",
-            },
-            {
-              icon: "📊",
-              title: "Project Delivery",
-              description: "Led successful delivery of complex projects",
-              metric: moonData?.projectCount
-                ? `${moonData.projectCount} projects`
-                : "Multiple projects",
-            },
-          ],
-        },
       ],
       actions: [
         { label: "Team Testimonials", action: "testimonials:show", icon: "💬" },
