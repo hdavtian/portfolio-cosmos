@@ -146,7 +146,9 @@ function buildCities({ places, spans, lineOf, lineNames, rolled }: SkillsData): 
       note: NOTES[place.slug] ?? "",
       entries,
       towers,
-      spot: place.slug === "stormscape-now" && home >= 0 ? home : index,
+      // The studio's return shares the studio's spot on the map: the second
+      // build rises on the same ground, later.
+      spot: (place.slug === "stormscape-now" || place.slug === "stormscape-freelance") && home >= 0 ? home : index,
     };
   });
 }
@@ -1899,8 +1901,19 @@ function Tally({
                   <ul className="tally__skills">
                     {row.skills.map((skill) => (
                       <li key={skill.name}>
-                        <span>{skill.name}</span>
-                        <span>{say(skill.years)}</span>
+                        <span className="tally__skill-name">{skill.name}</span>
+                        <span className="tally__bar tally__bar--skill">
+                          <span
+                            className="tally__fill"
+                            style={
+                              {
+                                width: `${Math.min(100, (skill.years / most) * 100)}%`,
+                                "--pct": Math.max(0.5, Math.min(100, (skill.years / most) * 100)),
+                              } as React.CSSProperties
+                            }
+                          />
+                        </span>
+                        <span className="tally__years tally__years--skill">{say(skill.years)} yrs</span>
                       </li>
                     ))}
                   </ul>

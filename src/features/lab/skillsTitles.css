@@ -633,25 +633,45 @@
   }
 }
 
+/* The opened skills: the same three columns as the line above them, the
+   names right-aligned to the same edge, their bars on the same track. */
 .tally__skills {
   grid-column: 1 / -1;
   list-style: none;
-  margin: 4px 0 2px 20px;
+  margin: 3px 0 4px;
   padding: 0;
   display: grid;
   gap: 3px;
   font-size: 10px;
-  color: rgba(243, 226, 184, 0.58);
+  color: rgba(243, 226, 184, 0.62);
 }
 
 .tally__skills li {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 14em) minmax(180px, 1fr) 4.5em;
+  align-items: center;
+  column-gap: 10px;
 }
 
-.tally__skills li span:last-child {
-  font-variant-numeric: tabular-nums;
+.tally__skill-name {
+  text-align: right;
+  /* Sits where the line's name sits, clear of its chevron. */
+  padding-right: 20px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tally__bar--skill {
+  height: 3px;
+  opacity: 0.85;
+}
+
+.tally__years--skill {
+  font-size: 10px;
+  color: rgba(243, 226, 184, 0.55);
 }
 
 .tally__foot {
@@ -886,4 +906,18 @@
 @keyframes titles-resume-in {
   from { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Narrower windows: a shorter panel so the finale's title keeps clear of it. */
+@media (max-width: 1400px) {
+  .tally {
+    width: min(420px, 40vw);
+  }
+  .tally__row,
+  .tally__skills li {
+    grid-template-columns: minmax(0, 12em) minmax(120px, 1fr) 4.5em;
+  }
+  .titles__now {
+    left: calc(clamp(18px, 3.4vw, 50px) + min(420px, 40vw) + 28px);
+  }
 }
