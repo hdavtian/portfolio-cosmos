@@ -29,6 +29,8 @@ export interface Category {
   headline?: boolean;
   era?: number;
   blurb?: string;
+  /** Shown with its years on the film's closing screen (D33). */
+  closing?: boolean;
 }
 
 export interface SkillDefinition {
@@ -293,6 +295,9 @@ export function skillsDataFromRelease(release: Release): SkillsData {
   const bySlug = new Map(technologies.map((record) => [record.slug, record]));
   const ordered = [...technologies].sort((a, b) => a.sortOrder - b.sortOrder);
   const lines = resumeSkillLines(technologies, release.resumeSkills?.headingOrder ?? []);
+  // Which lines the closing screen shows; none chosen means all of them.
+  const chosen = new Set(release.resumeSkills?.closingLines ?? []);
+  const closing = (slug: string) => chosen.size === 0 || chosen.has(slug);
   const lineOf = new Map(lines.flatMap((line) => line.skillSlugs.map((slug) => [slug, line.slug] as const)));
   const anyCurrent = ordered.some((record) => record.current && !record.isGrouping);
   const categories: Category[] = [
@@ -301,6 +306,7 @@ export function skillsDataFromRelease(release: Release): SkillsData {
       name: line.name,
       sortOrder: index,
       headline: true,
+      closing: closing(line.slug),
       blurb: bySlug.get(line.slug)?.blurb,
     })),
     ...(anyCurrent

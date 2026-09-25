@@ -22,6 +22,12 @@ export const profileSchema = z.object({
  */
 export const resumeSkillsSchema = z.object({
   headingOrder: z.array(slugSchema).default([]),
+  /**
+   * The lines shown with their years on the film's closing screen (D33), in
+   * headingOrder. Empty means every line with years. The Skill Progress
+   * panel lists every line regardless.
+   */
+  closingLines: z.array(slugSchema).default([]),
 });
 
 export const educationSchema = z.object({

@@ -266,6 +266,8 @@ interface ExperienceRow {
   name: string;
   years: number;
   hot: boolean;
+  /** On the closing screen (Admin -> Resume skills ordering, "Closing screen"). */
+  closing: boolean;
   skills: Array<{ name: string; years: number }>;
 }
 
@@ -326,6 +328,7 @@ function experienceAt({ categories }: SkillsData, cities: City[], fractions: num
       name: category.name,
       years: row ? unionYears(row.ranges) : 0,
       hot: row?.hot ?? false,
+      closing: category.closing ?? false,
       skills: row
         ? [...row.skills.entries()]
             .map(([name, ranges]) => ({ name, years: unionYears(ranges) }))
@@ -1697,11 +1700,11 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         <p className="titles__finale-since">Since {since}</p>
         <p className="titles__finale-craft">One craft</p>
         <ul className="titles__finale-list">
-          {/* The first five lines in the resume's own order (Admin -> Resume skills
-              ordering): the finale follows the curation, not a leaderboard. */}
+          {/* The lines ticked "Closing screen" on the Resume skills ordering
+              page, in the resume's order; the Skill Progress panel lists every
+              line regardless. */}
           {experience.rows
-            .filter((row) => row.slug !== "current-stack" && row.years > 0)
-            .slice(0, 5)
+            .filter((row) => row.closing && row.slug !== "current-stack" && row.years > 0)
             .map((row) => (
               <li key={row.slug}>
                 <span className="titles__finale-label">{row.name}</span>

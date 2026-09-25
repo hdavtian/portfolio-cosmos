@@ -23,7 +23,7 @@ export const singletonSchemas = {
   cosmosIntroduction: cosmosIntroductionSchema,
   // Defaulted, so a release from before it existed still validates, and a
   // publish is not blocked until the order has been saved once.
-  resumeSkills: resumeSkillsSchema.default({ headingOrder: [] }),
+  resumeSkills: resumeSkillsSchema.default({ headingOrder: [], closingLines: [] }),
 } as const;
 
 // Ordered, slug-keyed entity collections. The key is the MongoDB collection name.

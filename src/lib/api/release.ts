@@ -56,7 +56,7 @@ export const toRelease = (response: ReleaseResponse): Release => {
     etag: response.etag,
     profile: singletons.profile,
     cosmosIntroduction: singletons.cosmosIntroduction,
-    resumeSkills: singletons.resumeSkills ?? { headingOrder: [] },
+    resumeSkills: singletons.resumeSkills ?? { headingOrder: [], closingLines: [] },
     collections: ordered,
     media: response.media,
   };
