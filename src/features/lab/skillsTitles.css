@@ -289,8 +289,9 @@
   position: absolute;
   top: clamp(50px, 9vh, 86px);
   bottom: clamp(84px, 13vh, 120px);
-  left: clamp(18px, 3.4vw, 50px);
-  width: min(560px, 48vw);
+  left: 0;
+  right: 0;
+  padding-left: clamp(18px, 3.4vw, 50px);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -299,11 +300,17 @@
   pointer-events: none;
 }
 
+/* The three actions: one row, centred across the screen, low, above the
+   scrubber (the finale block itself stays in the left column). */
 .titles__finale-links {
-  margin-top: auto;
+  position: absolute;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+  margin: 0;
   pointer-events: auto;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-wrap: nowrap;
+  gap: 12px;
 }
 
 .titles__finale-links a,
