@@ -2767,17 +2767,12 @@ html.is-cinematic-ready .film-host {
 
 /* The download page: one block per format, the button first, a line on what it is for. */
 .showcase-resume__downloads {
-  display: grid;
-  gap: 22px;
-  max-width: 620px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  align-self: start;
+  gap: 12px;
   margin-top: 8px;
-}
-
-.showcase-resume__download p {
-  margin: 8px 0 0;
-  font-size: 0.92rem;
-  line-height: 1.5;
-  opacity: 0.78;
 }
 
 .showcase-resume__download-button {
