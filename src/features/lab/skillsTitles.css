@@ -408,27 +408,60 @@
   cursor: pointer;
 }
 
-/* An unwatched film's play buttons breathe: a slow swell of the gold glow. */
+/* An unwatched film's play buttons burn: a toned-down version of the
+   sun's fire - a warm fill, and a glow that flickers between orange and
+   gold, never quite still - so a first visitor's eye finds them. */
 .is-inviting {
-  animation: titles-breathe 2.4s ease-in-out infinite;
+  position: relative;
+  color: #fff1cf !important;
+  border-color: #ffb43a !important;
+  background:
+    radial-gradient(ellipse at 50% 120%, rgba(255, 140, 32, 0.55), transparent 62%),
+    rgba(120, 44, 6, 0.55) !important;
+  text-shadow: 0 0 8px rgba(255, 170, 60, 0.8);
+  animation: titles-burn 1.6s ease-in-out infinite;
 }
 
-@keyframes titles-breathe {
+.is-inviting::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 50% 100%, rgba(255, 120, 20, 0.45), transparent 70%);
+  filter: blur(8px);
+  animation: titles-flicker 0.9s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@keyframes titles-burn {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 196, 106, 0);
-    border-color: rgba(217, 164, 65, 0.7);
+    box-shadow: 0 0 14px 2px rgba(255, 120, 20, 0.45), 0 0 34px 8px rgba(226, 118, 32, 0.25);
   }
   50% {
-    box-shadow: 0 0 22px 4px rgba(255, 196, 106, 0.45);
-    border-color: #ffd06a;
+    box-shadow: 0 0 22px 5px rgba(255, 196, 106, 0.7), 0 0 52px 14px rgba(255, 150, 40, 0.4);
+  }
+}
+
+@keyframes titles-flicker {
+  from {
+    opacity: 0.55;
+    transform: scaleX(0.96) translateY(1px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1.04) translateY(-2px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .is-inviting {
+  .is-inviting,
+  .is-inviting::before {
     animation: none;
-    box-shadow: 0 0 22px 4px rgba(255, 196, 106, 0.35);
+  }
+  .is-inviting {
+    box-shadow: 0 0 22px 5px rgba(255, 196, 106, 0.5);
   }
 }
 
