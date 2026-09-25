@@ -2766,16 +2766,18 @@ html.is-cinematic-ready .film-host {
 }
 
 /* The download page: one block per format, the button first, a line on what it is for. */
+/* Under the name, one button per row. */
 .showcase-resume__downloads {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: flex-start;
-  align-self: start;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 24px;
 }
 
 .showcase-resume__download-button {
+  min-width: 240px;
+  text-align: left;
   font: inherit;
   font-size: 0.95rem;
   letter-spacing: 0.06em;

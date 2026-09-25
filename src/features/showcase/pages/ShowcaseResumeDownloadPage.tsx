@@ -56,23 +56,22 @@ export function ShowcaseResumeDownloadPage() {
         </Link>
         <p className="showcase-label">Download</p>
         <h1 className="showcase-resume__name">{release?.profile.name ?? "Résumé"}</h1>
+        <div className="showcase-resume__downloads" role="group" aria-label="Formats">
+          {FORMATS.map((entry) => (
+            <button
+              key={entry.format}
+              type="button"
+              className="showcase-resume__download-button"
+              disabled={!release || busy !== null}
+              onClick={() => void download(entry.format)}
+            >
+              {busy === entry.format ? "Writing…" : entry.label}
+            </button>
+          ))}
+          {error ? <p className="showcase-resume__download-error">{error}</p> : null}
+          {!release ? <p className="showcase-label">Loading the résumé…</p> : null}
+        </div>
       </header>
-
-      <section className="showcase-resume__downloads" aria-label="Formats">
-        {FORMATS.map((entry) => (
-          <button
-            key={entry.format}
-            type="button"
-            className="showcase-resume__download-button"
-            disabled={!release || busy !== null}
-            onClick={() => void download(entry.format)}
-          >
-            {busy === entry.format ? "Writing…" : entry.label}
-          </button>
-        ))}
-        {error ? <p className="showcase-resume__download-error">{error}</p> : null}
-        {!release ? <p className="showcase-label">Loading the résumé…</p> : null}
-      </section>
     </article>
   );
 }
