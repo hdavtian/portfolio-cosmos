@@ -82,6 +82,9 @@ const plain = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
 const SHOW_TITLE = false;
 const SHOW_PANEL_HEADINGS = false;
 const SHOW_CHAPTER_CARD = false;
+// The closing screen's centre numbers repeat the skill progress panel, which
+// is always shown now; hidden while Harma decides whether they stay.
+const SHOW_FINALE_NUMBERS = false;
 
 const NOTES: Record<string, string> = {
   stormscape:
@@ -1613,6 +1616,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         setOpen={setOpenRows}
         moving={moving}
         shown={panelOpen}
+        finale={ending > 0.5}
       />
 
       {/* Stopped at a place: where we are, and the way on or back. */}
@@ -1703,6 +1707,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
       >
         <p className="titles__finale-since">Since {since}</p>
         <p className="titles__finale-craft">One craft</p>
+        {SHOW_FINALE_NUMBERS ? (
         <ul className="titles__finale-list">
           {/* The lines ticked "Closing screen" on the Resume skills ordering
               page, in the resume's order; the Skill Progress panel lists every
@@ -1719,6 +1724,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
               </li>
             ))}
         </ul>
+        ) : null}
         <p className="titles__finale-links">
           <button type="button" onClick={replay}>
             Play from the start
@@ -1836,6 +1842,7 @@ function Tally({
   setOpen,
   moving,
   shown,
+  finale,
 }: {
   rows: ExperienceRow[];
   since: number;
@@ -1843,10 +1850,12 @@ function Tally({
   setOpen: (next: string[]) => void;
   moving: boolean;
   shown: boolean;
+  /** On the closing screen the title sits above the panel, which moves down for it. */
+  finale: boolean;
 }) {
   const most = Math.max(1, NOW_YEAR - 1994, ...rows.map((row) => row.years));
   return (
-    <aside className={`tally${shown ? " is-open" : ""}`} aria-hidden={!shown}>
+    <aside className={`tally${shown ? " is-open" : ""}${finale ? " is-finale" : ""}`} aria-hidden={!shown}>
       <Embers moving={moving} />
       <div className="tally__inner">
         {SHOW_PANEL_HEADINGS ? (

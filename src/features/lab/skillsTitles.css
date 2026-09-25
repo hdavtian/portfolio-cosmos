@@ -282,19 +282,38 @@
 }
 
 /* The last frame: the whole map, and the number it has been adding up to. */
-/* The closing screen sits low, clear of the skill progress panel on the
-   left and just above the scrubber, its row of numbers held inside 17%
-   margins so it wraps to a second row before touching the edges. */
+/* The closing screen is the left column: the title above the skill
+   progress panel (which moves down for it), the links beneath the panel,
+   above the scrubber. The map stays clear. */
 .titles__finale {
   position: absolute;
-  inset: 0;
+  top: clamp(50px, 9vh, 86px);
+  bottom: clamp(84px, 13vh, 120px);
+  left: clamp(18px, 3.4vw, 50px);
+  width: min(560px, 48vw);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 0 17% clamp(84px, 13vh, 120px);
-  text-align: center;
-  background: radial-gradient(ellipse at 50% 70%, rgba(8, 5, 2, 0.62), transparent 62%);
+  align-items: flex-start;
+  text-align: left;
+  /* The title takes clicks; the panel underneath must not be covered. */
+  pointer-events: none;
+}
+
+.titles__finale-links {
+  margin-top: auto;
+  pointer-events: auto;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.titles__finale-links a,
+.titles__finale-links button {
+  white-space: nowrap;
+}
+
+.tally.is-finale {
+  top: calc(clamp(50px, 9vh, 86px) + 96px);
+  bottom: clamp(140px, 22vh, 190px);
 }
 
 .titles__finale-years {
@@ -845,7 +864,7 @@
 }
 
 .titles__finale-craft {
-  margin: 4px 0 18px;
+  margin: 2px 0 0;
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
   font-size: clamp(1.5rem, 4vw, 3.25rem);
   font-weight: 700;
