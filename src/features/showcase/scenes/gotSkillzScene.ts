@@ -34,7 +34,7 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
     import("../../lab/gotBuilders"),
   ]);
   const { places, spans, lineOf, lineNames, rolled } = data.skills;
-  const { towersAt } = await import("../../lab/skillsData");
+  const { towersAt, castleTowers } = await import("../../lab/skillsData");
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x07060a, 0.00045);
@@ -165,7 +165,7 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
   const { byKind } = makeBuilders(THREE, label);
   const tallest = Math.max(1, ...spans.map((span) => span.to - span.from));
   const towersOf = (slug: string) =>
-    towersAt(spans as never, slug, lineOf, lineNames, rolled)
+    castleTowers(towersAt(spans as never, slug, lineOf, lineNames, rolled), slug)
       .map((tower) => ({ name: tower.name, years: tower.years, fresh: true }))
       .slice(0, 9);
   const home = places.find((place) => place.slug === "boingo");

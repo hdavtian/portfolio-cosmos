@@ -257,6 +257,23 @@ export function towersAt(
     .sort((a, b) => b.years - a.years);
 }
 
+/**
+ * A castle, not a wall: the towers at a place vary in height. Height still
+ * follows the years, but a use that spans the whole job ties with every
+ * other such use, and a row of equal towers hides its own labels. Each
+ * tower keeps between two thirds and all of its height, by a factor drawn
+ * from its name, so the skyline is the same every visit and the labels
+ * stand at different heights. The years shown anywhere are untouched.
+ */
+export function castleTowers(towers: Tower[], place: string): Tower[] {
+  const seeded = (text: string) => {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+    return ((h >>> 0) % 10000) / 10000;
+  };
+  return towers.map((tower) => ({ ...tower, years: tower.years * (0.66 + 0.34 * seeded(`${place}:${tower.key}`)) }));
+}
+
 export type SkillsData = ReturnType<typeof computeSkillsData>;
 
 /** "YYYY" or "MM/YYYY" (the schema's job and skill dates) as a fractional year. */

@@ -12,7 +12,7 @@ import {
   makeBuilders,
   type Build,
 } from "./gotBuilders";
-import { NOW_YEAR, say, skillsDataFromRelease, towersAt, type SkillsData } from "./skillsData";
+import { NOW_YEAR, castleTowers, say, skillsDataFromRelease, towersAt, type SkillsData } from "./skillsData";
 import "./skillsTitles.css";
 
 /**
@@ -128,7 +128,9 @@ function buildCities({ places, spans, lineOf, lineNames, rolled }: SkillsData): 
       entry.fresh = !seen.has(entry.skill);
       seen.add(entry.skill);
     }
-    const towers: Entry[] = towersAt(spans, place.slug, lineOf, lineNames, rolled).map((tower) => ({
+    // What is built: a castle of towers at varied heights (castleTowers); the
+    // panel and the finale read the true years from `entries`, not these.
+    const towers: Entry[] = castleTowers(towersAt(spans, place.slug, lineOf, lineNames, rolled), place.slug).map((tower) => ({
       skill: tower.key,
       name: tower.name,
       years: tower.years,
