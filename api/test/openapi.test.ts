@@ -52,19 +52,19 @@ describe("generated OpenAPI document", () => {
   // they cannot be registered by name. The bodies must still be derived from
   // the Zod definitions.
   it("derives request bodies from the Zod definitions", () => {
-    const requestBody = doc.paths["/api/v2/admin/skills"]?.post?.requestBody as {
+    const requestBody = doc.paths["/api/v2/admin/technologies"]?.post?.requestBody as {
       content: Record<string, { schema: { properties?: Record<string, unknown> } }>;
     };
     const schema = requestBody.content["application/json"].schema;
 
     expect(schema.properties).toHaveProperty("slug");
-    expect(schema.properties).toHaveProperty("categorySlug");
+    expect(schema.properties).toHaveProperty("parentSlug");
     expect(schema.properties).toHaveProperty("name");
     expect(doc.components?.securitySchemes).toHaveProperty("hd_session");
   });
 
   it("marks admin routes as requiring the session cookie", () => {
-    const listSkills = doc.paths["/api/v2/admin/skills"]?.get;
+    const listSkills = doc.paths["/api/v2/admin/technologies"]?.get;
 
     expect(listSkills?.security).toEqual([{ hd_session: [] }]);
   });
