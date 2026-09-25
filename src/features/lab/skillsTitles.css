@@ -282,15 +282,19 @@
 }
 
 /* The last frame: the whole map, and the number it has been adding up to. */
+/* The closing screen sits low, clear of the skill progress panel on the
+   left and just above the scrubber, its row of numbers held inside 17%
+   margins so it wraps to a second row before touching the edges. */
 .titles__finale {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  padding: 0 17% clamp(84px, 13vh, 120px);
   text-align: center;
-  background: radial-gradient(ellipse at 50% 50%, rgba(8, 5, 2, 0.62), transparent 62%);
+  background: radial-gradient(ellipse at 50% 70%, rgba(8, 5, 2, 0.62), transparent 62%);
 }
 
 .titles__finale-years {
@@ -319,7 +323,7 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 10px 34px;
+  gap: 8px 28px;
 }
 
 .titles__finale-list li {
@@ -331,7 +335,7 @@
 /* The line's name leads, read first; the years sit under it, "yrs" small beside them. */
 .titles__finale-label {
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: clamp(0.8rem, 1.3vw, 1.05rem);
+  font-size: clamp(0.7rem, 1.05vw, 0.88rem);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--titles-pale);
@@ -342,7 +346,7 @@
   align-items: baseline;
   gap: 6px;
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  font-size: clamp(1.2rem, 2.3vw, 1.9rem);
   color: var(--titles-pale);
 }
 
@@ -841,9 +845,9 @@
 }
 
 .titles__finale-craft {
-  margin: 6px 0 28px;
+  margin: 4px 0 18px;
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: clamp(3rem, 8vw, 6.5rem);
+  font-size: clamp(1.5rem, 4vw, 3.25rem);
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.08em;
