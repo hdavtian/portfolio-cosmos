@@ -411,7 +411,9 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   const holdingRef = useRef(false);
   // Set when the film is thrown somewhere (the scrubber, a tick, replay): the camera cuts instead of flying.
   const snapRef = useRef(true);
-  const [panelOpen, setPanelOpen] = useState(false);
+  // Skill progress is shown from the first frame, its lines closed; the
+  // toggle hides it for anyone who wants the map alone.
+  const [panelOpen, setPanelOpen] = useState(true);
   useEffect(() => {
     holdingRef.current = holding;
   }, [holding]);
@@ -1859,6 +1861,9 @@ function Tally({
                 key={row.slug}
                 className={`tally__row${row.hot && moving ? " is-hot" : ""}`}
               >
+                {/* Three columns: the name (right-aligned to its column), the
+                    bar, the years - so the bars start on one line whatever
+                    the name's length. */}
                 <button
                   type="button"
                   className="tally__name"
@@ -1875,7 +1880,6 @@ function Tally({
                     {isOpen ? "–" : "+"}
                   </span>
                   {row.name}
-                  <span className="tally__years">{say(row.years)} yrs</span>
                 </button>
                 <span className="tally__bar">
                   <span
@@ -1885,6 +1889,7 @@ function Tally({
                     }}
                   />
                 </span>
+                <span className="tally__years">{say(row.years)} yrs</span>
                 {isOpen ? (
                   <ul className="tally__skills">
                     {row.skills.map((skill) => (
