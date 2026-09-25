@@ -1517,7 +1517,8 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
       /* private mode: the buttons breathe again next visit, no harm */
     }
   };
-  const inviting = !watched && progress >= 1;
+  // Invite while the film sits unplayed at its start or its end.
+  const inviting = !watched && (progress >= 1 || progress <= 0) && !playing;
 
   const replay = () => {
     markWatched();
