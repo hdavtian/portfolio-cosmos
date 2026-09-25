@@ -62,8 +62,8 @@ describe("summarizeChanges", () => {
 
   it("counts adds instead of listing them when there are many", () => {
     const nodes = Array.from({ length: 6 }, (_, i) => ({ slug: `n${i}`, sortOrder: i, name: `Node ${i}` }));
-    expect(summarizeChanges(side({ techStackNodes: [] }), side({ techStackNodes: nodes }))).toEqual([
-      "Added 6 tech stack nodes",
+    expect(summarizeChanges(side({ technologies: [] }), side({ technologies: nodes }))).toEqual([
+      "Added 6 technologies",
     ]);
   });
 

@@ -27,7 +27,6 @@ const authCookie = (): string => {
 const skill = (overrides: Record<string, unknown> = {}) => ({
   slug: "typescript",
   sortOrder: 0,
-  categorySlug: "frontend",
   name: "TypeScript",
   ...overrides,
 });
@@ -48,8 +47,8 @@ describe.skipIf(!dockerMongo)(`v2 admin CRUD (${dockerMongo ? "docker" : SKIP_ME
 
   it("rejects every admin route without a session", async () => {
     const calls = [
-      request(app).get("/api/v2/admin/skills"),
-      request(app).post("/api/v2/admin/skills").send(skill()),
+      request(app).get("/api/v2/admin/technologies"),
+      request(app).post("/api/v2/admin/technologies").send(skill()),
       request(app).get("/api/v2/admin/singletons/profile"),
     ];
 
@@ -62,7 +61,7 @@ describe.skipIf(!dockerMongo)(`v2 admin CRUD (${dockerMongo ? "docker" : SKIP_ME
 
   it("creates, reads, lists, updates and deletes a record", async () => {
     const created = await request(app)
-      .post("/api/v2/admin/skills")
+      .post("/api/v2/admin/technologies")
       .set("Cookie", authCookie())
       .send(skill());
 
@@ -72,45 +71,45 @@ describe.skipIf(!dockerMongo)(`v2 admin CRUD (${dockerMongo ? "docker" : SKIP_ME
     expect(created.body.updatedBy).toBe("owner");
 
     const read = await request(app)
-      .get("/api/v2/admin/skills/typescript")
+      .get("/api/v2/admin/technologies/typescript")
       .set("Cookie", authCookie());
     expect(read.status).toBe(200);
     expect(read.body.name).toBe("TypeScript");
 
     const list = await request(app)
-      .get("/api/v2/admin/skills?page=1&pageSize=25")
+      .get("/api/v2/admin/technologies?page=1&pageSize=25")
       .set("Cookie", authCookie());
     expect(list.status).toBe(200);
     expect(list.body).toMatchObject({ total: 1, page: 1, pageSize: 25 });
     expect(list.body.items).toHaveLength(1);
 
     const updated = await request(app)
-      .put("/api/v2/admin/skills/typescript")
+      .put("/api/v2/admin/technologies/typescript")
       .set("Cookie", authCookie())
       .send({ ...skill({ name: "TypeScript 5" }), version: 1 });
     expect(updated.status).toBe(200);
     expect(updated.body).toMatchObject({ name: "TypeScript 5", version: 2 });
 
     const deleted = await request(app)
-      .delete("/api/v2/admin/skills/typescript")
+      .delete("/api/v2/admin/technologies/typescript")
       .set("Cookie", authCookie());
     expect(deleted.status).toBe(204);
 
     const missing = await request(app)
-      .get("/api/v2/admin/skills/typescript")
+      .get("/api/v2/admin/technologies/typescript")
       .set("Cookie", authCookie());
     expect(missing.status).toBe(404);
   });
 
   it("returns 409 when the record changed since it was loaded", async () => {
-    await request(app).post("/api/v2/admin/skills").set("Cookie", authCookie()).send(skill());
+    await request(app).post("/api/v2/admin/technologies").set("Cookie", authCookie()).send(skill());
     await request(app)
-      .put("/api/v2/admin/skills/typescript")
+      .put("/api/v2/admin/technologies/typescript")
       .set("Cookie", authCookie())
       .send({ ...skill({ name: "First" }), version: 1 });
 
     const stale = await request(app)
-      .put("/api/v2/admin/skills/typescript")
+      .put("/api/v2/admin/technologies/typescript")
       .set("Cookie", authCookie())
       .send({ ...skill({ name: "Second" }), version: 1 });
 
@@ -119,17 +118,17 @@ describe.skipIf(!dockerMongo)(`v2 admin CRUD (${dockerMongo ? "docker" : SKIP_ME
   });
 
   it("rejects a duplicate slug and invalid input with field details", async () => {
-    await request(app).post("/api/v2/admin/skills").set("Cookie", authCookie()).send(skill());
+    await request(app).post("/api/v2/admin/technologies").set("Cookie", authCookie()).send(skill());
 
     const duplicate = await request(app)
-      .post("/api/v2/admin/skills")
+      .post("/api/v2/admin/technologies")
       .set("Cookie", authCookie())
       .send(skill({ name: "Other" }));
     expect(duplicate.status).toBe(400);
     expect(duplicate.body.error.details?.[0].path).toBe("slug");
 
     const invalid = await request(app)
-      .post("/api/v2/admin/skills")
+      .post("/api/v2/admin/technologies")
       .set("Cookie", authCookie())
       .send(skill({ slug: "Not A Slug" }));
     expect(invalid.status).toBe(400);
@@ -139,18 +138,18 @@ describe.skipIf(!dockerMongo)(`v2 admin CRUD (${dockerMongo ? "docker" : SKIP_ME
   it("persists drag-and-drop ordering", async () => {
     for (const [index, name] of ["a", "b", "c"].entries()) {
       await request(app)
-        .post("/api/v2/admin/skills")
+        .post("/api/v2/admin/technologies")
         .set("Cookie", authCookie())
         .send(skill({ slug: name, name: name.toUpperCase(), sortOrder: index }));
     }
 
     const reordered = await request(app)
-      .put("/api/v2/admin/skills/order")
+      .put("/api/v2/admin/technologies/order")
       .set("Cookie", authCookie())
       .send({ slugs: ["c", "a", "b"] });
     expect(reordered.status).toBe(200);
 
-    const list = await request(app).get("/api/v2/admin/skills").set("Cookie", authCookie());
+    const list = await request(app).get("/api/v2/admin/technologies").set("Cookie", authCookie());
     expect(list.body.items.map((item: { slug: string }) => item.slug)).toEqual(["c", "a", "b"]);
   });
 

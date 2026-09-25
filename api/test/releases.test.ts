@@ -139,18 +139,18 @@ describe.skipIf(!dockerMongo)(`v2 releases (${dockerMongo ? "docker" : SKIP_MESS
     await publish();
 
     await request(app)
-      .post("/api/v2/admin/skills")
+      .post("/api/v2/admin/technologies")
       .set("Cookie", authCookie())
-      .send({ slug: "typescript", sortOrder: 0, categorySlug: "frontend", name: "TypeScript" })
+      .send({ slug: "typescript", sortOrder: 0, name: "TypeScript" })
       .expect(201);
 
     const live = await request(app).get("/api/v2/content/resume");
-    expect(live.body.content.collections.skills).toHaveLength(0);
+    expect(live.body.content.collections.technologies).toHaveLength(0);
 
     const draft = await request(app)
       .get("/api/v2/content/resume?preview=draft")
       .set("Cookie", authCookie());
-    expect(draft.body.content.collections.skills).toHaveLength(1);
+    expect(draft.body.content.collections.technologies).toHaveLength(1);
 
     const status = await request(app)
       .get("/api/v2/admin/releases/status")
@@ -159,7 +159,7 @@ describe.skipIf(!dockerMongo)(`v2 releases (${dockerMongo ? "docker" : SKIP_MESS
 
     await publish("with typescript");
     const afterPublish = await request(app).get("/api/v2/content/resume");
-    expect(afterPublish.body.content.collections.skills).toHaveLength(1);
+    expect(afterPublish.body.content.collections.technologies).toHaveLength(1);
   });
 
   it("rolls back by publishing the old content as a new release", async () => {
@@ -167,9 +167,9 @@ describe.skipIf(!dockerMongo)(`v2 releases (${dockerMongo ? "docker" : SKIP_MESS
     await publish("first");
 
     await request(app)
-      .post("/api/v2/admin/skills")
+      .post("/api/v2/admin/technologies")
       .set("Cookie", authCookie())
-      .send({ slug: "typescript", sortOrder: 0, categorySlug: "frontend", name: "TypeScript" });
+      .send({ slug: "typescript", sortOrder: 0, name: "TypeScript" });
     await publish("second");
 
     const rolledBack = await request(app)
@@ -180,7 +180,7 @@ describe.skipIf(!dockerMongo)(`v2 releases (${dockerMongo ? "docker" : SKIP_MESS
     expect(rolledBack.body).toMatchObject({ id: 3, rolledBackFrom: 1, current: true });
 
     const live = await request(app).get("/api/v2/content/resume");
-    expect(live.body.content.collections.skills).toHaveLength(0);
+    expect(live.body.content.collections.technologies).toHaveLength(0);
 
     const history = await request(app)
       .get("/api/v2/admin/releases")
@@ -199,9 +199,9 @@ describe.skipIf(!dockerMongo)(`v2 releases (${dockerMongo ? "docker" : SKIP_MESS
       .send({ data: { ...profile, name: "Harma Davtian1" }, version: 1 })
       .expect(200);
     await request(app)
-      .post("/api/v2/admin/skillCategories")
+      .post("/api/v2/admin/links")
       .set("Cookie", authCookie())
-      .send({ slug: "extra", sortOrder: 0, name: "Extra" })
+      .send({ slug: "extra", sortOrder: 0, title: "Extra", url: "https://example.com/extra" })
       .expect(201);
     await publish("edited");
 
@@ -213,8 +213,8 @@ describe.skipIf(!dockerMongo)(`v2 releases (${dockerMongo ? "docker" : SKIP_MESS
     expect(draftProfile.body.data.name).toBe("Harma Davtian");
     expect(draftProfile.body.version).toBe(3);
 
-    const categories = await request(app).get("/api/v2/admin/skillCategories").set("Cookie", authCookie());
-    expect(categories.body.items).toHaveLength(0);
+    const links = await request(app).get("/api/v2/admin/links").set("Cookie", authCookie());
+    expect(links.body.items).toHaveLength(0);
 
     const pending = await request(app)
       .get("/api/v2/admin/releases/pending-changes")
