@@ -38,9 +38,7 @@ const field =
 
 const COLLECTIONS: Record<string, CollectionWording> = {
   experiences: { singular: "job", plural: "jobs", label: field("company") },
-  skills: { singular: "skill", plural: "skills", label: field("name") },
-  skillCategories: { singular: "skill category", plural: "skill categories", label: field("name") },
-  techStackNodes: { singular: "tech stack node", plural: "tech stack nodes", label: field("name") },
+  technologies: { singular: "technology", plural: "technologies", label: field("name") },
   education: { singular: "education entry", plural: "education entries", label: field("institution") },
   certifications: { singular: "certification", plural: "certifications", label: field("name") },
   links: { singular: "link", plural: "links", label: field("title") },
@@ -56,6 +54,7 @@ const COLLECTIONS: Record<string, CollectionWording> = {
 const SINGLETON_NAMES: Record<string, string> = {
   profile: "profile",
   cosmosIntroduction: "cosmos introduction",
+  resumeSkills: "resume skills order",
 };
 
 const FIELD_NAMES: Record<string, string> = {
@@ -73,7 +72,11 @@ const FIELD_NAMES: Record<string, string> = {
   fontShadow: "glow",
   navLabel: "short name",
   jobMemories: "memories",
-  jobTech: "tech",
+  skillsUsed: "skills used",
+  isGrouping: "heading",
+  surfaces: "shown in",
+  aliases: "also known as",
+  technologySlug: "technology",
   coreSlugs: "cores",
   includeEntrySlugs: "included projects",
   excludeEntrySlugs: "excluded projects",
@@ -127,7 +130,19 @@ export function summarizeChanges(live: ContentSide, draft: ContentSide): string[
     const after = bySortOrder(draft.collections[collection] ?? []);
     const beforeBySlug = new Map(before.map((record) => [String(record.slug), record]));
     const afterBySlug = new Map(after.map((record) => [String(record.slug), record]));
-    const quote = (record: Record_) => `${wording.singular} "${wording.label(record)}"`;
+    // Two records can carry the same label - both StormScape jobs are called
+    // "Stormscape (Freelance)" - which made a line ambiguous to read and gave
+    // two of them the same React key. An ambiguous label carries its slug.
+    const labelCounts = new Map<string, number>();
+    for (const record of [...before, ...after]) {
+      const label = wording.label(record);
+      labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+    }
+    const quote = (record: Record_) => {
+      const label = wording.label(record);
+      const ambiguous = (labelCounts.get(label) ?? 0) > 2;
+      return `${wording.singular} "${label}"${ambiguous ? ` (${String(record.slug)})` : ""}`;
+    };
 
     const added = after.filter((record) => !beforeBySlug.has(String(record.slug)));
     const deleted = before.filter((record) => !afterBySlug.has(String(record.slug)));

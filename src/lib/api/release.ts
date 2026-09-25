@@ -26,6 +26,8 @@ export interface Release {
   etag: string;
   profile: ContentBundle["singletons"]["profile"];
   cosmosIntroduction: ContentBundle["singletons"]["cosmosIntroduction"];
+  /** The resume's skills lines order; absent in releases from before it. */
+  resumeSkills: ContentBundle["singletons"]["resumeSkills"];
   collections: ContentBundle["collections"];
   media: Record<string, ReleaseMedia>;
 }
@@ -54,6 +56,7 @@ export const toRelease = (response: ReleaseResponse): Release => {
     etag: response.etag,
     profile: singletons.profile,
     cosmosIntroduction: singletons.cosmosIntroduction,
+    resumeSkills: singletons.resumeSkills ?? { headingOrder: [], closingLines: [] },
     collections: ordered,
     media: response.media,
   };

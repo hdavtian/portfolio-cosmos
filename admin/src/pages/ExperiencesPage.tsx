@@ -73,7 +73,7 @@ export function ExperiencesPage() {
       <div className="admin-page-header">
         <div>
           <h1>Experience</h1>
-          <p>Jobs shown on the resume and as moons in the cosmos. Use Reorder rows to change their order.</p>
+          <p>Jobs shown on the resume and as moons in the cosmos. Drag a row by its handle to change the order.</p>
         </div>
         <ButtonComponent cssClass="e-primary e-outline" onClick={() => navigate("/experiences/new")}>
           Add job
@@ -88,7 +88,7 @@ export function ExperiencesPage() {
       {list.truncated ? <p className="admin-error">Showing the first 100 records only.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid rows={list.items} mode="local" onReorder={saveOrder}>
+        <EntityGrid gridId="experiences" rows={list.items} mode="local" onReorder={saveOrder}>
           {[
             <ColumnDirective key="company" field="company" headerText="Company" width="220" clipMode="EllipsisWithTooltip" />,
             <ColumnDirective key="navLabel" field="navLabel" headerText="Short name" width="130" />,

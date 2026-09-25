@@ -328,13 +328,25 @@
   gap: 2px;
 }
 
+/* The line's name leads, read first; the years sit under it, "yrs" small beside them. */
+.titles__finale-label {
+  font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
+  font-size: clamp(0.8rem, 1.3vw, 1.05rem);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--titles-pale);
+}
+
 .titles__finale-list strong {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
   font-size: clamp(1.5rem, 3vw, 2.4rem);
   color: var(--titles-pale);
 }
 
-.titles__finale-list span {
+.titles__finale-list small {
   font-size: 10px;
   letter-spacing: 0.2em;
   text-transform: uppercase;

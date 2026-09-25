@@ -12,14 +12,7 @@ import {
   makeBuilders,
   type Build,
 } from "./gotBuilders";
-import {
-  LAST_YEAR,
-  NOW_YEAR,
-  categories,
-  places,
-  say,
-  spans,
-} from "./skillsData";
+import { NOW_YEAR, say, skillsDataFromRelease, towersAt, type SkillsData } from "./skillsData";
 import "./skillsTitles.css";
 
 /**
@@ -57,7 +50,10 @@ interface City {
   to: number;
   kind: string;
   note: string;
+  /** Every skill used here: what the Skill Progress panel reads. */
   entries: Entry[];
+  /** What is built here: the entries, or a rolled-up line's as one (D30). */
+  towers: Entry[];
   /** Places share a spot on the map when they are the same company. */
   spot: number;
 }
@@ -91,6 +87,7 @@ const NOTES: Record<string, string> = {
   stormscape:
     "Own studio: freelance and side work, running alongside everything that follows",
   "stormscape-now": "The same studio, picked back up",
+  "stormscape-freelance": "The same studio, picked back up",
 };
 
 /** Where each place sits on the map. The studio is home, under the sun. */
@@ -98,6 +95,7 @@ const LAYOUT: Record<string, [number, number]> = {
   earthlink: [-1180, 520],
   hostpro: [-790, 220],
   stormscape: [-150, 60],
+  "stormscape-freelance": [-150, 60],
   unitedlayer: [-570, -460],
   murad: [30, -650],
   "capital-group": [560, -390],
@@ -106,9 +104,10 @@ const LAYOUT: Record<string, [number, number]> = {
   investcloud: [1200, 660],
 };
 
-function buildCities(): City[] {
+function buildCities({ places, spans, lineOf, lineNames, rolled }: SkillsData): City[] {
   const ordered = [...places].sort((a, b) => a.from - b.from);
   const seen = new Set<string>();
+  const seenTowers = new Set<string>();
   return ordered.map((place, index) => {
     const entries = spans
       .filter((span) => span.place === place.slug)
@@ -126,6 +125,16 @@ function buildCities(): City[] {
       entry.fresh = !seen.has(entry.skill);
       seen.add(entry.skill);
     }
+    const towers: Entry[] = towersAt(spans, place.slug, lineOf, lineNames, rolled).map((tower) => ({
+      skill: tower.key,
+      name: tower.name,
+      years: tower.years,
+      from: tower.from,
+      to: tower.to,
+      categories: [...new Set(tower.skills.map((skill) => lineOf.get(skill) ?? ""))].filter(Boolean),
+      fresh: !seenTowers.has(tower.key),
+    }));
+    for (const tower of towers) seenTowers.add(tower.skill);
     const home = ordered.findIndex((other) => other.slug === "stormscape");
     return {
       slug: place.slug,
@@ -136,6 +145,7 @@ function buildCities(): City[] {
       kind: KIND_BY_PLACE[place.slug] ?? KIND_ORDER[index % KIND_ORDER.length],
       note: NOTES[place.slug] ?? "",
       entries,
+      towers,
       spot: place.slug === "stormscape-now" && home >= 0 ? home : index,
     };
   });
@@ -256,6 +266,8 @@ interface ExperienceRow {
   name: string;
   years: number;
   hot: boolean;
+  /** On the closing screen (Admin -> Resume skills ordering, "Closing screen"). */
+  closing: boolean;
   skills: Array<{ name: string; years: number }>;
 }
 
@@ -264,7 +276,7 @@ interface ExperienceRow {
  * calendar: overlapping jobs never count twice, so these are the numbers that
  * can be said out loud in an interview.
  */
-function experienceAt(cities: City[], fractions: number[]) {
+function experienceAt({ categories }: SkillsData, cities: City[], fractions: number[]) {
   const byCategory = new Map<
     string,
     {
@@ -316,6 +328,7 @@ function experienceAt(cities: City[], fractions: number[]) {
       name: category.name,
       years: row ? unionYears(row.ranges) : 0,
       hot: row?.hot ?? false,
+      closing: category.closing ?? false,
       skills: row
         ? [...row.skills.entries()]
             .map(([name, ranges]) => ({ name, years: unionYears(ranges) }))
@@ -327,11 +340,29 @@ function experienceAt(cities: City[], fractions: number[]) {
   return { rows, career: unionYears(everything) };
 }
 
-const yearsLabel = (city: City) =>
-  `${Math.round(city.from)} – ${city.to >= LAST_YEAR - 1 ? "today" : Math.round(city.to)}`;
+// A start is the year it fell in (July 2025 is 2025, not 2026); an end rounds.
+const yearsLabel = (city: City, lastYear: number) =>
+  `${Math.floor(city.from)} – ${city.to >= lastYear - 1 ? "today" : Math.round(city.to)}`;
 
+/**
+ * The film plays the published timeline. Everything it builds - cities,
+ * timeline, fractions - is derived from that data, so a new release remounts
+ * the film (the key below) rather than mixing two timelines mid-play.
+ */
 export function SkillsTitlesPage() {
-  const cities = useMemo(buildCities, []);
+  const query = useReleaseQuery((content) => skillsDataFromRelease(content));
+  if (!query.data) {
+    return (
+      <div className="titles titles--loading">
+        <p className="titles__caption">{query.isError ? "The film could not load its timeline. Refresh to try again." : "Loading the timeline…"}</p>
+      </div>
+    );
+  }
+  return <SkillsTitlesFilm key={query.data.LAST_YEAR} data={query.data} />;
+}
+
+function SkillsTitlesFilm({ data }: { data: SkillsData }) {
+  const cities = useMemo(() => buildCities(data), [data]);
   const timeline = useMemo(() => buildTimeline(cities), [cities]);
   // "Since": the earliest year on any published project, so it follows the
   // portfolio rather than being typed in here.
@@ -366,9 +397,12 @@ export function SkillsTitlesPage() {
   }, [cities, projects]);
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
-  const progressRef = useRef(0);
-  const [progress, setProgress] = useState(0);
-  const [playing, setPlaying] = useState(true);
+  // The film opens on its last frame - today's complete picture, every tower
+  // up and the tally full - because that is the question a visitor brings.
+  // Play then runs the build-up from the first job.
+  const progressRef = useRef(1);
+  const [progress, setProgress] = useState(1);
+  const [playing, setPlaying] = useState(false);
   const [direction, setDirection] = useState(1);
   const [openRows, setOpenRows] = useState<string[]>([]);
   // The film stops at each place once it is built, until it is told to go on.
@@ -767,7 +801,7 @@ export function SkillsTitlesPage() {
 
         const tallest = Math.max(
           1,
-          ...cities.flatMap((city) => city.entries.map((entry) => entry.years)),
+          ...cities.flatMap((city) => city.towers.map((entry) => entry.years)),
         );
         const placed: Placed[] = [];
         cities.forEach((city, index) => {
@@ -788,9 +822,9 @@ export function SkillsTitlesPage() {
             (other) => other.spot === index && other !== city,
           );
           const build = byKind[city.kind](
-            city.entries.slice(0, PIECE_LIMIT),
+            city.towers.slice(0, PIECE_LIMIT),
             tallest,
-            laterCity?.entries.slice(0, PIECE_LIMIT),
+            laterCity?.towers.slice(0, PIECE_LIMIT),
             { title: city.name, accent: accentsRef.current[city.slug] ?? "#ffb266", house: city.slug },
           );
           build.group.position.copy(at).add(new THREE.Vector3(0, 1.5, 0));
@@ -831,7 +865,7 @@ export function SkillsTitlesPage() {
             new THREE.MeshBasicMaterial({
               map: nameTexture(
                 city.name.toUpperCase(),
-                yearsLabel(city).toUpperCase(),
+                yearsLabel(city, data.LAST_YEAR).toUpperCase(),
               ),
               transparent: true,
               opacity: 0.16,
@@ -1497,14 +1531,14 @@ export function SkillsTitlesPage() {
   }, []);
 
   const fractions = buildFractions(timeline, cities, progress);
-  const experience = experienceAt(cities, fractions);
+  const experience = experienceAt(data, cities, fractions);
   const ending = segment.kind === "outro" ? softly(0.35, 0.8, within(segment, progress)) : 0;
   const era =
     segment.kind === "intro"
-      ? `${Math.round(cities[0].from)}`
+      ? `${Math.floor(cities[0].from)}`
       : segment.kind === "outro"
-        ? `${Math.round(cities[0].from)} – today`
-        : yearsLabel(active);
+        ? `${Math.floor(cities[0].from)} – today`
+        : yearsLabel(active, data.LAST_YEAR);
   const stops = timeline.filter((entry) => entry.kind === "dwell");
 
   // The opening is long, and on an honest bar it would push every place to
@@ -1521,15 +1555,17 @@ export function SkillsTitlesPage() {
     bar <= START_STRETCH
       ? (bar / START_STRETCH) * introEnd
       : introEnd + ((bar - START_STRETCH) / (1 - START_STRETCH)) * (1 - introEnd);
-  const fresh = active.entries.filter((entry) => entry.fresh).slice(0, PIECE_LIMIT);
-  const carried = active.entries.filter((entry) => !entry.fresh).slice(0, PIECE_LIMIT);
+  const fresh = active.towers.filter((entry) => entry.fresh).slice(0, PIECE_LIMIT);
+  const carried = active.towers.filter((entry) => !entry.fresh).slice(0, PIECE_LIMIT);
 
   // What this place added: each discipline it touched, before it and after it.
   const before = experienceAt(
+    data,
     cities,
     fractions.map((_, index) => (index < cityIndex ? 1 : 0)),
   );
   const after = experienceAt(
+    data,
     cities,
     fractions.map((_, index) => (index <= cityIndex ? 1 : 0)),
   );
@@ -1578,7 +1614,7 @@ export function SkillsTitlesPage() {
       {/* Stopped at a place: where we are, and the way on or back. */}
       <section className={`titles__now${holding ? " is-on" : ""}`} aria-hidden={!holding}>
         <h2 className="titles__now-name">{active.name}</h2>
-        <p className="titles__now-years">{yearsLabel(active)}</p>
+        <p className="titles__now-years">{yearsLabel(active, data.LAST_YEAR)}</p>
         {active.title ? <p className="titles__now-role">{active.title}</p> : null}
         <div className="titles__nav">
           <button type="button" className="titles__nav-button" onClick={goPrevious} disabled={!holding || isFirstPlace}>
@@ -1606,7 +1642,7 @@ export function SkillsTitlesPage() {
             {DIRECTION_BY_PLACE[active.slug] ? ` · look ${DIRECTION_BY_PLACE[active.slug]}` : " · look A+B+C"}
           </p>
           <h2 className="titles__card-name">{active.name}</h2>
-          <p className="titles__card-years">{yearsLabel(active)}</p>
+          <p className="titles__card-years">{yearsLabel(active, data.LAST_YEAR)}</p>
           {fresh.length > 0 ? (
             <>
               <h3 className="titles__card-head is-new">Learned here</h3>
@@ -1664,18 +1700,24 @@ export function SkillsTitlesPage() {
         <p className="titles__finale-since">Since {since}</p>
         <p className="titles__finale-craft">One craft</p>
         <ul className="titles__finale-list">
+          {/* The lines ticked "Closing screen" on the Resume skills ordering
+              page, in the resume's order; the Skill Progress panel lists every
+              line regardless. */}
           {experience.rows
-            .filter((row) => ["frontend", "backend", "data", "cloud", "leadership"].includes(row.slug))
+            .filter((row) => row.closing && row.slug !== "current-stack" && row.years > 0)
             .map((row) => (
               <li key={row.slug}>
-                <strong>{Math.floor(row.years)}</strong>
-                <span>yrs · {row.name}</span>
+                <span className="titles__finale-label">{row.name}</span>
+                <strong>
+                  {Math.floor(row.years)}
+                  <small>yrs</small>
+                </strong>
               </li>
             ))}
         </ul>
         <p className="titles__finale-links">
           <button type="button" onClick={replay}>
-            Replay
+            Play from the start
           </button>
           <Link to="/resume">Read résumé</Link>
           <Link to="/universe">Enter the universe</Link>
@@ -1718,7 +1760,7 @@ export function SkillsTitlesPage() {
             }
           }}
         >
-          {progress >= 1 ? "Replay" : playing ? "Pause" : "Play ▶"}
+          {progress >= 1 ? "Play from the start ▶" : playing ? "Pause" : "Play ▶"}
         </button>
         <div className="titles__track">
           <input
@@ -1758,7 +1800,7 @@ export function SkillsTitlesPage() {
                 className={`titles__stop${stop === segment ? " is-on" : ""}`}
                 // The mark stands where the place is finished, not where it starts going up.
                 style={{ left: `${toBar(holds[index]) * 100}%` }}
-                title={`${cities[stop.city].name} · ${yearsLabel(cities[stop.city])}`}
+                title={`${cities[stop.city].name} · ${yearsLabel(cities[stop.city], data.LAST_YEAR)}`}
                 onClick={() => {
                   snapRef.current = true;
                   setPlaying(false);
@@ -1768,8 +1810,8 @@ export function SkillsTitlesPage() {
               >
                 <span>{cities[stop.city].name.split(" ")[0]}</span>
                 <span className="titles__stop-years">
-                  {Math.round(cities[stop.city].from)}–
-                  {cities[stop.city].to >= LAST_YEAR - 1
+                  {Math.floor(cities[stop.city].from)}–
+                  {cities[stop.city].to >= data.LAST_YEAR - 1
                     ? "now"
                     : String(Math.round(cities[stop.city].to)).slice(2)}
                 </span>

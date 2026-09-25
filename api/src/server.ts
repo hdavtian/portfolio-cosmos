@@ -10,7 +10,9 @@ const MONGO_RETRY_MS = 15000;
 const connectMongoWithRetry = async (): Promise<void> => {
   try {
     await connectMongo();
-    console.log("MongoDB connected.");
+    // Named on purpose: the admin once showed stale data because the API had
+    // been restarted onto a different database, and nothing said so.
+    console.log(`MongoDB connected: database "${mongoose.connection.name}".`);
   } catch (error) {
     console.error("MongoDB connection failed. Retrying...", error);
     setTimeout(() => {
@@ -20,9 +22,15 @@ const connectMongoWithRetry = async (): Promise<void> => {
 };
 
 const start = async () => {
-  app.listen(env.PORT, () => {
+  // Exclusive: on Windows a second process can otherwise bind the same port
+  // and log "listening" while the first keeps answering. Taken port = exit.
+  const server = app.listen({ port: env.PORT, exclusive: true }, () => {
     // Keep startup logging straightforward for Azure App Service log streaming.
     console.log(`API listening on port ${env.PORT}`);
+  });
+  server.on("error", (error) => {
+    console.error(`API could not listen on port ${env.PORT}: ${error.message}`);
+    process.exit(1);
   });
 
   // Keep the app alive even if Atlas is temporarily unreachable.

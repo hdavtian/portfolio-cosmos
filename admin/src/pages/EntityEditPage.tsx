@@ -1,5 +1,10 @@
-import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
-import { DropDownListComponent } from "@syncfusion/ej2-react-dropdowns";
+import { ButtonComponent, CheckBoxComponent } from "@syncfusion/ej2-react-buttons";
+import {
+  CheckBoxSelection,
+  DropDownListComponent,
+  Inject,
+  MultiSelectComponent,
+} from "@syncfusion/ej2-react-dropdowns";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -17,6 +22,16 @@ import {
   type EntityRecord,
   type PagedResult,
 } from "../lib/entityApi";
+
+/** A `tags` field is edited as one value per line. */
+const NEWLINE = String.fromCharCode(10);
+
+// One object, not a literal per render: a new identity makes Syncfusion rebind.
+const REFERENCE_FIELDS = { text: "label", value: "slug" };
+
+// One object, not a literal per render: Syncfusion rebinds when a prop's
+// identity changes, and rebinding a multi-select drops its selection.
+const MULTISELECT_FIELDS = { text: "label", value: "value" };
 
 type Content = Record<string, unknown>;
 
@@ -95,7 +110,7 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
   const status = useStatus();
 
   const [draft, setDraft] = useState<Content>(initial);
-  const [version, setVersion] = useState(initialVersion);
+  const [version] = useState(initialVersion);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   // Until the slug is typed by hand, new records follow the name field.
   const [slugTouched, setSlugTouched] = useState(!isNew);
@@ -103,10 +118,13 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
   const saving = create.isPending || update.isPending;
   const listPath = `/${definition.entity}`;
 
-  const setField = (key: string, value: string) => {
+  const setField = (key: string, value: string | boolean | string[]) => {
     setDraft((current) => {
       const next = { ...current, [key]: value };
-      if (key === definition.slugSource && !slugTouched) next.slug = suggestSlug(value);
+      // The slug follows the name only while it is still text and untouched.
+      if (key === definition.slugSource && !slugTouched && typeof value === "string") {
+        next.slug = suggestSlug(value);
+      }
       return next;
     });
     if (key === "slug") setSlugTouched(true);
@@ -126,9 +144,11 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
 
     if (isNew) {
       create.mutate(content, {
+        // Back to the list, where the new row is: the message survives the
+        // navigation, so it appears above the grid.
         onSuccess: (record) => {
-          status.success(`Created ${definition.singular}. Publish to show it on the sites.`);
-          navigate(`${listPath}/${record.slug}`, { replace: true });
+          status.success(`Created ${definition.singular} "${definition.describe(record) || record.slug}". Publish to show it on the sites.`);
+          navigate(listPath);
         },
         onError: handleError,
       });
@@ -139,11 +159,8 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
       { slug: String(initial.slug), content, version },
       {
         onSuccess: (record) => {
-          status.success(`Saved (version ${record.version}). Publish to show changes on the sites.`);
-          setVersion(record.version);
-          setDraft(withoutMeta(record));
-          // The slug is part of the URL; follow it if it was changed.
-          if (record.slug !== initial.slug) navigate(`${listPath}/${record.slug}`, { replace: true });
+          status.success(`Saved ${definition.singular} "${definition.describe(record) || record.slug}". Publish to show changes on the sites.`);
+          navigate(listPath);
         },
         onError: handleError,
       },
@@ -167,6 +184,26 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
         }
       }
       choices = choices.filter((option) => !excluded.has(option.slug));
+    }
+    if (selfReference) {
+      // A tree is easier to search when each choice shows where it sits
+      // ("Frontend › SPA frameworks › React") and the list runs alphabetically
+      // by that path, so siblings sit together and a name is found by typing
+      // any part of it.
+      const all = references.options[key] ?? [];
+      const bySlug = new Map(all.map((option) => [option.slug, option]));
+      const pathOf = (slug: string): string => {
+        const parts: string[] = [];
+        const seen = new Set<string>();
+        for (let current = bySlug.get(slug); current && !seen.has(current.slug); current = current.parentSlug ? bySlug.get(current.parentSlug) : undefined) {
+          seen.add(current.slug);
+          parts.unshift(current.label);
+        }
+        return parts.join(" › ");
+      };
+      choices = choices
+        .map((option) => ({ ...option, label: pathOf(option.slug) }))
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
     }
     return emptyOption ? [{ slug: "", label: emptyOption }, ...choices] : choices;
   };
@@ -206,21 +243,97 @@ function EntityEditor({ definition, initial, initialVersion, updatedBy, isNew }:
       <section className="admin-card">
         {orderedFields.map((field) => (
           <FormField key={field.key} label={field.label} hint={field.hint} error={fieldErrors[field.key]}>
-            {field.kind === "reference" ? (
+            {field.kind === "boolean" ? (
+              <CheckBoxComponent
+                checked={Boolean(draft[field.key])}
+                change={(event: { checked: boolean }) => setField(field.key, event.checked)}
+              />
+            ) : field.kind === "checkboxes" ? (
+              // One option per line: tick, label, then what ticking it does,
+              // so the effect is read beside the tick rather than in a block
+              // of prose underneath.
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {(field.options ?? []).map((option) => {
+                  const chosen = Array.isArray(draft[field.key]) ? (draft[field.key] as string[]) : [];
+                  return (
+                    <div key={option.value} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <CheckBoxComponent
+                        label={option.label}
+                        checked={chosen.includes(option.value)}
+                        change={(event: { checked: boolean }) =>
+                          setField(
+                            field.key,
+                            event.checked
+                              ? [...chosen, option.value]
+                              : chosen.filter((value) => value !== option.value),
+                          )
+                        }
+                      />
+                      {option.hint ? <span className="admin-status">{option.hint}</span> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : field.kind === "multiselect" ? (
+              <MultiSelectComponent
+                dataSource={field.options ?? []}
+                fields={MULTISELECT_FIELDS}
+                mode="CheckBox"
+                showSelectAll
+                showDropDownIcon
+                placeholder="Nowhere"
+                value={Array.isArray(draft[field.key]) ? (draft[field.key] as string[]) : []}
+                // The control fires `change` while it initialises, with an
+                // empty value and isInteracted false. Treating that as an edit
+                // emptied the field on open and would have saved it empty.
+                change={(event: { value: string[] | null; isInteracted?: boolean }) => {
+                  if (!event.isInteracted) return;
+                  setField(field.key, event.value ?? []);
+                }}
+              >
+                {/* CheckBox mode and Select All come from this module; without
+                    it the control throws as it renders. */}
+                <Inject services={[CheckBoxSelection]} />
+              </MultiSelectComponent>
+            ) : field.kind === "tags" ? (
+              // One per line: the list is read and edited as text, which is
+              // faster than a chip control for pasting a handful of old names.
+              <TextBoxComponent
+                multiline
+                value={(Array.isArray(draft[field.key]) ? (draft[field.key] as string[]) : []).join(NEWLINE)}
+                input={(event: { value: string }) =>
+                  setField(
+                    field.key,
+                    event.value
+                      .split(NEWLINE)
+                      .map((line) => line.trim())
+                      .filter(Boolean),
+                  )
+                }
+              />
+            ) : field.kind === "reference" ? (
               <DropDownListComponent
                 dataSource={choicesFor(
                   field.key,
                   field.emptyOption,
                   field.reference?.entity === definition.entity,
                 )}
-                fields={{ text: "label", value: "slug" }}
+                fields={REFERENCE_FIELDS}
                 value={String(draft[field.key] ?? "")}
                 placeholder={references.isLoading ? "Loading…" : `Choose a ${field.label.toLowerCase()}`}
+                // Type to narrow the list; "Contains" so any part of a path
+                // matches, not only its start.
+                allowFiltering
+                filterType="Contains"
+                filterBarPlaceholder="Type to find"
+                popupHeight="360px"
                 change={(event: { value: string }) => setField(field.key, event.value ?? "")}
               />
             ) : (
               <TextBoxComponent
                 multiline={field.kind === "multiline"}
+                // An id other records point at is set once and never changed.
+                enabled={isNew || !field.immutableAfterCreate}
                 value={String(draft[field.key] ?? "")}
                 input={(event: { value: string }) => setField(field.key, event.value)}
               />

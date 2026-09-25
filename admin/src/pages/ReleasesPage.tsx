@@ -1,12 +1,16 @@
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import {
+  ColumnChooser,
   ColumnDirective,
   ColumnsDirective,
+  Filter,
   GridComponent,
   Inject,
   Page,
+  Reorder,
   Resize,
   Sort,
+  Toolbar,
 } from "@syncfusion/ej2-react-grids";
 import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -37,6 +41,9 @@ interface ReleaseStatus {
 const HISTORY_PAGE_SETTINGS = { pageSize: 25 };
 
 // Matches the API's limit on release notes.
+const HISTORY_TOOLBAR = ["Search", "ColumnChooser"];
+const HISTORY_FILTER_SETTINGS = { type: "Menu" as const };
+
 const NOTES_MAX = 500;
 
 /** Joins change lines into notes, trimming whole lines to stay within the limit. */
@@ -69,6 +76,9 @@ export function ReleasesPage() {
   const queryClient = useQueryClient();
   const statusLine = useStatus();
   const [notes, setNotes] = useState("");
+  // The notes start as the summary of what changed, refreshed while they are
+  // untouched. Typing anything stops that: an edited note is never overwritten.
+  const [notesEdited, setNotesEdited] = useState(false);
 
   const status = useQuery({
     queryKey: ["releases", "status"],
@@ -103,17 +113,43 @@ export function ReleasesPage() {
   const publish = useMutation({
     mutationFn: () => api.post<ReleaseSummary>("/api/v2/admin/releases/publish", { notes: notes.trim() }),
     onSuccess: (release) => {
+      // The next release starts from its own summary again.
       setNotes("");
+      setNotesEdited(false);
+      setSuggestionShown("");
       void refresh();
-      statusLine.success(`Release #${release.id} is live on both sites.`);
+      statusLine.success(`Published as release #${release.id}.`);
     },
     onError: (error) => statusLine.error(error, "Could not publish."),
   });
 
+  const discard = useMutation({
+    mutationFn: () => api.post<{ discarded: boolean }>("/api/v2/admin/releases/discard-drafts"),
+    onSuccess: () => {
+      // Every cached record in the admin is now stale.
+      void queryClient.invalidateQueries();
+      statusLine.success("Unpublished changes discarded. The drafts match the live release again.");
+    },
+    onError: (error: unknown) => statusLine.error(error, "Could not discard the changes."),
+  });
+
+  const confirmDiscard = () => {
+    if (discard.isPending) return;
+    const count = pending.data?.lines.length ?? 0;
+    confirmAction({
+      title: "Discard unpublished changes?",
+      content:
+        `${count === 1 ? "One change" : `${count} changes`} will be thrown away and the drafts will match the live ` +
+        "release again. A copy of the drafts is kept, so this can be undone by hand if it was a mistake.",
+      confirmText: "Discard changes",
+      confirmClass: "e-danger e-outline",
+      onConfirm: () => discard.mutate(),
+    });
+  };
+
   const rollback = useMutation({
     mutationFn: (id: number) => api.post<ReleaseSummary>(`/api/v2/admin/releases/${id}/rollback`),
     onSuccess: (release) => {
-      setSelectedRelease(null);
       // Drafts were reset too, so every cached record in the admin is stale.
       void queryClient.invalidateQueries();
       statusLine.success(
@@ -156,10 +192,31 @@ export function ReleasesPage() {
 
 
   const historyRows = useMemo(() => (history.data?.items ?? []).map(toHistoryRow), [history.data]);
-  const [selectedRelease, setSelectedRelease] = useState<ReleaseSummary | null>(null);
 
-  const busy = publish.isPending || check.isPending;
+  const suggestedNotes = pending.data ? toNotes(pending.data.lines) : "";
+  const [suggestionShown, setSuggestionShown] = useState("");
+  if (!notesEdited && suggestedNotes !== suggestionShown) {
+    setSuggestionShown(suggestedNotes);
+    setNotes(suggestedNotes);
+  }
+
+  const busy = publish.isPending || check.isPending || discard.isPending;
   const s = status.data;
+
+  // Rolling back acts on one release, so the button belongs in its row: the
+  // history is paged and the one you want is rarely at the top.
+  const rollbackTemplate = (row: HistoryRow) =>
+    row.current ? (
+      <span className="admin-status">Live</span>
+    ) : (
+      <ButtonComponent
+        cssClass="e-small e-danger e-outline"
+        disabled={rollback.isPending}
+        onClick={() => confirmRollback(row)}
+      >
+        Roll back
+      </ButtonComponent>
+    );
 
   return (
     <>
@@ -200,14 +257,19 @@ export function ReleasesPage() {
             ) : pending.data && pending.data.lines.length > 0 ? (
               <>
                 <ul className="admin-change-list" aria-label="Changes waiting to be published">
-                  {pending.data.lines.map((line) => (
-                    <li key={line}>{line}</li>
+                  {/* Keyed by position: two records with the same name make
+                      the same line, and a repeated key breaks the list. */}
+                  {pending.data.lines.map((line, index) => (
+                    <li key={`${index}-${line}`}>{line}</li>
                   ))}
                 </ul>
                 <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
                   <ButtonComponent
                     cssClass="e-small e-flat e-outline"
-                    onClick={() => setNotes(toNotes(pending.data.lines))}
+                    onClick={() => {
+                      setNotes(toNotes(pending.data.lines));
+                      setNotesEdited(false);
+                    }}
                   >
                     Use as notes
                   </ButtonComponent>
@@ -230,17 +292,35 @@ export function ReleasesPage() {
               multiline
               maxLength={NOTES_MAX}
               value={notes}
-              input={(event: { value: string }) => setNotes(event.value)}
+              input={(event: { value: string }) => {
+                setNotes(event.value);
+                setNotesEdited(true);
+              }}
             />
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <ButtonComponent cssClass="e-flat e-outline" disabled={busy} onClick={() => check.mutate()}>
-            {check.isPending ? "Checking…" : "Check drafts"}
+        {/* Publishing and its dry run on the left; discarding is destructive,
+            so it sits apart on the right where it cannot be hit by habit. */}
+        <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+          <ButtonComponent
+            cssClass="e-flat e-outline"
+            disabled={busy}
+            title="Runs every check that publishing runs, and publishes nothing."
+            onClick={() => check.mutate()}
+          >
+            {check.isPending ? "Checking…" : "Dry run"}
           </ButtonComponent>
           <ButtonComponent cssClass="e-primary e-outline" disabled={busy} onClick={confirmPublish}>
             {publish.isPending ? "Publishing…" : "Publish"}
+          </ButtonComponent>
+          <ButtonComponent
+            cssClass="e-danger e-outline"
+            style={{ marginLeft: "auto" }}
+            disabled={busy || (pending.data?.lines.length ?? 0) === 0}
+            onClick={confirmDiscard}
+          >
+            {discard.isPending ? "Discarding…" : "Discard changes"}
           </ButtonComponent>
         </div>
       </section>
@@ -253,40 +333,33 @@ export function ReleasesPage() {
         {history.isLoading ? <p className="admin-status">Loading…</p> : null}
         {history.data ? (
           <>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
-              <ButtonComponent
-                cssClass="e-small e-danger e-outline"
-                disabled={!selectedRelease || selectedRelease.current || rollback.isPending}
-                onClick={() => selectedRelease && confirmRollback(selectedRelease)}
-              >
-                {rollback.isPending ? "Rolling back…" : "Roll back to selected release"}
-              </ButtonComponent>
-              <span className="admin-status">
-                {selectedRelease
-                  ? selectedRelease.current
-                    ? `Release #${selectedRelease.id} is already live.`
-                    : `Release #${selectedRelease.id} selected.`
-                  : "Select an earlier release to roll back to it."}
-              </span>
-            </div>
+            <p className="admin-status">
+              {rollback.isPending ? "Rolling back…" : "Roll back from the row of the release you want to restore."}
+            </p>
             <GridComponent
+              id="releaseHistory"
+              enablePersistence
               key={history.data.items[0]?.id ?? "empty"}
               dataSource={historyRows}
               allowPaging
               allowSorting
               allowResizing
+              allowFiltering
+              allowReordering
+              showColumnChooser
+              filterSettings={HISTORY_FILTER_SETTINGS}
+              toolbar={HISTORY_TOOLBAR}
               pageSettings={HISTORY_PAGE_SETTINGS}
               gridLines="Horizontal"
-              rowSelected={(args: { data?: HistoryRow }) => setSelectedRelease(args.data ?? null)}
-              rowDeselected={() => setSelectedRelease(null)}
             >
               <ColumnsDirective>
                 <ColumnDirective field="id" headerText="#" width={70} textAlign="Right" />
                 <ColumnDirective field="publishedLabel" headerText="Published" width={190} allowSorting={false} />
                 <ColumnDirective field="publishedBy" headerText="By" width={110} />
                 <ColumnDirective field="notesLabel" headerText="Notes" width={420} clipMode="EllipsisWithTooltip" />
+                <ColumnDirective headerText="Actions" width={150} template={rollbackTemplate} />
               </ColumnsDirective>
-              <Inject services={[Page, Sort, Resize]} />
+              <Inject services={[Page, Sort, Resize, Filter, Reorder, Toolbar, ColumnChooser]} />
             </GridComponent>
           </>
         ) : null}

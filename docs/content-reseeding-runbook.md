@@ -19,6 +19,18 @@ reached. It is never edited by hand (see "The fallback" below).
    red and blue (portfolio masthead, space-site badge). On fallback content the
    name is all gold.
 
+## The publish screen
+
+- **Dry run** runs every check publishing runs - each schema, the tech stack
+  tree, the technology tree and its name and alias collisions - and publishes
+  nothing. A green result means Publish will succeed.
+- **Publish** makes the drafts live. The notes start as a summary of what
+  changed and can be edited; typing in them stops the summary overwriting them.
+- **Discard changes** throws away everything unpublished and restores the
+  drafts from the live release. It publishes nothing, so history stays a record
+  of what went out. The drafts it replaces are copied into `draftBackups`
+  first, so a mistaken discard can be recovered by hand.
+
 ## Starting fresh: a new machine, or a broken local database
 
 There is no import from files. A fresh local database is a **restored copy of

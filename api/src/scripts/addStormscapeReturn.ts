@@ -41,7 +41,6 @@ const record = {
   ],
   projects: [],
   jobMemories: [],
-  jobTech: [],
 };
 
 const run = async () => {

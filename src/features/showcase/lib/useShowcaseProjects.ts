@@ -15,11 +15,18 @@ export interface ShowcaseCore {
 }
 
 const FALLBACK_TINT = "#7d8594";
-const TOP_TECH_COUNT = 10;
 
 /**
  * Published portfolio projects for the showcase site, in admin order, plus the
- * cores and most-used technologies that drive the filter chips.
+ * cores and the technologies offered as filter chips.
+ *
+ * Technology names come from the master list: a project links to records by
+ * slug and the record's name is what shows, so "html" and "HTML" are one tag
+ * without anyone editing the project. The chip row is the technologies ticked
+ * for the filters surface (Admin -> Technologies -> Shown in), headings left
+ * out, most-used first, with no cap - the tick is the only control (D23/D24).
+ * A release from before the master list carries no links; its free-text tags
+ * are shown as typed so that release still renders.
  */
 export function useShowcaseProjects() {
   const content = useReleaseQuery();
@@ -30,30 +37,11 @@ export function useShowcaseProjects() {
     const colorByCore = new Map(cores.map((core) => [core.name, core.color ?? FALLBACK_TINT]));
     const flattened = release ? portfolioItemsFromRelease(release) : [];
 
-    // Technology names are typed by hand in the admin ("css", "CSS "), so one
-    // spelling is chosen per name: the one with the most capitals ("CSS",
-    // "JavaScript"). Filters and chips then treat them as one.
-    const spelling = new Map<string, string>();
-    const capitals = (value: string) => value.replace(/[^A-Z]/g, "").length;
-    flattened.forEach((item) =>
-      item.technologies.forEach((raw) => {
-        const tech = raw.trim();
-        if (!tech) return;
-        const key = tech.toLowerCase();
-        const current = spelling.get(key);
-        if (!current || capitals(tech) > capitals(current)) spelling.set(key, tech);
-      }),
-    );
+    const technologies = release?.collections.technologies ?? [];
 
+    // Tags are already the linked technologies' names (portfolioTransform).
     const projects: ShowcaseProject[] = flattened.map((item) => ({
       ...item,
-      technologies: [
-        ...new Set(
-          item.technologies
-            .map((raw) => spelling.get(raw.trim().toLowerCase()))
-            .filter((tech): tech is string => Boolean(tech)),
-        ),
-      ],
       coreColor: colorByCore.get(item.category) ?? FALLBACK_TINT,
     }));
 
@@ -65,14 +53,15 @@ export function useShowcaseProjects() {
       }))
       .filter((core) => core.count > 0);
 
-    const techCounts = new Map<string, number>();
+    const usedBy = new Map<string, number>();
     projects.forEach((project) =>
-      project.technologies.forEach((tech) => techCounts.set(tech, (techCounts.get(tech) ?? 0) + 1)),
+      project.technologies.forEach((name) => usedBy.set(name, (usedBy.get(name) ?? 0) + 1)),
     );
-    const topTech = [...techCounts.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, TOP_TECH_COUNT)
-      .map(([tech]) => tech);
+    const topTech = technologies
+      .filter((record) => !record.isGrouping && record.surfaces.includes("filters"))
+      .map((record) => record.name)
+      .filter((name) => (usedBy.get(name) ?? 0) > 0)
+      .sort((a, b) => (usedBy.get(b) ?? 0) - (usedBy.get(a) ?? 0) || a.localeCompare(b));
 
     const years = projects.map((project) => project.year).filter((year): year is number => year !== null);
 

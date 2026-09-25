@@ -29,11 +29,12 @@ const smooth = (from: number, to: number, t: number) => {
 };
 
 export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData): Promise<ShowcaseScene> {
-  const [{ makeAstrolabe }, { makeBuilders, KIND_BY_PLACE }, { places, spans }] = await Promise.all([
+  const [{ makeAstrolabe }, { makeBuilders, KIND_BY_PLACE }] = await Promise.all([
     import("../../lab/gotAstrolabe"),
     import("../../lab/gotBuilders"),
-    import("../../lab/skillsData"),
   ]);
+  const { places, spans, lineOf, lineNames, rolled } = data.skills;
+  const { towersAt } = await import("../../lab/skillsData");
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x07060a, 0.00045);
@@ -164,10 +165,8 @@ export async function createGotSkillzScene(THREE: ThreeModule, data: SceneData):
   const { byKind } = makeBuilders(THREE, label);
   const tallest = Math.max(1, ...spans.map((span) => span.to - span.from));
   const towersOf = (slug: string) =>
-    spans
-      .filter((span) => span.place === slug)
-      .map((span) => ({ name: span.skillName, years: span.to - span.from, fresh: true }))
-      .sort((a, b) => b.years - a.years)
+    towersAt(spans as never, slug, lineOf, lineNames, rolled)
+      .map((tower) => ({ name: tower.name, years: tower.years, fresh: true }))
       .slice(0, 9);
   const home = places.find((place) => place.slug === "boingo");
   const accent = data.portfolio.cores.find((core) => core.slug === "boingo")?.color ?? "#FF6B35";

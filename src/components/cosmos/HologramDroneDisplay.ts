@@ -566,6 +566,9 @@ export class HologramDroneDisplay {
     const group = new THREE.Group();
     group.name = "HologramDrone";
 
+    // deathstar.glb arrives upright: its nodes carry the Z-up to Y-up turn,
+    // so its pole is Y and the equatorial trench lies level. It is spun about
+    // Y and turned only about Y (see the face track below), never tilted.
     const model = this.oblivionDroneTemplate.clone(true);
     model.name = "OblivionDroneModel";
 
@@ -1754,9 +1757,13 @@ export class HologramDroneDisplay {
     }
 
     if (laserTargets.length > 0) {
-      const targetWorld = laserTargets[0].target;
+      // Face the writing target by turning about the vertical axis only: a
+      // full look would pitch the sphere toward the text, and the Death
+      // Star's equator must stay level however low the panel sits.
+      const targetWorld = laserTargets[0].target.clone();
       const droneWorldForTrack = this._tmpV2.copy(this.droneGroup.position);
       this.rootGroup.localToWorld(droneWorldForTrack);
+      targetWorld.y = droneWorldForTrack.y;
       this._tmpM.lookAt(droneWorldForTrack, targetWorld, new THREE.Vector3(0, 1, 0));
       const desiredWorldQ = this._tmpQ2.setFromRotationMatrix(this._tmpM);
       // Model-forward correction: during engraving, rotate so the drone "face"

@@ -1,0 +1,26 @@
+{
+  "name": "@hd/resume-export",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The resume as a document: one model from the published release, written as Word, PDF and plain text. Shared by the site and the API.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./model": "./src/model.ts",
+    "./text": "./src/text.ts",
+    "./docx": "./src/docx.ts",
+    "./pdf": "./src/pdf.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hd/content-schema": "*",
+    "docx": "^9.5.0",
+    "pdf-lib": "^1.17.1"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.1"
+  }
+}

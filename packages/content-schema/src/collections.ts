@@ -2,7 +2,7 @@ import { z } from "zod";
 import { aboutDeckSlideSchema, pathTravelMessageSchema } from "./about.js";
 import { cosmosIntroductionSchema, cosmosPlanetSchema, guidedTourSchema } from "./cosmos.js";
 import { mediaAssetSchema } from "./media.js";
-import { techStackNodeSchema } from "./techStack.js";
+import { technologySchema } from "./technology.js";
 import {
   moonPortfolioMappingSchema,
   portfolioCoreSchema,
@@ -14,14 +14,16 @@ import {
   experienceSchema,
   linkSchema,
   profileSchema,
-  skillCategorySchema,
-  skillSchema,
+  resumeSkillsSchema,
 } from "./resume.js";
 
 // One document each, stored in the `singletons` collection under `key`.
 export const singletonSchemas = {
   profile: profileSchema,
   cosmosIntroduction: cosmosIntroductionSchema,
+  // Defaulted, so a release from before it existed still validates, and a
+  // publish is not blocked until the order has been saved once.
+  resumeSkills: resumeSkillsSchema.default({ headingOrder: [], closingLines: [] }),
 } as const;
 
 // Ordered, slug-keyed entity collections. The key is the MongoDB collection name.
@@ -29,9 +31,9 @@ export const collectionSchemas = {
   education: educationSchema,
   certifications: certificationSchema,
   links: linkSchema,
-  skillCategories: skillCategorySchema,
-  skills: skillSchema,
-  techStackNodes: techStackNodeSchema,
+  // The master list (D1). The skills, skill categories and tech stack nodes
+  // it absorbed were retired once every site read it (D31).
+  technologies: technologySchema,
   experiences: experienceSchema,
   portfolioCores: portfolioCoreSchema,
   portfolioEntries: portfolioEntrySchema,

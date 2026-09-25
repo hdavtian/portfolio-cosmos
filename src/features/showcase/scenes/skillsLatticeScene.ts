@@ -48,19 +48,23 @@ const makeHaloTexture = (THREE: ThreeModule) => {
   return texture;
 };
 
-const makeLabel = (THREE: ThreeModule, text: string, size: number) => {
+/**
+ * A name over a node. Headings read bright and cool; a child reads smaller and
+ * a shade warmer, so the two levels tell apart at a glance.
+ */
+const makeLabel = (THREE: ThreeModule, text: string, size: number, isCore = true) => {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
-  const font = `600 44px "JetBrains Mono", Menlo, monospace`;
+  const font = `${isCore ? 600 : 500} 44px "JetBrains Mono", Menlo, monospace`;
   ctx.font = font;
   const width = Math.ceil(ctx.measureText(text.toUpperCase()).width) + 24;
   canvas.width = width;
   canvas.height = 64;
   ctx.font = font;
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "rgba(223, 246, 255, 1)";
-  ctx.shadowColor = "rgba(110, 215, 255, 0.9)";
-  ctx.shadowBlur = 12;
+  ctx.fillStyle = isCore ? "rgba(223, 246, 255, 1)" : "rgba(196, 214, 232, 1)";
+  ctx.shadowColor = isCore ? "rgba(110, 215, 255, 0.9)" : "rgba(120, 170, 220, 0.7)";
+  ctx.shadowBlur = isCore ? 12 : 8;
   ctx.fillText(text.toUpperCase(), 12, 34);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -156,7 +160,7 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
     halo.scale.setScalar(radius * 4.6);
     root.add(halo);
 
-    const label = makeLabel(THREE, name, isCore ? 3.4 : 2.1);
+    const label = makeLabel(THREE, name, isCore ? 3.4 : 1.6, isCore);
     label.position.set(position.x, position.y + radius + (isCore ? 3.4 : 1.8), position.z);
     root.add(label);
 
@@ -178,9 +182,27 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
   };
 
   const roots = data.techStack;
-  const corePositions = roots.map((_, index) => {
-    const angle = (index / Math.max(1, roots.length)) * Math.PI * 2;
-    return new THREE.Vector3(Math.cos(angle) * RING_RADIUS, Math.sin(index * 0.9) * 6, Math.sin(angle) * RING_RADIUS);
+  // Cores on a sphere, not a ring (the same layout as the universe's lattice):
+  // a Fibonacci spiral spreads them evenly, the radius grows with the count
+  // so neighbours stay a branch-width apart, and a jitter seeded from the
+  // name loosens the pattern while keeping the layout the same every visit.
+  const seeded = (text: string, salt: number) => {
+    let h = 2166136261 ^ salt;
+    for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+    return ((h >>> 0) % 10000) / 10000;
+  };
+  const largestBranch = Math.max(1, ...roots.map((root) => root.children.length));
+  const branchReach = 11 + Math.min(7, largestBranch * 0.7);
+  const coreSpacing = branchReach * 2 + 14;
+  const count = Math.max(1, roots.length);
+  const sphereRadius = Math.max(RING_RADIUS, Math.sqrt((count * coreSpacing * coreSpacing) / (4 * Math.PI)));
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  const corePositions = roots.map((root, index) => {
+    const y = 1 - ((index + 0.5) / count) * 2;
+    const ringR = Math.sqrt(Math.max(0, 1 - y * y));
+    const theta = goldenAngle * index + (seeded(root.name, 1) - 0.5) * 0.6;
+    const radius = sphereRadius * (0.88 + seeded(root.name, 2) * 0.24);
+    return new THREE.Vector3(Math.cos(theta) * ringR * radius, y * radius * 0.85, Math.sin(theta) * ringR * radius);
   });
 
   // Ring links between neighbouring cores.
@@ -204,13 +226,15 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
       depth === 2
         ? 11 + Math.min(7, children.length * 0.7)
         : Math.max(3.2, 6.2 - (depth - 3) * 1.2) + Math.min(3, children.length * 0.35);
+    // A core's ring faces away from the lattice's centre, fanning into empty
+    // space; deeper rings face away from the grandparent.
     const outward = grandparentPosition
       ? parentPosition.clone().sub(grandparentPosition).normalize()
-      : new THREE.Vector3(0, 1, 0);
+      : parentPosition.clone().normalize();
     const axisA = new THREE.Vector3();
     const axisB = new THREE.Vector3();
     let center = parentPosition.clone();
-    if (depth === 2) {
+    if (depth === 2 && outward.lengthSq() < 1e-6) {
       axisA.set(1, 0, 0);
       axisB.set(0, 0, 1);
     } else {
@@ -221,17 +245,11 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
     }
     children.forEach((child, index) => {
       const angle = (index / Math.max(1, children.length)) * Math.PI * 2 + seed * 0.35;
-      const position =
-        depth === 2
-          ? new THREE.Vector3(
-              parentPosition.x + Math.cos(angle) * orbit,
-              parentPosition.y + Math.sin(angle * 1.4) * 2.2,
-              parentPosition.z + Math.sin(angle) * orbit,
-            )
-          : center
-              .clone()
-              .addScaledVector(axisA, Math.cos(angle) * orbit)
-              .addScaledVector(axisB, Math.sin(angle) * orbit);
+      const position = center
+        .clone()
+        .addScaledVector(axisA, Math.cos(angle) * orbit)
+        .addScaledVector(axisB, Math.sin(angle) * orbit)
+        .addScaledVector(outward, depth === 2 ? Math.sin(angle * 1.4) * 2.2 : 0);
       addNode(child.name, position, depth, seed * 2.13 + index * 0.77 + depth * 0.31, pathKeys);
       segments.push({ from: parentPosition.clone(), to: position.clone() });
       placeChildren(child, position, parentPosition, depth + 1, [...pathKeys, normalize(child.name)], seed + index + 1);
@@ -304,7 +322,8 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
       const targetElevation = 0.42 - pointer.y * 0.5;
       elevation += (targetElevation - elevation) * (1 - Math.exp(-2 * dt));
       const angle = azimuth + pointer.x * 0.9;
-      const distance = 128 + Math.sin(time * 0.08) * 10;
+      // Far enough to hold the whole sphere and its branches in frame.
+      const distance = sphereRadius * 1.85 + Math.sin(time * 0.08) * 10;
       camera.position.set(
         Math.cos(angle) * Math.cos(elevation) * distance,
         Math.sin(elevation) * distance,
@@ -327,7 +346,9 @@ export async function createSkillsLatticeScene(THREE: ThreeModule, data: SceneDa
         node.halo.material.color.copy(isLit ? litColor : node.depth === 1 ? coreColor : nodeColor);
         node.halo.scale.setScalar((node.depth === 1 ? CORE_RADIUS : NODE_RADIUS) * (isLit ? 7 : 4.6));
         if (node.label) {
-          const target = isLit ? 1 : node.depth === 1 ? (highlighting ? 0.35 : 0.75) : 0;
+          // Children keep a quiet label of their own, so the tree can be read
+          // without hovering; it steps back while a project is highlighted.
+          const target = isLit ? 1 : node.depth === 1 ? (highlighting ? 0.35 : 0.75) : highlighting ? 0.12 : 0.42;
           node.label.material.opacity += (target - node.label.material.opacity) * (1 - Math.exp(-6 * dt));
         }
       });

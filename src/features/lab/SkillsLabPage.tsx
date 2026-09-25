@@ -1,17 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
-import {
-  FIRST_YEAR,
-  LAST_YEAR,
-  YEARS,
-  categoryTotals,
-  headlineCategories,
-  places,
-  say,
-  skillTotals,
-  skillsLiveIn,
-} from "./skillsData";
+import { useReleaseQuery } from "../../lib/query/contentQueries";
+import { say, skillsDataFromRelease, type SkillsData } from "./skillsData";
 import "./skillsLab.css";
+
+// Every panel reads the one timeline through this; the page remounts when the
+// timeline changes, so no panel's memo holds an older one.
+const SkillsDataContext = createContext<SkillsData | null>(null);
+const useSkillsData = () => {
+  const data = useContext(SkillsDataContext);
+  if (!data) throw new Error("SkillsLab panels render inside the provider only");
+  return data;
+};
 
 /**
  * Sketches for showing how long each skill has been in play. Not wired into
@@ -19,16 +19,26 @@ import "./skillsLab.css";
  * shapes can be judged before anything is built for real.
  */
 export function SkillsLabPage() {
+  const data = useReleaseQuery((content) => skillsDataFromRelease(content)).data;
+  if (!data) return <p className="lab__lede">Loading the timeline…</p>;
+  return (
+    <SkillsDataContext.Provider value={data} key={data.LAST_YEAR}>
+      <SkillsLab />
+    </SkillsDataContext.Provider>
+  );
+}
+
+function SkillsLab() {
   const year = useScrollYear();
 
   return (
     <div className="lab">
       <header className="lab__head">
-        <p className="lab__eyebrow">Sketches · mock data</p>
+        <p className="lab__eyebrow">Sketches · the published timeline</p>
         <h1 className="lab__title">Twenty-five years, four ways</h1>
         <p className="lab__lede">
-          Every panel below reads the same mock timeline. Scroll: the year marker moves with you, from the first
-          line of HTML to today.
+          Every panel below reads the same published timeline. Scroll: the year marker moves with you, from the
+          first line of HTML to today.
         </p>
       </header>
 
@@ -95,6 +105,7 @@ export function SkillsLabPage() {
 
 /** The year the page is "at", driven by scroll position. */
 function useScrollYear() {
+  const { FIRST_YEAR, LAST_YEAR } = useSkillsData();
   const [year, setYear] = useState(FIRST_YEAR);
   useEffect(() => {
     const onScroll = () => {
@@ -110,6 +121,7 @@ function useScrollYear() {
 }
 
 function YearRail({ year }: { year: number }) {
+  const { FIRST_YEAR, LAST_YEAR, skillsLiveIn } = useSkillsData();
   const live = skillsLiveIn(year);
   return (
     <div className="lab__rail">
@@ -123,6 +135,7 @@ function YearRail({ year }: { year: number }) {
 }
 
 function Counters() {
+  const { LAST_YEAR, headlineCategories } = useSkillsData();
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -175,8 +188,8 @@ function CountUp({ to, run }: { to: number; run: boolean }) {
   );
 }
 
+// Colours are dealt to categories in their order, whichever timeline is showing.
 const CATEGORY_COLOURS = d3.scaleOrdinal<string, string>(
-  categoryTotals.map((category) => category.slug),
   ["#6ad7ff", "#7ae29c", "#ffd084", "#ff9ecb", "#a7b6ff", "#b8ffd9", "#ffb8ef", "#ffe2b3", "#9beaff", "#d6f4ff"],
 );
 
@@ -224,6 +237,7 @@ function useBox(ref: React.RefObject<HTMLElement | null>) {
  * resumes once the last year is drawn.
  */
 function RibbonLock() {
+  const { FIRST_YEAR, LAST_YEAR, skillTotals, skillsLiveIn } = useSkillsData();
   const wrapRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -328,6 +342,7 @@ function RibbonLock() {
 }
 
 function Stream({ year }: { year: number }) {
+  const { FIRST_YEAR, LAST_YEAR, YEARS, categoryTotals } = useSkillsData();
   const ref = useRef<SVGSVGElement>(null);
   useEffect(() => {
     const svg = d3.select(ref.current);
@@ -398,6 +413,7 @@ function Stream({ year }: { year: number }) {
  * were live that year. Labelled on both axes so the shape can be read.
  */
 function Terrain() {
+  const { YEARS, categoryTotals } = useSkillsData();
   const ref = useRef<HTMLDivElement>(null);
   const [reading, setReading] = useState<string | null>(null);
 
@@ -566,6 +582,7 @@ function Terrain() {
 
 /** Categories by job, opening up into the skills underneath them. */
 function Matrix() {
+  const { categoryTotals, places, skillTotals } = useSkillsData();
   const [open, setOpen] = useState<string[]>([]);
   const rows = useMemo(() => categoryTotals.filter((category) => category.years > 0), []);
   const skillsBySlug = useMemo(() => new Map(skillTotals.map((skill) => [skill.slug, skill])), []);
@@ -676,6 +693,7 @@ interface BubbleNode extends d3.SimulationNodeDatum {
  * made them up. A force layout keeps everything apart and settles.
  */
 function Bubbles() {
+  const { categoryTotals, skillTotals } = useSkillsData();
   const ref = useRef<SVGSVGElement>(null);
   const positions = useRef(new Map<string, { x: number; y: number }>());
   const [shape, setShape] = useState<ShapeName>("circle");

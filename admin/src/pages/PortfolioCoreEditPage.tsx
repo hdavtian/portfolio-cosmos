@@ -93,7 +93,7 @@ function CoreEditor({
   const status = useStatus();
 
   const [draft, setDraft] = useState<PortfolioCore>(initial);
-  const [version, setVersion] = useState(initialVersion);
+  const [version] = useState(initialVersion);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [slugTouched, setSlugTouched] = useState(!isNew);
   const saving = create.isPending || update.isPending;
@@ -114,8 +114,8 @@ function CoreEditor({
     if (isNew) {
       create.mutate(content, {
         onSuccess: (record) => {
-          status.success("Created core. Publish to show it on the sites.");
-          navigate(`/portfolioCores/${record.slug}`, { replace: true });
+          status.success(`Created core "${record.name}". Publish to show it on the sites.`);
+          navigate("/portfolioCores");
         },
         onError: handleError,
       });
@@ -126,10 +126,8 @@ function CoreEditor({
       { slug: initial.slug, content, version },
       {
         onSuccess: (record) => {
-          status.success(`Saved (version ${record.version}). Publish to show changes on the sites.`);
-          setVersion(record.version);
-          setDraft(withoutMeta(record));
-          if (record.slug !== initial.slug) navigate(`/portfolioCores/${record.slug}`, { replace: true });
+          status.success(`Saved core "${record.name}". Publish to show changes on the sites.`);
+          navigate("/portfolioCores");
         },
         onError: handleError,
       },

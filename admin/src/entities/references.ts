@@ -1,6 +1,5 @@
 import { useQueries } from "@tanstack/react-query";
-import { api } from "../lib/apiClient";
-import type { PagedResult } from "../lib/entityApi";
+import { fetchAllEntities } from "../lib/entityApi";
 import type { EntityDefinition } from "./definitions";
 
 // A type alias, not an interface: Syncfusion's dataSource expects objects with an
@@ -23,10 +22,8 @@ export function useReferenceOptions(definition: EntityDefinition) {
   const results = useQueries({
     queries: referenceFields.map((field) => ({
       queryKey: [field.reference!.entity, "options"],
-      queryFn: () =>
-        api.get<PagedResult<Record<string, unknown>>>(
-          `/api/v2/admin/${field.reference!.entity}?pageSize=100&sort=sortOrder`,
-        ),
+      // Every page, so a parent dropdown never misses a record past the 100th.
+      queryFn: async () => ({ items: await fetchAllEntities<Record<string, unknown>>(field.reference!.entity) }),
     })),
   });
 

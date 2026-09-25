@@ -6,7 +6,7 @@ import {
   type CollectionName,
   type ContentBundle,
   type SingletonName,
-  techStackIssues,
+  technologyIssues,
 } from "@hd/content-schema";
 import { createHash } from "node:crypto";
 import type { Db, Document } from "mongodb";
@@ -89,8 +89,9 @@ export class ReleaseService {
       singletonDocs.map((doc) => [doc.key as string, fromDb(doc.data)]),
     );
 
+    // A singleton whose schema has a default (resumeSkills) need not exist.
     const missing = (Object.keys(singletonSchemas) as SingletonName[]).filter(
-      (name) => !(name in singletons),
+      (name) => !(name in singletons) && !singletonSchemas[name].safeParse(undefined).success,
     );
     if (missing.length > 0) {
       throw ApiError.badRequest(
@@ -115,14 +116,16 @@ export class ReleaseService {
       );
     }
 
-    // The tech stack must form a tree; the schemas check each node on its own.
-    const treeIssues = techStackIssues(result.data.collections.techStackNodes);
-    if (treeIssues.length > 0) {
+    // The master list must form a tree, and no two entries may claim the same
+    // name or alias: a string that resolves to two technologies cannot be
+    // resolved at all (D25/D26). The schemas check each record on its own.
+    const technologyProblems = technologyIssues(result.data.collections.technologies);
+    if (technologyProblems.length > 0) {
       throw ApiError.badRequest(
-        "Cannot publish: the tech stack has nodes with a broken parent. Fix the listed nodes and try again.",
-        treeIssues.map((issue) => ({
-          path: `techStackNodes.${issue.index}.parentSlug`,
-          message: `"${result.data.collections.techStackNodes[issue.index]?.name}" ${issue.message}`,
+        "Cannot publish: some technologies have a broken parent or a name used twice. Fix the listed entries and try again.",
+        technologyProblems.map((issue) => ({
+          path: `technologies.${issue.index}`,
+          message: `"${result.data.collections.technologies[issue.index]?.name}" ${issue.message}`,
         })),
       );
     }
@@ -204,13 +207,22 @@ export class ReleaseService {
    * release predates (absent from its snapshot) is left untouched rather than
    * emptied.
    */
-  public async restoreDraftsFrom(content: ContentBundle, restoredBy: string, releaseId: number): Promise<void> {
+  /**
+   * `reason` is stored on the backup: a discard and a rollback both replace the
+   * drafts, and which one it was is the first thing anyone recovering will ask.
+   */
+  public async restoreDraftsFrom(
+    content: ContentBundle,
+    restoredBy: string,
+    releaseId: number,
+    reason = `Drafts before rolling back to release ${releaseId}`,
+  ): Promise<void> {
     const now = new Date();
 
     const backup: Record<string, unknown> = {
       createdAt: now,
       createdBy: restoredBy,
-      reason: `Drafts before rolling back to release ${releaseId}`,
+      reason,
       singletons: await this.db.collection(SINGLETONS_COLLECTION).find({}).toArray(),
       collections: {} as Record<string, Document[]>,
     };
@@ -257,6 +269,24 @@ export class ReleaseService {
         );
       }
     }
+  }
+
+  /**
+   * Throws away every unpublished change by restoring the drafts from the live
+   * release. No release is published: history stays a record of what went out,
+   * not of what was abandoned. The drafts being replaced are backed up first,
+   * exactly as a rollback does, so a discard is recoverable.
+   */
+  public async discardDrafts(discardedBy: string): Promise<{ discarded: boolean }> {
+    const current = await this.db.collection(RELEASES_COLLECTION).findOne({ current: true });
+    if (!current) throw ApiError.badRequest("Nothing has been published yet, so there is nothing to go back to.");
+    await this.restoreDraftsFrom(
+      current.content as ContentBundle,
+      discardedBy,
+      current.id as number,
+      `Drafts discarded, restoring release ${current.id as number}`,
+    );
+    return { discarded: true };
   }
 
   public async rollbackTo(

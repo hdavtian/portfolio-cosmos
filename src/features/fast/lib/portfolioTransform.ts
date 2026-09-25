@@ -8,9 +8,13 @@ import type { PortfolioItem, PortfolioMedia } from "../types";
  * laid out: by core, then plane, then ring, then the entry's own order.
  */
 export function portfolioItemsFromRelease(release: Release): PortfolioItem[] {
-  const { portfolioCores, portfolioEntries } = release.collections;
+  const { portfolioCores, portfolioEntries, technologies } = release.collections;
   const coreOrder = new Map(portfolioCores.map((core, index) => [core.slug, index]));
   const coreName = new Map(portfolioCores.map((core) => [core.slug, core.name]));
+  // Tags are the linked technologies' names, in the project's own order.
+  const nameBySlug = new Map(technologies.map((record) => [record.slug, record.name]));
+  const names = (slugs: readonly string[]) =>
+    [...new Set(slugs.map((slug) => nameBySlug.get(slug)).filter((name): name is string => Boolean(name)))];
 
   const entries = portfolioEntries
     .filter((entry) => coreOrder.has(entry.coreSlug))
@@ -29,11 +33,11 @@ export function portfolioItemsFromRelease(release: Release): PortfolioItem[] {
     const category = coreName.get(entry.coreSlug) ?? "";
     if (entry.clientVariants.length > 0) {
       entry.clientVariants.forEach((variant) => {
-        if (!items.has(variant.slug)) items.set(variant.slug, variantItem(release, category, entry, variant));
+        if (!items.has(variant.slug)) items.set(variant.slug, variantItem(release, category, entry, variant, names));
       });
       return;
     }
-    if (!items.has(entry.slug)) items.set(entry.slug, entryItem(release, category, entry));
+    if (!items.has(entry.slug)) items.set(entry.slug, entryItem(release, category, entry, names));
   });
   return [...items.values()];
 }
@@ -48,14 +52,20 @@ const gallery = (release: Release, media: GalleryItem[]): PortfolioMedia[] =>
     fit: item.fit,
   }));
 
-function entryItem(release: Release, category: string, entry: PortfolioEntry): PortfolioItem {
+function entryItem(
+  release: Release,
+  category: string,
+  entry: PortfolioEntry,
+  names: (slugs: readonly string[]) => string[],
+): PortfolioItem {
   const image = mediaUrl(release, entry.mediaId);
   return {
     id: entry.slug,
     title: entry.title,
     description: entry.description,
     image,
-    technologies: entry.technologies,
+    technologies: names(entry.technologySlugs),
+    technologySlugs: entry.technologySlugs,
     year: entry.year,
     category,
     subcategory: "General",
@@ -69,6 +79,7 @@ function variantItem(
   category: string,
   parent: PortfolioEntry,
   variant: ClientVariant,
+  names: (slugs: readonly string[]) => string[],
 ): PortfolioItem {
   const image = mediaUrl(release, variant.mediaId) || mediaUrl(release, parent.mediaId);
   const media = variant.galleryMedia.length > 0 ? variant.galleryMedia : parent.galleryMedia;
@@ -77,7 +88,11 @@ function variantItem(
     title: variant.title,
     description: variant.description,
     image,
-    technologies: variant.technologies,
+    // Every flattened item is tagged on its own; a variant never borrows the
+    // parent's tags, because a client site and the platform it was built on
+    // are different work.
+    technologies: names(variant.technologySlugs),
+    technologySlugs: variant.technologySlugs,
     year: typeof variant.year === "number" ? variant.year : parent.year,
     category,
     subcategory: parent.title,

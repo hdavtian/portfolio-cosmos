@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { resumeSkillLines } from "@hd/content-schema/technology-tree";
 import { useReleaseQuery } from "../../../lib/query/contentQueries";
 import { useBackdropTint } from "../lib/backdropTint";
 
@@ -52,6 +53,11 @@ export function ShowcaseResumePage() {
   const { summary } = data.profile;
   const { experiences: experience, certifications } = data.collections;
   const [education] = data.collections.education;
+  // The lines are built by the same function the admin's ordering page uses.
+  const skills = useMemo(
+    () => resumeSkillLines(data.collections.technologies ?? [], data.resumeSkills.headingOrder),
+    [data.collections.technologies, data.resumeSkills.headingOrder],
+  );
 
   return (
     <article className="showcase-resume">
@@ -83,13 +89,32 @@ export function ShowcaseResumePage() {
         </dl>
 
         <nav className="showcase-resume__jump" aria-label="Resume sections">
+          {skills.length ? <a href="#resume-skills">Skills</a> : null}
           <a href="#resume-experience">Experience</a>
           {education ? <a href="#resume-education">Education</a> : null}
           {certifications?.length ? <a href="#resume-certifications">Certifications</a> : null}
+          <Link to="/resume/download" className="showcase-resume__download-link">
+            Download
+          </Link>
         </nav>
       </header>
 
       <div className="showcase-resume__record">
+        {skills.length ? (
+          <section aria-labelledby="resume-skills">
+            <h2 id="resume-skills" className="showcase-label showcase-resume__heading">
+              Technical skills
+            </h2>
+            <ul className="showcase-resume__skills">
+              {skills.map((row) => (
+                <li key={row.slug}>
+                  <span className="showcase-resume__skills-heading">{row.name}</span>
+                  <span className="showcase-resume__skills-list">{row.skills.join(", ")}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <section aria-labelledby="resume-experience">
           <h2 id="resume-experience" className="showcase-label showcase-resume__heading">
             Experience

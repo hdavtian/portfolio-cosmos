@@ -58,17 +58,44 @@ export function useEntityList<T>(entity: string, state: ListState) {
   });
 }
 
+/** Every page of an entity, fetched in turn and joined; the API caps a page at 100. */
+export async function fetchAllEntities<T>(entity: string): Promise<Array<EntityRecord<T>>> {
+  const first = await api.get<PagedResult<T>>(listPath(entity, { page: 1, pageSize: 100, sort: "sortOrder" }));
+  const pages = Math.ceil(first.total / first.pageSize);
+  if (pages <= 1) return first.items;
+  const rest = await Promise.all(
+    Array.from({ length: pages - 1 }, (_, index) =>
+      api.get<PagedResult<T>>(listPath(entity, { page: index + 2, pageSize: 100, sort: "sortOrder" })),
+    ),
+  );
+  const items = [first, ...rest].flatMap((page) => page.items);
+  // Fewer than the API said exist is a truncated list, and a truncated list
+  // shown as complete is how records silently "disappear" from an admin. It
+  // fails loudly instead.
+  if (items.length < first.total) {
+    throw new Error(
+      `Only ${items.length} of ${first.total} ${entity} could be loaded. Reload; if it persists, the list is being cut off.`,
+    );
+  }
+  return items;
+}
+
 /**
- * Every record of a small entity, in saved order, for grids in local mode.
- * `truncated` is true when more exist than one API page (100) can return.
+ * Every record of an entity, in saved order, for grids in local mode and for
+ * pickers. Fetches every page, so a list that grows past 100 - the master
+ * technology list did - is never silently cut off at the API's page cap.
  */
 export function useAllEntities<T>(entity: string) {
-  const query = useEntityList<T>(entity, { page: 1, pageSize: 100, sort: "sortOrder" });
-  const items = query.data?.items;
+  const query = useQuery({
+    queryKey: [entity, "all"],
+    queryFn: () => fetchAllEntities<T>(entity),
+    placeholderData: (previous) => previous,
+  });
   return {
     ...query,
-    items,
-    truncated: Boolean(query.data && query.data.total > query.data.items.length),
+    items: query.data,
+    /** Kept for callers that still render a notice; nothing is cut off any more. */
+    truncated: false,
   };
 }
 
@@ -80,10 +107,18 @@ export function useEntity<T>(entity: string, slug: string | undefined) {
   });
 }
 
-/** Invalidates every cached view of an entity after a write. */
+/**
+ * Invalidates every cached view of an entity after a write. Deliberately does
+ * not return the promise: TanStack awaits a hook-level onSuccess before running
+ * the callbacks passed to mutate(), and by the time the refetch resolves the
+ * editor - keyed by record version - has remounted, so those callbacks (the
+ * navigation back to the list, the success message) were dropped on the floor.
+ */
 const useInvalidate = (entity: string) => {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: [entity] });
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: [entity] });
+  };
 };
 
 export function useCreateEntity<T>(entity: string) {

@@ -5,6 +5,7 @@ import { TextBoxComponent } from "@syncfusion/ej2-react-inputs";
 import { useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ListEditor } from "../components/ListEditor";
+import { SkillsUsedEditor } from "../components/SkillsUsedEditor";
 import { useStatus } from "../lib/status";
 import { fieldLabel } from "../lib/validationMessages";
 import { ApiError } from "../lib/apiClient";
@@ -21,7 +22,6 @@ const ENTITY = "experiences";
 type Position = Experience["positions"][number];
 type Project = Experience["projects"][number];
 type JobMemory = Experience["jobMemories"][number];
-type JobTech = Experience["jobTech"][number];
 
 const EMPTY: Experience = {
   slug: "",
@@ -35,21 +35,20 @@ const EMPTY: Experience = {
   positions: [{ title: "", responsibilities: [] }],
   projects: [],
   jobMemories: [],
-  jobTech: [],
+  skillsUsed: [],
 };
 
-const MEMORY_TYPES = [
-  { value: "tech", text: "Tech" },
-  { value: "memory", text: "Memory" },
+// How a memory is drawn as it flies past the moon (D13/D14).
+const MEMORY_STYLES = [
+  { value: "plain", text: "Plain" },
   { value: "code", text: "Code" },
+  { value: "handwritten", text: "Handwritten" },
 ];
 
-// Lines and comma lists are edited as text and stored as arrays. Blank entries
-// are kept while typing (so Enter works) and dropped on save.
+// Lines are edited as text and stored as arrays. Blank entries are kept while
+// typing (so Enter works) and dropped on save.
 const toLines = (values: string[]) => values.join("\n");
 const fromLines = (text: string) => text.split("\n");
-const toCommaList = (values: string[]) => values.join(", ");
-const fromCommaList = (text: string) => text.split(",").map((value) => value.trimStart());
 
 const clean = (values: string[]) => values.map((value) => value.trim()).filter(Boolean);
 
@@ -64,9 +63,15 @@ const normalise = (draft: Experience): Experience => ({
     endDate: position.endDate?.trim() || undefined,
     responsibilities: clean(position.responsibilities),
   })),
-  jobTech: draft.jobTech.map((tech) => ({
-    ...tech,
-    highlightMatches: clean(tech.highlightMatches),
+  // Blank dates mean the whole job; a years box left empty is no years.
+  skillsUsed: draft.skillsUsed.map((use) => ({
+    ...use,
+    from: use.from?.trim() || undefined,
+    to: use.to?.trim() || undefined,
+    years: use.years === undefined || Number.isNaN(use.years) ? undefined : use.years,
+    when: use.when || undefined,
+    style: use.style || undefined,
+    highlightMatches: clean(use.highlightMatches ?? []),
   })),
 });
 
@@ -121,7 +126,7 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
   const status = useStatus();
 
   const [draft, setDraft] = useState<Experience>(initial);
-  const [version, setVersion] = useState(initialVersion);
+  const [version] = useState(initialVersion);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const saving = create.isPending || update.isPending;
@@ -146,8 +151,8 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
     if (isNew) {
       create.mutate(content, {
         onSuccess: (record) => {
-          status.success("Created job. Publish to show it on the sites.");
-          navigate(`/experiences/${record.slug}`, { replace: true });
+          status.success(`Created job "${record.company}". Publish to show it on the sites.`);
+          navigate("/experiences");
         },
         onError: handleError,
       });
@@ -158,9 +163,8 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
       { slug: initial.slug, content, version },
       {
         onSuccess: (record) => {
-          status.success(`Saved (version ${record.version}). Publish to show changes on the sites.`);
-          setVersion(record.version);
-          setDraft(withoutMeta(record));
+          status.success(`Saved job "${record.company}". Publish to show changes on the sites.`);
+          navigate("/experiences");
         },
         onError: handleError,
       },
@@ -286,18 +290,18 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
         description="Short fragments the cosmos drone cycles through."
         items={draft.jobMemories}
         onChange={(items) => set("jobMemories", items)}
-        createItem={() => ({ type: "memory", text: "" })}
+        createItem={() => ({ style: "plain", text: "" })}
         describeItem={(item, index) => item.text || `Memory ${index + 1}`}
         addLabel="Add memory"
         errors={sectionErrors("jobMemories")}
         renderItem={(item, update) => (
           <>
-            <Field label="Type">
+            <Field label="Style" hint="How it is drawn on the fly-by: plain text, a code box, or handwriting">
               <DropDownListComponent
-                dataSource={MEMORY_TYPES}
+                dataSource={MEMORY_STYLES}
                 fields={{ text: "text", value: "value" }}
-                value={item.type}
-                change={(e: { value: string }) => update({ ...item, type: e.value as JobMemory["type"] })}
+                value={item.style}
+                change={(e: { value: string }) => update({ ...item, style: e.value as JobMemory["style"] })}
               />
             </Field>
             <Field label="Text">
@@ -307,29 +311,14 @@ function ExperienceEditor({ initial, initialVersion, updatedBy, isNew }: EditorP
         )}
       />
 
-      <ListEditor<JobTech>
-        title="Tech chips"
-        description="Technology labels; each lights up the listed words in the resume text."
-        items={draft.jobTech}
-        onChange={(items) => set("jobTech", items)}
-        createItem={() => ({ label: "", highlightMatches: [] })}
-        describeItem={(item, index) => item.label || `Tech ${index + 1}`}
-        addLabel="Add tech chip"
-        errors={sectionErrors("jobTech")}
-        renderItem={(item, update) => (
-          <>
-            <Field label="Label">
-              <TextBoxComponent value={item.label} input={(e: { value: string }) => update({ ...item, label: e.value })} />
-            </Field>
-            <Field label="Highlights" hint="Comma-separated words to highlight">
-              <TextBoxComponent
-                value={toCommaList(item.highlightMatches)}
-                input={(e: { value: string }) => update({ ...item, highlightMatches: fromCommaList(e.value) })}
-              />
-            </Field>
-          </>
-        )}
+      <SkillsUsedEditor
+        value={draft.skillsUsed}
+        onChange={(uses) => set("skillsUsed", uses)}
+        jobStart={draft.startDate}
+        jobEnd={draft.endDate}
+        errors={sectionErrors("skillsUsed")}
       />
+
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { StatusLine } from "../components/StatusLine";
 import { StatusProvider } from "../components/StatusProvider";
@@ -17,8 +18,7 @@ const NAV_GROUPS: Array<{
     links: [
       { to: "/profile", text: "Profile", ready: true },
       { to: "/experiences", text: "Experience", ready: true },
-      { to: "/skills", text: "Skills", ready: true },
-      { to: "/skillCategories", text: "Skill categories", ready: true },
+      { to: "/resumeSkills", text: "Resume skills ordering", ready: true },
       { to: "/education", text: "Education", ready: true },
       { to: "/certifications", text: "Certifications", ready: true },
       { to: "/links", text: "Links", ready: true },
@@ -29,7 +29,7 @@ const NAV_GROUPS: Array<{
     links: [
       { to: "/portfolioEntries", text: "Projects", ready: true },
       { to: "/portfolioCores", text: "Cores", ready: true },
-      { to: "/techStackNodes", text: "Tech stack", ready: true },
+      { to: "/technologies", text: "Technologies", ready: true },
     ],
   },
   {
@@ -45,15 +45,48 @@ const NAV_GROUPS: Array<{
   },
 ];
 
+// Whether the sidebar is folded away, remembered per browser: a wide grid is
+// easier to read with the nav out of the way, and the choice should survive
+// the next visit. Storage can be blocked or empty; then it just starts open.
+const SIDEBAR_KEY = "adminSidebarCollapsed";
+const readCollapsed = () => {
+  try {
+    return window.localStorage.getItem(SIDEBAR_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
 export function AdminLayout() {
   const navigate = useNavigate();
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0");
+    } catch {
+      // Nothing to remember it in; the session still works.
+    }
+  }, [collapsed]);
   const logout = useLogoutMutation();
   const pending = usePendingChanges();
   const pendingCount = pending.data?.neverPublished ? 0 : (pending.data?.lines.length ?? 0);
 
   return (
-    <div className="admin-shell">
-      <nav className="admin-sidebar">
+    <div className={`admin-shell${collapsed ? " is-collapsed" : ""}`}>
+      <nav className="admin-sidebar" aria-label="Admin sections">
+        {/* Folded: only this rail remains, with the way back. */}
+        <div className="admin-sidebar__rail">
+          <button
+            type="button"
+            className="admin-sidebar__toggle"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Show the navigation" : "Hide the navigation"}
+            title={collapsed ? "Show the navigation" : "Hide the navigation to give the page the full width"}
+            onClick={() => setCollapsed((value) => !value)}
+          >
+            {collapsed ? "»" : "«"}
+          </button>
+        </div>
         <div className="admin-sidebar__brand">Content Admin</div>
 
         <NavLink

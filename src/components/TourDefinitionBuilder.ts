@@ -29,6 +29,17 @@ export class TourDefinitionBuilder {
   }
 
   // Register planet data for tour building
+  /**
+   * The Skills planet's real skills under their headings, as the universe
+   * registered them from the master list - the tours used to carry a typed
+   * list with invented percentages, which is the one thing a resume must
+   * never do. No levels: the overlay draws a bar only when one is given.
+   */
+  private skillsByHeading(): Record<string, string[]> {
+    const data = this.planets.get("skills")?.data as Record<string, string[]> | undefined;
+    return data && typeof data === "object" ? data : {};
+  }
+
   public registerPlanet(id: string, data: PlanetData): void {
     this.planets.set(id, data);
   }
@@ -346,35 +357,6 @@ export class TourDefinitionBuilder {
             "Explore the moons of this planet to discover specific roles, companies, and achievements that have shaped the professional journey.",
           type: "text",
         },
-        {
-          id: "highlights",
-          title: "Key Achievements",
-          content: "",
-          type: "achievements",
-          data: [
-            {
-              icon: "👥",
-              title: "Team Leadership",
-              description:
-                "Led cross-functional teams to deliver complex projects",
-              metric: "10+ teams managed",
-            },
-            {
-              icon: "📈",
-              title: "Growth Impact",
-              description:
-                "Drove significant business growth through technical innovation",
-              metric: "200% performance increase",
-            },
-            {
-              icon: "🏆",
-              title: "Recognition",
-              description:
-                "Received multiple awards for technical excellence and leadership",
-              metric: "5+ awards",
-            },
-          ],
-        },
       ],
       actions: [
         {
@@ -406,19 +388,7 @@ export class TourDefinitionBuilder {
           title: "Technical Mastery",
           content: "",
           type: "skills",
-          data: {
-            Programming: [
-              { name: "JavaScript/TypeScript", level: 95 },
-              { name: "React/Next.js", level: 90 },
-              { name: "Python", level: 85 },
-              { name: "Three.js/WebGL", level: 80 },
-            ],
-            Design: [
-              { name: "UI/UX Design", level: 85 },
-              { name: "Figma/Sketch", level: 80 },
-              { name: "3D Modeling", level: 75 },
-            ],
-          },
+          data: this.skillsByHeading(),
         },
       ],
       actions: [
@@ -513,25 +483,7 @@ export class TourDefinitionBuilder {
           title: "Core Technologies",
           content: "",
           type: "skills",
-          data: {
-            Frontend: [
-              { name: "React/Next.js", level: 95 },
-              { name: "TypeScript", level: 90 },
-              { name: "Three.js", level: 85 },
-              { name: "SCSS/CSS3", level: 90 },
-            ],
-            Backend: [
-              { name: "Node.js", level: 85 },
-              { name: "Python", level: 80 },
-              { name: "PostgreSQL", level: 75 },
-              { name: "GraphQL", level: 70 },
-            ],
-            DevOps: [
-              { name: "Docker", level: 80 },
-              { name: "AWS/Azure", level: 75 },
-              { name: "CI/CD", level: 85 },
-            ],
-          },
+          data: this.skillsByHeading(),
         },
       ],
       actions: [
@@ -606,30 +558,6 @@ export class TourDefinitionBuilder {
       description:
         "Strategic leadership, team development, and organizational impact during this role.",
       sections: [
-        {
-          id: "leadership-impact",
-          title: "Leadership Impact",
-          content: "",
-          type: "achievements",
-          data: [
-            {
-              icon: "👥",
-              title: "Team Development",
-              description: "Built and mentored high-performing teams",
-              metric: moonData?.teamSize
-                ? `${moonData.teamSize} team members`
-                : "5-15 team members",
-            },
-            {
-              icon: "📊",
-              title: "Project Delivery",
-              description: "Led successful delivery of complex projects",
-              metric: moonData?.projectCount
-                ? `${moonData.projectCount} projects`
-                : "Multiple projects",
-            },
-          ],
-        },
       ],
       actions: [
         { label: "Team Testimonials", action: "testimonials:show", icon: "💬" },

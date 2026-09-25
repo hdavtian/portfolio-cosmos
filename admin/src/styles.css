@@ -21,17 +21,71 @@ body {
 }
 
 .admin-shell {
+  --admin-sidebar-width: 240px;
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: var(--admin-sidebar-width) 1fr;
   min-height: 100vh;
+  transition: grid-template-columns 180ms ease;
 }
 
+/* Folded: a slim rail holding only the button that brings the nav back, so a
+   grid gets the rest of the window. */
+.admin-shell.is-collapsed {
+  --admin-sidebar-width: 40px;
+}
+
+.admin-shell.is-collapsed .admin-sidebar > :not(.admin-sidebar__rail) {
+  display: none;
+}
+
+/* Stays put while a long page scrolls; scrolls on its own if it is taller
+   than the window. `align-self: start` keeps it from stretching to the grid
+   row's full height, which is what would defeat sticky. */
 .admin-sidebar {
   background: var(--admin-surface);
   border-right: 1px solid var(--admin-border);
   padding: 20px 0;
   display: flex;
   flex-direction: column;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.admin-sidebar__rail {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 8px 4px;
+}
+
+.admin-shell.is-collapsed .admin-sidebar__rail {
+  justify-content: center;
+  padding: 0;
+}
+
+.admin-sidebar__toggle {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--admin-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.admin-sidebar__toggle:hover {
+  color: var(--admin-accent);
+  border-color: var(--admin-accent);
+}
+
+.admin-sidebar__toggle:focus-visible {
+  outline: 2px solid var(--admin-accent);
+  outline-offset: 1px;
 }
 
 .admin-sidebar__brand {
@@ -95,7 +149,9 @@ body {
 }
 
 .admin-main {
-  padding: 24px 28px;
+  /* The top 56px is the band the floating status line lives in, so a
+     message never sits over the page's own content. */
+  padding: 64px 28px 24px;
   min-width: 0;
 }
 
@@ -144,17 +200,55 @@ body {
   gap: 14px;
 }
 
+/* Floats over the page instead of sitting in its flow, so appearing and
+   clearing never shifts what is underneath. Spans the main column, whatever
+   width the nav is at. */
 .admin-status-line {
-  position: sticky;
-  top: 0;
+  position: fixed;
+  top: 10px;
+  left: var(--admin-sidebar-width);
+  right: 0;
   z-index: 20;
-  margin-bottom: 14px;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  /* The band is only a positioning frame; the message itself takes clicks. */
+  pointer-events: none;
+}
+
+/* A centred pill in the band the page leaves free at the top: its own solid
+   colour by severity, no wider than its text needs, and small type. */
+.admin-status-line .e-message.e-message {
+  /* One row - icon, text, close - so the pill stays inside the band. */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+  max-width: min(760px, calc(100% - 56px));
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  box-shadow: 0 6px 18px rgba(20, 30, 50, 0.22);
+}
+
+.admin-status-line .e-message strong {
+  font-weight: 600;
+}
+
+.admin-status-line .e-message .e-msg-content {
+  padding: 0;
+}
+
+.admin-status-line .e-message .e-msg-close-icon {
+  position: static;
+  margin: 0;
 }
 
 .admin-status-line__details {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   padding-left: 18px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .admin-grid-mode {
@@ -169,7 +263,10 @@ body {
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
   border-radius: 8px;
-  overflow: hidden;
+  /* Not overflow: hidden - that would make this the sticky container and
+     pin a grid's sticky header to the wrapper instead of the viewport. */
+  overflow: clip;
+  overflow-clip-margin: 1px;
 }
 
 .admin-form__row {
@@ -275,6 +372,27 @@ body {
   .admin-sidebar {
     border-right: none;
     border-bottom: 1px solid var(--admin-border);
+    /* A band above the page on a phone: it scrolls away with the page. */
+    position: static;
+    height: auto;
+    overflow: visible;
+  }
+
+  .admin-shell.is-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-status-line {
+    left: 16px;
+    right: 16px;
+  }
+
+  .admin-shell.is-collapsed .admin-sidebar > :not(.admin-sidebar__rail) {
+    display: revert;
+  }
+
+  .admin-sidebar__rail {
+    display: none;
   }
 
   .admin-form__row {
@@ -339,4 +457,371 @@ body {
   margin: 0 auto;
   object-fit: contain;
   background: repeating-conic-gradient(#f2f4f7 0% 25%, #fff 0% 50%) 50% / 16px 16px;
+}
+
+/* The technology picker: a pool on the left, the chosen ones on the right. */
+.admin-tech-picker__lists {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.admin-tech-picker__pane {
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .admin-tech-picker__lists {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dragging a row in a tree. Syncfusion splits each row into three zones and
+   marks the target itself: a line above or below for "before"/"after", a
+   border round the row for "make it a child". The default cues are faint, so
+   they are drawn here in the accent - the line thick, the child case unmistakable. */
+.e-treegrid tr.e-droptop > td,
+.e-treegrid td.e-droptop {
+  border-top: 3px solid var(--admin-accent) !important;
+}
+
+.e-treegrid tr.e-dropbottom > td,
+.e-treegrid td.e-dropbottom {
+  border-bottom: 3px solid var(--admin-accent) !important;
+}
+
+/* "Into": Syncfusion marks the target's cells (not the row) mid-drag, so the
+   cells are what carry the box - 4px top and bottom on every cell, the left
+   and right edges on the first and last, so it reads as one thick outline. */
+/* Pending batch edits: a bar fixed to the bottom, visible wherever the tree
+   is scrolled, carrying the same Update and Cancel as the toolbar. */
+.admin-pending-bar {
+  position: fixed;
+  bottom: 16px;
+  left: var(--admin-sidebar-width);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.admin-pending-bar > * {
+  pointer-events: auto;
+}
+.admin-pending-bar > span {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #fff6e5;
+  border: 1px solid #e0a832;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* Heading rows of the technologies tree read as headings, not skills. */
+.e-treegrid tr.admin-tree-heading > td.e-rowcell {
+  background: #f1f4f8;
+  font-weight: 600;
+}
+
+.e-treegrid td.e-childborder,
+.e-treegrid tr.e-childborder > td {
+  background: #dce9fb !important;
+  border-top: 4px solid var(--admin-accent) !important;
+  border-bottom: 4px solid var(--admin-accent) !important;
+}
+
+.e-treegrid td.e-childborder:first-child,
+.e-treegrid tr.e-childborder > td:first-child {
+  border-left: 4px solid var(--admin-accent) !important;
+}
+
+.e-treegrid td.e-childborder:last-child,
+.e-treegrid tr.e-childborder > td:last-child {
+  border-right: 4px solid var(--admin-accent) !important;
+}
+
+.e-treegrid td.e-childborder:first-child::before,
+.e-treegrid tr.e-childborder > td:first-child::before {
+  content: "into";
+  margin-right: 8px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--admin-accent);
+}
+
+/* Tagging: skills on the left, project cards on the right, both scrolling. */
+.tagging {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 16px;
+  height: calc(100vh - 150px);
+  min-height: 420px;
+}
+
+.tagging__skills,
+.tagging__cards {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  background: var(--admin-surface);
+}
+
+.tagging__skills.is-drop-target {
+  outline: 3px dashed #e3165b;
+  outline-offset: -3px;
+}
+
+.tagging__toolbar {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.tagging__list,
+.tagging__grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 12px 12px;
+}
+
+.tagging__heading {
+  margin: 10px 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--admin-muted);
+}
+
+.tagging__skill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: grab;
+  user-select: none;
+}
+
+.tagging__skill:hover {
+  background: #eef2f7;
+}
+
+.tagging__skill.is-assigned {
+  background: #e7f0fe;
+  color: var(--admin-accent);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--admin-accent);
+  cursor: default;
+}
+
+.tagging__skill.is-armed {
+  background: #fff6e5;
+}
+
+.tagging__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  align-content: start;
+}
+
+.tagging__card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.tagging__card.is-selected {
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 2px #e7f0fe;
+}
+
+.tagging__card.is-drop-target {
+  border-color: #e3165b;
+  box-shadow: 0 0 0 3px #fbe1ea;
+}
+
+.tagging__card.is-saving {
+  opacity: 0.6;
+}
+
+.tagging__card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tagging__card-title {
+  font-weight: 600;
+}
+
+.tagging__card-meta {
+  font-size: 11px;
+  color: var(--admin-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tagging__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.tagging__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 7px;
+  border: 1px solid var(--admin-border);
+  border-radius: 3px;
+  font-size: 12px;
+  background: #f6f8fb;
+  cursor: grab;
+  user-select: none;
+}
+
+.tagging__chip.is-armed {
+  background: #fff6e5;
+  border-color: #e0a832;
+}
+
+.tagging__empty {
+  font-size: 12px;
+  color: var(--admin-muted);
+}
+
+/* The deliberate second click: a small action that appears on the clicked chip. */
+.tagging__action {
+  padding: 1px 7px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tagging__action--add {
+  background: var(--admin-accent);
+  color: #fff;
+}
+
+.tagging__action--remove {
+  background: #e3165b;
+  color: #fff;
+}
+
+.tagging__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 860px) {
+  .tagging {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+}
+
+.admin-card__head {
+  margin-bottom: 12px;
+}
+.admin-card__head h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.admin-card__head p {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+/* Skills used on a job: one row per skill, its span drawn on the job's timeline. */
+.admin-skill-uses {
+  margin-top: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.admin-skill-use {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) 84px 84px 64px 150px minmax(240px, 1.6fr) 120px;
+  gap: 8px;
+  align-items: start;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-skill-use--head {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--admin-muted);
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-skill-use__name {
+  font-weight: 600;
+  padding-top: 4px;
+}
+
+.admin-skill-use__bar {
+  position: relative;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 3px;
+  background: #e6ebf2;
+}
+
+.admin-skill-use__span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: var(--admin-accent);
+}
+
+.admin-skill-use__span.is-rough {
+  background: repeating-linear-gradient(45deg, var(--admin-accent) 0 4px, #b9d0ee 4px 8px);
+}
+
+.admin-skill-use__ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-top: 4px;
+}
+
+.admin-skill-use__name .admin-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .admin-skill-use {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .admin-skill-use--head {
+    display: none;
+  }
+  .admin-skill-use__name,
+  .admin-skill-use__ticks {
+    grid-column: 1 / -1;
+  }
 }

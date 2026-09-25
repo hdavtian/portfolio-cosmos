@@ -3,7 +3,16 @@
 // identical pages. Entities with nested content (experiences, portfolio) keep
 // bespoke pages.
 
-export type FieldKind = "text" | "multiline" | "reference";
+export type FieldKind =
+  | "text"
+  | "multiline"
+  | "reference"
+  | "boolean"
+  /** A short, fixed set of options, all visible: read the state without opening anything. */
+  | "checkboxes"
+  /** The same, behind a dropdown. For sets too long to show at once. */
+  | "multiselect"
+  | "tags";
 
 export interface FieldDefinition {
   key: string;
@@ -18,6 +27,18 @@ export interface FieldDefinition {
    * descendants are left out, so a loop cannot be chosen.
    */
   emptyOption?: string;
+  /**
+   * For `checkboxes` and `multiselect` fields: the choices, stored as an array
+   * of values. A choice's `hint` says what ticking it does, listed under the
+   * control so each option explains itself rather than sharing one paragraph.
+   */
+  options?: { value: string; label: string; hint?: string }[];
+  /**
+   * Set once, on creation, and read-only afterwards. Used for the slug of
+   * anything other records point at: changing it would silently break every
+   * link, and the display name is editable instead.
+   */
+  immutableAfterCreate?: boolean;
 }
 
 export interface ColumnDefinition {
@@ -50,43 +71,16 @@ const slugField: FieldDefinition = {
   kind: "text",
 };
 
+/** For entities other records point at by slug: the id is fixed after creation. */
+const fixedSlugField: FieldDefinition = {
+  ...slugField,
+  hint: "Fixed once saved: jobs and projects point at this id. Rename the technology instead - every screen shows the name.",
+  immutableAfterCreate: true,
+};
+
 const text = (value: unknown) => (typeof value === "string" ? value : "");
 
 export const ENTITY_DEFINITIONS: EntityDefinition[] = [
-  {
-    entity: "skills",
-    title: "Skills",
-    singular: "skill",
-    description: "Technologies listed on the resume, grouped by category. Use Reorder rows to change their order.",
-    slugSource: "name",
-    columns: [
-      { field: "name", header: "Skill", width: 220 },
-      { field: "categorySlug", header: "Category", width: 200 },
-    ],
-    fields: [
-      slugField,
-      { key: "name", label: "Name", kind: "text" },
-      {
-        key: "categorySlug",
-        label: "Category",
-        kind: "reference",
-        reference: { entity: "skillCategories", labelField: "name" },
-      },
-    ],
-    empty: () => ({ slug: "", sortOrder: 0, name: "", categorySlug: "" }),
-    describe: (record) => text(record.name),
-  },
-  {
-    entity: "skillCategories",
-    title: "Skill categories",
-    singular: "category",
-    description: "Groups for skills, such as Frontend or Cloud & DevOps. Use Reorder rows to change their order.",
-    slugSource: "name",
-    columns: [{ field: "name", header: "Category", width: 260 }],
-    fields: [slugField, { key: "name", label: "Name", kind: "text" }],
-    empty: () => ({ slug: "", sortOrder: 0, name: "" }),
-    describe: (record) => text(record.name),
-  },
   {
     entity: "education",
     title: "Education",
@@ -138,7 +132,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     entity: "links",
     title: "Links",
     singular: "link",
-    description: "Profile and demo links (LinkedIn, GitHub, live demos). Use Reorder rows to change their order.",
+    description: "Profile and demo links (LinkedIn, GitHub, live demos). Drag a row by its handle to change the order.",
     slugSource: "title",
     columns: [
       { field: "title", header: "Title", width: 260 },
@@ -153,26 +147,93 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     describe: (record) => text(record.title),
   },
   {
-    entity: "techStackNodes",
-    title: "Tech stack",
-    singular: "tech stack node",
+    entity: "technologies",
+    title: "Technologies",
+    singular: "technology",
     description:
-      "Nested tech stack for the portfolio site and the D3 skills graph, any depth (e.g. Frontend › Frameworks › React). Separate from the resume's Skills, which stay one level deep. Order within a level follows Reorder rows.",
+      "The one list of technologies. Everything else - a job's skills, a project's tags - points at an entry here, so a name is typed once and corrected once. Drag a row onto another to nest it, or above or below a row to reorder.",
     slugSource: "name",
     columns: [],
     fields: [
-      slugField,
+      fixedSlugField,
       { key: "name", label: "Name", kind: "text" },
       {
         key: "parentSlug",
         label: "Parent",
-        hint: "Leave at top level for a main branch",
+        hint: "Its one home in the tree. A skill has exactly one parent; if it seems to belong in two places, it is two skills.",
         kind: "reference",
-        reference: { entity: "techStackNodes", labelField: "name" },
+        reference: { entity: "technologies", labelField: "name" },
         emptyOption: "— Top level —",
       },
+      {
+        key: "isGrouping",
+        label: "Heading",
+        hint: "A heading, not a skill you claim. Headings organise the tree (Frontend, Databases, APIs). Screens that show skills only - moon labels, the home page chips - skip them; the film's Skill Progress rows are the headings ticked Resume.",
+        kind: "boolean",
+      },
+      {
+        key: "rollUpInFilm",
+        label: "Roll up in the film",
+        hint: "For a heading. In the film, its skills at each job become one tower - Frontend instead of HTML, CSS and JavaScript - with the years merged so overlaps never double-count. The Skill Progress panel still lists every skill beneath it. Off: one tower per skill.",
+        kind: "boolean",
+      },
+      {
+        key: "current",
+        label: "Current stack",
+        hint: "Part of the stack you work in today. Marks it as current wherever a site separates present from past.",
+        kind: "boolean",
+      },
+      {
+        key: "surfaces",
+        label: "Shown in",
+        hint: "A project's own technology list is not set here; edit the project.",
+        kind: "checkboxes",
+        options: [
+          {
+            value: "lattice",
+            label: "Skills Lattice (universe)",
+            hint: "appears in the universe's Skills Lattice",
+          },
+          {
+            value: "resume",
+            label: "Resume skills",
+            hint: "on the resume's skills section and the film's closing list. A ticked heading gets its own line; a ticked skill is printed on the line of the nearest ticked heading above it. Nothing is inherited: tick the heading and each skill you want printed",
+          },
+          {
+            value: "filters",
+            label: "Filters",
+            hint:
+              "offered as a filter in the home page chips and the universe Portfolio drop-down - but only once at " +
+              "least one project is tagged with it, since a filter that finds nothing is not shown. Leave off for " +
+              "something like HTML that nearly every project uses",
+          },
+        ],
+      },
+      {
+        key: "aliases",
+        label: "Also known as",
+        hint: "Older names and the combined labels this replaced, one per line. Typing any of them finds this technology, and nothing else may claim the same one.",
+        kind: "tags",
+      },
+      {
+        key: "blurb",
+        label: "Blurb",
+        hint: "Optional one line, mainly for headings.",
+        kind: "multiline",
+      },
     ],
-    empty: () => ({ slug: "", sortOrder: 0, name: "", parentSlug: "" }),
+    empty: () => ({
+      slug: "",
+      sortOrder: 0,
+      name: "",
+      parentSlug: "",
+      isGrouping: false,
+      current: false,
+      rollUpInFilm: false,
+      surfaces: ["lattice", "filters"],
+      aliases: [],
+      blurb: "",
+    }),
     describe: (record) => text(record.name),
     customList: true,
   },
@@ -181,7 +242,7 @@ export const ENTITY_DEFINITIONS: EntityDefinition[] = [
     title: "Ride messages",
     singular: "ride message",
     description:
-      "Only used in the Three.js app. Messages shown one after another while Mjolnir pulls you along the About path, in this order. Use Reorder rows to change it.",
+      "Only used in the Three.js app. Messages shown one after another while Mjolnir pulls you along the About path, in this order. Drag a row by its handle to change the order.",
     slugSource: "textContent",
     columns: [
       { field: "textContent", header: "Message", width: 420 },

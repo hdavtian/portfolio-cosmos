@@ -78,6 +78,7 @@ import {
 import type { ResumeSpace3DProps, SceneRef } from "./ResumeSpace3D.types";
 // Import our new cosmic systems
 import type { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { LatticeFocusPass, setFocused } from "./latticeFocusPass";
 import type { OverlayContent } from "../CosmicContentOverlay";
 import {
   COSMIC_AUDIO_TRACKS,
@@ -260,7 +261,7 @@ const MOON_TRAVEL_SIGN_PASSED_VIEWER_DIST = 4;
 const MOON_ORBIT_SIGN_DEBUG_LOGS = false;
 // Card layer stays on the overlay pass to avoid bloom/tonemapping washout.
 const PROJECT_SHOWCASE_CARD_LAYER = 1;
-const SKILLS_LATTICE_LAYER = 3;
+const SKILLS_LATTICE_LAYER = 3; // the focus mask uses 9 (latticeFocusPass.ts)
 const EXPERIENCE_END_CAMERA_POSITION = new THREE.Vector3(
   11281.3,
   -534.0,
@@ -1882,6 +1883,8 @@ type SkillsLatticeNodeRecord = {
   path: string[];
   detailItems: string[];
   halo?: THREE.Sprite;
+  /** The name over the node, hidden while another system is in focus. */
+  labelObject?: THREE.Object3D;
   lineInfluence: number;
 };
 
@@ -1891,6 +1894,7 @@ type SkillsLatticeLinkSegment = {
 };
 
 type SkillsLatticeLineGroup = {
+  object: THREE.Object3D;
   material: THREE.LineBasicMaterial;
   kind: "ring" | "skill";
   category?: string;
@@ -3300,8 +3304,11 @@ export default function ResumeSpace3D({
   const orbitalPortfolioFocusedCoreIdRef = useRef("");
   const [orbitalRegistrySelectedCoreId, setOrbitalRegistrySelectedCoreId] =
     useState("");
+  // The registry arrives minimized: a tab at the screen's edge, the panel
+  // sliding in from the right when asked for, so the portfolio is seen
+  // before its controls.
   const [orbitalRegistryPanelVisible, setOrbitalRegistryPanelVisible] =
-    useState(true);
+    useState(false);
   const orbitalPortfolioLastViewedRef = useRef<{
     focusIndex: number | null;
     variantIndex: number;
@@ -5034,6 +5041,9 @@ export default function ResumeSpace3D({
     center: new THREE.Vector3(),
     startedAt: 0,
   });
+  // The node under the pointer: drawn sharp and in a warm colour even when
+  // out of focus, so a soft node can be read before it is clicked.
+  const skillsLatticeHoverNodeRef = useRef<SkillsLatticeNodeRecord | null>(null);
   const skillsLatticeSelectedNodeRef = useRef<SkillsLatticeNodeRecord | null>(
     null,
   );
@@ -7193,7 +7203,7 @@ export default function ResumeSpace3D({
     setOrbitalPortfolioTechFilter("all");
     setOrbitalPortfolioFocusedCoreId("");
     setOrbitalRegistrySelectedCoreId("");
-    setOrbitalRegistryPanelVisible(true);
+    setOrbitalRegistryPanelVisible(false);
     orbitalPortfolioFocusIndexRef.current = 0;
     setOrbitalPortfolioFocusIndex(0);
     orbitalPortfolioLastViewedRef.current = {
@@ -9855,6 +9865,24 @@ export default function ResumeSpace3D({
     enterOrbitalPortfolio,
   ]);
 
+  // Left and right arrows step the portfolio like the Prev and Next
+  // buttons, only while the portfolio is active: the listener is added on
+  // entry and removed on exit. Keys typed into the registry's search box are
+  // left alone, and the event stops here so the ship does not steer.
+  useEffect(() => {
+    if (!orbitalPortfolioActive) return;
+    const onArrow = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      stepOrbitalPortfolioSequence(event.key === "ArrowLeft" ? -1 : 1);
+    };
+    window.addEventListener("keydown", onArrow, { capture: true });
+    return () => window.removeEventListener("keydown", onArrow, { capture: true });
+  }, [orbitalPortfolioActive, stepOrbitalPortfolioSequence]);
+
   useEffect(() => {
     if (orbitalPortfolioActive) return;
     orbitalPortfolioStationsRef.current.forEach((station) => {
@@ -11787,7 +11815,50 @@ export default function ResumeSpace3D({
     const shellUp = new THREE.Vector3();
     const sunDir = new THREE.Vector3();
     const toneAccentColor = new THREE.Color();
+    const hoverColor = new THREE.Color(0xffa64d);
+
+    // Focus. Clicking a node puts its system in focus: the node, its
+    // parent, its siblings and everything under it (a core: the core and
+    // its branch). The rest dims, loses its labels and goes soft - by
+    // membership, not by depth, since a system's parts sit all around it
+    // (see latticeFocusPass.ts). The effect eases in and out.
+    const startsWith = (prefix: string[], path: string[]) =>
+      prefix.length <= path.length && prefix.every((name, index) => name === path[index]);
+    const inSystem = (node: SkillsLatticeNodeRecord, selected: SkillsLatticeNodeRecord | null) => {
+      if (!selected || node.mesh === selected.mesh) return true;
+      if (startsWith(selected.path, node.path)) return true; // beneath it
+      if (selected.nodeType === "category") return false;
+      if (startsWith(node.path, selected.path)) return true; // above it
+      return node.path.length === selected.path.length && startsWith(selected.path.slice(0, -1), node.path); // beside it
+    };
+    let focusPass: LatticeFocusPass | null = null;
+    let focusStrength = 0;
+    let lastFocusMs = performance.now();
+    const syncFocus = () => {
+      const nowFocusMs = performance.now();
+      const dtFocus = Math.min((nowFocusMs - lastFocusMs) / 1000, 0.05);
+      lastFocusMs = nowFocusMs;
+      const wantFocus = skillsLatticeActiveRef.current && !!skillsLatticeSelectedNodeRef.current;
+      const composer = composerRef.current;
+      const { scene, camera } = sceneRef.current;
+      if (wantFocus && !focusPass && composer && scene && camera) {
+        const size = composer.renderTarget1;
+        focusPass = new LatticeFocusPass(scene, camera, size.width, size.height);
+        composer.insertPass(focusPass, 1);
+      }
+      if (!focusPass) return;
+      focusStrength += ((wantFocus ? 1 : 0) - focusStrength) * (1 - Math.exp(-dtFocus * 4));
+      focusPass.strength = focusStrength;
+      if (!wantFocus && focusStrength < 0.02 && composer) {
+        composer.removePass(focusPass);
+        focusPass.dispose();
+        focusPass = null;
+        focusStrength = 0;
+      }
+    };
+
     const tick = () => {
+      syncFocus();
       if (skillsLatticeActiveRef.current) {
         const nowMs = performance.now();
         const dt = Math.min((nowMs - lastTickMs) / 1000, 0.05);
@@ -11795,6 +11866,7 @@ export default function ResumeSpace3D({
         const t = nowMs * 0.001;
         const toneRuntime = orbitalPortfolioToneRuntimeRef.current;
         const selected = skillsLatticeSelectedNodeRef.current;
+        const hovered = skillsLatticeActiveRef.current ? skillsLatticeHoverNodeRef.current : null;
         const plasmaActive = !!selected;
         const categoryNodes = skillsLatticeNodesRef.current.filter(
           (n) => n.nodeType === "category",
@@ -12003,13 +12075,16 @@ export default function ResumeSpace3D({
             : 0;
           const pulse = 1 + Math.sin(t * 1.7 + node.phase) * 0.08;
           const isSelected = selected?.mesh === node.mesh;
-          const isRelated =
-            !selected ||
-            (selected.nodeType === "category"
-              ? node.category === selected.category
-              : node.category === selected.category ||
-                node.label === selected.label);
-          const selectedBoost = isSelected ? 1.28 : isRelated ? 1.03 : 0.96;
+          const isHovered = hovered?.mesh === node.mesh;
+          const isRelated = inSystem(node, selected) || isHovered;
+          if (node.labelObject && selected) {
+            node.labelObject.visible = node.labelObject.visible && isRelated;
+          }
+          // What stays sharp: the system's nodes and their names, and the
+          // node under the pointer (halos are glows and may soften with the rest).
+          setFocused(node.mesh, !!selected && isRelated);
+          if (node.labelObject) setFocused(node.labelObject, !!selected && isRelated);
+          const selectedBoost = isSelected ? 1.28 : isRelated ? 1.03 : 0.92;
           const toneBoost =
             node.nodeType === "category" ? toneAccentT * 0.4 : 0;
           node.mesh.scale.setScalar(node.baseScale * pulse * selectedBoost);
@@ -12021,7 +12096,7 @@ export default function ResumeSpace3D({
           bodyMat.opacity = latticeInternalsVisible
             ? isRelated
               ? baseNodeOpacity + toneAccentT * 0.26
-              : 0.2
+              : 0.12
             : 0;
           if (plasmaActive) {
             const baseColor =
@@ -12053,9 +12128,18 @@ export default function ResumeSpace3D({
               THREE.MathUtils.clamp(0.25 + toneAccentT * 0.55, 0, 1),
             );
           }
+          // Under the pointer: a warm colour nothing else in the lattice uses,
+          // so the hover is unmistakable, and full opacity so it can be read.
+          if (isHovered) {
+            bodyMat.color.lerp(hoverColor, 0.85);
+            if (latticeInternalsVisible) bodyMat.opacity = 1;
+            node.mesh.scale.multiplyScalar(1.12);
+          }
           if (node.halo?.material) {
             const hMat = node.halo.material as THREE.SpriteMaterial;
-            const focusAlpha = isSelected ? 0.62 : isRelated ? 0.24 : 0.08;
+            if (isHovered) hMat.color.copy(hoverColor);
+            else hMat.color.set(node.nodeType === "category" ? 0x8fd3ff : 0xdaf1ff);
+            const focusAlpha = isSelected ? 0.62 : isHovered ? 0.55 : isRelated ? 0.24 : 0.04;
             let rippleBoost = 0;
             if (ripple.active && rippleRadius >= 0) {
               node.mesh.getWorldPosition(worldNodePos);
@@ -12082,6 +12166,7 @@ export default function ResumeSpace3D({
               ? selected.nodeType === "category"
               : group.category === selected.category);
           const baseOpacity = isRelated ? wave : 0.08;
+          setFocused(group.object, !!selected && group.kind === "skill" && isRelated);
           const rippleBoost = ripple.active && rippleRadius >= 0 ? 0.12 : 0;
           group.material.opacity = latticeInternalsVisible
             ? THREE.MathUtils.clamp(baseOpacity + rippleBoost, 0.04, 0.9)
@@ -12242,7 +12327,13 @@ export default function ResumeSpace3D({
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (focusPass && composerRef.current) {
+        composerRef.current.removePass(focusPass);
+        focusPass.dispose();
+      }
+    };
   }, [sceneReady, exitSkillsLattice]);
 
   useEffect(() => {
@@ -12672,11 +12763,38 @@ export default function ResumeSpace3D({
       focusSkillsLatticeNode(node, true);
       event.stopPropagation();
     };
+    // Hover: one pick per frame at most, and the cursor says a node is there.
+    let hoverRaf = 0;
+    let hoverAt: { x: number; y: number } | null = null;
+    const setHover = (node: SkillsLatticeNodeRecord | null) => {
+      if (skillsLatticeHoverNodeRef.current === node) return;
+      skillsLatticeHoverNodeRef.current = node;
+      mount.style.cursor = node ? "pointer" : "";
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (!skillsLatticeActiveRef.current) {
+        setHover(null);
+        return;
+      }
+      hoverAt = { x: event.clientX, y: event.clientY };
+      if (hoverRaf) return;
+      hoverRaf = requestAnimationFrame(() => {
+        hoverRaf = 0;
+        if (hoverAt) setHover(pickNodeAtPointer(hoverAt.x, hoverAt.y));
+      });
+    };
+    const onPointerLeave = () => setHover(null);
     mount.addEventListener("pointerdown", onPointerDown, { capture: true });
+    mount.addEventListener("pointermove", onPointerMove);
+    mount.addEventListener("pointerleave", onPointerLeave);
     return () => {
       mount.removeEventListener("pointerdown", onPointerDown, {
         capture: true,
       });
+      mount.removeEventListener("pointermove", onPointerMove);
+      mount.removeEventListener("pointerleave", onPointerLeave);
+      if (hoverRaf) cancelAnimationFrame(hoverRaf);
+      setHover(null);
     };
   }, [focusSkillsLatticeNode]);
 
@@ -17669,13 +17787,38 @@ export default function ResumeSpace3D({
     orbitalPortfolioMatterPacketsRef.current = matterPackets;
     setOrbitalPortfolioReady(true);
 
-    const categoryPositions = categoryEntries.map((_, idx) => {
-      const a = (idx / Math.max(1, categoryEntries.length)) * Math.PI * 2;
-      const y = Math.sin(idx * 0.9) * 6;
+    // Category nodes sit on a sphere, not a ring: with twenty-odd headings a
+    // ring of radius 58 put neighbours 18 units apart while their child rings
+    // reach 18, so branches overlapped. A Fibonacci spiral spreads them evenly
+    // over the sphere; its radius grows with the count so neighbours stay a
+    // branch-width apart; a seeded jitter (from the name, so the layout is the
+    // same every visit) breaks the pattern into something that reads as found
+    // rather than plotted.
+    const seeded = (text: string, salt: number) => {
+      let h = 2166136261 ^ salt;
+      for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+      return ((h >>> 0) % 10000) / 10000;
+    };
+    const largestBranch = Math.max(1, ...categoryEntries.map((root) => root.children.length));
+    const branchReach = 11 + Math.min(7, largestBranch * 0.7);
+    const categorySpacing = branchReach * 2 + 14;
+    const count = Math.max(1, categoryEntries.length);
+    const sphereRadius = Math.max(
+      latticeRadius,
+      Math.sqrt((count * categorySpacing * categorySpacing) / (4 * Math.PI)),
+    );
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+    const categoryPositions = categoryEntries.map((root, idx) => {
+      // Evenly spaced heights, spiralling around; the poles are left slightly
+      // clear so no heading sits straight above or below the centre.
+      const y = 1 - ((idx + 0.5) / count) * 2;
+      const ringR = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = goldenAngle * idx + (seeded(root.name, 1) - 0.5) * 0.6;
+      const radius = sphereRadius * (0.88 + seeded(root.name, 2) * 0.24);
       return new THREE.Vector3(
-        Math.cos(a) * latticeRadius,
-        y,
-        Math.sin(a) * latticeRadius,
+        Math.cos(theta) * ringR * radius,
+        y * radius * 0.85,
+        Math.sin(theta) * ringR * radius,
       );
     });
 
@@ -17794,6 +17937,7 @@ export default function ResumeSpace3D({
       const ringMat = lines.material as THREE.LineBasicMaterial;
       latticeLineMats.push(ringMat);
       latticeLineGroups.push({
+        object: lines,
         material: ringMat,
         kind: "ring",
       });
@@ -17854,6 +17998,7 @@ export default function ResumeSpace3D({
 
       const catLabel = createLabel(category, `${branchNames.length} skills`);
       catLabel.userData.skillsLatticeLabel = true;
+      latticeNodes[latticeNodes.length - 1].labelObject = catLabel;
       catLabel.position.set(cPos.x, cPos.y + 6.6, cPos.z);
       catLabel.visible = false;
       skillsLatticeRoot.add(catLabel);
@@ -17882,16 +18027,17 @@ export default function ResumeSpace3D({
             ? 11 + Math.min(7, children.length * 0.7)
             : Math.max(3.2, 6.2 - (depth - 3) * 1.2) +
               Math.min(3, children.length * 0.35);
-        // Plane for this ring: depth 2 is the lattice's horizontal plane;
-        // deeper rings are perpendicular to the grandparent → parent direction
-        // and pushed a little further out along it.
+        // Plane for this ring: depth 2 faces away from the lattice's centre,
+        // so a branch on the sphere fans outward into empty space instead of
+        // lying flat across its neighbours; deeper rings are perpendicular to
+        // the grandparent → parent direction and pushed further out along it.
         const outward = grandparentPos
           ? parentPos.clone().sub(grandparentPos).normalize()
-          : new THREE.Vector3(0, 1, 0);
+          : parentPos.clone().normalize();
         const axisA = new THREE.Vector3();
         const axisB = new THREE.Vector3();
         let ringCenter = parentPos.clone();
-        if (depth === 2) {
+        if (depth === 2 && outward.lengthSq() < 1e-6) {
           axisA.set(1, 0, 0);
           axisB.set(0, 0, 1);
         } else {
@@ -17907,17 +18053,13 @@ export default function ResumeSpace3D({
         children.forEach((child, sIdx) => {
           const sa =
             (sIdx / Math.max(1, children.length)) * Math.PI * 2 + orderSeed * 0.35;
-          const sPos =
-            depth === 2
-              ? new THREE.Vector3(
-                  parentPos.x + Math.cos(sa) * orbitR,
-                  parentPos.y + Math.sin(sa * 1.4) * 2.2,
-                  parentPos.z + Math.sin(sa) * orbitR,
-                )
-              : ringCenter
-                  .clone()
-                  .addScaledVector(axisA, Math.cos(sa) * orbitR)
-                  .addScaledVector(axisB, Math.sin(sa) * orbitR);
+          const sPos = ringCenter
+            .clone()
+            .addScaledVector(axisA, Math.cos(sa) * orbitR)
+            .addScaledVector(axisB, Math.sin(sa) * orbitR)
+            // A little rise and fall around the ring keeps it from reading as
+            // a flat disc.
+            .addScaledVector(outward, depth === 2 ? Math.sin(sa * 1.4) * 2.2 : 0);
           const radius = skillNodeRadius * Math.pow(0.78, depth - 2);
           const skillNode = new THREE.Mesh(
             new THREE.OctahedronGeometry(radius, 0),
@@ -17972,6 +18114,7 @@ export default function ResumeSpace3D({
           });
           const skillLabel = createLabel(child.name);
           skillLabel.userData.skillsLatticeLabel = true;
+          latticeNodes[latticeNodes.length - 1].labelObject = skillLabel;
           skillLabel.position.set(sPos.x, sPos.y + radius + 1.15, sPos.z);
           skillLabel.visible = false;
           skillsLatticeRoot.add(skillLabel);
@@ -18003,6 +18146,7 @@ export default function ResumeSpace3D({
       const skillMatRef = skillLines.material as THREE.LineBasicMaterial;
       latticeLineMats.push(skillMatRef);
       latticeLineGroups.push({
+        object: skillLines,
         material: skillMatRef,
         kind: "skill",
         category,
@@ -19762,84 +19906,10 @@ export default function ResumeSpace3D({
         }
         default:
           // Handle tour actions
+          // Guided tours are retired (see memory: todo-remove-guided-tours);
+          // a "tour:" target does nothing until the code is removed outright.
           if (target.startsWith("tour:")) {
-            const tourType = target.replace("tour:", "");
-            vlog(`🚀 Tour request from navigation: ${tourType}`);
-
-            if (tourBuilderRef.current && tourGuideRef.current) {
-              let tour;
-              switch (tourType) {
-                case "career-journey":
-                  tour = tourBuilderRef.current.createCareerJourneyTour();
-                  break;
-                case "technical-deep-dive":
-                  tour = tourBuilderRef.current.createTechnicalDeepDiveTour();
-                  break;
-                case "leadership-story":
-                  tour = tourBuilderRef.current.createLeadershipStoryTour();
-                  break;
-              }
-
-              if (tour) {
-                vlog(
-                  `✅ Starting tour: ${tour.title} with ${tour.waypoints.length} waypoints`,
-                );
-                // Resolve any experience-moon waypoint positions to live moon world positions
-                const resolvedWaypoints = tour.waypoints.map((wp) => {
-                  try {
-                    if (wp.id && wp.id.startsWith("experience-moon-")) {
-                      const candidate =
-                        (wp.content && (wp.content as any).title) || wp.name;
-                      let moonMesh: THREE.Mesh | undefined;
-                      sceneRef.current.scene?.traverse((object) => {
-                        if (
-                          object instanceof THREE.Mesh &&
-                          object.userData.planetName
-                        ) {
-                          const pname = (
-                            object.userData.planetName || ""
-                          ).toLowerCase();
-                          if (
-                            candidate &&
-                            pname.includes(
-                              (candidate || "").toLowerCase().split(" ")[0],
-                            )
-                          ) {
-                            moonMesh = object as THREE.Mesh;
-                          }
-                        }
-                      });
-
-                      if (moonMesh) {
-                        const worldPos = new THREE.Vector3();
-                        moonMesh.getWorldPosition(worldPos);
-                        const offset = new THREE.Vector3(80, 40, 60);
-                        return {
-                          ...wp,
-                          target: {
-                            ...wp.target,
-                            lookAt: worldPos.clone(),
-                            position: worldPos.clone().add(offset),
-                          },
-                        } as typeof wp;
-                      }
-                    }
-                  } catch (e) {
-                    vlog("⚠️ Error resolving waypoint to mesh");
-                  }
-                  return wp;
-                });
-
-                setTourActive(true);
-                setOverlayContent(null);
-                setContentLoading(false);
-                tourGuideRef.current.startTour(resolvedWaypoints);
-              } else {
-                vlog(`❌ Failed to create tour`);
-              }
-            } else {
-              vlog(`❌ Tour system not initialized`);
-            }
+            vlog(`Guided tours are retired; ignoring ${target}`);
           }
           // Handle experience company specific navigation
           else if (target.startsWith("experience-")) {
@@ -20992,22 +21062,6 @@ export default function ResumeSpace3D({
                 {orbitalPortfolioAutoplayEnabled
                   ? "Auto-play On"
                   : "Auto-play Off"}
-              </button>
-              <button
-                onClick={exitOrbitalPortfolio}
-                style={{
-                  padding: "4px 6px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(255, 195, 160, 0.45)",
-                  background: "rgba(28, 14, 10, 0.82)",
-                  color: "#ffe2d5",
-                  fontFamily: "'Rajdhani', sans-serif",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  marginLeft: "auto",
-                }}
-              >
-                Exit
               </button>
             </div>
             <div
@@ -23383,30 +23437,6 @@ export default function ResumeSpace3D({
           )}
 
           {skillsLatticeActive && (
-            <button
-              onClick={() =>
-                exitSkillsLattice({ restoreShip: true, clearSystem: true })
-              }
-              style={{
-                position: "fixed",
-                right: 18,
-                top: 72,
-                zIndex: 1121,
-                padding: "5px 8px",
-                borderRadius: 8,
-                border: "1px solid rgba(255, 195, 160, 0.45)",
-                background: "rgba(28, 14, 10, 0.82)",
-                color: "#ffe2d5",
-                fontFamily: "'Rajdhani', sans-serif",
-                fontSize: 11,
-                cursor: "pointer",
-              }}
-            >
-              Exit
-            </button>
-          )}
-
-          {skillsLatticeActive && (
             <div
               style={{
                 position: "fixed",
@@ -25438,92 +25468,9 @@ export default function ResumeSpace3D({
               vlog(`🎬 Content action received: ${action}`);
 
               // Handle different actions
+              // Guided tours are retired; a "tour:" action does nothing.
               if (action.startsWith("tour:")) {
-                const tourType = action.replace("tour:", "");
-                vlog(`🔍 Tour type: ${tourType}`);
-                vlog(`📦 tourBuilderRef exists: ${!!tourBuilderRef.current}`);
-                vlog(`📦 tourGuideRef exists: ${!!tourGuideRef.current}`);
-
-                if (tourBuilderRef.current && tourGuideRef.current) {
-                  vlog(`🚀 Starting ${tourType} tour...`);
-                  let tour;
-                  switch (tourType) {
-                    case "career-journey":
-                      tour = tourBuilderRef.current.createCareerJourneyTour();
-                      vlog(
-                        `📋 Tour created with ${tour?.waypoints.length || 0} waypoints`,
-                      );
-                      break;
-                    case "technical-deep-dive":
-                      tour =
-                        tourBuilderRef.current.createTechnicalDeepDiveTour();
-                      break;
-                    case "leadership-story":
-                      tour = tourBuilderRef.current.createLeadershipStoryTour();
-                      break;
-                  }
-
-                  if (tour) {
-                    vlog(`✅ Tour object valid, starting...`);
-                    // Resolve experience-moon targets to live world positions
-                    const resolvedWaypoints = tour.waypoints.map((wp) => {
-                      try {
-                        if (wp.id && wp.id.startsWith("experience-moon-")) {
-                          const candidate =
-                            (wp.content && (wp.content as any).title) ||
-                            wp.name;
-                          let moonMesh: THREE.Mesh | undefined;
-                          sceneRef.current.scene?.traverse((object) => {
-                            if (
-                              object instanceof THREE.Mesh &&
-                              object.userData.planetName
-                            ) {
-                              const pname = (
-                                object.userData.planetName || ""
-                              ).toLowerCase();
-                              if (
-                                candidate &&
-                                pname.includes(
-                                  (candidate || "").toLowerCase().split(" ")[0],
-                                )
-                              ) {
-                                moonMesh = object as THREE.Mesh;
-                              }
-                            }
-                          });
-                          if (moonMesh) {
-                            const worldPos = new THREE.Vector3();
-                            moonMesh.getWorldPosition(worldPos);
-                            const offset = new THREE.Vector3(80, 40, 60);
-                            return {
-                              ...wp,
-                              target: {
-                                ...wp.target,
-                                lookAt: worldPos.clone(),
-                                position: worldPos.clone().add(offset),
-                              },
-                            } as typeof wp;
-                          }
-                        }
-                      } catch (e) {
-                        vlog("⚠️ Error resolving waypoint to mesh");
-                      }
-                      return wp;
-                    });
-
-                    setTourActive(true);
-                    setOverlayContent(null);
-                    setContentLoading(false);
-                    tourGuideRef.current.startTour(resolvedWaypoints);
-                    vlog(
-                      `✨ Tour started: ${tour.title} (${tour.waypoints.length} waypoints)`,
-                    );
-                  } else {
-                    vlog(`❌ Tour object is null or undefined`);
-                  }
-                } else {
-                  vlog(`❌ Tour refs not initialized`);
-                }
+                vlog(`Guided tours are retired; ignoring ${action}`);
               } else if (action.startsWith("navigate:")) {
                 const target = action.replace("navigate:", "");
                 if (cameraDirectorRef.current) {

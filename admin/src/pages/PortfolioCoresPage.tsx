@@ -71,7 +71,7 @@ export function PortfolioCoresPage() {
       <div className="admin-page-header">
         <div>
           <h1>Cores</h1>
-          <p>The centres projects orbit in the 3D portfolio, usually one per company. Use Reorder rows to change their order.</p>
+          <p>The centres projects orbit in the 3D portfolio, usually one per company. Drag a row by its handle to change the order.</p>
         </div>
         <ButtonComponent cssClass="e-primary e-outline" onClick={() => navigate("/portfolioCores/new")}>
           Add core
@@ -81,7 +81,7 @@ export function PortfolioCoresPage() {
       {list.isError ? <p className="admin-error">Could not load cores.</p> : null}
 
       <div className="admin-grid-wrap">
-        <EntityGrid rows={list.items} mode="local" onReorder={saveOrder}>
+        <EntityGrid gridId="portfolioCores" rows={list.items} mode="local" onReorder={saveOrder}>
           {[
             <ColumnDirective key="name" field="name" headerText="Core" width={220} />,
             <ColumnDirective key="color" headerText="Color" width={160} template={colorTemplate} allowSorting={false} allowFiltering={false} allowGrouping={false} />,

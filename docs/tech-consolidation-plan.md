@@ -121,6 +121,14 @@ removed in `c454e89`; its last unused files (`Hero`, `Summary`, `Skills`,
 | D24 | No cap on the filter row. Today it is the ten most-used technologies by count (`TOP_TECH_COUNT` in `useShowcaseProjects.ts`, added with the redesign in `9adbf5e`). A tick *and* a cap are two controls fighting: ticking twelve would silently drop two with no way to see which. The `filters` tick alone decides which technologies appear and the row wraps if it is long; they stay ordered by how many projects use them, which is a useful order once it is no longer also doing the choosing. `TOP_TECH_COUNT` is deleted; the sort stays. | 2026-09-22 |
 | D25 | Scenarios settled ahead of the build, because each is cheap now and expensive once records exist (section 4.10): slugs are immutable while names stay editable; a referenced technology cannot be deleted, only merged into another; reparenting moves the subtree and a cycle is rejected; aliases are unique across the whole list; unmatched project tags go to a holding list rather than being dropped or auto-created; a grouping with no visible children does not render a heading. | 2026-09-22 |
 | D26 | Slug uniqueness has three layers: a unique index on the collection (the only real guarantee, since it is the only one that holds under two simultaneous saves), an API check that also translates the index's duplicate-key error into a field error rather than a 500, and admin generating the slug from the name, editable before the first save, with availability checked as it is typed. Generation appends `-2`, `-3` when two names produce the same slug (`C#` and `C Sharp` both want `csharp`). Because slugs are immutable (D25), uniqueness is checked once, at creation, and a rename never re-opens it. | 2026-09-22 |
+| D27 | `featured` is removed; the Resume tick under Shown in does the whole job, because "shown in resume" says what it does and "featured" did not until its hint was read. The rule at every level of the tree: a ticked heading gets its own line, top-level or nested; a ticked skill is printed on the line of the nearest ticked heading above it; nothing is inherited from a parent, so a heading's tick never pulls in its skills, and a line with no ticked skills is not printed. The film's closing list reads the same set. This supersedes D21 and the "resume summary" row in 4.8. Curation is the point: the same set will later feed a plain, machine-readable resume generated for download (a future phase), where every extra keyword costs. New records no longer default the Resume tick on. | 2026-09-24 |
+| D28 | The order of the resume's skills lines is its own record, not the tree's order: a singleton `resumeSkills` holding `headingOrder`, the slugs of Resume-ticked headings in the order they print. Nested headings can then print anywhere (Styling above Backend), and the tree keeps the order the lattice and admin use. A ticked heading missing from the list prints after the listed ones in tree order, so a newly ticked heading never disappears; a stale slug is ignored. The lines are built by one function, `resumeSkillLines` in `@hd/content-schema`, read by the site and by Admin -> Resume -> Resume skills, a grid of the generated lines dragged into order, each drop saving. Chosen over a per-heading number because the order is one fact, saved once. | 2026-09-24 |
+| D29 | The film reads the release. Its timeline is one pure function of the release (`skillsDataFromRelease`): places are the published jobs, spans are each job's skill uses - dated as recorded, or the whole job when undated - and the Skill Progress rows are the resume's lines (D27/D28: the headings ticked Resume in the order set on the Resume skills ordering page), so the film's tally and the resume agree, plus "Current stack" (everything ticked current, counted from 2014 as the mock did). The film opens on its last frame - today's complete picture - and Play runs the build-up from the first job; a latest-first route ("where each piece was earned") is a later option. Only uses ticked Film destination, on skills ticked Film progress, are drawn. The mock's 75 per-job years were carried onto the database uses once by `scripts/skills-years-from-mock.mjs` (63 dated, 25 film-only uses added where a job had none of a mock skill's technologies; "leading engineers" and "test automation platforms" have no technology and were dropped). The mock stays as the fallback for a release from before the list, and is retired with the old collections. | 2026-09-24 |
+| D30 | The `filmProgress` surface is removed: since D29 the film's rows are the resume's lines and a job's ticks decide its towers, so a technology-level "in the film" tick answered nothing on its own (it could hide towers but not stand in for them). What was wanted from it - a calmer picture, one Frontend tower instead of HTML, CSS and JavaScript - is a property of the line, so headings gain `rollUpInFilm`: on, the line's skills at each job merge into one tower named for the line, years merged so overlaps never double-count, while the Skill Progress panel keeps every skill beneath it. Off (the default), one tower per skill. Records still carrying `filmProgress` read clean (the schema strips it). The job page's tick group is titled "Shown at this job" so it no longer shares a name with the technology's Shown in. | 2026-09-24 |
+| D31 | The old collections are retired: `skills`, `skillCategories` and `techStackNodes` leave the schema, the API, the admin (Skills (old), Skill categories, Tech stack (old)) and the sites' fallbacks; the film's mock timeline (`skillTimeline.json`) and its one-off scripts go with them, so every site reads the master list and nothing else. The local collections were dropped after a backup (`db-backups/local-resume_cosmos_local-2026-09-24T22-07-20-622Z.archive.gz`). Production still holds them until the production run copies the working database over. Still to retire, in a later pass: the jobs' `jobTech` and memory `type`, and the projects' free-text `technologies`. | 2026-09-24 |
+| D32 | The old fields go too. A job memory's `type` (tech / memory / code) becomes its `style` (plain / code / handwritten) - the same words the fly-by already drew by - converted once in the data (tech -> plain, memory -> handwritten, code -> code) and edited as "Style" on the job page; `jobTech` (the chips) goes, every job's moon labels coming from its skill uses; a project's free-text `technologies` goes, every project and client site being tagged, and the pages read the linked names. Every job has skill uses and every project has tags, so no surface changes. | 2026-09-24 |
+| D33 | The film's closing screen shows the lines ticked "Closing screen" on the Resume skills ordering page, in the resume's order, stored as `closingLines` on the `resumeSkills` singleton; none ticked means every line with years. The tick affects only the closing screen: the Skill Progress panel lists every line regardless, so nothing is ever hidden from the progression. | 2026-09-24 |
+| D34 | The resume is downloadable as a file, written from the published release on demand: `@hd/resume-export` builds one model (profile, the resume's skill lines, jobs with positions and bullets, education, certifications, links) and writes it as Word (`docx`), PDF (`pdf-lib`, standard fonts) and plain text, in the shape of the resume Harma has sent for years - US Letter, half-inch margins, one column, bold capitals for sections, real bullets, nothing an applicant-tracking system trips on. `/resume/download` writes the file in the browser when a button is pressed (the writers load on the click); `GET /api/v2/content/resume.docx|pdf|txt` returns the same file for a link that is always current. One source; no résumé files kept anywhere else. | 2026-09-25 |
 | D3 | The API is the only source. Missing data is added to the API; the mock file ends up as seed and offline fallback only. | 2026-09-21 |
 
 ## 4. Proposed shape
@@ -139,8 +147,8 @@ technologies on projects for a technical reader.
 | `current` | tick: part of the stack that is relevant today (D5). Replaces the mock's "Current stack" category and its start year. |
 | `showOnResume` | the resume and the Skills planet show only ticked ones, so they keep showing today's 18 under today's 5 headings. |
 | `blurb` | optional one line, mainly for top-level entries |
-| `featured` | matters to an employer: the resume summary and the film's closing list read only these (D21) |
-| `surfaces` | where it may appear: lattice, resume, film progress, filters (D20, D23) |
+| `surfaces` | where it may appear: lattice, resume, filters (D20, D23; film progress removed by D30) |
+| `rollUpInFilm` | heading only: its skills stand as one tower per job in the film (D30) |
 | `isGrouping` | a grouping, not a skill (D16). On by default for top-level entries. Surfaces that show skills only skip these; the resume and Skills planet use them as headings. |
 
 What the mock did with several categories per skill becomes nesting:
@@ -378,8 +386,7 @@ the surface actually reads.
 | **Tree / summary** | Skills lattice (universe) | technology `surfaces` |
 | | Resume skills section | technology `surfaces` |
 | | Film: Skill Progress | technology `surfaces` |
-| | Film: closing summary | technology `featured` (D21) |
-| | Resume summary | technology `featured` (D21) |
+| | Film: closing summary | technology `surfaces` (resume, D27) |
 | **Job** | Moon: job detail labels | skill use `surfaces` |
 | | Moon: memories fly-by | skill use `surfaces` |
 | | Film: destination graphic (ring, banner, branch) | skill use `surfaces` |
@@ -428,8 +435,7 @@ where the tick is.
 | Field | Hint text |
 |---|---|
 | `isGrouping` | "A heading, not a skill you claim. Headings organise the tree (Frontend, Databases, APIs). Screens that show skills only - the film's Skill Progress, moon labels, the home page chips - skip them." |
-| `featured` | "One of the few areas to put in front of a recruiter. Only featured entries appear in the resume summary and the film's closing list. It does not change where else this shows." |
-| `surfaces` | "Where this may appear. Lattice: the universe's Skills Lattice. Resume: the resume's skills section. Film progress: the film's Skill Progress screen. Filters: offered as a filter in the home page chips and the universe Portfolio drop-down. Every ticked technology appears, most-used first - there is no limit, so leave this off for something like HTML that nearly every project uses and would filter to almost everything. A project's own technology list is not set here; edit the project." |
+| `surfaces` | "Where this may appear. Lattice: the universe's Skills Lattice. Resume: the resume's skills section and the film's closing list - a ticked heading gets its own line, a ticked skill is printed on the line of the nearest ticked heading above it, nothing is inherited (D27). Film progress: the film's Skill Progress screen. Filters: offered as a filter in the home page chips and the universe Portfolio drop-down. Every ticked technology appears, most-used first - there is no limit, so leave this off for something like HTML that nearly every project uses and would filter to almost everything. A project's own technology list is not set here; edit the project." |
 | `current` | "Part of the stack you work in today. Marks it as current wherever a site separates present from past." |
 | `parent` | "Its one home in the tree. A skill has exactly one parent; if it seems to belong in two places, it is two skills." |
 
@@ -487,13 +493,12 @@ junk records like "Financial Web Content" got into the tree in the first place.
 surfaces ticked on. A grouping with no visible children renders nothing, so
 the resume never shows a bare heading. This is a rendering rule, not a tick.
 
-### Still unplanned: reconciling the film
+### Reconciling the film: done (D29)
 
-The film's mock has 11 categories and 75 uses; the migration produces 13 roots
-and 82 uses, and the job slugs differ (`stormscape-now` in the mock,
-`stormscape-freelance` in the database). Mapping the mock's per-job years onto
-the migrated skill uses is real work that no decision above covers. It is the
-last step of the consolidation (order of work, item 2) and needs its own pass.
+The mock's per-job years were carried onto the database uses by
+`scripts/skills-years-from-mock.mjs` (mapping table inside it; `stormscape-now`
+is `stormscape-freelance`). The film, its home-page preview and the lab page
+read the release; the mock is the fallback until it is retired.
 
 ## 5. What each site sees afterwards
 
@@ -558,6 +563,14 @@ years → film reads the release → remove the old screens and collections.
 - 2026-09-22: draft 5 (p): six scenarios settled ahead of the build (D25), and the film reconciliation named as the one piece still unplanned. "Data centre" corrected to "Data center".
 - 2026-09-22: draft 5 (o): the filter row loses its ten-item cap (D24); the tick is the only control, and the most-used-first order stays.
 - 2026-09-22: draft 5 (n): D23 corrects D20 - a filter list is not a tag list, so the home chips and the Portfolio drop-down get fine control after all.
+- 2026-09-25: draft 13: the resume downloads as Word, PDF and text from the release (D34).
+- 2026-09-24: draft 12: the closing screen's lines are chosen on the ordering page (D33).
+- 2026-09-24: draft 11: the old job and project fields go, memory type becomes style (D32).
+- 2026-09-24: draft 10: the old collections and the film's mock are retired (D31).
+- 2026-09-24: draft 9: the Film tick goes, headings roll up into one tower (D30).
+- 2026-09-24: draft 8: the film reads the release and the mock's years are carried over (D29).
+- 2026-09-24: draft 7: the resume lines' order is a singleton, ordered on its own admin page (D28).
+- 2026-09-24: draft 6: `featured` removed, the Resume tick carries the rule at every level (D27).
 - 2026-09-22: draft 5 (m): isHeading and headline renamed isGrouping and featured, and every option gets hint text naming the screens it affects (D22).
 - 2026-09-22: draft 5 (l): Harma's list of the ten places a skill shows, mapped to what governs each (D20), and `headline` revived for the recruiter-facing summaries (D21).
 - 2026-09-22: draft 5 (k): the tree is settled (D19). The dry run had been reading tech memories but not code ones; fixed, 86 technologies become 89.

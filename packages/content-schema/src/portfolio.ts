@@ -22,7 +22,8 @@ export const clientVariantSchema = z.object({
   title: text(200),
   mediaId: mediaRefSchema,
   description: text(4000),
-  technologies: z.array(text(60)),
+  /** Links into the master list. A client site is tagged on its own (D32). */
+  technologySlugs: z.array(slugSchema).default([]),
   year: yearSchema,
   fit: imageFitSchema,
   galleryMedia: z.array(galleryItemSchema).default([]),
@@ -57,7 +58,12 @@ export const portfolioEntrySchema = z.object({
   title: text(200),
   mediaId: mediaRefSchema,
   description: text(4000),
-  technologies: z.array(text(60)),
+  /**
+   * Links into the master technology list (plan 4.5); a site renders the
+   * linked record's name, which is what makes html/HTML one tag. The
+   * free-text list that came before was retired in D32.
+   */
+  technologySlugs: z.array(slugSchema).default([]),
   year: yearSchema,
   fit: imageFitSchema,
   galleryMedia: z.array(galleryItemSchema).default([]),

@@ -684,6 +684,52 @@ html.is-scene-dragging * {
 }
 
 .showcase-pill:focus-visible,
+/* Sort: two small square switches, one side of one switch lit. Deliberately
+   not chips, so the row reads as a setting rather than as more filters. */
+.showcase-filters__chips--sort {
+  gap: 10px;
+}
+
+.showcase-switch {
+  display: inline-flex;
+  border: 1px solid var(--showcase-ink-dim);
+  border-radius: 0;
+}
+
+.showcase-switch__side {
+  appearance: none;
+  margin: 0;
+  padding: 3px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--showcase-ink-quiet);
+  font-family: var(--showcase-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.showcase-switch__side + .showcase-switch__side {
+  border-left: 1px solid var(--showcase-ink-dim);
+}
+
+.showcase-switch__side:hover {
+  color: var(--showcase-ink, #e8eef6);
+}
+
+.showcase-switch__side[aria-pressed="true"] {
+  background: var(--showcase-ink, #e8eef6);
+  color: #0b0f16;
+}
+
+.showcase-switch__side:focus-visible {
+  outline: 2px solid var(--showcase-ink, #e8eef6);
+  outline-offset: 1px;
+}
+
 .showcase-chip:focus-visible,
 .showcase-list__link:focus-visible,
 .showcase-pager:focus-visible {
@@ -701,22 +747,51 @@ html.is-scene-dragging * {
   padding-block: calc(var(--showcase-gutter) + 36px) 12vh;
 }
 
+/* Filters and sort: one labelled row per group, a faint dotted rule between
+   them, the labels in a column of their own so wrapped chips line up under
+   the first chip rather than under the label. Same sizes as before; only the
+   organisation changes. */
 .showcase-filters {
   display: grid;
-  gap: 8px;
+  gap: 0;
   margin-bottom: clamp(20px, 4vh, 44px);
   max-width: 980px;
+  border-top: 1px dotted rgba(244, 241, 236, 0.22);
+  border-bottom: 1px dotted rgba(244, 241, 236, 0.22);
 }
 
 .showcase-filters__row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: start;
+  padding: 7px 0;
+}
+
+.showcase-filters__row + .showcase-filters__row {
+  border-top: 1px dotted rgba(244, 241, 236, 0.16);
+}
+
+.showcase-filters__row > .showcase-label {
+  min-width: 0;
+  padding-top: 5px;
+  color: var(--showcase-ink-dim);
+}
+
+/* Everything after the label wraps in the second column. */
+.showcase-filters__row > :not(.showcase-label) {
+  grid-column: 2;
+}
+
+.showcase-filters__row > .showcase-label + * {
+  grid-row: 1;
+}
+
+.showcase-filters__chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-}
-
-.showcase-filters__row > .showcase-label {
-  min-width: 44px;
 }
 
 .showcase-chip {
@@ -1402,21 +1477,11 @@ html.is-scene-dragging * {
  * title at once while the titles drift the other way, so the names surface
  * through the scene and sink back as the motion settles. Overlay blending
  * keeps whatever scene is behind them in the letters. Any movement wakes the
- * list, name by name. The open project stays as it is.
+ * list, name by name. The open project stays as it is. The name, title and
+ * place at the top and the filter chips stay lit throughout: they are the
+ * page's identity and its controls, and the scene is meant to show behind the
+ * list, not behind them.
  */
-.showcase-index.is-fading .showcase-masthead,
-.showcase-index.is-fading .showcase-filters,
-.showcase-index.is-resting .showcase-masthead,
-.showcase-index.is-resting .showcase-filters {
-  opacity: 0.1;
-  transition: opacity 1400ms ease;
-}
-
-.showcase-masthead,
-.showcase-filters {
-  transition: opacity 700ms ease;
-}
-
 .showcase-index.is-fading .showcase-list__item:not(.is-open) .showcase-list__link {
   opacity: 0;
   filter: blur(8px);
@@ -2373,6 +2438,43 @@ html.is-scene-dragging * {
   border-bottom: 1px solid rgba(244, 241, 236, 0.22);
 }
 
+/* Technical skills: one line per heading, as on the printed resume. */
+.showcase-resume__skills {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.showcase-resume__skills li {
+  display: grid;
+  grid-template-columns: minmax(120px, 170px) 1fr;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.showcase-resume__skills-heading {
+  font-family: var(--showcase-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-resume__skills-list {
+  color: var(--showcase-ink);
+}
+
+@media (max-width: 600px) {
+  .showcase-resume__skills li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
 .showcase-resume__jobs {
   list-style: none;
   margin: 0;
@@ -2661,4 +2763,46 @@ html.is-cinematic-ready .film-host {
   .showcase-constellation {
     transition: none;
   }
+}
+
+/* The download page: one block per format, the button first, a line on what it is for. */
+/* Under the name, one button per row. */
+.showcase-resume__downloads {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.showcase-resume__download-button {
+  min-width: 240px;
+  text-align: left;
+  font: inherit;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 10px 18px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.showcase-resume__download-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.showcase-resume__download-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.showcase-resume__download-error {
+  color: #ff9a8a;
+}
+
+.showcase-resume__download-link {
+  margin-left: auto;
 }

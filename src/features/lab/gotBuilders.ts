@@ -1498,6 +1498,7 @@ export const KIND_BY_PLACE: Record<string, string> = {
   rpa: "rotors",
   investcloud: "engine",
   "stormscape-now": "monument",
+  "stormscape-freelance": "monument",
 };
 
 export const KIND_ORDER = Object.values(KIND_BY_PLACE);
@@ -1508,4 +1509,5 @@ export const DIRECTION_BY_PLACE: Record<string, string> = {
   hostpro: "B · sigil",
   stormscape: "C · light",
   "stormscape-now": "C · light",
+  "stormscape-freelance": "C · light",
 };

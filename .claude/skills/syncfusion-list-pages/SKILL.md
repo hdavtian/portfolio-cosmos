@@ -33,10 +33,79 @@ Every admin grid provides:
 - **Column resizing** — `allowResizing` on the component *and* `Resize` in
   `Inject`. The prop alone does nothing, and the omission only shows when a
   value is clipped.
-- Row drag-and-drop reordering for entities with `sortOrder`, persisted through
-  the entity's order endpoint.
+- Row drag-and-drop reordering for entities with `sortOrder`, always enabled,
+  persisted through the entity's order endpoint (see "Reordering is always on").
+**Flat grids remember their layout.** `enablePersistence` with a stable, unique
+`id` on every `EntityGrid` and the release history: column widths and order,
+hidden columns, sorting, filters and page size come back on the next visit.
+Measured on 2026-09-22: sort a column, change the page size, navigate away and
+back - both persist and every template cell (row actions, previews) still
+renders. The earlier note that persistence drops template functions was wrong
+for the flat grid and has been withdrawn.
 
-Do not build custom filter/search widgets when Syncfusion provides one.
+**Tree grids sort, search and filter like the flat ones.** Measured in a
+visible tab on 2026-09-22: sorting reorders within the hierarchy, search shows
+matches with their ancestors, an Excel filter narrows the tree, and each clears
+back to every row. Dragging is refused while the view is rearranged, as on the
+flat grids.
+
+**Tree grids do not persist.** With `enablePersistence` on, the tree loaded
+with its trailing columns gone and the actions column stripped of its template
+before anything had been saved (measured with rows on screen). The flat grid
+does not do this; the tree does.
+
+**Measure grids only in a visible tab.** A `TreeGridComponent` paints its rows
+on an animation frame, and a background tab gets none: it shows "No records to
+display" while holding every row, and after one forced paint nothing updates
+again, so sorting, search and filtering all look broken. Check
+`document.visibilityState === "visible"` and that `requestAnimationFrame` is
+firing before believing any reading. A day was lost to this.
+
+**A stored array shows as one checkbox column per value.** `surfaces` is one
+array on the record; the grid splits it into boolean columns
+(`type="boolean" displayAsCheckBox`) so each value can be read and filtered on
+its own, matching the checkbox group on the edit form.
+
+**Every persisted grid shows Reset layout**, which clears the key
+(`lib/gridLayout.ts`) and reloads: the saved state includes the columns as they
+were, so a later column change can leave a stale layout with no way out from
+inside the grid.
+
+## Where actions go
+
+**Row actions live in the row.** Every action that operates on one record
+(edit, delete, add child, roll back to this one) is a button in an actions
+column on that row, never a button at the top of the page that acts on the
+selected row. A list can be long: selecting a row near the bottom and then
+scrolling back to the top to press a button is the failure this rule prevents.
+
+**Only genuinely global actions sit above the grid**, and only when they need
+no row: "Add", "Publish", a filter that applies to the whole list.
+
+This applies to `TreeGridComponent` as much as `GridComponent`: a tree still
+gets an actions column, and selection stays for dragging, not for acting.
+
+## Reordering is always on
+
+Row dragging is enabled on every grid that has a `sortOrder`. There is no
+"Reorder rows" mode to unlock first: the handle is always there.
+
+One drop renumbers the whole collection: the client sends every slug in its
+new order and `EntityRepository.reorder` sets `sortOrder` to each one's index.
+That is deliberate at this size (the largest collection is under a hundred
+rows) and it keeps the logic trivial. It does mean a single drag marks every
+record as changed, which the publish summary will list.
+
+Past roughly 500 rows in one collection it should become sparse or fractional
+ordering - gaps between numbers, so a move writes one row - but the reason is
+the publish diff and the release snapshot, not the database write, which stays
+cheap.
+
+A drop index is a position in the *visible* view, so only a view in saved order
+can be translated back into `sortOrder`. When the grid is sorted, grouped,
+filtered or searched, the drop is cancelled and the status line says which of
+those to clear. Refusing is the point - the alternative is saving an order
+nobody asked for, silently.
 
 ## Guardrails (lessons learned)
 
@@ -44,12 +113,53 @@ Do not build custom filter/search widgets when Syncfusion provides one.
   not even a JSX comment. Syncfusion reads children positionally; an extra child
   blanks template cells and drops `visible={false}`. Put comments above the grid.
 - Never render a grid inside a `<form>`: template cells render empty.
+- Column `template` functions must be stable across renders (`useMemo` once,
+  reading live state through a ref). A new function each render makes the
+  grid rebuild every cell, which re-renders React, which makes new functions:
+  with five checkbox templates a row the page froze on the first click.
+- In-place ticks use Syncfusion **batch editing** (`editSettings` mode
+  `Batch`, `Edit` inject, toolbar `Update`/`Cancel`, `showConfirmDialog`
+  false with the status line reporting): changes are visible pending cells,
+  written only on Update, reverted by Cancel. `beforeBatchSave` gets
+  `batchChanges.changedRecords`; PUT each with its version, then refetch.
+  Batch mode opens a cell on double-click; for a tick column, a click handler
+  on the wrapper does `editCell` -> click `.e-frame` -> `saveCell` so one
+  click flips it. Keep `recordDoubleClick` off tick columns. Refuse a row drop
+  while `getBatchChanges().changedRecords` is non-empty (a drop reloads).
+  Plain boolean columns (`displayAsCheckBox`, `editType="booleanedit"`), no
+  templates. Do not build live-save checkbox templates: they saved once and
+  then stayed disabled, and new template functions per render froze the page.
+- A persisted flat grid drops a `template` column entirely (it never reaches
+  the column chooser). A tick that acts on click is a plain boolean column
+  (`type="boolean" displayAsCheckBox`) handled in `recordClick`, and that
+  handler must be stable (`useCallback` reading state through a ref): the
+  grid keeps the handler it was given at mount, so a fresh closure per render
+  saves with a stale record version and is refused.
+- A persisted flat grid (`enablePersistence`, keyed by `gridId`) keeps its
+  saved column set, so a column added later stays hidden for anyone who has
+  visited the page. Adding or renaming a column means a new `gridId`
+  (`-v2`), never a "click Reset layout" instruction.
+- Long grids: `enableStickyHeader` (Grid and TreeGrid) pins the header and
+  toolbar to the viewport. It needs no `overflow: hidden` on any ancestor -
+  that makes the ancestor the sticky container; use `overflow: clip` for
+  rounded corners instead.
+- Tree row styling by kind: `rowDataBound` adds a class; style it in CSS.
 - Row actions use Syncfusion buttons with Syncfusion class tokens (`e-small`,
   `e-outline`, `e-flat`, `e-primary`), never project button classes.
 - Add/edit overlays follow the `syncfusion-edit-dialogs` skill.
 - No `window.confirm` / `window.alert`; use `DialogUtility`.
 - If a behavior cannot be done natively in Syncfusion, stop and ask Harma before
   adding custom styling or logic.
+
+## Fetching "all of them"
+
+The API caps a page at 100 (`MAX_PAGE_SIZE`). Any list the admin treats as
+complete - a tree, a picker, a parent dropdown, the tagging page - goes through
+`fetchAllEntities` / `useAllEntities`, which page until `total` is reached and
+**throw** if they end up short. Never call the list endpoint with
+`pageSize=100` and treat the result as everything: that is how records that
+were saved perfectly well appeared to vanish (2026-09-23, the 101st
+technology; the day before, a client's records in another admin).
 
 ## Backend alignment
 

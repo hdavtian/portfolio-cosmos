@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { skillsDataFromRelease } from "../lab/skillsData";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { CINEMATIC_PATH, canKeepAlive } from "../../app/cinematic/keepAlive";
 import { FILM_PATH, FilmHost } from "../../app/film/FilmHost";
@@ -54,9 +55,24 @@ export function ShowcaseLayout() {
       },
     [release],
   );
-  const jobs = useMemo<SceneJob[]>(
-    () =>
-      (release?.collections.experiences ?? []).map((entry) => ({
+  // A job's labels and fly-by come from its skill uses, each a link into the
+  // master list drawn by the record's name, and each shown only where its
+  // surfaces say (Admin -> Experience -> Skills used). The fly-by pool is the
+  // prose memories plus the uses ticked for it, drawn in the use's style. A
+  // release from before the master list has no uses and shows its typed labels.
+  const jobs = useMemo<SceneJob[]>(() => {
+    const nameBySlug = new Map((release?.collections.technologies ?? []).map((record) => [record.slug, record.name]));
+    const asMemoryType = (style?: string) => (style === "code" ? "code" : style === "handwritten" ? "memory" : "tech");
+    return (release?.collections.experiences ?? []).map((entry) => {
+      const uses = (entry.skillsUsed ?? [])
+        .map((use) => ({ ...use, name: nameBySlug.get(use.technologySlug) }))
+        .filter((use): use is typeof use & { name: string } => Boolean(use.name));
+      const labels = uses.filter((use) => use.surfaces.includes("moonLabel")).map((use) => use.name);
+      const flyBy = uses
+        .filter((use) => use.surfaces.includes("flyBy"))
+        .map((use) => ({ type: asMemoryType(use.style), text: use.name }));
+      const prose = entry.jobMemories.map((memory) => ({ type: asMemoryType(memory.style), text: memory.text }));
+      return {
         slug: entry.slug,
         company: entry.company,
         location: entry.location,
@@ -64,11 +80,17 @@ export function ShowcaseLayout() {
         endDate: entry.endDate,
         droneIntroText: entry.droneIntroText,
         positions: entry.positions,
-        memories: entry.jobMemories,
-        tech: entry.jobTech.map((tech) => tech.label),
-      })),
-    [release],
-  );
+        memories: [...prose, ...flyBy],
+        tech: labels,
+      };
+    });
+  }, [release]);
+  // The film's timeline, for its preview on the home page.
+  const skills = useMemo(() => {
+    if (!release) return { places: [], spans: [], lineOf: new Map(), lineNames: new Map(), rolled: new Set<string>() };
+    const { places, spans, lineOf, lineNames, rolled } = skillsDataFromRelease(release);
+    return { places, spans, lineOf, lineNames, rolled };
+  }, [release]);
   const { pathname } = useLocation();
   // Only the index lets the scene take the wheel; project pages scroll.
   const onIndex = pathname === "/";
@@ -106,6 +128,7 @@ export function ShowcaseLayout() {
             portfolio={portfolio}
             profile={release?.profile}
             jobs={jobs}
+            skills={skills}
             interactive={onIndex && !cinematicStill}
             paused={onCinematic || onFilm || cinematicStill}
             showPanel={!pathname.startsWith("/portfolio/") && !onFilm}

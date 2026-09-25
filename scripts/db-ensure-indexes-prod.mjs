@@ -9,9 +9,9 @@ import { productionMongo } from "./lib/production.mjs";
 const { uri, dbName, host } = productionMongo("db:ensure-indexes-prod");
 
 const collections = [
-  "education", "certifications", "links", "skillCategories", "skills", "experiences",
+  "education", "certifications", "links", "technologies", "experiences",
   "portfolioCores", "portfolioEntries", "moonPortfolioMappings", "aboutDeckSlides", "pathTravelMessages",
-  "guidedTours", "cosmosPlanets", "techStackNodes",
+  "guidedTours", "cosmosPlanets",
 ];
 
 const script = `

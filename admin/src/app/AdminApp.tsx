@@ -12,6 +12,7 @@ import { ExperienceDetailPage } from "../pages/ExperienceDetailPage";
 import { ExperiencesPage } from "../pages/ExperiencesPage";
 import { LoginPage } from "../pages/LoginPage";
 import { ProfilePage } from "../pages/ProfilePage";
+import { ResumeSkillsPage } from "../pages/ResumeSkillsPage";
 import { ReleasesPage } from "../pages/ReleasesPage";
 import { MediaDetailPage } from "../pages/MediaDetailPage";
 import { MediaPage } from "../pages/MediaPage";
@@ -20,7 +21,8 @@ import { PortfolioCoresPage } from "../pages/PortfolioCoresPage";
 import { PortfolioEntriesPage } from "../pages/PortfolioEntriesPage";
 import { PortfolioEntryEditPage } from "../pages/PortfolioEntryEditPage";
 import { PathMessageEditPage } from "../pages/PathMessageEditPage";
-import { TechStackPage } from "../pages/TechStackPage";
+import { TaggingPage } from "../pages/TaggingPage";
+import { TechnologiesPage } from "../pages/TechnologiesPage";
 
 export function AdminApp() {
   // Admin data is never persisted to localStorage and never served stale: an
@@ -60,15 +62,18 @@ export function AdminApp() {
             <Route path="experiences" element={<ExperiencesPage />} />
             <Route path="experiences/:slug" element={<ExperienceDetailPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="resumeSkills" element={<ResumeSkillsPage />} />
             <Route path="releases" element={<ReleasesPage />} />
             <Route path="media" element={<MediaPage />} />
             <Route path="media/:id" element={<MediaDetailPage />} />
             <Route path="portfolioEntries" element={<PortfolioEntriesPage />} />
+            {/* Before the :slug route, or "tagging" would be read as a project. */}
+            <Route path="portfolioEntries/tagging" element={<TaggingPage />} />
             <Route path="portfolioEntries/:slug" element={<PortfolioEntryEditPage />} />
             <Route path="portfolioCores" element={<PortfolioCoresPage />} />
             <Route path="portfolioCores/:slug" element={<PortfolioCoreEditPage />} />
             <Route path="pathTravelMessages/:slug" element={<PathMessageEditPage />} />
-            <Route path="techStackNodes" element={<TechStackPage />} />
+            <Route path="technologies" element={<TechnologiesPage />} />
             {/* Config-driven sections; keyed so switching entity resets grid state. */}
             {ENTITY_DEFINITIONS.flatMap((definition) => [
               ...(definition.customList

@@ -129,6 +129,7 @@ export function MediaPage() {
 
       <div className="admin-grid-wrap">
         <EntityGrid
+          gridId="media"
           rows={list.data?.items}
           total={list.data?.total}
           mode="server"

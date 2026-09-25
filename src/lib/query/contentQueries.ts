@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchSiteContent } from "../api/contentV2";
-import { buildTechStackTree, techStackTreeFromSkills } from "@hd/content-schema/tech-stack-tree";
+import { latticeTree } from "@hd/content-schema/technology-tree";
 import type { Release } from "../api/release";
 import { spaceContentFromRelease } from "../../components/cosmos/spaceContent";
 import { portfolioItemsFromRelease } from "../../features/fast/lib/portfolioTransform";
@@ -25,23 +25,12 @@ export const releaseQuery = {
   networkMode: "always" as const,
 };
 
-// Releases published before the tech stack existed have no nodes; the tree is
-// then two levels, built from the skill categories and their skills.
-const techStackFromRelease = (release: Release) => {
-  const { techStackNodes, skillCategories, skills } = release.collections;
-  const payload =
-    techStackNodes.length > 0
-      ? buildTechStackTree(techStackNodes)
-      : techStackTreeFromSkills(
-          Object.fromEntries(
-            skillCategories.map((category) => [
-              category.name,
-              skills.filter((skill) => skill.categorySlug === category.slug).map((skill) => skill.name),
-            ]),
-          ),
-        );
-  return { payload, source: "api" as const };
-};
+
+// The Skills lattice, from the master list's lattice ticks.
+const techStackFromRelease = (release: Release) => ({
+  payload: latticeTree(release.collections.technologies),
+  source: "api" as const,
+});
 
 /** Nested tech stack for the D3 skills graph (and the portfolio site redesign). */
 export function useTechStackQuery() {

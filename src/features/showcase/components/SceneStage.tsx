@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
-import { EMPTY_PORTFOLIO, type SceneJob, type ScenePortfolio, type ShowcaseScene } from "../scenes/types";
+import { EMPTY_PORTFOLIO, type SceneData, type SceneJob, type ScenePortfolio, type ShowcaseScene } from "../scenes/types";
 
 interface SceneStageProps {
   projects: ShowcaseProject[];
@@ -12,6 +12,7 @@ interface SceneStageProps {
   portfolio: ScenePortfolio | undefined;
   profile: { name: string; title: string } | undefined;
   jobs: SceneJob[];
+  skills: SceneData["skills"];
   /** Project whose preview is open on the page. */
   focusProjectId: string | null;
   /** True where the wheel and drag over empty space control the scene (the index). */
@@ -90,7 +91,7 @@ const readTourPreference = () => {
  * Fragments of the cinematic universe behind the portfolio: one renderer, one
  * visible scene at a time, glitch transitions, a switcher and an auto-tour.
  */
-export function SceneStage({ projects, techStack, highlights, portfolio, profile, jobs, focusProjectId, interactive, paused, showPanel, onShowing }: SceneStageProps) {
+export function SceneStage({ projects, techStack, highlights, portfolio, profile, jobs, skills, focusProjectId, interactive, paused, showPanel, onShowing }: SceneStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   // Already loaded and in memory: going back is instant, and the link says so.
   const [statuses, setStatuses] = useState<Record<string, SceneStatus>>(() =>
@@ -122,9 +123,9 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   });
 
   const hasData = projects.length > 0 && techStack !== undefined && portfolio !== undefined;
-  const dataRef = useRef({ profile: profile ?? { name: "", title: "" }, projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs });
+  const dataRef = useRef({ profile: profile ?? { name: "", title: "" }, projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs, skills });
   useLayoutEffect(() => {
-    dataRef.current = { profile: profile ?? { name: "", title: "" }, projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs };
+    dataRef.current = { profile: profile ?? { name: "", title: "" }, projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs, skills };
   });
 
   const switchTo = useCallback((id: string) => {

@@ -8,6 +8,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { FormField } from "../components/FormField";
 import { ListEditor } from "../components/ListEditor";
 import { MediaPicker } from "../components/MediaPicker";
+import { TechnologyPicker } from "../components/TechnologyPicker";
 import { useStatus } from "../lib/status";
 import { suggestSlug } from "../entities/definitions";
 import { fieldLabel } from "../lib/validationMessages";
@@ -37,16 +38,13 @@ const EMPTY: PortfolioEntry = {
   title: "",
   mediaId: "",
   description: "",
-  technologies: [],
+  technologySlugs: [],
   year: null,
   fit: "cover",
   galleryMedia: [],
   clientVariants: [],
 };
 
-const toCommaList = (values: string[]) => values.join(", ");
-const fromCommaList = (text: string) => text.split(",").map((value) => value.trimStart());
-const clean = (values: string[]) => values.map((value) => value.trim()).filter(Boolean);
 
 /**
  * Gallery images only need an image: the slug is generated, and a blank title
@@ -78,7 +76,6 @@ const normalise = (draft: PortfolioEntry): PortfolioEntry => ({
   slug: draft.slug.trim(),
   title: draft.title.trim(),
   description: draft.description.trim(),
-  technologies: clean(draft.technologies),
   galleryMedia: trimGallery(draft.galleryMedia, draft),
   clientVariants: draft.clientVariants.map((variant) => {
     const slug = variant.slug.trim() || suggestSlug(variant.title);
@@ -87,7 +84,6 @@ const normalise = (draft: PortfolioEntry): PortfolioEntry => ({
       slug,
       title: variant.title.trim(),
       description: variant.description.trim(),
-      technologies: clean(variant.technologies),
       galleryMedia: trimGallery(variant.galleryMedia, { ...variant, slug }),
     };
   }),
@@ -154,7 +150,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
   const status = useStatus();
 
   const [draft, setDraft] = useState<PortfolioEntry>(initial);
-  const [version, setVersion] = useState(initialVersion);
+  const [version] = useState(initialVersion);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [slugTouched, setSlugTouched] = useState(!isNew);
 
@@ -190,8 +186,8 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
     if (isNew) {
       create.mutate(content, {
         onSuccess: (record) => {
-          status.success("Created project. Publish to show it on the sites.");
-          navigate(`/portfolioEntries/${record.slug}`, { replace: true });
+          status.success(`Created project "${record.title}". Publish to show it on the sites.`);
+          navigate("/portfolioEntries");
         },
         onError: handleError,
       });
@@ -202,10 +198,8 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
       { slug: initial.slug, content, version },
       {
         onSuccess: (record) => {
-          status.success(`Saved (version ${record.version}). Publish to show changes on the sites.`);
-          setVersion(record.version);
-          setDraft(withoutMeta(record));
-          if (record.slug !== initial.slug) navigate(`/portfolioEntries/${record.slug}`, { replace: true });
+          status.success(`Saved project "${record.title}". Publish to show changes on the sites.`);
+          navigate("/portfolioEntries");
         },
         onError: handleError,
       },
@@ -315,11 +309,11 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
             input={(e: { value: string }) => set("description", e.value)}
           />
         </FormField>
-        <FormField label="Technologies" hint="Comma-separated" error={fieldErrors.technologies}>
-          <TextBoxComponent
-            value={toCommaList(draft.technologies)}
-            input={(e: { value: string }) => set("technologies", fromCommaList(e.value))}
-          />
+        <FormField
+          label="Technologies"
+          error={fieldErrors.technologySlugs}
+        >
+          <TechnologyPicker value={draft.technologySlugs} onChange={(slugs) => set("technologySlugs", slugs)} />
         </FormField>
         <FormField label="Year" hint="Leave empty if unknown" error={fieldErrors.year}>
           <NumericTextBoxComponent
@@ -390,7 +384,7 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
           title: "",
           mediaId: "",
           description: "",
-          technologies: [],
+          technologySlugs: [],
           year: null,
           fit: "cover",
           galleryMedia: [],
@@ -416,10 +410,14 @@ function EntryEditor({ initial, initialVersion, updatedBy, isNew }: EditorProps)
                 input={(e: { value: string }) => updateItem({ ...item, description: e.value })}
               />
             </FormField>
-            <FormField label="Technologies" hint="Comma-separated" error={itemError("clientVariants", index, "technologies")}>
-              <TextBoxComponent
-                value={toCommaList(item.technologies)}
-                input={(e: { value: string }) => updateItem({ ...item, technologies: fromCommaList(e.value) })}
+            <FormField
+              label="Technologies"
+              hint="A client site is tagged on its own; it never borrows the project's tags."
+              error={itemError("clientVariants", index, "technologySlugs")}
+            >
+              <TechnologyPicker
+                value={item.technologySlugs ?? []}
+                onChange={(slugs) => updateItem({ ...item, technologySlugs: slugs })}
               />
             </FormField>
             <FormField label="Year" error={itemError("clientVariants", index, "year")}>
