@@ -563,6 +563,7 @@ years → film reads the release → remove the old screens and collections.
 - 2026-09-22: draft 5 (p): six scenarios settled ahead of the build (D25), and the film reconciliation named as the one piece still unplanned. "Data centre" corrected to "Data center".
 - 2026-09-22: draft 5 (o): the filter row loses its ten-item cap (D24); the tick is the only control, and the most-used-first order stays.
 - 2026-09-22: draft 5 (n): D23 corrects D20 - a filter list is not a tag list, so the home chips and the Portfolio drop-down get fine control after all.
+- 2026-09-25: shipped: the working database was pushed to production (backups prod-…T13-41-44 and local-…T13-41-50 kept), the three retired collections dropped there, and main deployed (API + admin to Azure, site to GoDaddy); verified on harmadavtian.com and api.harmadavtian.com.
 - 2026-09-25: draft 13: the resume downloads as Word, PDF and text from the release (D34).
 - 2026-09-24: draft 12: the closing screen's lines are chosen on the ordering page (D33).
 - 2026-09-24: draft 11: the old job and project fields go, memory type becomes style (D32).
