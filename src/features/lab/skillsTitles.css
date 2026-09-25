@@ -772,17 +772,35 @@
 /* Where we are, and the way on or back. Sits to the right of the skill
    progress panel, and above it in stacking, so its buttons are never under
    the panel. */
+/* At a stop: the place, its years and role, and the way on or back. On the
+   right, off the build, over a warm ground of embers so the eye finds it
+   while the text stays legible on a dark plate. */
 .titles__now {
   position: absolute;
-  left: calc(clamp(18px, 3.4vw, 50px) + min(560px, 48vw) + 28px);
+  right: clamp(18px, 3.4vw, 50px);
   bottom: clamp(84px, 14vh, 128px);
   z-index: 7;
-  max-width: min(560px, 60vw);
+  width: min(400px, 36vw);
+  padding: 22px 24px 20px;
+  overflow: hidden;
+  border: 1px solid rgba(217, 164, 65, 0.28);
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(226, 118, 32, 0.28), transparent 62%),
+    rgba(10, 6, 3, 0.78);
+  box-shadow: 0 0 40px rgba(226, 118, 32, 0.18), 0 8px 40px rgba(0, 0, 0, 0.6);
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.6s ease, transform 0.6s ease;
   pointer-events: none;
   text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9);
+}
+
+.titles__now .tally__embers {
+  opacity: 0.9;
+}
+
+.titles__now-inner {
+  position: relative;
 }
 
 .titles__now.is-on {
@@ -793,7 +811,7 @@
 .titles__now-name {
   margin: 0;
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: clamp(1.7rem, 3.4vw, 3rem);
+  font-size: clamp(1rem, 2vw, 1.8rem);
   font-weight: 700;
   line-height: 1.05;
   letter-spacing: 0.1em;
@@ -948,8 +966,5 @@
   }
   .tally {
     --tally-columns: minmax(0, 160px) minmax(120px, 1fr) 58px;
-  }
-  .titles__now {
-    left: calc(clamp(18px, 3.4vw, 50px) + min(420px, 40vw) + 28px);
   }
 }
