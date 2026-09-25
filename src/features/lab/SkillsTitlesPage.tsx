@@ -1732,8 +1732,13 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
 
       <section
         className="titles__finale"
-        style={{ opacity: ending, pointerEvents: ending > 0.6 ? "auto" : "none" }}
-        aria-hidden={ending < 0.5}
+        style={{
+          // Shown at the end, and at the very start while the film waits to be
+          // played: the burning button is the way in.
+          opacity: progress <= 0 && !playing ? 1 : ending,
+          pointerEvents: (progress <= 0 && !playing) || ending > 0.6 ? "auto" : "none",
+        }}
+        aria-hidden={!((progress <= 0 && !playing) || ending >= 0.5)}
       >
         <p className="titles__finale-since">Since {since}</p>
         <p className="titles__finale-craft">One craft</p>
@@ -1768,7 +1773,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           Next): say so, in the middle, where it can't be missed. The very
           beginning counts — a film sitting at frame one, stopped, is the case a
           visitor is most likely to mistake for a broken page. */}
-      {(!playing && !holding && progress < 1) || stalled ? (
+      {(!playing && !holding && progress > 0 && progress < 1) || stalled ? (
         <button
           type="button"
           className="titles__resume"
@@ -1781,18 +1786,18 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           }}
         >
           <span className="titles__resume-mark" aria-hidden="true">▶</span>
-          {progress <= 0 ? "Start" : stalled ? "Play" : "Resume"}
+          {stalled ? "Play" : "Resume"}
         </button>
       ) : null}
       <div className="titles__scrub">
         <button
           type="button"
-          className={`titles__play${playing ? " is-on" : ""}${inviting ? " is-inviting" : ""}`}
+          className={`titles__play${playing ? " is-on" : ""}`}
           onClick={() => {
             // One button that does the sensible thing: replay at the end, pause
             // on the move, on to the next place from a stop, otherwise play.
-            if (progress >= 1) replay();
-            else if (playing) setPlaying(false);
+            if (playing) setPlaying(false);
+            else if (progress >= 1 || progress <= 0) replay();
             else if (holding) goNext();
             else {
               setDirection(1);
@@ -1800,7 +1805,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
             }
           }}
         >
-          {progress >= 1 ? "Play from the start ▶" : playing ? "Pause" : "Play ▶"}
+          {playing ? "Pause" : progress >= 1 || progress <= 0 ? "Play from the start ▶" : "Play ▶"}
         </button>
         <div className="titles__track">
           <input
