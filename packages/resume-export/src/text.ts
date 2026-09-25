@@ -43,7 +43,7 @@ export function resumeText(model: ResumeModel): string {
 
   if (model.links.length > 0) {
     section("Links");
-    for (const link of model.links) lines.push(`${link.title}: ${link.url}`);
+    for (const link of model.links) lines.push(`- ${link.title}: ${link.url}`);
   }
 
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";

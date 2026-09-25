@@ -92,7 +92,7 @@ export function resumeDocument(model: ResumeModel): Document {
     children.push(sectionHeading("Links"));
     for (const link of model.links) {
       children.push(
-        paragraph([
+        bullet([
           run(`${link.title}: `),
           new ExternalHyperlink({
             link: link.url,

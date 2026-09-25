@@ -159,15 +159,16 @@ export async function resumePdf(model: ResumeModel): Promise<Uint8Array> {
       const size = BODY;
       const lineHeight = size * LEADING;
       ensure(writer, lineHeight);
-      writer.page.drawText(lead, { x: MARGIN, y: writer.y - size, size, font: writer.regular, color: INK });
+      writer.page.drawText("•", { x: MARGIN + 4, y: writer.y - size, size, font: writer.regular, color: INK });
+      writer.page.drawText(lead, { x: MARGIN + BULLET_INDENT, y: writer.y - size, size, font: writer.regular, color: INK });
       writer.page.drawText(link.url, {
-        x: MARGIN + writer.regular.widthOfTextAtSize(lead, size),
+        x: MARGIN + BULLET_INDENT + writer.regular.widthOfTextAtSize(lead, size),
         y: writer.y - size,
         size,
         font: writer.regular,
         color: LINK,
       });
-      writer.y -= lineHeight + 2;
+      writer.y -= lineHeight + 1;
     }
   }
 
