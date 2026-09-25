@@ -19906,84 +19906,10 @@ export default function ResumeSpace3D({
         }
         default:
           // Handle tour actions
+          // Guided tours are retired (see memory: todo-remove-guided-tours);
+          // a "tour:" target does nothing until the code is removed outright.
           if (target.startsWith("tour:")) {
-            const tourType = target.replace("tour:", "");
-            vlog(`🚀 Tour request from navigation: ${tourType}`);
-
-            if (tourBuilderRef.current && tourGuideRef.current) {
-              let tour;
-              switch (tourType) {
-                case "career-journey":
-                  tour = tourBuilderRef.current.createCareerJourneyTour();
-                  break;
-                case "technical-deep-dive":
-                  tour = tourBuilderRef.current.createTechnicalDeepDiveTour();
-                  break;
-                case "leadership-story":
-                  tour = tourBuilderRef.current.createLeadershipStoryTour();
-                  break;
-              }
-
-              if (tour) {
-                vlog(
-                  `✅ Starting tour: ${tour.title} with ${tour.waypoints.length} waypoints`,
-                );
-                // Resolve any experience-moon waypoint positions to live moon world positions
-                const resolvedWaypoints = tour.waypoints.map((wp) => {
-                  try {
-                    if (wp.id && wp.id.startsWith("experience-moon-")) {
-                      const candidate =
-                        (wp.content && (wp.content as any).title) || wp.name;
-                      let moonMesh: THREE.Mesh | undefined;
-                      sceneRef.current.scene?.traverse((object) => {
-                        if (
-                          object instanceof THREE.Mesh &&
-                          object.userData.planetName
-                        ) {
-                          const pname = (
-                            object.userData.planetName || ""
-                          ).toLowerCase();
-                          if (
-                            candidate &&
-                            pname.includes(
-                              (candidate || "").toLowerCase().split(" ")[0],
-                            )
-                          ) {
-                            moonMesh = object as THREE.Mesh;
-                          }
-                        }
-                      });
-
-                      if (moonMesh) {
-                        const worldPos = new THREE.Vector3();
-                        moonMesh.getWorldPosition(worldPos);
-                        const offset = new THREE.Vector3(80, 40, 60);
-                        return {
-                          ...wp,
-                          target: {
-                            ...wp.target,
-                            lookAt: worldPos.clone(),
-                            position: worldPos.clone().add(offset),
-                          },
-                        } as typeof wp;
-                      }
-                    }
-                  } catch (e) {
-                    vlog("⚠️ Error resolving waypoint to mesh");
-                  }
-                  return wp;
-                });
-
-                setTourActive(true);
-                setOverlayContent(null);
-                setContentLoading(false);
-                tourGuideRef.current.startTour(resolvedWaypoints);
-              } else {
-                vlog(`❌ Failed to create tour`);
-              }
-            } else {
-              vlog(`❌ Tour system not initialized`);
-            }
+            vlog(`Guided tours are retired; ignoring ${target}`);
           }
           // Handle experience company specific navigation
           else if (target.startsWith("experience-")) {
@@ -25542,92 +25468,9 @@ export default function ResumeSpace3D({
               vlog(`🎬 Content action received: ${action}`);
 
               // Handle different actions
+              // Guided tours are retired; a "tour:" action does nothing.
               if (action.startsWith("tour:")) {
-                const tourType = action.replace("tour:", "");
-                vlog(`🔍 Tour type: ${tourType}`);
-                vlog(`📦 tourBuilderRef exists: ${!!tourBuilderRef.current}`);
-                vlog(`📦 tourGuideRef exists: ${!!tourGuideRef.current}`);
-
-                if (tourBuilderRef.current && tourGuideRef.current) {
-                  vlog(`🚀 Starting ${tourType} tour...`);
-                  let tour;
-                  switch (tourType) {
-                    case "career-journey":
-                      tour = tourBuilderRef.current.createCareerJourneyTour();
-                      vlog(
-                        `📋 Tour created with ${tour?.waypoints.length || 0} waypoints`,
-                      );
-                      break;
-                    case "technical-deep-dive":
-                      tour =
-                        tourBuilderRef.current.createTechnicalDeepDiveTour();
-                      break;
-                    case "leadership-story":
-                      tour = tourBuilderRef.current.createLeadershipStoryTour();
-                      break;
-                  }
-
-                  if (tour) {
-                    vlog(`✅ Tour object valid, starting...`);
-                    // Resolve experience-moon targets to live world positions
-                    const resolvedWaypoints = tour.waypoints.map((wp) => {
-                      try {
-                        if (wp.id && wp.id.startsWith("experience-moon-")) {
-                          const candidate =
-                            (wp.content && (wp.content as any).title) ||
-                            wp.name;
-                          let moonMesh: THREE.Mesh | undefined;
-                          sceneRef.current.scene?.traverse((object) => {
-                            if (
-                              object instanceof THREE.Mesh &&
-                              object.userData.planetName
-                            ) {
-                              const pname = (
-                                object.userData.planetName || ""
-                              ).toLowerCase();
-                              if (
-                                candidate &&
-                                pname.includes(
-                                  (candidate || "").toLowerCase().split(" ")[0],
-                                )
-                              ) {
-                                moonMesh = object as THREE.Mesh;
-                              }
-                            }
-                          });
-                          if (moonMesh) {
-                            const worldPos = new THREE.Vector3();
-                            moonMesh.getWorldPosition(worldPos);
-                            const offset = new THREE.Vector3(80, 40, 60);
-                            return {
-                              ...wp,
-                              target: {
-                                ...wp.target,
-                                lookAt: worldPos.clone(),
-                                position: worldPos.clone().add(offset),
-                              },
-                            } as typeof wp;
-                          }
-                        }
-                      } catch (e) {
-                        vlog("⚠️ Error resolving waypoint to mesh");
-                      }
-                      return wp;
-                    });
-
-                    setTourActive(true);
-                    setOverlayContent(null);
-                    setContentLoading(false);
-                    tourGuideRef.current.startTour(resolvedWaypoints);
-                    vlog(
-                      `✨ Tour started: ${tour.title} (${tour.waypoints.length} waypoints)`,
-                    );
-                  } else {
-                    vlog(`❌ Tour object is null or undefined`);
-                  }
-                } else {
-                  vlog(`❌ Tour refs not initialized`);
-                }
+                vlog(`Guided tours are retired; ignoring ${action}`);
               } else if (action.startsWith("navigate:")) {
                 const target = action.replace("navigate:", "");
                 if (cameraDirectorRef.current) {
