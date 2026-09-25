@@ -478,6 +478,9 @@
 
 /* The message: years of experience so far, lit from underneath. */
 .tally {
+  /* The three columns, in px so the line (11px type) and its opened skills
+     (10px type) resolve to the same widths: em would differ. */
+  --tally-columns: minmax(0, 192px) minmax(180px, 1fr) 58px;
   position: absolute;
   top: clamp(118px, 19vh, 176px);
   bottom: clamp(74px, 12vh, 110px);
@@ -544,7 +547,7 @@
    skills list runs under all three. */
 .tally__row {
   display: grid;
-  grid-template-columns: minmax(0, 14em) minmax(180px, 1fr) 4.5em;
+  grid-template-columns: var(--tally-columns);
   align-items: center;
   column-gap: 10px;
 }
@@ -648,7 +651,7 @@
 
 .tally__skills li {
   display: grid;
-  grid-template-columns: minmax(0, 14em) minmax(180px, 1fr) 4.5em;
+  grid-template-columns: var(--tally-columns);
   align-items: center;
   column-gap: 10px;
 }
@@ -913,9 +916,8 @@
   .tally {
     width: min(420px, 40vw);
   }
-  .tally__row,
-  .tally__skills li {
-    grid-template-columns: minmax(0, 12em) minmax(120px, 1fr) 4.5em;
+  .tally {
+    --tally-columns: minmax(0, 160px) minmax(120px, 1fr) 58px;
   }
   .titles__now {
     left: calc(clamp(18px, 3.4vw, 50px) + min(420px, 40vw) + 28px);
