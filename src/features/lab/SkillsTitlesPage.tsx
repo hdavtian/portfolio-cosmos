@@ -1498,7 +1498,29 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   };
 
   /** From the top. */
+  // Until the film has been watched once (remembered in this browser), the
+  // "Play from the start" buttons breathe, so a first visitor is invited to
+  // press one; after that they sit still.
+  const WATCHED_KEY = "got-film-watched";
+  const [watched, setWatched] = useState(() => {
+    try {
+      return window.localStorage.getItem(WATCHED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const markWatched = () => {
+    setWatched(true);
+    try {
+      window.localStorage.setItem(WATCHED_KEY, "1");
+    } catch {
+      /* private mode: the buttons breathe again next visit, no harm */
+    }
+  };
+  const inviting = !watched && progress >= 1;
+
   const replay = () => {
+    markWatched();
     snapRef.current = true;
     setHolding(false);
     setDirection(1);
@@ -1733,7 +1755,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         </ul>
         ) : null}
         <p className="titles__finale-links">
-          <button type="button" onClick={replay}>
+          <button type="button" className={inviting ? "is-inviting" : undefined} onClick={replay}>
             Play from the start
           </button>
           <Link to="/resume">Read résumé</Link>
@@ -1764,7 +1786,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
       <div className="titles__scrub">
         <button
           type="button"
-          className={`titles__play${playing ? " is-on" : ""}`}
+          className={`titles__play${playing ? " is-on" : ""}${inviting ? " is-inviting" : ""}`}
           onClick={() => {
             // One button that does the sensible thing: replay at the end, pause
             // on the move, on to the next place from a stop, otherwise play.
