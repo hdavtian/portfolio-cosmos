@@ -2764,3 +2764,48 @@ html.is-cinematic-ready .film-host {
     transition: none;
   }
 }
+
+/* The download page: one block per format, the button first, a line on what it is for. */
+.showcase-resume__downloads {
+  display: grid;
+  gap: 22px;
+  max-width: 620px;
+  margin-top: 8px;
+}
+
+.showcase-resume__download p {
+  margin: 8px 0 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  opacity: 0.78;
+}
+
+.showcase-resume__download-button {
+  font: inherit;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 10px 18px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.showcase-resume__download-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.showcase-resume__download-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.showcase-resume__download-error {
+  color: #ff9a8a;
+}
+
+.showcase-resume__download-link {
+  margin-left: auto;
+}

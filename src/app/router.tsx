@@ -44,6 +44,11 @@ const SkillsLabPage = lazy(() =>
     default: module.SkillsLabPage,
   })),
 );
+const ShowcaseResumeDownloadPage = lazy(() =>
+  import("../features/showcase/pages/ShowcaseResumeDownloadPage").then((module) => ({
+    default: module.ShowcaseResumeDownloadPage,
+  })),
+);
 const ShowcaseResumePage = lazy(() =>
   import("../features/showcase/pages/ShowcaseResumePage").then((module) => ({
     default: module.ShowcaseResumePage,
@@ -63,6 +68,7 @@ const routes: RouteObject[] = [
         children: [
           { index: true, element: <LazyRoute><ShowcaseIndexPage /></LazyRoute> },
           { path: "resume", element: <LazyRoute><ShowcaseResumePage /></LazyRoute> },
+          { path: "resume/download", element: <LazyRoute><ShowcaseResumeDownloadPage /></LazyRoute> },
           // The skills film, under the site nav; FilmHost in the layout can keep it alive.
           { path: "lab/got", element: null },
           // Rendered by CinematicHost in RootLayout, which can keep it alive.

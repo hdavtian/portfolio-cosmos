@@ -7,6 +7,7 @@ import { getDb } from "./db.js";
 import { ApiError, asyncHandler, parseOrThrow } from "./http.js";
 import { mediaUrl } from "./mediaStorage.js";
 import { collectMediaIds, ReleaseService, type ReleaseMedia } from "./releaseService.js";
+import { resumeDocx, resumeModel, resumePdf, resumeText } from "@hd/resume-export";
 
 // Public read API for both experiences. Serves the current release only, so a
 // half-finished edit can never reach a visitor. A signed-in admin may ask for
@@ -129,6 +130,35 @@ export function createContentRouter({ cookieSecret }: { cookieSecret: string }):
     asyncHandler(async (req, res) => {
       const { content, media, etag, draft } = await resolveBundle(req);
       send(req, res, etag, draft, { etag, draft, content, media: servedMedia(content, media) });
+    }),
+  );
+
+  // The resume as a file, written from the current release on each request:
+  // a link that always returns the current version.
+  const RESUME_FILES = {
+    docx: { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", write: resumeDocx },
+    pdf: { type: "application/pdf", write: resumePdf },
+    txt: { type: "text/plain; charset=utf-8", write: async (model: ReturnType<typeof resumeModel>) => resumeText(model) },
+  } as const;
+  const resumeFormatSchema = z.enum(["docx", "pdf", "txt"]);
+  router.get(
+    "/resume.:format",
+    asyncHandler(async (req, res) => {
+      const format = parseOrThrow(resumeFormatSchema, req.params.format, "Unknown resume format");
+      const { content, draft } = await resolveBundle(req);
+      const model = resumeModel({
+        profile: content.singletons.profile,
+        resumeSkills: content.singletons.resumeSkills,
+        collections: content.collections,
+      });
+      const file = RESUME_FILES[format];
+      const body = await file.write(model);
+      res.set({
+        "Content-Type": file.type,
+        "Content-Disposition": `attachment; filename="${model.fileStem}.${format}"`,
+        "Cache-Control": draft ? "no-store" : "public, no-cache",
+      });
+      res.send(typeof body === "string" ? body : Buffer.from(new Uint8Array(body)));
     }),
   );
 

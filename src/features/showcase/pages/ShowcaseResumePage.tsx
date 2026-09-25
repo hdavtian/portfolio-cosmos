@@ -93,6 +93,9 @@ export function ShowcaseResumePage() {
           <a href="#resume-experience">Experience</a>
           {education ? <a href="#resume-education">Education</a> : null}
           {certifications?.length ? <a href="#resume-certifications">Certifications</a> : null}
+          <Link to="/resume/download" className="showcase-resume__download-link">
+            Download
+          </Link>
         </nav>
       </header>
 
