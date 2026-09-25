@@ -129,6 +129,12 @@ nobody asked for, silently.
   Plain boolean columns (`displayAsCheckBox`, `editType="booleanedit"`), no
   templates. Do not build live-save checkbox templates: they saved once and
   then stayed disabled, and new template functions per render froze the page.
+- A persisted flat grid drops a `template` column entirely (it never reaches
+  the column chooser). A tick that acts on click is a plain boolean column
+  (`type="boolean" displayAsCheckBox`) handled in `recordClick`, and that
+  handler must be stable (`useCallback` reading state through a ref): the
+  grid keeps the handler it was given at mount, so a fresh closure per render
+  saves with a stale record version and is refused.
 - A persisted flat grid (`enablePersistence`, keyed by `gridId`) keeps its
   saved column set, so a column added later stays hidden for anyone who has
   visited the page. Adding or renaming a column means a new `gridId`

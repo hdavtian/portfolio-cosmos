@@ -1,8 +1,7 @@
 import { resumeSkillLines, type ResumeSkills, type Technology } from "@hd/content-schema";
-import { CheckBoxComponent } from "@syncfusion/ej2-react-buttons";
 import { ColumnDirective } from "@syncfusion/ej2-react-grids";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { EntityGrid } from "../components/EntityGrid";
 import { api, ApiError } from "../lib/apiClient";
@@ -79,22 +78,13 @@ export function ResumeSkillsPage() {
     const next = on ? [...new Set([...current, slug])] : current.filter((entry) => entry !== slug);
     save.mutate({ headingOrder: order.data?.data.headingOrder ?? [], closingLines: next });
   };
-
-  // The template is created once and reads the handler through a ref: a new
-  // template per render makes the grid rebuild every cell and re-render React.
-  const latest = useRef(toggleClosing);
-  latest.current = toggleClosing;
-  const closingTemplate = useMemo(
-    () => (row: { slug: string; closing: boolean }) => (
-      <CheckBoxComponent
-        checked={row.closing}
-        change={(event: { checked: boolean; event?: Event }) => {
-          if (event.event) latest.current(row.slug, event.checked);
-        }}
-      />
-    ),
-    [],
-  );
+  // The grid keeps the click handler it was given at mount, so the handler
+  // is stable and reads the latest state (and record version) through a ref.
+  const latestToggle = useRef(toggleClosing);
+  latestToggle.current = toggleClosing;
+  const onRecordClick = useCallback((args: { rowData?: { slug: string; closing: boolean }; column?: { field?: string } }) => {
+    if (args.column?.field === "closing" && args.rowData) latestToggle.current(args.rowData.slug, !args.rowData.closing);
+  }, []);
 
   if (technologies.isLoading || order.isLoading) return <p className="admin-status">Loading…</p>;
   if (technologies.isError || order.isError) return <p className="admin-error">Could not load the resume skills.</p>;
@@ -119,10 +109,18 @@ export function ResumeSkillsPage() {
         </p>
       ) : (
         <div className="admin-grid-wrap">
-          <EntityGrid gridId="resume-skills-v2" rows={rows} mode="local" onReorder={saveOrder}>
+          {/* The tick is a plain boolean column that acts on click: a template
+              column would be dropped by the grid's layout persistence. */}
+          <EntityGrid
+            gridId="resume-skills-v3"
+            rows={rows}
+            mode="local"
+            onReorder={saveOrder}
+            onRecordClick={onRecordClick}
+          >
             <ColumnDirective field="heading" headerText="Line" width={220} />
             <ColumnDirective field="skills" headerText="Skills, as printed" />
-            <ColumnDirective field="closing" headerText="Closing screen" width={140} textAlign="Center" template={closingTemplate} />
+            <ColumnDirective field="closing" headerText="Closing screen" width={140} type="boolean" displayAsCheckBox textAlign="Center" />
           </EntityGrid>
         </div>
       )}

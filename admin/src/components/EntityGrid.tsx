@@ -41,6 +41,8 @@ interface EntityGridProps<T extends GridRow> {
   onStateChange?: (state: ListState) => void;
   /** Supplied when the entity is manually ordered; receives the full slug order. */
   onReorder?: (slugs: string[]) => void;
+  /** A click on a cell, with its row and column: for tick columns that act on click. */
+  onRecordClick?: (args: { rowData?: T; column?: { field?: string } }) => void;
 }
 
 interface GridDataState {
@@ -76,6 +78,7 @@ export function EntityGrid<T extends GridRow>({
   state,
   onStateChange,
   onReorder,
+  onRecordClick,
 }: EntityGridProps<T>) {
   const gridRef = useRef<GridComponent>(null);
   const isServer = mode === "server";
@@ -192,6 +195,7 @@ export function EntityGrid<T extends GridRow>({
         dataSource={dataSource}
         dataStateChange={isServer ? handleDataStateChange : undefined}
         rowDrop={handleRowDrop}
+        recordClick={onRecordClick}
         allowPaging
         allowSorting
         allowFiltering={!isServer}
