@@ -119,7 +119,7 @@ export function ResumeSkillsPage() {
         </p>
       ) : (
         <div className="admin-grid-wrap">
-          <EntityGrid gridId="resume-skills" rows={rows} mode="local" onReorder={saveOrder}>
+          <EntityGrid gridId="resume-skills-v2" rows={rows} mode="local" onReorder={saveOrder}>
             <ColumnDirective field="heading" headerText="Line" width={220} />
             <ColumnDirective field="skills" headerText="Skills, as printed" />
             <ColumnDirective field="closing" headerText="Closing screen" width={140} textAlign="Center" template={closingTemplate} />

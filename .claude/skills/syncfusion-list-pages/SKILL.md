@@ -129,6 +129,10 @@ nobody asked for, silently.
   Plain boolean columns (`displayAsCheckBox`, `editType="booleanedit"`), no
   templates. Do not build live-save checkbox templates: they saved once and
   then stayed disabled, and new template functions per render froze the page.
+- A persisted flat grid (`enablePersistence`, keyed by `gridId`) keeps its
+  saved column set, so a column added later stays hidden for anyone who has
+  visited the page. Adding or renaming a column means a new `gridId`
+  (`-v2`), never a "click Reset layout" instruction.
 - Long grids: `enableStickyHeader` (Grid and TreeGrid) pins the header and
   toolbar to the viewport. It needs no `overflow: hidden` on any ancestor -
   that makes the ancestor the sticky container; use `overflow: clip` for
