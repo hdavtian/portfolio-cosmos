@@ -1621,6 +1621,10 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
 
       {/* Stopped at a place: where we are, and the way on or back. */}
       <section className={`titles__now${holding ? " is-on" : ""}`} aria-hidden={!holding}>
+        {/* The same embers as behind the skill progress: a warm ground for the
+            panel, on the right, off the build. */}
+        <Embers moving={moving && holding} />
+        <div className="titles__now-inner">
         <h2 className="titles__now-name">{active.name}</h2>
         <p className="titles__now-years">{yearsLabel(active, data.LAST_YEAR)}</p>
         {active.title ? <p className="titles__now-role">{active.title}</p> : null}
@@ -1628,8 +1632,10 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           <button type="button" className="titles__nav-button" onClick={goPrevious} disabled={!holding || isFirstPlace}>
             <span aria-hidden="true">←</span> Previous
           </button>
+          {/* From the last place, the way on is the closing screen: the future
+              is the open question, not another stop. */}
           <button type="button" className="titles__nav-button" onClick={goNext} disabled={!holding}>
-            Next <span aria-hidden="true">→</span>
+            {cityIndex === cities.length - 1 ? "What's next?" : "Next"} <span aria-hidden="true">→</span>
           </button>
         </div>
         <label className="titles__auto">
@@ -1641,6 +1647,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           />
           auto-continue
         </label>
+        </div>
       </section>
 
       {SHOW_CHAPTER_CARD ? (
