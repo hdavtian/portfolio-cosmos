@@ -446,6 +446,30 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   useEffect(() => {
     holdingRef.current = holding;
   }, [holding]);
+  // Shift held: a drag pans the view instead of turning it.
+  const [shifted, setShifted] = useState(false);
+  const shiftedRef = useRef(false);
+  useEffect(() => {
+    const set = (on: boolean) => {
+      shiftedRef.current = on;
+      setShifted(on);
+    };
+    const down = (event: KeyboardEvent) => {
+      if (event.key === "Shift") set(true);
+    };
+    const up = (event: KeyboardEvent) => {
+      if (event.key === "Shift") set(false);
+    };
+    const drop = () => set(false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", drop);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", drop);
+    };
+  }, []);
   // Nothing on screen moves unless the scrubber does.
   const [moving, setMoving] = useState(false);
 
@@ -1262,10 +1286,23 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           controls.maxDistance = reach * 2.4;
           controls.minPolarAngle = 0.35;
           controls.maxPolarAngle = 1.42;
-          controls.mouseButtons.left = CameraControls.ACTION.ROTATE;
+          // Panning may look round the place, never leave it or go under the
+          // ground: the aim is kept in a box round the construct, and the
+          // camera can only stand above the aim, so neither goes below the map.
+          const stop = placed.reduce((best, entry) =>
+            entry.at.distanceTo(aimNow) < best.at.distanceTo(aimNow) ? entry : best,
+          );
+          const room = Math.max(stop.build.reach, reach * 0.6);
+          controls.setBoundary(
+            new THREE.Box3(
+              new THREE.Vector3(stop.at.x - room, stop.at.y + 6, stop.at.z - room),
+              new THREE.Vector3(stop.at.x + room, stop.at.y + stop.build.top * 1.1, stop.at.z + room),
+            ),
+          );
+          controls.mouseButtons.left = shiftedRef.current ? CameraControls.ACTION.TRUCK : CameraControls.ACTION.ROTATE;
           controls.mouseButtons.wheel = CameraControls.ACTION.DOLLY;
           controls.touches.one = CameraControls.ACTION.TOUCH_ROTATE;
-          controls.touches.two = CameraControls.ACTION.TOUCH_DOLLY;
+          controls.touches.two = CameraControls.ACTION.TOUCH_DOLLY_TRUCK;
           handedOver = true;
         };
         const giveItBack = () => {
@@ -1277,6 +1314,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           controls.maxDistance = Infinity;
           controls.minPolarAngle = 0;
           controls.maxPolarAngle = Math.PI;
+          controls.setBoundary();
         };
         const render = () => {
           if (isFilmSuspended()) {
@@ -1318,9 +1356,12 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           } else if (!handedOver) {
             if (camera.position.distanceTo(eyeNow) < 24) handOver();
           } else if (!touched) {
+            controls.mouseButtons.left = shiftedRef.current ? CameraControls.ACTION.TRUCK : CameraControls.ACTION.ROTATE;
             // Until somebody takes hold of it, it keeps circling slowly.
             controls.rotate(dt * 0.05, 0, true);
           }
+          if (handedOver && touched)
+            controls.mouseButtons.left = shiftedRef.current ? CameraControls.ACTION.TRUCK : CameraControls.ACTION.ROTATE;
           controls.update(dt);
           // Close in, the lens is shallow and the background melts; pulled back
           // over the whole map it stops down so the country stays sharp.
@@ -1624,7 +1665,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   const showCard = SHOW_CHAPTER_CARD && atPlace && built > 0.86;
 
   return (
-    <div className={`titles${holding ? " is-holding" : ""}`} ref={rootRef}>
+    <div className={`titles${holding ? " is-holding" : ""}${shifted ? " is-shift" : ""}`} ref={rootRef}>
       <div className="titles__stage" ref={hostRef} />
       {sceneReady ? null : <FilmLoader caption="Building the map" />}
       <div className="titles__vignette" aria-hidden="true" />
@@ -1683,6 +1724,12 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           />
           auto-continue
         </label>
+        {/* How to look round: the least that reads at a glance. */}
+        <p className="titles__hint" aria-hidden="true">
+          <span className="titles__hint-item"><kbd>drag</kbd> orbit</span>
+          <span className={`titles__hint-item${shifted ? " is-on" : ""}`}><kbd>⇧ drag</kbd> pan</span>
+          <span className="titles__hint-item"><kbd>wheel</kbd> zoom</span>
+        </p>
         </div>
       </section>
 
