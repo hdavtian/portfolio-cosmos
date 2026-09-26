@@ -432,16 +432,26 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   const draggedRef = useRef(false);
   // The bar's width in pixels, so the head can be placed by a transform.
   const trackRef = useRef<HTMLDivElement>(null);
-  const [trackWidth, setTrackWidth] = useState(0);
+  const headRef = useRef<HTMLButtonElement>(null);
+  const trackWidthRef = useRef(0);
   useLayoutEffect(() => {
     const track = trackRef.current;
     if (!track) return;
-    const measure = () => setTrackWidth(track.getBoundingClientRect().width);
+    const measure = () => {
+      trackWidthRef.current = track.getBoundingClientRect().width;
+    };
     measure();
     const watch = new ResizeObserver(measure);
     watch.observe(track);
     return () => watch.disconnect();
   }, []);
+  // Where the head is asked to be, and where it is actually drawn. React is
+  // told where the film is about ten times a second, which is plenty for the
+  // captions but visibly steppy for something sliding along a bar - so the
+  // head reads the film's own value every frame instead, and eases onto it.
+  const headWantRef = useRef(0);
+  const headShownRef = useRef(0);
+  const headDraggingRef = useRef(false);
   // The film opens on its last frame - today's complete picture, every tower
   // up and the tally full - because that is the question a visitor brings.
   // Play then runs the build-up from the first job.
@@ -1783,7 +1793,44 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
       : introEnd + ((bar - START_STRETCH) / (1 - START_STRETCH)) * (1 - introEnd);
   // The film is over and waiting: the head sits at the head of the bar.
   const atStartAgain = progress >= 1 && !playing;
-  const headAt = atStartAgain ? 0 : toBar(progress);
+  // The frame loop below reads only refs, so it is built once and never sees
+  // a stale render: state arriving a frame late would show as a stutter.
+  const playingRef = useRef(false);
+  const toBarRef = useRef(toBar);
+  useEffect(() => {
+    playingRef.current = playing;
+    toBarRef.current = toBar;
+  });
+  useEffect(() => {
+    let frame = 0;
+    let last = performance.now();
+    const place = (now: number) => {
+      frame = requestAnimationFrame(place);
+      const head = headRef.current;
+      const step = Math.min(64, now - last);
+      last = now;
+      if (!head) return;
+      const done = progressRef.current >= 1 && !playingRef.current;
+      // While the film runs the head follows the film's own value, which is
+      // exact every frame; a drag says where it is going itself; and once the
+      // film is over the head wants the head of the bar.
+      const want = headDraggingRef.current
+        ? headWantRef.current
+        : done
+          ? 0
+          : toBarRef.current(progressRef.current);
+      // A drag is followed exactly; everything else is eased onto, which is
+      // what smooths the run and slides the head back at the end.
+      const shown = headDraggingRef.current
+        ? want
+        : headShownRef.current +
+          (want - headShownRef.current) * (1 - Math.exp(-step / 70));
+      headShownRef.current = shown;
+      head.style.transform = `translate3d(${shown * trackWidthRef.current}px, 0, 0)`;
+    };
+    frame = requestAnimationFrame(place);
+    return () => cancelAnimationFrame(frame);
+  }, []);
   // Nothing is happening and nothing else is asking to be pressed: the head
   // burns, the way the play buttons used to.
   const headBurning = !playing && (stalled || !holding);
@@ -2006,15 +2053,8 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
               again from the start. */}
           <button
             type="button"
+            ref={headRef}
             className={`titles__playhead${playing ? " is-playing" : ""}${headBurning ? " is-inviting" : ""}`}
-            style={{
-              // Whole pixels, and a transform rather than a percentage offset,
-              // so the circle and the mark in it are moved as one thing.
-              transform: `translate3d(${Math.round(headAt * trackWidth)}px, 0, 0)`,
-              // It slides back to the start when the film ends; everywhere
-              // else it must sit exactly where the scrubbing hand is.
-              transition: atStartAgain ? "transform 460ms ease" : "none",
-            }}
             aria-label={
               playing ? "Pause" : atStartAgain ? "Play from the start" : "Play"
             }
@@ -2041,6 +2081,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
               // Every fresh press starts clean, so a drag that ended without
               // a click cannot swallow the press after it.
               draggedRef.current = false;
+              headDraggingRef.current = false;
               const head = event.currentTarget;
               const track = head.parentElement as HTMLElement;
               const rect = track.getBoundingClientRect();
@@ -2057,6 +2098,8 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
               const onMove = (move: PointerEvent) => {
                 if (!moved && Math.abs(move.clientX - startX) < 4) return;
                 moved = true;
+                headDraggingRef.current = true;
+                head.classList.add("is-dragging");
                 setPlaying(false);
                 setHolding(false);
                 snapRef.current = true;
@@ -2064,6 +2107,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
                   1,
                   Math.max(0, (move.clientX - rect.left) / rect.width),
                 );
+                headWantRef.current = along;
                 setProgress(fromBar(along));
               };
               const onUp = () => {
@@ -2075,6 +2119,8 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
                 window.removeEventListener("pointermove", onMove, true);
                 window.removeEventListener("pointerup", onUp, true);
                 window.removeEventListener("pointercancel", onUp, true);
+                headDraggingRef.current = false;
+                head.classList.remove("is-dragging");
                 // A press is left to the click that follows; a drag swallows it.
                 draggedRef.current = moved;
               };
