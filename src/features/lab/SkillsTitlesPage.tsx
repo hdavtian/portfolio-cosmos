@@ -1500,30 +1500,11 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   };
 
   /** From the top. */
-  // Until the film has been watched once (remembered in this browser), the
-  // "Play from the start" buttons breathe, so a first visitor is invited to
-  // press one; after that they sit still.
-  const WATCHED_KEY = "got-film-watched";
-  const [watched, setWatched] = useState(() => {
-    try {
-      return window.localStorage.getItem(WATCHED_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
-  const markWatched = () => {
-    setWatched(true);
-    try {
-      window.localStorage.setItem(WATCHED_KEY, "1");
-    } catch {
-      /* private mode: the buttons breathe again next visit, no harm */
-    }
-  };
-  // Invite while the film sits unplayed at its start or its end.
-  const inviting = !watched && (progress >= 1 || progress <= 0) && !playing;
+  // The "Play from the start" button burns whenever the film sits at its
+  // start or its end: it is the way in, every visit.
+  const inviting = (progress >= 1 || progress <= 0) && !playing;
 
   const replay = () => {
-    markWatched();
     snapRef.current = true;
     setHolding(false);
     setDirection(1);
