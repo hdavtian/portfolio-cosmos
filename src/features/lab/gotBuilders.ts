@@ -1127,14 +1127,23 @@ export function makeBuilders(THREE: Three, label: Label) {
     const group = new THREE.Group();
     const sorted = [...towers].sort((a, b) => b.years - a.years);
     // The longest served stand at the centre, the rest fall away to the ends.
-    const ordered: Tower[] = [];
-    sorted.forEach((tower, index) => (index % 2 === 0 ? ordered.push(tower) : ordered.unshift(tower)));
+    const named: Tower[] = [];
+    sorted.forEach((tower, index) => (index % 2 === 0 ? named.push(tower) : named.unshift(tower)));
+    // Blank courses of wall between and beyond the lettered blocks, so the
+    // Wall runs on past what is written on it. A blank block carries no name
+    // and takes its height from its neighbours.
+    const ordered: Array<Tower | null> = [null, null];
+    named.forEach((tower, index) => {
+      ordered.push(tower);
+      if (index % 2 === 1 && index < named.length - 1) ordered.push(null);
+    });
+    ordered.push(null, null);
 
     // A gentle curve: the arc's centre sits far behind, so the wall reads
     // nearly straight with the ends just easing back.
     const RADIUS = 150;
     const WIDTH = 15;
-    const GAP = 1.4;
+    const GAP = 0;
     const DEPTH = 9;
     const step = (WIDTH + GAP) / RADIUS;
     const span = step * Math.max(0, ordered.length - 1);
@@ -1179,20 +1188,31 @@ export function makeBuilders(THREE: Three, label: Label) {
         emissiveIntensity: 0.35,
       });
 
+    const heightOf = (tower: Tower | null, index: number): number => {
+      if (tower) return 44 + shadeFor(tower, tallest) * 40;
+      // A blank block: between its nearest lettered neighbours, a little lower.
+      const left = ordered.slice(0, index).reverse().find((t) => t);
+      const right = ordered.slice(index + 1).find((t) => t);
+      const around = [left, right].filter((t): t is Tower => !!t).map((t) => 44 + shadeFor(t, tallest) * 40);
+      return (around.length ? around.reduce((a, b) => a + b, 0) / around.length : 50) - 6;
+    };
     const blocks = ordered.map((tower, index) => {
-      const height = 44 + shadeFor(tower, tallest) * 40;
-      const faces = icePlaque(tower.name, WIDTH, height);
-      const glowColour = tower.fresh ? NEW_GLOW : "#a6e8ff";
-      // The face (+z) carries the name, cut into the ice and lit from within.
-      const face = new THREE.MeshStandardMaterial({
-        map: faces.ice,
-        roughness: 0.3,
-        metalness: 0.05,
-        emissive: new THREE.Color(glowColour),
-        emissiveMap: faces.glow,
-        emissiveIntensity: 0,
-        color: new THREE.Color("#dff2ff"),
-      });
+      const height = heightOf(tower, index);
+      const faces = tower ? icePlaque(tower.name, WIDTH, height) : null;
+      const glowColour = tower?.fresh ? NEW_GLOW : "#a6e8ff";
+      // The face (+z) carries the name, cut into the ice and lit from within;
+      // a blank block's face is plain ice.
+      const face = faces
+        ? new THREE.MeshStandardMaterial({
+            map: faces.ice,
+            roughness: 0.3,
+            metalness: 0.05,
+            emissive: new THREE.Color(glowColour),
+            emissiveMap: faces.glow,
+            emissiveIntensity: 0,
+            color: new THREE.Color("#dff2ff"),
+          })
+        : iceSide("#d6ecf7", 0.35);
       const materials = [iceSide("#cfe7f3"), iceSide("#cfe7f3"), iceSide("#f4fbff", 0.5), iceSide("#9cc4d8", 0.6), face, iceSide("#b9dcea", 0.5)];
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(WIDTH, height, DEPTH), materials);
       const holder = new THREE.Group();
@@ -1211,7 +1231,7 @@ export function makeBuilders(THREE: Three, label: Label) {
       cap.position.y = height + 0.9;
       holder.add(cap);
       group.add(holder);
-      return { holder, height, face };
+      return { holder, height, face, lettered: !!tower };
     });
     const highest = Math.max(1, ...blocks.map((block) => block.height));
 
@@ -1269,7 +1289,7 @@ export function makeBuilders(THREE: Three, label: Label) {
         blocks.forEach((block, index) => {
           const grown = stage(eased, index + 1, blocks.length + 2);
           block.holder.scale.y = Math.max(0.001, grown);
-          block.face.emissiveIntensity = grown * (1.1 + 0.25 * Math.sin(phase * 1.3 + index));
+          if (block.lettered) block.face.emissiveIntensity = grown * (1.1 + 0.25 * Math.sin(phase * 1.3 + index));
         });
         const lit = stage(eased, blocks.length + 1, blocks.length + 2);
         crown(lit, phase);
