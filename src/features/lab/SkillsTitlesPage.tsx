@@ -361,11 +361,30 @@ export function SkillsTitlesPage() {
   if (!query.data) {
     return (
       <div className="titles titles--loading">
-        <p className="titles__caption">{query.isError ? "The film could not load its timeline. Refresh to try again." : "Loading the timeline…"}</p>
+        <FilmLoader
+          caption={query.isError ? "The film could not load its timeline. Refresh to try again." : "Reading the timeline"}
+          error={query.isError}
+        />
       </div>
     );
   }
   return <SkillsTitlesFilm key={query.data.LAST_YEAR} data={query.data} />;
+}
+
+/**
+ * What shows while the film gets ready - its code, its timeline, then the
+ * map itself (Three.js and the terrain, the longest wait): a dark plate in
+ * the film's own dress, a caption, and a burning line that runs while it
+ * waits. The same plate for every stage, so the wait reads as one thing.
+ */
+export function FilmLoader({ caption, error = false }: { caption: string; error?: boolean }) {
+  return (
+    <div className={`titles__loader${error ? " is-error" : ""}`} role="status" aria-live="polite">
+      <p className="titles__loader-kicker">The working years</p>
+      <p className="titles__loader-caption">{caption}</p>
+      {error ? null : <span className="titles__loader-line" aria-hidden="true" />}
+    </div>
+  );
 }
 
 function SkillsTitlesFilm({ data }: { data: SkillsData }) {
@@ -421,6 +440,8 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   // Skill progress is shown from the first frame, its lines closed; the
   // toggle hides it for anyone who wants the map alone.
   const [panelOpen, setPanelOpen] = useState(true);
+  // The map has drawn its first frame; until then the loader covers the stage.
+  const [sceneReady, setSceneReady] = useState(false);
   useEffect(() => {
     holdingRef.current = holding;
   }, [holding]);
@@ -1364,8 +1385,13 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           labelCamera.far = camera.far;
           labelCamera.updateProjectionMatrix();
           composer.render();
+          if (!firstFrameDrawn) {
+            firstFrameDrawn = true;
+            setSceneReady(true);
+          }
           frame = requestAnimationFrame(render);
         };
+        let firstFrameDrawn = false;
         frame = requestAnimationFrame(render);
 
         cleanup = () => {
@@ -1597,6 +1623,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   return (
     <div className={`titles${holding ? " is-holding" : ""}`} ref={rootRef}>
       <div className="titles__stage" ref={hostRef} />
+      {sceneReady ? null : <FilmLoader caption="Building the map" />}
       <div className="titles__vignette" aria-hidden="true" />
 
       {SHOW_TITLE ? (

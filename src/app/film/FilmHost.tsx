@@ -10,7 +10,15 @@ export const FILM_PATH = "/lab/got";
 
 const Film = lazy(() => import("../../features/lab/SkillsTitlesPage").then((m) => ({ default: m.SkillsTitlesPage })));
 
-const loading = <div className="route-loading">Loading the film…</div>;
+// The film's own loader is in its chunk; until that arrives, the same plate
+// in plain markup (styled by filmHost.css) so the wait reads as one thing.
+const loading = (
+  <div className="film-host__loading" role="status" aria-live="polite">
+    <p className="titles__loader-kicker">The working years</p>
+    <p className="titles__loader-caption">Loading the film</p>
+    <span className="titles__loader-line" aria-hidden="true" />
+  </div>
+);
 
 /**
  * Hosts the skills film inside the portfolio's layout, under its nav. Where
