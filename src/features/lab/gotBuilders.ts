@@ -1033,6 +1033,231 @@ export function makeBuilders(THREE: Three, label: Label) {
       };
     };
 
+  /* ------------------------------------------------------------------ */
+  /* G. The Wall: InvestCloud                                             */
+
+  /**
+   * A curtain of ice, curved like a shield, one block to a skill: the block's
+   * height is the years, its name cut into the face and lit with cold light
+   * (a skill first learned here burns warm instead). Frost drifts off it;
+   * the place's fire and its name stand on the parapet.
+   */
+  const icePlaque = (text: string, width: number, height: number) => {
+    const W = 512;
+    const H = Math.round((W * height) / width);
+    // The name runs up the block, so a tall narrow face carries it large.
+    const fit = (ctx: CanvasRenderingContext2D) => {
+      let size = 150;
+      ctx.font = `700 ${size}px "Cinzel", Georgia, serif`;
+      ctx.letterSpacing = "6px";
+      while (size > 40 && ctx.measureText(text.toUpperCase()).width > H * 0.86) {
+        size -= 6;
+        ctx.font = `700 ${size}px "Cinzel", Georgia, serif`;
+      }
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.translate(W / 2, H / 2);
+      ctx.rotate(-Math.PI / 2);
+    };
+    const make = (paint: (ctx: CanvasRenderingContext2D) => void, srgb: boolean) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d")!;
+      paint(ctx);
+      const texture = new THREE.CanvasTexture(canvas);
+      if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 8;
+      return texture;
+    };
+    return {
+      ice: make((ctx) => {
+        const wash = ctx.createLinearGradient(0, 0, 0, H);
+        wash.addColorStop(0, "#e8f6ff");
+        wash.addColorStop(0.5, "#bfe0f2");
+        wash.addColorStop(1, "#8fbdd6");
+        ctx.fillStyle = wash;
+        ctx.fillRect(0, 0, W, H);
+        // Veins and fractures in the ice.
+        for (let i = 0; i < 40; i += 1) {
+          ctx.strokeStyle = i % 3 === 0 ? "rgba(255,255,255,0.55)" : "rgba(40, 90, 120, 0.28)";
+          ctx.lineWidth = 1 + (i % 2);
+          ctx.beginPath();
+          const x = (i * 131) % W;
+          const y = (i * 71) % H;
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + 40 - (i % 7) * 12, y + 60 + (i % 5) * 18);
+          ctx.lineTo(x + 70 - (i % 5) * 20, y + 130);
+          ctx.stroke();
+        }
+        speckle(ctx, W, 500, "rgba(255,255,255,0.35)", "rgba(30, 70, 100, 0.18)");
+        fit(ctx);
+        ctx.fillStyle = "rgba(14, 40, 62, 0.9)";
+        ctx.fillText(text.toUpperCase(), 0, 4);
+      }, true),
+      glow: make((ctx) => {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, W, H);
+        fit(ctx);
+        ctx.fillStyle = "#fff";
+        ctx.shadowColor = "#fff";
+        ctx.shadowBlur = 10;
+        ctx.fillText(text.toUpperCase(), 0, 4);
+      }, false),
+    };
+  };
+
+  const frostTexture = painted((ctx, size) => {
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, "rgba(255,255,255,0.95)");
+    g.addColorStop(0.4, "rgba(200,235,255,0.5)");
+    g.addColorStop(1, "rgba(200,235,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+  }, 64);
+
+  const wall = (towers: Tower[], tallest: number, _later: Tower[] | undefined, place: Place): Build => {
+    const group = new THREE.Group();
+    const sorted = [...towers].sort((a, b) => b.years - a.years);
+    // The longest served stand at the centre, the rest fall away to the ends.
+    const ordered: Tower[] = [];
+    sorted.forEach((tower, index) => (index % 2 === 0 ? ordered.push(tower) : ordered.unshift(tower)));
+
+    const RADIUS = 62;
+    const WIDTH = 15;
+    const GAP = 1.4;
+    const DEPTH = 9;
+    const step = (WIDTH + GAP) / RADIUS;
+    const span = step * Math.max(0, ordered.length - 1);
+
+    // Ground: a shelf of packed snow the wall stands on.
+    const shelf = new THREE.Mesh(
+      new THREE.CylinderGeometry(RADIUS + 14, RADIUS + 18, 3, 64, 1, false, Math.PI - span / 2 - 0.35, span + 0.7),
+      new THREE.MeshStandardMaterial({ color: "#dfeaf0", roughness: 1, flatShading: true }),
+    );
+    shelf.position.set(0, 1.5, -RADIUS + 12);
+    group.add(shelf);
+
+    const iceSide = (color: string, roughness = 0.32) =>
+      new THREE.MeshStandardMaterial({
+        color,
+        roughness,
+        metalness: 0.05,
+        transparent: true,
+        opacity: 0.92,
+        flatShading: true,
+        emissive: new THREE.Color("#1e5e82"),
+        emissiveIntensity: 0.35,
+      });
+
+    const blocks = ordered.map((tower, index) => {
+      const height = 24 + shadeFor(tower, tallest) * 32;
+      const faces = icePlaque(tower.name, WIDTH, height);
+      const glowColour = tower.fresh ? NEW_GLOW : "#a6e8ff";
+      // The face (+z) carries the name, cut into the ice and lit from within.
+      const face = new THREE.MeshStandardMaterial({
+        map: faces.ice,
+        roughness: 0.3,
+        metalness: 0.05,
+        emissive: new THREE.Color(glowColour),
+        emissiveMap: faces.glow,
+        emissiveIntensity: 0,
+        color: new THREE.Color("#dff2ff"),
+      });
+      const materials = [iceSide("#cfe7f3"), iceSide("#cfe7f3"), iceSide("#f4fbff", 0.5), iceSide("#9cc4d8", 0.6), face, iceSide("#b9dcea", 0.5)];
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(WIDTH, height, DEPTH), materials);
+      const holder = new THREE.Group();
+      // Blocks curve round an arc whose centre sits behind the wall, so the
+      // middle of the wall is at the place and its ends sweep back.
+      const theta = -span / 2 + index * step;
+      holder.position.set(Math.sin(theta) * RADIUS, 0, Math.cos(theta) * RADIUS - RADIUS + 12);
+      holder.rotation.y = theta;
+      mesh.position.y = height / 2;
+      holder.add(mesh);
+      // A rough cap of snow.
+      const cap = new THREE.Mesh(
+        new THREE.BoxGeometry(WIDTH + 1.6, 1.8, DEPTH + 1.6),
+        new THREE.MeshStandardMaterial({ color: "#f7fcff", roughness: 1, flatShading: true }),
+      );
+      cap.position.y = height + 0.9;
+      holder.add(cap);
+      group.add(holder);
+      return { holder, height, face };
+    });
+    const highest = Math.max(1, ...blocks.map((block) => block.height));
+
+    // Frost drifting off the face.
+    const COUNT = 160;
+    const positions = new Float32Array(COUNT * 3);
+    const seeds = new Float32Array(COUNT);
+    for (let i = 0; i < COUNT; i += 1) {
+      const theta = -span / 2 + Math.random() * span;
+      const r = RADIUS + 4 + Math.random() * 10;
+      positions[i * 3] = Math.sin(theta) * r;
+      positions[i * 3 + 1] = Math.random() * (highest + 10);
+      positions[i * 3 + 2] = Math.cos(theta) * r - RADIUS + 12;
+      seeds[i] = Math.random();
+    }
+    const frostGeometry = new THREE.BufferGeometry();
+    frostGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const frost = new THREE.Points(
+      frostGeometry,
+      new THREE.PointsMaterial({
+        map: frostTexture,
+        color: "#dff4ff",
+        size: 2.2,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    group.add(frost);
+
+    // Cold light off the ice, so it reads as ice under the warm sky.
+    const cold = new THREE.PointLight("#8fdcff", 0, 160, 1.4);
+    cold.position.set(0, highest * 0.6, 42);
+    group.add(cold);
+
+    // The watchfire on the parapet, in the place's colour.
+    const fire = new THREE.Mesh(new THREE.SphereGeometry(2.6, 18, 18), new THREE.MeshBasicMaterial({ color: place.accent }));
+    fire.position.set(0, highest + 6, 12);
+    group.add(fire);
+    const fireLight = new THREE.PointLight(place.accent, 0, 90, 1.6);
+    fireLight.position.copy(fire.position);
+    group.add(fireLight);
+
+    const crownAt = highest + 44;
+    const crown = crowned(group, place, crownAt, 30);
+
+    return {
+      group,
+      top: crownAt + 8,
+      reach: RADIUS * Math.sin(span / 2) + 16,
+      view: { pitch: 0.16, sides: [0] },
+      grow(eased, phase) {
+        shelf.scale.set(1, Math.max(0.001, stage(eased, 0, 4)), 1);
+        blocks.forEach((block, index) => {
+          const grown = stage(eased, index + 1, blocks.length + 2);
+          block.holder.scale.y = Math.max(0.001, grown);
+          block.face.emissiveIntensity = grown * (1.1 + 0.25 * Math.sin(phase * 1.3 + index));
+        });
+        const lit = stage(eased, blocks.length + 1, blocks.length + 2);
+        crown(lit, phase);
+        fire.scale.setScalar(Math.max(0.001, lit) * (1 + 0.12 * Math.sin(phase * 6)));
+        fireLight.intensity = lit * 60;
+        cold.intensity = lit * 90;
+        (frost.material as ThreeTypes.PointsMaterial).opacity = lit * 0.75;
+        const pos = frost.geometry.getAttribute("position") as ThreeTypes.BufferAttribute;
+        for (let i = 0; i < COUNT; i += 1) {
+          pos.setY(i, (pos.getY(i) + 0.04 + seeds[i] * 0.05) % (highest + 10));
+          pos.setX(i, pos.getX(i) + Math.sin(phase * 0.8 + seeds[i] * 9) * 0.02);
+        }
+        pos.needsUpdate = true;
+      },
+    };
+  };
+
   const byKind: Record<string, (towers: Tower[], tallest: number, later: Tower[] | undefined, place: Place) => Build> = {
     beacon,
     standard,
@@ -1040,6 +1265,7 @@ export function makeBuilders(THREE: Three, label: Label) {
     rotors: combined("rotors"),
     orrery: combined("orrery"),
     engine: combined("engine"),
+    wall,
   };
 
   /* ------------------------------------------------------------------ */
@@ -1496,7 +1722,7 @@ export const KIND_BY_PLACE: Record<string, string> = {
   "capital-group": "engine",
   boingo: "orrery",
   rpa: "rotors",
-  investcloud: "engine",
+  investcloud: "wall",
   "stormscape-now": "monument",
   "stormscape-freelance": "monument",
 };
