@@ -613,13 +613,13 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
       holder.add(pole);
       const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, width + 3, 6), skin("bronze", 0.7));
       bar.rotation.z = Math.PI / 2;
-      bar.position.y = drop + 12;
+      bar.position.set(0, drop + 12, 1.6);
       holder.add(bar);
 
       // Two cloths back to back, so the lettering reads from either side.
       const material = tabard(tower, width, drop, index);
       const hang = new THREE.Group();
-      hang.position.y = drop + 11.4;
+      hang.position.set(0, drop + 11.4, 1.6);
       [0, Math.PI].forEach((turn) => {
         const cloth = new THREE.Mesh(new THREE.PlaneGeometry(width, drop), material);
         cloth.geometry.translate(0, -drop / 2, 0);
@@ -1399,14 +1399,194 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
     };
   };
 
+  /* ------------------------------------------------------------------ */
+  /* The fence: what the construct cannot carry                            */
+
+  /** The look of a rail: the place's material, with the name etched into it. */
+  type Palette = { base: string; light: string; dark: string; ink: string; glow: string; skin: SkinName | "ice" };
+  const PALETTES: Record<string, Palette> = {
+    bronze: { base: "#9c7430", light: "rgba(255, 226, 150, 0.14)", dark: "rgba(40, 24, 6, 0.18)", ink: "#2b1806", glow: "#ffd48a", skin: "bronze" },
+    timber: { base: "#5a3d22", light: "rgba(190, 140, 80, 0.2)", dark: "rgba(22, 12, 4, 0.35)", ink: "#f1d9a6", glow: "#ffcf80", skin: "timber" },
+    stone: { base: "#7a7060", light: "rgba(220, 210, 184, 0.16)", dark: "rgba(20, 16, 10, 0.24)", ink: "#1d1810", glow: "#ffe0a0", skin: "stone" },
+    iron: { base: "#3a3632", light: "rgba(160, 150, 130, 0.14)", dark: "rgba(0, 0, 0, 0.35)", ink: "#f0e6d0", glow: "#ffc070", skin: "iron" },
+    ice: { base: "#bfe0f2", light: "rgba(255,255,255,0.4)", dark: "rgba(30, 70, 100, 0.2)", ink: "#0e283e", glow: "#a6e8ff", skin: "ice" },
+  };
+
+  const railPlaque = (text: string, width: number, height: number, palette: Palette) => {
+    const W = 640;
+    const H = Math.max(48, Math.round((W * height) / width));
+    const fit = (ctx: CanvasRenderingContext2D) => {
+      let size = Math.round(H * 0.62);
+      ctx.font = `700 ${size}px "Cinzel", Georgia, serif`;
+      ctx.letterSpacing = "3px";
+      while (size > 18 && ctx.measureText(text).width > W * 0.9) {
+        size -= 3;
+        ctx.font = `700 ${size}px "Cinzel", Georgia, serif`;
+      }
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+    };
+    const make = (paint: (ctx: CanvasRenderingContext2D) => void, srgb: boolean) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d")!;
+      paint(ctx);
+      const texture = new THREE.CanvasTexture(canvas);
+      if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 8;
+      return texture;
+    };
+    return {
+      face: make((ctx) => {
+        ctx.fillStyle = palette.base;
+        ctx.fillRect(0, 0, W, H);
+        for (let i = 0; i < 60; i += 1) {
+          ctx.fillStyle = i % 2 === 0 ? palette.light : palette.dark;
+          ctx.fillRect(0, (i * 37) % H, W, 1 + (i % 2));
+        }
+        speckle(ctx, W, 400, palette.light, palette.dark);
+        fit(ctx);
+        ctx.fillStyle = palette.ink;
+        ctx.fillText(text.toUpperCase(), W / 2, H / 2 + 2);
+      }, true),
+      glow: make((ctx) => {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, W, H);
+        fit(ctx);
+        ctx.fillStyle = "#fff";
+        ctx.shadowColor = "#fff";
+        ctx.shadowBlur = 6;
+        ctx.fillText(text.toUpperCase(), W / 2, H / 2 + 2);
+      }, false),
+    };
+  };
+
+  const postMaterial = (palette: Palette) =>
+    palette.skin === "ice"
+      ? new THREE.MeshStandardMaterial({ color: "#cfe7f3", roughness: 0.35, metalness: 0.05, flatShading: true, emissive: new THREE.Color("#1e5e82"), emissiveIntensity: 0.3 })
+      : skin(palette.skin, 0.55);
+
+  /**
+   * A low rail fence in an arc before the place, three rails to a bay, a
+   * skill etched into each rail. It rises with the build and reads from the
+   * road. The arc is sized to the names, and the construct is framed to
+   * include it.
+   */
+  const fence = (towers: Tower[], palette: Palette, innerReach: number) => {
+    const group = new THREE.Group();
+    const RAILS = 3;
+    const BAY = 30;
+    const RAIL_H = 3.2;
+    const POST_H = 14;
+    const bays = Math.max(1, Math.ceil(towers.length / RAILS));
+    const arc = Math.min(Math.PI * 1.3, Math.PI * 0.55 + bays * 0.08);
+    const radius = Math.max(innerReach + 18, (bays * BAY) / arc);
+    const items: Array<{ material: ThreeTypes.MeshStandardMaterial; fresh: boolean }> = [];
+    const parts: ThreeTypes.Object3D[] = [];
+
+    const postAt = (theta: number) => {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.2, POST_H, 8), postMaterial(palette));
+      post.position.set(Math.sin(theta) * radius, POST_H / 2, Math.cos(theta) * radius);
+      group.add(post);
+      parts.push(post);
+    };
+    const step = arc / bays;
+    for (let b = 0; b <= bays; b += 1) postAt(-arc / 2 + b * step);
+
+    towers.forEach((tower, index) => {
+      const bay = Math.floor(index / RAILS);
+      const rail = index % RAILS;
+      const theta = -arc / 2 + (bay + 0.5) * step;
+      const width = radius * step - 2.4;
+      const faces = railPlaque(tower.name, width, RAIL_H, palette);
+      const material = new THREE.MeshStandardMaterial({
+        map: faces.face,
+        roughness: palette.skin === "ice" ? 0.3 : 0.7,
+        metalness: palette.skin === "bronze" || palette.skin === "iron" ? 0.7 : 0.05,
+        emissive: new THREE.Color(tower.fresh ? NEW_GLOW : palette.glow),
+        emissiveMap: faces.glow,
+        emissiveIntensity: 0,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, RAIL_H, 1.1), material);
+      const holder = new THREE.Group();
+      holder.position.set(Math.sin(theta) * radius, 3.6 + rail * (RAIL_H + 1.4), Math.cos(theta) * radius);
+      // Face outward, along the radius, so the lettering reads from the road.
+      holder.rotation.y = theta;
+      holder.add(mesh);
+      group.add(holder);
+      parts.push(holder);
+      items.push({ material, fresh: !!tower.fresh });
+    });
+
+    return {
+      group,
+      reach: radius + 4,
+      grow(eased: number, phase: number) {
+        const rise = stage(eased, 3, 4);
+        group.scale.y = Math.max(0.001, rise);
+        items.forEach((item, index) => {
+          item.material.emissiveIntensity = rise * (1.05 + 0.2 * Math.sin(phase * 1.4 + index * 0.7));
+        });
+      },
+    };
+  };
+
+  /** Which material each kind builds in, so its fence matches. */
+  const PALETTE_BY_KIND: Record<string, Palette> = {
+    beacon: PALETTES.bronze,
+    standard: PALETTES.timber,
+    monument: PALETTES.stone,
+    rotors: PALETTES.iron,
+    orrery: PALETTES.bronze,
+    engine: PALETTES.iron,
+    wall: PALETTES.ice,
+  };
+
+  /**
+   * Every skill accounted for: the construct carries the nine longest served
+   * as it always has, and the rest go on a fence before it in the same
+   * material. A second visit fences what is new since.
+   */
+  const CARRIES = 9;
+  const fenced =
+    (kind: string, base: (towers: Tower[], tallest: number, later: Tower[] | undefined, place: Place) => Build) =>
+    (towers: Tower[], tallest: number, later: Tower[] | undefined, place: Place): Build => {
+      const sorted = [...towers].sort((a, b) => b.years - a.years);
+      const build = base(sorted.slice(0, CARRIES), tallest, later?.slice(0, CARRIES), place);
+      const rest = sorted.slice(CARRIES);
+      const laterRest = (later ?? []).slice(CARRIES);
+      if (rest.length === 0 && laterRest.length === 0) return build;
+      const palette = PALETTE_BY_KIND[kind] ?? PALETTES.bronze;
+      const rail = fence([...rest, ...laterRest], palette, build.reach);
+      build.group.add(rail.group);
+      const grow = build.grow;
+      const growLater = build.growLater;
+      return {
+        ...build,
+        reach: Math.max(build.reach, rail.reach),
+        grow(eased, phase, focus) {
+          grow(eased, phase, focus);
+          rail.grow(eased, phase);
+        },
+        growLater: growLater
+          ? (eased, phase, focus) => {
+              growLater(eased, phase, focus);
+              rail.grow(1, phase);
+            }
+          : undefined,
+      };
+    };
+
   const byKind: Record<string, (towers: Tower[], tallest: number, later: Tower[] | undefined, place: Place) => Build> = {
-    beacon,
-    standard,
-    monument,
-    rotors: combined("rotors"),
-    orrery: combined("orrery"),
-    engine: combined("engine"),
-    wall,
+    beacon: fenced("beacon", beacon),
+    standard: fenced("standard", standard),
+    monument: fenced("monument", monument),
+    rotors: fenced("rotors", combined("rotors")),
+    orrery: fenced("orrery", combined("orrery")),
+    engine: fenced("engine", combined("engine")),
+    wall: fenced("wall", wall),
     cavalcade,
   };
 
@@ -1871,10 +2051,14 @@ export const KIND_BY_PLACE: Record<string, string> = {
 
 export const KIND_ORDER = Object.values(KIND_BY_PLACE);
 
-/** How many skills a kind can carry; the rest of the kinds take the film's cap of nine. */
-export const LIMIT_BY_KIND: Record<string, number> = {
-  cavalcade: 60,
-};
+/**
+ * How many skills a kind is handed. Every kind now accounts for all of them
+ * (the construct carries nine, a fence the rest), so the film's old cap of
+ * nine is only a fallback for a kind not listed here.
+ */
+export const LIMIT_BY_KIND: Record<string, number> = Object.fromEntries(
+  ["beacon", "standard", "monument", "rotors", "orrery", "engine", "wall", "cavalcade"].map((kind) => [kind, 80]),
+);
 
 /** What each direction is called, for the chapter card. */
 export const DIRECTION_BY_PLACE: Record<string, string> = {
