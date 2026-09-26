@@ -452,7 +452,7 @@
 }
 
 .titles__track {
-  --titles-head: 26px;
+  --titles-head: 34px;
   position: relative;
   flex: 1;
   padding-bottom: 30px;
@@ -515,7 +515,7 @@
   font: inherit;
   font-size: 9px;
   line-height: 1;
-  cursor: grab;
+  cursor: pointer;
   touch-action: none;
   user-select: none;
   will-change: transform;
@@ -523,28 +523,28 @@
   z-index: 2;
 }
 
-.titles__playhead:active {
+.titles__playhead.is-dragging {
   cursor: grabbing;
 }
 
 /* The mark: drawn, so it sits dead centre whichever one it is. */
 .titles__playhead-mark {
-  width: 9px;
-  height: 10px;
+  width: 12px;
+  height: 13px;
   background: currentColor;
   /* A triangle's mass sits a third of the way along it, so it only reads
      centred in a circle when the shape is nudged a pixel to the right. */
-  margin-left: 2px;
+  margin-left: 3px;
   clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
 
 .titles__playhead.is-playing .titles__playhead-mark {
-  width: 9px;
-  height: 10px;
+  width: 11px;
+  height: 13px;
   margin-left: 0;
   background: none;
-  border-left: 3px solid currentColor;
-  border-right: 3px solid currentColor;
+  border-left: 4px solid currentColor;
+  border-right: 4px solid currentColor;
   box-sizing: border-box;
   clip-path: none;
 }
@@ -850,7 +850,7 @@
 .titles__hint {
   position: absolute;
   left: 50%;
-  bottom: clamp(74px, 11vh, 96px);
+  bottom: clamp(84px, 12vh, 106px);
   transform: translateX(-50%);
   margin: 0;
   padding: 6px 4px;
