@@ -1794,9 +1794,11 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         className="titles__finale"
         style={{
           // Shown at the end, and at the very start while the film waits to be
-          // played: the burning button is the way in.
+          // played: the burning button is the way in. Hidden, it is hidden to
+          // the pointer too - its buttons keep their own pointer-events, so
+          // visibility is what takes them out of reach.
           opacity: progress <= 0 && !playing ? 1 : ending,
-          pointerEvents: (progress <= 0 && !playing) || ending > 0.6 ? "auto" : "none",
+          visibility: (progress <= 0 && !playing) || ending > 0.6 ? "visible" : "hidden",
         }}
         aria-hidden={!((progress <= 0 && !playing) || ending >= 0.5)}
       >
