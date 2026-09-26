@@ -1803,14 +1803,17 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         </header>
       ) : null}
 
-      <button
-        type="button"
-        className={`titles__toggle${panelOpen ? " is-on" : ""}`}
-        aria-expanded={panelOpen}
-        onClick={() => setPanelOpen((current) => !current)}
-      >
-        Skill progress
-      </button>
+      <div className="titles__mark">
+        <button
+          type="button"
+          className={`titles__toggle${panelOpen ? " is-on" : ""}`}
+          aria-expanded={panelOpen}
+          onClick={() => setPanelOpen((current) => !current)}
+        >
+          Skill progression
+        </button>
+        <p className="titles__mark-since">Focused since {since}</p>
+      </div>
       <Tally
         rows={experience.rows}
         since={since}
@@ -1929,8 +1932,6 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         }}
         aria-hidden={!((progress <= 0 && !playing) || ending >= 0.5)}
       >
-        <p className="titles__finale-since">Since {since}</p>
-        <p className="titles__finale-craft">One craft</p>
         {SHOW_FINALE_NUMBERS ? (
         <ul className="titles__finale-list">
           {/* The lines ticked "Closing screen" on the Resume skills ordering
