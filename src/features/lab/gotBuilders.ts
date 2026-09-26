@@ -1078,7 +1078,14 @@ export function makeBuilders(THREE: Three, label: Label) {
         wash.addColorStop(1, "#8fbdd6");
         ctx.fillStyle = wash;
         ctx.fillRect(0, 0, W, H);
-        // Veins and fractures in the ice.
+        // Courses of ice, then veins and fractures.
+        const rowH = W / 6;
+        for (let r = 0; r * rowH < H; r += 1) {
+          ctx.fillStyle = "rgba(26, 70, 100, 0.5)";
+          ctx.fillRect(0, r * rowH, W, 3);
+          const offset = r % 2 === 0 ? 0 : W / 4;
+          for (let c = -1; c < 3; c += 1) ctx.fillRect(offset + c * (W / 2), r * rowH, 3, rowH);
+        }
         for (let i = 0; i < 40; i += 1) {
           ctx.strokeStyle = i % 3 === 0 ? "rgba(255,255,255,0.55)" : "rgba(40, 90, 120, 0.28)";
           ctx.lineWidth = 1 + (i % 2);
@@ -1123,7 +1130,9 @@ export function makeBuilders(THREE: Three, label: Label) {
     const ordered: Tower[] = [];
     sorted.forEach((tower, index) => (index % 2 === 0 ? ordered.push(tower) : ordered.unshift(tower)));
 
-    const RADIUS = 62;
+    // A gentle curve: the arc's centre sits far behind, so the wall reads
+    // nearly straight with the ends just easing back.
+    const RADIUS = 150;
     const WIDTH = 15;
     const GAP = 1.4;
     const DEPTH = 9;
@@ -1136,10 +1145,30 @@ export function makeBuilders(THREE: Three, label: Label) {
       new THREE.MeshStandardMaterial({ color: "#dfeaf0", roughness: 1, flatShading: true }),
     );
     shelf.position.set(0, 1.5, -RADIUS + 12);
+    shelf.scale.set(0.55, 1, 0.55);
     group.add(shelf);
 
+    // The ice is laid in courses: horizontal bricks, as the Wall is built.
+    const courses = painted((ctx, size) => {
+      ctx.fillStyle = "#cfe7f3";
+      ctx.fillRect(0, 0, size, size);
+      const rows = 6;
+      const h = size / rows;
+      for (let r = 0; r < rows; r += 1) {
+        const offset = r % 2 === 0 ? 0 : size / 4;
+        for (let c = -1; c < 3; c += 1) {
+          const x = offset + c * (size / 2);
+          ctx.fillStyle = (r + c) % 3 === 0 ? "#d9eef8" : (r + c) % 3 === 1 ? "#c4e0ee" : "#cfe7f3";
+          ctx.fillRect(x + 2, r * h + 2, size / 2 - 4, h - 4);
+        }
+        ctx.fillStyle = "rgba(26, 70, 100, 0.55)";
+        ctx.fillRect(0, r * h, size, 2);
+      }
+      speckle(ctx, size, 300, "rgba(255,255,255,0.3)", "rgba(30, 70, 100, 0.15)");
+    });
     const iceSide = (color: string, roughness = 0.32) =>
       new THREE.MeshStandardMaterial({
+        map: courses,
         color,
         roughness,
         metalness: 0.05,
@@ -1151,7 +1180,7 @@ export function makeBuilders(THREE: Three, label: Label) {
       });
 
     const blocks = ordered.map((tower, index) => {
-      const height = 24 + shadeFor(tower, tallest) * 32;
+      const height = 44 + shadeFor(tower, tallest) * 40;
       const faces = icePlaque(tower.name, WIDTH, height);
       const glowColour = tower.fresh ? NEW_GLOW : "#a6e8ff";
       // The face (+z) carries the name, cut into the ice and lit from within.
