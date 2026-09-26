@@ -1439,14 +1439,29 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
       ];
       let reach = main.reach;
       const satellites = chunks.map((chunk, index) => {
-        const build = byKindRaw[kinds[index % kinds.length]](chunk, tallest, undefined, { ...place, quiet: true });
+        const companionKind = kinds[index % kinds.length];
+        const build = byKindRaw[companionKind](chunk, tallest, undefined, { ...place, quiet: true });
         const seat = seats[index % seats.length];
         const scale = 0.72 - Math.min(0.2, index * 0.04);
         const distance = main.reach + build.reach * scale + 14 + Math.floor(index / seats.length) * 40;
         build.group.position.set(Math.sin(seat.angle) * distance, 0, Math.cos(seat.angle) * distance);
         build.group.rotation.y = seat.turn;
         build.group.scale.setScalar(scale);
-        main.group.add(build.group);
+        // A second set of wheels stands its rod upright, a mill beside the
+        // machine, so the two read as different engines of the same works.
+        if (companionKind === "rotors" && kind === "rotors") {
+          const upright = new THREE.Group();
+          upright.rotation.z = Math.PI / 2;
+          upright.position.y = build.reach * scale * 0.5 + 6;
+          upright.add(build.group);
+          build.group.position.set(0, 0, 0);
+          build.group.rotation.set(0, seat.turn, 0);
+          upright.position.x = Math.sin(seat.angle) * distance;
+          upright.position.z = Math.cos(seat.angle) * distance;
+          main.group.add(upright);
+        } else {
+          main.group.add(build.group);
+        }
         reach = Math.max(reach, distance + build.reach * scale);
         return { build, pace: 0.7 + ((index * 7) % 5) * 0.18, delay: 0.22 + index * 0.1 };
       });
