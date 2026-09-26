@@ -704,6 +704,25 @@
   color: #ffc46a;
 }
 
+/* A line with nothing counted against it yet: dimmed, like a control that
+   cannot be used, until the film reaches something that counts towards it. */
+.tally__row.is-idle .tally__name,
+.tally__row.is-idle .tally__years {
+  color: rgba(243, 226, 184, 0.25);
+}
+
+.tally__row.is-idle .tally__name {
+  cursor: default;
+}
+
+.tally__row.is-idle .tally__bar {
+  opacity: 0.4;
+}
+
+.tally__chevron.is-empty {
+  visibility: hidden;
+}
+
 .tally__chevron {
   display: inline-grid;
   place-items: center;

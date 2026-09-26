@@ -2211,11 +2211,15 @@ function Tally({
         ) : null}
         <ul className="tally__list">
           {rows.map((row) => {
-            const isOpen = open.includes(row.slug);
+            // Nothing has been counted against this line yet: it is listed,
+            // so the shape of the whole is there from the first frame, but
+            // dimmed, and there is nothing under it to open.
+            const counted = row.years > 0 && row.skills.length > 0;
+            const isOpen = counted && open.includes(row.slug);
             return (
               <li
                 key={row.slug}
-                className={`tally__row${row.hot && moving ? " is-hot" : ""}`}
+                className={`tally__row${row.hot && moving ? " is-hot" : ""}${counted ? "" : " is-idle"}`}
               >
                 {/* Three columns: the name (right-aligned to its column), the
                     bar, the years - so the bars start on one line whatever
@@ -2223,7 +2227,8 @@ function Tally({
                 <button
                   type="button"
                   className="tally__name"
-                  aria-expanded={isOpen}
+                  disabled={!counted}
+                  aria-expanded={counted ? isOpen : undefined}
                   onClick={() =>
                     setOpen(
                       isOpen
@@ -2233,7 +2238,12 @@ function Tally({
                   }
                 >
                   {row.name}
-                  <span className="tally__chevron" aria-hidden="true">
+                  {/* Always in the layout, so every name keeps its column,
+                      but only drawn where there is something to open. */}
+                  <span
+                    className={`tally__chevron${counted ? "" : " is-empty"}`}
+                    aria-hidden="true"
+                  >
                     {isOpen ? "–" : "+"}
                   </span>
                 </button>
