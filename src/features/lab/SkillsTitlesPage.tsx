@@ -772,7 +772,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         /* ---------------------------------------------------------------- */
         /* The astrolabe: the sun this world is lit by                       */
 
-        const SUN = new THREE.Vector3(0, 520, -40);
+        const SUN = new THREE.Vector3(0, 1040, -40);
         scene.add(new THREE.HemisphereLight(0xd8c49a, 0x1c1208, 0.34));
         const rake = new THREE.DirectionalLight(0xffc98a, 1.5);
         rake.position.set(-600, 500, 500);

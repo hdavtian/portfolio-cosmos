@@ -4,7 +4,7 @@ import type * as ThreeTypes from "three";
  * The astrolabe: the sun the map is lit by. A burning core — its surface a
  * slow boil of fire, a corona licking off it, sparks thrown outward — caged
  * in three bronze bands that turn on different axes.
- * The bands are pierced, so the fire shows through them as they pass. The
+ * The bands are thin rings, the way a place's own are. The
  * innermost carries the name, its letters burning; the outer two carry the
  * trade itself, written in code.
  *
@@ -246,8 +246,8 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
           ctx.fillRect((i * 53) % w, 0, 2 + (i % 3), h);
         }
         ctx.fillStyle = "rgba(34, 18, 4, 0.55)";
-        ctx.fillRect(0, 0, w, 9);
-        ctx.fillRect(0, h - 9, w, 9);
+        ctx.fillRect(0, 0, w, 5);
+        ctx.fillRect(0, h - 5, w, 5);
         ctx.fillStyle = "#2b1806";
         if (!blank) write(ctx, w, h);
       }, true),
@@ -263,26 +263,6 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
     };
   };
 
-  // Slots cut through the metal, so the fire shows as the band goes by.
-  const pierced = (slots: number) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 2048;
-    canvas.height = 64;
-    const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#000";
-    const step = canvas.width / slots;
-    for (let i = 0; i < slots; i += 1) {
-      if (i % 4 === 3) continue;
-      ctx.fillRect(i * step + step * 0.3, 4, step * 0.16, 9);
-      ctx.fillRect(i * step + step * 0.3, canvas.height - 13, step * 0.16, 9);
-    }
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    return texture;
-  };
-
   const makeBand = (
     radius: number,
     height: number,
@@ -290,7 +270,6 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
     font: string,
     spacing: number,
     tilt: [number, number, number],
-    slots: number,
     heatColour: string,
     cast: string,
   ) => {
@@ -299,8 +278,6 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
     const faces = lettered(text, font, spacing);
     const material = new THREE.MeshStandardMaterial({
       map: faces.metal,
-      alphaMap: pierced(slots),
-      alphaTest: 0.5,
       // A cast in the metal, so each band reads as its own colour even unlit.
       color: new THREE.Color(cast),
       metalness: 0.85,
@@ -344,8 +321,6 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
     const band = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 128, 1, true), material);
     const bareMaterial = new THREE.MeshStandardMaterial({
       map: lettered(text, font, spacing, true).metal,
-      alphaMap: material.alphaMap,
-      alphaTest: 0.5,
       color: new THREE.Color(cast),
       metalness: 0.85,
       roughness: 0.38,
@@ -356,7 +331,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
     [1, -1].forEach((edge) => {
       const railMaterial = new THREE.MeshStandardMaterial({ color: "#a37a30", metalness: 0.9, roughness: 0.32 });
       forged(railMaterial, "y", "rail");
-      const rail = new THREE.Mesh(new THREE.TorusGeometry(radius, 1.5, 8, 128), railMaterial);
+      const rail = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.8, 6, 128), railMaterial);
       rail.rotation.x = Math.PI / 2;
       rail.position.y = (edge * height) / 2;
       band.add(rail);
@@ -371,7 +346,7 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
         blending: THREE.AdditiveBlending,
       }),
     );
-    weld.scale.set(height * 2.6, height * 2.6, 1);
+    weld.scale.set(height * 4.6, height * 4.6, 1);
     band.add(weld);
     pivot.add(band);
     group.add(pivot);
@@ -381,11 +356,11 @@ export function makeAstrolabe(THREE: Three, engravings: { name: string; markup: 
   const CODE = '600 40px "JetBrains Mono", Menlo, Consolas, monospace';
   const bands = [
     // The name, nearest the fire, burning.
-    { ...makeBand(74, 24, engravings.name, '700 58px "Cinzel", Georgia, serif', 10, [0.35, 0, 0.2], 64, "#ff3a1e", "#ffb4a0"), speed: 0.34, heat: 2.6 },
+    { ...makeBand(74, 14, engravings.name, '700 58px "Cinzel", Georgia, serif', 10, [0.35, 0, 0.2], "#ff3a1e", "#ffb4a0"), speed: 0.34, heat: 2.6 },
     // The trade, written out: what the browser reads…
-    { ...makeBand(100, 30, engravings.markup, CODE, 3, [-0.5, 0.4, 1.05], 80, "#3aa2ff", "#a9c6e8"), speed: -0.25, heat: 1.5 },
+    { ...makeBand(100, 16, engravings.markup, CODE, 3, [-0.5, 0.4, 1.05], "#3aa2ff", "#a9c6e8"), speed: -0.25, heat: 1.5 },
     // …and what the server runs.
-    { ...makeBand(111, 26, engravings.languages, CODE, 3, [0.5, 0.25, -0.8], 96, "#ff9a2a", "#ffd9a6"), speed: 0.19, heat: 1.1 },
+    { ...makeBand(111, 15, engravings.languages, CODE, 3, [0.5, 0.25, -0.8], "#ff9a2a", "#ffd9a6"), speed: 0.19, heat: 1.1 },
   ];
 
   // Embers spitting off the name as it turns: the sizzle.
