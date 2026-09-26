@@ -39,6 +39,8 @@ export interface Build {
   /** How tall and how wide it stands once built, floating title included, so a camera can frame all of it. */
   top: number;
   reach: number;
+  /** How wide the place's own construct is, companions aside: what the camera frames. */
+  frame?: number;
   /**
    * Where the camera should come to rest, if the place reads best from somewhere
    * in particular: how far above level (radians), and optionally which sides it
@@ -1157,15 +1159,6 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
     const step = (WIDTH + GAP) / RADIUS;
     const span = step * Math.max(0, ordered.length - 1);
 
-    // Ground: a shelf of packed snow the wall stands on.
-    const shelf = new THREE.Mesh(
-      new THREE.CylinderGeometry(RADIUS + 14, RADIUS + 18, 3, 64, 1, false, Math.PI - span / 2 - 0.35, span + 0.7),
-      new THREE.MeshStandardMaterial({ color: "#dfeaf0", roughness: 1, flatShading: true }),
-    );
-    shelf.position.set(0, 1.5, -RADIUS + 12);
-    shelf.scale.set(0.55, 1, 0.55);
-    group.add(shelf);
-
     // The ice is laid in courses: horizontal bricks, as the Wall is built.
     const courses = painted((ctx, size) => {
       ctx.fillStyle = "#cfe7f3";
@@ -1294,7 +1287,6 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
       reach: RADIUS * Math.sin(span / 2) + 16,
       view: { pitch: 0.16, sides: [0] },
       grow(eased, phase) {
-        shelf.scale.set(1, Math.max(0.001, stage(eased, 0, 4)), 1);
         blocks.forEach((block, index) => {
           const grown = stage(eased, index + 1, blocks.length + 2);
           block.holder.scale.y = Math.max(0.001, grown);
@@ -1404,11 +1396,88 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
   };
 
   /* ------------------------------------------------------------------ */
+  /* The mill: an upright wheel, for a place's second set of works         */
+
+  /**
+   * A wheel stood on its edge on a single post - a mill wheel, not a drum
+   * shaft - each skill an engraved rim of it, nested one inside the next,
+   * the longest served outermost. Read square-on, from either side.
+   */
+  const mill = (towers: Tower[], _tallest: number, _later: Tower[] | undefined, place: Place): Build => {
+    const group = new THREE.Group();
+    const own = place.accent;
+    const sorted = [...towers].sort((a, b) => b.years - a.years);
+    const STEP = 7.5;
+    const outer = 16 + sorted.length * STEP;
+    const hub = new THREE.Group();
+    hub.position.y = outer + 8;
+    group.add(hub);
+
+    const fixed = new THREE.Group();
+    group.add(fixed);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3, outer + 8, 10), skin("iron", 0.8));
+    post.position.set(0, (outer + 8) / 2, -6);
+    fixed.add(post);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(9, 11, 3, 12), skin("stone", 0.6));
+    foot.position.set(0, 1.5, -6);
+    fixed.add(foot);
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 12, 8), skin("iron", 0.9));
+    arm.rotation.x = Math.PI / 2;
+    arm.position.set(0, outer + 8, -0.5);
+    fixed.add(arm);
+
+    const rims = sorted.map((tower, index) => {
+      const radius = outer - index * STEP;
+      const rim = engravedBand(radius, 5.6, tower.name, glowFor(tower, own));
+      // Stood on edge: the band's axis runs along z, its face to the camera.
+      rim.rotation.x = Math.PI / 2;
+      const holder = new THREE.Group();
+      holder.add(rim);
+      // Spokes from this rim in to the next.
+      for (let k = 0; k < 6; k += 1) {
+        const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.9, STEP - 0.6, 0.9), skin("bronze", 0.5));
+        const angle = (k / 6) * Math.PI * 2 + index * 0.35;
+        const r = radius - STEP / 2;
+        spoke.position.set(Math.cos(angle) * r, Math.sin(angle) * r, 0);
+        spoke.rotation.z = angle + Math.PI / 2;
+        holder.add(spoke);
+      }
+      hub.add(holder);
+      return { holder, rim, index };
+    });
+    const axle = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 7, 16), skin("bronze", 0.9));
+    axle.rotation.x = Math.PI / 2;
+    hub.add(axle);
+
+    const crownAt = outer * 2 + 22;
+    const crown = crowned(group, place, crownAt, 30);
+
+    return {
+      group,
+      top: crownAt + 8,
+      reach: outer + 6,
+      view: { pitch: 0.2, sides: [0, Math.PI] },
+      grow(eased, phase) {
+        const laid = Math.max(0.001, stage(eased, 0, 6));
+        fixed.scale.set(1, laid, 1);
+        fixed.visible = eased > 0.001;
+        axle.visible = eased > 0.001;
+        rims.forEach((entry, index) => {
+          const grown = stage(eased, index + 1, rims.length + 3);
+          entry.holder.scale.setScalar(Math.max(0.001, grown));
+          entry.holder.rotation.z = phase * (index % 2 === 0 ? 0.35 : -0.28) + (1 - grown) * 2;
+        });
+        crown(stage(eased, rims.length + 1, rims.length + 3), phase);
+      },
+    };
+  };
+
+  /* ------------------------------------------------------------------ */
   /* The cluster: every skill stands somewhere                            */
 
   const CARRIES = 9;
   /** Kinds that can stand beside a place's own: never the monument (StormScape's alone), the Wall or the cavalcade. */
-  const COMPANIONS = ["orrery", "rotors", "engine", "beacon", "standard"];
+  const COMPANIONS = ["orrery", "mill", "engine", "beacon", "standard"];
 
   /**
    * A place with more skills than its construct carries raises more
@@ -1421,12 +1490,16 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
     (towers: Tower[], tallest: number, later: Tower[] | undefined, place: Place): Build => {
       const sorted = [...towers].sort((a, b) => b.years - a.years);
       const main = base(sorted.slice(0, CARRIES), tallest, later?.slice(0, CARRIES), place);
-      const rest = [...sorted.slice(CARRIES), ...(later ?? []).slice(CARRIES)];
-      if (rest.length === 0) return main;
+      const rest = sorted.slice(CARRIES);
+      const laterRest = (later ?? []).slice(CARRIES);
+      if (rest.length === 0 && laterRest.length === 0) return main;
 
-      const chunks: Tower[][] = [];
-      for (let i = 0; i < rest.length; i += CARRIES) chunks.push(rest.slice(i, i + CARRIES));
-      const kinds = [kind, ...COMPANIONS.filter((name) => name !== kind)];
+      // Each chunk knows which visit it belongs to.
+      const chunks: Array<{ towers: Tower[]; onReturn: boolean }> = [];
+      for (let i = 0; i < rest.length; i += CARRIES) chunks.push({ towers: rest.slice(i, i + CARRIES), onReturn: false });
+      for (let i = 0; i < laterRest.length; i += CARRIES) chunks.push({ towers: laterRest.slice(i, i + CARRIES), onReturn: true });
+      // A second set of wheels stands upright as a mill, not another shaft.
+      const kinds = [kind === "rotors" ? "mill" : kind, ...COMPANIONS.filter((name) => name !== kind)];
       // Beside and behind the place, alternating sides, further out as they go.
       const seats = [
         { angle: 2.05, turn: 0.55 },
@@ -1438,7 +1511,7 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
         { angle: -1.45, turn: -0.8 },
       ];
       let reach = main.reach;
-      const satellites = chunks.map((chunk, index) => {
+      const satellites = chunks.map(({ towers: chunk, onReturn }, index) => {
         const companionKind = kinds[index % kinds.length];
         const build = byKindRaw[companionKind](chunk, tallest, undefined, { ...place, quiet: true });
         const seat = seats[index % seats.length];
@@ -1447,46 +1520,38 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
         build.group.position.set(Math.sin(seat.angle) * distance, 0, Math.cos(seat.angle) * distance);
         build.group.rotation.y = seat.turn;
         build.group.scale.setScalar(scale);
-        // A second set of wheels stands its rod upright, a mill beside the
-        // machine, so the two read as different engines of the same works.
-        if (companionKind === "rotors" && kind === "rotors") {
-          const upright = new THREE.Group();
-          upright.rotation.z = Math.PI / 2;
-          upright.position.y = build.reach * scale * 0.5 + 6;
-          upright.add(build.group);
-          build.group.position.set(0, 0, 0);
-          build.group.rotation.set(0, seat.turn, 0);
-          upright.position.x = Math.sin(seat.angle) * distance;
-          upright.position.z = Math.cos(seat.angle) * distance;
-          main.group.add(upright);
-        } else {
-          main.group.add(build.group);
-        }
+        main.group.add(build.group);
         reach = Math.max(reach, distance + build.reach * scale);
-        return { build, pace: 0.7 + ((index * 7) % 5) * 0.18, delay: 0.22 + index * 0.1 };
+        return { build, onReturn, pace: 0.7 + ((index * 7) % 5) * 0.18, delay: 0.22 + index * 0.1 };
       });
 
       const grow = main.grow;
       const growLater = main.growLater;
-      const growAll = (eased: number, phase: number, focus: number) => {
+      // Each visit raises its own companions; the other visit's stay as they are.
+      const growSet = (onReturn: boolean, eased: number, phase: number, focus: number) => {
         satellites.forEach((satellite) => {
+          if (satellite.onReturn !== onReturn) return;
           const own = Math.max(0, Math.min(1, (eased - satellite.delay) / (1 - satellite.delay)));
           satellite.build.grow(own, phase * satellite.pace, focus);
         });
       };
+      const hasReturn = satellites.some((satellite) => satellite.onReturn);
       return {
         ...main,
         reach,
+        // The camera frames the place's own construct; companions stand off at the sides.
+        frame: main.frame ?? main.reach,
         grow(eased, phase, focus) {
           grow(eased, phase, focus);
-          growAll(eased, phase, focus);
+          growSet(false, eased, phase, focus);
         },
-        growLater: growLater
-          ? (eased, phase, focus) => {
-              growLater(eased, phase, focus);
-              growAll(1, phase, focus);
-            }
-          : undefined,
+        growLater:
+          growLater || hasReturn
+            ? (eased, phase, focus) => {
+                growLater?.(eased, phase, focus);
+                growSet(true, eased, phase, focus);
+              }
+            : undefined,
       };
     };
 
@@ -1497,6 +1562,7 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
     rotors: combined("rotors"),
     orrery: combined("orrery"),
     engine: combined("engine"),
+    mill,
     wall,
   };
 

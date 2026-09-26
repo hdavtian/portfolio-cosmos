@@ -929,11 +929,12 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         // How far back the camera must stand to hold the whole structure —
         // floating title included — with air above it, whatever the window's shape.
         const fitDistance = (index: number) => {
-          const { top, reach } = placed[index].build;
+          const { top, reach, frame } = placed[index].build;
           const half = THREE.MathUtils.degToRad(camera.fov / 2);
-          const tall = (top * 1.34) / 2 / Math.tan(half);
-          const wide = (reach * 2.5) / 2 / (Math.tan(half) * Math.max(1, camera.aspect * 0.78));
-          return Math.max(tall, wide) * 1.08;
+          const tall = (top * 1.18) / 2 / Math.tan(half);
+          // The place's own construct fills the frame; companions stand off at the sides.
+          const wide = ((frame ?? reach) * 2.1) / 2 / (Math.tan(half) * Math.max(1, camera.aspect * 0.78));
+          return Math.max(tall, wide) * 0.96;
         };
 
         const dwellPose = (
@@ -1257,8 +1258,8 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         // while it is still flying in would yank it about.
         const handOver = () => {
           const reach = eyeNow.distanceTo(aimNow);
-          controls.minDistance = reach * 0.55;
-          controls.maxDistance = reach * 1.45;
+          controls.minDistance = reach * 0.3;
+          controls.maxDistance = reach * 2.4;
           controls.minPolarAngle = 0.35;
           controls.maxPolarAngle = 1.42;
           controls.mouseButtons.left = CameraControls.ACTION.ROTATE;
