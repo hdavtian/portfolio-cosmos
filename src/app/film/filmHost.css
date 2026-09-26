@@ -58,7 +58,7 @@
 .titles__loader-caption {
   margin: 0;
   font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
-  font-size: clamp(1.1rem, 2.2vw, 1.7rem);
+  font-size: clamp(0.55rem, 1.1vw, 0.85rem);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #d9a441;

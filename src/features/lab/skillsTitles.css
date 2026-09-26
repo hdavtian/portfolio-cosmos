@@ -475,14 +475,6 @@
   color: #f4e6c8;
 }
 
-.titles__hint {
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(243, 226, 184, 0.35);
-  white-space: nowrap;
-}
-
 .titles__track {
   position: relative;
   flex: 1;
@@ -795,22 +787,40 @@
   user-select: none;
 }
 
+/* A place under the pointer: clicking it goes there. */
+.titles__stage canvas.is-over {
+  cursor: pointer;
+}
+
 /* Shift held: the drag pans, and the pointer says so. */
 .titles.is-holding.is-shift .titles__stage,
 .titles.is-holding.is-shift .titles__stage:active {
   cursor: move;
 }
 
-/* How to look round, under the stop panel's actions. */
+/* How to look round: centred low, clear of the scrubber below it so a
+   drag meant for the bar is never caught here. */
 .titles__hint {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(74px, 11vh, 96px);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 4px;
   display: flex;
-  gap: 14px;
-  margin: 14px 0 0;
+  gap: clamp(26px, 4vw, 52px);
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(243, 226, 184, 0.42);
   white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.titles__hint.is-on {
+  opacity: 1;
 }
 
 .titles__hint-item {
@@ -820,22 +830,7 @@
   transition: color 0.2s ease;
 }
 
-.titles__hint kbd {
-  font: inherit;
-  padding: 2px 6px;
-  border: 1px solid rgba(217, 164, 65, 0.35);
-  border-radius: 3px;
-  color: rgba(243, 226, 184, 0.7);
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
-}
-
 .titles__hint-item.is-on {
-  color: rgba(243, 226, 184, 0.9);
-}
-
-.titles__hint-item.is-on kbd {
-  border-color: rgba(255, 196, 92, 0.9);
-  background: rgba(255, 178, 102, 0.16);
   color: #ffd98a;
 }
 
