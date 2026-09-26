@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type * as ThreeTypes from "three";
 import { useReleaseQuery } from "../../lib/query/contentQueries";
 import { isFilmSuspended } from "../../lib/filmSuspend";
@@ -427,6 +427,21 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   // Clicking a place on the map goes there, exactly as its mark on the
   // scrubber does. The scene calls this; React knows where the stops are.
   const pickStopRef = useRef<(cityIndex: number) => void>(() => {});
+  // The playhead is dragged and pressed with the same button: a drag sets
+  // this so the click that ends it is not also taken as a press.
+  const draggedRef = useRef(false);
+  // The bar's width in pixels, so the head can be placed by a transform.
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [trackWidth, setTrackWidth] = useState(0);
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const measure = () => setTrackWidth(track.getBoundingClientRect().width);
+    measure();
+    const watch = new ResizeObserver(measure);
+    watch.observe(track);
+    return () => watch.disconnect();
+  }, []);
   // The film opens on its last frame - today's complete picture, every tower
   // up and the tally full - because that is the question a visitor brings.
   // Play then runs the build-up from the first job.
@@ -1622,7 +1637,12 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
       // arrives after a long gap (the tab or the film hidden) counts as one
       // frame, not the whole gap, so coming back never jumps to the end.
       framesRef.current.ran += 1;
-      const step = (Math.min(now - last, 100) / (filmSeconds * 1000)) * (direction < 0 ? 3 : 1);
+      // Never negative: a frame's timestamp can predate the clock reading
+      // that started the run, and a backwards first step at zero would trip
+      // the end guard below and stop the film before it began.
+      const step =
+        (Math.max(0, Math.min(now - last, 100)) / (filmSeconds * 1000)) *
+        (direction < 0 ? 3 : 1);
       last = now;
       // Decided here, not inside a state updater: setting other state from an
       // updater runs during render, which React refuses ("maximum update depth").
@@ -1640,8 +1660,10 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         setHolding(true);
         return;
       }
-      if (next >= 1 || next <= 0) {
-        const end = next >= 1 ? 1 : 0;
+      // Only the end being travelled towards stops the film: playing forward
+      // from the very start is not the same as running off the bottom of it.
+      if (direction > 0 ? next >= 1 : next <= 0) {
+        const end = direction > 0 ? 1 : 0;
         progressRef.current = end;
         setProgress(end);
         setPlaying(false);
@@ -1682,10 +1704,6 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   };
 
   /** From the top. */
-  // The "Play from the start" button burns whenever the film sits at its
-  // start or its end: it is the way in, every visit.
-  const inviting = (progress >= 1 || progress <= 0) && !playing;
-
   const replay = () => {
     snapRef.current = true;
     setHolding(false);
@@ -1763,6 +1781,12 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
     bar <= START_STRETCH
       ? (bar / START_STRETCH) * introEnd
       : introEnd + ((bar - START_STRETCH) / (1 - START_STRETCH)) * (1 - introEnd);
+  // The film is over and waiting: the head sits at the head of the bar.
+  const atStartAgain = progress >= 1 && !playing;
+  const headAt = atStartAgain ? 0 : toBar(progress);
+  // Nothing is happening and nothing else is asking to be pressed: the head
+  // burns, the way the play buttons used to.
+  const headBurning = !playing && (stalled || !holding);
   const fresh = active.towers.filter((entry) => entry.fresh).slice(0, PIECE_LIMIT);
   const carried = active.towers.filter((entry) => !entry.fresh).slice(0, PIECE_LIMIT);
 
@@ -1951,53 +1975,16 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         </ul>
         ) : null}
         <p className="titles__finale-links">
-          <button type="button" className={inviting ? "is-inviting" : undefined} onClick={replay}>
-            Play from the start
-          </button>
           <Link to="/resume">Read résumé</Link>
           <Link to="/universe">Enter the universe</Link>
         </p>
       </section>
 
-      {/* Stopped anywhere short of the end, and not at a stop (which has its own
-          Next): say so, in the middle, where it can't be missed. The very
-          beginning counts — a film sitting at frame one, stopped, is the case a
-          visitor is most likely to mistake for a broken page. */}
-      {(!playing && !holding && progress > 0 && progress < 1) || stalled ? (
-        <button
-          type="button"
-          className="titles__resume"
-          onClick={() => {
-            // Stalled: stop and start again, so the play effect is re-run from scratch.
-            setStalled(false);
-            setPlaying(false);
-            setDirection(1);
-            window.setTimeout(() => setPlaying(true), 0);
-          }}
-        >
-          <span className="titles__resume-mark" aria-hidden="true">▶</span>
-          {stalled ? "Play" : "Resume"}
-        </button>
-      ) : null}
       <div className="titles__scrub">
-        <button
-          type="button"
-          className={`titles__play${playing ? " is-on" : ""}`}
-          onClick={() => {
-            // One button that does the sensible thing: replay at the end, pause
-            // on the move, on to the next place from a stop, otherwise play.
-            if (playing) setPlaying(false);
-            else if (progress >= 1 || progress <= 0) replay();
-            else if (holding) goNext();
-            else {
-              setDirection(1);
-              setPlaying(true);
-            }
-          }}
-        >
-          {playing ? "Pause" : progress >= 1 || progress <= 0 ? "Play from the start ▶" : "Play ▶"}
-        </button>
-        <div className="titles__track">
+        <div className="titles__track" ref={trackRef}>
+          {/* The line the head runs along. The range beneath it is what takes
+              a click anywhere on the bar, and the keyboard. */}
+          <span className="titles__rail" aria-hidden="true" />
           <input
             id="titles-scrubber"
             type="range"
@@ -2013,6 +2000,93 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
               setProgress(fromBar(Number(event.target.value)));
             }}
           />
+          {/* The playhead is the film's one control: it shows where the film
+              is, plays or pauses when pressed, and drags to scrub. Finished,
+              it returns to the head of the bar and burns: press to see it
+              again from the start. */}
+          <button
+            type="button"
+            className={`titles__playhead${playing ? " is-playing" : ""}${headBurning ? " is-inviting" : ""}`}
+            style={{
+              // Whole pixels, and a transform rather than a percentage offset,
+              // so the circle and the mark in it are moved as one thing.
+              transform: `translate3d(${Math.round(headAt * trackWidth)}px, 0, 0)`,
+              // It slides back to the start when the film ends; everywhere
+              // else it must sit exactly where the scrubbing hand is.
+              transition: atStartAgain ? "transform 460ms ease" : "none",
+            }}
+            aria-label={
+              playing ? "Pause" : atStartAgain ? "Play from the start" : "Play"
+            }
+            onClick={() => {
+              if (draggedRef.current) {
+                draggedRef.current = false;
+                return;
+              }
+              // The sensible thing for wherever the film is.
+              if (stalled) {
+                setStalled(false);
+                setPlaying(false);
+                setDirection(1);
+                window.setTimeout(() => setPlaying(true), 0);
+              } else if (playing) setPlaying(false);
+              else if (progress >= 1 || progress <= 0) replay();
+              else if (holding) goNext();
+              else {
+                setDirection(1);
+                setPlaying(true);
+              }
+            }}
+            onPointerDown={(event) => {
+              // Every fresh press starts clean, so a drag that ended without
+              // a click cannot swallow the press after it.
+              draggedRef.current = false;
+              const head = event.currentTarget;
+              const track = head.parentElement as HTMLElement;
+              const rect = track.getBoundingClientRect();
+              const startX = event.clientX;
+              let moved = false;
+              // Capture keeps a fast drag from being lost off the edge of the
+              // head; not every pointer can be captured, and it is not needed
+              // for the drag to work, since the window is what is listened to.
+              try {
+                head.setPointerCapture(event.pointerId);
+              } catch {
+                /* nothing to capture */
+              }
+              const onMove = (move: PointerEvent) => {
+                if (!moved && Math.abs(move.clientX - startX) < 4) return;
+                moved = true;
+                setPlaying(false);
+                setHolding(false);
+                snapRef.current = true;
+                const along = Math.min(
+                  1,
+                  Math.max(0, (move.clientX - rect.left) / rect.width),
+                );
+                setProgress(fromBar(along));
+              };
+              const onUp = () => {
+                try {
+                  head.releasePointerCapture(event.pointerId);
+                } catch {
+                  /* never captured */
+                }
+                window.removeEventListener("pointermove", onMove, true);
+                window.removeEventListener("pointerup", onUp, true);
+                window.removeEventListener("pointercancel", onUp, true);
+                // A press is left to the click that follows; a drag swallows it.
+                draggedRef.current = moved;
+              };
+              // Caught on the way down, so a press is never lost to something
+              // that swallows the event before it comes back up.
+              window.addEventListener("pointermove", onMove, true);
+              window.addEventListener("pointerup", onUp, true);
+              window.addEventListener("pointercancel", onUp, true);
+            }}
+          >
+            <span className="titles__playhead-mark" aria-hidden="true" />
+          </button>
           <div className="titles__stops">
             <button
               type="button"
