@@ -1343,12 +1343,14 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
       holder.add(pole);
       const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, WIDTH + 3, 6), skin("bronze", 0.7));
       bar.rotation.z = Math.PI / 2;
-      bar.position.y = drop + 12;
+      bar.position.set(0, drop + 12, 1.6);
       holder.add(bar);
       const years = tower.years >= 10 ? `${Math.floor(tower.years)}+ YRS` : `${tower.years.toFixed(1)} YRS`;
       const material = tabardFor(place, tower, WIDTH, drop, index, years);
+      // The cloth hangs from the bar in front of the pole, so the pole is
+      // always behind the lettering from the road side.
       const hang = new THREE.Group();
-      hang.position.y = drop + 11.4;
+      hang.position.set(0, drop + 11.4, 1.6);
       [0, Math.PI].forEach((turn) => {
         const cloth = new THREE.Mesh(new THREE.PlaneGeometry(WIDTH, drop), material);
         cloth.geometry.translate(0, -drop / 2, 0);
