@@ -9,6 +9,7 @@ import {
   DIRECTION_BY_PLACE,
   KIND_BY_PLACE,
   KIND_ORDER,
+  LIMIT_BY_KIND,
   makeBuilders,
   type Build,
 } from "./gotBuilders";
@@ -851,10 +852,11 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           const laterCity = cities.find(
             (other) => other.spot === index && other !== city,
           );
+          const limit = LIMIT_BY_KIND[city.kind] ?? PIECE_LIMIT;
           const build = byKind[city.kind](
-            city.towers.slice(0, PIECE_LIMIT),
+            city.towers.slice(0, limit),
             tallest,
-            laterCity?.towers.slice(0, PIECE_LIMIT),
+            laterCity?.towers.slice(0, limit),
             { title: city.name, accent: accentsRef.current[city.slug] ?? "#ffb266", house: city.slug },
           );
           build.group.position.copy(at).add(new THREE.Vector3(0, 1.5, 0));

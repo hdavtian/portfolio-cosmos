@@ -477,6 +477,83 @@ export function makeBuilders(THREE: Three, label: Label) {
   };
 
   /* ------------------------------------------------------------------ */
+  /** A banner's cloth: the house's colours, the skill's name across it, a note beneath. */
+const tabardFor = (place: Place, tower: Tower, width: number, drop: number, index: number, note?: string) => {
+  const [, field, second] = HOUSES[place.house] ?? HOUSES.hostpro;
+    const W = 384;
+    const H = Math.round((W * drop) / width);
+    const draw = (paint: (ctx: CanvasRenderingContext2D) => void, srgb: boolean) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d")!;
+      paint(ctx);
+      const texture = new THREE.CanvasTexture(canvas);
+      if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 8;
+      return texture;
+    };
+    // The name reads across the cloth, a word or two to a line, as large as
+    // the longest line allows.
+    const words = tower.name.toUpperCase().split(/\s+|(?<=\/)/).filter((word) => word && word !== "/");
+    const rows: string[] = [];
+    for (const word of words) {
+      const last = rows[rows.length - 1];
+      if (last !== undefined && (last + " " + word).length <= 11) rows[rows.length - 1] = `${last} ${word}`;
+      else rows.push(word);
+    }
+    const write = (ctx: CanvasRenderingContext2D) => {
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      let size = 74;
+      const fits = () => {
+        ctx.font = `700 ${size}px "Cinzel", Georgia, serif`;
+        return rows.every((row) => ctx.measureText(row).width <= W - 56);
+      };
+      while (!fits() && size > 26) size -= 2;
+      const lead = size * 1.18;
+      const start = Math.min(H * 0.42, 70 + (rows.length * lead) / 2) - ((rows.length - 1) * lead) / 2;
+      rows.forEach((row, k) => ctx.fillText(row, W / 2, start + k * lead));
+      if (note) {
+        ctx.font = `600 ${Math.round(size * 0.46)}px "JetBrains Mono", Menlo, monospace`;
+        ctx.fillText(note, W / 2, start + rows.length * lead + size * 0.15);
+      }
+    };
+    const cloth = draw((ctx) => {
+      ctx.fillStyle = index % 2 === 0 ? field : second;
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = "#d9b25a";
+      ctx.lineWidth = 12;
+      ctx.strokeRect(12, 12, W - 24, H - 24);
+      // A swallow-tail cut into the hem.
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      ctx.moveTo(0, H);
+      ctx.lineTo(W / 2, H - 46);
+      ctx.lineTo(W, H);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(20, 10, 2, 0.55)";
+      write(ctx);
+    }, true);
+    const glow = draw((ctx) => {
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#fff";
+      ctx.shadowColor = "#fff";
+      ctx.shadowBlur = 6;
+      write(ctx);
+    }, false);
+    return new THREE.MeshStandardMaterial({
+      map: cloth,
+      emissive: new THREE.Color(glowFor(tower, place.accent)),
+      emissiveMap: glow,
+      emissiveIntensity: 1.6,
+      roughness: 0.92,
+    });
+  };
+
+
   /* B. The sigil: HostPro's standard                                     */
 
   const standard = (towers: Tower[], tallest: number, _later: Tower[] | undefined, place: Place): Build => {
@@ -521,75 +598,8 @@ export function makeBuilders(THREE: Three, label: Label) {
     // A tabard's cloth: the skill written down it in letters that glow — gold
     // for one learned here, the house's colour for one carried further —
     // the same rule the engraved bands follow everywhere else.
-    const tabard = (tower: Tower, width: number, drop: number, index: number) => {
-      const W = 384;
-      const H = Math.round((W * drop) / width);
-      const draw = (paint: (ctx: CanvasRenderingContext2D) => void, srgb: boolean) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = W;
-        canvas.height = H;
-        const ctx = canvas.getContext("2d")!;
-        paint(ctx);
-        const texture = new THREE.CanvasTexture(canvas);
-        if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
-        texture.anisotropy = 8;
-        return texture;
-      };
-      // The name reads across the cloth, a word or two to a line, as large as
-      // the longest line allows.
-      const words = tower.name.toUpperCase().split(/\s+|(?<=\/)/).filter((word) => word && word !== "/");
-      const rows: string[] = [];
-      for (const word of words) {
-        const last = rows[rows.length - 1];
-        if (last !== undefined && (last + " " + word).length <= 11) rows[rows.length - 1] = `${last} ${word}`;
-        else rows.push(word);
-      }
-      const write = (ctx: CanvasRenderingContext2D) => {
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        let size = 74;
-        const fits = () => {
-          ctx.font = `700 ${size}px "Cinzel", Georgia, serif`;
-          return rows.every((row) => ctx.measureText(row).width <= W - 56);
-        };
-        while (!fits() && size > 26) size -= 2;
-        const lead = size * 1.18;
-        const start = Math.min(H * 0.42, 70 + (rows.length * lead) / 2) - ((rows.length - 1) * lead) / 2;
-        rows.forEach((row, k) => ctx.fillText(row, W / 2, start + k * lead));
-      };
-      const cloth = draw((ctx) => {
-        ctx.fillStyle = index % 2 === 0 ? field : second;
-        ctx.fillRect(0, 0, W, H);
-        ctx.strokeStyle = "#d9b25a";
-        ctx.lineWidth = 12;
-        ctx.strokeRect(12, 12, W - 24, H - 24);
-        // A swallow-tail cut into the hem.
-        ctx.fillStyle = "#000";
-        ctx.beginPath();
-        ctx.moveTo(0, H);
-        ctx.lineTo(W / 2, H - 46);
-        ctx.lineTo(W, H);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = "rgba(20, 10, 2, 0.55)";
-        write(ctx);
-      }, true);
-      const glow = draw((ctx) => {
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = "#fff";
-        ctx.shadowColor = "#fff";
-        ctx.shadowBlur = 6;
-        write(ctx);
-      }, false);
-      return new THREE.MeshStandardMaterial({
-        map: cloth,
-        emissive: new THREE.Color(glowFor(tower, place.accent)),
-        emissiveMap: glow,
-        emissiveIntensity: 1.6,
-        roughness: 0.92,
-      });
-    };
+    const tabard = (tower: Tower, width: number, drop: number, index: number, note?: string) =>
+      tabardFor(place, tower, width, drop, index, note);
 
     // The skills, flown in a ring round the shield and facing out, so they can
     // be read from wherever the camera is. Longest served hangs longest.
@@ -1302,6 +1312,91 @@ export function makeBuilders(THREE: Three, label: Label) {
     };
   };
 
+  /* ------------------------------------------------------------------ */
+  /* H. The cavalcade: InvestCloud                                        */
+
+  /**
+   * Every skill, but never all at once: the Wall stands behind, and in front
+   * of it a file of standards passes - one cloth to a skill, its name and its
+   * years, the pole's height its years, five or six in frame at a time -
+   * carried by riders you do not see, as the titles show an army as a line
+   * of sigils on the horizon. The file loops, so a stop long enough sees all.
+   */
+  const cavalcade = (towers: Tower[], tallest: number, later: Tower[] | undefined, place: Place): Build => {
+    const group = new THREE.Group();
+    const sorted = [...towers].sort((a, b) => b.years - a.years);
+    const backdrop = wall(sorted.slice(0, 9), tallest, later, place);
+    group.add(backdrop.group);
+
+    const WIDTH = 26;
+    const SPACING = 44;
+    // The stretch of road in front of the Wall that the camera sees.
+    const WINDOW = 290;
+    const ROAD_Z = 70;
+    const loop = Math.max(WINDOW + SPACING * 2, sorted.length * SPACING);
+
+    const banners = sorted.map((tower, index) => {
+      const drop = 28 + shadeFor(tower, tallest) * 20;
+      const holder = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, drop + 14, 8), skin("timber", 0.7));
+      pole.position.y = (drop + 14) / 2;
+      holder.add(pole);
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, WIDTH + 3, 6), skin("bronze", 0.7));
+      bar.rotation.z = Math.PI / 2;
+      bar.position.y = drop + 12;
+      holder.add(bar);
+      const years = tower.years >= 10 ? `${Math.floor(tower.years)}+ YRS` : `${tower.years.toFixed(1)} YRS`;
+      const material = tabardFor(place, tower, WIDTH, drop, index, years);
+      const hang = new THREE.Group();
+      hang.position.y = drop + 11.4;
+      [0, Math.PI].forEach((turn) => {
+        const cloth = new THREE.Mesh(new THREE.PlaneGeometry(WIDTH, drop), material);
+        cloth.geometry.translate(0, -drop / 2, 0);
+        cloth.rotation.y = turn;
+        cloth.position.z = turn === 0 ? 0.12 : -0.12;
+        hang.add(cloth);
+      });
+      holder.add(hang);
+      holder.position.z = ROAD_Z;
+      holder.visible = false;
+      group.add(holder);
+      return { holder, hang, offset: index * SPACING };
+    });
+
+    // Torchlight along the road, so the cloths read against the Wall.
+    const roadLight = new THREE.PointLight("#ffd9a0", 0, 260, 1.2);
+    roadLight.position.set(0, 60, ROAD_Z + 40);
+    group.add(roadLight);
+
+    return {
+      group,
+      top: backdrop.top,
+      reach: backdrop.reach + 40,
+      view: backdrop.view,
+      grow(eased, phase, focus) {
+        backdrop.grow(eased, phase, focus);
+        const lit = stage(eased, 2, 4);
+        // The file rides right to left along the road; a standard rises as it
+        // comes into view and sinks as it leaves.
+        roadLight.intensity = lit * 120;
+        const travel = phase * 40;
+        banners.forEach((banner, index) => {
+          const along = (((banner.offset + travel) % loop) + loop) % loop;
+          const x = WINDOW / 2 - along;
+          const inside = x > -WINDOW / 2 && x < WINDOW / 2;
+          banner.holder.visible = inside && lit > 0.01;
+          if (!inside) return;
+          const edge = Math.min(1, (WINDOW / 2 - Math.abs(x)) / 30);
+          banner.holder.position.x = x;
+          banner.holder.scale.y = Math.max(0.001, edge * edge * lit);
+          // The cloth stirs as it rides.
+          banner.hang.rotation.y = Math.sin(phase * 2.1 + index) * 0.16;
+          banner.hang.rotation.z = Math.sin(phase * 1.7 + index * 0.6) * 0.05;
+        });
+      },
+    };
+  };
+
   const byKind: Record<string, (towers: Tower[], tallest: number, later: Tower[] | undefined, place: Place) => Build> = {
     beacon,
     standard,
@@ -1310,6 +1405,7 @@ export function makeBuilders(THREE: Three, label: Label) {
     orrery: combined("orrery"),
     engine: combined("engine"),
     wall,
+    cavalcade,
   };
 
   /* ------------------------------------------------------------------ */
@@ -1766,12 +1862,17 @@ export const KIND_BY_PLACE: Record<string, string> = {
   "capital-group": "engine",
   boingo: "orrery",
   rpa: "rotors",
-  investcloud: "wall",
+  investcloud: "cavalcade",
   "stormscape-now": "monument",
   "stormscape-freelance": "monument",
 };
 
 export const KIND_ORDER = Object.values(KIND_BY_PLACE);
+
+/** How many skills a kind can carry; the rest of the kinds take the film's cap of nine. */
+export const LIMIT_BY_KIND: Record<string, number> = {
+  cavalcade: 60,
+};
 
 /** What each direction is called, for the chapter card. */
 export const DIRECTION_BY_PLACE: Record<string, string> = {
