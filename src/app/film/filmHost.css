@@ -27,3 +27,83 @@
     animation: none;
   }
 }
+
+/* The film's loader: a dark plate in the film's dress, for every stage of
+   the wait (the code, the timeline, the map). */
+.film-host__loading,
+.titles__loader {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 60%, #1a110a 0%, #0a0704 70%);
+  color: #f3e2b8;
+}
+
+.film-host__loading {
+  position: fixed;
+}
+
+.titles__loader-kicker {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(243, 226, 184, 0.62);
+}
+
+.titles__loader-caption {
+  margin: 0;
+  font-family: "Cinzel", "Barlow Condensed", Georgia, serif;
+  font-size: clamp(1.1rem, 2.2vw, 1.7rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #d9a441;
+  text-shadow: 0 0 24px rgba(255, 150, 40, 0.35);
+}
+
+.titles__loader.is-error .titles__loader-caption {
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: #f3e2b8;
+}
+
+/* A line of fire that runs while it waits. */
+.titles__loader-line {
+  position: relative;
+  display: block;
+  width: min(240px, 40vw);
+  height: 3px;
+  margin: 12px auto 0;
+  overflow: hidden;
+  background: rgba(217, 164, 65, 0.16);
+}
+
+.titles__loader-line::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, #ffd96a 30%, #e2761f 70%, transparent);
+  box-shadow: 0 0 12px rgba(255, 170, 60, 0.8);
+  animation: titles-loader-run 1.3s ease-in-out infinite;
+}
+
+@keyframes titles-loader-run {
+  to {
+    left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titles__loader-line::after {
+    animation: none;
+    left: 30%;
+  }
+}
