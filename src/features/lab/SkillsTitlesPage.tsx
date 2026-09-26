@@ -1123,8 +1123,11 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         const toEye = new THREE.Vector3();
         const toAim = new THREE.Vector3();
         const over = new THREE.Vector3();
-        const WIDE_EYE = new THREE.Vector3(0, 1500, 2050);
-        const WIDE_AIM = new THREE.Vector3(0, 0, -60);
+        // The last frame holds the sun as well as the map: the shot stands a
+        // little further back and looks a little higher, so the astrolabe has
+        // air above it instead of sitting on the top edge.
+        const WIDE_EYE = new THREE.Vector3(0, 1620, 2300);
+        const WIDE_AIM = new THREE.Vector3(0, 150, -60);
         // The opening, as fractions of the intro: the sun lights, each band is
         // forged in turn (the second and third overlapping), a breath, and only
         // then does the camera begin to move away.
