@@ -1132,17 +1132,12 @@ export function makeBuilders(THREE: Three, label: Label) {
     // Blank courses of wall between and beyond the lettered blocks, so the
     // Wall runs on past what is written on it. A blank block carries no name
     // and takes its height from its neighbours.
-    const ordered: Array<Tower | null> = [null, null];
-    named.forEach((tower, index) => {
-      ordered.push(tower);
-      if (index % 2 === 1 && index < named.length - 1) ordered.push(null);
-    });
-    ordered.push(null, null);
+    const ordered: Array<Tower | null> = named;
 
     // A gentle curve: the arc's centre sits far behind, so the wall reads
     // nearly straight with the ends just easing back.
     const RADIUS = 150;
-    const WIDTH = 15;
+    const WIDTH = 30;
     const GAP = 0;
     const DEPTH = 9;
     const step = (WIDTH + GAP) / RADIUS;
