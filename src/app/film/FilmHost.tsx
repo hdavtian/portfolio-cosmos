@@ -14,8 +14,8 @@ const Film = lazy(() => import("../../features/lab/SkillsTitlesPage").then((m) =
 // in plain markup (styled by filmHost.css) so the wait reads as one thing.
 const loading = (
   <div className="film-host__loading" role="status" aria-live="polite">
-    <p className="titles__loader-kicker">The working years</p>
-    <p className="titles__loader-caption">Loading the film</p>
+    <p className="titles__loader-kicker">Skill progression</p>
+    <p className="titles__loader-caption">Loading skill progression journey and map</p>
     <span className="titles__loader-line" aria-hidden="true" />
   </div>
 );

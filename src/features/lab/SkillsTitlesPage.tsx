@@ -17,7 +17,7 @@ import { NOW_YEAR, castleTowers, say, skillsDataFromRelease, towersAt, type Skil
 import "./skillsTitles.css";
 
 /**
- * The Working Years: a career told the way the Game of Thrones titles tell a
+ * Skill Progression: a career told the way the Game of Thrones titles tell a
  * kingdom. A relief map lit by an astrolabe sun; the camera sweeps from place
  * to place, and at each one a clockwork structure winds up out of the map —
  * one piece per skill, its height the years spent on it there, a gold cap on
@@ -363,7 +363,7 @@ export function SkillsTitlesPage() {
     return (
       <div className="titles titles--loading">
         <FilmLoader
-          caption={query.isError ? "The film could not load its timeline. Refresh to try again." : "Reading the timeline"}
+          caption={query.isError ? "The film could not load its timeline. Refresh to try again." : "Loading skill progression journey and map"}
           error={query.isError}
         />
       </div>
@@ -381,7 +381,7 @@ export function SkillsTitlesPage() {
 export function FilmLoader({ caption, error = false }: { caption: string; error?: boolean }) {
   return (
     <div className={`titles__loader${error ? " is-error" : ""}`} role="status" aria-live="polite">
-      <p className="titles__loader-kicker">The working years</p>
+      <p className="titles__loader-kicker">Skill progression</p>
       <p className="titles__loader-caption">{caption}</p>
       {error ? null : <span className="titles__loader-line" aria-hidden="true" />}
     </div>
@@ -1667,13 +1667,13 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   return (
     <div className={`titles${holding ? " is-holding" : ""}${shifted ? " is-shift" : ""}`} ref={rootRef}>
       <div className="titles__stage" ref={hostRef} />
-      {sceneReady ? null : <FilmLoader caption="Building the map" />}
+      {sceneReady ? null : <FilmLoader caption="Loading skill progression journey and map" />}
       <div className="titles__vignette" aria-hidden="true" />
 
       {SHOW_TITLE ? (
         <header className="titles__head">
           <p className="titles__eyebrow">Harma Davtian · sketch, mock data</p>
-          <h1 className="titles__name">The Working Years</h1>
+          <h1 className="titles__name">Skill Progression</h1>
           <p className="titles__era">{era}</p>
         </header>
       ) : null}
