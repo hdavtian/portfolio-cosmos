@@ -1648,7 +1648,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
       <section className={`titles__now${holding ? " is-on" : ""}`} aria-hidden={!holding}>
         {/* The same embers as behind the skill progress: a warm ground for the
             panel, on the right, off the build. */}
-        <Embers moving={moving && holding} />
+        <Embers moving={holding} />
         <div className="titles__now-inner">
         <h2 className="titles__now-name">{active.name}</h2>
         <p className="titles__now-years">{yearsLabel(active, data.LAST_YEAR)}</p>
@@ -1893,7 +1893,7 @@ function Tally({
   const most = Math.max(1, NOW_YEAR - 1994, ...rows.map((row) => row.years));
   return (
     <aside className={`tally${shown ? " is-open" : ""}${finale ? " is-finale" : ""}`} aria-hidden={!shown}>
-      <Embers moving={moving} />
+      <Embers moving={shown} />
       <div className="tally__inner">
         {SHOW_PANEL_HEADINGS ? (
           <>
@@ -1973,7 +1973,7 @@ function Tally({
   );
 }
 
-/** Embers drifting up behind the tally. They hold still with everything else when the scrubber is parked. */
+/** Embers drifting up behind a panel, whenever it is showing. */
 function Embers({ moving }: { moving: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const movingRef = useRef(moving);
