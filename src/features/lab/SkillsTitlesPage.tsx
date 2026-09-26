@@ -424,6 +424,9 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   }, [cities, projects]);
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
+  // Clicking a place on the map goes there, exactly as its mark on the
+  // scrubber does. The scene calls this; React knows where the stops are.
+  const pickStopRef = useRef<(cityIndex: number) => void>(() => {});
   // The film opens on its last frame - today's complete picture, every tower
   // up and the tally full - because that is the question a visitor brings.
   // Play then runs the build-up from the first job.
@@ -446,6 +449,13 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   useEffect(() => {
     holdingRef.current = holding;
   }, [holding]);
+  // Parked on the last frame, with the ending up: the view is the viewer's
+  // to turn, close in on and pan, as at a stop, though nothing is "held".
+  const parked = progress >= 1 && !playing;
+  const parkedRef = useRef(false);
+  useEffect(() => {
+    parkedRef.current = parked;
+  }, [parked]);
   // Shift held: a drag pans the view instead of turning it.
   const [shifted, setShifted] = useState(false);
   const shiftedRef = useRef(false);
@@ -935,6 +945,83 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         });
 
         /* ---------------------------------------------------------------- */
+        /* Going to a place by clicking it                                   */
+
+        // A box round each place: cheap to test a ray against, and forgiving
+        // of a click near the construct rather than exactly on a spoke of it.
+        const reachable = placed
+          .map((entry, index) => ({ entry, index }))
+          .filter(({ entry }) => !entry.later)
+          .map(({ entry, index }) => ({
+            index,
+            box: new THREE.Box3(
+              new THREE.Vector3(
+                entry.at.x - entry.build.reach,
+                entry.at.y - 4,
+                entry.at.z - entry.build.reach,
+              ),
+              new THREE.Vector3(
+                entry.at.x + entry.build.reach,
+                entry.at.y + entry.build.top,
+                entry.at.z + entry.build.reach,
+              ),
+            ),
+          }));
+        const picker = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        const where = new THREE.Vector3();
+        const canvas = renderer.domElement;
+        const placeUnder = (event: PointerEvent) => {
+          const rect = canvas.getBoundingClientRect();
+          pointer.set(
+            ((event.clientX - rect.left) / rect.width) * 2 - 1,
+            -((event.clientY - rect.top) / rect.height) * 2 + 1,
+          );
+          picker.setFromCamera(pointer, camera);
+          let best = -1;
+          let nearest = Infinity;
+          reachable.forEach(({ index, box }) => {
+            if (!picker.ray.intersectBox(box, where)) return;
+            const away = where.distanceTo(camera.position);
+            if (away < nearest) {
+              nearest = away;
+              best = index;
+            }
+          });
+          return best;
+        };
+        let pressedAt: { x: number; y: number } | null = null;
+        const onPointerDown = (event: PointerEvent) => {
+          pressedAt = { x: event.clientX, y: event.clientY };
+        };
+        const onPointerMove = (event: PointerEvent) => {
+          // Mid-drag the view is being turned, not aimed at anything; and
+          // with shift down the pointer is already saying "pan".
+          if (pressedAt || shiftedRef.current) {
+            canvas.classList.remove("is-over");
+            return;
+          }
+          canvas.classList.toggle("is-over", placeUnder(event) >= 0);
+        };
+        const onPointerUp = (event: PointerEvent) => {
+          const from = pressedAt;
+          pressedAt = null;
+          if (!from || event.button !== 0 || event.shiftKey) return;
+          // A drag turned or panned the view; only a click goes anywhere.
+          if (Math.abs(event.clientX - from.x) + Math.abs(event.clientY - from.y) > 6) return;
+          const index = placeUnder(event);
+          if (index >= 0) pickStopRef.current(index);
+        };
+        const onPointerLeave = () => {
+          pressedAt = null;
+          canvas.classList.remove("is-over");
+        };
+        canvas.addEventListener("pointerdown", onPointerDown);
+        canvas.addEventListener("pointermove", onPointerMove);
+        canvas.addEventListener("pointerup", onPointerUp);
+        canvas.addEventListener("pointerleave", onPointerLeave);
+
+        /* ---------------------------------------------------------------- */
         /* The camera                                                        */
 
         const shotFor = (index: number) =>
@@ -1282,10 +1369,29 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         // while it is still flying in would yank it about.
         const handOver = () => {
           const reach = eyeNow.distanceTo(aimNow);
-          controls.minDistance = reach * 0.3;
-          controls.maxDistance = reach * 2.4;
           controls.minPolarAngle = 0.35;
           controls.maxPolarAngle = 1.42;
+          if (parkedRef.current) {
+            // The end: zoom in as far as a place, and back out only to where
+            // the film parked; pan anywhere over the map, never under it.
+            controls.minDistance = reach * 0.08;
+            controls.maxDistance = reach;
+            const room = 1400;
+            controls.setBoundary(
+              new THREE.Box3(
+                new THREE.Vector3(WIDE_AIM.x - room, 6, WIDE_AIM.z - room),
+                new THREE.Vector3(WIDE_AIM.x + room, 420, WIDE_AIM.z + room),
+              ),
+            );
+            controls.mouseButtons.left = shiftedRef.current ? CameraControls.ACTION.TRUCK : CameraControls.ACTION.ROTATE;
+            controls.mouseButtons.wheel = CameraControls.ACTION.DOLLY;
+            controls.touches.one = CameraControls.ACTION.TOUCH_ROTATE;
+            controls.touches.two = CameraControls.ACTION.TOUCH_DOLLY_TRUCK;
+            handedOver = true;
+            return;
+          }
+          controls.minDistance = reach * 0.3;
+          controls.maxDistance = reach * 2.4;
           // Panning may look round the place, never leave it or go under the
           // ground: the aim is kept in a box round the construct, and the
           // camera can only stand above the aim, so neither goes below the map.
@@ -1329,7 +1435,8 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           // …except while it is holding at a place for the card to be read:
           // then the machine keeps turning on the clock, and the camera drifts.
           const dt = Math.min(0.05, clock.getDelta());
-          const holdingNow = holdingRef.current;
+          const parkedNow = parkedRef.current;
+          const holdingNow = holdingRef.current || parkedNow;
           if (holdingNow) idle += dt;
           if (holdingNow !== wasHolding || (holdingNow && Math.abs(p - heldAt) > 1e-6)) {
             // Also when thrown from one stop straight to another: let go of the
@@ -1357,8 +1464,9 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
             if (camera.position.distanceTo(eyeNow) < 24) handOver();
           } else if (!touched) {
             controls.mouseButtons.left = shiftedRef.current ? CameraControls.ACTION.TRUCK : CameraControls.ACTION.ROTATE;
-            // Until somebody takes hold of it, it keeps circling slowly.
-            controls.rotate(dt * 0.05, 0, true);
+            // Until somebody takes hold of it, it keeps circling slowly - a
+            // place, that is; the map at the end stays as it was parked.
+            if (!parkedNow) controls.rotate(dt * 0.05, 0, true);
           }
           if (handedOver && touched)
             controls.mouseButtons.left = shiftedRef.current ? CameraControls.ACTION.TRUCK : CameraControls.ACTION.ROTATE;
@@ -1441,6 +1549,10 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         cleanup = () => {
           cancelAnimationFrame(frame);
           window.removeEventListener("resize", resize);
+          canvas.removeEventListener("pointerdown", onPointerDown);
+          canvas.removeEventListener("pointermove", onPointerMove);
+          canvas.removeEventListener("pointerup", onPointerUp);
+          canvas.removeEventListener("pointerleave", onPointerLeave);
           scene.traverse((object) => {
             const mesh = object as ThreeTypes.Mesh;
             if (mesh.geometry) mesh.geometry.dispose();
@@ -1624,6 +1736,19 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         : yearsLabel(active, data.LAST_YEAR);
   const stops = timeline.filter((entry) => entry.kind === "dwell");
 
+  // Clicking a place on the map goes there, exactly as its mark on the
+  // scrubber does: the film is stopped, thrown to that place, and held.
+  useEffect(() => {
+    pickStopRef.current = (cityIndex: number) => {
+      const which = stops.findIndex((stop) => stop.city === cityIndex);
+      if (which < 0) return;
+      snapRef.current = true;
+      setPlaying(false);
+      setProgress(holds[which]);
+      setHolding(true);
+    };
+  });
+
   // The opening is long, and on an honest bar it would push every place to
   // the right. So the bar is drawn to its own scale — the opening gets a short
   // stretch marked Start — while the film itself plays at exactly the speed it
@@ -1665,7 +1790,7 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
   const showCard = SHOW_CHAPTER_CARD && atPlace && built > 0.86;
 
   return (
-    <div className={`titles${holding ? " is-holding" : ""}${shifted ? " is-shift" : ""}`} ref={rootRef}>
+    <div className={`titles${holding || parked ? " is-holding" : ""}${shifted ? " is-shift" : ""}`} ref={rootRef}>
       <div className="titles__stage" ref={hostRef} />
       {sceneReady ? null : <FilmLoader caption="Loading skill progression journey and map" />}
       <div className="titles__vignette" aria-hidden="true" />
@@ -1696,6 +1821,14 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         finale={ending > 0.5}
       />
 
+      {/* How to look round. One place only, low and centred, clear of the
+          scrubber below it so a drag meant for the bar is never caught here. */}
+      <p className={`titles__hint${holding || parked ? " is-on" : ""}`} aria-hidden="true">
+        <span className="titles__hint-item">Mouse drag to rotate around</span>
+        <span className={`titles__hint-item${shifted ? " is-on" : ""}`}>Shift click to pan up/down</span>
+        <span className="titles__hint-item">Zoom in/out enabled</span>
+      </p>
+
       {/* Stopped at a place: where we are, and the way on or back. */}
       <section className={`titles__now${holding ? " is-on" : ""}`} aria-hidden={!holding}>
         {/* The same embers as behind the skill progress: a warm ground for the
@@ -1724,12 +1857,6 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           />
           auto-continue
         </label>
-        {/* How to look round: the least that reads at a glance. */}
-        <p className="titles__hint" aria-hidden="true">
-          <span className="titles__hint-item"><kbd>drag</kbd> orbit</span>
-          <span className={`titles__hint-item${shifted ? " is-on" : ""}`}><kbd>⇧ drag</kbd> pan</span>
-          <span className="titles__hint-item"><kbd>wheel</kbd> zoom</span>
-        </p>
         </div>
       </section>
 
