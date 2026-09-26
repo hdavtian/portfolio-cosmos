@@ -687,8 +687,9 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
   const monument = (towers: Tower[], tallest: number, later: Tower[] = [], place: Place): Build => {
     const group = new THREE.Group();
     const OWN = place.accent;
-    // What the studio picked up the second time round grows in its own colour.
-    const LATER = "#ff9d5c";
+    // The trees grow in three colours, branch by branch: red, blue, orange.
+    const LEAVES = ["#ff4a3d", "#4fa8ff", "#ff9d5c"];
+    const leaf = (index: number) => LEAVES[index % LEAVES.length];
 
     const plinth = new THREE.Mesh(
       new THREE.CylinderGeometry(21, 26, 6, 6),
@@ -803,7 +804,7 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
         index,
         20 + index * GAP,
         (index / Math.max(1, first.length)) * Math.PI * 2,
-        tower.fresh ? NEW_GLOW : OWN,
+        leaf(index),
         Boolean(tower.fresh),
       ),
     );
@@ -811,7 +812,7 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
     // Coming back, the studio doesn't graft onto the old tree: a second one
     // grows beside it, in its own colour, for what is new since.
     const SECOND = new THREE.Vector3(74, 0, 0);
-    const sapling = lightColumn(4.5, 20 + later.length * GAP + 40, LATER);
+    const sapling = lightColumn(4.5, 20 + later.length * GAP + 40, leaf(2));
     sapling.position.x = SECOND.x;
     group.add(sapling);
     const saplingBase = new THREE.Mesh(
@@ -822,7 +823,7 @@ const tabardFor = (place: Place, tower: Tower, width: number, drop: number, inde
     group.add(saplingBase);
     const laterSorted = [...later].sort((a, b) => b.years - a.years);
     const laterBranches = laterSorted.map((tower, index) =>
-      branch(SECOND, tower, index, 16 + index * GAP, (index / Math.max(1, laterSorted.length)) * Math.PI * 2 + 0.4, LATER, true),
+      branch(SECOND, tower, index, 16 + index * GAP, (index / Math.max(1, laterSorted.length)) * Math.PI * 2 + 0.4, leaf(index + 1), true),
     );
 
     const shards = Array.from({ length: 10 }, (_, k) => {
