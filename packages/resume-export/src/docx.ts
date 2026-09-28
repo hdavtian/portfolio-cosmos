@@ -8,6 +8,7 @@ import {
   TextRun,
 } from "docx";
 import type { ResumeModel } from "./model.js";
+import { conformPackage } from "./opc.js";
 
 /**
  * The resume as a Word document, in the shape of the one Harma has sent for
@@ -105,7 +106,9 @@ export function resumeDocument(model: ResumeModel): Document {
 
   return new Document({
     creator: model.name,
+    lastModifiedBy: model.name,
     title: `${model.name} - ${model.title}`,
+    description: `${model.name} resume`,
     styles: { default: { document: { run: { font: FONT, size: BODY } } } },
     numbering: {
       config: [
@@ -137,5 +140,10 @@ export function resumeDocument(model: ResumeModel): Document {
   });
 }
 
-/** The .docx bytes; works in the browser and in Node alike. */
-export const resumeDocx = (model: ResumeModel): Promise<ArrayBuffer> => Packer.toArrayBuffer(resumeDocument(model));
+/**
+ * The .docx bytes; works in the browser and in Node alike. The package is
+ * rewritten on the way out so strict readers — the resume parsers at Indeed
+ * and LinkedIn among them — accept it. See `conformPackage`.
+ */
+export const resumeDocx = async (model: ResumeModel): Promise<ArrayBuffer> =>
+  conformPackage(await Packer.toArrayBuffer(resumeDocument(model)));
