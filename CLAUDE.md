@@ -66,11 +66,16 @@ When Harma assigns a ticket:
 4. Implement, following the existing skills in `.claude/skills/` where they apply
    (`syncfusion-list-pages`, `syncfusion-edit-dialogs`).
 5. Commit referencing the key, e.g. `HD-1: fine tune posthog integration`.
-6. Comment on the ticket with what changed and the commit sha, then transition it.
-   Check `listJiraIssueTransitions` first — transition ids are per-project, don't guess.
+6. Comment on the ticket with what changed, the branch, and the commit sha.
 
-Don't transition a ticket to Done on work that hasn't been verified. If tests or a manual
-check didn't happen, say so in the comment and leave it In Progress.
+**Do not move a ticket's status. Harma does that by hand.** The v2 server only exposes
+`listJiraIssueTransitions` through the blocked `executeRead` runner, so the ids cannot be read,
+and guessing a transition name is worse than leaving the ticket where it is. `transitionJiraIssue`
+stays on the allow-list for the day that changes, but until then the comment is the hand-off.
+
+Say plainly in the comment what was and was not verified. Where something could only be checked
+as code — a build passing rather than the feature observed working — say so, and say what would
+confirm it. That is what tells Harma whether a ticket is ready to close.
 
 ### Override (rare)
 
