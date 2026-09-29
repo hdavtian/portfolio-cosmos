@@ -90,7 +90,18 @@ const positionDates = (
   return `${monthYear(start)} - ${end ? monthYear(end) : "Present"}`;
 };
 
-const safeStem = (text: string) => text.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
+/**
+ * The file name: lower case, ASCII, dash delimited, nothing a parser or a
+ * shell has to quote. "Harma Davtian - Full Stack Engineer" becomes
+ * "harma-davtian-full-stack-engineer".
+ */
+const safeStem = (text: string) =>
+  text
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 export function resumeModel(source: ResumeSource): ResumeModel {
   const { profile } = source;

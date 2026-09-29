@@ -62,7 +62,15 @@ describe("resumeModel", () => {
   it("orders links and names the file after the person and title", () => {
     const model = resumeModel(source);
     expect(model.links.map((l) => l.title)).toEqual(["Site", "GitHub"]);
-    expect(model.fileStem).toBe("Ada Lovelace - Full Stack Engineer");
+    expect(model.fileStem).toBe("ada-lovelace-full-stack-engineer");
+  });
+
+  it("keeps the file name to lower-case ASCII words joined by dashes", () => {
+    const named = (name: string, title: string) =>
+      resumeModel({ ...source, profile: { ...source.profile, name, title } }).fileStem;
+    expect(named("José O'Neill, Jr.", "Sr. Engineer / Architect")).toBe("jose-o-neill-jr-sr-engineer-architect");
+    expect(named("  Ada  ", "R&D")).toBe("ada-r-d");
+    expect(named("Ada", "Full Stack Engineer")).not.toMatch(/[^a-z0-9-]/);
   });
 });
 

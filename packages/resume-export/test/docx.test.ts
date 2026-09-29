@@ -24,7 +24,7 @@ const model: ResumeModel = {
   education: [{ institution: "Somewhere", degree: "BS, Mathematics", date: "May 1842" }],
   links: [{ title: "LinkedIn", url: "https://www.linkedin.com/in/ada" }],
   certifications: [{ name: "A certificate", date: "Jan 2020" }],
-  fileStem: "Ada Lovelace - Full Stack Engineer",
+  fileStem: "ada-lovelace-full-stack-engineer",
 };
 
 const open = async () => {
