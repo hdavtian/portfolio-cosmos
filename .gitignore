@@ -46,3 +46,6 @@ media-backups/
 
 # Before/after evidence for the legacy-translation retirement (screenshots, release snapshots)
 baselines/
+
+# Human-created, self-expiring Jira guard override (never commit)
+.claude/jira-unlock
