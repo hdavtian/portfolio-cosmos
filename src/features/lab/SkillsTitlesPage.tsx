@@ -1875,7 +1875,9 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
 
   return (
     <div className={`titles${holding || parked ? " is-holding" : ""}${shifted ? " is-shift" : ""}`} ref={rootRef}>
-      <div className="titles__stage" ref={hostRef} />
+      {/* Fades up once the first frame is drawn, so the map arrives rather than
+          appearing. Opacity only, which the compositor handles on its own. */}
+      <div className={`titles__stage${sceneReady ? " is-ready" : ""}`} ref={hostRef} />
       {sceneReady ? null : <FilmLoader caption="Loading skill progression journey and map" />}
       <div className="titles__vignette" aria-hidden="true" />
 

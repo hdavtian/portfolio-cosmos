@@ -12,9 +12,24 @@
   font-family: "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
+/* The map fades up when its first frame has been drawn, rather than cutting in
+   as the loader goes. Opacity only, so the compositor does it without the main
+   thread, which is still busy settling the scene at that moment. */
 .titles__stage {
   position: absolute;
   inset: 0;
+  opacity: 0;
+  transition: opacity 520ms ease;
+}
+
+.titles__stage.is-ready {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titles__stage {
+    transition: none;
+  }
 }
 
 .titles__stage canvas {
