@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { TechStackTreeNode } from "@hd/content-schema/tech-stack-tree";
 import type { ShowcaseProject } from "../lib/useShowcaseProjects";
 import { SCENE_DEFINITIONS } from "../scenes/registry";
+import { trackEvent } from "../../../lib/analytics";
 import { EMPTY_PORTFOLIO, type SceneData, type SceneJob, type ScenePortfolio, type ShowcaseScene } from "../scenes/types";
 
 interface SceneStageProps {
@@ -451,6 +452,12 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
                   type="button"
                   className={`showcase-scene-switcher__item${isActive ? " is-active" : ""}${ready ? " is-ready" : ""}`}
                   onClick={() => {
+                    trackEvent("showcase_background_preview_click", {
+                      scene_id: definition.id,
+                      scene_label: definition.label,
+                      scene_index: index,
+                      previous_scene_id: activeId,
+                    });
                     lastInteractionRef.current = performance.now();
                     switchTo(definition.id);
                   }}

@@ -23,6 +23,7 @@ import {
 } from "../lib/indexReturnState";
 import { useRestState } from "../lib/useRestState";
 import { readVisitedProjects } from "../lib/visitedProjects";
+import { trackEvent } from "../../../lib/analytics";
 import {
   useShowcaseProjects,
   type ShowcaseProject,
@@ -272,8 +273,18 @@ export function ShowcaseIndexPage() {
     setSearchParams(next, { replace: true });
   };
 
-  const toggleFilter = (key: "core" | "tech", value: string) =>
-    updateParams({ [key]: searchParams.get(key) === value ? null : value });
+  // One chip per row is lit at a time: clicking the lit one clears it. The
+  // `action` says which way it went, so checked and unchecked stay separable.
+  const toggleFilter = (key: "core" | "tech", value: string) => {
+    const wasOn = searchParams.get(key) === value;
+    trackEvent("showcase_filter_chip_toggle", {
+      chip_type: key,
+      value,
+      action: wasOn ? "uncheck" : "check",
+      source: "home",
+    });
+    updateParams({ [key]: wasOn ? null : value });
+  };
 
   const beginClosing = (id: string) => {
     window.clearTimeout(closeTimer.current);
@@ -297,21 +308,46 @@ export function ShowcaseIndexPage() {
     event.preventDefault();
     setRestoredOpenId(null);
     if (openId === project.id) {
+      trackPreviewToggle(project, "close", "title");
       beginClosing(project.id);
       updateParams({ open: null });
       return;
     }
     if (openId) beginClosing(openId);
+    trackPreviewToggle(project, "open", "title");
     updateParams({ open: project.id });
   };
 
+  // Opening the preview is the first step of the two-step walk into a project,
+  // so it is worth counting separately from the project page itself.
+  const trackPreviewToggle = (
+    project: ShowcaseProject,
+    action: "open" | "close",
+    via: "title" | "close_button",
+  ) =>
+    trackEvent("showcase_project_preview_toggle", {
+      portfolio_id: project.id,
+      title: project.title,
+      category: project.category,
+      action,
+      via,
+    });
+
   const openProject = (project: ShowcaseProject) => {
+    trackEvent("showcase_project_view_click", {
+      portfolio_id: project.id,
+      title: project.title,
+      category: project.category,
+      source: "preview_pane",
+    });
     saveIndexReturnState({ search: location.search, scrollY: window.scrollY });
     navigate(`/portfolio/${project.id}`);
   };
 
   const closePreview = () => {
     if (!openId) return;
+    const project = visible.find((entry) => entry.id === openId);
+    if (project) trackPreviewToggle(project, "close", "close_button");
     setRestoredOpenId(null);
     beginClosing(openId);
     updateParams({ open: null });
@@ -408,7 +444,13 @@ export function ShowcaseIndexPage() {
                 <button
                   type="button"
                   className="showcase-chip showcase-chip--clear"
-                  onClick={() => updateParams({ core: null, tech: null })}
+                  onClick={() => {
+                    trackEvent("showcase_filter_clear_click", {
+                      core: coreFilter,
+                      tech: techFilter,
+                    });
+                    updateParams({ core: null, tech: null });
+                  }}
                 >
                   Clear
                 </button>
@@ -432,11 +474,16 @@ export function ShowcaseIndexPage() {
                       className="showcase-switch__side"
                       aria-pressed={sort === side.key}
                       title={side.title}
-                      onClick={() =>
+                      onClick={() => {
+                        trackEvent("showcase_sort_change", {
+                          value: side.key,
+                          label: side.label,
+                          previous: sort,
+                        });
                         updateParams({
                           sort: side.key === DEFAULT_SORT ? null : side.key,
-                        })
-                      }
+                        });
+                      }}
                     >
                       {side.label}
                     </button>

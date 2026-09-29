@@ -5,6 +5,7 @@ import { useBackdropTint } from "../lib/backdropTint";
 import { readIndexReturnState } from "../lib/indexReturnState";
 import { useShowcaseProjects } from "../lib/useShowcaseProjects";
 import { markProjectVisited } from "../lib/visitedProjects";
+import { trackEvent } from "../../../lib/analytics";
 
 /** One project: story and spec sheet on the left, large images on the right. */
 export function ShowcaseProjectPage() {
@@ -30,6 +31,21 @@ export function ShowcaseProjectPage() {
   useEffect(() => {
     if (project) markProjectVisited(project.id);
   }, [project]);
+
+  // The SDK's $pageview already records the URL; this carries the project's
+  // identity alongside it, so reports don't have to parse paths.
+  const detailId = project?.id ?? null;
+  useEffect(() => {
+    if (!project || !detailId) return;
+    trackEvent("showcase_project_detail_view", {
+      portfolio_id: project.id,
+      title: project.title,
+      category: project.category,
+      year: project.year,
+      media_count: project.detailMedia.filter((item) => item.image).length,
+    });
+    // Keyed on the id so a re-render with the same project does not re-fire.
+  }, [detailId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Escape leaves the project, unless the full-size viewer is open — that
   // takes Escape first, to close itself.
@@ -91,7 +107,22 @@ export function ShowcaseProjectPage() {
                 <ul className="showcase-spec__list">
                   {project.technologies.map((tech) => (
                     <li key={tech}>
-                      <Link to={`/?tech=${encodeURIComponent(tech)}`}>{tech}</Link>
+                      {/* Same action as the homepage chip, so it carries the same
+                          event with a different source rather than its own name. */}
+                      <Link
+                        to={`/?tech=${encodeURIComponent(tech)}`}
+                        onClick={() =>
+                          trackEvent("showcase_filter_chip_toggle", {
+                            chip_type: "tech",
+                            value: tech,
+                            action: "check",
+                            source: "project_detail",
+                            portfolio_id: project.id,
+                          })
+                        }
+                      >
+                        {tech}
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -107,6 +138,7 @@ export function ShowcaseProjectPage() {
           <ProjectGallery
             key={project.id}
             projectTitle={project.title}
+            portfolioId={project.id}
             tint={project.coreColor}
             shots={media.map((item, mediaIndex) => ({
               key: item.id ?? `${project.id}-${mediaIndex}`,

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useReleaseQuery } from "../../../lib/query/contentQueries";
+import { trackEvent } from "../../../lib/analytics";
 
 /**
  * The resume as a file: Word, PDF and plain text, each written in the browser
@@ -23,6 +24,9 @@ export function ShowcaseResumeDownloadPage() {
 
   const download = async (format: Format) => {
     if (!release || busy) return;
+    // Fired on the click rather than on success: the writers are loaded lazily
+    // and can fail, and the intent to download is the thing worth counting.
+    trackEvent("showcase_resume_download_click", { format });
     setBusy(format);
     setError(null);
     try {
@@ -41,6 +45,7 @@ export function ShowcaseResumeDownloadPage() {
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (cause) {
       console.error("[resume] could not write the file", cause);
+      trackEvent("showcase_resume_download_failed", { format });
       setError("The file could not be written. Refresh and try again.");
     } finally {
       setBusy(null);

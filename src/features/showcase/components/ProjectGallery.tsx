@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { trackEvent } from "../../../lib/analytics";
 
 export interface GalleryShot {
   key: string;
@@ -16,10 +17,13 @@ export interface GalleryShot {
 export function ProjectGallery({
   shots,
   projectTitle,
+  portfolioId,
   tint,
 }: {
   shots: GalleryShot[];
   projectTitle: string;
+  /** Carried on the analytics events so they name the project, not just the image. */
+  portfolioId: string;
   /** The project's core colour, washed over the screenshots. */
   tint?: string;
 }) {
@@ -35,7 +39,15 @@ export function ProjectGallery({
             index={index}
             total={shots.length}
             eager={index === 0}
-            onMaximize={() => setViewing(index)}
+            onMaximize={() => {
+              trackEvent("showcase_project_image_expand", {
+                portfolio_id: portfolioId,
+                media_index: index,
+                media_title: shot.title,
+                media_count: shots.length,
+              });
+              setViewing(index);
+            }}
           />
         ))}
       </ol>
@@ -44,6 +56,7 @@ export function ProjectGallery({
           shots={shots}
           index={viewing}
           projectTitle={projectTitle}
+          portfolioId={portfolioId}
           onIndex={setViewing}
           onClose={() => setViewing(null)}
         />
@@ -148,12 +161,14 @@ function ShotViewer({
   shots,
   index,
   projectTitle,
+  portfolioId,
   onIndex,
   onClose,
 }: {
   shots: GalleryShot[];
   index: number;
   projectTitle: string;
+  portfolioId: string;
   onIndex: (index: number) => void;
   onClose: () => void;
 }) {
@@ -165,9 +180,38 @@ function ShotViewer({
   useEffect(() => {
     currentThumbRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [index]);
+
+  // One event for every way of moving between screenshots, with `via` saying
+  // which control was used, rather than an event name per control.
+  const goTo = useCallback(
+    (to: number, via: "thumb" | "arrow" | "key") => {
+      trackEvent("showcase_lightbox_navigate", {
+        portfolio_id: portfolioId,
+        from_index: index,
+        to_index: to,
+        media_count: shots.length,
+        via,
+      });
+      onIndex(to);
+    },
+    [index, onIndex, portfolioId, shots.length],
+  );
   const step = useCallback(
-    (delta: number) => onIndex((index + delta + shots.length) % shots.length),
-    [index, onIndex, shots.length],
+    (delta: number, via: "arrow" | "key") =>
+      goTo((index + delta + shots.length) % shots.length, via),
+    [goTo, index, shots.length],
+  );
+
+  const closeWith = useCallback(
+    (via: "button" | "backdrop" | "key") => {
+      trackEvent("showcase_lightbox_close", {
+        portfolio_id: portfolioId,
+        media_index: index,
+        via,
+      });
+      onClose();
+    },
+    [index, onClose, portfolioId],
   );
 
   useEffect(() => {
@@ -183,17 +227,23 @@ function ShotViewer({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-      else if (event.key === "ArrowRight") step(1);
-      else if (event.key === "ArrowLeft") step(-1);
+      if (event.key === "Escape") closeWith("key");
+      else if (event.key === "ArrowRight") step(1, "key");
+      else if (event.key === "ArrowLeft") step(-1, "key");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, step]);
+  }, [closeWith, step]);
 
   return createPortal(
     <div className="showcase-viewer" role="dialog" aria-modal="true" aria-label={`${projectTitle} screenshots`}>
-      <button type="button" className="showcase-viewer__backdrop" onClick={onClose} aria-label="Close" tabIndex={-1} />
+      <button
+        type="button"
+        className="showcase-viewer__backdrop"
+        onClick={() => closeWith("backdrop")}
+        aria-label="Close"
+        tabIndex={-1}
+      />
       <div className="showcase-viewer__bar">
         <p className="showcase-shot__caption">
           <span className="showcase-shot__index">
@@ -201,7 +251,7 @@ function ShotViewer({
           </span>
           <span>{shot.title}</span>
         </p>
-        <button ref={closeRef} type="button" className="showcase-back" onClick={onClose}>
+        <button ref={closeRef} type="button" className="showcase-back" onClick={() => closeWith("button")}>
           Close
         </button>
       </div>
@@ -214,7 +264,7 @@ function ShotViewer({
             <button
               type="button"
               className="showcase-viewer__step showcase-viewer__step--prev"
-              onClick={() => step(-1)}
+              onClick={() => step(-1, "arrow")}
               aria-label="Previous screenshot"
             >
               <span aria-hidden="true" />
@@ -222,7 +272,7 @@ function ShotViewer({
             <button
               type="button"
               className="showcase-viewer__step showcase-viewer__step--next"
-              onClick={() => step(1)}
+              onClick={() => step(1, "arrow")}
               aria-label="Next screenshot"
             >
               <span aria-hidden="true" />
@@ -239,7 +289,7 @@ function ShotViewer({
                 type="button"
                 ref={thumbIndex === index ? currentThumbRef : undefined}
                 className={`showcase-viewer__thumb${thumbIndex === index ? " is-current" : ""}`}
-                onClick={() => onIndex(thumbIndex)}
+                onClick={() => goTo(thumbIndex, "thumb")}
                 aria-label={`Screenshot ${thumbIndex + 1}: ${item.title}`}
                 aria-current={thumbIndex === index ? "true" : undefined}
               >

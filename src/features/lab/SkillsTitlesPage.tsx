@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type * as ThreeTypes from "three";
 import { useReleaseQuery } from "../../lib/query/contentQueries";
 import { isFilmSuspended } from "../../lib/filmSuspend";
+import { trackEvent } from "../../lib/analytics";
 import { useShowcaseProjects } from "../showcase/lib/useShowcaseProjects";
 import { makeAstrolabe } from "./gotAstrolabe";
 import { Link } from "react-router-dom";
@@ -1746,9 +1747,11 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
       if (!holdingRef.current) return;
       if (event.key === "ArrowRight" || event.key === "Enter" || event.key === " ") {
         event.preventDefault();
+        trackEvent("film_transport_click", { action: "next", via: "key" });
         goNext();
       } else if (event.key === "ArrowLeft") {
         event.preventDefault();
+        trackEvent("film_transport_click", { action: "previous", via: "key" });
         goPrevious();
       }
     };
@@ -1773,6 +1776,13 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
     pickStopRef.current = (cityIndex: number) => {
       const which = stops.findIndex((stop) => stop.city === cityIndex);
       if (which < 0) return;
+      // The same destination as a scrubber stop, reached from the 3D map.
+      trackEvent("film_stop_click", {
+        stop_slug: cities[cityIndex].slug,
+        stop_name: cities[cityIndex].name,
+        stop_index: which,
+        via: "map",
+      });
       snapRef.current = true;
       setPlaying(false);
       setProgress(holds[which]);
@@ -1882,7 +1892,12 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
           type="button"
           className={`titles__toggle${panelOpen ? " is-on" : ""}`}
           aria-expanded={panelOpen}
-          onClick={() => setPanelOpen((current) => !current)}
+          onClick={() => {
+            trackEvent("film_panel_toggle", {
+              action: panelOpen ? "close" : "open",
+            });
+            setPanelOpen((current) => !current);
+          }}
         >
           Skill progression
         </button>
@@ -1916,12 +1931,28 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         <p className="titles__now-years">{yearsLabel(active, data.LAST_YEAR)}</p>
         {active.title ? <p className="titles__now-role">{active.title}</p> : null}
         <div className="titles__nav">
-          <button type="button" className="titles__nav-button" onClick={goPrevious} disabled={!holding || isFirstPlace}>
+          <button
+            type="button"
+            className="titles__nav-button"
+            onClick={() => {
+              trackEvent("film_transport_click", { action: "previous", via: "button" });
+              goPrevious();
+            }}
+            disabled={!holding || isFirstPlace}
+          >
             <span aria-hidden="true">←</span> Previous
           </button>
           {/* From the last place, the way on is the closing screen: the future
               is the open question, not another stop. */}
-          <button type="button" className="titles__nav-button" onClick={goNext} disabled={!holding}>
+          <button
+            type="button"
+            className="titles__nav-button"
+            onClick={() => {
+              trackEvent("film_transport_click", { action: "next", via: "button" });
+              goNext();
+            }}
+            disabled={!holding}
+          >
             {cityIndex === cities.length - 1 ? "What's next?" : "Next"} <span aria-hidden="true">→</span>
           </button>
         </div>
@@ -2025,8 +2056,18 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         </ul>
         ) : null}
         <p className="titles__finale-links">
-          <Link to="/resume">Read résumé</Link>
-          <Link to="/universe">Enter the universe</Link>
+          <Link
+            to="/resume"
+            onClick={() => trackEvent("film_cta_click", { target: "resume" })}
+          >
+            Read résumé
+          </Link>
+          <Link
+            to="/universe"
+            onClick={() => trackEvent("film_cta_click", { target: "universe" })}
+          >
+            Enter the universe
+          </Link>
         </p>
       </section>
 
@@ -2063,10 +2104,26 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
             }
             onClick={() => {
               if (draggedRef.current) {
+                // A drag ended here, not a press: no transport action happened.
                 draggedRef.current = false;
                 return;
               }
-              // The sensible thing for wherever the film is.
+              // The sensible thing for wherever the film is. The same button is
+              // play, pause, replay and next, so the event says which it was.
+              const action = stalled
+                ? "resume_stalled"
+                : playing
+                  ? "pause"
+                  : progress >= 1 || progress <= 0
+                    ? "replay"
+                    : holding
+                      ? "next"
+                      : "play";
+              trackEvent("film_transport_click", {
+                action,
+                progress: Number(progress.toFixed(3)),
+                via: "playhead",
+              });
               if (stalled) {
                 setStalled(false);
                 setPlaying(false);
@@ -2143,6 +2200,12 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
               style={{ left: "0%" }}
               title="The opening"
               onClick={() => {
+                trackEvent("film_stop_click", {
+                  stop_slug: "start",
+                  stop_name: "Start",
+                  stop_index: -1,
+                  via: "scrubber",
+                });
                 snapRef.current = true;
                 setPlaying(false);
                 setHolding(false);
@@ -2160,6 +2223,12 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
                 style={{ left: `${toBar(holds[index]) * 100}%` }}
                 title={`${cities[stop.city].name} · ${yearsLabel(cities[stop.city], data.LAST_YEAR)}`}
                 onClick={() => {
+                  trackEvent("film_stop_click", {
+                    stop_slug: cities[stop.city].slug,
+                    stop_name: cities[stop.city].name,
+                    stop_index: index,
+                    via: "scrubber",
+                  });
                   snapRef.current = true;
                   setPlaying(false);
                   setProgress(holds[index]);
@@ -2232,13 +2301,18 @@ function Tally({
                   className="tally__name"
                   disabled={!counted}
                   aria-expanded={counted ? isOpen : undefined}
-                  onClick={() =>
+                  onClick={() => {
+                    trackEvent("film_skill_toggle", {
+                      skill_slug: row.slug,
+                      skill_name: row.name,
+                      action: isOpen ? "collapse" : "expand",
+                    });
                     setOpen(
                       isOpen
                         ? open.filter((slug) => slug !== row.slug)
                         : [...open, row.slug],
-                    )
-                  }
+                    );
+                  }}
                 >
                   {row.name}
                   {/* Always in the layout, so every name keeps its column,
