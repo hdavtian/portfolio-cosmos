@@ -92,12 +92,11 @@ export function CinematicHost() {
     return () => observer.disconnect();
   }, [showing]);
 
-  // Once the page has faded, the experience owns the screen and the address.
-  useEffect(() => {
-    if (launch !== "ready" || onRoute) return;
-    const timer = window.setTimeout(() => navigate(CINEMATIC_PATH), 700);
-    return () => window.clearTimeout(timer);
-  }, [launch, navigate, onRoute]);
+  // The address is no longer handed over on a timer. Every way in -- the nav
+  // pill, the hint panel, the still -- navigates on the click, so the address is
+  // right immediately and the loader shows under the nav. The timer that used to
+  // do it fired wherever the visitor had got to in the meantime, which meant a
+  // click on the universe could pull someone off the page they had since chosen.
 
   // The launch ends when the visitor comes back from the experience, not
   // while it is still handing over.
@@ -188,7 +187,7 @@ export function CinematicHost() {
       aria-hidden={!showing}
       inert={!showing}
       // As a still it is one big way back into the experience.
-      onClick={still ? () => setCinematicLaunch("loading") : undefined}
+      onClick={still ? () => navigate(CINEMATIC_PATH) : undefined}
       role={still ? "button" : undefined}
       tabIndex={still ? 0 : undefined}
       aria-label={still ? "Back to the full experience" : undefined}

@@ -1,12 +1,13 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useState } from "react";
+import { lazy, Suspense, useLayoutEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { canKeepAlive } from "../cinematic/keepAlive";
 import { setFilmSuspended } from "../../lib/filmSuspend";
 import "../wake.css";
 import "./filmHost.css";
 
 /** The address of the skills film. */
-export const FILM_PATH = "/lab/got";
+export const FILM_PATH = "/progression";
+/** Where it used to live, kept redirecting for links already out there. */
+export const FILM_OLD_PATH = "/lab/got";
 
 const Film = lazy(() => import("../../features/lab/SkillsTitlesPage").then((m) => ({ default: m.SkillsTitlesPage })));
 
@@ -29,43 +30,16 @@ const loading = (
 export function FilmHost() {
   const { pathname } = useLocation();
   const onRoute = pathname === FILM_PATH;
-  const [keepAlive] = useState(canKeepAlive);
-  const [kept, setKept] = useState(false);
-  if (keepAlive && onRoute && !kept) setKept(true);
 
+  // The film used to stay mounted once visited, so that coming back resumed it
+  // in place. That cost more than it bought: its three.js scene, renderer and
+  // three canvases stayed resident on every other page, and its two animation
+  // frames kept being scheduled at full rate while drawing nothing. Returning
+  // to it now starts it from the top, which is the agreed trade.
   useLayoutEffect(() => {
-    if (kept) setFilmSuspended(!onRoute);
+    setFilmSuspended(false);
     return () => setFilmSuspended(false);
-  }, [kept, onRoute]);
+  }, []);
 
-  // Back to a paused film: like the universe, it flickers back to life rather
-  // than snapping on. Only after it has been put away, never on first visit.
-  // The route change is noticed during render (the derived-state pattern), so
-  // the wake class is on the very first frame back.
-  const [waking, setWaking] = useState(false);
-  const [wasOnRoute, setWasOnRoute] = useState(onRoute);
-  if (onRoute !== wasOnRoute) {
-    setWasOnRoute(onRoute);
-    if (onRoute && kept) setWaking(true);
-  }
-  useEffect(() => {
-    if (!waking) return;
-    const timer = window.setTimeout(() => setWaking(false), 1100);
-    return () => window.clearTimeout(timer);
-  }, [waking]);
-
-  if (!keepAlive || !kept) {
-    return onRoute ? <Suspense fallback={loading}>{<Film />}</Suspense> : null;
-  }
-  return (
-    <div
-      className={`film-host ${onRoute ? "is-showing" : "is-hidden"}${waking ? " is-waking" : ""}`}
-      aria-hidden={!onRoute}
-      inert={!onRoute}
-    >
-      <Suspense fallback={loading}>
-        <Film />
-      </Suspense>
-    </div>
-  );
+  return onRoute ? <Suspense fallback={loading}>{<Film />}</Suspense> : null;
 }

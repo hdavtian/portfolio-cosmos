@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { Link } from "react-router-dom";
-import { isCinematicLoaded, setCinematicLaunch, subscribeCinematicLaunch } from "../../../app/cinematic/launchStore";
+import { isCinematicLoaded, subscribeCinematicLaunch } from "../../../app/cinematic/launchStore";
 
 export type NavHintId = "home" | "tech" | "resume" | "cinematic" | "contact";
 
@@ -60,12 +60,9 @@ export function NavHint({ hovered, onEnterCinematic }: { hovered: NavHintId | nu
       <Link
         to="/universe"
         className="showcase-gateway"
-        onClick={(event) => {
-          if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-          event.preventDefault();
-          setCinematicLaunch("loading");
-          onEnterCinematic();
-        }}
+        // An ordinary link now: the address changes on the click and the loader
+        // shows under the nav, rather than the navigation waiting on the chunk.
+        onClick={() => onEnterCinematic()}
       >
         {body}
       </Link>

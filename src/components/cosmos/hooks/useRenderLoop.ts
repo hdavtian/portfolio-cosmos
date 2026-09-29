@@ -1,8 +1,8 @@
 import type CameraControls from "camera-controls";
 import type React from "react";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import * as THREE from "three";
-import { isCinematicSuspended } from "../../../lib/cinematicSuspend";
+import { isCinematicSuspended, subscribeCinematicSuspended } from "../../../lib/cinematicSuspend";
 import { dinfo, dwarn } from "../../../lib/debugLog";
 import { emitCosmosEvent } from "../cosmosEventBus";
 import type { DashcamController } from "../dashcamTV";
@@ -30,6 +30,8 @@ import type { TVPreviewController } from "../targetPreviewTV";
 
 export const useRenderLoop = () => {
   const animationFrameRef = useRef<number | null>(null);
+  // The live frame callback, so a suspension can stop and restart the loop.
+  const animateRef = useRef<(() => void) | null>(null);
   const travelAnchorRef = useRef<PhysicsTravelAnchor | null>(null);
   const COMET_MIN_INTERVAL_MS = 8000;
   const COMET_MAX_INTERVAL_MS = 14000;
@@ -996,9 +998,19 @@ export const useRenderLoop = () => {
       };
 
       const animate = () => {
+        // Suspended means put away behind the portfolio, which can last for the
+        // rest of the session: stop asking for frames rather than wake ~60 times
+        // a second to do nothing. The subscription below starts it again.
+        // A GPU warm-up is a moment, not a state, so that one keeps spinning.
+        if (isCinematicSuspended()) {
+          lastFrameTime = performance.now();
+          animationFrameRef.current = null;
+          return;
+        }
+
         animationFrameRef.current = requestAnimationFrame(animate);
 
-        if (gpuWarmupInProgressRef?.current || isCinematicSuspended()) {
+        if (gpuWarmupInProgressRef?.current) {
           lastFrameTime = performance.now();
           return;
         }
@@ -2791,8 +2803,21 @@ export const useRenderLoop = () => {
         }
       };
 
+      // Kept so that coming back from a suspension can start the loop the
+      // suspension stopped, without rebuilding the scene.
+      animateRef.current = animate;
       animate();
     },
+    [],
+  );
+
+  // Put away, the loop stops; brought back, it starts from where it left off.
+  useEffect(
+    () =>
+      subscribeCinematicSuspended((suspended) => {
+        if (suspended || animationFrameRef.current !== null) return;
+        animateRef.current?.();
+      }),
     [],
   );
 

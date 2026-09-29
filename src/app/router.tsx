@@ -69,8 +69,10 @@ const routes: RouteObject[] = [
           { index: true, element: <LazyRoute><ShowcaseIndexPage /></LazyRoute> },
           { path: "resume", element: <LazyRoute><ShowcaseResumePage /></LazyRoute> },
           { path: "resume/download", element: <LazyRoute><ShowcaseResumeDownloadPage /></LazyRoute> },
-          // The skills film, under the site nav; FilmHost in the layout can keep it alive.
-          { path: "lab/got", element: null },
+          // The skills film, under the site nav; rendered by FilmHost in the layout.
+          { path: "progression", element: null },
+          // The old address, kept for links already out there.
+          { path: "lab/got", element: <Navigate to="/progression" replace /> },
           // Rendered by CinematicHost in RootLayout, which can keep it alive.
           // It sits in this layout so the portfolio's scenes can wait, paused,
           // underneath it.

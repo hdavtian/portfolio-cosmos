@@ -683,6 +683,36 @@ html.is-scene-dragging * {
   background: transparent;
 }
 
+/* A small ring spinning inside the pill while the page it leads to is on its
+   way. Most pages arrive within a frame or two and it never appears; the
+   universe has a chunk worth waiting for, and the click used to look ignored.
+   It takes the pill's own colour, so it reads on both the gold plate and the
+   lit state. */
+.showcase-pill__busy {
+  width: 9px;
+  height: 9px;
+  margin-left: 7px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: showcase-pill-busy 620ms linear infinite;
+}
+
+@keyframes showcase-pill-busy {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Anyone who has asked for less movement gets a steady mark instead of a spin. */
+@media (prefers-reduced-motion: reduce) {
+  .showcase-pill__busy {
+    animation: none;
+    border-top-color: currentColor;
+    opacity: 0.55;
+  }
+}
+
 .showcase-pill:focus-visible,
 /* Sort: two small square switches, one side of one switch lit. Deliberately
    not chips, so the row reads as a setting rather than as more filters. */

@@ -111,6 +111,8 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
   const focusRef = useRef(focusProjectId);
   const interactiveRef = useRef(interactive);
   const pausedRef = useRef(paused);
+  // Set by the render effect; lets un-pausing start the loop it stopped.
+  const resumeRef = useRef<(() => void) | null>(null);
   const onShowingRef = useRef(onShowing);
   const lastInteractionRef = useRef(performance.now());
   const activeSinceRef = useRef(performance.now());
@@ -122,6 +124,11 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
     pausedRef.current = paused;
     onShowingRef.current = onShowing;
   });
+
+  // Coming off a pause, the loop has stopped and has to be asked to start again.
+  useEffect(() => {
+    if (!paused) resumeRef.current?.();
+  }, [paused]);
 
   const hasData = projects.length > 0 && techStack !== undefined && portfolio !== undefined;
   const dataRef = useRef({ profile: profile ?? { name: "", title: "" }, projects, techStack: techStack ?? [], portfolio: portfolio ?? EMPTY_PORTFOLIO, jobs, skills });
@@ -262,8 +269,12 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
       let preloadAccumulator = 0;
       const render = (now: number) => {
         if (pausedRef.current) {
+          // Stop the loop rather than spin through it drawing nothing. A paused
+          // scene used to keep asking for a frame ~60 times a second for as long
+          // as the visitor stayed away, competing with whatever page they were
+          // actually on. resume() below starts it again.
           last = now;
-          frame = requestAnimationFrame(render);
+          frame = 0;
           return;
         }
         const dt = Math.min(0.1, (now - last) / 1000);
@@ -363,12 +374,19 @@ export function SceneStage({ projects, techStack, highlights, portfolio, profile
         frame = requestAnimationFrame(render);
       };
 
+      // Starting the loop again after it has stopped, whether it stopped for a
+      // pause or a hidden tab. Never schedules a second frame alongside a live one.
+      const resume = () => {
+        if (frame || pausedRef.current || document.hidden) return;
+        last = performance.now();
+        frame = requestAnimationFrame(render);
+      };
+      resumeRef.current = resume;
+
       const onVisibility = () => {
         cancelAnimationFrame(frame);
-        if (!document.hidden) {
-          last = performance.now();
-          frame = requestAnimationFrame(render);
-        }
+        frame = 0;
+        if (!document.hidden) resume();
       };
       document.addEventListener("visibilitychange", onVisibility);
       frame = requestAnimationFrame(render);
