@@ -15,16 +15,6 @@ import { useShowcaseProjects } from "./lib/useShowcaseProjects";
 const DEFAULT_TINT = "#6f7787";
 
 /**
- * The spinner inside a nav pill, while the page it leads to is on its way.
- * Marked aria-hidden: the pill's own text already names the destination, and
- * `aria-busy` on the pill is what carries the state to a screen reader.
- */
-function Busy({ on }: { on: boolean }) {
-  if (!on) return null;
-  return <span className="showcase-pill__busy" aria-hidden="true" />;
-}
-
-/**
  * A pill's classes. NavLink only adds `active` for itself when className is a
  * string, so passing a function here means spelling it out.
  */
@@ -82,17 +72,14 @@ function ShowcaseNav({ email }: { email: string | undefined }) {
     <>
       <nav ref={pillsRef} className="showcase-pills" aria-label="Site" onMouseLeave={() => setHovered(null)}>
         {/* `end`: Home is current only on the index, not on every route under it. */}
-        <NavLink to="/" end className={pillClass("/")} onMouseEnter={() => setHovered("home")} onFocus={() => setHovered("home")} onClick={() => setPending("/")}>
+        <NavLink to="/" end className={pillClass("/")} aria-busy={pending === "/"} onMouseEnter={() => setHovered("home")} onFocus={() => setHovered("home")} onClick={() => setPending("/")}>
           Home
-          <Busy on={pending === "/"} />
         </NavLink>
-        <NavLink to={FILM_PATH} className={pillClass(FILM_PATH)} onMouseEnter={() => setHovered("tech")} onFocus={() => setHovered("tech")} onClick={() => setPending(FILM_PATH)}>
+        <NavLink to={FILM_PATH} className={pillClass(FILM_PATH)} aria-busy={pending === FILM_PATH} onMouseEnter={() => setHovered("tech")} onFocus={() => setHovered("tech")} onClick={() => setPending(FILM_PATH)}>
           Tech Progression
-          <Busy on={pending === FILM_PATH} />
         </NavLink>
-        <NavLink to="/resume" className={pillClass("/resume")} onMouseEnter={() => setHovered("resume")} onFocus={() => setHovered("resume")} onClick={() => setPending("/resume")}>
+        <NavLink to="/resume" className={pillClass("/resume")} aria-busy={pending === "/resume"} onMouseEnter={() => setHovered("resume")} onFocus={() => setHovered("resume")} onClick={() => setPending("/resume")}>
           Résumé
-          <Busy on={pending === "/resume"} />
         </NavLink>
         {/* An ordinary link: the address changes on the click, and the loader
             shows under this nav until the visitor enters. It used to hold the
@@ -102,7 +89,7 @@ function ShowcaseNav({ email }: { email: string | undefined }) {
             somewhere else. */}
         <NavLink
           to={CINEMATIC_PATH}
-          className={pillClass(CINEMATIC_PATH)}
+          className={pillClass(CINEMATIC_PATH)} aria-busy={pending === CINEMATIC_PATH}
           onMouseEnter={() => {
             setHovered("cinematic");
             prefetchCinematic();
@@ -119,7 +106,6 @@ function ShowcaseNav({ email }: { email: string | undefined }) {
           }}
         >
           Universe
-          <Busy on={pending === CINEMATIC_PATH} />
         </NavLink>
         {email ? (
           <a href={`mailto:${email}`} className="showcase-pill" onMouseEnter={() => setHovered("contact")} onFocus={() => setHovered("contact")}>
