@@ -275,27 +275,6 @@
   accent-color: #d9a441;
 }
 
-.titles__finale-links {
-  display: flex;
-  gap: 14px;
-  margin: 30px 0 0;
-}
-
-.titles__finale-links a {
-  padding: 10px 20px;
-  border: 1px solid rgba(217, 164, 65, 0.7);
-  color: var(--titles-gold);
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  text-decoration: none;
-}
-
-.titles__finale-links a:first-child {
-  background: var(--titles-gold);
-  color: #1a1006;
-}
-
 /* The last frame: the whole map, and the number it has been adding up to. */
 /* The closing screen is the left column: the title above the skill
    progress panel (which moves down for it), the links beneath the panel,
@@ -317,22 +296,6 @@
 
 /* The three actions: one row, centred across the screen, low, above the
    scrubber (the finale block itself stays in the left column). */
-.titles__finale-links {
-  position: absolute;
-  left: 50%;
-  bottom: 44px;
-  transform: translateX(-50%);
-  margin: 0;
-  pointer-events: auto;
-  flex-wrap: nowrap;
-  gap: 12px;
-}
-
-.titles__finale-links a,
-.titles__finale-links button {
-  white-space: nowrap;
-}
-
 .tally.is-finale {
   bottom: clamp(140px, 22vh, 190px);
 }
@@ -1084,29 +1047,6 @@
 .titles__now .titles__auto input {
   width: 10px;
   height: 10px;
-}
-
-.titles__finale-links button {
-  padding: 10px 20px;
-  background: none;
-  border: 1px solid rgba(217, 164, 65, 0.7);
-  color: var(--titles-gold);
-  font: inherit;
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.titles__finale-links a:first-child {
-  background: none;
-  color: var(--titles-gold);
-}
-
-.titles__finale-links a:hover,
-.titles__finale-links button:hover {
-  background: rgba(217, 164, 65, 0.16);
-  color: #f4e6c8;
 }
 
 /* The paused film's way on: one control, dead centre. */

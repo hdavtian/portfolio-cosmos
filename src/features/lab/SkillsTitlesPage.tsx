@@ -5,7 +5,6 @@ import { isFilmSuspended } from "../../lib/filmSuspend";
 import { trackEvent } from "../../lib/analytics";
 import { useShowcaseProjects } from "../showcase/lib/useShowcaseProjects";
 import { makeAstrolabe } from "./gotAstrolabe";
-import { Link } from "react-router-dom";
 import {
   DIRECTION_BY_PLACE,
   KIND_BY_PLACE,
@@ -2057,20 +2056,6 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
             ))}
         </ul>
         ) : null}
-        <p className="titles__finale-links">
-          <Link
-            to="/resume"
-            onClick={() => trackEvent("film_cta_click", { target: "resume" })}
-          >
-            Read résumé
-          </Link>
-          <Link
-            to="/universe"
-            onClick={() => trackEvent("film_cta_click", { target: "universe" })}
-          >
-            Enter the universe
-          </Link>
-        </p>
       </section>
 
       <div className="titles__scrub">
