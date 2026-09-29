@@ -31,20 +31,20 @@ export function FilmHost() {
   const { pathname } = useLocation();
   const onRoute = pathname === FILM_PATH;
 
-  // The film used to stay mounted once visited, so that coming back resumed it
-  // in place. Measured, that was the slower of the two: returning to a kept film
-  // blocked the main thread for ~5.8s against ~2.1s to build a fresh one, and it
-  // held three canvases and a scene graph on every other page in between.
+  // Not kept between visits, which was measured twice and both times was the
+  // slower of the two -- even after its animation frames were properly
+  // cancelled rather than left spinning, and even after a hover stopped
+  // re-rendering the page underneath. Keeping it roughly doubled the cost of
+  // coming back (about 6s of blocked main thread against about 3s to build a
+  // fresh one) and made leaving it cost seconds where unmounting costs about a
+  // tenth of one. It also held five canvases on every other page against two.
   useLayoutEffect(() => {
     setFilmSuspended(false);
     return () => setFilmSuspended(false);
   }, []);
 
-  // The wrapper earns its keep even though the film no longer outlives its
-  // route: it is what lays the film over the page, and its z-index is the
-  // stacking context that keeps the film's own loader (z-index 8) under the
-  // site nav. Without it that loader painted over the nav, which is why the
-  // nav vanished on the way in and came back once the film had arrived.
+  // The wrapper lays the film over the page, and its z-index is the stacking
+  // context that keeps the film's own loader (z-index 8) under the site nav.
   return onRoute ? (
     <div className="film-host is-showing">
       <Suspense fallback={loading}>

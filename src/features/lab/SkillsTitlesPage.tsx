@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type * as ThreeTypes from "three";
 import { useReleaseQuery } from "../../lib/query/contentQueries";
-import { isFilmSuspended } from "../../lib/filmSuspend";
+import { isFilmSuspended, subscribeFilmSuspended } from "../../lib/filmSuspend";
 import { trackEvent } from "../../lib/analytics";
 import { useShowcaseProjects } from "../showcase/lib/useShowcaseProjects";
 import { makeAstrolabe } from "./gotAstrolabe";
@@ -1452,10 +1452,12 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         };
         const render = () => {
           if (isFilmSuspended()) {
-            // Put away behind the portfolio: draw nothing, and don't let the
-            // clock run on, so it resumes exactly where it was.
+            // Put away behind the portfolio: stop asking for frames, and swallow
+            // the elapsed time so it resumes exactly where it was. It used to
+            // keep asking ~60 times a second to draw nothing, for as long as the
+            // visitor was on another page. resumeRender starts it again.
             clock.getDelta();
-            frame = requestAnimationFrame(render);
+            frame = 0;
             return;
           }
           const p = progressRef.current;
@@ -1574,7 +1576,16 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         let firstFrameDrawn = false;
         frame = requestAnimationFrame(render);
 
+        // Coming back from a suspension, the loop has stopped and has to be
+        // asked to start again. Never schedules a second frame alongside a live one.
+        const unsubscribeSuspend = subscribeFilmSuspended((suspended) => {
+          if (suspended || frame) return;
+          clock.getDelta();
+          frame = requestAnimationFrame(render);
+        });
+
         cleanup = () => {
+          unsubscribeSuspend();
           cancelAnimationFrame(frame);
           window.removeEventListener("resize", resize);
           canvas.removeEventListener("pointerdown", onPointerDown);
@@ -1642,8 +1653,10 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
     const tick = (now: number) => {
       framesRef.current.asked += 1;
       if (isFilmSuspended()) {
+        // Stop rather than spin. The subscription below starts it again, from
+        // the moment it comes back, so no elapsed time is played through.
         last = now;
-        frame = requestAnimationFrame(tick);
+        frame = 0;
         return;
       }
       // Going back is a rewind, so it runs three times as fast. A frame that
@@ -1697,7 +1710,17 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    // Same as the universe: put away, the loop stops; brought back, it starts
+    // again from where it left off rather than playing through the gap.
+    const unsubscribeSuspend = subscribeFilmSuspended((suspended) => {
+      if (suspended || frame) return;
+      last = performance.now();
+      frame = requestAnimationFrame(tick);
+    });
+    return () => {
+      unsubscribeSuspend();
+      cancelAnimationFrame(frame);
+    };
   }, [direction, holds, playing]);
 
   /** On to the next place (or, from the last one, out to the ending). */
