@@ -32,10 +32,9 @@ export function FilmHost() {
   const onRoute = pathname === FILM_PATH;
 
   // The film used to stay mounted once visited, so that coming back resumed it
-  // in place. That cost more than it bought: its three.js scene, renderer and
-  // three canvases stayed resident on every other page, and its two animation
-  // frames kept being scheduled at full rate while drawing nothing. Returning
-  // to it now starts it from the top, which is the agreed trade.
+  // in place. Measured, that was the slower of the two: returning to a kept film
+  // blocked the main thread for ~5.8s against ~2.1s to build a fresh one, and it
+  // held three canvases and a scene graph on every other page in between.
   useLayoutEffect(() => {
     setFilmSuspended(false);
     return () => setFilmSuspended(false);

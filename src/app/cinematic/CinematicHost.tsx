@@ -40,6 +40,8 @@ export function CinematicHost() {
   const showing = onRoute || launch === "ready";
 
   const still = useSyncExternalStore(subscribeCinematicLaunch, isCinematicStill, isCinematicStill);
+  // setCinematicLoaded notifies the same store, so this follows it.
+  const loadedNow = useSyncExternalStore(subscribeCinematicLaunch, isCinematicLoaded, isCinematicLoaded);
   const [keepAlive] = useState(canKeepAlive);
   const [kept, setKept] = useState(false);
   // Mount on the first visit (or when a launch starts) and keep it from then on.
@@ -91,6 +93,16 @@ export function CinematicHost() {
     observer.observe(host, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, [showing]);
+
+  // While the experience is still on its loader, the site nav stays on top of it
+  // and usable: the visitor asked for the universe, not for the site to go away,
+  // and until they press Enter they may well change their mind. Once the loader
+  // has gone the experience owns the screen. The stylesheet lifts the pills.
+  const atGate = onRoute && !loadedNow;
+  useEffect(() => {
+    document.documentElement.classList.toggle("is-cinematic-gate", atGate);
+    return () => document.documentElement.classList.remove("is-cinematic-gate");
+  }, [atGate]);
 
   // The address is no longer handed over on a timer. Every way in -- the nav
   // pill, the hint panel, the still -- navigates on the click, so the address is

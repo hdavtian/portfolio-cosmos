@@ -43,8 +43,13 @@
   color: #f3e2b8;
 }
 
+/* Fixed, and under the site nav. `.titles__loader` sits inside `.film-host`,
+   whose own z-index puts the whole thing below the pills; this plate is a
+   sibling of the page, so it needs saying here. Without it the nav disappeared
+   while the film loaded and came back once it had, which read as a glitch. */
 .film-host__loading {
   position: fixed;
+  z-index: 4;
 }
 
 .titles__loader-kicker {

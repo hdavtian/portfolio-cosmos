@@ -2634,6 +2634,15 @@ html.is-scene-dragging * {
  * background while the site stays in place, and once the loader is ready the
  * page fades away so the visitor can press Enter on it.
  */
+/* The universe covers the screen (z-index 60), so while it is still on its
+   loader the site nav is lifted over it and stays usable. The visitor asked for
+   the universe, not for the way out to disappear, and until they press Enter
+   they may change their mind. Once the loader has gone the class goes with it
+   and the experience owns the screen. */
+html.is-cinematic-gate .showcase-pills {
+  z-index: 61;
+}
+
 /* The page's own ground goes clear so the loader — or the experience's last
    frame — shows through. */
 html.is-cinematic-loading .showcase,
