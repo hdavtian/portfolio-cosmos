@@ -40,5 +40,16 @@ export function FilmHost() {
     return () => setFilmSuspended(false);
   }, []);
 
-  return onRoute ? <Suspense fallback={loading}>{<Film />}</Suspense> : null;
+  // The wrapper earns its keep even though the film no longer outlives its
+  // route: it is what lays the film over the page, and its z-index is the
+  // stacking context that keeps the film's own loader (z-index 8) under the
+  // site nav. Without it that loader painted over the nav, which is why the
+  // nav vanished on the way in and came back once the film had arrived.
+  return onRoute ? (
+    <div className="film-host is-showing">
+      <Suspense fallback={loading}>
+        <Film />
+      </Suspense>
+    </div>
+  ) : null;
 }

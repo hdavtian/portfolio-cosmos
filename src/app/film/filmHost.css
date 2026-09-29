@@ -88,27 +88,35 @@
   background: rgba(217, 164, 65, 0.16);
 }
 
+/* Runs on transform rather than `left`, so the compositor keeps it moving while
+   the main thread is busy building the film's scene. Animating `left` meant the
+   bar sat frozen at the start for the whole build and then vanished, which read
+   as a hang rather than a wait. */
 .titles__loader-line::after {
   content: "";
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -40%;
+  left: 0;
   width: 40%;
   background: linear-gradient(90deg, transparent, #ffd96a 30%, #e2761f 70%, transparent);
   box-shadow: 0 0 12px rgba(255, 170, 60, 0.8);
+  will-change: transform;
   animation: titles-loader-run 1.3s ease-in-out infinite;
 }
 
 @keyframes titles-loader-run {
+  from {
+    transform: translateX(-100%);
+  }
   to {
-    left: 100%;
+    transform: translateX(250%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .titles__loader-line::after {
     animation: none;
-    left: 30%;
+    transform: translateX(75%);
   }
 }
