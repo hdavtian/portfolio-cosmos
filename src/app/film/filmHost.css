@@ -6,15 +6,17 @@
   z-index: 4;
 }
 
+/* Put away the way the universe is put away: moved off, clipped away and made
+   invisible. It used to stay where it was under a full-screen
+   `grayscale + blur` filter, which the compositor kept paying for -- over three
+   canvases -- for as long as the visitor was on another page. That, not keeping
+   the film in memory, is what made coming back to it expensive. */
 .film-host.is-hidden {
+  transform: translateX(100%);
+  clip-path: inset(0 0 0 100%);
   visibility: hidden;
+  opacity: 0;
   pointer-events: none;
-}
-
-/* Put away: its last frame drained of colour, like the paused universe, so
-   that is the frame it wakes from. */
-.film-host.is-hidden {
-  filter: grayscale(1) blur(2px) brightness(0.55) contrast(0.9);
 }
 
 /* Back to a paused film: colour and focus stutter in (keyframes in ../wake.css). */

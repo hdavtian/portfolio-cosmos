@@ -1,4 +1,4 @@
-import { lazy, Suspense, useLayoutEffect } from "react";
+import { lazy, Suspense, useLayoutEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { setFilmSuspended } from "../../lib/filmSuspend";
 import "../wake.css";
@@ -30,26 +30,30 @@ const loading = (
 export function FilmHost() {
   const { pathname } = useLocation();
   const onRoute = pathname === FILM_PATH;
+  // Mounted on the first visit and kept from then on, the way the universe is.
+  const [kept, setKept] = useState(false);
+  if (onRoute && !kept) setKept(true);
 
-  // Not kept between visits, which was measured twice and both times was the
-  // slower of the two -- even after its animation frames were properly
-  // cancelled rather than left spinning, and even after a hover stopped
-  // re-rendering the page underneath. Keeping it roughly doubled the cost of
-  // coming back (about 6s of blocked main thread against about 3s to build a
-  // fresh one) and made leaving it cost seconds where unmounting costs about a
-  // tenth of one. It also held five canvases on every other page against two.
+  // Suspended really does mean stopped now: both of the film's animation frames
+  // are cancelled rather than re-scheduled to draw nothing (see
+  // SkillsTitlesPage), and the hidden film is moved off and clipped away rather
+  // than left under a blur (see filmHost.css). Put away it costs memory and its
+  // canvases, but no main thread, and coming back is a class change instead of
+  // three seconds of building a scene from scratch.
   useLayoutEffect(() => {
-    setFilmSuspended(false);
+    if (kept) setFilmSuspended(!onRoute);
     return () => setFilmSuspended(false);
-  }, []);
+  }, [kept, onRoute]);
+
+  if (!kept) return null;
 
   // The wrapper lays the film over the page, and its z-index is the stacking
   // context that keeps the film's own loader (z-index 8) under the site nav.
-  return onRoute ? (
-    <div className="film-host is-showing">
+  return (
+    <div className={`film-host ${onRoute ? "is-showing" : "is-hidden"}`} aria-hidden={!onRoute} inert={!onRoute}>
       <Suspense fallback={loading}>
         <Film />
       </Suspense>
     </div>
-  ) : null;
+  );
 }

@@ -352,13 +352,19 @@ function experienceAt({ categories }: SkillsData, cities: City[], fractions: num
 const yearsLabel = (city: City, lastYear: number) =>
   `${Math.floor(city.from)} – ${city.to >= lastYear - 1 ? "today" : Math.round(city.to)}`;
 
+/** Outside the component on purpose: see the note in SkillsTitlesPage. */
+const selectSkillsData = (content: Parameters<typeof skillsDataFromRelease>[0]) =>
+  skillsDataFromRelease(content);
+
 /**
  * The film plays the published timeline. Everything it builds - cities,
  * timeline, fractions - is derived from that data, so a new release remounts
  * the film (the key below) rather than mixing two timelines mid-play.
  */
 export function SkillsTitlesPage() {
-  const query = useReleaseQuery((content) => skillsDataFromRelease(content));
+  // Defined outside the component (see below), so the query hands back the same
+  // object across renders and the film does not rebuild its scene on each one.
+  const query = useReleaseQuery(selectSkillsData);
   if (!query.data) {
     return (
       <div className="titles titles--loading">

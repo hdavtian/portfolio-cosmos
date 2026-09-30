@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { fetchSiteContent } from "../api/contentV2";
 import { latticeTree } from "@hd/content-schema/technology-tree";
 import type { Release } from "../api/release";
@@ -43,10 +44,21 @@ export function useTechStackQuery() {
  * re-renders only when that part changes.
  */
 export function useReleaseQuery<T = Release>(select?: (release: Release) => T) {
-  return useQuery({
-    ...releaseQuery,
-    select: (content) => (select ? select(content.release) : (content.release as T)),
-  });
+  // The selector is held steady across renders. React Query re-runs `select` and
+  // hands back a fresh object whenever the function itself is new, and this
+  // wrapper used to build a new one every render -- so every caller got a new
+  // object each time, however stable its own selector was. Anything deriving
+  // work from the result then redid that work: the progression film rebuilt its
+  // entire 3D scene on every render, seconds of it, because `cities` and
+  // `timeline` are memoised on a value that never held still.
+  // A caller passing an inline arrow still gets a new selector each render;
+  // pass a function defined outside the component, as the selectors here are.
+  const selectRelease = useCallback(
+    (content: Awaited<ReturnType<typeof fetchSiteContent>>) =>
+      select ? select(content.release) : (content.release as T),
+    [select],
+  );
+  return useQuery({ ...releaseQuery, select: selectRelease });
 }
 
 /** The published projects, one per entry or client site, in portfolio order. */
