@@ -128,10 +128,13 @@ function App() {
           <div className="hero__summary">
             <p className="hero__summary-text">{summary}</p>
           </div>
+          {/* The email address used to sit above the location here. Removed
+              with the ones on the contact and resume pages (HD-4): an address
+              in the page source is an address a crawler harvests, which is
+              most of the reason the contact form exists. This was the last
+              place on the site it appeared. It is still on the downloadable
+              resume, where somebody has to ask for the file. */}
           <div className="hero__contact">
-            <div className="hero__contact-item">
-              {personal.email}
-            </div>
             <div className="hero__contact-item">
               {personal.location}
             </div>

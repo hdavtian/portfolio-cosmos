@@ -63,12 +63,32 @@ const gmailTransport = (): Transporter | null => {
   return transporter;
 };
 
+/**
+ * The test environment never sends mail, whatever is configured.
+ *
+ * Not belt and braces -- this is load-bearing. `env.ts` loads `api/.env`, and
+ * once a real app password lives there the suite inherits it: every test that
+ * submits the form would send a genuine notification to the inbox and a
+ * genuine confirmation to `visitor@example.com`. The suite has a dozen such
+ * tests, so one `npm test` becomes a dozen emails and a pile of bounces.
+ *
+ * Found the moment a credential was first set locally -- before that the
+ * tests passed only because nobody had one, which is not a safeguard, it is
+ * a coincidence. The guard is here rather than in the vitest config because
+ * `dotenv` repopulates anything the config deletes.
+ */
+const sendingDisabled = (): boolean => env.NODE_ENV === "test";
+
 export const gmailMailer: Mailer = {
   get configured() {
-    return Boolean(env.GMAIL_USER && env.GMAIL_APP_PASSWORD);
+    return !sendingDisabled() && Boolean(env.GMAIL_USER && env.GMAIL_APP_PASSWORD);
   },
 
   async send(message) {
+    if (sendingDisabled()) {
+      return "Email is disabled in the test environment; nothing was sent.";
+    }
+
     const transport = gmailTransport();
     if (!transport) {
       return "Email is not configured (GMAIL_USER / GMAIL_APP_PASSWORD unset).";

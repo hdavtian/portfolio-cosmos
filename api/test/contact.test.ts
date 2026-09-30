@@ -240,8 +240,13 @@ describe.skipIf(!dockerMongo)(
     expect(stored?.status).toBe("new");
     expect(stored?.notes).toBe("");
     expect(stored?.version).toBe(1);
-    // No credential in the suite, so the row must say nobody was emailed.
-    expect(stored?.mailError).toContain("not configured");
+    /* Nobody was emailed, and the row says so.
+       Asserted as "a reason is recorded" rather than one exact sentence: the
+       suite reaches this either because no credential is set or because the
+       test environment refuses to send even when one is (see mailer.ts). The
+       point is that a message nobody was told about never looks delivered. */
+    expect(typeof stored?.mailError).toBe("string");
+    expect(stored?.mailError).not.toBe("");
   });
 
   it("stores the message exactly as it was typed, tags and all", async () => {
@@ -410,6 +415,17 @@ describe.skipIf(!dockerMongo)(
     expect(response.status).toBe(404);
   });
 
+  it("never sends mail from the test environment, even with a credential set", async () => {
+    /* The regression this exists for: `env.ts` loads api/.env, so a developer
+       with a real Gmail app password would otherwise have every form-
+       submitting test in this file send a genuine email. */
+    const { mailer } = await import("../src/v2/contact/mailer.js");
+    expect(mailer.configured).toBe(false);
+    expect(await mailer.send({ to: "nobody@example.com", subject: "x", html: "x", text: "x" })).toContain(
+      "test environment",
+    );
+  });
+
   describe("the admin side", () => {
     const submit = async () => {
       const response = await request(app)
@@ -551,6 +567,9 @@ describe.skipIf(!dockerMongo)(
       expect(response.status).toBe(200);
       expect(response.body.version).toBe(0);
       expect(response.body.notifyEmail).toBe("harmadavtian@gmail.com");
+      /* False in the suite whether or not a credential is present: the test
+         environment cannot send. Guards the admin's "not configured" banner
+         and, more importantly, guards the suite against emailing anybody. */
       expect(response.body.mailConfigured).toBe(false);
     });
 
