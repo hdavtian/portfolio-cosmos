@@ -72,12 +72,17 @@ export function ShowcaseResumePage() {
         {summary ? <p className="showcase-resume__summary">{summary}</p> : null}
 
         <dl className="showcase-spec">
+          {/* The email address is deliberately not printed on this page.
+              A mailto in the page source is an address a crawler harvests,
+              which is what the contact form exists to avoid; it is still on
+              the downloadable resume, where somebody has to ask for the file.
+              The link below goes to the form instead. */}
           <div>
             <dt>Contact</dt>
             <dd>
-              <a className="showcase-resume__link" href={`mailto:${personal.email}`}>
-                {personal.email}
-              </a>
+              <Link className="showcase-resume__link" to="/contact">
+                Send a message
+              </Link>
             </dd>
           </div>
           {personal.location ? (

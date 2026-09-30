@@ -12,6 +12,7 @@ import { createRequireAuth } from "../auth/requireAuth.js";
 import { getDb } from "./db.js";
 import { EntityRepository } from "./entityRepository.js";
 import { ApiError, asyncHandler, parseOrThrow } from "./http.js";
+import { createAdminContactRouter } from "./contact/adminContactRouter.js";
 import { createMediaRouter } from "./mediaRouter.js";
 import { createReleaseRouter } from "./releaseRouter.js";
 import { fromDb, toDb } from "./storageCodec.js";
@@ -64,6 +65,11 @@ export function createAdminRouter({ cookieSecret }: { cookieSecret: string }): R
 
   // Publishing, history and rollback. Also not a content collection.
   router.use("/releases", createReleaseRouter());
+
+  // Contact form messages and their settings (HD-4). Runtime data, not
+  // content: deliberately outside the release pipeline, so mounted here rather
+  // than generated from collectionSchemas like the entities below.
+  router.use("/contactSubmissions", createAdminContactRouter());
 
   // ---- singletons (profile, cosmos introduction) ----
 

@@ -825,3 +825,50 @@ body {
     grid-column: 1 / -1;
   }
 }
+
+/* ---------- Contact form submissions (HD-4) ---------- */
+
+/* The status of a message, in the grid. Colour carries the meaning at a
+   glance, but never alone: the label is always the word itself, so the list
+   still reads correctly in greyscale or to anybody who cannot separate the
+   hues. */
+.admin-pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.admin-pill--new {
+  color: #0b4da2;
+  border-color: rgba(31, 111, 235, 0.35);
+  background: rgba(31, 111, 235, 0.1);
+}
+
+.admin-pill--open {
+  color: #8a5300;
+  border-color: rgba(191, 132, 0, 0.35);
+  background: rgba(191, 132, 0, 0.12);
+}
+
+.admin-pill--closed {
+  color: #1b6b3a;
+  border-color: rgba(27, 107, 58, 0.3);
+  background: rgba(27, 107, 58, 0.1);
+}
+
+.admin-pill--spam {
+  color: var(--admin-danger);
+  border-color: rgba(192, 57, 43, 0.32);
+  background: rgba(192, 57, 43, 0.1);
+}
+
+.admin-pill--test {
+  color: var(--admin-muted);
+  border-color: var(--admin-border);
+  background: rgba(107, 118, 132, 0.1);
+}

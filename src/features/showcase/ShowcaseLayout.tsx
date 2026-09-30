@@ -40,7 +40,9 @@ const prefetchCinematic = () => {
  * of the progression film. Hovering a link re-rendered a 3D page, which is why
  * the canvas blinked black and everything went slow under the pointer.
  */
-function ShowcaseNav({ email }: { email: string | undefined }) {
+// No longer takes the address: the Contact pill is a route now (HD-4), and
+// the address itself is offered on the contact page.
+function ShowcaseNav() {
   const { pathname } = useLocation();
   const [hovered, setHovered] = useState<NavHintId | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -107,11 +109,18 @@ function ShowcaseNav({ email }: { email: string | undefined }) {
         >
           Universe
         </NavLink>
-        {email ? (
-          <a href={`mailto:${email}`} className="showcase-pill" onMouseEnter={() => setHovered("contact")} onFocus={() => setHovered("contact")}>
-            Contact
-          </a>
-        ) : null}
+        {/* HD-4: the form, not a mailto. The address is deliberately nowhere
+            in the page source now -- a mailto is what crawlers harvest. */}
+        <NavLink
+          to="/contact"
+          className={pillClass("/contact")}
+          aria-busy={pending === "/contact"}
+          onMouseEnter={() => setHovered("contact")}
+          onFocus={() => setHovered("contact")}
+          onClick={() => setPending("/contact")}
+        >
+          Contact
+        </NavLink>
       </nav>
       {/* Rendered only while a pill is hovered. It used to be an always-present
           panel of at least 320px with nothing in it, which took the pointer
@@ -131,7 +140,7 @@ function ShowcaseNav({ email }: { email: string | undefined }) {
 export function ShowcaseLayout() {
   const [tint, setTintState] = useState(DEFAULT_TINT);
   const setTint = useCallback((color: string | null) => setTintState(color ?? DEFAULT_TINT), []);
-  const { personal, projects } = useShowcaseProjects();
+  const { projects } = useShowcaseProjects();
   const techStack = useTechStackQuery().data?.payload;
   const release = useReleaseQuery().data;
   const portfolio = useMemo(
@@ -227,7 +236,7 @@ export function ShowcaseLayout() {
         <a href="#showcase-main" className="skip-link">
           Skip to main content
         </a>
-        <ShowcaseNav email={personal?.email} />
+        <ShowcaseNav />
         <main id="showcase-main" className="showcase__main">
           <Outlet />
         </main>

@@ -49,6 +49,11 @@ const ShowcaseResumeDownloadPage = lazy(() =>
     default: module.ShowcaseResumeDownloadPage,
   })),
 );
+const ShowcaseContactPage = lazy(() =>
+  import("../features/showcase/pages/ShowcaseContactPage").then((module) => ({
+    default: module.ShowcaseContactPage,
+  })),
+);
 const ShowcaseResumePage = lazy(() =>
   import("../features/showcase/pages/ShowcaseResumePage").then((module) => ({
     default: module.ShowcaseResumePage,
@@ -68,6 +73,9 @@ const routes: RouteObject[] = [
         children: [
           { index: true, element: <LazyRoute><ShowcaseIndexPage /></LazyRoute> },
           { path: "resume", element: <LazyRoute><ShowcaseResumePage /></LazyRoute> },
+          // HD-4. Lazy like the rest, so the proof-of-work code only loads for
+          // somebody who actually opens the form.
+          { path: "contact", element: <LazyRoute><ShowcaseContactPage /></LazyRoute> },
           { path: "resume/download", element: <LazyRoute><ShowcaseResumeDownloadPage /></LazyRoute> },
           // The skills film, under the site nav; rendered by FilmHost in the layout.
           { path: "progression", element: null },

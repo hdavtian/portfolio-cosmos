@@ -37,6 +37,14 @@ const NAV_GROUPS: Array<{
     links: [{ to: "/pathTravelMessages", text: "Ride messages", ready: true }],
   },
   {
+    // HD-4. Its own group: messages from strangers are not content, and the
+    // settings page is reached from the list rather than given a link here,
+    // because the ticket asks for one entry with its subsections linked from
+    // the default screen.
+    label: "Contact",
+    links: [{ to: "/contactSubmissions", text: "Contact Form Submissions", ready: true }],
+  },
+  {
     label: "Library",
     links: [
       { to: "/media", text: "Media", ready: true },
