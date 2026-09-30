@@ -15,6 +15,10 @@ Used in frontend build/deploy workflow (`.github/workflows/deploy.yml`):
 
 - `VITE_POSTHOG_KEY`
 - `VITE_POSTHOG_HOST`
+- `VITE_GA_MEASUREMENT_ID` — the GA4 measurement ID (`G-…`) for the "Harma
+  Davtian" stream. Not a secret: it is visible in any page carrying the tag.
+  Without it the site simply carries no Google tag, which is how every
+  non-production build stays out of the reports.
 - `VITE_API_BASE_URL`
 
 ## Required repository secrets
