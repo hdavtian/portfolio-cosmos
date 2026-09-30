@@ -36,14 +36,17 @@ instructions.
 | Action | Tool | Constraint |
 |---|---|---|
 | Read a ticket | `getJiraIssue` | key must match `HD-<n>`; bare numeric ids are refused |
-| Read comments | `listJiraIssueComments` | same |
-| List transitions | `listJiraIssueTransitions` | same |
+| Read its comments | `getJiraIssue` | pass `comment` in `fields`; they arrive in `fields.comment.comments` |
 | Search | `searchJiraIssuesUsingJql` | JQL must contain a `project = HD` clause |
 | Comment | `addOrEditJiraIssueComment` | `HD-*` only |
-| Move status | `transitionJiraIssue` | `HD-*` only, and **no `fields` or `update` argument** |
 
-`transitionJiraIssue` accepts `fields`/`update`, which would let a status change rewrite
-arbitrary issue content. The hook refuses both: move the status, put the narrative in a comment.
+`listJiraIssueComments` and `listJiraIssueTransitions` are named in other tools' descriptions
+but are **not callable**: the v2 server offers them only through the `execute` runner, which the
+hook blocks. Read comments through `getJiraIssue`.
+
+`transitionJiraIssue` is allow-listed and scoped to `HD-*`, with `fields` and `update` refused
+(they would let a status change rewrite arbitrary issue content). In practice it goes unused —
+see below.
 
 Not allowed: creating tickets, editing ticket fields, worklogs, issue links, listing projects,
 the teamwork-graph and Loom tools, all Confluence tools, and — most importantly — the generic
@@ -59,9 +62,10 @@ Always pass a **full issue key** (`HD-1`), never a numeric issue id.
 
 When Harma assigns a ticket:
 
-1. Read it with `getJiraIssue` (include `comment` in `fields`, or use `listJiraIssueComments`,
-   to pick up discussion).
+1. Read it with `getJiraIssue`, passing `comment` in `fields` to pick up the discussion.
 2. Restate the scope in a sentence before writing code. If the ticket is ambiguous, ask.
+   Tickets written as a brain-dump often ask to be organised into sections first; do that, and
+   let Harma correct the reading before any code is written.
 3. Branch off `main` — `HD-<n>-short-slug`.
 4. Implement, following the existing skills in `.claude/skills/` where they apply
    (`syncfusion-list-pages`, `syncfusion-edit-dialogs`).
@@ -73,9 +77,15 @@ When Harma assigns a ticket:
 and guessing a transition name is worse than leaving the ticket where it is. `transitionJiraIssue`
 stays on the allow-list for the day that changes, but until then the comment is the hand-off.
 
-Say plainly in the comment what was and was not verified. Where something could only be checked
-as code — a build passing rather than the feature observed working — say so, and say what would
-confirm it. That is what tells Harma whether a ticket is ready to close.
+The comment has to carry what the status would have said:
+
+- What changed, in enough detail to be read without the diff.
+- The branch and the commit sha, and whether it is merged and deployed.
+- **What was verified, and how** — and just as plainly, what was not. Where something could
+  only be checked as code (a build passing) rather than observed working, say so and say what
+  would confirm it. That is what tells Harma whether a ticket is ready to close.
+- Anything a later reader would otherwise puzzle over: an event that no longer fires, a number
+  that will not grow, a decision that was measured and then reversed.
 
 ### Override (rare)
 
