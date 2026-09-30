@@ -3044,16 +3044,25 @@ html.is-cinematic-ready .film-host {
   cursor: default;
 }
 
+/* The confirmation, under the form rather than in place of it. Its own row
+   with the close button pinned to the right, so a long reference can never
+   push the × off the edge. */
 .showcase-contact__sent {
-  display: grid;
-  gap: 14px;
-  justify-items: start;
-  padding: 22px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 22px;
+  padding: 18px 20px;
   border: 1px solid var(--showcase-ink-dim);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.04);
   font-size: 14px;
   line-height: 1.65;
+}
+
+.showcase-contact__sent-body {
+  display: grid;
+  gap: 4px;
 }
 
 .showcase-contact__sent p {
@@ -3062,9 +3071,40 @@ html.is-cinematic-ready .film-host {
 
 .showcase-contact__sent-heading {
   font-family: var(--showcase-display);
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+}
+
+.showcase-contact__sent-reference {
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-contact__sent-close {
+  margin-inline-start: auto;
+  /* A comfortable target around a small glyph: the × itself is tiny, and a
+     16px hit area is a miss on a phone. */
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  padding: 0;
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--showcase-ink-quiet);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.showcase-contact__sent-close:hover,
+.showcase-contact__sent-close:focus-visible {
+  color: var(--showcase-ink);
+  border-color: var(--showcase-ink-dim);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 @media (max-width: 900px) {

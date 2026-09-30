@@ -37,6 +37,8 @@ import { useBackdropTint } from "../lib/backdropTint";
 /** The widget, as much of it as this file calls. */
 interface AltchaElement extends HTMLElement {
   verify?: (options?: { controller?: AbortController }) => Promise<{ payload: string } | null>;
+  /** Clears the tick and the solved payload, ready to be solved again. */
+  reset?: () => void;
 }
 
 /**
@@ -142,7 +144,17 @@ export function ShowcaseContactPage() {
 
   const [errors, setErrors] = useState<FieldErrors>({});
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState<string | null>(null);
+  /**
+   * The last successful send, or null.
+   *
+   * An object rather than the reference string, because a reference is not
+   * always there: a submission caught by one of the silent rejections answers
+   * exactly like a success and carries none. That has to look like a success
+   * here too -- a rejection a person could tell apart from a success is a
+   * rejection a bot can be tuned against -- so "sent" and "has a reference"
+   * are two separate facts.
+   */
+  const [sent, setSent] = useState<{ reference: string | null } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(CONTACT_MESSAGE_MAX);
 
@@ -180,9 +192,13 @@ export function ShowcaseContactPage() {
     const form = event.currentTarget;
     const data = new FormData(form);
 
+    /* Any previous result goes now, before anything else: the note under the
+       form must never be left over from the last message while a new one is
+       in flight. */
     const found = validate(data);
     setErrors(found);
     setFailure(null);
+    setSent(null);
     if (Object.keys(found).length > 0) {
       // Focus the first thing that is wrong, so a keyboard user is taken to it.
       const firstBad = Object.keys(found)[0];
@@ -206,8 +222,21 @@ export function ShowcaseContactPage() {
        flight. The server's fingerprint guard is the backstop. */
     setSending(true);
 
+    /*
+     * Only the network call is guarded.
+     *
+     * The whole of this used to sit in one try/catch, so anything that threw
+     * *after* a successful post -- clearing the form, resetting the widget --
+     * was reported as "your message could not be sent". That happened: a
+     * message was stored server-side while the page said it had failed, which
+     * is the worst thing this form could tell somebody. It invites them to
+     * write it again, and only the duplicate guard stops two of everything.
+     *
+     * So the fetch is wrapped and nothing else is.
+     */
+    let response: Response;
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v2/contact/submissions`, {
+      response = await fetch(`${API_BASE_URL}/api/v2/contact/submissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -219,38 +248,55 @@ export function ShowcaseContactPage() {
           renderedAt,
         }),
       });
-
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
-        const details = body.error?.details ?? [];
-
-        if (details.length > 0) {
-          setErrors(
-            Object.fromEntries(
-              details
-                .filter((detail) => detail.path in FIELD_LABELS)
-                .map((detail) => [detail.path, detail.message]),
-            ),
-          );
-        }
-
-        setFailure(body.error?.message ?? "Your message could not be sent. Please try again.");
-        return;
-      }
-
-      const body = (await response.json()) as SubmitResponse;
-
-      /* A 202 with no reference is one of the silent rejections. It is answered
-         exactly like a success on purpose -- see the router -- so it is treated
-         as one here too, which is what makes the deception complete. */
-      setSent(body.reference);
-      form.reset();
-      setRemaining(CONTACT_MESSAGE_MAX);
     } catch {
       setFailure("Your message could not be sent. Check your connection and try again.");
-    } finally {
       setSending(false);
+      return;
     }
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
+      const details = body.error?.details ?? [];
+
+      if (details.length > 0) {
+        setErrors(
+          Object.fromEntries(
+            details
+              .filter((detail) => detail.path in FIELD_LABELS)
+              .map((detail) => [detail.path, detail.message]),
+          ),
+        );
+      }
+
+      setFailure(body.error?.message ?? "Your message could not be sent. Please try again.");
+      setSending(false);
+      return;
+    }
+
+    /* Past this point the message is stored, and the visitor is told so
+       whatever else happens. A reference we cannot read is not a failure. */
+    const body = (await response.json().catch(() => ({}))) as Partial<SubmitResponse>;
+
+    form.reset();
+    setRemaining(CONTACT_MESSAGE_MAX);
+
+    /* The challenge is spent -- single-use, enforced server-side -- so the
+       widget goes back to unticked. Without this it still reads "Verified"
+       while holding a payload the server will refuse as replayed, and the
+       next message fails for a reason nobody could guess from the screen.
+       Guarded on its own: a widget that objects to being reset must not cost
+       somebody the confirmation for a message that did arrive. */
+    try {
+      widgetRef.current?.reset?.();
+    } catch {
+      // Nothing to do. The next send solves a fresh challenge regardless.
+    }
+
+    /* A 202 with no reference is one of the silent rejections. It is answered
+       exactly like a success on purpose -- see the router -- so it is treated
+       as one here too, which is what makes the deception complete. */
+    setSent({ reference: body.reference ?? null });
+    setSending(false);
   };
 
   return (
@@ -274,17 +320,12 @@ export function ShowcaseContactPage() {
       </header>
 
       <div className="showcase-contact__panel">
-        {sent ? (
-          <div className="showcase-contact__sent" role="status">
-            <p className="showcase-contact__sent-heading">Your message has been sent.</p>
-            {sent ? (
-              <p>
-                Reference <strong>{sent}</strong>
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <form ref={formRef} className="showcase-contact__form" onSubmit={handleSubmit} noValidate>
+        {/* The form always stays. It used to be replaced by the confirmation,
+            which meant writing a second message took a trip through a "send
+            another" button -- and that button was itself the thing nobody
+            needed. Now a send simply empties the fields and leaves a note
+            underneath, so the page is ready for the next one either way. */}
+        <form ref={formRef} className="showcase-contact__form" onSubmit={handleSubmit} noValidate>
             {/* Name and email share a row on a wide screen and stack on a
                 narrow one: both are short single-line answers, and putting
                 them side by side keeps the message box above the fold. */}
@@ -405,9 +446,33 @@ export function ShowcaseContactPage() {
             <button type="submit" className="showcase-contact__submit" disabled={sending}>
               {sending ? "Sending…" : "Send"}
             </button>
-
           </form>
-        )}
+
+          {/* Under the form, dismissible, and it does not block anything: a
+              second message can be written and sent with this still on
+              screen, and pressing Send clears it before the next attempt.
+              `role="status"` rather than "alert" -- a screen reader should
+              announce it once the send is done, not interrupt. */}
+          {sent ? (
+            <div className="showcase-contact__sent" role="status">
+              <div className="showcase-contact__sent-body">
+                <p className="showcase-contact__sent-heading">Your message has been sent.</p>
+                {sent.reference ? (
+                  <p className="showcase-contact__sent-reference">
+                    Reference <strong>{sent.reference}</strong>
+                  </p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="showcase-contact__sent-close"
+                aria-label="Dismiss this confirmation"
+                onClick={() => setSent(null)}
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
       </div>
     </article>
   );
