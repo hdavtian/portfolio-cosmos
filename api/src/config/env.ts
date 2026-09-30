@@ -39,6 +39,22 @@ const envSchema = z
     AZURE_STORAGE_ACCOUNT: z.string().optional(),
     AZURE_STORAGE_CONTAINER: z.string().min(1).default("media"),
     MEDIA_PUBLIC_BASE_URL: z.string().url().optional(),
+
+    // Contact form mail (HD-4). Gmail SMTP with an app password, not the
+    // account password: Google refuses the latter for SMTP. Generated at
+    // Google Account -> Security -> 2-Step Verification -> App passwords.
+    //
+    // Deliberately optional, including in production. An unset credential
+    // means the form still accepts and stores a message and the row records
+    // that nobody was emailed about it -- which is strictly better than the
+    // API refusing to boot, or a visitor's note being lost because a password
+    // was rotated. The admin surfaces the state so it cannot go unnoticed.
+    GMAIL_USER: z.string().email().optional(),
+    GMAIL_APP_PASSWORD: z.string().min(1).optional(),
+    // The display name on outgoing mail. Not the address; see mailer.ts.
+    MAIL_FROM_NAME: z.string().min(1).default("Harma Davtian"),
+    // Where a confirmation email points the visitor back to.
+    SITE_PUBLIC_URL: z.string().url().default("https://harmadavtian.com"),
   })
   // Never fall back to a default secret in production: fail to start instead.
   .superRefine((value, ctx) => {

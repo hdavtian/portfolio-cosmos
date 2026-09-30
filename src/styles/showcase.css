@@ -2862,3 +2862,221 @@ html.is-cinematic-ready .film-host {
 .showcase-resume__download-link {
   margin-left: auto;
 }
+
+/* ---------- Contact (HD-4) ---------- */
+
+/* Same two-column shape as the resume: the sticky introduction on the left,
+   the thing you came for on the right. Deliberately not a new layout -- a
+   visitor arriving from /resume should recognise where they are. */
+/* Two columns like the resume, but centred in the viewport rather than hung
+   from the top: the form is short enough to fit on one screen, and a short
+   page pinned to the top leaves the whole lower half empty.
+
+   `min-height` rather than `height`, and `align-content: center` rather than
+   `align-items`, so the pair is centred as a block while still growing
+   normally -- a long validation state or a narrow screen pushes the page
+   taller and it simply scrolls, instead of the content being clipped. */
+.showcase-contact {
+  display: grid;
+  grid-template-columns: minmax(280px, 34vw) minmax(0, 1fr);
+  align-content: center;
+  min-height: 100vh;
+  gap: clamp(20px, 3vw, 56px);
+  padding-inline: var(--showcase-gutter);
+  /* Clear of the scene switcher in the bottom-right corner. */
+  padding-inline-end: calc(var(--showcase-gutter) + 260px);
+  padding-block: calc(var(--showcase-gutter) + 36px) 12vh;
+}
+
+/* Not sticky, unlike the resume's introduction. Sticky earns its place beside
+   a long scrolling record; beside a centred form that fits the screen there is
+   nothing to scroll past, and it would only fight the centring. */
+.showcase-contact__intro {
+  align-self: center;
+  display: grid;
+  gap: 18px;
+}
+
+.showcase-contact__back {
+  justify-self: start;
+}
+
+.showcase-contact__heading {
+  margin: 0;
+  font-family: var(--showcase-display);
+  font-weight: 900;
+  font-size: clamp(2.2rem, 5vw, 5.4rem);
+  line-height: 0.86;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+/* Centred against the introduction rather than stretched: the two columns are
+   different heights, and a stretched panel starts higher than the heading
+   beside it, which reads as a misalignment rather than a choice. */
+.showcase-contact__panel {
+  align-self: center;
+  max-width: 62ch;
+}
+
+.showcase-contact__form {
+  display: grid;
+  gap: 22px;
+}
+
+/* Name and email side by side, stacking below 640px. `minmax(0, 1fr)` rather
+   than `1fr`: a grid track's default minimum is its content, so an input's
+   intrinsic width would push the row wider than the panel instead of shrinking
+   with it. */
+.showcase-contact__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .showcase-contact__pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.showcase-contact__field {
+  display: grid;
+  /* `start`: with a paired row, a field whose neighbour shows an error message
+     would otherwise stretch its own input to match the taller cell. */
+  align-content: start;
+  gap: 7px;
+}
+
+.showcase-contact__field label {
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--showcase-ink-quiet);
+}
+
+.showcase-contact__field input,
+.showcase-contact__field textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  padding: 11px 13px;
+  color: var(--showcase-ink);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--showcase-ink-dim);
+  border-radius: 4px;
+  /* Vertical only: a textarea that can be dragged wider breaks the column. */
+  resize: vertical;
+}
+
+.showcase-contact__field input:focus-visible,
+.showcase-contact__field textarea:focus-visible {
+  outline: none;
+  border-color: var(--showcase-ink);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.showcase-contact__field input[aria-invalid="true"],
+.showcase-contact__field textarea[aria-invalid="true"] {
+  border-color: #ff9a8a;
+}
+
+.showcase-contact__field input:disabled,
+.showcase-contact__field textarea:disabled {
+  opacity: 0.55;
+}
+
+.showcase-contact__count {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--showcase-ink-dim);
+  text-align: right;
+}
+
+.showcase-contact__error {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #ff9a8a;
+}
+
+.showcase-contact__error--form {
+  padding: 10px 13px;
+  border: 1px solid rgba(255, 154, 138, 0.4);
+  border-radius: 4px;
+  background: rgba(255, 154, 138, 0.08);
+}
+
+/* The honeypot. Off-screen rather than display:none, because some bots skip
+   fields they can tell are not rendered; the other three defences against a
+   screen reader offering it are on the input itself. */
+.showcase-contact__decoy {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.showcase-contact__submit {
+  justify-self: start;
+  min-width: 240px;
+  font: inherit;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 12px 20px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.showcase-contact__submit:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.showcase-contact__submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.showcase-contact__sent {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  padding: 22px;
+  border: 1px solid var(--showcase-ink-dim);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.showcase-contact__sent p {
+  margin: 0;
+}
+
+.showcase-contact__sent-heading {
+  font-family: var(--showcase-display);
+  font-size: 1.5rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .showcase-contact {
+    grid-template-columns: minmax(0, 1fr);
+    /* The switcher moves out of the way at this width, so the reserved
+       right-hand gutter would only waste the screen. */
+    padding-inline-end: var(--showcase-gutter);
+  }
+
+  .showcase-contact__submit {
+    justify-self: stretch;
+    min-width: 0;
+  }
+}

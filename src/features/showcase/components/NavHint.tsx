@@ -39,7 +39,8 @@ export function NavHint({ hovered, onEnterCinematic }: { hovered: NavHintId | nu
     contact: {
       eyebrow: "Contact",
       title: "Say hello",
-      note: "Opens your mail client with an email to Harma",
+      // No longer a mailto: HD-4 put a form on the site.
+      note: "It reaches Harma directly",
     },
   };
   const hint = hints[hovered];

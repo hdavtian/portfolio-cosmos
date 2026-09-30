@@ -18,8 +18,16 @@ import { ButtonComponent } from "@syncfusion/ej2-react-buttons";
 import { resetGridLayout } from "../lib/gridLayout";
 import type { ListState } from "../lib/entityApi";
 
+/**
+ * What the grid itself needs from a row.
+ *
+ * `slug` only matters to row dragging, and `id` only to a list that is keyed by
+ * one -- contact submissions have no slug at all. Both are optional so a
+ * non-reorderable grid is not forced to invent a field it does not have.
+ */
 interface GridRow {
   slug?: string;
+  id?: string;
 }
 
 interface EntityGridProps<T extends GridRow> {

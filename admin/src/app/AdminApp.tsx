@@ -5,6 +5,9 @@ import { AdminLayout } from "./AdminLayout";
 import { RequireSession } from "./RequireSession";
 import { PENDING_CHANGES_KEY } from "../lib/pendingChanges";
 import { ENTITY_DEFINITIONS } from "../entities/definitions";
+import { ContactSettingsPage } from "../pages/ContactSettingsPage";
+import { ContactSubmissionPage } from "../pages/ContactSubmissionPage";
+import { ContactSubmissionsPage } from "../pages/ContactSubmissionsPage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { EntityEditPage } from "../pages/EntityEditPage";
 import { EntityListPage } from "../pages/EntityListPage";
@@ -74,6 +77,13 @@ export function AdminApp() {
             <Route path="portfolioCores/:slug" element={<PortfolioCoreEditPage />} />
             <Route path="pathTravelMessages/:slug" element={<PathMessageEditPage />} />
             <Route path="technologies" element={<TechnologiesPage />} />
+            {/* HD-4. Not a content collection, so these are declared by hand
+                rather than generated from ENTITY_DEFINITIONS below. */}
+            <Route path="contactSubmissions" element={<ContactSubmissionsPage />} />
+            {/* Before the :id route, or "settings" is read as a message id --
+                the same trap as portfolioEntries/tagging above. */}
+            <Route path="contactSubmissions/settings" element={<ContactSettingsPage />} />
+            <Route path="contactSubmissions/:id" element={<ContactSubmissionPage />} />
             {/* Config-driven sections; keyed so switching entity resets grid state. */}
             {ENTITY_DEFINITIONS.flatMap((definition) => [
               ...(definition.customList

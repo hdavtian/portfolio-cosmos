@@ -11,6 +11,7 @@ import { env } from "./config/env.js";
 import { apiRouter } from "./routes/index.js";
 import { createAdminRouter } from "./v2/adminRouter.js";
 import { createContentRouter } from "./v2/contentRouter.js";
+import { createPublicContactRouter } from "./v2/contact/publicContactRouter.js";
 import { errorHandler } from "./v2/http.js";
 
 // Credentialed requests come from the admin (same origin as the API once
@@ -46,8 +47,6 @@ export const createApp = () => {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: "2mb" }));
-
   // Correlates log lines with the error envelope returned to the client.
   app.use((req, _res, next) => {
     req.requestId = randomUUID();
@@ -55,6 +54,22 @@ export const createApp = () => {
   });
 
   app.use(morgan("combined"));
+
+  /*
+   * The contact form (HD-4), mounted *before* the global body parser.
+   *
+   * It brings its own `express.json` with a 32kb limit, and that limit only
+   * means anything if nothing has parsed the body first: mounted below, the
+   * 2mb parser would already have read and buffered the request and the
+   * tighter limit would silently never apply. This is the one unauthenticated
+   * write endpoint on the site, so it is the one that most needs its own cap.
+   *
+   * Unauthenticated and write-only besides: it is kept in its own router so
+   * nothing that can read messages back sits beside it.
+   */
+  app.use("/api/v2/contact", createPublicContactRouter());
+
+  app.use(express.json({ limit: "2mb" }));
 
   // The admin SPA on its own hostname (API paths on that host fall through).
   const adminSite = createAdminSite({

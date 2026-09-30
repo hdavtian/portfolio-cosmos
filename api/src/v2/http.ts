@@ -77,6 +77,30 @@ export const errorHandler = (
     return;
   }
 
+  /*
+   * A body over the route's limit is the client's fault, not ours.
+   *
+   * `express.json` throws a PayloadTooLargeError carrying `type:
+   * "entity.too.large"`, and without this it fell through to the 500 below --
+   * so the contact form's 32kb cap worked but reported itself as a server
+   * fault, which is both wrong and unhelpful to whoever hit it. Matched on
+   * `type` rather than the class, which body-parser does not export.
+   */
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { type?: string }).type === "entity.too.large"
+  ) {
+    res.status(413).json({
+      error: {
+        code: "PAYLOAD_TOO_LARGE",
+        message: "That request was too large.",
+        requestId,
+      },
+    });
+    return;
+  }
+
   console.error(`[${requestId}]`, error);
   res.status(500).json({
     error: {
