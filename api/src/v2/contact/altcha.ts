@@ -178,13 +178,29 @@ export async function verifyContactSolution(
     return { ok: false, reason: "replayed" };
   }
 
-  const result = await verifySolution({
-    challenge: challenge as Parameters<typeof verifySolution>[0]["challenge"],
-    solution: solution as Parameters<typeof verifySolution>[0]["solution"],
-    deriveKey,
-    hmacSignatureSecret: HMAC_SIGNATURE_SECRET,
-    hmacKeySignatureSecret: HMAC_KEY_SIGNATURE_SECRET,
-  });
+  /*
+   * Wrapped, because the payload is attacker-controlled all the way down.
+   *
+   * `verifySolution` expects a well-formed challenge object and *throws* on
+   * one that is merely plausible -- a base64 JSON blob with a `signature`
+   * string and a `solution`, but missing the parameters it then reads. That
+   * is trivially easy to post, and it came back as a 500 "Unexpected error"
+   * rather than a refusal: the wrong status, and a genuine failure would have
+   * been indistinguishable from this in the logs. Caught by forging a payload
+   * by hand; every schema check upstream passed it happily.
+   */
+  let result: Awaited<ReturnType<typeof verifySolution>>;
+  try {
+    result = await verifySolution({
+      challenge: challenge as Parameters<typeof verifySolution>[0]["challenge"],
+      solution: solution as Parameters<typeof verifySolution>[0]["solution"],
+      deriveKey,
+      hmacSignatureSecret: HMAC_SIGNATURE_SECRET,
+      hmacKeySignatureSecret: HMAC_KEY_SIGNATURE_SECRET,
+    });
+  } catch {
+    return { ok: false, reason: "malformed" };
+  }
 
   if (!result.verified) {
     if (result.expired) return { ok: false, reason: "expired" };

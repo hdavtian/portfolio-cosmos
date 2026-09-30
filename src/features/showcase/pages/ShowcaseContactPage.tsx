@@ -40,28 +40,50 @@ interface AltchaElement extends HTMLElement {
 }
 
 /**
- * Runs the proof of work and returns the payload to post.
+ * The solved payload the widget has written into the form, if it has one.
  *
- * `verify()` resolves with the payload in altcha v3, so this awaits it rather
- * than polling the hidden input the widget writes. The first version here did
- * poll, every 250ms for fifteen seconds, which was copied from the other
- * site's older integration -- it worked, but it meant a failure took the full
- * fifteen seconds to report and a success waited up to a quarter of a second
- * after it was ready.
+ * The widget writes a hidden input named `altcha` into the form rather than
+ * telling React anything, so the form is where its answer is read from.
  *
- * Resolves to null on any failure, which is all the caller needs: every one of
- * them ends in the same sentence asking the visitor to reload.
+ * ## Why this does not solve the challenge itself
+ *
+ * It used to. Send called `verify()` when the payload was missing, so the
+ * proof of work simply happened inside the send and the checkbox was
+ * optional. That was safe -- the server refuses any submission without a
+ * valid solution, so skipping the tick bypassed nothing -- but it made a
+ * visible control that says "I'm not a robot" do nothing when ignored, which
+ * reads as a bug to anybody who tries it. A checkbox is either required, as
+ * reCAPTCHA's is, or there is no checkbox at all, as with an invisible
+ * challenge. The hybrid is the one option that is not a pattern.
  */
-async function solveChallenge(widget: AltchaElement | null): Promise<string | null> {
-  if (!widget?.verify) return null;
+const solvedPayload = (form: HTMLFormElement): string =>
+  String(new FormData(form).get("altcha") ?? "");
 
-  try {
-    const result = await widget.verify();
-    return result?.payload ?? null;
-  } catch {
-    return null;
-  }
-}
+/**
+ * The widget's look, in its own CSS variables.
+ *
+ * One object at module scope, not a literal per render: a new identity on
+ * every render makes a custom element rebind, and the values never change.
+ * They read the page's own tokens, so the widget follows the showcase palette
+ * rather than carrying a second one. Its markup lives in a shadow root, so
+ * these variables are the only way in -- a stylesheet cannot reach it.
+ */
+const ALTCHA_THEME = {
+  "--altcha-max-width": "100%",
+  "--altcha-border-radius": "4px",
+  "--altcha-border-color": "var(--showcase-ink-dim)",
+  "--altcha-color-base": "rgba(255, 255, 255, 0.04)",
+  "--altcha-color-base-content": "var(--showcase-ink)",
+  "--altcha-color-text": "var(--showcase-ink)",
+  "--altcha-color-border": "var(--showcase-ink-dim)",
+  "--altcha-checkbox-border-color": "var(--showcase-ink-dim)",
+  "--altcha-color-primary": "var(--showcase-ink)",
+  "--altcha-color-error": "#ff9a8a",
+  "--altcha-spinner-color": "var(--showcase-ink)",
+} as const;
+
+/** No footer line and no logo: the page carries no other chrome. */
+const ALTCHA_CONFIGURATION = JSON.stringify({ hideFooter: true, hideLogo: true });
 
 type FieldErrors = Record<string, string>;
 
@@ -168,19 +190,23 @@ export function ShowcaseContactPage() {
       return;
     }
 
+    /* Nothing is sent until the challenge has been solved, and solving it is
+       the visitor's own click on the widget. Checked before the button is
+       disabled, so refusing here leaves the form exactly as it was. */
+    const altcha = solvedPayload(form);
+    if (!altcha) {
+      setFailure("Please confirm you are not a robot, then send.");
+      widgetRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+
     /* Disabled for the whole attempt, from here until either outcome. HD-4
        asks for the button to disable on the first click, and it is also what
-       stops the commonest duplicate: a second click while the proof of work is
-       still running. The server's fingerprint guard is the backstop. */
+       stops the commonest duplicate: a second click while the request is in
+       flight. The server's fingerprint guard is the backstop. */
     setSending(true);
 
     try {
-      const altcha = await solveChallenge(widgetRef.current);
-      if (!altcha) {
-        setFailure("The verification step did not finish. Please reload the page and try again.");
-        return;
-      }
-
       const response = await fetch(`${API_BASE_URL}/api/v2/contact/submissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -352,17 +378,22 @@ export function ShowcaseContactPage() {
                 its own hostname in production and on :8080 in development, so
                 a relative path reaches the static site instead and the form
                 silently cannot be verified. */}
-            {/* Hidden entirely: this form reports its own progress on the
-                send button, so the widget's UI would only be a second, quieter
-                status line saying the same thing. `auto="off"` because a
-                visitor who opens the page and leaves should not have paid for
-                a challenge -- it is solved on submit, inside the send. */}
+            {/* Visible, and it starts nothing by itself.
+                `auto="off"` means the widget neither solves on load nor
+                reacts to the form being focused: it sits there until somebody
+                ticks it, or until Send does it for them. So a visitor who
+                opens the page and wanders off has spent none of their CPU,
+                and nothing on the page moves or takes focus while they type.
+                Themed through the widget's own CSS variables, which is the
+                supported way -- its markup is in a shadow root and cannot be
+                reached by a stylesheet. */}
             <altcha-widget
               ref={widgetRef}
               challenge={`${API_BASE_URL}/api/v2/contact/challenge`}
               name="altcha"
               auto="off"
-              style={{ display: "none" }}
+              configuration={ALTCHA_CONFIGURATION}
+              style={ALTCHA_THEME}
             />
 
             {failure ? (

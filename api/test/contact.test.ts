@@ -266,6 +266,25 @@ describe.skipIf(!dockerMongo)(
     expect(await getDb().collection("contactSubmissions").countDocuments()).toBe(0);
   });
 
+  it("refuses a forged challenge payload without falling over", async () => {
+    /* A plausible-looking blob: valid base64, valid JSON, a signature and a
+       solution -- and nothing else the verifier needs. It used to reach
+       `verifySolution`, throw, and surface as a 500 "Unexpected error", which
+       is both the wrong answer and noise in the logs that looks like a real
+       fault. Trivial to post, so it is asserted. */
+    const forged = Buffer.from(
+      JSON.stringify({ challenge: { signature: "fake" }, solution: { counter: 1 } }),
+    ).toString("base64");
+
+    const response = await request(app)
+      .post("/api/v2/contact/submissions")
+      .send(await validBody({ altcha: forged }));
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("CHALLENGE_FAILED");
+    expect(await getDb().collection("contactSubmissions").countDocuments()).toBe(0);
+  });
+
   it("refuses a replayed challenge", async () => {
     const altcha = await solveChallenge();
 
