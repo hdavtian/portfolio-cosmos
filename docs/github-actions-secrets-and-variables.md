@@ -21,6 +21,14 @@ Used in frontend build/deploy workflow (`.github/workflows/deploy.yml`):
   non-production build stays out of the reports.
 - `VITE_API_BASE_URL`
 
+Optional:
+
+- `VITE_STATCOUNTER_PROJECT` / `VITE_STATCOUNTER_SECURITY` — the StatCounter
+  project id and security code. Neither is a secret (both appear in the page
+  source of any site carrying the counter), and `src/lib/analytics.ts` defaults
+  to the "Harma Davtian" project, so the counter works with both unset. Set
+  them only to point the site at a different StatCounter project.
+
 ## Required repository secrets
 
 Used in frontend deploy workflow (`.github/workflows/deploy.yml`):

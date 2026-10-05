@@ -5,6 +5,18 @@ const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID as
   | undefined;
 
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
+
+/* StatCounter's project id and security code. Both appear in the page source of
+ * any site that carries the counter, so they are not secrets and are defaulted
+ * here: the counter then works from a plain `npm run build` with no GitHub
+ * Actions variable to set. The env vars exist so a second project can be
+ * pointed at without a code change. */
+const STATCOUNTER_PROJECT =
+  (import.meta.env.VITE_STATCOUNTER_PROJECT as string | undefined) ||
+  "13167072";
+const STATCOUNTER_SECURITY =
+  (import.meta.env.VITE_STATCOUNTER_SECURITY as string | undefined) ||
+  "d16c9d4e";
 const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST as string | undefined;
 const POSTHOG_OWNER_ID =
   (import.meta.env.VITE_POSTHOG_OWNER_ID as string | undefined) ||
@@ -42,11 +54,16 @@ type SiteOwnerConsoleApi = {
 
 type GtagCommand = (...args: unknown[]) => void;
 
+type HistoryMethod = "pushState" | "replaceState";
+
 declare global {
   interface Window {
     __so?: SiteOwnerConsoleApi;
     dataLayer?: unknown[];
     gtag?: GtagCommand;
+    sc_project?: number;
+    sc_invisible?: number;
+    sc_security?: string;
   }
 }
 
@@ -60,6 +77,7 @@ function isProductionHost(): boolean {
 
 let initialized = false;
 let gaLoaded = false;
+let statCounterLoaded = false;
 
 /* ---------------------------------------------------------------------------
  * Google Analytics
@@ -113,6 +131,103 @@ function initGoogleAnalytics(): void {
   script.async = true;
   script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
   document.head.appendChild(script);
+}
+
+/* ---------------------------------------------------------------------------
+ * StatCounter
+ *
+ * The snippet StatCounter hands out sets three globals and loads counter.js,
+ * which counts one page view for the document it loaded into. Pasting it into
+ * index.html would count localhost, previews and the admin app as traffic to
+ * the site, so it is loaded here instead, behind the same production-host gate
+ * as PostHog and GA.
+ *
+ * The globals have to be set before counter.js runs -- that is how the script
+ * reads its configuration -- so the order below matches the snippet exactly.
+ * `sc_invisible = 1` keeps the badge off the page, as in the snippet.
+ *
+ * counter.js only counts the load it arrived with. This site is a single-page
+ * app, so every route after the first is a history change with no new document
+ * and would never be counted. Those are sent as the no-script pixel from the
+ * snippet's <noscript> block, which is the same hit by a different transport:
+ * the URL carries the project, the security code, the page being counted and
+ * the previous one as the referrer.
+ * ------------------------------------------------------------------------- */
+
+function initStatCounter(): void {
+  if (statCounterLoaded || !STATCOUNTER_PROJECT || !STATCOUNTER_SECURITY) return;
+  statCounterLoaded = true;
+
+  window.sc_project = Number(STATCOUNTER_PROJECT);
+  window.sc_invisible = 1;
+  window.sc_security = STATCOUNTER_SECURITY;
+
+  const script = document.createElement("script");
+  script.async = true;
+  script.src = "https://www.statcounter.com/counter/counter.js";
+  document.head.appendChild(script);
+
+  watchHistoryForStatCounter();
+}
+
+/**
+ * One route change, one counted page view. The pixel is requested rather than
+ * added to the DOM, so nothing is appended to the page on every navigation.
+ */
+function countStatCounterPageView(previousUrl: string): void {
+  if (!statCounterLoaded) return;
+  try {
+    const url = new URL(
+      `https://c.statcounter.com/${STATCOUNTER_PROJECT}/0/${STATCOUNTER_SECURITY}/1/`,
+    );
+    // StatCounter reads the page and referrer from the query string when the
+    // hit arrives as the pixel; without them it would record the pixel's own
+    // URL as the page.
+    url.searchParams.set("u", window.location.href);
+    url.searchParams.set("r", previousUrl);
+    // Defeats the browser cache, which would otherwise serve one route's pixel
+    // for the next and lose the hit.
+    url.searchParams.set("rand", String(Math.random()));
+
+    const pixel = new Image();
+    pixel.referrerPolicy = "no-referrer-when-downgrade";
+    pixel.src = url.toString();
+  } catch {
+    // A page view is not worth breaking a navigation over.
+  }
+}
+
+/**
+ * Route changes here are `history.pushState` / `replaceState` calls made by the
+ * router, which fire no event of their own, plus `popstate` for back and
+ * forward. The two history methods are wrapped once, after counter.js has been
+ * asked for, and only on a production host.
+ */
+function watchHistoryForStatCounter(): void {
+  let lastUrl = window.location.href;
+
+  const onUrlChanged = (): void => {
+    const currentUrl = window.location.href;
+    if (currentUrl === lastUrl) return;
+    const previousUrl = lastUrl;
+    lastUrl = currentUrl;
+    countStatCounterPageView(previousUrl);
+  };
+
+  const wrap = (method: HistoryMethod): void => {
+    const original = window.history[method];
+    window.history[method] = function patched(
+      this: History,
+      ...args: Parameters<History[HistoryMethod]>
+    ): void {
+      original.apply(this, args);
+      onUrlChanged();
+    };
+  };
+
+  wrap("pushState");
+  wrap("replaceState");
+  window.addEventListener("popstate", onUrlChanged);
 }
 
 function readOwnerMarker(): boolean {
@@ -233,6 +348,7 @@ export function initAnalytics(): void {
   // One gate for both: nothing reports from localhost, a preview or the admin.
   if (!isProductionHost()) return;
   initGoogleAnalytics();
+  initStatCounter();
   if (initialized || !POSTHOG_KEY) return;
   initialized = true;
 
