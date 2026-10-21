@@ -37,8 +37,10 @@ instructions.
 |---|---|---|
 | Read a ticket | `getJiraIssue` | key must match `HD-<n>`; bare numeric ids are refused |
 | Read its comments | `getJiraIssue` | pass `comment` in `fields`; they arrive in `fields.comment.comments` |
-| Search | `searchJiraIssuesUsingJql` | JQL must contain a `project = HD` clause |
+| Search | `searchJiraIssuesUsingJql` | JQL must **start** with `project = HD`, joined to the rest by `AND` only: no `OR`, no `||`, no `project in (...)`, one project clause |
 | Comment | `addOrEditJiraIssueComment` | `HD-*` only |
+
+Every call must carry this site's `cloudId` (`4bf735dc-4f63-4fd4-8adf-038fe793af25` or `https://harmadavtian.atlassian.net`); a call for any other site, or with none, is refused. `listJiraIssueComments` and `listJiraIssueTransitions` are refused by the hook outright.
 
 `listJiraIssueComments` and `listJiraIssueTransitions` are named in other tools' descriptions
 but are **not callable**: the v2 server offers them only through the `execute` runner, which the
