@@ -86,9 +86,9 @@ describe("resumeModel", () => {
 });
 
 describe("resumeText", () => {
-  it("repeats the company above every role and uses plain bullets", () => {
+  it("repeats the company above every role, leaves a blank line under each title, and uses plain bullets", () => {
     const text = resumeText(resumeModel(source));
-    expect(text).toContain("EXPERIENCE\n\nAnalytical Engines - London\nLead | Feb 2024 - Present\n- Led the team\n\nAnalytical Engines - London\nEngineer | Apr 2018 - Feb 2024\n- Built the engine");
+    expect(text).toContain("EXPERIENCE\n\nAnalytical Engines - London\nLead | Feb 2024 - Present\n\n- Led the team\n\nAnalytical Engines - London\nEngineer | Apr 2018 - Feb 2024\n\n- Built the engine");
     expect(text).toContain("- Backend: Node.js");
     expect(text).toContain("- Site: https://ada.dev");
   });

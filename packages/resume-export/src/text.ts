@@ -25,7 +25,8 @@ export function resumeText(model: ResumeModel): string {
   for (const job of model.experience) {
     for (const position of job.positions) {
       if (!first) lines.push("");
-      lines.push(`${job.company} - ${job.location}`, `${position.title} | ${position.dates}`);
+      // A blank line between the role and its bullets, so the title stands clear.
+      lines.push(`${job.company} - ${job.location}`, `${position.title} | ${position.dates}`, "");
       for (const bullet of position.bullets) lines.push(`- ${bullet}`);
       first = false;
     }

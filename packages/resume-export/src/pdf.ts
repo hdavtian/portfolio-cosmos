@@ -132,7 +132,7 @@ export async function resumePdf(model: ResumeModel): Promise<Uint8Array> {
     for (const position of job.positions) {
       if (!first) writer.y -= 8;
       write(writer, `${job.company} - ${job.location}`, { size: COMPANY, bold: true, after: 0, keepWith: ROLE * LEADING + BODY * LEADING * 2 });
-      write(writer, `${position.title} | ${position.dates}`, { size: ROLE, bold: true, after: 3, keepWith: BODY * LEADING * 2 });
+      write(writer, `${position.title} | ${position.dates}`, { size: ROLE, bold: true, after: 7, keepWith: BODY * LEADING * 2 });
       for (const item of position.bullets) bullet(writer, [{ text: item }]);
       first = false;
     }

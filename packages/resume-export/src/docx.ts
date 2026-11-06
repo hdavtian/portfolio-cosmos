@@ -69,7 +69,7 @@ export function resumeDocument(model: ResumeModel): Document {
       children.push(
         paragraph([run(`${job.company} - ${job.location}`, { bold: true, size: COMPANY })], { before: first ? 0 : 160, after: 20 }),
       );
-      children.push(paragraph([run(`${position.title} | ${position.dates}`, { bold: true, size: ROLE })], { after: 60 }));
+      children.push(paragraph([run(`${position.title} | ${position.dates}`, { bold: true, size: ROLE })], { after: 140 }));
       for (const item of position.bullets) children.push(bullet(item));
       first = false;
     }
