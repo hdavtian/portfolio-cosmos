@@ -176,9 +176,29 @@ const SECONDS_PER_WEIGHT = 3;
 const SHOW_EVERY_MS = 100;
 let filmSeconds = 118;
 
+// The opening, in seconds from Start (HD-9). The sun lights as before. The
+// three bands then forge three times faster than they used to, each starting
+// a little after the one before, and each band's name is etched while the
+// band forms rather than afterwards. The camera sets off halfway through the
+// forging, at twice its old pace, so the whole opening runs about 8.6 seconds
+// where it used to run 21.6.
+const INTRO_SUN: [number, number] = [0, 1.94];
+const INTRO_BANDS: Array<[number, number]> = [
+  [2.16, 2.88],
+  [2.376, 3.096],
+  [2.592, 3.312],
+];
+// Halfway through the forging: from the first band starting to the last closing.
+const INTRO_CAMERA_FROM = (INTRO_BANDS[0][0] + INTRO_BANDS[2][1]) / 2;
+// The ease back, the pull out and the flight down to the first place, each
+// half as long as they were (3.02s, 2.38s and 6.42s).
+const INTRO_EASE_BACK = INTRO_CAMERA_FROM + 1.51;
+const INTRO_PULL_OUT = INTRO_EASE_BACK + 1.19;
+const INTRO_SECONDS = INTRO_PULL_OUT + 3.21;
+
 function buildTimeline(cities: City[]): Segment[] {
   const parts: Array<{ kind: SegmentKind; city: number; weight: number }> = [
-    { kind: "intro", city: 0, weight: 7.2 },
+    { kind: "intro", city: 0, weight: INTRO_SECONDS / SECONDS_PER_WEIGHT },
   ];
   cities.forEach((city, index) => {
     if (index > 0) {
@@ -1134,27 +1154,17 @@ function SkillsTitlesFilm({ data }: { data: SkillsData }) {
         // air above it instead of sitting on the top edge.
         const WIDE_EYE = new THREE.Vector3(0, 1620, 2300);
         const WIDE_AIM = new THREE.Vector3(0, 150, -60);
-        // The opening, as fractions of the intro: the sun lights, each band is
-        // forged in turn (the second and third overlapping), a breath, and only
-        // then does the camera begin to move away.
+        // The opening as fractions of the intro, from the seconds above: the
+        // sun lights, the three bands forge (overlapping) with their names
+        // etched as they form, and the camera leaves halfway through.
+        const at = (seconds: number) => seconds / INTRO_SECONDS;
         const INTRO = {
-          sun: [0, 0.09],
-          bands: [
-            [0.1, 0.2],
-            // Each starts 30% of the way into the one before: all three overlap.
-            [0.13, 0.23],
-            [0.16, 0.26],
-          ],
-          // Each band is etched the moment it closes, not once all three stand.
-          etch: [
-            [0.2, 0.3],
-            [0.23, 0.33],
-            [0.26, 0.36],
-          ],
-          // Two seconds to read it, and the camera begins to leave.
-          formed: 0.36 + 2 / (timeline[0].to * filmSeconds),
-          easeBack: 0.36 + 2 / (timeline[0].to * filmSeconds) + 0.14,
-          pullOut: 0.36 + 2 / (timeline[0].to * filmSeconds) + 0.25,
+          sun: INTRO_SUN.map(at) as [number, number],
+          bands: INTRO_BANDS.map(([from, to]) => [at(from), at(to)] as [number, number]),
+          etch: INTRO_BANDS.map(([from, to]) => [at(from), at(to)] as [number, number]),
+          formed: at(INTRO_CAMERA_FROM),
+          easeBack: at(INTRO_EASE_BACK),
+          pullOut: at(INTRO_PULL_OUT),
         };
         const FORGE_EYE = new THREE.Vector3(SUN.x + 46, SUN.y + 34, SUN.z + 372);
         const MID_EYE = new THREE.Vector3(SUN.x + 60, SUN.y + 44, SUN.z + 400);
