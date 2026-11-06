@@ -144,6 +144,9 @@ export const experienceSchema = z.object({
   projects: z.array(experienceProjectSchema).default([]),
   jobMemories: z.array(jobMemorySchema).default([]),
   skillsUsed: z.array(skillUseSchema).default([]),
+  // Off leaves the job out of the resume download and /resume page only; the
+  // cosmos, the film and the showcase moons still show it. Missing means on.
+  includeOnResume: z.boolean().optional(),
 });
 
 export type Profile = z.infer<typeof profileSchema>;
